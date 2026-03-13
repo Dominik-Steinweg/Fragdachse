@@ -1,0 +1,42 @@
+ToDos:
+
+- Netzwerk weiter prüfen (gibt es Bugs?, ist es stabil?, ist es nach den Techniken wie ClientPrediction (?) und RCP sauber aufgesetzt?)
+
+- Tileset/Layers sauber einstellen
+
+- Einbuddeln
+- Dodge
+
+- Adrenalin + Wut
+
+- Zerstörbare Wände (Raster!)
+- Random Wände
+
+- "Crosshair"
+
+- Loadout minimal realisieren
+ - Primär
+ - Sekundär
+ - Utility
+ - Ultimate
+
+- WeaponConfig.txt abarbeiten und alles einbauen
+
+
+
+- GUI links (Spielerinfos)
+  - Tastenbelegung (oder über Button verstecken und dann als Popup??)
+  - HealthBar
+  - Adrenalin-Bar
+  - Wut-Bar
+  - Power-Ups
+  - Cooldowns
+    - Primary
+    - Secondary
+    - Utility
+    - Buddeln
+
+- GUI rechts (Spielinfos)
+  - Timer dort hin verschieben
+  - Killfeed
+  - Fragliste
