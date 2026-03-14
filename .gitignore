@@ -44,6 +44,12 @@ Thumbs.db
 coverage/
 public/build/
 
+# Interne Notizen und ToDos
+ToDo/
+
+# Clause
+.claude/
+
 # Optional: lockfiles (uncomment if you want to ignore them)
 # package-lock.json
 # yarn.lock
