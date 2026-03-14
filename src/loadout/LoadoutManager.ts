@@ -3,7 +3,7 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { LoadoutSlot }    from '../types';
-import type { UltimateConfig } from './LoadoutConfig';
+import type { UltimateConfig, WeaponConfig } from './LoadoutConfig';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
@@ -166,6 +166,26 @@ export class LoadoutManager {
 
   isUltimateActive(playerId: string): boolean {
     return this.ultimateStates.get(playerId)?.active ?? false;
+  }
+
+  // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────
+
+  /**
+   * Gibt die WeaponConfig der tatsächlich ausgerüsteten Waffe zurück.
+   * Ermöglicht dem AimSystem die echten Waffenwerte (Range, Spread-Parameter)
+   * zu nutzen, unabhängig davon welches Loadout der Spieler ausgewählt hat.
+   */
+  getEquippedWeaponConfig(playerId: string, slot: 'weapon1' | 'weapon2'): WeaponConfig | undefined {
+    return this.loadouts.get(playerId)?.[slot].config;
+  }
+
+  /**
+   * Gibt den aktuellen dynamischen Spread (Bloom) der Waffe zurück.
+   * Direkt aus dem BaseWeapon-Objekt – das AimSystem braucht auf dem Host
+   * keine eigene Simulation und nutzt stattdessen den autoritären Wert.
+   */
+  getDynamicSpread(playerId: string, slot: 'weapon1' | 'weapon2'): number {
+    return this.loadouts.get(playerId)?.[slot].getDynamicSpread() ?? 0;
   }
 
   /** Cooldown-Fraktion eines Slots: 0 = bereit, 1 = gerade benutzt. */

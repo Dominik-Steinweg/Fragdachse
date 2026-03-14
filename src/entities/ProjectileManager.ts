@@ -12,7 +12,7 @@ export class ProjectileManager {
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private rockObjects: (Phaser.GameObjects.Rectangle | null)[] | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
-  private onRockHit:   ((rockId: number) => void) | null = null;
+  private onRockHit:   ((rockId: number, damage: number) => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -38,7 +38,7 @@ export class ProjectileManager {
    * Registriert einen Callback, der bei jedem Projektil-Felsen-Treffer (Host)
    * aufgerufen wird. Gibt den Index in layout.rocks[] weiter.
    */
-  setRockHitCallback(cb: (rockId: number) => void): void {
+  setRockHitCallback(cb: (rockId: number, damage: number) => void): void {
     this.onRockHit = cb;
   }
 
@@ -85,6 +85,7 @@ export class ProjectileManager {
       createdAt:      Date.now(),
       ownerId,
       boundsListener: () => {},
+      colliders:      [],
       damage:         cfg.damage,
       lifetime:       cfg.lifetime,
       maxBounces:     cfg.maxBounces,
@@ -107,18 +108,20 @@ export class ProjectileManager {
       if (this.rockGroup) {
         const rockObjects = this.rockObjects;
         const onHit       = this.onRockHit;
-        this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+        const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
           tracked.bounceCount++;
           if (!rockObjects || !onHit) return;
           const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
-          if (idx !== -1) onHit(idx);
+          if (idx !== -1) onHit(idx, tracked.damage);
         });
+        tracked.colliders.push(rockCollider);
       }
 
       if (this.trunkGroup) {
-        this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+        const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
           tracked.bounceCount++;
         });
+        tracked.colliders.push(trunkCollider);
       }
     }
   }
@@ -138,8 +141,24 @@ export class ProjectileManager {
     if (idx === -1) return;
     const proj = this.projectiles[idx];
     this.scene.physics.world.off('worldbounds', proj.boundsListener);
+    for (const c of proj.colliders) c.destroy();
     proj.sprite.destroy();
     this.projectiles.splice(idx, 1);
+  }
+
+  /**
+   * Zerstört alle aktiven Projektile und ihre Collider.
+   * Muss vor ArenaBuilder.destroyDynamic() aufgerufen werden.
+   */
+  destroyAll(): void {
+    for (const proj of this.projectiles) {
+      this.scene.physics.world.off('worldbounds', proj.boundsListener);
+      for (const c of proj.colliders) c.destroy();
+      proj.sprite.destroy();
+    }
+    this.projectiles = [];
+    for (const sprite of this.clientVisuals.values()) sprite.destroy();
+    this.clientVisuals.clear();
   }
 
   /**
@@ -164,6 +183,7 @@ export class ProjectileManager {
             ownerId:   proj.ownerId,
           });
           this.scene.physics.world.off('worldbounds', proj.boundsListener);
+          for (const c of proj.colliders) c.destroy();
           proj.sprite.destroy();
           return false;
         }
@@ -173,6 +193,7 @@ export class ProjectileManager {
         const dead = age > proj.lifetime || proj.bounceCount >= proj.maxBounces;
         if (dead) {
           this.scene.physics.world.off('worldbounds', proj.boundsListener);
+          for (const c of proj.colliders) c.destroy();
           proj.sprite.destroy();
         }
         return !dead;

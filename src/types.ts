@@ -74,6 +74,7 @@ export interface TrackedProjectile {
   createdAt:      number;
   ownerId:        string;
   boundsListener: (hitBody: Phaser.Physics.Arcade.Body) => void;
+  colliders:      Phaser.Physics.Arcade.Collider[];  // müssen beim Destroy explizit entfernt werden
   damage:         number;        // Schadenswert pro Direkttreffer
   lifetime:       number;        // ms Lebensdauer (Bullets) / fuseTime (Granaten)
   maxBounces:     number;        // maximale Abpraller

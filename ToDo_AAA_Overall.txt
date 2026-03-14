@@ -20,6 +20,10 @@ ToDos:
 
  - "Crosshair"
 
+- Loadout um zwei weitere Waffen (mind. 1 Hitscan) und ein weiteres Utility Erweitern
+
+- Loadout Auswahl in Lobby integrieren
+
 - WeaponConfig.txt abarbeiten und alles einbauen
 
 - Powerups!
@@ -45,6 +49,6 @@ GUI Info-Bereiche:
   - Fragliste
 
 
-GUI: Lobby
+GUI: Lobby muss noch überarbeitet werden, bisher äußerst rudimentär
 
 Sprites für Spieler und Steine etc.

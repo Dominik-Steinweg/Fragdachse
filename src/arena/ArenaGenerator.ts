@@ -1,4 +1,4 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE } from '../config';
+import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS } from '../config';
 import type { ArenaLayout, RockCell, TreeCell } from '../types';
 
 /**
@@ -19,25 +19,63 @@ export class ArenaGenerator {
         new Array(GRID_COLS).fill(false),
       );
 
-      // Alle Zellen als Kandidaten sammeln und shuffeln
+      // --- Cellular Automata Felsen-Platzierung ---
+
+      // 1. Initialer Noise
+      let map: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
+        Array.from({ length: GRID_COLS }, () => rng() < ROCK_FILL_RATIO),
+      );
+
+      // 2. Smoothing-Steps
+      for (let step = 0; step < CA_SMOOTHING_STEPS; step++) {
+        const newMap: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
+          new Array(GRID_COLS).fill(false),
+        );
+        for (let gy = 0; gy < GRID_ROWS; gy++) {
+          for (let gx = 0; gx < GRID_COLS; gx++) {
+            // Zähle Fels-Nachbarn in 8 umliegenden Zellen (Rand = Fels)
+            let rockNeighbors = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const nx = gx + dx;
+                const ny = gy + dy;
+                if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) {
+                  rockNeighbors++; // Rand gilt als Fels
+                } else if (map[ny][nx]) {
+                  rockNeighbors++;
+                }
+              }
+            }
+            if (map[gy][gx]) {
+              // Fels: wird zu Boden wenn zu wenig Nachbarn
+              newMap[gy][gx] = rockNeighbors >= CA_MIN_ROCK_NEIGHBORS;
+            } else {
+              // Boden: wird zu Fels wenn zu viele Nachbarn
+              newMap[gy][gx] = rockNeighbors > CA_MAX_FLOOR_NEIGHBORS;
+            }
+          }
+        }
+        map = newMap;
+      }
+
+      // 3. map auf blocked übertragen und rocks-Array befüllen
+      const rocks: RockCell[] = [];
+      for (let gy = 0; gy < GRID_ROWS; gy++) {
+        for (let gx = 0; gx < GRID_COLS; gx++) {
+          if (map[gy][gx]) {
+            blocked[gy][gx] = true;
+            rocks.push({ gridX: gx, gridY: gy });
+          }
+        }
+      }
+
+      // allCells für Baum-Platzierung aufbauen
       const allCells: Array<{ gx: number; gy: number }> = [];
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         for (let gx = 0; gx < GRID_COLS; gx++) {
           allCells.push({ gx, gy });
         }
-      }
-      ArenaGenerator.shuffle(allCells, rng);
-
-      // Felsen platzieren
-      const totalCells    = GRID_COLS * GRID_ROWS;
-      const rockCount     = Math.floor(totalCells * ROCK_FILL_RATIO);
-      const rocks: RockCell[] = [];
-      let placed = 0;
-      for (const { gx, gy } of allCells) {
-        if (placed >= rockCount) break;
-        blocked[gy][gx] = true;
-        rocks.push({ gridX: gx, gridY: gy });
-        placed++;
       }
 
       // Konnektivitätsprüfung

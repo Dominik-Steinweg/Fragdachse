@@ -112,13 +112,15 @@ export const PROJECTILE_MAX_BOUNCES = 10;
 export const CELL_SIZE           = 48;
 export const GRID_COLS           = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 30
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
-export const ROCK_FILL_RATIO     = 0.12;   // ~43 Felsen (12% der 660 Zellen)
-export const TREE_COUNT          = 4;
+export const ROCK_FILL_RATIO     = 0.30;   
+export const TREE_COUNT          = 2;
+export const CA_SMOOTHING_STEPS  = 3;    // Anzahl Cellular-Automata-Durchläufe (0 = kein Smoothing)
+export const CA_MIN_ROCK_NEIGHBORS = 2;  // Fels mit < N Nachbarn wird zu Boden
+export const CA_MAX_FLOOR_NEIGHBORS = 4; // Boden mit > N Nachbarn wird zu Fels
 
 // ---- Felsen HP ----
 export const ROCK_HP_MAX         = 200;
 export const ROCK_HP_THRESHOLD   = 100;    // < 50% → Farbwechsel zu BROWN_3
-export const ROCK_DAMAGE_PER_HIT = 25;     // 8 Abpraller bis Zerstörung
 
 // ---- Baumstumpf & Baumkrone ----
 export const TRUNK_RADIUS        = 24;     // Kollisions-Radius Baumstumpf (px)
@@ -138,7 +140,7 @@ export const RAGE_PER_DAMAGE           = 1;    // Wut pro Schadenspunkt
 // ---- Dash ----
 export const DASH_SPEED                = 800;  // px/s
 export const DASH_DURATION_MS          = 150;  // Dauer der Geschwindigkeitsüberschreibung
-export const DASH_COOLDOWN_MS          = 2000;
+export const DASH_COOLDOWN_MS          = 1000;
 
 // ---- Burrow ----
 export const BURROW_SPEED_FACTOR       = 0.4;       // Faktor * PLAYER_SPEED
@@ -154,6 +156,6 @@ export const SELF_STUN_DURATION_MS     = 1000;
 
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;
-export const ARENA_DURATION_SEC = 120;
+export const ARENA_DURATION_SEC = 10;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.

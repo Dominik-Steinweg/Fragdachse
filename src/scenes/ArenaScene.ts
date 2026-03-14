@@ -12,13 +12,15 @@ import { CombatSystem }        from '../systems/CombatSystem';
 import { ResourceSystem }      from '../systems/ResourceSystem';
 import { BurrowSystem }        from '../systems/BurrowSystem';
 import { LoadoutManager }      from '../loadout/LoadoutManager';
+import { WEAPON_CONFIGS }      from '../loadout/LoadoutConfig';
+import type { WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { ResourceHUD }         from '../ui/ResourceHUD';
+import { AimSystem }           from '../ui/AimSystem';
 import { LobbyOverlay }        from './LobbyOverlay';
 import type { PlayerNetState, GamePhase, PlayerProfile } from '../types';
 import {
   GAME_WIDTH, ARENA_DURATION_SEC,
-  ROCK_DAMAGE_PER_HIT,
 } from '../config';
 
 // ── HUD-Konstanten ────────────────────────────────────────────────────────────
@@ -35,13 +37,26 @@ export class ArenaScene extends Phaser.Scene {
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
 
-  // ── HUD ──────────────────────────────────────────────────────────────────
+  // ── HUD / Aim ─────────────────────────────────────────────────────────────
   private timerText!: Phaser.GameObjects.Text;
   private resourceHUD: ResourceHUD | null = null;
+  private aimSystem:   AimSystem   | null = null;
+
+  // Alive/Burrowed-Flags des lokalen Spielers (gesetzt in runHostUpdate/runClientUpdate)
+  private localPlayerAlive    = false;
+  private localPlayerBurrowed = false;
 
   // ── Dynamische Arena ──────────────────────────────────────────────────────
   private arenaResult:  ArenaBuilderResult | null = null;
   private rockRegistry: RockRegistry | null       = null;
+
+  // ── Lokale Waffenconfigs (Client-Fallback für AimSystem) ──────────────────
+  // Wird bei jedem Loadout-Wechsel aktualisiert. Auf dem Host überschreibt der
+  // LoadoutManager-Getter diesen Wert – hier nur für Non-Host-Clients relevant.
+  private localWeaponConfigs: Record<'weapon1' | 'weapon2', WeaponConfig> = {
+    weapon1: WEAPON_CONFIGS.TEST_WEAPON_1,
+    weapon2: WEAPON_CONFIGS.TEST_WEAPON_2,
+  };
 
   // ── Host-only Systeme ─────────────────────────────────────────────────────
   private resourceSystem: ResourceSystem | null = null;
@@ -103,11 +118,30 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.inputSystem.setup();
     this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY) => {
+      if (slot === 'weapon1' || slot === 'weapon2') {
+        this.aimSystem?.notifyShot(slot);
+      }
       bridge.sendLoadoutUse(slot, angle, targetX, targetY);
     });
 
     // ── 8. Ressourcen-HUD ─────────────────────────────────────────────────
     this.resourceHUD = new ResourceHUD(this);
+
+    // ── 8b. Aim-System (rein clientseitig) ────────────────────────────────
+    // getWeaponConfig: Auf dem Host liest LoadoutManager die tatsächlich ausgerüstete
+    // Waffe; auf Clients wird der gecachte Wert in localWeaponConfigs genutzt.
+    // getActualSpread: Nur auf dem Host – liest den autoritären Bloom-Wert direkt
+    // aus dem BaseWeapon-Objekt; auf Clients entfällt dieser Parameter (→ Simulation).
+    this.aimSystem = new AimSystem(
+      this,
+      () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      (slot) =>
+        this.loadoutManager?.getEquippedWeaponConfig(bridge.getLocalPlayerId(), slot)
+        ?? this.localWeaponConfigs[slot],
+      bridge.isHost()
+        ? (slot) => this.loadoutManager?.getDynamicSpread(bridge.getLocalPlayerId(), slot) ?? 0
+        : undefined,
+    );
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId) => {
@@ -359,15 +393,19 @@ export class ArenaScene extends Phaser.Scene {
       this.rockRegistry = new RockRegistry(layout);
       const arenaResult  = this.arenaResult;
 
-      this.projectileManager.setRockHitCallback((rockId) => {
+      this.projectileManager.setRockHitCallback((rockId, damage) => {
         if (!this.rockRegistry || !arenaResult) return;
-        const newHp = this.rockRegistry.applyDamage(rockId, ROCK_DAMAGE_PER_HIT);
+        const newHp = this.rockRegistry.applyDamage(rockId, damage);
         ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, rockId, newHp);
       });
     }
   }
 
   private tearDownArena(): void {
+    // Projektile (und ihre Phaser-Collider) VOR dem Gruppen-Destroy aufräumen,
+    // sonst greifen verwaiste Collider auf die zerstörten StaticGroups zu und crashen.
+    this.projectileManager.destroyAll();
+
     if (this.arenaResult) {
       ArenaBuilder.destroyDynamic(this.arenaResult);
       this.arenaResult = null;
@@ -416,6 +454,13 @@ export class ArenaScene extends Phaser.Scene {
     if (inGame) {
       this.inputSystem.update();
     }
+
+    // AimSystem jeden Frame aktualisieren (auch wenn inGame=false → gfx.clear())
+    const showAim = inGame
+                 && !this.matchTerminated
+                 && this.localPlayerAlive
+                 && !this.localPlayerBurrowed;
+    this.aimSystem?.update(showAim, delta);
 
     if (!this.matchTerminated && phase === 'LOBBY') {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
@@ -498,6 +543,8 @@ export class ArenaScene extends Phaser.Scene {
       const ls = players[localId];
       this.inputSystem.setLocalState(ls.isStunned, ls.isBurrowed);
       this.resourceHUD?.update(ls.adrenaline, ls.rage, this.inputSystem.getDashCooldownFrac());
+      this.localPlayerAlive    = ls.alive;
+      this.localPlayerBurrowed = ls.isBurrowed;
     }
   }
 
@@ -552,6 +599,8 @@ export class ArenaScene extends Phaser.Scene {
         localState.rage,
         this.inputSystem.getDashCooldownFrac(),
       );
+      this.localPlayerAlive    = localState.alive;
+      this.localPlayerBurrowed = localState.isBurrowed;
     }
   }
 }
