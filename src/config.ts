@@ -84,6 +84,10 @@ export const COLORS = {
   CANOPY_ALPHA: 0.4
 } as const;
 
+export function toCssColor(color: number): `#${string}` {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
+
 
 // ---- Player ----
 export const PLAYER_SIZE  = 32;

@@ -6,15 +6,15 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerProfile } from '../types';
-import { GAME_WIDTH, GAME_HEIGHT, DEPTH } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
-const BG_COLOR      = 0x000000;
-const PANEL_COLOR   = 0x1e2a38;
-const READY_COLOR   = 0x27ae60;
-const UNREADY_COLOR = 0xc0392b;
-const TEXT_COLOR    = '#e0e0e0';
-const TITLE_COLOR   = '#f0c040';
+const BG_COLOR      = COLORS.GREY_9;
+const PANEL_COLOR   = COLORS.GREY_6;
+const READY_COLOR   = COLORS.GREEN_3;
+const UNREADY_COLOR = COLORS.RED_3;
+const TEXT_COLOR    = toCssColor(COLORS.GREY_1);
+const TITLE_COLOR   = toCssColor(COLORS.GOLD_1);
 
 const PANEL_W  = 700;
 const PANEL_H  = 600;   // etwas höher für Name-Zeile
@@ -42,6 +42,7 @@ export class LobbyOverlay {
   private readyBtnLabel!: Phaser.GameObjects.Text;
   private visible         = false;
   private btnLocked       = false;
+  private nameEditOpen     = false;
 
   constructor(
     private scene:          Phaser.Scene,
@@ -87,20 +88,20 @@ export class LobbyOverlay {
 
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 108, PANEL_W - 40, 2, 0x3a4f6a)
+      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 108, PANEL_W - 40, 2, COLORS.BLUE_1)
         .setScrollFactor(0),
     );
 
     // ── Trennlinie unten (vor Name + Button) ──────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, NAME_Y - 16, PANEL_W - 40, 2, 0x3a4f6a)
+      this.scene.add.rectangle(GAME_WIDTH / 2, NAME_Y - 16, PANEL_W - 40, 2, COLORS.BLUE_1)
         .setScrollFactor(0),
     );
 
     // ── Name-Zeile ────────────────────────────────────────────────────────
     objects.push(
       this.scene.add.text(PANEL_X + 20, NAME_Y + 2, 'Dein Name:', {
-        fontSize: '18px', fontFamily: 'monospace', color: '#aaaaaa',
+        fontSize: '18px', fontFamily: 'monospace', color: TEXT_COLOR,
       }).setScrollFactor(0),
     );
 
@@ -111,7 +112,7 @@ export class LobbyOverlay {
 
     // ── Edit-Button ───────────────────────────────────────────────────────
     const editBtn = this.scene.add.text(PANEL_X + PANEL_W - 120, NAME_Y + 2, '[ ÄNDERN ]', {
-      fontSize: '16px', fontFamily: 'monospace', color: '#7ec8e3',
+      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_1),
     }).setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.openNameEdit())
@@ -129,7 +130,7 @@ export class LobbyOverlay {
     objects.push(this.readyBtn);
 
     this.readyBtnLabel = this.scene.add.text(GAME_WIDTH / 2, BTN_Y, 'BEREIT', {
-      fontSize: '26px', fontFamily: 'monospace', color: '#ffffff', fontStyle: 'bold',
+      fontSize: '26px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.readyBtnLabel);
 
@@ -217,19 +218,126 @@ export class LobbyOverlay {
 
   /** Öffnet einen nativen Dialog zum Namensändern. */
   private openNameEdit(): void {
+    if (this.nameEditOpen) return;
+    this.nameEditOpen = true;
+
     const localId      = this.bridge.getLocalPlayerId();
     const currentName  = this.bridge.getConnectedPlayers().find(p => p.id === localId)?.name ?? '';
-    const input        = window.prompt('Dein Anzeigename:', currentName);
-    if (input !== null && input.trim() !== '') {
-      this.bridge.setLocalName(input.trim());
-    }
+
+    // 1. Den Haupt-Container (das Pop-up-Fenster) erstellen
+    const popup = document.createElement('div');
+    Object.assign(popup.style, {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      border: `3px solid ${toCssColor(COLORS.GREEN_4)}`,
+      borderRadius: '8px',
+      padding: '20px',
+      display: 'flex',
+      flexDirection: 'column', // Elemente untereinander anordnen
+      gap: '15px',             // Abstand zwischen Textfeld und Buttons
+      zIndex: '1000',
+      fontFamily: 'Arial, sans-serif',
+      boxShadow: '0px 0px 20px rgba(0,0,0,0.8)', // Schicker Schatten
+    });
+
+    // 2. Das Eingabefeld erstellen
+    const inputElement = document.createElement('input');
+    inputElement.type = 'text';
+    inputElement.value = currentName;
+    Object.assign(inputElement.style, {
+      fontSize: '20px',
+      padding: '10px',
+      textAlign: 'center',
+      border: `2px solid ${toCssColor(COLORS.GREY_5)}`,
+      borderRadius: '4px',
+      backgroundColor: toCssColor(COLORS.GREY_8),
+      color: toCssColor(COLORS.GREY_1),
+      outline: 'none',
+      width: '250px',
+    });
+
+    // 3. Einen Container für die Buttons erstellen (nebeneinander)
+    const buttonContainer = document.createElement('div');
+    Object.assign(buttonContainer.style, {
+      display: 'flex',
+      justifyContent: 'space-between',
+      gap: '10px',
+    });
+
+    // 4. Den "Speichern"-Button erstellen
+    const confirmBtn = document.createElement('button');
+    confirmBtn.innerText = 'Speichern';
+    Object.assign(confirmBtn.style, {
+      flex: '1', // Nimmt den anderen halben Platz ein
+      padding: '10px',
+      fontSize: '16px',
+      cursor: 'pointer',
+      backgroundColor: toCssColor(COLORS.GREEN_4), // Grün
+      color: toCssColor(COLORS.GREY_1),
+      border: 'none',
+      borderRadius: '4px',
+      fontWeight: 'bold',
+    });
+
+    // 5. Den "Abbrechen"-Button erstellen
+    const cancelBtn = document.createElement('button');
+    cancelBtn.innerText = 'Abbrechen';
+    Object.assign(cancelBtn.style, {
+      flex: '1', // Nimmt den halben Platz ein
+      padding: '10px',
+      fontSize: '16px',
+      cursor: 'pointer',
+      backgroundColor: toCssColor(COLORS.RED_4), // Rot
+      color: toCssColor(COLORS.GREY_1),
+      border: 'none',
+      borderRadius: '4px',
+      fontWeight: 'bold',
+    });
+
+    // 6. Alles zusammenbauen und ins Spiel einfügen
+    buttonContainer.appendChild(cancelBtn);
+    buttonContainer.appendChild(confirmBtn);
+    popup.appendChild(inputElement);
+    popup.appendChild(buttonContainer);
+
+    const container = document.getElementById('game-container') || document.body;
+    container.appendChild(popup);
+    inputElement.focus();
+
+    // 7. Die Logik zum Speichern und Schließen
+    const closePopup = () => {
+      this.nameEditOpen = false;
+      popup.remove();
+    };
+
+    const saveName = () => {
+
+      const input = inputElement.value.trim();
+      if (input !== '') {
+        this.bridge.setLocalName(input);
+      }
+      closePopup();
+    };
+
+    // Klick-Events für die Buttons
+    confirmBtn.onclick = saveName;
+    cancelBtn.onclick = closePopup;
+
+    // Bonus: Enter/Escape auf der Tastatur weiterhin unterstützen!
+    inputElement.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key === 'Enter') saveName();
+      if (event.key === 'Escape') closePopup();
+    });
   }
 
   private addPlayerRow(profile: PlayerProfile): void {
     const idx = this.playerRows.size;
     const y   = LIST_Y + idx * ROW_H;
 
-    const bg = this.scene.add.rectangle(GAME_WIDTH / 2, y, PANEL_W - 40, ROW_H - 6, 0x253040)
+    const bg = this.scene.add.rectangle(GAME_WIDTH / 2, y, PANEL_W - 40, ROW_H - 6, COLORS.GREY_7)
       .setOrigin(0.5, 0).setScrollFactor(0);
     const name = this.scene.add.text(LIST_X + 40, y + 10, profile.name, {
       fontSize: '22px', fontFamily: 'monospace',
@@ -238,7 +346,7 @@ export class LobbyOverlay {
     const badge = this.scene.add.rectangle(LIST_X + 8, y + (ROW_H - 6) / 2, 20, 20, UNREADY_COLOR)
       .setOrigin(0.5).setScrollFactor(0);
     const label = this.scene.add.text(LIST_X + 8, y + (ROW_H - 6) / 2, '✗', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#ffffff',
+      fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1),  fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
 
     this.container!.add([bg, name, badge, label]);
