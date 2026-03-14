@@ -13,16 +13,16 @@ const BG_COLOR      = COLORS.GREY_9;
 const PANEL_COLOR   = COLORS.GREY_6;
 const READY_COLOR   = COLORS.GREEN_3;
 const UNREADY_COLOR = COLORS.RED_3;
-const TEXT_COLOR    = toCssColor(COLORS.GREY_1);
-const TITLE_COLOR   = toCssColor(COLORS.GOLD_1);
+const TEXT_COLOR    = toCssColor(COLORS.GREY_2);
 
-const PANEL_W  = 700;
+const PANEL_W  = 800;
 const PANEL_H  = 600;   // etwas höher für Name-Zeile
 const PANEL_X  = GAME_WIDTH  / 2 - PANEL_W / 2;
 const PANEL_Y  = GAME_HEIGHT / 2 - PANEL_H / 2;
+const LOGO_Y   = 120;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
-const LIST_Y   = PANEL_Y + 120;
+const LIST_Y   = PANEL_Y + 60;
 const NAME_Y   = PANEL_Y + PANEL_H - 110;  // Name-Zeile über dem BEREIT-Button
 const BTN_Y    = PANEL_Y + PANEL_H - 52;
 
@@ -63,38 +63,38 @@ export class LobbyOverlay {
     // ── Halbtransparenter Hintergrund ─────────────────────────────────────
     objects.push(
       this.scene.add.rectangle(
-        GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, BG_COLOR, 0.85,
+        GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, BG_COLOR, 0.50,
       ).setScrollFactor(0),
     );
 
     // ── Panel ─────────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, PANEL_COLOR)
-        .setStrokeStyle(2, 0x3a4f6a).setScrollFactor(0),
+      this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, PANEL_COLOR, 0.8)
+        .setStrokeStyle(2, COLORS.GOLD_1).setScrollFactor(0),
     );
 
     // ── Titel ─────────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 40, 'FRAGDACHSE', {
-        fontSize: '52px', fontFamily: 'monospace', color: TITLE_COLOR, fontStyle: 'bold',
-      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.image(GAME_WIDTH / 2, LOGO_Y, 'lobby_logo')
+        .setOrigin(0.5)
+        .setScrollFactor(0),
     );
 
     // ── Status-Text ───────────────────────────────────────────────────────
-    this.statusText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 90, 'Warte auf Mitspieler…', {
+    this.statusText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 30, 'Warte auf Mitspieler…', {
       fontSize: '20px', fontFamily: 'monospace', color: TEXT_COLOR,
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.statusText);
 
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 108, PANEL_W - 40, 2, COLORS.BLUE_1)
+      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 48, PANEL_W - 40, 2, COLORS.GOLD_1)
         .setScrollFactor(0),
     );
 
     // ── Trennlinie unten (vor Name + Button) ──────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, NAME_Y - 16, PANEL_W - 40, 2, COLORS.BLUE_1)
+      this.scene.add.rectangle(GAME_WIDTH / 2, NAME_Y - 16, PANEL_W - 40, 2, COLORS.GOLD_1)
         .setScrollFactor(0),
     );
 

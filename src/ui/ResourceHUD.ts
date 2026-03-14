@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ADRENALINE_MAX, RAGE_MAX, DEPTH } from '../config';
+import { ADRENALINE_MAX, RAGE_MAX, DEPTH, COLORS } from '../config';
 
 // ── Layout-Konstanten (linker Sidebar, x=0..240) ─────────────────────────────
 const BAR_X       = 20;    // Linke Kante der Balken
@@ -11,13 +11,13 @@ const BAR_DASH_Y  = 520;   // Dash-Cooldown-Leiste
 const LABEL_FONT  = { fontSize: '12px', color: '#cccccc', fontFamily: 'monospace' };
 
 // Farben
-const COLOR_ADR_BG   = 0x1a3a4a;
-const COLOR_ADR_FG   = 0x4fb3e8;  // blau
-const COLOR_RAGE_BG  = 0x3a1a1a;
-const COLOR_RAGE_FG  = 0xe84f4f;  // rot
-const COLOR_DASH_BG  = 0x2a2a2a;
-const COLOR_DASH_RDY = 0x44cc44;  // grün = bereit
-const COLOR_DASH_CD  = 0x666666;  // grau = Cooldown
+const COLOR_ADR_BG   = COLORS.GREY_8;
+const COLOR_ADR_FG   = COLORS.BLUE_4;  // blau
+const COLOR_RAGE_BG  = COLORS.GREY_8;
+const COLOR_RAGE_FG  = COLORS.RED_2;  // rot
+const COLOR_DASH_BG  = COLORS.GREY_8;
+const COLOR_DASH_RDY = COLORS.GREEN_4;  // grün = bereit
+const COLOR_DASH_CD  = COLORS.GREEN_3;  // grau = Cooldown
 
 /**
  * Client-seitiges HUD für Adrenalin, Wut und Dash-Cooldown.
