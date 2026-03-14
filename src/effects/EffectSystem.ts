@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import { PLAYER_SIZE, DEPTH_FX } from '../config';
+import { PLAYER_SIZE, DEPTH_FX, SHOCKWAVE_RADIUS } from '../config';
 
 export class EffectSystem {
   constructor(
@@ -27,6 +27,54 @@ export class EffectSystem {
       scaleY:     2.8,
       alpha:      0,
       duration:   100,
+      ease:       'Power2Out',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  // ── Schockwellen-Effekt: expandierender Goldring (Unburrow) ─────────────
+
+  playShockwaveEffect(x: number, y: number): void {
+    const startRadius = 10;
+    const endScale    = (SHOCKWAVE_RADIUS / startRadius) * 2;
+    const ring = this.scene.add.circle(x, y, startRadius, 0xffcc00, 0.7);
+    ring.setDepth(DEPTH_FX);
+    this.scene.tweens.add({
+      targets:    ring,
+      scaleX:     endScale,
+      scaleY:     endScale,
+      alpha:      0,
+      duration:   350,
+      ease:       'Power2Out',
+      onComplete: () => ring.destroy(),
+    });
+    // Kleiner weißer Kernblitz
+    const flash = this.scene.add.circle(x, y, 8, 0xffffff, 1);
+    flash.setDepth(DEPTH_FX);
+    this.scene.tweens.add({
+      targets:    flash,
+      scaleX:     4,
+      scaleY:     4,
+      alpha:      0,
+      duration:   180,
+      ease:       'Power3Out',
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  // ── Granaten-Explosions-Effekt: wachsender roter Kreis ───────────────────
+
+  playExplosionEffect(x: number, y: number, radius: number): void {
+    const startRadius = 8;
+    const endScale    = (radius / startRadius) * 2;
+    const ring = this.scene.add.circle(x, y, startRadius, 0xff2200, 0.7);
+    ring.setDepth(DEPTH_FX);
+    this.scene.tweens.add({
+      targets:    ring,
+      scaleX:     endScale,
+      scaleY:     endScale,
+      alpha:      0,
+      duration:   600,
       ease:       'Power2Out',
       onComplete: () => ring.destroy(),
     });

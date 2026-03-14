@@ -3,12 +3,14 @@ import type { PlayerProfile } from '../types';
 import {
   PLAYER_SIZE, DEPTH,
   HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
+  BURROW_ALPHA, BURROW_TINT,
 } from '../config';
 
 export class PlayerEntity {
   readonly id:     string;
   readonly sprite: Phaser.GameObjects.Rectangle;
 
+  private readonly colorHex: number;
   private hpBarBg:  Phaser.GameObjects.Rectangle;
   private hpBarFg:  Phaser.GameObjects.Rectangle;
   private currentHp = HP_MAX;
@@ -17,10 +19,15 @@ export class PlayerEntity {
   private targetX = 0;
   private targetY = 0;
 
+  // Visuelle Zustände – kombiniert in resolveVisual()
+  private isBurrowedVisual = false;
+  private isRagingVisual   = false;
+
   constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number) {
-    this.id = profile.id;
-    this.targetX = x;
-    this.targetY = y;
+    this.id       = profile.id;
+    this.colorHex = profile.colorHex;
+    this.targetX  = x;
+    this.targetY  = y;
 
     // Spieler-Sprite
     this.sprite = scene.add.rectangle(x, y, PLAYER_SIZE, PLAYER_SIZE, profile.colorHex);
@@ -98,6 +105,36 @@ export class PlayerEntity {
     this.sprite.setVisible(visible);
     this.hpBarBg.setVisible(visible);
     this.hpBarFg.setVisible(visible);
+  }
+
+  /** Burrow-Visualisierung setzen. */
+  setBurrowVisual(isBurrowed: boolean): void {
+    this.isBurrowedVisual = isBurrowed;
+    this.resolveVisual();
+  }
+
+  /** Ultimate-Rage-Tint setzen (Spieler leuchtet rot). */
+  setRageTint(active: boolean): void {
+    this.isRagingVisual = active;
+    this.resolveVisual();
+  }
+
+  /**
+   * Einheitliche Methode zur visuellen Darstellung.
+   * Priorität: Burrow > Rage > Normal.
+   * Rectangle hat kein setTint() – stattdessen setFillStyle().
+   */
+  private resolveVisual(): void {
+    if (this.isBurrowedVisual) {
+      this.sprite.setAlpha(BURROW_ALPHA);
+      this.sprite.setFillStyle(BURROW_TINT);
+    } else if (this.isRagingVisual) {
+      this.sprite.setAlpha(1.0);
+      this.sprite.setFillStyle(0xff3333);
+    } else {
+      this.sprite.setAlpha(1.0);
+      this.sprite.setFillStyle(this.colorHex);
+    }
   }
 
   destroy(): void {

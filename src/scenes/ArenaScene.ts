@@ -8,9 +8,12 @@ import { PlayerManager }       from '../entities/PlayerManager';
 import { ProjectileManager }   from '../entities/ProjectileManager';
 import { InputSystem }         from '../systems/InputSystem';
 import { HostPhysicsSystem }   from '../systems/HostPhysicsSystem';
-import { ShootingSystem }      from '../systems/ShootingSystem';
 import { CombatSystem }        from '../systems/CombatSystem';
+import { ResourceSystem }      from '../systems/ResourceSystem';
+import { BurrowSystem }        from '../systems/BurrowSystem';
+import { LoadoutManager }      from '../loadout/LoadoutManager';
 import { EffectSystem }        from '../effects/EffectSystem';
+import { ResourceHUD }         from '../ui/ResourceHUD';
 import { LobbyOverlay }        from './LobbyOverlay';
 import type { PlayerNetState, GamePhase, PlayerProfile } from '../types';
 import {
@@ -30,15 +33,20 @@ export class ArenaScene extends Phaser.Scene {
   private effectSystem!:      EffectSystem;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
-  private shootingSystem!:    ShootingSystem;
   private lobbyOverlay!:      LobbyOverlay;
 
   // ── HUD ──────────────────────────────────────────────────────────────────
   private timerText!: Phaser.GameObjects.Text;
+  private resourceHUD: ResourceHUD | null = null;
 
   // ── Dynamische Arena ──────────────────────────────────────────────────────
   private arenaResult:  ArenaBuilderResult | null = null;
   private rockRegistry: RockRegistry | null       = null;
+
+  // ── Host-only Systeme ─────────────────────────────────────────────────────
+  private resourceSystem: ResourceSystem | null = null;
+  private burrowSystem:   BurrowSystem   | null = null;
+  private loadoutManager: LoadoutManager | null = null;
 
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
@@ -46,8 +54,7 @@ export class ArenaScene extends Phaser.Scene {
   private roundStartPending = false;
   /**
    * Wird true wenn der Host während eines laufenden Matches disconnectet.
-   * Sperrt die Arena-Simulation und refreshPlayerList() bis die Netzwerkphase
-   * auf 'LOBBY' gewechselt ist (neuer Host setzt sie zurück).
+   * Sperrt die Arena-Simulation bis die Netzwerkphase auf 'LOBBY' wechselt.
    */
   private matchTerminated   = false;
 
@@ -62,6 +69,9 @@ export class ArenaScene extends Phaser.Scene {
   create(): void {
     // Alte Szenen-Callbacks löschen, neue registrieren
     bridge.clearPlayerCallbacks();
+
+    // Kontextmenü deaktivieren (Rechtsklick soll weapon2 auslösen, nicht Browser-Menü)
+    this.input.mouse?.disableContextMenu();
 
     // ── 1. Statische Arena (einmalig, nie zerstört) ────────────────────────
     const builder = new ArenaBuilder(this);
@@ -80,41 +90,65 @@ export class ArenaScene extends Phaser.Scene {
     this.effectSystem = new EffectSystem(this, bridge);
     this.effectSystem.setup();
 
-    // ── 6. Schuss-System ──────────────────────────────────────────────────
-    this.shootingSystem = new ShootingSystem(bridge, this.playerManager, this.projectileManager);
-    this.shootingSystem.setup();
-
-    // ── 7. Host-Physik (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
+    // ── 6. Host-Physik (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
     this.hostPhysics = new HostPhysicsSystem(
       this, this.playerManager, bridge, this.combatSystem,
     );
 
-    // ── 8. Input ──────────────────────────────────────────────────────────
+    // ── 7. Input ──────────────────────────────────────────────────────────
     this.inputSystem = new InputSystem(
       this,
       bridge,
       () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
     );
     this.inputSystem.setup();
-    this.inputSystem.setupShootListener(angle => this.shootingSystem.fireShot(angle));
+    this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY) => {
+      bridge.sendLoadoutUse(slot, angle, targetX, targetY);
+    });
 
-    // ── 9. Netzwerk-Callbacks ─────────────────────────────────────────────
+    // ── 8. Ressourcen-HUD ─────────────────────────────────────────────────
+    this.resourceHUD = new ResourceHUD(this);
+
+    // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId) => {
+      if (!bridge.isHost()) return;
+      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now());
+    });
+
+    // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
+    bridge.registerExplosionEffectHandler((x, y, radius) => {
+      this.effectSystem.playExplosionEffect(x, y, radius);
+    });
+
+    // ── 11. RPC-Handler für Burrow-Visualisierung ─────────────────────────
+    bridge.registerBurrowVisualHandler((playerId, isBurrowed) => {
+      const entity = this.playerManager.getPlayer(playerId);
+      if (!entity) return;
+      entity.setBurrowVisual(isBurrowed);
+    });
+
+    // ── 12. Schockwellen-Visualisierung ───────────────────────────────────
+    bridge.registerShockwaveEffectHandler((x, y) => {
+      this.effectSystem.playShockwaveEffect(x, y);
+    });
+
+    // ── 13. Netzwerk-Callbacks ────────────────────────────────────────────
     bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
 
-    // ── 10. HUD erstellen ─────────────────────────────────────────────────
+    // ── 14. HUD erstellen ─────────────────────────────────────────────────
     this.createHUD();
 
-    // ── 11. Lobby-Overlay erstellen und anzeigen ──────────────────────────
+    // ── 15. Lobby-Overlay erstellen und anzeigen ──────────────────────────
     this.lobbyOverlay = new LobbyOverlay(this, bridge, () => this.onReadyToggled());
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
 
-    // ── 12. Eigenen Ready-Status hart zurücksetzen ────────────────────────
+    // ── 16. Eigenen Ready-Status hart zurücksetzen ────────────────────────
     this.isLocalReady = false;
     bridge.setLocalReady(false);
 
-    // ── 13. Initiale Phase lesen (Spät-Joiner-Support) ────────────────────
+    // ── 17. Initiale Phase lesen (Spät-Joiner-Support) ────────────────────
     this.lastPhase = bridge.getGamePhase();
   }
 
@@ -126,19 +160,20 @@ export class ArenaScene extends Phaser.Scene {
 
   private onPlayerLeft(id: string): void {
     if (this.playerManager.hasPlayer(id)) {
-      this.combatSystem.removePlayer(id);
+      if (bridge.isHost()) {
+        this.combatSystem.removePlayer(id);
+        this.resourceSystem?.removePlayer(id);
+        this.burrowSystem?.removePlayer(id);
+        this.loadoutManager?.removePlayer(id);
+      }
       this.hostPhysics.removePlayer(id);
       this.playerManager.removePlayer(id);
     }
-    // Host-Disconnect während eines laufenden Matches → Match sofort beenden
     if (bridge.getGamePhase() === 'ARENA' && id === bridge.getMatchHostId()) {
       this.terminateMatch();
     }
   }
 
-  /**
-   * Beendet das laufende Match sofort (z. B. weil der Host disconnectet ist).
-   */
   private terminateMatch(): void {
     if (this.matchTerminated) return;
     this.matchTerminated = true;
@@ -148,7 +183,12 @@ export class ArenaScene extends Phaser.Scene {
     this.roundStartPending = false;
 
     for (const p of [...this.playerManager.getAllPlayers()]) {
-      if (bridge.isHost()) this.combatSystem.removePlayer(p.id);
+      if (bridge.isHost()) {
+        this.combatSystem.removePlayer(p.id);
+        this.resourceSystem?.removePlayer(p.id);
+        this.burrowSystem?.removePlayer(p.id);
+        this.loadoutManager?.removePlayer(p.id);
+      }
       this.playerManager.removePlayer(p.id);
     }
 
@@ -190,21 +230,26 @@ export class ArenaScene extends Phaser.Scene {
   private onTransitionToArena(): void {
     const layout = bridge.getArenaLayout();
     if (!layout) {
-      // Reliable-State sollte bereits da sein; kurze Retry-Verzögerung als Absicherung
       this.time.delayedCall(16, () => this.onTransitionToArena());
       return;
     }
 
-    // Dynamische Arena aufbauen
     this.buildArena(layout);
 
-    // Bereits bereite Spieler spawnen
     for (const profile of bridge.getConnectedPlayers()) {
       if (bridge.getPlayerReady(profile.id) && !this.playerManager.hasPlayer(profile.id)) {
         this.playerManager.addPlayer(profile);
-        if (bridge.isHost()) this.combatSystem.initPlayer(profile.id);
+        if (bridge.isHost()) {
+          this.combatSystem.initPlayer(profile.id);
+          this.resourceSystem?.initPlayer(profile.id);
+          this.burrowSystem?.initPlayer(profile.id);
+          this.loadoutManager?.assignDefaultLoadout(profile.id);
+        }
       }
     }
+
+    this.resourceHUD?.setVisible(true);
+    this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
   }
 
@@ -214,38 +259,42 @@ export class ArenaScene extends Phaser.Scene {
     this.roundStartPending = false;
 
     for (const p of [...this.playerManager.getAllPlayers()]) {
-      if (bridge.isHost()) this.combatSystem.removePlayer(p.id);
+      if (bridge.isHost()) {
+        this.combatSystem.removePlayer(p.id);
+        this.resourceSystem?.removePlayer(p.id);
+        this.burrowSystem?.removePlayer(p.id);
+        this.loadoutManager?.removePlayer(p.id);
+      }
       this.playerManager.removePlayer(p.id);
     }
 
     this.tearDownArena();
 
+    this.resourceHUD?.setVisible(false);
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
   }
 
-  /** Host-only: Prüft ob alle Spieler bereit sind und startet die Runde. */
   private hostCheckReadyToStart(): void {
     if (this.roundStartPending || !bridge.areAllPlayersReady()) return;
     this.roundStartPending = true;
     this.lobbyOverlay.lockButton();
-    // Host-ID publizieren bevor die Phase wechselt
     bridge.setMatchHostId();
-    // Layout generieren und publizieren (reliable → Client bekommt es vor Phase-Wechsel)
     const layout = ArenaGenerator.generate(Date.now());
     bridge.publishArenaLayout(layout);
-    // Rundenende nach Layout setzen, Phasenwechsel zuletzt
     bridge.setRoundEndTime(Date.now() + ARENA_DURATION_SEC * 1000);
     bridge.setGamePhase('ARENA');
   }
 
-  /** Host: Spawnt Spieler die isReady === true sind und noch keine Entity haben. */
   private spawnReadyPlayers(): void {
     if (!bridge.isHost()) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (bridge.getPlayerReady(profile.id) && !this.playerManager.hasPlayer(profile.id)) {
         this.playerManager.addPlayer(profile);
         this.combatSystem.initPlayer(profile.id);
+        this.resourceSystem?.initPlayer(profile.id);
+        this.burrowSystem?.initPlayer(profile.id);
+        this.loadoutManager?.assignDefaultLoadout(profile.id);
       }
     }
   }
@@ -253,16 +302,13 @@ export class ArenaScene extends Phaser.Scene {
   // ── Arena Aufbau / Teardown ───────────────────────────────────────────────
 
   private buildArena(layout: import('../types').ArenaLayout): void {
-    // Sicherheits-Teardown (sollte in normalem Flow leer sein)
     this.tearDownArena();
 
     const builder = new ArenaBuilder(this);
     this.arenaResult = builder.buildDynamic(layout);
 
-    // Layout in PlayerManager eintragen (für dynamische Spawn-Punkte)
     this.playerManager.setLayout(layout);
 
-    // Gruppen an Physik-Systeme weitergeben
     this.projectileManager.setRockGroup(
       this.arenaResult.rockGroup,
       this.arenaResult.rockObjects,
@@ -273,17 +319,49 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaResult.trunkGroup,
     );
 
-    // RockRegistry nur auf dem Host initialisieren
     if (bridge.isHost()) {
+      this.resourceSystem = new ResourceSystem();
+      this.burrowSystem   = new BurrowSystem(
+        this.resourceSystem,
+        this.playerManager,
+        this.combatSystem,
+        this.hostPhysics,
+        bridge,
+      );
+      this.burrowSystem.setGroups(this.arenaResult.rockGroup, this.arenaResult.trunkGroup);
+
+      this.loadoutManager = new LoadoutManager(
+        this.playerManager,
+        this.projectileManager,
+        this.resourceSystem,
+        bridge,
+      );
+
+      // Rück-Referenzen setzen
+      this.combatSystem.setBurrowSystem(this.burrowSystem);
+      this.combatSystem.setResourceSystem(this.resourceSystem);
+      this.combatSystem.setLoadoutManager(this.loadoutManager);
+
+      this.hostPhysics.setBurrowSystem(this.burrowSystem);
+      this.hostPhysics.setLoadoutManager(this.loadoutManager);
+
+      // Dash-RPC: Client → Host
+      bridge.registerDashHandler((playerId, dx, dy) => {
+        this.hostPhysics.handleDashRPC(playerId, dx, dy);
+      });
+
+      // Burrow-RPC: Client → Host
+      bridge.registerBurrowHandler((playerId, wantsBurrowed) => {
+        this.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
+      });
+
+      // RockRegistry nur auf dem Host
       this.rockRegistry = new RockRegistry(layout);
-      const arenaResult  = this.arenaResult;  // Closure-Referenz sichern
+      const arenaResult  = this.arenaResult;
 
       this.projectileManager.setRockHitCallback((rockId) => {
         if (!this.rockRegistry || !arenaResult) return;
         const newHp = this.rockRegistry.applyDamage(rockId, ROCK_DAMAGE_PER_HIT);
-        // Fels-Visual sofort auf dem Host aktualisieren.
-        // remove() wird NICHT aufgerufen: hp=0 bleibt im Snapshot, damit Clients
-        // in runClientUpdate() destroyRock() auslösen können.
         ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, rockId, newHp);
       });
     }
@@ -294,7 +372,15 @@ export class ArenaScene extends Phaser.Scene {
       ArenaBuilder.destroyDynamic(this.arenaResult);
       this.arenaResult = null;
     }
-    this.rockRegistry = null;
+    this.rockRegistry   = null;
+    this.resourceSystem = null;
+    this.burrowSystem   = null;
+    this.loadoutManager = null;
+    this.combatSystem.setBurrowSystem(null);
+    this.combatSystem.setResourceSystem(null);
+    this.combatSystem.setLoadoutManager(null);
+    this.hostPhysics.setBurrowSystem(null);
+    this.hostPhysics.setLoadoutManager(null);
     this.projectileManager.setRockGroup(null, null, null);
     this.hostPhysics.setRockGroup(null, null);
   }
@@ -321,21 +407,20 @@ export class ArenaScene extends Phaser.Scene {
 
   // ── Update ───────────────────────────────────────────────────────────────
 
-  update(): void {
+  update(_time: number, delta: number): void {
     this.detectPhaseChange();
 
-    const phase      = bridge.getGamePhase();
-    const localReady = this.isLocalReady;
-    const inGame     = phase === 'ARENA' && localReady;
+    const phase  = bridge.getGamePhase();
+    const inGame = phase === 'ARENA';
 
     if (inGame) {
       this.inputSystem.update();
     }
 
-    if (!this.matchTerminated && (phase === 'LOBBY' || !localReady)) {
+    if (!this.matchTerminated && phase === 'LOBBY') {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       this.lobbyOverlay.refreshPlayerList(bridge.getConnectedPlayers());
-      if (phase === 'LOBBY' && bridge.isHost()) this.hostCheckReadyToStart();
+      if (bridge.isHost()) this.hostCheckReadyToStart();
     } else if (!this.matchTerminated && this.lobbyOverlay.isVisible()) {
       this.lobbyOverlay.hide();
     }
@@ -346,13 +431,12 @@ export class ArenaScene extends Phaser.Scene {
 
       if (bridge.isHost()) {
         this.spawnReadyPlayers();
-        this.runHostUpdate();
+        this.runHostUpdate(delta);
         if (secs <= 0) bridge.setGamePhase('LOBBY');
       } else {
         this.runClientUpdate();
       }
 
-      // Canopy-Transparenz – nur für den lokalen Spieler, jede Frame lokal berechnet
       if (this.arenaResult) {
         const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite ?? null;
         ArenaBuilder.updateCanopyTransparency(this.arenaResult.canopyObjects, localSprite);
@@ -362,18 +446,44 @@ export class ArenaScene extends Phaser.Scene {
 
   // ── Host-Update ──────────────────────────────────────────────────────────
 
-  private runHostUpdate(): void {
+  private runHostUpdate(delta: number): void {
+    // Ressourcen- und Burrow-Systeme ticken
+    if (this.resourceSystem && this.burrowSystem) {
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (!this.burrowSystem.isBurrowed(player.id)) {
+          this.resourceSystem.regenTick(player.id, delta);
+        }
+      }
+      this.burrowSystem.update(delta);
+    }
+
+    // LoadoutManager ticken (Rage-Drain, Ultimate-Ablauf)
+    this.loadoutManager?.update(delta);
+
     this.hostPhysics.update();
     this.combatSystem.update();
 
-    const projectiles = this.projectileManager.hostUpdate();
-    const rocks       = this.rockRegistry?.getNetSnapshot() ?? [];
+    const { synced: projectiles, explodedGrenades } = this.projectileManager.hostUpdate();
+
+    // Granaten-Explosionen verarbeiten
+    for (const g of explodedGrenades) {
+      this.combatSystem.applyAoeDamage(g.x, g.y, g.aoeRadius, g.aoeDamage, g.ownerId);
+      bridge.broadcastExplosionEffect(g.x, g.y, g.aoeRadius);
+    }
+
+    const rocks   = this.rockRegistry?.getNetSnapshot() ?? [];
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.playerManager.getAllPlayers()) {
-      const hp    = this.combatSystem.getHP(player.id);
-      const alive = this.combatSystem.isAlive(player.id);
-      players[player.id] = { x: player.sprite.x, y: player.sprite.y, hp, alive };
+      const hp         = this.combatSystem.getHP(player.id);
+      const alive      = this.combatSystem.isAlive(player.id);
+      const adrenaline = this.resourceSystem?.getAdrenaline(player.id) ?? 0;
+      const rage       = this.resourceSystem?.getRage(player.id) ?? 0;
+      const isBurrowed = this.burrowSystem?.isBurrowed(player.id) ?? false;
+      const isStunned  = this.burrowSystem?.isStunned(player.id)  ?? false;
+      const isRaging   = this.loadoutManager?.isUltimateActive(player.id) ?? false;
+
+      players[player.id] = { x: player.sprite.x, y: player.sprite.y, hp, alive, adrenaline, rage, isBurrowed, isStunned, isRaging };
 
       player.updateHP(hp);
       player.setVisible(alive);
@@ -381,6 +491,14 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     bridge.publishGameState({ players, projectiles, rocks });
+
+    // HUD des lokalen Host-Spielers aktualisieren
+    const localId = bridge.getLocalPlayerId();
+    if (players[localId]) {
+      const ls = players[localId];
+      this.inputSystem.setLocalState(ls.isStunned, ls.isBurrowed);
+      this.resourceHUD?.update(ls.adrenaline, ls.rage, this.inputSystem.getDashCooldownFrac());
+    }
   }
 
   // ── Client-Update ────────────────────────────────────────────────────────
@@ -389,7 +507,6 @@ export class ArenaScene extends Phaser.Scene {
     const state = bridge.getLatestGameState();
     if (!state) return;
 
-    // Entities lazy erstellen wenn der Host Daten für einen Spieler sendet
     for (const [id, ps] of Object.entries(state.players)) {
       let player = this.playerManager.getPlayer(id);
       if (!player) {
@@ -404,9 +521,10 @@ export class ArenaScene extends Phaser.Scene {
       player.setTargetPosition(ps.x, ps.y);
       player.updateHP(ps.hp);
       player.setVisible(ps.alive);
+      player.setBurrowVisual(ps.isBurrowed);
+      player.setRageTint(ps.isRaging);
     }
 
-    // Spielerpositionen zur Zielposition interpolieren
     const LERP_FACTOR = 0.2;
     for (const player of this.playerManager.getAllPlayers()) {
       player.lerpStep(LERP_FACTOR);
@@ -414,7 +532,6 @@ export class ArenaScene extends Phaser.Scene {
 
     this.projectileManager.clientSyncVisuals(state.projectiles);
 
-    // Rock-HP-Sync: beschädigte Felsen visuell aktualisieren
     if (state.rocks && this.arenaResult) {
       for (const rs of state.rocks) {
         ArenaBuilder.updateRockVisual(
@@ -424,6 +541,17 @@ export class ArenaScene extends Phaser.Scene {
           rs.hp,
         );
       }
+    }
+
+    const localId    = bridge.getLocalPlayerId();
+    const localState = state.players[localId];
+    if (localState) {
+      this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);
+      this.resourceHUD?.update(
+        localState.adrenaline,
+        localState.rage,
+        this.inputSystem.getDashCooldownFrac(),
+      );
     }
   }
 }

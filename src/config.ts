@@ -125,6 +125,33 @@ export const TRUNK_RADIUS        = 24;     // Kollisions-Radius Baumstumpf (px)
 export const CANOPY_RADIUS       = 96;     // Visueller Radius Baumkrone (px)
 export const CANOPY_ALPHA_PLAYER = 0.2;   // Alpha wenn lokaler Spieler darunter (80% transparent)
 
+// ---- Ressourcen ----
+export const ADRENALINE_MAX            = 100;
+export const ADRENALINE_START          = 30;
+export const ADRENALINE_REGEN_PER_SEC  = 1;    // passiv, Host
+export const ADRENALINE_DRAIN_PER_SEC  = 20;   // während Burrow
+export const ADRENALINE_REGEN_PAUSE_MS = 500;  // Pause nach Verbrauch
+
+export const RAGE_MAX                  = 300;
+export const RAGE_PER_DAMAGE           = 1;    // Wut pro Schadenspunkt
+
+// ---- Dash ----
+export const DASH_SPEED                = 800;  // px/s
+export const DASH_DURATION_MS          = 150;  // Dauer der Geschwindigkeitsüberschreibung
+export const DASH_COOLDOWN_MS          = 2000;
+
+// ---- Burrow ----
+export const BURROW_SPEED_FACTOR       = 0.4;       // Faktor * PLAYER_SPEED
+export const BURROW_ALPHA              = 0.4;
+export const BURROW_TINT               = 0x8B5E3C;  // Braun
+export const BURROW_STUCK_DAMAGE_PER_SEC = 10;
+
+// ---- Schockwelle ----
+export const SHOCKWAVE_RADIUS          = 150;   // px
+export const SHOCKWAVE_DAMAGE          = 30;
+export const SHOCKWAVE_KNOCKBACK       = 400;   // px/s Impuls
+export const SELF_STUN_DURATION_MS     = 1000;
+
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;
 export const ARENA_DURATION_SEC = 120;

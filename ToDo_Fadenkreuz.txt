@@ -1,0 +1,33 @@
+
+Du bist ein Senior Game Developer für Phaser 3. Wir implementieren ein dynamisches Ziel-System (Fadenkreuz und Schusslinie) für unseren Topdown-Shooter.
+WICHTIG VORAB: Bitte belasse den normalen System-Mauszeiger des Browsers vorerst sichtbar (kein cursor: none im CSS). Lade außerdem noch keine externen Bilder/Sprites (PNGs), sondern baue das Fadenkreuz ausschließlich mit Phaser.GameObjects.Graphics.
+
+Bitte integriere folgende Logik für den lokalen Spieler (z.B. in der update()-Schleife der Szene oder einem eigenen AimingSystem):
+
+1. Die Schusslinie (Laserpointer):
+
+Nutze ein Graphics-Objekt, das jeden Frame geleert (clear()) und neu gezeichnet wird.
+
+Zeichne eine durchgezogene, aber stark transparente Linie (z.B. Weiß, alpha: 0.2) vom Zentrum des lokalen Spielers in Richtung des aktuellen Maus-Pointers.
+
+Reichweiten-Limit (Clamping): Die Linie darf nicht unendlich lang sein. Begrenze die Länge auf die maximale Reichweite der aktuell ausgerüsteten Waffe (z.B. maxRange). Ist die Maus weiter weg als die Waffe schießen kann, stoppt die Linie exakt an der maxRange-Grenze. Nutze Trigonometrie (Phaser.Math.Angle.Between und Distanz-Checks), um diesen Endpunkt zu berechnen.
+
+2. Das dynamische Fadenkreuz (Crosshair):
+
+Zeichne exakt an den berechneten Endpunkt der Linie (also auf der Mausposition, aber maximal bis zur Waffengrenze) ein Fadenkreuz.
+
+Zeichne dafür 4 kurze Linien (Oben, Unten, Links, Rechts um den Endpunkt herum).
+
+Bloom / Rückstoß-Feedback: Der Abstand dieser 4 kleinen Linien vom berechneten Zentrum des Fadenkreuzes soll sich dynamisch vergrößern, je höher der currentDynamicSpread (die Streuung/Rückstoß der Waffe) des Spielers gerade ist.
+
+3. Farbliches Treffer-Feedback (Target Detection):
+
+Prüfe (z.B. via Phaser.Geom.Intersects.LineToRectangle), ob die exakte Schusslinie den Hitbox-Bereich eines gegnerischen Spielers oder eines Felsens (aus der Felsen-StaticGroup) schneidet/berührt.
+
+Wenn ja: Färbe das Fadenkreuz und die Schusslinie Rot (nutze unsere Konstante COLORS.RED_3).
+
+Wenn nein: Zeichne beides im Standard-Weiß.
+
+4. Ausnahme beim Einbuddeln:
+
+Wenn der lokale Spieler den Status isBurrowed === true hat, darf absolut nichts gezeichnet werden. Leere das Graphics-Objekt, da der Spieler unter der Erde nicht zielen kann.

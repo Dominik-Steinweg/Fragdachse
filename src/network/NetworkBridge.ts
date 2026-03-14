@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
@@ -224,16 +224,35 @@ export class NetworkBridge {
     return { players, projectiles: projectiles ?? [], rocks: rocks ?? [] };
   }
 
-  // ── Schuss-RPC: Client → Host ─────────────────────────────────────────────
-  registerShootHandler(handler: (angle: number, shooterId: string) => void): void {
-    RPC.register('shoot', async (data: unknown, caller: PlayerState): Promise<unknown> => {
-      if (!isHost()) return;
-      handler((data as { angle: number }).angle, caller.id);
+  // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
+
+  sendLoadoutUse(slot: LoadoutSlot, angle: number, targetX: number, targetY: number): void {
+    RPC.call('lu', { slot, angle, tx: targetX, ty: targetY }, RPC.Mode.HOST).catch(console.error);
+  }
+
+  registerLoadoutUseHandler(
+    handler: (slot: LoadoutSlot, angle: number, targetX: number, targetY: number, senderId: string) => void,
+  ): void {
+    RPC.register('lu', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return undefined;
+      const { slot, angle, tx, ty } = data as { slot: LoadoutSlot; angle: number; tx: number; ty: number };
+      handler(slot, angle, tx, ty, caller.id);
+      return undefined;
     });
   }
 
-  sendShoot(angle: number): void {
-    RPC.call('shoot', { angle }, RPC.Mode.HOST).catch(console.error);
+  // ── Explosions-Effekt-RPC: Host → Alle ────────────────────────────────────
+
+  broadcastExplosionEffect(x: number, y: number, radius: number): void {
+    RPC.call('xfx', { x, y, r: radius }, RPC.Mode.ALL).catch(console.error);
+  }
+
+  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number) => void): void {
+    RPC.register('xfx', async (data: unknown): Promise<unknown> => {
+      const { x, y, r } = data as { x: number; y: number; r: number };
+      handler(x, y, r);
+      return undefined;
+    });
   }
 
   // ── Effekt-RPC: Host → Alle (visuelles Feedback) ──────────────────────────
@@ -245,6 +264,64 @@ export class NetworkBridge {
     RPC.register('fx', async (data: unknown): Promise<unknown> => {
       const { type, x, y } = data as { type: 'hit' | 'death'; x: number; y: number };
       cb(type, x, y);
+      return undefined;
+    });
+  }
+
+  // ── Dash-RPC: Client → Host ───────────────────────────────────────────────
+
+  sendDash(dx: number, dy: number): void {
+    RPC.call('dash', { dx, dy }, RPC.Mode.HOST).catch(console.error);
+  }
+
+  registerDashHandler(cb: (playerId: string, dx: number, dy: number) => void): void {
+    RPC.register('dash', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return;
+      const { dx, dy } = data as { dx: number; dy: number };
+      cb(caller.id, dx, dy);
+      return undefined;
+    });
+  }
+
+  // ── Burrow-RPC: Client → Host ─────────────────────────────────────────────
+
+  sendBurrowRequest(wantsBurrowed: boolean): void {
+    RPC.call('burrow', { want: wantsBurrowed }, RPC.Mode.HOST).catch(console.error);
+  }
+
+  registerBurrowHandler(cb: (playerId: string, wantsBurrowed: boolean) => void): void {
+    RPC.register('burrow', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return;
+      const { want } = data as { want: boolean };
+      cb(caller.id, want);
+      return undefined;
+    });
+  }
+
+  // ── Schockwellen-Effekt: Host → Alle ─────────────────────────────────────
+
+  broadcastShockwaveEffect(x: number, y: number): void {
+    RPC.call('shockfx', { x, y }, RPC.Mode.ALL).catch(console.error);
+  }
+
+  registerShockwaveEffectHandler(cb: (x: number, y: number) => void): void {
+    RPC.register('shockfx', async (data: unknown): Promise<unknown> => {
+      const { x, y } = data as { x: number; y: number };
+      cb(x, y);
+      return undefined;
+    });
+  }
+
+  // ── Burrow-Visualisierung: Host → Alle ────────────────────────────────────
+
+  broadcastBurrowVisual(playerId: string, isBurrowed: boolean): void {
+    RPC.call('bfx', { id: playerId, b: isBurrowed }, RPC.Mode.ALL).catch(console.error);
+  }
+
+  registerBurrowVisualHandler(cb: (playerId: string, isBurrowed: boolean) => void): void {
+    RPC.register('bfx', async (data: unknown): Promise<unknown> => {
+      const { id, b } = data as { id: string; b: boolean };
+      cb(id, b);
       return undefined;
     });
   }

@@ -12,17 +12,20 @@ ToDos:
 - Zerstörbare Wände (Raster!)
 - Random Wände
 
-- "Crosshair"
-
 - Loadout minimal realisieren
  - Primär
  - Sekundär
  - Utility
  - Ultimate
 
+ - "Crosshair"
+
 - WeaponConfig.txt abarbeiten und alles einbauen
 
+- Powerups!
 
+
+GUI Info-Bereiche:
 
 - GUI links (Spielerinfos)
   - Tastenbelegung (oder über Button verstecken und dann als Popup??)
@@ -40,3 +43,8 @@ ToDos:
   - Timer dort hin verschieben
   - Killfeed
   - Fragliste
+
+
+GUI: Lobby
+
+Sprites für Spieler und Steine etc.

@@ -1,10 +1,6 @@
 import Phaser from 'phaser';
-import {
-  PROJECTILE_SIZE, PROJECTILE_SPEED,
-  PROJECTILE_LIFETIME_MS, PROJECTILE_MAX_BOUNCES,
-  DEPTH, COLORS,
-} from '../config';
-import type { TrackedProjectile, SyncedProjectile } from '../types';
+import { DEPTH } from '../config';
+import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
 
 export class ProjectileManager {
   private scene:       Phaser.Scene;
@@ -48,25 +44,56 @@ export class ProjectileManager {
 
   // ── Host ──────────────────────────────────────────────────────────────────
 
-  spawnProjectile(x: number, y: number, angle: number, ownerId: string): void {
+  /**
+   * Spawnt ein Projektil mit der übergebenen Konfiguration.
+   * Granaten (isGrenade=true) haben keine Welt-/Hindernis-Kollision
+   * und explodieren nach fuseTime ms.
+   */
+  spawnProjectile(
+    x:       number,
+    y:       number,
+    angle:   number,
+    ownerId: string,
+    cfg:     ProjectileSpawnConfig,
+  ): void {
     const id     = this.nextId++;
-    const sprite = this.scene.add.rectangle(x, y, PROJECTILE_SIZE, PROJECTILE_SIZE, COLORS.GOLD_3);
+    const sprite = this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
     sprite.setDepth(DEPTH.PROJECTILES);
     this.scene.physics.add.existing(sprite);
 
     const body = sprite.body as Phaser.Physics.Arcade.Body;
-    body.setCollideWorldBounds(true);
-    body.onWorldBounds = true;
-    body.setBounce(1, 1);
+
+    if (cfg.isGrenade) {
+      // Granaten fliegen durch alles – keine Welt-/Hindernis-Kollision
+      body.setCollideWorldBounds(false);
+    } else {
+      body.setCollideWorldBounds(true);
+      body.onWorldBounds = true;
+      body.setBounce(1, 1);
+    }
+
     body.setVelocity(
-      Math.cos(angle) * PROJECTILE_SPEED,
-      Math.sin(angle) * PROJECTILE_SPEED,
+      Math.cos(angle) * cfg.speed,
+      Math.sin(angle) * cfg.speed,
     );
 
     const tracked: TrackedProjectile = {
-      id, sprite, body, bounceCount: 0, createdAt: Date.now(), ownerId,
+      id,
+      sprite,
+      body,
+      bounceCount:    0,
+      createdAt:      Date.now(),
+      ownerId,
       boundsListener: () => {},
+      damage:         cfg.damage,
+      lifetime:       cfg.lifetime,
+      maxBounces:     cfg.maxBounces,
+      isGrenade:      cfg.isGrenade,
+      fuseTime:       cfg.fuseTime,
+      aoeRadius:      cfg.aoeRadius,
+      aoeDamage:      cfg.aoeDamage,
     };
+
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
       if (hitBody === body) tracked.bounceCount++;
     };
@@ -74,23 +101,24 @@ export class ProjectileManager {
     this.projectiles.push(tracked);
     this.scene.physics.world.on('worldbounds', boundsListener);
 
-    // Felsen-Collider: Abprallen (physikalisch) + Schaden (Callback)
-    if (this.rockGroup) {
-      const rockObjects = this.rockObjects;
-      const onHit       = this.onRockHit;
-      this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
-        tracked.bounceCount++;
-        if (!rockObjects || !onHit) return;
-        const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
-        if (idx !== -1) onHit(idx);
-      });
-    }
+    // Rock/Trunk-Collider NUR für normale Projektile (nicht Granaten)
+    if (!cfg.isGrenade) {
+      if (this.rockGroup) {
+        const rockObjects = this.rockObjects;
+        const onHit       = this.onRockHit;
+        this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+          tracked.bounceCount++;
+          if (!rockObjects || !onHit) return;
+          const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
+          if (idx !== -1) onHit(idx);
+        });
+      }
 
-    // Trunk-Collider: nur Abprallen, kein Schaden
-    if (this.trunkGroup) {
-      this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
-        tracked.bounceCount++;
-      });
+      if (this.trunkGroup) {
+        this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+          tracked.bounceCount++;
+        });
+      }
     }
   }
 
@@ -114,21 +142,51 @@ export class ProjectileManager {
   }
 
   /**
-   * Host: Abgelaufene Projektile entfernen, aktuelle Positionen zurückgeben.
+   * Host: Abgelaufene/explodierte Projektile entfernen, aktuelle Positionen zurückgeben.
+   * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurückgegeben.
    */
-  hostUpdate(): SyncedProjectile[] {
-    const now = Date.now();
+  hostUpdate(): { synced: SyncedProjectile[]; explodedGrenades: ExplodedGrenade[] } {
+    const now              = Date.now();
+    const explodedGrenades: ExplodedGrenade[] = [];
+
     this.projectiles = this.projectiles.filter(proj => {
-      const dead =
-        now - proj.createdAt > PROJECTILE_LIFETIME_MS ||
-        proj.bounceCount >= PROJECTILE_MAX_BOUNCES;
-      if (dead) {
-        this.scene.physics.world.off('worldbounds', proj.boundsListener);
-        proj.sprite.destroy();
+      const age = now - proj.createdAt;
+
+      if (proj.isGrenade) {
+        // Granate: explodiert nach fuseTime
+        if (age >= proj.fuseTime!) {
+          explodedGrenades.push({
+            x:         proj.sprite.x,
+            y:         proj.sprite.y,
+            aoeRadius: proj.aoeRadius!,
+            aoeDamage: proj.aoeDamage!,
+            ownerId:   proj.ownerId,
+          });
+          this.scene.physics.world.off('worldbounds', proj.boundsListener);
+          proj.sprite.destroy();
+          return false;
+        }
+        return true;
+      } else {
+        // Normales Projektil: Lifetime oder Max-Bounces
+        const dead = age > proj.lifetime || proj.bounceCount >= proj.maxBounces;
+        if (dead) {
+          this.scene.physics.world.off('worldbounds', proj.boundsListener);
+          proj.sprite.destroy();
+        }
+        return !dead;
       }
-      return !dead;
     });
-    return this.projectiles.map(p => ({ id: p.id, x: p.sprite.x, y: p.sprite.y }));
+
+    const synced: SyncedProjectile[] = this.projectiles.map(p => ({
+      id:    p.id,
+      x:     p.sprite.x,
+      y:     p.sprite.y,
+      size:  p.sprite.width,
+      color: p.sprite.fillColor,
+    }));
+
+    return { synced, explodedGrenades };
   }
 
   // ── Client ────────────────────────────────────────────────────────────────
@@ -150,9 +208,7 @@ export class ProjectileManager {
     for (const proj of data) {
       const existing = this.clientVisuals.get(proj.id);
       if (!existing) {
-        const sprite = this.scene.add.rectangle(
-          proj.x, proj.y, PROJECTILE_SIZE, PROJECTILE_SIZE, COLORS.GOLD_3,
-        );
+        const sprite = this.scene.add.rectangle(proj.x, proj.y, proj.size, proj.size, proj.color);
         sprite.setDepth(DEPTH.PROJECTILES);
         this.clientVisuals.set(proj.id, sprite);
       } else {
