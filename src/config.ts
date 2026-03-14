@@ -156,6 +156,6 @@ export const SELF_STUN_DURATION_MS     = 1000;
 
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;
-export const ARENA_DURATION_SEC = 10;
+export const ARENA_DURATION_SEC = 120;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.
