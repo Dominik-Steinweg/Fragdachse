@@ -54,8 +54,8 @@ export class ArenaScene extends Phaser.Scene {
   // Wird bei jedem Loadout-Wechsel aktualisiert. Auf dem Host überschreibt der
   // LoadoutManager-Getter diesen Wert – hier nur für Non-Host-Clients relevant.
   private localWeaponConfigs: Record<'weapon1' | 'weapon2', WeaponConfig> = {
-    weapon1: WEAPON_CONFIGS.TEST_WEAPON_1,
-    weapon2: WEAPON_CONFIGS.TEST_WEAPON_2,
+    weapon1: WEAPON_CONFIGS.GLOCK,
+    weapon2: WEAPON_CONFIGS.P90,
   };
 
   // ── Host-only Systeme ─────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('bg_grass', 'assets/sprites/32x32grass01.png');
+    this.load.image('bg_grass', 'public/assets/sprites/32x32grass01.png');
   }
 
   create(): void {

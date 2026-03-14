@@ -46,8 +46,8 @@ export class LoadoutManager {
   assignDefaultLoadout(playerId: string): void {
     const ultCfg = ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
     this.loadouts.set(playerId, {
-      weapon1:  new GenericWeapon(WEAPON_CONFIGS.TEST_WEAPON_1),
-      weapon2:  new GenericWeapon(WEAPON_CONFIGS.TEST_WEAPON_2),
+      weapon1:  new GenericWeapon(WEAPON_CONFIGS.GLOCK),
+      weapon2:  new GenericWeapon(WEAPON_CONFIGS.P90),
       utility:  new GenericUtility(UTILITY_CONFIGS.HE_GRENADE),
       ultimate: new GenericUltimate(ultCfg),
     });

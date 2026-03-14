@@ -56,22 +56,22 @@ export interface UltimateConfig {
 
 export const WEAPON_CONFIGS = {
   /**
-   * Standardwaffe – gemäßigte Feuerrate, mittlerer Schaden, kontrollierbarer Bloom.
+   * "WEAPON1" - Linke Maustaste
    */
-  TEST_WEAPON_1: {
-    id:                   'TEST_WEAPON_1',
-    cooldown:             200,
+  GLOCK: {
+    id:                   'GLOCK',
+    cooldown:             150,
     damage:               15,
-    projectileSpeed:      500,
-    projectileSize:       6,
-    range:                800,        // Lifetime ≈ 1600 ms
+    projectileSpeed:      700,
+    projectileSize:       5,
+    range:                400,        
     projectileMaxBounces: 10,
     projectileColor:      0xc09473,
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        10,
-    spreadStanding:       0,
-    spreadMoving:         15,
+    spreadStanding:       5,
+    spreadMoving:         10,
     spreadPerShot:        5,
     maxDynamicSpread:     25,
     spreadRecoveryDelay:  400,
@@ -79,40 +79,87 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
   } as WeaponConfig,
 
+  USP: {
+    id:                   'USP',
+    cooldown:             250,
+    damage:               20,
+    projectileSpeed:      1000,
+    projectileSize:       5,
+    range:                600,        
+    projectileMaxBounces: 10,
+    projectileColor:      0xc09473,
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        10,
+    spreadStanding:       0,
+    spreadMoving:         20,
+    spreadPerShot:        5,
+    maxDynamicSpread:     25,
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+  } as WeaponConfig,
+
+
+
+
   /**
-   * Schnellfeuerwaffe – hohe Feuerrate, geringer Schaden, starker Bloom-Aufbau.
+   * "WEAPON2" - Rechte Maustaste
    */
-  TEST_WEAPON_2: {
-    id:                   'TEST_WEAPON_2',
-    cooldown:             100,
-    damage:               8,
-    projectileSpeed:      600,
-    projectileSize:       4,
-    range:                600,        // Lifetime = 1000 ms
+
+  P90: {
+    id:                   'P90',
+    cooldown:             80,
+    damage:               10,
+    projectileSpeed:      800,
+    projectileSize:       3,
+    range:                500,        
     projectileMaxBounces: 10,
     projectileColor:      0xaaddff,
     allowedSlots:         ['weapon2'],
-    adrenalinCost:        5,
+    adrenalinCost:        4,
     adrenalinGain:        0,
-    spreadStanding:       0,
-    spreadMoving:         20,
+    spreadStanding:       15,
+    spreadMoving:         15,
     spreadPerShot:        2,
     maxDynamicSpread:     18,
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
   } as WeaponConfig,
+
+  AK47: {
+    id:                   'AK47',
+    cooldown:             100,
+    damage:               20,
+    projectileSpeed:      1000,
+    projectileSize:       4,
+    range:                1000,        
+    projectileMaxBounces: 10,
+    projectileColor:      0xaaddff,
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        8,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         15,
+    spreadPerShot:        5,
+    maxDynamicSpread:     30,
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   2,
+    spreadRecoverySpeed:  100,
+  } as WeaponConfig,
+
 } as const;
 
 export const UTILITY_CONFIGS = {
   HE_GRENADE: {
     id:              'HE_GRENADE',
     cooldown:        6000,
-    projectileSpeed: 200,
+    projectileSpeed: 500,
     projectileSize:  10,
     projectileColor: 0x44aa22,
-    fuseTime:        1500,
-    aoeRadius:       120,
+    fuseTime:        750,
+    aoeRadius:       80,
     aoeDamage:       60,
   } as UtilityConfig,
 } as const;
@@ -132,8 +179,8 @@ export const ULTIMATE_CONFIGS = {
 // ── Standard-Loadout für alle Spieler beim Spawn ──────────────────────────────
 
 export const DEFAULT_LOADOUT = {
-  weapon1:  WEAPON_CONFIGS.TEST_WEAPON_1,
-  weapon2:  WEAPON_CONFIGS.TEST_WEAPON_2,
+  weapon1:  WEAPON_CONFIGS.GLOCK,
+  weapon2:  WEAPON_CONFIGS.P90,
   utility:  UTILITY_CONFIGS.HE_GRENADE,
   ultimate: ULTIMATE_CONFIGS.HONEY_BADGER_RAGE,
 } as const;
