@@ -37,6 +37,15 @@ export class ResourceSystem {
   }
 
   /**
+   * Fügt Adrenalin hinzu (gedeckelt auf ADRENALINE_MAX).
+   * Pausiert die Regeneration NICHT – wird als Belohnung für Treffer genutzt.
+   */
+  addAdrenaline(id: string, amount: number): void {
+    const cur = Math.min(ADRENALINE_MAX, (this.adrenaline.get(id) ?? 0) + amount);
+    this.adrenaline.set(id, cur);
+  }
+
+  /**
    * Zieht Adrenalin ab und pausiert die passive Regeneration für
    * ADRENALINE_REGEN_PAUSE_MS Millisekunden.
    */

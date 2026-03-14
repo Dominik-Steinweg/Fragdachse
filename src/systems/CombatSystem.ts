@@ -117,7 +117,7 @@ export class CombatSystem {
           // Damage-Multiplier des Schützen (Ultimate)
           const multiplier   = this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1;
           const actualDamage = proj.damage * multiplier;
-          this.handleHit(proj.id, player.id, actualDamage);
+          this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain);
           break;  // Projektil trifft maximal einen Spieler pro Frame
         }
       }
@@ -126,9 +126,20 @@ export class CombatSystem {
 
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
 
-  private handleHit(projectileId: number, playerId: string, damage: number): void {
+  private handleHit(
+    projectileId:  number,
+    playerId:      string,
+    damage:        number,
+    shooterId:     string,
+    adrenalinGain: number,
+  ): void {
     this.projectileManager.destroyProjectile(projectileId);
     this.applyDamage(playerId, damage, true);  // skipBurrowCheck: Check bereits oben
+
+    // Adrenalin-Belohnung für den Schützen
+    if (adrenalinGain > 0) {
+      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+    }
   }
 
   private handleDeath(playerId: string, x: number, y: number): void {

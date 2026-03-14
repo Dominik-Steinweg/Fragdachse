@@ -28,7 +28,7 @@ interface UltimateState {
 /**
  * LoadoutManager – Host-autoritär.
  * Verwaltet pro Spieler 4 Slots (weapon1, weapon2, utility, ultimate),
- * prüft Cooldowns, dispatcht Aktionen und tracked den Ultimate-Zustand.
+ * prüft Cooldowns/Adrenalin, dispatcht Aktionen, tracked Spread-Bloom und Ultimate-Zustand.
  */
 export class LoadoutManager {
   private loadouts       = new Map<string, PlayerLoadout>();
@@ -38,7 +38,7 @@ export class LoadoutManager {
     private playerManager:     PlayerManager,
     private projectileManager: ProjectileManager,
     private resourceSystem:    ResourceSystem,
-    private _bridge:           NetworkBridge,
+    private bridge:            NetworkBridge,
   ) {}
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -82,52 +82,29 @@ export class LoadoutManager {
     const y = player.sprite.y;
 
     switch (slot) {
-      case 'weapon1': {
-        if (loadout.weapon1.isOnCooldown(now)) return;
-        const cfg = loadout.weapon1.config;
-        this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-          speed:      cfg.projectileSpeed,
-          size:       cfg.projectileSize,
-          damage:     cfg.damage,
-          color:      cfg.projectileColor,
-          lifetime:   cfg.projectileLifetime,
-          maxBounces: cfg.projectileMaxBounces,
-          isGrenade:  false,
-        });
-        loadout.weapon1.recordUse(now);
+      case 'weapon1':
+        this.fireWeapon(loadout.weapon1, x, y, angle, playerId, now);
         break;
-      }
 
-      case 'weapon2': {
-        if (loadout.weapon2.isOnCooldown(now)) return;
-        const cfg = loadout.weapon2.config;
-        this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-          speed:      cfg.projectileSpeed,
-          size:       cfg.projectileSize,
-          damage:     cfg.damage,
-          color:      cfg.projectileColor,
-          lifetime:   cfg.projectileLifetime,
-          maxBounces: cfg.projectileMaxBounces,
-          isGrenade:  false,
-        });
-        loadout.weapon2.recordUse(now);
+      case 'weapon2':
+        this.fireWeapon(loadout.weapon2, x, y, angle, playerId, now);
         break;
-      }
 
       case 'utility': {
         if (loadout.utility.isOnCooldown(now)) return;
         const cfg = loadout.utility.config;
         this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-          speed:      cfg.projectileSpeed,
-          size:       cfg.projectileSize,
-          damage:     0,              // kein Direkttreffer-Schaden
-          color:      cfg.projectileColor,
-          lifetime:   cfg.fuseTime,   // Lifetime = Zündzeit
-          maxBounces: 0,
-          isGrenade:  true,
-          fuseTime:   cfg.fuseTime,
-          aoeRadius:  cfg.aoeRadius,
-          aoeDamage:  cfg.aoeDamage,
+          speed:         cfg.projectileSpeed,
+          size:          cfg.projectileSize,
+          damage:        0,              // kein Direkttreffer-Schaden
+          color:         cfg.projectileColor,
+          lifetime:      cfg.fuseTime,   // Lifetime = Zündzeit
+          maxBounces:    0,
+          isGrenade:     true,
+          adrenalinGain: 0,              // Granaten geben kein Adrenalin
+          fuseTime:      cfg.fuseTime,
+          aoeRadius:     cfg.aoeRadius,
+          aoeDamage:     cfg.aoeDamage,
         });
         loadout.utility.recordUse(now);
         break;
@@ -145,10 +122,18 @@ export class LoadoutManager {
     }
   }
 
-  // ── Frame-Update (Rage-Drain, Ultimate-Ablauf) ────────────────────────────
+  // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
 
-  update(_delta: number): void {
+  update(delta: number): void {
     const now = Date.now();
+
+    // Spread-Decay für alle ausgerüsteten Waffen
+    for (const loadout of this.loadouts.values()) {
+      loadout.weapon1.decaySpread(delta, now);
+      loadout.weapon2.decaySpread(delta, now);
+    }
+
+    // Ultimate: Rage proportional drainieren + Effekt nach duration deaktivieren
     for (const [playerId, state] of this.ultimateStates) {
       if (!state.active) continue;
 
@@ -188,5 +173,62 @@ export class LoadoutManager {
     const loadout = this.loadouts.get(playerId);
     if (!loadout || slot === 'ultimate') return 0;
     return loadout[slot].getCooldownFrac(now);
+  }
+
+  // ── Interne Helfer ────────────────────────────────────────────────────────
+
+  /**
+   * Feuert eine Waffe ab: prüft Cooldown + Adrenalin, berechnet den
+   * gestreuten Winkel (Basis + dynamischer Bloom), errechnet Lifetime
+   * aus Reichweite und spawnt das Projektil.
+   */
+  private fireWeapon(
+    weapon:   BaseWeapon,
+    x:        number,
+    y:        number,
+    angle:    number,
+    playerId: string,
+    now:      number,
+  ): void {
+    // 1. Cooldown-Check
+    if (weapon.isOnCooldown(now)) return;
+
+    const cfg = weapon.config;
+
+    // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
+    if (cfg.adrenalinCost > 0) {
+      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return;
+      this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
+    }
+
+    // 3. Gesamtspread ermitteln: Basis (stehend / bewegend) + dynamischer Bloom
+    // Bewegungsstatus direkt vom Physics-Body lesen – der Host besitzt die Simulation,
+    // daher ist velocity immer aktuell (kein Netzwerk-Lag wie bei getPlayerInput).
+    const shooterBody = this.playerManager.getPlayer(playerId)?.body;
+    const isMoving    = Math.abs(shooterBody?.velocity.x ?? 0) > 0.5
+                     || Math.abs(shooterBody?.velocity.y ?? 0) > 0.5;
+    const baseSpread    = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
+    const totalSpreadDeg = baseSpread + weapon.getDynamicSpread();
+    const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
+    const finalAngle     = angle + (Math.random() * 2 - 1) * halfSpreadRad;
+
+    // 4. Lifetime aus Reichweite berechnen (Projektil verschwindet exakt an der Reichweite)
+    const lifetime = (cfg.range / cfg.projectileSpeed) * 1000;
+
+    // 5. Projektil spawnen
+    this.projectileManager.spawnProjectile(x, y, finalAngle, playerId, {
+      speed:         cfg.projectileSpeed,
+      size:          cfg.projectileSize,
+      damage:        cfg.damage,
+      color:         cfg.projectileColor,
+      lifetime,
+      maxBounces:    cfg.projectileMaxBounces,
+      isGrenade:     false,
+      adrenalinGain: cfg.adrenalinGain,
+    });
+
+    // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen
+    weapon.addSpread();
+    weapon.recordUse(now);
   }
 }

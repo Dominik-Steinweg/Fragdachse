@@ -4,7 +4,7 @@
  * Ultimates überschreiben canUse() für Rage-basierte Logik.
  */
 export abstract class BaseLoadoutItem<T extends { cooldown: number }> {
-  private lastUsedAt = -Infinity;
+  protected lastUsedAt = -Infinity;
 
   constructor(public readonly config: T) {}
 

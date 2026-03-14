@@ -128,7 +128,7 @@ export const CANOPY_ALPHA_PLAYER = 0.2;   // Alpha wenn lokaler Spieler darunter
 // ---- Ressourcen ----
 export const ADRENALINE_MAX            = 100;
 export const ADRENALINE_START          = 30;
-export const ADRENALINE_REGEN_PER_SEC  = 1;    // passiv, Host
+export const ADRENALINE_REGEN_PER_SEC  = 10;    // passiv, Host
 export const ADRENALINE_DRAIN_PER_SEC  = 20;   // während Burrow
 export const ADRENALINE_REGEN_PAUSE_MS = 500;  // Pause nach Verbrauch
 

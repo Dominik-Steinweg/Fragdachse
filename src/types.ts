@@ -43,16 +43,17 @@ export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
 export interface ProjectileSpawnConfig {
-  speed:      number;
-  size:       number;
-  damage:     number;   // 0 bei Granaten (kein Direkttreffer-Schaden)
-  color:      number;   // hex
-  lifetime:   number;   // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
-  maxBounces: number;   // 0 für Granaten
-  isGrenade:  boolean;
-  fuseTime?:  number;   // ms bis AoE-Explosion (nur Granaten)
-  aoeRadius?: number;   // px AoE-Radius
-  aoeDamage?: number;   // HP-Schaden im AoE-Radius
+  speed:         number;
+  size:          number;
+  damage:        number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
+  color:         number;        // hex
+  lifetime:      number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
+  maxBounces:    number;        // 0 für Granaten
+  isGrenade:     boolean;
+  adrenalinGain: number;        // Adrenalin-Gewinn für den Schützen bei Treffer
+  fuseTime?:     number;        // ms bis AoE-Explosion (nur Granaten)
+  aoeRadius?:    number;        // px AoE-Radius
+  aoeDamage?:    number;        // HP-Schaden im AoE-Radius
 }
 
 /** Explodierte Granate – von ProjectileManager.hostUpdate() zurückgegeben */
@@ -73,10 +74,11 @@ export interface TrackedProjectile {
   createdAt:      number;
   ownerId:        string;
   boundsListener: (hitBody: Phaser.Physics.Arcade.Body) => void;
-  damage:         number;   // Schadenswert pro Direkttreffer
-  lifetime:       number;   // ms Lebensdauer (Bullets) / fuseTime (Granaten)
-  maxBounces:     number;   // maximale Abpraller
+  damage:         number;        // Schadenswert pro Direkttreffer
+  lifetime:       number;        // ms Lebensdauer (Bullets) / fuseTime (Granaten)
+  maxBounces:     number;        // maximale Abpraller
   isGrenade:      boolean;
+  adrenalinGain:  number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   fuseTime?:      number;
   aoeRadius?:     number;
   aoeDamage?:     number;

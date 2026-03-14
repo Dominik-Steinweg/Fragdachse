@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerInput, LoadoutSlot } from '../types';
 import { DASH_COOLDOWN_MS } from '../config';
-import { WEAPON_CONFIGS }   from '../loadout/LoadoutConfig';
 
 export class InputSystem {
   private scene:           Phaser.Scene;
@@ -20,9 +19,6 @@ export class InputSystem {
 
   // Lokaler Dash-Cooldown (nur für HUD-Visualisierung, kein Gameplay-Impact)
   private dashCooldownUntil = 0;  // ms-Timestamp
-
-  // Lokale Cooldown-Tracker für Waffen (Throttling der RPCs, Host validiert autoritativ)
-  private slotLastFired = new Map<LoadoutSlot, number>();
 
   // Loadout-Callback (gesetzt von ArenaScene)
   private onLoadoutUse: ((slot: LoadoutSlot, angle: number, targetX: number, targetY: number) => void) | null = null;
@@ -125,24 +121,16 @@ export class InputSystem {
       const py    = pointer.y;
       const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, px, py);
 
-      // LMB gedrückt halten → weapon1 (Dauerfeuer mit Cooldown-Throttle)
+      // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
+      // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
+      // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
       if (pointer.leftButtonDown()) {
-        const cd   = WEAPON_CONFIGS.TEST_WEAPON_1.cooldown;
-        const last = this.slotLastFired.get('weapon1') ?? -Infinity;
-        if (now - last >= cd) {
-          this.onLoadoutUse('weapon1', angle, px, py);
-          this.slotLastFired.set('weapon1', now);
-        }
+        this.onLoadoutUse('weapon1', angle, px, py);
       }
 
-      // RMB gedrückt halten → weapon2 (Dauerfeuer mit Cooldown-Throttle)
+      // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
       if (pointer.rightButtonDown()) {
-        const cd   = WEAPON_CONFIGS.TEST_WEAPON_2.cooldown;
-        const last = this.slotLastFired.get('weapon2') ?? -Infinity;
-        if (now - last >= cd) {
-          this.onLoadoutUse('weapon2', angle, px, py);
-          this.slotLastFired.set('weapon2', now);
-        }
+        this.onLoadoutUse('weapon2', angle, px, py);
       }
 
       // E-Taste → utility (Granate, Flanke)

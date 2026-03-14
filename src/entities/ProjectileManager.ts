@@ -89,6 +89,7 @@ export class ProjectileManager {
       lifetime:       cfg.lifetime,
       maxBounces:     cfg.maxBounces,
       isGrenade:      cfg.isGrenade,
+      adrenalinGain:  cfg.adrenalinGain,
       fuseTime:       cfg.fuseTime,
       aoeRadius:      cfg.aoeRadius,
       aoeDamage:      cfg.aoeDamage,
