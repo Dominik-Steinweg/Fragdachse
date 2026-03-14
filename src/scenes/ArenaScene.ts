@@ -78,7 +78,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('bg_grass', 'public/assets/sprites/32x32grass01.png');
+    this.load.image('bg_grass', './assets/sprites/32x32grass01.png');
   }
 
   create(): void {
