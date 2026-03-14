@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
+import {
+  ARENA_OFFSET_X, ARENA_OFFSET_Y,
+  ARENA_WIDTH,    ARENA_HEIGHT,
+} from '../config';
 
 // ── Visuelle Konstanten ────────────────────────────────────────────────────
 const LASER_COLOR    = 0xffffff;
@@ -15,6 +19,12 @@ const CROSS_GAP_MAX  = 24;  // px gap bei maximalem Gesamtspread
 // Bewegungserkennung: Mindest-Positionsänderung pro Frame in px
 const MOVE_THRESHOLD = 0.3;
 
+// ── Arena-Grenzen (gecacht) ────────────────────────────────────────────────
+const AX1 = ARENA_OFFSET_X;
+const AY1 = ARENA_OFFSET_Y;
+const AX2 = ARENA_OFFSET_X + ARENA_WIDTH;
+const AY2 = ARENA_OFFSET_Y + ARENA_HEIGHT;
+
 // ── Client-seitiger Spread-State (Fallback für Non-Host-Clients) ──────────
 interface ClientSpreadState {
   value:      number;
@@ -29,6 +39,15 @@ interface ClientSpreadState {
  *      auf die Reichweite (cfg.range) der aktiven Waffe gekürzt.
  *   2. Dynamisches Fadenkreuz: 4 Arme am Endpunkt; der Arm-Abstand wächst
  *      proportional zum aktuellen Gesamtspread (Basis + dynamischer Bloom).
+ *
+ * Clipping: Schusslinie und Fadenkreuz werden per Software auf die
+ * Arena-Grenzen geclipt (kein GeometryMask, da dieser in Phaser 3 WebGL
+ * das Objekt in zwei Render-Passes aufteilt → Doppelbild-Artefakt).
+ * Da der Spieler stets innerhalb der Arena liegt, genügt es, den Endpunkt
+ * parametrisch an die nächste Arena-Kante zu klemmen.
+ *
+ * Cursor-Management: In der Arena-Phase wird der System-Mauszeiger via
+ * Phaser-API ausgeblendet; in der Lobby-Phase (inArena=false) ist er sichtbar.
  *
  * Bewegungserkennung erfolgt via Sprite-Positions-Delta – funktioniert
  * sowohl auf dem Host (Physics-Position) als auch auf Clients (Lerp-Position).
@@ -54,7 +73,8 @@ export class AimSystem {
   // Bewegungserkennung via Positions-Delta
   private prevX: number | null = null;  // null = noch nicht initialisiert
   private prevY: number | null = null;
-  private isMoving = false;
+  private isMoving    = false;
+  private prevShowAim = false;  // Flankenerkennung für prevX-Reset bei Respawn
 
   /**
    * @param scene           Phaser-Szene
@@ -98,12 +118,24 @@ export class AimSystem {
 
   /**
    * Jeden Frame aufrufen.
-   * @param visible false → nur löschen (kein Zeichnen); z.B. wenn tot, vergraben oder in Lobby
-   * @param delta   Frame-Delta in Millisekunden
+   * @param showAim  true → Schusslinie + Fadenkreuz zeichnen (alive, nicht vergraben)
+   * @param inArena  true → Arena-Phase aktiv; steuert die Cursor-Sichtbarkeit
+   * @param delta    Frame-Delta in Millisekunden
    */
-  update(visible: boolean, delta: number): void {
+  update(showAim: boolean, inArena: boolean, delta: number): void {
+    // ── Cursor-Sichtbarkeit ──────────────────────────────────────────────────
+    // In der Arena verstecken, in der Lobby wieder zeigen.
+    this.scene.input.setDefaultCursor(inArena ? 'none' : 'default');
+
+    // ── Reset Positions-Baseline bei Respawn / erstem Sichtbarwerden ────────
+    if (showAim && !this.prevShowAim) {
+      this.prevX = null;
+      this.prevY = null;
+    }
+    this.prevShowAim = showAim;
+
     this.gfx.clear();
-    if (!visible) return;
+    if (!showAim) return;
 
     // ── 1. Lokalen Spieler ermitteln ────────────────────────────────────────
     const sprite = this.getLocalSprite();
@@ -114,7 +146,7 @@ export class AimSystem {
 
     // ── 2. Bewegungserkennung via Positions-Delta ────────────────────────────
     if (this.prevX === null) {
-      // Erster sichtbarer Frame: Position als Basis speichern, kein falsches "isMoving"
+      // Erster sichtbarer Frame nach (Re-)Spawn: Baseline setzen, kein falsches "isMoving"
       this.prevX    = sx;
       this.prevY    = sy;
       this.isMoving = false;
@@ -163,49 +195,88 @@ export class AimSystem {
     const dist = Math.sqrt(dx * dx + dy * dy);
     const nx   = dist > 0 ? dx / dist : 1;
     const ny   = dist > 0 ? dy / dist : 0;
-    // Endpunkt: Mausposition oder Reichweiten-Grenze (je nachdem was näher ist)
-    const clampedDist = Math.min(dist, cfg.range);
-    const ex = sx + nx * clampedDist;
-    const ey = sy + ny * clampedDist;
+    // Erster Clip: Reichweiten-Grenze (Waffe)
+    const rangeDist = Math.min(dist, cfg.range);
+    const ex = sx + nx * rangeDist;
+    const ey = sy + ny * rangeDist;
+
+    // Zweiter Clip: Arena-Grenze (Software-Clipping statt GeometryMask)
+    // Startpunkt (Spieler) liegt immer innerhalb der Arena →
+    // parametrisches Klemmen an die nächste überschrittene Kante.
+    const { x: cx, y: cy, inside } = this.clipToArena(sx, sy, ex, ey);
 
     // ── 6. Laser-Linie ──────────────────────────────────────────────────────
     this.gfx.lineStyle(LASER_WIDTH, LASER_COLOR, LASER_ALPHA);
     this.gfx.beginPath();
     this.gfx.moveTo(sx, sy);
-    this.gfx.lineTo(ex, ey);
+    this.gfx.lineTo(cx, cy);
     this.gfx.strokePath();
 
-    // ── 7. Dynamisches Fadenkreuz ───────────────────────────────────────────
+    // ── 7. Dynamisches Fadenkreuz (nur wenn Endpunkt innerhalb der Arena) ───
+    if (!inside) return;
+
     const gap = CROSS_GAP_MIN + frac * (CROSS_GAP_MAX - CROSS_GAP_MIN);
 
     this.gfx.lineStyle(CROSS_LINE_W, CROSS_COLOR, CROSS_ALPHA);
 
     // Rechts
     this.gfx.beginPath();
-    this.gfx.moveTo(ex + gap, ey);
-    this.gfx.lineTo(ex + gap + CROSS_LINE_LEN, ey);
+    this.gfx.moveTo(cx + gap, cy);
+    this.gfx.lineTo(cx + gap + CROSS_LINE_LEN, cy);
     this.gfx.strokePath();
 
     // Links
     this.gfx.beginPath();
-    this.gfx.moveTo(ex - gap, ey);
-    this.gfx.lineTo(ex - gap - CROSS_LINE_LEN, ey);
+    this.gfx.moveTo(cx - gap, cy);
+    this.gfx.lineTo(cx - gap - CROSS_LINE_LEN, cy);
     this.gfx.strokePath();
 
     // Unten
     this.gfx.beginPath();
-    this.gfx.moveTo(ex, ey + gap);
-    this.gfx.lineTo(ex, ey + gap + CROSS_LINE_LEN);
+    this.gfx.moveTo(cx, cy + gap);
+    this.gfx.lineTo(cx, cy + gap + CROSS_LINE_LEN);
     this.gfx.strokePath();
 
     // Oben
     this.gfx.beginPath();
-    this.gfx.moveTo(ex, ey - gap);
-    this.gfx.lineTo(ex, ey - gap - CROSS_LINE_LEN);
+    this.gfx.moveTo(cx, cy - gap);
+    this.gfx.lineTo(cx, cy - gap - CROSS_LINE_LEN);
     this.gfx.strokePath();
   }
 
+  /** Cursor wiederherstellen und Graphics-Objekt zerstören. */
   destroy(): void {
+    this.scene.input.setDefaultCursor('default');
     this.gfx.destroy();
+  }
+
+  // ── Privat: Software-Clipping ─────────────────────────────────────────────
+
+  /**
+   * Klemmt den Endpunkt (ex, ey) einer Linie ab (sx, sy) an die Arena-Grenzen.
+   * (sx, sy) muss innerhalb der Arena liegen.
+   *
+   * @returns geklemmter Endpunkt + `inside`: true wenn (ex,ey) innerhalb der Arena lag.
+   */
+  private clipToArena(
+    sx: number, sy: number,
+    ex: number, ey: number,
+  ): { x: number; y: number; inside: boolean } {
+    const inside = ex >= AX1 && ex <= AX2 && ey >= AY1 && ey <= AY2;
+    if (inside) return { x: ex, y: ey, inside: true };
+
+    // Parametrisch: Linie P(t) = (sx,sy) + t * (dx,dy), t ∈ [0,1]
+    // Suche kleinstes t, bei dem die Linie eine Arena-Kante erreicht.
+    const dx = ex - sx;
+    const dy = ey - sy;
+    let t = 1;
+
+    if (dx > 0) t = Math.min(t, (AX2 - sx) / dx);
+    else if (dx < 0) t = Math.min(t, (AX1 - sx) / dx);
+
+    if (dy > 0) t = Math.min(t, (AY2 - sy) / dy);
+    else if (dy < 0) t = Math.min(t, (AY1 - sy) / dy);
+
+    return { x: sx + t * dx, y: sy + t * dy, inside: false };
   }
 }

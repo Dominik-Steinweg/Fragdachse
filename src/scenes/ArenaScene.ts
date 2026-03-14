@@ -455,12 +455,14 @@ export class ArenaScene extends Phaser.Scene {
       this.inputSystem.update();
     }
 
-    // AimSystem jeden Frame aktualisieren (auch wenn inGame=false → gfx.clear())
-    const showAim = inGame
-                 && !this.matchTerminated
+    // AimSystem jeden Frame aktualisieren (auch wenn inGame=false → Cursor + gfx.clear())
+    // inArena steuert Cursor-Sichtbarkeit (Arena=versteckt, Lobby=sichtbar).
+    // showAim steuert ob Schusslinie + Fadenkreuz gezeichnet werden.
+    const inArena = inGame && !this.matchTerminated;
+    const showAim = inArena
                  && this.localPlayerAlive
                  && !this.localPlayerBurrowed;
-    this.aimSystem?.update(showAim, delta);
+    this.aimSystem?.update(showAim, inArena, delta);
 
     if (!this.matchTerminated && phase === 'LOBBY') {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
