@@ -9,36 +9,85 @@ export class HostPhysicsSystem {
   private playerManager: PlayerManager;
   private bridge:        NetworkBridge;
   private combatSystem:  CombatSystem;
-  private rockGroup:     Phaser.Physics.Arcade.StaticGroup;
-  private collidersSetup = new Set<string>();
+
+  // Obstacle-Gruppen – werden nach Arena-Aufbau injiziert
+  private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
+  private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
+
+  // Pro-Spieler Collider-Tracking
+  private rockCollidersSetup  = new Set<string>();
+  private trunkCollidersSetup = new Set<string>();
+  private playerColliders     = new Map<string, Phaser.Physics.Arcade.Collider[]>();
 
   constructor(
     scene:         Phaser.Scene,
     playerManager: PlayerManager,
     bridge:        NetworkBridge,
     combatSystem:  CombatSystem,
-    rockGroup:     Phaser.Physics.Arcade.StaticGroup,
   ) {
     this.scene         = scene;
     this.playerManager = playerManager;
     this.bridge        = bridge;
     this.combatSystem  = combatSystem;
-    this.rockGroup     = rockGroup;
+  }
+
+  /**
+   * Setzt die Kollisions-Gruppen nach dem Arena-Aufbau.
+   * Bei null (Lobby-Teardown) werden alle existierenden Collider zerstört
+   * und die Tracking-Sets geleert, damit die nächste Runde sauber startet.
+   */
+  setRockGroup(
+    rockGroup:  Phaser.Physics.Arcade.StaticGroup | null,
+    trunkGroup: Phaser.Physics.Arcade.StaticGroup | null,
+  ): void {
+    if (rockGroup === null) {
+      // Alle Collider zerstören und State leeren
+      for (const colliders of this.playerColliders.values()) {
+        for (const c of colliders) c.destroy();
+      }
+      this.playerColliders.clear();
+      this.rockCollidersSetup.clear();
+      this.trunkCollidersSetup.clear();
+    }
+    this.rockGroup  = rockGroup;
+    this.trunkGroup = trunkGroup;
+  }
+
+  /**
+   * Spieler-Collider zerstören wenn ein Spieler die Lobby verlässt.
+   */
+  removePlayer(id: string): void {
+    const colliders = this.playerColliders.get(id);
+    if (colliders) {
+      for (const c of colliders) c.destroy();
+      this.playerColliders.delete(id);
+    }
+    this.rockCollidersSetup.delete(id);
+    this.trunkCollidersSetup.delete(id);
   }
 
   /**
    * Jeden Frame – nur auf dem Host aktiv.
    * Setzt Velocities basierend auf Spieler-Input; tote Spieler werden übersprungen.
-   * Gibt keine Werte zurück – GameScene liest Positionen direkt von den Sprites.
    */
   update(): void {
     if (!this.bridge.isHost()) return;
 
     for (const player of this.playerManager.getAllPlayers()) {
       // Collider mit Felsen lazy anlegen
-      if (!this.collidersSetup.has(player.id)) {
-        this.scene.physics.add.collider(player.sprite, this.rockGroup);
-        this.collidersSetup.add(player.id);
+      if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {
+        const existing = this.playerColliders.get(player.id) ?? [];
+        existing.push(this.scene.physics.add.collider(player.sprite, this.rockGroup));
+        this.playerColliders.set(player.id, existing);
+        this.rockCollidersSetup.add(player.id);
+      }
+
+      // Collider mit Baumstümpfen lazy anlegen
+      if (this.trunkGroup && !this.trunkCollidersSetup.has(player.id)) {
+        const existing = this.playerColliders.get(player.id) ?? [];
+        existing.push(this.scene.physics.add.collider(player.sprite, this.trunkGroup));
+        this.playerColliders.set(player.id, existing);
+        this.trunkCollidersSetup.add(player.id);
       }
 
       // Tote Spieler: Physik ist bereits deaktiviert (body.enable = false durch CombatSystem)

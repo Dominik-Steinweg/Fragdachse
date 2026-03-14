@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, GamePhase } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
@@ -21,11 +21,15 @@ const KEY_READY       = 'isr';   // per-player boolean: isReady
 const KEY_NAME        = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
 const KEY_GAME_PHASE  = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_ROUND_END   = 'ret';   // global: number (timestamp ms)
+const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
+const KEY_ARENA_LAYOUT = 'aly';   // global: ArenaLayout (reliable, einmalig pro Runde)
+const KEY_ROCK_HP      = 'rck';   // global: RockNetState[] (unreliable, Delta-Snapshot)
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 export interface GameState {
   players:     Record<string, PlayerNetState>;
   projectiles: SyncedProjectile[];
+  rocks:       RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
 }
 
 export class NetworkBridge {
@@ -177,17 +181,47 @@ export class NetworkBridge {
     return Math.max(0, Math.ceil((this.getRoundEndTime() - Date.now()) / 1000));
   }
 
+  // ── Match-Host-ID: Host → Alle (global, reliable) ────────────────────────
+
+  /**
+   * Host-only: Speichert die eigene Player-ID als authoritativer Match-Host.
+   * Wird einmalig beim Rundenstart aufgerufen, damit Clients den
+   * Host-Disconnect erkennen können.
+   */
+  setMatchHostId(): void {
+    setState(KEY_HOST_ID, myPlayer().id, true);
+  }
+
+  /**
+   * Liest die gespeicherte Match-Host-ID (Standard: null).
+   * Clients vergleichen damit incoming onQuit-IDs.
+   */
+  getMatchHostId(): string | null {
+    return (getState(KEY_HOST_ID) as string | undefined) ?? null;
+  }
+
+  // ── Arena Layout: Host → Alle (global, reliable, einmalig pro Runde) ─────────
+  publishArenaLayout(layout: ArenaLayout): void {
+    setState(KEY_ARENA_LAYOUT, layout, true);   // reliable=true: kommt garantiert vor Phase-Wechsel an
+  }
+
+  getArenaLayout(): ArenaLayout | undefined {
+    return getState(KEY_ARENA_LAYOUT) as ArenaLayout | undefined;
+  }
+
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────
   publishGameState(state: GameState): void {
     setState(KEY_PLAYERS,     state.players,     false);
     setState(KEY_PROJECTILES, state.projectiles, false);
+    setState(KEY_ROCK_HP,         state.rocks,       false);
   }
 
   getLatestGameState(): GameState | undefined {
     const players     = getState(KEY_PLAYERS)     as Record<string, PlayerNetState> | undefined;
     const projectiles = getState(KEY_PROJECTILES) as SyncedProjectile[]             | undefined;
+    const rocks       = getState(KEY_ROCK_HP)     as RockNetState[]                 | undefined;
     if (!players) return undefined;
-    return { players, projectiles: projectiles ?? [] };
+    return { players, projectiles: projectiles ?? [], rocks: rocks ?? [] };
   }
 
   // ── Schuss-RPC: Client → Host ─────────────────────────────────────────────

@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { bridge }              from '../network/bridge';
 import { ArenaBuilder }        from '../arena/ArenaBuilder';
+import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
+import { ArenaGenerator }      from '../arena/ArenaGenerator';
+import { RockRegistry }        from '../arena/RockRegistry';
 import { PlayerManager }       from '../entities/PlayerManager';
 import { ProjectileManager }   from '../entities/ProjectileManager';
 import { InputSystem }         from '../systems/InputSystem';
@@ -10,7 +13,10 @@ import { CombatSystem }        from '../systems/CombatSystem';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { LobbyOverlay }        from './LobbyOverlay';
 import type { PlayerNetState, GamePhase, PlayerProfile } from '../types';
-import { GAME_WIDTH, ARENA_DURATION_SEC } from '../config';
+import {
+  GAME_WIDTH, ARENA_DURATION_SEC,
+  ROCK_DAMAGE_PER_HIT,
+} from '../config';
 
 // ── HUD-Konstanten ────────────────────────────────────────────────────────────
 const HUD_Y               = 28;
@@ -30,27 +36,42 @@ export class ArenaScene extends Phaser.Scene {
   // ── HUD ──────────────────────────────────────────────────────────────────
   private timerText!: Phaser.GameObjects.Text;
 
+  // ── Dynamische Arena ──────────────────────────────────────────────────────
+  private arenaResult:  ArenaBuilderResult | null = null;
+  private rockRegistry: RockRegistry | null       = null;
+
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
   private lastPhase: GamePhase = 'LOBBY';
   private roundStartPending = false;
+  /**
+   * Wird true wenn der Host während eines laufenden Matches disconnectet.
+   * Sperrt die Arena-Simulation und refreshPlayerList() bis die Netzwerkphase
+   * auf 'LOBBY' gewechselt ist (neuer Host setzt sie zurück).
+   */
+  private matchTerminated   = false;
 
   constructor() {
     super({ key: 'ArenaScene' });
+  }
+
+  preload(): void {
+    this.load.image('bg_grass', 'assets/sprites/32x32grass01.png');
   }
 
   create(): void {
     // Alte Szenen-Callbacks löschen, neue registrieren
     bridge.clearPlayerCallbacks();
 
-    // ── 1. Arena ──────────────────────────────────────────────────────────
-    const rockGroup = new ArenaBuilder(this).build();
+    // ── 1. Statische Arena (einmalig, nie zerstört) ────────────────────────
+    const builder = new ArenaBuilder(this);
+    builder.buildStatic();
 
     // ── 2. Spieler-System ─────────────────────────────────────────────────
     this.playerManager = new PlayerManager(this);
 
-    // ── 3. Projektile ─────────────────────────────────────────────────────
-    this.projectileManager = new ProjectileManager(this, rockGroup);
+    // ── 3. Projektile (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
+    this.projectileManager = new ProjectileManager(this);
 
     // ── 4. Combat-System ──────────────────────────────────────────────────
     this.combatSystem = new CombatSystem(this.playerManager, this.projectileManager, bridge);
@@ -63,9 +84,9 @@ export class ArenaScene extends Phaser.Scene {
     this.shootingSystem = new ShootingSystem(bridge, this.playerManager, this.projectileManager);
     this.shootingSystem.setup();
 
-    // ── 7. Host-Physik ────────────────────────────────────────────────────
+    // ── 7. Host-Physik (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
     this.hostPhysics = new HostPhysicsSystem(
-      this, this.playerManager, bridge, this.combatSystem, rockGroup,
+      this, this.playerManager, bridge, this.combatSystem,
     );
 
     // ── 8. Input ──────────────────────────────────────────────────────────
@@ -90,16 +111,11 @@ export class ArenaScene extends Phaser.Scene {
     this.lobbyOverlay.show();
 
     // ── 12. Eigenen Ready-Status hart zurücksetzen ────────────────────────
-    // Playroom cached Player-State sitzungsübergreifend. Ohne diesen Reset
-    // könnte ein Late-Joiner mit altem isReady:true sofort gespawnt werden,
-    // bevor er auf "Bereit" geklickt hat.
     this.isLocalReady = false;
     bridge.setLocalReady(false);
 
     // ── 13. Initiale Phase lesen (Spät-Joiner-Support) ────────────────────
     this.lastPhase = bridge.getGamePhase();
-    // Overlay ist bereits sichtbar – onTransitionToArena() wird bewusst NICHT
-    // aufgerufen, da der Late-Joiner noch nicht bereit ist.
   }
 
   // ── Netzwerk-Events ───────────────────────────────────────────────────────
@@ -111,8 +127,40 @@ export class ArenaScene extends Phaser.Scene {
   private onPlayerLeft(id: string): void {
     if (this.playerManager.hasPlayer(id)) {
       this.combatSystem.removePlayer(id);
+      this.hostPhysics.removePlayer(id);
       this.playerManager.removePlayer(id);
     }
+    // Host-Disconnect während eines laufenden Matches → Match sofort beenden
+    if (bridge.getGamePhase() === 'ARENA' && id === bridge.getMatchHostId()) {
+      this.terminateMatch();
+    }
+  }
+
+  /**
+   * Beendet das laufende Match sofort (z. B. weil der Host disconnectet ist).
+   */
+  private terminateMatch(): void {
+    if (this.matchTerminated) return;
+    this.matchTerminated = true;
+
+    this.isLocalReady    = false;
+    bridge.setLocalReady(false);
+    this.roundStartPending = false;
+
+    for (const p of [...this.playerManager.getAllPlayers()]) {
+      if (bridge.isHost()) this.combatSystem.removePlayer(p.id);
+      this.playerManager.removePlayer(p.id);
+    }
+
+    this.tearDownArena();
+
+    if (bridge.isHost()) {
+      bridge.setGamePhase('LOBBY');
+    }
+
+    this.lobbyOverlay.setReadyButtonState(false);
+    this.lobbyOverlay.show();
+    this.lobbyOverlay.showHostDisconnectedMessage();
   }
 
   private onReadyToggled(): void {
@@ -123,9 +171,15 @@ export class ArenaScene extends Phaser.Scene {
 
   // ── State Machine ─────────────────────────────────────────────────────────
 
-  /** Erkennt Phasenwechsel per Polling (Playroom setState löst kein Event aus). */
   private detectPhaseChange(): void {
     const current = bridge.getGamePhase();
+
+    if (this.matchTerminated) {
+      if (current !== this.lastPhase) this.lastPhase = current;
+      if (current === 'LOBBY') this.matchTerminated = false;
+      return;
+    }
+
     if (current === this.lastPhase) return;
     const prev   = this.lastPhase;
     this.lastPhase = current;
@@ -134,7 +188,17 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private onTransitionToArena(): void {
-    // Alle bereits bereiten Spieler spawnen
+    const layout = bridge.getArenaLayout();
+    if (!layout) {
+      // Reliable-State sollte bereits da sein; kurze Retry-Verzögerung als Absicherung
+      this.time.delayedCall(16, () => this.onTransitionToArena());
+      return;
+    }
+
+    // Dynamische Arena aufbauen
+    this.buildArena(layout);
+
+    // Bereits bereite Spieler spawnen
     for (const profile of bridge.getConnectedPlayers()) {
       if (bridge.getPlayerReady(profile.id) && !this.playerManager.hasPlayer(profile.id)) {
         this.playerManager.addPlayer(profile);
@@ -145,18 +209,17 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private onTransitionToLobby(): void {
-    // Eigenen Ready-Status zurücksetzen
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;
 
-    // Alle Entities despawnen
     for (const p of [...this.playerManager.getAllPlayers()]) {
       if (bridge.isHost()) this.combatSystem.removePlayer(p.id);
       this.playerManager.removePlayer(p.id);
     }
 
-    // Overlay zurücksetzen und anzeigen
+    this.tearDownArena();
+
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
   }
@@ -166,19 +229,74 @@ export class ArenaScene extends Phaser.Scene {
     if (this.roundStartPending || !bridge.areAllPlayersReady()) return;
     this.roundStartPending = true;
     this.lobbyOverlay.lockButton();
-    // roundEndTime VOR gamePhase setzen – Clients sehen sofort gültigen Timestamp
+    // Host-ID publizieren bevor die Phase wechselt
+    bridge.setMatchHostId();
+    // Layout generieren und publizieren (reliable → Client bekommt es vor Phase-Wechsel)
+    const layout = ArenaGenerator.generate(Date.now());
+    bridge.publishArenaLayout(layout);
+    // Rundenende nach Layout setzen, Phasenwechsel zuletzt
     bridge.setRoundEndTime(Date.now() + ARENA_DURATION_SEC * 1000);
     bridge.setGamePhase('ARENA');
   }
 
   /** Host: Spawnt Spieler die isReady === true sind und noch keine Entity haben. */
   private spawnReadyPlayers(): void {
+    if (!bridge.isHost()) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (bridge.getPlayerReady(profile.id) && !this.playerManager.hasPlayer(profile.id)) {
         this.playerManager.addPlayer(profile);
         this.combatSystem.initPlayer(profile.id);
       }
     }
+  }
+
+  // ── Arena Aufbau / Teardown ───────────────────────────────────────────────
+
+  private buildArena(layout: import('../types').ArenaLayout): void {
+    // Sicherheits-Teardown (sollte in normalem Flow leer sein)
+    this.tearDownArena();
+
+    const builder = new ArenaBuilder(this);
+    this.arenaResult = builder.buildDynamic(layout);
+
+    // Layout in PlayerManager eintragen (für dynamische Spawn-Punkte)
+    this.playerManager.setLayout(layout);
+
+    // Gruppen an Physik-Systeme weitergeben
+    this.projectileManager.setRockGroup(
+      this.arenaResult.rockGroup,
+      this.arenaResult.rockObjects,
+      this.arenaResult.trunkGroup,
+    );
+    this.hostPhysics.setRockGroup(
+      this.arenaResult.rockGroup,
+      this.arenaResult.trunkGroup,
+    );
+
+    // RockRegistry nur auf dem Host initialisieren
+    if (bridge.isHost()) {
+      this.rockRegistry = new RockRegistry(layout);
+      const arenaResult  = this.arenaResult;  // Closure-Referenz sichern
+
+      this.projectileManager.setRockHitCallback((rockId) => {
+        if (!this.rockRegistry || !arenaResult) return;
+        const newHp = this.rockRegistry.applyDamage(rockId, ROCK_DAMAGE_PER_HIT);
+        // Fels-Visual sofort auf dem Host aktualisieren.
+        // remove() wird NICHT aufgerufen: hp=0 bleibt im Snapshot, damit Clients
+        // in runClientUpdate() destroyRock() auslösen können.
+        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, rockId, newHp);
+      });
+    }
+  }
+
+  private tearDownArena(): void {
+    if (this.arenaResult) {
+      ArenaBuilder.destroyDynamic(this.arenaResult);
+      this.arenaResult = null;
+    }
+    this.rockRegistry = null;
+    this.projectileManager.setRockGroup(null, null, null);
+    this.hostPhysics.setRockGroup(null, null);
   }
 
   // ── HUD ──────────────────────────────────────────────────────────────────
@@ -208,46 +326,36 @@ export class ArenaScene extends Phaser.Scene {
 
     const phase      = bridge.getGamePhase();
     const localReady = this.isLocalReady;
-    // Spieler ist aktiv im Spiel, sobald er bereit UND die Arena läuft.
     const inGame     = phase === 'ARENA' && localReady;
 
-    // ── Input: nur aktiv wenn Spieler tatsächlich im Spiel ist ───────────
-    // Verhindert Bewegung/Schießen solange Lobby-Overlay sichtbar ist –
-    // auch wenn (durch stale State) irrtümlich eine Entity existiert.
     if (inGame) {
       this.inputSystem.update();
     }
 
-    // ── Overlay-Steuerung ─────────────────────────────────────────────────
-    if (phase === 'LOBBY' || !localReady) {
-      // Overlay einblenden (normal-flow UND Late-Joiner in laufender Runde)
+    if (!this.matchTerminated && (phase === 'LOBBY' || !localReady)) {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       this.lobbyOverlay.refreshPlayerList(bridge.getConnectedPlayers());
       if (phase === 'LOBBY' && bridge.isHost()) this.hostCheckReadyToStart();
-    } else if (this.lobbyOverlay.isVisible()) {
-      // phase === 'ARENA' && localReady === true:
-      // Late-Joiner hat BEREIT geklickt → Overlay schließen.
-      // (Normal-flow wird durch onTransitionToArena() abgedeckt, aber
-      // für Late-Joiner, die ohne Transition direkt in ARENA landen,
-      // ist dieser Zweig der einzige Weg.)
+    } else if (!this.matchTerminated && this.lobbyOverlay.isVisible()) {
       this.lobbyOverlay.hide();
     }
 
-    // ── ARENA-Simulation ──────────────────────────────────────────────────
-    // runClientUpdate läuft bewusst auch für noch-nicht-bereite Spieler
-    // (Late-Joiner sehen die laufende Runde im Hintergrund durch das
-    // halbtransparente Overlay – "Live-Spectator"-Feature).
-    if (phase === 'ARENA') {
+    if (phase === 'ARENA' && !this.matchTerminated) {
       const secs = bridge.computeSecondsLeft();
       this.updateTimerDisplay(secs);
 
       if (bridge.isHost()) {
-        // Spät-Joiner spawnen, die während der Runde BEREIT gedrückt haben
         this.spawnReadyPlayers();
         this.runHostUpdate();
         if (secs <= 0) bridge.setGamePhase('LOBBY');
       } else {
         this.runClientUpdate();
+      }
+
+      // Canopy-Transparenz – nur für den lokalen Spieler, jede Frame lokal berechnet
+      if (this.arenaResult) {
+        const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite ?? null;
+        ArenaBuilder.updateCanopyTransparency(this.arenaResult.canopyObjects, localSprite);
       }
     }
   }
@@ -259,6 +367,7 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.update();
 
     const projectiles = this.projectileManager.hostUpdate();
+    const rocks       = this.rockRegistry?.getNetSnapshot() ?? [];
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.playerManager.getAllPlayers()) {
@@ -271,7 +380,7 @@ export class ArenaScene extends Phaser.Scene {
       player.syncBar();
     }
 
-    bridge.publishGameState({ players, projectiles });
+    bridge.publishGameState({ players, projectiles, rocks });
   }
 
   // ── Client-Update ────────────────────────────────────────────────────────
@@ -292,11 +401,29 @@ export class ArenaScene extends Phaser.Scene {
       }
       if (!player) continue;
 
-      player.setPosition(ps.x, ps.y);
+      player.setTargetPosition(ps.x, ps.y);
       player.updateHP(ps.hp);
       player.setVisible(ps.alive);
     }
 
+    // Spielerpositionen zur Zielposition interpolieren
+    const LERP_FACTOR = 0.2;
+    for (const player of this.playerManager.getAllPlayers()) {
+      player.lerpStep(LERP_FACTOR);
+    }
+
     this.projectileManager.clientSyncVisuals(state.projectiles);
+
+    // Rock-HP-Sync: beschädigte Felsen visuell aktualisieren
+    if (state.rocks && this.arenaResult) {
+      for (const rs of state.rocks) {
+        ArenaBuilder.updateRockVisual(
+          this.arenaResult.rockObjects,
+          this.arenaResult.rockGroup,
+          rs.id,
+          rs.hp,
+        );
+      }
+    }
   }
 }

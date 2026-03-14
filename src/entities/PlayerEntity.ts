@@ -13,8 +13,14 @@ export class PlayerEntity {
   private hpBarFg:  Phaser.GameObjects.Rectangle;
   private currentHp = HP_MAX;
 
+  // Zielposition für client-seitige Interpolation (Lerp)
+  private targetX = 0;
+  private targetY = 0;
+
   constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number) {
     this.id = profile.id;
+    this.targetX = x;
+    this.targetY = y;
 
     // Spieler-Sprite
     this.sprite = scene.add.rectangle(x, y, PLAYER_SIZE, PLAYER_SIZE, profile.colorHex);
@@ -38,10 +44,32 @@ export class PlayerEntity {
     return this.sprite.body as Phaser.Physics.Arcade.Body;
   }
 
-  /** Sprite + Physik-Body + HP-Balken positionieren. */
+  /** Sprite + Physik-Body + HP-Balken positionieren (Host: Respawn). */
   setPosition(x: number, y: number): void {
+    this.targetX = x;
+    this.targetY = y;
     this.sprite.setPosition(x, y);
     this.body.reset(x, y);
+    this.syncBar();
+  }
+
+  /**
+   * Zielposition für client-seitige Interpolation setzen.
+   * Nicht auf dem Host aufrufen – dort gilt setPosition().
+   */
+  setTargetPosition(x: number, y: number): void {
+    this.targetX = x;
+    this.targetY = y;
+  }
+
+  /**
+   * Sprite einen Schritt zur Zielposition interpolieren.
+   * Jeden Frame auf dem Client aufrufen.
+   * @param factor Interpolationsfaktor 0–1 (z. B. 0.2 für weiche Bewegung)
+   */
+  lerpStep(factor: number): void {
+    this.sprite.x = Phaser.Math.Linear(this.sprite.x, this.targetX, factor);
+    this.sprite.y = Phaser.Math.Linear(this.sprite.y, this.targetY, factor);
     this.syncBar();
   }
 

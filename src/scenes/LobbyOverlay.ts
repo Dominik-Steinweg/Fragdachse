@@ -200,6 +200,19 @@ export class LobbyOverlay {
     this.readyBtn.disableInteractive().setAlpha(0.4);
   }
 
+  /**
+   * Zeigt eine permanente Fehlermeldung wenn der Host das Spiel verlassen hat.
+   * Deaktiviert den BEREIT-Button, bis das Overlay neu gebaut wird (build()).
+   */
+  showHostDisconnectedMessage(): void {
+    this.statusText
+      .setText('Host hat das Spiel verlassen.')
+      .setStyle({ color: '#ff4444' });
+    this.btnLocked = true;
+    this.readyBtn.disableInteractive().setAlpha(0.4);
+    this.readyBtnLabel.setText('BEENDET');
+  }
+
   // ── Interne Hilfsmethoden ─────────────────────────────────────────────────
 
   /** Öffnet einen nativen Dialog zum Namensändern. */

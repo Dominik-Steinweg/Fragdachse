@@ -98,7 +98,7 @@ export class CombatSystem {
 
     // Body re-aktivieren und an Spawn-Point setzen (reset() löscht auch Velocity)
     player.body.enable = true;
-    const spawn = this.playerManager.getSpawnPoint(playerId);
+    const spawn = this.playerManager.getSpawnPoint();
     player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
   }
 }
