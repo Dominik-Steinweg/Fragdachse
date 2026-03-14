@@ -4,10 +4,10 @@ import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { LoadoutSlot }    from '../types';
 import type { UltimateConfig } from './LoadoutConfig';
-import { TestWeapon1 }     from './items/TestWeapon1';
-import { TestWeapon2 }     from './items/TestWeapon2';
-import { HE_Grenade }      from './items/HE_Grenade';
-import { HoneyBadgerRage } from './items/HoneyBadgerRage';
+import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
+import { GenericWeapon }   from './GenericWeapon';
+import { GenericUtility }  from './GenericUtility';
+import { GenericUltimate } from './GenericUltimate';
 import type { BaseWeapon }   from './BaseWeapon';
 import type { BaseUtility }  from './BaseUtility';
 import type { BaseUltimate } from './BaseUltimate';
@@ -44,16 +44,17 @@ export class LoadoutManager {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   assignDefaultLoadout(playerId: string): void {
+    const ultCfg = ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
     this.loadouts.set(playerId, {
-      weapon1:  new TestWeapon1(),
-      weapon2:  new TestWeapon2(),
-      utility:  new HE_Grenade(),
-      ultimate: new HoneyBadgerRage(),
+      weapon1:  new GenericWeapon(WEAPON_CONFIGS.TEST_WEAPON_1),
+      weapon2:  new GenericWeapon(WEAPON_CONFIGS.TEST_WEAPON_2),
+      utility:  new GenericUtility(UTILITY_CONFIGS.HE_GRENADE),
+      ultimate: new GenericUltimate(ultCfg),
     });
     this.ultimateStates.set(playerId, {
       active:    false,
       startTime: 0,
-      config:    new HoneyBadgerRage().config,
+      config:    ultCfg,
     });
   }
 

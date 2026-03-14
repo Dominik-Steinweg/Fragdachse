@@ -4,9 +4,9 @@
  * Ultimates überschreiben canUse() für Rage-basierte Logik.
  */
 export abstract class BaseLoadoutItem<T extends { cooldown: number }> {
-  abstract readonly config: T;
-
   private lastUsedAt = -Infinity;
+
+  constructor(public readonly config: T) {}
 
   /** True wenn der Cooldown noch nicht abgelaufen ist. */
   isOnCooldown(now: number): boolean {

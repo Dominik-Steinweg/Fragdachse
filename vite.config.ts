@@ -6,5 +6,14 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
+    chunkSizeWarningLimit: 3000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Packt Phaser und Playroom in eine eigene Datei namens "vendor"
+          vendor: ['phaser', 'playroomkit'] 
+        }
+      }
+    }
   },
 });
