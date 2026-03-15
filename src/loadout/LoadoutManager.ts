@@ -3,7 +3,13 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { LoadoutSlot, PlayerAimNetState, WeaponSlot } from '../types';
-import type { UltimateConfig, UtilityConfig, WeaponConfig } from './LoadoutConfig';
+import type {
+  MeleeWeaponFireConfig,
+  ProjectileWeaponFireConfig,
+  UltimateConfig,
+  UtilityConfig,
+  WeaponConfig,
+} from './LoadoutConfig';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { isVelocityMoving } from './SpreadMath';
 
@@ -236,8 +242,8 @@ export class LoadoutManager {
 
   /**
    * Feuert eine Waffe ab: prüft Cooldown + Adrenalin, berechnet den
-   * gestreuten Winkel (Basis + dynamischer Bloom), errechnet Lifetime
-   * aus Reichweite und spawnt das Projektil.
+   * gestreuten Winkel (Basis + dynamischer Bloom) und dispatcht dann
+   * auf die typ-spezifische Waffenlogik.
    */
   private fireWeapon(
     weapon:   BaseWeapon,
@@ -256,7 +262,6 @@ export class LoadoutManager {
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
     if (cfg.adrenalinCost > 0) {
       if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return;
-      this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
     }
 
     // 3. Gesamtspread ermitteln: Basis (stehend / bewegend) + dynamischer Bloom
@@ -269,24 +274,87 @@ export class LoadoutManager {
     const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
     const finalAngle     = angle + (Math.random() * 2 - 1) * halfSpreadRad;
 
-    // 4. Lifetime aus Reichweite berechnen (Projektil verschwindet exakt an der Reichweite)
-    const lifetime = (cfg.range / cfg.projectileSpeed) * 1000;
+    // 4. Typ-spezifische Waffenlogik ausführen.
+    const didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, playerId, playerColor);
+    if (!didFire) return;
 
-    // 5. Projektil spawnen
-    this.projectileManager.spawnProjectile(x, y, finalAngle, playerId, {
-      speed:         cfg.projectileSpeed,
-      size:          cfg.projectileSize,
-      damage:        cfg.damage,
-      color:         playerColor,
-      lifetime,
-      maxBounces:    cfg.projectileMaxBounces,
-      isGrenade:     false,
-      adrenalinGain: cfg.adrenalinGain,
-      weaponName:    cfg.displayName,
-    });
+    // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
+    if (cfg.adrenalinCost > 0) {
+      this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
+    }
 
     // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen
     weapon.addSpread();
     weapon.recordUse(now);
+  }
+
+  private dispatchWeaponFire(
+    config:      WeaponConfig,
+    x:           number,
+    y:           number,
+    angle:       number,
+    playerId:    string,
+    playerColor: number,
+  ): boolean {
+    switch (config.fire.type) {
+      case 'projectile':
+        return this.fireProjectileWeapon(config, config.fire, x, y, angle, playerId, playerColor);
+
+      case 'hitscan':
+        return this.fireHitscanWeapon(config, x, y, angle, playerId);
+
+      case 'melee':
+        return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId);
+
+      default:
+        return false;
+    }
+  }
+
+  private fireProjectileWeapon(
+    config:      WeaponConfig,
+    fireConfig:  ProjectileWeaponFireConfig,
+    x:           number,
+    y:           number,
+    angle:       number,
+    playerId:    string,
+    playerColor: number,
+  ): boolean {
+    const lifetime = (config.range / fireConfig.projectileSpeed) * 1000;
+
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed:         fireConfig.projectileSpeed,
+      size:          fireConfig.projectileSize,
+      damage:        config.damage,
+      color:         playerColor,
+      lifetime,
+      maxBounces:    fireConfig.projectileMaxBounces,
+      isGrenade:     false,
+      adrenalinGain: config.adrenalinGain,
+      weaponName:    config.displayName,
+    });
+
+    return true;
+  }
+
+  private fireHitscanWeapon(
+    _config:   WeaponConfig,
+    _x:        number,
+    _y:        number,
+    _angle:    number,
+    _playerId: string,
+  ): boolean {
+    return false;
+  }
+
+  private fireMeleeWeapon(
+    _config:     WeaponConfig,
+    _fireConfig: MeleeWeaponFireConfig,
+    _x:          number,
+    _y:          number,
+    _angle:      number,
+    _playerId:   string,
+  ): boolean {
+    return false;
   }
 }

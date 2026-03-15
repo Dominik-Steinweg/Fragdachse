@@ -3,15 +3,37 @@ import type { LoadoutSlot } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
+export interface ProjectileWeaponFireConfig {
+  readonly type: 'projectile';
+  readonly projectileSpeed: number;     // px/s
+  readonly projectileSize: number;      // px (quadratisch)
+  readonly projectileMaxBounces: number;
+}
+
+export interface HitscanWeaponFireConfig {
+  readonly type: 'hitscan';
+  readonly traceThickness: number;      // px - für spätere Ray-/Sweep-Checks
+}
+
+export interface MeleeWeaponFireConfig {
+  readonly type: 'melee';
+  readonly hitRadius: number;           // px - Trefferkreis vor dem Spieler
+  readonly hitArcDegrees: number;       // Öffnungswinkel vor dem Spieler
+  readonly forwardOffset: number;       // px - Mittelpunkt des Trefferkreises vor dem Spieler
+}
+
+export type WeaponFireConfig =
+  | ProjectileWeaponFireConfig
+  | HitscanWeaponFireConfig
+  | MeleeWeaponFireConfig;
+
 export interface WeaponConfig {
   readonly id: string;
   readonly displayName: string;
   readonly cooldown: number;            // ms zwischen zwei Schüssen
   readonly damage: number;              // HP-Schaden pro Direkttreffer
-  readonly projectileSpeed: number;     // px/s
-  readonly projectileSize: number;      // px (quadratisch)
   readonly range: number;               // px – Lifetime = range/speed*1000 ms
-  readonly projectileMaxBounces: number;
+  readonly fire: WeaponFireConfig;
 
   readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die diese Waffe eingesetzt werden darf
 
@@ -64,10 +86,13 @@ export const WEAPON_CONFIGS = {
     displayName:          'Glock',
     cooldown:             150,
     damage:               10,
-    projectileSpeed:      700,
-    projectileSize:       5,
     range:                400,        
-    projectileMaxBounces: 10,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      700,
+      projectileSize:       5,
+      projectileMaxBounces: 10,
+    },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        10,
@@ -85,10 +110,13 @@ export const WEAPON_CONFIGS = {
     displayName:          'USP',
     cooldown:             250,
     damage:               14,
-    projectileSpeed:      1000,
-    projectileSize:       5,
     range:                600,        
-    projectileMaxBounces: 10,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1000,
+      projectileSize:       5,
+      projectileMaxBounces: 10,
+    },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        10,
@@ -101,8 +129,51 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
   } as WeaponConfig,
 
+  ASMD_PRIM: {
+    id:                   'ASMD_PRIM',
+    displayName:          'ASMD Primär',
+    cooldown:             250,
+    damage:               10,
+    range:                800,        
+    fire: {
+      type:                 'hitscan',
+      traceThickness:       3,
+   },
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        5,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        3,
+    maxDynamicSpread:     9,
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+  } as WeaponConfig,
 
-
+  BITE: {
+    id:                   'BITE',
+    displayName:          'Dachsbiss',
+    cooldown:             250,
+    damage:               50,
+    range:                150,        
+    fire: {
+      type:                 'melee',
+      hitRadius:            24,
+      hitArcDegrees:        90,
+      forwardOffset:        16,
+   },
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        50,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+  } as WeaponConfig,
 
   /**
    * "WEAPON2" - Rechte Maustaste
@@ -113,10 +184,13 @@ export const WEAPON_CONFIGS = {
     displayName:          'P90',
     cooldown:             80,
     damage:               7,
-    projectileSpeed:      800,
-    projectileSize:       3,
     range:                500,        
-    projectileMaxBounces: 10,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      800,
+      projectileSize:       3,
+      projectileMaxBounces: 10,
+    },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        4,
     adrenalinGain:        0,
@@ -134,10 +208,13 @@ export const WEAPON_CONFIGS = {
     displayName:          'AK-47',
     cooldown:             100,
     damage:               14,
-    projectileSpeed:      1000,
-    projectileSize:       4,
     range:                1000,        
-    projectileMaxBounces: 10,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1000,
+      projectileSize:       4,
+      projectileMaxBounces: 10,
+    },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        8,
     adrenalinGain:        0,

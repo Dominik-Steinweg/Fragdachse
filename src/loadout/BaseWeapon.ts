@@ -2,7 +2,7 @@ import type { WeaponConfig } from './LoadoutConfig';
 import { BaseLoadoutItem } from './BaseLoadoutItem';
 import { addDynamicSpread, decayDynamicSpread } from './SpreadMath';
 
-/** Basisklasse für Projektilwaffen. Verwaltet Cooldown + dynamischen Spread (Bloom). */
+/** Basisklasse für Waffen. Verwaltet Cooldown + dynamischen Spread (Bloom). */
 export abstract class BaseWeapon extends BaseLoadoutItem<WeaponConfig> {
   private dynamicSpread = 0; // aktueller Bloom-Wert in Grad (0 = kein Spread)
 
