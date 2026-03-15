@@ -85,6 +85,8 @@ export class ProjectileManager {
       weaponName:     cfg.weaponName ?? 'Waffe',
       fuseTime:       cfg.fuseTime,
       grenadeEffect:  cfg.grenadeEffect,
+      detonable:      cfg.detonable,
+      detonator:      cfg.detonator,
     };
 
     // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0

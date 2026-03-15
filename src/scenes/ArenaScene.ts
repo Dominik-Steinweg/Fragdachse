@@ -20,6 +20,7 @@ import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS } from '../powerups/PowerUpConfig';
+import { DetonationSystem }    from '../systems/DetonationSystem';
 import { LeftSidePanel }       from '../ui/LeftSidePanel';
 import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem }           from '../ui/AimSystem';
@@ -64,9 +65,11 @@ export class ArenaScene extends Phaser.Scene {
   private rockRegistry: RockRegistry | null       = null;
 
   // ── Host-only Systeme ─────────────────────────────────────────────────────
-  private resourceSystem: ResourceSystem | null = null;
-  private burrowSystem:   BurrowSystem   | null = null;
-  private loadoutManager: LoadoutManager | null = null;  private powerUpSystem:  PowerUpSystem  | null = null;
+  private resourceSystem:    ResourceSystem    | null = null;
+  private burrowSystem:      BurrowSystem      | null = null;
+  private loadoutManager:    LoadoutManager    | null = null;
+  private powerUpSystem:     PowerUpSystem     | null = null;
+  private detonationSystem:  DetonationSystem  | null = null;
 
   // ── Client-seitiges PowerUp-Rendering ───────────────────────────────────────
   private powerUpSprites = new Map<number, Phaser.GameObjects.Rectangle>();
@@ -485,6 +488,10 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.setPowerUpSystem(this.powerUpSystem);
       this.resourceSystem.setPowerUpSystem(this.powerUpSystem);
 
+      // DetonationSystem initialisieren
+      this.detonationSystem = new DetonationSystem(this.projectileManager);
+      this.combatSystem.setDetonationSystem(this.detonationSystem);
+
       this.hostPhysics.setBurrowSystem(this.burrowSystem);
       this.hostPhysics.setLoadoutManager(this.loadoutManager);
 
@@ -549,6 +556,9 @@ export class ArenaScene extends Phaser.Scene {
     this.resourceSystem?.setPowerUpSystem(null);
     this.resourceSystem = null;
     this.burrowSystem   = null;
+    this.combatSystem.setDetonationSystem(null);
+    this.detonationSystem?.reset();
+    this.detonationSystem = null;
     this.loadoutManager?.setCombatSystem(null);
     this.loadoutManager = null;
     this.combatSystem.setBurrowSystem(null);
@@ -657,6 +667,9 @@ export class ArenaScene extends Phaser.Scene {
 
     this.hostPhysics.update(countdownActive);
     if (!countdownActive) {
+      // Projektil-Detonations-Check vor combatSystem.update(), damit bereits gezündete
+      // Projektile nicht mehr als Spieler-Treffer gewertet werden.
+      this.detonationSystem?.checkProjectileDetonations();
       this.combatSystem.update();
     }
 
@@ -666,6 +679,15 @@ export class ArenaScene extends Phaser.Scene {
     const hitscanTraces = countdownActive
       ? []
       : this.combatSystem.collectReplicatedHitscanTraces(Date.now());
+
+    // Detonations-Ereignisse verarbeiten (ASMD Secondary Ball, zukünftige Raketen, …)
+    const detonations = countdownActive ? [] : (this.detonationSystem?.flushDetonations() ?? []);
+    for (const det of detonations) {
+      this.combatSystem.applyAoeDamage(
+        det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
+      );
+      bridge.broadcastExplosionEffect(det.x, det.y, det.effect.aoeRadius);
+    }
 
     // Granaten-Explosionen verarbeiten
     for (const g of explodedGrenades) {

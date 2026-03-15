@@ -1,5 +1,5 @@
 import { RAGE_MAX } from '../config';
-import type { LoadoutSlot } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -56,6 +56,13 @@ export interface WeaponConfig {
   // Sind beide Felder gesetzt und pelletCount > 1, werden alle Projektile gleichzeitig gefeuert.
   readonly pelletCount?:       number; // Anzahl gleichzeitig abgefeuerter Projektile
   readonly pelletSpreadAngle?: number; // Halbwinkel der Auffächerung in Grad ([-y, +y])
+
+  // Visuelles Override
+  readonly projectileColor?: number; // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
+
+  // Detonations-System
+  readonly detonable?:  DetonableConfig;  // Projektile dieser Waffe können gezündet werden
+  readonly detonator?:  DetonatorConfig;  // Diese Waffe zündet passende Detonables
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov';
@@ -166,11 +173,11 @@ export const WEAPON_CONFIGS = {
     displayName:          'ASMD Primär',
     cooldown:             500,
     damage:               10,
-    range:                800,        
+    range:                800,
     fire: {
       type:                 'hitscan',
       traceThickness:       3,
-   },
+    },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        5,
@@ -181,6 +188,10 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
+    // ASMD Primary zündet ASMD Secondary-Bälle (und später weitere Tags wenn gewünscht)
+    detonator: {
+      triggerTags: ['asmd_ball'],
+    } satisfies DetonatorConfig,
   } as WeaponConfig,
 
   BITE: {
@@ -210,6 +221,44 @@ export const WEAPON_CONFIGS = {
   /**
    * "WEAPON2" - Rechte Maustaste
    */
+
+  /**
+   * ASMD Secondary – langsamer Energieball (Projektil), der durch ASMD Primary (Hitscan)
+   * oder andere konfigurierte Detonatoren gezündet werden kann.
+   * Basiert auf dem ASMD Shock Rifle Secondary Fire aus Unreal Tournament.
+   */
+  ASMD_SEC: {
+    id:                   'ASMD_SEC',
+    displayName:          'ASMD Sekundär',
+    cooldown:             2500,
+    damage:               20,          // Direkttreffer-Schaden
+    range:                1750,         // Lebensdauer: 1750/350*1000 = 5000 ms
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      350,
+      projectileSize:       14,
+      projectileMaxBounces: 5,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        20,
+    adrenalinGain:        10,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+    // Elektrisch-blauer Energieball – überschreibt Spielerfarbe
+    projectileColor:      0x00aaff,
+    // Detonations-Tag: wird durch ASMD_PRIM (und spätere Detonatoren mit diesem Tag) gezündet
+    detonable: {
+      tag:            'asmd_ball',
+      aoeDamage:      80,
+      aoeRadius:      100,
+      allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
+    } satisfies DetonableConfig,
+  } as WeaponConfig,
 
   P90: {
     id:                   'P90',

@@ -78,6 +78,9 @@ export interface ProjectileSpawnConfig {
   weaponName?:   string;        // Waffenname für Killfeed
   fuseTime?:     number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?: GrenadeEffectConfig;
+  // Detonations-System (optional)
+  detonable?: DetonableConfig;  // Projektil kann durch passende Detonatoren gezündet werden
+  detonator?: DetonatorConfig;  // Projektil löst passende Detonables aus (z.B. Selbst-Detonation)
 }
 
 export interface DamageGrenadeEffect {
@@ -104,6 +107,25 @@ export interface FireGrenadeEffect {
 }
 
 export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect;
+
+/**
+ * Markiert ein Projektil als detonierbar durch spezifische Auslöser-Tags.
+ * Data-driven: konfigurierbar pro Waffe, flexibel erweiterbar (ASMD Ball, Rakete, …).
+ */
+export interface DetonableConfig {
+  readonly tag: string;              // Bezeichner, z.B. 'asmd_ball'
+  readonly aoeDamage: number;        // Explosionsschaden bei Detonation
+  readonly aoeRadius: number;        // Explosionsradius in px
+  readonly allowCrossTeam: boolean;  // true = Gegner-Detonator kann es ebenfalls zünden
+}
+
+/**
+ * Markiert einen Schuss/Treffer als Detonator für passende DetonableConfig-Tags.
+ * Wird an WeaponConfig geheftet; gilt sowohl für Hitscan- als auch Projektil-Waffen.
+ */
+export interface DetonatorConfig {
+  readonly triggerTags: readonly string[];  // Tags der Projektile, die gezündet werden können
+}
 
 /** Explodierte Granate – von ProjectileManager.hostUpdate() zurückgegeben */
 export interface ExplodedGrenade {
@@ -148,6 +170,9 @@ export interface TrackedProjectile {
   weaponName:     string;        // Waffenname für Killfeed
   fuseTime?:      number;
   grenadeEffect?: GrenadeEffectConfig;
+  // Detonations-System (optional)
+  detonable?: DetonableConfig;  // dieses Projektil kann gezündet werden
+  detonator?: DetonatorConfig;  // dieses Projektil kann andere Detonables zünden
 }
 
 // ---- Prozedurales Arena-Layout ----

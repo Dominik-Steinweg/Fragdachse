@@ -372,12 +372,14 @@ export class LoadoutManager {
       speed:         fireConfig.projectileSpeed,
       size:          fireConfig.projectileSize,
       damage:        config.damage,
-      color:         playerColor,
+      color:         config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang
       lifetime,
       maxBounces:    fireConfig.projectileMaxBounces,
       isGrenade:     false,
       adrenalinGain: config.adrenalinGain,
       weaponName:    config.displayName,
+      detonable:     config.detonable,
+      detonator:     config.detonator,
     });
 
     return true;
@@ -406,6 +408,7 @@ export class LoadoutManager {
       config.adrenalinGain,
       config.displayName,
       shotId,
+      config.detonator,  // DetonatorConfig weitergeben (optional)
     ) ?? false;
   }
 

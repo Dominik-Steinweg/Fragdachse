@@ -3,7 +3,8 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
-import type { SyncedHitscanTrace } from '../types';
+import type { DetonationSystem }  from './DetonationSystem';
+import type { SyncedHitscanTrace, DetonatorConfig } from '../types';
 import {
   ARENA_HEIGHT,
   HP_MAX, RESPAWN_DELAY_MS,
@@ -57,10 +58,11 @@ export class CombatSystem {
   private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number) => void) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
-  private burrowSystem:   BurrowSystemType   | null  = null;
-  private resourceSystem: ResourceSystem     | null  = null;
-  private loadoutManager: LoadoutManagerType | null  = null;
-  private powerUpSystem:  PowerUpSystemType  | null  = null;
+  private burrowSystem:     BurrowSystemType    | null  = null;
+  private resourceSystem:   ResourceSystem      | null  = null;
+  private loadoutManager:   LoadoutManagerType  | null  = null;
+  private powerUpSystem:    PowerUpSystemType   | null  = null;
+  private detonationSystem: DetonationSystem    | null  = null;
   private rockObjects: readonly (Phaser.GameObjects.Rectangle | null)[] | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
 
@@ -76,6 +78,7 @@ export class CombatSystem {
   setResourceSystem(rs: ResourceSystem | null): void     { this.resourceSystem = rs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void { this.loadoutManager = lm; }
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
+  setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Rectangle | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -215,6 +218,7 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName: string,
     shotId?: number,
+    detonatorCfg?: DetonatorConfig,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -238,6 +242,13 @@ export class CombatSystem {
       shooterId,
       shotId,
     });
+
+    // Hitscan-Detonation prüfen (z.B. ASMD Primary zündet ASMD Secondary-Ball)
+    if (detonatorCfg) {
+      this.detonationSystem?.checkHitscanDetonations(
+        startX, startY, trace.endX, trace.endY, shooterId, detonatorCfg,
+      );
+    }
 
     if (!trace.hitPlayerId) return true;
 
