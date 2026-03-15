@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -37,6 +37,7 @@ const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_HITSCAN_TRACES = 'htr'; // global: SyncedHitscanTrace[] (unreliable, kurzlebige VFX-Ereignisse)
+const KEY_MELEE_SWINGS   = 'mls'; // global: SyncedMeleeSwing[]   (unreliable, kurzlebige Melee-VFX)
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
 const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
@@ -63,13 +64,14 @@ export interface RoundResult {
 }
 
 export interface GameState {
-  players:     Record<string, PlayerNetState>;
-  projectiles: SyncedProjectile[];
-  rocks:       RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
+  players:      Record<string, PlayerNetState>;
+  projectiles:  SyncedProjectile[];
+  rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
   hitscanTraces: SyncedHitscanTrace[];
-  smokes:      SyncedSmokeCloud[];
-  fires:       SyncedFireZone[];
-  powerups:    SyncedPowerUp[];  // Power-Ups auf dem Boden
+  meleeSwings:  SyncedMeleeSwing[];  // kurzlebige Melee-VFX
+  smokes:       SyncedSmokeCloud[];
+  fires:        SyncedFireZone[];
+  powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
 }
 
 type LoadoutUseHandler = (
@@ -335,32 +337,35 @@ export class NetworkBridge {
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────
   publishGameState(state: GameState): void {
-    setState(KEY_PLAYERS,      state.players,      false);
-    setState(KEY_PROJECTILES,  state.projectiles,  false);
-    setState(KEY_ROCK_HP,      state.rocks,        false);
+    setState(KEY_PLAYERS,        state.players,       false);
+    setState(KEY_PROJECTILES,    state.projectiles,   false);
+    setState(KEY_ROCK_HP,        state.rocks,         false);
     setState(KEY_HITSCAN_TRACES, state.hitscanTraces, false);
-    setState(KEY_SMOKE_CLOUDS, state.smokes,       false);
-    setState(KEY_FIRE_ZONES,   state.fires,        false);
-    setState(KEY_POWERUPS,     state.powerups,     false);
+    setState(KEY_MELEE_SWINGS,   state.meleeSwings,   false);
+    setState(KEY_SMOKE_CLOUDS,   state.smokes,        false);
+    setState(KEY_FIRE_ZONES,     state.fires,         false);
+    setState(KEY_POWERUPS,       state.powerups,      false);
   }
 
   getLatestGameState(): GameState | undefined {
-    const players = getState(KEY_PLAYERS) as Record<string, PlayerNetState> | undefined;
-    const projectiles = getState(KEY_PROJECTILES) as SyncedProjectile[] | undefined;
-    const rocks = getState(KEY_ROCK_HP) as RockNetState[] | undefined;
+    const players     = getState(KEY_PLAYERS)       as Record<string, PlayerNetState> | undefined;
+    const projectiles = getState(KEY_PROJECTILES)   as SyncedProjectile[]  | undefined;
+    const rocks       = getState(KEY_ROCK_HP)       as RockNetState[]      | undefined;
     const hitscanTraces = getState(KEY_HITSCAN_TRACES) as SyncedHitscanTrace[] | undefined;
-    const smokes = getState(KEY_SMOKE_CLOUDS) as SyncedSmokeCloud[] | undefined;
-    const fires  = getState(KEY_FIRE_ZONES)   as SyncedFireZone[]  | undefined;
-    const powerups = getState(KEY_POWERUPS)    as SyncedPowerUp[]   | undefined;
+    const meleeSwings  = getState(KEY_MELEE_SWINGS) as SyncedMeleeSwing[]  | undefined;
+    const smokes      = getState(KEY_SMOKE_CLOUDS)  as SyncedSmokeCloud[]  | undefined;
+    const fires       = getState(KEY_FIRE_ZONES)    as SyncedFireZone[]    | undefined;
+    const powerups    = getState(KEY_POWERUPS)      as SyncedPowerUp[]     | undefined;
     if (!players) return undefined;
     return {
       players,
-      projectiles: projectiles ?? [],
-      rocks: rocks ?? [],
+      projectiles:  projectiles  ?? [],
+      rocks:        rocks        ?? [],
       hitscanTraces: hitscanTraces ?? [],
-      smokes: smokes ?? [],
-      fires:  fires  ?? [],
-      powerups: powerups ?? [],
+      meleeSwings:  meleeSwings  ?? [],
+      smokes:       smokes       ?? [],
+      fires:        fires        ?? [],
+      powerups:     powerups     ?? [],
     };
   }
 

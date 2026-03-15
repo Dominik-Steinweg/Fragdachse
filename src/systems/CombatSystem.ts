@@ -4,7 +4,7 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
-import type { SyncedHitscanTrace, DetonatorConfig } from '../types';
+import type { SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig } from '../types';
 import {
   ARENA_HEIGHT,
   HP_MAX, RESPAWN_DELAY_MS,
@@ -17,6 +17,7 @@ import {
 } from '../config';
 
 const HITSCAN_TRACE_REPLICATION_MS = 80;
+const MELEE_SWING_REPLICATION_MS   = 120;
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
@@ -45,10 +46,13 @@ export class CombatSystem {
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
   private readonly hitscanLine = new Phaser.Geom.Line();
+  private readonly meleeLine   = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
   private readonly arenaBounds = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchCircle = new Phaser.Geom.Circle();
   private readonly scratchPoints: Phaser.Geom.Point[] = [];
   private recentHitscanTraces: Array<SyncedHitscanTrace & { expiresAt: number }> = [];
+  private recentMeleeSwings:   Array<SyncedMeleeSwing  & { expiresAt: number }> = [];
+  private meleeSwingIdCounter = 0;
 
   // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
   private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
@@ -269,6 +273,70 @@ export class CombatSystem {
     return this.recentHitscanTraces.map(({ expiresAt, ...trace }) => trace);
   }
 
+  // ── Melee-Angriff ─────────────────────────────────────────────────────────
+
+  /**
+   * Löst einen Melee-Angriff aus.
+   * Trifft ALLE Gegner, die sich im Trefferbereich befinden (Fächerform).
+   * Hindernisse (Felsen, Baumstämme) blockieren den Angriff auf dahinter stehende Ziele.
+   * Gibt true zurück wenn der Angriff verarbeitet wurde (Host-only).
+   */
+  resolveMeleeSwing(
+    shooterId:     string,
+    x:             number,
+    y:             number,
+    angle:         number,
+    range:         number,
+    arcDegrees:    number,
+    damage:        number,
+    adrenalinGain: number,
+    weaponName:    string,
+    playerColor:   number,
+  ): boolean {
+    if (!this.bridge.isHost()) return false;
+
+    const halfArcRad = (arcDegrees * Math.PI / 180) / 2;
+
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.isMeleeTargetCandidate(player.id, shooterId)) continue;
+
+      const dx   = player.sprite.x - x;
+      const dy   = player.sprite.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Reichweite – Spieler-Radius als Toleranz hinzurechnen
+      if (dist > range + PLAYER_SIZE * 0.5) continue;
+
+      // Winkelprüfung: liegt das Ziel innerhalb des Trefferbogens?
+      let angleDiff = Math.atan2(dy, dx) - angle;
+      while (angleDiff >  Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+      if (Math.abs(angleDiff) > halfArcRad) continue;
+
+      // Hindernischeck: liegt ein Fels/Stamm zwischen Schütze und Ziel?
+      this.meleeLine.setTo(x, y, player.sprite.x, player.sprite.y);
+      if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
+
+      const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
+      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = damage * loadoutMult * powerUpMult;
+      this.applyDamage(player.id, actualDamage, true, shooterId, weaponName);
+
+      if (adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
+    }
+
+    // Swing-VFX für alle Clients in die Replikations-Queue einreihen
+    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId });
+    return true;
+  }
+
+  collectReplicatedMeleeSwings(now: number): SyncedMeleeSwing[] {
+    this.recentMeleeSwings = this.recentMeleeSwings.filter(s => s.expiresAt > now);
+    return this.recentMeleeSwings.map(({ expiresAt, ...s }) => s);
+  }
+
   traceHitscan(options: HitscanTraceOptions): HitscanTraceResult {
     const { shooterId, startX, startY, angle, range, traceThickness, applyFavorTheShooter } = options;
 
@@ -315,6 +383,46 @@ export class CombatSystem {
       ...trace,
       expiresAt: now + HITSCAN_TRACE_REPLICATION_MS,
     });
+  }
+
+  private queueMeleeSwing(swing: Omit<SyncedMeleeSwing, 'swingId'>): void {
+    const now = Date.now();
+    this.recentMeleeSwings = this.recentMeleeSwings.filter(s => s.expiresAt > now);
+    this.recentMeleeSwings.push({
+      ...swing,
+      swingId:   ++this.meleeSwingIdCounter,
+      expiresAt: now + MELEE_SWING_REPLICATION_MS,
+    });
+  }
+
+  /**
+   * Prüft, ob ein Hindernis (Fels oder Baumstamm) die aktuelle meleeLine
+   * vor der angegebenen Distanz blockiert (Arena-Außenwände werden ignoriert,
+   * da Ziele immer innerhalb der Arena stehen).
+   */
+  private isMeleePathBlocked(maxDist: number): boolean {
+    if (this.rockObjects) {
+      for (const rock of this.rockObjects) {
+        if (!rock?.active) continue;
+        const hit = this.findNearestRectangleHit(this.meleeLine, rock.getBounds());
+        if (hit && hit.distance < maxDist) return true;
+      }
+    }
+    if (this.trunkObjects) {
+      for (const trunk of this.trunkObjects) {
+        if (!trunk.active) continue;
+        const hit = this.findNearestCircleHit(this.meleeLine, trunk.x, trunk.y, trunk.radius);
+        if (hit && hit.distance < maxDist) return true;
+      }
+    }
+    return false;
+  }
+
+  private isMeleeTargetCandidate(playerId: string, shooterId: string): boolean {
+    if (playerId === shooterId) return false;
+    if (!this.isAlive(playerId)) return false;
+    if (this.burrowSystem?.isBurrowed(playerId)) return false;
+    return true;
   }
 
   private isHitscanTargetCandidate(playerId: string, shooterId: string): boolean {

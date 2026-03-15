@@ -17,9 +17,7 @@ export interface HitscanWeaponFireConfig {
 
 export interface MeleeWeaponFireConfig {
   readonly type: 'melee';
-  readonly hitRadius: number;           // px - Trefferkreis vor dem Spieler
   readonly hitArcDegrees: number;       // Öffnungswinkel vor dem Spieler
-  readonly forwardOffset: number;       // px - Mittelpunkt des Trefferkreises vor dem Spieler
 }
 
 export type WeaponFireConfig =
@@ -198,14 +196,12 @@ export const WEAPON_CONFIGS = {
   BITE: {
     id:                   'BITE',
     displayName:          'Dachsbiss',
-    cooldown:             250,
+    cooldown:             350,
     damage:               50,
-    range:                150,        
+    range:                80,        
     fire: {
       type:                 'melee',
-      hitRadius:            24,
-      hitArcDegrees:        90,
-      forwardOffset:        16,
+      hitArcDegrees:        60,
    },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,

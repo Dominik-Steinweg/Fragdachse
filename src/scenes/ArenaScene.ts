@@ -679,6 +679,9 @@ export class ArenaScene extends Phaser.Scene {
     const hitscanTraces = countdownActive
       ? []
       : this.combatSystem.collectReplicatedHitscanTraces(Date.now());
+    const meleeSwings = countdownActive
+      ? []
+      : this.combatSystem.collectReplicatedMeleeSwings(Date.now());
 
     // Detonations-Ereignisse verarbeiten (ASMD Secondary Ball, zukünftige Raketen, …)
     const detonations = countdownActive ? [] : (this.detonationSystem?.flushDetonations() ?? []);
@@ -718,6 +721,9 @@ export class ArenaScene extends Phaser.Scene {
     for (const trace of hitscanTraces) {
       this.effectSystem.playSyncedHitscanTracer(trace);
     }
+    for (const swing of meleeSwings) {
+      this.effectSystem.playSyncedMeleeSwing(swing);
+    }
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.playerManager.getAllPlayers()) {
@@ -752,7 +758,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
-    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, smokes, fires, powerups });
+    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, meleeSwings, smokes, fires, powerups });
 
     // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
     this.syncPowerUpSprites(powerups);
@@ -804,6 +810,9 @@ export class ArenaScene extends Phaser.Scene {
     this.fireSystem.syncVisuals(state.fires ?? []);
     for (const trace of state.hitscanTraces) {
       this.effectSystem.playSyncedHitscanTracer(trace);
+    }
+    for (const swing of state.meleeSwings ?? []) {
+      this.effectSystem.playSyncedMeleeSwing(swing);
     }
 
     if (state.rocks && this.arenaResult) {

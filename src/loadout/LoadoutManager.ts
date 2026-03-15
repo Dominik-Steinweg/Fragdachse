@@ -40,7 +40,7 @@ interface UltimateState {
   config:    UltimateConfig;
 }
 
-type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot' | 'traceHitscan'>;
+type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
 
 /**
  * LoadoutManager – Host-autoritär.
@@ -350,7 +350,7 @@ export class LoadoutManager {
         return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, shotId);
 
       case 'melee':
-        return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId);
+        return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor);
 
       default:
         return false;
@@ -414,13 +414,25 @@ export class LoadoutManager {
   }
 
   private fireMeleeWeapon(
-    _config:     WeaponConfig,
-    _fireConfig: MeleeWeaponFireConfig,
-    _x:          number,
-    _y:          number,
-    _angle:      number,
-    _playerId:   string,
+    config:      WeaponConfig,
+    fireConfig:  MeleeWeaponFireConfig,
+    x:           number,
+    y:           number,
+    angle:       number,
+    playerId:    string,
+    playerColor: number,
   ): boolean {
-    return false;
+    return this.combatSystem?.resolveMeleeSwing(
+      playerId,
+      x,
+      y,
+      angle,
+      config.range,
+      fireConfig.hitArcDegrees,
+      config.damage,
+      config.adrenalinGain,
+      config.displayName,
+      playerColor,
+    ) ?? false;
   }
 }

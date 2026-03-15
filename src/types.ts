@@ -63,6 +63,18 @@ export interface SyncedHitscanTrace {
   shotId?:    number;
 }
 
+/** Kurzlebiger Melee-Swing für VFX-Replikation (Host → Clients, unreliable). */
+export interface SyncedMeleeSwing {
+  swingId:    number;   // pro Session eindeutig, für Client-Deduplizierung
+  x:          number;
+  y:          number;
+  angle:      number;   // Angriffs-Richtung in Radiant (Mittellinie des Bogens)
+  arcDegrees: number;   // Gesamtbreite des Trefferbogens in Grad
+  range:      number;   // maximale Reichweite in px
+  color:      number;   // Spielerfarbe (hex)
+  shooterId:  string;
+}
+
 /** Globale Spielphase – nur vom Host per setState gesetzt */
 export type GamePhase = 'LOBBY' | 'ARENA';
 

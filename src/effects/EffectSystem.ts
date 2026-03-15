@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { SyncedHitscanTrace } from '../types';
+import type { SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { DEPTH_FX, DEPTH_TRACE, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
 
 const HITSCAN_TRACER_FADE_MS = 120;
+const MELEE_SWING_FADE_MS    = 220;
 
 export class EffectSystem {
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
+  private processedMeleeSwingKeys   = new Map<string, number>();
 
   constructor(
     private scene:  Phaser.Scene,
@@ -184,6 +186,101 @@ export class EffectSystem {
     this.processedSyncedTracerKeys.set(tracerKey, now + 250);
 
     return shooterId === this.bridge.getLocalPlayerId() && this.consumePredictedTracerId(shotId);
+  }
+
+  // ── Melee-Swing-VFX: Fächerform vor dem Spieler ──────────────────────────
+
+  /**
+   * Zeichnet den sichtbaren Trefferbereich eines Melee-Angriffs:
+   * - Halbtransparenter gefüllter Fächer in Spielerfarbe
+   * - Leuchtende Bogenlinie + zwei Randkanten
+   * - Drei Kratzer ("Klauen") als radiale Linien
+   */
+  playMeleeSwingEffect(
+    x:           number,
+    y:           number,
+    angle:       number,
+    arcDegrees:  number,
+    range:       number,
+    playerColor: number,
+  ): void {
+    const palette    = getBeamPaletteForPlayerColor(playerColor);
+    const halfArcRad = (arcDegrees * Math.PI / 180) / 2;
+    const startAngle = angle - halfArcRad;
+    const endAngle   = angle + halfArcRad;
+
+    const gfx = this.scene.add.graphics();
+    gfx.setDepth(DEPTH_FX);
+
+    // 1. Gefüllter Sektor (Fächer)
+    gfx.fillStyle(palette.glow, 0.18);
+    gfx.beginPath();
+    gfx.moveTo(x, y);
+    gfx.arc(x, y, range, startAngle, endAngle, false);
+    gfx.closePath();
+    gfx.fillPath();
+
+    // 2. Äußere Bogenlinie
+    gfx.lineStyle(3, playerColor, 0.1);
+    gfx.beginPath();
+    gfx.arc(x, y, range, startAngle, endAngle, false);
+    gfx.strokePath();
+
+    // 3. Seitenkanten
+    gfx.lineStyle(2, playerColor, 0.1);
+    gfx.lineBetween(
+      x, y,
+      x + Math.cos(startAngle) * range,
+      y + Math.sin(startAngle) * range,
+    );
+    gfx.lineBetween(
+      x, y,
+      x + Math.cos(endAngle) * range,
+      y + Math.sin(endAngle) * range,
+    );
+
+    // 4. Drei Kratzer (Biss-/Klaueneffekt) als radiale Linien
+    const clawOffsets = [-0.55, 0, 0.55];
+    for (const t of clawOffsets) {
+      const a  = angle + t * halfArcRad;
+      const x0 = x + Math.cos(a) * range * 0.28;
+      const y0 = y + Math.sin(a) * range * 0.28;
+      const x1 = x + Math.cos(a) * range * 0.97;
+      const y1 = y + Math.sin(a) * range * 0.97;
+      gfx.lineStyle(2, palette.shadow, 0.50);
+      gfx.lineBetween(x0, y0, x1, y1);
+    }
+
+    this.scene.tweens.add({
+      targets:    gfx,
+      alpha:      0,
+      duration:   MELEE_SWING_FADE_MS,
+      ease:       'Power2Out',
+      onComplete: () => gfx.destroy(),
+    });
+  }
+
+  /**
+   * Spielt einen synchronisierten Melee-Swing ab.
+   * Dedupliziert anhand der swingId, damit der Effekt pro Event nur einmal gerendert wird
+   * (der Host-Zustand wird mehrere Frames länger gesendet als die Animation dauert).
+   */
+  playSyncedMeleeSwing(swing: SyncedMeleeSwing): void {
+    const now = this.scene.time.now;
+    const key = `${swing.shooterId}:${swing.swingId}`;
+
+    // Abgelaufene Einträge bereinigen
+    for (const [k, expiresAt] of this.processedMeleeSwingKeys) {
+      if (expiresAt <= now) this.processedMeleeSwingKeys.delete(k);
+    }
+    if (this.processedMeleeSwingKeys.has(key)) return;
+    this.processedMeleeSwingKeys.set(key, now + 500);
+
+    this.playMeleeSwingEffect(
+      swing.x, swing.y,
+      swing.angle, swing.arcDegrees, swing.range,
+      swing.color,
+    );
   }
 
   // ── Todes-Effekt: drei Explosionsringe + weißer Blitz ────────────────────
