@@ -727,10 +727,12 @@ export class ArenaScene extends Phaser.Scene {
       player.syncBar();
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, smokes, fires, powerups: this.powerUpSystem?.getNetSnapshot() ?? [] });
+    const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
+    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, smokes, fires, powerups });
 
-    // PowerUp-Sprites auch auf dem Host rendern
-    this.syncPowerUpSprites(this.powerUpSystem?.getNetSnapshot() ?? []);
+    // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
+    this.syncPowerUpSprites(powerups);
+    this.checkLocalPickup(powerups);
 
     // HUD des lokalen Host-Spielers aktualisieren
     const localId = bridge.getLocalPlayerId();
@@ -922,8 +924,13 @@ export class ArenaScene extends Phaser.Scene {
 
     for (const pu of powerups) {
       const dist = Phaser.Math.Distance.Between(px, py, pu.x, pu.y);
-      if (dist <= PICKUP_RADIUS) {
-        bridge.sendPickupPowerUp(pu.uid);
+      if (dist <= PICKUP_RADIUS * 2) {
+        if (bridge.isHost()) {
+          // Host kann direkt einsammeln – kein RPC-Umweg nötig
+          this.powerUpSystem?.tryPickup(localId, pu.uid, px, py);
+        } else {
+          bridge.sendPickupPowerUp(pu.uid);
+        }
         this.pickupCooldownUntil = now + 100; // 100ms Debounce
         return; // Maximal 1 Pickup-Request pro Check
       }
