@@ -51,6 +51,10 @@ export class PlayerEntity {
     return this.sprite.body as Phaser.Physics.Arcade.Body;
   }
 
+  get color(): number {
+    return this.colorHex;
+  }
+
   /** Sprite + Physik-Body + HP-Balken positionieren (Host: Respawn). */
   setPosition(x: number, y: number): void {
     this.targetX = x;

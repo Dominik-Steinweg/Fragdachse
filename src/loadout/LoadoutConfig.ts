@@ -11,7 +11,6 @@ export interface WeaponConfig {
   readonly projectileSize: number;      // px (quadratisch)
   readonly range: number;               // px – Lifetime = range/speed*1000 ms
   readonly projectileMaxBounces: number;
-  readonly projectileColor: number;     // hex
 
   readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die diese Waffe eingesetzt werden darf
 
@@ -36,7 +35,6 @@ export interface UtilityConfig {
   readonly cooldown: number;        // ms
   readonly projectileSpeed: number; // px/s (langsam für Granaten)
   readonly projectileSize: number;  // px
-  readonly projectileColor: number; // hex
   readonly fuseTime: number;        // ms bis Explosion
   readonly aoeRadius: number;       // px
   readonly aoeDamage: number;       // HP-Schaden im Radius
@@ -66,7 +64,6 @@ export const WEAPON_CONFIGS = {
     projectileSize:       5,
     range:                400,        
     projectileMaxBounces: 10,
-    projectileColor:      0xc09473,
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        10,
@@ -87,7 +84,6 @@ export const WEAPON_CONFIGS = {
     projectileSize:       5,
     range:                600,        
     projectileMaxBounces: 10,
-    projectileColor:      0xc09473,
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        10,
@@ -115,7 +111,6 @@ export const WEAPON_CONFIGS = {
     projectileSize:       3,
     range:                500,        
     projectileMaxBounces: 10,
-    projectileColor:      0xaaddff,
     allowedSlots:         ['weapon2'],
     adrenalinCost:        4,
     adrenalinGain:        0,
@@ -136,7 +131,6 @@ export const WEAPON_CONFIGS = {
     projectileSize:       4,
     range:                1000,        
     projectileMaxBounces: 10,
-    projectileColor:      0xaaddff,
     allowedSlots:         ['weapon2'],
     adrenalinCost:        8,
     adrenalinGain:        0,
@@ -157,7 +151,6 @@ export const UTILITY_CONFIGS = {
     cooldown:        6000,
     projectileSpeed: 500,
     projectileSize:  10,
-    projectileColor: 0x44aa22,
     fuseTime:        750,
     aoeRadius:       80,
     aoeDamage:       60,

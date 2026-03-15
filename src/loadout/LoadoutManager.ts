@@ -93,11 +93,11 @@ export class LoadoutManager {
 
     switch (slot) {
       case 'weapon1':
-        this.fireWeapon(loadout.weapon1, x, y, angle, playerId, now);
+        this.fireWeapon(loadout.weapon1, x, y, angle, playerId, now, player.color);
         break;
 
       case 'weapon2':
-        this.fireWeapon(loadout.weapon2, x, y, angle, playerId, now);
+        this.fireWeapon(loadout.weapon2, x, y, angle, playerId, now, player.color);
         break;
 
       case 'utility': {
@@ -107,7 +107,7 @@ export class LoadoutManager {
           speed:         cfg.projectileSpeed,
           size:          cfg.projectileSize,
           damage:        0,              // kein Direkttreffer-Schaden
-          color:         cfg.projectileColor,
+          color:         player.color,
           lifetime:      cfg.fuseTime,   // Lifetime = Zündzeit
           maxBounces:    0,
           isGrenade:     true,
@@ -220,6 +220,7 @@ export class LoadoutManager {
     angle:    number,
     playerId: string,
     now:      number,
+    playerColor: number,
   ): void {
     // 1. Cooldown-Check
     if (weapon.isOnCooldown(now)) return;
@@ -251,7 +252,7 @@ export class LoadoutManager {
       speed:         cfg.projectileSpeed,
       size:          cfg.projectileSize,
       damage:        cfg.damage,
-      color:         cfg.projectileColor,
+      color:         playerColor,
       lifetime,
       maxBounces:    cfg.projectileMaxBounces,
       isGrenade:     false,

@@ -11,7 +11,9 @@
       "Bash(python3 -c \":*)",
       "Bash(node -e \":*)",
       "Bash(npm run:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(find C:Fragdachse/src -type f -name *.ts)",
+      "Bash(grep -n \"initColorPool\\\\|PLAYER_COLORS\" \"C:\\\\Fragdachse/src\"/*.ts)"
     ]
   }
 }
