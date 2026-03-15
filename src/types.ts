@@ -38,13 +38,17 @@ export interface PlayerNetState {
   aim:        PlayerAimNetState;
 }
 
+/** Visueller Stil eines Projektils */
+export type ProjectileStyle = 'bullet' | 'ball';
+
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
-  id:    number;
-  x:     number;
-  y:     number;
-  size:  number;  // px – für korrekte Client-Darstellung
-  color: number;  // hex
+  id:     number;
+  x:      number;
+  y:      number;
+  size:   number;  // px – für korrekte Client-Darstellung
+  color:  number;  // hex
+  style?: ProjectileStyle;  // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
@@ -67,17 +71,18 @@ export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
 export interface ProjectileSpawnConfig {
-  speed:         number;
-  size:          number;
-  damage:        number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
-  color:         number;        // hex
-  lifetime:      number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
-  maxBounces:    number;        // 0 für Granaten
-  isGrenade:     boolean;
-  adrenalinGain: number;        // Adrenalin-Gewinn für den Schützen bei Treffer
-  weaponName?:   string;        // Waffenname für Killfeed
-  fuseTime?:     number;        // ms bis AoE-Explosion (nur Granaten)
-  grenadeEffect?: GrenadeEffectConfig;
+  speed:           number;
+  size:            number;
+  damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
+  color:           number;        // hex
+  lifetime:        number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
+  maxBounces:      number;        // 0 für Granaten
+  isGrenade:       boolean;
+  adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
+  weaponName?:     string;        // Waffenname für Killfeed
+  fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
+  grenadeEffect?:  GrenadeEffectConfig;
+  projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // Projektil kann durch passende Detonatoren gezündet werden
   detonator?: DetonatorConfig;  // Projektil löst passende Detonables aus (z.B. Selbst-Detonation)
@@ -154,22 +159,23 @@ export interface SyncedFireZone {
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
 export interface TrackedProjectile {
-  id:             number;
-  sprite:         Phaser.GameObjects.Rectangle;
-  body:           Phaser.Physics.Arcade.Body;
-  bounceCount:    number;
-  createdAt:      number;
-  ownerId:        string;
-  boundsListener: (hitBody: Phaser.Physics.Arcade.Body) => void;
-  colliders:      Phaser.Physics.Arcade.Collider[];  // müssen beim Destroy explizit entfernt werden
-  damage:         number;        // Schadenswert pro Direkttreffer
-  lifetime:       number;        // ms Lebensdauer (Bullets) / fuseTime (Granaten)
-  maxBounces:     number;        // maximale Abpraller
-  isGrenade:      boolean;
-  adrenalinGain:  number;        // Adrenalin-Gewinn für den Schützen bei Treffer
-  weaponName:     string;        // Waffenname für Killfeed
-  fuseTime?:      number;
-  grenadeEffect?: GrenadeEffectConfig;
+  id:              number;
+  sprite:          Phaser.GameObjects.Shape;  // Rectangle (bullet) oder Arc (ball)
+  body:            Phaser.Physics.Arcade.Body;
+  bounceCount:     number;
+  createdAt:       number;
+  ownerId:         string;
+  boundsListener:  (hitBody: Phaser.Physics.Arcade.Body) => void;
+  colliders:       Phaser.Physics.Arcade.Collider[];  // müssen beim Destroy explizit entfernt werden
+  damage:          number;        // Schadenswert pro Direkttreffer
+  lifetime:        number;        // ms Lebensdauer (Bullets) / fuseTime (Granaten)
+  maxBounces:      number;        // maximale Abpraller
+  isGrenade:       boolean;
+  adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
+  weaponName:      string;        // Waffenname für Killfeed
+  fuseTime?:       number;
+  grenadeEffect?:  GrenadeEffectConfig;
+  projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // dieses Projektil kann gezündet werden
   detonator?: DetonatorConfig;  // dieses Projektil kann andere Detonables zünden

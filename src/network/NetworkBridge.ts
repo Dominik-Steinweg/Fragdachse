@@ -81,7 +81,7 @@ type LoadoutUseHandler = (
   shotId?: number,
 ) => void;
 
-type ExplosionEffectHandler = (x: number, y: number, radius: number) => void;
+type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number) => void;
 type EffectHandler = (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void;
 type HitscanTracerHandler = (
   startX: number,
@@ -412,17 +412,17 @@ export class NetworkBridge {
 
   // ── Explosions-Effekt-RPC: Host → Alle ────────────────────────────────────
 
-  broadcastExplosionEffect(x: number, y: number, radius: number): void {
-    this.broadcastRpc('xfx', { x, y, r: radius });
+  broadcastExplosionEffect(x: number, y: number, radius: number, color?: number): void {
+    this.broadcastRpc('xfx', { x, y, r: radius, c: color });
   }
 
-  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number) => void): void {
+  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number) => void): void {
     this.explosionEffectHandler = handler;
     this.registerAllRpcHandler('xfx', async (data: unknown): Promise<unknown> => {
       const explosionEffectHandler = this.explosionEffectHandler;
       if (!explosionEffectHandler) return undefined;
-      const { x, y, r } = data as { x: number; y: number; r: number };
-      explosionEffectHandler(x, y, r);
+      const { x, y, r, c } = data as { x: number; y: number; r: number; c?: number };
+      explosionEffectHandler(x, y, r, c);
       return undefined;
     });
   }

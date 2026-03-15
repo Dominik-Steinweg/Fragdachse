@@ -86,12 +86,16 @@ export class EffectSystem {
     });
   }
 
-  // ── Granaten-Explosions-Effekt: wachsender roter Kreis ───────────────────
-
-  playExplosionEffect(x: number, y: number, radius: number): void {
+  // ── Granaten-Explosions-Effekt: wachsender Kreis ─────────────────────────────
+  /**
+   * @param radius  Explosionsradius in px (visuell 1:1 match mit Schadensradius)
+   * @param color   Optionale Farbe (Standard: orange-rot 0xff2200)
+   */
+  playExplosionEffect(x: number, y: number, radius: number, color?: number): void {
+    const fillColor = color ?? 0xff2200;
     const startRadius = 8;
-    const endScale    = (radius / startRadius) * 2;
-    const ring = this.scene.add.circle(x, y, startRadius, 0xff2200, 0.7);
+    const endScale    = radius / startRadius; // 1:1 – visueller Radius = Schadensradius
+    const ring = this.scene.add.circle(x, y, startRadius, fillColor, 0.7);
     ring.setDepth(DEPTH_FX);
     this.scene.tweens.add({
       targets:    ring,

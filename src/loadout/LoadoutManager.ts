@@ -369,17 +369,18 @@ export class LoadoutManager {
     const lifetime = (config.range / fireConfig.projectileSpeed) * 1000;
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed:         fireConfig.projectileSpeed,
-      size:          fireConfig.projectileSize,
-      damage:        config.damage,
-      color:         config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang
+      speed:           fireConfig.projectileSpeed,
+      size:            fireConfig.projectileSize,
+      damage:          config.damage,
+      color:           config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang
       lifetime,
-      maxBounces:    fireConfig.projectileMaxBounces,
-      isGrenade:     false,
-      adrenalinGain: config.adrenalinGain,
-      weaponName:    config.displayName,
-      detonable:     config.detonable,
-      detonator:     config.detonator,
+      maxBounces:      fireConfig.projectileMaxBounces,
+      isGrenade:       false,
+      adrenalinGain:   config.adrenalinGain,
+      weaponName:      config.displayName,
+      projectileStyle: config.projectileStyle,
+      detonable:       config.detonable,
+      detonator:       config.detonator,
     });
 
     return true;

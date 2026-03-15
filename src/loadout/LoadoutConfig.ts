@@ -1,5 +1,5 @@
 import { RAGE_MAX } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileStyle } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -58,7 +58,8 @@ export interface WeaponConfig {
   readonly pelletSpreadAngle?: number; // Halbwinkel der Auffächerung in Grad ([-y, +y])
 
   // Visuelles Override
-  readonly projectileColor?: number; // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
+  readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
+  readonly projectileStyle?: ProjectileStyle; // 'bullet' (eckig, Standard) | 'ball' (rund)
 
   // Detonations-System
   readonly detonable?:  DetonableConfig;  // Projektile dieser Waffe können gezündet werden
@@ -249,8 +250,9 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
-    // Elektrisch-blauer Energieball – überschreibt Spielerfarbe
-    projectileColor:      0x00aaff,
+    // Runder Energieball – wird in Spielerfarbe gezeichnet.
+    // projectileColor kann gesetzt werden um die Farbe zu überschreiben (hier nicht gesetzt).
+    projectileStyle:  'ball' satisfies ProjectileStyle,
     // Detonations-Tag: wird durch ASMD_PRIM (und spätere Detonatoren mit diesem Tag) gezündet
     detonable: {
       tag:            'asmd_ball',

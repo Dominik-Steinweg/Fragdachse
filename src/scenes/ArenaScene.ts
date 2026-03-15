@@ -181,8 +181,8 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
-    bridge.registerExplosionEffectHandler((x, y, radius) => {
-      this.effectSystem.playExplosionEffect(x, y, radius);
+    bridge.registerExplosionEffectHandler((x, y, radius, color) => {
+      this.effectSystem.playExplosionEffect(x, y, radius, color);
     });
 
     // ── 11. RPC-Handler für Burrow-Visualisierung ─────────────────────────
@@ -686,7 +686,9 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.applyAoeDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
       );
-      bridge.broadcastExplosionEffect(det.x, det.y, det.effect.aoeRadius);
+      // Explosion in Spielerfarbe des Auslösers (z.B. Roter Spieler zündet grünen Ball → rote Explosion)
+      const detonatorColor = bridge.getPlayerColor(det.detonatorOwnerId);
+      bridge.broadcastExplosionEffect(det.x, det.y, det.effect.aoeRadius, detonatorColor);
     }
 
     // Granaten-Explosionen verarbeiten

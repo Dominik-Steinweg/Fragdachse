@@ -5,7 +5,7 @@ import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSp
 export class ProjectileManager {
   private scene:       Phaser.Scene;
   private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile
-  private clientVisuals = new Map<number, Phaser.GameObjects.Rectangle>(); // Client: Visuals
+  private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals
   private nextId        = 0;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
@@ -56,8 +56,13 @@ export class ProjectileManager {
     ownerId: string,
     cfg:     ProjectileSpawnConfig,
   ): void {
-    const id     = this.nextId++;
-    const sprite = this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
+    const id = this.nextId++;
+
+    // Visueller Stil bestimmt ob das Projektil eckig (bullet) oder rund (ball) gezeichnet wird.
+    const isBall = cfg.projectileStyle === 'ball';
+    const sprite: Phaser.GameObjects.Shape = isBall
+      ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
+      : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
     sprite.setDepth(DEPTH.PROJECTILES);
     this.scene.physics.add.existing(sprite);
 
@@ -83,10 +88,11 @@ export class ProjectileManager {
       isGrenade:      cfg.isGrenade,
       adrenalinGain:  cfg.adrenalinGain,
       weaponName:     cfg.weaponName ?? 'Waffe',
-      fuseTime:       cfg.fuseTime,
-      grenadeEffect:  cfg.grenadeEffect,
-      detonable:      cfg.detonable,
-      detonator:      cfg.detonator,
+      fuseTime:        cfg.fuseTime,
+      grenadeEffect:   cfg.grenadeEffect,
+      projectileStyle: cfg.projectileStyle,
+      detonable:       cfg.detonable,
+      detonator:       cfg.detonator,
     };
 
     // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
@@ -105,7 +111,7 @@ export class ProjectileManager {
    *                          false für Granaten (kein Felstrefferschaden beim Abprallen)
    */
   private setupBouncePhysics(
-    sprite:          Phaser.GameObjects.Rectangle,
+    sprite:          Phaser.GameObjects.Shape,
     body:            Phaser.Physics.Arcade.Body,
     tracked:         TrackedProjectile,
     applyRockDamage: boolean,
@@ -221,6 +227,7 @@ export class ProjectileManager {
       y:     p.sprite.y,
       size:  p.sprite.width,
       color: p.sprite.fillColor,
+      style: p.projectileStyle,
     }));
 
     return { synced, explodedGrenades };
@@ -245,7 +252,10 @@ export class ProjectileManager {
     for (const proj of data) {
       const existing = this.clientVisuals.get(proj.id);
       if (!existing) {
-        const sprite = this.scene.add.rectangle(proj.x, proj.y, proj.size, proj.size, proj.color);
+        const isBall = proj.style === 'ball';
+        const sprite: Phaser.GameObjects.Shape = isBall
+          ? this.scene.add.circle(proj.x, proj.y, proj.size / 2, proj.color)
+          : this.scene.add.rectangle(proj.x, proj.y, proj.size, proj.size, proj.color);
         sprite.setDepth(DEPTH.PROJECTILES);
         this.clientVisuals.set(proj.id, sprite);
       } else {
