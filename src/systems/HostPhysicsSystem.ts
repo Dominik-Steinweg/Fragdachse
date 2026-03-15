@@ -138,7 +138,7 @@ export class HostPhysicsSystem {
    * Jeden Frame – nur auf dem Host aktiv.
    * Priorität: Stun > Dash > Burrow-Speed > Normale Bewegung.
    */
-  update(): void {
+  update(movementLocked = false): void {
     if (!this.bridge.isHost()) return;
 
     const now = Date.now();
@@ -167,6 +167,11 @@ export class HostPhysicsSystem {
 
       // Tote Spieler überspringen (body.enable = false durch CombatSystem)
       if (!this.combatSystem.isAlive(player.id)) continue;
+
+      if (movementLocked) {
+        player.body.setVelocity(0, 0);
+        continue;
+      }
 
       // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
       if (this.burrowSystem?.isStunned(player.id)) {

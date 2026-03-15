@@ -19,11 +19,12 @@ import { EffectSystem }        from '../effects/EffectSystem';
 import { LeftSidePanel }       from '../ui/LeftSidePanel';
 import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem }           from '../ui/AimSystem';
+import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { LobbyOverlay }        from './LobbyOverlay';
 import type { PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, WeaponSlot } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';
 import {
-  ARENA_DURATION_SEC, PLAYER_COLORS,
+  ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 
@@ -41,6 +42,7 @@ export class ArenaScene extends Phaser.Scene {
   private leftPanel!:  LeftSidePanel;
   private rightPanel!: RightSidePanel;
   private aimSystem:   AimSystem | null = null;
+  private arenaCountdown: ArenaCountdownOverlay | null = null;
 
   // Alive/Burrowed-Flags des lokalen Spielers (gesetzt in runHostUpdate/runClientUpdate)
   private localPlayerAlive    = false;
@@ -134,6 +136,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId) => {
       if (!bridge.isHost()) return;
+      if (bridge.isArenaCountdownActive()) return;
       this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now());
     });
 
@@ -184,6 +187,10 @@ export class ArenaScene extends Phaser.Scene {
     // ── 14. Right Side Panel (Timer, Killfeed, Leaderboard) ───────────────
     this.rightPanel = new RightSidePanel(this);
     this.rightPanel.build();
+    this.arenaCountdown = new ArenaCountdownOverlay(
+      this,
+      () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+    );
 
     // Kill-Ereignis-Handler: alle Clients (inkl. Host) aktualisieren den Killfeed
     bridge.registerKillEventHandler(event => {
@@ -237,6 +244,7 @@ export class ArenaScene extends Phaser.Scene {
     this.isLocalReady    = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;
+    this.arenaCountdown?.clear();
 
     for (const p of [...this.playerManager.getAllPlayers()]) {
       if (bridge.isHost()) {
@@ -308,6 +316,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.leftPanel.transitionToGame();
     this.rightPanel.transitionToGame();
+    this.arenaCountdown?.syncTo(bridge.getArenaStartTime());
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
   }
@@ -316,6 +325,7 @@ export class ArenaScene extends Phaser.Scene {
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;
+    this.arenaCountdown?.clear();
 
     for (const p of [...this.playerManager.getAllPlayers()]) {
       if (bridge.isHost()) {
@@ -353,9 +363,11 @@ export class ArenaScene extends Phaser.Scene {
     this.lobbyOverlay.lockButton();
     bridge.setMatchHostId();
     bridge.resetAllFrags();
+    const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     const layout = ArenaGenerator.generate(Date.now());
     bridge.publishArenaLayout(layout);
-    bridge.setRoundEndTime(Date.now() + ARENA_DURATION_SEC * 1000);
+    bridge.setArenaStartTime(arenaStartTime);
+    bridge.setRoundEndTime(arenaStartTime + ARENA_DURATION_SEC * 1000);
     bridge.setGamePhase('ARENA');
   }
 
@@ -433,11 +445,13 @@ export class ArenaScene extends Phaser.Scene {
 
       // Dash-RPC: Client → Host
       bridge.registerDashHandler((playerId, dx, dy) => {
+        if (bridge.isArenaCountdownActive()) return;
         this.hostPhysics.handleDashRPC(playerId, dx, dy);
       });
 
       // Burrow-RPC: Client → Host
       bridge.registerBurrowHandler((playerId, wantsBurrowed) => {
+        if (bridge.isArenaCountdownActive()) return;
         this.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
       });
 
@@ -502,9 +516,15 @@ export class ArenaScene extends Phaser.Scene {
 
     const phase  = bridge.getGamePhase();
     const inGame = phase === 'ARENA';
+    const countdownActive = bridge.isArenaCountdownActive();
 
     if (inGame) {
+      this.inputSystem.setInputEnabled(!countdownActive);
       this.inputSystem.update();
+      this.arenaCountdown?.update();
+    } else {
+      this.inputSystem.setInputEnabled(false);
+      this.arenaCountdown?.clear();
     }
 
     if (!this.matchTerminated && phase === 'LOBBY') {
@@ -527,7 +547,7 @@ export class ArenaScene extends Phaser.Scene {
       if (bridge.isHost()) {
         this.spawnReadyPlayers();
         this.runHostUpdate(delta);
-        if (secs <= 0) {
+        if (!countdownActive && secs <= 0) {
           this.hostSaveRoundResults();
           bridge.setGamePhase('LOBBY');
         }
@@ -559,8 +579,10 @@ export class ArenaScene extends Phaser.Scene {
   // ── Host-Update ──────────────────────────────────────────────────────────
 
   private runHostUpdate(delta: number): void {
+    const countdownActive = bridge.isArenaCountdownActive();
+
     // Ressourcen- und Burrow-Systeme ticken
-    if (this.resourceSystem && this.burrowSystem) {
+    if (!countdownActive && this.resourceSystem && this.burrowSystem) {
       for (const player of this.playerManager.getAllPlayers()) {
         if (!this.burrowSystem.isBurrowed(player.id)) {
           this.resourceSystem.regenTick(player.id, delta);
@@ -570,12 +592,18 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     // LoadoutManager ticken (Rage-Drain, Ultimate-Ablauf)
-    this.loadoutManager?.update(delta);
+    if (!countdownActive) {
+      this.loadoutManager?.update(delta);
+    }
 
-    this.hostPhysics.update();
-    this.combatSystem.update();
+    this.hostPhysics.update(countdownActive);
+    if (!countdownActive) {
+      this.combatSystem.update();
+    }
 
-    const { synced: projectiles, explodedGrenades } = this.projectileManager.hostUpdate();
+    const { synced: projectiles, explodedGrenades } = countdownActive
+      ? { synced: [], explodedGrenades: [] }
+      : this.projectileManager.hostUpdate();
 
     // Granaten-Explosionen verarbeiten
     for (const g of explodedGrenades) {
@@ -613,6 +641,7 @@ export class ArenaScene extends Phaser.Scene {
 
       player.updateHP(hp);
       player.setVisible(alive);
+      player.setRageTint(isRaging);
       player.syncBar();
     }
 

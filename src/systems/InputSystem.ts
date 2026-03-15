@@ -26,6 +26,7 @@ export class InputSystem {
   // Lokaler Zustand vom Host empfangen
   private localIsStunned  = false;
   private localIsBurrowed = false;
+  private inputEnabled    = true;
 
   constructor(
     scene:          Phaser.Scene,
@@ -71,6 +72,10 @@ export class InputSystem {
     this.localIsBurrowed = isBurrowed;
   }
 
+  setInputEnabled(enabled: boolean): void {
+    this.inputEnabled = enabled;
+  }
+
   /**
    * Dash-Cooldown als Fraktion 0 (bereit) – 1 (gerade benutzt) für das HUD.
    */
@@ -84,13 +89,17 @@ export class InputSystem {
   update(): void {
     // ── 1. Bewegungs-Input (immer gesendet) ────────────────────────────────
     let dx = 0, dy = 0;
-    if (this.keyA.isDown) dx -= 1;
-    if (this.keyD.isDown) dx += 1;
-    if (this.keyW.isDown) dy -= 1;
-    if (this.keyS.isDown) dy += 1;
+    if (this.inputEnabled) {
+      if (this.keyA.isDown) dx -= 1;
+      if (this.keyD.isDown) dx += 1;
+      if (this.keyW.isDown) dy -= 1;
+      if (this.keyS.isDown) dy += 1;
+    }
 
     const input: PlayerInput = { dx, dy };
     this.bridge.sendLocalInput(input);
+
+    if (!this.inputEnabled) return;
 
     // ── 2. Stun: keine weiteren Aktionen ───────────────────────────────────
     if (this.localIsStunned) return;

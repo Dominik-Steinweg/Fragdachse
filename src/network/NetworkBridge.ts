@@ -20,6 +20,7 @@ const KEY_PROJECTILES  = 'prj';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
 const KEY_NAME         = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
+const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
 const KEY_ARENA_LAYOUT = 'aly';   // global: ArenaLayout (reliable, einmalig pro Runde)
@@ -189,6 +190,29 @@ export class NetworkBridge {
     return (getState(KEY_GAME_PHASE) as GamePhase | undefined) ?? 'LOBBY';
   }
 
+  // ── Arena-Startzeit / Countdown: Host → Alle (global, reliable) ─────────
+
+  /** Host-only: Setzt den Zeitstempel, ab dem ARENA-Input und Match-Timer freigegeben sind. */
+  setArenaStartTime(ts: number): void {
+    setState(KEY_ARENA_START, ts, true);
+  }
+
+  /** Liest den autoritativen ARENA-Startzeitpunkt (Standard: 0). */
+  getArenaStartTime(): number {
+    return (getState(KEY_ARENA_START) as number | undefined) ?? 0;
+  }
+
+  /** true solange die Runde bereits in ARENA ist, aber der Start-Countdown noch läuft. */
+  isArenaCountdownActive(now = Date.now()): boolean {
+    return this.getGamePhase() === 'ARENA' && now < this.getArenaStartTime();
+  }
+
+  /** Verbleibende Countdown-Sekunden als 3,2,1 (sonst 0). */
+  computeArenaCountdownSecondsLeft(now = Date.now()): number {
+    if (!this.isArenaCountdownActive(now)) return 0;
+    return Math.max(0, Math.ceil((this.getArenaStartTime() - now) / 1000));
+  }
+
   // ── Rundenende-Zeitstempel: Host → Alle (global, reliable) ────────────────
 
   /** Host-only: Setzt den Rundenende-Zeitstempel (Date.now() + Dauer). */
@@ -206,7 +230,9 @@ export class NetworkBridge {
    * Wird niemals über das Netzwerk gesendet.
    */
   computeSecondsLeft(): number {
-    return Math.max(0, Math.ceil((this.getRoundEndTime() - Date.now()) / 1000));
+    const now = Date.now();
+    const effectiveNow = Math.max(now, this.getArenaStartTime());
+    return Math.max(0, Math.ceil((this.getRoundEndTime() - effectiveNow) / 1000));
   }
 
   // ── Match-Host-ID: Host → Alle (global, reliable) ────────────────────────

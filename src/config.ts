@@ -163,6 +163,7 @@ export const PLAYER_COLORS: readonly number[] = [
 
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;
+export const ARENA_COUNTDOWN_SEC = 3;
 export const ARENA_DURATION_SEC = 120;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.
