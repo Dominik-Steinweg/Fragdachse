@@ -5,6 +5,7 @@ import type { LoadoutSlot } from '../types';
 
 export interface WeaponConfig {
   readonly id: string;
+  readonly displayName: string;
   readonly cooldown: number;            // ms zwischen zwei Schüssen
   readonly damage: number;              // HP-Schaden pro Direkttreffer
   readonly projectileSpeed: number;     // px/s
@@ -32,6 +33,7 @@ export interface WeaponConfig {
 
 export interface UtilityConfig {
   readonly id: string;
+  readonly displayName: string;
   readonly cooldown: number;        // ms
   readonly projectileSpeed: number; // px/s (langsam für Granaten)
   readonly projectileSize: number;  // px
@@ -42,6 +44,7 @@ export interface UtilityConfig {
 
 export interface UltimateConfig {
   readonly id: string;
+  readonly displayName: string;
   readonly cooldown: number;          // ms (0 = rage-gated, kein Zeitcooldown)
   readonly rageRequired: number;      // Rage-Wert zum Aktivieren (= RAGE_MAX)
   readonly duration: number;          // ms wie lange der Effekt anhält
@@ -58,6 +61,7 @@ export const WEAPON_CONFIGS = {
    */
   GLOCK: {
     id:                   'GLOCK',
+    displayName:          'Glock',
     cooldown:             150,
     damage:               10,
     projectileSpeed:      700,
@@ -78,6 +82,7 @@ export const WEAPON_CONFIGS = {
 
   USP: {
     id:                   'USP',
+    displayName:          'USP',
     cooldown:             250,
     damage:               14,
     projectileSpeed:      1000,
@@ -105,6 +110,7 @@ export const WEAPON_CONFIGS = {
 
   P90: {
     id:                   'P90',
+    displayName:          'P90',
     cooldown:             80,
     damage:               7,
     projectileSpeed:      800,
@@ -125,6 +131,7 @@ export const WEAPON_CONFIGS = {
 
   AK47: {
     id:                   'AK47',
+    displayName:          'AK-47',
     cooldown:             100,
     damage:               14,
     projectileSpeed:      1000,
@@ -148,6 +155,7 @@ export const WEAPON_CONFIGS = {
 export const UTILITY_CONFIGS = {
   HE_GRENADE: {
     id:              'HE_GRENADE',
+    displayName:     'HE Granate',
     cooldown:        6000,
     projectileSpeed: 500,
     projectileSize:  10,
@@ -160,11 +168,12 @@ export const UTILITY_CONFIGS = {
 export const ULTIMATE_CONFIGS = {
   HONEY_BADGER_RAGE: {
     id:                 'HONEY_BADGER_RAGE',
+    displayName:        'Honigdachs-Wut',
     cooldown:           0,          // rage-gated, kein Zeitcooldown
     rageRequired:       RAGE_MAX,   // 300
     duration:           5000,
-    speedMultiplier:    1.3,
-    damageMultiplier:   2.0,
+    speedMultiplier:    1.5,
+    damageMultiplier:   1.5,
     rageDrainDuration:  5000,
   } as UltimateConfig,
 } as const;

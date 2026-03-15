@@ -115,7 +115,7 @@ export class LoadoutManager {
           maxBounces:    0,
           isGrenade:     true,
           adrenalinGain: 0,              // Granaten geben kein Adrenalin
-          weaponName:    cfg.id,
+          weaponName:    cfg.displayName,
           fuseTime:      cfg.fuseTime,
           aoeRadius:     cfg.aoeRadius,
           aoeDamage:     cfg.aoeDamage,
@@ -282,7 +282,7 @@ export class LoadoutManager {
       maxBounces:    cfg.projectileMaxBounces,
       isGrenade:     false,
       adrenalinGain: cfg.adrenalinGain,
-      weaponName:    cfg.id,
+      weaponName:    cfg.displayName,
     });
 
     // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen

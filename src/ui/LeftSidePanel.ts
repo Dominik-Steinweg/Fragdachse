@@ -51,21 +51,17 @@ const ARROW_X_LEFT      = 15;
 const ARROW_X_RIGHT     = 195;   // "[ > ]" (~42px) endet bei ≈237 – bleibt im 240px-Sidebar
 const ITEM_NAME_X       = 120;   // zentriert in 240px Sidebar
 
+type LoadoutCarouselItem = {
+  id: string;
+  displayName: string;
+};
+
 // Item-Arrays nach Slot gefiltert
-const SLOT_ITEMS: Record<LoadoutSlot, Array<{ id: string }>> = {
+const SLOT_ITEMS: Record<LoadoutSlot, LoadoutCarouselItem[]> = {
   weapon1:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon1')),
   weapon2:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon2')),
   utility:  Object.values(UTILITY_CONFIGS),
   ultimate: Object.values(ULTIMATE_CONFIGS),
-};
-
-const ITEM_DISPLAY: Record<string, string> = {
-  GLOCK:             'Glock',
-  USP:               'USP',
-  P90:               'P90',
-  AK47:              'AK-47',
-  HE_GRENADE:        'HE Granate',
-  HONEY_BADGER_RAGE: 'Honigdachs',
 };
 
 const SLOT_LABELS: Record<LoadoutSlot, string> = {
@@ -416,7 +412,7 @@ export class LeftSidePanel {
 
   private updateCarouselDisplay(slot: LoadoutSlot): void {
     const item = SLOT_ITEMS[slot][this.loadoutIndices[slot]];
-    this.loadoutNameTexts[slot]?.setText(ITEM_DISPLAY[item.id] ?? item.id);
+    this.loadoutNameTexts[slot]?.setText(item.displayName ?? item.id);
   }
 
   // ── Namens-Edit DOM-Popup ──────────────────────────────────────────────────
