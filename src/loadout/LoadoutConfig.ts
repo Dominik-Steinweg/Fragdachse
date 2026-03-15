@@ -63,6 +63,7 @@ interface BaseUtilityConfig {
   readonly projectileSpeed: number; // px/s (langsam für Granaten)
   readonly projectileSize: number;  // px
   readonly fuseTime: number;        // ms bis Explosion
+  readonly maxBounces: number;      // 0 = kein Abprallen, >0 = Explosion nach n Abprallern
 }
 
 export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
@@ -264,6 +265,7 @@ export const UTILITY_CONFIGS = {
     projectileSpeed: 500,
     projectileSize:  10,
     fuseTime:        750,
+    maxBounces:      3,
     aoeRadius:       80,
     aoeDamage:       60,
   } as UtilityConfig,
@@ -276,6 +278,7 @@ export const UTILITY_CONFIGS = {
     projectileSpeed:        500,
     projectileSize:         10,
     fuseTime:               750,
+    maxBounces:             3,
     smokeRadius:            240,
     smokeExpandDuration:    500,
     smokeLingerDuration:    7000,
@@ -291,7 +294,8 @@ export const UTILITY_CONFIGS = {
     projectileSpeed:    500,
     projectileSize:     10,
     fuseTime:           750,
-    fireRadius:         90,
+    maxBounces:         3,
+    fireRadius:         160,
     fireDamagePerTick:  8,
     fireTickInterval:   200,
     fireLingerDuration: 4000,

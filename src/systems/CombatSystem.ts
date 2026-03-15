@@ -151,9 +151,16 @@ export class CombatSystem {
    * Flächenschaden um einen Punkt (z.B. Granaten-Explosion).
    * Burrowed-Spieler sind immun (skipBurrowCheck=false).
    */
-  applyAoeDamage(x: number, y: number, radius: number, damage: number, ownerId: string): void {
+  applyAoeDamage(
+    x: number,
+    y: number,
+    radius: number,
+    damage: number,
+    ownerId: string,
+    includeSelf = false,
+  ): void {
     for (const player of this.playerManager.getAllPlayers()) {
-      if (player.id === ownerId) continue;
+      if (!includeSelf && player.id === ownerId) continue;
       if (!this.isAlive(player.id)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
       if (dist <= radius) {

@@ -150,7 +150,7 @@ export class LoadoutManager {
           damage:        0,              // kein Direkttreffer-Schaden
           color:         player.color,
           lifetime:      cfg.fuseTime,   // Lifetime = Zündzeit
-          maxBounces:    0,
+          maxBounces:    cfg.maxBounces,
           isGrenade:     true,
           adrenalinGain: 0,              // Granaten geben kein Adrenalin
           weaponName:    cfg.displayName,

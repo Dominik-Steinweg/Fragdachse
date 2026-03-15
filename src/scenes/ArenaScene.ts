@@ -650,9 +650,9 @@ export class ArenaScene extends Phaser.Scene {
       ? { synced: [], damageEvents: [] }
       : this.fireSystem.hostUpdate(Date.now());
 
-    // Feuer-Schadens-Ticks auf CombatSystem anwenden
+    // Feuer-Schadens-Ticks auf CombatSystem anwenden (inkl. Selbstschaden)
     for (const ev of fireDamageEvents) {
-      this.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId);
+      this.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true);
     }
 
     const rocks   = this.rockRegistry?.getNetSnapshot() ?? [];

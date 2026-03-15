@@ -63,15 +63,6 @@ export class ProjectileManager {
 
     const body = sprite.body as Phaser.Physics.Arcade.Body;
 
-    if (cfg.isGrenade) {
-      // Granaten fliegen durch alles – keine Welt-/Hindernis-Kollision
-      body.setCollideWorldBounds(false);
-    } else {
-      body.setCollideWorldBounds(true);
-      body.onWorldBounds = true;
-      body.setBounce(1, 1);
-    }
-
     body.setVelocity(
       Math.cos(angle) * cfg.speed,
       Math.sin(angle) * cfg.speed,
@@ -96,33 +87,54 @@ export class ProjectileManager {
       grenadeEffect:  cfg.grenadeEffect,
     };
 
+    // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
+    if (!cfg.isGrenade || cfg.maxBounces > 0) {
+      this.setupBouncePhysics(sprite, body, tracked, !cfg.isGrenade);
+    }
+
+    this.projectiles.push(tracked);
+  }
+
+  /**
+   * Richtet Welt- und Hindernis-Kollision mit physikalischem Abprallen ein.
+   * Wird von normalen Projektilen und bouncenden Granaten (maxBounces > 0) genutzt.
+   *
+   * @param applyRockDamage – true für normale Projektile (Felstreffer-Schaden);
+   *                          false für Granaten (kein Felstrefferschaden beim Abprallen)
+   */
+  private setupBouncePhysics(
+    sprite:          Phaser.GameObjects.Rectangle,
+    body:            Phaser.Physics.Arcade.Body,
+    tracked:         TrackedProjectile,
+    applyRockDamage: boolean,
+  ): void {
+    body.setCollideWorldBounds(true);
+    body.onWorldBounds = true;
+    body.setBounce(1, 1);
+
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
       if (hitBody === body) tracked.bounceCount++;
     };
     tracked.boundsListener = boundsListener;
-    this.projectiles.push(tracked);
     this.scene.physics.world.on('worldbounds', boundsListener);
 
-    // Rock/Trunk-Collider NUR für normale Projektile (nicht Granaten)
-    if (!cfg.isGrenade) {
-      if (this.rockGroup) {
-        const rockObjects = this.rockObjects;
-        const onHit       = this.onRockHit;
-        const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
-          tracked.bounceCount++;
-          if (!rockObjects || !onHit) return;
-          const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
-          if (idx !== -1) onHit(idx, tracked.damage);
-        });
-        tracked.colliders.push(rockCollider);
-      }
+    if (this.rockGroup) {
+      const rockObjects = this.rockObjects;
+      const onHit       = this.onRockHit;
+      const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+        tracked.bounceCount++;
+        if (!applyRockDamage || !rockObjects || !onHit) return;
+        const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
+        if (idx !== -1) onHit(idx, tracked.damage);
+      });
+      tracked.colliders.push(rockCollider);
+    }
 
-      if (this.trunkGroup) {
-        const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
-          tracked.bounceCount++;
-        });
-        tracked.colliders.push(trunkCollider);
-      }
+    if (this.trunkGroup) {
+      const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+        tracked.bounceCount++;
+      });
+      tracked.colliders.push(trunkCollider);
     }
   }
 
@@ -173,8 +185,10 @@ export class ProjectileManager {
       const age = now - proj.createdAt;
 
       if (proj.isGrenade) {
-        // Granate: explodiert nach fuseTime
-        if (age >= proj.fuseTime! && proj.grenadeEffect) {
+        // Granate explodiert nach fuseTime ODER wenn Abprall-Limit erreicht
+        const fuseExpired = age >= proj.fuseTime!;
+        const bouncedOut  = proj.maxBounces > 0 && proj.bounceCount >= proj.maxBounces;
+        if ((fuseExpired || bouncedOut) && proj.grenadeEffect) {
           explodedGrenades.push({
             x:      proj.sprite.x,
             y:      proj.sprite.y,
