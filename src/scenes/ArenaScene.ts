@@ -34,6 +34,16 @@ import { isVelocityMoving } from '../loadout/SpreadMath';
 
 
 export class ArenaScene extends Phaser.Scene {
+  private readonly hitscanVisualLine = new Phaser.Geom.Line();
+  private readonly hitscanVisualCircle = new Phaser.Geom.Circle();
+  private readonly hitscanVisualArenaBounds = new Phaser.Geom.Rectangle(
+    ARENA_OFFSET_X,
+    ARENA_OFFSET_Y,
+    ARENA_WIDTH,
+    ARENA_HEIGHT,
+  );
+  private readonly hitscanVisualPoints: Phaser.Geom.Point[] = [];
+
   private playerManager!:     PlayerManager;
   private projectileManager!: ProjectileManager;
   private combatSystem!:      CombatSystem;
@@ -748,6 +758,9 @@ export class ArenaScene extends Phaser.Scene {
     targetX: number,
     targetY: number,
   ): number | undefined {
+    void targetX;
+    void targetY;
+
     const config = this.getLocalWeaponConfig(slot);
     if (config.fire.type !== 'hitscan') return undefined;
 
@@ -769,18 +782,20 @@ export class ArenaScene extends Phaser.Scene {
     const desiredEndX = localSprite.x + Math.cos(angle) * desiredDistance;
     const desiredEndY = localSprite.y + Math.sin(angle) * desiredDistance;
 
-    const clippedEnd = this.clipHitscanToArena(localSprite.x, localSprite.y, maxEndX, maxEndY);
-    const desiredLine = new Phaser.Geom.Line(localSprite.x, localSprite.y, desiredEndX, desiredEndY);
-    const clippedDistance = Phaser.Math.Distance.Between(localSprite.x, localSprite.y, clippedEnd.x, clippedEnd.y);
-    const desiredClampedDistance = Math.min(desiredDistance, clippedDistance);
-    const endX = desiredLine.x1 + Math.cos(angle) * desiredClampedDistance;
-    const endY = desiredLine.y1 + Math.sin(angle) * desiredClampedDistance;
+    const resolvedEnd = this.resolveLocalHitscanTracerEnd(
+      localSprite.x,
+      localSprite.y,
+      angle,
+      config.range,
+      bridge.getLocalPlayerId(),
+      config.fire.traceThickness,
+    );
 
     this.effectSystem.playPredictedHitscanTracer(
       localSprite.x,
       localSprite.y,
-      endX,
-      endY,
+      resolvedEnd.x,
+      resolvedEnd.y,
       localSprite.fillColor,
       config.fire.traceThickness,
       shotId,
@@ -789,8 +804,8 @@ export class ArenaScene extends Phaser.Scene {
     bridge.broadcastHitscanTracer(
       localSprite.x,
       localSprite.y,
-      endX,
-      endY,
+      resolvedEnd.x,
+      resolvedEnd.y,
       localSprite.fillColor,
       config.fire.traceThickness,
       bridge.getLocalPlayerId(),
@@ -800,21 +815,82 @@ export class ArenaScene extends Phaser.Scene {
     return shotId;
   }
 
-  private clipHitscanToArena(
+  private resolveLocalHitscanTracerEnd(
     startX: number,
     startY: number,
-    endX: number,
-    endY: number,
+    angle: number,
+    range: number,
+    shooterId: string,
+    traceThickness: number,
   ): { x: number; y: number } {
-    const line = new Phaser.Geom.Line(startX, startY, endX, endY);
-    const arenaRect = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
-    const points = Phaser.Geom.Intersects.GetLineToRectangle(line, arenaRect);
+    const maxEndX = startX + Math.cos(angle) * range;
+    const maxEndY = startY + Math.sin(angle) * range;
+    this.hitscanVisualLine.setTo(startX, startY, maxEndX, maxEndY);
 
+    let bestHit = this.findNearestVisualRectHit(this.hitscanVisualArenaBounds);
+
+    if (this.arenaResult) {
+      for (const rock of this.arenaResult.rockObjects) {
+        if (!rock?.active) continue;
+        const hit = this.findNearestVisualRectHit(rock.getBounds());
+        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+      }
+
+      for (const trunk of this.arenaResult.trunkObjects) {
+        if (!trunk.active) continue;
+        const hit = this.findNearestVisualCircleHit(trunk.x, trunk.y, trunk.radius);
+        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+      }
+    }
+
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (player.id === shooterId) continue;
+      if (!player.sprite.active || !player.sprite.visible) continue;
+      if (this.isVisualHitscanTargetBurrowed(player.id)) continue;
+
+      const expandedBounds = player.sprite.getBounds();
+      expandedBounds.x -= traceThickness * 0.5;
+      expandedBounds.y -= traceThickness * 0.5;
+      expandedBounds.width  += traceThickness;
+      expandedBounds.height += traceThickness;
+
+      const hit = this.findNearestVisualRectHit(expandedBounds);
+      if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+    }
+
+    return bestHit ?? { x: maxEndX, y: maxEndY };
+  }
+
+  private isVisualHitscanTargetBurrowed(playerId: string): boolean {
+    if (bridge.isHost()) {
+      return this.burrowSystem?.isBurrowed(playerId) ?? false;
+    }
+
+    return bridge.getLatestGameState()?.players[playerId]?.isBurrowed ?? false;
+  }
+
+  private findNearestVisualRectHit(rect: Phaser.Geom.Rectangle): { x: number; y: number; distance: number } | null {
+    const points = Phaser.Geom.Intersects.GetLineToRectangle(this.hitscanVisualLine, rect, this.hitscanVisualPoints);
+    return this.pickNearestVisualIntersection(points);
+  }
+
+  private findNearestVisualCircleHit(centerX: number, centerY: number, radius: number): { x: number; y: number; distance: number } | null {
+    this.hitscanVisualCircle.setTo(centerX, centerY, radius);
+    const points = Phaser.Geom.Intersects.GetLineToCircle(this.hitscanVisualLine, this.hitscanVisualCircle, this.hitscanVisualPoints);
+    return this.pickNearestVisualIntersection(points);
+  }
+
+  private pickNearestVisualIntersection(points: Phaser.Geom.Point[]): { x: number; y: number; distance: number } | null {
     let bestPoint: Phaser.Geom.Point | null = null;
     let bestDistance = Infinity;
 
     for (const point of points) {
-      const distance = Phaser.Math.Distance.Between(startX, startY, point.x, point.y);
+      const distance = Phaser.Math.Distance.Between(
+        this.hitscanVisualLine.x1,
+        this.hitscanVisualLine.y1,
+        point.x,
+        point.y,
+      );
       if (distance <= 0.01) continue;
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -822,7 +898,10 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    return bestPoint ?? { x: endX, y: endY };
+    points.length = 0;
+
+    if (!bestPoint) return null;
+    return { x: bestPoint.x, y: bestPoint.y, distance: bestDistance };
   }
 
   private getDefaultAimState(isMoving: boolean): PlayerAimNetState {
