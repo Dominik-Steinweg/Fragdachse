@@ -268,11 +268,11 @@ export const UTILITY_CONFIGS = {
     projectileSpeed:        500,
     projectileSize:         10,
     fuseTime:               750,
-    smokeRadius:            132,
-    smokeExpandDuration:    450,
-    smokeLingerDuration:    5200,
-    smokeDissipateDuration: 1400,
-    smokeMaxAlpha:          0.82,
+    smokeRadius:            240,
+    smokeExpandDuration:    500,
+    smokeLingerDuration:    7000,
+    smokeDissipateDuration: 2000,
+    smokeMaxAlpha:          0.95,
   } as UtilityConfig,
 } as const;
 
