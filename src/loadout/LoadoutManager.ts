@@ -359,7 +359,6 @@ export class LoadoutManager {
     shotId?:     number,
   ): boolean {
     void playerColor;
-    void shotId;
     return this.combatSystem?.resolveHitscanShot(
       playerId,
       x,
@@ -368,8 +367,10 @@ export class LoadoutManager {
       config.range,
       config.damage,
       fireConfig.traceThickness,
+      playerColor,
       config.adrenalinGain,
       config.displayName,
+      shotId,
     ) ?? false;
   }
 

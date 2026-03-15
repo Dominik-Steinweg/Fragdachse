@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -36,6 +36,7 @@ const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
+const KEY_HITSCAN_TRACES = 'htr'; // global: SyncedHitscanTrace[] (unreliable, kurzlebige VFX-Ereignisse)
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ export interface GameState {
   players:     Record<string, PlayerNetState>;
   projectiles: SyncedProjectile[];
   rocks:       RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
+  hitscanTraces: SyncedHitscanTrace[];
 }
 
 type LoadoutUseHandler = (
@@ -327,15 +329,22 @@ export class NetworkBridge {
   publishGameState(state: GameState): void {
     setState(KEY_PLAYERS,     state.players,     false);
     setState(KEY_PROJECTILES, state.projectiles, false);
-    setState(KEY_ROCK_HP,         state.rocks,       false);
+    setState(KEY_ROCK_HP, state.rocks, false);
+    setState(KEY_HITSCAN_TRACES, state.hitscanTraces, false);
   }
 
   getLatestGameState(): GameState | undefined {
-    const players     = getState(KEY_PLAYERS)     as Record<string, PlayerNetState> | undefined;
-    const projectiles = getState(KEY_PROJECTILES) as SyncedProjectile[]             | undefined;
-    const rocks       = getState(KEY_ROCK_HP)     as RockNetState[]                 | undefined;
+    const players = getState(KEY_PLAYERS) as Record<string, PlayerNetState> | undefined;
+    const projectiles = getState(KEY_PROJECTILES) as SyncedProjectile[] | undefined;
+    const rocks = getState(KEY_ROCK_HP) as RockNetState[] | undefined;
+    const hitscanTraces = getState(KEY_HITSCAN_TRACES) as SyncedHitscanTrace[] | undefined;
     if (!players) return undefined;
-    return { players, projectiles: projectiles ?? [], rocks: rocks ?? [] };
+    return {
+      players,
+      projectiles: projectiles ?? [],
+      rocks: rocks ?? [],
+      hitscanTraces: hitscanTraces ?? [],
+    };
   }
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────

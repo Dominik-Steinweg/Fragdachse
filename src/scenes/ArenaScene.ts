@@ -621,6 +621,9 @@ export class ArenaScene extends Phaser.Scene {
     const { synced: projectiles, explodedGrenades } = countdownActive
       ? { synced: [], explodedGrenades: [] }
       : this.projectileManager.hostUpdate();
+    const hitscanTraces = countdownActive
+      ? []
+      : this.combatSystem.collectReplicatedHitscanTraces(Date.now());
 
     // Granaten-Explosionen verarbeiten
     for (const g of explodedGrenades) {
@@ -629,6 +632,10 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const rocks   = this.rockRegistry?.getNetSnapshot() ?? [];
+
+    for (const trace of hitscanTraces) {
+      this.effectSystem.playSyncedHitscanTracer(trace);
+    }
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.playerManager.getAllPlayers()) {
@@ -662,7 +669,7 @@ export class ArenaScene extends Phaser.Scene {
       player.syncBar();
     }
 
-    bridge.publishGameState({ players, projectiles, rocks });
+    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces });
 
     // HUD des lokalen Host-Spielers aktualisieren
     const localId = bridge.getLocalPlayerId();
@@ -706,6 +713,9 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.projectileManager.clientSyncVisuals(state.projectiles);
+    for (const trace of state.hitscanTraces) {
+      this.effectSystem.playSyncedHitscanTracer(trace);
+    }
 
     if (state.rocks && this.arenaResult) {
       for (const rs of state.rocks) {
@@ -779,17 +789,6 @@ export class ArenaScene extends Phaser.Scene {
       trace.endY,
       localSprite.fillColor,
       config.fire.traceThickness,
-      shotId,
-    );
-
-    bridge.broadcastHitscanTracer(
-      localSprite.x,
-      localSprite.y,
-      trace.endX,
-      trace.endY,
-      localSprite.fillColor,
-      config.fire.traceThickness,
-      bridge.getLocalPlayerId(),
       shotId,
     );
 

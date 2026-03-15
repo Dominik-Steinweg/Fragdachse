@@ -47,6 +47,18 @@ export interface SyncedProjectile {
   color: number;  // hex
 }
 
+/** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
+export interface SyncedHitscanTrace {
+  startX:     number;
+  startY:     number;
+  endX:       number;
+  endY:       number;
+  color:      number;
+  thickness:  number;
+  shooterId?: string;
+  shotId?:    number;
+}
+
 /** Globale Spielphase – nur vom Host per setState gesetzt */
 export type GamePhase = 'LOBBY' | 'ARENA';
 

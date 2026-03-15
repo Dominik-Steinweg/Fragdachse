@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
+import type { SyncedHitscanTrace } from '../types';
 import { DEPTH_FX, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
 
 const HITSCAN_TRACER_FADE_MS = 120;
 
 export class EffectSystem {
   private pendingPredictedTracerIds = new Map<number, number>();
+  private processedSyncedTracerKeys = new Map<string, number>();
 
   constructor(
     private scene:  Phaser.Scene,
@@ -25,10 +27,16 @@ export class EffectSystem {
     });
 
     this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, shooterId, shotId) => {
-      if (shooterId === this.bridge.getLocalPlayerId() && shotId !== undefined && this.consumePredictedTracerId(shotId)) {
-        return;
-      }
-      this.playHitscanTracer(startX, startY, endX, endY, color, thickness);
+      this.playSyncedHitscanTracer({
+        startX,
+        startY,
+        endX,
+        endY,
+        color,
+        thickness,
+        shooterId,
+        shotId,
+      });
     });
   }
 
@@ -141,6 +149,12 @@ export class EffectSystem {
     this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness);
   }
 
+  playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
+    const { startX, startY, endX, endY, color, thickness, shooterId, shotId } = trace;
+    if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
+    this.playHitscanTracer(startX, startY, endX, endY, color, thickness);
+  }
+
   private consumePredictedTracerId(shotId: number): boolean {
     const now = this.scene.time.now;
 
@@ -151,6 +165,21 @@ export class EffectSystem {
     if (!this.pendingPredictedTracerIds.has(shotId)) return false;
     this.pendingPredictedTracerIds.delete(shotId);
     return true;
+  }
+
+  private shouldSkipSyncedTracer(shooterId?: string, shotId?: number): boolean {
+    if (shotId === undefined || !shooterId) return false;
+
+    const now = this.scene.time.now;
+    for (const [key, expiresAt] of this.processedSyncedTracerKeys) {
+      if (expiresAt <= now) this.processedSyncedTracerKeys.delete(key);
+    }
+
+    const tracerKey = `${shooterId}:${shotId}`;
+    if (this.processedSyncedTracerKeys.has(tracerKey)) return true;
+    this.processedSyncedTracerKeys.set(tracerKey, now + 250);
+
+    return shooterId === this.bridge.getLocalPlayerId() && this.consumePredictedTracerId(shotId);
   }
 
   // ── Todes-Effekt: drei Explosionsringe + weißer Blitz ────────────────────

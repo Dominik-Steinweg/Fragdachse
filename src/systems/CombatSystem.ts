@@ -3,6 +3,7 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
+import type { SyncedHitscanTrace } from '../types';
 import {
   ARENA_HEIGHT,
   HP_MAX, RESPAWN_DELAY_MS,
@@ -13,6 +14,8 @@ import {
   PLAYER_SIZE,
   RAGE_PER_DAMAGE, ADRENALINE_START,
 } from '../config';
+
+const HITSCAN_TRACE_REPLICATION_MS = 80;
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
@@ -43,6 +46,7 @@ export class CombatSystem {
   private readonly arenaBounds = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchCircle = new Phaser.Geom.Circle();
   private readonly scratchPoints: Phaser.Geom.Point[] = [];
+  private recentHitscanTraces: Array<SyncedHitscanTrace & { expiresAt: number }> = [];
 
   // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
   private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
@@ -196,8 +200,10 @@ export class CombatSystem {
     range: number,
     damage: number,
     traceThickness: number,
+    playerColor: number,
     adrenalinGain: number,
     weaponName: string,
+    shotId?: number,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -211,6 +217,17 @@ export class CombatSystem {
       applyFavorTheShooter: true,
     });
 
+    this.queueHitscanTrace({
+      startX,
+      startY,
+      endX: trace.endX,
+      endY: trace.endY,
+      color: playerColor,
+      thickness: traceThickness,
+      shooterId,
+      shotId,
+    });
+
     if (!trace.hitPlayerId) return true;
 
     const multiplier = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
@@ -222,6 +239,11 @@ export class CombatSystem {
     }
 
     return true;
+  }
+
+  collectReplicatedHitscanTraces(now: number): SyncedHitscanTrace[] {
+    this.recentHitscanTraces = this.recentHitscanTraces.filter(trace => trace.expiresAt > now);
+    return this.recentHitscanTraces.map(({ expiresAt, ...trace }) => trace);
   }
 
   traceHitscan(options: HitscanTraceOptions): HitscanTraceResult {
@@ -262,6 +284,15 @@ export class CombatSystem {
   }
 
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
+
+  private queueHitscanTrace(trace: SyncedHitscanTrace): void {
+    const now = Date.now();
+    this.recentHitscanTraces = this.recentHitscanTraces.filter(item => item.expiresAt > now);
+    this.recentHitscanTraces.push({
+      ...trace,
+      expiresAt: now + HITSCAN_TRACE_REPLICATION_MS,
+    });
+  }
 
   private isHitscanTargetCandidate(playerId: string, shooterId: string): boolean {
     if (playerId === shooterId) return false;
