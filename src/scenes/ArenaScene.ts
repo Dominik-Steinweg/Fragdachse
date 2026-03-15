@@ -18,6 +18,8 @@ import type { WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
+import { PowerUpSystem }        from '../powerups/PowerUpSystem';
+import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS } from '../powerups/PowerUpConfig';
 import { LeftSidePanel }       from '../ui/LeftSidePanel';
 import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem }           from '../ui/AimSystem';
@@ -31,6 +33,7 @@ import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   ARENA_WIDTH,
+  CELL_SIZE, DEPTH,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 
@@ -63,8 +66,11 @@ export class ArenaScene extends Phaser.Scene {
   // ── Host-only Systeme ─────────────────────────────────────────────────────
   private resourceSystem: ResourceSystem | null = null;
   private burrowSystem:   BurrowSystem   | null = null;
-  private loadoutManager: LoadoutManager | null = null;
+  private loadoutManager: LoadoutManager | null = null;  private powerUpSystem:  PowerUpSystem  | null = null;
 
+  // ── Client-seitiges PowerUp-Rendering ───────────────────────────────────────
+  private powerUpSprites = new Map<number, Phaser.GameObjects.Rectangle>();
+  private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
   private lastPhase: GamePhase = 'LOBBY';
@@ -473,11 +479,17 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.setResourceSystem(this.resourceSystem);
       this.combatSystem.setLoadoutManager(this.loadoutManager);
 
+      // PowerUpSystem initialisieren
+      this.powerUpSystem = new PowerUpSystem(this.playerManager, this.combatSystem, layout);
+      this.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
+      this.combatSystem.setPowerUpSystem(this.powerUpSystem);
+      this.resourceSystem.setPowerUpSystem(this.powerUpSystem);
+
       this.hostPhysics.setBurrowSystem(this.burrowSystem);
       this.hostPhysics.setLoadoutManager(this.loadoutManager);
 
-      // Kill-Callback: Frags erhöhen + Kill-Ereignis broadcasten
-      this.combatSystem.setKillCallback((killerId, victimId, weapon) => {
+      // Kill-Callback: Frags erhöhen + Kill-Ereignis broadcasten + PowerUp-Drop
+      this.combatSystem.setKillCallback((killerId, victimId, weapon, x, y) => {
         bridge.incrementPlayerFrags(killerId);
         const allPlayers    = bridge.getConnectedPlayers();
         const killerProfile = allPlayers.find(p => p.id === killerId);
@@ -493,6 +505,8 @@ export class ArenaScene extends Phaser.Scene {
             victimColor: victimProfile.colorHex,
           });
         }
+        // Power-Up droppen an der Todesposition
+        this.powerUpSystem?.onPlayerKilled(x, y);
       });
 
       // RockRegistry nur auf dem Host
@@ -503,6 +517,17 @@ export class ArenaScene extends Phaser.Scene {
         if (!this.rockRegistry || !arenaResult) return;
         const newHp = this.rockRegistry.applyDamage(rockId, damage);
         ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, rockId, newHp);
+        // Power-Up droppen wenn der Fels zerstört wurde
+        if (newHp <= 0) {
+          this.powerUpSystem?.onRockDestroyed(rockId);
+        }
+      });
+
+      // Pickup-RPC vom Client entgegennehmen
+      bridge.registerPickupPowerUpHandler((uid, playerId) => {
+        const player = this.playerManager.getPlayer(playerId);
+        if (!player) return;
+        this.powerUpSystem?.tryPickup(playerId, uid, player.sprite.x, player.sprite.y);
       });
     }
   }
@@ -519,6 +544,9 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaResult = null;
     }
     this.rockRegistry   = null;
+    this.powerUpSystem?.reset();
+    this.powerUpSystem   = null;
+    this.resourceSystem?.setPowerUpSystem(null);
     this.resourceSystem = null;
     this.burrowSystem   = null;
     this.loadoutManager?.setCombatSystem(null);
@@ -526,12 +554,17 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setBurrowSystem(null);
     this.combatSystem.setResourceSystem(null);
     this.combatSystem.setLoadoutManager(null);
+    this.combatSystem.setPowerUpSystem(null);
     this.combatSystem.setArenaObstacles(null, null);
-    this.combatSystem.setKillCallback(() => {});
+    this.combatSystem.setKillCallback(() => { /* noop */ });
     this.hostPhysics.setBurrowSystem(null);
     this.hostPhysics.setLoadoutManager(null);
     this.projectileManager.setRockGroup(null, null, null);
     this.hostPhysics.setRockGroup(null, null);
+
+    // Client-seitige PowerUp-Sprites aufräumen
+    for (const rect of this.powerUpSprites.values()) rect.destroy();
+    this.powerUpSprites.clear();
   }
 
   // ── Update ───────────────────────────────────────────────────────────────
@@ -619,6 +652,7 @@ export class ArenaScene extends Phaser.Scene {
     // LoadoutManager ticken (Rage-Drain, Ultimate-Ablauf)
     if (!countdownActive) {
       this.loadoutManager?.update(delta);
+      this.powerUpSystem?.update(delta);
     }
 
     this.hostPhysics.update(countdownActive);
@@ -693,7 +727,10 @@ export class ArenaScene extends Phaser.Scene {
       player.syncBar();
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, smokes, fires });
+    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, smokes, fires, powerups: this.powerUpSystem?.getNetSnapshot() ?? [] });
+
+    // PowerUp-Sprites auch auf dem Host rendern
+    this.syncPowerUpSprites(this.powerUpSystem?.getNetSnapshot() ?? []);
 
     // HUD des lokalen Host-Spielers aktualisieren
     const localId = bridge.getLocalPlayerId();
@@ -753,6 +790,12 @@ export class ArenaScene extends Phaser.Scene {
         );
       }
     }
+
+    // ── PowerUp-Sprites synchronisieren ──────────────────────────────────
+    this.syncPowerUpSprites(state.powerups ?? []);
+
+    // ── Lokaler Pickup-Check ─────────────────────────────────────────────
+    this.checkLocalPickup(state.powerups ?? []);
 
     const localId    = bridge.getLocalPlayerId();
     const localState = state.players[localId];
@@ -828,5 +871,62 @@ export class ArenaScene extends Phaser.Scene {
       weapon1DynamicSpread: 0,
       weapon2DynamicSpread: 0,
     };
+  }
+
+  // ── Power-Up-Rendering (Host + Client) ─────────────────────────────────
+
+  /**
+   * Synchronisiert die sichtbaren PowerUp-Sprites mit dem aktuellen Netzwerk-Snapshot.
+   * Neue Items werden als farbige Rectangles erstellt, entfernte werden zerstört.
+   */
+  private syncPowerUpSprites(powerups: import('../types').SyncedPowerUp[]): void {
+    const activeUids = new Set<number>();
+
+    for (const pu of powerups) {
+      activeUids.add(pu.uid);
+      let rect = this.powerUpSprites.get(pu.uid);
+      if (!rect) {
+        const def = POWERUP_DEFS[pu.defId];
+        const color = def?.color ?? 0xffffff;
+        rect = this.add.rectangle(pu.x, pu.y, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, color);
+        rect.setDepth(DEPTH.PLAYERS - 1);
+        this.powerUpSprites.set(pu.uid, rect);
+      }
+      // Position aktualisieren (für den Fall, dass Items sich bewegen könnten)
+      rect.setPosition(pu.x, pu.y);
+    }
+
+    // Entfernte Items aufräumen
+    for (const [uid, rect] of this.powerUpSprites) {
+      if (!activeUids.has(uid)) {
+        rect.destroy();
+        this.powerUpSprites.delete(uid);
+      }
+    }
+  }
+
+  /**
+   * Prüft ob der lokale Spieler ein Power-Up berührt und sendet ggf. einen Pickup-RPC.
+   * Debounced auf 100ms um RPC-Spam zu vermeiden.
+   */
+  private checkLocalPickup(powerups: import('../types').SyncedPowerUp[]): void {
+    const now = Date.now();
+    if (now < this.pickupCooldownUntil) return;
+
+    const localId = bridge.getLocalPlayerId();
+    const player  = this.playerManager.getPlayer(localId);
+    if (!player || !player.sprite.active) return;
+
+    const px = player.sprite.x;
+    const py = player.sprite.y;
+
+    for (const pu of powerups) {
+      const dist = Phaser.Math.Distance.Between(px, py, pu.x, pu.y);
+      if (dist <= PICKUP_RADIUS) {
+        bridge.sendPickupPowerUp(pu.uid);
+        this.pickupCooldownUntil = now + 100; // 100ms Debounce
+        return; // Maximal 1 Pickup-Request pro Check
+      }
+    }
   }
 }

@@ -1,0 +1,63 @@
+// ── Power-Up-Definitionen ──────────────────────────────────────────────────
+
+export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage';
+
+export interface PowerUpDef {
+  readonly id:          string;
+  readonly type:        PowerUpType;
+  readonly healAmount?: number;   // nur instant_heal (999 = Full HP)
+  readonly durationMs?: number;   // nur buff_*
+  readonly multiplier?: number;   // nur buff_*
+  /** Hex-Farbe für die Client-Darstellung */
+  readonly color:       number;
+}
+
+export const POWERUP_DEFS: Record<string, PowerUpDef> = {
+  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999, color: 0x00ff00 },
+  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: 0x00aaff },
+  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: 0xff4400 },
+};
+
+// ── Drop-Tabellen ──────────────────────────────────────────────────────────
+
+export interface DropTable {
+  /** 0-1 Wahrscheinlichkeit, dass überhaupt etwas droppt (fehlt = 1.0) */
+  chanceToDrop?: number;
+  /** defId → Gewichtung (0 = deaktiviert) */
+  items: Record<string, number>;
+}
+
+export const DROP_TABLES: Record<string, DropTable> = {
+  ENEMY_KILL: {
+    chanceToDrop: 1.0,
+    items: { HEALTH_PACK: 70, ADRENALINE: 30, DOUBLE_DAMAGE: 0 },
+  },
+  ROCK_DESTROY: {
+    chanceToDrop: 0.2,
+    items: { HEALTH_PACK: 80, ADRENALINE: 20, DOUBLE_DAMAGE: 0 },
+  },
+  SCHEDULED_EVENT: {
+    // chanceToDrop fehlt → immer 1.0
+    items: { HEALTH_PACK: 20, ADRENALINE: 30, DOUBLE_DAMAGE: 50 },
+  },
+};
+
+// ── Geplante Spawns (Sekunden nach Rundenstart) ────────────────────────────
+
+export interface ScheduledSpawn {
+  readonly timeSeconds: number;
+  readonly amount:      number;
+}
+
+export const SCHEDULED_SPAWNS: ScheduledSpawn[] = [
+  { timeSeconds: 30, amount: 2 },
+  { timeSeconds: 60, amount: 3 },
+];
+
+// ── Pickup-Radius (Pixel) ──────────────────────────────────────────────────
+
+/** Maximaler Abstand Spieler–PowerUp-Mittelpunkt, um einzusammeln */
+export const PICKUP_RADIUS = 24;
+
+/** Darstellungsgröße der PowerUp-Rectangles (px) */
+export const POWERUP_RENDER_SIZE = 20;

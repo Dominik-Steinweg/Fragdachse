@@ -20,6 +20,7 @@ const HITSCAN_TRACE_REPLICATION_MS = 80;
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
 type LoadoutManagerType  = { getDamageMultiplier(id: string): number };
+type PowerUpSystemType   = { getDamageMultiplier(id: string): number };
 
 export interface HitscanTraceResult {
   readonly endX: number;
@@ -53,12 +54,13 @@ export class CombatSystem {
   private lastWeapon:   Map<string, string> = new Map();  // victimId → weaponName
 
   // Callback: (killerId, victimId, weaponName) – Host-only
-  private onKillCb: ((killerId: string, victimId: string, weapon: string) => void) | null = null;
+  private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number) => void) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:   BurrowSystemType   | null  = null;
   private resourceSystem: ResourceSystem     | null  = null;
   private loadoutManager: LoadoutManagerType | null  = null;
+  private powerUpSystem:  PowerUpSystemType  | null  = null;
   private rockObjects: readonly (Phaser.GameObjects.Rectangle | null)[] | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
 
@@ -73,6 +75,7 @@ export class CombatSystem {
   setBurrowSystem(bs: BurrowSystemType | null): void     { this.burrowSystem   = bs; }
   setResourceSystem(rs: ResourceSystem | null): void     { this.resourceSystem = rs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void { this.loadoutManager = lm; }
+  setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Rectangle | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -82,7 +85,7 @@ export class CombatSystem {
   }
 
   /** Setzt den Kill-Callback (Host-only). */
-  setKillCallback(cb: (killerId: string, victimId: string, weapon: string) => void): void {
+  setKillCallback(cb: (killerId: string, victimId: string, weapon: string, x: number, y: number) => void): void {
     this.onKillCb = cb;
   }
 
@@ -189,9 +192,10 @@ export class CombatSystem {
         if (this.burrowSystem?.isBurrowed(player.id))     continue;
 
         if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.sprite.getBounds())) {
-          // Damage-Multiplier des Schützen (Ultimate)
-          const multiplier   = this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1;
-          const actualDamage = proj.damage * multiplier;
+          // Damage-Multiplier des Schützen (Ultimate + PowerUp)
+          const loadoutMult  = this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1;
+          const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
+          const actualDamage = proj.damage * loadoutMult * powerUpMult;
           this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
           break;  // Projektil trifft maximal einen Spieler pro Frame
         }
@@ -237,8 +241,9 @@ export class CombatSystem {
 
     if (!trace.hitPlayerId) return true;
 
-    const multiplier = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
-    const actualDamage = damage * multiplier;
+    const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
+    const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+    const actualDamage = damage * loadoutMult * powerUpMult;
     this.applyDamage(trace.hitPlayerId, actualDamage, true, shooterId, weaponName);
 
     if (adrenalinGain > 0) {
@@ -454,11 +459,17 @@ export class CombatSystem {
     const killerId = this.lastAttacker.get(playerId);
     if (killerId && killerId !== playerId) {
       const weapon = this.lastWeapon.get(playerId) ?? 'Waffe';
-      this.onKillCb?.(killerId, playerId, weapon);
+      this.onKillCb?.(killerId, playerId, weapon, x, y);
     }
 
     const timer = setTimeout(() => this.respawn(playerId), RESPAWN_DELAY_MS);
     this.respawnTimers.set(playerId, timer);
+  }
+
+  /** Heilt den Spieler vollständig auf HP_MAX (nur wenn lebendig). */
+  healToFull(playerId: string): void {
+    if (!this.isAlive(playerId)) return;
+    this.hp.set(playerId, HP_MAX);
   }
 
   private respawn(playerId: string): void {

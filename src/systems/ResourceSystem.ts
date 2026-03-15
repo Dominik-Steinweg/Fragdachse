@@ -6,6 +6,8 @@ import {
   RAGE_MAX,
 } from '../config';
 
+type PowerUpSystemType = { getRegenMultiplier(id: string): number };
+
 /**
  * Host-only: Verwaltet Adrenalin und Wut aller Spieler.
  * Regen-Logik wird per Frame über regenTick() aufgerufen.
@@ -15,6 +17,9 @@ export class ResourceSystem {
   private adrenaline:        Map<string, number> = new Map();
   private rage:              Map<string, number> = new Map();
   private regenPausedUntil:  Map<string, number> = new Map(); // ms-Timestamp
+  private powerUpSystem:     PowerUpSystemType | null = null;
+
+  setPowerUpSystem(ps: PowerUpSystemType | null): void { this.powerUpSystem = ps; }
 
   initPlayer(id: string): void {
     this.adrenaline.set(id, ADRENALINE_START);
@@ -70,9 +75,10 @@ export class ResourceSystem {
    */
   regenTick(id: string, delta: number): void {
     if (Date.now() < (this.regenPausedUntil.get(id) ?? 0)) return;
+    const regenMult = this.powerUpSystem?.getRegenMultiplier(id) ?? 1;
     const cur = Math.min(
       ADRENALINE_MAX,
-      (this.adrenaline.get(id) ?? 0) + ADRENALINE_REGEN_PER_SEC * delta / 1000,
+      (this.adrenaline.get(id) ?? 0) + ADRENALINE_REGEN_PER_SEC * regenMult * delta / 1000,
     );
     this.adrenaline.set(id, cur);
   }

@@ -167,3 +167,11 @@ export interface ArenaLayout {
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
 export interface RockNetState { id: number; hp: number; }
+
+/** Synchronisiertes Power-Up auf dem Boden (Host → Clients via GameState) */
+export interface SyncedPowerUp {
+  uid:   number;   // Eindeutige ID dieses World-Items
+  defId: string;   // Schlüssel in POWERUP_DEFS
+  x:     number;
+  y:     number;
+}

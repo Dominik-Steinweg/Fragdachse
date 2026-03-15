@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedSmokeCloud, SyncedFireZone, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -39,6 +39,7 @@ const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschl
 const KEY_HITSCAN_TRACES = 'htr'; // global: SyncedHitscanTrace[] (unreliable, kurzlebige VFX-Ereignisse)
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
+const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ export interface GameState {
   hitscanTraces: SyncedHitscanTrace[];
   smokes:      SyncedSmokeCloud[];
   fires:       SyncedFireZone[];
+  powerups:    SyncedPowerUp[];  // Power-Ups auf dem Boden
 }
 
 type LoadoutUseHandler = (
@@ -100,6 +102,7 @@ type ColorAcceptedHandler = (requesterId: string, color: number) => void;
 type ColorDeniedHandler = (requesterId: string) => void;
 type ColorChangeHandler = (playerId: string, color: number) => void;
 type KillEventHandler = (event: KillEvent) => void;
+type PowerUpPickupHandler = (uid: number, playerId: string) => void;
 
 interface RpcEnvelope {
   type: string;
@@ -133,6 +136,7 @@ export class NetworkBridge {
   private colorDeniedHandler: ColorDeniedHandler | null = null;
   private colorChangeHandler: ColorChangeHandler | null = null;
   private killEventHandler: KillEventHandler | null = null;
+  private powerUpPickupHandler: PowerUpPickupHandler | null = null;
 
   // ── Lobby-Initialisierung (einmalig vor activate()) ────────────────────────
   static async initializeLobby(): Promise<void> {
@@ -337,6 +341,7 @@ export class NetworkBridge {
     setState(KEY_HITSCAN_TRACES, state.hitscanTraces, false);
     setState(KEY_SMOKE_CLOUDS, state.smokes,       false);
     setState(KEY_FIRE_ZONES,   state.fires,        false);
+    setState(KEY_POWERUPS,     state.powerups,     false);
   }
 
   getLatestGameState(): GameState | undefined {
@@ -346,6 +351,7 @@ export class NetworkBridge {
     const hitscanTraces = getState(KEY_HITSCAN_TRACES) as SyncedHitscanTrace[] | undefined;
     const smokes = getState(KEY_SMOKE_CLOUDS) as SyncedSmokeCloud[] | undefined;
     const fires  = getState(KEY_FIRE_ZONES)   as SyncedFireZone[]  | undefined;
+    const powerups = getState(KEY_POWERUPS)    as SyncedPowerUp[]   | undefined;
     if (!players) return undefined;
     return {
       players,
@@ -354,6 +360,7 @@ export class NetworkBridge {
       hitscanTraces: hitscanTraces ?? [],
       smokes: smokes ?? [],
       fires:  fires  ?? [],
+      powerups: powerups ?? [],
     };
   }
 
@@ -377,6 +384,28 @@ export class NetworkBridge {
       if (!loadoutUseHandler) return undefined;
       const { slot, angle, tx, ty, sid } = data as { slot: LoadoutSlot; angle: number; tx: number; ty: number; sid?: number };
       loadoutUseHandler(slot, angle, tx, ty, caller.id, sid);
+      return undefined;
+    });
+  }
+
+  // ── Power-Up-Pickup-RPC: Client → Host ────────────────────────────────────
+
+  sendPickupPowerUp(uid: number): void {
+    if (isHost()) {
+      this.powerUpPickupHandler?.(uid, myPlayer().id);
+      return;
+    }
+    this.sendHostRpc('pup', { uid });
+  }
+
+  registerPickupPowerUpHandler(handler: (uid: number, playerId: string) => void): void {
+    this.powerUpPickupHandler = handler;
+    this.registerHostRpcHandler('pup', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return undefined;
+      const cb = this.powerUpPickupHandler;
+      if (!cb) return undefined;
+      const { uid } = data as { uid: number };
+      cb(uid, caller.id);
       return undefined;
     });
   }
