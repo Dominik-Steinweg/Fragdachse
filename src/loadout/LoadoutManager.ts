@@ -40,7 +40,7 @@ interface UltimateState {
   config:    UltimateConfig;
 }
 
-type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot'>;
+type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot' | 'traceHitscan'>;
 
 /**
  * LoadoutManager – Host-autoritär.

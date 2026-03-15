@@ -18,6 +18,23 @@ import {
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
 type LoadoutManagerType  = { getDamageMultiplier(id: string): number };
 
+export interface HitscanTraceResult {
+  readonly endX: number;
+  readonly endY: number;
+  readonly distance: number;
+  readonly hitPlayerId: string | null;
+}
+
+export interface HitscanTraceOptions {
+  readonly shooterId: string;
+  readonly startX: number;
+  readonly startY: number;
+  readonly angle: number;
+  readonly range: number;
+  readonly traceThickness: number;
+  readonly applyFavorTheShooter: boolean;
+}
+
 export class CombatSystem {
   private hp:            Map<string, number>                           = new Map();
   private alive:         Map<string, boolean>                          = new Map();
@@ -184,6 +201,32 @@ export class CombatSystem {
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
+    const trace = this.traceHitscan({
+      shooterId,
+      startX,
+      startY,
+      angle,
+      range,
+      traceThickness,
+      applyFavorTheShooter: true,
+    });
+
+    if (!trace.hitPlayerId) return true;
+
+    const multiplier = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
+    const actualDamage = damage * multiplier;
+    this.applyDamage(trace.hitPlayerId, actualDamage, true, shooterId, weaponName);
+
+    if (adrenalinGain > 0) {
+      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+    }
+
+    return true;
+  }
+
+  traceHitscan(options: HitscanTraceOptions): HitscanTraceResult {
+    const { shooterId, startX, startY, angle, range, traceThickness, applyFavorTheShooter } = options;
+
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
     const maxEndX = startX + dirX * range;
@@ -196,31 +239,60 @@ export class CombatSystem {
 
     let hitPlayerId: string | null = null;
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.isAlive(player.id)) continue;
-      if (player.id === shooterId) continue;
-      if (this.burrowSystem?.isBurrowed(player.id)) continue;
+      if (!this.isHitscanTargetCandidate(player.id, shooterId)) continue;
 
-      const hitDistance = this.getFavorTheShooterHitDistance(this.hitscanLine, player, traceThickness);
+      const hitDistance = this.getHitscanPlayerHitDistance(
+        this.hitscanLine,
+        player,
+        traceThickness,
+        applyFavorTheShooter,
+      );
       if (hitDistance === null || hitDistance > closestDistance) continue;
 
       closestDistance = hitDistance;
       hitPlayerId = player.id;
     }
 
-    if (!hitPlayerId) return true;
-
-    const multiplier = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
-    const actualDamage = damage * multiplier;
-    this.applyDamage(hitPlayerId, actualDamage, true, shooterId, weaponName);
-
-    if (adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-    }
-
-    return true;
+    return {
+      endX: startX + dirX * closestDistance,
+      endY: startY + dirY * closestDistance,
+      distance: closestDistance,
+      hitPlayerId,
+    };
   }
 
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
+
+  private isHitscanTargetCandidate(playerId: string, shooterId: string): boolean {
+    if (playerId === shooterId) return false;
+    if (!this.isHitscanTargetAlive(playerId)) return false;
+    if (this.isHitscanTargetBurrowed(playerId)) return false;
+    return true;
+  }
+
+  private isHitscanTargetAlive(playerId: string): boolean {
+    if (this.bridge.isHost()) return this.isAlive(playerId);
+    return this.bridge.getLatestGameState()?.players[playerId]?.alive ?? true;
+  }
+
+  private isHitscanTargetBurrowed(playerId: string): boolean {
+    if (this.burrowSystem) return this.burrowSystem.isBurrowed(playerId);
+    return this.bridge.getLatestGameState()?.players[playerId]?.isBurrowed ?? false;
+  }
+
+  private getHitscanPlayerHitDistance(
+    line: Phaser.Geom.Line,
+    player: ReturnType<PlayerManager['getAllPlayers']>[number],
+    traceThickness: number,
+    applyFavorTheShooter: boolean,
+  ): number | null {
+    if (applyFavorTheShooter) {
+      return this.getFavorTheShooterHitDistance(line, player, traceThickness);
+    }
+
+    const baseRadius = PLAYER_SIZE * 0.5 + traceThickness * 0.5;
+    return this.findNearestCircleHit(line, player.sprite.x, player.sprite.y, baseRadius)?.distance ?? null;
+  }
 
   private findNearestObstacleHit(
     line: Phaser.Geom.Line,
