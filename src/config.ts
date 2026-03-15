@@ -13,6 +13,7 @@ export const DEPTH = {
   ROCKS: 9,
   PLAYERS: 10,
   PROJECTILES: 15,
+  FIRE: 16,
   SMOKE: 18,
   CANOPY: 20,
   OVERLAY: 100,

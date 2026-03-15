@@ -53,7 +53,7 @@ export interface WeaponConfig {
   readonly spreadRecoverySpeed: number; // ms pro Tick (bestimmt Abbau-Geschwindigkeit)
 }
 
-export type UtilityType = 'explosive' | 'smoke';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov';
 
 interface BaseUtilityConfig {
   readonly id: string;
@@ -80,7 +80,15 @@ export interface SmokeUtilityConfig extends BaseUtilityConfig {
   readonly smokeMaxAlpha: number;           // 0-1
 }
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig;
+export interface MolotovUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'molotov';
+  readonly fireRadius: number;          // px – Schadensradius
+  readonly fireDamagePerTick: number;   // HP Schaden pro Tick
+  readonly fireTickInterval: number;    // ms zwischen Damage-Ticks (z.B. 200)
+  readonly fireLingerDuration: number;  // ms wie lange das Feuer brennt
+}
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig;
 
 export interface UltimateConfig {
   readonly id: string;
@@ -273,6 +281,20 @@ export const UTILITY_CONFIGS = {
     smokeLingerDuration:    7000,
     smokeDissipateDuration: 2000,
     smokeMaxAlpha:          0.95,
+  } as UtilityConfig,
+
+  MOLOTOV_GRENADE: {
+    id:                 'MOLOTOV_GRENADE',
+    displayName:        'Molotov',
+    type:               'molotov',
+    cooldown:           8000,
+    projectileSpeed:    500,
+    projectileSize:     10,
+    fuseTime:           750,
+    fireRadius:         90,
+    fireDamagePerTick:  8,
+    fireTickInterval:   200,
+    fireLingerDuration: 4000,
   } as UtilityConfig,
 } as const;
 

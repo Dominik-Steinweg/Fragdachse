@@ -95,7 +95,15 @@ export interface SmokeGrenadeEffect {
   maxAlpha: number;
 }
 
-export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect;
+export interface FireGrenadeEffect {
+  type: 'fire';
+  radius: number;
+  damagePerTick: number;
+  tickInterval: number;    // ms
+  lingerDuration: number;  // ms
+}
+
+export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect;
 
 /** Explodierte Granate – von ProjectileManager.hostUpdate() zurückgegeben */
 export interface ExplodedGrenade {
@@ -112,6 +120,14 @@ export interface SyncedSmokeCloud {
   radius:  number;
   alpha:   number;
   density: number;
+}
+
+export interface SyncedFireZone {
+  id:     number;
+  x:      number;
+  y:      number;
+  radius: number;
+  alpha:  number; // 0-1, für visuelles Fade-in/-out
 }
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
