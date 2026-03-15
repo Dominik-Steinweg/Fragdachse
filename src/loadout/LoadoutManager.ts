@@ -121,6 +121,20 @@ export class LoadoutManager {
       case 'utility': {
         if (loadout.utility.isOnCooldown(now)) return;
         const cfg = loadout.utility.config;
+        const grenadeEffect = cfg.type === 'explosive'
+          ? {
+              type:   'damage' as const,
+              radius: cfg.aoeRadius,
+              damage: cfg.aoeDamage,
+            }
+          : {
+              type:              'smoke' as const,
+              radius:            cfg.smokeRadius,
+              spreadDuration:    cfg.smokeExpandDuration,
+              lingerDuration:    cfg.smokeLingerDuration,
+              dissipateDuration: cfg.smokeDissipateDuration,
+              maxAlpha:          cfg.smokeMaxAlpha,
+            };
         this.projectileManager.spawnProjectile(x, y, angle, playerId, {
           speed:         cfg.projectileSpeed,
           size:          cfg.projectileSize,
@@ -132,8 +146,7 @@ export class LoadoutManager {
           adrenalinGain: 0,              // Granaten geben kein Adrenalin
           weaponName:    cfg.displayName,
           fuseTime:      cfg.fuseTime,
-          aoeRadius:     cfg.aoeRadius,
-          aoeDamage:     cfg.aoeDamage,
+          grenadeEffect,
         });
         loadout.utility.recordUse(now);
         break;

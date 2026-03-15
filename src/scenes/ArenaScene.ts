@@ -16,6 +16,7 @@ import type { LoadoutSelection } from '../loadout/LoadoutManager';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import type { WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
+import { SmokeSystem }         from '../effects/SmokeSystem';
 import { LeftSidePanel }       from '../ui/LeftSidePanel';
 import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem }           from '../ui/AimSystem';
@@ -38,6 +39,7 @@ export class ArenaScene extends Phaser.Scene {
   private projectileManager!: ProjectileManager;
   private combatSystem!:      CombatSystem;
   private effectSystem!:      EffectSystem;
+  private smokeSystem!:       SmokeSystem;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
@@ -110,6 +112,7 @@ export class ArenaScene extends Phaser.Scene {
     this.effectSystem.setup(() => {
       this.aimSystem?.notifyConfirmedHit();
     });
+    this.smokeSystem = new SmokeSystem(this);
 
     // ── 6. Host-Physik (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
     this.hostPhysics = new HostPhysicsSystem(
@@ -505,6 +508,7 @@ export class ArenaScene extends Phaser.Scene {
     // Projektile (und ihre Phaser-Collider) VOR dem Gruppen-Destroy aufräumen,
     // sonst greifen verwaiste Collider auf die zerstörten StaticGroups zu und crashen.
     this.projectileManager.destroyAll();
+    this.smokeSystem.destroyAll();
 
     if (this.arenaResult) {
       ArenaBuilder.destroyDynamic(this.arenaResult);
@@ -627,9 +631,15 @@ export class ArenaScene extends Phaser.Scene {
 
     // Granaten-Explosionen verarbeiten
     for (const g of explodedGrenades) {
-      this.combatSystem.applyAoeDamage(g.x, g.y, g.aoeRadius, g.aoeDamage, g.ownerId);
-      bridge.broadcastExplosionEffect(g.x, g.y, g.aoeRadius);
+      if (g.effect.type === 'damage') {
+        this.combatSystem.applyAoeDamage(g.x, g.y, g.effect.radius, g.effect.damage, g.ownerId);
+        bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius);
+      } else {
+        this.smokeSystem.hostCreateCloud(g.x, g.y, g.effect);
+      }
     }
+
+    const smokes = countdownActive ? [] : this.smokeSystem.hostUpdate(Date.now());
 
     const rocks   = this.rockRegistry?.getNetSnapshot() ?? [];
 
@@ -669,7 +679,7 @@ export class ArenaScene extends Phaser.Scene {
       player.syncBar();
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces });
+    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, smokes });
 
     // HUD des lokalen Host-Spielers aktualisieren
     const localId = bridge.getLocalPlayerId();
@@ -713,6 +723,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.projectileManager.clientSyncVisuals(state.projectiles);
+    this.smokeSystem.syncVisuals(state.smokes);
     for (const trace of state.hitscanTraces) {
       this.effectSystem.playSyncedHitscanTracer(trace);
     }

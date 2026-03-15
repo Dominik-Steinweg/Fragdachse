@@ -53,16 +53,34 @@ export interface WeaponConfig {
   readonly spreadRecoverySpeed: number; // ms pro Tick (bestimmt Abbau-Geschwindigkeit)
 }
 
-export interface UtilityConfig {
+export type UtilityType = 'explosive' | 'smoke';
+
+interface BaseUtilityConfig {
   readonly id: string;
   readonly displayName: string;
+  readonly type: UtilityType;
   readonly cooldown: number;        // ms
   readonly projectileSpeed: number; // px/s (langsam für Granaten)
   readonly projectileSize: number;  // px
   readonly fuseTime: number;        // ms bis Explosion
+}
+
+export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'explosive';
   readonly aoeRadius: number;       // px
   readonly aoeDamage: number;       // HP-Schaden im Radius
 }
+
+export interface SmokeUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'smoke';
+  readonly smokeRadius: number;             // px
+  readonly smokeExpandDuration: number;     // ms
+  readonly smokeLingerDuration: number;     // ms
+  readonly smokeDissipateDuration: number;  // ms
+  readonly smokeMaxAlpha: number;           // 0-1
+}
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig;
 
 export interface UltimateConfig {
   readonly id: string;
@@ -233,12 +251,28 @@ export const UTILITY_CONFIGS = {
   HE_GRENADE: {
     id:              'HE_GRENADE',
     displayName:     'HE Granate',
+    type:            'explosive',
     cooldown:        6000,
     projectileSpeed: 500,
     projectileSize:  10,
     fuseTime:        750,
     aoeRadius:       80,
     aoeDamage:       60,
+  } as UtilityConfig,
+
+  SMOKE_GRENADE: {
+    id:                     'SMOKE_GRENADE',
+    displayName:            'Smoke Granate',
+    type:                   'smoke',
+    cooldown:               7000,
+    projectileSpeed:        500,
+    projectileSize:         10,
+    fuseTime:               750,
+    smokeRadius:            132,
+    smokeExpandDuration:    450,
+    smokeLingerDuration:    5200,
+    smokeDissipateDuration: 1400,
+    smokeMaxAlpha:          0.82,
   } as UtilityConfig,
 } as const;
 

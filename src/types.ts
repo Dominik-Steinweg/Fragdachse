@@ -77,17 +77,41 @@ export interface ProjectileSpawnConfig {
   adrenalinGain: number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName?:   string;        // Waffenname für Killfeed
   fuseTime?:     number;        // ms bis AoE-Explosion (nur Granaten)
-  aoeRadius?:    number;        // px AoE-Radius
-  aoeDamage?:    number;        // HP-Schaden im AoE-Radius
+  grenadeEffect?: GrenadeEffectConfig;
 }
+
+export interface DamageGrenadeEffect {
+  type: 'damage';
+  radius: number;
+  damage: number;
+}
+
+export interface SmokeGrenadeEffect {
+  type: 'smoke';
+  radius: number;
+  spreadDuration: number;
+  lingerDuration: number;
+  dissipateDuration: number;
+  maxAlpha: number;
+}
+
+export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect;
 
 /** Explodierte Granate – von ProjectileManager.hostUpdate() zurückgegeben */
 export interface ExplodedGrenade {
-  x:         number;
-  y:         number;
-  aoeRadius: number;
-  aoeDamage: number;
-  ownerId:   string;
+  x:      number;
+  y:      number;
+  ownerId: string;
+  effect: GrenadeEffectConfig;
+}
+
+export interface SyncedSmokeCloud {
+  id:      number;
+  x:       number;
+  y:       number;
+  radius:  number;
+  alpha:   number;
+  density: number;
 }
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
@@ -107,8 +131,7 @@ export interface TrackedProjectile {
   adrenalinGain:  number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName:     string;        // Waffenname für Killfeed
   fuseTime?:      number;
-  aoeRadius?:     number;
-  aoeDamage?:     number;
+  grenadeEffect?: GrenadeEffectConfig;
 }
 
 // ---- Prozedurales Arena-Layout ----

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { SyncedHitscanTrace } from '../types';
-import { DEPTH_FX, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
+import { DEPTH_FX, DEPTH_TRACE, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
 
 const HITSCAN_TRACER_FADE_MS = 120;
 
@@ -114,7 +114,7 @@ export class EffectSystem {
   ): void {
     const palette = getBeamPaletteForPlayerColor(playerColor);
     const gfx = this.scene.add.graphics();
-    gfx.setDepth(DEPTH_FX);
+    gfx.setDepth(DEPTH_TRACE);
 
     this.strokeTracer(gfx, palette.shadow, Math.max(thickness + 6, 6), 0.20, startX, startY, endX, endY);
     this.strokeTracer(gfx, palette.glow, Math.max(thickness + 3, 4), 0.45, startX, startY, endX, endY);

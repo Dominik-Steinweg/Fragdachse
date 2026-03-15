@@ -93,8 +93,7 @@ export class ProjectileManager {
       adrenalinGain:  cfg.adrenalinGain,
       weaponName:     cfg.weaponName ?? 'Waffe',
       fuseTime:       cfg.fuseTime,
-      aoeRadius:      cfg.aoeRadius,
-      aoeDamage:      cfg.aoeDamage,
+      grenadeEffect:  cfg.grenadeEffect,
     };
 
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
@@ -175,13 +174,12 @@ export class ProjectileManager {
 
       if (proj.isGrenade) {
         // Granate: explodiert nach fuseTime
-        if (age >= proj.fuseTime!) {
+        if (age >= proj.fuseTime! && proj.grenadeEffect) {
           explodedGrenades.push({
-            x:         proj.sprite.x,
-            y:         proj.sprite.y,
-            aoeRadius: proj.aoeRadius!,
-            aoeDamage: proj.aoeDamage!,
-            ownerId:   proj.ownerId,
+            x:      proj.sprite.x,
+            y:      proj.sprite.y,
+            ownerId: proj.ownerId,
+            effect: proj.grenadeEffect,
           });
           this.scene.physics.world.off('worldbounds', proj.boundsListener);
           for (const c of proj.colliders) c.destroy();

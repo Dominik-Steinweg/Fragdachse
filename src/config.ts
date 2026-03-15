@@ -13,6 +13,7 @@ export const DEPTH = {
   ROCKS: 9,
   PLAYERS: 10,
   PROJECTILES: 15,
+  SMOKE: 18,
   CANOPY: 20,
   OVERLAY: 100,
 } as const;
@@ -148,6 +149,7 @@ export const HP_BAR_HEIGHT   = 5;
 export const HP_BAR_OFFSET_Y = 24;              // Pixel unter Sprite-Mittelpunkt
 
 // ---- Effekt-Layer (über Baumkronen) ----
+export const DEPTH_TRACE = 16;
 export const DEPTH_FX = 25;
 
 // ---- Prozedurales Arena-Grid ----
