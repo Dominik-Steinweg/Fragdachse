@@ -121,6 +121,20 @@ export class ArenaScene extends Phaser.Scene {
       bridge.sendLoadoutUse(slot, angle, targetX, targetY);
     });
 
+    bridge.registerDashHandler((playerId, dx, dy) => {
+      if (!bridge.isHost()) return;
+      if (bridge.getGamePhase() !== 'ARENA') return;
+      if (bridge.isArenaCountdownActive()) return;
+      this.hostPhysics.handleDashRPC(playerId, dx, dy);
+    });
+
+    bridge.registerBurrowHandler((playerId, wantsBurrowed) => {
+      if (!bridge.isHost()) return;
+      if (bridge.getGamePhase() !== 'ARENA') return;
+      if (bridge.isArenaCountdownActive()) return;
+      this.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
+    });
+
     // ── 8. Left Side Panel (Namensanzeige + ResourceHUD) ──────────────────
     this.leftPanel = new LeftSidePanel(this, bridge);
     this.leftPanel.build();
@@ -442,18 +456,6 @@ export class ArenaScene extends Phaser.Scene {
 
       this.hostPhysics.setBurrowSystem(this.burrowSystem);
       this.hostPhysics.setLoadoutManager(this.loadoutManager);
-
-      // Dash-RPC: Client → Host
-      bridge.registerDashHandler((playerId, dx, dy) => {
-        if (bridge.isArenaCountdownActive()) return;
-        this.hostPhysics.handleDashRPC(playerId, dx, dy);
-      });
-
-      // Burrow-RPC: Client → Host
-      bridge.registerBurrowHandler((playerId, wantsBurrowed) => {
-        if (bridge.isArenaCountdownActive()) return;
-        this.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
-      });
 
       // Kill-Callback: Frags erhöhen + Kill-Ereignis broadcasten
       this.combatSystem.setKillCallback((killerId, victimId, weapon) => {

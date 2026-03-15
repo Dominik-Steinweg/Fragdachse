@@ -153,12 +153,12 @@ export const SELF_STUN_DURATION_MS     = 1000;
 
 // ---- Spielerfarben (12 auswählbare, einzigartige Farben) ----
 export const PLAYER_COLORS: readonly number[] = [
-  COLORS.BLUE_2,   COLORS.BLUE_5,
-  COLORS.GREEN_2,  COLORS.GREEN_5,
-  COLORS.BROWN_2,  COLORS.BROWN_5,
-  COLORS.GOLD_2,   COLORS.GOLD_5,
-  COLORS.RED_2,    COLORS.RED_5,
-  COLORS.PURPLE_2, COLORS.PURPLE_5,
+  COLORS.BLUE_3,   COLORS.BLUE_2,
+  COLORS.GREEN_3,  COLORS.GREEN_2,
+  COLORS.BROWN_3,  COLORS.BROWN_2,
+  COLORS.GOLD_3,   COLORS.GOLD_2,
+  COLORS.RED_3,    COLORS.RED_2,
+  COLORS.PURPLE_3, COLORS.PURPLE_2,
 ] as const;
 
 // ---- Szenen / Match ----

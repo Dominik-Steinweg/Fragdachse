@@ -383,7 +383,7 @@ export class LeftSidePanel {
       const isFree      = available.includes(color);
       const isClickable = (isFree || isOwn) && !this.requestPending;
 
-      rect.setAlpha(isOwn || isFree ? 1.0 : 0.0);
+      rect.setAlpha(isOwn || isFree ? 1.0 : 0.07);
       rect.setStrokeStyle(isOwn ? 3 : 0, COLORS.GREY_1);
 
       if (isClickable) {

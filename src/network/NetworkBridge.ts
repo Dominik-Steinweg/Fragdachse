@@ -13,6 +13,9 @@ import type { PlayerState } from 'playroomkit';
 import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
 import { MAX_PLAYERS } from '../config';
 
+const HOST_RPC_CHANNEL = 'rpc_host';
+const ALL_RPC_CHANNEL  = 'rpc_all';
+
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
 const KEY_INPUT        = 'inp';
 const KEY_PLAYERS      = 'plr';
@@ -61,6 +64,31 @@ export interface GameState {
   rocks:       RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
 }
 
+type LoadoutUseHandler = (
+  slot: LoadoutSlot,
+  angle: number,
+  targetX: number,
+  targetY: number,
+  senderId: string,
+) => void;
+
+type ExplosionEffectHandler = (x: number, y: number, radius: number) => void;
+type EffectHandler = (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void;
+type DashHandler = (playerId: string, dx: number, dy: number) => void;
+type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
+type ShockwaveEffectHandler = (x: number, y: number) => void;
+type BurrowVisualHandler = (playerId: string, isBurrowed: boolean) => void;
+type ColorRequestHandler = (requestedColor: number, requesterId: string) => void;
+type ColorAcceptedHandler = (requesterId: string, color: number) => void;
+type ColorDeniedHandler = (requesterId: string) => void;
+type ColorChangeHandler = (playerId: string, color: number) => void;
+type KillEventHandler = (event: KillEvent) => void;
+
+interface RpcEnvelope {
+  type: string;
+  payload: unknown;
+}
+
 export class NetworkBridge {
   private playerStateMap   = new Map<string, PlayerState>();
   private connectedPlayers = new Map<string, PlayerProfile>();
@@ -69,6 +97,24 @@ export class NetworkBridge {
   private quitCbs: Array<(id: string) => void>             = [];
 
   private activated = false;
+  private hostDispatcherRegistered = false;
+  private allDispatcherRegistered = false;
+  private knownPlayerColors: readonly number[] = [];
+  private hostRpcHandlers = new Map<string, (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown>();
+  private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
+
+  private loadoutUseHandler: LoadoutUseHandler | null = null;
+  private explosionEffectHandler: ExplosionEffectHandler | null = null;
+  private effectHandler: EffectHandler | null = null;
+  private dashHandler: DashHandler | null = null;
+  private burrowHandler: BurrowHandler | null = null;
+  private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
+  private burrowVisualHandler: BurrowVisualHandler | null = null;
+  private colorRequestHandler: ColorRequestHandler | null = null;
+  private colorAcceptedHandler: ColorAcceptedHandler | null = null;
+  private colorDeniedHandler: ColorDeniedHandler | null = null;
+  private colorChangeHandler: ColorChangeHandler | null = null;
+  private killEventHandler: KillEventHandler | null = null;
 
   // ── Lobby-Initialisierung (einmalig vor activate()) ────────────────────────
   static async initializeLobby(): Promise<void> {
@@ -121,8 +167,10 @@ export class NetworkBridge {
       this.playerStateMap.set(state.id, state);
 
       state.onQuit(() => {
+        const hadColor = this.getPlayerColor(state.id) !== undefined;
         this.playerStateMap.delete(state.id);
         this.connectedPlayers.delete(state.id);
+        if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
       });
 
@@ -281,16 +329,19 @@ export class NetworkBridge {
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
 
   sendLoadoutUse(slot: LoadoutSlot, angle: number, targetX: number, targetY: number): void {
-    RPC.call('lu', { slot, angle, tx: targetX, ty: targetY }, RPC.Mode.HOST).catch(console.error);
+    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY });
   }
 
   registerLoadoutUseHandler(
     handler: (slot: LoadoutSlot, angle: number, targetX: number, targetY: number, senderId: string) => void,
   ): void {
-    RPC.register('lu', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+    this.loadoutUseHandler = handler;
+    this.registerHostRpcHandler('lu', async (data: unknown, caller: PlayerState): Promise<unknown> => {
       if (!isHost()) return undefined;
+      const loadoutUseHandler = this.loadoutUseHandler;
+      if (!loadoutUseHandler) return undefined;
       const { slot, angle, tx, ty } = data as { slot: LoadoutSlot; angle: number; tx: number; ty: number };
-      handler(slot, angle, tx, ty, caller.id);
+      loadoutUseHandler(slot, angle, tx, ty, caller.id);
       return undefined;
     });
   }
@@ -298,26 +349,32 @@ export class NetworkBridge {
   // ── Explosions-Effekt-RPC: Host → Alle ────────────────────────────────────
 
   broadcastExplosionEffect(x: number, y: number, radius: number): void {
-    RPC.call('xfx', { x, y, r: radius }, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('xfx', { x, y, r: radius });
   }
 
   registerExplosionEffectHandler(handler: (x: number, y: number, radius: number) => void): void {
-    RPC.register('xfx', async (data: unknown): Promise<unknown> => {
+    this.explosionEffectHandler = handler;
+    this.registerAllRpcHandler('xfx', async (data: unknown): Promise<unknown> => {
+      const explosionEffectHandler = this.explosionEffectHandler;
+      if (!explosionEffectHandler) return undefined;
       const { x, y, r } = data as { x: number; y: number; r: number };
-      handler(x, y, r);
+      explosionEffectHandler(x, y, r);
       return undefined;
     });
   }
 
   // ── Effekt-RPC: Host → Alle (visuelles Feedback) ──────────────────────────
   broadcastEffect(type: 'hit' | 'death', x: number, y: number, shooterId?: string): void {
-    RPC.call('fx', { type, x, y, shooterId }, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('fx', { type, x, y, shooterId });
   }
 
   registerEffectHandler(cb: (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void): void {
-    RPC.register('fx', async (data: unknown): Promise<unknown> => {
+    this.effectHandler = cb;
+    this.registerAllRpcHandler('fx', async (data: unknown): Promise<unknown> => {
+      const effectHandler = this.effectHandler;
+      if (!effectHandler) return undefined;
       const { type, x, y, shooterId } = data as { type: 'hit' | 'death'; x: number; y: number; shooterId?: string };
-      cb(type, x, y, shooterId);
+      effectHandler(type, x, y, shooterId);
       return undefined;
     });
   }
@@ -325,14 +382,17 @@ export class NetworkBridge {
   // ── Dash-RPC: Client → Host ───────────────────────────────────────────────
 
   sendDash(dx: number, dy: number): void {
-    RPC.call('dash', { dx, dy }, RPC.Mode.HOST).catch(console.error);
+    this.sendHostRpc('dash', { dx, dy });
   }
 
   registerDashHandler(cb: (playerId: string, dx: number, dy: number) => void): void {
-    RPC.register('dash', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+    this.dashHandler = cb;
+    this.registerHostRpcHandler('dash', async (data: unknown, caller: PlayerState): Promise<unknown> => {
       if (!isHost()) return;
+      const dashHandler = this.dashHandler;
+      if (!dashHandler) return undefined;
       const { dx, dy } = data as { dx: number; dy: number };
-      cb(caller.id, dx, dy);
+      dashHandler(caller.id, dx, dy);
       return undefined;
     });
   }
@@ -340,14 +400,17 @@ export class NetworkBridge {
   // ── Burrow-RPC: Client → Host ─────────────────────────────────────────────
 
   sendBurrowRequest(wantsBurrowed: boolean): void {
-    RPC.call('burrow', { want: wantsBurrowed }, RPC.Mode.HOST).catch(console.error);
+    this.sendHostRpc('burrow', { want: wantsBurrowed });
   }
 
   registerBurrowHandler(cb: (playerId: string, wantsBurrowed: boolean) => void): void {
-    RPC.register('burrow', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+    this.burrowHandler = cb;
+    this.registerHostRpcHandler('burrow', async (data: unknown, caller: PlayerState): Promise<unknown> => {
       if (!isHost()) return;
+      const burrowHandler = this.burrowHandler;
+      if (!burrowHandler) return undefined;
       const { want } = data as { want: boolean };
-      cb(caller.id, want);
+      burrowHandler(caller.id, want);
       return undefined;
     });
   }
@@ -355,13 +418,16 @@ export class NetworkBridge {
   // ── Schockwellen-Effekt: Host → Alle ─────────────────────────────────────
 
   broadcastShockwaveEffect(x: number, y: number): void {
-    RPC.call('shockfx', { x, y }, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('shockfx', { x, y });
   }
 
   registerShockwaveEffectHandler(cb: (x: number, y: number) => void): void {
-    RPC.register('shockfx', async (data: unknown): Promise<unknown> => {
+    this.shockwaveEffectHandler = cb;
+    this.registerAllRpcHandler('shockfx', async (data: unknown): Promise<unknown> => {
+      const shockwaveEffectHandler = this.shockwaveEffectHandler;
+      if (!shockwaveEffectHandler) return undefined;
       const { x, y } = data as { x: number; y: number };
-      cb(x, y);
+      shockwaveEffectHandler(x, y);
       return undefined;
     });
   }
@@ -369,13 +435,16 @@ export class NetworkBridge {
   // ── Burrow-Visualisierung: Host → Alle ────────────────────────────────────
 
   broadcastBurrowVisual(playerId: string, isBurrowed: boolean): void {
-    RPC.call('bfx', { id: playerId, b: isBurrowed }, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('bfx', { id: playerId, b: isBurrowed });
   }
 
   registerBurrowVisualHandler(cb: (playerId: string, isBurrowed: boolean) => void): void {
-    RPC.register('bfx', async (data: unknown): Promise<unknown> => {
+    this.burrowVisualHandler = cb;
+    this.registerAllRpcHandler('bfx', async (data: unknown): Promise<unknown> => {
+      const burrowVisualHandler = this.burrowVisualHandler;
+      if (!burrowVisualHandler) return undefined;
       const { id, b } = data as { id: string; b: boolean };
-      cb(id, b);
+      burrowVisualHandler(id, b);
       return undefined;
     });
   }
@@ -388,10 +457,8 @@ export class NetworkBridge {
    */
   initColorPool(allColors: readonly number[]): void {
     if (!isHost()) return;
-    const existing = getState(KEY_AVAIL_COLORS) as number[] | undefined;
-    if (!existing) {
-      setState(KEY_AVAIL_COLORS, [...allColors], true);
-    }
+    this.knownPlayerColors = [...allColors];
+    this.reconcileColorPool();
   }
 
   /** Liest den aktuellen Farbpool (kann von allen Clients gelesen werden). */
@@ -418,12 +485,12 @@ export class NetworkBridge {
   hostAssignColor(playerId: string): void {
     if (!isHost()) return;
     if (this.getPlayerColor(playerId) !== undefined) return;
-    const available = this.getAvailableColors();
+    const available = this.computeAvailableColors();
     if (available.length === 0) return;
     const idx   = Math.floor(Math.random() * available.length);
     const color = available[idx];
-    this.setAvailableColors(available.filter((_, i) => i !== idx));
-    this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_COLOR, color);
+    this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_COLOR, color, true);
+    this.reconcileColorPool();
     this.broadcastColorChange(playerId, color);
   }
 
@@ -434,10 +501,7 @@ export class NetworkBridge {
     if (!isHost()) return;
     const color = this.getPlayerColor(playerId);
     if (color === undefined) return;
-    const available = this.getAvailableColors();
-    if (!available.includes(color)) {
-      this.setAvailableColors([...available, color]);
-    }
+    this.reconcileColorPool();
   }
 
   /**
@@ -446,14 +510,12 @@ export class NetworkBridge {
    */
   hostHandleColorRequest(requestedColor: number, requesterId: string): void {
     if (!isHost()) return;
-    const available = this.getAvailableColors();
+    const available = this.computeAvailableColors();
     if (available.includes(requestedColor)) {
-      const oldColor  = this.getPlayerColor(requesterId);
-      const newPool   = available.filter(c => c !== requestedColor);
-      if (oldColor !== undefined && !newPool.includes(oldColor)) newPool.push(oldColor);
-      this.setAvailableColors(newPool);
-      this.playerStateMap.get(requesterId)?.setState(KEY_PLAYER_COLOR, requestedColor);
+      this.playerStateMap.get(requesterId)?.setState(KEY_PLAYER_COLOR, requestedColor, true);
+      this.reconcileColorPool();
       this.broadcastColorAccepted(requesterId, requestedColor);
+      this.broadcastColorChange(requesterId, requestedColor);
     } else {
       this.broadcastColorDenied(requesterId);
     }
@@ -463,58 +525,70 @@ export class NetworkBridge {
 
   /** Client → Host: Farbwechsel-Anfrage. */
   sendColorRequest(color: number): void {
-    RPC.call('crq', { c: color }, RPC.Mode.HOST).catch(console.error);
+    this.sendHostRpc('crq', { c: color });
   }
 
   /** Host-only: Empfänger für Farbwechsel-Anfragen. */
   registerColorRequestHandler(
     handler: (requestedColor: number, requesterId: string) => void,
   ): void {
-    RPC.register('crq', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+    this.colorRequestHandler = handler;
+    this.registerHostRpcHandler('crq', async (data: unknown, caller: PlayerState): Promise<unknown> => {
       if (!isHost()) return undefined;
-      handler((data as { c: number }).c, caller.id);
+      const colorRequestHandler = this.colorRequestHandler;
+      if (!colorRequestHandler) return undefined;
+      colorRequestHandler((data as { c: number }).c, caller.id);
       return undefined;
     });
   }
 
   /** Host → Alle: Farbwechsel akzeptiert (alle Clients zeigen neue Farbe). */
   broadcastColorAccepted(requesterId: string, color: number): void {
-    RPC.call('cac', { id: requesterId, c: color }, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('cac', { id: requesterId, c: color });
   }
 
   registerColorAcceptedHandler(
     handler: (requesterId: string, color: number) => void,
   ): void {
-    RPC.register('cac', async (data: unknown): Promise<unknown> => {
+    this.colorAcceptedHandler = handler;
+    this.registerAllRpcHandler('cac', async (data: unknown): Promise<unknown> => {
+      const colorAcceptedHandler = this.colorAcceptedHandler;
+      if (!colorAcceptedHandler) return undefined;
       const { id, c } = data as { id: string; c: number };
-      handler(id, c);
+      colorAcceptedHandler(id, c);
       return undefined;
     });
   }
 
   /** Host → Alle: Farbwechsel abgelehnt (nur Requester zeigt Feedback). */
   broadcastColorDenied(requesterId: string): void {
-    RPC.call('cdnd', { id: requesterId }, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('cdnd', { id: requesterId });
   }
 
   registerColorDeniedHandler(handler: (requesterId: string) => void): void {
-    RPC.register('cdnd', async (data: unknown): Promise<unknown> => {
-      handler((data as { id: string }).id);
+    this.colorDeniedHandler = handler;
+    this.registerAllRpcHandler('cdnd', async (data: unknown): Promise<unknown> => {
+      const colorDeniedHandler = this.colorDeniedHandler;
+      if (!colorDeniedHandler) return undefined;
+      colorDeniedHandler((data as { id: string }).id);
       return undefined;
     });
   }
 
   /** Host → Alle: Farbzuweisung (auto-assign beim Join). */
   broadcastColorChange(playerId: string, color: number): void {
-    RPC.call('cch', { id: playerId, c: color }, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('cch', { id: playerId, c: color });
   }
 
   registerColorChangeHandler(
     handler: (playerId: string, color: number) => void,
   ): void {
-    RPC.register('cch', async (data: unknown): Promise<unknown> => {
+    this.colorChangeHandler = handler;
+    this.registerAllRpcHandler('cch', async (data: unknown): Promise<unknown> => {
+      const colorChangeHandler = this.colorChangeHandler;
+      if (!colorChangeHandler) return undefined;
       const { id, c } = data as { id: string; c: number };
-      handler(id, c);
+      colorChangeHandler(id, c);
       return undefined;
     });
   }
@@ -573,15 +647,91 @@ export class NetworkBridge {
 
   /** Host-only: Sendet ein Kill-Ereignis an alle Clients (inkl. Host selbst). */
   broadcastKillEvent(event: KillEvent): void {
-    RPC.call('kev', event, RPC.Mode.ALL).catch(console.error);
+    this.broadcastRpc('kev', event);
   }
 
   /** Registriert einen Handler für eingehende Kill-Ereignisse (alle Clients). */
   registerKillEventHandler(cb: (event: KillEvent) => void): void {
-    RPC.register('kev', async (data: unknown): Promise<unknown> => {
-      cb(data as KillEvent);
+    this.killEventHandler = cb;
+    this.registerAllRpcHandler('kev', async (data: unknown): Promise<unknown> => {
+      const killEventHandler = this.killEventHandler;
+      if (!killEventHandler) return undefined;
+      killEventHandler(data as KillEvent);
       return undefined;
     });
+  }
+
+  private sendHostRpc(type: string, payload: unknown): void {
+    this.ensureRpcDispatchersRegistered();
+    RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST).catch(console.error);
+  }
+
+  private broadcastRpc(type: string, payload: unknown): void {
+    this.ensureRpcDispatchersRegistered();
+    RPC.call(ALL_RPC_CHANNEL, { type, payload }, RPC.Mode.ALL).catch(console.error);
+  }
+
+  private registerHostRpcHandler(
+    type: string,
+    handler: (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown,
+  ): void {
+    this.hostRpcHandlers.set(type, handler);
+    this.ensureRpcDispatchersRegistered();
+  }
+
+  private registerAllRpcHandler(
+    type: string,
+    handler: (payload: unknown) => Promise<unknown> | unknown,
+  ): void {
+    this.allRpcHandlers.set(type, handler);
+    this.ensureRpcDispatchersRegistered();
+  }
+
+  private ensureRpcDispatchersRegistered(): void {
+    if (!this.hostDispatcherRegistered) {
+      this.hostDispatcherRegistered = true;
+      RPC.register(HOST_RPC_CHANNEL, async (data: unknown, caller: PlayerState): Promise<unknown> => {
+        const envelope = this.parseRpcEnvelope(data);
+        if (!envelope) return undefined;
+        const handler = this.hostRpcHandlers.get(envelope.type);
+        if (!handler) return undefined;
+        return await handler(envelope.payload, caller);
+      });
+    }
+
+    if (!this.allDispatcherRegistered) {
+      this.allDispatcherRegistered = true;
+      RPC.register(ALL_RPC_CHANNEL, async (data: unknown): Promise<unknown> => {
+        const envelope = this.parseRpcEnvelope(data);
+        if (!envelope) return undefined;
+        const handler = this.allRpcHandlers.get(envelope.type);
+        if (!handler) return undefined;
+        return await handler(envelope.payload);
+      });
+    }
+  }
+
+  private parseRpcEnvelope(data: unknown): RpcEnvelope | null {
+    if (!data || typeof data !== 'object') return null;
+    const envelope = data as Partial<RpcEnvelope>;
+    if (typeof envelope.type !== 'string') return null;
+    return { type: envelope.type, payload: envelope.payload };
+  }
+
+  private computeAvailableColors(): number[] {
+    if (this.knownPlayerColors.length === 0) return this.getAvailableColors();
+    const usedColors = new Set<number>();
+    for (const id of this.connectedPlayers.keys()) {
+      const color = this.getPlayerColor(id);
+      if (color !== undefined) usedColors.add(color);
+    }
+    return this.knownPlayerColors.filter(color => !usedColors.has(color));
+  }
+
+  private reconcileColorPool(): void {
+    if (!isHost()) return;
+    if (this.knownPlayerColors.length === 0) return;
+    this.setAvailableColors(this.computeAvailableColors());
   }
 
   // ── Interner Helfer: PlayerState → PlayerProfile ──────────────────────────
