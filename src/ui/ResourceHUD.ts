@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ADRENALINE_MAX, RAGE_MAX, DEPTH, COLORS } from '../config';
+import { ADRENALINE_MAX, RAGE_MAX, COLORS } from '../config';
 
 // ── Layout-Konstanten (linker Sidebar, x=0..240) ─────────────────────────────
 const BAR_X       = 20;    // Linke Kante der Balken
@@ -22,6 +22,7 @@ const COLOR_DASH_CD  = COLORS.GREEN_3;  // grau = Cooldown
 /**
  * Client-seitiges HUD für Adrenalin, Wut und Dash-Cooldown.
  * Zeichnet drei gestapelte Leisten im linken Sidebar-Bereich.
+ * Die GameObjects werden in den übergebenen Container eingefügt.
  */
 export class ResourceHUD {
   // Hintergründe (Gesamtbreite)
@@ -39,35 +40,24 @@ export class ResourceHUD {
   private rageLabel: Phaser.GameObjects.Text;
   private dashLabel: Phaser.GameObjects.Text;
 
-  constructor(private scene: Phaser.Scene) {
-    const depth = DEPTH.OVERLAY - 1;
-
+  constructor(private scene: Phaser.Scene, container: Phaser.GameObjects.Container) {
     // ── Adrenalin ──
     this.adrBg = scene.add.rectangle(BAR_X + BAR_W / 2, BAR_ADR_Y, BAR_W, BAR_H, COLOR_ADR_BG);
-    this.adrBg.setDepth(depth);
     this.adrFg = scene.add.rectangle(BAR_X, BAR_ADR_Y, BAR_W, BAR_H, COLOR_ADR_FG);
     this.adrFg.setOrigin(0, 0.5);
-    this.adrFg.setDepth(depth + 1);
     this.adrLabel = scene.add.text(BAR_X, BAR_ADR_Y - 14, 'ADRENALIN', LABEL_FONT);
-    this.adrLabel.setDepth(depth + 1);
 
     // ── Wut ──
     this.rageBg = scene.add.rectangle(BAR_X + BAR_W / 2, BAR_RAGE_Y, BAR_W, BAR_H, COLOR_RAGE_BG);
-    this.rageBg.setDepth(depth);
     this.rageFg = scene.add.rectangle(BAR_X, BAR_RAGE_Y, BAR_W, BAR_H, COLOR_RAGE_FG);
     this.rageFg.setOrigin(0, 0.5);
-    this.rageFg.setDepth(depth + 1);
     this.rageLabel = scene.add.text(BAR_X, BAR_RAGE_Y - 14, 'WUT', LABEL_FONT);
-    this.rageLabel.setDepth(depth + 1);
 
     // ── Dash-Cooldown ──
     this.dashBg = scene.add.rectangle(BAR_X + BAR_W / 2, BAR_DASH_Y, BAR_W, BAR_H, COLOR_DASH_BG);
-    this.dashBg.setDepth(depth);
     this.dashFg = scene.add.rectangle(BAR_X, BAR_DASH_Y, BAR_W, BAR_H, COLOR_DASH_RDY);
     this.dashFg.setOrigin(0, 0.5);
-    this.dashFg.setDepth(depth + 1);
     this.dashLabel = scene.add.text(BAR_X, BAR_DASH_Y - 14, 'DASH [SPACE]', LABEL_FONT);
-    this.dashLabel.setDepth(depth + 1);
 
     // Alle Hintergrund-Rechtecke linksausgerichtet
     this.adrBg.setOrigin(0, 0.5);
@@ -77,7 +67,12 @@ export class ResourceHUD {
     this.dashBg.setOrigin(0, 0.5);
     this.dashBg.setPosition(BAR_X, BAR_DASH_Y);
 
-    this.setVisible(false); // Initial ausgeblendet (Lobby)
+    // Alle Objects in den Container einfügen (Depth wird am Container gesetzt)
+    container.add([
+      this.adrBg, this.adrFg, this.adrLabel,
+      this.rageBg, this.rageFg, this.rageLabel,
+      this.dashBg, this.dashFg, this.dashLabel,
+    ]);
   }
 
   /**
@@ -101,18 +96,6 @@ export class ResourceHUD {
     this.dashFg.width = BAR_W * dashReadyFrac;
     const dashColor = dashCooldownFrac <= 0 ? COLOR_DASH_RDY : COLOR_DASH_CD;
     this.dashFg.setFillStyle(dashColor);
-  }
-
-  setVisible(visible: boolean): void {
-    this.adrBg.setVisible(visible);
-    this.adrFg.setVisible(visible);
-    this.adrLabel.setVisible(visible);
-    this.rageBg.setVisible(visible);
-    this.rageFg.setVisible(visible);
-    this.rageLabel.setVisible(visible);
-    this.dashBg.setVisible(visible);
-    this.dashFg.setVisible(visible);
-    this.dashLabel.setVisible(visible);
   }
 
   destroy(): void {

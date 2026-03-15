@@ -3,8 +3,15 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { LoadoutSlot }    from '../types';
-import type { UltimateConfig, WeaponConfig } from './LoadoutConfig';
+import type { UltimateConfig, UtilityConfig, WeaponConfig } from './LoadoutConfig';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
+
+export interface LoadoutSelection {
+  weapon1?:  WeaponConfig;
+  weapon2?:  WeaponConfig;
+  utility?:  UtilityConfig;
+  ultimate?: UltimateConfig;
+}
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
 import { GenericUltimate } from './GenericUltimate';
@@ -43,12 +50,15 @@ export class LoadoutManager {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  assignDefaultLoadout(playerId: string): void {
-    const ultCfg = ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
+  assignDefaultLoadout(playerId: string, selection?: LoadoutSelection): void {
+    const w1Cfg  = selection?.weapon1  ?? WEAPON_CONFIGS.GLOCK;
+    const w2Cfg  = selection?.weapon2  ?? WEAPON_CONFIGS.P90;
+    const utCfg  = selection?.utility  ?? UTILITY_CONFIGS.HE_GRENADE;
+    const ultCfg = selection?.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
     this.loadouts.set(playerId, {
-      weapon1:  new GenericWeapon(WEAPON_CONFIGS.GLOCK),
-      weapon2:  new GenericWeapon(WEAPON_CONFIGS.P90),
-      utility:  new GenericUtility(UTILITY_CONFIGS.HE_GRENADE),
+      weapon1:  new GenericWeapon(w1Cfg),
+      weapon2:  new GenericWeapon(w2Cfg),
+      utility:  new GenericUtility(utCfg),
       ultimate: new GenericUltimate(ultCfg),
     });
     this.ultimateStates.set(playerId, {
@@ -102,6 +112,7 @@ export class LoadoutManager {
           maxBounces:    0,
           isGrenade:     true,
           adrenalinGain: 0,              // Granaten geben kein Adrenalin
+          weaponName:    cfg.id,
           fuseTime:      cfg.fuseTime,
           aoeRadius:     cfg.aoeRadius,
           aoeDamage:     cfg.aoeDamage,
@@ -245,6 +256,7 @@ export class LoadoutManager {
       maxBounces:    cfg.projectileMaxBounces,
       isGrenade:     false,
       adrenalinGain: cfg.adrenalinGain,
+      weaponName:    cfg.id,
     });
 
     // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen

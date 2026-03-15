@@ -95,7 +95,6 @@ export const PLAYER_SPEED = 200;
 
 // ---- Combat ----
 export const HP_MAX           = 100;
-export const DAMAGE_PER_HIT   = 10;
 export const RESPAWN_DELAY_MS = 1000;
 
 // ---- HP-Balken ----
@@ -105,12 +104,6 @@ export const HP_BAR_OFFSET_Y = 24;              // Pixel unter Sprite-Mittelpunk
 
 // ---- Effekt-Layer (über Baumkronen) ----
 export const DEPTH_FX = 25;
-
-// ---- Projectile ----
-export const PROJECTILE_SIZE = 6;
-export const PROJECTILE_SPEED = 400;
-export const PROJECTILE_LIFETIME_MS = 3000;
-export const PROJECTILE_MAX_BOUNCES = 10;
 
 // ---- Prozedurales Arena-Grid ----
 export const CELL_SIZE           = 48;
@@ -142,9 +135,9 @@ export const RAGE_MAX                  = 300;
 export const RAGE_PER_DAMAGE           = 1;    // Wut pro Schadenspunkt
 
 // ---- Dash ----
-export const DASH_SPEED                = 800;  // px/s
-export const DASH_DURATION_MS          = 150;  // Dauer der Geschwindigkeitsüberschreibung
-export const DASH_COOLDOWN_MS          = 1000;
+export const DASH_SPEED                = 600;  // px/s
+export const DASH_DURATION_MS          = 75;  // Dauer der Geschwindigkeitsüberschreibung
+export const DASH_COOLDOWN_MS          = 500;
 
 // ---- Burrow ----
 export const BURROW_SPEED_FACTOR       = 0.4;       // Faktor * PLAYER_SPEED
@@ -157,6 +150,16 @@ export const SHOCKWAVE_RADIUS          = 150;   // px
 export const SHOCKWAVE_DAMAGE          = 30;
 export const SHOCKWAVE_KNOCKBACK       = 400;   // px/s Impuls
 export const SELF_STUN_DURATION_MS     = 1000;
+
+// ---- Spielerfarben (12 auswählbare, einzigartige Farben) ----
+export const PLAYER_COLORS: readonly number[] = [
+  COLORS.BLUE_2,   COLORS.BLUE_5,
+  COLORS.GREEN_2,  COLORS.GREEN_5,
+  COLORS.BROWN_2,  COLORS.BROWN_5,
+  COLORS.GOLD_2,   COLORS.GOLD_5,
+  COLORS.RED_2,    COLORS.RED_5,
+  COLORS.PURPLE_2, COLORS.PURPLE_5,
+] as const;
 
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;

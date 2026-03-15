@@ -39,14 +39,14 @@ export class InputSystem {
 
   setup(): void {
     const kb = this.scene.input.keyboard!;
-    this.keyW     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.keyA     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keyS     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.keyD     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keyW     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.W, false);
+    this.keyA     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.A, false);
+    this.keyS     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.S, false);
+    this.keyD     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.D, false);
     this.keySpace = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyShift = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
-    this.keyE     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+    this.keyE     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E, false);
+    this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
 
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
@@ -126,10 +126,8 @@ export class InputSystem {
       // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
       if (pointer.leftButtonDown()) {
         this.onLoadoutUse('weapon1', angle, px, py);
-      }
-
-      // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
-      if (pointer.rightButtonDown()) {
+      } else if (pointer.rightButtonDown()) {
+        // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
         this.onLoadoutUse('weapon2', angle, px, py);
       }
 

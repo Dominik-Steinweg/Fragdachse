@@ -61,7 +61,7 @@ export const WEAPON_CONFIGS = {
   GLOCK: {
     id:                   'GLOCK',
     cooldown:             150,
-    damage:               15,
+    damage:               10,
     projectileSpeed:      700,
     projectileSize:       5,
     range:                400,        
@@ -82,7 +82,7 @@ export const WEAPON_CONFIGS = {
   USP: {
     id:                   'USP',
     cooldown:             250,
-    damage:               20,
+    damage:               14,
     projectileSpeed:      1000,
     projectileSize:       5,
     range:                600,        
@@ -110,7 +110,7 @@ export const WEAPON_CONFIGS = {
   P90: {
     id:                   'P90',
     cooldown:             80,
-    damage:               10,
+    damage:               7,
     projectileSpeed:      800,
     projectileSize:       3,
     range:                500,        
@@ -131,7 +131,7 @@ export const WEAPON_CONFIGS = {
   AK47: {
     id:                   'AK47',
     cooldown:             100,
-    damage:               20,
+    damage:               14,
     projectileSpeed:      1000,
     projectileSize:       4,
     range:                1000,        

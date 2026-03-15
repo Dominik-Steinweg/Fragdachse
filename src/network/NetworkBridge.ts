@@ -14,18 +14,46 @@ import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, Game
 import { MAX_PLAYERS } from '../config';
 
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
-const KEY_INPUT       = 'inp';
-const KEY_PLAYERS     = 'plr';
-const KEY_PROJECTILES = 'prj';
-const KEY_READY       = 'isr';   // per-player boolean: isReady
-const KEY_NAME        = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
-const KEY_GAME_PHASE  = 'gph';   // global: 'LOBBY' | 'ARENA'
-const KEY_ROUND_END   = 'ret';   // global: number (timestamp ms)
+const KEY_INPUT        = 'inp';
+const KEY_PLAYERS      = 'plr';
+const KEY_PROJECTILES  = 'prj';
+const KEY_READY        = 'isr';   // per-player boolean: isReady
+const KEY_NAME         = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
+const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
+const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
 const KEY_ARENA_LAYOUT = 'aly';   // global: ArenaLayout (reliable, einmalig pro Runde)
 const KEY_ROCK_HP      = 'rck';   // global: RockNetState[] (unreliable, Delta-Snapshot)
+const KEY_AVAIL_COLORS = 'avc';   // global: number[] (verfügbarer Farbpool, reliable)
+const KEY_PLAYER_COLOR = 'clr';   // per-player: number (benutzerdefinierte Spielerfarbe)
+const KEY_LOADOUT_W1   = 'lw1';   // per-player: string (weapon1 item ID)
+const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
+const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
+const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
+const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
+const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
+
+/** Kill-Ereignis für den Killfeed (Host → Alle per RPC) */
+export interface KillEvent {
+  killerId:    string;
+  killerName:  string;
+  killerColor: number;
+  weapon:      string;
+  victimId:    string;
+  victimName:  string;
+  victimColor: number;
+}
+
+/** Rundenabschluss-Snapshot eines Spielers */
+export interface RoundResult {
+  id:       string;
+  name:     string;
+  colorHex: number;
+  frags:    number;
+}
+
 export interface GameState {
   players:     Record<string, PlayerNetState>;
   projectiles: SyncedProjectile[];
@@ -326,17 +354,229 @@ export class NetworkBridge {
     });
   }
 
+  // ── Farbpool: Host → Alle (global, reliable) ─────────────────────────────
+
+  /**
+   * Host-only: Initialisiert den Farbpool falls noch nicht vorhanden.
+   * Nur beim allerersten Start gesetzt, damit Reconnects bestehende Farben erhalten.
+   */
+  initColorPool(allColors: readonly number[]): void {
+    if (!isHost()) return;
+    const existing = getState(KEY_AVAIL_COLORS) as number[] | undefined;
+    if (!existing) {
+      setState(KEY_AVAIL_COLORS, [...allColors], true);
+    }
+  }
+
+  /** Liest den aktuellen Farbpool (kann von allen Clients gelesen werden). */
+  getAvailableColors(): number[] {
+    return (getState(KEY_AVAIL_COLORS) as number[] | undefined) ?? [];
+  }
+
+  /** Host-only: Überschreibt den Farbpool. */
+  setAvailableColors(colors: number[]): void {
+    setState(KEY_AVAIL_COLORS, colors, true);
+  }
+
+  // ── Spielerfarbe: pro Spieler ─────────────────────────────────────────────
+
+  /** Liest die benutzerdefinierte Farbe eines Spielers (undefined = noch keine). */
+  getPlayerColor(playerId: string): number | undefined {
+    return this.playerStateMap.get(playerId)?.getState(KEY_PLAYER_COLOR) as number | undefined;
+  }
+
+  /**
+   * Host-only: Weist einem Spieler automatisch eine zufällige verfügbare Farbe zu
+   * und aktualisiert den Farbpool. Kein-Op wenn Spieler bereits eine Farbe hat.
+   */
+  hostAssignColor(playerId: string): void {
+    if (!isHost()) return;
+    if (this.getPlayerColor(playerId) !== undefined) return;
+    const available = this.getAvailableColors();
+    if (available.length === 0) return;
+    const idx   = Math.floor(Math.random() * available.length);
+    const color = available[idx];
+    this.setAvailableColors(available.filter((_, i) => i !== idx));
+    this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_COLOR, color);
+    this.broadcastColorChange(playerId, color);
+  }
+
+  /**
+   * Host-only: Gibt die Farbe eines Spielers bei Disconnect zurück in den Pool.
+   */
+  hostReclaimColor(playerId: string): void {
+    if (!isHost()) return;
+    const color = this.getPlayerColor(playerId);
+    if (color === undefined) return;
+    const available = this.getAvailableColors();
+    if (!available.includes(color)) {
+      this.setAvailableColors([...available, color]);
+    }
+  }
+
+  /**
+   * Host-only: Verarbeitet eine Farbwechsel-Anfrage eines Clients.
+   * Gibt Farbe frei/reserviert und broadcastet das Ergebnis.
+   */
+  hostHandleColorRequest(requestedColor: number, requesterId: string): void {
+    if (!isHost()) return;
+    const available = this.getAvailableColors();
+    if (available.includes(requestedColor)) {
+      const oldColor  = this.getPlayerColor(requesterId);
+      const newPool   = available.filter(c => c !== requestedColor);
+      if (oldColor !== undefined && !newPool.includes(oldColor)) newPool.push(oldColor);
+      this.setAvailableColors(newPool);
+      this.playerStateMap.get(requesterId)?.setState(KEY_PLAYER_COLOR, requestedColor);
+      this.broadcastColorAccepted(requesterId, requestedColor);
+    } else {
+      this.broadcastColorDenied(requesterId);
+    }
+  }
+
+  // ── Farb-RPCs ─────────────────────────────────────────────────────────────
+
+  /** Client → Host: Farbwechsel-Anfrage. */
+  sendColorRequest(color: number): void {
+    RPC.call('crq', { c: color }, RPC.Mode.HOST).catch(console.error);
+  }
+
+  /** Host-only: Empfänger für Farbwechsel-Anfragen. */
+  registerColorRequestHandler(
+    handler: (requestedColor: number, requesterId: string) => void,
+  ): void {
+    RPC.register('crq', async (data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return undefined;
+      handler((data as { c: number }).c, caller.id);
+      return undefined;
+    });
+  }
+
+  /** Host → Alle: Farbwechsel akzeptiert (alle Clients zeigen neue Farbe). */
+  broadcastColorAccepted(requesterId: string, color: number): void {
+    RPC.call('cac', { id: requesterId, c: color }, RPC.Mode.ALL).catch(console.error);
+  }
+
+  registerColorAcceptedHandler(
+    handler: (requesterId: string, color: number) => void,
+  ): void {
+    RPC.register('cac', async (data: unknown): Promise<unknown> => {
+      const { id, c } = data as { id: string; c: number };
+      handler(id, c);
+      return undefined;
+    });
+  }
+
+  /** Host → Alle: Farbwechsel abgelehnt (nur Requester zeigt Feedback). */
+  broadcastColorDenied(requesterId: string): void {
+    RPC.call('cdnd', { id: requesterId }, RPC.Mode.ALL).catch(console.error);
+  }
+
+  registerColorDeniedHandler(handler: (requesterId: string) => void): void {
+    RPC.register('cdnd', async (data: unknown): Promise<unknown> => {
+      handler((data as { id: string }).id);
+      return undefined;
+    });
+  }
+
+  /** Host → Alle: Farbzuweisung (auto-assign beim Join). */
+  broadcastColorChange(playerId: string, color: number): void {
+    RPC.call('cch', { id: playerId, c: color }, RPC.Mode.ALL).catch(console.error);
+  }
+
+  registerColorChangeHandler(
+    handler: (playerId: string, color: number) => void,
+  ): void {
+    RPC.register('cch', async (data: unknown): Promise<unknown> => {
+      const { id, c } = data as { id: string; c: number };
+      handler(id, c);
+      return undefined;
+    });
+  }
+
+  // ── Loadout-Auswahl: pro Spieler (per-player, reliable) ──────────────────
+
+  /** Setzt die Loadout-Auswahl für einen Slot lokal (reliable). */
+  setLocalLoadoutSlot(slot: LoadoutSlot, itemId: string): void {
+    const key = { weapon1: KEY_LOADOUT_W1, weapon2: KEY_LOADOUT_W2, utility: KEY_LOADOUT_UT, ultimate: KEY_LOADOUT_UL }[slot];
+    myPlayer().setState(key, itemId, true);
+  }
+
+  /** Liest die Loadout-Auswahl eines Spielers für einen Slot. */
+  getPlayerLoadoutSlot(playerId: string, slot: LoadoutSlot): string | undefined {
+    const key = { weapon1: KEY_LOADOUT_W1, weapon2: KEY_LOADOUT_W2, utility: KEY_LOADOUT_UT, ultimate: KEY_LOADOUT_UL }[slot];
+    return this.playerStateMap.get(playerId)?.getState(key) as string | undefined;
+  }
+
+  // ── Frag-Tracking: pro Spieler (per-player state) ────────────────────────
+
+  /** Liest den Frag-Zähler eines Spielers (Standard: 0). */
+  getPlayerFrags(playerId: string): number {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_FRAGS) as number | undefined) ?? 0;
+  }
+
+  /** Host-only: Erhöht den Frag-Zähler eines Spielers um 1. */
+  incrementPlayerFrags(killerId: string): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(killerId);
+    if (!ps) return;
+    const current = (ps.getState(KEY_FRAGS) as number | undefined) ?? 0;
+    ps.setState(KEY_FRAGS, current + 1);
+  }
+
+  /** Host-only: Setzt die Frags aller verbundenen Spieler auf 0 zurück. */
+  resetAllFrags(): void {
+    if (!isHost()) return;
+    for (const ps of this.playerStateMap.values()) {
+      ps.setState(KEY_FRAGS, 0);
+    }
+  }
+
+  // ── Rundenabschluss-Snapshot: Host → Alle (global, reliable) ─────────────
+
+  /** Host-only: Speichert den Endstand der Runde für die Lobby-Anzeige. */
+  publishRoundResults(results: RoundResult[]): void {
+    setState(KEY_ROUND_RESULTS, results, true);
+  }
+
+  /** Liest den gespeicherten Endstand (null = noch keine Runde gespielt). */
+  getRoundResults(): RoundResult[] | null {
+    return (getState(KEY_ROUND_RESULTS) as RoundResult[] | undefined) ?? null;
+  }
+
+  // ── Kill-Ereignis-RPC: Host → Alle ────────────────────────────────────────
+
+  /** Host-only: Sendet ein Kill-Ereignis an alle Clients (inkl. Host selbst). */
+  broadcastKillEvent(event: KillEvent): void {
+    RPC.call('kev', event, RPC.Mode.ALL).catch(console.error);
+  }
+
+  /** Registriert einen Handler für eingehende Kill-Ereignisse (alle Clients). */
+  registerKillEventHandler(cb: (event: KillEvent) => void): void {
+    RPC.register('kev', async (data: unknown): Promise<unknown> => {
+      cb(data as KillEvent);
+      return undefined;
+    });
+  }
+
   // ── Interner Helfer: PlayerState → PlayerProfile ──────────────────────────
   private extractProfile(state: PlayerState): PlayerProfile {
-    const profile   = state.getProfile();
-    const rawHex    = (profile.color as unknown as Record<string, unknown> | undefined)?.hex ?? '#ffffff';
-    const colorNum  = parseInt(String(rawHex).replace('#', ''), 16);
-    // KEY_NAME hat Vorrang vor dem Playroom-Profil-Namen (Late-Joiner-Fix)
-    const stateName = state.getState(KEY_NAME) as string | undefined;
+    const profile    = state.getProfile();
+    const stateName  = state.getState(KEY_NAME)         as string | undefined;
+    const stateColor = state.getState(KEY_PLAYER_COLOR) as number | undefined;
+
+    let colorHex: number;
+    if (stateColor !== undefined) {
+      colorHex = stateColor;
+    } else {
+      const rawHex = (profile.color as unknown as Record<string, unknown> | undefined)?.hex ?? '#ffffff';
+      const parsed = parseInt(String(rawHex).replace('#', ''), 16);
+      colorHex = isNaN(parsed) ? 0xffffff : parsed;
+    }
+
     return {
       id:       state.id,
       name:     stateName || profile.name || 'Player',
-      colorHex: isNaN(colorNum) ? 0xffffff : colorNum,
+      colorHex,
     };
   }
 }

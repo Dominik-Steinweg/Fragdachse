@@ -12,21 +12,20 @@ import { CombatSystem }        from '../systems/CombatSystem';
 import { ResourceSystem }      from '../systems/ResourceSystem';
 import { BurrowSystem }        from '../systems/BurrowSystem';
 import { LoadoutManager }      from '../loadout/LoadoutManager';
-import { WEAPON_CONFIGS }      from '../loadout/LoadoutConfig';
+import type { LoadoutSelection } from '../loadout/LoadoutManager';
+import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import type { WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
-import { ResourceHUD }         from '../ui/ResourceHUD';
+import { LeftSidePanel }       from '../ui/LeftSidePanel';
+import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem }           from '../ui/AimSystem';
 import { LobbyOverlay }        from './LobbyOverlay';
 import type { PlayerNetState, GamePhase, PlayerProfile } from '../types';
+import type { RoundResult } from '../network/NetworkBridge';
 import {
-  GAME_WIDTH, ARENA_DURATION_SEC,
+  ARENA_DURATION_SEC, PLAYER_COLORS,
 } from '../config';
 
-// ── HUD-Konstanten ────────────────────────────────────────────────────────────
-const HUD_Y               = 28;
-const TIMER_COLOR_NORMAL  = '#e0e0e0';
-const TIMER_COLOR_WARNING = '#ff4444';
 
 export class ArenaScene extends Phaser.Scene {
   private playerManager!:     PlayerManager;
@@ -38,9 +37,9 @@ export class ArenaScene extends Phaser.Scene {
   private lobbyOverlay!:      LobbyOverlay;
 
   // ── HUD / Aim ─────────────────────────────────────────────────────────────
-  private timerText!: Phaser.GameObjects.Text;
-  private resourceHUD: ResourceHUD | null = null;
-  private aimSystem:   AimSystem   | null = null;
+  private leftPanel!:  LeftSidePanel;
+  private rightPanel!: RightSidePanel;
+  private aimSystem:   AimSystem | null = null;
 
   // Alive/Burrowed-Flags des lokalen Spielers (gesetzt in runHostUpdate/runClientUpdate)
   private localPlayerAlive    = false;
@@ -125,8 +124,9 @@ export class ArenaScene extends Phaser.Scene {
       bridge.sendLoadoutUse(slot, angle, targetX, targetY);
     });
 
-    // ── 8. Ressourcen-HUD ─────────────────────────────────────────────────
-    this.resourceHUD = new ResourceHUD(this);
+    // ── 8. Left Side Panel (Namensanzeige + ResourceHUD) ──────────────────
+    this.leftPanel = new LeftSidePanel(this, bridge);
+    this.leftPanel.build();
 
     // ── 8b. Aim-System (rein clientseitig) ────────────────────────────────
     // getWeaponConfig: Auf dem Host liest LoadoutManager die tatsächlich ausgerüstete
@@ -167,12 +167,45 @@ export class ArenaScene extends Phaser.Scene {
       this.effectSystem.playShockwaveEffect(x, y);
     });
 
-    // ── 13. Netzwerk-Callbacks ────────────────────────────────────────────
+    // ── 13. Farb-System ───────────────────────────────────────────────────
+    if (bridge.isHost()) {
+      bridge.initColorPool(PLAYER_COLORS);
+    }
+    bridge.registerColorRequestHandler((color, id) => {
+      bridge.hostHandleColorRequest(color, id);
+    });
+    bridge.registerColorAcceptedHandler((id, _color) => {
+      if (id === bridge.getLocalPlayerId()) {
+        this.leftPanel.onColorAccepted();
+      }
+      this.leftPanel.refreshColorPickerIfOpen();
+    });
+    bridge.registerColorDeniedHandler((id) => {
+      if (id === bridge.getLocalPlayerId()) {
+        this.leftPanel.onColorDenied();
+      }
+    });
+    bridge.registerColorChangeHandler((_id, _color) => {
+      // Player-State-Sync via Playroom; Indikator wird im Lobby-Update-Loop aktualisiert.
+      this.leftPanel.refreshColorPickerIfOpen();
+    });
+
+    // ── 14. Netzwerk-Callbacks (Join/Quit) ────────────────────────────────
     bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
 
-    // ── 14. HUD erstellen ─────────────────────────────────────────────────
-    this.createHUD();
+    // ── 14. Right Side Panel (Timer, Killfeed, Leaderboard) ───────────────
+    this.rightPanel = new RightSidePanel(this);
+    this.rightPanel.build();
+
+    // Kill-Ereignis-Handler: alle Clients (inkl. Host) aktualisieren den Killfeed
+    bridge.registerKillEventHandler(event => {
+      this.rightPanel.addKillFeedEntry(
+        event.killerName, event.killerColor,
+        event.weapon,
+        event.victimName, event.victimColor,
+      );
+    });
 
     // ── 15. Lobby-Overlay erstellen und anzeigen ──────────────────────────
     this.lobbyOverlay = new LobbyOverlay(this, bridge, () => this.onReadyToggled());
@@ -189,11 +222,12 @@ export class ArenaScene extends Phaser.Scene {
 
   // ── Netzwerk-Events ───────────────────────────────────────────────────────
 
-  private onPlayerJoined(_profile: PlayerProfile): void {
-    // Nur protokollieren – kein Entity-Spawn. Spawn erfolgt wenn isReady === true.
+  private onPlayerJoined(profile: PlayerProfile): void {
+    if (bridge.isHost()) bridge.hostAssignColor(profile.id);
   }
 
   private onPlayerLeft(id: string): void {
+    if (bridge.isHost()) bridge.hostReclaimColor(id);
     if (this.playerManager.hasPlayer(id)) {
       if (bridge.isHost()) {
         this.combatSystem.removePlayer(id);
@@ -228,6 +262,8 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.tearDownArena();
+    this.leftPanel.transitionToLobby();
+    this.rightPanel.transitionToLobby();
 
     if (bridge.isHost()) {
       bridge.setGamePhase('LOBBY');
@@ -278,12 +314,13 @@ export class ArenaScene extends Phaser.Scene {
           this.combatSystem.initPlayer(profile.id);
           this.resourceSystem?.initPlayer(profile.id);
           this.burrowSystem?.initPlayer(profile.id);
-          this.loadoutManager?.assignDefaultLoadout(profile.id);
+          this.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
         }
       }
     }
 
-    this.resourceHUD?.setVisible(true);
+    this.leftPanel.transitionToGame();
+    this.rightPanel.transitionToGame();
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
   }
@@ -305,9 +342,22 @@ export class ArenaScene extends Phaser.Scene {
 
     this.tearDownArena();
 
-    this.resourceHUD?.setVisible(false);
+    this.leftPanel.transitionToLobby();
+    this.rightPanel.transitionToLobby();
+    this.rightPanel.showRoundResults(bridge.getRoundResults());
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
+  }
+
+  private hostSaveRoundResults(): void {
+    if (!bridge.isHost()) return;
+    const results: RoundResult[] = bridge.getConnectedPlayers().map(p => ({
+      id:       p.id,
+      name:     p.name,
+      colorHex: p.colorHex,
+      frags:    bridge.getPlayerFrags(p.id),
+    }));
+    bridge.publishRoundResults(results);
   }
 
   private hostCheckReadyToStart(): void {
@@ -315,6 +365,7 @@ export class ArenaScene extends Phaser.Scene {
     this.roundStartPending = true;
     this.lobbyOverlay.lockButton();
     bridge.setMatchHostId();
+    bridge.resetAllFrags();
     const layout = ArenaGenerator.generate(Date.now());
     bridge.publishArenaLayout(layout);
     bridge.setRoundEndTime(Date.now() + ARENA_DURATION_SEC * 1000);
@@ -329,9 +380,22 @@ export class ArenaScene extends Phaser.Scene {
         this.combatSystem.initPlayer(profile.id);
         this.resourceSystem?.initPlayer(profile.id);
         this.burrowSystem?.initPlayer(profile.id);
-        this.loadoutManager?.assignDefaultLoadout(profile.id);
+        this.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
       }
     }
+  }
+
+  private resolveLoadoutSelection(playerId: string): LoadoutSelection {
+    const w1Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon1');
+    const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
+    const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
+    const ulId = bridge.getPlayerLoadoutSlot(playerId, 'ultimate');
+    return {
+      weapon1:  w1Id ? WEAPON_CONFIGS[w1Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
+      weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
+      utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
+      ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
+    };
   }
 
   // ── Arena Aufbau / Teardown ───────────────────────────────────────────────
@@ -390,6 +454,25 @@ export class ArenaScene extends Phaser.Scene {
         this.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
       });
 
+      // Kill-Callback: Frags erhöhen + Kill-Ereignis broadcasten
+      this.combatSystem.setKillCallback((killerId, victimId, weapon) => {
+        bridge.incrementPlayerFrags(killerId);
+        const allPlayers    = bridge.getConnectedPlayers();
+        const killerProfile = allPlayers.find(p => p.id === killerId);
+        const victimProfile  = allPlayers.find(p => p.id === victimId);
+        if (killerProfile && victimProfile) {
+          bridge.broadcastKillEvent({
+            killerId,
+            killerName:  killerProfile.name,
+            killerColor: killerProfile.colorHex,
+            weapon,
+            victimId,
+            victimName:  victimProfile.name,
+            victimColor: victimProfile.colorHex,
+          });
+        }
+      });
+
       // RockRegistry nur auf dem Host
       this.rockRegistry = new RockRegistry(layout);
       const arenaResult  = this.arenaResult;
@@ -418,30 +501,11 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setBurrowSystem(null);
     this.combatSystem.setResourceSystem(null);
     this.combatSystem.setLoadoutManager(null);
+    this.combatSystem.setKillCallback(() => {});
     this.hostPhysics.setBurrowSystem(null);
     this.hostPhysics.setLoadoutManager(null);
     this.projectileManager.setRockGroup(null, null, null);
     this.hostPhysics.setRockGroup(null, null);
-  }
-
-  // ── HUD ──────────────────────────────────────────────────────────────────
-
-  private createHUD(): void {
-    this.add.rectangle(GAME_WIDTH / 2, HUD_Y, 200, 44, 0x000000, 0.2).setDepth(50).setScrollFactor(0);
-    this.timerText = this.add.text(GAME_WIDTH / 2, HUD_Y, '2:00', {
-      fontSize:   '32px',
-      fontFamily: 'monospace',
-      color:      TIMER_COLOR_NORMAL,
-      fontStyle:  'bold',
-    }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-  }
-
-  private updateTimerDisplay(secs: number): void {
-    const mm  = Math.floor(secs / 60);
-    const ss  = secs % 60;
-    const str = `${mm}:${ss.toString().padStart(2, '0')}`;
-    this.timerText.setText(str);
-    this.timerText.setColor(secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL);
   }
 
   // ── Update ───────────────────────────────────────────────────────────────
@@ -467,7 +531,12 @@ export class ArenaScene extends Phaser.Scene {
 
     if (!this.matchTerminated && phase === 'LOBBY') {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
-      this.lobbyOverlay.refreshPlayerList(bridge.getConnectedPlayers());
+      const players = bridge.getConnectedPlayers();
+      this.lobbyOverlay.refreshPlayerList(players);
+      const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
+      if (localProfile) this.leftPanel.updateLocalName(localProfile.name);
+      this.leftPanel.refreshColorIndicator();
+      this.leftPanel.refreshColorPickerIfOpen();
       if (bridge.isHost()) this.hostCheckReadyToStart();
     } else if (!this.matchTerminated && this.lobbyOverlay.isVisible()) {
       this.lobbyOverlay.hide();
@@ -475,15 +544,24 @@ export class ArenaScene extends Phaser.Scene {
 
     if (phase === 'ARENA' && !this.matchTerminated) {
       const secs = bridge.computeSecondsLeft();
-      this.updateTimerDisplay(secs);
+      this.rightPanel.updateTimer(secs);
 
       if (bridge.isHost()) {
         this.spawnReadyPlayers();
         this.runHostUpdate(delta);
-        if (secs <= 0) bridge.setGamePhase('LOBBY');
+        if (secs <= 0) {
+          this.hostSaveRoundResults();
+          bridge.setGamePhase('LOBBY');
+        }
       } else {
         this.runClientUpdate();
       }
+
+      // Leaderboard mit aktuellen Frags aktualisieren (alle Clients)
+      const leaderboardEntries = bridge.getConnectedPlayers()
+        .map(p => ({ name: p.name, colorHex: p.colorHex, frags: bridge.getPlayerFrags(p.id) }))
+        .sort((a, b) => b.frags - a.frags);
+      this.rightPanel.updateLeaderboard(leaderboardEntries);
 
       if (this.arenaResult) {
         const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite ?? null;
@@ -545,7 +623,7 @@ export class ArenaScene extends Phaser.Scene {
     if (players[localId]) {
       const ls = players[localId];
       this.inputSystem.setLocalState(ls.isStunned, ls.isBurrowed);
-      this.resourceHUD?.update(ls.adrenaline, ls.rage, this.inputSystem.getDashCooldownFrac());
+      this.leftPanel.updateResources(ls.adrenaline, ls.rage, this.inputSystem.getDashCooldownFrac());
       this.localPlayerAlive    = ls.alive;
       this.localPlayerBurrowed = ls.isBurrowed;
     }
@@ -597,7 +675,7 @@ export class ArenaScene extends Phaser.Scene {
     const localState = state.players[localId];
     if (localState) {
       this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);
-      this.resourceHUD?.update(
+      this.leftPanel.updateResources(
         localState.adrenaline,
         localState.rage,
         this.inputSystem.getDashCooldownFrac(),

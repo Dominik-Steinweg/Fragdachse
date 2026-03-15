@@ -18,6 +18,13 @@ export class CombatSystem {
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
 
+  // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
+  private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
+  private lastWeapon:   Map<string, string> = new Map();  // victimId → weaponName
+
+  // Callback: (killerId, victimId, weaponName) – Host-only
+  private onKillCb: ((killerId: string, victimId: string, weapon: string) => void) | null = null;
+
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:   BurrowSystemType   | null  = null;
   private resourceSystem: ResourceSystem     | null  = null;
@@ -35,16 +42,25 @@ export class CombatSystem {
   setResourceSystem(rs: ResourceSystem | null): void     { this.resourceSystem = rs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void { this.loadoutManager = lm; }
 
+  /** Setzt den Kill-Callback (Host-only). */
+  setKillCallback(cb: (killerId: string, victimId: string, weapon: string) => void): void {
+    this.onKillCb = cb;
+  }
+
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
   initPlayer(id: string): void {
     this.hp.set(id, HP_MAX);
     this.alive.set(id, true);
+    this.lastAttacker.delete(id);
+    this.lastWeapon.delete(id);
   }
 
   removePlayer(id: string): void {
     this.hp.delete(id);
     this.alive.delete(id);
+    this.lastAttacker.delete(id);
+    this.lastWeapon.delete(id);
     const t = this.respawnTimers.get(id);
     if (t) { clearTimeout(t); this.respawnTimers.delete(id); }
   }
@@ -59,10 +75,23 @@ export class CombatSystem {
   /**
    * Fügt einem Spieler Schaden zu. Burrowed-Spieler sind unverwundbar
    * (Ausnahme: Stuck-Schaden über skipBurrowCheck=true).
+   * attackerId/weaponName werden für die Kill-Zuordnung getrackt.
    */
-  applyDamage(targetId: string, amount: number, skipBurrowCheck = false): void {
+  applyDamage(
+    targetId:        string,
+    amount:          number,
+    skipBurrowCheck  = false,
+    attackerId?:     string,
+    weaponName?:     string,
+  ): void {
     if (!this.isAlive(targetId)) return;
     if (!skipBurrowCheck && this.burrowSystem?.isBurrowed(targetId)) return;
+
+    // Letzten Angreifer tracken (Selbstschaden ausgenommen)
+    if (attackerId && attackerId !== targetId) {
+      this.lastAttacker.set(targetId, attackerId);
+      if (weaponName) this.lastWeapon.set(targetId, weaponName);
+    }
 
     const player = this.playerManager.getPlayer(targetId);
     const x = player?.sprite.x ?? 0;
@@ -89,7 +118,7 @@ export class CombatSystem {
       if (!this.isAlive(player.id)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
       if (dist <= radius) {
-        this.applyDamage(player.id, damage, false);
+        this.applyDamage(player.id, damage, false, ownerId, 'Granate');
       }
     }
   }
@@ -117,7 +146,7 @@ export class CombatSystem {
           // Damage-Multiplier des Schützen (Ultimate)
           const multiplier   = this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1;
           const actualDamage = proj.damage * multiplier;
-          this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain);
+          this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
           break;  // Projektil trifft maximal einen Spieler pro Frame
         }
       }
@@ -132,9 +161,10 @@ export class CombatSystem {
     damage:        number,
     shooterId:     string,
     adrenalinGain: number,
+    weaponName:    string,
   ): void {
     this.projectileManager.destroyProjectile(projectileId);
-    this.applyDamage(playerId, damage, true);  // skipBurrowCheck: Check bereits oben
+    this.applyDamage(playerId, damage, true, shooterId, weaponName);
 
     // Adrenalin-Belohnung für den Schützen
     if (adrenalinGain > 0) {
@@ -150,6 +180,13 @@ export class CombatSystem {
 
     this.bridge.broadcastEffect('death', x, y);
 
+    // Kill-Callback auslösen (Host-only, kein Selbstkill)
+    const killerId = this.lastAttacker.get(playerId);
+    if (killerId && killerId !== playerId) {
+      const weapon = this.lastWeapon.get(playerId) ?? 'Waffe';
+      this.onKillCb?.(killerId, playerId, weapon);
+    }
+
     const timer = setTimeout(() => this.respawn(playerId), RESPAWN_DELAY_MS);
     this.respawnTimers.set(playerId, timer);
   }
@@ -158,6 +195,8 @@ export class CombatSystem {
     this.hp.set(playerId, HP_MAX);
     this.alive.set(playerId, true);
     this.respawnTimers.delete(playerId);
+    this.lastAttacker.delete(playerId);
+    this.lastWeapon.delete(playerId);
 
     this.resourceSystem?.setAdrenaline(playerId, ADRENALINE_START);
 

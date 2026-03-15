@@ -51,6 +51,7 @@ export interface ProjectileSpawnConfig {
   maxBounces:    number;        // 0 für Granaten
   isGrenade:     boolean;
   adrenalinGain: number;        // Adrenalin-Gewinn für den Schützen bei Treffer
+  weaponName?:   string;        // Waffenname für Killfeed
   fuseTime?:     number;        // ms bis AoE-Explosion (nur Granaten)
   aoeRadius?:    number;        // px AoE-Radius
   aoeDamage?:    number;        // HP-Schaden im AoE-Radius
@@ -80,6 +81,7 @@ export interface TrackedProjectile {
   maxBounces:     number;        // maximale Abpraller
   isGrenade:      boolean;
   adrenalinGain:  number;        // Adrenalin-Gewinn für den Schützen bei Treffer
+  weaponName:     string;        // Waffenname für Killfeed
   fuseTime?:      number;
   aoeRadius?:     number;
   aoeDamage?:     number;
