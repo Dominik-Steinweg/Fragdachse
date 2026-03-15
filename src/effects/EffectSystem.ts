@@ -9,9 +9,14 @@ export class EffectSystem {
   ) {}
 
   /** RPC-Handler registrieren – Effekte werden bei ALLEN Clients (inkl. Host) abgespielt. */
-  setup(): void {
-    this.bridge.registerEffectHandler((type, x, y) => {
-      if (type === 'hit')   this.playHitEffect(x, y);
+  setup(onLocalConfirmedHit?: () => void): void {
+    this.bridge.registerEffectHandler((type, x, y, shooterId) => {
+      if (type === 'hit') {
+        if (shooterId === this.bridge.getLocalPlayerId()) {
+          onLocalConfirmedHit?.();
+        }
+        this.playHitEffect(x, y);
+      }
       if (type === 'death') this.playDeathEffect(x, y);
     });
   }

@@ -284,14 +284,14 @@ export class NetworkBridge {
   }
 
   // ── Effekt-RPC: Host → Alle (visuelles Feedback) ──────────────────────────
-  broadcastEffect(type: 'hit' | 'death', x: number, y: number): void {
-    RPC.call('fx', { type, x, y }, RPC.Mode.ALL).catch(console.error);
+  broadcastEffect(type: 'hit' | 'death', x: number, y: number, shooterId?: string): void {
+    RPC.call('fx', { type, x, y, shooterId }, RPC.Mode.ALL).catch(console.error);
   }
 
-  registerEffectHandler(cb: (type: 'hit' | 'death', x: number, y: number) => void): void {
+  registerEffectHandler(cb: (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void): void {
     RPC.register('fx', async (data: unknown): Promise<unknown> => {
-      const { type, x, y } = data as { type: 'hit' | 'death'; x: number; y: number };
-      cb(type, x, y);
+      const { type, x, y, shooterId } = data as { type: 'hit' | 'death'; x: number; y: number; shooterId?: string };
+      cb(type, x, y, shooterId);
       return undefined;
     });
   }

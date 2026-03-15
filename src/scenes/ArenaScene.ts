@@ -96,7 +96,9 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── 5. Effekt-System ──────────────────────────────────────────────────
     this.effectSystem = new EffectSystem(this, bridge);
-    this.effectSystem.setup();
+    this.effectSystem.setup(() => {
+      this.aimSystem?.notifyConfirmedHit();
+    });
 
     // ── 6. Host-Physik (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
     this.hostPhysics = new HostPhysicsSystem(
@@ -126,6 +128,7 @@ export class ArenaScene extends Phaser.Scene {
       this,
       () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
       (slot) => this.getLocalWeaponConfig(slot),
+      () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────

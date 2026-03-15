@@ -103,7 +103,7 @@ export class CombatSystem {
     // Wut-Gewinn proportional zum Schaden
     this.resourceSystem?.addRage(targetId, amount * RAGE_PER_DAMAGE);
 
-    this.bridge.broadcastEffect('hit', x, y);
+    this.bridge.broadcastEffect('hit', x, y, attackerId);
 
     if (newHp === 0) this.handleDeath(targetId, x, y);
   }
