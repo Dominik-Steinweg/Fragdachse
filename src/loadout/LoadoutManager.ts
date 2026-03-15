@@ -12,7 +12,7 @@ import type {
   WeaponConfig,
 } from './LoadoutConfig';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
-import { isVelocityMoving } from './SpreadMath';
+import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 
 export interface LoadoutSelection {
   weapon1?:  WeaponConfig;
@@ -296,7 +296,7 @@ export class LoadoutManager {
       if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return;
     }
 
-    // 3. Gesamtspread ermitteln: Basis (stehend / bewegend) + dynamischer Bloom
+    // 3. Spread-Parameter berechnen
     // Bewegungsstatus direkt vom Physics-Body lesen – der Host besitzt die Simulation,
     // daher ist velocity immer aktuell (kein Netzwerk-Lag wie bei getPlayerInput).
     const shooterBody = this.playerManager.getPlayer(playerId)?.body;
@@ -304,10 +304,23 @@ export class LoadoutManager {
     const baseSpread    = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
     const totalSpreadDeg = baseSpread + weapon.getDynamicSpread();
     const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
-    const finalAngle     = angle + (Math.random() * 2 - 1) * halfSpreadRad;
 
     // 4. Typ-spezifische Waffenlogik ausführen.
-    const didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, playerId, playerColor, shotId);
+    //    Multi-Pellet-Waffen (z.B. Shotgun) feuern alle Projektile gleichzeitig ab.
+    //    Jedes Pellet erhält seinen eigenen zufälligen Spread-Offset zusätzlich zum Pellet-Winkel.
+    const pelletCount = cfg.pelletCount ?? 1;
+    let didFire: boolean;
+    if (pelletCount > 1) {
+      const pelletOffsets = calcPelletAngles(pelletCount, cfg.pelletSpreadAngle ?? 0);
+      for (const offset of pelletOffsets) {
+        const pelletAngle = angle + offset + (Math.random() * 2 - 1) * halfSpreadRad;
+        this.dispatchWeaponFire(cfg, x, y, pelletAngle, playerId, playerColor, shotId);
+      }
+      didFire = true;
+    } else {
+      const finalAngle = angle + (Math.random() * 2 - 1) * halfSpreadRad;
+      didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, playerId, playerColor, shotId);
+    }
     if (!didFire) return;
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.

@@ -51,6 +51,11 @@ export interface WeaponConfig {
   readonly spreadRecoveryDelay: number; // ms Wartezeit nach letztem Schuss vor Abbau
   readonly spreadRecoveryRate: number;  // Grad-Abbau pro Tick
   readonly spreadRecoverySpeed: number; // ms pro Tick (bestimmt Abbau-Geschwindigkeit)
+
+  // Multi-Projektil (Optional) – z.B. Shotgun
+  // Sind beide Felder gesetzt und pelletCount > 1, werden alle Projektile gleichzeitig gefeuert.
+  readonly pelletCount?:       number; // Anzahl gleichzeitig abgefeuerter Projektile
+  readonly pelletSpreadAngle?: number; // Halbwinkel der Auffächerung in Grad ([-y, +y])
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov';
@@ -252,6 +257,32 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   2,
     spreadRecoverySpeed:  100,
+  } as WeaponConfig,
+
+  SHOTGUN: {
+    id:                   'SHOTGUN',
+    displayName:          'Schrotflinte',
+    cooldown:             700,
+    damage:               20,       // Schaden pro Pellet
+    range:                280,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1200,
+      projectileSize:       4,
+      projectileMaxBounces: 1,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        20,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         5,
+    spreadPerShot:        5,
+    maxDynamicSpread:     5,
+    spreadRecoveryDelay:  500,
+    spreadRecoveryRate:   3,
+    spreadRecoverySpeed:  100,
+    pelletCount:          5,
+    pelletSpreadAngle:    16,
   } as WeaponConfig,
 
 } as const;
