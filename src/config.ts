@@ -84,6 +84,49 @@ export const COLORS = {
   CANOPY_ALPHA: 0.4
 } as const;
 
+export interface BeamPalette {
+  shadow: number;
+  glow: number;
+  core: number;
+}
+
+const DEFAULT_BEAM_PALETTE: BeamPalette = {
+  shadow: COLORS.GREY_9,
+  glow:   COLORS.GREY_5,
+  core:   COLORS.GREY_1,
+};
+
+export function getBeamPaletteForPlayerColor(color: number): BeamPalette {
+  switch (color) {
+    case COLORS.BLUE_3:
+    case COLORS.BLUE_2:
+      return { shadow: COLORS.BLUE_6, glow: COLORS.BLUE_4, core: COLORS.BLUE_1 };
+
+    case COLORS.GREEN_3:
+    case COLORS.GREEN_2:
+      return { shadow: COLORS.GREEN_6, glow: COLORS.GREEN_4, core: COLORS.GREEN_1 };
+
+    case COLORS.BROWN_3:
+    case COLORS.BROWN_2:
+      return { shadow: COLORS.BROWN_6, glow: COLORS.BROWN_4, core: COLORS.BROWN_1 };
+
+    case COLORS.GOLD_3:
+    case COLORS.GOLD_2:
+      return { shadow: COLORS.GOLD_6, glow: COLORS.GOLD_4, core: COLORS.GOLD_1 };
+
+    case COLORS.RED_3:
+    case COLORS.RED_2:
+      return { shadow: COLORS.RED_6, glow: COLORS.RED_4, core: COLORS.RED_1 };
+
+    case COLORS.PURPLE_3:
+    case COLORS.PURPLE_2:
+      return { shadow: COLORS.PURPLE_6, glow: COLORS.PURPLE_4, core: COLORS.PURPLE_1 };
+
+    default:
+      return DEFAULT_BEAM_PALETTE;
+  }
+}
+
 export function toCssColor(color: number): `#${string}` {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
@@ -96,6 +139,8 @@ export const PLAYER_SPEED = 200;
 // ---- Combat ----
 export const HP_MAX           = 100;
 export const RESPAWN_DELAY_MS = 1000;
+export const HITSCAN_FAVOR_THE_SHOOTER_MS = 120;
+export const HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET = 36;
 
 // ---- HP-Balken ----
 export const HP_BAR_WIDTH    = PLAYER_SIZE;     // gleiche Breite wie Spieler

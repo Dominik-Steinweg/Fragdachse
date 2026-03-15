@@ -70,10 +70,21 @@ type LoadoutUseHandler = (
   targetX: number,
   targetY: number,
   senderId: string,
+  shotId?: number,
 ) => void;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number) => void;
 type EffectHandler = (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void;
+type HitscanTracerHandler = (
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  color: number,
+  thickness: number,
+  shooterId?: string,
+  shotId?: number,
+) => void;
 type DashHandler = (playerId: string, dx: number, dy: number) => void;
 type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
 type ShockwaveEffectHandler = (x: number, y: number) => void;
@@ -106,6 +117,7 @@ export class NetworkBridge {
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
   private effectHandler: EffectHandler | null = null;
+  private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
@@ -328,20 +340,24 @@ export class NetworkBridge {
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
 
-  sendLoadoutUse(slot: LoadoutSlot, angle: number, targetX: number, targetY: number): void {
-    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY });
+  sendLoadoutUse(slot: LoadoutSlot, angle: number, targetX: number, targetY: number, shotId?: number): void {
+    if (isHost()) {
+      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId);
+      return;
+    }
+    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId });
   }
 
   registerLoadoutUseHandler(
-    handler: (slot: LoadoutSlot, angle: number, targetX: number, targetY: number, senderId: string) => void,
+    handler: (slot: LoadoutSlot, angle: number, targetX: number, targetY: number, senderId: string, shotId?: number) => void,
   ): void {
     this.loadoutUseHandler = handler;
     this.registerHostRpcHandler('lu', async (data: unknown, caller: PlayerState): Promise<unknown> => {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
-      const { slot, angle, tx, ty } = data as { slot: LoadoutSlot; angle: number; tx: number; ty: number };
-      loadoutUseHandler(slot, angle, tx, ty, caller.id);
+      const { slot, angle, tx, ty, sid } = data as { slot: LoadoutSlot; angle: number; tx: number; ty: number; sid?: number };
+      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid);
       return undefined;
     });
   }
@@ -375,6 +391,39 @@ export class NetworkBridge {
       if (!effectHandler) return undefined;
       const { type, x, y, shooterId } = data as { type: 'hit' | 'death'; x: number; y: number; shooterId?: string };
       effectHandler(type, x, y, shooterId);
+      return undefined;
+    });
+  }
+
+  broadcastHitscanTracer(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    color: number,
+    thickness: number,
+    shooterId?: string,
+    shotId?: number,
+  ): void {
+    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, id: shooterId, sid: shotId });
+  }
+
+  registerHitscanTracerHandler(handler: HitscanTracerHandler): void {
+    this.hitscanTracerHandler = handler;
+    this.registerAllRpcHandler('htfx', async (data: unknown): Promise<unknown> => {
+      const hitscanTracerHandler = this.hitscanTracerHandler;
+      if (!hitscanTracerHandler) return undefined;
+      const { sx, sy, ex, ey, c, t, id, sid } = data as {
+        sx: number;
+        sy: number;
+        ex: number;
+        ey: number;
+        c: number;
+        t: number;
+        id?: string;
+        sid?: number;
+      };
+      hitscanTracerHandler(sx, sy, ex, ey, c, t, id, sid);
       return undefined;
     });
   }

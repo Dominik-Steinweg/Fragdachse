@@ -2,6 +2,7 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
+import type { CombatSystem }      from '../systems/CombatSystem';
 import type { LoadoutSlot, PlayerAimNetState, WeaponSlot } from '../types';
 import type {
   MeleeWeaponFireConfig,
@@ -39,6 +40,8 @@ interface UltimateState {
   config:    UltimateConfig;
 }
 
+type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot'>;
+
 /**
  * LoadoutManager – Host-autoritär.
  * Verwaltet pro Spieler 4 Slots (weapon1, weapon2, utility, ultimate),
@@ -48,6 +51,7 @@ export class LoadoutManager {
   private loadouts       = new Map<string, PlayerLoadout>();
   private ultimateStates = new Map<string, UltimateState>();
   private aimNetStates   = new Map<string, PlayerAimNetState>();
+  private combatSystem: CombatResolverType | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -82,6 +86,10 @@ export class LoadoutManager {
     this.aimNetStates.delete(playerId);
   }
 
+  setCombatSystem(combatSystem: CombatResolverType | null): void {
+    this.combatSystem = combatSystem;
+  }
+
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
 
   use(
@@ -91,6 +99,7 @@ export class LoadoutManager {
     _targetX: number,
     _targetY: number,
     now:      number,
+    shotId?:  number,
   ): void {
     const loadout = this.loadouts.get(playerId);
     if (!loadout) return;
@@ -102,11 +111,11 @@ export class LoadoutManager {
 
     switch (slot) {
       case 'weapon1':
-        this.fireWeapon(loadout.weapon1, x, y, angle, playerId, now, player.color);
+        this.fireWeapon(loadout.weapon1, x, y, angle, playerId, now, player.color, shotId);
         break;
 
       case 'weapon2':
-        this.fireWeapon(loadout.weapon2, x, y, angle, playerId, now, player.color);
+        this.fireWeapon(loadout.weapon2, x, y, angle, playerId, now, player.color, shotId);
         break;
 
       case 'utility': {
@@ -253,6 +262,7 @@ export class LoadoutManager {
     playerId: string,
     now:      number,
     playerColor: number,
+    shotId?: number,
   ): void {
     // 1. Cooldown-Check
     if (weapon.isOnCooldown(now)) return;
@@ -275,7 +285,7 @@ export class LoadoutManager {
     const finalAngle     = angle + (Math.random() * 2 - 1) * halfSpreadRad;
 
     // 4. Typ-spezifische Waffenlogik ausführen.
-    const didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, playerId, playerColor);
+    const didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, playerId, playerColor, shotId);
     if (!didFire) return;
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
@@ -295,13 +305,14 @@ export class LoadoutManager {
     angle:       number,
     playerId:    string,
     playerColor: number,
+    shotId?:     number,
   ): boolean {
     switch (config.fire.type) {
       case 'projectile':
         return this.fireProjectileWeapon(config, config.fire, x, y, angle, playerId, playerColor);
 
       case 'hitscan':
-        return this.fireHitscanWeapon(config, x, y, angle, playerId);
+        return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, shotId);
 
       case 'melee':
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId);
@@ -338,13 +349,28 @@ export class LoadoutManager {
   }
 
   private fireHitscanWeapon(
-    _config:   WeaponConfig,
-    _x:        number,
-    _y:        number,
-    _angle:    number,
-    _playerId: string,
+    config:      WeaponConfig,
+    fireConfig:  import('./LoadoutConfig').HitscanWeaponFireConfig,
+    x:           number,
+    y:           number,
+    angle:       number,
+    playerId:    string,
+    playerColor: number,
+    shotId?:     number,
   ): boolean {
-    return false;
+    void playerColor;
+    void shotId;
+    return this.combatSystem?.resolveHitscanShot(
+      playerId,
+      x,
+      y,
+      angle,
+      config.range,
+      config.damage,
+      fireConfig.traceThickness,
+      config.adrenalinGain,
+      config.displayName,
+    ) ?? false;
   }
 
   private fireMeleeWeapon(

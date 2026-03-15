@@ -14,6 +14,8 @@ export interface ArenaBuilderResult {
   rockObjects:  (Phaser.GameObjects.Rectangle | null)[];
   /** StaticGroup mit Baumstümpfen (Kreis-Körper, keine HP) */
   trunkGroup:   Phaser.Physics.Arcade.StaticGroup;
+  /** Baumstumpf-Objekte für Hitscan-/Melee-Sweeps */
+  trunkObjects: Phaser.GameObjects.Arc[];
   /** Baumkronen-Grafiken für Transparenz-Update */
   canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }>;
 }
@@ -46,6 +48,7 @@ export class ArenaBuilder {
     const rockGroup    = this.scene.physics.add.staticGroup();
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockObjects:  (Phaser.GameObjects.Rectangle | null)[] = [];
+    const trunkObjects: Phaser.GameObjects.Arc[] = [];
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }> = [];
 
     // Felsen
@@ -70,13 +73,14 @@ export class ArenaBuilder {
       const trunkBody = trunk.body as Phaser.Physics.Arcade.StaticBody;
       trunkBody.setCircle(TRUNK_RADIUS);
       trunkBody.updateFromGameObject();
+      trunkObjects.push(trunk);
 
       // Canopy (nur visuell)
       const gfx = this.createCanopyVisual(worldX, worldY);
       canopyObjects.push({ gfx, worldX, worldY });
     }
 
-    return { rockGroup, rockObjects, trunkGroup, canopyObjects };
+    return { rockGroup, rockObjects, trunkGroup, trunkObjects, canopyObjects };
   }
 
   // ── Canopy-Transparenz (jeden Frame lokal) ─────────────────────────────────
@@ -152,6 +156,10 @@ export class ArenaBuilder {
     result.rockGroup.destroy(true);
 
     // Trunks
+    for (const trunk of result.trunkObjects) {
+      if (trunk.active) trunk.destroy();
+    }
+    result.trunkObjects.length = 0;
     result.trunkGroup.destroy(true);
 
     // Canopies

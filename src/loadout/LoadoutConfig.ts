@@ -132,7 +132,7 @@ export const WEAPON_CONFIGS = {
   ASMD_PRIM: {
     id:                   'ASMD_PRIM',
     displayName:          'ASMD Primär',
-    cooldown:             250,
+    cooldown:             500,
     damage:               10,
     range:                800,        
     fire: {
@@ -144,8 +144,8 @@ export const WEAPON_CONFIGS = {
     adrenalinGain:        5,
     spreadStanding:       0,
     spreadMoving:         0,
-    spreadPerShot:        3,
-    maxDynamicSpread:     9,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,

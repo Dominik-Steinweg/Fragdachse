@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import { PLAYER_SIZE, DEPTH_FX, SHOCKWAVE_RADIUS } from '../config';
+import { DEPTH_FX, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
+
+const HITSCAN_TRACER_FADE_MS = 120;
 
 export class EffectSystem {
+  private pendingPredictedTracerIds = new Map<number, number>();
+
   constructor(
     private scene:  Phaser.Scene,
     private bridge: NetworkBridge,
@@ -18,6 +22,13 @@ export class EffectSystem {
         this.playHitEffect(x, y);
       }
       if (type === 'death') this.playDeathEffect(x, y);
+    });
+
+    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, shooterId, shotId) => {
+      if (shooterId === this.bridge.getLocalPlayerId() && shotId !== undefined && this.consumePredictedTracerId(shotId)) {
+        return;
+      }
+      this.playHitscanTracer(startX, startY, endX, endY, color, thickness);
     });
   }
 
@@ -85,6 +96,63 @@ export class EffectSystem {
     });
   }
 
+  playHitscanTracer(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    playerColor: number,
+    thickness: number,
+  ): void {
+    const palette = getBeamPaletteForPlayerColor(playerColor);
+    const gfx = this.scene.add.graphics();
+    gfx.setDepth(DEPTH_FX);
+
+    this.strokeTracer(gfx, palette.shadow, Math.max(thickness + 6, 6), 0.20, startX, startY, endX, endY);
+    this.strokeTracer(gfx, palette.glow, Math.max(thickness + 3, 4), 0.45, startX, startY, endX, endY);
+    this.strokeTracer(gfx, palette.core, Math.max(thickness, 2), 0.95, startX, startY, endX, endY);
+
+    gfx.fillStyle(palette.glow, 0.40);
+    gfx.fillCircle(startX, startY, Math.max(thickness * 1.35, 4));
+    gfx.fillStyle(palette.core, 0.85);
+    gfx.fillCircle(startX, startY, Math.max(thickness * 0.75, 2));
+    gfx.fillStyle(palette.core, 0.65);
+    gfx.fillCircle(endX, endY, Math.max(thickness * 0.6, 2));
+
+    this.scene.tweens.add({
+      targets:    gfx,
+      alpha:      0,
+      duration:   HITSCAN_TRACER_FADE_MS,
+      ease:       'Quad.easeOut',
+      onComplete: () => gfx.destroy(),
+    });
+  }
+
+  playPredictedHitscanTracer(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    playerColor: number,
+    thickness: number,
+    shotId: number,
+  ): void {
+    this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
+    this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness);
+  }
+
+  private consumePredictedTracerId(shotId: number): boolean {
+    const now = this.scene.time.now;
+
+    for (const [id, expiresAt] of this.pendingPredictedTracerIds) {
+      if (expiresAt <= now) this.pendingPredictedTracerIds.delete(id);
+    }
+
+    if (!this.pendingPredictedTracerIds.has(shotId)) return false;
+    this.pendingPredictedTracerIds.delete(shotId);
+    return true;
+  }
+
   // ── Todes-Effekt: drei Explosionsringe + weißer Blitz ────────────────────
 
   private playDeathEffect(x: number, y: number): void {
@@ -109,5 +177,22 @@ export class EffectSystem {
         onComplete: () => ring.destroy(),
       });
     }
+  }
+
+  private strokeTracer(
+    gfx: Phaser.GameObjects.Graphics,
+    color: number,
+    width: number,
+    alpha: number,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): void {
+    gfx.lineStyle(width, color, alpha);
+    gfx.beginPath();
+    gfx.moveTo(startX, startY);
+    gfx.lineTo(endX, endY);
+    gfx.strokePath();
   }
 }

@@ -24,7 +24,11 @@ import { LobbyOverlay }        from './LobbyOverlay';
 import type { PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, WeaponSlot } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';
 import {
+  ARENA_HEIGHT,
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS,
+  ARENA_OFFSET_X,
+  ARENA_OFFSET_Y,
+  ARENA_WIDTH,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 
@@ -66,6 +70,11 @@ export class ArenaScene extends Phaser.Scene {
    * Sperrt die Arena-Simulation bis die Netzwerkphase auf 'LOBBY' wechselt.
    */
   private matchTerminated   = false;
+  private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = {
+    weapon1: 0,
+    weapon2: 0,
+  };
+  private nextPredictedHitscanShotId = 1;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -115,10 +124,12 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.inputSystem.setup();
     this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY) => {
+      let shotId: number | undefined;
       if (slot === 'weapon1' || slot === 'weapon2') {
         this.aimSystem?.notifyShot(slot);
+        shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
       }
-      bridge.sendLoadoutUse(slot, angle, targetX, targetY);
+      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId);
     });
 
     bridge.registerDashHandler((playerId, dx, dy) => {
@@ -148,10 +159,10 @@ export class ArenaScene extends Phaser.Scene {
     );
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
-    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId) => {
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId) => {
       if (!bridge.isHost()) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now());
+      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now(), shotId);
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
@@ -450,9 +461,11 @@ export class ArenaScene extends Phaser.Scene {
       );
 
       // Rück-Referenzen setzen
+      this.loadoutManager.setCombatSystem(this.combatSystem);
       this.combatSystem.setBurrowSystem(this.burrowSystem);
       this.combatSystem.setResourceSystem(this.resourceSystem);
       this.combatSystem.setLoadoutManager(this.loadoutManager);
+      this.combatSystem.setArenaObstacles(this.arenaResult.rockObjects, this.arenaResult.trunkObjects);
 
       this.hostPhysics.setBurrowSystem(this.burrowSystem);
       this.hostPhysics.setLoadoutManager(this.loadoutManager);
@@ -500,10 +513,12 @@ export class ArenaScene extends Phaser.Scene {
     this.rockRegistry   = null;
     this.resourceSystem = null;
     this.burrowSystem   = null;
+    this.loadoutManager?.setCombatSystem(null);
     this.loadoutManager = null;
     this.combatSystem.setBurrowSystem(null);
     this.combatSystem.setResourceSystem(null);
     this.combatSystem.setLoadoutManager(null);
+    this.combatSystem.setArenaObstacles(null, null);
     this.combatSystem.setKillCallback(() => {});
     this.hostPhysics.setBurrowSystem(null);
     this.hostPhysics.setLoadoutManager(null);
@@ -725,6 +740,89 @@ export class ArenaScene extends Phaser.Scene {
 
     const selection = this.resolveLoadoutSelection(localId);
     return selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
+  }
+
+  private playPredictedLocalHitscanTracer(
+    slot: WeaponSlot,
+    angle: number,
+    targetX: number,
+    targetY: number,
+  ): number | undefined {
+    const config = this.getLocalWeaponConfig(slot);
+    if (config.fire.type !== 'hitscan') return undefined;
+
+    const now = Date.now();
+    if (now < this.predictedHitscanCooldownUntil[slot]) return undefined;
+    this.predictedHitscanCooldownUntil[slot] = now + config.cooldown;
+
+    const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    if (!localSprite) return undefined;
+
+    const shotId = this.nextPredictedHitscanShotId++;
+
+    const maxEndX = localSprite.x + Math.cos(angle) * config.range;
+    const maxEndY = localSprite.y + Math.sin(angle) * config.range;
+    const desiredDistance = Math.min(
+      config.range,
+      Phaser.Math.Distance.Between(localSprite.x, localSprite.y, targetX, targetY),
+    );
+    const desiredEndX = localSprite.x + Math.cos(angle) * desiredDistance;
+    const desiredEndY = localSprite.y + Math.sin(angle) * desiredDistance;
+
+    const clippedEnd = this.clipHitscanToArena(localSprite.x, localSprite.y, maxEndX, maxEndY);
+    const desiredLine = new Phaser.Geom.Line(localSprite.x, localSprite.y, desiredEndX, desiredEndY);
+    const clippedDistance = Phaser.Math.Distance.Between(localSprite.x, localSprite.y, clippedEnd.x, clippedEnd.y);
+    const desiredClampedDistance = Math.min(desiredDistance, clippedDistance);
+    const endX = desiredLine.x1 + Math.cos(angle) * desiredClampedDistance;
+    const endY = desiredLine.y1 + Math.sin(angle) * desiredClampedDistance;
+
+    this.effectSystem.playPredictedHitscanTracer(
+      localSprite.x,
+      localSprite.y,
+      endX,
+      endY,
+      localSprite.fillColor,
+      config.fire.traceThickness,
+      shotId,
+    );
+
+    bridge.broadcastHitscanTracer(
+      localSprite.x,
+      localSprite.y,
+      endX,
+      endY,
+      localSprite.fillColor,
+      config.fire.traceThickness,
+      bridge.getLocalPlayerId(),
+      shotId,
+    );
+
+    return shotId;
+  }
+
+  private clipHitscanToArena(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): { x: number; y: number } {
+    const line = new Phaser.Geom.Line(startX, startY, endX, endY);
+    const arenaRect = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+    const points = Phaser.Geom.Intersects.GetLineToRectangle(line, arenaRect);
+
+    let bestPoint: Phaser.Geom.Point | null = null;
+    let bestDistance = Infinity;
+
+    for (const point of points) {
+      const distance = Phaser.Math.Distance.Between(startX, startY, point.x, point.y);
+      if (distance <= 0.01) continue;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestPoint = point;
+      }
+    }
+
+    return bestPoint ?? { x: endX, y: endY };
   }
 
   private getDefaultAimState(isMoving: boolean): PlayerAimNetState {
