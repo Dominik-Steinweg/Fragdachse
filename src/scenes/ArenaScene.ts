@@ -20,11 +20,12 @@ import { LeftSidePanel }       from '../ui/LeftSidePanel';
 import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem }           from '../ui/AimSystem';
 import { LobbyOverlay }        from './LobbyOverlay';
-import type { PlayerNetState, GamePhase, PlayerProfile } from '../types';
+import type { PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, WeaponSlot } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';
 import {
   ARENA_DURATION_SEC, PLAYER_COLORS,
 } from '../config';
+import { isVelocityMoving } from '../loadout/SpreadMath';
 
 
 export class ArenaScene extends Phaser.Scene {
@@ -48,14 +49,6 @@ export class ArenaScene extends Phaser.Scene {
   // ── Dynamische Arena ──────────────────────────────────────────────────────
   private arenaResult:  ArenaBuilderResult | null = null;
   private rockRegistry: RockRegistry | null       = null;
-
-  // ── Lokale Waffenconfigs (Client-Fallback für AimSystem) ──────────────────
-  // Wird bei jedem Loadout-Wechsel aktualisiert. Auf dem Host überschreibt der
-  // LoadoutManager-Getter diesen Wert – hier nur für Non-Host-Clients relevant.
-  private localWeaponConfigs: Record<'weapon1' | 'weapon2', WeaponConfig> = {
-    weapon1: WEAPON_CONFIGS.GLOCK,
-    weapon2: WEAPON_CONFIGS.P90,
-  };
 
   // ── Host-only Systeme ─────────────────────────────────────────────────────
   private resourceSystem: ResourceSystem | null = null;
@@ -128,20 +121,11 @@ export class ArenaScene extends Phaser.Scene {
     this.leftPanel = new LeftSidePanel(this, bridge);
     this.leftPanel.build();
 
-    // ── 8b. Aim-System (rein clientseitig) ────────────────────────────────
-    // getWeaponConfig: Auf dem Host liest LoadoutManager die tatsächlich ausgerüstete
-    // Waffe; auf Clients wird der gecachte Wert in localWeaponConfigs genutzt.
-    // getActualSpread: Nur auf dem Host – liest den autoritären Bloom-Wert direkt
-    // aus dem BaseWeapon-Objekt; auf Clients entfällt dieser Parameter (→ Simulation).
+    // ── 8b. Aim-System (Prediction + Host-Reconciliation) ──────────────────
     this.aimSystem = new AimSystem(
       this,
       () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
-      (slot) =>
-        this.loadoutManager?.getEquippedWeaponConfig(bridge.getLocalPlayerId(), slot)
-        ?? this.localWeaponConfigs[slot],
-      bridge.isHost()
-        ? (slot) => this.loadoutManager?.getDynamicSpread(bridge.getLocalPlayerId(), slot) ?? 0
-        : undefined,
+      (slot) => this.getLocalWeaponConfig(slot),
     );
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
@@ -520,15 +504,6 @@ export class ArenaScene extends Phaser.Scene {
       this.inputSystem.update();
     }
 
-    // AimSystem jeden Frame aktualisieren (auch wenn inGame=false → Cursor + gfx.clear())
-    // inArena steuert Cursor-Sichtbarkeit (Arena=versteckt, Lobby=sichtbar).
-    // showAim steuert ob Schusslinie + Fadenkreuz gezeichnet werden.
-    const inArena = inGame && !this.matchTerminated;
-    const showAim = inArena
-                 && this.localPlayerAlive
-                 && !this.localPlayerBurrowed;
-    this.aimSystem?.update(showAim, inArena, delta);
-
     if (!this.matchTerminated && phase === 'LOBBY') {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       const players = bridge.getConnectedPlayers();
@@ -568,6 +543,14 @@ export class ArenaScene extends Phaser.Scene {
         ArenaBuilder.updateCanopyTransparency(this.arenaResult.canopyObjects, localSprite);
       }
     }
+
+    // AimSystem jeden Frame aktualisieren (auch wenn inGame=false → Cursor + gfx.clear())
+    // Läuft nach Host-/Client-Update, damit lokale Autoritätsdaten im selben Frame wirken.
+    const inArena = inGame && !this.matchTerminated;
+    const showAim = inArena
+                 && this.localPlayerAlive
+                 && !this.localPlayerBurrowed;
+    this.aimSystem?.update(showAim, inArena, delta);
   }
 
   // ── Host-Update ──────────────────────────────────────────────────────────
@@ -608,8 +591,22 @@ export class ArenaScene extends Phaser.Scene {
       const isBurrowed = this.burrowSystem?.isBurrowed(player.id) ?? false;
       const isStunned  = this.burrowSystem?.isStunned(player.id)  ?? false;
       const isRaging   = this.loadoutManager?.isUltimateActive(player.id) ?? false;
+      const isMoving   = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
+      const aim        = this.loadoutManager?.getAimNetState(player.id, isMoving)
+                      ?? this.getDefaultAimState(isMoving);
 
-      players[player.id] = { x: player.sprite.x, y: player.sprite.y, hp, alive, adrenaline, rage, isBurrowed, isStunned, isRaging };
+      players[player.id] = {
+        x: player.sprite.x,
+        y: player.sprite.y,
+        hp,
+        alive,
+        adrenaline,
+        rage,
+        isBurrowed,
+        isStunned,
+        isRaging,
+        aim,
+      };
 
       player.updateHP(hp);
       player.setVisible(alive);
@@ -622,6 +619,7 @@ export class ArenaScene extends Phaser.Scene {
     const localId = bridge.getLocalPlayerId();
     if (players[localId]) {
       const ls = players[localId];
+      this.aimSystem?.setAuthoritativeState(ls.aim);
       this.inputSystem.setLocalState(ls.isStunned, ls.isBurrowed);
       this.leftPanel.updateResources(ls.adrenaline, ls.rage, this.inputSystem.getDashCooldownFrac());
       this.localPlayerAlive    = ls.alive;
@@ -674,6 +672,7 @@ export class ArenaScene extends Phaser.Scene {
     const localId    = bridge.getLocalPlayerId();
     const localState = state.players[localId];
     if (localState) {
+      this.aimSystem?.setAuthoritativeState(localState.aim);
       this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);
       this.leftPanel.updateResources(
         localState.adrenaline,
@@ -683,5 +682,23 @@ export class ArenaScene extends Phaser.Scene {
       this.localPlayerAlive    = localState.alive;
       this.localPlayerBurrowed = localState.isBurrowed;
     }
+  }
+
+  private getLocalWeaponConfig(slot: WeaponSlot): WeaponConfig {
+    const localId = bridge.getLocalPlayerId();
+    const equipped = this.loadoutManager?.getEquippedWeaponConfig(localId, slot);
+    if (equipped) return equipped;
+
+    const selection = this.resolveLoadoutSelection(localId);
+    return selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
+  }
+
+  private getDefaultAimState(isMoving: boolean): PlayerAimNetState {
+    return {
+      revision: 0,
+      isMoving,
+      weapon1DynamicSpread: 0,
+      weapon2DynamicSpread: 0,
+    };
   }
 }

@@ -1,5 +1,6 @@
 import type { WeaponConfig } from './LoadoutConfig';
 import { BaseLoadoutItem } from './BaseLoadoutItem';
+import { addDynamicSpread, decayDynamicSpread } from './SpreadMath';
 
 /** Basisklasse für Projektilwaffen. Verwaltet Cooldown + dynamischen Spread (Bloom). */
 export abstract class BaseWeapon extends BaseLoadoutItem<WeaponConfig> {
@@ -21,10 +22,7 @@ export abstract class BaseWeapon extends BaseLoadoutItem<WeaponConfig> {
    * gedeckelt auf maxDynamicSpread.
    */
   addSpread(): void {
-    this.dynamicSpread = Math.min(
-      this.config.maxDynamicSpread,
-      this.dynamicSpread + this.config.spreadPerShot,
-    );
+    this.dynamicSpread = addDynamicSpread(this.dynamicSpread, this.config);
   }
 
   // ── Spread-Decay (jeden Frame, nur Host) ──────────────────────────────────
@@ -37,11 +35,11 @@ export abstract class BaseWeapon extends BaseLoadoutItem<WeaponConfig> {
    * @param now    Aktueller Timestamp (Date.now())
    */
   decaySpread(delta: number, now: number): void {
-    if (this.dynamicSpread <= 0) return;
-    if (now - this.lastUsedAt < this.config.spreadRecoveryDelay) return;
-
-    // Anteil der Recovery-Rate, der in diesem Frame anfällt
-    const ticks = delta / this.config.spreadRecoverySpeed;
-    this.dynamicSpread = Math.max(0, this.dynamicSpread - ticks * this.config.spreadRecoveryRate);
+    this.dynamicSpread = decayDynamicSpread(
+      this.dynamicSpread,
+      this.config,
+      delta,
+      now - this.lastUsedAt,
+    );
   }
 }

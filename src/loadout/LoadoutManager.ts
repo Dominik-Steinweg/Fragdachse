@@ -2,9 +2,10 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
-import type { LoadoutSlot }    from '../types';
+import type { LoadoutSlot, PlayerAimNetState, WeaponSlot } from '../types';
 import type { UltimateConfig, UtilityConfig, WeaponConfig } from './LoadoutConfig';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
+import { isVelocityMoving } from './SpreadMath';
 
 export interface LoadoutSelection {
   weapon1?:  WeaponConfig;
@@ -40,6 +41,7 @@ interface UltimateState {
 export class LoadoutManager {
   private loadouts       = new Map<string, PlayerLoadout>();
   private ultimateStates = new Map<string, UltimateState>();
+  private aimNetStates   = new Map<string, PlayerAimNetState>();
 
   constructor(
     private playerManager:     PlayerManager,
@@ -71,6 +73,7 @@ export class LoadoutManager {
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
     this.ultimateStates.delete(playerId);
+    this.aimNetStates.delete(playerId);
   }
 
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
@@ -199,6 +202,29 @@ export class LoadoutManager {
     return this.loadouts.get(playerId)?.[slot].getDynamicSpread() ?? 0;
   }
 
+  getAimNetState(playerId: string, isMoving: boolean): PlayerAimNetState | undefined {
+    const loadout = this.loadouts.get(playerId);
+    if (!loadout) return undefined;
+
+    const weapon1DynamicSpread = loadout.weapon1.getDynamicSpread();
+    const weapon2DynamicSpread = loadout.weapon2.getDynamicSpread();
+    const previous = this.aimNetStates.get(playerId);
+    const changed = !previous
+      || previous.isMoving !== isMoving
+      || previous.weapon1DynamicSpread !== weapon1DynamicSpread
+      || previous.weapon2DynamicSpread !== weapon2DynamicSpread;
+
+    const nextState: PlayerAimNetState = {
+      revision: changed ? (previous?.revision ?? 0) + 1 : (previous?.revision ?? 0),
+      isMoving,
+      weapon1DynamicSpread,
+      weapon2DynamicSpread,
+    };
+
+    this.aimNetStates.set(playerId, nextState);
+    return nextState;
+  }
+
   /** Cooldown-Fraktion eines Slots: 0 = bereit, 1 = gerade benutzt. */
   getCooldownFrac(playerId: string, slot: LoadoutSlot, now: number): number {
     const loadout = this.loadouts.get(playerId);
@@ -237,8 +263,7 @@ export class LoadoutManager {
     // Bewegungsstatus direkt vom Physics-Body lesen – der Host besitzt die Simulation,
     // daher ist velocity immer aktuell (kein Netzwerk-Lag wie bei getPlayerInput).
     const shooterBody = this.playerManager.getPlayer(playerId)?.body;
-    const isMoving    = Math.abs(shooterBody?.velocity.x ?? 0) > 0.5
-                     || Math.abs(shooterBody?.velocity.y ?? 0) > 0.5;
+    const isMoving    = isVelocityMoving(shooterBody?.velocity.x ?? 0, shooterBody?.velocity.y ?? 0);
     const baseSpread    = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
     const totalSpreadDeg = baseSpread + weapon.getDynamicSpread();
     const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;

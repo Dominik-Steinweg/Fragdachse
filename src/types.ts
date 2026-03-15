@@ -13,6 +13,17 @@ export interface PlayerInput {
   dy: number; // -1 | 0 | 1
 }
 
+/** Waffen-Slots mit Spread/Crosshair-Relevanz. */
+export type WeaponSlot = 'weapon1' | 'weapon2';
+
+/** Autoritativer Aim-State für Crosshair-Reconciliation. */
+export interface PlayerAimNetState {
+  revision:             number;
+  isMoving:             boolean;
+  weapon1DynamicSpread: number;
+  weapon2DynamicSpread: number;
+}
+
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
   x:          number;
@@ -24,6 +35,7 @@ export interface PlayerNetState {
   isBurrowed: boolean;
   isStunned:  boolean;
   isRaging:   boolean;  // Ultimate aktiv
+  aim:        PlayerAimNetState;
 }
 
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
