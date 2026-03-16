@@ -18,8 +18,8 @@ export interface ArenaBuilderResult {
   trunkObjects: Phaser.GameObjects.Arc[];
   /** Baumkronen-Grafiken für Transparenz-Update */
   canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }>;
-  /** Gleis-Grafiken (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
-  trackObjects: Phaser.GameObjects.Graphics[];
+  /** Gleis-TileSprites (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
+  trackObjects: Phaser.GameObjects.TileSprite[];
 }
 
 export class ArenaBuilder {
@@ -174,8 +174,8 @@ export class ArenaBuilder {
     result.canopyObjects.length = 0;
 
     // Gleise
-    for (const gfx of result.trackObjects) {
-      if (gfx.active) gfx.destroy();
+    for (const ts of result.trackObjects) {
+      if (ts.active) ts.destroy();
     }
     result.trackObjects.length = 0;
   }
@@ -217,17 +217,17 @@ export class ArenaBuilder {
   // ── Gleise ────────────────────────────────────────────────────────────────
 
   /**
-   * Gruppiert TrackCells nach Spalte und erstellt pro Spalte eine Grafik.
+   * Gruppiert TrackCells nach Spalte und erstellt pro Spalte einen TileSprite.
    * Gleise sind rein visuell (keine Physik-Gruppe), da sie begehbar sind.
    */
-  private buildTracks(tracks: TrackCell[]): Phaser.GameObjects.Graphics[] {
-    // Spalten → Zeilenzahl ermitteln
+  private buildTracks(tracks: TrackCell[]): Phaser.GameObjects.TileSprite[] {
+    // Spalten → maximale Zeilenzahl ermitteln
     const colRows = new Map<number, number>();
     for (const { gridX, gridY } of tracks) {
       const current = colRows.get(gridX) ?? 0;
       colRows.set(gridX, Math.max(current, gridY + 1));
     }
-    const result: Phaser.GameObjects.Graphics[] = [];
+    const result: Phaser.GameObjects.TileSprite[] = [];
     for (const [col, rowCount] of colRows) {
       result.push(this.createTrackColumnVisual(col, rowCount));
     }
@@ -235,41 +235,18 @@ export class ArenaBuilder {
   }
 
   /**
-   * Zeichnet eine vollständige Gleis-Spalte:
-   * – Dunkelgraues Schotterbett
-   * – Braune Schwellen (horizontal, jede Zelle)
-   * – Braune Schienen (zwei vertikale Streifen)
+   * Erstellt einen TileSprite für eine vollständige Gleis-Spalte.
+   * Die Textur 'bg_tracks' (48×48 px) wird vertikal gekachelt.
    */
-  private createTrackColumnVisual(col: number, rowCount: number): Phaser.GameObjects.Graphics {
-    const x = ARENA_OFFSET_X + col * CELL_SIZE;
-    const y = ARENA_OFFSET_Y;
-    const w = CELL_SIZE;        // 48 px
+  private createTrackColumnVisual(col: number, rowCount: number): Phaser.GameObjects.TileSprite {
+    const w = CELL_SIZE;
     const h = rowCount * CELL_SIZE;
+    const cx = ARENA_OFFSET_X + col * CELL_SIZE + w / 2;
+    const cy = ARENA_OFFSET_Y + h / 2;
 
-    const gfx = this.scene.add.graphics();
-    gfx.setDepth(DEPTH.TRACKS);
-
-    // Schotterbett (dunkelgrauer Hintergrund)
-    gfx.fillStyle(COLORS.GREY_7);
-    gfx.fillRect(x, y, w, h);
-
-    // Schwellen (braune Querbalken, eine pro Zelle)
-    const tieH      = 8;
-    const tieInset  = 5;
-    gfx.fillStyle(COLORS.BROWN_5);
-    for (let row = -1; row < ( rowCount * 2 ); row++) {
-      const tieY = y + row * ( CELL_SIZE / 2) + (CELL_SIZE - tieH) / 2;
-      gfx.fillRect(x + tieInset, tieY, w - tieInset * 2, tieH);
-    }
-
-    // Schienen (zwei vertikale Streifen über die gesamte Höhe)
-    const railW    = 5;
-    const railInset = 10;
-    gfx.fillStyle(COLORS.BROWN_4);
-    gfx.fillRect(x + railInset, y, railW, h);
-    gfx.fillRect(x + w - railInset - railW, y, railW, h);
-
-    return gfx;
+    const ts = this.scene.add.tileSprite(cx, cy, w, h, 'bg_tracks');
+    ts.setDepth(DEPTH.TRACKS);
+    return ts;
   }
 
   // ── Statische Interna ──────────────────────────────────────────────────────

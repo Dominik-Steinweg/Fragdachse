@@ -81,7 +81,7 @@ export class ArenaScene extends Phaser.Scene {
   private trainDestroyedShown   = false;
 
   // ── Client-seitiges PowerUp-Rendering ───────────────────────────────────────
-  private powerUpSprites = new Map<number, Phaser.GameObjects.Rectangle>();
+  private powerUpSprites = new Map<number, Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image>();
   private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
@@ -103,8 +103,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('bg_grass', './assets/sprites/32x32grass01.png');
+    this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
+    this.load.image('bg_tracks',  './assets/sprites/48x48tracks02.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
+    this.load.image('powerup_hp', './assets/sprites/16x16HP.png');
+    this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
+    this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
   }
 
   create(): void {
@@ -1085,23 +1089,29 @@ export class ArenaScene extends Phaser.Scene {
 
   /**
    * Synchronisiert die sichtbaren PowerUp-Sprites mit dem aktuellen Netzwerk-Snapshot.
-   * Neue Items werden als farbige Rectangles erstellt, entfernte werden zerstört.
+   * Neue Items werden als Bild-Sprite (wenn `spriteKey` gesetzt) oder farbiges Rectangle erstellt,
+   * entfernte werden zerstört.
    */
   private syncPowerUpSprites(powerups: import('../types').SyncedPowerUp[]): void {
     const activeUids = new Set<number>();
 
     for (const pu of powerups) {
       activeUids.add(pu.uid);
-      let rect = this.powerUpSprites.get(pu.uid);
-      if (!rect) {
+      let sprite = this.powerUpSprites.get(pu.uid);
+      if (!sprite) {
         const def = POWERUP_DEFS[pu.defId];
-        const color = def?.color ?? 0xffffff;
-        rect = this.add.rectangle(pu.x, pu.y, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, color);
-        rect.setDepth(DEPTH.PLAYERS - 1);
-        this.powerUpSprites.set(pu.uid, rect);
+        if (def?.spriteKey) {
+          sprite = this.add.image(pu.x, pu.y, def.spriteKey)
+            .setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE);
+        } else {
+          const color = def?.color ?? 0xffffff;
+          sprite = this.add.rectangle(pu.x, pu.y, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, color);
+        }
+        sprite.setDepth(DEPTH.PLAYERS - 1);
+        this.powerUpSprites.set(pu.uid, sprite);
       }
       // Position aktualisieren (für den Fall, dass Items sich bewegen könnten)
-      rect.setPosition(pu.x, pu.y);
+      sprite.setPosition(pu.x, pu.y);
     }
 
     // Entfernte Items aufräumen

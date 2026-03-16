@@ -8,14 +8,16 @@ export interface PowerUpDef {
   readonly healAmount?: number;   // nur instant_heal (999 = Full HP)
   readonly durationMs?: number;   // nur buff_*
   readonly multiplier?: number;   // nur buff_*
-  /** Hex-Farbe für die Client-Darstellung */
+  /** Hex-Farbe für die Client-Darstellung (Fallback wenn kein spriteKey) */
   readonly color:       number;
+  /** Phaser-Texture-Key für die Sprite-Darstellung (optional, sonst Rectangle) */
+  readonly spriteKey?:  string;
 }
 
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
-  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999, color: 0x00ff00 },
-  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: 0x00aaff },
-  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: 0xff4400 },
+  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999, color: 0x00ff00, spriteKey: 'powerup_hp' },
+  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: 0x00aaff, spriteKey: 'powerup_adr' },
+  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: 0xff4400, spriteKey: 'powerup_dam' },
 };
 
 // ── Drop-Tabellen ──────────────────────────────────────────────────────────
