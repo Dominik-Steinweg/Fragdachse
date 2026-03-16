@@ -10,6 +10,7 @@ export const ARENA_OFFSET_Y = 12;
 // ---- Depth Layers ----
 export const DEPTH = {
   GRASS: 1,
+  TRACKS: 2,
   ROCKS: 9,
   PLAYERS: 10,
   PROJECTILES: 15,
@@ -162,6 +163,14 @@ export const TREE_COUNT          = 2;
 export const CA_SMOOTHING_STEPS  = 3;    // Anzahl Cellular-Automata-Durchläufe (0 = kein Smoothing)
 export const CA_MIN_ROCK_NEIGHBORS = 2;  // Fels mit < N Nachbarn wird zu Boden
 export const CA_MAX_FLOOR_NEIGHBORS = 4; // Boden mit > N Nachbarn wird zu Fels
+
+// ---- Gleise ----
+/** Anzahl Gleise pro Runde */
+export const TRACK_COUNT           = 1;
+/** Erste erlaubte Spalte (≥ 25 % der Arena-Breite, inklusive) */
+export const TRACK_SPAWN_MIN_COL   = Math.floor(GRID_COLS * 0.25); // 7
+/** Letzte erlaubte Spalte (≤ 75 % der Arena-Breite, inklusive) */
+export const TRACK_SPAWN_MAX_COL   = Math.floor(GRID_COLS * 0.75); // 22
 
 // ---- Felsen HP ----
 export const ROCK_HP_MAX         = 200;

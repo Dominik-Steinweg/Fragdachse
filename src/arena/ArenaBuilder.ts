@@ -5,7 +5,7 @@ import {
   DEPTH, COLORS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_THRESHOLD,
 } from '../config';
-import type { ArenaLayout } from '../types';
+import type { ArenaLayout, TrackCell } from '../types';
 
 export interface ArenaBuilderResult {
   /** StaticGroup mit Felsen-Rechtecken (für Kollision + HP-Tracking) */
@@ -18,6 +18,8 @@ export interface ArenaBuilderResult {
   trunkObjects: Phaser.GameObjects.Arc[];
   /** Baumkronen-Grafiken für Transparenz-Update */
   canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }>;
+  /** Gleis-Grafiken (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
+  trackObjects: Phaser.GameObjects.Graphics[];
 }
 
 export class ArenaBuilder {
@@ -51,6 +53,9 @@ export class ArenaBuilder {
     const trunkObjects: Phaser.GameObjects.Arc[] = [];
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }> = [];
 
+    // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
+    const trackObjects = this.buildTracks(layout.tracks ?? []);
+
     // Felsen
     for (let i = 0; i < layout.rocks.length; i++) {
       const { gridX, gridY } = layout.rocks[i];
@@ -80,7 +85,7 @@ export class ArenaBuilder {
       canopyObjects.push({ gfx, worldX, worldY });
     }
 
-    return { rockGroup, rockObjects, trunkGroup, trunkObjects, canopyObjects };
+    return { rockGroup, rockObjects, trunkGroup, trunkObjects, canopyObjects, trackObjects };
   }
 
   // ── Canopy-Transparenz (jeden Frame lokal) ─────────────────────────────────
@@ -167,6 +172,12 @@ export class ArenaBuilder {
       if (gfx.active) gfx.destroy();
     }
     result.canopyObjects.length = 0;
+
+    // Gleise
+    for (const gfx of result.trackObjects) {
+      if (gfx.active) gfx.destroy();
+    }
+    result.trackObjects.length = 0;
   }
 
   // ── Private Factory-Methoden (Swap-Vorbereitung für Sprites) ──────────────
@@ -200,6 +211,64 @@ export class ArenaBuilder {
     gfx.fillStyle(COLORS.GREEN_3, 1.0);
     gfx.fillCircle(worldX, worldY, CANOPY_RADIUS);
     gfx.setDepth(DEPTH.CANOPY);
+    return gfx;
+  }
+
+  // ── Gleise ────────────────────────────────────────────────────────────────
+
+  /**
+   * Gruppiert TrackCells nach Spalte und erstellt pro Spalte eine Grafik.
+   * Gleise sind rein visuell (keine Physik-Gruppe), da sie begehbar sind.
+   */
+  private buildTracks(tracks: TrackCell[]): Phaser.GameObjects.Graphics[] {
+    // Spalten → Zeilenzahl ermitteln
+    const colRows = new Map<number, number>();
+    for (const { gridX, gridY } of tracks) {
+      const current = colRows.get(gridX) ?? 0;
+      colRows.set(gridX, Math.max(current, gridY + 1));
+    }
+    const result: Phaser.GameObjects.Graphics[] = [];
+    for (const [col, rowCount] of colRows) {
+      result.push(this.createTrackColumnVisual(col, rowCount));
+    }
+    return result;
+  }
+
+  /**
+   * Zeichnet eine vollständige Gleis-Spalte:
+   * – Dunkelgraues Schotterbett
+   * – Braune Schwellen (horizontal, jede Zelle)
+   * – Braune Schienen (zwei vertikale Streifen)
+   */
+  private createTrackColumnVisual(col: number, rowCount: number): Phaser.GameObjects.Graphics {
+    const x = ARENA_OFFSET_X + col * CELL_SIZE;
+    const y = ARENA_OFFSET_Y;
+    const w = CELL_SIZE;        // 48 px
+    const h = rowCount * CELL_SIZE;
+
+    const gfx = this.scene.add.graphics();
+    gfx.setDepth(DEPTH.TRACKS);
+
+    // Schotterbett (dunkelgrauer Hintergrund)
+    gfx.fillStyle(COLORS.GREY_7);
+    gfx.fillRect(x, y, w, h);
+
+    // Schwellen (braune Querbalken, eine pro Zelle)
+    const tieH      = 8;
+    const tieInset  = 5;
+    gfx.fillStyle(COLORS.BROWN_5);
+    for (let row = -1; row < ( rowCount * 2 ); row++) {
+      const tieY = y + row * ( CELL_SIZE / 2) + (CELL_SIZE - tieH) / 2;
+      gfx.fillRect(x + tieInset, tieY, w - tieInset * 2, tieH);
+    }
+
+    // Schienen (zwei vertikale Streifen über die gesamte Höhe)
+    const railW    = 5;
+    const railInset = 10;
+    gfx.fillStyle(COLORS.BROWN_4);
+    gfx.fillRect(x + railInset, y, railW, h);
+    gfx.fillRect(x + w - railInset - railW, y, railW, h);
+
     return gfx;
   }
 

@@ -9,11 +9,11 @@ import {
   toCssColor,
 } from '../config';
 
-const VEIL_CELL_SIZE = 32;
+const VEIL_CELL_SIZE = 8;
 const VEIL_EDGE_BAND_PX = 96;
 const VEIL_RADIUS_PX = 176;
 const VEIL_ALPHA = 1.00;
-const REVEAL_DURATION_MS = 1000;
+const REVEAL_DURATION_MS = 1800;
 const FLOAT_DISTANCE_PX = 72;
 const TWEEN_DURATION_MS = 1100;
 const GO_FLOAT_DISTANCE_PX = 40;

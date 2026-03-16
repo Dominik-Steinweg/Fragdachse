@@ -1,5 +1,5 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS } from '../config';
-import type { ArenaLayout, RockCell, TreeCell } from '../types';
+import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL } from '../config';
+import type { ArenaLayout, RockCell, TreeCell, TrackCell } from '../types';
 
 /**
  * Prozeduraler Arena-Generator – keine Phaser-Abhängigkeit.
@@ -18,6 +18,9 @@ export class ArenaGenerator {
       const blocked: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
         new Array(GRID_COLS).fill(false),
       );
+
+      // --- Gleise zuerst generieren (vor Felsen) ---
+      const { trackCols, tracks } = ArenaGenerator.generateTracks(rng);
 
       // --- Cellular Automata Felsen-Platzierung ---
 
@@ -60,10 +63,11 @@ export class ArenaGenerator {
       }
 
       // 3. map auf blocked übertragen und rocks-Array befüllen
+      //    Gleis-Spalten bleiben frei (trackCols sind begehbar)
       const rocks: RockCell[] = [];
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         for (let gx = 0; gx < GRID_COLS; gx++) {
-          if (map[gy][gx]) {
+          if (map[gy][gx] && !trackCols.has(gx)) {
             blocked[gy][gx] = true;
             rocks.push({ gridX: gx, gridY: gy });
           }
@@ -89,6 +93,7 @@ export class ArenaGenerator {
       const shuffledForTrees = allCells.filter(
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
+          !trackCols.has(gx) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -104,12 +109,37 @@ export class ArenaGenerator {
       // Nochmalige Konnektivitätsprüfung nach Baumplatzierung
       if (!ArenaGenerator.isConnected(blocked)) continue;
 
-      return { seed: seed + attempt, rocks, trees };
+      return { seed: seed + attempt, rocks, trees, tracks };
     }
 
     throw new Error(
       `ArenaGenerator: Konnte nach 100 Versuchen kein konnektives Layout generieren (seed=${seed})`,
     );
+  }
+
+  /**
+   * Generiert TRACK_COUNT zufällige vertikale Gleis-Spalten in der mittleren
+   * Hälfte der Arena (TRACK_SPAWN_MIN_COL … TRACK_SPAWN_MAX_COL).
+   * Gibt die Set der gewählten Spalten zurück (für Felsen/Baum-Filter)
+   * sowie alle TrackCells (jede Zelle einer Gleis-Spalte).
+   */
+  private static generateTracks(rng: () => number): { trackCols: Set<number>; tracks: TrackCell[] } {
+    const available: number[] = [];
+    for (let c = TRACK_SPAWN_MIN_COL; c <= TRACK_SPAWN_MAX_COL; c++) {
+      available.push(c);
+    }
+    ArenaGenerator.shuffle(available, rng);
+
+    const trackCols = new Set<number>();
+    const tracks: TrackCell[] = [];
+    for (let i = 0; i < Math.min(TRACK_COUNT, available.length); i++) {
+      const col = available[i];
+      trackCols.add(col);
+      for (let gy = 0; gy < GRID_ROWS; gy++) {
+        tracks.push({ gridX: col, gridY: gy });
+      }
+    }
+    return { trackCols, tracks };
   }
 
   /**

@@ -201,11 +201,15 @@ export interface RockCell { gridX: number; gridY: number; }
 /** Ein Baum-Gitterzelle (Trunk + Canopy, relativ zur Arena) */
 export interface TreeCell { gridX: number; gridY: number; }
 
+/** Eine Gleis-Gitterzelle (begehbar, Grundlage für spätere Zuglogik) */
+export interface TrackCell { gridX: number; gridY: number; }
+
 /** Vollständiger Arena-Layout-Deskriptor – wird vom Host generiert und via reliable-State verteilt */
 export interface ArenaLayout {
-  seed:  number;
-  rocks: RockCell[];
-  trees: TreeCell[];
+  seed:   number;
+  rocks:  RockCell[];
+  trees:  TreeCell[];
+  tracks: TrackCell[];
 }
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
