@@ -91,7 +91,8 @@ export class TrainManager {
 
   /** Startet den Zug (Spawn-Zeitpunkt erreicht). */
   spawn(): void {
-    this.hp        = TRAIN.HP_MAX;
+    // hp wird absichtlich NICHT zurückgesetzt – bleibt über Durchfahrten erhalten.
+    // Initialwert kommt aus dem Feldinitialisier (HP_MAX) bzw. prepareReentry() lässt ihn stehen.
     this.alive     = true;
     this.active    = true;
     this.destroyed = false;

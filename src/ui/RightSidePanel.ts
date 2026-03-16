@@ -308,8 +308,11 @@ export class RightSidePanel {
     ).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
 
     // HP-Balken Füllung (Breite wird dynamisch angepasst)
+    // Origin (0, 0.5) → X muss die linke Kante des Hintergrund-Balkens sein:
+    //   SIDEBAR_CENTER_X - (PANEL_WIDTH - 16) / 2
+    const barLeftX = SIDEBAR_CENTER_X - (PANEL_WIDTH - 16) / 2;
     this.trainBarFill = this.scene.add.rectangle(
-      SIDEBAR_LEFT_X + 8, TRAIN_BAR_Y, PANEL_WIDTH - 16, TRAIN_BAR_H, 0xcf573c,
+      barLeftX, TRAIN_BAR_Y, PANEL_WIDTH - 16, TRAIN_BAR_H, 0xcf573c,
     ).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
 
     this.gameContainer.add([this.trainText, this.trainBarBg, this.trainBarFill]);
