@@ -208,6 +208,7 @@ export class ArenaBuilder {
   private createCanopyVisual(worldX: number, worldY: number): Phaser.GameObjects.Image {
     const img = this.scene.add.image(worldX, worldY, 'bg_canopy');
     img.setDisplaySize(CANOPY_RADIUS * 2, CANOPY_RADIUS * 2);
+    img.setAngle(Phaser.Math.Between(0, 359));
     img.setDepth(DEPTH.CANOPY);
     return img;
   }
