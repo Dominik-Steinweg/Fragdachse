@@ -619,9 +619,17 @@ export class ArenaScene extends Phaser.Scene {
           }
           bridge.broadcastExplosionEffect(result.centerX, result.centerY, 160);
 
-          // Power-Ups an tatsächlichen Segment-Positionen spawnen
+          // Power-Ups nur an Segmenten, die sich noch innerhalb der Arena befinden
+          const arenaTop    = ARENA_OFFSET_Y;
+          const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
+          const validSegs = result.segmentPositions.filter(
+            seg => seg.y >= arenaTop && seg.y <= arenaBottom,
+          );
+          const dropSegs = validSegs.length > 0 ? validSegs : result.segmentPositions;
           for (let i = 0; i < TRAIN_DROP_COUNT; i++) {
-            const seg     = result.segmentPositions[i % result.segmentPositions.length];
+            // Gleichmäßig über die gültigen Segmente verteilen
+            const idx = Math.floor(i * dropSegs.length / TRAIN_DROP_COUNT);
+            const seg = dropSegs[idx];
             const scatter = 28;
             const ox = (Math.random() - 0.5) * scatter;
             const oy = (Math.random() - 0.5) * scatter;
@@ -630,17 +638,20 @@ export class ArenaScene extends Phaser.Scene {
           bridge.broadcastTrainDestroyed();
         });
 
-        // Natürlicher Ausfahrt-Callback: Zug nach Wartezeit erneut spawnen
+        // Natürlicher Ausfahrt-Callback: Zug nach Wartezeit erneut spawnen, Richtung alternieren
         this.trainManager.setExitedCallback(() => {
           const currentEvent = bridge.getTrainEvent();
           if (!currentEvent) return;
+          // Richtung umkehren
+          const newDirection: 1 | -1 = currentEvent.direction === 1 ? -1 : 1;
           const newSpawnAt = Date.now() + TRAIN.SPAWN_DELAY_S * 1000;
           bridge.publishTrainEvent({
             trackX:    currentEvent.trackX,
-            direction: currentEvent.direction,
+            direction: newDirection,
             spawnAt:   newSpawnAt,
           });
-          this.trainManager?.reset();
+          // HP bleibt erhalten; nur Fahrtrichtung und Position werden neu gesetzt
+          this.trainManager?.prepareReentry(newDirection);
           this.trainSpawned = false;
         });
       }

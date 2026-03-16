@@ -43,9 +43,9 @@ export class TrainManager {
   private locoY: number;
 
   /** Welt-X der Gleismitte – fest für die gesamte Runde */
-  private readonly trackX:    number;
+  private readonly trackX: number;
   /** Fahrtrichtung: 1 = von oben nach unten, -1 = von unten nach oben */
-  private readonly direction: 1 | -1;
+  private direction: 1 | -1;
 
   // ── Phaser-Objekte ────────────────────────────────────────────────────────
   /** StaticGroup: unsichtbare Hitbox-Rechtecke, wird für Projektil-Overlap genutzt */
@@ -277,6 +277,25 @@ export class TrainManager {
     for (const s of this.segObjects) {
       (s.body as Phaser.Physics.Arcade.StaticBody).enable = false;
     }
+  }
+
+  /**
+   * Bereitet den Zug für eine erneute Einfahrt vor, ohne die HP zurückzusetzen.
+   * Wird nach natürlichem Verlassen der Arena aufgerufen (Multi-Spawn).
+   * @param newDirection - neue Fahrtrichtung (alternierend)
+   */
+  prepareReentry(newDirection: 1 | -1): void {
+    this.direction  = newDirection;
+    this.alive      = false;
+    this.active     = false;
+    this.destroyed  = false;
+    this.lastHitter = null;
+    this.locoY      = this.initialLocoY();
+    this.updateSegmentPositions();
+    for (const s of this.segObjects) {
+      (s.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    }
+    // hp bleibt absichtlich unverändert
   }
 
   /**
