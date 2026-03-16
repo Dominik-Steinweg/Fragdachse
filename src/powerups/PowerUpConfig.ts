@@ -1,5 +1,7 @@
 // ── Power-Up-Definitionen ──────────────────────────────────────────────────
 
+import { COLORS } from '../config';
+
 export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage';
 
 export interface PowerUpDef {
@@ -15,9 +17,9 @@ export interface PowerUpDef {
 }
 
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
-  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999, color: 0x00ff00, spriteKey: 'powerup_hp' },
-  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: 0x00aaff, spriteKey: 'powerup_adr' },
-  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: 0xff4400, spriteKey: 'powerup_dam' },
+  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999,                    color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
+  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
+  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
 };
 
 // ── Drop-Tabellen ──────────────────────────────────────────────────────────

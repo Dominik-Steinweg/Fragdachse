@@ -81,7 +81,11 @@ export class ArenaScene extends Phaser.Scene {
   private trainDestroyedShown   = false;
 
   // ── Client-seitiges PowerUp-Rendering ───────────────────────────────────────
-  private powerUpSprites = new Map<number, Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image>();
+  /**
+   * Container je UID: enthält [0] Glow-Kreis (Arc) und [1] Grafik (Image/Rectangle).
+   * Container.destroy(true) räumt Kinder + deren Tweens automatisch auf.
+   */
+  private powerUpSprites = new Map<number, Phaser.GameObjects.Container>();
   private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
@@ -105,6 +109,7 @@ export class ArenaScene extends Phaser.Scene {
   preload(): void {
     this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
     this.load.image('bg_tracks',  './assets/sprites/48x48tracks02.png');
+    this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp', './assets/sprites/16x16HP.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
@@ -698,8 +703,8 @@ export class ArenaScene extends Phaser.Scene {
     this.projectileManager.setRockGroup(null, null, null);
     this.hostPhysics.setRockGroup(null, null);
 
-    // Client-seitige PowerUp-Sprites aufräumen
-    for (const rect of this.powerUpSprites.values()) rect.destroy();
+    // Client-seitige PowerUp-Container aufräumen (destroy(true) räumt Kinder + Tweens mit auf)
+    for (const container of this.powerUpSprites.values()) container.destroy(true);
     this.powerUpSprites.clear();
 
     // Zug aufräumen
@@ -1088,36 +1093,67 @@ export class ArenaScene extends Phaser.Scene {
   // ── Power-Up-Rendering (Host + Client) ─────────────────────────────────
 
   /**
-   * Synchronisiert die sichtbaren PowerUp-Sprites mit dem aktuellen Netzwerk-Snapshot.
-   * Neue Items werden als Bild-Sprite (wenn `spriteKey` gesetzt) oder farbiges Rectangle erstellt,
-   * entfernte werden zerstört.
+   * Synchronisiert die sichtbaren PowerUp-Container mit dem aktuellen Netzwerk-Snapshot.
+   *
+   * Aufbau je Container (Schicht-Reihenfolge = Render-Reihenfolge):
+   *   [0] Image | Rectangle – die eigentliche Grafik (feste Größe)
+   *       └─ preFX.addGlow()  – Pixel-Lichtaura direkt an der Grafikkante,
+   *                             outerStrength pulsiert via Tween
+   *
+   * Der preFX-Glow rendert die Aura hinter dem Sprite-Pixel, die Grafik bleibt
+   * immer sichtbar vorne. Der Glow-Tween-Cleanup erfolgt über das destroy-Event
+   * der Grafik – keine separate Tween-Map nötig.
+   * Container.destroy(true) räumt Grafik + deren Tweens automatisch auf.
    */
   private syncPowerUpSprites(powerups: import('../types').SyncedPowerUp[]): void {
     const activeUids = new Set<number>();
 
     for (const pu of powerups) {
       activeUids.add(pu.uid);
-      let sprite = this.powerUpSprites.get(pu.uid);
-      if (!sprite) {
-        const def = POWERUP_DEFS[pu.defId];
-        if (def?.spriteKey) {
-          sprite = this.add.image(pu.x, pu.y, def.spriteKey)
-            .setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE);
-        } else {
-          const color = def?.color ?? 0xffffff;
-          sprite = this.add.rectangle(pu.x, pu.y, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, color);
-        }
-        sprite.setDepth(DEPTH.PLAYERS - 1);
-        this.powerUpSprites.set(pu.uid, sprite);
+      if (this.powerUpSprites.has(pu.uid)) {
+        this.powerUpSprites.get(pu.uid)!.setPosition(pu.x, pu.y);
+        continue;
       }
-      // Position aktualisieren (für den Fall, dass Items sich bewegen könnten)
-      sprite.setPosition(pu.x, pu.y);
+
+      const def       = POWERUP_DEFS[pu.defId];
+      const glowColor = def?.color ?? 0xffffff;
+      // Deterministischer Phasen-Offset: Items pulsieren leicht gegeneinander versetzt
+      const phaseMs   = (pu.uid * 137) % 1400;
+
+      // ── Container ─────────────────────────────────────────────────────────
+      const container = this.add.container(pu.x, pu.y);
+      container.setDepth(DEPTH.PLAYERS - 1);
+
+      // ── Grafik: feste Größe, kein Scale-Tween ─────────────────────────────
+      const graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle =
+        def?.spriteKey
+          ? this.add.image(0, 0, def.spriteKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
+          : this.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor);
+      container.add(graphic);
+
+      // ── preFX-Glow: Pixel-Aura, outerStrength pulsiert ───────────────────
+      const glow = graphic.preFX?.addGlow(glowColor, 2, 0, false, 0.1, 14);
+      if (glow) {
+        const glowTween = this.tweens.add({
+          targets:       glow,
+          outerStrength: { from: 2, to: 8 },
+          duration:      900,
+          yoyo:          true,
+          repeat:        -1,
+          ease:          'Sine.easeInOut',
+          delay:         phaseMs,
+        });
+        // Tween-Cleanup ohne separate Map: destroy-Event der Grafik abfangen
+        graphic.once(Phaser.GameObjects.Events.DESTROY, () => glowTween.stop());
+      }
+
+      this.powerUpSprites.set(pu.uid, container);
     }
 
     // Entfernte Items aufräumen
-    for (const [uid, rect] of this.powerUpSprites) {
+    for (const [uid, container] of this.powerUpSprites) {
       if (!activeUids.has(uid)) {
-        rect.destroy();
+        container.destroy(true); // Kinder (Arc, Grafik) + deren Tweens werden mitgelöscht
         this.powerUpSprites.delete(uid);
       }
     }

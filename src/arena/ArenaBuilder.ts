@@ -16,8 +16,8 @@ export interface ArenaBuilderResult {
   trunkGroup:   Phaser.Physics.Arcade.StaticGroup;
   /** Baumstumpf-Objekte für Hitscan-/Melee-Sweeps */
   trunkObjects: Phaser.GameObjects.Arc[];
-  /** Baumkronen-Grafiken für Transparenz-Update */
-  canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }>;
+  /** Baumkronen-Sprites für Transparenz-Update */
+  canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }>;
   /** Gleis-TileSprites (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
   trackObjects: Phaser.GameObjects.TileSprite[];
 }
@@ -51,7 +51,7 @@ export class ArenaBuilder {
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockObjects:  (Phaser.GameObjects.Rectangle | null)[] = [];
     const trunkObjects: Phaser.GameObjects.Arc[] = [];
-    const canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }> = [];
+    const canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }> = [];
 
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
     const trackObjects = this.buildTracks(layout.tracks ?? []);
@@ -95,7 +95,7 @@ export class ArenaBuilder {
    * Spieler darunter befindet. Nur lokal – keine Netzwerkauswirkungen.
    */
   static updateCanopyTransparency(
-    canopyObjects: Array<{ gfx: Phaser.GameObjects.Graphics; worldX: number; worldY: number }>,
+    canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }>,
     localSprite:   Phaser.GameObjects.GameObject & { x: number; y: number } | null,
   ): void {
     for (const { gfx, worldX, worldY } of canopyObjects) {
@@ -203,15 +203,13 @@ export class ArenaBuilder {
   }
 
   /**
-   * Erstellt die Baumkronen-Grafik (aktuell: Graphics-Kreis).
-   * Kann später durch `this.scene.add.image(...)` ersetzt werden.
+   * Erstellt die Baumkronen-Grafik als Image-Sprite (192×192 px = CANOPY_RADIUS * 2).
    */
-  private createCanopyVisual(worldX: number, worldY: number): Phaser.GameObjects.Graphics {
-    const gfx = this.scene.add.graphics();
-    gfx.fillStyle(COLORS.GREEN_3, 1.0);
-    gfx.fillCircle(worldX, worldY, CANOPY_RADIUS);
-    gfx.setDepth(DEPTH.CANOPY);
-    return gfx;
+  private createCanopyVisual(worldX: number, worldY: number): Phaser.GameObjects.Image {
+    const img = this.scene.add.image(worldX, worldY, 'bg_canopy');
+    img.setDisplaySize(CANOPY_RADIUS * 2, CANOPY_RADIUS * 2);
+    img.setDepth(DEPTH.CANOPY);
+    return img;
   }
 
   // ── Gleise ────────────────────────────────────────────────────────────────
