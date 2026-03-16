@@ -512,9 +512,21 @@ export class ArenaScene extends Phaser.Scene {
 
       // Kill-Callback: Frags erhöhen + Kill-Ereignis broadcasten + PowerUp-Drop
       this.combatSystem.setKillCallback((killerId, victimId, weapon, x, y) => {
-        // Zug-Kills: kein Frag, kein Killfeed-Eintrag (Zug übernimmt das selbst)
+        // Zug-Kills: kein Frag, aber Killfeed-Eintrag + Power-Up-Drop
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
           this.powerUpSystem?.onPlayerKilled(x, y);
+          const victimProfile = bridge.getConnectedPlayers().find(p => p.id === victimId);
+          if (victimProfile) {
+            bridge.broadcastKillEvent({
+              killerId:    TRAIN.TRAIN_KILLER_ID,
+              killerName:  'RB 54',
+              killerColor: 0xcf573c,
+              weapon:      'überfahren',
+              victimId,
+              victimName:  victimProfile.name,
+              victimColor: victimProfile.colorHex,
+            });
+          }
           return;
         }
         bridge.incrementPlayerFrags(killerId);
@@ -601,14 +613,35 @@ export class ArenaScene extends Phaser.Scene {
               });
             }
           }
-          // Power-Ups spawnen
+          // Große Explosionen an jedem Segment + zentrale Mega-Explosion
+          for (const seg of result.segmentPositions) {
+            bridge.broadcastExplosionEffect(seg.x, seg.y, 80);
+          }
+          bridge.broadcastExplosionEffect(result.centerX, result.centerY, 160);
+
+          // Power-Ups an tatsächlichen Segment-Positionen spawnen
           for (let i = 0; i < TRAIN_DROP_COUNT; i++) {
-            const scatter = 60;
+            const seg     = result.segmentPositions[i % result.segmentPositions.length];
+            const scatter = 28;
             const ox = (Math.random() - 0.5) * scatter;
             const oy = (Math.random() - 0.5) * scatter;
-            this.powerUpSystem?.spawnFromTable('TRAIN_DESTROY', result.centerX + ox, result.centerY + oy);
+            this.powerUpSystem?.spawnFromTable('TRAIN_DESTROY', seg.x + ox, seg.y + oy);
           }
           bridge.broadcastTrainDestroyed();
+        });
+
+        // Natürlicher Ausfahrt-Callback: Zug nach Wartezeit erneut spawnen
+        this.trainManager.setExitedCallback(() => {
+          const currentEvent = bridge.getTrainEvent();
+          if (!currentEvent) return;
+          const newSpawnAt = Date.now() + TRAIN.SPAWN_DELAY_S * 1000;
+          bridge.publishTrainEvent({
+            trackX:    currentEvent.trackX,
+            direction: currentEvent.direction,
+            spawnAt:   newSpawnAt,
+          });
+          this.trainManager?.reset();
+          this.trainSpawned = false;
         });
       }
     }
@@ -713,9 +746,9 @@ export class ArenaScene extends Phaser.Scene {
           if (trainState?.alive) {
             this.rightPanel.updateTrainHP(trainState.hp, trainState.maxHp);
           } else if (Date.now() < trainEvent.spawnAt) {
-            // Noch nicht gespawnt – Ankunftszeit anzeigen
-            const secsUntil = Math.max(0, Math.ceil((trainEvent.spawnAt - Date.now()) / 1000));
-            this.rightPanel.setTrainArrival(secsUntil);
+            // Noch nicht gespawnt – feste Ankunftszeit auf dem Runden-Timer anzeigen
+            const arrivalTimerSecs = Math.max(0, Math.ceil((bridge.getRoundEndTime() - trainEvent.spawnAt) / 1000));
+            this.rightPanel.setTrainArrival(arrivalTimerSecs);
           }
         }
       }

@@ -223,14 +223,15 @@ export class RightSidePanel {
   // ── Zug-Widget-Updates ────────────────────────────────────────────────────
 
   /**
-   * Zeigt Ankunftszeit des Zugs (vor Spawn).
-   * secsUntil = Sekunden bis der Zug einfährt.
+   * Zeigt feste Ankunftszeit des Zugs (vor Spawn).
+   * arrivalTimerSecs = der Rundenzeit-Wert (Sekunden), bei dem der Zug einfährt.
+   * Wird einmal gesetzt und bleibt statisch – kein Countdown.
    */
-  setTrainArrival(secsUntil: number): void {
-    const mm = Math.floor(secsUntil / 60);
-    const ss = secsUntil % 60;
+  setTrainArrival(arrivalTimerSecs: number): void {
+    const mm = Math.floor(arrivalTimerSecs / 60);
+    const ss = arrivalTimerSecs % 60;
     const timeStr = `${mm}:${ss.toString().padStart(2, '0')}`;
-    this.trainText.setText(`RB 54 fährt ein um:\n${timeStr}`).setVisible(true);
+    this.trainText.setText(`RB 54 um ${timeStr}`).setVisible(true);
     this.trainBarBg.setVisible(false);
     this.trainBarFill.setVisible(false);
     this.trainWidgetVisible = true;

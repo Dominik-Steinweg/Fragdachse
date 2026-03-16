@@ -13,7 +13,8 @@
       "Bash(npm run:*)",
       "Bash(xargs grep:*)",
       "Bash(find C:Fragdachse/src -type f -name *.ts)",
-      "Bash(grep -n \"initColorPool\\\\|PLAYER_COLORS\" \"C:\\\\Fragdachse/src\"/*.ts)"
+      "Bash(grep -n \"initColorPool\\\\|PLAYER_COLORS\" \"C:\\\\Fragdachse/src\"/*.ts)",
+      "Bash(findstr /n \"trainManager\\\\|trainSpawned\\\\|trainDestroyed\\\\|TRAIN_DROP\\\\|TRAIN_KILLER\\\\|onExited\\\\|onDestroyed\\\\|broadcastKill\\\\|broadcastExplosion\\\\|spawnFromTable\\\\|segmentPositions\\\\|setTrainArrival\\\\|getRoundEnd\\\\|SPAWN_DELAY\\\\|trainEvent\\\\|arrivalTimerSecs\\\\|secsUntil\\\\|buildArena\\\\|runHostUpdate\\\\|tearDown\")"
     ]
   }
 }

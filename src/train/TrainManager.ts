@@ -10,13 +10,15 @@ import { TRAIN } from './TrainConfig';
 
 export interface TrainDestroyResult {
   /** PlayerId des letzten Treffers (null wenn unbekannt) */
-  lastHitterId: string | null;
+  lastHitterId:      string | null;
   /** Welt-X der Gleismitte */
-  centerX:      number;
+  centerX:           number;
   /** Welt-Y des Zugmittelpunkts zum Zerstörungszeitpunkt */
-  centerY:      number;
+  centerY:           number;
   /** Gesamt-Pixelhöhe des Zugs inkl. Lücken */
-  totalHeight:  number;
+  totalHeight:       number;
+  /** Weltkoordinaten jedes Segments (Lok + Waggons) zum Zerstörungszeitpunkt */
+  segmentPositions:  { x: number; y: number }[];
 }
 
 // ── TrainManager ──────────────────────────────────────────────────────────────
@@ -54,6 +56,7 @@ export class TrainManager {
   // ── Callbacks ─────────────────────────────────────────────────────────────
   private onPlayerHit: ((playerId: string) => void)          | null = null;
   private onDestroyed: ((r: TrainDestroyResult) => void)     | null = null;
+  private onExited:    (() => void)                          | null = null;
 
   constructor(
     private scene:         Phaser.Scene,
@@ -71,6 +74,7 @@ export class TrainManager {
 
   setPlayerHitCallback(cb: (playerId: string) => void):     void { this.onPlayerHit = cb; }
   setDestroyCallback(cb: (r: TrainDestroyResult) => void):  void { this.onDestroyed  = cb; }
+  setExitedCallback(cb: () => void):                        void { this.onExited     = cb; }
 
   // ── Zugriff auf Physics-Gruppe ───────────────────────────────────────────
 
@@ -132,6 +136,7 @@ export class TrainManager {
       for (const s of this.segObjects) {
         (s.body as Phaser.Physics.Arcade.StaticBody).enable = false;
       }
+      this.onExited?.();
     }
   }
 
@@ -251,6 +256,29 @@ export class TrainManager {
       + TRAIN.WAGON_COUNT * TRAIN.SEGMENT_GAP;
   }
 
+  /** Weltkoordinaten aller Segment-Mittelpunkte (aktueller Frame). */
+  getSegmentPositions(): { x: number; y: number }[] {
+    return this.segCenterYs().map(y => ({ x: this.trackX, y }));
+  }
+
+  /**
+   * Setzt den Zug-Zustand für einen erneuten Durchlauf zurück.
+   * Muss vor dem nächsten `spawn()` aufgerufen werden.
+   */
+  reset(): void {
+    this.hp        = TRAIN.HP_MAX;
+    this.alive     = false;
+    this.active    = false;
+    this.destroyed = false;
+    this.lastHitter = null;
+    this.locoY     = this.initialLocoY();
+    // Hitboxen repositionieren und deaktivieren
+    this.updateSegmentPositions();
+    for (const s of this.segObjects) {
+      (s.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    }
+  }
+
   /**
    * True wenn der letzte Waggon die Arena vollständig verlassen hat.
    *
@@ -309,10 +337,11 @@ export class TrainManager {
     const avgY = ys.reduce((a, b) => a + b, 0) / ys.length;
 
     this.onDestroyed?.({
-      lastHitterId: this.lastHitter,
-      centerX:      this.trackX,
-      centerY:      avgY,
-      totalHeight:  this.totalHeight(),
+      lastHitterId:     this.lastHitter,
+      centerX:          this.trackX,
+      centerY:          avgY,
+      totalHeight:      this.totalHeight(),
+      segmentPositions: ys.map(y => ({ x: this.trackX, y })),
     });
   }
 }

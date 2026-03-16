@@ -169,8 +169,8 @@ export class ProjectileManager {
       const onTrainHit = this.onTrainHit;
       const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
         onTrainHit?.(tracked.damage, tracked.ownerId);
-        // Projektil nach Treffer sicher abräumen (next hostUpdate-Cycle)
-        tracked.bounceCount = tracked.maxBounces + 1;
+        // bounceCount++ → Physik prallt ab; nicht-bouncende Projektile (maxBounces=0) sterben nächsten Frame
+        tracked.bounceCount++;
       });
       tracked.colliders.push(trainCollider);
     }
