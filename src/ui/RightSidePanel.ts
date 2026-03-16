@@ -23,9 +23,16 @@ const TIMER_BG_H          = 44;
 const TIMER_COLOR_NORMAL  = '#e0e0e0';
 const TIMER_COLOR_WARNING = '#ff4444';
 
+// Zug-Widget (zwischen Timer und Killfeed)
+const TRAIN_WIDGET_SEP_Y  = 56;   // Trennlinie unter Timer
+const TRAIN_WIDGET_TEXT_Y = 72;   // Ankunfts-/Status-Text
+const TRAIN_BAR_Y         = 90;   // HP-Balken Mittellinie
+const TRAIN_BAR_H         = 12;   // Balkenhöhe
+const TRAIN_WIDGET_BOT_Y  = 104;  // Unterkante des Widgets
+
 // Killfeed: Namen links/rechts, Waffe zentriert
 const KILLFEED_MAX     = 5;
-const KILLFEED_TOP_Y   = 66;    // Y des ersten (neuesten) Eintrags
+const KILLFEED_TOP_Y   = 116;   // Y des ersten (neuesten) Eintrags (nach Train-Widget verschoben)
 const KILLFEED_ENTRY_H = 22;
 const KILLFEED_FONT    = '13px';
 const KILLFEED_NAME_MAXLEN = 8; // Zeichen – wird mit … abgeschnitten
@@ -75,6 +82,12 @@ export class RightSidePanel {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
   }[] = [];
+
+  // ── Zug-Widget ────────────────────────────────────────────────────────────
+  private trainText!:      Phaser.GameObjects.Text;
+  private trainBarBg!:     Phaser.GameObjects.Rectangle;
+  private trainBarFill!:   Phaser.GameObjects.Rectangle;
+  private trainWidgetVisible = false;
 
   // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
   private resultsHeader!: Phaser.GameObjects.Text;
@@ -207,6 +220,48 @@ export class RightSidePanel {
     }
   }
 
+  // ── Zug-Widget-Updates ────────────────────────────────────────────────────
+
+  /**
+   * Zeigt Ankunftszeit des Zugs (vor Spawn).
+   * secsUntil = Sekunden bis der Zug einfährt.
+   */
+  setTrainArrival(secsUntil: number): void {
+    const mm = Math.floor(secsUntil / 60);
+    const ss = secsUntil % 60;
+    const timeStr = `${mm}:${ss.toString().padStart(2, '0')}`;
+    this.trainText.setText(`RB 54 fährt ein um:\n${timeStr}`).setVisible(true);
+    this.trainBarBg.setVisible(false);
+    this.trainBarFill.setVisible(false);
+    this.trainWidgetVisible = true;
+  }
+
+  /** Aktualisiert den HP-Balken des Zugs während er aktiv ist. */
+  updateTrainHP(hp: number, maxHp: number): void {
+    const ratio = Math.max(0, hp / maxHp);
+    const barMaxW = PANEL_WIDTH - 16;
+    this.trainText.setText('RB 54').setVisible(true);
+    this.trainBarBg.setVisible(true);
+    this.trainBarFill.setSize(barMaxW * ratio, TRAIN_BAR_H).setVisible(true);
+    this.trainWidgetVisible = true;
+  }
+
+  /** Zeigt "Zug fällt aus"-Meldung nach Zerstörung. */
+  showTrainDestroyed(): void {
+    this.trainText.setText('RB 54 fällt\nheute leider aus').setVisible(true);
+    this.trainBarBg.setVisible(false);
+    this.trainBarFill.setVisible(false);
+    this.trainWidgetVisible = true;
+  }
+
+  /** Blendet das Zug-Widget vollständig aus (z.B. nach Match-Ende). */
+  hideTrainWidget(): void {
+    this.trainText.setVisible(false);
+    this.trainBarBg.setVisible(false);
+    this.trainBarFill.setVisible(false);
+    this.trainWidgetVisible = false;
+  }
+
   destroy(): void {
     this.lobbyContainer.destroy(true);
     this.gameContainer.destroy(true);
@@ -231,6 +286,32 @@ export class RightSidePanel {
     }).setOrigin(0.5).setScrollFactor(0);
 
     this.gameContainer.add([timerBg, this.timerText]);
+
+    // ── Zug-Widget ────────────────────────────────────────────────────────────
+    this.gameContainer.add(
+      this.scene.add.rectangle(SIDEBAR_CENTER_X, TRAIN_WIDGET_SEP_Y, PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
+        .setScrollFactor(0),
+    );
+
+    this.trainText = this.scene.add.text(SIDEBAR_CENTER_X, TRAIN_WIDGET_TEXT_Y, '', {
+      fontSize:   '11px',
+      fontFamily: 'monospace',
+      color:      '#c0a060',
+      align:      'center',
+      wordWrap:   { width: PANEL_WIDTH - 8 },
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
+
+    // HP-Balken Hintergrund
+    this.trainBarBg = this.scene.add.rectangle(
+      SIDEBAR_CENTER_X, TRAIN_BAR_Y, PANEL_WIDTH - 16, TRAIN_BAR_H, 0x331a00,
+    ).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
+
+    // HP-Balken Füllung (Breite wird dynamisch angepasst)
+    this.trainBarFill = this.scene.add.rectangle(
+      SIDEBAR_LEFT_X + 8, TRAIN_BAR_Y, PANEL_WIDTH - 16, TRAIN_BAR_H, 0xcf573c,
+    ).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
+
+    this.gameContainer.add([this.trainText, this.trainBarBg, this.trainBarFill]);
 
     // ── Trennlinie vor Killfeed ───────────────────────────────────────────────
     this.gameContainer.add(

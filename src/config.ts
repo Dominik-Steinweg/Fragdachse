@@ -11,6 +11,7 @@ export const ARENA_OFFSET_Y = 12;
 export const DEPTH = {
   GRASS: 1,
   TRACKS: 2,
+  TRAIN: 5,
   ROCKS: 9,
   PLAYERS: 10,
   PROJECTILES: 15,

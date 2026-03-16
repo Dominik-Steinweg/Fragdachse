@@ -215,6 +215,23 @@ export interface ArenaLayout {
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
 export interface RockNetState { id: number; hp: number; }
 
+/** Konfiguration des Zug-Events – einmalig vom Host veröffentlicht (reliable) */
+export interface TrainEventConfig {
+  trackX:    number;   // Welt-X der Gleisspalte (Mitte)
+  direction: 1 | -1;  // 1 = oben→unten, -1 = unten→oben
+  spawnAt:   number;   // Spielzeit in ms ab Match-Start (wann spawnt der Zug)
+}
+
+/** Per-Frame Zug-Zustand (Host → Clients, unreliable) */
+export interface SyncedTrainState {
+  alive:    boolean;  // false = zerstört oder noch nicht gespawnt
+  x:        number;   // Welt-X (Gleismitte)
+  y:        number;   // Welt-Y der Lokomotive (Mittelpunkt)
+  dir:      1 | -1;   // Fahrtrichtung
+  hp:       number;   // aktuell verbleibende HP (0 = zerstört)
+  maxHp:    number;   // maximale HP (für HP-Bar-Berechnung)
+}
+
 /** Synchronisiertes Power-Up auf dem Boden (Host → Clients via GameState) */
 export interface SyncedPowerUp {
   uid:   number;   // Eindeutige ID dieses World-Items

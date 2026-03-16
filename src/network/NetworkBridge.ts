@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, GamePhase, ArenaLayout, RockNetState, LoadoutSlot } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, TrainEventConfig, SyncedTrainState } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -41,6 +41,8 @@ const KEY_MELEE_SWINGS   = 'mls'; // global: SyncedMeleeSwing[]   (unreliable, k
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
 const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
+const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   einmalig pro Runde)
+const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -72,6 +74,7 @@ export interface GameState {
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
+  train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
 }
 
 type LoadoutUseHandler = (
@@ -105,6 +108,7 @@ type ColorDeniedHandler = (requesterId: string) => void;
 type ColorChangeHandler = (playerId: string, color: number) => void;
 type KillEventHandler = (event: KillEvent) => void;
 type PowerUpPickupHandler = (uid: number, playerId: string) => void;
+type TrainDestroyedHandler = () => void;
 
 interface RpcEnvelope {
   type: string;
@@ -139,6 +143,7 @@ export class NetworkBridge {
   private colorChangeHandler: ColorChangeHandler | null = null;
   private killEventHandler: KillEventHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
+  private trainDestroyedHandler: TrainDestroyedHandler | null = null;
 
   // ── Lobby-Initialisierung (einmalig vor activate()) ────────────────────────
   static async initializeLobby(): Promise<void> {
@@ -345,6 +350,7 @@ export class NetworkBridge {
     setState(KEY_SMOKE_CLOUDS,   state.smokes,        false);
     setState(KEY_FIRE_ZONES,     state.fires,         false);
     setState(KEY_POWERUPS,       state.powerups,      false);
+    setState(KEY_TRAIN_STATE,    state.train,         false);
   }
 
   getLatestGameState(): GameState | undefined {
@@ -356,6 +362,7 @@ export class NetworkBridge {
     const smokes      = getState(KEY_SMOKE_CLOUDS)  as SyncedSmokeCloud[]  | undefined;
     const fires       = getState(KEY_FIRE_ZONES)    as SyncedFireZone[]    | undefined;
     const powerups    = getState(KEY_POWERUPS)      as SyncedPowerUp[]     | undefined;
+    const train       = getState(KEY_TRAIN_STATE)   as SyncedTrainState | null | undefined;
     if (!players) return undefined;
     return {
       players,
@@ -366,7 +373,36 @@ export class NetworkBridge {
       smokes:       smokes       ?? [],
       fires:        fires        ?? [],
       powerups:     powerups     ?? [],
+      train:        train        ?? null,
     };
+  }
+
+  // ── Zug-Event: Host → Alle (global, reliable, einmalig pro Runde) ──────────
+
+  /** Host-only: Veröffentlicht die Zug-Konfiguration für die Runde. */
+  publishTrainEvent(cfg: TrainEventConfig): void {
+    setState(KEY_TRAIN_EVENT, cfg, true);
+  }
+
+  /** Liest die Zug-Event-Konfiguration (undefined = noch nicht gesetzt). */
+  getTrainEvent(): TrainEventConfig | undefined {
+    return getState(KEY_TRAIN_EVENT) as TrainEventConfig | undefined;
+  }
+
+  // ── Zug-Zerstörung: Host → Alle (RPC, einmalig) ───────────────────────────
+
+  /** Host-only: Broadcastet, dass der Zug zerstört wurde. */
+  broadcastTrainDestroyed(): void {
+    this.broadcastRpc('trdes', {});
+  }
+
+  /** Registriert einen Handler für die Zug-Zerstörung (alle Clients inkl. Host). */
+  registerTrainDestroyedHandler(cb: () => void): void {
+    this.trainDestroyedHandler = cb;
+    this.registerAllRpcHandler('trdes', async (): Promise<unknown> => {
+      this.trainDestroyedHandler?.();
+      return undefined;
+    });
   }
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
@@ -723,6 +759,15 @@ export class NetworkBridge {
     if (!ps) return;
     const current = (ps.getState(KEY_FRAGS) as number | undefined) ?? 0;
     ps.setState(KEY_FRAGS, current + 1);
+  }
+
+  /** Host-only: Erhöht den Frag-Zähler eines Spielers um einen beliebigen Betrag. */
+  addPlayerFrags(playerId: string, amount: number): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    const current = (ps.getState(KEY_FRAGS) as number | undefined) ?? 0;
+    ps.setState(KEY_FRAGS, current + amount);
   }
 
   /** Host-only: Setzt die Frags aller verbundenen Spieler auf 0 zurück. */

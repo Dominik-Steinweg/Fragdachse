@@ -19,8 +19,11 @@ import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
-import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS } from '../powerups/PowerUpConfig';
+import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS, TRAIN_DROP_COUNT } from '../powerups/PowerUpConfig';
 import { DetonationSystem }    from '../systems/DetonationSystem';
+import { TrainManager }        from '../train/TrainManager';
+import { TrainRenderer }       from '../train/TrainRenderer';
+import { TRAIN }               from '../train/TrainConfig';
 import { LeftSidePanel }       from '../ui/LeftSidePanel';
 import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem }           from '../ui/AimSystem';
@@ -70,6 +73,12 @@ export class ArenaScene extends Phaser.Scene {
   private loadoutManager:    LoadoutManager    | null = null;
   private powerUpSystem:     PowerUpSystem     | null = null;
   private detonationSystem:  DetonationSystem  | null = null;
+
+  // ── Zug-Event ─────────────────────────────────────────────────────────────
+  private trainManager:       TrainManager  | null = null;
+  private trainRenderer:      TrainRenderer | null = null;
+  private trainSpawned          = false;
+  private trainDestroyedShown   = false;
 
   // ── Client-seitiges PowerUp-Rendering ───────────────────────────────────────
   private powerUpSprites = new Map<number, Phaser.GameObjects.Rectangle>();
@@ -239,6 +248,12 @@ export class ArenaScene extends Phaser.Scene {
         event.weapon,
         event.victimName, event.victimColor,
       );
+    });
+
+    // Zug-Zerstörungs-Handler: alle Clients zeigen "fällt leider aus"-Meldung
+    bridge.registerTrainDestroyedHandler(() => {
+      this.trainDestroyedShown = true;
+      this.rightPanel.showTrainDestroyed();
     });
 
     // ── 15. Lobby-Overlay erstellen und anzeigen ──────────────────────────
@@ -497,6 +512,11 @@ export class ArenaScene extends Phaser.Scene {
 
       // Kill-Callback: Frags erhöhen + Kill-Ereignis broadcasten + PowerUp-Drop
       this.combatSystem.setKillCallback((killerId, victimId, weapon, x, y) => {
+        // Zug-Kills: kein Frag, kein Killfeed-Eintrag (Zug übernimmt das selbst)
+        if (killerId === TRAIN.TRAIN_KILLER_ID) {
+          this.powerUpSystem?.onPlayerKilled(x, y);
+          return;
+        }
         bridge.incrementPlayerFrags(killerId);
         const allPlayers    = bridge.getConnectedPlayers();
         const killerProfile = allPlayers.find(p => p.id === killerId);
@@ -536,7 +556,65 @@ export class ArenaScene extends Phaser.Scene {
         if (!player) return;
         this.powerUpSystem?.tryPickup(playerId, uid, player.sprite.x, player.sprite.y);
       });
+
+      // ── Zug-Event (Host-only) ────────────────────────────────────────────
+      // Gleisspalte aus dem Layout lesen (erste TrackCell → gridX)
+      const trackCell = layout.tracks?.[0];
+      if (trackCell !== undefined) {
+        const trackX  = ARENA_OFFSET_X + trackCell.gridX * CELL_SIZE + CELL_SIZE / 2;
+        const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+        const spawnAt = bridge.getArenaStartTime() + TRAIN.SPAWN_DELAY_S * 1000;
+
+        bridge.publishTrainEvent({ trackX, direction, spawnAt });
+
+        this.trainManager = new TrainManager(this, this.playerManager, trackX, direction);
+        this.trainSpawned = false;
+        this.trainDestroyedShown = false;
+
+        // Projektil-Kollision mit dem Zug verdrahten
+        this.projectileManager.setTrainGroup(this.trainManager.getGroup());
+        this.projectileManager.setTrainHitCallback((damage, attackerId) => {
+          this.trainManager?.applyDamage(damage, attackerId);
+        });
+
+        // Spieler-Kollision → sofortiger Kill (skipBurrowCheck=true, kein Frag-Kredit)
+        this.trainManager.setPlayerHitCallback((playerId) => {
+          this.combatSystem.applyDamage(playerId, 9999, true, TRAIN.TRAIN_KILLER_ID, 'Zug RB 54');
+        });
+
+        // Zerstörungs-Callback
+        this.trainManager.setDestroyCallback((result) => {
+          // KILL_FRAGS an den letzten Treffer-Spieler vergeben
+          if (result.lastHitterId) {
+            bridge.addPlayerFrags(result.lastHitterId, TRAIN.KILL_FRAGS);
+            const allPlayers  = bridge.getConnectedPlayers();
+            const hitter = allPlayers.find(p => p.id === result.lastHitterId);
+            if (hitter) {
+              bridge.broadcastKillEvent({
+                killerId:    hitter.id,
+                killerName:  hitter.name,
+                killerColor: hitter.colorHex,
+                weapon:      'Zug RB 54',
+                victimId:    '__train__',
+                victimName:  'RB 54',
+                victimColor: 0xcf573c,
+              });
+            }
+          }
+          // Power-Ups spawnen
+          for (let i = 0; i < TRAIN_DROP_COUNT; i++) {
+            const scatter = 60;
+            const ox = (Math.random() - 0.5) * scatter;
+            const oy = (Math.random() - 0.5) * scatter;
+            this.powerUpSystem?.spawnFromTable('TRAIN_DESTROY', result.centerX + ox, result.centerY + oy);
+          }
+          bridge.broadcastTrainDestroyed();
+        });
+      }
     }
+
+    // ── TrainRenderer (alle Clients inkl. Host) ──────────────────────────────
+    this.trainRenderer = new TrainRenderer(this);
   }
 
   private tearDownArena(): void {
@@ -575,6 +653,17 @@ export class ArenaScene extends Phaser.Scene {
     // Client-seitige PowerUp-Sprites aufräumen
     for (const rect of this.powerUpSprites.values()) rect.destroy();
     this.powerUpSprites.clear();
+
+    // Zug aufräumen
+    this.trainManager?.destroy();
+    this.trainManager = null;
+    this.trainRenderer?.destroy();
+    this.trainRenderer = null;
+    this.projectileManager.setTrainGroup(null);
+    this.projectileManager.setTrainHitCallback(null);
+    this.trainSpawned        = false;
+    this.trainDestroyedShown = false;
+    this.rightPanel.hideTrainWidget();
   }
 
   // ── Update ───────────────────────────────────────────────────────────────
@@ -611,6 +700,25 @@ export class ArenaScene extends Phaser.Scene {
     if (phase === 'ARENA' && !this.matchTerminated) {
       const secs = bridge.computeSecondsLeft();
       this.rightPanel.updateTimer(secs);
+
+      // ── Zug-Widget aktualisieren ──────────────────────────────────────────
+      const trainEvent = bridge.getTrainEvent();
+      if (trainEvent) {
+        if (this.trainDestroyedShown) {
+          // showTrainDestroyed() wurde bereits via RPC gesetzt – nichts tun
+        } else {
+          // Letzten State aus GameState lesen (Client + Host teilen denselben Pfad)
+          const latestState = bridge.getLatestGameState();
+          const trainState  = latestState?.train ?? null;
+          if (trainState?.alive) {
+            this.rightPanel.updateTrainHP(trainState.hp, trainState.maxHp);
+          } else if (Date.now() < trainEvent.spawnAt) {
+            // Noch nicht gespawnt – Ankunftszeit anzeigen
+            const secsUntil = Math.max(0, Math.ceil((trainEvent.spawnAt - Date.now()) / 1000));
+            this.rightPanel.setTrainArrival(secsUntil);
+          }
+        }
+      }
 
       if (bridge.isHost()) {
         this.spawnReadyPlayers();
@@ -716,6 +824,20 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true);
     }
 
+    // ── Zug-Update (Host) ─────────────────────────────────────────────────────
+    if (!countdownActive && this.trainManager) {
+      if (!this.trainSpawned) {
+        const trainEvent = bridge.getTrainEvent();
+        if (trainEvent && Date.now() >= trainEvent.spawnAt) {
+          this.trainManager.spawn();
+          this.trainSpawned = true;
+        }
+      }
+      if (this.trainSpawned) {
+        this.trainManager.update(delta);
+      }
+    }
+
     const rocks   = this.rockRegistry?.getNetSnapshot() ?? [];
 
     for (const trace of hitscanTraces) {
@@ -758,7 +880,11 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
-    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, meleeSwings, smokes, fires, powerups });
+    const train    = this.trainManager?.getNetSnapshot() ?? null;
+    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, meleeSwings, smokes, fires, powerups, train });
+
+    // Zug-Renderer auf dem Host direkt aktualisieren (kein Client-Update-Pfad)
+    this.trainRenderer?.update(train);
 
     // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
     this.syncPowerUpSprites(powerups);
@@ -825,6 +951,9 @@ export class ArenaScene extends Phaser.Scene {
         );
       }
     }
+
+    // ── Zug-Renderer aktualisieren ────────────────────────────────────────
+    this.trainRenderer?.update(state.train ?? null);
 
     // ── PowerUp-Sprites synchronisieren ──────────────────────────────────
     this.syncPowerUpSprites(state.powerups ?? []);

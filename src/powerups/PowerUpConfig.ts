@@ -38,9 +38,16 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   SCHEDULED_EVENT: {
     // chanceToDrop fehlt → immer 1.0
-    items: { HEALTH_PACK: 20, ADRENALINE: 30, DOUBLE_DAMAGE: 50 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100 },
+  },
+  TRAIN_DESTROY: {
+    // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100 },
   },
 };
+
+/** Anzahl Power-Ups, die beim Zerstören des Zugs gespawnt werden. */
+export const TRAIN_DROP_COUNT = 3;
 
 // ── Geplante Spawns (Sekunden nach Rundenstart) ────────────────────────────
 
@@ -50,8 +57,7 @@ export interface ScheduledSpawn {
 }
 
 export const SCHEDULED_SPAWNS: ScheduledSpawn[] = [
-  { timeSeconds: 30, amount: 2 },
-  { timeSeconds: 60, amount: 3 },
+  { timeSeconds: 90, amount: 1 },
 ];
 
 // ── Pickup-Radius (Pixel) ──────────────────────────────────────────────────

@@ -14,6 +14,10 @@ export class ProjectileManager {
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number) => void) | null = null;
 
+  // ── Zug-Kollision ─────────────────────────────────────────────────────────
+  private trainGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
+  private onTrainHit:  ((damage: number, attackerId: string) => void) | null = null;
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
@@ -40,6 +44,22 @@ export class ProjectileManager {
    */
   setRockHitCallback(cb: (rockId: number, damage: number) => void): void {
     this.onRockHit = cb;
+  }
+
+  /**
+   * Setzt die StaticGroup des Zugs für Projektil-Kollision (Host-only).
+   * null = kein Zug aktiv (deaktiviert die Kollision).
+   */
+  setTrainGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void {
+    this.trainGroup = group;
+  }
+
+  /**
+   * Registriert einen Callback, der bei jedem Projektil-Zug-Treffer aufgerufen wird.
+   * null = kein Handler (deaktiviert den Callback ohne die Kollision zu entfernen).
+   */
+  setTrainHitCallback(cb: ((damage: number, attackerId: string) => void) | null): void {
+    this.onTrainHit = cb;
   }
 
   // ── Host ──────────────────────────────────────────────────────────────────
@@ -143,6 +163,16 @@ export class ProjectileManager {
         tracked.bounceCount++;
       });
       tracked.colliders.push(trunkCollider);
+    }
+
+    if (this.trainGroup) {
+      const onTrainHit = this.onTrainHit;
+      const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+        onTrainHit?.(tracked.damage, tracked.ownerId);
+        // Projektil nach Treffer sicher abräumen (next hostUpdate-Cycle)
+        tracked.bounceCount = tracked.maxBounces + 1;
+      });
+      tracked.colliders.push(trainCollider);
     }
   }
 
