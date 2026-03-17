@@ -8,7 +8,7 @@
  * Gleiche Public API wie LeftSidePanel: build(), transitionToGame(), transitionToLobby().
  */
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, toCssColor } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, COLORS, toCssColor } from '../config';
 import type { RoundResult } from '../network/NetworkBridge';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
@@ -42,8 +42,10 @@ const LB_SEP_Y      = KILLFEED_TOP_Y + KILLFEED_MAX * KILLFEED_ENTRY_H + 10; // 
 const LB_HEADER_Y   = LB_SEP_Y + 14;    // 200
 const LB_START_Y    = LB_HEADER_Y + 26; // 226
 const LB_ENTRY_H    = 22;
-const LB_FONT       = '14px';
+const LB_FONT        = '14px';
 const LB_HEADER_FONT = '13px';
+const LB_FRAGS_X     = SIDEBAR_LEFT_X + 152; // 1840 – Frags rechts-bündig
+const LB_PING_X      = SIDEBAR_RIGHT_X;       // 1912 – Ping rechts-bündig
 
 // Lobby-Endstand
 const RESULTS_HEADER_Y   = 28;
@@ -56,6 +58,13 @@ const RESULTS_HEADER_FONT = '13px';
 const COLOR_DIM       = '#607080';
 const COLOR_HEADER    = '#8fa8b8';
 const COLOR_SEPARATOR = 0x334455;
+
+function pingColor(ms: number): string {
+  if (ms <= 50)  return toCssColor(COLORS.GREEN_2);
+  if (ms <= 100) return toCssColor(COLORS.GOLD_1);
+  if (ms <= 200) return toCssColor(COLORS.RED_1);
+  return toCssColor(COLORS.RED_3);
+}
 
 export class RightSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
@@ -81,8 +90,7 @@ export class RightSidePanel {
   private lbRows: {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
-  }[] = [];
-
+  }[] = [];  private lbPingRows: Phaser.GameObjects.Text[] = [];
   // ── Zug-Widget ────────────────────────────────────────────────────────────
   private trainText!:      Phaser.GameObjects.Text;
   private trainBarBg!:     Phaser.GameObjects.Rectangle;
@@ -182,16 +190,19 @@ export class RightSidePanel {
    * Aktualisiert das Arena-Leaderboard.
    * entries muss bereits absteigend nach Frags sortiert sein.
    */
-  updateLeaderboard(entries: { name: string; colorHex: number; frags: number }[]): void {
+  updateLeaderboard(entries: { name: string; colorHex: number; frags: number; ping: number }[]): void {
     for (let i = 0; i < this.lbRows.length; i++) {
-      const row   = this.lbRows[i];
-      const entry = entries[i];
+      const row      = this.lbRows[i];
+      const pingText = this.lbPingRows[i];
+      const entry    = entries[i];
       if (entry) {
         row.name.setText(`${i + 1}. ${entry.name}`).setColor(toCssColor(entry.colorHex)).setVisible(true);
         row.frags.setText(String(entry.frags)).setVisible(true);
+        pingText.setText(`${entry.ping}ms`).setColor(pingColor(entry.ping)).setVisible(true);
       } else {
         row.name.setVisible(false);
         row.frags.setVisible(false);
+        pingText.setVisible(false);
       }
     }
   }
@@ -362,12 +373,20 @@ export class RightSidePanel {
 
     // ── Leaderboard-Header ────────────────────────────────────────────────────
     this.gameContainer.add(
-      this.scene.add.text(SIDEBAR_CENTER_X, LB_HEADER_Y, 'F R A G S', {
+      this.scene.add.text(LB_FRAGS_X, LB_HEADER_Y, 'F R A G S', {
         fontSize:   LB_HEADER_FONT,
         fontFamily: 'monospace',
         color:      COLOR_HEADER,
         fontStyle:  'bold',
-      }).setOrigin(0.5, 0.5).setScrollFactor(0),
+      }).setOrigin(1, 0.5).setScrollFactor(0),
+    );
+    this.gameContainer.add(
+      this.scene.add.text(LB_PING_X, LB_HEADER_Y, 'ms', {
+        fontSize:   LB_HEADER_FONT,
+        fontFamily: 'monospace',
+        color:      COLOR_HEADER,
+        fontStyle:  'bold',
+      }).setOrigin(1, 0.5).setScrollFactor(0),
     );
 
     // ── Leaderboard-Einträge (Max. 12 Spieler) ────────────────────────────────
@@ -380,14 +399,21 @@ export class RightSidePanel {
         color:      '#ffffff',
       }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
 
-      const fragsText = this.scene.add.text(SIDEBAR_RIGHT_X, y, '', {
+      const fragsText = this.scene.add.text(LB_FRAGS_X, y, '', {
         fontSize:   LB_FONT,
         fontFamily: 'monospace',
         color:      COLOR_DIM,
       }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
-      this.gameContainer.add([nameText, fragsText]);
+      const pingText = this.scene.add.text(LB_PING_X, y, '', {
+        fontSize:   '11px',
+        fontFamily: 'monospace',
+        color:      toCssColor(COLORS.GREEN_2),
+      }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+
+      this.gameContainer.add([nameText, fragsText, pingText]);
       this.lbRows.push({ name: nameText, frags: fragsText });
+      this.lbPingRows.push(pingText);
     }
   }
 

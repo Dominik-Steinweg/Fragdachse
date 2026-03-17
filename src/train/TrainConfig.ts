@@ -27,7 +27,7 @@ export const TRAIN = {
   SEGMENT_GAP:     4,
 
   /** Gesamt-HP des Zugs (Shared Pool, Lok + alle Waggons zusammen) */
-  HP_MAX:          100,
+  HP_MAX:          300,
 
   /** Frags, die dem Last-Hit-Spieler gutgeschrieben werden */
   KILL_FRAGS:      3,

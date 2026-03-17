@@ -26,13 +26,22 @@ const LOGO_Y   = 120;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
 const LIST_Y   = PANEL_Y + 60;
-const BTN_Y    = PANEL_Y + PANEL_H - 52;
+const BTN_Y      = PANEL_Y + PANEL_H - 52;
+const ROW_PING_X = PANEL_X + PANEL_W - 28; // 1332 – Ping rechts-bündig in Spielerzeile
+
+function pingColor(ms: number): string {
+  if (ms <= 50)  return toCssColor(COLORS.GREEN_2);
+  if (ms <= 100) return toCssColor(COLORS.GOLD_1);
+  if (ms <= 200) return toCssColor(COLORS.RED_1);
+  return toCssColor(COLORS.RED_3);
+}
 
 type PlayerRow = {
   bg:    Phaser.GameObjects.Rectangle;
   name:  Phaser.GameObjects.Text;
   badge: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
+  ping:  Phaser.GameObjects.Text;
 };
 
 export class LobbyOverlay {
@@ -139,7 +148,7 @@ export class LobbyOverlay {
     // Reihen für abgemeldete Spieler entfernen
     for (const [id, row] of this.playerRows) {
       if (!currentIds.has(id)) {
-        row.bg.destroy(); row.name.destroy(); row.badge.destroy(); row.label.destroy();
+        row.bg.destroy(); row.name.destroy(); row.badge.destroy(); row.label.destroy(); row.ping.destroy();
         this.playerRows.delete(id);
       }
     }
@@ -158,6 +167,7 @@ export class LobbyOverlay {
 
     this.repositionRows();
     this.refreshBadges();
+    this.refreshPings();
     this.updateStatus(connectedPlayers.length);
   }
 
@@ -206,8 +216,12 @@ export class LobbyOverlay {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1),  fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
 
-    this.container!.add([bg, name, badge, label]);
-    this.playerRows.set(profile.id, { bg, name, badge, label });
+    const ping = this.scene.add.text(ROW_PING_X, y + (ROW_H - 6) / 2, '', {
+      fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+    }).setOrigin(1, 0.5).setScrollFactor(0);
+
+    this.container!.add([bg, name, badge, label, ping]);
+    this.playerRows.set(profile.id, { bg, name, badge, label, ping });
   }
 
   private repositionRows(): void {
@@ -218,6 +232,7 @@ export class LobbyOverlay {
       row.name.setPosition(LIST_X + 40, y + 10);
       row.badge.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
       row.label.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
+      row.ping.setPosition(ROW_PING_X, y + (ROW_H - 6) / 2);
       idx++;
     }
   }
@@ -229,7 +244,12 @@ export class LobbyOverlay {
       row.label.setText(ready ? '✓' : '✗');
     }
   }
-
+  private refreshPings(): void {
+    for (const [id, row] of this.playerRows) {
+      const ms = this.bridge.getPlayerPing(id);
+      row.ping.setText(`${ms}ms`).setColor(pingColor(ms));
+    }
+  }
   private updateStatus(playerCount: number): void {
     if (playerCount < 2) {
       this.statusText.setText('Warte auf Mitspieler…').setStyle({ color: TEXT_COLOR });

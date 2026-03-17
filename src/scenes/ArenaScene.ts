@@ -276,6 +276,10 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── 17. Initiale Phase lesen (Spät-Joiner-Support) ────────────────────
     this.lastPhase = bridge.getGamePhase();
+
+    // ── 18. Ping-Messung (läuft dauerhaft, auch in LOBBY) ─────────────────
+    bridge.setupPingMeasurement();
+    this.time.addEvent({ delay: 2000, callback: () => bridge.sendPingToHost(), loop: true });
   }
 
   // ── Netzwerk-Events ───────────────────────────────────────────────────────
@@ -784,9 +788,9 @@ export class ArenaScene extends Phaser.Scene {
         this.runClientUpdate();
       }
 
-      // Leaderboard mit aktuellen Frags aktualisieren (alle Clients)
+      // Leaderboard mit aktuellen Frags und Ping aktualisieren (alle Clients)
       const leaderboardEntries = bridge.getConnectedPlayers()
-        .map(p => ({ name: p.name, colorHex: p.colorHex, frags: bridge.getPlayerFrags(p.id) }))
+        .map(p => ({ name: p.name, colorHex: p.colorHex, frags: bridge.getPlayerFrags(p.id), ping: bridge.getPlayerPing(p.id) }))
         .sort((a, b) => b.frags - a.frags);
       this.rightPanel.updateLeaderboard(leaderboardEntries);
 

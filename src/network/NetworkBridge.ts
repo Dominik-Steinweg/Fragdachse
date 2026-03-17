@@ -43,6 +43,7 @@ const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, hos
 const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
 const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   einmalig pro Runde)
 const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
+const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -776,6 +777,46 @@ export class NetworkBridge {
     for (const ps of this.playerStateMap.values()) {
       ps.setState(KEY_FRAGS, 0);
     }
+  }
+
+  // ── Ping-Messung: Client → Host → Alle ────────────────────────────────────
+
+  /** Liest den gemessenen Roundtrip-Ping eines Spielers in ms (Standard: 0 für Host). */
+  getPlayerPing(playerId: string): number {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_PING) as number | undefined) ?? 0;
+  }
+
+  /**
+   * Client-only: Sendet einen Ping-Request an den Host.
+   * Für den Host kein-Op (bleibt bei Default-Ping 0 ms).
+   */
+  sendPingToHost(): void {
+    if (isHost()) return;
+    this.sendHostRpc('png', { ts: Date.now(), id: myPlayer().id });
+  }
+
+  /**
+   * Registriert die RPC-Handler für die Round-Trip-Ping-Messung.
+   * Muss einmalig in ArenaScene.create() aufgerufen werden.
+   *
+   * Ablauf:
+   *   Client → Host ('png'):  sendet { ts, id }
+   *   Host   → Alle ('pong'): broadcastet { ts, id } zurück
+   *   Client ('pong'):        misst RTT, schreibt per-player-State KEY_PING
+   */
+  setupPingMeasurement(): void {
+    this.registerHostRpcHandler('png', async (data: unknown): Promise<unknown> => {
+      if (!isHost()) return undefined;
+      const { ts, id } = data as { ts: number; id: string };
+      this.broadcastRpc('pong', { ts, id });
+      return undefined;
+    });
+    this.registerAllRpcHandler('pong', async (data: unknown): Promise<unknown> => {
+      const { ts, id } = data as { ts: number; id: string };
+      if (id !== myPlayer().id) return undefined;
+      myPlayer().setState(KEY_PING, Date.now() - ts);
+      return undefined;
+    });
   }
 
   // ── Rundenabschluss-Snapshot: Host → Alle (global, reliable) ─────────────
