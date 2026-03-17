@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, TrainEventConfig, SyncedTrainState } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -87,6 +87,7 @@ type LoadoutUseHandler = (
   targetY: number,
   senderId: string,
   shotId?: number,
+  params?: LoadoutUseParams,
 ) => void;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number) => void;
@@ -413,24 +414,46 @@ export class NetworkBridge {
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
 
-  sendLoadoutUse(slot: LoadoutSlot, angle: number, targetX: number, targetY: number, shotId?: number): void {
+  sendLoadoutUse(
+    slot: LoadoutSlot,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    shotId?: number,
+    params?: LoadoutUseParams,
+  ): void {
     if (isHost()) {
-      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId);
+      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params);
       return;
     }
-    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId });
+    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params });
   }
 
   registerLoadoutUseHandler(
-    handler: (slot: LoadoutSlot, angle: number, targetX: number, targetY: number, senderId: string, shotId?: number) => void,
+    handler: (
+      slot: LoadoutSlot,
+      angle: number,
+      targetX: number,
+      targetY: number,
+      senderId: string,
+      shotId?: number,
+      params?: LoadoutUseParams,
+    ) => void,
   ): void {
     this.loadoutUseHandler = handler;
     this.registerHostRpcHandler('lu', async (data: unknown, caller: PlayerState): Promise<unknown> => {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
-      const { slot, angle, tx, ty, sid } = data as { slot: LoadoutSlot; angle: number; tx: number; ty: number; sid?: number };
-      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid);
+      const { slot, angle, tx, ty, sid, prm } = data as {
+        slot: LoadoutSlot;
+        angle: number;
+        tx: number;
+        ty: number;
+        sid?: number;
+        prm?: LoadoutUseParams;
+      };
+      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm);
       return undefined;
     });
   }

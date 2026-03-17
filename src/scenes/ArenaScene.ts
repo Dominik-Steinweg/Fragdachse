@@ -14,7 +14,7 @@ import { BurrowSystem }        from '../systems/BurrowSystem';
 import { LoadoutManager }      from '../loadout/LoadoutManager';
 import type { LoadoutSelection } from '../loadout/LoadoutManager';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
-import type { WeaponConfig }   from '../loadout/LoadoutConfig';
+import type { UtilityConfig, WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
@@ -28,7 +28,7 @@ import { TrainRenderer }       from '../train/TrainRenderer';
 import { TRAIN }               from '../train/TrainConfig';
 import { LeftSidePanel }       from '../ui/LeftSidePanel';
 import { RightSidePanel }      from '../ui/RightSidePanel';
-import { AimSystem }           from '../ui/AimSystem';
+import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { LobbyOverlay }        from './LobbyOverlay';
 import type { PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, WeaponSlot } from '../types';
@@ -60,6 +60,7 @@ export class ArenaScene extends Phaser.Scene {
   private leftPanel!:  LeftSidePanel;
   private rightPanel!: RightSidePanel;
   private aimSystem:   AimSystem | null = null;
+  private utilityChargeIndicator: UtilityChargeIndicator | null = null;
   private arenaCountdown: ArenaCountdownOverlay | null = null;
 
   // Alive/Burrowed-Flags des lokalen Spielers (gesetzt in runHostUpdate/runClientUpdate)
@@ -167,13 +168,14 @@ export class ArenaScene extends Phaser.Scene {
       () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
     );
     this.inputSystem.setup();
-    this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY) => {
+    this.inputSystem.setupUtilityConfigProvider(() => this.getLocalUtilityConfig());
+    this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       let shotId: number | undefined;
       if (slot === 'weapon1' || slot === 'weapon2') {
         this.aimSystem?.notifyShot(slot);
         shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
       }
-      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId);
+      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params);
     });
 
     bridge.registerDashHandler((playerId, dx, dy) => {
@@ -201,12 +203,17 @@ export class ArenaScene extends Phaser.Scene {
       (slot) => this.getLocalWeaponConfig(slot),
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
+    this.utilityChargeIndicator = new UtilityChargeIndicator(
+      this,
+      () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
+    );
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
-    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId) => {
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params) => {
       if (!bridge.isHost()) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now(), shotId);
+      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now(), shotId, params);
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
@@ -821,8 +828,10 @@ export class ArenaScene extends Phaser.Scene {
     const inArena = inGame && !this.matchTerminated;
     const showAim = inArena
                  && this.localPlayerAlive
-                 && !this.localPlayerBurrowed;
+                 && !this.localPlayerBurrowed
+                 && !this.inputSystem.isUtilityCharging();
     this.aimSystem?.update(showAim, inArena, delta);
+    this.utilityChargeIndicator?.update(this.inputSystem.getUtilityChargePreviewState());
   }
 
   // ── Host-Update ──────────────────────────────────────────────────────────
@@ -1059,6 +1068,12 @@ export class ArenaScene extends Phaser.Scene {
 
     const selection = this.resolveLoadoutSelection(localId);
     return selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
+  }
+
+  private getLocalUtilityConfig(): UtilityConfig {
+    const localId = bridge.getLocalPlayerId();
+    const selection = this.resolveLoadoutSelection(localId);
+    return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
   }
 
   private playPredictedLocalHitscanTracer(

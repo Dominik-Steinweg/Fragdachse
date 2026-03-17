@@ -66,12 +66,27 @@ export interface WeaponConfig {
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov';
 
+export interface InstantUtilityActivationConfig {
+  readonly type: 'instant';
+}
+
+export interface ChargedThrowUtilityActivationConfig {
+  readonly type: 'charged_throw';
+  readonly minThrowSpeed: number;      // px/s bei kurzem Antippen
+  readonly fullChargeDuration: number; // ms bis Maximalgeschwindigkeit
+}
+
+export type UtilityActivationConfig =
+  | InstantUtilityActivationConfig
+  | ChargedThrowUtilityActivationConfig;
+
 interface BaseUtilityConfig {
   readonly id: string;
   readonly displayName: string;
   readonly type: UtilityType;
   readonly cooldown: number;        // ms
-  readonly projectileSpeed: number; // px/s (langsam für Granaten)
+  readonly activation: UtilityActivationConfig;
+  readonly projectileSpeed: number; // px/s maximale Wurfgeschwindigkeit
   readonly projectileSize: number;  // px
   readonly fuseTime: number;        // ms bis Explosion
   readonly maxBounces: number;      // 0 = kein Abprallen, >0 = Explosion nach n Abprallern
@@ -101,6 +116,12 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
 }
 
 export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig;
+
+const STANDARD_GRENADE_CHARGE = {
+  type: 'charged_throw',
+  minThrowSpeed: 180,
+  fullChargeDuration: 700,
+} as const satisfies ChargedThrowUtilityActivationConfig;
 
 export interface UltimateConfig {
   readonly id: string;
@@ -345,6 +366,7 @@ export const UTILITY_CONFIGS = {
     displayName:     'HE Granate',
     type:            'explosive',
     cooldown:        6000,
+    activation:      STANDARD_GRENADE_CHARGE,
     projectileSpeed: 500,
     projectileSize:  10,
     fuseTime:        750,
@@ -358,6 +380,7 @@ export const UTILITY_CONFIGS = {
     displayName:            'Smoke Granate',
     type:                   'smoke',
     cooldown:               7000,
+    activation:             STANDARD_GRENADE_CHARGE,
     projectileSpeed:        500,
     projectileSize:         10,
     fuseTime:               750,
@@ -374,6 +397,7 @@ export const UTILITY_CONFIGS = {
     displayName:        'Molotov',
     type:               'molotov',
     cooldown:           8000,
+    activation:         STANDARD_GRENADE_CHARGE,
     projectileSpeed:    500,
     projectileSize:     10,
     fuseTime:           750,

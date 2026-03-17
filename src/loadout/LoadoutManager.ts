@@ -3,8 +3,9 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
-import type { LoadoutSlot, PlayerAimNetState, WeaponSlot } from '../types';
+import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, WeaponSlot } from '../types';
 import type {
+  ChargedThrowUtilityActivationConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
   UltimateConfig,
@@ -100,6 +101,7 @@ export class LoadoutManager {
     _targetY: number,
     now:      number,
     shotId?:  number,
+    params?:  LoadoutUseParams,
   ): void {
     const loadout = this.loadouts.get(playerId);
     if (!loadout) return;
@@ -119,45 +121,7 @@ export class LoadoutManager {
         break;
 
       case 'utility': {
-        if (loadout.utility.isOnCooldown(now)) return;
-        const cfg = loadout.utility.config;
-        const grenadeEffect =
-          cfg.type === 'explosive'
-            ? {
-                type:   'damage' as const,
-                radius: cfg.aoeRadius,
-                damage: cfg.aoeDamage,
-              }
-            : cfg.type === 'molotov'
-              ? {
-                  type:          'fire' as const,
-                  radius:        cfg.fireRadius,
-                  damagePerTick: cfg.fireDamagePerTick,
-                  tickInterval:  cfg.fireTickInterval,
-                  lingerDuration: cfg.fireLingerDuration,
-                }
-              : {
-                  type:              'smoke' as const,
-                  radius:            cfg.smokeRadius,
-                  spreadDuration:    cfg.smokeExpandDuration,
-                  lingerDuration:    cfg.smokeLingerDuration,
-                  dissipateDuration: cfg.smokeDissipateDuration,
-                  maxAlpha:          cfg.smokeMaxAlpha,
-                };
-        this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-          speed:         cfg.projectileSpeed,
-          size:          cfg.projectileSize,
-          damage:        0,              // kein Direkttreffer-Schaden
-          color:         player.color,
-          lifetime:      cfg.fuseTime,   // Lifetime = Zündzeit
-          maxBounces:    cfg.maxBounces,
-          isGrenade:     true,
-          adrenalinGain: 0,              // Granaten geben kein Adrenalin
-          weaponName:    cfg.displayName,
-          fuseTime:      cfg.fuseTime,
-          grenadeEffect,
-        });
-        loadout.utility.recordUse(now);
+        this.useUtility(loadout.utility, x, y, angle, playerId, now, player.color, params);
         break;
       }
 
@@ -331,6 +295,103 @@ export class LoadoutManager {
     // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen
     weapon.addSpread();
     weapon.recordUse(now);
+  }
+
+  private useUtility(
+    utility: BaseUtility,
+    x: number,
+    y: number,
+    angle: number,
+    playerId: string,
+    now: number,
+    playerColor: number,
+    params?: LoadoutUseParams,
+  ): void {
+    if (utility.isOnCooldown(now)) return;
+
+    const cfg = utility.config;
+    let didUse = false;
+
+    switch (cfg.activation.type) {
+      case 'charged_throw':
+        didUse = this.throwGrenadeUtility(
+          cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },
+          x,
+          y,
+          angle,
+          playerId,
+          playerColor,
+          params?.utilityChargeFraction ?? 0,
+        );
+        break;
+
+      case 'instant':
+        didUse = false;
+        break;
+    }
+
+    if (didUse) {
+      utility.recordUse(now);
+    }
+  }
+
+  private throwGrenadeUtility(
+    cfg: UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },
+    x: number,
+    y: number,
+    angle: number,
+    playerId: string,
+    playerColor: number,
+    chargeFraction: number,
+  ): boolean {
+    const clampedCharge = Math.max(0, Math.min(1, chargeFraction));
+    const speed = cfg.activation.minThrowSpeed
+      + (cfg.projectileSpeed - cfg.activation.minThrowSpeed) * clampedCharge;
+
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed,
+      size:          cfg.projectileSize,
+      damage:        0,
+      color:         playerColor,
+      lifetime:      cfg.fuseTime,
+      maxBounces:    cfg.maxBounces,
+      isGrenade:     true,
+      adrenalinGain: 0,
+      weaponName:    cfg.displayName,
+      fuseTime:      cfg.fuseTime,
+      grenadeEffect: this.buildGrenadeEffect(cfg),
+    });
+
+    return true;
+  }
+
+  private buildGrenadeEffect(cfg: UtilityConfig): GrenadeEffectConfig {
+    if (cfg.type === 'explosive') {
+      return {
+        type:   'damage',
+        radius: cfg.aoeRadius,
+        damage: cfg.aoeDamage,
+      };
+    }
+
+    if (cfg.type === 'molotov') {
+      return {
+        type:           'fire',
+        radius:         cfg.fireRadius,
+        damagePerTick:  cfg.fireDamagePerTick,
+        tickInterval:   cfg.fireTickInterval,
+        lingerDuration: cfg.fireLingerDuration,
+      };
+    }
+
+    return {
+      type:              'smoke',
+      radius:            cfg.smokeRadius,
+      spreadDuration:    cfg.smokeExpandDuration,
+      lingerDuration:    cfg.smokeLingerDuration,
+      dissipateDuration: cfg.smokeDissipateDuration,
+      maxAlpha:          cfg.smokeMaxAlpha,
+    };
   }
 
   private dispatchWeaponFire(

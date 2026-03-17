@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { PlayerInput, LoadoutSlot } from '../types';
+import type { PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState } from '../types';
 import { DASH_COOLDOWN_MS } from '../config';
+import type { ChargedThrowUtilityActivationConfig, UtilityConfig } from '../loadout/LoadoutConfig';
 
 export class InputSystem {
   private scene:           Phaser.Scene;
@@ -21,7 +22,9 @@ export class InputSystem {
   private dashCooldownUntil = 0;  // ms-Timestamp
 
   // Loadout-Callback (gesetzt von ArenaScene)
-  private onLoadoutUse: ((slot: LoadoutSlot, angle: number, targetX: number, targetY: number) => void) | null = null;
+  private onLoadoutUse: ((slot: LoadoutSlot, angle: number, targetX: number, targetY: number, params?: LoadoutUseParams) => void) | null = null;
+  private getLocalUtilityConfig: (() => UtilityConfig | undefined) | null = null;
+  private utilityChargeStartedAt: number | null = null;
 
   // Lokaler Zustand vom Host empfangen
   private localIsStunned  = false;
@@ -58,9 +61,13 @@ export class InputSystem {
    * Wird aufgerufen wenn der Spieler eine Aktion ausführt (Waffe, Utility, Ultimate).
    */
   setupLoadoutListener(
-    cb: (slot: LoadoutSlot, angle: number, targetX: number, targetY: number) => void,
+    cb: (slot: LoadoutSlot, angle: number, targetX: number, targetY: number, params?: LoadoutUseParams) => void,
   ): void {
     this.onLoadoutUse = cb;
+  }
+
+  setupUtilityConfigProvider(cb: () => UtilityConfig | undefined): void {
+    this.getLocalUtilityConfig = cb;
   }
 
   /**
@@ -70,10 +77,12 @@ export class InputSystem {
   setLocalState(isStunned: boolean, isBurrowed: boolean): void {
     this.localIsStunned  = isStunned;
     this.localIsBurrowed = isBurrowed;
+    if (isStunned) this.cancelUtilityCharge();
   }
 
   setInputEnabled(enabled: boolean): void {
     this.inputEnabled = enabled;
+    if (!enabled) this.cancelUtilityCharge();
   }
 
   /**
@@ -83,6 +92,26 @@ export class InputSystem {
     const remaining = this.dashCooldownUntil - Date.now();
     if (remaining <= 0) return 0;
     return Math.min(1, remaining / DASH_COOLDOWN_MS);
+  }
+
+  isUtilityCharging(): boolean {
+    return this.utilityChargeStartedAt !== null;
+  }
+
+  getUtilityChargePreviewState(): UtilityChargePreviewState | undefined {
+    const sprite = this.getLocalSprite();
+    const cfg = this.getChargedThrowUtilityConfig();
+    const startedAt = this.utilityChargeStartedAt;
+    if (!sprite || !cfg || startedAt === null) return undefined;
+
+    const pointer = this.scene.input.activePointer;
+    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, pointer.x, pointer.y);
+    return {
+      angle,
+      chargeFraction: this.computeUtilityChargeFraction(startedAt, cfg.activation, Date.now()),
+      minThrowSpeed: cfg.activation.minThrowSpeed,
+      maxThrowSpeed: cfg.projectileSpeed,
+    };
   }
 
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
@@ -102,7 +131,10 @@ export class InputSystem {
     if (!this.inputEnabled) return;
 
     // ── 2. Stun: keine weiteren Aktionen ───────────────────────────────────
-    if (this.localIsStunned) return;
+    if (this.localIsStunned) {
+      this.cancelUtilityCharge();
+      return;
+    }
 
     // ── 3. Dash (Flanke, einmalig auslösen) ────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
@@ -125,30 +157,76 @@ export class InputSystem {
     const sprite  = this.getLocalSprite();
     const now     = Date.now();
 
-    if (sprite) {
-      const px    = pointer.x;
-      const py    = pointer.y;
-      const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, px, py);
+    if (!sprite) {
+      this.cancelUtilityCharge();
+      return;
+    }
 
-      // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
-      // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
-      // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
-      if (pointer.leftButtonDown()) {
-        this.onLoadoutUse('weapon1', angle, px, py);
-      } else if (pointer.rightButtonDown()) {
-        // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
-        this.onLoadoutUse('weapon2', angle, px, py);
-      }
+    const px    = pointer.x;
+    const py    = pointer.y;
+    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, px, py);
 
-      // E-Taste → utility (Granate, Flanke)
-      if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
+    // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
+    // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
+    // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
+    if (pointer.leftButtonDown()) {
+      this.onLoadoutUse('weapon1', angle, px, py);
+    } else if (pointer.rightButtonDown()) {
+      // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
+      this.onLoadoutUse('weapon2', angle, px, py);
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (!this.tryStartChargedUtility(now)) {
         this.onLoadoutUse('utility', angle, px, py);
       }
+    }
+
+    if (Phaser.Input.Keyboard.JustUp(this.keyE) && this.utilityChargeStartedAt !== null) {
+      this.releaseChargedUtility(angle, px, py, now);
     }
 
     // Q-Taste → ultimate (keine Positionsdaten nötig)
     if (Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.onLoadoutUse('ultimate', 0, 0, 0);
     }
+  }
+
+  private getChargedThrowUtilityConfig(): (UtilityConfig & { activation: ChargedThrowUtilityActivationConfig }) | undefined {
+    const cfg = this.getLocalUtilityConfig?.();
+    if (!cfg || cfg.activation.type !== 'charged_throw') return undefined;
+    return cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig };
+  }
+
+  private tryStartChargedUtility(now: number): boolean {
+    const cfg = this.getChargedThrowUtilityConfig();
+    if (!cfg) return false;
+    this.utilityChargeStartedAt = now;
+    return true;
+  }
+
+  private releaseChargedUtility(angle: number, targetX: number, targetY: number, now: number): void {
+    const cfg = this.getChargedThrowUtilityConfig();
+    const startedAt = this.utilityChargeStartedAt;
+    this.utilityChargeStartedAt = null;
+    if (!cfg || startedAt === null) return;
+
+    this.onLoadoutUse?.('utility', angle, targetX, targetY, {
+      utilityChargeFraction: this.computeUtilityChargeFraction(startedAt, cfg.activation, now),
+    });
+  }
+
+  private computeUtilityChargeFraction(
+    startedAt: number,
+    activation: ChargedThrowUtilityActivationConfig,
+    now: number,
+  ): number {
+    if (activation.fullChargeDuration <= 0) return 1;
+    const elapsed = now - startedAt;
+    return Math.max(0, Math.min(1, elapsed / activation.fullChargeDuration));
+  }
+
+  private cancelUtilityCharge(): void {
+    this.utilityChargeStartedAt = null;
   }
 }

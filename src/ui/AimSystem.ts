@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import { AimSpreadModel } from './AimSpreadModel';
-import type { PlayerAimNetState, WeaponSlot } from '../types';
+import type { PlayerAimNetState, UtilityChargePreviewState, WeaponSlot } from '../types';
 import {
   COLORS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
@@ -61,6 +61,13 @@ const AX1 = ARENA_OFFSET_X;
 const AY1 = ARENA_OFFSET_Y;
 const AX2 = ARENA_OFFSET_X + ARENA_WIDTH;
 const AY2 = ARENA_OFFSET_Y + ARENA_HEIGHT;
+
+const CHARGE_ANCHOR_OFFSET_X = 18;
+const CHARGE_STEM_LENGTH = 12;
+const CHARGE_BAR_GAP = 6;
+const CHARGE_BAR_WIDTH = 52;
+const CHARGE_BAR_HEIGHT = 8;
+const CHARGE_BAR_START_X = CHARGE_ANCHOR_OFFSET_X + CHARGE_STEM_LENGTH + CHARGE_BAR_GAP;
 
 export class AimSystem {
   private readonly gfx: Phaser.GameObjects.Graphics;
@@ -322,5 +329,79 @@ export class AimSystem {
     else if (dy < 0) t = Math.min(t, (AY1 - sy) / dy);
 
     return { x: sx + t * dx, y: sy + t * dy, inside: false };
+  }
+}
+
+export class UtilityChargeIndicator {
+  private readonly container: Phaser.GameObjects.Container;
+  private readonly anchorShadow: Phaser.GameObjects.Arc;
+  private readonly anchorCore: Phaser.GameObjects.Arc;
+  private readonly stemShadow: Phaser.GameObjects.Rectangle;
+  private readonly stemCore: Phaser.GameObjects.Rectangle;
+  private readonly barShadow: Phaser.GameObjects.Rectangle;
+  private readonly barBg: Phaser.GameObjects.Rectangle;
+  private readonly barFill: Phaser.GameObjects.Rectangle;
+  private readonly barEdge: Phaser.GameObjects.Rectangle;
+
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly getLocalSprite: () => Phaser.GameObjects.Rectangle | undefined,
+    private readonly getPlayerColor: () => number,
+  ) {
+    this.anchorShadow = scene.add.circle(CHARGE_ANCHOR_OFFSET_X, 0, 5, COLORS.GREY_10, 0.42);
+    this.anchorCore = scene.add.circle(CHARGE_ANCHOR_OFFSET_X, 0, 2.5, COLORS.GREY_1, 0.95);
+
+    this.stemShadow = scene.add.rectangle(CHARGE_ANCHOR_OFFSET_X + 1, 0, CHARGE_STEM_LENGTH + 2, 4, COLORS.GREY_10, 0.32);
+    this.stemShadow.setOrigin(0, 0.5);
+    this.stemCore = scene.add.rectangle(CHARGE_ANCHOR_OFFSET_X, 0, CHARGE_STEM_LENGTH, 2, COLORS.GREY_3, 0.9);
+    this.stemCore.setOrigin(0, 0.5);
+
+    this.barShadow = scene.add.rectangle(CHARGE_BAR_START_X + 1, 0, CHARGE_BAR_WIDTH + 2, CHARGE_BAR_HEIGHT + 2, COLORS.GREY_10, 0.38);
+    this.barShadow.setOrigin(0, 0.5);
+    this.barBg = scene.add.rectangle(CHARGE_BAR_START_X, 0, CHARGE_BAR_WIDTH, CHARGE_BAR_HEIGHT, COLORS.GREY_8, 0.92);
+    this.barBg.setOrigin(0, 0.5);
+    this.barFill = scene.add.rectangle(CHARGE_BAR_START_X, 0, 0, CHARGE_BAR_HEIGHT, this.getPlayerColor(), 0.95);
+    this.barFill.setOrigin(0, 0.5);
+    this.barEdge = scene.add.rectangle(CHARGE_BAR_START_X + CHARGE_BAR_WIDTH, 0, 2, CHARGE_BAR_HEIGHT + 2, COLORS.GREY_1, 0.75);
+    this.barEdge.setOrigin(0.5, 0.5);
+
+    this.container = scene.add.container(0, 0, [
+      this.anchorShadow,
+      this.anchorCore,
+      this.stemShadow,
+      this.stemCore,
+      this.barShadow,
+      this.barBg,
+      this.barFill,
+      this.barEdge,
+    ]);
+    this.container.setDepth(14);
+    this.container.setVisible(false);
+  }
+
+  update(preview: UtilityChargePreviewState | undefined): void {
+    const sprite = this.getLocalSprite();
+    if (!preview || !sprite) {
+      this.container.setVisible(false);
+      return;
+    }
+
+    const charge = Phaser.Math.Clamp(preview.chargeFraction, 0, 1);
+    const playerColor = this.getPlayerColor();
+
+    this.container.setVisible(true);
+    this.container.setPosition(sprite.x, sprite.y);
+    this.container.setRotation(preview.angle);
+
+    this.anchorCore.setFillStyle(playerColor, 0.98);
+    this.stemCore.setFillStyle(playerColor, 0.72 + charge * 0.18);
+    this.barFill.setFillStyle(playerColor, 0.88 + charge * 0.10);
+    this.barFill.width = CHARGE_BAR_WIDTH * charge;
+    this.barEdge.setAlpha(0.4 + charge * 0.45);
+    this.barBg.setAlpha(0.72 + charge * 0.16);
+  }
+
+  destroy(): void {
+    this.container.destroy(true);
   }
 }

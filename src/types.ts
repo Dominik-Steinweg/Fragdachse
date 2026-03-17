@@ -83,6 +83,19 @@ export type GamePhase = 'LOBBY' | 'ARENA';
 /** Loadout-Slot-Bezeichner */
 export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 
+/** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
+export interface LoadoutUseParams {
+  utilityChargeFraction?: number; // 0 = Minimalwurf, 1 = voller Wurf
+}
+
+/** Lokaler Preview-State für aufladbare Utility-Aktionen. */
+export interface UtilityChargePreviewState {
+  angle: number;
+  chargeFraction: number;
+  minThrowSpeed: number;
+  maxThrowSpeed: number;
+}
+
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
 export interface ProjectileSpawnConfig {
   speed:           number;
