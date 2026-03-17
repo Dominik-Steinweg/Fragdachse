@@ -172,7 +172,7 @@ export class ProjectileManager {
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
         // Flamme an Wand → sofort löschen (bounceCount triggert Destroy im hostUpdate)
-        tracked.bounceCount = tracked.maxBounces;
+        tracked.bounceCount = tracked.maxBounces + 1;
       };
       tracked.boundsListener = boundsListener;
       this.scene.physics.world.on('worldbounds', boundsListener);
@@ -195,11 +195,21 @@ export class ProjectileManager {
     body:    Phaser.Physics.Arcade.Body,
     tracked: TrackedProjectile,
   ): void {
-    // Kein Bounce: Flammen prallen nicht ab
+    // Kein Bounce: Kollision zerstört die Hitbox
     body.setBounce(0, 0);
 
-    // Flammen passieren Felsen und Baumstümpfe (rockDamageMult = 0, Feuer fließt über Hindernisse).
-    // Nur der Zug blockiert die Flamme, da er Schaden nehmen kann (trainDamageMult > 0).
+    if (this.rockGroup) {
+      const c = this.scene.physics.add.overlap(sprite, this.rockGroup, () => {
+        tracked.bounceCount = tracked.maxBounces; // markiert als "dead" für hostUpdate
+      });
+      tracked.colliders.push(c);
+    }
+    if (this.trunkGroup) {
+      const c = this.scene.physics.add.overlap(sprite, this.trunkGroup, () => {
+        tracked.bounceCount = tracked.maxBounces;
+      });
+      tracked.colliders.push(c);
+    }
     if (this.trainGroup) {
       const onTrainHit = this.onTrainHit;
       const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
@@ -313,13 +323,16 @@ export class ProjectileManager {
     const maxSize  = proj.hitboxMaxSize ?? proj.sprite.width;
     const decay    = proj.velocityDecay ?? 1;
 
-    // 1. Wachstum: Body-Größe vergrößern
+    // 1. Wachstum: Nur die visuelle Sprite-Größe vergrößern – der Physik-Body bleibt
+    // bei seiner Startgröße (hitboxStartSize). Würde der Body mitgewachsen, würde sein
+    // seitlich wachsender Rand benachbarte Felsen/Trunks und Arena-Wände treffen,
+    // obwohl der Flugpfad der Flamme frei ist → vorzeitiger Tod und positionsabhängige
+    // Reichweite. CombatSystem nutzt sprite.getBounds() für Spielertreffer, das mit
+    // displayWidth wächst → die wachsende Trefferzone funktioniert korrekt.
     const curSize = proj.sprite.displayWidth;
     if (curSize < maxSize) {
       const newSize = Math.min(maxSize, curSize + growRate * deltaS);
-      proj.body.setSize(newSize, newSize);
-      proj.body.setOffset(0, 0);
-      // Shape-Dimension aktualisieren (für SyncedProjectile.size)
+      // Shape-Dimension aktualisieren (für SyncedProjectile.size und CombatSystem-Bounds)
       proj.sprite.setDisplaySize(newSize, newSize);
     }
 
@@ -403,7 +416,7 @@ export class ProjectileManager {
         return true;
       } else {
         // Normales Projektil: Lifetime oder Max-Bounces
-        const dead = age > proj.lifetime || proj.bounceCount >= proj.maxBounces;
+        const dead = age > proj.lifetime || proj.bounceCount > proj.maxBounces;
         if (dead) {
           this.scene.physics.world.off('worldbounds', proj.boundsListener);
           for (const c of proj.colliders) c.destroy();

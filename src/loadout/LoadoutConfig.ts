@@ -193,7 +193,7 @@ export const WEAPON_CONFIGS = {
       type:                 'projectile',
       projectileSpeed:      1000,
       projectileSize:       5,
-      projectileMaxBounces: 10,
+      projectileMaxBounces: 0,
     },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
@@ -386,19 +386,19 @@ export const WEAPON_CONFIGS = {
   FLAMETHROWER: {
     id:                   'FLAMETHROWER',
     displayName:          'Flammenwerfer',
-    cooldown:             50,          // 20 Hitboxen/s
-    damage:               5,           // pro Hitbox-Treffer
-    range:                750,         // px maximale Flammenreichweite
+    cooldown:             30,          // 20 Hitboxen/s
+    damage:               2,           // pro Hitbox-Treffer
+    range:                300,         // px maximale Flammenreichweite
     fire: {
       type:               'flamethrower',
       projectileSpeed:    300,         // px/s Anfangsgeschwindigkeit
       hitboxStartSize:    8,           // px Startgröße
-      hitboxEndSize:      180,          // px Maximalgröße
-      hitboxGrowRate:     80,          // px/s Wachstum
-      velocityDecay:      0.88,        // 88% der Geschwindigkeit verbleiben pro Sekunde → ~750 px Reichweite
+      hitboxEndSize:      80,          // px Maximalgröße
+      hitboxGrowRate:     30,          // px/s Wachstum
+      velocityDecay:      0.82,        // 95% der Geschwindigkeit verbleiben pro Sekunde → ~750 px Reichweite
     },
     allowedSlots:         ['weapon2'],
-    adrenalinCost:        1,           // Adrenalin-Kosten pro Hitbox
+    adrenalinCost:        0.5,           // Adrenalin-Kosten pro Hitbox
     adrenalinGain:        0,           // kein Adrenalin-Gewinn bei Treffer
     spreadStanding:       8,
     spreadMoving:         12,

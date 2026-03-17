@@ -546,7 +546,7 @@ export class LoadoutManager {
       damage:          config.damage,
       color:           config.projectileColor ?? playerColor,
       lifetime,
-      maxBounces:      9999,  // Flammen sterben nicht durch Bounces, sondern durch Lifetime/Kollision
+      maxBounces:      999999,  // Flammen sterben nicht durch Bounces, sondern durch Lifetime/Kollision
       isGrenade:       false,
       adrenalinGain:   config.adrenalinGain,
       weaponName:      config.displayName,
