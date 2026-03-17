@@ -141,6 +141,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
+    projectileStyle:      'bullet' as ProjectileStyle,
   } as WeaponConfig,
 
   USP: {
@@ -165,6 +166,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
+    projectileStyle:      'bullet' as ProjectileStyle,
   } as WeaponConfig,
 
   ASMD_PRIM: {
@@ -241,6 +243,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
+    projectileStyle:      'bullet' as ProjectileStyle,
   } as WeaponConfig,
 
   AK47: {
@@ -265,6 +268,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   2,
     spreadRecoverySpeed:  100,
+    projectileStyle:      'bullet' as ProjectileStyle,
   } as WeaponConfig,
 
   SHOTGUN: {
@@ -291,6 +295,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     pelletCount:          5,
     pelletSpreadAngle:    16,
+    projectileStyle:      'bullet' as ProjectileStyle,
   } as WeaponConfig,
 
   /**

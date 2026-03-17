@@ -46,6 +46,8 @@ export interface SyncedProjectile {
   id:     number;
   x:      number;
   y:      number;
+  vx:     number;  // Geschwindigkeit X (px/s) – für Client-seitige Trail-Orientierung
+  vy:     number;  // Geschwindigkeit Y (px/s)
   size:   number;  // px – für korrekte Client-Darstellung
   color:  number;  // hex
   style?: ProjectileStyle;  // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
@@ -177,6 +179,7 @@ export interface TrackedProjectile {
   bounceCount:     number;
   createdAt:       number;
   ownerId:         string;
+  color:           number;  // hex – gespeichert bei Spawn, entkoppelt von Shape
   boundsListener:  (hitBody: Phaser.Physics.Arcade.Body) => void;
   colliders:       Phaser.Physics.Arcade.Collider[];  // müssen beim Destroy explizit entfernt werden
   damage:          number;        // Schadenswert pro Direkttreffer

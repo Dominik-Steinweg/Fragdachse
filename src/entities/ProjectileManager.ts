@@ -1,12 +1,16 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
+import type { BulletRenderer } from '../effects/BulletRenderer';
 
 export class ProjectileManager {
   private scene:       Phaser.Scene;
   private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile
-  private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals
+  private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals (ball-Stil)
   private nextId        = 0;
+
+  // ── Bullet-Renderer (Enhanced Bullet Visuals) ─────────────────────────────
+  private bulletRenderer: BulletRenderer | null = null;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -62,6 +66,14 @@ export class ProjectileManager {
     this.onTrainHit = cb;
   }
 
+  /**
+   * Injiziert den BulletRenderer für verbesserte Bullet-Darstellung.
+   * null = deaktiviert (Fallback auf einfache Shapes).
+   */
+  setBulletRenderer(renderer: BulletRenderer | null): void {
+    this.bulletRenderer = renderer;
+  }
+
   // ── Host ──────────────────────────────────────────────────────────────────
 
   /**
@@ -78,12 +90,21 @@ export class ProjectileManager {
   ): void {
     const id = this.nextId++;
 
-    // Visueller Stil bestimmt ob das Projektil eckig (bullet) oder rund (ball) gezeichnet wird.
-    const isBall = cfg.projectileStyle === 'ball';
+    const isBall   = cfg.projectileStyle === 'ball';
+    const isBullet = cfg.projectileStyle === 'bullet';
+
+    // Physik-Shape: für 'bullet' mit BulletRenderer unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = isBall
       ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
       : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
     sprite.setDepth(DEPTH.PROJECTILES);
+
+    if (isBullet && this.bulletRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.bulletRenderer.createBullet(id, x, y, cfg.size, cfg.color);
+    }
+
     this.scene.physics.add.existing(sprite);
 
     const body = sprite.body as Phaser.Physics.Arcade.Body;
@@ -100,6 +121,7 @@ export class ProjectileManager {
       bounceCount:    0,
       createdAt:      Date.now(),
       ownerId,
+      color:          cfg.color,
       boundsListener: () => {},
       colliders:      [],
       damage:         cfg.damage,
@@ -140,8 +162,20 @@ export class ProjectileManager {
     body.onWorldBounds = true;
     body.setBounce(1, 1);
 
+    const isBullet     = tracked.projectileStyle === 'bullet';
+    const renderer     = this.bulletRenderer;
+
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
-      if (hitBody === body) tracked.bounceCount++;
+      if (hitBody !== body) return;
+      tracked.bounceCount++;
+      // Funken an Arena-Wand: Velocity ist nach Bounce bereits reflektiert
+      if (isBullet && renderer) {
+        renderer.playImpactSparks(
+          body.x + body.halfWidth, body.y + body.halfHeight,
+          body.velocity.x, body.velocity.y,
+          tracked.color,
+        );
+      }
     };
     tracked.boundsListener = boundsListener;
     this.scene.physics.world.on('worldbounds', boundsListener);
@@ -151,6 +185,14 @@ export class ProjectileManager {
       const onHit       = this.onRockHit;
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         tracked.bounceCount++;
+        // Funken bei Fels-Aufprall
+        if (isBullet && renderer) {
+          renderer.playImpactSparks(
+            body.x + body.halfWidth, body.y + body.halfHeight,
+            body.velocity.x, body.velocity.y,
+            tracked.color,
+          );
+        }
         if (!applyRockDamage || !rockObjects || !onHit) return;
         const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
         if (idx !== -1) onHit(idx, tracked.damage);
@@ -161,6 +203,14 @@ export class ProjectileManager {
     if (this.trunkGroup) {
       const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
         tracked.bounceCount++;
+        // Funken bei Baumstamm-Aufprall
+        if (isBullet && renderer) {
+          renderer.playImpactSparks(
+            body.x + body.halfWidth, body.y + body.halfHeight,
+            body.velocity.x, body.velocity.y,
+            tracked.color,
+          );
+        }
       });
       tracked.colliders.push(trunkCollider);
     }
@@ -169,7 +219,14 @@ export class ProjectileManager {
       const onTrainHit = this.onTrainHit;
       const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
         onTrainHit?.(tracked.damage, tracked.ownerId);
-        // bounceCount++ → Physik prallt ab; nicht-bouncende Projektile (maxBounces=0) sterben nächsten Frame
+        // Funken bei Zug-Aufprall
+        if (isBullet && renderer) {
+          renderer.playImpactSparks(
+            body.x + body.halfWidth, body.y + body.halfHeight,
+            body.velocity.x, body.velocity.y,
+            tracked.color,
+          );
+        }
         tracked.bounceCount++;
       });
       tracked.colliders.push(trainCollider);
@@ -193,6 +250,7 @@ export class ProjectileManager {
     this.scene.physics.world.off('worldbounds', proj.boundsListener);
     for (const c of proj.colliders) c.destroy();
     proj.sprite.destroy();
+    this.bulletRenderer?.destroyBullet(proj.id);
     this.projectiles.splice(idx, 1);
   }
 
@@ -207,6 +265,7 @@ export class ProjectileManager {
       proj.sprite.destroy();
     }
     this.projectiles = [];
+    this.bulletRenderer?.destroyAll();
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
   }
@@ -218,6 +277,7 @@ export class ProjectileManager {
   hostUpdate(): { synced: SyncedProjectile[]; explodedGrenades: ExplodedGrenade[] } {
     const now              = Date.now();
     const explodedGrenades: ExplodedGrenade[] = [];
+    const renderer         = this.bulletRenderer;
 
     this.projectiles = this.projectiles.filter(proj => {
       const age = now - proj.createdAt;
@@ -246,17 +306,32 @@ export class ProjectileManager {
           this.scene.physics.world.off('worldbounds', proj.boundsListener);
           for (const c of proj.colliders) c.destroy();
           proj.sprite.destroy();
+          renderer?.destroyBullet(proj.id);
         }
         return !dead;
       }
     });
 
+    // BulletRenderer-Visuals an Physik-Body synchronisieren
+    if (renderer) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'bullet') {
+          renderer.syncBulletToBody(
+            proj.id, proj.sprite.x, proj.sprite.y,
+            proj.body.velocity.x, proj.body.velocity.y,
+          );
+        }
+      }
+    }
+
     const synced: SyncedProjectile[] = this.projectiles.map(p => ({
       id:    p.id,
       x:     p.sprite.x,
       y:     p.sprite.y,
+      vx:    p.body.velocity.x,
+      vy:    p.body.velocity.y,
       size:  p.sprite.width,
-      color: p.sprite.fillColor,
+      color: p.color,
       style: p.projectileStyle,
     }));
 
@@ -268,28 +343,53 @@ export class ProjectileManager {
   /**
    * Client: Visuelle Projektil-Sprites anhand der vom Host empfangenen Daten
    * erstellen, verschieben oder entfernen. Keine Physik auf Client-Seite.
+   * Bullet-Stil wird über BulletRenderer gerendert (Trail + Sparks),
+   * Ball-Stil verwendet weiterhin einfache Phaser-Circle-Shapes.
    */
   clientSyncVisuals(data: SyncedProjectile[]): void {
     const activeIds = new Set(data.map(d => d.id));
+    const renderer  = this.bulletRenderer;
 
+    // Verwaiste Visuals entfernen
     for (const [id, sprite] of this.clientVisuals) {
       if (!activeIds.has(id)) {
         sprite.destroy();
         this.clientVisuals.delete(id);
       }
     }
+    // Verwaiste BulletRenderer-Visuals entfernen
+    if (renderer) {
+      for (const id of renderer.getActiveIds()) {
+        if (!activeIds.has(id)) renderer.destroyBullet(id);
+      }
+    }
 
     for (const proj of data) {
-      const existing = this.clientVisuals.get(proj.id);
-      if (!existing) {
-        const isBall = proj.style === 'ball';
-        const sprite: Phaser.GameObjects.Shape = isBall
-          ? this.scene.add.circle(proj.x, proj.y, proj.size / 2, proj.color)
-          : this.scene.add.rectangle(proj.x, proj.y, proj.size, proj.size, proj.color);
-        sprite.setDepth(DEPTH.PROJECTILES);
-        this.clientVisuals.set(proj.id, sprite);
+      const isBullet = proj.style === 'bullet';
+
+      if (isBullet && renderer) {
+        // Bullet-Stil: BulletRenderer übernimmt Rendering
+        if (!renderer.has(proj.id)) {
+          renderer.createBullet(proj.id, proj.x, proj.y, proj.size, proj.color);
+        }
+        const bounced = renderer.updateBulletPosition(proj.id, proj.x, proj.y, proj.vx, proj.vy);
+        if (bounced) {
+          renderer.playImpactSparks(proj.x, proj.y, proj.vx, proj.vy, proj.color);
+        }
+        // Kein clientVisuals-Map-Eintrag für Bullets (BulletRenderer verwaltet sie)
       } else {
-        existing.setPosition(proj.x, proj.y);
+        // Ball- oder Legacy-Stil: einfache Shapes
+        const existing = this.clientVisuals.get(proj.id);
+        if (!existing) {
+          const isBall = proj.style === 'ball';
+          const sprite: Phaser.GameObjects.Shape = isBall
+            ? this.scene.add.circle(proj.x, proj.y, proj.size / 2, proj.color)
+            : this.scene.add.rectangle(proj.x, proj.y, proj.size, proj.size, proj.color);
+          sprite.setDepth(DEPTH.PROJECTILES);
+          this.clientVisuals.set(proj.id, sprite);
+        } else {
+          existing.setPosition(proj.x, proj.y);
+        }
       }
     }
   }

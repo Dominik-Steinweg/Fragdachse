@@ -18,6 +18,7 @@ import type { WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
+import { BulletRenderer }      from '../effects/BulletRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS, TRAIN_DROP_COUNT } from '../powerups/PowerUpConfig';
 import { DetonationSystem }    from '../systems/DetonationSystem';
@@ -49,6 +50,7 @@ export class ArenaScene extends Phaser.Scene {
   private effectSystem!:      EffectSystem;
   private smokeSystem!:       SmokeSystem;
   private fireSystem!:        FireSystem;
+  private bulletRenderer!:    BulletRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
@@ -132,6 +134,11 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── 3. Projektile (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
     this.projectileManager = new ProjectileManager(this);
+
+    // ── 3b. Bullet-Renderer (verbesserte Projektilgrafik) ─────────────────
+    this.bulletRenderer = new BulletRenderer(this);
+    this.bulletRenderer.generateTextures();
+    this.projectileManager.setBulletRenderer(this.bulletRenderer);
 
     // ── 4. Combat-System ──────────────────────────────────────────────────
     this.combatSystem = new CombatSystem(this.playerManager, this.projectileManager, bridge);
