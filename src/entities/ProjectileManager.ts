@@ -165,14 +165,14 @@ export class ProjectileManager {
     };
 
     if (isFlame) {
-      // Flammen: kein Bounce, keine World-Bounds-Kollision;
-      // Felsen-/Trunk-Kontakt zerstört die Hitbox sofort.
+      // Flammen: kein Bounce, Arena-Bounds und Hindernisse stoppen die Hitbox;
+      // sie verweilt dann für die restliche Lifetime an der Aufprallstelle.
       body.setCollideWorldBounds(true);
       body.onWorldBounds = true;
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
-        // Flamme an Wand → sofort löschen (bounceCount triggert Destroy im hostUpdate)
-        tracked.bounceCount = tracked.maxBounces + 1;
+        // Flamme an Wand → anhalten (Lifetime bestimmt weiterlaufend die Lebensdauer)
+        body.setVelocity(0, 0);
       };
       tracked.boundsListener = boundsListener;
       this.scene.physics.world.on('worldbounds', boundsListener);
@@ -187,30 +187,30 @@ export class ProjectileManager {
   }
 
   /**
-   * Richtet Fels-/Trunk-Kollision für Flammen-Hitboxen ein.
-   * Flammen prallen NICHT ab, sondern werden bei Kontakt sofort zerstört.
+   * Richtet Fels-/Trunk-/Zug-Kollision für Flammen-Hitboxen ein.
+   * Felsen und Trunks stoppen die Flamme physisch (collider, kein Bounce);
+   * sie verweilt dann für ihre restliche Lifetime an der Aufprallstelle.
+   * Der Zug zerstört die Flamme sofort und erhält Schaden.
    */
   private setupFlameColliders(
     sprite:  Phaser.GameObjects.Shape,
     body:    Phaser.Physics.Arcade.Body,
     tracked: TrackedProjectile,
   ): void {
-    // Kein Bounce: Kollision zerstört die Hitbox
+    // Kein Abprallen: Flamme bleibt an der Aufprallstelle stehen
     body.setBounce(0, 0);
 
     if (this.rockGroup) {
-      const c = this.scene.physics.add.overlap(sprite, this.rockGroup, () => {
-        tracked.bounceCount = tracked.maxBounces; // markiert als "dead" für hostUpdate
-      });
+      // collider statt overlap: Phaser stoppt den Body physisch am Felsen
+      const c = this.scene.physics.add.collider(sprite, this.rockGroup);
       tracked.colliders.push(c);
     }
     if (this.trunkGroup) {
-      const c = this.scene.physics.add.overlap(sprite, this.trunkGroup, () => {
-        tracked.bounceCount = tracked.maxBounces;
-      });
+      const c = this.scene.physics.add.collider(sprite, this.trunkGroup);
       tracked.colliders.push(c);
     }
     if (this.trainGroup) {
+      // Zug: Flamme wird sofort zerstört (bewegliches Objekt – kein Lingern sinnvoll)
       const onTrainHit = this.onTrainHit;
       const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
         const trainMult = tracked.trainDamageMult ?? 1;
