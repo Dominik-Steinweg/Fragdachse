@@ -68,6 +68,7 @@ const CHARGE_BAR_GAP = 6;
 const CHARGE_BAR_WIDTH = 52;
 const CHARGE_BAR_HEIGHT = 8;
 const CHARGE_BAR_START_X = CHARGE_ANCHOR_OFFSET_X + CHARGE_STEM_LENGTH + CHARGE_BAR_GAP;
+const CHARGE_STRIKE_X = CHARGE_BAR_START_X + CHARGE_BAR_WIDTH * 0.5;
 
 export class AimSystem {
   private readonly gfx: Phaser.GameObjects.Graphics;
@@ -342,6 +343,8 @@ export class UtilityChargeIndicator {
   private readonly barBg: Phaser.GameObjects.Rectangle;
   private readonly barFill: Phaser.GameObjects.Rectangle;
   private readonly barEdge: Phaser.GameObjects.Rectangle;
+  private readonly barStrikeShadow: Phaser.GameObjects.Rectangle;
+  private readonly barStrikeCore: Phaser.GameObjects.Rectangle;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -364,6 +367,10 @@ export class UtilityChargeIndicator {
     this.barFill.setOrigin(0, 0.5);
     this.barEdge = scene.add.rectangle(CHARGE_BAR_START_X + CHARGE_BAR_WIDTH, 0, 2, CHARGE_BAR_HEIGHT + 2, COLORS.GREY_1, 0.75);
     this.barEdge.setOrigin(0.5, 0.5);
+    this.barStrikeShadow = scene.add.rectangle(CHARGE_STRIKE_X, 0, CHARGE_BAR_WIDTH + 10, 5, COLORS.GREY_10, 0.82);
+    this.barStrikeShadow.setAngle(-23);
+    this.barStrikeCore = scene.add.rectangle(CHARGE_STRIKE_X, 0, CHARGE_BAR_WIDTH + 8, 2, COLORS.RED_2, 0.92);
+    this.barStrikeCore.setAngle(-23);
 
     this.container = scene.add.container(0, 0, [
       this.anchorShadow,
@@ -374,6 +381,8 @@ export class UtilityChargeIndicator {
       this.barBg,
       this.barFill,
       this.barEdge,
+      this.barStrikeShadow,
+      this.barStrikeCore,
     ]);
     this.container.setDepth(14);
     this.container.setVisible(false);
@@ -393,12 +402,26 @@ export class UtilityChargeIndicator {
     this.container.setPosition(sprite.x, sprite.y);
     this.container.setRotation(preview.angle);
 
+    if (preview.isBlocked) {
+      this.anchorCore.setFillStyle(COLORS.GREY_3, 0.92);
+      this.stemCore.setFillStyle(COLORS.GREY_4, 0.78);
+      this.barFill.width = 0;
+      this.barEdge.setAlpha(0.36);
+      this.barBg.setFillStyle(COLORS.GREY_7, 0.94);
+      this.barStrikeShadow.setVisible(true);
+      this.barStrikeCore.setVisible(true);
+      return;
+    }
+
     this.anchorCore.setFillStyle(playerColor, 0.98);
     this.stemCore.setFillStyle(playerColor, 0.72 + charge * 0.18);
+    this.barBg.setFillStyle(COLORS.GREY_8, 0.92);
     this.barFill.setFillStyle(playerColor, 0.88 + charge * 0.10);
     this.barFill.width = CHARGE_BAR_WIDTH * charge;
     this.barEdge.setAlpha(0.4 + charge * 0.45);
     this.barBg.setAlpha(0.72 + charge * 0.16);
+    this.barStrikeShadow.setVisible(false);
+    this.barStrikeCore.setVisible(false);
   }
 
   destroy(): void {

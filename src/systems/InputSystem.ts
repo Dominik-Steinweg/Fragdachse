@@ -24,6 +24,10 @@ export class InputSystem {
   // Loadout-Callback (gesetzt von ArenaScene)
   private onLoadoutUse: ((slot: LoadoutSlot, angle: number, targetX: number, targetY: number, params?: LoadoutUseParams) => void) | null = null;
   private getLocalUtilityConfig: (() => UtilityConfig | undefined) | null = null;
+  private getLocalUtilityCooldownUntil: (() => number) | null = null;
+  private predictedUtilityCooldownUntil = 0;
+  private utilityHoldActive = false;
+  private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
 
   // Lokaler Zustand vom Host empfangen
@@ -70,6 +74,10 @@ export class InputSystem {
     this.getLocalUtilityConfig = cb;
   }
 
+  setupUtilityCooldownProvider(cb: () => number): void {
+    this.getLocalUtilityCooldownUntil = cb;
+  }
+
   /**
    * Wird von ArenaScene jeden Frame mit dem aktuellen Spieler-Netzwerkstatus gesetzt,
    * damit Stun und Burrow-Zustand für Input-Gating berücksichtigt werden.
@@ -82,7 +90,10 @@ export class InputSystem {
 
   setInputEnabled(enabled: boolean): void {
     this.inputEnabled = enabled;
-    if (!enabled) this.cancelUtilityCharge();
+    if (!enabled) {
+      this.predictedUtilityCooldownUntil = 0;
+      this.cancelUtilityCharge();
+    }
   }
 
   /**
@@ -94,21 +105,27 @@ export class InputSystem {
     return Math.min(1, remaining / DASH_COOLDOWN_MS);
   }
 
-  isUtilityCharging(): boolean {
-    return this.utilityChargeStartedAt !== null;
+  isUtilityPreviewActive(): boolean {
+    return this.utilityHoldActive;
   }
 
   getUtilityChargePreviewState(): UtilityChargePreviewState | undefined {
     const sprite = this.getLocalSprite();
     const cfg = this.getChargedThrowUtilityConfig();
+    if (!this.utilityHoldActive || !sprite || !cfg) return undefined;
+
+    const now = Date.now();
     const startedAt = this.utilityChargeStartedAt;
-    if (!sprite || !cfg || startedAt === null) return undefined;
 
     const pointer = this.scene.input.activePointer;
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, pointer.x, pointer.y);
     return {
       angle,
-      chargeFraction: this.computeUtilityChargeFraction(startedAt, cfg.activation, Date.now()),
+      chargeFraction: startedAt === null
+        ? 0
+        : this.computeUtilityChargeFraction(startedAt, cfg.activation, now),
+      cooldownFrac: this.isUtilityBlocked(now) ? 1 : 0,
+      isBlocked: this.isUtilityBlocked(now),
       minThrowSpeed: cfg.activation.minThrowSpeed,
       maxThrowSpeed: cfg.projectileSpeed,
     };
@@ -177,13 +194,22 @@ export class InputSystem {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      if (!this.tryStartChargedUtility(now)) {
+      if (!this.beginChargedUtilityHold(now)) {
         this.onLoadoutUse('utility', angle, px, py);
       }
     }
 
-    if (Phaser.Input.Keyboard.JustUp(this.keyE) && this.utilityChargeStartedAt !== null) {
+    if (this.utilityHoldActive && this.utilityChargeStartedAt === null && this.keyE.isDown) {
+      this.maybeStartHeldUtilityCharge(now);
+    }
+
+    const releasedUtility = Phaser.Input.Keyboard.JustUp(this.keyE);
+    if (releasedUtility && this.utilityChargeStartedAt !== null) {
       this.releaseChargedUtility(angle, px, py, now);
+    } else if (releasedUtility) {
+      this.cancelUtilityCharge();
+    } else if (this.utilityHoldActive && !this.keyE.isDown) {
+      this.cancelUtilityCharge();
     }
 
     // Q-Taste → ultimate (keine Positionsdaten nötig)
@@ -198,18 +224,35 @@ export class InputSystem {
     return cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig };
   }
 
-  private tryStartChargedUtility(now: number): boolean {
+  private beginChargedUtilityHold(now: number): boolean {
     const cfg = this.getChargedThrowUtilityConfig();
     if (!cfg) return false;
-    this.utilityChargeStartedAt = now;
+
+    const cooldownUntil = this.getEffectiveUtilityCooldownUntil();
+    this.utilityHoldActive = true;
+    this.utilityChargeEligibleAt = now < cooldownUntil ? cooldownUntil : now;
+    this.utilityChargeStartedAt = null;
+    this.maybeStartHeldUtilityCharge(now);
     return true;
+  }
+
+  private maybeStartHeldUtilityCharge(now: number): void {
+    if (!this.utilityHoldActive || this.utilityChargeStartedAt !== null) return;
+
+    const eligibleAt = this.utilityChargeEligibleAt ?? now;
+    if (now < eligibleAt) return;
+
+    this.utilityChargeStartedAt = eligibleAt;
+    this.utilityChargeEligibleAt = null;
   }
 
   private releaseChargedUtility(angle: number, targetX: number, targetY: number, now: number): void {
     const cfg = this.getChargedThrowUtilityConfig();
     const startedAt = this.utilityChargeStartedAt;
-    this.utilityChargeStartedAt = null;
+    this.cancelUtilityCharge();
     if (!cfg || startedAt === null) return;
+
+    this.predictedUtilityCooldownUntil = now + cfg.cooldown;
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
       utilityChargeFraction: this.computeUtilityChargeFraction(startedAt, cfg.activation, now),
@@ -226,7 +269,25 @@ export class InputSystem {
     return Math.max(0, Math.min(1, elapsed / activation.fullChargeDuration));
   }
 
+  private getEffectiveUtilityCooldownUntil(): number {
+    const authoritative = this.getLocalUtilityCooldownUntil?.() ?? 0;
+    const effective = Math.max(authoritative, this.predictedUtilityCooldownUntil);
+    if (Date.now() >= effective) {
+      this.predictedUtilityCooldownUntil = 0;
+      return authoritative;
+    }
+    return effective;
+  }
+
+  private isUtilityBlocked(now: number): boolean {
+    if (!this.utilityHoldActive || this.utilityChargeStartedAt !== null) return false;
+    const eligibleAt = this.utilityChargeEligibleAt ?? this.getEffectiveUtilityCooldownUntil();
+    return now < eligibleAt;
+  }
+
   private cancelUtilityCharge(): void {
+    this.utilityHoldActive = false;
+    this.utilityChargeEligibleAt = null;
     this.utilityChargeStartedAt = null;
   }
 }

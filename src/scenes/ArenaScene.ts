@@ -169,6 +169,7 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.inputSystem.setup();
     this.inputSystem.setupUtilityConfigProvider(() => this.getLocalUtilityConfig());
+    this.inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       let shotId: number | undefined;
       if (slot === 'weapon1' || slot === 'weapon2') {
@@ -829,7 +830,7 @@ export class ArenaScene extends Phaser.Scene {
     const showAim = inArena
                  && this.localPlayerAlive
                  && !this.localPlayerBurrowed
-                 && !this.inputSystem.isUtilityCharging();
+                 && !this.inputSystem.isUtilityPreviewActive();
     this.aimSystem?.update(showAim, inArena, delta);
     this.utilityChargeIndicator?.update(this.inputSystem.getUtilityChargePreviewState());
   }

@@ -79,6 +79,7 @@ export class LoadoutManager {
       startTime: 0,
       config:    ultCfg,
     });
+    this.bridge.publishUtilityCooldownUntil(playerId, 0);
   }
 
   removePlayer(playerId: string): void {
@@ -332,6 +333,7 @@ export class LoadoutManager {
 
     if (didUse) {
       utility.recordUse(now);
+      this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown);
     }
   }
 

@@ -92,6 +92,8 @@ export interface LoadoutUseParams {
 export interface UtilityChargePreviewState {
   angle: number;
   chargeFraction: number;
+  cooldownFrac: number;
+  isBlocked: boolean;
   minThrowSpeed: number;
   maxThrowSpeed: number;
 }

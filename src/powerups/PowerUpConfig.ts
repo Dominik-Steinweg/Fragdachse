@@ -80,7 +80,7 @@ export const SCHEDULED_SPAWNS: ScheduledSpawn[] = [
 // ── Pickup-Radius (Pixel) ──────────────────────────────────────────────────
 
 /** Maximaler Abstand Spieler–PowerUp-Mittelpunkt, um einzusammeln */
-export const PICKUP_RADIUS = 24;
+export const PICKUP_RADIUS = 16;
 
 /** Darstellungsgröße der PowerUp-Rectangles (px) */
-export const POWERUP_RENDER_SIZE = 20;
+export const POWERUP_RENDER_SIZE = 16;

@@ -119,7 +119,7 @@ export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | Moloto
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
-  minThrowSpeed: 180,
+  minThrowSpeed: 50,
   fullChargeDuration: 700,
 } as const satisfies ChargedThrowUtilityActivationConfig;
 

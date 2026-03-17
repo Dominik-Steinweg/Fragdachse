@@ -34,6 +34,7 @@ const KEY_LOADOUT_W1   = 'lw1';   // per-player: string (weapon1 item ID)
 const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
 const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
+const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: number (Date.now()-Timestamp bis Utility wieder bereit)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_HITSCAN_TRACES = 'htr'; // global: SyncedHitscanTrace[] (unreliable, kurzlebige VFX-Ereignisse)
@@ -772,6 +773,19 @@ export class NetworkBridge {
   getPlayerLoadoutSlot(playerId: string, slot: LoadoutSlot): string | undefined {
     const key = { weapon1: KEY_LOADOUT_W1, weapon2: KEY_LOADOUT_W2, utility: KEY_LOADOUT_UT, ultimate: KEY_LOADOUT_UL }[slot];
     return this.playerStateMap.get(playerId)?.getState(key) as string | undefined;
+  }
+
+  /** Host-only: Publiziert bis wann die Utility eines Spielers im Cooldown ist. */
+  publishUtilityCooldownUntil(playerId: string, cooldownUntil: number): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    ps.setState(KEY_UTILITY_CD_UNTIL, cooldownUntil, true);
+  }
+
+  /** Liest den autoritativen Utility-Cooldown-Endzeitpunkt eines Spielers (0 = bereit). */
+  getPlayerUtilityCooldownUntil(playerId: string): number {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_CD_UNTIL) as number | undefined) ?? 0;
   }
 
   // ── Frag-Tracking: pro Spieler (per-player state) ────────────────────────
