@@ -39,7 +39,7 @@ export interface PlayerNetState {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball';
+export type ProjectileStyle = 'bullet' | 'ball' | 'flame';
 
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
@@ -118,6 +118,12 @@ export interface ProjectileSpawnConfig {
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   rockDamageMult?:  number;     // Schadensfaktor gegen Felsen
   trainDamageMult?: number;     // Schadensfaktor gegen den Zug
+
+  // Flammenwerfer (optional)
+  isFlame?:         boolean;    // true = Flammen-Hitbox (wächst, verlangsamt sich, kein Bounce)
+  hitboxGrowRate?:  number;     // Hitbox-Wachstum in px/s
+  hitboxMaxSize?:   number;     // maximale Hitbox-Größe in px
+  velocityDecay?:   number;     // Geschwindigkeits-Multiplikator pro Sekunde (0-1, kleiner = schnellerer Abbau)
 }
 
 export interface DamageGrenadeEffect {
@@ -221,6 +227,13 @@ export interface TrackedProjectile {
   // Objekt-Schadens-Multiplikatoren
   rockDamageMult?:  number;
   trainDamageMult?: number;
+
+  // Flammenwerfer (optional)
+  isFlame?:         boolean;
+  hitboxGrowRate?:  number;     // px/s Wachstum
+  hitboxMaxSize?:   number;     // px Maximum
+  velocityDecay?:   number;     // Speed-Multiplikator pro Sekunde
+  initialSpeed?:    number;     // Geschwindigkeit bei Spawn (für Decay-Berechnung)
 }
 
 // ---- Prozedurales Arena-Layout ----

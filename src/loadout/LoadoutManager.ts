@@ -6,6 +6,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, WeaponSlot } from '../types';
 import type {
   ChargedThrowUtilityActivationConfig,
+  FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
   UltimateConfig,
@@ -419,6 +420,9 @@ export class LoadoutManager {
       case 'melee':
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor);
 
+      case 'flamethrower':
+        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor);
+
       default:
         return false;
     }
@@ -507,5 +511,55 @@ export class LoadoutManager {
       config.rockDamageMult  ?? 1,
       config.trainDamageMult ?? 1,
     ) ?? false;
+  }
+
+  private fireFlamethrowerWeapon(
+    config:      WeaponConfig,
+    fireConfig:  FlamethrowerWeaponFireConfig,
+    x:           number,
+    y:           number,
+    angle:       number,
+    playerId:    string,
+    playerColor: number,
+  ): boolean {
+    // Lifetime berechnen: Bei velocityDecay < 1 verlangsamt sich die Hitbox exponentiell.
+    // Zurückgelegte Strecke = speed / -ln(decay) * (1 - decay^t)
+    // → t = ln(1 - range * -ln(decay) / speed) / ln(decay)
+    const decay = fireConfig.velocityDecay;
+    let lifetime: number;
+    if (decay >= 1 || decay <= 0) {
+      lifetime = (config.range / fireConfig.projectileSpeed) * 1000;
+    } else {
+      const lnDecay   = Math.log(decay);
+      const maxDist   = fireConfig.projectileSpeed / -lnDecay;
+      const distRatio = config.range / maxDist;
+      if (distRatio >= 1) {
+        lifetime = 3000; // Range nie erreichbar → Cap
+      } else {
+        lifetime = Math.log(1 - distRatio) / lnDecay * 1000;
+      }
+    }
+
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed:           fireConfig.projectileSpeed,
+      size:            fireConfig.hitboxStartSize,
+      damage:          config.damage,
+      color:           config.projectileColor ?? playerColor,
+      lifetime,
+      maxBounces:      9999,  // Flammen sterben nicht durch Bounces, sondern durch Lifetime/Kollision
+      isGrenade:       false,
+      adrenalinGain:   config.adrenalinGain,
+      weaponName:      config.displayName,
+      projectileStyle: 'flame',
+      rockDamageMult:  config.rockDamageMult,
+      trainDamageMult: config.trainDamageMult,
+      // Flammenwerfer-spezifische Felder
+      isFlame:         true,
+      hitboxGrowRate:  fireConfig.hitboxGrowRate,
+      hitboxMaxSize:   fireConfig.hitboxEndSize,
+      velocityDecay:   fireConfig.velocityDecay,
+    });
+
+    return true;
   }
 }

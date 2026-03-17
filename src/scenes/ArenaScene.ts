@@ -19,6 +19,7 @@ import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
+import { FlameRenderer }       from '../effects/FlameRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
@@ -53,6 +54,7 @@ export class ArenaScene extends Phaser.Scene {
   private smokeSystem!:       SmokeSystem;
   private fireSystem!:        FireSystem;
   private bulletRenderer!:    BulletRenderer;
+  private flameRenderer!:     FlameRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
@@ -138,6 +140,9 @@ export class ArenaScene extends Phaser.Scene {
     this.bulletRenderer = new BulletRenderer(this);
     this.bulletRenderer.generateTextures();
     this.projectileManager.setBulletRenderer(this.bulletRenderer);
+    this.flameRenderer = new FlameRenderer(this);
+    this.flameRenderer.generateTextures();
+    this.projectileManager.setFlameRenderer(this.flameRenderer);
     this.nukeRenderer = new NukeRenderer(this);
     this.nukeRenderer.generateTextures();
     this.powerUpRenderer = new PowerUpRenderer(this);
@@ -980,7 +985,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const { synced: projectiles, explodedGrenades } = countdownActive
       ? { synced: [], explodedGrenades: [] }
-      : this.projectileManager.hostUpdate();
+      : this.projectileManager.hostUpdate(delta);
     const hitscanTraces = countdownActive
       ? []
       : this.combatSystem.collectReplicatedHitscanTraces(Date.now());

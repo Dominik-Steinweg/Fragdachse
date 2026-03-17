@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
 import type { BulletRenderer } from '../effects/BulletRenderer';
+import type { FlameRenderer } from '../effects/FlameRenderer';
 
 export class ProjectileManager {
   private scene:       Phaser.Scene;
@@ -11,6 +12,9 @@ export class ProjectileManager {
 
   // ── Bullet-Renderer (Enhanced Bullet Visuals) ─────────────────────────────
   private bulletRenderer: BulletRenderer | null = null;
+
+  // ── Flame-Renderer (Flammenwerfer-Partikel) ───────────────────────────────
+  private flameRenderer: FlameRenderer | null = null;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -74,6 +78,14 @@ export class ProjectileManager {
     this.bulletRenderer = renderer;
   }
 
+  /**
+   * Injiziert den FlameRenderer für Flammenwerfer-Darstellung.
+   * null = deaktiviert.
+   */
+  setFlameRenderer(renderer: FlameRenderer | null): void {
+    this.flameRenderer = renderer;
+  }
+
   // ── Host ──────────────────────────────────────────────────────────────────
 
   /**
@@ -92,8 +104,9 @@ export class ProjectileManager {
 
     const isBall   = cfg.projectileStyle === 'ball';
     const isBullet = cfg.projectileStyle === 'bullet';
+    const isFlame  = cfg.projectileStyle === 'flame';
 
-    // Physik-Shape: für 'bullet' mit BulletRenderer unsichtbar (nur Kollisions-Body)
+    // Physik-Shape: für 'bullet'/'flame' unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = isBall
       ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
       : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
@@ -103,6 +116,12 @@ export class ProjectileManager {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.bulletRenderer.createBullet(id, x, y, cfg.size, cfg.color);
+    }
+
+    // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
+    if (isFlame) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
     }
 
     this.scene.physics.add.existing(sprite);
@@ -137,14 +156,59 @@ export class ProjectileManager {
       detonator:       cfg.detonator,
       rockDamageMult:  cfg.rockDamageMult,
       trainDamageMult: cfg.trainDamageMult,
+      // Flammenwerfer-Felder
+      isFlame:         cfg.isFlame,
+      hitboxGrowRate:  cfg.hitboxGrowRate,
+      hitboxMaxSize:   cfg.hitboxMaxSize,
+      velocityDecay:   cfg.velocityDecay,
+      initialSpeed:    cfg.speed,
     };
 
-    // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
-    if (!cfg.isGrenade || cfg.maxBounces > 0) {
+    if (isFlame) {
+      // Flammen: kein Bounce, keine World-Bounds-Kollision;
+      // Felsen-/Trunk-Kontakt zerstört die Hitbox sofort.
+      body.setCollideWorldBounds(true);
+      body.onWorldBounds = true;
+      const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
+        if (hitBody !== body) return;
+        // Flamme an Wand → sofort löschen (bounceCount triggert Destroy im hostUpdate)
+        tracked.bounceCount = tracked.maxBounces;
+      };
+      tracked.boundsListener = boundsListener;
+      this.scene.physics.world.on('worldbounds', boundsListener);
+
+      this.setupFlameColliders(sprite, body, tracked);
+    } else if (!cfg.isGrenade || cfg.maxBounces > 0) {
+      // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
       this.setupBouncePhysics(sprite, body, tracked, !cfg.isGrenade);
     }
 
     this.projectiles.push(tracked);
+  }
+
+  /**
+   * Richtet Fels-/Trunk-Kollision für Flammen-Hitboxen ein.
+   * Flammen prallen NICHT ab, sondern werden bei Kontakt sofort zerstört.
+   */
+  private setupFlameColliders(
+    sprite:  Phaser.GameObjects.Shape,
+    body:    Phaser.Physics.Arcade.Body,
+    tracked: TrackedProjectile,
+  ): void {
+    // Kein Bounce: Flammen prallen nicht ab
+    body.setBounce(0, 0);
+
+    // Flammen passieren Felsen und Baumstümpfe (rockDamageMult = 0, Feuer fließt über Hindernisse).
+    // Nur der Zug blockiert die Flamme, da er Schaden nehmen kann (trainDamageMult > 0).
+    if (this.trainGroup) {
+      const onTrainHit = this.onTrainHit;
+      const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
+        const trainMult = tracked.trainDamageMult ?? 1;
+        if (trainMult !== 0) onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+        tracked.bounceCount = tracked.maxBounces;
+      });
+      tracked.colliders.push(c);
+    }
   }
 
   /**
@@ -241,6 +305,35 @@ export class ProjectileManager {
   }
 
   /**
+   * Host: Flammen-Hitbox pro Frame wachsen lassen und verlangsamen.
+   * Wird nur für Projektile mit `isFlame === true` aufgerufen.
+   */
+  private updateFlameHitbox(proj: TrackedProjectile, deltaS: number): void {
+    const growRate = proj.hitboxGrowRate ?? 0;
+    const maxSize  = proj.hitboxMaxSize ?? proj.sprite.width;
+    const decay    = proj.velocityDecay ?? 1;
+
+    // 1. Wachstum: Body-Größe vergrößern
+    const curSize = proj.sprite.displayWidth;
+    if (curSize < maxSize) {
+      const newSize = Math.min(maxSize, curSize + growRate * deltaS);
+      proj.body.setSize(newSize, newSize);
+      proj.body.setOffset(0, 0);
+      // Shape-Dimension aktualisieren (für SyncedProjectile.size)
+      proj.sprite.setDisplaySize(newSize, newSize);
+    }
+
+    // 2. Verlangsamung: Geschwindigkeit exponentiell abbauen
+    if (decay < 1) {
+      const factor = Math.pow(decay, deltaS);
+      proj.body.setVelocity(
+        proj.body.velocity.x * factor,
+        proj.body.velocity.y * factor,
+      );
+    }
+  }
+
+  /**
    * Host: Snapshot der aktiven Projektile (für Kollisionserkennung im CombatSystem).
    */
   getActiveProjectiles(): readonly TrackedProjectile[] {
@@ -258,6 +351,7 @@ export class ProjectileManager {
     for (const c of proj.colliders) c.destroy();
     proj.sprite.destroy();
     this.bulletRenderer?.destroyBullet(proj.id);
+    this.flameRenderer?.destroyFlameVisual(proj.id);
     this.projectiles.splice(idx, 1);
   }
 
@@ -273,6 +367,7 @@ export class ProjectileManager {
     }
     this.projectiles = [];
     this.bulletRenderer?.destroyAll();
+    this.flameRenderer?.destroyAll();
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
   }
@@ -281,7 +376,7 @@ export class ProjectileManager {
    * Host: Abgelaufene/explodierte Projektile entfernen, aktuelle Positionen zurückgeben.
    * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurückgegeben.
    */
-  hostUpdate(): { synced: SyncedProjectile[]; explodedGrenades: ExplodedGrenade[] } {
+  hostUpdate(deltaMs = 16.67): { synced: SyncedProjectile[]; explodedGrenades: ExplodedGrenade[] } {
     const now              = Date.now();
     const explodedGrenades: ExplodedGrenade[] = [];
     const renderer         = this.bulletRenderer;
@@ -314,6 +409,10 @@ export class ProjectileManager {
           for (const c of proj.colliders) c.destroy();
           proj.sprite.destroy();
           renderer?.destroyBullet(proj.id);
+          this.flameRenderer?.destroyFlameVisual(proj.id);
+        } else if (proj.isFlame) {
+          // Flammen-Hitbox: wachsen + verlangsamen
+          this.updateFlameHitbox(proj, deltaMs / 1000);
         }
         return !dead;
       }
@@ -331,13 +430,36 @@ export class ProjectileManager {
       }
     }
 
+    // FlameRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
+    const flames = this.flameRenderer;
+    if (flames) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'flame') {
+          if (!flames.has(proj.id)) {
+            flames.createFlameVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+          }
+          flames.updateFlameVisual(
+            proj.id, proj.sprite.x, proj.sprite.y,
+            proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y,
+          );
+        }
+      }
+      // Verwaiste Flame-Visuals entfernen (Projektil wurde zerstört)
+      const activeFlameIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'flame').map(p => p.id),
+      );
+      for (const id of flames.getActiveIds()) {
+        if (!activeFlameIds.has(id)) flames.destroyFlameVisual(id);
+      }
+    }
+
     const synced: SyncedProjectile[] = this.projectiles.map(p => ({
       id:    p.id,
       x:     p.sprite.x,
       y:     p.sprite.y,
       vx:    p.body.velocity.x,
       vy:    p.body.velocity.y,
-      size:  p.sprite.width,
+      size:  p.sprite.displayWidth,
       color: p.color,
       style: p.projectileStyle,
     }));
@@ -356,6 +478,7 @@ export class ProjectileManager {
   clientSyncVisuals(data: SyncedProjectile[]): void {
     const activeIds = new Set(data.map(d => d.id));
     const renderer  = this.bulletRenderer;
+    const flames    = this.flameRenderer;
 
     // Verwaiste Visuals entfernen
     for (const [id, sprite] of this.clientVisuals) {
@@ -370,11 +493,24 @@ export class ProjectileManager {
         if (!activeIds.has(id)) renderer.destroyBullet(id);
       }
     }
+    // Verwaiste FlameRenderer-Visuals entfernen
+    if (flames) {
+      for (const id of flames.getActiveIds()) {
+        if (!activeIds.has(id)) flames.destroyFlameVisual(id);
+      }
+    }
 
     for (const proj of data) {
       const isBullet = proj.style === 'bullet';
+      const isFlame  = proj.style === 'flame';
 
-      if (isBullet && renderer) {
+      if (isFlame && flames) {
+        // Flame-Stil: FlameRenderer übernimmt Partikel-Rendering
+        if (!flames.has(proj.id)) {
+          flames.createFlameVisual(proj.id, proj.x, proj.y, proj.size);
+        }
+        flames.updateFlameVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
+      } else if (isBullet && renderer) {
         // Bullet-Stil: BulletRenderer übernimmt Rendering
         if (!renderer.has(proj.id)) {
           renderer.createBullet(proj.id, proj.x, proj.y, proj.size, proj.color);

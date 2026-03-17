@@ -20,10 +20,20 @@ export interface MeleeWeaponFireConfig {
   readonly hitArcDegrees: number;       // Öffnungswinkel vor dem Spieler
 }
 
+export interface FlamethrowerWeaponFireConfig {
+  readonly type: 'flamethrower';
+  readonly projectileSpeed: number;     // px/s – Anfangsgeschwindigkeit der Hitbox
+  readonly hitboxStartSize: number;     // px – Startgröße der Hitbox
+  readonly hitboxEndSize: number;       // px – Maximalgröße nach Wachstum
+  readonly hitboxGrowRate: number;      // px/s – Wachstumsrate der Hitbox
+  readonly velocityDecay: number;       // Geschwindigkeits-Faktor pro Sekunde (0-1)
+}
+
 export type WeaponFireConfig =
   | ProjectileWeaponFireConfig
   | HitscanWeaponFireConfig
-  | MeleeWeaponFireConfig;
+  | MeleeWeaponFireConfig
+  | FlamethrowerWeaponFireConfig;
 
 export interface WeaponConfig {
   readonly id: string;
@@ -366,6 +376,41 @@ export const WEAPON_CONFIGS = {
       aoeRadius:      80,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
     } satisfies DetonableConfig,
+  } as WeaponConfig,
+
+  /**
+   * FLAMMENWERFER – Kontinu-Feuer-Waffe (Weapon2-Slot)
+   * Niedrige Pro-Treffer-Damage, hohe Feuerrate, kurze Reichweite.
+   * Host spawnt unsichtbare, wachsende Hitboxen; Clients rendern Flammenpartikel.
+   */
+  FLAMETHROWER: {
+    id:                   'FLAMETHROWER',
+    displayName:          'Flammenwerfer',
+    cooldown:             50,          // 20 Hitboxen/s
+    damage:               5,           // pro Hitbox-Treffer
+    range:                750,         // px maximale Flammenreichweite
+    fire: {
+      type:               'flamethrower',
+      projectileSpeed:    300,         // px/s Anfangsgeschwindigkeit
+      hitboxStartSize:    8,           // px Startgröße
+      hitboxEndSize:      180,          // px Maximalgröße
+      hitboxGrowRate:     80,          // px/s Wachstum
+      velocityDecay:      0.88,        // 88% der Geschwindigkeit verbleiben pro Sekunde → ~750 px Reichweite
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        1,           // Adrenalin-Kosten pro Hitbox
+    adrenalinGain:        0,           // kein Adrenalin-Gewinn bei Treffer
+    spreadStanding:       8,
+    spreadMoving:         12,
+    spreadPerShot:        0.3,
+    maxDynamicSpread:     6,
+    spreadRecoveryDelay:  300,
+    spreadRecoveryRate:   4,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'flame' as ProjectileStyle,
+    projectileColor:      0xff6600,    // feste Flammenfarbe (nicht Spielerfarbe)
+    rockDamageMult:       0,           // Flammen machen keinen Schaden an Felsen
+    trainDamageMult:      0.5,         // 50% Schaden am Zug
   } as WeaponConfig,
 
 } as const;
