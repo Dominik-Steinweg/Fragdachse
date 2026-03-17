@@ -17,6 +17,8 @@ export interface FireDamageEvent {
   radius:  number;
   damage:  number;
   ownerId: string;
+  rockDamageMult:  number;
+  trainDamageMult: number;
 }
 
 /* ── Internal host-side tracking ── */
@@ -95,6 +97,8 @@ export class FireSystem {
           radius:  zone.config.radius,
           damage:  zone.config.damagePerTick,
           ownerId: zone.ownerId,
+          rockDamageMult:  zone.config.rockDamageMult  ?? 1,
+          trainDamageMult: zone.config.trainDamageMult ?? 1,
         });
       }
 

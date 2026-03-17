@@ -62,6 +62,10 @@ export interface WeaponConfig {
   // Detonations-System
   readonly detonable?:  DetonableConfig;  // Projektile dieser Waffe können gezündet werden
   readonly detonator?:  DetonatorConfig;  // Diese Waffe zündet passende Detonables
+
+  // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
+  readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
+  readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov';
@@ -90,6 +94,10 @@ interface BaseUtilityConfig {
   readonly projectileSize: number;  // px
   readonly fuseTime: number;        // ms bis Explosion
   readonly maxBounces: number;      // 0 = kein Abprallen, >0 = Explosion nach n Abprallern
+
+  // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
+  readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
+  readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
 }
 
 export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
@@ -214,6 +222,7 @@ export const WEAPON_CONFIGS = {
     detonator: {
       triggerTags: ['asmd_ball'],
     } satisfies DetonatorConfig,
+    rockDamageMult:  0,   // ASMD Primary macht keinen Schaden an Felsen
   } as WeaponConfig,
 
   BITE: {
@@ -236,6 +245,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
+    trainDamageMult: 1.5, // 150% Schaden am Zug
   } as WeaponConfig,
 
   /**
@@ -406,6 +416,7 @@ export const UTILITY_CONFIGS = {
     fireDamagePerTick:  8,
     fireTickInterval:   200,
     fireLingerDuration: 4000,
+    rockDamageMult:     0,  // Molotov macht keinen Schaden an Felsen
   } as UtilityConfig,
 } as const;
 

@@ -11,9 +11,9 @@ export const ARENA_OFFSET_Y = 12;
 export const DEPTH = {
   GRASS: 1,
   TRACKS: 2,
-  TRAIN: 5,
   ROCKS: 9,
   PLAYERS: 10,
+  TRAIN: 11,  
   PROJECTILES: 15,
   FIRE: 16,
   SMOKE: 18,
@@ -204,9 +204,9 @@ export const BURROW_TINT               = 0x8B5E3C;  // Braun
 export const BURROW_STUCK_DAMAGE_PER_SEC = 10;
 
 // ---- Schockwelle ----
-export const SHOCKWAVE_RADIUS          = 150;   // px
+export const SHOCKWAVE_RADIUS          = 250;   // px
 export const SHOCKWAVE_DAMAGE          = 30;
-export const SHOCKWAVE_KNOCKBACK       = 400;   // px/s Impuls
+export const SHOCKWAVE_KNOCKBACK       = 1400;   // px/s Impuls
 export const SELF_STUN_DURATION_MS     = 1000;
 
 // ---- Spielerfarben (12 auswählbare, einzigartige Farben) ----

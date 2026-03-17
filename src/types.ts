@@ -115,12 +115,17 @@ export interface ProjectileSpawnConfig {
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // Projektil kann durch passende Detonatoren gezündet werden
   detonator?: DetonatorConfig;  // Projektil löst passende Detonables aus (z.B. Selbst-Detonation)
+  // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
+  rockDamageMult?:  number;     // Schadensfaktor gegen Felsen
+  trainDamageMult?: number;     // Schadensfaktor gegen den Zug
 }
 
 export interface DamageGrenadeEffect {
   type: 'damage';
   radius: number;
   damage: number;
+  rockDamageMult?:  number;
+  trainDamageMult?: number;
 }
 
 export interface SmokeGrenadeEffect {
@@ -138,6 +143,8 @@ export interface FireGrenadeEffect {
   damagePerTick: number;
   tickInterval: number;    // ms
   lingerDuration: number;  // ms
+  rockDamageMult?:  number;
+  trainDamageMult?: number;
 }
 
 export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect;
@@ -151,6 +158,8 @@ export interface DetonableConfig {
   readonly aoeDamage: number;        // Explosionsschaden bei Detonation
   readonly aoeRadius: number;        // Explosionsradius in px
   readonly allowCrossTeam: boolean;  // true = Gegner-Detonator kann es ebenfalls zünden
+  readonly rockDamageMult?:  number; // Schadensfaktor gegen Felsen (Default 1.0)
+  readonly trainDamageMult?: number; // Schadensfaktor gegen den Zug (Default 1.0)
 }
 
 /**
@@ -209,6 +218,9 @@ export interface TrackedProjectile {
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // dieses Projektil kann gezündet werden
   detonator?: DetonatorConfig;  // dieses Projektil kann andere Detonables zünden
+  // Objekt-Schadens-Multiplikatoren
+  rockDamageMult?:  number;
+  trainDamageMult?: number;
 }
 
 // ---- Prozedurales Arena-Layout ----

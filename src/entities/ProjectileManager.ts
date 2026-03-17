@@ -135,6 +135,8 @@ export class ProjectileManager {
       projectileStyle: cfg.projectileStyle,
       detonable:       cfg.detonable,
       detonator:       cfg.detonator,
+      rockDamageMult:  cfg.rockDamageMult,
+      trainDamageMult: cfg.trainDamageMult,
     };
 
     // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
@@ -194,8 +196,10 @@ export class ProjectileManager {
           );
         }
         if (!applyRockDamage || !rockObjects || !onHit) return;
+        const rockMult = tracked.rockDamageMult ?? 1;
+        if (rockMult === 0) return;
         const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
-        if (idx !== -1) onHit(idx, tracked.damage);
+        if (idx !== -1) onHit(idx, tracked.damage * rockMult);
       });
       tracked.colliders.push(rockCollider);
     }
@@ -218,7 +222,10 @@ export class ProjectileManager {
     if (this.trainGroup) {
       const onTrainHit = this.onTrainHit;
       const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
-        onTrainHit?.(tracked.damage, tracked.ownerId);
+        const trainMult = tracked.trainDamageMult ?? 1;
+        if (trainMult !== 0) {
+          onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+        }
         // Funken bei Zug-Aufprall
         if (isBullet && renderer) {
           renderer.playImpactSparks(

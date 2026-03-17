@@ -373,6 +373,8 @@ export class LoadoutManager {
         type:   'damage',
         radius: cfg.aoeRadius,
         damage: cfg.aoeDamage,
+        rockDamageMult:  cfg.rockDamageMult,
+        trainDamageMult: cfg.trainDamageMult,
       };
     }
 
@@ -383,6 +385,8 @@ export class LoadoutManager {
         damagePerTick:  cfg.fireDamagePerTick,
         tickInterval:   cfg.fireTickInterval,
         lingerDuration: cfg.fireLingerDuration,
+        rockDamageMult:  cfg.rockDamageMult,
+        trainDamageMult: cfg.trainDamageMult,
       };
     }
 
@@ -444,6 +448,8 @@ export class LoadoutManager {
       projectileStyle: config.projectileStyle,
       detonable:       config.detonable,
       detonator:       config.detonator,
+      rockDamageMult:  config.rockDamageMult,
+      trainDamageMult: config.trainDamageMult,
     });
 
     return true;
@@ -473,6 +479,8 @@ export class LoadoutManager {
       config.displayName,
       shotId,
       config.detonator,  // DetonatorConfig weitergeben (optional)
+      config.rockDamageMult  ?? 1,
+      config.trainDamageMult ?? 1,
     ) ?? false;
   }
 
@@ -496,6 +504,8 @@ export class LoadoutManager {
       config.adrenalinGain,
       config.displayName,
       playerColor,
+      config.rockDamageMult  ?? 1,
+      config.trainDamageMult ?? 1,
     ) ?? false;
   }
 }

@@ -41,7 +41,7 @@ interface ActiveNukeStrike {
 }
 
 interface PowerUpSystemOptions {
-  onNukeExploded?: (x: number, y: number, radius: number) => void;
+  onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
 }
 
 // ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
@@ -275,7 +275,7 @@ export class PowerUpSystem {
       this.combat.applyDamage(player.id, Math.round(damage), false, strike.triggeredBy, 'Atombombe');
     }
 
-    this.options.onNukeExploded?.(strike.x, strike.y, strike.radius);
+    this.options.onNukeExploded?.(strike.x, strike.y, strike.radius, strike.triggeredBy);
   }
 
   // ── Buff-Abfragen (von anderen Systemen aufgerufen) ─────────────────────

@@ -33,6 +33,8 @@ export const NUKE_CONFIG = {
   warningColor:       COLORS.RED_2,
   circleFillAlpha:    0.12,
   circleStrokeAlpha:  0.42,
+  rockDamageMult:     0.25,  // 25% Schaden an Felsen
+  trainDamageMult:    1.0,   // 100% Schaden am Zug
 } as const;
 
 // ── Drop-Tabellen ──────────────────────────────────────────────────────────

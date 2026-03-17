@@ -69,6 +69,11 @@ export class CombatSystem {
   private detonationSystem: DetonationSystem    | null  = null;
   private rockObjects: readonly (Phaser.GameObjects.Rectangle | null)[] | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
+  private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
+
+  // Callbacks für Objekt-Schaden (gesetzt von ArenaScene)
+  private onRockDamage:  ((rockIndex: number, damage: number) => void) | null = null;
+  private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -89,6 +94,18 @@ export class CombatSystem {
   ): void {
     this.rockObjects = rockObjects;
     this.trunkObjects = trunkObjects;
+  }
+
+  setTrainSegments(segments: readonly Phaser.GameObjects.Rectangle[] | null): void {
+    this.trainSegObjects = segments;
+  }
+
+  setRockDamageCallback(cb: ((rockIndex: number, damage: number) => void) | null): void {
+    this.onRockDamage = cb;
+  }
+
+  setTrainDamageCallback(cb: ((damage: number, attackerId: string) => void) | null): void {
+    this.onTrainDamage = cb;
   }
 
   /** Setzt den Kill-Callback (Host-only). */
@@ -223,6 +240,8 @@ export class CombatSystem {
     weaponName: string,
     shotId?: number,
     detonatorCfg?: DetonatorConfig,
+    rockDamageMult = 1,
+    trainDamageMult = 1,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -254,18 +273,67 @@ export class CombatSystem {
       );
     }
 
-    if (!trace.hitPlayerId) return true;
+    if (trace.hitPlayerId) {
+      const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
+      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = damage * loadoutMult * powerUpMult;
+      this.applyDamage(trace.hitPlayerId, actualDamage, true, shooterId, weaponName);
 
-    const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
-    const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
-    const actualDamage = damage * loadoutMult * powerUpMult;
-    this.applyDamage(trace.hitPlayerId, actualDamage, true, shooterId, weaponName);
-
-    if (adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      if (adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
+    } else {
+      // Kein Spieler getroffen → prüfen ob Fels oder Zug getroffen wurde
+      this.applyHitscanObjectDamage(
+        startX, startY, trace.endX, trace.endY,
+        damage, rockDamageMult, trainDamageMult, shooterId,
+      );
     }
 
     return true;
+  }
+
+  /**
+   * Prüft, ob der Hitscan-Endpunkt einen Fels oder Zug trifft, und wendet Schaden an.
+   */
+  private applyHitscanObjectDamage(
+    startX: number, startY: number, endX: number, endY: number,
+    damage: number, rockMult: number, trainMult: number, shooterId: string,
+  ): void {
+    const hitLine = new Phaser.Geom.Line(startX, startY, endX, endY);
+    const endDist = Phaser.Geom.Line.Length(hitLine);
+    const EPSILON = 2; // Toleranz in px
+
+    // Nächsten Fels am Endpunkt suchen
+    if (rockMult !== 0 && this.rockObjects && this.onRockDamage) {
+      let bestRockIdx = -1;
+      let bestRockDist = Infinity;
+      for (let i = 0; i < this.rockObjects.length; i++) {
+        const rock = this.rockObjects[i];
+        if (!rock?.active) continue;
+        const hit = this.findNearestRectangleHit(hitLine, rock.getBounds());
+        if (hit && Math.abs(hit.distance - endDist) < EPSILON && hit.distance < bestRockDist) {
+          bestRockDist = hit.distance;
+          bestRockIdx = i;
+        }
+      }
+      if (bestRockIdx >= 0) {
+        this.onRockDamage(bestRockIdx, damage * rockMult);
+        return; // Fels blockiert – kein Zug dahinter
+      }
+    }
+
+    // Zug-Segment am Endpunkt suchen
+    if (trainMult !== 0 && this.trainSegObjects && this.onTrainDamage) {
+      for (const seg of this.trainSegObjects) {
+        if (!seg.active) continue;
+        const hit = this.findNearestRectangleHit(hitLine, seg.getBounds());
+        if (hit && Math.abs(hit.distance - endDist) < EPSILON) {
+          this.onTrainDamage(damage * trainMult, shooterId);
+          return;
+        }
+      }
+    }
   }
 
   collectReplicatedHitscanTraces(now: number): SyncedHitscanTrace[] {
@@ -292,6 +360,8 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName:    string,
     playerColor:   number,
+    rockDamageMult  = 1,
+    trainDamageMult = 1,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -327,6 +397,9 @@ export class CombatSystem {
       }
     }
 
+    // Melee-Objektschaden: Felsen und Zug im Trefferbogen prüfen
+    this.applyMeleeObjectDamage(x, y, angle, range, halfArcRad, damage, rockDamageMult, trainDamageMult, shooterId);
+
     // Swing-VFX für alle Clients in die Replikations-Queue einreihen
     this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId });
     return true;
@@ -335,6 +408,48 @@ export class CombatSystem {
   collectReplicatedMeleeSwings(now: number): SyncedMeleeSwing[] {
     this.recentMeleeSwings = this.recentMeleeSwings.filter(s => s.expiresAt > now);
     return this.recentMeleeSwings.map(({ expiresAt, ...s }) => s);
+  }
+
+  /**
+   * Prüft, ob Felsen oder Zug-Segmente im Melee-Trefferbogen liegen, und wendet Schaden an.
+   */
+  private applyMeleeObjectDamage(
+    x: number, y: number, angle: number, range: number, halfArcRad: number,
+    damage: number, rockMult: number, trainMult: number, shooterId: string,
+  ): void {
+    // Felsschaden
+    if (rockMult !== 0 && this.rockObjects && this.onRockDamage) {
+      for (let i = 0; i < this.rockObjects.length; i++) {
+        const rock = this.rockObjects[i];
+        if (!rock?.active) continue;
+        const dx   = rock.x - x;
+        const dy   = rock.y - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > range) continue;
+        let ad = Math.atan2(dy, dx) - angle;
+        while (ad >  Math.PI) ad -= 2 * Math.PI;
+        while (ad < -Math.PI) ad += 2 * Math.PI;
+        if (Math.abs(ad) > halfArcRad) continue;
+        this.onRockDamage(i, damage * rockMult);
+      }
+    }
+
+    // Zugschaden
+    if (trainMult !== 0 && this.trainSegObjects && this.onTrainDamage) {
+      for (const seg of this.trainSegObjects) {
+        if (!seg.active) continue;
+        const dx   = seg.x - x;
+        const dy   = seg.y - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > range) continue;
+        let ad = Math.atan2(dy, dx) - angle;
+        while (ad >  Math.PI) ad -= 2 * Math.PI;
+        while (ad < -Math.PI) ad += 2 * Math.PI;
+        if (Math.abs(ad) > halfArcRad) continue;
+        this.onTrainDamage(damage * trainMult, shooterId);
+        break; // Nur einmal pro Swing den Zug treffen
+      }
+    }
   }
 
   traceHitscan(options: HitscanTraceOptions): HitscanTraceResult {
@@ -473,6 +588,14 @@ export class CombatSystem {
       for (const trunk of this.trunkObjects) {
         if (!trunk.active) continue;
         const hit = this.findNearestCircleHit(line, trunk.x, trunk.y, trunk.radius);
+        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+      }
+    }
+
+    if (this.trainSegObjects) {
+      for (const seg of this.trainSegObjects) {
+        if (!seg.active) continue;
+        const hit = this.findNearestRectangleHit(line, seg.getBounds());
         if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
       }
     }

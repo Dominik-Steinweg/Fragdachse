@@ -81,6 +81,9 @@ export class TrainManager {
   /** Gibt die StaticGroup zurück – für Projektil-Overlap im ProjectileManager. */
   getGroup(): Phaser.Physics.Arcade.StaticGroup { return this.group; }
 
+  /** Gibt die Segment-Rectangles zurück – für Hitscan-/Melee-Kollisionserkennung. */
+  getSegObjects(): readonly Phaser.GameObjects.Rectangle[] { return this.segObjects; }
+
   // ── Status-Abfragen ──────────────────────────────────────────────────────
 
   isActive():    boolean { return this.active;    }

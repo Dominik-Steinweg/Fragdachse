@@ -20,7 +20,7 @@ import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
-import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS, TRAIN_DROP_COUNT } from '../powerups/PowerUpConfig';
+import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
 import { DetonationSystem }    from '../systems/DetonationSystem';
 import { TrainManager }        from '../train/TrainManager';
@@ -500,6 +500,17 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaResult.trunkGroup,
     );
     this.combatSystem.setArenaObstacles(this.arenaResult.rockObjects, this.arenaResult.trunkObjects);
+
+    // Rock/Train-Damage-Callbacks für Hitscan/Melee-Objektschaden
+    this.combatSystem.setRockDamageCallback((rockIndex, damage) => {
+      if (!this.rockRegistry || !this.arenaResult) return;
+      const newHp = this.rockRegistry.applyDamage(rockIndex, damage);
+      ArenaBuilder.updateRockVisual(this.arenaResult.rockObjects, this.arenaResult.rockGroup, rockIndex, newHp);
+      if (newHp <= 0) this.powerUpSystem?.onRockDestroyed(rockIndex);
+    });
+    this.combatSystem.setTrainDamageCallback((damage, attackerId) => {
+      this.trainManager?.applyDamage(damage, attackerId);
+    });
     this.hostPhysics.setRockGroup(
       this.arenaResult.rockGroup,
       this.arenaResult.trunkGroup,
@@ -531,8 +542,9 @@ export class ArenaScene extends Phaser.Scene {
 
       // PowerUpSystem initialisieren
       this.powerUpSystem = new PowerUpSystem(this.playerManager, this.combatSystem, layout, {
-        onNukeExploded: (x, y, radius) => {
+        onNukeExploded: (x, y, radius, triggeredBy) => {
           bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a);
+          this.applyNukeEnvironmentDamage(x, y, radius, triggeredBy);
         },
       });
       this.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
@@ -724,6 +736,9 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setLoadoutManager(null);
     this.combatSystem.setPowerUpSystem(null);
     this.combatSystem.setArenaObstacles(null, null);
+    this.combatSystem.setTrainSegments(null);
+    this.combatSystem.setRockDamageCallback(null);
+    this.combatSystem.setTrainDamageCallback(null);
     this.combatSystem.setKillCallback(() => { /* noop */ });
     this.hostPhysics.setBurrowSystem(null);
     this.hostPhysics.setLoadoutManager(null);
@@ -835,6 +850,103 @@ export class ArenaScene extends Phaser.Scene {
     this.utilityChargeIndicator?.update(this.inputSystem.getUtilityChargePreviewState());
   }
 
+  // ── AoE-Umgebungsschaden (Felsen + Zug) ──────────────────────────────────
+
+  /**
+   * Wendet Flächenschaden auf Felsen und Zug an (Host-only).
+   * Aufgerufen von Granaten-Explosionen, Feuer-Ticks, Detonationen und Nuklear-Schlägen.
+   */
+  private applyAoeEnvironmentDamage(
+    x: number,
+    y: number,
+    radius: number,
+    damage: number,
+    rockMult: number,
+    trainMult: number,
+    attackerId: string,
+  ): void {
+    const arenaResult = this.arenaResult;
+
+    // Felsschaden
+    if (rockMult !== 0 && arenaResult && this.rockRegistry) {
+      const rockObjects = arenaResult.rockObjects;
+      for (let i = 0; i < rockObjects.length; i++) {
+        const rock = rockObjects[i];
+        if (!rock?.active) continue;
+        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
+        if (dist > radius) continue;
+        const newHp = this.rockRegistry.applyDamage(i, damage * rockMult);
+        ArenaBuilder.updateRockVisual(rockObjects, arenaResult.rockGroup, i, newHp);
+        if (newHp <= 0) {
+          this.powerUpSystem?.onRockDestroyed(i);
+        }
+      }
+    }
+
+    // Zugschaden
+    if (trainMult !== 0 && this.trainManager) {
+      const trainState = this.trainManager.getNetSnapshot();
+      if (trainState?.alive) {
+        // Treffer, wenn irgendein Segment-Mittelpunkt im AoE-Radius liegt
+        const segments = this.trainManager.getSegmentPositions();
+        for (const seg of segments) {
+          if (Phaser.Math.Distance.Between(x, y, seg.x, seg.y) <= radius) {
+            this.trainManager.applyDamage(damage * trainMult, attackerId);
+            break; // Nur einmal pro AoE treffen
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Nuke-spezifischer Umgebungsschaden mit distanzbasiertem Falloff (wie bei Spielern).
+   */
+  private applyNukeEnvironmentDamage(
+    x: number,
+    y: number,
+    radius: number,
+    triggeredBy: string,
+  ): void {
+    const arenaResult = this.arenaResult;
+    const rockMult:  number = NUKE_CONFIG.rockDamageMult;
+    const trainMult: number = NUKE_CONFIG.trainDamageMult;
+
+    // Felsschaden mit Distanz-Falloff
+    if (rockMult !== 0 && arenaResult && this.rockRegistry) {
+      for (let i = 0; i < arenaResult.rockObjects.length; i++) {
+        const rock = arenaResult.rockObjects[i];
+        if (!rock?.active) continue;
+        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
+        if (dist > radius) continue;
+        const t = Phaser.Math.Clamp(dist / radius, 0, 1);
+        const baseDmg = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, t);
+        const newHp = this.rockRegistry.applyDamage(i, Math.round(baseDmg * rockMult));
+        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, i, newHp);
+        if (newHp <= 0) {
+          this.powerUpSystem?.onRockDestroyed(i);
+        }
+      }
+    }
+
+    // Zugschaden mit Distanz-Falloff
+    if (trainMult !== 0 && this.trainManager) {
+      const trainState = this.trainManager.getNetSnapshot();
+      if (trainState?.alive) {
+        let minDist = Infinity;
+        for (const seg of this.trainManager.getSegmentPositions()) {
+          const d = Phaser.Math.Distance.Between(x, y, seg.x, seg.y);
+          if (d < minDist) minDist = d;
+        }
+        if (minDist <= radius) {
+          const t = Phaser.Math.Clamp(minDist / radius, 0, 1);
+          const baseDmg = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, t);
+          this.trainManager.applyDamage(Math.round(baseDmg * trainMult), triggeredBy);
+        }
+      }
+    }
+  }
+
   // ── Host-Update ──────────────────────────────────────────────────────────
 
   private runHostUpdate(delta: number): void {
@@ -880,6 +992,10 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.applyAoeDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
       );
+      this.applyAoeEnvironmentDamage(
+        det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage,
+        det.effect.rockDamageMult ?? 1, det.effect.trainDamageMult ?? 1, det.detonatorOwnerId,
+      );
       // Explosion in Spielerfarbe des Auslösers (z.B. Roter Spieler zündet grünen Ball → rote Explosion)
       const detonatorColor = bridge.getPlayerColor(det.detonatorOwnerId);
       bridge.broadcastExplosionEffect(det.x, det.y, det.effect.aoeRadius, detonatorColor);
@@ -889,6 +1005,10 @@ export class ArenaScene extends Phaser.Scene {
     for (const g of explodedGrenades) {
       if (g.effect.type === 'damage') {
         this.combatSystem.applyAoeDamage(g.x, g.y, g.effect.radius, g.effect.damage, g.ownerId);
+        this.applyAoeEnvironmentDamage(
+          g.x, g.y, g.effect.radius, g.effect.damage,
+          g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId,
+        );
         bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius);
       } else if (g.effect.type === 'fire') {
         this.fireSystem.hostCreateZone(g.x, g.y, g.effect, g.ownerId);
@@ -905,6 +1025,10 @@ export class ArenaScene extends Phaser.Scene {
     // Feuer-Schadens-Ticks auf CombatSystem anwenden (inkl. Selbstschaden)
     for (const ev of fireDamageEvents) {
       this.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true);
+      this.applyAoeEnvironmentDamage(
+        ev.x, ev.y, ev.radius, ev.damage,
+        ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
+      );
     }
 
     // ── Zug-Update (Host) ─────────────────────────────────────────────────────
@@ -914,6 +1038,8 @@ export class ArenaScene extends Phaser.Scene {
         if (trainEvent && Date.now() >= trainEvent.spawnAt) {
           this.trainManager.spawn();
           this.trainSpawned = true;
+          // Zug-Segmente für Hitscan/Melee-Kollision bereitstellen
+          this.combatSystem.setTrainSegments(this.trainManager.getSegObjects());
         }
       }
       if (this.trainSpawned) {
