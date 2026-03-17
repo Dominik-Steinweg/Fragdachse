@@ -2,7 +2,7 @@
 
 import { COLORS } from '../config';
 
-export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage';
+export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage' | 'global_nuke';
 
 export interface PowerUpDef {
   readonly id:          string;
@@ -17,10 +17,23 @@ export interface PowerUpDef {
 }
 
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
-  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999,                    color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
+  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999,                     color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
   ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
+  NUKE:          { id: 'NUKE',          type: 'global_nuke',                                       color: COLORS.RED_2,    spriteKey: 'powerup_nuke' },
 };
+
+export const NUKE_CONFIG = {
+  countdownMs:        5_000,
+  radius:             500,
+  maxDamage:          1000,
+  minDamage:          50,
+  edgePaddingPx:      120,
+  farSpawnTopFraction: 0.25,
+  warningColor:       COLORS.RED_2,
+  circleFillAlpha:    0.12,
+  circleStrokeAlpha:  0.42,
+} as const;
 
 // ── Drop-Tabellen ──────────────────────────────────────────────────────────
 
@@ -42,16 +55,16 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   SCHEDULED_EVENT: {
     // chanceToDrop fehlt → immer 1.0
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100, NUKE: 0 },
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 100 },
   },
 };
 
 /** Anzahl Power-Ups, die beim Zerstören des Zugs gespawnt werden. */
-export const TRAIN_DROP_COUNT = 3;
+export const TRAIN_DROP_COUNT = 1;
 
 // ── Geplante Spawns (Sekunden nach Rundenstart) ────────────────────────────
 

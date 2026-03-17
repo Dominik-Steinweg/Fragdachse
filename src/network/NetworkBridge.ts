@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, TrainEventConfig, SyncedTrainState } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, TrainEventConfig, SyncedTrainState } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -41,6 +41,7 @@ const KEY_MELEE_SWINGS   = 'mls'; // global: SyncedMeleeSwing[]   (unreliable, k
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
 const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
+const KEY_NUKE_STRIKES   = 'nks'; // global: SyncedNukeStrike[] (unreliable, host-authoritative aktive Nukes)
 const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   einmalig pro Runde)
 const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
@@ -75,6 +76,7 @@ export interface GameState {
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
+  nukes:        SyncedNukeStrike[];
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
 }
 
@@ -351,6 +353,7 @@ export class NetworkBridge {
     setState(KEY_SMOKE_CLOUDS,   state.smokes,        false);
     setState(KEY_FIRE_ZONES,     state.fires,         false);
     setState(KEY_POWERUPS,       state.powerups,      false);
+    setState(KEY_NUKE_STRIKES,   state.nukes,         false);
     setState(KEY_TRAIN_STATE,    state.train,         false);
   }
 
@@ -363,6 +366,7 @@ export class NetworkBridge {
     const smokes      = getState(KEY_SMOKE_CLOUDS)  as SyncedSmokeCloud[]  | undefined;
     const fires       = getState(KEY_FIRE_ZONES)    as SyncedFireZone[]    | undefined;
     const powerups    = getState(KEY_POWERUPS)      as SyncedPowerUp[]     | undefined;
+    const nukes       = getState(KEY_NUKE_STRIKES)  as SyncedNukeStrike[]  | undefined;
     const train       = getState(KEY_TRAIN_STATE)   as SyncedTrainState | null | undefined;
     if (!players) return undefined;
     return {
@@ -374,6 +378,7 @@ export class NetworkBridge {
       smokes:       smokes       ?? [],
       fires:        fires        ?? [],
       powerups:     powerups     ?? [],
+      nukes:        nukes        ?? [],
       train:        train        ?? null,
     };
   }

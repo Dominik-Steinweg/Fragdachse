@@ -21,6 +21,7 @@ import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS, TRAIN_DROP_COUNT } from '../powerups/PowerUpConfig';
+import { NukeRenderer }        from '../powerups/NukeRenderer';
 import { DetonationSystem }    from '../systems/DetonationSystem';
 import { TrainManager }        from '../train/TrainManager';
 import { TrainRenderer }       from '../train/TrainRenderer';
@@ -79,6 +80,7 @@ export class ArenaScene extends Phaser.Scene {
   // ── Zug-Event ─────────────────────────────────────────────────────────────
   private trainManager:       TrainManager  | null = null;
   private trainRenderer:      TrainRenderer | null = null;
+  private nukeRenderer:       NukeRenderer  | null = null;
   private trainSpawned          = false;
   private trainDestroyedShown   = false;
 
@@ -139,6 +141,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bulletRenderer = new BulletRenderer(this);
     this.bulletRenderer.generateTextures();
     this.projectileManager.setBulletRenderer(this.bulletRenderer);
+    this.nukeRenderer = new NukeRenderer(this);
+    this.nukeRenderer.generateTextures();
 
     // ── 4. Combat-System ──────────────────────────────────────────────────
     this.combatSystem = new CombatSystem(this.playerManager, this.projectileManager, bridge);
@@ -518,7 +522,11 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.setLoadoutManager(this.loadoutManager);
 
       // PowerUpSystem initialisieren
-      this.powerUpSystem = new PowerUpSystem(this.playerManager, this.combatSystem, layout);
+      this.powerUpSystem = new PowerUpSystem(this.playerManager, this.combatSystem, layout, {
+        onNukeExploded: (x, y, radius) => {
+          bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a);
+        },
+      });
       this.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
       this.combatSystem.setPowerUpSystem(this.powerUpSystem);
       this.resourceSystem.setPowerUpSystem(this.powerUpSystem);
@@ -717,6 +725,7 @@ export class ArenaScene extends Phaser.Scene {
     // Client-seitige PowerUp-Container aufräumen (destroy(true) räumt Kinder + Tweens mit auf)
     for (const container of this.powerUpSprites.values()) container.destroy(true);
     this.powerUpSprites.clear();
+    this.nukeRenderer?.clear();
 
     // Zug aufräumen
     this.trainManager?.destroy();
@@ -944,14 +953,16 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
+    const nukes    = this.powerUpSystem?.getNukeSnapshot() ?? [];
     const train    = this.trainManager?.getNetSnapshot() ?? null;
-    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, meleeSwings, smokes, fires, powerups, train });
+    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, meleeSwings, smokes, fires, powerups, nukes, train });
 
     // Zug-Renderer auf dem Host direkt aktualisieren (kein Client-Update-Pfad)
     this.trainRenderer?.update(train);
 
     // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
     this.syncPowerUpSprites(powerups);
+    this.nukeRenderer?.sync(nukes);
     this.checkLocalPickup(powerups);
 
     // HUD des lokalen Host-Spielers aktualisieren
@@ -1021,6 +1032,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── PowerUp-Sprites synchronisieren ──────────────────────────────────
     this.syncPowerUpSprites(state.powerups ?? []);
+    this.nukeRenderer?.sync(state.nukes ?? []);
 
     // ── Lokaler Pickup-Check ─────────────────────────────────────────────
     this.checkLocalPickup(state.powerups ?? []);

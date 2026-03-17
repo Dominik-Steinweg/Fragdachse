@@ -242,3 +242,14 @@ export interface SyncedPowerUp {
   x:     number;
   y:     number;
 }
+
+/** Aktiver Nuke-Strike (Host → Clients via GameState) */
+export interface SyncedNukeStrike {
+  id:          number;
+  x:           number;
+  y:           number;
+  radius:      number;
+  armedAt:     number;   // Date.now()-Zeitpunkt des Spawns
+  explodeAt:   number;   // Date.now()-Zeitpunkt der Explosion
+  triggeredBy: string;
+}

@@ -2,15 +2,14 @@ import Phaser from 'phaser';
 import {
   CELL_SIZE, GRID_COLS, GRID_ROWS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  HP_MAX,
+  ARENA_WIDTH, ARENA_HEIGHT,
 } from '../config';
-import type { ArenaLayout, SyncedPowerUp } from '../types';
+import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem }  from '../systems/CombatSystem';
-import type { NetworkBridge }  from '../network/NetworkBridge';
 import {
   POWERUP_DEFS, DROP_TABLES, SCHEDULED_SPAWNS,
-  PICKUP_RADIUS,
+  PICKUP_RADIUS, NUKE_CONFIG,
   type PowerUpDef, type DropTable,
 } from './PowerUpConfig';
 
@@ -31,6 +30,20 @@ interface WorldItem {
   y:    number;
 }
 
+interface ActiveNukeStrike {
+  id:          number;
+  x:           number;
+  y:           number;
+  radius:      number;
+  armedAt:     number;
+  explodeAt:   number;
+  triggeredBy: string;
+}
+
+interface PowerUpSystemOptions {
+  onNukeExploded?: (x: number, y: number, radius: number) => void;
+}
+
 // ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
 
 function weightedRandom(weights: Record<string, number>): string | null {
@@ -47,7 +60,7 @@ function weightedRandom(weights: Record<string, number>): string | null {
 
 // ── PowerUpSystem ──────────────────────────────────────────────────────────
 
-type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'isAlive'>;
+type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'isAlive' | 'applyDamage'>;
 
 /**
  * Host-autoritäres System für Power-Ups auf dem Boden und aktive Buffs.
@@ -58,7 +71,9 @@ type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'isAlive'>;
 export class PowerUpSystem {
   private worldItems  = new Map<number, WorldItem>();
   private activeBuffs = new Map<string, ActiveBuff[]>(); // playerId → Buffs
+  private activeNukes = new Map<number, ActiveNukeStrike>();
   private nextUid     = 1;
+  private nextNukeId  = 1;
 
   // Scheduled-Spawn-Tracking
   private arenaStartTime         = 0;
@@ -68,6 +83,7 @@ export class PowerUpSystem {
     private playerManager: PlayerManager,
     private combat:        PowerUpSystemDeps,
     private layout:        ArenaLayout,
+    private options:       PowerUpSystemOptions = {},
   ) {}
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -81,7 +97,9 @@ export class PowerUpSystem {
   reset(): void {
     this.worldItems.clear();
     this.activeBuffs.clear();
+    this.activeNukes.clear();
     this.nextUid = 1;
+    this.nextNukeId = 1;
     this.arenaStartTime = 0;
     this.scheduledSpawnsFired.clear();
   }
@@ -118,6 +136,13 @@ export class PowerUpSystem {
           }
         }
       }
+    }
+
+    // 3) Fällige Nukes detonieren lassen
+    for (const [id, strike] of this.activeNukes) {
+      if (now < strike.explodeAt) continue;
+      this.explodeNuke(strike);
+      this.activeNukes.delete(id);
     }
   }
 
@@ -213,7 +238,44 @@ export class PowerUpSystem {
         this.activeBuffs.set(playerId, buffs);
         break;
       }
+      case 'global_nuke':
+        this.armNukeStrike(playerId);
+        break;
     }
+  }
+
+  private armNukeStrike(playerId: string): void {
+    const owner = this.playerManager.getPlayer(playerId);
+    if (!owner) return;
+
+    const spawn = this.findNukeSpawnPoint(owner.sprite.x, owner.sprite.y);
+    const armedAt = Date.now();
+    const strike: ActiveNukeStrike = {
+      id:          this.nextNukeId++,
+      x:           spawn.x,
+      y:           spawn.y,
+      radius:      NUKE_CONFIG.radius,
+      armedAt,
+      explodeAt:   armedAt + NUKE_CONFIG.countdownMs,
+      triggeredBy: playerId,
+    };
+
+    this.activeNukes.set(strike.id, strike);
+  }
+
+  private explodeNuke(strike: ActiveNukeStrike): void {
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.combat.isAlive(player.id)) continue;
+
+      const dist = Phaser.Math.Distance.Between(strike.x, strike.y, player.sprite.x, player.sprite.y);
+      if (dist > strike.radius) continue;
+
+      const clampedT = Phaser.Math.Clamp(dist / strike.radius, 0, 1);
+      const damage = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, clampedT);
+      this.combat.applyDamage(player.id, Math.round(damage), false, strike.triggeredBy, 'Atombombe');
+    }
+
+    this.options.onNukeExploded?.(strike.x, strike.y, strike.radius);
   }
 
   // ── Buff-Abfragen (von anderen Systemen aufgerufen) ─────────────────────
@@ -250,15 +312,57 @@ export class PowerUpSystem {
     return result;
   }
 
+  getNukeSnapshot(): SyncedNukeStrike[] {
+    const result: SyncedNukeStrike[] = [];
+    for (const strike of this.activeNukes.values()) {
+      result.push({
+        id:          strike.id,
+        x:           strike.x,
+        y:           strike.y,
+        radius:      strike.radius,
+        armedAt:     strike.armedAt,
+        explodeAt:   strike.explodeAt,
+        triggeredBy: strike.triggeredBy,
+      });
+    }
+    return result;
+  }
+
   // ── Freie Zelle finden (analog PlayerManager.getSpawnPoint) ─────────────
 
   private getRandomFreeCell(): { gx: number; gy: number } {
+    const free = this.collectFreeCells(0);
+    if (free.length === 0) return { gx: 0, gy: 0 };
+    return free[Math.floor(Math.random() * free.length)];
+  }
+
+  private findNukeSpawnPoint(triggerX: number, triggerY: number): { x: number; y: number } {
+    const preferred = this.collectFreeCells(NUKE_CONFIG.edgePaddingPx)
+      .map(cell => ({
+        ...cell,
+        dist: Phaser.Math.Distance.Between(triggerX, triggerY, this.cellToWorldX(cell.gx), this.cellToWorldY(cell.gy)),
+      }));
+
+    const outsideBlast = preferred.filter(cell => cell.dist > NUKE_CONFIG.radius);
+    const primaryPool = outsideBlast.length > 0 ? outsideBlast : preferred;
+
+    if (primaryPool.length > 0) {
+      const sorted = [...primaryPool].sort((left, right) => right.dist - left.dist);
+      const topCount = Math.max(1, Math.ceil(sorted.length * NUKE_CONFIG.farSpawnTopFraction));
+      const pick = sorted[Math.floor(Math.random() * topCount)];
+      return { x: this.cellToWorldX(pick.gx), y: this.cellToWorldY(pick.gy) };
+    }
+
+    const fallback = this.getRandomFreeCell();
+    return { x: this.cellToWorldX(fallback.gx), y: this.cellToWorldY(fallback.gy) };
+  }
+
+  private collectFreeCells(edgePaddingPx: number): Array<{ gx: number; gy: number }> {
     const blocked = new Set<string>();
 
     for (const r of this.layout.rocks) blocked.add(`${r.gridX}_${r.gridY}`);
     for (const t of this.layout.trees) blocked.add(`${t.gridX}_${t.gridY}`);
 
-    // Spieler-Zellen ebenfalls ausschließen
     for (const p of this.playerManager.getAllPlayers()) {
       if (!p.sprite.active) continue;
       const gx = Math.floor((p.sprite.x - ARENA_OFFSET_X) / CELL_SIZE);
@@ -266,23 +370,44 @@ export class PowerUpSystem {
       blocked.add(`${gx}_${gy}`);
     }
 
-    // Bereits liegende Power-Ups ausschließen
     for (const item of this.worldItems.values()) {
       const gx = Math.floor((item.x - ARENA_OFFSET_X) / CELL_SIZE);
       const gy = Math.floor((item.y - ARENA_OFFSET_Y) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
     }
 
+    for (const strike of this.activeNukes.values()) {
+      const gx = Math.floor((strike.x - ARENA_OFFSET_X) / CELL_SIZE);
+      const gy = Math.floor((strike.y - ARENA_OFFSET_Y) / CELL_SIZE);
+      blocked.add(`${gx}_${gy}`);
+    }
+
+    const minX = ARENA_OFFSET_X + edgePaddingPx;
+    const maxX = ARENA_OFFSET_X + ARENA_WIDTH - edgePaddingPx;
+    const minY = ARENA_OFFSET_Y + edgePaddingPx;
+    const maxY = ARENA_OFFSET_Y + ARENA_HEIGHT - edgePaddingPx;
+
     const free: Array<{ gx: number; gy: number }> = [];
     for (let gy = 0; gy < GRID_ROWS; gy++) {
       for (let gx = 0; gx < GRID_COLS; gx++) {
-        if (!blocked.has(`${gx}_${gy}`)) {
-          free.push({ gx, gy });
-        }
+        if (blocked.has(`${gx}_${gy}`)) continue;
+
+        const wx = this.cellToWorldX(gx);
+        const wy = this.cellToWorldY(gy);
+        if (wx < minX || wx > maxX || wy < minY || wy > maxY) continue;
+
+        free.push({ gx, gy });
       }
     }
 
-    if (free.length === 0) return { gx: 0, gy: 0 };
-    return free[Math.floor(Math.random() * free.length)];
+    return free;
+  }
+
+  private cellToWorldX(gx: number): number {
+    return ARENA_OFFSET_X + gx * CELL_SIZE + CELL_SIZE / 2;
+  }
+
+  private cellToWorldY(gy: number): number {
+    return ARENA_OFFSET_Y + gy * CELL_SIZE + CELL_SIZE / 2;
   }
 }

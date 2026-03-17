@@ -35,9 +35,6 @@ export const TRAIN = {
   /** Sekunden nach Rundenstart bis der Zug einfährt */
   SPAWN_DELAY_S:   10,
 
-  /** Anzahl Power-ups, die bei Zerstörung des Zugs spawnen */
-  POWERUP_DROPS:   3,
-
   /** Streifenhöhe in px für den Waggon-Geschwindigkeitseffekt */
   WAGON_STRIPE_H:  8,
 
