@@ -33,7 +33,7 @@ const SPARK_COLORS     = [0xffffff, 0xffee88, 0xffaa44, 0xff6622];
 const DEPTH_TRAIL  = DEPTH.PROJECTILES - 1;
 const DEPTH_GLOW   = DEPTH.PROJECTILES - 1;
 const DEPTH_BULLET = DEPTH.PROJECTILES;
-const DEPTH_SPARK  = DEPTH.PROJECTILES + 10;
+const DEPTH_SPARK  = DEPTH.PROJECTILES + 1;
 
 // ── Interner State pro Bullet ──────────────────────────────────────────────
 interface BulletVisual {

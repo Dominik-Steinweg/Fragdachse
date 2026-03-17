@@ -20,8 +20,9 @@ import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
-import { POWERUP_DEFS, POWERUP_RENDER_SIZE, PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
+import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
+import { PowerUpRenderer }     from '../powerups/PowerUpRenderer';
 import { DetonationSystem }    from '../systems/DetonationSystem';
 import { TrainManager }        from '../train/TrainManager';
 import { TrainRenderer }       from '../train/TrainRenderer';
@@ -82,15 +83,10 @@ export class ArenaScene extends Phaser.Scene {
   private trainManager:       TrainManager  | null = null;
   private trainRenderer:      TrainRenderer | null = null;
   private nukeRenderer:       NukeRenderer  | null = null;
+  private powerUpRenderer:     PowerUpRenderer | null = null;
   private trainSpawned          = false;
   private trainDestroyedShown   = false;
 
-  // ── Client-seitiges PowerUp-Rendering ───────────────────────────────────────
-  /**
-   * Container je UID: enthält [0] Glow-Kreis (Arc) und [1] Grafik (Image/Rectangle).
-   * Container.destroy(true) räumt Kinder + deren Tweens automatisch auf.
-   */
-  private powerUpSprites = new Map<number, Phaser.GameObjects.Container>();
   private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
@@ -144,6 +140,7 @@ export class ArenaScene extends Phaser.Scene {
     this.projectileManager.setBulletRenderer(this.bulletRenderer);
     this.nukeRenderer = new NukeRenderer(this);
     this.nukeRenderer.generateTextures();
+    this.powerUpRenderer = new PowerUpRenderer(this);
 
     // ── 4. Combat-System ──────────────────────────────────────────────────
     this.combatSystem = new CombatSystem(this.playerManager, this.projectileManager, bridge);
@@ -618,95 +615,102 @@ export class ArenaScene extends Phaser.Scene {
       });
 
       // ── Zug-Event (Host-only) ────────────────────────────────────────────
-      // Gleisspalte aus dem Layout lesen (erste TrackCell → gridX)
       const trackCell = layout.tracks?.[0];
       if (trackCell !== undefined) {
-        const trackX  = ARENA_OFFSET_X + trackCell.gridX * CELL_SIZE + CELL_SIZE / 2;
-        const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-        const spawnAt = bridge.getArenaStartTime() + TRAIN.SPAWN_DELAY_S * 1000;
-
-        bridge.publishTrainEvent({ trackX, direction, spawnAt });
-
-        this.trainManager = new TrainManager(this, this.playerManager, trackX, direction);
-        this.trainSpawned = false;
-        this.trainDestroyedShown = false;
-
-        // Projektil-Kollision mit dem Zug verdrahten
-        this.projectileManager.setTrainGroup(this.trainManager.getGroup());
-        this.projectileManager.setTrainHitCallback((damage, attackerId) => {
-          this.trainManager?.applyDamage(damage, attackerId);
-        });
-
-        // Spieler-Kollision → sofortiger Kill (skipBurrowCheck=true, kein Frag-Kredit)
-        this.trainManager.setPlayerHitCallback((playerId) => {
-          this.combatSystem.applyDamage(playerId, 9999, true, TRAIN.TRAIN_KILLER_ID, 'Zug RB 54');
-        });
-
-        // Zerstörungs-Callback
-        this.trainManager.setDestroyCallback((result) => {
-          // KILL_FRAGS an den letzten Treffer-Spieler vergeben
-          if (result.lastHitterId) {
-            bridge.addPlayerFrags(result.lastHitterId, TRAIN.KILL_FRAGS);
-            const allPlayers  = bridge.getConnectedPlayers();
-            const hitter = allPlayers.find(p => p.id === result.lastHitterId);
-            if (hitter) {
-              bridge.broadcastKillEvent({
-                killerId:    hitter.id,
-                killerName:  hitter.name,
-                killerColor: hitter.colorHex,
-                weapon:      'Zug RB 54',
-                victimId:    '__train__',
-                victimName:  'RB 54',
-                victimColor: 0xcf573c,
-              });
-            }
-          }
-          // Große Explosionen an jedem Segment + zentrale Mega-Explosion
-          for (const seg of result.segmentPositions) {
-            bridge.broadcastExplosionEffect(seg.x, seg.y, 80);
-          }
-          bridge.broadcastExplosionEffect(result.centerX, result.centerY, 160);
-
-          // Power-Ups nur an Segmenten, die sich noch innerhalb der Arena befinden
-          const arenaTop    = ARENA_OFFSET_Y;
-          const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
-          const validSegs = result.segmentPositions.filter(
-            seg => seg.y >= arenaTop && seg.y <= arenaBottom,
-          );
-          const dropSegs = validSegs.length > 0 ? validSegs : result.segmentPositions;
-          for (let i = 0; i < TRAIN_DROP_COUNT; i++) {
-            // Gleichmäßig über die gültigen Segmente verteilen
-            const idx = Math.floor(i * dropSegs.length / TRAIN_DROP_COUNT);
-            const seg = dropSegs[idx];
-            const scatter = 28;
-            const ox = (Math.random() - 0.5) * scatter;
-            const oy = (Math.random() - 0.5) * scatter;
-            this.powerUpSystem?.spawnFromTable('TRAIN_DESTROY', seg.x + ox, seg.y + oy);
-          }
-          bridge.broadcastTrainDestroyed();
-        });
-
-        // Natürlicher Ausfahrt-Callback: Zug nach Wartezeit erneut spawnen, Richtung alternieren
-        this.trainManager.setExitedCallback(() => {
-          const currentEvent = bridge.getTrainEvent();
-          if (!currentEvent) return;
-          // Richtung umkehren
-          const newDirection: 1 | -1 = currentEvent.direction === 1 ? -1 : 1;
-          const newSpawnAt = Date.now() + TRAIN.SPAWN_DELAY_S * 1000;
-          bridge.publishTrainEvent({
-            trackX:    currentEvent.trackX,
-            direction: newDirection,
-            spawnAt:   newSpawnAt,
-          });
-          // HP bleibt erhalten; nur Fahrtrichtung und Position werden neu gesetzt
-          this.trainManager?.prepareReentry(newDirection);
-          this.trainSpawned = false;
-        });
+        this.setupHostTrainEvent(trackCell.gridX);
       }
     }
 
     // ── TrainRenderer (alle Clients inkl. Host) ──────────────────────────────
     this.trainRenderer = new TrainRenderer(this);
+  }
+
+  /**
+   * Erstellt und verdrahtet den Zug-Event auf dem Host (TrainManager, Callbacks, Projektil-Kollision).
+   * Ausgelagert aus buildArena() zur besseren Übersichtlichkeit.
+   */
+  private setupHostTrainEvent(trackGridX: number): void {
+    const trackX  = ARENA_OFFSET_X + trackGridX * CELL_SIZE + CELL_SIZE / 2;
+    const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+    const spawnAt = bridge.getArenaStartTime() + TRAIN.SPAWN_DELAY_S * 1000;
+
+    bridge.publishTrainEvent({ trackX, direction, spawnAt });
+
+    this.trainManager = new TrainManager(this, this.playerManager, trackX, direction);
+    this.trainSpawned = false;
+    this.trainDestroyedShown = false;
+
+    // Projektil-Kollision mit dem Zug verdrahten
+    this.projectileManager.setTrainGroup(this.trainManager.getGroup());
+    this.projectileManager.setTrainHitCallback((damage, attackerId) => {
+      this.trainManager?.applyDamage(damage, attackerId);
+    });
+
+    // Spieler-Kollision → sofortiger Kill (skipBurrowCheck=true, kein Frag-Kredit)
+    this.trainManager.setPlayerHitCallback((playerId) => {
+      this.combatSystem.applyDamage(playerId, 9999, true, TRAIN.TRAIN_KILLER_ID, 'Zug RB 54');
+    });
+
+    // Zerstörungs-Callback
+    this.trainManager.setDestroyCallback((result) => {
+      // KILL_FRAGS an den letzten Treffer-Spieler vergeben
+      if (result.lastHitterId) {
+        bridge.addPlayerFrags(result.lastHitterId, TRAIN.KILL_FRAGS);
+        const allPlayers  = bridge.getConnectedPlayers();
+        const hitter = allPlayers.find(p => p.id === result.lastHitterId);
+        if (hitter) {
+          bridge.broadcastKillEvent({
+            killerId:    hitter.id,
+            killerName:  hitter.name,
+            killerColor: hitter.colorHex,
+            weapon:      'Zug RB 54',
+            victimId:    '__train__',
+            victimName:  'RB 54',
+            victimColor: 0xcf573c,
+          });
+        }
+      }
+      // Große Explosionen an jedem Segment + zentrale Mega-Explosion
+      for (const seg of result.segmentPositions) {
+        bridge.broadcastExplosionEffect(seg.x, seg.y, 80);
+      }
+      bridge.broadcastExplosionEffect(result.centerX, result.centerY, 160);
+
+      // Power-Ups nur an Segmenten, die sich noch innerhalb der Arena befinden
+      const arenaTop    = ARENA_OFFSET_Y;
+      const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
+      const validSegs = result.segmentPositions.filter(
+        seg => seg.y >= arenaTop && seg.y <= arenaBottom,
+      );
+      const dropSegs = validSegs.length > 0 ? validSegs : result.segmentPositions;
+      for (let i = 0; i < TRAIN_DROP_COUNT; i++) {
+        // Gleichmäßig über die gültigen Segmente verteilen
+        const idx = Math.floor(i * dropSegs.length / TRAIN_DROP_COUNT);
+        const seg = dropSegs[idx];
+        const scatter = 28;
+        const ox = (Math.random() - 0.5) * scatter;
+        const oy = (Math.random() - 0.5) * scatter;
+        this.powerUpSystem?.spawnFromTable('TRAIN_DESTROY', seg.x + ox, seg.y + oy);
+      }
+      bridge.broadcastTrainDestroyed();
+    });
+
+    // Natürlicher Ausfahrt-Callback: Zug nach Wartezeit erneut spawnen, Richtung alternieren
+    this.trainManager.setExitedCallback(() => {
+      const currentEvent = bridge.getTrainEvent();
+      if (!currentEvent) return;
+      // Richtung umkehren
+      const newDirection: 1 | -1 = currentEvent.direction === 1 ? -1 : 1;
+      const newSpawnAt = Date.now() + TRAIN.SPAWN_DELAY_S * 1000;
+      bridge.publishTrainEvent({
+        trackX:    currentEvent.trackX,
+        direction: newDirection,
+        spawnAt:   newSpawnAt,
+      });
+      // HP bleibt erhalten; nur Fahrtrichtung und Position werden neu gesetzt
+      this.trainManager?.prepareReentry(newDirection);
+      this.trainSpawned = false;
+    });
   }
 
   private tearDownArena(): void {
@@ -745,9 +749,7 @@ export class ArenaScene extends Phaser.Scene {
     this.projectileManager.setRockGroup(null, null, null);
     this.hostPhysics.setRockGroup(null, null);
 
-    // Client-seitige PowerUp-Container aufräumen (destroy(true) räumt Kinder + Tweens mit auf)
-    for (const container of this.powerUpSprites.values()) container.destroy(true);
-    this.powerUpSprites.clear();
+    this.powerUpRenderer?.clear();
     this.nukeRenderer?.clear();
 
     // Zug aufräumen
@@ -1097,7 +1099,7 @@ export class ArenaScene extends Phaser.Scene {
     this.trainRenderer?.update(train);
 
     // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
-    this.syncPowerUpSprites(powerups);
+    this.powerUpRenderer?.sync(powerups);
     this.nukeRenderer?.sync(nukes);
     this.checkLocalPickup(powerups);
 
@@ -1167,7 +1169,7 @@ export class ArenaScene extends Phaser.Scene {
     this.trainRenderer?.update(state.train ?? null);
 
     // ── PowerUp-Sprites synchronisieren ──────────────────────────────────
-    this.syncPowerUpSprites(state.powerups ?? []);
+    this.powerUpRenderer?.sync(state.powerups ?? []);
     this.nukeRenderer?.sync(state.nukes ?? []);
 
     // ── Lokaler Pickup-Check ─────────────────────────────────────────────
@@ -1255,74 +1257,7 @@ export class ArenaScene extends Phaser.Scene {
     };
   }
 
-  // ── Power-Up-Rendering (Host + Client) ─────────────────────────────────
-
-  /**
-   * Synchronisiert die sichtbaren PowerUp-Container mit dem aktuellen Netzwerk-Snapshot.
-   *
-   * Aufbau je Container (Schicht-Reihenfolge = Render-Reihenfolge):
-   *   [0] Image | Rectangle – die eigentliche Grafik (feste Größe)
-   *       └─ preFX.addGlow()  – Pixel-Lichtaura direkt an der Grafikkante,
-   *                             outerStrength pulsiert via Tween
-   *
-   * Der preFX-Glow rendert die Aura hinter dem Sprite-Pixel, die Grafik bleibt
-   * immer sichtbar vorne. Der Glow-Tween-Cleanup erfolgt über das destroy-Event
-   * der Grafik – keine separate Tween-Map nötig.
-   * Container.destroy(true) räumt Grafik + deren Tweens automatisch auf.
-   */
-  private syncPowerUpSprites(powerups: import('../types').SyncedPowerUp[]): void {
-    const activeUids = new Set<number>();
-
-    for (const pu of powerups) {
-      activeUids.add(pu.uid);
-      if (this.powerUpSprites.has(pu.uid)) {
-        this.powerUpSprites.get(pu.uid)!.setPosition(pu.x, pu.y);
-        continue;
-      }
-
-      const def       = POWERUP_DEFS[pu.defId];
-      const glowColor = def?.color ?? 0xffffff;
-      // Deterministischer Phasen-Offset: Items pulsieren leicht gegeneinander versetzt
-      const phaseMs   = (pu.uid * 137) % 1400;
-
-      // ── Container ─────────────────────────────────────────────────────────
-      const container = this.add.container(pu.x, pu.y);
-      container.setDepth(DEPTH.PLAYERS - 1);
-
-      // ── Grafik: feste Größe, kein Scale-Tween ─────────────────────────────
-      const graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle =
-        def?.spriteKey
-          ? this.add.image(0, 0, def.spriteKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
-          : this.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor);
-      container.add(graphic);
-
-      // ── preFX-Glow: Pixel-Aura, outerStrength pulsiert ───────────────────
-      const glow = graphic.preFX?.addGlow(glowColor, 2, 0, false, 0.1, 14);
-      if (glow) {
-        const glowTween = this.tweens.add({
-          targets:       glow,
-          outerStrength: { from: 2, to: 8 },
-          duration:      900,
-          yoyo:          true,
-          repeat:        -1,
-          ease:          'Sine.easeInOut',
-          delay:         phaseMs,
-        });
-        // Tween-Cleanup ohne separate Map: destroy-Event der Grafik abfangen
-        graphic.once(Phaser.GameObjects.Events.DESTROY, () => glowTween.stop());
-      }
-
-      this.powerUpSprites.set(pu.uid, container);
-    }
-
-    // Entfernte Items aufräumen
-    for (const [uid, container] of this.powerUpSprites) {
-      if (!activeUids.has(uid)) {
-        container.destroy(true); // Kinder (Arc, Grafik) + deren Tweens werden mitgelöscht
-        this.powerUpSprites.delete(uid);
-      }
-    }
-  }
+  // ── Power-Up-Pickup (Host + Client) ─────────────────────────────────────
 
   /**
    * Prüft ob der lokale Spieler ein Power-Up berührt und sendet ggf. einen Pickup-RPC.
