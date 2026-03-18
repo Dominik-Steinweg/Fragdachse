@@ -17,14 +17,63 @@ import { TRAIN } from './TrainConfig';
 export class TrainRenderer {
   private readonly gfx: Phaser.GameObjects.Graphics;
 
+  // Interpolation: Zielposition und aktuelle Display-Position
+  private targetY  = 0;
+  private displayY = 0;
+  private lastDir: 1 | -1 = 1;
+  private lastX    = 0;
+  private lastAlive = false;
+  private lastHp    = 0;
+  private lastMaxHp = 0;
+
   constructor(scene: Phaser.Scene) {
     this.gfx = scene.add.graphics();
     this.gfx.setDepth(DEPTH.TRAIN);
   }
 
   /**
-   * Jeden Frame aufrufen.
-   * `state = null` → alles ausblenden.
+   * Neuen Server-State setzen (nur bei neuem Netzwerk-Snapshot aufrufen).
+   */
+  setTarget(state: SyncedTrainState | null): void {
+    if (!state || !state.alive) {
+      this.lastAlive = false;
+      return;
+    }
+    if (!this.lastAlive) {
+      // Erster Frame oder Respawn → Snap statt Lerp
+      this.displayY = state.y;
+    }
+    this.targetY  = state.y;
+    this.lastDir  = state.dir;
+    this.lastX    = state.x;
+    this.lastHp   = state.hp;
+    this.lastMaxHp = state.maxHp;
+    this.lastAlive = true;
+  }
+
+  /**
+   * Jeden Render-Frame aufrufen. Interpoliert displayY → targetY.
+   * @param lerpFactor Zeitbasierter Interpolationsfaktor (0–1)
+   */
+  render(lerpFactor: number): void {
+    this.gfx.clear();
+    if (!this.lastAlive) return;
+
+    this.displayY = Phaser.Math.Linear(this.displayY, this.targetY, lerpFactor);
+
+    const fakeState: SyncedTrainState = {
+      alive: true,
+      x:     this.lastX,
+      y:     this.displayY,
+      dir:   this.lastDir,
+      hp:    this.lastHp,
+      maxHp: this.lastMaxHp,
+    };
+    this.draw(fakeState);
+  }
+
+  /**
+   * Legacy: Direktes Update ohne Interpolation (Host-Pfad).
    */
   update(state: SyncedTrainState | null): void {
     this.gfx.clear();

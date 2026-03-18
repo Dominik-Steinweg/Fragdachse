@@ -44,6 +44,7 @@ import {
   ARENA_WIDTH,
   CELL_SIZE, DEPTH,
   DASH_T2_S,
+  NET_TICK_INTERVAL_MS, NET_SMOOTH_TIME_MS,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 
@@ -96,6 +97,7 @@ export class ArenaScene extends Phaser.Scene {
   // ── Dash-Visual-Tracking (client-seitig) ──────────────────────────────────
   private dashPhase2StartTimes = new Map<string, number>(); // playerId → lokaler Zeitstempel
   private prevDashPhases       = new Map<string, number>(); // playerId → vorherige Phase
+  private prevAliveStates      = new Map<string, boolean>(); // playerId → vorheriger alive-Status
   private dashTrailTimers      = new Map<string, number>(); // playerId → nächster Ghost ms
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
@@ -106,6 +108,12 @@ export class ArenaScene extends Phaser.Scene {
    * Sperrt die Arena-Simulation bis die Netzwerkphase auf 'LOBBY' wechselt.
    */
   private matchTerminated   = false;
+
+  // ── Netzwerk-Tick-Rate-Drosselung (Host) ─────────────────────────────────
+  private netTickAccumulator = 0;
+  // ── Client: letzte verarbeitete GameState-Version ────────────────────────
+  private lastGameStateVersion = -1;
+
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = {
     weapon1: 0,
     weapon2: 0,
@@ -185,7 +193,9 @@ export class ArenaScene extends Phaser.Scene {
         this.aimSystem?.notifyShot(slot);
         shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
       }
-      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params);
+      // Lokale Sprite-Position mitsenden für Hitscan-Kompensation bei 20Hz Tick-Rate
+      const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y);
     });
 
     bridge.registerDashHandler((playerId, dx, dy) => {
@@ -220,10 +230,10 @@ export class ArenaScene extends Phaser.Scene {
     );
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
-    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params) => {
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY) => {
       if (!bridge.isHost()) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now(), shotId, params);
+      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now(), shotId, params, clientX, clientY);
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
@@ -839,7 +849,7 @@ export class ArenaScene extends Phaser.Scene {
           bridge.setGamePhase('LOBBY');
         }
       } else {
-        this.runClientUpdate();
+        this.runClientUpdate(delta);
       }
 
       // Leaderboard mit aktuellen Frags und Ping aktualisieren (alle Clients)
@@ -994,12 +1004,7 @@ export class ArenaScene extends Phaser.Scene {
     const { synced: projectiles, explodedGrenades } = countdownActive
       ? { synced: [], explodedGrenades: [] }
       : this.projectileManager.hostUpdate(delta);
-    const hitscanTraces = countdownActive
-      ? []
-      : this.combatSystem.collectReplicatedHitscanTraces(Date.now());
-    const meleeSwings = countdownActive
-      ? []
-      : this.combatSystem.collectReplicatedMeleeSwings(Date.now());
+    // Hitscan-Traces und Melee-Swings werden jetzt per RPC direkt aus CombatSystem gesendet
 
     // Detonations-Ereignisse verarbeiten (ASMD Secondary Ball, zukünftige Raketen, …)
     const detonations = countdownActive ? [] : (this.detonationSystem?.flushDetonations() ?? []);
@@ -1064,12 +1069,59 @@ export class ArenaScene extends Phaser.Scene {
 
     const rocks   = this.rockRegistry?.getNetSnapshot() ?? [];
 
-    for (const trace of hitscanTraces) {
-      this.effectSystem.playSyncedHitscanTracer(trace);
+    // Hitscan-Traces und Melee-Swings werden per RPC abgespielt (Host empfängt eigene Broadcasts)
+
+    // Host-lokale Visuals jeden Frame aktualisieren (HP-Bars, Sichtbarkeit, Dash-Trails)
+    for (const player of this.playerManager.getAllPlayers()) {
+      const hp    = this.combatSystem.getHP(player.id);
+      const alive = this.combatSystem.isAlive(player.id);
+      player.updateHP(hp);
+      player.setVisible(alive);
+      player.setRageTint(this.loadoutManager?.isUltimateActive(player.id) ?? false);
+      player.syncBar();
+      const dashPhase = this.hostPhysics.getDashPhase(player.id);
+      if (dashPhase === 0) this.dashTrailTimers.delete(player.id);
+      this.applyDashVisual(player, player.id, dashPhase, false);
     }
-    for (const swing of meleeSwings) {
-      this.effectSystem.playSyncedMeleeSwing(swing);
+
+    const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
+    const nukes    = this.powerUpSystem?.getNukeSnapshot() ?? [];
+    const train    = this.trainManager?.getNetSnapshot() ?? null;
+
+    // Zug-Renderer auf dem Host direkt aktualisieren (kein Client-Update-Pfad)
+    this.trainRenderer?.update(train);
+    // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
+    this.powerUpRenderer?.sync(powerups);
+    this.nukeRenderer?.sync(nukes);
+    this.checkLocalPickup(powerups);
+
+    // HUD des lokalen Host-Spielers aktualisieren
+    const localId = bridge.getLocalPlayerId();
+    const localPlayer = this.playerManager.getPlayer(localId);
+    if (localPlayer) {
+      const isMovingLocal = isVelocityMoving(localPlayer.body.velocity.x, localPlayer.body.velocity.y);
+      const aimLocal      = this.loadoutManager?.getAimNetState(localId, isMovingLocal)
+                          ?? this.getDefaultAimState(isMovingLocal);
+      this.aimSystem?.setAuthoritativeState(aimLocal);
+      this.inputSystem.setLocalState(
+        this.burrowSystem?.isStunned(localId) ?? false,
+        this.burrowSystem?.isBurrowed(localId) ?? false,
+      );
+      this.leftPanel.updateResources(
+        this.resourceSystem?.getAdrenaline(localId) ?? 0,
+        this.resourceSystem?.getRage(localId) ?? 0,
+        this.inputSystem.getDashCooldownFrac(),
+      );
+      this.localPlayerAlive    = this.combatSystem.isAlive(localId);
+      this.localPlayerBurrowed = this.burrowSystem?.isBurrowed(localId) ?? false;
     }
+
+    // ── Netzwerk-Tick-Rate-Drosselung: State nur alle NET_TICK_INTERVAL_MS senden ──
+    this.netTickAccumulator += delta;
+    if (this.netTickAccumulator < NET_TICK_INTERVAL_MS) return;
+    this.netTickAccumulator -= NET_TICK_INTERVAL_MS;
+    // Accumulator-Überlauf verhindern (z.B. bei Tab-Wechsel / großen Deltas)
+    if (this.netTickAccumulator > NET_TICK_INTERVAL_MS) this.netTickAccumulator = 0;
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.playerManager.getAllPlayers()) {
@@ -1085,133 +1137,117 @@ export class ArenaScene extends Phaser.Scene {
                       ?? this.getDefaultAimState(isMoving);
 
       players[player.id] = {
-        x: player.sprite.x,
-        y: player.sprite.y,
+        x: Math.round(player.sprite.x),
+        y: Math.round(player.sprite.y),
         hp,
         alive,
-        adrenaline,
-        rage,
+        adrenaline: Math.round(adrenaline),
+        rage: Math.round(rage),
         isBurrowed,
         isStunned,
         isRaging,
         dashPhase: this.hostPhysics.getDashPhase(player.id),
-        aim,
+        aim: {
+          revision:             aim.revision,
+          isMoving:             aim.isMoving,
+          weapon1DynamicSpread: Math.round(aim.weapon1DynamicSpread * 10) / 10,
+          weapon2DynamicSpread: Math.round(aim.weapon2DynamicSpread * 10) / 10,
+        },
       };
-
-      player.updateHP(hp);
-      player.setVisible(alive);
-      player.setRageTint(isRaging);
-      player.syncBar();
-
-      // Trail-Ghosts während Phase 1 (Skalierung macht HostPhysicsSystem)
-      const dashPhase = players[player.id].dashPhase;
-      if (dashPhase === 0) this.dashTrailTimers.delete(player.id);
-      this.applyDashVisual(player, player.id, dashPhase, false);
     }
 
-    const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
-    const nukes    = this.powerUpSystem?.getNukeSnapshot() ?? [];
-    const train    = this.trainManager?.getNetSnapshot() ?? null;
-    bridge.publishGameState({ players, projectiles, rocks, hitscanTraces, meleeSwings, smokes, fires, powerups, nukes, train });
-
-    // Zug-Renderer auf dem Host direkt aktualisieren (kein Client-Update-Pfad)
-    this.trainRenderer?.update(train);
-
-    // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
-    this.powerUpRenderer?.sync(powerups);
-    this.nukeRenderer?.sync(nukes);
-    this.checkLocalPickup(powerups);
-
-    // HUD des lokalen Host-Spielers aktualisieren
-    const localId = bridge.getLocalPlayerId();
-    if (players[localId]) {
-      const ls = players[localId];
-      this.aimSystem?.setAuthoritativeState(ls.aim);
-      this.inputSystem.setLocalState(ls.isStunned, ls.isBurrowed);
-      this.leftPanel.updateResources(ls.adrenaline, ls.rage, this.inputSystem.getDashCooldownFrac());
-      this.localPlayerAlive    = ls.alive;
-      this.localPlayerBurrowed = ls.isBurrowed;
-    }
+    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, powerups, nukes, train });
   }
 
   // ── Client-Update ────────────────────────────────────────────────────────
 
-  private runClientUpdate(): void {
+  private runClientUpdate(delta: number): void {
     const state = bridge.getLatestGameState();
     if (!state) return;
 
-    const localId = bridge.getLocalPlayerId();
-    for (const [id, ps] of Object.entries(state.players)) {
-      let player = this.playerManager.getPlayer(id);
-      if (!player) {
-        const profile = bridge.getConnectedPlayers().find(p => p.id === id);
-        if (profile) {
-          this.playerManager.addPlayer(profile);
-          player = this.playerManager.getPlayer(id);
+    // Zeitbasierte Interpolation: frame-rate-unabhängig
+    const lerpFactor = 1 - Math.exp(-delta / NET_SMOOTH_TIME_MS);
+
+    // Prüfen ob ein neuer State vom Server eingetroffen ist
+    const currentVersion = bridge.getGameStateVersion();
+    const isNewData = currentVersion !== this.lastGameStateVersion;
+    if (isNewData) this.lastGameStateVersion = currentVersion;
+
+    // Spieler-Targets nur bei neuem Server-Snapshot setzen
+    if (isNewData) {
+      const localId = bridge.getLocalPlayerId();
+      for (const [id, ps] of Object.entries(state.players)) {
+        let player = this.playerManager.getPlayer(id);
+        if (!player) {
+          const profile = bridge.getConnectedPlayers().find(p => p.id === id);
+          if (profile) {
+            this.playerManager.addPlayer(profile);
+            player = this.playerManager.getPlayer(id);
+          }
+        }
+        if (!player) continue;
+
+        // Respawn-Snap: Wenn alive von false → true wechselt, direkt auf Spawnposition setzen
+        const wasAlive = this.prevAliveStates.get(id) ?? false;
+        if (ps.alive && !wasAlive) {
+          player.sprite.setPosition(ps.x, ps.y);
+        }
+        this.prevAliveStates.set(id, ps.alive);
+
+        player.setTargetPosition(ps.x, ps.y);
+        player.updateHP(ps.hp);
+        player.setVisible(ps.alive);
+        player.setBurrowVisual(ps.isBurrowed);
+        player.setRageTint(ps.isRaging);
+
+        // ── Dash-Visual-Verarbeitung ──────────────────────────────────────
+        const curPhase  = ps.dashPhase ?? 0;
+
+        if (curPhase === 2 && (this.prevDashPhases.get(id) ?? 0) !== 2) {
+          this.dashPhase2StartTimes.set(id, this.time.now);
+        }
+        if (curPhase === 0) {
+          this.dashPhase2StartTimes.delete(id);
+          this.dashTrailTimers.delete(id);
+        }
+        this.prevDashPhases.set(id, curPhase);
+        this.applyDashVisual(player, id, curPhase);
+      }
+
+      // Neue Projektil-Snapshots verarbeiten
+      this.projectileManager.clientSyncVisuals(state.projectiles);
+
+      // Effekte und Umgebung nur bei neuem State synchronisieren
+      this.smokeSystem.syncVisuals(state.smokes);
+      this.fireSystem.syncVisuals(state.fires ?? []);
+      // Hitscan-Traces und Melee-Swings werden per RPC empfangen (EffectSystem-Handler)
+
+      if (state.rocks && this.arenaResult) {
+        for (const rs of state.rocks) {
+          ArenaBuilder.updateRockVisual(
+            this.arenaResult.rockObjects,
+            this.arenaResult.rockGroup,
+            rs.id,
+            rs.hp,
+          );
         }
       }
-      if (!player) continue;
 
-      player.setTargetPosition(ps.x, ps.y);
-      player.updateHP(ps.hp);
-      player.setVisible(ps.alive);
-      player.setBurrowVisual(ps.isBurrowed);
-      player.setRageTint(ps.isRaging);
-
-      // ── Dash-Visual-Verarbeitung ────────────────────────────────────────
-      const curPhase  = ps.dashPhase ?? 0;
-
-      // Phase-2-Startzeitpunkt merken (für easeIn-Animation)
-      if (curPhase === 2 && (this.prevDashPhases.get(id) ?? 0) !== 2) {
-        this.dashPhase2StartTimes.set(id, this.time.now);
-      }
-      if (curPhase === 0) {
-        this.dashPhase2StartTimes.delete(id);
-        this.dashTrailTimers.delete(id);
-      }
-      this.prevDashPhases.set(id, curPhase);
-
-      // Visuelle Skalierung + Trail-Ghosts
-      this.applyDashVisual(player, id, curPhase);
+      this.trainRenderer?.setTarget(state.train ?? null);
+      this.powerUpRenderer?.sync(state.powerups ?? []);
+      this.nukeRenderer?.sync(state.nukes ?? []);
+      this.checkLocalPickup(state.powerups ?? []);
     }
 
-    const LERP_FACTOR = 0.2;
+    // ── Jeden Frame: Smooth Interpolation + Extrapolation ───────────────
     for (const player of this.playerManager.getAllPlayers()) {
-      player.lerpStep(LERP_FACTOR);
+      player.lerpStep(lerpFactor);
     }
+    this.trainRenderer?.render(lerpFactor);
+    // Projektile zwischen Netzwerk-Ticks extrapolieren
+    this.projectileManager.clientExtrapolate();
 
-    this.projectileManager.clientSyncVisuals(state.projectiles);
-    this.smokeSystem.syncVisuals(state.smokes);
-    this.fireSystem.syncVisuals(state.fires ?? []);
-    for (const trace of state.hitscanTraces) {
-      this.effectSystem.playSyncedHitscanTracer(trace);
-    }
-    for (const swing of state.meleeSwings ?? []) {
-      this.effectSystem.playSyncedMeleeSwing(swing);
-    }
-
-    if (state.rocks && this.arenaResult) {
-      for (const rs of state.rocks) {
-        ArenaBuilder.updateRockVisual(
-          this.arenaResult.rockObjects,
-          this.arenaResult.rockGroup,
-          rs.id,
-          rs.hp,
-        );
-      }
-    }
-
-    // ── Zug-Renderer aktualisieren ────────────────────────────────────────
-    this.trainRenderer?.update(state.train ?? null);
-
-    // ── PowerUp-Sprites synchronisieren ──────────────────────────────────
-    this.powerUpRenderer?.sync(state.powerups ?? []);
-    this.nukeRenderer?.sync(state.nukes ?? []);
-
-    // ── Lokaler Pickup-Check ─────────────────────────────────────────────
-    this.checkLocalPickup(state.powerups ?? []);
-
-    const localState = state.players[localId];
+    const localState = state.players[bridge.getLocalPlayerId()];
     if (localState) {
       this.aimSystem?.setAuthoritativeState(localState.aim);
       this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);

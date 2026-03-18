@@ -4,11 +4,27 @@ import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSp
 import type { BulletRenderer } from '../effects/BulletRenderer';
 import type { FlameRenderer } from '../effects/FlameRenderer';
 
+/** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
+interface ClientProjectileState {
+  serverX: number;
+  serverY: number;
+  vx: number;
+  vy: number;
+  size: number;
+  receivedAt: number;
+  style?: string;
+  // Flammenwerfer-Decay: velocity nimmt exponentiell ab
+  isFlame: boolean;
+}
+
 export class ProjectileManager {
   private scene:       Phaser.Scene;
   private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile
   private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals (ball-Stil)
   private nextId        = 0;
+
+  // ── Client-Extrapolation ──────────────────────────────────────────────────
+  private clientProjStates = new Map<number, ClientProjectileState>();
 
   // ── Bullet-Renderer (Enhanced Bullet Visuals) ─────────────────────────────
   private bulletRenderer: BulletRenderer | null = null;
@@ -468,11 +484,11 @@ export class ProjectileManager {
 
     const synced: SyncedProjectile[] = this.projectiles.map(p => ({
       id:    p.id,
-      x:     p.sprite.x,
-      y:     p.sprite.y,
-      vx:    p.body.velocity.x,
-      vy:    p.body.velocity.y,
-      size:  p.sprite.displayWidth,
+      x:     Math.round(p.sprite.x),
+      y:     Math.round(p.sprite.y),
+      vx:    Math.round(p.body.velocity.x),
+      vy:    Math.round(p.body.velocity.y),
+      size:  Math.round(p.sprite.displayWidth),
       color: p.color,
       style: p.projectileStyle,
     }));
@@ -483,58 +499,77 @@ export class ProjectileManager {
   // ── Client ────────────────────────────────────────────────────────────────
 
   /**
-   * Client: Visuelle Projektil-Sprites anhand der vom Host empfangenen Daten
-   * erstellen, verschieben oder entfernen. Keine Physik auf Client-Seite.
-   * Bullet-Stil wird über BulletRenderer gerendert (Trail + Sparks),
-   * Ball-Stil verwendet weiterhin einfache Phaser-Circle-Shapes.
+   * Client: Empfängt neue Server-Snapshots und speichert den State für Extrapolation.
+   * Erstellt/entfernt visuelle Sprites. Positionsupdate passiert in clientExtrapolate().
    */
   clientSyncVisuals(data: SyncedProjectile[]): void {
+    const now       = performance.now();
     const activeIds = new Set(data.map(d => d.id));
     const renderer  = this.bulletRenderer;
     const flames    = this.flameRenderer;
 
-    // Verwaiste Visuals entfernen
+    // Verwaiste Visuals und States entfernen
     for (const [id, sprite] of this.clientVisuals) {
       if (!activeIds.has(id)) {
         sprite.destroy();
         this.clientVisuals.delete(id);
+        this.clientProjStates.delete(id);
       }
     }
-    // Verwaiste BulletRenderer-Visuals entfernen
     if (renderer) {
       for (const id of renderer.getActiveIds()) {
-        if (!activeIds.has(id)) renderer.destroyBullet(id);
+        if (!activeIds.has(id)) {
+          renderer.destroyBullet(id);
+          this.clientProjStates.delete(id);
+        }
       }
     }
-    // Verwaiste FlameRenderer-Visuals entfernen
     if (flames) {
       for (const id of flames.getActiveIds()) {
-        if (!activeIds.has(id)) flames.destroyFlameVisual(id);
+        if (!activeIds.has(id)) {
+          flames.destroyFlameVisual(id);
+          this.clientProjStates.delete(id);
+        }
       }
     }
 
+    // Server-State aktualisieren und neue Visuals erstellen
     for (const proj of data) {
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
 
+      // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
+      const prev = this.clientProjStates.get(proj.id);
+      const velocityFlipped = prev && isBullet &&
+        (prev.vx * proj.vx < -1 || prev.vy * proj.vy < -1);
+
+      // Extrapolations-State speichern/aktualisieren
+      this.clientProjStates.set(proj.id, {
+        serverX: proj.x,
+        serverY: proj.y,
+        vx: proj.vx,
+        vy: proj.vy,
+        size: proj.size,
+        receivedAt: now,
+        style: proj.style,
+        isFlame: isFlame,
+      });
+
       if (isFlame && flames) {
-        // Flame-Stil: FlameRenderer übernimmt Partikel-Rendering
         if (!flames.has(proj.id)) {
           flames.createFlameVisual(proj.id, proj.x, proj.y, proj.size);
         }
+        // Sofort auf Server-Position setzen; Extrapolation passiert in clientExtrapolate()
         flames.updateFlameVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isBullet && renderer) {
-        // Bullet-Stil: BulletRenderer übernimmt Rendering
         if (!renderer.has(proj.id)) {
           renderer.createBullet(proj.id, proj.x, proj.y, proj.size, proj.color);
         }
-        const bounced = renderer.updateBulletPosition(proj.id, proj.x, proj.y, proj.vx, proj.vy);
-        if (bounced) {
+        renderer.updateBulletPosition(proj.id, proj.x, proj.y, proj.vx, proj.vy);
+        if (velocityFlipped) {
           renderer.playImpactSparks(proj.x, proj.y, proj.vx, proj.vy, proj.color);
         }
-        // Kein clientVisuals-Map-Eintrag für Bullets (BulletRenderer verwaltet sie)
       } else {
-        // Ball- oder Legacy-Stil: einfache Shapes
         const existing = this.clientVisuals.get(proj.id);
         if (!existing) {
           const isBall = proj.style === 'ball';
@@ -546,6 +581,51 @@ export class ProjectileManager {
         } else {
           existing.setPosition(proj.x, proj.y);
         }
+      }
+    }
+  }
+
+  /**
+   * Client: Extrapoliert Projektil-Positionen zwischen Netzwerk-Ticks.
+   * Wird jeden Render-Frame aufgerufen (unabhängig von der Netzwerk-Tick-Rate).
+   *
+   * Bullets/Balls: Lineare Extrapolation (konstante Velocity).
+   * Flames: Exponentielle Velocity-Decay (gleiche Formel wie Host).
+   */
+  clientExtrapolate(): void {
+    const now      = performance.now();
+    const renderer = this.bulletRenderer;
+    const flames   = this.flameRenderer;
+
+    for (const [id, state] of this.clientProjStates) {
+      const dt = (now - state.receivedAt) / 1000; // Sekunden seit letztem Server-Update
+      if (dt <= 0) continue;
+
+      let ex: number, ey: number;
+
+      if (state.isFlame) {
+        // Flammen: exponentielle Velocity-Decay (velocityDecay ≈ 0.82 pro Sekunde)
+        // Geschlossene Integralform: pos = serverPos + v₀ * (1 - decay^t) / (-ln(decay))
+        const decay = 0.82; // Muss dem Config-Wert entsprechen
+        const lnDecay = Math.log(decay); // negativ
+        const integralFactor = (1 - Math.pow(decay, dt)) / (-lnDecay);
+        ex = state.serverX + state.vx * integralFactor;
+        ey = state.serverY + state.vy * integralFactor;
+      } else {
+        // Bullets/Balls: lineare Extrapolation
+        ex = state.serverX + state.vx * dt;
+        ey = state.serverY + state.vy * dt;
+      }
+
+      if (state.style === 'flame' && flames && flames.has(id)) {
+        // Decay-Velocity für Partikel-Orientierung
+        const decayFactor = Math.pow(0.82, dt);
+        flames.updateFlameVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);
+      } else if (state.style === 'bullet' && renderer && renderer.has(id)) {
+        renderer.updateBulletPosition(id, ex, ey, state.vx, state.vy);
+      } else {
+        const sprite = this.clientVisuals.get(id);
+        if (sprite) sprite.setPosition(ex, ey);
       }
     }
   }

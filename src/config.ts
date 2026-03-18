@@ -193,8 +193,8 @@ export const RAGE_MAX                  = 300;
 export const RAGE_PER_DAMAGE           = 1;    // Wut pro Schadenspunkt
 
 // ---- Dash ----
-export const DASH_T1_S    = 0.6;    // Burst-Phase Dauer (s)
-export const DASH_T2_S    = 0.3;    // Recovery-Phase Dauer (s)
+export const DASH_T1_S    = 0.5;    // Burst-Phase Dauer (s)
+export const DASH_T2_S    = 0.25;    // Recovery-Phase Dauer (s)
 export const DASH_F_MIN   = 0.25;   // Kriechgang-Faktor (25 % v_norm)
 // f_start = (3*t1 + 2*t2 - 2*f_min*(t1+t2)) / t1 = 3.25 — Strecken-Neutralität
 export const DASH_F_START =
@@ -226,5 +226,13 @@ export const PLAYER_COLORS: readonly number[] = [
 export const MAX_PLAYERS        = 12;
 export const ARENA_COUNTDOWN_SEC = 3;
 export const ARENA_DURATION_SEC = 120;
+
+// ---- Netzwerk ----
+/** Netzwerk-Tick-Rate: Wie oft der Host den Game State an Clients sendet. */
+export const NET_TICK_RATE_HZ     = 20;
+/** Berechnetes Intervall in ms zwischen Netzwerk-Ticks. */
+export const NET_TICK_INTERVAL_MS = 1000 / NET_TICK_RATE_HZ;  // 50 ms
+/** Zeitbasierte Glättung für Client-Interpolation (ms). ~1.5× Tick-Intervall. */
+export const NET_SMOOTH_TIME_MS   = 80;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.

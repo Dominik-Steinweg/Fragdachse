@@ -386,15 +386,15 @@ export const WEAPON_CONFIGS = {
   FLAMETHROWER: {
     id:                   'FLAMETHROWER',
     displayName:          'Flammenwerfer',
-    cooldown:             30,          // 20 Hitboxen/s
-    damage:               2,           // pro Hitbox-Treffer
-    range:                300,         // px maximale Flammenreichweite
+    cooldown:             70,          // 20 Hitboxen/s
+    damage:               6,           // pro Hitbox-Treffer
+    range:                250,         // px maximale Flammenreichweite
     fire: {
       type:               'flamethrower',
-      projectileSpeed:    300,         // px/s Anfangsgeschwindigkeit
-      hitboxStartSize:    8,           // px Startgröße
-      hitboxEndSize:      80,          // px Maximalgröße
-      hitboxGrowRate:     30,          // px/s Wachstum
+      projectileSpeed:    400,         // px/s Anfangsgeschwindigkeit
+      hitboxStartSize:    14,           // px Startgröße
+      hitboxEndSize:      120,          // px Maximalgröße
+      hitboxGrowRate:     60,          // px/s Wachstum
       velocityDecay:      0.82,        // 95% der Geschwindigkeit verbleiben pro Sekunde → ~750 px Reichweite
     },
     allowedSlots:         ['weapon2'],
@@ -410,7 +410,7 @@ export const WEAPON_CONFIGS = {
     projectileStyle:      'flame' as ProjectileStyle,
     projectileColor:      0xff6600,    // feste Flammenfarbe (nicht Spielerfarbe)
     rockDamageMult:       0,           // Flammen machen keinen Schaden an Felsen
-    trainDamageMult:      0.5,         // 50% Schaden am Zug
+    trainDamageMult:      0.05,        // 5% Schaden am Zug
   } as WeaponConfig,
 
 } as const;

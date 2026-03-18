@@ -107,7 +107,7 @@ export class FireSystem {
         x:      zone.x,
         y:      zone.y,
         radius: zone.config.radius,
-        alpha:  this.computeAlpha(elapsed, zone.config.lingerDuration),
+        alpha:  Math.round(this.computeAlpha(elapsed, zone.config.lingerDuration) * 100) / 100,
       });
     }
 

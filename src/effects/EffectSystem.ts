@@ -40,6 +40,10 @@ export class EffectSystem {
         shotId,
       });
     });
+
+    this.bridge.registerMeleeSwingHandler((swing) => {
+      this.playSyncedMeleeSwing(swing);
+    });
   }
 
   // ── Treffer-Effekt: kleiner roter Ring ────────────────────────────────────

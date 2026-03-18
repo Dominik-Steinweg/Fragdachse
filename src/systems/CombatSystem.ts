@@ -16,8 +16,7 @@ import {
   RAGE_PER_DAMAGE, ADRENALINE_START,
 } from '../config';
 
-const HITSCAN_TRACE_REPLICATION_MS = 80;
-const MELEE_SWING_REPLICATION_MS   = 120;
+// Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
@@ -50,8 +49,6 @@ export class CombatSystem {
   private readonly arenaBounds = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchCircle = new Phaser.Geom.Circle();
   private readonly scratchPoints: Phaser.Geom.Point[] = [];
-  private recentHitscanTraces: Array<SyncedHitscanTrace & { expiresAt: number }> = [];
-  private recentMeleeSwings:   Array<SyncedMeleeSwing  & { expiresAt: number }> = [];
   private meleeSwingIdCounter = 0;
 
   // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
@@ -256,10 +253,10 @@ export class CombatSystem {
     });
 
     this.queueHitscanTrace({
-      startX,
-      startY,
-      endX: trace.endX,
-      endY: trace.endY,
+      startX: Math.round(startX),
+      startY: Math.round(startY),
+      endX: Math.round(trace.endX),
+      endY: Math.round(trace.endY),
       color: playerColor,
       thickness: traceThickness,
       shooterId,
@@ -336,10 +333,7 @@ export class CombatSystem {
     }
   }
 
-  collectReplicatedHitscanTraces(now: number): SyncedHitscanTrace[] {
-    this.recentHitscanTraces = this.recentHitscanTraces.filter(trace => trace.expiresAt > now);
-    return this.recentHitscanTraces.map(({ expiresAt, ...trace }) => trace);
-  }
+  // collectReplicatedHitscanTraces entfernt – Traces werden per RPC gesendet
 
   // ── Melee-Angriff ─────────────────────────────────────────────────────────
 
@@ -405,10 +399,7 @@ export class CombatSystem {
     return true;
   }
 
-  collectReplicatedMeleeSwings(now: number): SyncedMeleeSwing[] {
-    this.recentMeleeSwings = this.recentMeleeSwings.filter(s => s.expiresAt > now);
-    return this.recentMeleeSwings.map(({ expiresAt, ...s }) => s);
-  }
+  // collectReplicatedMeleeSwings entfernt – Swings werden per RPC gesendet
 
   /**
    * Prüft, ob Felsen oder Zug-Segmente im Melee-Trefferbogen liegen, und wendet Schaden an.
@@ -492,22 +483,18 @@ export class CombatSystem {
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
 
   private queueHitscanTrace(trace: SyncedHitscanTrace): void {
-    const now = Date.now();
-    this.recentHitscanTraces = this.recentHitscanTraces.filter(item => item.expiresAt > now);
-    this.recentHitscanTraces.push({
-      ...trace,
-      expiresAt: now + HITSCAN_TRACE_REPLICATION_MS,
-    });
+    // Direkt per RPC an alle Clients senden (einmalig, statt per-frame in GameState)
+    this.bridge.broadcastHitscanTracer(
+      trace.startX, trace.startY, trace.endX, trace.endY,
+      trace.color, trace.thickness, trace.shooterId, trace.shotId,
+    );
+    // Lokale Wiedergabe auf dem Host (EffectSystem bekommt das RPC auch)
   }
 
   private queueMeleeSwing(swing: Omit<SyncedMeleeSwing, 'swingId'>): void {
-    const now = Date.now();
-    this.recentMeleeSwings = this.recentMeleeSwings.filter(s => s.expiresAt > now);
-    this.recentMeleeSwings.push({
-      ...swing,
-      swingId:   ++this.meleeSwingIdCounter,
-      expiresAt: now + MELEE_SWING_REPLICATION_MS,
-    });
+    const fullSwing: SyncedMeleeSwing = { ...swing, swingId: ++this.meleeSwingIdCounter };
+    // Direkt per RPC an alle Clients senden
+    this.bridge.broadcastMeleeSwing(fullSwing);
   }
 
   /**

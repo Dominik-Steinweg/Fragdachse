@@ -37,8 +37,7 @@ const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: number (Date.now()-Timestamp bis Utility wieder bereit)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
-const KEY_HITSCAN_TRACES = 'htr'; // global: SyncedHitscanTrace[] (unreliable, kurzlebige VFX-Ereignisse)
-const KEY_MELEE_SWINGS   = 'mls'; // global: SyncedMeleeSwing[]   (unreliable, kurzlebige Melee-VFX)
+// KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
 const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
@@ -46,6 +45,7 @@ const KEY_NUKE_STRIKES   = 'nks'; // global: SyncedNukeStrike[] (unreliable, hos
 const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   einmalig pro Runde)
 const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
+const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -72,13 +72,12 @@ export interface GameState {
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectile[];
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
-  hitscanTraces: SyncedHitscanTrace[];
-  meleeSwings:  SyncedMeleeSwing[];  // kurzlebige Melee-VFX
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
   nukes:        SyncedNukeStrike[];
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
+  // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
 
 type LoadoutUseHandler = (
@@ -89,6 +88,8 @@ type LoadoutUseHandler = (
   senderId: string,
   shotId?: number,
   params?: LoadoutUseParams,
+  clientX?: number,
+  clientY?: number,
 ) => void;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number) => void;
@@ -112,6 +113,7 @@ type ColorAcceptedHandler = (requesterId: string, color: number) => void;
 type ColorDeniedHandler = (requesterId: string) => void;
 type ColorChangeHandler = (playerId: string, color: number) => void;
 type KillEventHandler = (event: KillEvent) => void;
+type MeleeSwingHandler = (swing: SyncedMeleeSwing) => void;
 type PowerUpPickupHandler = (uid: number, playerId: string) => void;
 type TrainDestroyedHandler = () => void;
 
@@ -147,6 +149,7 @@ export class NetworkBridge {
   private colorDeniedHandler: ColorDeniedHandler | null = null;
   private colorChangeHandler: ColorChangeHandler | null = null;
   private killEventHandler: KillEventHandler | null = null;
+  private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
 
@@ -346,44 +349,57 @@ export class NetworkBridge {
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────
+
+  // Client-seitiger Cache für Partial-State-Merge (leere Arrays werden nicht gesendet)
+  private cachedGameState: GameState | undefined;
+  // Host-seitige Sequenznummer: wird bei jedem publishGameState() inkrementiert
+  private publishSeq = 0;
+  // Client-seitig: zuletzt gesehene Sequenznummer für Change-Detection
+  private lastSeenSeq = -1;
+  // Monoton steigender Zähler: wird nur bei tatsächlich neuem Server-State inkrementiert
+  private gameStateVersion = 0;
+
+  /**
+   * Sendet den Game State als einzelnen setState-Aufruf.
+   * Leere Arrays und null-Werte werden weggelassen, um Bandbreite zu sparen.
+   * Enthält eine Sequenznummer (_s) für zuverlässige Change-Detection auf Clients.
+   */
   publishGameState(state: GameState): void {
-    setState(KEY_PLAYERS,        state.players,       false);
-    setState(KEY_PROJECTILES,    state.projectiles,   false);
-    setState(KEY_ROCK_HP,        state.rocks,         false);
-    setState(KEY_HITSCAN_TRACES, state.hitscanTraces, false);
-    setState(KEY_MELEE_SWINGS,   state.meleeSwings,   false);
-    setState(KEY_SMOKE_CLOUDS,   state.smokes,        false);
-    setState(KEY_FIRE_ZONES,     state.fires,         false);
-    setState(KEY_POWERUPS,       state.powerups,      false);
-    setState(KEY_NUKE_STRIKES,   state.nukes,         false);
-    setState(KEY_TRAIN_STATE,    state.train,         false);
+    const payload: Record<string, unknown> = { p: state.players, _s: ++this.publishSeq };
+    if (state.projectiles.length > 0)  payload.j = state.projectiles;
+    if (state.rocks.length > 0)        payload.r = state.rocks;
+    if (state.smokes.length > 0)       payload.s = state.smokes;
+    if (state.fires.length > 0)        payload.f = state.fires;
+    if (state.powerups.length > 0)     payload.u = state.powerups;
+    if (state.nukes.length > 0)        payload.n = state.nukes;
+    if (state.train)                   payload.t = state.train;
+    setState(KEY_GAME_STATE, payload, false);
   }
 
   getLatestGameState(): GameState | undefined {
-    const players     = getState(KEY_PLAYERS)       as Record<string, PlayerNetState> | undefined;
-    const projectiles = getState(KEY_PROJECTILES)   as SyncedProjectile[]  | undefined;
-    const rocks       = getState(KEY_ROCK_HP)       as RockNetState[]      | undefined;
-    const hitscanTraces = getState(KEY_HITSCAN_TRACES) as SyncedHitscanTrace[] | undefined;
-    const meleeSwings  = getState(KEY_MELEE_SWINGS) as SyncedMeleeSwing[]  | undefined;
-    const smokes      = getState(KEY_SMOKE_CLOUDS)  as SyncedSmokeCloud[]  | undefined;
-    const fires       = getState(KEY_FIRE_ZONES)    as SyncedFireZone[]    | undefined;
-    const powerups    = getState(KEY_POWERUPS)      as SyncedPowerUp[]     | undefined;
-    const nukes       = getState(KEY_NUKE_STRIKES)  as SyncedNukeStrike[]  | undefined;
-    const train       = getState(KEY_TRAIN_STATE)   as SyncedTrainState | null | undefined;
-    if (!players) return undefined;
-    return {
-      players,
-      projectiles:  projectiles  ?? [],
-      rocks:        rocks        ?? [],
-      hitscanTraces: hitscanTraces ?? [],
-      meleeSwings:  meleeSwings  ?? [],
-      smokes:       smokes       ?? [],
-      fires:        fires        ?? [],
-      powerups:     powerups     ?? [],
-      nukes:        nukes        ?? [],
-      train:        train        ?? null,
+    const raw = getState(KEY_GAME_STATE) as Record<string, unknown> | undefined;
+    if (!raw || !raw.p) return this.cachedGameState;
+    // Sequenznummer vergleichen: nur parsen wenn neue Daten vom Host eingetroffen sind
+    const seq = raw._s as number | undefined;
+    if (seq !== undefined && seq === this.lastSeenSeq) return this.cachedGameState;
+    if (seq !== undefined) this.lastSeenSeq = seq;
+    const state: GameState = {
+      players:       raw.p as Record<string, PlayerNetState>,
+      projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
+      rocks:         (raw.r as RockNetState[]       | undefined) ?? [],
+      smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
+      fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
+      powerups:      (raw.u as SyncedPowerUp[]       | undefined) ?? [],
+      nukes:         (raw.n as SyncedNukeStrike[]    | undefined) ?? [],
+      train:         (raw.t as SyncedTrainState      | undefined) ?? null,
     };
+    this.cachedGameState = state;
+    this.gameStateVersion++;
+    return state;
   }
+
+  /** Monoton steigender Zähler, wird nur bei tatsächlich neuem Server-State inkrementiert. */
+  getGameStateVersion(): number { return this.gameStateVersion; }
 
   // ── Zug-Event: Host → Alle (global, reliable, einmalig pro Runde) ──────────
 
@@ -422,12 +438,14 @@ export class NetworkBridge {
     targetY: number,
     shotId?: number,
     params?: LoadoutUseParams,
+    clientX?: number,
+    clientY?: number,
   ): void {
     if (isHost()) {
-      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params);
+      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY);
       return;
     }
-    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params });
+    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY });
   }
 
   registerLoadoutUseHandler(
@@ -439,6 +457,8 @@ export class NetworkBridge {
       senderId: string,
       shotId?: number,
       params?: LoadoutUseParams,
+      clientX?: number,
+      clientY?: number,
     ) => void,
   ): void {
     this.loadoutUseHandler = handler;
@@ -446,15 +466,17 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
-      const { slot, angle, tx, ty, sid, prm } = data as {
+      const { slot, angle, tx, ty, sid, prm, px, py } = data as {
         slot: LoadoutSlot;
         angle: number;
         tx: number;
         ty: number;
         sid?: number;
         prm?: LoadoutUseParams;
+        px?: number;
+        py?: number;
       };
-      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm);
+      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py);
       return undefined;
     });
   }
@@ -543,6 +565,31 @@ export class NetworkBridge {
         sid?: number;
       };
       hitscanTracerHandler(sx, sy, ex, ey, c, t, id, sid);
+      return undefined;
+    });
+  }
+
+  // ── Melee-Swing-RPC: Host → Alle ──────────────────────────────────────────
+
+  broadcastMeleeSwing(swing: SyncedMeleeSwing): void {
+    this.broadcastRpc('msfx', {
+      sid: swing.swingId, x: swing.x, y: swing.y,
+      a: swing.angle, ad: swing.arcDegrees, r: swing.range,
+      c: swing.color, id: swing.shooterId,
+    });
+  }
+
+  registerMeleeSwingHandler(handler: (swing: SyncedMeleeSwing) => void): void {
+    this.meleeSwingHandler = handler;
+    this.registerAllRpcHandler('msfx', async (data: unknown): Promise<unknown> => {
+      const meleeSwingHandler = this.meleeSwingHandler;
+      if (!meleeSwingHandler) return undefined;
+      const { sid, x, y, a, ad, r, c, id } = data as {
+        sid: number; x: number; y: number;
+        a: number; ad: number; r: number;
+        c: number; id: string;
+      };
+      meleeSwingHandler({ swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id });
       return undefined;
     });
   }

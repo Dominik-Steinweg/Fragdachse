@@ -102,22 +102,26 @@ export class LoadoutManager {
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
 
   use(
-    slot:     LoadoutSlot,
-    playerId: string,
-    angle:    number,
-    _targetX: number,
-    _targetY: number,
-    now:      number,
-    shotId?:  number,
-    params?:  LoadoutUseParams,
+    slot:      LoadoutSlot,
+    playerId:  string,
+    angle:     number,
+    _targetX:  number,
+    _targetY:  number,
+    now:       number,
+    shotId?:   number,
+    params?:   LoadoutUseParams,
+    clientX?:  number,
+    clientY?:  number,
   ): void {
     const loadout = this.loadouts.get(playerId);
     if (!loadout) return;
 
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return;
-    const x = player.sprite.x;
-    const y = player.sprite.y;
+    // Client-Position verwenden falls vorhanden (kompensiert Netzwerk-Tick-Latenz),
+    // sonst Fallback auf autoritative Host-Position.
+    const x = clientX ?? player.sprite.x;
+    const y = clientY ?? player.sprite.y;
 
     // Schießen während Dash-Phase 1 (Burst) blockiert
     if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return;

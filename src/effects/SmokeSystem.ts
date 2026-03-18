@@ -138,9 +138,9 @@ export class SmokeSystem {
         id: cloud.id,
         x: cloud.x,
         y: cloud.y,
-        radius: radius * eased,
-        alpha: maxAlpha * Phaser.Math.Linear(0.18, 1, eased),
-        density: Phaser.Math.Linear(0.35, 1, eased),
+        radius: Math.round(radius * eased),
+        alpha: Math.round(maxAlpha * Phaser.Math.Linear(0.18, 1, eased) * 100) / 100,
+        density: Math.round(Phaser.Math.Linear(0.35, 1, eased) * 100) / 100,
       };
     }
 
@@ -162,9 +162,9 @@ export class SmokeSystem {
       id: cloud.id,
       x: cloud.x,
       y: cloud.y,
-      radius: radius * Phaser.Math.Linear(1, 1.08, eased),
-      alpha: maxAlpha * (1 - eased),
-      density: Phaser.Math.Linear(1, 0.2, eased),
+      radius: Math.round(radius * Phaser.Math.Linear(1, 1.08, eased)),
+      alpha: Math.round(maxAlpha * (1 - eased) * 100) / 100,
+      density: Math.round(Phaser.Math.Linear(1, 0.2, eased) * 100) / 100,
     };
   }
 
