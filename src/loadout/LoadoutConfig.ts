@@ -213,7 +213,7 @@ export const WEAPON_CONFIGS = {
     displayName:          'ASMD Primär',
     cooldown:             500,
     damage:               10,
-    range:                800,
+    range:                550,
     fire: {
       type:                 'hitscan',
       traceThickness:       3,
@@ -348,13 +348,13 @@ export const WEAPON_CONFIGS = {
     id:                   'ASMD_SEC',
     displayName:          'ASMD Sekundär',
     cooldown:             500,
-    damage:               40,          // Direkttreffer-Schaden
-    range:                1000,         
+    damage:               20,          // Direkttreffer-Schaden
+    range:                500,         
     fire: {
       type:                 'projectile',
       projectileSpeed:      350,
       projectileSize:       16,
-      projectileMaxBounces: 1,
+      projectileMaxBounces: 0,
     },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        20,
