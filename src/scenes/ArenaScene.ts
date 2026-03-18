@@ -47,6 +47,7 @@ import {
   NET_TICK_INTERVAL_MS, NET_SMOOTH_TIME_MS,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
+import { dequantizeAngle } from '../utils/angle';
 
 
 export class ArenaScene extends Phaser.Scene {
@@ -132,6 +133,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_hp', './assets/sprites/16x16HP.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
+    this.load.image('badger', './assets/sprites/32x32dachsweapon01.png');
   }
 
   create(): void {
@@ -1095,8 +1097,15 @@ export class ArenaScene extends Phaser.Scene {
     this.nukeRenderer?.sync(nukes);
     this.checkLocalPickup(powerups);
 
-    // HUD des lokalen Host-Spielers aktualisieren
+    // Rotation aller Spieler-Sprites auf dem Host aktualisieren
     const localId = bridge.getLocalPlayerId();
+    for (const p of this.playerManager.getAllPlayers()) {
+      if (p.id === localId) continue;
+      const remoteInput = bridge.getPlayerInput(p.id);
+      if (remoteInput) p.setRotation(dequantizeAngle(remoteInput.aim));
+    }
+
+    // HUD des lokalen Host-Spielers aktualisieren
     const localPlayer = this.playerManager.getPlayer(localId);
     if (localPlayer) {
       const isMovingLocal = isVelocityMoving(localPlayer.body.velocity.x, localPlayer.body.velocity.y);
@@ -1107,6 +1116,7 @@ export class ArenaScene extends Phaser.Scene {
         this.burrowSystem?.isStunned(localId) ?? false,
         this.burrowSystem?.isBurrowed(localId) ?? false,
       );
+      localPlayer.setRotation(this.inputSystem.getAimAngle());
       this.leftPanel.updateResources(
         this.resourceSystem?.getAdrenaline(localId) ?? 0,
         this.resourceSystem?.getRage(localId) ?? 0,
@@ -1136,9 +1146,11 @@ export class ArenaScene extends Phaser.Scene {
       const aim        = this.loadoutManager?.getAimNetState(player.id, isMoving)
                       ?? this.getDefaultAimState(isMoving);
 
+      const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
         x: Math.round(player.sprite.x),
         y: Math.round(player.sprite.y),
+        rot: playerInput?.aim ?? 0,
         hp,
         alive,
         adrenaline: Math.round(adrenaline),
@@ -1195,6 +1207,9 @@ export class ArenaScene extends Phaser.Scene {
         this.prevAliveStates.set(id, ps.alive);
 
         player.setTargetPosition(ps.x, ps.y);
+        if (id !== localId) {
+          player.setTargetRotation(dequantizeAngle(ps.rot));
+        }
         player.updateHP(ps.hp);
         player.setVisible(ps.alive);
         player.setBurrowVisual(ps.isBurrowed);
@@ -1247,7 +1262,13 @@ export class ArenaScene extends Phaser.Scene {
     // Projektile zwischen Netzwerk-Ticks extrapolieren
     this.projectileManager.clientExtrapolate();
 
-    const localState = state.players[bridge.getLocalPlayerId()];
+    const localId2 = bridge.getLocalPlayerId();
+    const localPlayerClient = this.playerManager.getPlayer(localId2);
+    if (localPlayerClient) {
+      localPlayerClient.setRotation(this.inputSystem.getAimAngle());
+    }
+
+    const localState = state.players[localId2];
     if (localState) {
       this.aimSystem?.setAuthoritativeState(localState.aim);
       this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);
@@ -1318,14 +1339,14 @@ export class ArenaScene extends Phaser.Scene {
     if (now < this.predictedHitscanCooldownUntil[slot]) return undefined;
     this.predictedHitscanCooldownUntil[slot] = now + config.cooldown;
 
-    const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
-    if (!localSprite) return undefined;
+    const localPlayer = this.playerManager.getPlayer(bridge.getLocalPlayerId());
+    if (!localPlayer) return undefined;
 
     const shotId = this.nextPredictedHitscanShotId++;
     const trace = this.combatSystem.traceHitscan({
       shooterId: bridge.getLocalPlayerId(),
-      startX: localSprite.x,
-      startY: localSprite.y,
+      startX: localPlayer.sprite.x,
+      startY: localPlayer.sprite.y,
       angle,
       range: config.range,
       traceThickness: config.fire.traceThickness,
@@ -1333,11 +1354,11 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     this.effectSystem.playPredictedHitscanTracer(
-      localSprite.x,
-      localSprite.y,
+      localPlayer.sprite.x,
+      localPlayer.sprite.y,
       trace.endX,
       trace.endY,
-      localSprite.fillColor,
+      localPlayer.color,
       config.fire.traceThickness,
       shotId,
     );

@@ -233,8 +233,8 @@ export class HostPhysicsSystem {
           const easeOut = 1 - (1 - t) * (1 - t);
           speedFactor = DASH_F_START + (DASH_F_MIN - DASH_F_START) * easeOut;
 
-          // Hitbox sofort auf 50 % × 50 % (25 % Fläche)
-          player.body.setSize(PLAYER_SIZE * 0.5, PLAYER_SIZE * 0.5);
+          // Hitbox sofort auf 50 % Radius (25 % Fläche)
+          player.body.setCircle(PLAYER_SIZE * 0.25);
           player.sprite.setScale(0.5);
 
           if (elapsed >= DASH_T1_S) {
@@ -249,13 +249,13 @@ export class HostPhysicsSystem {
           const easeIn = t * t;
           speedFactor = DASH_F_MIN + (1 - DASH_F_MIN) * easeIn;
           const scale = 0.5 + 0.5 * easeIn;
-          player.body.setSize(PLAYER_SIZE * scale, PLAYER_SIZE * scale);
+          player.body.setCircle(PLAYER_SIZE * scale / 2);
           player.sprite.setScale(scale);
 
           if (elapsed >= DASH_T2_S) {
             done = true;
             this.dashStates.delete(player.id);
-            player.body.setSize(PLAYER_SIZE, PLAYER_SIZE);
+            player.body.setCircle(PLAYER_SIZE / 2);
             player.sprite.setScale(1.0);
           }
         }

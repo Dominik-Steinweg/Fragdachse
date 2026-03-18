@@ -8,7 +8,7 @@ import {
 
 export class PlayerEntity {
   readonly id:     string;
-  readonly sprite: Phaser.GameObjects.Rectangle;
+  readonly sprite: Phaser.GameObjects.Image;
 
   private readonly colorHex: number;
   private hpBarBg:  Phaser.GameObjects.Rectangle;
@@ -18,6 +18,14 @@ export class PlayerEntity {
   // Zielposition für client-seitige Interpolation (Lerp)
   private targetX = 0;
   private targetY = 0;
+
+  // Rotation: Bild zeigt nach Norden (up = -π/2 in Phaser), Offset +π/2 nötig
+  private static readonly ROTATION_OFFSET = Math.PI / 2;
+  private targetRotation = 0;
+
+  // Glow-Aura für Spielerfarbe
+  private glowFx: Phaser.FX.Glow | null = null;
+  private glowTween: Phaser.Tweens.Tween | null = null;
 
   // Visuelle Zustände – kombiniert in resolveVisual()
   private isBurrowedVisual = false;
@@ -29,11 +37,26 @@ export class PlayerEntity {
     this.targetX  = x;
     this.targetY  = y;
 
-    // Spieler-Sprite
-    this.sprite = scene.add.rectangle(x, y, PLAYER_SIZE, PLAYER_SIZE, profile.colorHex);
+    // Spieler-Sprite (Badger-Bild statt Rechteck)
+    this.sprite = scene.add.image(x, y, 'badger');
+    this.sprite.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
     this.sprite.setDepth(DEPTH.PLAYERS);
     scene.physics.add.existing(this.sprite);
+    this.body.setCircle(PLAYER_SIZE / 2);
     this.body.setCollideWorldBounds(true);
+
+    // Leuchtende Spielerfarb-Aura (vgl. PowerUpRenderer)
+    this.glowFx = this.sprite.preFX?.addGlow(profile.colorHex, 4, 0, false, 0.1, 16) ?? null;
+    if (this.glowFx) {
+      this.glowTween = scene.tweens.add({
+        targets:       this.glowFx,
+        outerStrength: { from: 3, to: 7 },
+        duration:      1000,
+        yoyo:          true,
+        repeat:        -1,
+        ease:          'Sine.easeInOut',
+      });
+    }
 
     // HP-Balken Hintergrund (dunkelgrau, zentriert)
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
@@ -81,7 +104,25 @@ export class PlayerEntity {
   lerpStep(factor: number): void {
     this.sprite.x = Phaser.Math.Linear(this.sprite.x, this.targetX, factor);
     this.sprite.y = Phaser.Math.Linear(this.sprite.y, this.targetY, factor);
+    this.lerpRotation(factor);
     this.syncBar();
+  }
+
+  /** Sprite-Rotation direkt setzen (lokaler Spieler, jeden Frame). */
+  setRotation(aimAngle: number): void {
+    this.sprite.rotation = aimAngle + PlayerEntity.ROTATION_OFFSET;
+  }
+
+  /** Ziel-Rotation für client-seitige Interpolation (Remote-Spieler). */
+  setTargetRotation(aimAngle: number): void {
+    this.targetRotation = aimAngle;
+  }
+
+  /** Rotation smooth zum Ziel interpolieren (Shortest-Path). */
+  private lerpRotation(factor: number): void {
+    const current = this.sprite.rotation - PlayerEntity.ROTATION_OFFSET;
+    const diff = Phaser.Math.Angle.Wrap(this.targetRotation - current);
+    this.sprite.rotation = (current + diff * factor) + PlayerEntity.ROTATION_OFFSET;
   }
 
   /**
@@ -131,22 +172,23 @@ export class PlayerEntity {
   /**
    * Einheitliche Methode zur visuellen Darstellung.
    * Priorität: Burrow > Rage > Normal.
-   * Rectangle hat kein setTint() – stattdessen setFillStyle().
+   * Bild bleibt ungetinted – Zustand wird über Glow-Aura-Farbe + Alpha vermittelt.
    */
   private resolveVisual(): void {
     if (this.isBurrowedVisual) {
       this.sprite.setAlpha(BURROW_ALPHA);
-      this.sprite.setFillStyle(BURROW_TINT);
+      if (this.glowFx) this.glowFx.color = BURROW_TINT;
     } else if (this.isRagingVisual) {
       this.sprite.setAlpha(1.0);
-      this.sprite.setFillStyle(0xff3333);
+      if (this.glowFx) this.glowFx.color = 0xff3333;
     } else {
       this.sprite.setAlpha(1.0);
-      this.sprite.setFillStyle(this.colorHex);
+      if (this.glowFx) this.glowFx.color = this.colorHex;
     }
   }
 
   destroy(): void {
+    this.glowTween?.stop();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.sprite.destroy();

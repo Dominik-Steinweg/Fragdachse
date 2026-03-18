@@ -80,7 +80,7 @@ export class AimSystem {
 
   constructor(
     private readonly scene:           Phaser.Scene,
-    private readonly getLocalSprite:  () => Phaser.GameObjects.Rectangle | undefined,
+    private readonly getLocalSprite:  () => Phaser.GameObjects.Image | undefined,
     private readonly getWeaponConfig: (slot: WeaponSlot) => WeaponConfig,
     private readonly getPlayerColor:  () => number,
   ) {
@@ -346,7 +346,7 @@ export class UtilityChargeIndicator {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly getLocalSprite: () => Phaser.GameObjects.Rectangle | undefined,
+    private readonly getLocalSprite: () => Phaser.GameObjects.Image | undefined,
     private readonly getPlayerColor: () => number,
   ) {
     this.anchorShadow = scene.add.circle(CHARGE_ANCHOR_OFFSET_X, 0, 5, COLORS.GREY_10, 0.42);

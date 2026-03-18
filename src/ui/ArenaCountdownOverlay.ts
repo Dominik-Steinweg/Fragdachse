@@ -24,7 +24,7 @@ const REVEAL_TARGET_RADIUS_PX = Math.max(ARENA_WIDTH, ARENA_HEIGHT) * 1.2;
 export class ArenaCountdownOverlay {
   private readonly veil: Phaser.GameObjects.Graphics;
   private readonly text: Phaser.GameObjects.Text;
-  private readonly getFocusSprite: () => Phaser.GameObjects.Rectangle | undefined;
+  private readonly getFocusSprite: () => Phaser.GameObjects.Image | undefined;
   private unlockAtMs = 0;
   private lastShownNumber = 0;
   private lastFocusX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
@@ -37,7 +37,7 @@ export class ArenaCountdownOverlay {
 
   constructor(
     private scene: Phaser.Scene,
-    getFocusSprite: () => Phaser.GameObjects.Rectangle | undefined,
+    getFocusSprite: () => Phaser.GameObjects.Image | undefined,
   ) {
     this.getFocusSprite = getFocusSprite;
 

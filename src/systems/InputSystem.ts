@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState } from '../types';
 import { DASH_T1_S, DASH_T2_S } from '../config';
+import { quantizeAngle } from '../utils/angle';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type { ChargedThrowUtilityActivationConfig, UtilityConfig } from '../loadout/LoadoutConfig';
@@ -9,7 +10,7 @@ import type { ChargedThrowUtilityActivationConfig, UtilityConfig } from '../load
 export class InputSystem {
   private scene:           Phaser.Scene;
   private bridge:          NetworkBridge;
-  private getLocalSprite:  () => Phaser.GameObjects.Rectangle | undefined;
+  private getLocalSprite:  () => Phaser.GameObjects.Image | undefined;
 
   private keyW!:     Phaser.Input.Keyboard.Key;
   private keyA!:     Phaser.Input.Keyboard.Key;
@@ -32,6 +33,9 @@ export class InputSystem {
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
 
+  // Aktueller Aim-Winkel (Radiant, für Rotation-Sync)
+  private currentAimAngle = 0;
+
   // Lokaler Zustand vom Host empfangen
   private localIsStunned  = false;
   private localIsBurrowed = false;
@@ -40,7 +44,7 @@ export class InputSystem {
   constructor(
     scene:          Phaser.Scene,
     bridge:         NetworkBridge,
-    getLocalSprite: () => Phaser.GameObjects.Rectangle | undefined,
+    getLocalSprite: () => Phaser.GameObjects.Image | undefined,
   ) {
     this.scene          = scene;
     this.bridge         = bridge;
@@ -107,6 +111,9 @@ export class InputSystem {
     return Math.min(1, remaining / DASH_CYCLE_MS);
   }
 
+  /** Aktueller Aim-Winkel in Radiant (für Sprite-Rotation). */
+  getAimAngle(): number { return this.currentAimAngle; }
+
   isUtilityPreviewActive(): boolean {
     return this.utilityHoldActive;
   }
@@ -144,7 +151,7 @@ export class InputSystem {
       if (this.keyS.isDown) dy += 1;
     }
 
-    const input: PlayerInput = { dx, dy };
+    const input: PlayerInput = { dx, dy, aim: quantizeAngle(this.currentAimAngle) };
     this.bridge.sendLocalInput(input);
 
     if (!this.inputEnabled) return;
@@ -184,6 +191,7 @@ export class InputSystem {
     const px    = pointer.x;
     const py    = pointer.y;
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, px, py);
+    this.currentAimAngle = angle;
 
     // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.

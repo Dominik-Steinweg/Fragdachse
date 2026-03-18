@@ -9,8 +9,9 @@ export interface PlayerProfile {
 
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {
-  dx: number; // -1 | 0 | 1
-  dy: number; // -1 | 0 | 1
+  dx: number;  // -1 | 0 | 1
+  dy: number;  // -1 | 0 | 1
+  aim: number; // Aim-Winkel quantisiert als uint8 (0-255 → 0-2π)
 }
 
 /** Waffen-Slots mit Spread/Crosshair-Relevanz. */
@@ -28,6 +29,7 @@ export interface PlayerAimNetState {
 export interface PlayerNetState {
   x:          number;
   y:          number;
+  rot:        number;   // Blickrichtung quantisiert als uint8 (0-255 → 0-2π)
   hp:         number;
   alive:      boolean;
   adrenaline: number;   // 0–ADRENALINE_MAX
