@@ -58,6 +58,22 @@ export class EffectSystem {
     });
   }
 
+  // ── Dash-Trail-Effekt ─────────────────────────────────────────────────────
+
+  /** Trail-Geist: verblassende Kopie des Spieler-Sprites während Phase 1. */
+  playDashTrailGhost(x: number, y: number, color: number, scale: number): void {
+    const size = PLAYER_SIZE * scale;
+    const ghost = this.scene.add.rectangle(x, y, size, size, color, 0.4);
+    ghost.setDepth(DEPTH_FX - 1);
+    this.scene.tweens.add({
+      targets:    ghost,
+      alpha:      0,
+      duration:   150,
+      ease:       'Linear',
+      onComplete: () => ghost.destroy(),
+    });
+  }
+
   // ── Schockwellen-Effekt: expandierender Goldring (Unburrow) ─────────────
 
   playShockwaveEffect(x: number, y: number): void {

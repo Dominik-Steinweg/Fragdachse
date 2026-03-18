@@ -50,10 +50,11 @@ type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot' | 'traceHitsca
  * prüft Cooldowns/Adrenalin, dispatcht Aktionen, tracked Spread-Bloom und Ultimate-Zustand.
  */
 export class LoadoutManager {
-  private loadouts       = new Map<string, PlayerLoadout>();
-  private ultimateStates = new Map<string, UltimateState>();
-  private aimNetStates   = new Map<string, PlayerAimNetState>();
-  private combatSystem: CombatResolverType | null = null;
+  private loadouts          = new Map<string, PlayerLoadout>();
+  private ultimateStates    = new Map<string, UltimateState>();
+  private aimNetStates      = new Map<string, PlayerAimNetState>();
+  private combatSystem:       CombatResolverType | null = null;
+  private dashBurstChecker: ((id: string) => boolean) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -93,6 +94,11 @@ export class LoadoutManager {
     this.combatSystem = combatSystem;
   }
 
+  /** Injiziert einen Checker, der während Dash-Phase 1 das Schießen blockiert. */
+  setDashBurstChecker(fn: (id: string) => boolean): void {
+    this.dashBurstChecker = fn;
+  }
+
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
 
   use(
@@ -112,6 +118,9 @@ export class LoadoutManager {
     if (!player) return;
     const x = player.sprite.x;
     const y = player.sprite.y;
+
+    // Schießen während Dash-Phase 1 (Burst) blockiert
+    if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return;
 
     switch (slot) {
       case 'weapon1':

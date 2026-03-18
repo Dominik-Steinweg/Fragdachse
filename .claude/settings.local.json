@@ -18,7 +18,9 @@
       "Bash(findstr -i track)",
       "Bash(dir \"C:\\\\Fragdachse\\\\public\\\\assets\\\\sprites\" /b)",
       "Bash(findstr /i track)",
-      "Bash(dir \"C:\\\\Fragdachse\\\\public\\\\assets\\\\sprites\")"
+      "Bash(dir \"C:\\\\Fragdachse\\\\public\\\\assets\\\\sprites\")",
+      "Bash(find /c/Fragdachse -type f -name config*)",
+      "Bash(find /c/Fragdachse/src -type f \\\\\\(-name *.ts -o -name *.js \\\\\\))"
     ]
   }
 }

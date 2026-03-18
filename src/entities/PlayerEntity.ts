@@ -111,6 +111,11 @@ export class PlayerEntity {
     this.hpBarFg.setVisible(visible);
   }
 
+  /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite). */
+  setDashScale(scale: number): void {
+    this.sprite.setScale(scale);
+  }
+
   /** Burrow-Visualisierung setzen. */
   setBurrowVisual(isBurrowed: boolean): void {
     this.isBurrowedVisual = isBurrowed;

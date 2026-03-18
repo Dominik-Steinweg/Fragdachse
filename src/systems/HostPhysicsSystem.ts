@@ -3,14 +3,22 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { CombatSystem }  from './CombatSystem';
 import {
-  PLAYER_SPEED,
-  DASH_SPEED, DASH_DURATION_MS,
+  PLAYER_SPEED, PLAYER_SIZE,
+  DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START,
   BURROW_SPEED_FACTOR,
 } from '../config';
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = { isBurrowed(id: string): boolean; isStunned(id: string): boolean };
 type LoadoutManagerType = { getSpeedMultiplier(id: string): number };
+
+interface DashState {
+  phase:   1 | 2;
+  startMs: number;   // Zeitstempel Phasenbeginn
+  dirX:    number;   // normierter Startrichtungsvektor
+  dirY:    number;
+  vNorm:   number;   // v_norm zum Dash-Zeitpunkt (skaliert mit Buffs)
+}
 
 export class HostPhysicsSystem {
   private scene:         Phaser.Scene;
@@ -31,9 +39,9 @@ export class HostPhysicsSystem {
   private burrowSystem:   BurrowSystemType   | null = null;
   private loadoutManager: LoadoutManagerType | null = null;
 
-  // Dash-Zustand pro Spieler
-  private dashingUntil  = new Map<string, number>();   // ms-Timestamp
-  private dashVelocity  = new Map<string, { vx: number; vy: number }>();
+  // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
+  private dashStates       = new Map<string, DashState>();
+  private dashBurstPlayers = new Set<string>(); // Phase 1 aktiv → Schießen blockiert
 
   // Burrow-State (Collider-Enable-Tracking)
   private burrowedPlayers = new Set<string>();
@@ -55,19 +63,43 @@ export class HostPhysicsSystem {
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void  { this.loadoutManager = lm; }
 
+  // ── Dash-Abfragen ─────────────────────────────────────────────────────────
+
+  /** Gibt zurück ob Spieler aktuell in Phase 1 (Burst) ist → Schießen blockiert. */
+  isDashBurst(id: string): boolean { return this.dashBurstPlayers.has(id); }
+
+  /** Gibt die aktuelle Dash-Phase zurück: 0 = kein Dash, 1 = Burst, 2 = Recovery. */
+  getDashPhase(id: string): 0 | 1 | 2 {
+    return (this.dashStates.get(id)?.phase ?? 0) as 0 | 1 | 2;
+  }
+
   // ── Dash-Handler (aufgerufen von NetworkBridge-RPC) ───────────────────────
 
   /**
    * Verarbeitet einen Dash-RPC vom Client.
-   * Setzt für DASH_DURATION_MS die Geschwindigkeit auf DASH_SPEED in (dx,dy)-Richtung.
+   * Startet Phase 1 (Burst) mit Quad.easeOut Geschwindigkeitskurve.
+   * Kein Dash wenn: tot, gestunnt, bereits dashend, oder im Stand.
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
     if (!this.combatSystem.isAlive(playerId)) return;
     if (this.burrowSystem?.isStunned(playerId)) return;
+    if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
+
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len === 0) return; // kein Dash im Stand
-    this.dashVelocity.set(playerId, { vx: (dx / len) * DASH_SPEED, vy: (dy / len) * DASH_SPEED });
-    this.dashingUntil.set(playerId, Date.now() + DASH_DURATION_MS);
+
+    const burrowed  = this.burrowSystem?.isBurrowed(playerId) ?? false;
+    const speedMult = this.loadoutManager?.getSpeedMultiplier(playerId) ?? 1;
+    const vNorm     = (burrowed ? PLAYER_SPEED * BURROW_SPEED_FACTOR : PLAYER_SPEED) * speedMult;
+
+    this.dashStates.set(playerId, {
+      phase:   1,
+      startMs: Date.now(),
+      dirX:    dx / len,
+      dirY:    dy / len,
+      vNorm,
+    });
+    this.dashBurstPlayers.add(playerId);
   }
 
   // ── Burrow-Kollisions-Steuerung (aufgerufen von BurrowSystem) ────────────
@@ -109,8 +141,8 @@ export class HostPhysicsSystem {
       this.rockCollidersSetup.clear();
       this.trunkCollidersSetup.clear();
       this.burrowedPlayers.clear();
-      this.dashingUntil.clear();
-      this.dashVelocity.clear();
+      this.dashStates.clear();
+      this.dashBurstPlayers.clear();
     }
     this.rockGroup  = rockGroup;
     this.trunkGroup = trunkGroup;
@@ -128,15 +160,15 @@ export class HostPhysicsSystem {
     this.rockCollidersSetup.delete(id);
     this.trunkCollidersSetup.delete(id);
     this.burrowedPlayers.delete(id);
-    this.dashingUntil.delete(id);
-    this.dashVelocity.delete(id);
+    this.dashStates.delete(id);
+    this.dashBurstPlayers.delete(id);
   }
 
   // ── Frame-Update ─────────────────────────────────────────────────────────
 
   /**
    * Jeden Frame – nur auf dem Host aktiv.
-   * Priorität: Stun > Dash > Burrow-Speed > Normale Bewegung.
+   * Priorität: Stun > Dash (2-Phasen) > Burrow-Speed > Normale Bewegung.
    */
   update(movementLocked = false): void {
     if (!this.bridge.isHost()) return;
@@ -179,14 +211,60 @@ export class HostPhysicsSystem {
         continue;
       }
 
-      // ── 2. Dash: Überschreibe Velocity für DASH_DURATION_MS ──────────
-      const dashEnd = this.dashingUntil.get(player.id) ?? 0;
-      if (now < dashEnd) {
-        const dv = this.dashVelocity.get(player.id);
-        if (dv) {
-          player.body.setVelocity(dv.vx, dv.vy);
+      // ── 2. Dash: 2-Phasen Speed-Debt-Modell ─────────────────────────
+      const dash = this.dashStates.get(player.id);
+      if (dash) {
+        const elapsed = (now - dash.startMs) / 1000;
+
+        // Air Control: WASD wenn gedrückt, sonst gespeicherte Startrichtung
+        const input  = this.bridge.getPlayerInput(player.id);
+        const rawX   = input?.dx ?? 0;
+        const rawY   = input?.dy ?? 0;
+        const rawLen = Math.sqrt(rawX * rawX + rawY * rawY);
+        const dirX   = rawLen > 0 ? rawX / rawLen : dash.dirX;
+        const dirY   = rawLen > 0 ? rawY / rawLen : dash.dirY;
+
+        let speedFactor: number;
+        let done = false;
+
+        if (dash.phase === 1) {
+          const t = Math.min(1, elapsed / DASH_T1_S);
+          // Quad.easeOut: sofortiger Abfall von f_start auf f_min
+          const easeOut = 1 - (1 - t) * (1 - t);
+          speedFactor = DASH_F_START + (DASH_F_MIN - DASH_F_START) * easeOut;
+
+          // Hitbox sofort auf 50 % × 50 % (25 % Fläche)
+          player.body.setSize(PLAYER_SIZE * 0.5, PLAYER_SIZE * 0.5);
+          player.sprite.setScale(0.5);
+
+          if (elapsed >= DASH_T1_S) {
+            // Phasenwechsel: Überschusszeit in Phase 2 übertragen
+            dash.phase   = 2;
+            dash.startMs = now - (elapsed - DASH_T1_S) * 1000;
+            this.dashBurstPlayers.delete(player.id);
+          }
+        } else {
+          const t = Math.min(1, elapsed / DASH_T2_S);
+          // Quad.easeIn: zähes Aufrappeln von f_min auf 1.0
+          const easeIn = t * t;
+          speedFactor = DASH_F_MIN + (1 - DASH_F_MIN) * easeIn;
+          const scale = 0.5 + 0.5 * easeIn;
+          player.body.setSize(PLAYER_SIZE * scale, PLAYER_SIZE * scale);
+          player.sprite.setScale(scale);
+
+          if (elapsed >= DASH_T2_S) {
+            done = true;
+            this.dashStates.delete(player.id);
+            player.body.setSize(PLAYER_SIZE, PLAYER_SIZE);
+            player.sprite.setScale(1.0);
+          }
+        }
+
+        if (!done) {
+          player.body.setVelocity(dirX * dash.vNorm * speedFactor, dirY * dash.vNorm * speedFactor);
           continue;
         }
+        // done → fällt durch zur normalen Bewegung
       }
 
       // ── 3. Normaler Input mit optionalem Burrow-Speed-Faktor ─────────

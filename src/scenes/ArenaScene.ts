@@ -5,6 +5,7 @@ import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import { ArenaGenerator }      from '../arena/ArenaGenerator';
 import { RockRegistry }        from '../arena/RockRegistry';
 import { PlayerManager }       from '../entities/PlayerManager';
+import type { PlayerEntity }   from '../entities/PlayerEntity';
 import { ProjectileManager }   from '../entities/ProjectileManager';
 import { InputSystem }         from '../systems/InputSystem';
 import { HostPhysicsSystem }   from '../systems/HostPhysicsSystem';
@@ -42,6 +43,7 @@ import {
   ARENA_OFFSET_Y,
   ARENA_WIDTH,
   CELL_SIZE, DEPTH,
+  DASH_T2_S,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 
@@ -90,6 +92,11 @@ export class ArenaScene extends Phaser.Scene {
   private trainDestroyedShown   = false;
 
   private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
+
+  // ── Dash-Visual-Tracking (client-seitig) ──────────────────────────────────
+  private dashPhase2StartTimes = new Map<string, number>(); // playerId → lokaler Zeitstempel
+  private prevDashPhases       = new Map<string, number>(); // playerId → vorherige Phase
+  private dashTrailTimers      = new Map<string, number>(); // playerId → nächster Ghost ms
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
   private lastPhase: GamePhase = 'LOBBY';
@@ -538,6 +545,7 @@ export class ArenaScene extends Phaser.Scene {
 
       // Rück-Referenzen setzen
       this.loadoutManager.setCombatSystem(this.combatSystem);
+      this.loadoutManager.setDashBurstChecker(id => this.hostPhysics.isDashBurst(id));
       this.combatSystem.setBurrowSystem(this.burrowSystem);
       this.combatSystem.setResourceSystem(this.resourceSystem);
       this.combatSystem.setLoadoutManager(this.loadoutManager);
@@ -1086,6 +1094,7 @@ export class ArenaScene extends Phaser.Scene {
         isBurrowed,
         isStunned,
         isRaging,
+        dashPhase: this.hostPhysics.getDashPhase(player.id),
         aim,
       };
 
@@ -1093,6 +1102,11 @@ export class ArenaScene extends Phaser.Scene {
       player.setVisible(alive);
       player.setRageTint(isRaging);
       player.syncBar();
+
+      // Trail-Ghosts während Phase 1 (Skalierung macht HostPhysicsSystem)
+      const dashPhase = players[player.id].dashPhase;
+      if (dashPhase === 0) this.dashTrailTimers.delete(player.id);
+      this.applyDashVisual(player, player.id, dashPhase, false);
     }
 
     const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
@@ -1126,6 +1140,7 @@ export class ArenaScene extends Phaser.Scene {
     const state = bridge.getLatestGameState();
     if (!state) return;
 
+    const localId = bridge.getLocalPlayerId();
     for (const [id, ps] of Object.entries(state.players)) {
       let player = this.playerManager.getPlayer(id);
       if (!player) {
@@ -1142,6 +1157,22 @@ export class ArenaScene extends Phaser.Scene {
       player.setVisible(ps.alive);
       player.setBurrowVisual(ps.isBurrowed);
       player.setRageTint(ps.isRaging);
+
+      // ── Dash-Visual-Verarbeitung ────────────────────────────────────────
+      const curPhase  = ps.dashPhase ?? 0;
+
+      // Phase-2-Startzeitpunkt merken (für easeIn-Animation)
+      if (curPhase === 2 && (this.prevDashPhases.get(id) ?? 0) !== 2) {
+        this.dashPhase2StartTimes.set(id, this.time.now);
+      }
+      if (curPhase === 0) {
+        this.dashPhase2StartTimes.delete(id);
+        this.dashTrailTimers.delete(id);
+      }
+      this.prevDashPhases.set(id, curPhase);
+
+      // Visuelle Skalierung + Trail-Ghosts
+      this.applyDashVisual(player, id, curPhase);
     }
 
     const LERP_FACTOR = 0.2;
@@ -1180,7 +1211,6 @@ export class ArenaScene extends Phaser.Scene {
     // ── Lokaler Pickup-Check ─────────────────────────────────────────────
     this.checkLocalPickup(state.powerups ?? []);
 
-    const localId    = bridge.getLocalPlayerId();
     const localState = state.players[localId];
     if (localState) {
       this.aimSystem?.setAuthoritativeState(localState.aim);
@@ -1192,6 +1222,32 @@ export class ArenaScene extends Phaser.Scene {
       );
       this.localPlayerAlive    = localState.alive;
       this.localPlayerBurrowed = localState.isBurrowed;
+    }
+  }
+
+  /**
+   * Trail-Ghosts für einen Spieler anhand seiner Dash-Phase spawnen.
+   * Auf dem Client auch die Sprite-Skalierung setzen (Host macht das bereits in HostPhysicsSystem).
+   */
+  private applyDashVisual(player: PlayerEntity, id: string, curPhase: 0 | 1 | 2, setScale = true): void {
+    if (curPhase === 1) {
+      if (setScale) player.setDashScale(0.5);
+      const now = this.time.now;
+      const nextGhost = this.dashTrailTimers.get(id) ?? 0;
+      if (now >= nextGhost) {
+        this.effectSystem.playDashTrailGhost(player.sprite.x, player.sprite.y, player.color, 0.5);
+        this.dashTrailTimers.set(id, now + 50);
+      }
+    } else if (curPhase === 2) {
+      if (setScale) {
+        const p2Start = this.dashPhase2StartTimes.get(id);
+        const t = p2Start !== undefined
+          ? Math.min(1, (this.time.now - p2Start) / (DASH_T2_S * 1000))
+          : 1;
+        player.setDashScale(0.5 + 0.5 * t * t); // Quad.easeIn 50% → 100%
+      }
+    } else if (setScale) {
+      player.setDashScale(1.0);
     }
   }
 

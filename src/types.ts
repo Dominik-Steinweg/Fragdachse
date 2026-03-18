@@ -35,6 +35,7 @@ export interface PlayerNetState {
   isBurrowed: boolean;
   isStunned:  boolean;
   isRaging:   boolean;  // Ultimate aktiv
+  dashPhase:  0 | 1 | 2; // 0 = kein Dash, 1 = Burst, 2 = Recovery
   aim:        PlayerAimNetState;
 }
 

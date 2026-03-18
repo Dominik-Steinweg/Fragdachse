@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState } from '../types';
-import { DASH_COOLDOWN_MS } from '../config';
+import { DASH_T1_S, DASH_T2_S } from '../config';
+
+const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type { ChargedThrowUtilityActivationConfig, UtilityConfig } from '../loadout/LoadoutConfig';
 
 export class InputSystem {
@@ -102,7 +104,7 @@ export class InputSystem {
   getDashCooldownFrac(): number {
     const remaining = this.dashCooldownUntil - Date.now();
     if (remaining <= 0) return 0;
-    return Math.min(1, remaining / DASH_COOLDOWN_MS);
+    return Math.min(1, remaining / DASH_CYCLE_MS);
   }
 
   isUtilityPreviewActive(): boolean {
@@ -158,7 +160,7 @@ export class InputSystem {
       const now = Date.now();
       if (now >= this.dashCooldownUntil) {
         this.bridge.sendDash(dx, dy);
-        this.dashCooldownUntil = now + DASH_COOLDOWN_MS;
+        this.dashCooldownUntil = now + DASH_CYCLE_MS;
       }
     }
 
