@@ -166,8 +166,8 @@ export const WEAPON_CONFIGS = {
     range:                400,        
     fire: {
       type:                 'projectile',
-      projectileSpeed:      700,
-      projectileSize:       5,
+      projectileSpeed:      900,
+      projectileSize:       2,
       projectileMaxBounces: 10,
     },
     allowedSlots:         ['weapon1'],
@@ -191,9 +191,9 @@ export const WEAPON_CONFIGS = {
     range:                600,        
     fire: {
       type:                 'projectile',
-      projectileSpeed:      1000,
-      projectileSize:       5,
-      projectileMaxBounces: 0,
+      projectileSpeed:      1200,
+      projectileSize:       3,
+      projectileMaxBounces: 1,
     },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
@@ -270,8 +270,8 @@ export const WEAPON_CONFIGS = {
     range:                500,        
     fire: {
       type:                 'projectile',
-      projectileSpeed:      800,
-      projectileSize:       3,
+      projectileSpeed:      1200,
+      projectileSize:       2,
       projectileMaxBounces: 10,
     },
     allowedSlots:         ['weapon2'],
@@ -295,8 +295,8 @@ export const WEAPON_CONFIGS = {
     range:                1000,        
     fire: {
       type:                 'projectile',
-      projectileSpeed:      1000,
-      projectileSize:       4,
+      projectileSpeed:      1200,
+      projectileSize:       3,
       projectileMaxBounces: 10,
     },
     allowedSlots:         ['weapon2'],
@@ -316,8 +316,8 @@ export const WEAPON_CONFIGS = {
     id:                   'SHOTGUN',
     displayName:          'Schrotflinte',
     cooldown:             700,
-    damage:               20,       // Schaden pro Pellet
-    range:                280,
+    damage:               15,       // Schaden pro Pellet
+    range:                230,
     fire: {
       type:                 'projectile',
       projectileSpeed:      1200,
