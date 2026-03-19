@@ -47,8 +47,11 @@ public/build/
 # Interne Notizen und ToDos
 ToDo/
 
-# Clause
+# Claude
 .claude/
+
+#Google-Drive
+fragdachse_drive/
 
 # Optional: lockfiles (uncomment if you want to ignore them)
 # package-lock.json

@@ -134,9 +134,23 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
     this.load.image('badger', './assets/sprites/32x32dachsweapon01.png');
+    this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
   }
 
   create(): void {
+    // Sterbeanimation registrieren (39 Frames, 60 fps → 16.67 ms/Frame)
+    this.anims.create({
+      key:       'player_death',
+      frames:    this.anims.generateFrameNames('dachs_death', {
+        prefix:  'Animation test (Dachs tot) (geist dunkler fade)-NEU ',
+        suffix:  '.aseprite',
+        start:   0,
+        end:     38,
+      }),
+      frameRate: 60,
+      repeat:    0,
+    });
+
     // Alte Szenen-Callbacks löschen, neue registrieren
     bridge.clearPlayerCallbacks();
 

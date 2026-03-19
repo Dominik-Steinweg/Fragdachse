@@ -27,6 +27,10 @@ export class PlayerEntity {
   private glowFx: Phaser.FX.Glow | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
 
+  // Sterbeanimation
+  private deathSprite: Phaser.GameObjects.Sprite | null = null;
+  private isAliveVisual = true; // verfolgt Übergang alive→dead für einmaligen Animationsstart
+
   // Visuelle Zustände – kombiniert in resolveVisual()
   private isBurrowedVisual = false;
   private isRagingVisual   = false;
@@ -68,6 +72,13 @@ export class PlayerEntity {
     this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
 
     this.syncBar();
+
+    // Sterbe-Sprite (zunächst ausgeblendet; Tiefe leicht unter Spielern)
+    // Origin (0.5, 1) = untere Mitte → Animation wächst nach oben
+    this.deathSprite = scene.add.sprite(x, y, 'dachs_death');
+    this.deathSprite.setOrigin(0.5, 1);
+    this.deathSprite.setDepth(DEPTH.PLAYERS - 1);
+    this.deathSprite.setVisible(false);
   }
 
   get body(): Phaser.Physics.Arcade.Body {
@@ -150,6 +161,29 @@ export class PlayerEntity {
     this.sprite.setVisible(visible);
     this.hpBarBg.setVisible(visible);
     this.hpBarFg.setVisible(visible);
+
+    if (!visible && this.isAliveVisual) {
+      // Übergang alive → dead: Sterbeanimation starten
+      this.isAliveVisual = false;
+      if (this.deathSprite) {
+        // Unterkante des 32×64-Frames bündig mit Sprite-Unterkante (wächst nach oben)
+        this.deathSprite.setPosition(this.sprite.x, this.sprite.y + PLAYER_SIZE / 2);
+        this.deathSprite.setVisible(true);
+        this.deathSprite.play('player_death');
+        this.deathSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+          this.deathSprite?.setVisible(false);
+        });
+      }
+    } else if (visible && !this.isAliveVisual) {
+      // Übergang dead → alive (Respawn): Animation abbrechen
+      this.isAliveVisual = true;
+      if (this.deathSprite) {
+        this.deathSprite.stop();
+        this.deathSprite.setVisible(false);
+      }
+    } else if (visible) {
+      this.isAliveVisual = true;
+    }
   }
 
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite). */
@@ -192,5 +226,6 @@ export class PlayerEntity {
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.sprite.destroy();
+    this.deathSprite?.destroy();
   }
 }

@@ -213,7 +213,7 @@ export const WEAPON_CONFIGS = {
     displayName:          'ASMD Primär',
     cooldown:             500,
     damage:               10,
-    range:                550,
+    range:                650,
     fire: {
       type:                 'hitscan',
       traceThickness:       3,
@@ -320,7 +320,7 @@ export const WEAPON_CONFIGS = {
     range:                230,
     fire: {
       type:                 'projectile',
-      projectileSpeed:      1200,
+      projectileSpeed:      1600,
       projectileSize:       4,
       projectileMaxBounces: 1,
     },
@@ -387,7 +387,7 @@ export const WEAPON_CONFIGS = {
     id:                   'FLAMETHROWER',
     displayName:          'Flammenwerfer',
     cooldown:             70,          // 20 Hitboxen/s
-    damage:               6,           // pro Hitbox-Treffer
+    damage:               4,           // pro Hitbox-Treffer
     range:                250,         // px maximale Flammenreichweite
     fire: {
       type:               'flamethrower',
