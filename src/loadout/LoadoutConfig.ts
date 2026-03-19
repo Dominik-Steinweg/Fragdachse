@@ -105,9 +105,18 @@ interface BaseUtilityConfig {
   readonly fuseTime: number;        // ms bis Explosion
   readonly maxBounces: number;      // 0 = kein Abprallen, >0 = Explosion nach n Abprallern
 
+  readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die dieses Utility eingesetzt werden darf
+
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
+
+  // Spezial-Flags (optional)
+  /** Goldene Explosion + Kamera-Shake (Heilige Handgranate etc.) */
+  readonly holyExplosion?: boolean;
+  /** Kein Cooldown-Publish nach Nutzung – für Ammo-basierte Einmal-Items,
+   *  damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird. */
+  readonly skipCooldownPublish?: boolean;
 }
 
 export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
@@ -428,6 +437,7 @@ export const UTILITY_CONFIGS = {
     maxBounces:      3,
     aoeRadius:       80,
     aoeDamage:       60,
+    allowedSlots:    ['utility'],
   } as UtilityConfig,
 
   SMOKE_GRENADE: {
@@ -445,6 +455,7 @@ export const UTILITY_CONFIGS = {
     smokeLingerDuration:    7000,
     smokeDissipateDuration: 2000,
     smokeMaxAlpha:          0.95,
+    allowedSlots:           ['utility'],
   } as UtilityConfig,
 
   MOLOTOV_GRENADE: {
@@ -462,6 +473,25 @@ export const UTILITY_CONFIGS = {
     fireTickInterval:   200,
     fireLingerDuration: 4000,
     rockDamageMult:     0,  // Molotov macht keinen Schaden an Felsen
+    allowedSlots:       ['utility'],
+  } as UtilityConfig,
+
+  HOLY_HAND_GRENADE: {
+    id:              'HOLY_HAND_GRENADE',
+    displayName:     'Heilige Handgranate',
+    type:            'explosive',
+    cooldown:        0,             // Ammo-basiert (Einzelschuss), kein Cooldown
+    activation:      STANDARD_GRENADE_CHARGE,
+    projectileSpeed: 500,
+    projectileSize:  14,
+    fuseTime:        3000,          // 3 Sekunden Zünder
+    maxBounces:      999,             // bleibt liegen
+    aoeRadius:       250,           // riesiger Radius
+    aoeDamage:       200,           // massiver Schaden
+    allowedSlots:         [],            // NICHT im Loadout-Menü wählbar
+    trainDamageMult:      1.0,           // 100% Schaden am Zug
+    holyExplosion:        true,          // goldene Explosion + Kamera-Shake
+    skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
   } as UtilityConfig,
 } as const;
 

@@ -178,6 +178,8 @@ export class ProjectileManager {
       hitboxMaxSize:   cfg.hitboxMaxSize,
       velocityDecay:   cfg.velocityDecay,
       initialSpeed:    cfg.speed,
+      // Granaten-Countdown
+      lastCountdownEmitted: null,
     };
 
     if (isFlame) {
@@ -197,6 +199,41 @@ export class ProjectileManager {
     } else if (!cfg.isGrenade || cfg.maxBounces > 0) {
       // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
       this.setupBouncePhysics(sprite, body, tracked, !cfg.isGrenade);
+    } else if (cfg.isGrenade && cfg.maxBounces === 0) {
+      // Granate ohne Bounces (z.B. Heilige Handgranate): Wand-Kollision, aber kein Abprallen.
+      // Bleibt an der Aufprallstelle liegen und explodiert nach fuseTime.
+      body.setCollideWorldBounds(true);
+      body.onWorldBounds = true;
+      body.setBounce(0, 0);
+      const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
+        if (hitBody !== body) return;
+        body.setVelocity(0, 0);
+      };
+      tracked.boundsListener = boundsListener;
+      this.scene.physics.world.on('worldbounds', boundsListener);
+
+      // Fels-/Trunk-/Zug-Kollision: Granate bleibt stecken
+      if (this.rockGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
+          body.setVelocity(0, 0);
+        });
+        tracked.colliders.push(c);
+      }
+      if (this.trunkGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+          body.setVelocity(0, 0);
+        });
+        tracked.colliders.push(c);
+      }
+      if (this.trainGroup) {
+        const onTrainHit = this.onTrainHit;
+        const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+          body.setVelocity(0, 0);
+          const trainMult = tracked.trainDamageMult ?? 1;
+          if (trainMult !== 0) onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+        });
+        tracked.colliders.push(c);
+      }
     }
 
     this.projectiles.push(tracked);
@@ -405,9 +442,14 @@ export class ProjectileManager {
    * Host: Abgelaufene/explodierte Projektile entfernen, aktuelle Positionen zurückgeben.
    * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurückgegeben.
    */
-  hostUpdate(deltaMs = 16.67): { synced: SyncedProjectile[]; explodedGrenades: ExplodedGrenade[] } {
+  hostUpdate(deltaMs = 16.67): {
+    synced: SyncedProjectile[];
+    explodedGrenades: ExplodedGrenade[];
+    countdownEvents: Array<{ x: number; y: number; value: number }>;
+  } {
     const now              = Date.now();
     const explodedGrenades: ExplodedGrenade[] = [];
+    const countdownEvents: Array<{ x: number; y: number; value: number }> = [];
     const renderer         = this.bulletRenderer;
 
     this.projectiles = this.projectiles.filter(proj => {
@@ -429,6 +471,17 @@ export class ProjectileManager {
           proj.sprite.destroy();
           return false;
         }
+
+        // Countdown-Emission für Granaten mit langer Zündzeit (≥ 1500ms)
+        const fuseTime = proj.fuseTime ?? 0;
+        if (fuseTime >= 1500) {
+          const remainingSeconds = Math.max(0, Math.ceil((fuseTime - age) / 1000));
+          if (remainingSeconds > 0 && proj.lastCountdownEmitted !== remainingSeconds) {
+            proj.lastCountdownEmitted = remainingSeconds;
+            countdownEvents.push({ x: proj.sprite.x, y: proj.sprite.y, value: remainingSeconds });
+          }
+        }
+
         return true;
       } else {
         // Normales Projektil: Lifetime oder Max-Bounces
@@ -493,7 +546,7 @@ export class ProjectileManager {
       style: p.projectileStyle,
     }));
 
-    return { synced, explodedGrenades };
+    return { synced, explodedGrenades, countdownEvents };
   }
 
   // ── Client ────────────────────────────────────────────────────────────────

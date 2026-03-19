@@ -92,7 +92,8 @@ type LoadoutUseHandler = (
   clientY?: number,
 ) => void;
 
-type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number) => void;
+type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, isHoly?: boolean) => void;
+type GrenadeCountdownHandler = (x: number, y: number, value: number) => void;
 type EffectHandler = (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void;
 type HitscanTracerHandler = (
   startX: number,
@@ -138,6 +139,7 @@ export class NetworkBridge {
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
+  private grenadeCountdownHandler: GrenadeCountdownHandler | null = null;
   private effectHandler: EffectHandler | null = null;
   private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
@@ -505,17 +507,34 @@ export class NetworkBridge {
 
   // ── Explosions-Effekt-RPC: Host → Alle ────────────────────────────────────
 
-  broadcastExplosionEffect(x: number, y: number, radius: number, color?: number): void {
-    this.broadcastRpc('xfx', { x, y, r: radius, c: color });
+  broadcastExplosionEffect(x: number, y: number, radius: number, color?: number, isHoly?: boolean): void {
+    this.broadcastRpc('xfx', { x, y, r: radius, c: color, h: isHoly || undefined });
   }
 
-  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number) => void): void {
+  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number, isHoly?: boolean) => void): void {
     this.explosionEffectHandler = handler;
     this.registerAllRpcHandler('xfx', async (data: unknown): Promise<unknown> => {
       const explosionEffectHandler = this.explosionEffectHandler;
       if (!explosionEffectHandler) return undefined;
-      const { x, y, r, c } = data as { x: number; y: number; r: number; c?: number };
-      explosionEffectHandler(x, y, r, c);
+      const { x, y, r, c, h } = data as { x: number; y: number; r: number; c?: number; h?: boolean };
+      explosionEffectHandler(x, y, r, c, h);
+      return undefined;
+    });
+  }
+
+  // ── Granaten-Countdown-RPC: Host → Alle ──────────────────────────────────
+
+  broadcastGrenadeCountdown(x: number, y: number, value: number): void {
+    this.broadcastRpc('gcnt', { x, y, v: value });
+  }
+
+  registerGrenadeCountdownHandler(handler: (x: number, y: number, value: number) => void): void {
+    this.grenadeCountdownHandler = handler;
+    this.registerAllRpcHandler('gcnt', async (data: unknown): Promise<unknown> => {
+      const cb = this.grenadeCountdownHandler;
+      if (!cb) return undefined;
+      const { x, y, v } = data as { x: number; y: number; v: number };
+      cb(x, y, v);
       return undefined;
     });
   }

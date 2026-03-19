@@ -18,6 +18,16 @@ export abstract class BaseLoadoutItem<T extends { cooldown: number }> {
     this.lastUsedAt = now;
   }
 
+  /** Cooldown-Zustand wiederherstellen (z.B. nach temporärem Utility-Override). */
+  setLastUsedAt(ts: number): void {
+    this.lastUsedAt = ts;
+  }
+
+  /** Letzten Einsatz-Zeitstempel lesen (für Zustandssicherung). */
+  getLastUsedAt(): number {
+    return this.lastUsedAt;
+  }
+
   /**
    * Cooldown-Fraktion: 0 = bereit, 1 = gerade benutzt.
    * Für HUD-Darstellung.

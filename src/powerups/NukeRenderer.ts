@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { SyncedNukeStrike } from '../types';
 import { DEPTH, COLORS } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';
+import type { EffectSystem } from '../effects/EffectSystem';
 
 const TEX_NUKE_ICON = 'powerup_nuke';
 
@@ -15,8 +16,14 @@ interface NukeVisual {
 
 export class NukeRenderer {
   private visuals = new Map<number, NukeVisual>();
+  private effectSystem: EffectSystem | null = null;
 
   constructor(private scene: Phaser.Scene) {}
+
+  /** EffectSystem injizieren für gemeinsame Countdown-Text-Logik. */
+  setEffectSystem(effectSystem: EffectSystem): void {
+    this.effectSystem = effectSystem;
+  }
 
   generateTextures(): void {
     if (this.scene.textures.exists(TEX_NUKE_ICON)) return;
@@ -131,24 +138,10 @@ export class NukeRenderer {
   }
 
   private emitCountdownText(x: number, y: number, value: number): void {
-    const label = this.scene.add.text(x, y - 20, String(value), {
-      fontFamily: 'monospace',
-      fontSize: '34px',
-      color: '#ebede9',
-      stroke: '#241527',
-      strokeThickness: 5,
-    });
-    label.setOrigin(0.5);
-    label.setDepth(DEPTH.OVERLAY - 5);
-
-    this.scene.tweens.add({
-      targets:    label,
-      y:          y - 64,
-      alpha:      0,
-      duration:   850,
-      ease:       'Quad.easeOut',
-      onComplete: () => label.destroy(),
-    });
+    // Delegiert an EffectSystem für gemeinsame Countdown-Logik
+    if (this.effectSystem) {
+      this.effectSystem.playCountdownText(x, y, value);
+    }
   }
 
   private destroyVisual(visual: NukeVisual): void {

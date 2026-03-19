@@ -135,6 +135,7 @@ export interface DamageGrenadeEffect {
   damage: number;
   rockDamageMult?:  number;
   trainDamageMult?: number;
+  isHoly?:          boolean;  // Heilige Handgranate – goldene Explosion + Kamera-Shake
 }
 
 export interface SmokeGrenadeEffect {
@@ -237,6 +238,9 @@ export interface TrackedProjectile {
   hitboxMaxSize?:   number;     // px Maximum
   velocityDecay?:   number;     // Speed-Multiplikator pro Sekunde
   initialSpeed?:    number;     // Geschwindigkeit bei Spawn (für Decay-Berechnung)
+
+  // Granaten-Countdown (Host-intern)
+  lastCountdownEmitted?: number | null;  // letzter emittierter Countdown-Wert (Dedup)
 }
 
 // ---- Prozedurales Arena-Layout ----

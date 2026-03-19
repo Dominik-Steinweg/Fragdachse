@@ -1,20 +1,55 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { DEPTH_FX, DEPTH_TRACE, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
+import { DEPTH, DEPTH_FX, DEPTH_TRACE, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
 
 const HITSCAN_TRACER_FADE_MS = 120;
 const MELEE_SWING_FADE_MS    = 220;
+
+const TEX_EXPLOSION_SPARK = '__explosion_spark';
+const TEX_EXPLOSION_EMBER = '__explosion_ember';
 
 export class EffectSystem {
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
+  private texturesGenerated = false;
 
   constructor(
     private scene:  Phaser.Scene,
     private bridge: NetworkBridge,
   ) {}
+
+  /** Erzeugt kleine Canvas-Texturen für Explosions-Partikel (einmalig). */
+  private ensureTextures(): void {
+    if (this.texturesGenerated) return;
+    this.texturesGenerated = true;
+
+    // Soft-Dot für Funken
+    if (!this.scene.textures.exists(TEX_EXPLOSION_SPARK)) {
+      const sparkCanvas = this.scene.textures.createCanvas(TEX_EXPLOSION_SPARK, 6, 6);
+      if (sparkCanvas) {
+        const ctx = sparkCanvas.context;
+        const g = ctx.createRadialGradient(3, 3, 0, 3, 3, 3);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 6, 6);
+        sparkCanvas.refresh();
+      }
+    }
+
+    // Solider Block für Glut
+    if (!this.scene.textures.exists(TEX_EXPLOSION_EMBER)) {
+      const emberCanvas = this.scene.textures.createCanvas(TEX_EXPLOSION_EMBER, 4, 4);
+      if (emberCanvas) {
+        const ctx = emberCanvas.context;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 4, 4);
+        emberCanvas.refresh();
+      }
+    }
+  }
 
   /** RPC-Handler registrieren – Effekte werden bei ALLEN Clients (inkl. Host) abgespielt. */
   setup(onLocalConfirmedHit?: () => void): void {
@@ -108,25 +143,143 @@ export class EffectSystem {
     });
   }
 
-  // ── Granaten-Explosions-Effekt: wachsender Kreis ─────────────────────────────
+  // ── Granaten-Explosions-Effekt (überarbeitet: Flash + Blast + Ring + Partikel) ──
   /**
    * @param radius  Explosionsradius in px (visuell 1:1 match mit Schadensradius)
    * @param color   Optionale Farbe (Standard: orange-rot 0xff2200)
+   * @param isHoly  Heilige Handgranate – goldene Palette + Kamera-Shake
    */
-  playExplosionEffect(x: number, y: number, radius: number, color?: number): void {
-    const fillColor = color ?? 0xff2200;
+  playExplosionEffect(x: number, y: number, radius: number, color?: number, isHoly?: boolean): void {
+    this.ensureTextures();
+
+    const fillColor  = isHoly ? 0xffd700 : (color ?? 0xff2200);
+    const flashColor = isHoly ? 0xffffff : 0xffffcc;
     const startRadius = 8;
-    const endScale    = radius / startRadius; // 1:1 – visueller Radius = Schadensradius
-    const ring = this.scene.add.circle(x, y, startRadius, fillColor, 0.7);
-    ring.setDepth(DEPTH_FX);
+    const endScale    = radius / startRadius;
+
+    // 1. Innerer Blitz (weiß/hell)
+    const flash = this.scene.add.circle(x, y, startRadius, flashColor, 1);
+    flash.setDepth(DEPTH_FX + 1);
+    const flashEndScale = (radius * 0.3) / startRadius;
     this.scene.tweens.add({
-      targets:    ring,
+      targets:    flash,
+      scaleX:     flashEndScale,
+      scaleY:     flashEndScale,
+      alpha:      0,
+      duration:   150,
+      ease:       'Power3Out',
+      onComplete: () => flash.destroy(),
+    });
+
+    // 2. Haupt-Explosionsfüllung (wachsender Kreis)
+    const blast = this.scene.add.circle(x, y, startRadius, fillColor, 0.7);
+    blast.setDepth(DEPTH_FX);
+    this.scene.tweens.add({
+      targets:    blast,
       scaleX:     endScale,
       scaleY:     endScale,
       alpha:      0,
       duration:   600,
       ease:       'Power2Out',
+      onComplete: () => blast.destroy(),
+    });
+
+    // 3. Schockwellen-Ring (Stroke-Kreis)
+    const ringStartRadius = radius * 0.5;
+    const ringEndScale    = (radius * 1.15) / ringStartRadius;
+    const ring = this.scene.add.circle(x, y, ringStartRadius);
+    ring.setStrokeStyle(isHoly ? 3 : 2, fillColor, 0.8);
+    ring.setFillStyle(0, 0);
+    ring.setDepth(DEPTH_FX);
+    this.scene.tweens.add({
+      targets:    ring,
+      scaleX:     ringEndScale,
+      scaleY:     ringEndScale,
+      alpha:      0,
+      duration:   400,
+      ease:       'Linear',
       onComplete: () => ring.destroy(),
+    });
+
+    // 4. Funken-Partikel (explosiver Burst)
+    const sparkTints = isHoly
+      ? [0xffd700, 0xffffff, 0xffee88]
+      : [fillColor, 0xffaa00, 0xff6600];
+    const sparkCount = Math.ceil(radius / (isHoly ? 3 : 5));
+    const sparkEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+      lifespan:  { min: 300, max: 600 },
+      speed:     { min: 50,  max: radius * 1.5 },
+      scale:     { start: 1.2, end: 0 },
+      alpha:     { start: 0.9, end: 0 },
+      tint:      sparkTints,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting:  false,
+    });
+    sparkEmitter.setDepth(DEPTH_FX);
+    sparkEmitter.explode(sparkCount);
+    this.scene.time.delayedCall(800, () => sparkEmitter.destroy());
+
+    // 5. Glut-Partikel (langsamer, mit Gravitation)
+    const emberTints = isHoly ? [0xffd700, 0xffcc00] : [fillColor, 0xff4400];
+    const emberCount = Math.ceil(radius / (isHoly ? 4 : 8));
+    const emberEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_EMBER, {
+      lifespan:  { min: 500, max: 1000 },
+      speed:     { min: 20,  max: radius * 0.8 },
+      scale:     { start: 0.8, end: 0.2 },
+      alpha:     { start: 0.7, end: 0 },
+      tint:      emberTints,
+      gravityY:  40,
+      emitting:  false,
+    });
+    emberEmitter.setDepth(DEPTH_FX);
+    emberEmitter.explode(emberCount);
+    this.scene.time.delayedCall(1200, () => emberEmitter.destroy());
+
+    // 6. Heilige Handgranate: zusätzlicher goldener Außenring + Kamera-Shake
+    if (isHoly) {
+      const holyRingRadius = radius * 0.6;
+      const holyRingEndScale = (radius * 1.4) / holyRingRadius;
+      const holyRing = this.scene.add.circle(x, y, holyRingRadius);
+      holyRing.setStrokeStyle(4, 0xffd700, 0.6);
+      holyRing.setFillStyle(0, 0);
+      holyRing.setDepth(DEPTH_FX);
+      this.scene.tweens.add({
+        targets:    holyRing,
+        scaleX:     holyRingEndScale,
+        scaleY:     holyRingEndScale,
+        alpha:      0,
+        duration:   800,
+        ease:       'Power2Out',
+        onComplete: () => holyRing.destroy(),
+      });
+
+      this.scene.cameras.main.shake(300, 0.008);
+    }
+  }
+
+  // ── Countdown-Text (aufsteigende verblassende Zahl) ─────────────────────────
+  /**
+   * Zeigt eine Countdown-Zahl, die nach oben schwebt und verblasst.
+   * Wird von NukeRenderer und Granaten-Countdown gemeinsam genutzt.
+   */
+  playCountdownText(x: number, y: number, value: number): void {
+    const label = this.scene.add.text(x, y - 20, String(value), {
+      fontFamily: 'monospace',
+      fontSize:   '34px',
+      color:      '#ebede9',
+      stroke:     '#241527',
+      strokeThickness: 5,
+    });
+    label.setOrigin(0.5);
+    label.setDepth(DEPTH.OVERLAY - 5);
+
+    this.scene.tweens.add({
+      targets:    label,
+      y:          y - 64,
+      alpha:      0,
+      duration:   850,
+      ease:       'Quad.easeOut',
+      onComplete: () => label.destroy(),
     });
   }
 

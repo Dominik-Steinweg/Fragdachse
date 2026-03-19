@@ -133,6 +133,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_hp', './assets/sprites/16x16HP.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
+    this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');
     this.load.image('badger', './assets/sprites/32x32dachsweapon01.png');
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
   }
@@ -186,6 +187,7 @@ export class ArenaScene extends Phaser.Scene {
     this.effectSystem.setup(() => {
       this.aimSystem?.notifyConfirmedHit();
     });
+    this.nukeRenderer?.setEffectSystem(this.effectSystem);
     this.smokeSystem = new SmokeSystem(this);
     this.fireSystem  = new FireSystem(this);
 
@@ -253,8 +255,13 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
-    bridge.registerExplosionEffectHandler((x, y, radius, color) => {
-      this.effectSystem.playExplosionEffect(x, y, radius, color);
+    bridge.registerExplosionEffectHandler((x, y, radius, color, isHoly) => {
+      this.effectSystem.playExplosionEffect(x, y, radius, color, isHoly);
+    });
+
+    // ── 10b. Granaten-Countdown-RPC (alle Clients inkl. Host) ─────────────
+    bridge.registerGrenadeCountdownHandler((x, y, value) => {
+      this.effectSystem.playCountdownText(x, y, value);
     });
 
     // ── 11. RPC-Handler für Burrow-Visualisierung ─────────────────────────
@@ -581,6 +588,9 @@ export class ArenaScene extends Phaser.Scene {
         onNukeExploded: (x, y, radius, triggeredBy) => {
           bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a);
           this.applyNukeEnvironmentDamage(x, y, radius, triggeredBy);
+        },
+        onHolyHandGrenadePickup: (playerId) => {
+          this.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1);
         },
       });
       this.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
@@ -1017,9 +1027,14 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.update();
     }
 
-    const { synced: projectiles, explodedGrenades } = countdownActive
-      ? { synced: [], explodedGrenades: [] }
+    const { synced: projectiles, explodedGrenades, countdownEvents } = countdownActive
+      ? { synced: [], explodedGrenades: [], countdownEvents: [] }
       : this.projectileManager.hostUpdate(delta);
+
+    // Granaten-Countdown-Events an alle Clients broadcasten
+    for (const evt of countdownEvents) {
+      bridge.broadcastGrenadeCountdown(evt.x, evt.y, evt.value);
+    }
     // Hitscan-Traces und Melee-Swings werden jetzt per RPC direkt aus CombatSystem gesendet
 
     // Detonations-Ereignisse verarbeiten (ASMD Secondary Ball, zukünftige Raketen, …)
@@ -1045,7 +1060,7 @@ export class ArenaScene extends Phaser.Scene {
           g.x, g.y, g.effect.radius, g.effect.damage,
           g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId,
         );
-        bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius);
+        bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius, undefined, g.effect.isHoly);
       } else if (g.effect.type === 'fire') {
         this.fireSystem.hostCreateZone(g.x, g.y, g.effect, g.ownerId);
       } else {
@@ -1333,6 +1348,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private getLocalUtilityConfig(): UtilityConfig {
     const localId = bridge.getLocalPlayerId();
+    // Tatsächlich ausgerüstete Utility (inkl. Override, z.B. Heilige Handgranate)
+    const equipped = this.loadoutManager?.getEquippedUtilityConfig(localId);
+    if (equipped) return equipped;
+    // Fallback: Loadout-Menü-Auswahl
     const selection = this.resolveLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
   }

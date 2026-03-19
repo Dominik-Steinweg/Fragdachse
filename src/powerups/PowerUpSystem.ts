@@ -42,6 +42,7 @@ interface ActiveNukeStrike {
 
 interface PowerUpSystemOptions {
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
+  onHolyHandGrenadePickup?: (playerId: string) => void;
 }
 
 // ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
@@ -240,6 +241,9 @@ export class PowerUpSystem {
       }
       case 'global_nuke':
         this.armNukeStrike(playerId);
+        break;
+      case 'holy_hand_grenade':
+        this.options.onHolyHandGrenadePickup?.(playerId);
         break;
     }
   }

@@ -2,7 +2,7 @@
 
 import { COLORS } from '../config';
 
-export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage' | 'global_nuke';
+export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage' | 'global_nuke' | 'holy_hand_grenade';
 
 export interface PowerUpDef {
   readonly id:          string;
@@ -20,7 +20,8 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999,                     color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
   ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
-  NUKE:          { id: 'NUKE',          type: 'global_nuke',                                       color: COLORS.RED_2,    spriteKey: 'powerup_nuke' },
+  NUKE:                { id: 'NUKE',                type: 'global_nuke',                                       color: COLORS.RED_2,    spriteKey: 'powerup_nuke' },
+  HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',                                  color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
 };
 
 export const NUKE_CONFIG = {
@@ -61,7 +62,7 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 100 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 50, HOLY_HAND_GRENADE: 50 },
   },
 };
 

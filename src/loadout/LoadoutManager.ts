@@ -56,6 +56,10 @@ export class LoadoutManager {
   private combatSystem:       CombatResolverType | null = null;
   private dashBurstChecker: ((id: string) => boolean) | null = null;
 
+  // ── Utility-Override (Heilige Handgranate etc.) ─────────────────────────
+  private savedUtilities    = new Map<string, { config: UtilityConfig; lastUsedAt: number }>();
+  private utilityAmmo       = new Map<string, number>(); // playerId → verbleibende Einsätze (-1/absent = unbegrenzt)
+
   constructor(
     private playerManager:     PlayerManager,
     private projectileManager: ProjectileManager,
@@ -81,6 +85,9 @@ export class LoadoutManager {
       startTime: 0,
       config:    ultCfg,
     });
+    // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
+    this.savedUtilities.delete(playerId);
+    this.utilityAmmo.delete(playerId);
     this.bridge.publishUtilityCooldownUntil(playerId, 0);
   }
 
@@ -88,6 +95,8 @@ export class LoadoutManager {
     this.loadouts.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
+    this.savedUtilities.delete(playerId);
+    this.utilityAmmo.delete(playerId);
   }
 
   setCombatSystem(combatSystem: CombatResolverType | null): void {
@@ -97,6 +106,52 @@ export class LoadoutManager {
   /** Injiziert einen Checker, der während Dash-Phase 1 das Schießen blockiert. */
   setDashBurstChecker(fn: (id: string) => boolean): void {
     this.dashBurstChecker = fn;
+  }
+
+  // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
+
+  /**
+   * Überschreibt den Utility-Slot eines Spielers temporär.
+   * Der aktuelle Zustand (Config + Cooldown) wird zwischengespeichert.
+   */
+  overrideUtility(playerId: string, config: UtilityConfig, ammo: number): void {
+    const loadout = this.loadouts.get(playerId);
+    if (!loadout) return;
+
+    // Aktuellen Zustand sichern (Config + Cooldown-Zeitstempel)
+    this.savedUtilities.set(playerId, {
+      config:     loadout.utility.config,
+      lastUsedAt: loadout.utility.getLastUsedAt(),
+    });
+
+    // Neues Utility einsetzen
+    loadout.utility = new GenericUtility(config);
+    this.utilityAmmo.set(playerId, ammo);
+    this.bridge.publishUtilityCooldownUntil(playerId, 0); // sofort einsatzbereit
+  }
+
+  /**
+   * Stellt das zuvor gespeicherte Utility wieder her.
+   * Wird automatisch aufgerufen wenn die Ammo aufgebraucht ist.
+   */
+  private restoreUtility(playerId: string): void {
+    const saved = this.savedUtilities.get(playerId);
+    if (!saved) return;
+
+    const loadout = this.loadouts.get(playerId);
+    if (!loadout) return;
+
+    const restored = new GenericUtility(saved.config);
+    restored.setLastUsedAt(saved.lastUsedAt);
+    loadout.utility = restored;
+
+    this.savedUtilities.delete(playerId);
+    this.utilityAmmo.delete(playerId);
+
+    // Cooldown-Status an Clients publizieren
+    const now = Date.now();
+    const remaining = saved.config.cooldown - (now - saved.lastUsedAt);
+    this.bridge.publishUtilityCooldownUntil(playerId, remaining > 0 ? now + remaining : 0);
   }
 
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
@@ -207,6 +262,11 @@ export class LoadoutManager {
    */
   getEquippedWeaponConfig(playerId: string, slot: 'weapon1' | 'weapon2'): WeaponConfig | undefined {
     return this.loadouts.get(playerId)?.[slot].config;
+  }
+
+  /** Gibt die Config der tatsächlich ausgerüsteten Utility zurück (inkl. Override). */
+  getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined {
+    return this.loadouts.get(playerId)?.utility.config;
   }
 
   /**
@@ -324,6 +384,10 @@ export class LoadoutManager {
   ): void {
     if (utility.isOnCooldown(now)) return;
 
+    // Ammo-Check (falls Ammo-Tracking aktiv, z.B. Heilige Handgranate)
+    const ammo = this.utilityAmmo.get(playerId);
+    if (ammo !== undefined && ammo <= 0) return;
+
     const cfg = utility.config;
     let didUse = false;
 
@@ -346,8 +410,22 @@ export class LoadoutManager {
     }
 
     if (didUse) {
-      utility.recordUse(now);
-      this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown);
+      // skipCooldownPublish: kein recordUse/publishCooldown für Ammo-basierte Einmal-Items,
+      // damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird.
+      if (!cfg.skipCooldownPublish) {
+        utility.recordUse(now);
+        this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown);
+      }
+
+      // Ammo dekrementieren und ggf. altes Utility wiederherstellen
+      if (ammo !== undefined) {
+        const remaining = ammo - 1;
+        if (remaining <= 0) {
+          this.restoreUtility(playerId);
+        } else {
+          this.utilityAmmo.set(playerId, remaining);
+        }
+      }
     }
   }
 
@@ -389,6 +467,7 @@ export class LoadoutManager {
         damage: cfg.aoeDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
+        isHoly:          cfg.holyExplosion,
       };
     }
 

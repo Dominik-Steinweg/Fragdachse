@@ -60,7 +60,7 @@ type LoadoutCarouselItem = {
 const SLOT_ITEMS: Record<LoadoutSlot, LoadoutCarouselItem[]> = {
   weapon1:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon1')),
   weapon2:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon2')),
-  utility:  Object.values(UTILITY_CONFIGS),
+  utility:  Object.values(UTILITY_CONFIGS).filter(u => (u.allowedSlots as readonly string[]).includes('utility')),
   ultimate: Object.values(ULTIMATE_CONFIGS),
 };
 

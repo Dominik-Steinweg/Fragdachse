@@ -281,6 +281,11 @@ export class InputSystem {
 
   private getEffectiveUtilityCooldownUntil(): number {
     const authoritative = this.getLocalUtilityCooldownUntil?.() ?? 0;
+    // Wenn der Host den Cooldown aktiv zurückgesetzt hat (z.B. Utility-Override),
+    // darf die lokale Prediction nicht mehr blockieren.
+    if (authoritative < this.predictedUtilityCooldownUntil && Date.now() >= authoritative) {
+      this.predictedUtilityCooldownUntil = 0;
+    }
     const effective = Math.max(authoritative, this.predictedUtilityCooldownUntil);
     if (Date.now() >= effective) {
       this.predictedUtilityCooldownUntil = 0;
