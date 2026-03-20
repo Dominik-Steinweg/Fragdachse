@@ -407,10 +407,11 @@ export class UtilityChargeIndicator {
       return;
     }
 
-    this.anchorCore.setFillStyle(playerColor, 0.98);
-    this.stemCore.setFillStyle(playerColor, 0.72 + charge * 0.18);
+    const fillColor = preview.isGateCharge ? COLORS.GREEN_2 : playerColor;
+    this.anchorCore.setFillStyle(fillColor, 0.98);
+    this.stemCore.setFillStyle(fillColor, 0.72 + charge * 0.18);
     this.barBg.setFillStyle(COLORS.GREY_8, 0.92);
-    this.barFill.setFillStyle(playerColor, 0.88 + charge * 0.10);
+    this.barFill.setFillStyle(fillColor, 0.88 + charge * 0.10);
     this.barFill.width = CHARGE_BAR_WIDTH * charge;
     this.barEdge.setAlpha(0.4 + charge * 0.45);
     this.barBg.setAlpha(0.72 + charge * 0.16);

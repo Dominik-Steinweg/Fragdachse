@@ -217,6 +217,16 @@ export class CombatSystem {
           const loadoutMult  = this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1;
           const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
           const actualDamage = proj.damage * loadoutMult * powerUpMult;
+
+          if (proj.isBfg) {
+            // BFG: Piercing – Spieler nur 1x treffen, Projektil fliegt weiter
+            if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
+            if (proj.bfgHitPlayers.has(player.id)) continue;
+            proj.bfgHitPlayers.add(player.id);
+            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName);
+            continue; // kein break, kein destroyProjectile
+          }
+
           this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
           break;  // Projektil trifft maximal einen Spieler pro Frame
         }
@@ -478,6 +488,41 @@ export class CombatSystem {
       distance: closestDistance,
       hitPlayerId,
     };
+  }
+
+  // ── LoS-Check (für BFG-Laser) ──────────────────────────────────────────────
+
+  /**
+   * Prüft, ob eine direkte Sichtlinie zwischen zwei Punkten besteht.
+   * Felsen und Baumstämme blockieren die Sichtlinie; Arena-Wände und Zug nicht.
+   */
+  hasLineOfSight(
+    startX: number, startY: number,
+    endX: number, endY: number,
+    skipRockIndex?: number,
+  ): boolean {
+    const line = new Phaser.Geom.Line(startX, startY, endX, endY);
+    const targetDist = Phaser.Geom.Line.Length(line);
+
+    if (this.rockObjects) {
+      for (let i = 0; i < this.rockObjects.length; i++) {
+        if (i === skipRockIndex) continue;
+        const rock = this.rockObjects[i];
+        if (!rock?.active) continue;
+        const hit = this.findNearestRectangleHit(line, rock.getBounds());
+        if (hit && hit.distance < targetDist - 2) return false;
+      }
+    }
+
+    if (this.trunkObjects) {
+      for (const trunk of this.trunkObjects) {
+        if (!trunk.active) continue;
+        const hit = this.findNearestCircleHit(line, trunk.x, trunk.y, trunk.radius);
+        if (hit && hit.distance < targetDist - 2) return false;
+      }
+    }
+
+    return true;
   }
 
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import { COLORS } from '../config';
 
-export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage' | 'global_nuke' | 'holy_hand_grenade';
+export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage' | 'global_nuke' | 'holy_hand_grenade' | 'bfg';
 
 export interface PowerUpDef {
   readonly id:          string;
@@ -22,6 +22,7 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
   NUKE:                { id: 'NUKE',                type: 'global_nuke',                                       color: COLORS.RED_2,    spriteKey: 'powerup_nuke' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',                                  color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
+  BFG:                 { id: 'BFG',                type: 'bfg',                                                color: COLORS.GREEN_2,  spriteKey: 'powerup_bfg'  },
 };
 
 export const NUKE_CONFIG = {
@@ -62,12 +63,12 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 50, HOLY_HAND_GRENADE: 50 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 0, HOLY_HAND_GRENADE: 33, BFG: 34 },
   },
 };
 
 /** Anzahl Power-Ups, die beim Zerstören des Zugs gespawnt werden. */
-export const TRAIN_DROP_COUNT = 1;
+export const TRAIN_DROP_COUNT = 6;
 
 // ── Geplante Spawns (Sekunden nach Rundenstart) ────────────────────────────
 

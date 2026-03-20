@@ -78,7 +78,7 @@ export interface WeaponConfig {
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -90,9 +90,15 @@ export interface ChargedThrowUtilityActivationConfig {
   readonly fullChargeDuration: number; // ms bis Maximalgeschwindigkeit
 }
 
+export interface ChargedGateUtilityActivationConfig {
+  readonly type: 'charged_gate';
+  readonly fullChargeDuration: number; // ms – muss voll aufgeladen werden um zu feuern
+}
+
 export type UtilityActivationConfig =
   | InstantUtilityActivationConfig
-  | ChargedThrowUtilityActivationConfig;
+  | ChargedThrowUtilityActivationConfig
+  | ChargedGateUtilityActivationConfig;
 
 interface BaseUtilityConfig {
   readonly id: string;
@@ -142,7 +148,15 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly fireLingerDuration: number;  // ms wie lange das Feuer brennt
 }
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig;
+export interface BfgUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'bfg';
+  readonly directDamage: number;    // HP-Schaden bei Direkttreffer
+  readonly laserDamage: number;     // Schaden pro Laser-Treffer
+  readonly laserRadius: number;     // Laser-Reichweite in px
+  readonly laserInterval: number;   // ms zwischen Laser-Salven
+}
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -492,6 +506,24 @@ export const UTILITY_CONFIGS = {
     trainDamageMult:      1.0,           // 100% Schaden am Zug
     holyExplosion:        true,          // goldene Explosion + Kamera-Shake
     skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
+  } as UtilityConfig,
+
+  BFG: {
+    id:                  'BFG',
+    displayName:         'BFG',
+    type:                'bfg',
+    cooldown:            0,             // Ammo-basiert (Einzelschuss), kein Cooldown
+    activation:          { type: 'charged_gate', fullChargeDuration: 900 } as ChargedGateUtilityActivationConfig,
+    projectileSpeed:     250,           // langsames, großes Projektil
+    projectileSize:      32,
+    fuseTime:            0,             // kein Zünder
+    maxBounces:          0,
+    directDamage:        200,           // massiver Direkttreffer-Schaden
+    laserDamage:         10,            // Schaden pro Laser-Treffer
+    laserRadius:         256,           // Laser-Reichweite in px
+    laserInterval:       100,           // alle 100ms Laser-Salve
+    allowedSlots:        [],            // NICHT im Loadout-Menü wählbar
+    skipCooldownPublish: true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
   } as UtilityConfig,
 } as const;
 

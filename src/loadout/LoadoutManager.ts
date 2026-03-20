@@ -5,6 +5,7 @@ import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
 import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, WeaponSlot } from '../types';
 import type {
+  BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -13,6 +14,7 @@ import type {
   UtilityConfig,
   WeaponConfig,
 } from './LoadoutConfig';
+import { COLORS } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 
@@ -404,6 +406,13 @@ export class LoadoutManager {
         );
         break;
 
+      case 'charged_gate':
+        if ((params?.utilityChargeFraction ?? 0) < 1.0) return; // nicht voll geladen → abbrechen
+        if (cfg.type === 'bfg') {
+          didUse = this.fireBfgUtility(cfg as BfgUtilityConfig, x, y, angle, playerId);
+        }
+        break;
+
       case 'instant':
         didUse = false;
         break;
@@ -459,6 +468,33 @@ export class LoadoutManager {
     return true;
   }
 
+  private fireBfgUtility(
+    cfg:       BfgUtilityConfig,
+    x:         number,
+    y:         number,
+    angle:     number,
+    playerId:  string,
+  ): boolean {
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed:            cfg.projectileSpeed,
+      size:             cfg.projectileSize,
+      damage:           cfg.directDamage,
+      color:            COLORS.GREEN_2,
+      lifetime:         5000,      // großzügig – endet durch Arena-Wand
+      maxBounces:       0,
+      isGrenade:        false,
+      adrenalinGain:    0,
+      weaponName:       cfg.displayName,
+      projectileStyle:  'bfg',
+      isBfg:            true,
+      bfgLaserRadius:   cfg.laserRadius,
+      bfgLaserDamage:   cfg.laserDamage,
+      bfgLaserInterval: cfg.laserInterval,
+    });
+
+    return true;
+  }
+
   private buildGrenadeEffect(cfg: UtilityConfig): GrenadeEffectConfig {
     if (cfg.type === 'explosive') {
       return {
@@ -483,14 +519,19 @@ export class LoadoutManager {
       };
     }
 
-    return {
-      type:              'smoke',
-      radius:            cfg.smokeRadius,
-      spreadDuration:    cfg.smokeExpandDuration,
-      lingerDuration:    cfg.smokeLingerDuration,
-      dissipateDuration: cfg.smokeDissipateDuration,
-      maxAlpha:          cfg.smokeMaxAlpha,
-    };
+    if (cfg.type === 'smoke') {
+      return {
+        type:              'smoke',
+        radius:            cfg.smokeRadius,
+        spreadDuration:    cfg.smokeExpandDuration,
+        lingerDuration:    cfg.smokeLingerDuration,
+        dissipateDuration: cfg.smokeDissipateDuration,
+        maxAlpha:          cfg.smokeMaxAlpha,
+      };
+    }
+
+    // BFG und andere Typen haben keinen Granaten-Effekt
+    return { type: 'damage', radius: 0, damage: 0 };
   }
 
   private dispatchWeaponFire(

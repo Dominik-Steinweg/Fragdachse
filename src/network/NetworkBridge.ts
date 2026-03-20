@@ -154,6 +154,7 @@ export class NetworkBridge {
   private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
+  private bfgLaserHandler: ((sx: number, sy: number, ex: number, ey: number, color: number) => void) | null = null;
 
   // ── Lobby-Initialisierung (einmalig vor activate()) ────────────────────────
   static async initializeLobby(): Promise<void> {
@@ -662,6 +663,23 @@ export class NetworkBridge {
       if (!shockwaveEffectHandler) return undefined;
       const { x, y } = data as { x: number; y: number };
       shockwaveEffectHandler(x, y);
+      return undefined;
+    });
+  }
+
+  // ── BFG-Laser-RPC: Host → Alle ──────────────────────────────────────────
+
+  broadcastBfgLaser(sx: number, sy: number, ex: number, ey: number, color: number): void {
+    this.broadcastRpc('bfl', { sx, sy, ex, ey, c: color });
+  }
+
+  registerBfgLaserHandler(handler: (sx: number, sy: number, ex: number, ey: number, color: number) => void): void {
+    this.bfgLaserHandler = handler;
+    this.registerAllRpcHandler('bfl', async (data: unknown): Promise<unknown> => {
+      const cb = this.bfgLaserHandler;
+      if (!cb) return undefined;
+      const { sx, sy, ex, ey, c } = data as { sx: number; sy: number; ex: number; ey: number; c: number };
+      cb(sx, sy, ex, ey, c);
       return undefined;
     });
   }

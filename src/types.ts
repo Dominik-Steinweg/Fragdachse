@@ -42,7 +42,7 @@ export interface PlayerNetState {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'flame';
+export type ProjectileStyle = 'bullet' | 'ball' | 'flame' | 'bfg';
 
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
@@ -99,6 +99,7 @@ export interface UtilityChargePreviewState {
   isBlocked: boolean;
   minThrowSpeed: number;
   maxThrowSpeed: number;
+  isGateCharge?: boolean;  // true = Gate-Charge (muss voll aufgeladen werden, z.B. BFG)
 }
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
@@ -127,6 +128,12 @@ export interface ProjectileSpawnConfig {
   hitboxGrowRate?:  number;     // Hitbox-Wachstum in px/s
   hitboxMaxSize?:   number;     // maximale Hitbox-Größe in px
   velocityDecay?:   number;     // Geschwindigkeits-Multiplikator pro Sekunde (0-1, kleiner = schnellerer Abbau)
+
+  // BFG (optional)
+  isBfg?:            boolean;   // true = BFG-Projektil (durchschlagend, Laser-Sub-Attacke)
+  bfgLaserRadius?:   number;    // Laser-Reichweite in px
+  bfgLaserDamage?:   number;    // Schaden pro Laser-Treffer
+  bfgLaserInterval?: number;    // ms zwischen Laser-Salven
 }
 
 export interface DamageGrenadeEffect {
@@ -241,6 +248,16 @@ export interface TrackedProjectile {
 
   // Granaten-Countdown (Host-intern)
   lastCountdownEmitted?: number | null;  // letzter emittierter Countdown-Wert (Dedup)
+
+  // BFG (optional)
+  isBfg?:            boolean;
+  bfgLaserRadius?:   number;
+  bfgLaserDamage?:   number;
+  bfgLaserInterval?: number;
+  lastBfgLaserAt?:   number;          // Zeitstempel der letzten Laser-Salve
+  bfgHitPlayers?:    Set<string>;     // Debounce: jeden Spieler nur 1x direkt treffen
+  bfgHitRocks?:      Set<number>;     // Debounce: jeden Fels nur 1x zerstören
+  bfgHitTrain?:      boolean;         // Debounce: Zug nur 1x pro Projektil beschädigen
 }
 
 // ---- Prozedurales Arena-Layout ----

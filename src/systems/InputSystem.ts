@@ -5,7 +5,10 @@ import { DASH_T1_S, DASH_T2_S } from '../config';
 import { quantizeAngle } from '../utils/angle';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
-import type { ChargedThrowUtilityActivationConfig, UtilityConfig } from '../loadout/LoadoutConfig';
+import type { ChargedThrowUtilityActivationConfig, ChargedGateUtilityActivationConfig, UtilityConfig } from '../loadout/LoadoutConfig';
+
+/** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
+type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig;
 
 export class InputSystem {
   private scene:           Phaser.Scene;
@@ -120,11 +123,12 @@ export class InputSystem {
 
   getUtilityChargePreviewState(): UtilityChargePreviewState | undefined {
     const sprite = this.getLocalSprite();
-    const cfg = this.getChargedThrowUtilityConfig();
+    const cfg = this.getChargeableUtilityConfig();
     if (!this.utilityHoldActive || !sprite || !cfg) return undefined;
 
     const now = Date.now();
     const startedAt = this.utilityChargeStartedAt;
+    const isGate = cfg.activation.type === 'charged_gate';
 
     const pointer = this.scene.input.activePointer;
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, pointer.x, pointer.y);
@@ -135,8 +139,9 @@ export class InputSystem {
         : this.computeUtilityChargeFraction(startedAt, cfg.activation, now),
       cooldownFrac: this.isUtilityBlocked(now) ? 1 : 0,
       isBlocked: this.isUtilityBlocked(now),
-      minThrowSpeed: cfg.activation.minThrowSpeed,
-      maxThrowSpeed: cfg.projectileSpeed,
+      minThrowSpeed: isGate ? 0 : (cfg.activation as ChargedThrowUtilityActivationConfig).minThrowSpeed,
+      maxThrowSpeed: isGate ? 0 : cfg.projectileSpeed,
+      isGateCharge: isGate,
     };
   }
 
@@ -213,6 +218,14 @@ export class InputSystem {
       this.maybeStartHeldUtilityCharge(now);
     }
 
+    // Screenshake während Gate-Charge (BFG Auflade-Feedback)
+    if (this.utilityHoldActive && this.utilityChargeStartedAt !== null) {
+      const chargeCfg = this.getChargeableUtilityConfig();
+      if (chargeCfg?.activation.type === 'charged_gate') {
+        this.scene.cameras.main.shake(50, 0.003);
+      }
+    }
+
     const releasedUtility = Phaser.Input.Keyboard.JustUp(this.keyE);
     if (releasedUtility && this.utilityChargeStartedAt !== null) {
       this.releaseChargedUtility(angle, px, py, now);
@@ -228,14 +241,14 @@ export class InputSystem {
     }
   }
 
-  private getChargedThrowUtilityConfig(): (UtilityConfig & { activation: ChargedThrowUtilityActivationConfig }) | undefined {
+  private getChargeableUtilityConfig(): (UtilityConfig & { activation: ChargeableActivation }) | undefined {
     const cfg = this.getLocalUtilityConfig?.();
-    if (!cfg || cfg.activation.type !== 'charged_throw') return undefined;
-    return cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig };
+    if (!cfg || (cfg.activation.type !== 'charged_throw' && cfg.activation.type !== 'charged_gate')) return undefined;
+    return cfg as UtilityConfig & { activation: ChargeableActivation };
   }
 
   private beginChargedUtilityHold(now: number): boolean {
-    const cfg = this.getChargedThrowUtilityConfig();
+    const cfg = this.getChargeableUtilityConfig();
     if (!cfg) return false;
 
     const cooldownUntil = this.getEffectiveUtilityCooldownUntil();
@@ -257,21 +270,26 @@ export class InputSystem {
   }
 
   private releaseChargedUtility(angle: number, targetX: number, targetY: number, now: number): void {
-    const cfg = this.getChargedThrowUtilityConfig();
+    const cfg = this.getChargeableUtilityConfig();
     const startedAt = this.utilityChargeStartedAt;
     this.cancelUtilityCharge();
     if (!cfg || startedAt === null) return;
 
+    const chargeFraction = this.computeUtilityChargeFraction(startedAt, cfg.activation, now);
+
+    // Gate-Charge: nur feuern wenn voll aufgeladen (fraction >= 1.0)
+    if (cfg.activation.type === 'charged_gate' && chargeFraction < 1.0) return;
+
     this.predictedUtilityCooldownUntil = now + cfg.cooldown;
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
-      utilityChargeFraction: this.computeUtilityChargeFraction(startedAt, cfg.activation, now),
+      utilityChargeFraction: chargeFraction,
     });
   }
 
   private computeUtilityChargeFraction(
     startedAt: number,
-    activation: ChargedThrowUtilityActivationConfig,
+    activation: ChargeableActivation,
     now: number,
   ): number {
     if (activation.fullChargeDuration <= 0) return 1;

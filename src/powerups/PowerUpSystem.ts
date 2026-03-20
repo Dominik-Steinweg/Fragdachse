@@ -43,6 +43,7 @@ interface ActiveNukeStrike {
 interface PowerUpSystemOptions {
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
   onHolyHandGrenadePickup?: (playerId: string) => void;
+  onBfgPickup?: (playerId: string) => void;
 }
 
 // ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
@@ -244,6 +245,9 @@ export class PowerUpSystem {
         break;
       case 'holy_hand_grenade':
         this.options.onHolyHandGrenadePickup?.(playerId);
+        break;
+      case 'bfg':
+        this.options.onBfgPickup?.(playerId);
         break;
     }
   }

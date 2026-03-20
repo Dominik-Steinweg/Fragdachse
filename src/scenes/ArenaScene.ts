@@ -21,6 +21,7 @@ import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
+import { BfgRenderer }         from '../effects/BfgRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
@@ -42,7 +43,7 @@ import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   ARENA_WIDTH,
-  CELL_SIZE, DEPTH,
+  CELL_SIZE, COLORS, DEPTH,
   DASH_T2_S,
   NET_TICK_INTERVAL_MS, NET_SMOOTH_TIME_MS,
 } from '../config';
@@ -59,6 +60,7 @@ export class ArenaScene extends Phaser.Scene {
   private fireSystem!:        FireSystem;
   private bulletRenderer!:    BulletRenderer;
   private flameRenderer!:     FlameRenderer;
+  private bfgRenderer!:       BfgRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
@@ -94,6 +96,7 @@ export class ArenaScene extends Phaser.Scene {
   private trainDestroyedShown   = false;
 
   private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
+  private clientUtilityOverride: UtilityConfig | null = null; // Client-seitige Vorhersage für Utility-Override (BFG/HHG)
 
   // ── Dash-Visual-Tracking (client-seitig) ──────────────────────────────────
   private dashPhase2StartTimes = new Map<string, number>(); // playerId → lokaler Zeitstempel
@@ -175,9 +178,27 @@ export class ArenaScene extends Phaser.Scene {
     this.flameRenderer = new FlameRenderer(this);
     this.flameRenderer.generateTextures();
     this.projectileManager.setFlameRenderer(this.flameRenderer);
+    this.bfgRenderer = new BfgRenderer(this);
+    this.bfgRenderer.generateTextures();
+    this.projectileManager.setBfgRenderer(this.bfgRenderer);
     this.nukeRenderer = new NukeRenderer(this);
     this.nukeRenderer.generateTextures();
     this.powerUpRenderer = new PowerUpRenderer(this);
+
+    // ── 3c. Prozedurale Power-Up-Textur: BFG ────────────────────────────
+    if (!this.textures.exists('powerup_bfg')) {
+      const s = 16;
+      const canvas = this.textures.createCanvas('powerup_bfg', s, s)!;
+      const ctx = canvas.context;
+      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
+      grad.addColorStop(0.3, 'rgba(208,218,145,0.9)');
+      grad.addColorStop(0.6, 'rgba(168,202,88,0.6)');
+      grad.addColorStop(1, 'rgba(117,167,67,0.0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, s, s);
+      canvas.refresh();
+    }
 
     // ── 4. Combat-System ──────────────────────────────────────────────────
     this.combatSystem = new CombatSystem(this.playerManager, this.projectileManager, bridge);
@@ -210,6 +231,10 @@ export class ArenaScene extends Phaser.Scene {
       if (slot === 'weapon1' || slot === 'weapon2') {
         this.aimSystem?.notifyShot(slot);
         shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
+      }
+      // Client-seitigen Utility-Override nach Benutzung zurücksetzen
+      if (slot === 'utility' && this.clientUtilityOverride) {
+        this.clientUtilityOverride = null;
       }
       // Lokale Sprite-Position mitsenden für Hitscan-Kompensation bei 20Hz Tick-Rate
       const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
@@ -262,6 +287,11 @@ export class ArenaScene extends Phaser.Scene {
     // ── 10b. Granaten-Countdown-RPC (alle Clients inkl. Host) ─────────────
     bridge.registerGrenadeCountdownHandler((x, y, value) => {
       this.effectSystem.playCountdownText(x, y, value);
+    });
+
+    // ── 10c. BFG-Laser-Effekt-RPC (alle Clients inkl. Host) ───────────────
+    bridge.registerBfgLaserHandler((sx, sy, ex, ey, color) => {
+      this.effectSystem.playHitscanTracer(sx, sy, ex, ey, color, 2);
     });
 
     // ── 11. RPC-Handler für Burrow-Visualisierung ─────────────────────────
@@ -592,6 +622,9 @@ export class ArenaScene extends Phaser.Scene {
         onHolyHandGrenadePickup: (playerId) => {
           this.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1);
         },
+        onBfgPickup: (playerId) => {
+          this.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.BFG, 1);
+        },
       });
       this.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
       this.combatSystem.setPowerUpSystem(this.powerUpSystem);
@@ -600,6 +633,11 @@ export class ArenaScene extends Phaser.Scene {
       // DetonationSystem initialisieren
       this.detonationSystem = new DetonationSystem(this.projectileManager);
       this.combatSystem.setDetonationSystem(this.detonationSystem);
+
+      // BFG Laser-Callback: Host löst periodische Laser-Strahlen aus
+      this.projectileManager.setBfgLaserCallback((proj) => {
+        this.resolveBfgLasers(proj);
+      });
 
       this.hostPhysics.setBurrowSystem(this.burrowSystem);
       this.hostPhysics.setLoadoutManager(this.loadoutManager);
@@ -953,6 +991,60 @@ export class ArenaScene extends Phaser.Scene {
   /**
    * Nuke-spezifischer Umgebungsschaden mit distanzbasiertem Falloff (wie bei Spielern).
    */
+  /** Host: löst BFG-Laser-Strahlen auf alle gültigen Ziele im Radius auf. */
+  private resolveBfgLasers(proj: import('../types').TrackedProjectile): void {
+    const radius  = proj.bfgLaserRadius ?? 256;
+    const damage  = proj.bfgLaserDamage ?? 10;
+    const px      = proj.sprite.x;
+    const py      = proj.sprite.y;
+
+    // Spieler-Laser
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (player.id === proj.ownerId) continue;
+      if (!this.combatSystem.isAlive(player.id)) continue;
+      if (this.burrowSystem?.isBurrowed(player.id)) continue;
+      const dist = Phaser.Math.Distance.Between(px, py, player.sprite.x, player.sprite.y);
+      if (dist > radius) continue;
+      if (!this.combatSystem.hasLineOfSight(px, py, player.sprite.x, player.sprite.y)) continue;
+      this.combatSystem.applyDamage(player.id, damage, false, proj.ownerId, 'BFG');
+      bridge.broadcastBfgLaser(px, py, player.sprite.x, player.sprite.y, COLORS.GREEN_2);
+    }
+
+    // Felsen-Laser (skipRockIndex um zu verhindern dass der Zielfels seine eigene LoS blockiert)
+    const arenaResult = this.arenaResult;
+    if (arenaResult && this.rockRegistry) {
+      for (let i = 0; i < arenaResult.rockObjects.length; i++) {
+        const rock = arenaResult.rockObjects[i];
+        if (!rock?.active) continue;
+        const dist = Phaser.Math.Distance.Between(px, py, rock.x, rock.y);
+        if (dist > radius) continue;
+        if (!this.combatSystem.hasLineOfSight(px, py, rock.x, rock.y, i)) continue;
+        const newHp = this.rockRegistry.applyDamage(i, damage);
+        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, i, newHp);
+        if (newHp <= 0) {
+          this.powerUpSystem?.onRockDestroyed(i);
+        }
+        bridge.broadcastBfgLaser(px, py, rock.x, rock.y, COLORS.GREEN_2);
+      }
+    }
+
+    // Zug-Laser
+    if (this.trainManager) {
+      const trainState = this.trainManager.getNetSnapshot();
+      if (trainState?.alive) {
+        const segments = this.trainManager.getSegmentPositions();
+        for (const seg of segments) {
+          const dist = Phaser.Math.Distance.Between(px, py, seg.x, seg.y);
+          if (dist > radius) continue;
+          if (!this.combatSystem.hasLineOfSight(px, py, seg.x, seg.y)) continue;
+          this.trainManager.applyDamage(damage, proj.ownerId);
+          bridge.broadcastBfgLaser(px, py, seg.x, seg.y, COLORS.GREEN_2);
+          break; // Nur ein Laser pro Tick auf den Zug
+        }
+      }
+    }
+  }
+
   private applyNukeEnvironmentDamage(
     x: number,
     y: number,
@@ -1198,6 +1290,11 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     bridge.publishGameState({ players, projectiles, rocks, smokes, fires, powerups, nukes, train });
+
+    // BFG-Screenshake während Flug (Host)
+    if (projectiles.some(p => p.style === 'bfg')) {
+      this.cameras.main.shake(100, 0.003);
+    }
   }
 
   // ── Client-Update ────────────────────────────────────────────────────────
@@ -1309,6 +1406,11 @@ export class ArenaScene extends Phaser.Scene {
       this.localPlayerAlive    = localState.alive;
       this.localPlayerBurrowed = localState.isBurrowed;
     }
+
+    // BFG-Screenshake während Flug (Client)
+    if (state.projectiles.some(p => p.style === 'bfg')) {
+      this.cameras.main.shake(100, 0.003);
+    }
   }
 
   /**
@@ -1351,6 +1453,8 @@ export class ArenaScene extends Phaser.Scene {
     // Tatsächlich ausgerüstete Utility (inkl. Override, z.B. Heilige Handgranate)
     const equipped = this.loadoutManager?.getEquippedUtilityConfig(localId);
     if (equipped) return equipped;
+    // Client-seitige Vorhersage für Utility-Override (BFG/HHG)
+    if (this.clientUtilityOverride) return this.clientUtilityOverride;
     // Fallback: Loadout-Menü-Auswahl
     const selection = this.resolveLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
@@ -1433,6 +1537,12 @@ export class ArenaScene extends Phaser.Scene {
           this.powerUpSystem?.tryPickup(localId, pu.uid, px, py);
         } else {
           bridge.sendPickupPowerUp(pu.uid);
+          // Client-seitige Vorhersage: Utility-Override lokal setzen
+          if (pu.defId === 'BFG') {
+            this.clientUtilityOverride = UTILITY_CONFIGS.BFG;
+          } else if (pu.defId === 'HOLY_HAND_GRENADE') {
+            this.clientUtilityOverride = UTILITY_CONFIGS.HOLY_HAND_GRENADE;
+          }
         }
         this.pickupCooldownUntil = now + 100; // 100ms Debounce
         return; // Maximal 1 Pickup-Request pro Check

@@ -3,6 +3,7 @@ import { DEPTH } from '../config';
 import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
 import type { BulletRenderer } from '../effects/BulletRenderer';
 import type { FlameRenderer } from '../effects/FlameRenderer';
+import type { BfgRenderer }   from '../effects/BfgRenderer';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -31,6 +32,12 @@ export class ProjectileManager {
 
   // ── Flame-Renderer (Flammenwerfer-Partikel) ───────────────────────────────
   private flameRenderer: FlameRenderer | null = null;
+
+  // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
+  private bfgRenderer: BfgRenderer | null = null;
+
+  // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
+  private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -102,6 +109,16 @@ export class ProjectileManager {
     this.flameRenderer = renderer;
   }
 
+  /** Injiziert den BfgRenderer für BFG-Projektil-Darstellung. */
+  setBfgRenderer(renderer: BfgRenderer | null): void {
+    this.bfgRenderer = renderer;
+  }
+
+  /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
+  setBfgLaserCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
+    this.bfgLaserCallback = cb;
+  }
+
   // ── Host ──────────────────────────────────────────────────────────────────
 
   /**
@@ -121,6 +138,7 @@ export class ProjectileManager {
     const isBall   = cfg.projectileStyle === 'ball';
     const isBullet = cfg.projectileStyle === 'bullet';
     const isFlame  = cfg.projectileStyle === 'flame';
+    const isBfg    = cfg.projectileStyle === 'bfg';
 
     // Physik-Shape: für 'bullet'/'flame' unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = isBall
@@ -136,6 +154,12 @@ export class ProjectileManager {
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
     if (isFlame) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+    }
+
+    // BFG-Projektile sind unsichtbar (Rendering übernimmt BfgRenderer)
+    if (isBfg) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
     }
@@ -180,9 +204,58 @@ export class ProjectileManager {
       initialSpeed:    cfg.speed,
       // Granaten-Countdown
       lastCountdownEmitted: null,
+      // BFG-Felder
+      isBfg:            cfg.isBfg,
+      bfgLaserRadius:   cfg.bfgLaserRadius,
+      bfgLaserDamage:   cfg.bfgLaserDamage,
+      bfgLaserInterval: cfg.bfgLaserInterval,
     };
 
-    if (isFlame) {
+    if (isBfg) {
+      // BFG: Welt-Bounds zerstören das Projektil; Felsen/Zug werden per Overlap beschädigt,
+      // das Projektil fliegt aber durch alles durch (kein physischer Stopp).
+      body.setCollideWorldBounds(true);
+      body.onWorldBounds = true;
+      const bfgBoundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
+        if (hitBody !== body) return;
+        tracked.bounceCount = tracked.maxBounces + 1; // zum Entfernen markieren
+      };
+      tracked.boundsListener = bfgBoundsListener;
+      this.scene.physics.world.on('worldbounds', bfgBoundsListener);
+
+      // Felsen: Overlap → beschädigt Fels, Projektil fliegt weiter
+      if (this.rockGroup) {
+        const rockObjects = this.rockObjects;
+        const onHit       = this.onRockHit;
+        const c = this.scene.physics.add.overlap(sprite, this.rockGroup, (_proj, rockGO) => {
+          if (!rockObjects || !onHit) return;
+          if (!tracked.bfgHitRocks) tracked.bfgHitRocks = new Set();
+          const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
+          if (idx !== -1 && !tracked.bfgHitRocks.has(idx)) {
+            tracked.bfgHitRocks.add(idx);
+            onHit(idx, tracked.damage);
+          }
+        });
+        tracked.colliders.push(c);
+      }
+
+      // Zug: Overlap → beschädigt Zug, Projektil fliegt weiter
+      if (this.trainGroup) {
+        const onTrainHit = this.onTrainHit;
+        const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
+          if (tracked.bfgHitTrain) return;
+          tracked.bfgHitTrain = true;
+          onTrainHit?.(tracked.damage, tracked.ownerId);
+        });
+        tracked.colliders.push(c);
+      }
+      // Trunks: kein Collider/Overlap – Projektil fliegt einfach durch
+
+      // BfgRenderer-Visual erstellen (Host rendert ebenfalls)
+      if (this.bfgRenderer) {
+        this.bfgRenderer.createVisual(id, x, y, cfg.size);
+      }
+    } else if (isFlame) {
       // Flammen: kein Bounce, Arena-Bounds und Hindernisse stoppen die Hitbox;
       // sie verweilt dann für die restliche Lifetime an der Aufprallstelle.
       body.setCollideWorldBounds(true);
@@ -418,6 +491,7 @@ export class ProjectileManager {
     proj.sprite.destroy();
     this.bulletRenderer?.destroyBullet(proj.id);
     this.flameRenderer?.destroyFlameVisual(proj.id);
+    this.bfgRenderer?.destroyVisual(proj.id);
     this.projectiles.splice(idx, 1);
   }
 
@@ -434,6 +508,7 @@ export class ProjectileManager {
     this.projectiles = [];
     this.bulletRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
+    this.bfgRenderer?.destroyAll();
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
   }
@@ -492,9 +567,18 @@ export class ProjectileManager {
           proj.sprite.destroy();
           renderer?.destroyBullet(proj.id);
           this.flameRenderer?.destroyFlameVisual(proj.id);
+          this.bfgRenderer?.destroyVisual(proj.id);
         } else if (proj.isFlame) {
           // Flammen-Hitbox: wachsen + verlangsamen
           this.updateFlameHitbox(proj, deltaMs / 1000);
+        } else if (proj.isBfg) {
+          // BFG: Laser-Salven in regelmäßigen Intervallen abfeuern
+          const bfgNow = Date.now();
+          const interval = proj.bfgLaserInterval ?? 100;
+          if (!proj.lastBfgLaserAt || bfgNow - proj.lastBfgLaserAt >= interval) {
+            proj.lastBfgLaserAt = bfgNow;
+            this.bfgLaserCallback?.(proj);
+          }
         }
         return !dead;
       }
@@ -532,6 +616,26 @@ export class ProjectileManager {
       );
       for (const id of flames.getActiveIds()) {
         if (!activeFlameIds.has(id)) flames.destroyFlameVisual(id);
+      }
+    }
+
+    // BfgRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
+    const bfgR = this.bfgRenderer;
+    if (bfgR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'bfg') {
+          if (!bfgR.has(proj.id)) {
+            bfgR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+          }
+          bfgR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+        }
+      }
+      // Verwaiste BFG-Visuals entfernen
+      const activeBfgIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'bfg').map(p => p.id),
+      );
+      for (const id of bfgR.getActiveIds()) {
+        if (!activeBfgIds.has(id)) bfgR.destroyVisual(id);
       }
     }
 
@@ -585,11 +689,21 @@ export class ProjectileManager {
         }
       }
     }
+    const bfgR = this.bfgRenderer;
+    if (bfgR) {
+      for (const id of bfgR.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          bfgR.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
 
     // Server-State aktualisieren und neue Visuals erstellen
     for (const proj of data) {
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
+      const isBfgP   = proj.style === 'bfg';
 
       // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
       const prev = this.clientProjStates.get(proj.id);
@@ -605,10 +719,15 @@ export class ProjectileManager {
         size: proj.size,
         receivedAt: now,
         style: proj.style,
-        isFlame: isFlame,
+        isFlame,
       });
 
-      if (isFlame && flames) {
+      if (isBfgP && bfgR) {
+        if (!bfgR.has(proj.id)) {
+          bfgR.createVisual(proj.id, proj.x, proj.y, proj.size);
+        }
+        bfgR.updateVisual(proj.id, proj.x, proj.y, proj.size);
+      } else if (isFlame && flames) {
         if (!flames.has(proj.id)) {
           flames.createFlameVisual(proj.id, proj.x, proj.y, proj.size);
         }
@@ -670,7 +789,10 @@ export class ProjectileManager {
         ey = state.serverY + state.vy * dt;
       }
 
-      if (state.style === 'flame' && flames && flames.has(id)) {
+      const bfgRe = this.bfgRenderer;
+      if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
+        bfgRe.updateVisual(id, ex, ey, state.size);
+      } else if (state.style === 'flame' && flames && flames.has(id)) {
         // Decay-Velocity für Partikel-Orientierung
         const decayFactor = Math.pow(0.82, dt);
         flames.updateFlameVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);
