@@ -290,8 +290,10 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── 10c. BFG-Laser-Effekt-RPC (alle Clients inkl. Host) ───────────────
-    bridge.registerBfgLaserHandler((sx, sy, ex, ey, color) => {
-      this.effectSystem.playHitscanTracer(sx, sy, ex, ey, color, 2);
+    bridge.registerBfgLaserBatchHandler((lines, color) => {
+      for (const line of lines) {
+        this.effectSystem.playHitscanTracer(line.sx, line.sy, line.ex, line.ey, color, 2);
+      }
     });
 
     // ── 11. RPC-Handler für Burrow-Visualisierung ─────────────────────────
@@ -997,6 +999,7 @@ export class ArenaScene extends Phaser.Scene {
     const damage  = proj.bfgLaserDamage ?? 10;
     const px      = proj.sprite.x;
     const py      = proj.sprite.y;
+    const laserLines: { sx: number; sy: number; ex: number; ey: number }[] = [];
 
     // Spieler-Laser
     for (const player of this.playerManager.getAllPlayers()) {
@@ -1007,7 +1010,7 @@ export class ArenaScene extends Phaser.Scene {
       if (dist > radius) continue;
       if (!this.combatSystem.hasLineOfSight(px, py, player.sprite.x, player.sprite.y)) continue;
       this.combatSystem.applyDamage(player.id, damage, false, proj.ownerId, 'BFG');
-      bridge.broadcastBfgLaser(px, py, player.sprite.x, player.sprite.y, COLORS.GREEN_2);
+      laserLines.push({ sx: px, sy: py, ex: player.sprite.x, ey: player.sprite.y });
     }
 
     // Felsen-Laser (skipRockIndex um zu verhindern dass der Zielfels seine eigene LoS blockiert)
@@ -1024,7 +1027,7 @@ export class ArenaScene extends Phaser.Scene {
         if (newHp <= 0) {
           this.powerUpSystem?.onRockDestroyed(i);
         }
-        bridge.broadcastBfgLaser(px, py, rock.x, rock.y, COLORS.GREEN_2);
+        laserLines.push({ sx: px, sy: py, ex: rock.x, ey: rock.y });
       }
     }
 
@@ -1038,11 +1041,13 @@ export class ArenaScene extends Phaser.Scene {
           if (dist > radius) continue;
           if (!this.combatSystem.hasLineOfSight(px, py, seg.x, seg.y)) continue;
           this.trainManager.applyDamage(damage, proj.ownerId);
-          bridge.broadcastBfgLaser(px, py, seg.x, seg.y, COLORS.GREEN_2);
+          laserLines.push({ sx: px, sy: py, ex: seg.x, ey: seg.y });
           break; // Nur ein Laser pro Tick auf den Zug
         }
       }
     }
+
+    bridge.broadcastBfgLaserBatch(laserLines, COLORS.GREEN_2);
   }
 
   private applyNukeEnvironmentDamage(

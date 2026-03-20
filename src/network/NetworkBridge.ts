@@ -154,7 +154,7 @@ export class NetworkBridge {
   private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
-  private bfgLaserHandler: ((sx: number, sy: number, ex: number, ey: number, color: number) => void) | null = null;
+  private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
 
   // ── Lobby-Initialisierung (einmalig vor activate()) ────────────────────────
   static async initializeLobby(): Promise<void> {
@@ -669,17 +669,18 @@ export class NetworkBridge {
 
   // ── BFG-Laser-RPC: Host → Alle ──────────────────────────────────────────
 
-  broadcastBfgLaser(sx: number, sy: number, ex: number, ey: number, color: number): void {
-    this.broadcastRpc('bfl', { sx, sy, ex, ey, c: color });
+  broadcastBfgLaserBatch(lines: { sx: number; sy: number; ex: number; ey: number }[], color: number): void {
+    if (lines.length === 0) return;
+    this.broadcastRpc('bfl', { l: lines, c: color });
   }
 
-  registerBfgLaserHandler(handler: (sx: number, sy: number, ex: number, ey: number, color: number) => void): void {
+  registerBfgLaserBatchHandler(handler: (lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void): void {
     this.bfgLaserHandler = handler;
     this.registerAllRpcHandler('bfl', async (data: unknown): Promise<unknown> => {
       const cb = this.bfgLaserHandler;
       if (!cb) return undefined;
-      const { sx, sy, ex, ey, c } = data as { sx: number; sy: number; ex: number; ey: number; c: number };
-      cb(sx, sy, ex, ey, c);
+      const { l, c } = data as { l: { sx: number; sy: number; ex: number; ey: number }[]; c: number };
+      cb(l, c);
       return undefined;
     });
   }
