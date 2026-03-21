@@ -175,7 +175,7 @@ export const TRACK_SPAWN_MAX_COL   = Math.floor(GRID_COLS * 0.75); // 22
 
 // ---- Felsen HP ----
 export const ROCK_HP_MAX         = 200;
-export const ROCK_HP_THRESHOLD   = 100;    // < 50% → Farbwechsel zu BROWN_3
+export const ROCK_TINT_STEPS     = 20;     // Anzahl visueller Abstufungen (0xffffff → 0x666666)
 
 // ---- Baumstumpf & Baumkrone ----
 export const TRUNK_RADIUS        = 16;     // Kollisions-Radius Baumstumpf (px)

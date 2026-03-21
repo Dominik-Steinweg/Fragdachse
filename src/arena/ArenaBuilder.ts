@@ -3,7 +3,7 @@ import {
   GAME_WIDTH, GAME_HEIGHT,
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   DEPTH, COLORS,
-  CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_THRESHOLD,
+  CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
 } from '../config';
 import type { ArenaLayout, RockCell, TrackCell } from '../types';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
@@ -138,8 +138,10 @@ export class ArenaBuilder {
     const img = rockObjects[id];
     if (!img?.active) return;
 
-    const tint = hp < ROCK_HP_THRESHOLD ? 0x999999 : 0xffffff;
-    img.setTint(tint);
+    // Glatte Abstufung in ROCK_TINT_STEPS Schritten: 0xffffff (voll) → 0x666666 (fast zerstört)
+    const ratio = Math.round((hp / ROCK_HP_MAX) * ROCK_TINT_STEPS) / ROCK_TINT_STEPS;
+    const gray  = Math.round(0x66 + (0xFF - 0x66) * ratio);
+    img.setTint((gray << 16) | (gray << 8) | gray);
   }
 
   /**
