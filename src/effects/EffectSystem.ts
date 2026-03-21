@@ -99,10 +99,13 @@ export class EffectSystem {
 
   // ── Dash-Trail-Effekt ─────────────────────────────────────────────────────
 
-  /** Trail-Geist: verblassende Kopie des Spieler-Sprites während Phase 1. */
-  playDashTrailGhost(x: number, y: number, color: number, scale: number): void {
-    const size = PLAYER_SIZE * scale;
-    const ghost = this.scene.add.rectangle(x, y, size, size, color, 0.4);
+  /** Trail-Geist: verblassende Sprite-Kopie des Spielers während Phase 1. */
+  playDashTrailGhost(x: number, y: number, color: number, scale: number, rotation: number): void {
+    const ghost = this.scene.add.image(x, y, 'badger');
+    ghost.setDisplaySize(PLAYER_SIZE * scale, PLAYER_SIZE * scale);
+    ghost.setRotation(rotation);
+    ghost.setTint(color);
+    ghost.setAlpha(0.45);
     ghost.setDepth(DEPTH_FX - 1);
     this.scene.tweens.add({
       targets:    ghost,

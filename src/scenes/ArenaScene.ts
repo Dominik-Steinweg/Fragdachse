@@ -1445,7 +1445,7 @@ export class ArenaScene extends Phaser.Scene {
       const now = this.time.now;
       const nextGhost = this.dashTrailTimers.get(id) ?? 0;
       if (now >= nextGhost) {
-        this.effectSystem.playDashTrailGhost(player.sprite.x, player.sprite.y, player.color, 0.5);
+        this.effectSystem.playDashTrailGhost(player.sprite.x, player.sprite.y, player.color, 0.5, player.sprite.rotation);
         this.dashTrailTimers.set(id, now + 50);
       }
     } else if (curPhase === 2) {
