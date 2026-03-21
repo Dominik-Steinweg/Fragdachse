@@ -23,7 +23,7 @@ async function boot(): Promise<void> {
     // roundPixels: true,    
     physics: {
       default: 'arcade',
-      arcade:  { gravity: { x: 0, y: 0 }, debug: false },
+      arcade:  { gravity: { x: 0, y: 0 }, debug: false, fps: 120 },
     },
     scene: [ArenaScene],   // Einzige Szene – Lobby läuft als Overlay
     scale: {
