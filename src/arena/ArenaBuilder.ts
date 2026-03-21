@@ -277,7 +277,7 @@ export class ArenaBuilder {
    * Die Textur 'bg_tracks' (48×48 px) wird vertikal gekachelt.
    */
   private createTrackColumnVisual(col: number, rowCount: number): Phaser.GameObjects.TileSprite {
-    const w = CELL_SIZE;
+    const w = CELL_SIZE * 2;
     const h = rowCount * CELL_SIZE;
     const cx = ARENA_OFFSET_X + col * CELL_SIZE + w / 2;
     const cy = ARENA_OFFSET_Y + h / 2;

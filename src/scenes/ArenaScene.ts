@@ -739,7 +739,7 @@ export class ArenaScene extends Phaser.Scene {
    * Ausgelagert aus buildArena() zur besseren Übersichtlichkeit.
    */
   private setupHostTrainEvent(trackGridX: number): void {
-    const trackX  = ARENA_OFFSET_X + trackGridX * CELL_SIZE + CELL_SIZE / 2;
+    const trackX  = ARENA_OFFSET_X + trackGridX * CELL_SIZE + CELL_SIZE;
     const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
     const spawnAt = bridge.getArenaStartTime() + TRAIN.SPAWN_DELAY_S * 1000;
 

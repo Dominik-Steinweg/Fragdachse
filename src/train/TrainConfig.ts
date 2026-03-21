@@ -8,8 +8,8 @@ export const TRAIN = {
   /** Fahrgeschwindigkeit in px/s */
   SPEED:           600,
 
-  /** Visuelle Breite = CELL_SIZE = 48 px, exakt auf dem Gleis-Raster */
-  VISUAL_WIDTH:    CELL_SIZE*2,        // 48
+  /** Visuelle Breite = 2 × CELL_SIZE = 64 px, exakt auf dem Gleis-Raster */
+  VISUAL_WIDTH:    CELL_SIZE*2,        // 64
 
   /** Arcade-Physics-Hitbox-Breite – schmaler als Grafik (kein unfairer Randtod) */
   HITBOX_WIDTH:    44,

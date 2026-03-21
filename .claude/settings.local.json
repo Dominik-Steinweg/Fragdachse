@@ -33,7 +33,8 @@
       "WebFetch(domain:stormcloak.games)",
       "WebFetch(domain:opengameart.org)",
       "WebFetch(domain:forum.godotengine.org)",
-      "WebFetch(domain:led.itch.io)"
+      "WebFetch(domain:led.itch.io)",
+      "Bash(find C:Fragdachse/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js \\\\\\))"
     ]
   }
 }

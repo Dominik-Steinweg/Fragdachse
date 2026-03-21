@@ -135,6 +135,7 @@ export class ArenaGenerator {
     for (let i = 0; i < Math.min(TRACK_COUNT, available.length); i++) {
       const col = available[i];
       trackCols.add(col);
+      trackCols.add(col + 1);
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         tracks.push({ gridX: col, gridY: gy });
       }
