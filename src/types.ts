@@ -277,6 +277,9 @@ export interface TrackedProjectile {
   bfgHitPlayers?:    Set<string>;     // Debounce: jeden Spieler nur 1x direkt treffen
   bfgHitRocks?:      Set<number>;     // Debounce: jeden Fels nur 1x zerstören
   bfgHitTrain?:      boolean;         // Debounce: Zug nur 1x pro Projektil beschädigen
+
+  // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
+  originalBodySize?: number;
 }
 
 // ---- Prozedurales Arena-Layout ----

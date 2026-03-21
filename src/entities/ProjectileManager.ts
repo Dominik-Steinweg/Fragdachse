@@ -7,6 +7,9 @@ import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { AwpRenderer }     from '../effects/AwpRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
+/** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
+const MIN_BODY_LEN = 10;
+
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
   serverX: number;
@@ -199,6 +202,18 @@ export class ProjectileManager {
       Math.sin(angle) * cfg.speed,
     );
 
+    // Anti-Tunneling: Body in Flugrichtung verlängern (proportional zur
+    // Geschwindigkeitskomponente je Achse). Verhindert, dass kleine Projektile
+    // an Nahtstellen zwischen benachbarten 32×32-Fels-Bodies durchrutschen.
+    if (!isFlame && !isBfg && !cfg.isGrenade && cfg.size < MIN_BODY_LEN) {
+      const vx = Math.abs(Math.cos(angle));
+      const vy = Math.abs(Math.sin(angle));
+      const bodyW = Math.max(cfg.size, vx * MIN_BODY_LEN);
+      const bodyH = Math.max(cfg.size, vy * MIN_BODY_LEN);
+      body.setSize(bodyW, bodyH);
+      body.setOffset((cfg.size - bodyW) / 2, (cfg.size - bodyH) / 2);
+    }
+
     const tracked: TrackedProjectile = {
       id,
       sprite,
@@ -236,6 +251,9 @@ export class ProjectileManager {
       bfgLaserRadius:   cfg.bfgLaserRadius,
       bfgLaserDamage:   cfg.bfgLaserDamage,
       bfgLaserInterval: cfg.bfgLaserInterval,
+      // Anti-Tunneling
+      originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isBfg && !cfg.isGrenade
+        ? cfg.size : undefined,
     };
 
     if (isBfg) {
@@ -417,6 +435,11 @@ export class ProjectileManager {
           tracked.color,
         );
       }
+      // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
+      if (tracked.bounceCount > tracked.maxBounces) {
+        body.setVelocity(0, 0);
+        body.enable = false;
+      }
     };
     tracked.boundsListener = boundsListener;
     this.scene.physics.world.on('worldbounds', boundsListener);
@@ -439,6 +462,11 @@ export class ProjectileManager {
         if (rockMult === 0) return;
         const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Image);
         if (idx !== -1) onHit(idx, tracked.damage * rockMult);
+        // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
+        if (tracked.bounceCount > tracked.maxBounces) {
+          body.setVelocity(0, 0);
+          body.enable = false;
+        }
       });
       tracked.colliders.push(rockCollider);
     }
@@ -453,6 +481,11 @@ export class ProjectileManager {
             body.velocity.x, body.velocity.y,
             tracked.color,
           );
+        }
+        // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
+        if (tracked.bounceCount > tracked.maxBounces) {
+          body.setVelocity(0, 0);
+          body.enable = false;
         }
       });
       tracked.colliders.push(trunkCollider);
@@ -474,6 +507,11 @@ export class ProjectileManager {
           );
         }
         tracked.bounceCount++;
+        // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
+        if (tracked.bounceCount > tracked.maxBounces) {
+          body.setVelocity(0, 0);
+          body.enable = false;
+        }
       });
       tracked.colliders.push(trainCollider);
     }
@@ -625,6 +663,21 @@ export class ProjectileManager {
             this.bfgLaserCallback?.(proj);
           }
         }
+
+        // Anti-Tunneling: Body-Ausrichtung nach Bounce aktualisieren
+        if (proj.originalBodySize !== undefined) {
+          const pvx = Math.abs(proj.body.velocity.x);
+          const pvy = Math.abs(proj.body.velocity.y);
+          const spd = Math.sqrt(pvx * pvx + pvy * pvy);
+          if (spd > 1) {
+            const orig = proj.originalBodySize;
+            const bw = Math.max(orig, (pvx / spd) * MIN_BODY_LEN);
+            const bh = Math.max(orig, (pvy / spd) * MIN_BODY_LEN);
+            proj.body.setSize(bw, bh);
+            proj.body.setOffset((orig - bw) / 2, (orig - bh) / 2);
+          }
+        }
+
         return !dead;
       }
     });
