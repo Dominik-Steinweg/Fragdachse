@@ -9,16 +9,16 @@ export const TRAIN = {
   SPEED:           600,
 
   /** Visuelle Breite = CELL_SIZE = 48 px, exakt auf dem Gleis-Raster */
-  VISUAL_WIDTH:    CELL_SIZE,        // 48
+  VISUAL_WIDTH:    CELL_SIZE*2,        // 48
 
   /** Arcade-Physics-Hitbox-Breite – schmaler als Grafik (kein unfairer Randtod) */
   HITBOX_WIDTH:    44,
 
   /** Länge der Lokomotive in px */
-  LOCO_HEIGHT:     CELL_SIZE * 2,    // 96
+  LOCO_HEIGHT:     CELL_SIZE * 4,    // 96
 
   /** Länge eines Waggons in px */
-  WAGON_HEIGHT:    CELL_SIZE + 24,   // 72
+  WAGON_HEIGHT:    CELL_SIZE * 3,   // 72
 
   /** Anzahl Waggons hinter der Lokomotive */
   WAGON_COUNT:     32,

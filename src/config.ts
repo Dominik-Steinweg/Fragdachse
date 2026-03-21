@@ -156,7 +156,7 @@ export const DEPTH_TRACE = 16;
 export const DEPTH_FX = 25;
 
 // ---- Prozedurales Arena-Grid ----
-export const CELL_SIZE           = 48;
+export const CELL_SIZE           = 32;
 export const GRID_COLS           = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 30
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
 export const ROCK_FILL_RATIO     = 0.30;   
@@ -178,7 +178,7 @@ export const ROCK_HP_MAX         = 200;
 export const ROCK_HP_THRESHOLD   = 100;    // < 50% → Farbwechsel zu BROWN_3
 
 // ---- Baumstumpf & Baumkrone ----
-export const TRUNK_RADIUS        = 24;     // Kollisions-Radius Baumstumpf (px)
+export const TRUNK_RADIUS        = 16;     // Kollisions-Radius Baumstumpf (px)
 export const CANOPY_RADIUS       = 96;     // Visueller Radius Baumkrone (px)
 export const CANOPY_ALPHA_PLAYER = 0.2;   // Alpha wenn lokaler Spieler darunter (80% transparent)
 

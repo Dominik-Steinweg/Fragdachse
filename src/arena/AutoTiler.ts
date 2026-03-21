@@ -156,62 +156,70 @@ function buildBlob47Table(spritesheetOrder: readonly number[]): number[] {
 // └─────────────────────────────────────────────────────────────────────────┘
 
 const ROCK_47_SPRITESHEET_ORDER: readonly number[] = [
-  // ── Row 0 (Frames 0–10): Oben-Bereich ──────────────────────────────────
-  28,   //  0: Außenecke Oben-Links + SE        (S+SE+E)
-  20,   //  1: Außenecke Oben-Links ohne Diag   (S+E)
-  124,  //  2: Oberkante voll                   (E+SE+S+SW+W)
-  92,   //  3: Oberkante nur SE                 (E+SE+S+W)
-  116,  //  4: Oberkante nur SW                 (E+S+SW+W)
-  84,   //  5: Oberkante ohne Diag              (E+S+W)
-  112,  //  6: Außenecke Oben-Rechts + SW       (S+SW+W)
-  80,   //  7: Außenecke Oben-Rechts ohne Diag  (S+W)
-  127,  //  8: Zentrum fehlt NW                 (N+NE+E+SE+S+SW+W)
-  253,  //  9: Zentrum fehlt NE                 (NW+N+E+SE+S+SW+W)
-  247,  // 10: Zentrum fehlt SE                 (NW+N+NE+E+S+SW+W)
+  // ── Zeile 0 (Frames 0–10) ────────────────────────────────────────────────
+  28,   //  0: E, SE, S
+  124,  //  1: E, SE, S, SW, W
+  112,  //  2: W, SW, S
+  16,   //  3: S
+  20,   //  4: E, S
+  116,  //  5: E, S, SW, W
+  92,   //  6: E, SE, S, W
+  80,   //  7: S, W
+  84,   //  8: S, W, E
+  221,  //  9: N, E, SE, S, W, NW
+  -1,   // 10: leer
 
-  // ── Row 1 (Frames 11–21): Mitte-Bereich ────────────────────────────────
-  31,   // 11: Linkskante voll                  (N+NE+E+SE+S)
-  23,   // 12: Linkskante nur SE                (N+E+SE+S)
-  29,   // 13: Linkskante nur NE                (N+NE+E+S)
-  21,   // 14: Linkskante ohne Diag             (N+E+S)
-  255,  // 15: Zentrum voll (alle 8 Nachbarn)   (NW+N+NE+E+SE+S+SW+W)
-  241,  // 16: Rechtskante voll                 (NW+N+S+SW+W)
-  209,  // 17: Rechtskante nur NW               (NW+N+S+W)
-  113,  // 18: Rechtskante nur SW               (N+S+SW+W)
-  81,   // 19: Rechtskante ohne Diag            (N+S+W)
-  223,  // 20: Zentrum fehlt SW                 (NW+N+NE+E+SE+S+W)
-  95,   // 21: Zentrum NE+SE (fehlt NW+SW)      (N+NE+E+SE+S+W)
+  // ── Zeile 1 (Frames 11–21) ───────────────────────────────────
+  31,   // 11: N, NE, E, SE, S
+  255,  // 12: massiver Fels in Mitte (Alle 8 Nachbarn)
+  241,  // 13: N, S, SW, W, NW
+  17,   // 14: N, S
+  23,   // 15: N, NE, E, S
+  247,  // 16: N, NE, E, S, SW, W, NW
+  223,  // 17: N, NE, E, S, SE, W, NW
+  209,  // 18: N, S, W, NW
+  215,  // 19: N, NE, E, S, W, NW
+  119,  // 20: N, NE, E, S, SW, W
+  -1,   // 21: leer
 
-  // ── Row 2 (Frames 22–32): Unten-Bereich ────────────────────────────────
-  7,    // 22: Außenecke Unten-Links + NE       (N+NE+E)
-  5,    // 23: Außenecke Unten-Links ohne Diag  (N+E)
-  199,  // 24: Unterkante voll                  (NW+N+NE+E+W)
-  71,   // 25: Unterkante nur NE                (N+NE+E+W)
-  197,  // 26: Unterkante nur NW                (NW+N+E+W)
-  69,   // 27: Unterkante ohne Diag             (N+E+W)
-  193,  // 28: Außenecke Unten-Rechts + NW      (NW+N+W)
-  65,   // 29: Außenecke Unten-Rechts ohne Diag (N+W)
-  125,  // 30: Zentrum SE+SW (fehlt NW+NE)      (N+E+SE+S+SW+W)
-  245,  // 31: Zentrum SW+NW (fehlt NE+SE)      (NW+N+E+S+SW+W)
-  215,  // 32: Zentrum NW+NE (fehlt SE+SW)      (NW+N+NE+E+S+W)
+  // ── Zeile 2 (Frames 22–32) ───────────────────────────────────
+  7,    // 22: N, NE, E
+  199,  // 23: N, NE, E, W, NW
+  193,  // 24: N, W, NW
+  1,    // 25: N 
+  29,   // 26: N, E, SE, S
+  253,  // 27: N, E, SE, S, SW, W, NW
+  127,  // 28: N, NE, E, SE, S, SW, W
+  113,  // 29: N, S, SW, W
+  125,  // 30: N, E, SE, S, SW, W
+  93,   // 31: N, E, SE, S, W
+  117,  // 32: N, E, S, SW, W
 
-  // ── Row 3 (Frames 33–43): Zentrum-Varianten + Sonderstücke ─────────────
-  119,  // 33: Zentrum NE+SW (gegenüber)        (N+NE+E+S+SW+W)
-  221,  // 34: Zentrum NW+SE (gegenüber)        (NW+N+E+SE+S+W)
-  87,   // 35: Zentrum nur NE                   (N+NE+E+S+W)
-  93,   // 36: Zentrum nur SE                   (N+E+SE+S+W)
-  117,  // 37: Zentrum nur SW                   (N+E+S+SW+W)
-  213,  // 38: Zentrum nur NW                   (NW+N+E+S+W)
-  85,   // 39: Zentrum ohne Diag (alle Kard.)   (N+E+S+W)
-  17,   // 40: Vertikaler Korridor              (N+S)
-  68,   // 41: Horizontaler Korridor            (E+W)
-  1,    // 42: Endstück nach Süden (N-Nachbar)  (N)
-  4,    // 43: Endstück nach Westen (E-Nachbar) (E)
+  // ── Zeile 3 (Frames 33–43) ───────────────────────────────────
+  4,    // 33: E 
+  68,   // 34: E, W
+  64,   // 35: W (Endstück nach Westen)
+  0,    // 36: freistehend (0 Nachbarn)
+  5,    // 37: N, E
+  197,  // 38: N, E, W, NW
+  71,   // 39: N, NE, W, E
+  65,   // 40: N, W
+  69,   // 41: N, E, W
+  87,   // 42: N, NE, E, S, W
+  213,  // 43: N, E, S, W, NW
 
-  // ── Row 4 (Frames 44–46, Rest leer) ────────────────────────────────────
-  16,   // 44: Endstück nach Norden (S-Nachbar) (S)
-  64,   // 45: Endstück nach Osten (W-Nachbar)  (W)
-  0,    // 46: Freistehend (keine Nachbarn)
+  // ── Zeile 4 (Frames 44–54) ───────────────────────────────────
+  -1,   // 44: nichts
+  -1,   // 45: nichts
+  -1,   // 46: nichts
+  -1,   // 47: nichts
+  21,   // 48: N, E, S
+  245,  // 49: N, E, S, SW, W, NW
+  95,   // 50: N, NE, E, SE, S, W
+  81,   // 51: N, S, W
+  85,   // 52: N, S, W, E
+  -1,   // 53: nichts
+  -1    // 54: nichts
 ];
 
 /** Vorgefertigte AutoTile-Konfiguration für das Rock-47-Blob-Tileset. */

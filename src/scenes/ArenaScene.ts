@@ -136,7 +136,7 @@ export class ArenaScene extends Phaser.Scene {
   preload(): void {
     this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
     this.load.image('bg_tracks',  './assets/sprites/48x48tracks02.png');
-    this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp', './assets/sprites/16x16HP.png');
