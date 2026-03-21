@@ -138,8 +138,8 @@ export class AimSystem {
     const palette = SLOT_PALETTES[aimState.activeSlot];
 
     const baseSpread = aimState.isMoving ? cfg.spreadMoving : cfg.spreadStanding;
-    const totalSpread = baseSpread + aimState.dynamicSpread;
-    const maxTotal = cfg.spreadMoving + cfg.maxDynamicSpread;
+    const totalSpread = Math.max(0, baseSpread + aimState.dynamicSpread);
+    const maxTotal = cfg.spreadMoving + Math.max(0, cfg.maxDynamicSpread);
     const frac = maxTotal > 0 ? Math.min(1, totalSpread / maxTotal) : 0;
 
     const pointer = this.scene.input.activePointer;

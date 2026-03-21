@@ -52,8 +52,8 @@ export interface WeaponConfig {
   // Spread (Bloom) in Grad
   readonly spreadStanding: number;      // Basis-Spread im Stand
   readonly spreadMoving: number;        // Basis-Spread in Bewegung
-  readonly spreadPerShot: number;       // Bloom-Zunahme pro Schuss
-  readonly maxDynamicSpread: number;    // Obergrenze des dynamischen Spreads
+  readonly spreadPerShot: number;       // Bloom-Zunahme pro Schuss (negativ = Warmup-Mechanik, z.B. Negev)
+  readonly maxDynamicSpread: number;    // Ober-/Untergrenze des dynamischen Spreads (negativ für Warmup-Waffen)
 
   // Spread-Recovery
   readonly spreadRecoveryDelay: number; // ms Wartezeit nach letztem Schuss vor Abbau
@@ -357,7 +357,7 @@ export const WEAPON_CONFIGS = {
     id:                   'AK47',
     displayName:          'AK-47',
     cooldown:             100,
-    damage:               14,
+    damage:               10,
     range:                1000,        
     fire: {
       type:                 'projectile',
@@ -544,6 +544,48 @@ export const WEAPON_CONFIGS = {
     projectileColor:      0xff6600,    // feste Flammenfarbe (nicht Spielerfarbe)
     rockDamageMult:       0,           // Flammen machen keinen Schaden an Felsen
     trainDamageMult:      0.05,        // 5% Schaden am Zug
+  } as WeaponConfig,
+
+  /**
+   * NEGEV – Maschinengewehr mit inverser Spread-Mechanik (Weapon2-Slot)
+   * Hoher Basis-Spread, wird durch Dauerfeuer präziser (negativer dynamischer Spread).
+   * Bei Feuerpause geht die Genauigkeit schnell verloren.
+   */
+  NEGEV: {
+    id:                   'NEGEV',
+    displayName:          'Negev',
+    cooldown:             60,
+    damage:               4,
+    range:                650,        
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1200,
+      projectileSize:       2,
+      projectileMaxBounces: 3,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        1,
+    adrenalinGain:        0,
+    spreadStanding:       35,         // hohe Basis-Ungenauigkeit
+    spreadMoving:         43,         // noch ungenauer in Bewegung
+    spreadPerShot:        -1,         // Dauerfeuer reduziert Spread (inverse Bloom)
+    maxDynamicSpread:     -33,        // maximale Genauigkeitsverbesserung (→ Stand-Total = 5°)
+    spreadRecoveryDelay:  100,        // schneller Genauigkeitsverlust nach Feuerpause
+    spreadRecoveryRate:   15,         // schnelle Rückkehr zu voller Ungenauigkeit
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'bullet' as ProjectileStyle,
+    holdSpeedFactor:      0.3,
+    shotScreenShake:      { duration: 60, intensity: 0.002 },    
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  4,
+      alphaCore:  0.45,
+      alphaGlow:  0.15,
+      segments:   4,
+      fadeMs:     160,
+      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
+      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+    } satisfies TracerConfig,
   } as WeaponConfig,
 
 } as const;

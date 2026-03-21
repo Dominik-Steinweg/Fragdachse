@@ -1,7 +1,12 @@
 import type { WeaponConfig } from './LoadoutConfig';
 
 export function addDynamicSpread(current: number, config: WeaponConfig): number {
-  return Math.min(config.maxDynamicSpread, current + config.spreadPerShot);
+  const next = current + config.spreadPerShot;
+  // Negev-style weapons: spreadPerShot < 0 → dynamic spread decreases from 0 towards negative maxDynamicSpread
+  if (config.maxDynamicSpread >= 0) {
+    return Math.min(config.maxDynamicSpread, Math.max(0, next));
+  }
+  return Math.max(config.maxDynamicSpread, Math.min(0, next));
 }
 
 export function decayDynamicSpread(
@@ -10,11 +15,14 @@ export function decayDynamicSpread(
   delta: number,
   elapsedSinceShot: number,
 ): number {
-  if (current <= 0) return 0;
+  if (current === 0) return 0;
   if (elapsedSinceShot < config.spreadRecoveryDelay) return current;
 
   const ticks = delta / config.spreadRecoverySpeed;
-  return Math.max(0, current - ticks * config.spreadRecoveryRate);
+  const step = ticks * Math.abs(config.spreadRecoveryRate);
+  // Decay towards 0 from either direction (positive bloom or negative Negev-warmup)
+  if (current > 0) return Math.max(0, current - step);
+  return Math.min(0, current + step);
 }
 
 export function isVelocityMoving(vx: number, vy: number): boolean {

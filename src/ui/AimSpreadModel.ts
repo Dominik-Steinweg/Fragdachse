@@ -90,9 +90,10 @@ export class AimSpreadModel {
 
   private syncLastShotAt(slot: WeaponSlot, nextDynamicSpread: number, now: number): void {
     const previous = this.lastAuthoritativeDynamicSpread[slot];
-    if (nextDynamicSpread > previous) {
+    // Shot detected when dynamic spread moves further from 0 (positive bloom or Negev-warmup)
+    if (Math.abs(nextDynamicSpread) > Math.abs(previous)) {
       this.lastPredictedShotAt[slot] = now;
-    } else if (nextDynamicSpread <= 0) {
+    } else if (nextDynamicSpread === 0) {
       this.lastPredictedShotAt[slot] = -Infinity;
     }
     this.lastAuthoritativeDynamicSpread[slot] = nextDynamicSpread;

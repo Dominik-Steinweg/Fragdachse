@@ -370,7 +370,7 @@ export class LoadoutManager {
     const shooterBody = this.playerManager.getPlayer(playerId)?.body;
     const isMoving    = isVelocityMoving(shooterBody?.velocity.x ?? 0, shooterBody?.velocity.y ?? 0);
     const baseSpread    = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
-    const totalSpreadDeg = baseSpread + weapon.getDynamicSpread();
+    const totalSpreadDeg = Math.max(0, baseSpread + weapon.getDynamicSpread());
     const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
 
     // 4. Typ-spezifische Waffenlogik ausführen.
