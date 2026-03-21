@@ -22,6 +22,7 @@ import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
+import { AwpRenderer }         from '../effects/AwpRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
@@ -61,6 +62,7 @@ export class ArenaScene extends Phaser.Scene {
   private bulletRenderer!:    BulletRenderer;
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
+  private awpRenderer!:       AwpRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
@@ -181,6 +183,9 @@ export class ArenaScene extends Phaser.Scene {
     this.bfgRenderer = new BfgRenderer(this);
     this.bfgRenderer.generateTextures();
     this.projectileManager.setBfgRenderer(this.bfgRenderer);
+    this.awpRenderer = new AwpRenderer(this);
+    this.awpRenderer.generateTextures();
+    this.projectileManager.setAwpRenderer(this.awpRenderer);
     this.nukeRenderer = new NukeRenderer(this);
     this.nukeRenderer.generateTextures();
     this.powerUpRenderer = new PowerUpRenderer(this);
@@ -306,6 +311,13 @@ export class ArenaScene extends Phaser.Scene {
     // ── 12. Schockwellen-Visualisierung ───────────────────────────────────
     bridge.registerShockwaveEffectHandler((x, y) => {
       this.effectSystem.playShockwaveEffect(x, y);
+    });
+
+    // ── 12b. Shot-Feedback (Screenshake beim Schützen bei AWP-Schuss) ──────
+    bridge.registerShotFxHandler((shooterId, duration, intensity) => {
+      if (shooterId === bridge.getLocalPlayerId()) {
+        this.cameras.main.shake(duration, intensity);
+      }
     });
 
     // ── 13. Farb-System ───────────────────────────────────────────────────
@@ -611,6 +623,7 @@ export class ArenaScene extends Phaser.Scene {
       // Rück-Referenzen setzen
       this.loadoutManager.setCombatSystem(this.combatSystem);
       this.loadoutManager.setDashBurstChecker(id => this.hostPhysics.isDashBurst(id));
+      this.loadoutManager.setPhysicsSystem(this.hostPhysics);
       this.combatSystem.setBurrowSystem(this.burrowSystem);
       this.combatSystem.setResourceSystem(this.resourceSystem);
       this.combatSystem.setLoadoutManager(this.loadoutManager);

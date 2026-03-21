@@ -42,7 +42,7 @@ export interface PlayerNetState {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'flame' | 'bfg';
+export type ProjectileStyle = 'bullet' | 'ball' | 'flame' | 'bfg' | 'awp';
 
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {

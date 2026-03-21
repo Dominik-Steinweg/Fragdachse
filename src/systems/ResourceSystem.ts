@@ -57,7 +57,10 @@ export class ResourceSystem {
   drainAdrenaline(id: string, amount: number): void {
     const cur = Math.max(0, (this.adrenaline.get(id) ?? 0) - amount);
     this.adrenaline.set(id, cur);
-    this.regenPausedUntil.set(id, Date.now() + ADRENALINE_REGEN_PAUSE_MS);
+    // Regen-Pause nicht setzen, wenn Adrenalinspritze aktiv ist
+    if ((this.powerUpSystem?.getRegenMultiplier(id) ?? 1) === 1) {
+      this.regenPausedUntil.set(id, Date.now() + ADRENALINE_REGEN_PAUSE_MS);
+    }
   }
 
   /**

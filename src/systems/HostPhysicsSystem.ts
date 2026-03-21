@@ -46,6 +46,9 @@ export class HostPhysicsSystem {
   // Burrow-State (Collider-Enable-Tracking)
   private burrowedPlayers = new Set<string>();
 
+  // Rückstoß-Impulse (Zeit-basiertes Quad-Ease-Out Decay über mehrere Frames)
+  private pendingRecoils = new Map<string, { vx: number; vy: number; startMs: number; durationMs: number }>();
+
   constructor(
     scene:         Phaser.Scene,
     playerManager: PlayerManager,
@@ -62,6 +65,17 @@ export class HostPhysicsSystem {
 
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void  { this.loadoutManager = lm; }
+
+  // ── Rückstoß ─────────────────────────────────────────────────────────────
+
+  /**
+   * Startet einen zeitbasierter Rückstoß-Impuls (Quad-Ease-Out Decay über durationMs).
+   * Wird in HostPhysicsSystem.update() additiv zur regulären Velocity addiert.
+   * Amplitude zum Zeitpunkt t: force * (1 - t/duration)²
+   */
+  addRecoil(playerId: string, vx: number, vy: number, durationMs = 180): void {
+    this.pendingRecoils.set(playerId, { vx, vy, startMs: Date.now(), durationMs });
+  }
 
   // ── Dash-Abfragen ─────────────────────────────────────────────────────────
 
@@ -143,6 +157,7 @@ export class HostPhysicsSystem {
       this.burrowedPlayers.clear();
       this.dashStates.clear();
       this.dashBurstPlayers.clear();
+      this.pendingRecoils.clear();
     }
     this.rockGroup  = rockGroup;
     this.trunkGroup = trunkGroup;
@@ -162,6 +177,7 @@ export class HostPhysicsSystem {
     this.burrowedPlayers.delete(id);
     this.dashStates.delete(id);
     this.dashBurstPlayers.delete(id);
+    this.pendingRecoils.delete(id);
   }
 
   // ── Frame-Update ─────────────────────────────────────────────────────────
@@ -281,6 +297,23 @@ export class HostPhysicsSystem {
         player.body.setVelocity((dx / len) * speed, (dy / len) * speed);
       } else {
         player.body.setVelocity(0, 0);
+      }
+
+      // ── 4. Rückstoß-Impuls (Quad-Ease-Out Decay über durationMs) ────────
+      const recoil = this.pendingRecoils.get(player.id);
+      if (recoil) {
+        const elapsed = now - recoil.startMs;
+        if (elapsed >= recoil.durationMs) {
+          this.pendingRecoils.delete(player.id);
+        } else {
+          // Quad-Ease-Out: beginnt stark, endet sanft
+          const t      = elapsed / recoil.durationMs;
+          const factor = (1 - t) * (1 - t);
+          player.body.setVelocity(
+            player.body.velocity.x + recoil.vx * factor,
+            player.body.velocity.y + recoil.vy * factor,
+          );
+        }
       }
     }
   }

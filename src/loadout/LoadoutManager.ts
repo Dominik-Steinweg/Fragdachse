@@ -45,6 +45,7 @@ interface UltimateState {
 }
 
 type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
+type PhysicsSystemType  = { addRecoil(id: string, vx: number, vy: number, durationMs?: number): void };
 
 /**
  * LoadoutManager – Host-autoritär.
@@ -57,6 +58,11 @@ export class LoadoutManager {
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
   private dashBurstChecker: ((id: string) => boolean) | null = null;
+  private physicsSystem:      PhysicsSystemType | null = null;
+
+  // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
+  private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
+  private static readonly HOLD_EXPIRE_MS = 100;
 
   // ── Utility-Override (Heilige Handgranate etc.) ─────────────────────────
   private savedUtilities    = new Map<string, { config: UtilityConfig; lastUsedAt: number }>();
@@ -99,6 +105,7 @@ export class LoadoutManager {
     this.aimNetStates.delete(playerId);
     this.savedUtilities.delete(playerId);
     this.utilityAmmo.delete(playerId);
+    this.heldFireSlots.delete(playerId);
   }
 
   setCombatSystem(combatSystem: CombatResolverType | null): void {
@@ -108,6 +115,11 @@ export class LoadoutManager {
   /** Injiziert einen Checker, der während Dash-Phase 1 das Schießen blockiert. */
   setDashBurstChecker(fn: (id: string) => boolean): void {
     this.dashBurstChecker = fn;
+  }
+
+  /** Injiziert das HostPhysicsSystem für Rückstoß-Impulse. */
+  setPhysicsSystem(ps: PhysicsSystemType | null): void {
+    this.physicsSystem = ps;
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
@@ -183,6 +195,11 @@ export class LoadoutManager {
     // Schießen während Dash-Phase 1 (Burst) blockiert
     if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return;
 
+    // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
+    if (slot === 'weapon1' || slot === 'weapon2') {
+      this.heldFireSlots.set(playerId, { slot, lastAt: now });
+    }
+
     switch (slot) {
       case 'weapon1':
         this.fireWeapon(loadout.weapon1, x, y, angle, playerId, now, player.color, shotId);
@@ -242,8 +259,18 @@ export class LoadoutManager {
   // ── Multiplier-Getter ─────────────────────────────────────────────────────
 
   getSpeedMultiplier(playerId: string): number {
-    const state = this.ultimateStates.get(playerId);
-    return state?.active ? state.config.speedMultiplier : 1;
+    const state        = this.ultimateStates.get(playerId);
+    const ultimateMult = state?.active ? state.config.speedMultiplier : 1;
+
+    // holdSpeedFactor: Verlangsamung wenn Feuerknopf gehalten wird
+    const held = this.heldFireSlots.get(playerId);
+    if (held && Date.now() - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
+      const cfg        = this.loadouts.get(playerId)?.[held.slot].config;
+      const holdFactor = cfg?.holdSpeedFactor ?? 1;
+      return ultimateMult * holdFactor;
+    }
+
+    return ultimateMult;
   }
 
   getDamageMultiplier(playerId: string): number {
@@ -372,6 +399,18 @@ export class LoadoutManager {
     // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen
     weapon.addSpread();
     weapon.recordUse(now);
+
+    // 7. Rückstoß-Impuls (host-autoritativ, Quad-Ease-Out über shotRecoilDuration)
+    if (cfg.shotRecoilForce) {
+      const oppVx = -Math.cos(angle) * cfg.shotRecoilForce;
+      const oppVy = -Math.sin(angle) * cfg.shotRecoilForce;
+      this.physicsSystem?.addRecoil(playerId, oppVx, oppVy, cfg.shotRecoilDuration ?? 180);
+    }
+
+    // 8. Screenshake beim Schützen (via RPC an alle, gefiltert auf lokalen Spieler)
+    if (cfg.shotScreenShake) {
+      this.bridge.broadcastShotFx(playerId, cfg.shotScreenShake.duration, cfg.shotScreenShake.intensity);
+    }
   }
 
   private useUtility(

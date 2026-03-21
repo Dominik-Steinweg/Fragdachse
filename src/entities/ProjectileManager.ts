@@ -2,8 +2,9 @@ import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
 import type { BulletRenderer } from '../effects/BulletRenderer';
-import type { FlameRenderer } from '../effects/FlameRenderer';
-import type { BfgRenderer }   from '../effects/BfgRenderer';
+import type { FlameRenderer }  from '../effects/FlameRenderer';
+import type { BfgRenderer }    from '../effects/BfgRenderer';
+import type { AwpRenderer }    from '../effects/AwpRenderer';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -35,6 +36,9 @@ export class ProjectileManager {
 
   // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
   private bfgRenderer: BfgRenderer | null = null;
+
+  // ── AWP-Renderer (Rauchspur + Enhanced Bullet) ───────────────────────────
+  private awpRenderer: AwpRenderer | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
@@ -114,6 +118,11 @@ export class ProjectileManager {
     this.bfgRenderer = renderer;
   }
 
+  /** Injiziert den AwpRenderer für AWP-Projektil-Darstellung (Rauchspur). */
+  setAwpRenderer(renderer: AwpRenderer | null): void {
+    this.awpRenderer = renderer;
+  }
+
   /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
   setBfgLaserCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
     this.bfgLaserCallback = cb;
@@ -139,8 +148,9 @@ export class ProjectileManager {
     const isBullet = cfg.projectileStyle === 'bullet';
     const isFlame  = cfg.projectileStyle === 'flame';
     const isBfg    = cfg.projectileStyle === 'bfg';
+    const isAwp    = cfg.projectileStyle === 'awp';
 
-    // Physik-Shape: für 'bullet'/'flame' unsichtbar (nur Kollisions-Body)
+    // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = isBall
       ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
       : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
@@ -150,6 +160,13 @@ export class ProjectileManager {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.bulletRenderer.createBullet(id, x, y, cfg.size, cfg.color);
+    }
+
+    // AWP-Projektile sind unsichtbar (Rendering übernimmt AwpRenderer mit Rauchspur)
+    if (isAwp && this.awpRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.awpRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -365,14 +382,21 @@ export class ProjectileManager {
     body.setBounce(1, 1);
 
     const isBullet     = tracked.projectileStyle === 'bullet';
+    const isAwp        = tracked.projectileStyle === 'awp';
     const renderer     = this.bulletRenderer;
+    const awpR         = this.awpRenderer;
+
+    const playImpact = (bx: number, by: number, bvx: number, bvy: number, col: number) => {
+      if (isAwp && awpR)     awpR.playImpactSparks(bx, by, bvx, bvy, col);
+      else if (isBullet && renderer) renderer.playImpactSparks(bx, by, bvx, bvy, col);
+    };
 
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
       if (hitBody !== body) return;
       tracked.bounceCount++;
       // Funken an Arena-Wand: Velocity ist nach Bounce bereits reflektiert
-      if (isBullet && renderer) {
-        renderer.playImpactSparks(
+      if (isBullet || isAwp) {
+        playImpact(
           body.x + body.halfWidth, body.y + body.halfHeight,
           body.velocity.x, body.velocity.y,
           tracked.color,
@@ -388,8 +412,8 @@ export class ProjectileManager {
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         tracked.bounceCount++;
         // Funken bei Fels-Aufprall
-        if (isBullet && renderer) {
-          renderer.playImpactSparks(
+        if (isBullet || isAwp) {
+          playImpact(
             body.x + body.halfWidth, body.y + body.halfHeight,
             body.velocity.x, body.velocity.y,
             tracked.color,
@@ -408,8 +432,8 @@ export class ProjectileManager {
       const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
         tracked.bounceCount++;
         // Funken bei Baumstamm-Aufprall
-        if (isBullet && renderer) {
-          renderer.playImpactSparks(
+        if (isBullet || isAwp) {
+          playImpact(
             body.x + body.halfWidth, body.y + body.halfHeight,
             body.velocity.x, body.velocity.y,
             tracked.color,
@@ -427,8 +451,8 @@ export class ProjectileManager {
           onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
         }
         // Funken bei Zug-Aufprall
-        if (isBullet && renderer) {
-          renderer.playImpactSparks(
+        if (isBullet || isAwp) {
+          playImpact(
             body.x + body.halfWidth, body.y + body.halfHeight,
             body.velocity.x, body.velocity.y,
             tracked.color,
@@ -490,6 +514,7 @@ export class ProjectileManager {
     for (const c of proj.colliders) c.destroy();
     proj.sprite.destroy();
     this.bulletRenderer?.destroyBullet(proj.id);
+    this.awpRenderer?.destroyVisual(proj.id);
     this.flameRenderer?.destroyFlameVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
     this.projectiles.splice(idx, 1);
@@ -507,6 +532,7 @@ export class ProjectileManager {
     }
     this.projectiles = [];
     this.bulletRenderer?.destroyAll();
+    this.awpRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
@@ -566,6 +592,7 @@ export class ProjectileManager {
           for (const c of proj.colliders) c.destroy();
           proj.sprite.destroy();
           renderer?.destroyBullet(proj.id);
+          this.awpRenderer?.destroyVisual(proj.id);
           this.flameRenderer?.destroyFlameVisual(proj.id);
           this.bfgRenderer?.destroyVisual(proj.id);
         } else if (proj.isFlame) {
@@ -593,6 +620,26 @@ export class ProjectileManager {
             proj.body.velocity.x, proj.body.velocity.y,
           );
         }
+      }
+    }
+
+    // AwpRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
+    const awpR = this.awpRenderer;
+    if (awpR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'awp') {
+          awpR.updateVisual(
+            proj.id, proj.sprite.x, proj.sprite.y,
+            proj.body.velocity.x, proj.body.velocity.y,
+          );
+        }
+      }
+      // Verwaiste AWP-Visuals entfernen (Projektil wurde zerstört)
+      const activeAwpIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'awp').map(p => p.id),
+      );
+      for (const id of awpR.getActiveIds()) {
+        if (!activeAwpIds.has(id)) awpR.destroyVisual(id);
       }
     }
 
@@ -698,16 +745,26 @@ export class ProjectileManager {
         }
       }
     }
+    const awpR = this.awpRenderer;
+    if (awpR) {
+      for (const id of awpR.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          awpR.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
 
     // Server-State aktualisieren und neue Visuals erstellen
     for (const proj of data) {
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
       const isBfgP   = proj.style === 'bfg';
+      const isAwpP   = proj.style === 'awp';
 
       // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
       const prev = this.clientProjStates.get(proj.id);
-      const velocityFlipped = prev && isBullet &&
+      const velocityFlipped = prev && (isBullet || isAwpP) &&
         (prev.vx * proj.vx < -1 || prev.vy * proj.vy < -1);
 
       // Extrapolations-State speichern/aktualisieren
@@ -733,6 +790,14 @@ export class ProjectileManager {
         }
         // Sofort auf Server-Position setzen; Extrapolation passiert in clientExtrapolate()
         flames.updateFlameVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
+      } else if (isAwpP && awpR) {
+        if (!awpR.has(proj.id)) {
+          awpR.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+        }
+        awpR.updateVisual(proj.id, proj.x, proj.y, proj.vx, proj.vy);
+        if (velocityFlipped) {
+          awpR.playImpactSparks(proj.x, proj.y, proj.vx, proj.vy, proj.color);
+        }
       } else if (isBullet && renderer) {
         if (!renderer.has(proj.id)) {
           renderer.createBullet(proj.id, proj.x, proj.y, proj.size, proj.color);
@@ -790,12 +855,15 @@ export class ProjectileManager {
       }
 
       const bfgRe = this.bfgRenderer;
+      const awpRe = this.awpRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
       } else if (state.style === 'flame' && flames && flames.has(id)) {
         // Decay-Velocity für Partikel-Orientierung
         const decayFactor = Math.pow(0.82, dt);
         flames.updateFlameVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);
+      } else if (state.style === 'awp' && awpRe && awpRe.has(id)) {
+        awpRe.updateVisual(id, ex, ey, state.vx, state.vy);
       } else if (state.style === 'bullet' && renderer && renderer.has(id)) {
         renderer.updateBulletPosition(id, ex, ey, state.vx, state.vy);
       } else {

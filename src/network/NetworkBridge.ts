@@ -556,6 +556,19 @@ export class NetworkBridge {
     });
   }
 
+  // ── Shot-Feedback-RPC: Host → Alle (Screenshake bei Schuss) ───────────────
+  broadcastShotFx(shooterId: string, duration: number, intensity: number): void {
+    this.broadcastRpc('sfx', { id: shooterId, d: duration, i: intensity });
+  }
+
+  registerShotFxHandler(cb: (shooterId: string, duration: number, intensity: number) => void): void {
+    this.registerAllRpcHandler('sfx', async (data: unknown): Promise<unknown> => {
+      const { id, d, i } = data as { id: string; d: number; i: number };
+      cb(id, d, i);
+      return undefined;
+    });
+  }
+
   broadcastHitscanTracer(
     startX: number,
     startY: number,

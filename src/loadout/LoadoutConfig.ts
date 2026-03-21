@@ -76,6 +76,15 @@ export interface WeaponConfig {
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
+
+  // Shot-Feedback-Mechaniken (optional, data-driven)
+  readonly holdSpeedFactor?:   number;  // Geschwindigkeits-Multiplikator während Feuerknopf gehalten (z.B. 0.5 = halbiert)
+  readonly shotRecoilForce?:   number;  // Rückstoßkraft in px/s – Anfangsgeschwindigkeit des Rückstoßimpulses
+  readonly shotRecoilDuration?: number; // ms – wie lange der Rückstoß anhält (Default: 180ms, Quad-Ease-Out Decay)
+  readonly shotScreenShake?: {          // Kamera-Shake direkt beim Schuss (nicht während Cooldown)
+    readonly duration:  number;        // ms
+    readonly intensity: number;        // 0–1 (Phaser shake intensity)
+  };
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg';
@@ -399,6 +408,43 @@ export const WEAPON_CONFIGS = {
       aoeRadius:      80,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
     } satisfies DetonableConfig,
+  } as WeaponConfig,
+
+  /**
+   * AWP – Bolt-Action-Scharfschützengewehr (CS2-inspiriert, Weapon2-Slot)
+   * Extrem hoher Schaden, geringe Feuerrate, kein Spread im Stand.
+   * Beim Halten des Feuerknopfs: Bewegungsgeschwindigkeit halbiert.
+   * Bei jedem Schuss: Rückstoß + Kamera-Shake beim Schützen.
+   * Projektil-Stil 'awp': sichtbarer Rauchstreifen hinter dem Geschoss.
+   */
+  AWP: {
+    id:                   'AWP',
+    displayName:          'AWP',
+    cooldown:             1500,
+    damage:               100,
+    range:                1800,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      3500,
+      projectileSize:       4,
+      projectileMaxBounces: 0,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        60,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         35,
+    spreadPerShot:        5,
+    maxDynamicSpread:     35,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   10,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'awp' as ProjectileStyle,
+    holdSpeedFactor:      0.5,
+    shotRecoilForce:      750,         // px/s Anfangsimpuls (Quad-Ease-Out über shotRecoilDuration)
+    shotRecoilDuration:   200,         // ms – Rückstoß hält 200ms an → deutlich sichtbar
+    shotScreenShake:      { duration: 120, intensity: 0.006 },
+    rockDamageMult:       1.0,
   } as WeaponConfig,
 
   /**
