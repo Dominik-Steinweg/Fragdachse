@@ -171,7 +171,7 @@ export class BurrowSystem {
     if (this.rockGroup) {
       for (const child of this.rockGroup.getChildren()) {
         if (!child.active) continue;
-        const rock = child as Phaser.GameObjects.Rectangle;
+        const rock = child as Phaser.GameObjects.Image;
         if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, rock.getBounds())) {
           return true;
         }

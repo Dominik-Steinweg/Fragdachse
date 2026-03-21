@@ -81,8 +81,9 @@ export class ArenaScene extends Phaser.Scene {
   private localPlayerBurrowed = false;
 
   // ── Dynamische Arena ──────────────────────────────────────────────────────
-  private arenaResult:  ArenaBuilderResult | null = null;
-  private rockRegistry: RockRegistry | null       = null;
+  private arenaResult:   ArenaBuilderResult | null = null;
+  private rockRegistry:  RockRegistry | null       = null;
+  private currentLayout: import('../types').ArenaLayout | null = null;
 
   // ── Host-only Systeme ─────────────────────────────────────────────────────
   private resourceSystem:    ResourceSystem    | null = null;
@@ -135,6 +136,7 @@ export class ArenaScene extends Phaser.Scene {
   preload(): void {
     this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
     this.load.image('bg_tracks',  './assets/sprites/48x48tracks02.png');
+    this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 48, frameHeight: 48 });
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp', './assets/sprites/16x16HP.png');
@@ -579,6 +581,7 @@ export class ArenaScene extends Phaser.Scene {
   private buildArena(layout: import('../types').ArenaLayout): void {
     this.tearDownArena();
 
+    this.currentLayout = layout;
     const builder = new ArenaBuilder(this);
     this.arenaResult = builder.buildDynamic(layout);
 
@@ -595,7 +598,7 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setRockDamageCallback((rockIndex, damage) => {
       if (!this.rockRegistry || !this.arenaResult) return;
       const newHp = this.rockRegistry.applyDamage(rockIndex, damage);
-      ArenaBuilder.updateRockVisual(this.arenaResult.rockObjects, this.arenaResult.rockGroup, rockIndex, newHp);
+      ArenaBuilder.updateRockVisual(this.arenaResult.rockObjects, this.arenaResult.rockGroup, this.arenaResult.rockGrid, this.currentLayout!.rocks, rockIndex, newHp);
       if (newHp <= 0) this.powerUpSystem?.onRockDestroyed(rockIndex);
     });
     this.combatSystem.setTrainDamageCallback((damage, attackerId) => {
@@ -706,7 +709,7 @@ export class ArenaScene extends Phaser.Scene {
       this.projectileManager.setRockHitCallback((rockId, damage) => {
         if (!this.rockRegistry || !arenaResult) return;
         const newHp = this.rockRegistry.applyDamage(rockId, damage);
-        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, rockId, newHp);
+        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, rockId, newHp);
         // Power-Up droppen wenn der Fels zerstört wurde
         if (newHp <= 0) {
           this.powerUpSystem?.onRockDestroyed(rockId);
@@ -831,6 +834,7 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaResult = null;
     }
     this.rockRegistry   = null;
+    this.currentLayout  = null;
     this.powerUpSystem?.reset();
     this.powerUpSystem   = null;
     this.resourceSystem?.setPowerUpSystem(null);
@@ -984,7 +988,7 @@ export class ArenaScene extends Phaser.Scene {
         const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
         if (dist > radius) continue;
         const newHp = this.rockRegistry.applyDamage(i, damage * rockMult);
-        ArenaBuilder.updateRockVisual(rockObjects, arenaResult.rockGroup, i, newHp);
+        ArenaBuilder.updateRockVisual(rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
         if (newHp <= 0) {
           this.powerUpSystem?.onRockDestroyed(i);
         }
@@ -1040,7 +1044,7 @@ export class ArenaScene extends Phaser.Scene {
         if (dist > radius) continue;
         if (!this.combatSystem.hasLineOfSight(px, py, rock.x, rock.y, i)) continue;
         const newHp = this.rockRegistry.applyDamage(i, damage);
-        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, i, newHp);
+        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
         if (newHp <= 0) {
           this.powerUpSystem?.onRockDestroyed(i);
         }
@@ -1087,7 +1091,7 @@ export class ArenaScene extends Phaser.Scene {
         const t = Phaser.Math.Clamp(dist / radius, 0, 1);
         const baseDmg = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, t);
         const newHp = this.rockRegistry.applyDamage(i, Math.round(baseDmg * rockMult));
-        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, i, newHp);
+        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
         if (newHp <= 0) {
           this.powerUpSystem?.onRockDestroyed(i);
         }
@@ -1385,11 +1389,13 @@ export class ArenaScene extends Phaser.Scene {
       this.fireSystem.syncVisuals(state.fires ?? []);
       // Hitscan-Traces und Melee-Swings werden per RPC empfangen (EffectSystem-Handler)
 
-      if (state.rocks && this.arenaResult) {
+      if (state.rocks && this.arenaResult && this.currentLayout) {
         for (const rs of state.rocks) {
           ArenaBuilder.updateRockVisual(
             this.arenaResult.rockObjects,
             this.arenaResult.rockGroup,
+            this.arenaResult.rockGrid,
+            this.currentLayout.rocks,
             rs.id,
             rs.hp,
           );

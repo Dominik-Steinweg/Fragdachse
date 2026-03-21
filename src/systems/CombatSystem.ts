@@ -64,7 +64,7 @@ export class CombatSystem {
   private loadoutManager:   LoadoutManagerType  | null  = null;
   private powerUpSystem:    PowerUpSystemType   | null  = null;
   private detonationSystem: DetonationSystem    | null  = null;
-  private rockObjects: readonly (Phaser.GameObjects.Rectangle | null)[] | null = null;
+  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
 
@@ -86,7 +86,7 @@ export class CombatSystem {
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
   setArenaObstacles(
-    rockObjects: readonly (Phaser.GameObjects.Rectangle | null)[] | null,
+    rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
   ): void {
     this.rockObjects = rockObjects;

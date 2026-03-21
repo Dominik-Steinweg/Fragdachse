@@ -53,6 +53,9 @@ ToDo/
 #Google-Drive
 fragdachse_drive/
 
+# Tiled
+Tiled/
+
 # Optional: lockfiles (uncomment if you want to ignore them)
 # package-lock.json
 # yarn.lock

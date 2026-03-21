@@ -5,13 +5,17 @@ import {
   DEPTH, COLORS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_THRESHOLD,
 } from '../config';
-import type { ArenaLayout, TrackCell } from '../types';
+import type { ArenaLayout, RockCell, TrackCell } from '../types';
+import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
+import { RockGridIndex } from './RockGridIndex';
 
 export interface ArenaBuilderResult {
-  /** StaticGroup mit Felsen-Rechtecken (für Kollision + HP-Tracking) */
+  /** StaticGroup mit Felsen-Sprites (für Kollision + HP-Tracking) */
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
   /** Paralleles Array zu layout.rocks – null-Slots = bereits zerstört */
-  rockObjects:  (Phaser.GameObjects.Rectangle | null)[];
+  rockObjects:  (Phaser.GameObjects.Image | null)[];
+  /** Spatial Index für Grid-basierte Nachbar-Lookups (Autotiling) */
+  rockGrid:     RockGridIndex;
   /** StaticGroup mit Baumstümpfen (Kreis-Körper, keine HP) */
   trunkGroup:   Phaser.Physics.Arcade.StaticGroup;
   /** Baumstumpf-Objekte für Hitscan-/Melee-Sweeps */
@@ -49,22 +53,28 @@ export class ArenaBuilder {
   buildDynamic(layout: ArenaLayout): ArenaBuilderResult {
     const rockGroup    = this.scene.physics.add.staticGroup();
     const trunkGroup   = this.scene.physics.add.staticGroup();
-    const rockObjects:  (Phaser.GameObjects.Rectangle | null)[] = [];
+    const rockObjects:  (Phaser.GameObjects.Image | null)[] = [];
     const trunkObjects: Phaser.GameObjects.Arc[] = [];
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }> = [];
+
+    // Spatial Index für Autotiling
+    const rockGrid = new RockGridIndex(layout.rocks);
+    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupied(gx, gy);
 
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
     const trackObjects = this.buildTracks(layout.tracks ?? []);
 
-    // Felsen
+    // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
       const { gridX, gridY } = layout.rocks[i];
       const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
-      const rect   = this.createRockVisual(worldX, worldY);
-      rockGroup.add(rect);
-      (rect.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
-      rockObjects.push(rect);
+      const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
+      const frame  = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
+      const img    = this.createRockVisual(worldX, worldY, frame);
+      rockGroup.add(img);
+      (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      rockObjects.push(img);
     }
 
     // Bäume (Trunk + Canopy)
@@ -85,7 +95,7 @@ export class ArenaBuilder {
       canopyObjects.push({ gfx, worldX, worldY });
     }
 
-    return { rockGroup, rockObjects, trunkGroup, trunkObjects, canopyObjects, trackObjects };
+    return { rockGroup, rockObjects, rockGrid, trunkGroup, trunkObjects, canopyObjects, trackObjects };
   }
 
   // ── Canopy-Transparenz (jeden Frame lokal) ─────────────────────────────────
@@ -110,24 +120,53 @@ export class ArenaBuilder {
   // ── Rock-Visual-Updates ────────────────────────────────────────────────────
 
   /**
-   * Aktualisiert Farbe eines Felsens anhand seines HP-Wertes.
-   * Bei hp <= 0 wird der Fels zerstört.
+   * Aktualisiert Tint eines Felsens anhand seines HP-Wertes.
+   * Bei hp <= 0 wird der Fels zerstört und Nachbar-Tiles aktualisiert.
    */
   static updateRockVisual(
-    rockObjects: (Phaser.GameObjects.Rectangle | null)[],
+    rockObjects: (Phaser.GameObjects.Image | null)[],
     rockGroup:   Phaser.Physics.Arcade.StaticGroup,
+    rockGrid:    RockGridIndex,
+    rocks:       readonly RockCell[],
     id:          number,
     hp:          number,
   ): void {
     if (hp <= 0) {
-      ArenaBuilder.destroyRock(rockObjects, rockGroup, id);
+      ArenaBuilder.destroyRockAndRetile(rockObjects, rockGroup, rockGrid, rocks, id);
       return;
     }
-    const rect = rockObjects[id];
-    if (!rect?.active) return;
+    const img = rockObjects[id];
+    if (!img?.active) return;
 
-    const color = hp < ROCK_HP_THRESHOLD ? COLORS.BROWN_3 : COLORS.BROWN_5;
-    rect.setFillStyle(color);
+    const tint = hp < ROCK_HP_THRESHOLD ? 0x999999 : 0xffffff;
+    img.setTint(tint);
+  }
+
+  /**
+   * Entfernt einen Fels und aktualisiert die Tile-Frames aller Nachbarn.
+   */
+  static destroyRockAndRetile(
+    rockObjects: (Phaser.GameObjects.Image | null)[],
+    rockGroup:   Phaser.Physics.Arcade.StaticGroup,
+    rockGrid:    RockGridIndex,
+    rocks:       readonly RockCell[],
+    id:          number,
+  ): void {
+    const { gridX, gridY } = rocks[id];
+    ArenaBuilder.destroyRock(rockObjects, rockGroup, id);
+    rockGrid.remove(gridX, gridY);
+
+    // Nachbar-Tiles neu berechnen
+    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupied(gx, gy);
+    const neighborIds = rockGrid.getNeighborIndices(gridX, gridY);
+    for (const nid of neighborIds) {
+      const img = rockObjects[nid];
+      if (!img?.active) continue;
+      const { gridX: ngx, gridY: ngy } = rocks[nid];
+      const mask  = AutoTiler.computeMask(ngx, ngy, isOccupied);
+      const frame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
+      img.setFrame(frame);
+    }
   }
 
   /**
@@ -135,13 +174,13 @@ export class ArenaBuilder {
    * Sicher mehrfach aufzurufen (idempotent via null-Slot).
    */
   static destroyRock(
-    rockObjects: (Phaser.GameObjects.Rectangle | null)[],
+    rockObjects: (Phaser.GameObjects.Image | null)[],
     rockGroup:   Phaser.Physics.Arcade.StaticGroup,
     id:          number,
   ): void {
-    const rect = rockObjects[id];
-    if (!rect) return;
-    rockGroup.remove(rect, true, true);
+    const img = rockObjects[id];
+    if (!img) return;
+    rockGroup.remove(img, true, true);
     rockGroup.refresh();
     rockObjects[id] = null;
   }
@@ -154,8 +193,8 @@ export class ArenaBuilder {
    */
   static destroyDynamic(result: ArenaBuilderResult): void {
     // Felsen
-    for (const rect of result.rockObjects) {
-      if (rect?.active) rect.destroy();
+    for (const img of result.rockObjects) {
+      if (img?.active) img.destroy();
     }
     result.rockObjects.length = 0;
     result.rockGroup.destroy(true);
@@ -180,16 +219,16 @@ export class ArenaBuilder {
     result.trackObjects.length = 0;
   }
 
-  // ── Private Factory-Methoden (Swap-Vorbereitung für Sprites) ──────────────
+  // ── Private Factory-Methoden ───────────────────────────────────────────────
 
   /**
-   * Erstellt den Felsen-Sprite (aktuell: Rectangle).
-   * Kann später durch `this.scene.add.image(...)` ersetzt werden.
+   * Erstellt einen Felsen-Sprite aus dem Autotile-Spritesheet.
    */
-  private createRockVisual(worldX: number, worldY: number): Phaser.GameObjects.Rectangle {
-    const rect = this.scene.add.rectangle(worldX, worldY, CELL_SIZE, CELL_SIZE, COLORS.BROWN_5);
-    rect.setDepth(DEPTH.ROCKS);
-    return rect;
+  private createRockVisual(worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
+    const img = this.scene.add.image(worldX, worldY, 'rocks', frame);
+    img.setDisplaySize(CELL_SIZE, CELL_SIZE);
+    img.setDepth(DEPTH.ROCKS);
+    return img;
   }
 
   /**

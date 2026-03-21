@@ -20,7 +20,20 @@
       "Bash(findstr /i track)",
       "Bash(dir \"C:\\\\Fragdachse\\\\public\\\\assets\\\\sprites\")",
       "Bash(find /c/Fragdachse -type f -name config*)",
-      "Bash(find /c/Fragdachse/src -type f \\\\\\(-name *.ts -o -name *.js \\\\\\))"
+      "Bash(find /c/Fragdachse/src -type f \\\\\\(-name *.ts -o -name *.js \\\\\\))",
+      "Bash(identify \"C:/Fragdachse/public/assets/sprites/rocks.png\")",
+      "Bash(python3 -c \"from PIL import Image; img=Image.open\\(''C:/Fragdachse/public/assets/sprites/rocks.png''\\); print\\(f''Size: {img.size}''\\)\")",
+      "Bash(powershell -Command \"[System.Drawing.Image]::FromFile\\(''C:\\\\Fragdachse\\\\public\\\\assets\\\\sprites\\\\rocks.png''\\).Size\")",
+      "WebFetch(domain:www.boristhebrave.com)",
+      "WebFetch(domain:excaliburjs.com)",
+      "WebFetch(domain:www.tilesetter.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:www.cr31.co.uk)",
+      "WebFetch(domain:stormcloak.games)",
+      "WebFetch(domain:opengameart.org)",
+      "WebFetch(domain:forum.godotengine.org)",
+      "WebFetch(domain:led.itch.io)"
     ]
   }
 }

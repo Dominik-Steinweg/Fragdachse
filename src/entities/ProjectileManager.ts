@@ -49,7 +49,7 @@ export class ProjectileManager {
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
-  private rockObjects: (Phaser.GameObjects.Rectangle | null)[] | null = null;
+  private rockObjects: (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number) => void) | null = null;
 
@@ -69,7 +69,7 @@ export class ProjectileManager {
    */
   setRockGroup(
     group:      Phaser.Physics.Arcade.StaticGroup | null,
-    objects:    (Phaser.GameObjects.Rectangle | null)[] | null,
+    objects:    (Phaser.GameObjects.Image | null)[] | null,
     trunkGroup: Phaser.Physics.Arcade.StaticGroup | null,
   ): void {
     this.rockGroup   = group;
@@ -257,7 +257,7 @@ export class ProjectileManager {
         const c = this.scene.physics.add.overlap(sprite, this.rockGroup, (_proj, rockGO) => {
           if (!rockObjects || !onHit) return;
           if (!tracked.bfgHitRocks) tracked.bfgHitRocks = new Set();
-          const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
+          const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Image);
           if (idx !== -1 && !tracked.bfgHitRocks.has(idx)) {
             tracked.bfgHitRocks.add(idx);
             onHit(idx, tracked.damage);
@@ -437,7 +437,7 @@ export class ProjectileManager {
         if (!applyRockDamage || !rockObjects || !onHit) return;
         const rockMult = tracked.rockDamageMult ?? 1;
         if (rockMult === 0) return;
-        const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Rectangle);
+        const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Image);
         if (idx !== -1) onHit(idx, tracked.damage * rockMult);
       });
       tracked.colliders.push(rockCollider);
