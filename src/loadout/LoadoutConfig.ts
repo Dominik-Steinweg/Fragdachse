@@ -1,5 +1,5 @@
 import { RAGE_MAX } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileStyle } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileStyle, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -85,6 +85,10 @@ export interface WeaponConfig {
     readonly duration:  number;        // ms
     readonly intensity: number;        // 0–1 (Phaser shake intensity)
   };
+
+  // Tracer-Leuchtlinie (optional, data-driven)
+  // undefined = kein Tracer; TracerConfig.colorCore/colorGlow undefined = Spielerfarbe
+  readonly tracerConfig?: TracerConfig;
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg';
@@ -213,6 +217,16 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
     projectileStyle:      'bullet' as ProjectileStyle,
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  3,
+      alphaCore:  0.45,
+      alphaGlow:  0.15,
+      segments:   4,
+      fadeMs:     160,
+      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
+      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+    } satisfies TracerConfig,    
   } as WeaponConfig,
 
   USP: {
@@ -238,6 +252,16 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
     projectileStyle:      'bullet' as ProjectileStyle,
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  3,
+      alphaCore:  0.45,
+      alphaGlow:  0.15,
+      segments:   4,
+      fadeMs:     160,
+      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
+      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+    } satisfies TracerConfig,    
   } as WeaponConfig,
 
   ASMD_PRIM: {
@@ -317,6 +341,16 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
     projectileStyle:      'bullet' as ProjectileStyle,
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  4,
+      alphaCore:  0.45,
+      alphaGlow:  0.15,
+      segments:   4,
+      fadeMs:     160,
+      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
+      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+    } satisfies TracerConfig,
   } as WeaponConfig,
 
   AK47: {
@@ -342,6 +376,16 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   2,
     spreadRecoverySpeed:  100,
     projectileStyle:      'bullet' as ProjectileStyle,
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  3,
+      alphaCore:  0.75,
+      alphaGlow:  0.25,
+      segments:   5,
+      fadeMs:     200,
+      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
+      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+    } satisfies TracerConfig,    
   } as WeaponConfig,
 
   SHOTGUN: {
@@ -369,6 +413,16 @@ export const WEAPON_CONFIGS = {
     pelletCount:          5,
     pelletSpreadAngle:    16,
     projectileStyle:      'bullet' as ProjectileStyle,
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  3,
+      alphaCore:  0.45,
+      alphaGlow:  0.15,
+      segments:   4,
+      fadeMs:     160,
+      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
+      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+    } satisfies TracerConfig,    
   } as WeaponConfig,
 
   /**
@@ -427,7 +481,7 @@ export const WEAPON_CONFIGS = {
       type:                 'projectile',
       projectileSpeed:      3500,
       projectileSize:       4,
-      projectileMaxBounces: 0,
+      projectileMaxBounces: 1,
     },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        60,
@@ -445,6 +499,16 @@ export const WEAPON_CONFIGS = {
     shotRecoilDuration:   200,         // ms – Rückstoß hält 200ms an → deutlich sichtbar
     shotScreenShake:      { duration: 120, intensity: 0.006 },
     rockDamageMult:       1.0,
+    tracerConfig: {
+      widthCore:  2,
+      widthGlow:  6,
+      alphaCore:  0.95,
+      alphaGlow:  0.45,
+      segments:   6,
+      fadeMs:     350,
+      colorCore:  0xffffff,   // weißer Kern
+      // colorGlow:  0xffdd66,   // gelb-goldener Halo
+    } satisfies TracerConfig,
   } as WeaponConfig,
 
   /**

@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
-import type { BulletRenderer } from '../effects/BulletRenderer';
-import type { FlameRenderer }  from '../effects/FlameRenderer';
-import type { BfgRenderer }    from '../effects/BfgRenderer';
-import type { AwpRenderer }    from '../effects/AwpRenderer';
+import type { BulletRenderer }  from '../effects/BulletRenderer';
+import type { FlameRenderer }   from '../effects/FlameRenderer';
+import type { BfgRenderer }     from '../effects/BfgRenderer';
+import type { AwpRenderer }     from '../effects/AwpRenderer';
+import type { TracerRenderer }  from '../effects/TracerRenderer';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -37,8 +38,11 @@ export class ProjectileManager {
   // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
   private bfgRenderer: BfgRenderer | null = null;
 
-  // ── AWP-Renderer (Rauchspur + Enhanced Bullet) ───────────────────────────
+  // ── AWP-Renderer (Enhanced Bullet) ───────────────────────────────────────
   private awpRenderer: AwpRenderer | null = null;
+
+  // ── Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) ───────
+  private tracerRenderer: TracerRenderer | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
@@ -118,9 +122,14 @@ export class ProjectileManager {
     this.bfgRenderer = renderer;
   }
 
-  /** Injiziert den AwpRenderer für AWP-Projektil-Darstellung (Rauchspur). */
+  /** Injiziert den AwpRenderer für AWP-Projektil-Darstellung. */
   setAwpRenderer(renderer: AwpRenderer | null): void {
     this.awpRenderer = renderer;
+  }
+
+  /** Injiziert den TracerRenderer für data-driven Leuchtlinien. */
+  setTracerRenderer(renderer: TracerRenderer | null): void {
+    this.tracerRenderer = renderer;
   }
 
   /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
@@ -209,6 +218,7 @@ export class ProjectileManager {
       fuseTime:        cfg.fuseTime,
       grenadeEffect:   cfg.grenadeEffect,
       projectileStyle: cfg.projectileStyle,
+      tracerConfig:    cfg.tracerConfig,
       detonable:       cfg.detonable,
       detonator:       cfg.detonator,
       rockDamageMult:  cfg.rockDamageMult,
@@ -324,6 +334,11 @@ export class ProjectileManager {
         });
         tracked.colliders.push(c);
       }
+    }
+
+    // Tracer-Leuchtlinie (optional, data-driven via tracerConfig)
+    if (cfg.tracerConfig && this.tracerRenderer) {
+      this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.color);
     }
 
     this.projectiles.push(tracked);
@@ -515,6 +530,7 @@ export class ProjectileManager {
     proj.sprite.destroy();
     this.bulletRenderer?.destroyBullet(proj.id);
     this.awpRenderer?.destroyVisual(proj.id);
+    this.tracerRenderer?.destroyTracer(proj.id);
     this.flameRenderer?.destroyFlameVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
     this.projectiles.splice(idx, 1);
@@ -533,6 +549,7 @@ export class ProjectileManager {
     this.projectiles = [];
     this.bulletRenderer?.destroyAll();
     this.awpRenderer?.destroyAll();
+    this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
@@ -593,6 +610,7 @@ export class ProjectileManager {
           proj.sprite.destroy();
           renderer?.destroyBullet(proj.id);
           this.awpRenderer?.destroyVisual(proj.id);
+          this.tracerRenderer?.destroyTracer(proj.id);
           this.flameRenderer?.destroyFlameVisual(proj.id);
           this.bfgRenderer?.destroyVisual(proj.id);
         } else if (proj.isFlame) {
@@ -686,15 +704,34 @@ export class ProjectileManager {
       }
     }
 
+    // TracerRenderer-Visuals aktualisieren (Host rendert Tracer ebenfalls)
+    const tracerR = this.tracerRenderer;
+    if (tracerR) {
+      for (const proj of this.projectiles) {
+        if (proj.tracerConfig) {
+          tracerR.updateTracer(proj.id, proj.sprite.x, proj.sprite.y,
+            proj.body.velocity.x, proj.body.velocity.y);
+        }
+      }
+      // Verwaiste Tracer-Visuals entfernen
+      const activeTracerIds = new Set(
+        this.projectiles.filter(p => p.tracerConfig).map(p => p.id),
+      );
+      for (const id of tracerR.getActiveIds()) {
+        if (!activeTracerIds.has(id)) tracerR.destroyTracer(id);
+      }
+    }
+
     const synced: SyncedProjectile[] = this.projectiles.map(p => ({
-      id:    p.id,
-      x:     Math.round(p.sprite.x),
-      y:     Math.round(p.sprite.y),
-      vx:    Math.round(p.body.velocity.x),
-      vy:    Math.round(p.body.velocity.y),
-      size:  Math.round(p.sprite.displayWidth),
-      color: p.color,
-      style: p.projectileStyle,
+      id:     p.id,
+      x:      Math.round(p.sprite.x),
+      y:      Math.round(p.sprite.y),
+      vx:     Math.round(p.body.velocity.x),
+      vy:     Math.round(p.body.velocity.y),
+      size:   Math.round(p.sprite.displayWidth),
+      color:  p.color,
+      style:  p.projectileStyle,
+      tracer: p.tracerConfig,
     }));
 
     return { synced, explodedGrenades, countdownEvents };
@@ -754,6 +791,12 @@ export class ProjectileManager {
         }
       }
     }
+    const tracerRc = this.tracerRenderer;
+    if (tracerRc) {
+      for (const id of tracerRc.getActiveIds()) {
+        if (!activeIds.has(id)) tracerRc.destroyTracer(id);
+      }
+    }
 
     // Server-State aktualisieren und neue Visuals erstellen
     for (const proj of data) {
@@ -766,6 +809,10 @@ export class ProjectileManager {
       const prev = this.clientProjStates.get(proj.id);
       const velocityFlipped = prev && (isBullet || isAwpP) &&
         (prev.vx * proj.vx < -1 || prev.vy * proj.vy < -1);
+      // Tracer-Spawn nach Abpraller zurücksetzen (vor dem Tracer-Update weiter unten)
+      if (velocityFlipped && tracerRc && tracerRc.has(proj.id)) {
+        tracerRc.notifyBounce(proj.id, proj.x, proj.y);
+      }
 
       // Extrapolations-State speichern/aktualisieren
       this.clientProjStates.set(proj.id, {
@@ -819,6 +866,14 @@ export class ProjectileManager {
           existing.setPosition(proj.x, proj.y);
         }
       }
+
+      // Tracer (unabhängig vom Renderer-Typ, data-driven via proj.tracer)
+      if (proj.tracer && tracerRc) {
+        if (!tracerRc.has(proj.id)) {
+          tracerRc.createTracer(proj.id, proj.x, proj.y, proj.tracer, proj.color);
+        }
+        tracerRc.updateTracer(proj.id, proj.x, proj.y, proj.vx, proj.vy);
+      }
     }
   }
 
@@ -869,6 +924,12 @@ export class ProjectileManager {
       } else {
         const sprite = this.clientVisuals.get(id);
         if (sprite) sprite.setPosition(ex, ey);
+      }
+
+      // Tracer: unabhängig vom Renderer, wenn vorhanden
+      const tracerRe = this.tracerRenderer;
+      if (tracerRe && tracerRe.has(id)) {
+        tracerRe.updateTracer(id, ex, ey, state.vx, state.vy);
       }
     }
   }

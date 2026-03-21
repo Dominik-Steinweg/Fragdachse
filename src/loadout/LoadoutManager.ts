@@ -622,6 +622,7 @@ export class LoadoutManager {
       adrenalinGain:   config.adrenalinGain,
       weaponName:      config.displayName,
       projectileStyle: config.projectileStyle,
+      tracerConfig:    config.tracerConfig,
       detonable:       config.detonable,
       detonator:       config.detonator,
       rockDamageMult:  config.rockDamageMult,

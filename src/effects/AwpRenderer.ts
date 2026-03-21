@@ -17,14 +17,6 @@ const GLOW_TEX_SIZE     = 24;
 const GLOW_SCALE        = 2.8;
 const GLOW_ALPHA        = 0.55;
 
-// ── Tracer-Linie ───────────────────────────────────────────────────────────
-const TRACER_COLOR_CORE  = 0xffffff;   // innere Linie: helles Weiß
-const TRACER_COLOR_GLOW  = 0xffdd66;   // äußere Linie: gelb-gold (Leuchteffekt)
-const TRACER_WIDTH_CORE  = 2;          // px
-const TRACER_WIDTH_GLOW  = 6;          // px
-const TRACER_SEGMENTS    = 6;          // Gradient-Segmente (mehr = weicherer Fade)
-const TRACER_FADE_MS     = 350;        // Ausklang nach Einschlag (ms)
-
 // ── Impact-Funken ──────────────────────────────────────────────────────────
 const SPARK_COUNT      = 16;
 const SPARK_LIFESPAN   = 280;
@@ -35,20 +27,17 @@ const SPARK_GRAVITY_Y  = 220;
 const SPARK_COLORS     = [0xffffff, 0xffee88, 0xffaa44, 0xff6622];
 
 // ── Depth-Layer ────────────────────────────────────────────────────────────
-const DEPTH_TRACER = DEPTH.PROJECTILES - 2;
 const DEPTH_TRAIL  = DEPTH.PROJECTILES - 1;
 const DEPTH_GLOW   = DEPTH.PROJECTILES - 1;
 const DEPTH_BULLET = DEPTH.PROJECTILES;
 const DEPTH_SPARK  = DEPTH.PROJECTILES + 1;
 
 // ── Interner State pro AWP-Projektil ──────────────────────────────────────
+// Tracer-Linie wird von TracerRenderer verwaltet (data-driven, wiederverwendbar)
 interface AwpVisual {
   bullet: Phaser.GameObjects.Image;
   trail:  Phaser.GameObjects.Image;
   glow:   Phaser.GameObjects.Image;
-  tracer: Phaser.GameObjects.Graphics;  // Leuchtlinie von Spawn bis aktuelle Position
-  spawnX: number;
-  spawnY: number;
   prevX:  number;
   prevY:  number;
 }
@@ -183,11 +172,7 @@ export class AwpRenderer {
     glow.setBlendMode(Phaser.BlendModes.ADD);
     glow.setDepth(DEPTH_GLOW);
 
-    // Tracer-Linie: Graphics-Objekt in Weltkoordinaten, jeden Frame neu gezeichnet
-    const tracer = this.scene.add.graphics();
-    tracer.setDepth(DEPTH_TRACER);
-
-    this.visuals.set(id, { bullet, trail, glow, tracer, spawnX: x, spawnY: y, prevX: x, prevY: y });
+    this.visuals.set(id, { bullet, trail, glow, prevX: x, prevY: y });
   }
 
   updateVisual(id: number, x: number, y: number, vx: number, vy: number): boolean {
@@ -199,9 +184,6 @@ export class AwpRenderer {
     bv.trail.setPosition(x, y).setRotation(rot);
     bv.glow.setPosition(x, y);
 
-    // Tracer: jeden Frame von Spawn bis aktuelle Position neu zeichnen
-    this._drawTracer(bv.tracer, bv.spawnX, bv.spawnY, x, y);
-
     const dx      = x - bv.prevX;
     const dy      = y - bv.prevY;
     const bounced = (dx !== 0 || dy !== 0) && (dx * vx < -0.5 || dy * vy < -0.5);
@@ -211,38 +193,8 @@ export class AwpRenderer {
   }
 
   /**
-   * Zeichnet die Tracer-Linie als Gradient:
-   * TRACER_SEGMENTS Abschnitte von Spawn bis Bullet, Opazität steigt von 0 → 1.
-   * Jeder Abschnitt: dicker gelber Außen-Glow + dünner weißer Kern.
-   */
-  private _drawTracer(
-    g: Phaser.GameObjects.Graphics,
-    sx: number, sy: number,
-    ex: number, ey: number,
-  ): void {
-    g.clear();
-    const N = TRACER_SEGMENTS;
-    for (let i = 0; i < N; i++) {
-      const t0 = i / N;
-      const t1 = (i + 1) / N;
-      // Sanfter Gradient: quadratisch von fast-null bis eins
-      const alpha = ((t0 + t1) / 2) * ((t0 + t1) / 2);
-      const x0 = sx + (ex - sx) * t0,  y0 = sy + (ey - sy) * t0;
-      const x1 = sx + (ex - sx) * t1,  y1 = sy + (ey - sy) * t1;
-
-      // Äußerer Glow
-      g.lineStyle(TRACER_WIDTH_GLOW, TRACER_COLOR_GLOW, alpha * 0.45);
-      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.strokePath();
-
-      // Innerer heller Kern
-      g.lineStyle(TRACER_WIDTH_CORE, TRACER_COLOR_CORE, alpha * 0.95);
-      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.strokePath();
-    }
-  }
-
-  /**
    * Visual für dieses Projektil entfernen.
-   * Bullet/Trail/Glow sofort zerstören; Tracer-Linie bleibt kurz sichtbar und klingt aus.
+   * Bullet/Trail/Glow sofort zerstören. Tracer wird separat von TracerRenderer verwaltet.
    */
   destroyVisual(id: number): void {
     const bv = this.visuals.get(id);
@@ -252,15 +204,6 @@ export class AwpRenderer {
     bv.bullet.destroy();
     bv.trail.destroy();
     bv.glow.destroy();
-
-    // Tracer: Fadeout, dann Objekt aufräumen
-    this.scene.tweens.add({
-      targets:  bv.tracer,
-      alpha:    0,
-      duration: TRACER_FADE_MS,
-      ease:     'Power2',
-      onComplete: () => { if (bv.tracer.scene) bv.tracer.destroy(); },
-    });
   }
 
   /**
@@ -302,7 +245,6 @@ export class AwpRenderer {
       bv.bullet.destroy();
       bv.trail.destroy();
       bv.glow.destroy();
-      if (bv.tracer.scene) bv.tracer.destroy();
     }
     this.visuals.clear();
     for (const e of this.activeSparkEmitters) {

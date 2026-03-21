@@ -23,6 +23,7 @@ import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
 import { AwpRenderer }         from '../effects/AwpRenderer';
+import { TracerRenderer }      from '../effects/TracerRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
@@ -63,6 +64,7 @@ export class ArenaScene extends Phaser.Scene {
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
   private awpRenderer!:       AwpRenderer;
+  private tracerRenderer!:    TracerRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
@@ -186,6 +188,8 @@ export class ArenaScene extends Phaser.Scene {
     this.awpRenderer = new AwpRenderer(this);
     this.awpRenderer.generateTextures();
     this.projectileManager.setAwpRenderer(this.awpRenderer);
+    this.tracerRenderer = new TracerRenderer(this);
+    this.projectileManager.setTracerRenderer(this.tracerRenderer);
     this.nukeRenderer = new NukeRenderer(this);
     this.nukeRenderer.generateTextures();
     this.powerUpRenderer = new PowerUpRenderer(this);

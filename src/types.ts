@@ -44,16 +44,33 @@ export interface PlayerNetState {
 /** Visueller Stil eines Projektils */
 export type ProjectileStyle = 'bullet' | 'ball' | 'flame' | 'bfg' | 'awp';
 
+/**
+ * Konfiguration für die Tracer-Leuchtlinie eines Projektils (data-driven).
+ * Alle Felder ohne `?` sind Pflichtangaben.
+ */
+export interface TracerConfig {
+  readonly widthCore:  number;   // Breite der inneren hellen Linie (px)
+  readonly widthGlow:  number;   // Breite des äußeren Leucht-Halos (px)
+  readonly alphaCore:  number;   // Max-Opazität der inneren Linie am Bullet-Kopf (0–1)
+  readonly alphaGlow:  number;   // Max-Opazität des äußeren Halos am Bullet-Kopf (0–1)
+  readonly segments:   number;   // Anzahl Gradient-Abschnitte (mehr = weicherer Fade)
+  readonly fadeMs:     number;   // Fadeout-Dauer nach Einschlag (ms)
+  readonly maxLength?: number;   // Max. sichtbare Trail-Länge in px (undefined = voller Pfad ab Spawn)
+  readonly colorCore?: number;   // Farb-Override innere Linie (undefined = Projektil-/Spielerfarbe)
+  readonly colorGlow?: number;   // Farb-Override äußerer Halo (undefined = Projektil-/Spielerfarbe)
+}
+
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
-  id:     number;
-  x:      number;
-  y:      number;
-  vx:     number;  // Geschwindigkeit X (px/s) – für Client-seitige Trail-Orientierung
-  vy:     number;  // Geschwindigkeit Y (px/s)
-  size:   number;  // px – für korrekte Client-Darstellung
-  color:  number;  // hex
-  style?: ProjectileStyle;  // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
+  id:      number;
+  x:       number;
+  y:       number;
+  vx:      number;  // Geschwindigkeit X (px/s) – für Client-seitige Trail-Orientierung
+  vy:      number;  // Geschwindigkeit Y (px/s)
+  size:    number;  // px – für korrekte Client-Darstellung
+  color:   number;  // hex
+  style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
+  tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
@@ -116,6 +133,7 @@ export interface ProjectileSpawnConfig {
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
+  tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional, data-driven)
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // Projektil kann durch passende Detonatoren gezündet werden
   detonator?: DetonatorConfig;  // Projektil löst passende Detonables aus (z.B. Selbst-Detonation)
@@ -232,6 +250,7 @@ export interface TrackedProjectile {
   fuseTime?:       number;
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil
+  tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional)
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // dieses Projektil kann gezündet werden
   detonator?: DetonatorConfig;  // dieses Projektil kann andere Detonables zünden
