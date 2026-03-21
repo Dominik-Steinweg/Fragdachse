@@ -97,6 +97,7 @@ export class LoadoutManager {
     this.savedUtilities.delete(playerId);
     this.utilityAmmo.delete(playerId);
     this.bridge.publishUtilityCooldownUntil(playerId, 0);
+    this.bridge.publishUtilityOverrideName(playerId, '');
   }
 
   removePlayer(playerId: string): void {
@@ -142,6 +143,7 @@ export class LoadoutManager {
     loadout.utility = new GenericUtility(config);
     this.utilityAmmo.set(playerId, ammo);
     this.bridge.publishUtilityCooldownUntil(playerId, 0); // sofort einsatzbereit
+    this.bridge.publishUtilityOverrideName(playerId, config.displayName);
   }
 
   /**
@@ -166,6 +168,7 @@ export class LoadoutManager {
     const now = Date.now();
     const remaining = saved.config.cooldown - (now - saved.lastUsedAt);
     this.bridge.publishUtilityCooldownUntil(playerId, remaining > 0 ? now + remaining : 0);
+    this.bridge.publishUtilityOverrideName(playerId, ''); // Override aufgehoben
   }
 
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────

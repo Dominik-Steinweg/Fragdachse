@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
+import { circleZone, edgeZone } from './EffectUtils';
 import type { FireGrenadeEffect, SyncedFireZone } from '../types';
 
 /* ── Texture keys ─────────────────────────────────────── */
@@ -180,7 +181,7 @@ export class FireSystem {
       emitting:  true,
     });
     emberEmitter.setDepth(DEPTH.FIRE);
-    emberEmitter.addEmitZone(this.circleZone(r * 0.85));
+    emberEmitter.addEmitZone(circleZone(r * 0.85));
 
     /* ── Bright spark emitter (concentrated near center, drifts upward) ── */
     const sparkEmitter = this.scene.add.particles(zone.x, zone.y, TEX_SPARK, {
@@ -196,7 +197,7 @@ export class FireSystem {
       emitting:  true,
     });
     sparkEmitter.setDepth(DEPTH.FIRE + 0.1);
-    sparkEmitter.addEmitZone(this.circleZone(r * 0.5));
+    sparkEmitter.addEmitZone(circleZone(r * 0.5));
 
     /* ── Rim emitter: clearly marks damage boundary ── */
     const rimEmitter = this.scene.add.particles(zone.x, zone.y, TEX_EMBER, {
@@ -212,7 +213,7 @@ export class FireSystem {
       emitting:  true,
     });
     rimEmitter.setDepth(DEPTH.FIRE);
-    rimEmitter.addEmitZone(this.edgeZone(r));
+    rimEmitter.addEmitZone(edgeZone(r));
 
     return { baseGfx, emberEmitter, sparkEmitter, rimEmitter, zoneRadius: r };
   }
@@ -234,11 +235,11 @@ export class FireSystem {
     /* Resize emit zones if radius changed significantly */
     if (Math.abs(r - visual.zoneRadius) >= 4) {
       visual.emberEmitter.clearEmitZones();
-      visual.emberEmitter.addEmitZone(this.circleZone(r * 0.85));
+      visual.emberEmitter.addEmitZone(circleZone(r * 0.85));
       visual.sparkEmitter.clearEmitZones();
-      visual.sparkEmitter.addEmitZone(this.circleZone(r * 0.5));
+      visual.sparkEmitter.addEmitZone(circleZone(r * 0.5));
       visual.rimEmitter.clearEmitZones();
-      visual.rimEmitter.addEmitZone(this.edgeZone(r));
+      visual.rimEmitter.addEmitZone(edgeZone(r));
       visual.zoneRadius = r;
     }
   }
@@ -337,23 +338,5 @@ export class FireSystem {
     }
     gfx.generateTexture(TEX_SPARK, SIZE, SIZE);
     gfx.destroy();
-  }
-
-  // ── Zone helpers ──────────────────────────────────────────────────────────
-
-  private circleZone(r: number): Phaser.Types.GameObjects.Particles.EmitZoneData {
-    return {
-      type:   'random',
-      source: new Phaser.Geom.Circle(0, 0, r),
-    } as Phaser.Types.GameObjects.Particles.EmitZoneData;
-  }
-
-  /** Randzone: Partikel entstehen genau auf dem Kreisrand. */
-  private edgeZone(r: number): Phaser.Types.GameObjects.Particles.EmitZoneData {
-    return {
-      type:   'edge',
-      source: new Phaser.Geom.Circle(0, 0, r),
-      quantity: 32,
-    } as Phaser.Types.GameObjects.Particles.EmitZoneData;
   }
 }

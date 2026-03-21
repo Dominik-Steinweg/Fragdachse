@@ -22,7 +22,6 @@ import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
-import { AwpRenderer }         from '../effects/AwpRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
@@ -63,7 +62,6 @@ export class ArenaScene extends Phaser.Scene {
   private bulletRenderer!:    BulletRenderer;
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
-  private awpRenderer!:       AwpRenderer;
   private tracerRenderer!:    TracerRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
@@ -102,6 +100,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
   private clientUtilityOverride: UtilityConfig | null = null; // Client-seitige Vorhersage für Utility-Override (BFG/HHG)
+
+  // ── Client-seitige Waffen-Cooldown-Tracker (für HUD) ───────────────────────
+  private weaponLastFired: Record<'weapon1' | 'weapon2', number> = { weapon1: 0, weapon2: 0 };
 
   // ── Dash-Visual-Tracking (client-seitig) ──────────────────────────────────
   private dashPhase2StartTimes = new Map<string, number>(); // playerId → lokaler Zeitstempel
@@ -187,9 +188,6 @@ export class ArenaScene extends Phaser.Scene {
     this.bfgRenderer = new BfgRenderer(this);
     this.bfgRenderer.generateTextures();
     this.projectileManager.setBfgRenderer(this.bfgRenderer);
-    this.awpRenderer = new AwpRenderer(this);
-    this.awpRenderer.generateTextures();
-    this.projectileManager.setAwpRenderer(this.awpRenderer);
     this.tracerRenderer = new TracerRenderer(this);
     this.projectileManager.setTracerRenderer(this.tracerRenderer);
     this.nukeRenderer = new NukeRenderer(this);
@@ -242,10 +240,14 @@ export class ArenaScene extends Phaser.Scene {
       if (slot === 'weapon1' || slot === 'weapon2') {
         this.aimSystem?.notifyShot(slot);
         shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
+        // Track fire timestamp for client-side cooldown HUD
+        this.weaponLastFired[slot] = Date.now();
+        this.leftPanel.flashSlot(slot);
       }
       // Client-seitigen Utility-Override nach Benutzung zurücksetzen
-      if (slot === 'utility' && this.clientUtilityOverride) {
-        this.clientUtilityOverride = null;
+      if (slot === 'utility') {
+        if (this.clientUtilityOverride) this.clientUtilityOverride = null;
+        this.leftPanel.flashSlot('utility');
       }
       // Lokale Sprite-Position mitsenden für Hitscan-Kompensation bei 20Hz Tick-Rate
       const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
@@ -266,7 +268,7 @@ export class ArenaScene extends Phaser.Scene {
       this.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
     });
 
-    // ── 8. Left Side Panel (Namensanzeige + ResourceHUD) ──────────────────
+    // ── 8. Left Side Panel (Namensanzeige + ArenaHUD) ─────────────────────
     this.leftPanel = new LeftSidePanel(this, bridge);
     this.leftPanel.build();
 
@@ -1264,11 +1266,21 @@ export class ArenaScene extends Phaser.Scene {
         this.burrowSystem?.isBurrowed(localId) ?? false,
       );
       localPlayer.setRotation(this.inputSystem.getAimAngle());
-      this.leftPanel.updateResources(
-        this.resourceSystem?.getAdrenaline(localId) ?? 0,
-        this.resourceSystem?.getRage(localId) ?? 0,
-        this.inputSystem.getDashCooldownFrac(),
-      );
+      const now = Date.now();
+      const utilCfg = this.loadoutManager?.getEquippedUtilityConfig(localId);
+      const syringeActive = (this.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1;
+      this.leftPanel.updateArenaHUD({
+        hp:                      this.combatSystem.getHP(localId),
+        adrenaline:              this.resourceSystem?.getAdrenaline(localId) ?? 0,
+        rage:                    this.resourceSystem?.getRage(localId) ?? 0,
+        isUltimateActive:        this.loadoutManager?.isUltimateActive(localId) ?? false,
+        weapon1CooldownFrac:     this.loadoutManager?.getCooldownFrac(localId, 'weapon1', now) ?? 0,
+        weapon2CooldownFrac:     this.loadoutManager?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
+        utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
+        utilityDisplayName:      utilCfg?.displayName,
+        adrenalineSyringeActive: syringeActive,
+        isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
+      });
       this.localPlayerAlive    = this.combatSystem.isAlive(localId);
       this.localPlayerBurrowed = this.burrowSystem?.isBurrowed(localId) ?? false;
     }
@@ -1292,6 +1304,9 @@ export class ArenaScene extends Phaser.Scene {
       const isMoving   = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
       const aim        = this.loadoutManager?.getAimNetState(player.id, isMoving)
                       ?? this.getDefaultAimState(isMoving);
+
+      // Publish adrenaline syringe state for client HUD
+      bridge.publishAdrSyringeActive(player.id, (this.powerUpSystem?.getRegenMultiplier(player.id) ?? 1) > 1);
 
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
@@ -1426,11 +1441,22 @@ export class ArenaScene extends Phaser.Scene {
     if (localState) {
       this.aimSystem?.setAuthoritativeState(localState.aim);
       this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);
-      this.leftPanel.updateResources(
-        localState.adrenaline,
-        localState.rage,
-        this.inputSystem.getDashCooldownFrac(),
-      );
+      const overrideName = bridge.getPlayerUtilityOverrideName(localId2);
+      const utilDisplayName = overrideName
+        || this.clientUtilityOverride?.displayName
+        || undefined;
+      this.leftPanel.updateArenaHUD({
+        hp:                      localState.hp,
+        adrenaline:              localState.adrenaline,
+        rage:                    localState.rage,
+        isUltimateActive:        localState.isRaging,
+        weapon1CooldownFrac:     this.getClientWeaponCooldownFrac('weapon1'),
+        weapon2CooldownFrac:     this.getClientWeaponCooldownFrac('weapon2'),
+        utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
+        utilityDisplayName:      utilDisplayName,
+        adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
+        isUtilityOverridden:     overrideName !== '' || this.clientUtilityOverride !== null,
+      });
       this.localPlayerAlive    = localState.alive;
       this.localPlayerBurrowed = localState.isBurrowed;
     }
@@ -1486,6 +1512,27 @@ export class ArenaScene extends Phaser.Scene {
     // Fallback: Loadout-Menü-Auswahl
     const selection = this.resolveLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
+  }
+
+  /** Client-seitiger Waffen-Cooldown basierend auf lokalem Fire-Timestamp und Config-Cooldown. */
+  private getClientWeaponCooldownFrac(slot: 'weapon1' | 'weapon2'): number {
+    const lastFired = this.weaponLastFired[slot];
+    if (lastFired === 0) return 0;
+    const config = this.getLocalWeaponConfig(slot);
+    const elapsed = Date.now() - lastFired;
+    if (elapsed >= config.cooldown) return 0;
+    return 1 - elapsed / config.cooldown;
+  }
+
+  /** Utility-Cooldown als Fraktion 0 (bereit) – 1 (gerade benutzt) für HUD. */
+  private getLocalUtilityCooldownFrac(): number {
+    const localId = bridge.getLocalPlayerId();
+    const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId);
+    const remaining = cooldownUntil - Date.now();
+    if (remaining <= 0) return 0;
+    const config = this.getLocalUtilityConfig();
+    if (config.cooldown <= 0) return 0;
+    return Math.min(1, remaining / config.cooldown);
   }
 
   private playPredictedLocalHitscanTracer(

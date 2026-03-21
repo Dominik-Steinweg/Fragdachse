@@ -35,6 +35,8 @@ const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
 const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: number (Date.now()-Timestamp bis Utility wieder bereit)
+const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
+const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
@@ -884,6 +886,32 @@ export class NetworkBridge {
   /** Liest den autoritativen Utility-Cooldown-Endzeitpunkt eines Spielers (0 = bereit). */
   getPlayerUtilityCooldownUntil(playerId: string): number {
     return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_CD_UNTIL) as number | undefined) ?? 0;
+  }
+
+  /** Host-only: Publiziert den Display-Namen einer Utility-Override (z.B. BFG, Heilige Handgranate). Leerstring = kein Override. */
+  publishUtilityOverrideName(playerId: string, name: string): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    ps.setState(KEY_UTILITY_OVERRIDE_NAME, name, true);
+  }
+
+  /** Liest den aktuellen Utility-Override-Namen eines Spielers (leer = kein Override). */
+  getPlayerUtilityOverrideName(playerId: string): string {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_NAME) as string | undefined) ?? '';
+  }
+
+  /** Host-only: Publiziert ob die Adrenalinspritze eines Spielers aktiv ist. */
+  publishAdrSyringeActive(playerId: string, active: boolean): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    ps.setState(KEY_ADR_SYRINGE, active, true);
+  }
+
+  /** Liest ob die Adrenalinspritze eines Spielers aktiv ist. */
+  getPlayerAdrSyringeActive(playerId: string): boolean {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_ADR_SYRINGE) as boolean | undefined) ?? false;
   }
 
   // ── Frag-Tracking: pro Spieler (per-player state) ────────────────────────

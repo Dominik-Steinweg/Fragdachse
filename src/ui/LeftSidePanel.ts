@@ -2,13 +2,14 @@
  * LeftSidePanel – linker Seitenbereich (x=0..240) für Lobby- und Arena-Phase.
  *
  * lobbyContainer (y=0):      Namensanzeige, Farbauswahl
- * gameContainer  (y=−H):     ResourceHUD-Balken (initial off-screen oben)
+ * gameContainer  (y=−H):     ArenaHUD (initial off-screen oben)
  *
  * Reusability-Template: gleiche Public-API wie RightSidePanel.
  */
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import { ResourceHUD } from './ResourceHUD';
+import { ArenaHUD } from './ArenaHUD';
+import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import type { LoadoutSlot } from '../types';
@@ -80,7 +81,7 @@ interface SwatchEntry {
 export class LeftSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
-  private resourceHUD!:    ResourceHUD;
+  private arenaHUD!:       ArenaHUD;
   private localNameText!:  Phaser.GameObjects.Text;
   private nameEditEnabled  = true;
   private nameEditOpen     = false;
@@ -108,10 +109,10 @@ export class LeftSidePanel {
   // ── Aufbau ─────────────────────────────────────────────────────────────────
 
   build(): void {
-    // ── gameContainer (ResourceHUD-Balken, initial off-screen oben) ───────────
+    // ── gameContainer (ArenaHUD, initial off-screen oben) ─────────────────────
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
     this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
-    this.resourceHUD = new ResourceHUD(this.scene, this.gameContainer);
+    this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer);
 
     // ── lobbyContainer (Namens- und Farbsektion, initial on-screen) ───────────
     const objects: Phaser.GameObjects.GameObject[] = [];
@@ -211,6 +212,9 @@ export class LeftSidePanel {
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.pendingDelay?.remove();
 
+    // Populate ArenaHUD with player info and loadout names
+    this.initArenaHUD();
+
     this.scene.tweens.add({
       targets:  this.lobbyContainer,
       y:        GAME_HEIGHT,
@@ -233,6 +237,8 @@ export class LeftSidePanel {
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.pendingDelay?.remove();
+
+    this.arenaHUD.reset();
 
     this.scene.tweens.add({
       targets:  this.gameContainer,
@@ -262,8 +268,14 @@ export class LeftSidePanel {
     this.localNameText?.setText(name);
   }
 
-  updateResources(adrenaline: number, rage: number, dashCooldownFrac: number): void {
-    this.resourceHUD.update(adrenaline, rage, dashCooldownFrac);
+  /** Per-frame arena HUD update with all player vitals. */
+  updateArenaHUD(data: ArenaHUDData): void {
+    this.arenaHUD.update(data);
+  }
+
+  /** Trigger fire-highlight on a weapon/utility slot. */
+  flashSlot(slot: 'weapon1' | 'weapon2' | 'utility'): void {
+    this.arenaHUD.flashSlot(slot);
   }
 
   /** Aktualisiert das Farbindikator-Quadrat anhand des aktuellen Player-States. */
@@ -294,7 +306,7 @@ export class LeftSidePanel {
   }
 
   destroy(): void {
-    this.resourceHUD.destroy();
+    this.arenaHUD.destroy();
     this.lobbyContainer.destroy(true);
     this.gameContainer.destroy(true);
     this.pickerContainer.destroy(true);
@@ -515,5 +527,31 @@ export class LeftSidePanel {
       if (e.key === 'Enter')  saveName();
       if (e.key === 'Escape') closePopup();
     });
+  }
+
+  // ── Arena-HUD Initialisation ─────────────────────────────────────────────
+
+  private initArenaHUD(): void {
+    const localId = this.bridge.getLocalPlayerId();
+
+    // Player name + colour
+    const players = this.bridge.getConnectedPlayers();
+    const localProfile = players.find(p => p.id === localId);
+    const name  = localProfile?.name ?? 'Spieler';
+    const color = this.bridge.getPlayerColor(localId) ?? 0xffffff;
+    this.arenaHUD.setPlayerInfo(name, color);
+
+    // Loadout display names
+    const w1Id  = this.bridge.getPlayerLoadoutSlot(localId, 'weapon1');
+    const w2Id  = this.bridge.getPlayerLoadoutSlot(localId, 'weapon2');
+    const utId  = this.bridge.getPlayerLoadoutSlot(localId, 'utility');
+    const ulId  = this.bridge.getPlayerLoadoutSlot(localId, 'ultimate');
+
+    const w1Name  = (w1Id && WEAPON_CONFIGS[w1Id as keyof typeof WEAPON_CONFIGS]?.displayName) ?? 'Glock';
+    const w2Name  = (w2Id && WEAPON_CONFIGS[w2Id as keyof typeof WEAPON_CONFIGS]?.displayName) ?? 'P90';
+    const utName  = (utId && UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]?.displayName) ?? 'Granate';
+    const ulName  = (ulId && ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]?.displayName) ?? 'Honigdachs-Wut';
+
+    this.arenaHUD.setLoadoutNames(w1Name, w2Name, utName, ulName);
   }
 }

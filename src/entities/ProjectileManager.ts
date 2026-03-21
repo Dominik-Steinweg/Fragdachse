@@ -2,9 +2,9 @@ import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
+import { BULLET_STYLE, AWP_STYLE } from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
-import type { AwpRenderer }     from '../effects/AwpRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
 /** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
@@ -41,8 +41,6 @@ export class ProjectileManager {
   // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
   private bfgRenderer: BfgRenderer | null = null;
 
-  // ── AWP-Renderer (Enhanced Bullet) ───────────────────────────────────────
-  private awpRenderer: AwpRenderer | null = null;
 
   // ── Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) ───────
   private tracerRenderer: TracerRenderer | null = null;
@@ -125,11 +123,6 @@ export class ProjectileManager {
     this.bfgRenderer = renderer;
   }
 
-  /** Injiziert den AwpRenderer für AWP-Projektil-Darstellung. */
-  setAwpRenderer(renderer: AwpRenderer | null): void {
-    this.awpRenderer = renderer;
-  }
-
   /** Injiziert den TracerRenderer für data-driven Leuchtlinien. */
   setTracerRenderer(renderer: TracerRenderer | null): void {
     this.tracerRenderer = renderer;
@@ -171,14 +164,14 @@ export class ProjectileManager {
     if (isBullet && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.bulletRenderer.createBullet(id, x, y, cfg.size, cfg.color);
+      this.bulletRenderer.createVisual(id, x, y, cfg.size, cfg.color, BULLET_STYLE);
     }
 
-    // AWP-Projektile sind unsichtbar (Rendering übernimmt AwpRenderer mit Rauchspur)
-    if (isAwp && this.awpRenderer) {
+    // AWP-Projektile sind unsichtbar (Rendering übernimmt BulletRenderer mit AWP-Stil)
+    if (isAwp && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.awpRenderer.createVisual(id, x, y, cfg.size, cfg.color);
+      this.bulletRenderer.createVisual(id, x, y, cfg.size, cfg.color, AWP_STYLE);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -417,11 +410,9 @@ export class ProjectileManager {
     const isBullet     = tracked.projectileStyle === 'bullet';
     const isAwp        = tracked.projectileStyle === 'awp';
     const renderer     = this.bulletRenderer;
-    const awpR         = this.awpRenderer;
 
     const playImpact = (bx: number, by: number, bvx: number, bvy: number, col: number) => {
-      if (isAwp && awpR)     awpR.playImpactSparks(bx, by, bvx, bvy, col);
-      else if (isBullet && renderer) renderer.playImpactSparks(bx, by, bvx, bvy, col);
+      if ((isBullet || isAwp) && renderer) renderer.playImpactSparks(tracked.id, bx, by, bvx, bvy, col);
     };
 
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
@@ -566,10 +557,9 @@ export class ProjectileManager {
     this.scene.physics.world.off('worldbounds', proj.boundsListener);
     for (const c of proj.colliders) c.destroy();
     proj.sprite.destroy();
-    this.bulletRenderer?.destroyBullet(proj.id);
-    this.awpRenderer?.destroyVisual(proj.id);
+    this.bulletRenderer?.destroyVisual(proj.id);
     this.tracerRenderer?.destroyTracer(proj.id);
-    this.flameRenderer?.destroyFlameVisual(proj.id);
+    this.flameRenderer?.destroyVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
     this.projectiles.splice(idx, 1);
   }
@@ -586,7 +576,6 @@ export class ProjectileManager {
     }
     this.projectiles = [];
     this.bulletRenderer?.destroyAll();
-    this.awpRenderer?.destroyAll();
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
@@ -646,10 +635,9 @@ export class ProjectileManager {
           this.scene.physics.world.off('worldbounds', proj.boundsListener);
           for (const c of proj.colliders) c.destroy();
           proj.sprite.destroy();
-          renderer?.destroyBullet(proj.id);
-          this.awpRenderer?.destroyVisual(proj.id);
+          renderer?.destroyVisual(proj.id);
           this.tracerRenderer?.destroyTracer(proj.id);
-          this.flameRenderer?.destroyFlameVisual(proj.id);
+          this.flameRenderer?.destroyVisual(proj.id);
           this.bfgRenderer?.destroyVisual(proj.id);
         } else if (proj.isFlame) {
           // Flammen-Hitbox: wachsen + verlangsamen
@@ -682,35 +670,22 @@ export class ProjectileManager {
       }
     });
 
-    // BulletRenderer-Visuals an Physik-Body synchronisieren
+    // BulletRenderer-Visuals an Physik-Body synchronisieren (Bullet + AWP)
     if (renderer) {
       for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'bullet') {
-          renderer.syncBulletToBody(
+        if (proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp') {
+          renderer.syncToBody(
             proj.id, proj.sprite.x, proj.sprite.y,
             proj.body.velocity.x, proj.body.velocity.y,
           );
         }
       }
-    }
-
-    // AwpRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
-    const awpR = this.awpRenderer;
-    if (awpR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'awp') {
-          awpR.updateVisual(
-            proj.id, proj.sprite.x, proj.sprite.y,
-            proj.body.velocity.x, proj.body.velocity.y,
-          );
-        }
-      }
-      // Verwaiste AWP-Visuals entfernen (Projektil wurde zerstört)
-      const activeAwpIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'awp').map(p => p.id),
+      // Verwaiste Bullet/AWP-Visuals entfernen
+      const activeBulletIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'bullet' || p.projectileStyle === 'awp').map(p => p.id),
       );
-      for (const id of awpR.getActiveIds()) {
-        if (!activeAwpIds.has(id)) awpR.destroyVisual(id);
+      for (const id of renderer.getActiveIds()) {
+        if (!activeBulletIds.has(id)) renderer.destroyVisual(id);
       }
     }
 
@@ -720,9 +695,9 @@ export class ProjectileManager {
       for (const proj of this.projectiles) {
         if (proj.projectileStyle === 'flame') {
           if (!flames.has(proj.id)) {
-            flames.createFlameVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+            flames.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
           }
-          flames.updateFlameVisual(
+          flames.updateVisual(
             proj.id, proj.sprite.x, proj.sprite.y,
             proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y,
           );
@@ -733,7 +708,7 @@ export class ProjectileManager {
         this.projectiles.filter(p => p.projectileStyle === 'flame').map(p => p.id),
       );
       for (const id of flames.getActiveIds()) {
-        if (!activeFlameIds.has(id)) flames.destroyFlameVisual(id);
+        if (!activeFlameIds.has(id)) flames.destroyVisual(id);
       }
     }
 
@@ -813,7 +788,7 @@ export class ProjectileManager {
     if (renderer) {
       for (const id of renderer.getActiveIds()) {
         if (!activeIds.has(id)) {
-          renderer.destroyBullet(id);
+          renderer.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -821,7 +796,7 @@ export class ProjectileManager {
     if (flames) {
       for (const id of flames.getActiveIds()) {
         if (!activeIds.has(id)) {
-          flames.destroyFlameVisual(id);
+          flames.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -831,15 +806,6 @@ export class ProjectileManager {
       for (const id of bfgR.getActiveIds()) {
         if (!activeIds.has(id)) {
           bfgR.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    const awpR = this.awpRenderer;
-    if (awpR) {
-      for (const id of awpR.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          awpR.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -886,25 +852,24 @@ export class ProjectileManager {
         bfgR.updateVisual(proj.id, proj.x, proj.y, proj.size);
       } else if (isFlame && flames) {
         if (!flames.has(proj.id)) {
-          flames.createFlameVisual(proj.id, proj.x, proj.y, proj.size);
+          flames.createVisual(proj.id, proj.x, proj.y, proj.size);
         }
-        // Sofort auf Server-Position setzen; Extrapolation passiert in clientExtrapolate()
-        flames.updateFlameVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
-      } else if (isAwpP && awpR) {
-        if (!awpR.has(proj.id)) {
-          awpR.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+        flames.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
+      } else if (isAwpP && renderer) {
+        if (!renderer.has(proj.id)) {
+          renderer.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, AWP_STYLE);
         }
-        awpR.updateVisual(proj.id, proj.x, proj.y, proj.vx, proj.vy);
+        renderer.syncToBody(proj.id, proj.x, proj.y, proj.vx, proj.vy);
         if (velocityFlipped) {
-          awpR.playImpactSparks(proj.x, proj.y, proj.vx, proj.vy, proj.color);
+          renderer.playImpactSparks(proj.id, proj.x, proj.y, proj.vx, proj.vy, proj.color);
         }
       } else if (isBullet && renderer) {
         if (!renderer.has(proj.id)) {
-          renderer.createBullet(proj.id, proj.x, proj.y, proj.size, proj.color);
+          renderer.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, BULLET_STYLE);
         }
-        renderer.updateBulletPosition(proj.id, proj.x, proj.y, proj.vx, proj.vy);
+        renderer.updatePosition(proj.id, proj.x, proj.y, proj.vx, proj.vy);
         if (velocityFlipped) {
-          renderer.playImpactSparks(proj.x, proj.y, proj.vx, proj.vy, proj.color);
+          renderer.playImpactSparks(proj.id, proj.x, proj.y, proj.vx, proj.vy, proj.color);
         }
       } else {
         const existing = this.clientVisuals.get(proj.id);
@@ -963,17 +928,15 @@ export class ProjectileManager {
       }
 
       const bfgRe = this.bfgRenderer;
-      const awpRe = this.awpRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
       } else if (state.style === 'flame' && flames && flames.has(id)) {
-        // Decay-Velocity für Partikel-Orientierung
         const decayFactor = Math.pow(0.82, dt);
-        flames.updateFlameVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);
-      } else if (state.style === 'awp' && awpRe && awpRe.has(id)) {
-        awpRe.updateVisual(id, ex, ey, state.vx, state.vy);
+        flames.updateVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);
+      } else if (state.style === 'awp' && renderer && renderer.has(id)) {
+        renderer.syncToBody(id, ex, ey, state.vx, state.vy);
       } else if (state.style === 'bullet' && renderer && renderer.has(id)) {
-        renderer.updateBulletPosition(id, ex, ey, state.vx, state.vy);
+        renderer.updatePosition(id, ex, ey, state.vx, state.vy);
       } else {
         const sprite = this.clientVisuals.get(id);
         if (sprite) sprite.setPosition(ex, ey);

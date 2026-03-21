@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
+import { circleZone } from './EffectUtils';
 import type { SmokeGrenadeEffect, SyncedSmokeCloud } from '../types';
 
 /* ── Texture keys ─────────────────────────────────────── */
@@ -193,7 +194,7 @@ export class SmokeSystem {
       blendMode: Phaser.BlendModes.NORMAL,
     });
     edgeEmitter.setDepth(DEPTH.SMOKE);
-    edgeEmitter.addEmitZone(this.circleZone(Math.max(cloud.radius * 0.75, 10)));
+    edgeEmitter.addEmitZone(circleZone(Math.max(cloud.radius * 0.75, 10)));
 
     const innerEmitter = this.scene.add.particles(cloud.x, cloud.y, TEX_PUFF, {
       lifespan: { min: 800, max: 1500 },
@@ -209,7 +210,7 @@ export class SmokeSystem {
       blendMode: Phaser.BlendModes.NORMAL,
     });
     innerEmitter.setDepth(DEPTH.SMOKE);
-    innerEmitter.addEmitZone(this.circleZone(Math.max(cloud.radius * 0.35, 6)));
+    innerEmitter.addEmitZone(circleZone(Math.max(cloud.radius * 0.35, 6)));
 
     return {
       container,
@@ -274,9 +275,9 @@ export class SmokeSystem {
     const target = Math.max(radius * 0.78, 10);
     if (Math.abs(target - visual.zoneRadius) >= 6) {
       visual.edgeEmitter.clearEmitZones();
-      visual.edgeEmitter.addEmitZone(this.circleZone(target));
+      visual.edgeEmitter.addEmitZone(circleZone(target));
       visual.innerEmitter.clearEmitZones();
-      visual.innerEmitter.addEmitZone(this.circleZone(target * 0.45));
+      visual.innerEmitter.addEmitZone(circleZone(target * 0.45));
       visual.zoneRadius = target;
     }
   }
@@ -287,15 +288,6 @@ export class SmokeSystem {
     visual.innerEmitter.stop();
     visual.innerEmitter.destroy();
     visual.container.destroy(true);
-  }
-
-  /* ── Helpers ── */
-
-  private circleZone(r: number): Phaser.Types.GameObjects.Particles.EmitZoneData {
-    return {
-      type: 'random',
-      source: new Phaser.Geom.Circle(0, 0, r),
-    } as Phaser.Types.GameObjects.Particles.EmitZoneData;
   }
 
   /* ── Pixel-art texture generation (createCanvas for reliable WebGL upload) ── */

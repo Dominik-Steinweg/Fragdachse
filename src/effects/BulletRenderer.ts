@@ -7,33 +7,74 @@ const TEX_TRAIL  = '__bullet_trail';
 const TEX_GLOW   = '__bullet_glow';
 const TEX_SPARK  = '__bullet_spark';
 
-// ── Konfiguration ──────────────────────────────────────────────────────────
+// ── Textur-Dimensionen ─────────────────────────────────────────────────────
+const TRAIL_TEX_W   = 48;
+const TRAIL_TEX_H   = 8;
+const GLOW_TEX_SIZE = 24;
 
-// Trail-Image (gestreckte Gradient-Textur hinter dem Bullet)
-const TRAIL_TEX_W       = 48;   // Textur-Breite (px)
-const TRAIL_TEX_H       = 8;    // Textur-Höhe (px)
-const TRAIL_LENGTH_MULT = 6;    // Trail-Länge = bulletSize * Mult
-
-// Glow-Halo um das Projektil
-const GLOW_TEX_SIZE  = 24;
-const GLOW_SCALE     = 2.0;   // relativer Multiplikator zur Bullet-Größe
-const GLOW_ALPHA     = 0.45;
-
-// Impact-Funken (One-Shot-Emitter pro Impact)
-const SPARK_COUNT      = 12;
-const SPARK_LIFESPAN   = 250;
-const SPARK_SPEED_MIN  = 90;
-const SPARK_SPEED_MAX  = 300;
-const SPARK_SPREAD_DEG = 50;    // ±Grad um Reflexionsrichtung
-const SPARK_GRAVITY_Y  = 200;
-// Phaser 3.90 color-Interpolation: Weiß → Gold → Dunkelorange über Partikel-Lebensdauer
-const SPARK_COLORS     = [0xffffff, 0xffee88, 0xffaa44, 0xff6622];
+// Impact-Funken Farbverlauf (Weiß → Gold → Dunkelorange)
+const SPARK_COLORS = [0xffffff, 0xffee88, 0xffaa44, 0xff6622];
 
 // Depth-Layer
 const DEPTH_TRAIL  = DEPTH.PROJECTILES - 1;
 const DEPTH_GLOW   = DEPTH.PROJECTILES - 1;
 const DEPTH_BULLET = DEPTH.PROJECTILES;
 const DEPTH_SPARK  = DEPTH.PROJECTILES + 1;
+
+// ── Stil-Konfiguration ────────────────────────────────────────────────────
+/** Konfigurierbare Werte für Bullet-artige Projektile (Standard-Bullet, AWP, etc.) */
+export interface BulletStyleConfig {
+  scaleBoost:      number;
+  trailLengthMult: number;
+  trailAlpha:      number;
+  trailScaleYMult: number;
+  glowScale:       number;
+  glowAlpha:       number;
+  sparkCount:      number;
+  sparkLifespan:   number;
+  sparkSpeedMin:   number;
+  sparkSpeedMax:   number;
+  sparkSpreadDeg:  number;
+  sparkGravityY:   number;
+  sparkScaleStart: number;
+  sparkScaleEnd:   number;
+}
+
+/** Standard-Bullet-Stil */
+export const BULLET_STYLE: BulletStyleConfig = {
+  scaleBoost:      1.0,
+  trailLengthMult: 6,
+  trailAlpha:      0.75,
+  trailScaleYMult: 1.2,
+  glowScale:       2.0,
+  glowAlpha:       0.45,
+  sparkCount:      12,
+  sparkLifespan:   250,
+  sparkSpeedMin:   90,
+  sparkSpeedMax:   300,
+  sparkSpreadDeg:  50,
+  sparkGravityY:   200,
+  sparkScaleStart: 1.4,
+  sparkScaleEnd:   0.2,
+};
+
+/** AWP-Stil (größer, auffälliger) */
+export const AWP_STYLE: BulletStyleConfig = {
+  scaleBoost:      1.4,
+  trailLengthMult: 8,
+  trailAlpha:      0.85,
+  trailScaleYMult: 1.3,
+  glowScale:       2.8,
+  glowAlpha:       0.55,
+  sparkCount:      16,
+  sparkLifespan:   280,
+  sparkSpeedMin:   110,
+  sparkSpeedMax:   380,
+  sparkSpreadDeg:  55,
+  sparkGravityY:   220,
+  sparkScaleStart: 1.6,
+  sparkScaleEnd:   0.15,
+};
 
 // ── Interner State pro Bullet ──────────────────────────────────────────────
 interface BulletVisual {
@@ -42,16 +83,17 @@ interface BulletVisual {
   glow:    Phaser.GameObjects.Image;
   prevX:   number;
   prevY:   number;
+  config:  BulletStyleConfig;
 }
 
 /**
- * Rendert Bullet-Stil-Projektile mit:
+ * Rendert Bullet-artige Projektile (Standard-Bullet + AWP) mit:
  * - Geformtem Projektil-Sprite (längliches Capsule mit hellem Kern)
- * - Glatter Leuchtspur (Image-basiert, keine Partikel-Lücken)
+ * - Glatter Leuchtspur (Image-basiert)
  * - Weichem Glow-Halo um das Projektil
- * - Funkensprühen bei Impact (One-Shot-Emitter pro Aufprall)
+ * - Funkensprühen bei Impact
  *
- * Standalone-Modul – wird vom ProjectileManager für style='bullet' genutzt.
+ * Stil-Unterschiede werden über BulletStyleConfig gesteuert (BULLET_STYLE, AWP_STYLE).
  */
 export class BulletRenderer {
   private scene: Phaser.Scene;
@@ -68,7 +110,7 @@ export class BulletRenderer {
 
   /**
    * Erzeugt alle benötigten Texturen prozedural (einmalig pro Scene).
-   * Muss vor createBullet() aufgerufen werden.
+   * Muss vor createVisual() aufgerufen werden.
    */
   generateTextures(): void {
     const texMgr = this.scene.textures;
@@ -166,50 +208,45 @@ export class BulletRenderer {
     }
   }
 
-  // ── Bullet erstellen / aktualisieren / zerstören ─────────────────────────
+  // ── Visual erstellen / aktualisieren / zerstören ─────────────────────────
 
   /**
    * Erstellt Bullet-Visual (Capsule + Trail-Image + Glow) für ein neues Projektil.
+   * @param config  Stil-Konfiguration (BULLET_STYLE oder AWP_STYLE)
    */
-  createBullet(id: number, x: number, y: number, size: number, color: number): void {
+  createVisual(id: number, x: number, y: number, size: number, color: number, config: BulletStyleConfig = BULLET_STYLE): void {
     if (this.bullets.has(id)) return;
 
-    const scaleFactor = Math.max(size / 5, 0.6);
+    const scaleFactor = Math.max(size / 5, 0.6) * config.scaleBoost;
 
-    // Bullet-Image (Capsule-Form)
     const bullet = this.scene.add.image(x, y, TEX_BULLET);
     bullet.setScale(scaleFactor, scaleFactor);
     bullet.setTint(color);
     bullet.setDepth(DEPTH_BULLET);
 
-    // Trail-Image (langgezogener Gradient hinter dem Bullet)
-    // Origin rechts-mitte: der helle Kopf liegt am Bullet, der Schweif erstreckt sich nach hinten
     const trail = this.scene.add.image(x, y, TEX_TRAIL);
     trail.setOrigin(1.0, 0.5);
-    const trailScaleX = (size * TRAIL_LENGTH_MULT) / TRAIL_TEX_W;
-    const trailScaleY = scaleFactor * 1.2;
-    trail.setScale(trailScaleX, trailScaleY);
+    trail.setScale((size * config.trailLengthMult) / TRAIL_TEX_W, scaleFactor * config.trailScaleYMult);
     trail.setTint(color);
-    trail.setAlpha(0.75);
+    trail.setAlpha(config.trailAlpha);
     trail.setBlendMode(Phaser.BlendModes.ADD);
     trail.setDepth(DEPTH_TRAIL);
 
-    // Glow-Halo (weicher Schein um das Bullet)
     const glow = this.scene.add.image(x, y, TEX_GLOW);
-    glow.setScale(scaleFactor * GLOW_SCALE);
+    glow.setScale(scaleFactor * config.glowScale);
     glow.setTint(color);
-    glow.setAlpha(GLOW_ALPHA);
+    glow.setAlpha(config.glowAlpha);
     glow.setBlendMode(Phaser.BlendModes.ADD);
     glow.setDepth(DEPTH_GLOW);
 
-    this.bullets.set(id, { bullet, trail, glow, prevX: x, prevY: y });
+    this.bullets.set(id, { bullet, trail, glow, prevX: x, prevY: y, config });
   }
 
   /**
-   * Host-seitig: Bullet-Position und -Rotation anhand der Physik-Velocity setzen.
+   * Host-seitig: Position und Rotation anhand der Physik-Velocity setzen.
    * Gibt true zurück wenn ein Bounce erkannt wurde.
    */
-  syncBulletToBody(id: number, x: number, y: number, vx: number, vy: number): boolean {
+  syncToBody(id: number, x: number, y: number, vx: number, vy: number): boolean {
     const bv = this.bullets.get(id);
     if (!bv) return false;
 
@@ -229,10 +266,10 @@ export class BulletRenderer {
   }
 
   /**
-   * Client-seitig: Bullet-Position setzen und Rotation aus Velocity berechnen.
+   * Client-seitig: Position setzen und Rotation aus Velocity berechnen.
    * Gibt true zurück wenn ein Bounce erkannt wurde.
    */
-  updateBulletPosition(id: number, x: number, y: number, vx: number, vy: number): boolean {
+  updatePosition(id: number, x: number, y: number, vx: number, vy: number): boolean {
     const bv = this.bullets.get(id);
     if (!bv) return false;
 
@@ -259,9 +296,9 @@ export class BulletRenderer {
   }
 
   /**
-   * Bullet-Visual entfernen. Sofortiger Cleanup (Trail braucht kein Fading da Image-basiert).
+   * Visual entfernen. Sofortiger Cleanup.
    */
-  destroyBullet(id: number): void {
+  destroyVisual(id: number): void {
     const bv = this.bullets.get(id);
     if (!bv) return;
     this.bullets.delete(id);
@@ -272,37 +309,30 @@ export class BulletRenderer {
 
   /**
    * Funken-Effekt bei Aufprall (Wand, Felsen, Zug).
-   * Erzeugt einen frischen One-Shot-Emitter mit korrekter Winkel-Konfiguration.
-   * Nutzt Phaser 3.90 color-Interpolation für Weiß→Gold→Orange Farbverlauf.
-   *
-   * @param x      Aufprall-Position
-   * @param y      Aufprall-Position
-   * @param dirX   Reflexions-Richtung X (weg von der Wand, = post-bounce velocity)
-   * @param dirY   Reflexions-Richtung Y
-   * @param _color Projektilfarbe (reserviert für zukünftige Erweiterung)
+   * Nutzt die im Visual gespeicherte Stil-Konfiguration für Spark-Werte.
    */
-  playImpactSparks(x: number, y: number, dirX: number, dirY: number, _color: number): void {
-    const baseAngle = Math.atan2(dirY, dirX) * (180 / Math.PI);
+  playImpactSparks(id: number, x: number, y: number, dirX: number, dirY: number, _color: number): void {
+    const bv  = this.bullets.get(id);
+    const cfg = bv?.config ?? BULLET_STYLE;
 
-    // One-Shot-Emitter: Winkel wird bei Erstellung korrekt gesetzt (kein dynamisches Override nötig)
+    const baseAngle = Math.atan2(dirY, dirX) * (180 / Math.PI);
     const emitter = this.scene.add.particles(x, y, TEX_SPARK, {
-      speed:    { min: SPARK_SPEED_MIN, max: SPARK_SPEED_MAX },
-      angle:    { min: baseAngle - SPARK_SPREAD_DEG, max: baseAngle + SPARK_SPREAD_DEG },
-      lifespan: SPARK_LIFESPAN,
+      speed:    { min: cfg.sparkSpeedMin, max: cfg.sparkSpeedMax },
+      angle:    { min: baseAngle - cfg.sparkSpreadDeg, max: baseAngle + cfg.sparkSpreadDeg },
+      lifespan: cfg.sparkLifespan,
       alpha:    { start: 1.0, end: 0.0 },
-      scale:    { start: 1.4, end: 0.2 },
+      scale:    { start: cfg.sparkScaleStart, end: cfg.sparkScaleEnd },
       rotate:   { min: 0, max: 360 },
-      color:    SPARK_COLORS,               // Phaser 3.90: Farbinterpolation über Lebensdauer
+      color:    SPARK_COLORS,
       blendMode: Phaser.BlendModes.ADD,
-      gravityY:  SPARK_GRAVITY_Y,
+      gravityY:  cfg.sparkGravityY,
       emitting:  false,
     });
     emitter.setDepth(DEPTH_SPARK);
-    emitter.explode(SPARK_COUNT);
+    emitter.explode(cfg.sparkCount);
 
-    // Auto-Cleanup nach Ablauf aller Partikel
     this.activeSparkEmitters.push(emitter);
-    this.scene.time.delayedCall(SPARK_LIFESPAN + 80, () => {
+    this.scene.time.delayedCall(cfg.sparkLifespan + 80, () => {
       const idx = this.activeSparkEmitters.indexOf(emitter);
       if (idx !== -1) this.activeSparkEmitters.splice(idx, 1);
       if (emitter.scene) emitter.destroy();

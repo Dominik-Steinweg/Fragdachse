@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
+import { circleZone } from './EffectUtils';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_BFG_CORE  = '__bfg_core';
@@ -135,13 +136,7 @@ export class BfgRenderer {
       emitting:  true,
     });
     coreEmitter.setDepth(DEPTH_BFG + 0.05);
-    coreEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.35),
-      quantity: 3,
-    });
-
-    // Äußerer Energiering: breiter, dunkleres Grün
+    coreEmitter.addEmitZone(circleZone(spread * 0.35, 3));
     const outerEmitter = this.scene.add.particles(x, y, TEX_BFG_EMBER, {
       lifespan:  OUTER_LIFESPAN,
       frequency: 18,
@@ -156,13 +151,7 @@ export class BfgRenderer {
       emitting:  true,
     });
     outerEmitter.setDepth(DEPTH_BFG);
-    outerEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread),
-      quantity: 2,
-    });
-
-    // Funken: radial nach außen strahlend
+    outerEmitter.addEmitZone(circleZone(spread, 2));
     const sparkEmitter = this.scene.add.particles(x, y, TEX_BFG_SPARK, {
       lifespan:  SPARK_LIFESPAN,
       frequency: 40,
@@ -176,11 +165,7 @@ export class BfgRenderer {
       emitting:  true,
     });
     sparkEmitter.setDepth(DEPTH_SPARK);
-    sparkEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.5),
-      quantity: 1,
-    });
+    sparkEmitter.addEmitZone(circleZone(spread * 0.5, 1));
 
     // Glow: additiver grüner Halo
     const glowImage = this.scene.add.image(x, y, TEX_BFG_GLOW);
@@ -213,25 +198,13 @@ export class BfgRenderer {
     const spread = Math.max(size * 0.5, 6);
 
     visual.coreEmitter.clearEmitZones();
-    visual.coreEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.35),
-      quantity: 3,
-    });
+    visual.coreEmitter.addEmitZone(circleZone(spread * 0.35, 3));
 
     visual.outerEmitter.clearEmitZones();
-    visual.outerEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread),
-      quantity: 2,
-    });
+    visual.outerEmitter.addEmitZone(circleZone(spread, 2));
 
     visual.sparkEmitter.clearEmitZones();
-    visual.sparkEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.5),
-      quantity: 1,
-    });
+    visual.sparkEmitter.addEmitZone(circleZone(spread * 0.5, 1));
 
     // Skalierung an Größe anpassen
     visual.coreEmitter.setParticleScale(0.4 + size * 0.012, 0.05);

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
+import { circleZone } from './EffectUtils';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_FLAME_EMBER = '__flame_ember';
@@ -119,7 +120,7 @@ export class FlameRenderer {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /** Registriert eine neue Flammen-Hitbox für die visuelle Darstellung. */
-  createFlameVisual(id: number, x: number, y: number, size: number): void {
+  createVisual(id: number, x: number, y: number, size: number): void {
     if (this.flames.has(id)) return;
 
     const spread = Math.max(size * 0.4, 4);
@@ -139,13 +140,7 @@ export class FlameRenderer {
       emitting:  true,
     });
     coreEmitter.setDepth(DEPTH_FLAME + 0.05);
-    coreEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.4),
-      quantity: 2,
-    });
-
-    // Äußere Flamme: breiter, weniger opak
+    coreEmitter.addEmitZone(circleZone(spread * 0.4, 2));
     const outerEmitter = this.scene.add.particles(x, y, TEX_FLAME_EMBER, {
       lifespan:  OUTER_LIFESPAN,
       frequency: 20,
@@ -160,13 +155,7 @@ export class FlameRenderer {
       emitting:  true,
     });
     outerEmitter.setDepth(DEPTH_FLAME);
-    outerEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread),
-      quantity: 2,
-    });
-
-    // Funken: kleine leuchtende Partikel
+    outerEmitter.addEmitZone(circleZone(spread, 2));
     const sparkEmitter = this.scene.add.particles(x, y, TEX_FLAME_SPARK, {
       lifespan:  SPARK_LIFESPAN,
       frequency: 50,
@@ -181,11 +170,7 @@ export class FlameRenderer {
       emitting:  true,
     });
     sparkEmitter.setDepth(DEPTH_SPARK);
-    sparkEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.6),
-      quantity: 1,
-    });
+    sparkEmitter.addEmitZone(circleZone(spread * 0.6, 1));
 
     // Glow: additiver Leucht-Halo der mit der Hitbox wächst
     const glowImage = this.scene.add.image(x, y, TEX_FLAME_GLOW);
@@ -200,7 +185,7 @@ export class FlameRenderer {
   }
 
   /** Aktualisiert Position, Größe und Richtung einer Flammen-Hitbox. */
-  updateFlameVisual(
+  updateVisual(
     id: number, x: number, y: number,
     size: number, vx: number, vy: number,
   ): void {
@@ -221,25 +206,13 @@ export class FlameRenderer {
     const spread = Math.max(size * 0.4, 4);
 
     visual.coreEmitter.clearEmitZones();
-    visual.coreEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.4),
-      quantity: 2,
-    });
+    visual.coreEmitter.addEmitZone(circleZone(spread * 0.4, 2));
 
     visual.outerEmitter.clearEmitZones();
-    visual.outerEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread),
-      quantity: 2,
-    });
+    visual.outerEmitter.addEmitZone(circleZone(spread, 2));
 
     visual.sparkEmitter.clearEmitZones();
-    visual.sparkEmitter.addEmitZone({
-      type:     'random',
-      source:   new Phaser.Geom.Circle(0, 0, spread * 0.6),
-      quantity: 1,
-    });
+    visual.sparkEmitter.addEmitZone(circleZone(spread * 0.6, 1));
 
     // Skalierung an Größe anpassen: größere Hitbox = größere Partikel
     const scaleFactor = 0.3 + size * 0.01;
@@ -248,7 +221,7 @@ export class FlameRenderer {
   }
 
   /** Entfernt eine Flammen-Hitbox-Visualisierung. */
-  destroyFlameVisual(id: number): void {
+  destroyVisual(id: number): void {
     const visual = this.flames.get(id);
     if (!visual) return;
 
@@ -276,7 +249,7 @@ export class FlameRenderer {
   /** Entfernt alle Flammen-Visualisierungen. */
   destroyAll(): void {
     for (const [id] of this.flames) {
-      this.destroyFlameVisual(id);
+      this.destroyVisual(id);
     }
   }
 }
