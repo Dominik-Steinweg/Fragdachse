@@ -181,11 +181,16 @@ export class ArmageddonSystem {
       if (this.rockGrid?.isOccupied(gx, gy)) continue;
 
       // Freies Feld gefunden → Meteor spawnen
+      // Radius mit konfigurierbarem Jitter (z.B. ±10%)
+      const jitter = cfg.meteorRadiusJitter;
+      const radiusMult = 1 + (Math.random() * 2 - 1) * jitter;
+      const radius = Math.round(cfg.meteorDamageRadius * radiusMult);
+
       this.meteors.push({
         id:        this.nextMeteorId++,
         x:         Math.round(wx),
         y:         Math.round(wy),
-        radius:    cfg.meteorDamageRadius,
+        radius,
         spawnedAt: now,
         impactAt:  now + cfg.meteorFallDuration,
         ownerId:   session.ownerId,

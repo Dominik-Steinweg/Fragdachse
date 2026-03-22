@@ -66,10 +66,14 @@ export class PlayerManager {
   getSpawnPoint(): { x: number; y: number } {
     const blocked = new Set<string>();
 
-    // Felsen und Baumstümpfe aus dem Layout blockieren
+    // Felsen, Baumstümpfe und Gleise aus dem Layout blockieren
     if (this.layout) {
       for (const r of this.layout.rocks) blocked.add(`${r.gridX}_${r.gridY}`);
       for (const t of this.layout.trees) blocked.add(`${t.gridX}_${t.gridY}`);
+      for (const track of this.layout.tracks) {
+        blocked.add(`${track.gridX}_${track.gridY}`);
+        blocked.add(`${track.gridX + 1}_${track.gridY}`);
+      }
     }
 
     // Aktuell belegte Spieler-Zellen ausschließen

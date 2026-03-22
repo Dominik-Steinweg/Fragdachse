@@ -183,6 +183,7 @@ export interface ArmageddonMeteorConfig {
   readonly meteorDamage: number;        // HP-Schaden pro Einschlag
   readonly meteorFallDuration: number;  // ms – Vorwarnzeit bevor der Meteor einschlägt
   readonly meteorsPerSecond: number;    // Spawn-Rate (leicht zufällig verteilt)
+  readonly meteorRadiusJitter: number;   // 0–1 – prozentuale Zufallsabweichung des Radius (0.1 = ±10%)
   readonly selfDamageMult: number;      // Selbstschadens-Multiplikator (0 = immun)
   readonly rockDamageMult?: number;     // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number;    // Schadensfaktor gegen den Zug (Default 1.0)
@@ -720,11 +721,12 @@ export const ULTIMATE_CONFIGS = {
     damageMultiplier:   1.0,
     rageDrainDuration:  7000,
     armageddon: {
-      meteorSpawnRadius:  250,    // px um den Spieler
-      meteorDamageRadius: 48,     // px AoE bei Einschlag (~1.5 Tiles)
-      meteorDamage:       35,     // HP pro Meteor
+      meteorSpawnRadius:  350,    // px um den Spieler
+      meteorDamageRadius: 64,     // px AoE bei Einschlag (~1.5 Tiles)
+      meteorDamage:       60,     // HP pro Meteor
       meteorFallDuration: 1200,   // ms Vorwarnung
       meteorsPerSecond:   10,     // ~70 Meteore in 7 Sekunden
+      meteorRadiusJitter: 0.1,    // ±10% Radius-Zufallsabweichung
       selfDamageMult:     0,      // Caster immun
       rockDamageMult:     0.5,
       trainDamageMult:    0.5,
