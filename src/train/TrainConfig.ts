@@ -18,10 +18,10 @@ export const TRAIN = {
   LOCO_HEIGHT:     CELL_SIZE * 4,    // 96
 
   /** Länge eines Waggons in px */
-  WAGON_HEIGHT:    CELL_SIZE * 3,   // 72
+  WAGON_HEIGHT:    CELL_SIZE * 8,   
 
   /** Anzahl Waggons hinter der Lokomotive */
-  WAGON_COUNT:     32,
+  WAGON_COUNT:     12,
 
   /** Lücke zwischen Lok und erstem Waggon sowie zwischen Waggons in px */
   SEGMENT_GAP:     4,

@@ -314,9 +314,9 @@ export class TrainManager {
     const heights = this.segHeights();
     const lastH  = heights[heights.length - 1];
     if (this.direction === 1) {
-      return lastY + lastH / 2 > ARENA_OFFSET_Y + ARENA_HEIGHT;
+      return lastY - lastH / 2 >= ARENA_OFFSET_Y + ARENA_HEIGHT;
     }
-    return lastY - lastH / 2 < ARENA_OFFSET_Y;
+    return lastY + lastH / 2 <= ARENA_OFFSET_Y;
   }
 
   /** AABB-Overlap-Check zwischen allen Segmenten und allen aktiven Spielern. */

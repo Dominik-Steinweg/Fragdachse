@@ -9,10 +9,10 @@ import { TRAIN } from './TrainConfig';
  * Arbeitet ausschließlich mit `SyncedTrainState` – keine direkte
  * Verbindung zum TrainManager. Zeichnet jeden Frame neu via `update()`.
  *
- * Visuals (Placeholder, austauschbar gegen Pixel-Art-Sprites):
- *  - Lokomotive: roter Kasten mit Kabinendetails
- *  - Waggons:    dunkelgraue Streifen (alle WAGON_STRIPE_H px) im Wechsel
- *                → vermittelt visuell die Geschwindigkeit
+ * Visuals in Top-Down-Anmutung, angelehnt an den realen DB-Regio-RB 54:
+ *  - rote Seitenbänder / Wagenkasten
+ *  - helles Dachfeld mit dunklen Dachaufbauten
+ *  - dunkle Frontverglasung an der Lok
  */
 export class TrainRenderer {
   private readonly gfx: Phaser.GameObjects.Graphics;
@@ -100,52 +100,98 @@ export class TrainRenderer {
   }
 
   /**
-   * Lokomotive: roter Kasten mit Dachstreifen und Kabinendetail.
+   * Lokomotive in Draufsicht: roter Wagenkasten, helles Dach und dunkle Front.
    */
   private drawLoco(cx: number, cy: number, w: number, h: number): void {
-    // Hauptfläche – kräftiges Rot
-    this.gfx.fillStyle(COLORS.RED_2);
-    this.gfx.fillRect(cx - w / 2, cy - h / 2, w, h);
+    const x0 = cx - w / 2;
+    const y0 = cy - h / 2;
+    const sideBandW = 8;
+    const roofW = w - sideBandW * 2;
+    const roofH = h - 12;
+    const roofX = cx - roofW / 2;
+    const roofY = cy - roofH / 2;
+    const noseDir = this.lastDir;
+    const noseH = 18;
+    const noseY = noseDir > 0 ? y0 + h - noseH : y0;
+    const cabGlassH = 12;
+    const cabGlassY = noseDir > 0 ? noseY + 2 : noseY + noseH - cabGlassH - 2;
 
-    // Dunkle Querstreifen oben/unten
-    this.gfx.fillStyle(COLORS.RED_5);
-    this.gfx.fillRect(cx - w / 2, cy - h / 2,      w, 5);
-    this.gfx.fillRect(cx - w / 2, cy + h / 2 - 5,  w, 5);
+    this.drawCapsule(cx, cy, w, h, COLORS.RED_2);
 
-    // Kabinen-Fenster (kleines blaues Rechteck in der oberen Hälfte)
-    const winW = 16;
-    const winH = 10;
-    this.gfx.fillStyle(COLORS.BLUE_2, 0.75);
-    this.gfx.fillRect(cx - winW / 2, cy - h / 4 - winH / 2, winW, winH);
+    this.gfx.fillStyle(COLORS.RED_3);
+    this.gfx.fillRect(x0 + 2, y0 + 10, sideBandW, h - 20);
+    this.gfx.fillRect(x0 + w - sideBandW - 2, y0 + 10, sideBandW, h - 20);
 
-    // Rahmen ums Fenster
+    this.drawCapsule(cx, cy, roofW, roofH, COLORS.GREY_2);
+
+    this.gfx.fillStyle(COLORS.GREY_3);
+    this.gfx.fillRect(roofX, noseY, roofW, noseH);
+
+    this.gfx.fillStyle(COLORS.GREY_6, 0.95);
+    this.gfx.fillRect(cx - 6, roofY + 10, 12, roofH - noseH - 20);
+    this.gfx.fillRect(cx - 14, cy - 6, 28, 6);
+
+    this.gfx.fillStyle(COLORS.BLUE_5, 0.9);
+    this.gfx.fillRect(roofX + 8, cabGlassY, roofW - 16, cabGlassH);
+
+    this.gfx.fillStyle(COLORS.GREY_1, 0.9);
+    this.gfx.fillRect(roofX + 3, roofY + 3, roofW - 6, 3);
+
     this.gfx.lineStyle(1, COLORS.GREY_9, 1);
-    this.gfx.strokeRect(cx - winW / 2, cy - h / 4 - winH / 2, winW, winH);
+    this.drawCapsuleOutline(cx, cy, w, h);
+    this.gfx.strokeRect(roofX + 8, cabGlassY, roofW - 16, cabGlassH);
   }
 
   /**
-   * Waggon: abwechselnde Grau-Streifen erzeugen optischen Geschwindigkeitseffekt.
-   * idx bestimmt den Offset, sodass benachbarte Waggons unterschiedlich aussehen.
+   * Waggon in Draufsicht: roter Wagenkasten mit hellem Dachfeld.
+   * idx variiert Dachaufbauten leicht, damit der Zug nicht zu flach wirkt.
    */
   private drawWagon(cx: number, cy: number, w: number, h: number, idx: number): void {
     const x0 = cx - w / 2;
     const y0 = cy - h / 2;
+    const sideBandW = 7;
+    const roofInset = 10;
+    const roofW = w - sideBandW * 2;
+    const roofH = h - roofInset;
+    const roofX = cx - roofW / 2;
+    const roofY = cy - roofH / 2;
+    const equipmentOffset = idx % 3;
 
-    // Streifen alternierend zeichnen
-    const offset = (idx % 2) * TRAIN.WAGON_STRIPE_H; // Versatz pro Waggon-Index
-    for (let sy = 0; sy < h; sy += TRAIN.WAGON_STRIPE_H) {
-      const stripe = Math.floor((sy + offset) / TRAIN.WAGON_STRIPE_H) % 2 === 0
-        ? COLORS.GREY_6
-        : COLORS.GREY_7;
-      this.gfx.fillStyle(stripe);
-      const sh = Math.min(TRAIN.WAGON_STRIPE_H, h - sy);
-      this.gfx.fillRect(x0, y0 + sy, w, sh);
-    }
+    this.drawCapsule(cx, cy, w, h, COLORS.RED_2);
 
-    // Dünner Rahmen
-    this.gfx.fillStyle(COLORS.GREY_9);
-    this.gfx.fillRect(x0, y0,         w, 2); // oben
-    this.gfx.fillRect(x0, y0 + h - 2, w, 2); // unten
+    this.gfx.fillStyle(COLORS.RED_3);
+    this.gfx.fillRect(x0 + 2, y0 + 8, sideBandW, h - 16);
+    this.gfx.fillRect(x0 + w - sideBandW - 2, y0 + 8, sideBandW, h - 16);
+
+    this.drawCapsule(cx, cy, roofW, roofH, COLORS.GREY_2);
+
+    this.gfx.fillStyle(COLORS.GREY_3, 0.95);
+    this.gfx.fillRect(roofX + 4, roofY + 4, roofW - 8, 5);
+
+    this.gfx.fillStyle(COLORS.GREY_6, 0.92);
+    this.gfx.fillRect(cx - 4, roofY + 12 + equipmentOffset * 4, 8, 12);
+    this.gfx.fillRect(cx - 10, cy - 3, 20, 5);
+
+    this.gfx.fillStyle(COLORS.GREY_5, 0.85);
+    this.gfx.fillRect(roofX + 6, y0 + h - 14, roofW - 12, 4);
+
+    this.gfx.lineStyle(1, COLORS.GREY_9, 1);
+    this.drawCapsuleOutline(cx, cy, w, h);
+  }
+
+  private drawCapsule(cx: number, cy: number, w: number, h: number, color: number): void {
+    const radius = Math.min(w * 0.5, 12);
+    this.gfx.fillStyle(color);
+    this.gfx.fillRect(cx - w / 2, cy - h / 2 + radius, w, h - radius * 2);
+    this.gfx.fillEllipse(cx, cy - h / 2 + radius, w, radius * 2);
+    this.gfx.fillEllipse(cx, cy + h / 2 - radius, w, radius * 2);
+  }
+
+  private drawCapsuleOutline(cx: number, cy: number, w: number, h: number): void {
+    const radius = Math.min(w * 0.5, 12);
+    this.gfx.strokeRect(cx - w / 2, cy - h / 2 + radius, w, h - radius * 2);
+    this.gfx.strokeEllipse(cx, cy - h / 2 + radius, w, radius * 2);
+    this.gfx.strokeEllipse(cx, cy + h / 2 - radius, w, radius * 2);
   }
 
   /**
