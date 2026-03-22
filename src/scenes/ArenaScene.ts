@@ -129,6 +129,7 @@ export class ArenaScene extends Phaser.Scene {
   private prevDashPhases       = new Map<string, number>(); // playerId → vorherige Phase
   private prevAliveStates      = new Map<string, boolean>(); // playerId → vorheriger alive-Status
   private dashTrailTimers      = new Map<string, number>(); // playerId → nächster Ghost ms
+  private overlayTrackedLocalAlive: boolean | null = null;
   // ── State Machine ─────────────────────────────────────────────────────────
   private isLocalReady      = false;
   private lastPhase: GamePhase = 'LOBBY';
@@ -579,6 +580,7 @@ export class ArenaScene extends Phaser.Scene {
     this.leftPanel.transitionToGame();
     this.rightPanel.transitionToGame();
     this.syncHostLoadoutsFromCommittedSelections();
+    this.overlayTrackedLocalAlive = null;
     this.arenaCountdown?.syncTo(bridge.getArenaStartTime());
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
@@ -588,6 +590,7 @@ export class ArenaScene extends Phaser.Scene {
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;
+    this.overlayTrackedLocalAlive = null;
     this.arenaCountdown?.clear();
 
     for (const p of [...this.playerManager.getAllPlayers()]) {
@@ -1010,10 +1013,8 @@ export class ArenaScene extends Phaser.Scene {
     if (inGame) {
       this.inputSystem.setInputEnabled(!countdownActive);
       this.inputSystem.update();
-      this.arenaCountdown?.update(bridge.getSynchronizedNow());
     } else {
       this.inputSystem.setInputEnabled(false);
-      this.arenaCountdown?.clear();
     }
 
     if (!this.matchTerminated && phase === 'LOBBY') {
@@ -1082,12 +1083,40 @@ export class ArenaScene extends Phaser.Scene {
     // AimSystem jeden Frame aktualisieren (auch wenn inGame=false → Cursor + gfx.clear())
     // Läuft nach Host-/Client-Update, damit lokale Autoritätsdaten im selben Frame wirken.
     const inArena = inGame && !this.matchTerminated;
+    this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     const showAim = inArena
                  && this.localPlayerAlive
                  && !this.localPlayerBurrowed
                  && !this.inputSystem.isUtilityPreviewActive();
     this.aimSystem?.update(showAim, inArena, delta);
     this.utilityChargeIndicator?.update(this.inputSystem.getUtilityChargePreviewState());
+  }
+
+  private syncArenaFogOverlay(now: number, inArena: boolean, countdownActive: boolean): void {
+    if (!this.arenaCountdown) return;
+
+    if (!inArena) {
+      this.overlayTrackedLocalAlive = null;
+      this.arenaCountdown.clear();
+      return;
+    }
+
+    if (countdownActive) {
+      this.overlayTrackedLocalAlive = this.localPlayerAlive;
+      this.arenaCountdown.update(now);
+      return;
+    }
+
+    if (this.localPlayerAlive) {
+      if (this.overlayTrackedLocalAlive === false) {
+        this.arenaCountdown.playRespawnReveal();
+      }
+    } else if (this.overlayTrackedLocalAlive !== false) {
+      this.arenaCountdown.showDeathVeil();
+    }
+
+    this.overlayTrackedLocalAlive = this.localPlayerAlive;
+    this.arenaCountdown.update(now);
   }
 
   // ── AoE-Umgebungsschaden (Felsen + Zug) ──────────────────────────────────

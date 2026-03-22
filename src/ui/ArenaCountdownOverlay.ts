@@ -12,8 +12,11 @@ import {
 const VEIL_CELL_SIZE = 8;
 const VEIL_EDGE_BAND_PX = 96;
 const VEIL_RADIUS_PX = 176;
+const CLOSED_VEIL_RADIUS_PX = -(VEIL_EDGE_BAND_PX + VEIL_CELL_SIZE);
 const VEIL_ALPHA = 1.00;
 const REVEAL_DURATION_MS = 1800;
+const DEATH_VEIL_HOLD_MS = 500;
+const DEATH_VEIL_CLOSE_DURATION_MS = 180;
 const FLOAT_DISTANCE_PX = 72;
 const TWEEN_DURATION_MS = 1100;
 const GO_FLOAT_DISTANCE_PX = 40;
@@ -21,10 +24,13 @@ const GO_TEXT_DURATION_MS = 420;
 const GO_FONT_SIZE_PX = 184;
 const REVEAL_TARGET_RADIUS_PX = Math.max(ARENA_WIDTH, ARENA_HEIGHT) * 1.2;
 
+type OverlayMode = 'hidden' | 'countdown' | 'death' | 'respawn-reveal';
+
 export class ArenaCountdownOverlay {
   private readonly veil: Phaser.GameObjects.Graphics;
   private readonly text: Phaser.GameObjects.Text;
   private readonly getFocusSprite: () => Phaser.GameObjects.Image | undefined;
+  private mode: OverlayMode = 'hidden';
   private unlockAtMs = 0;
   private lastShownNumber = 0;
   private lastFocusX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
@@ -32,6 +38,8 @@ export class ArenaCountdownOverlay {
   private revealRadius = VEIL_RADIUS_PX;
   private veilAlpha = VEIL_ALPHA;
   private goTriggeredForUnlock = false;
+  private deathVeilHoldUntilMs = 0;
+  private deathVeilClosing = false;
   private readonly baseX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
   private readonly baseY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
 
@@ -61,26 +69,80 @@ export class ArenaCountdownOverlay {
   }
 
   syncTo(unlockAtMs: number): void {
-    if (unlockAtMs !== this.unlockAtMs) {
-      this.stopTextTweens();
-      this.scene.tweens.killTweensOf(this.text);
-      this.text.setVisible(false).setText('');
-      this.lastShownNumber = 0;
-      this.goTriggeredForUnlock = false;
-      this.revealRadius = VEIL_RADIUS_PX;
-      this.veilAlpha = VEIL_ALPHA;
-      this.veil.setVisible(unlockAtMs > 0);
+    if (unlockAtMs <= 0) {
+      if (this.mode === 'countdown') this.clear();
+      this.unlockAtMs = 0;
+      return;
+    }
+
+    if (unlockAtMs !== this.unlockAtMs || this.mode !== 'countdown') {
+      this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
+      this.mode = 'countdown';
+      this.veil.setVisible(true);
     }
     this.unlockAtMs = unlockAtMs;
   }
 
+  showDeathVeil(): void {
+    if (this.mode === 'death') return;
+
+    this.captureFocusPoint();
+    this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
+    this.mode = 'death';
+    this.deathVeilHoldUntilMs = this.scene.time.now + DEATH_VEIL_HOLD_MS;
+    this.deathVeilClosing = false;
+    this.renderVeil(this.revealRadius, this.veilAlpha);
+  }
+
+  playRespawnReveal(): void {
+    this.captureFocusPoint();
+    this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
+    this.mode = 'respawn-reveal';
+    this.renderVeil(this.revealRadius, this.veilAlpha);
+    this.playReveal(false);
+  }
+
   update(now = Date.now()): void {
-    if (this.unlockAtMs <= 0) {
+    if (this.mode === 'hidden') {
       this.clear();
       return;
     }
 
+    if (this.mode === 'death') {
+      if (!this.deathVeilClosing && this.scene.time.now >= this.deathVeilHoldUntilMs) {
+        this.deathVeilClosing = true;
+        this.scene.tweens.add({
+          targets: this,
+          revealRadius: CLOSED_VEIL_RADIUS_PX,
+          duration: DEATH_VEIL_CLOSE_DURATION_MS,
+          ease: 'Quad.easeIn',
+          onUpdate: () => {
+            this.renderVeil(this.revealRadius, this.veilAlpha);
+          },
+        });
+      }
+      this.renderVeil(this.revealRadius, this.veilAlpha);
+      return;
+    }
+
     this.captureFocusPoint();
+
+    if (this.mode === 'respawn-reveal') {
+      if (this.veilAlpha > 0.01) {
+        this.renderVeil(this.revealRadius, this.veilAlpha);
+        return;
+      }
+
+      this.veil.clear();
+      this.veil.setVisible(false);
+      this.mode = 'hidden';
+      return;
+    }
+
+    if (this.unlockAtMs <= 0) {
+      this.clear();
+      return;
+    }
 
     const secondsLeft = Math.max(0, Math.ceil((this.unlockAtMs - now) / 1000));
     if (secondsLeft > 0) {
@@ -95,7 +157,7 @@ export class ArenaCountdownOverlay {
     if (!this.goTriggeredForUnlock) {
       this.goTriggeredForUnlock = true;
       this.lastShownNumber = 0;
-      this.playGoReveal();
+      this.playReveal(true);
     }
 
     if (this.veilAlpha > 0.01) {
@@ -108,15 +170,11 @@ export class ArenaCountdownOverlay {
   }
 
   clear(): void {
-    this.stopTextTweens();
+    this.mode = 'hidden';
     this.unlockAtMs = 0;
-    this.lastShownNumber = 0;
-    this.goTriggeredForUnlock = false;
-    this.revealRadius = VEIL_RADIUS_PX;
-    this.veilAlpha = VEIL_ALPHA;
+    this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
     this.veil.clear();
     this.veil.setVisible(false);
-    this.text.setVisible(false).setAlpha(1).setScale(1).setPosition(this.baseX, this.baseY);
   }
 
   destroy(): void {
@@ -172,36 +230,41 @@ export class ArenaCountdownOverlay {
     });
   }
 
-  private playGoReveal(): void {
+  private playReveal(showGoText: boolean): void {
     this.stopTextTweens();
-    this.text.setStyle({
-      fontFamily: 'monospace',
-      fontSize: `${GO_FONT_SIZE_PX}px`,
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.RED_1),
-      stroke: toCssColor(COLORS.GREY_10),
-      strokeThickness: 18,
-    });
-    this.text
-      .setText('GO!')
-      .setPosition(this.baseX, this.baseY + 8)
-      .setAlpha(1)
-      .setScale(0.82)
-      .setVisible(true);
 
-    this.scene.tweens.add({
-      targets: this.text,
-      y: this.baseY - GO_FLOAT_DISTANCE_PX,
-      alpha: 0,
-      scale: 1.14,
-      duration: GO_TEXT_DURATION_MS,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        if (this.goTriggeredForUnlock) {
-          this.text.setVisible(false);
-        }
-      },
-    });
+    if (showGoText) {
+      this.text.setStyle({
+        fontFamily: 'monospace',
+        fontSize: `${GO_FONT_SIZE_PX}px`,
+        fontStyle: 'bold',
+        color: toCssColor(COLORS.RED_1),
+        stroke: toCssColor(COLORS.GREY_10),
+        strokeThickness: 18,
+      });
+      this.text
+        .setText('GO!')
+        .setPosition(this.baseX, this.baseY + 8)
+        .setAlpha(1)
+        .setScale(0.82)
+        .setVisible(true);
+
+      this.scene.tweens.add({
+        targets: this.text,
+        y: this.baseY - GO_FLOAT_DISTANCE_PX,
+        alpha: 0,
+        scale: 1.14,
+        duration: GO_TEXT_DURATION_MS,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          if (this.goTriggeredForUnlock) {
+            this.text.setVisible(false);
+          }
+        },
+      });
+    } else {
+      this.text.setVisible(false).setText('');
+    }
 
     this.scene.tweens.add({
       targets: this,
@@ -215,8 +278,27 @@ export class ArenaCountdownOverlay {
       onComplete: () => {
         this.veil.clear();
         this.veil.setVisible(false);
+        if (this.mode === 'respawn-reveal' || this.goTriggeredForUnlock) {
+          this.mode = 'hidden';
+        }
       },
     });
+  }
+
+  private resetOverlayState(radius: number, alpha: number): void {
+    this.stopTextTweens();
+    this.lastShownNumber = 0;
+    this.goTriggeredForUnlock = false;
+    this.deathVeilHoldUntilMs = 0;
+    this.deathVeilClosing = false;
+    this.revealRadius = radius;
+    this.veilAlpha = alpha;
+    this.text
+      .setVisible(false)
+      .setText('')
+      .setAlpha(1)
+      .setScale(1)
+      .setPosition(this.baseX, this.baseY);
   }
 
   private renderVeil(radius: number, alpha: number): void {

@@ -163,8 +163,8 @@ export class LobbyOverlay {
       .setScrollFactor(0);
     objects.push(this.copyBtn);
 
-    this.copyBtnLabel = this.scene.add.text(COPY_BTN_X, ACTION_BTN_Y, 'LINK', {
-      fontSize: '20px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    this.copyBtnLabel = this.scene.add.text(COPY_BTN_X, ACTION_BTN_Y, 'LINK KOPIEREN', {
+      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.copyBtnLabel);
 
@@ -257,7 +257,7 @@ export class LobbyOverlay {
     this.copyBtnLabel.setText('KOPIERT');
     this.scene.time.delayedCall(1200, () => {
       if (!this.copyBtnLabel.scene) return;
-      this.copyBtnLabel.setText('LINK');
+      this.copyBtnLabel.setText('LINK KOPIEREN');
     });
   }
 
@@ -420,6 +420,7 @@ export class LobbyOverlay {
     }
 
     if (this.roomQuality.status === 'good' && this.roomQuality.worstPingMs !== null) {
+      if (!this.localIsHost) return '';
       return `Raumtest ok: ${this.roomQuality.worstPingMs}ms bei Ziel ${this.roomQuality.thresholdMs}ms.`;
     }
 
