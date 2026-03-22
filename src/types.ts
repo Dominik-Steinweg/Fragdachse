@@ -344,3 +344,14 @@ export interface SyncedNukeStrike {
   explodeAt:   number;   // Date.now()-Zeitpunkt der Explosion
   triggeredBy: string;
 }
+
+/** Aktiver Armageddon-Meteor (Host → Clients via GameState) */
+export interface SyncedMeteorStrike {
+  id:        number;   // Eindeutige Meteor-ID
+  x:         number;   // Einschlagsort Welt-X
+  y:         number;   // Einschlagsort Welt-Y
+  radius:    number;   // Schadensradius (px)
+  spawnedAt: number;   // Date.now()-Zeitpunkt des Spawns (Warnkreis erscheint)
+  impactAt:  number;   // Date.now()-Zeitpunkt des Einschlags
+  ownerId:   string;   // Spieler-ID des Casters
+}

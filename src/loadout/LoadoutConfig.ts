@@ -177,6 +177,17 @@ const STANDARD_GRENADE_CHARGE = {
   fullChargeDuration: 700,
 } as const satisfies ChargedThrowUtilityActivationConfig;
 
+export interface ArmageddonMeteorConfig {
+  readonly meteorSpawnRadius: number;   // px – Radius um den Spieler, in dem Meteore spawnen
+  readonly meteorDamageRadius: number;  // px – AoE-Schadensradius beim Einschlag
+  readonly meteorDamage: number;        // HP-Schaden pro Einschlag
+  readonly meteorFallDuration: number;  // ms – Vorwarnzeit bevor der Meteor einschlägt
+  readonly meteorsPerSecond: number;    // Spawn-Rate (leicht zufällig verteilt)
+  readonly selfDamageMult: number;      // Selbstschadens-Multiplikator (0 = immun)
+  readonly rockDamageMult?: number;     // Schadensfaktor gegen Felsen (Default 1.0)
+  readonly trainDamageMult?: number;    // Schadensfaktor gegen den Zug (Default 1.0)
+}
+
 export interface UltimateConfig {
   readonly id: string;
   readonly displayName: string;
@@ -186,6 +197,9 @@ export interface UltimateConfig {
   readonly speedMultiplier: number;   // z.B. 1.3 = 30% schneller
   readonly damageMultiplier: number;  // z.B. 2.0 = doppelter Schaden
   readonly rageDrainDuration: number; // ms über die Rage von max→0 sinkt
+
+  // Armageddon-Ultimate (optional, nur bei Armageddon gesetzt)
+  readonly armageddon?: ArmageddonMeteorConfig;
 }
 
 // ── Item-Registrierung ────────────────────────────────────────────────────────
@@ -689,6 +703,32 @@ export const ULTIMATE_CONFIGS = {
     speedMultiplier:    1.5,
     damageMultiplier:   1.5,
     rageDrainDuration:  5000,
+  } as UltimateConfig,
+
+  /**
+   * ARMAGEDDON – Inspiriert vom Druiden-Skill aus Diablo 2.
+   * Spawnt ~70 Meteore über 7 Sekunden im Radius um den Spieler.
+   * Jeder Meteor zeigt einen Warnkreis, fällt dann herab und macht AoE-Schaden.
+   */
+  ARMAGEDDON: {
+    id:                 'ARMAGEDDON',
+    displayName:        'Armageddon',
+    cooldown:           0,
+    rageRequired:       RAGE_MAX,
+    duration:           7000,
+    speedMultiplier:    1.0,
+    damageMultiplier:   1.0,
+    rageDrainDuration:  7000,
+    armageddon: {
+      meteorSpawnRadius:  250,    // px um den Spieler
+      meteorDamageRadius: 48,     // px AoE bei Einschlag (~1.5 Tiles)
+      meteorDamage:       35,     // HP pro Meteor
+      meteorFallDuration: 1200,   // ms Vorwarnung
+      meteorsPerSecond:   10,     // ~70 Meteore in 7 Sekunden
+      selfDamageMult:     0,      // Caster immun
+      rockDamageMult:     0.5,
+      trainDamageMult:    0.5,
+    },
   } as UltimateConfig,
 } as const;
 

@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -79,6 +79,7 @@ export interface GameState {
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
   nukes:        SyncedNukeStrike[];
+  meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
@@ -378,6 +379,7 @@ export class NetworkBridge {
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.powerups.length > 0)     payload.u = state.powerups;
     if (state.nukes.length > 0)        payload.n = state.nukes;
+    if (state.meteors.length > 0)      payload.mt = state.meteors;
     if (state.train)                   payload.t = state.train;
     setState(KEY_GAME_STATE, payload, false);
   }
@@ -397,6 +399,7 @@ export class NetworkBridge {
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       powerups:      (raw.u as SyncedPowerUp[]       | undefined) ?? [],
       nukes:         (raw.n as SyncedNukeStrike[]    | undefined) ?? [],
+      meteors:       (raw.mt as SyncedMeteorStrike[] | undefined) ?? [],
       train:         (raw.t as SyncedTrainState      | undefined) ?? null,
     };
     this.cachedGameState = state;

@@ -27,7 +27,10 @@ import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
 import { PowerUpRenderer }     from '../powerups/PowerUpRenderer';
+import { MeteorRenderer }      from '../effects/MeteorRenderer';
 import { DetonationSystem }    from '../systems/DetonationSystem';
+import { ArmageddonSystem }    from '../systems/ArmageddonSystem';
+import type { MeteorImpactEvent } from '../systems/ArmageddonSystem';
 import { TrainManager }        from '../train/TrainManager';
 import { TrainRenderer }       from '../train/TrainRenderer';
 import { TRAIN }               from '../train/TrainConfig';
@@ -89,11 +92,13 @@ export class ArenaScene extends Phaser.Scene {
   private loadoutManager:    LoadoutManager    | null = null;
   private powerUpSystem:     PowerUpSystem     | null = null;
   private detonationSystem:  DetonationSystem  | null = null;
+  private armageddonSystem:  ArmageddonSystem  | null = null;
 
   // ── Zug-Event ─────────────────────────────────────────────────────────────
   private trainManager:       TrainManager  | null = null;
   private trainRenderer:      TrainRenderer | null = null;
   private nukeRenderer:       NukeRenderer  | null = null;
+  private meteorRenderer:     MeteorRenderer | null = null;
   private powerUpRenderer:     PowerUpRenderer | null = null;
   private trainSpawned          = false;
   private trainDestroyedShown   = false;
@@ -195,6 +200,8 @@ export class ArenaScene extends Phaser.Scene {
     this.projectileManager.setTracerRenderer(this.tracerRenderer);
     this.nukeRenderer = new NukeRenderer(this);
     this.nukeRenderer.generateTextures();
+    this.meteorRenderer = new MeteorRenderer(this);
+    this.meteorRenderer.generateTextures();
     this.powerUpRenderer = new PowerUpRenderer(this);
 
     // ── 3c. Prozedurale Power-Up-Textur: BFG ────────────────────────────
@@ -667,6 +674,11 @@ export class ArenaScene extends Phaser.Scene {
       this.detonationSystem = new DetonationSystem(this.projectileManager);
       this.combatSystem.setDetonationSystem(this.detonationSystem);
 
+      // ArmageddonSystem initialisieren (Meteor-Ultimate)
+      this.armageddonSystem = new ArmageddonSystem();
+      this.armageddonSystem.setRockGrid(this.arenaResult.rockGrid);
+      this.loadoutManager.setArmageddonSystem(this.armageddonSystem);
+
       // BFG Laser-Callback: Host löst periodische Laser-Strahlen aus
       this.projectileManager.setBfgLaserCallback((proj) => {
         this.resolveBfgLasers(proj);
@@ -872,6 +884,9 @@ export class ArenaScene extends Phaser.Scene {
 
     this.powerUpRenderer?.clear();
     this.nukeRenderer?.clear();
+    this.meteorRenderer?.clear();
+    this.armageddonSystem?.destroyAll();
+    this.armageddonSystem = null;
 
     // Zug aufräumen
     this.trainManager?.destroy();
@@ -1212,6 +1227,23 @@ export class ArenaScene extends Phaser.Scene {
       );
     }
 
+    // ── Armageddon-Meteore (Host) ──────────────────────────────────────────
+    const meteorImpacts = countdownActive ? [] : (this.armageddonSystem?.update(Date.now(), delta) ?? []);
+    for (const mi of meteorImpacts) {
+      // Spieler-Schaden (selfDamageMult steuert ob Caster getroffen wird)
+      this.combatSystem.applyAoeDamage(
+        mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
+        mi.selfDamageMult > 0,
+      );
+      // Umgebungs-Schaden (Felsen, Zug)
+      this.applyAoeEnvironmentDamage(
+        mi.x, mi.y, mi.radius, mi.damage,
+        mi.rockDamageMult, mi.trainDamageMult, mi.ownerId,
+      );
+      // Explosionseffekt an alle Clients broadcasten
+      bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622);
+    }
+
     // ── Zug-Update (Host) ─────────────────────────────────────────────────────
     if (!countdownActive && this.trainManager) {
       if (!this.trainSpawned) {
@@ -1249,6 +1281,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
     const nukes    = this.powerUpSystem?.getNukeSnapshot() ?? [];
+    const meteors  = this.armageddonSystem?.getSnapshot() ?? [];
     const train    = this.trainManager?.getNetSnapshot() ?? null;
 
     // Zug-Renderer auf dem Host direkt aktualisieren (kein Client-Update-Pfad)
@@ -1256,6 +1289,7 @@ export class ArenaScene extends Phaser.Scene {
     // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
     this.powerUpRenderer?.sync(powerups);
     this.nukeRenderer?.sync(nukes);
+    this.meteorRenderer?.sync(meteors);
     this.checkLocalPickup(powerups);
 
     // Rotation aller Spieler-Sprites auf dem Host aktualisieren
@@ -1349,7 +1383,7 @@ export class ArenaScene extends Phaser.Scene {
       };
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, powerups, nukes, train });
+    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, powerups, nukes, meteors, train });
 
     // BFG-Screenshake während Flug (Host)
     if (projectiles.some(p => p.style === 'bfg')) {
@@ -1440,6 +1474,7 @@ export class ArenaScene extends Phaser.Scene {
       this.trainRenderer?.setTarget(state.train ?? null);
       this.powerUpRenderer?.sync(state.powerups ?? []);
       this.nukeRenderer?.sync(state.nukes ?? []);
+      this.meteorRenderer?.sync(state.meteors ?? []);
       this.checkLocalPickup(state.powerups ?? []);
     }
 

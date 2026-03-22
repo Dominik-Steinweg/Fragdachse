@@ -1,6 +1,7 @@
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
+import type { ArmageddonSystem }  from '../systems/ArmageddonSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
 import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, WeaponSlot } from '../types';
@@ -59,6 +60,7 @@ export class LoadoutManager {
   private combatSystem:       CombatResolverType | null = null;
   private dashBurstChecker: ((id: string) => boolean) | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
+  private armageddonSystem:   ArmageddonSystem | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
@@ -121,6 +123,11 @@ export class LoadoutManager {
   /** Injiziert das HostPhysicsSystem für Rückstoß-Impulse. */
   setPhysicsSystem(ps: PhysicsSystemType | null): void {
     this.physicsSystem = ps;
+  }
+
+  /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
+  setArmageddonSystem(sys: ArmageddonSystem | null): void {
+    this.armageddonSystem = sys;
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
@@ -224,6 +231,15 @@ export class LoadoutManager {
         const rage = this.resourceSystem.getRage(playerId);
         if (rage < cfg.rageRequired) return;     // nicht genug Rage
         this.ultimateStates.set(playerId, { active: true, startTime: now, config: cfg });
+
+        // Armageddon: Meteor-Spawning starten
+        if (cfg.armageddon && this.armageddonSystem) {
+          const pm = this.playerManager;
+          this.armageddonSystem.activate(playerId, cfg.armageddon, () => {
+            const p = pm.getPlayer(playerId);
+            return p ? { x: p.sprite.x, y: p.sprite.y } : null;
+          });
+        }
         break;
       }
     }
@@ -255,6 +271,10 @@ export class LoadoutManager {
 
       if (elapsed >= state.config.duration) {
         state.active = false;
+        // Armageddon: Meteor-Spawning stoppen (In-Flight-Meteore schlagen noch ein)
+        if (state.config.armageddon && this.armageddonSystem) {
+          this.armageddonSystem.deactivate(playerId);
+        }
       }
     }
   }
