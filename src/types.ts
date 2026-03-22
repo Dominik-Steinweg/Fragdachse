@@ -111,6 +111,10 @@ export interface RoomQualitySnapshot {
   status: RoomQualityStatus;
   summary: string;
   source: 'host-proxy' | 'team-ping';
+  autoSearchActive: boolean;
+  autoSearchAttempt: number;
+  autoSearchMaxAttempts: number;
+  autoSearchExhausted: boolean;
   thresholdMs: number;
   worstPingMs: number | null;
   measuredPlayers: number;

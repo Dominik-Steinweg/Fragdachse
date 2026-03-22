@@ -11,6 +11,7 @@ import {
   ROOM_QUALITY_START_POLICY,
 } from '../config';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
+import type { AutomaticRoomSearchState } from '../utils/roomQuality';
 
 interface RoomQualityBridge {
   isHost(): boolean;
@@ -26,6 +27,11 @@ interface RoomQualityMonitorDeps {
   getRetryCount: () => number;
   clearRetryCount: () => void;
   restartRoomForQualityRetry: () => void;
+  restartRoomForAutomaticRoomSearch: () => void;
+  getAutomaticRoomSearchState: () => AutomaticRoomSearchState;
+  consumeAutomaticRoomSearchAttempt: () => AutomaticRoomSearchState;
+  clearAutomaticRoomSearchState: () => void;
+  markAutomaticRoomSearchExhausted: () => AutomaticRoomSearchState;
 }
 
 export class RoomQualityMonitor {
@@ -56,6 +62,11 @@ export class RoomQualityMonitor {
     if (!this.deps.bridge.isHost()) {
       this.roomQualitySnapshot = this.deps.bridge.getRoomQuality();
       return;
+    }
+
+    const autoSearchState = this.deps.getAutomaticRoomSearchState();
+    if (autoSearchState.active && !autoSearchState.exhausted) {
+      this.deps.consumeAutomaticRoomSearchAttempt();
     }
 
     this.publishRoomQuality(this.buildSnapshot('sampling', 'Host-Probe startet…', null, 0, 0, 0, 'host-proxy'));
@@ -120,6 +131,7 @@ export class RoomQualityMonitor {
 
     if (worstPingMs <= ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS) {
       this.deps.clearRetryCount();
+      this.deps.clearAutomaticRoomSearchState();
       this.autoRetryAtMs = null;
       this.autoRetryTriggered = false;
       this.publishRoomQuality(
@@ -133,6 +145,12 @@ export class RoomQualityMonitor {
           'team-ping',
         ),
       );
+      return this.roomQualitySnapshot;
+    }
+
+    const autoSearchState = this.deps.getAutomaticRoomSearchState();
+    if (autoSearchState.active) {
+      this.handleAutomaticSearchFailure(now, worstPingMs, remotePlayers.length, players.length, minSamplesCollected, 'team-ping');
       return this.roomQualitySnapshot;
     }
 
@@ -212,9 +230,17 @@ export class RoomQualityMonitor {
       : `Host-Probe ${this.hostSoloProbeEstimateMs}ms`;
 
     if (this.hostSoloProbeEstimateMs <= ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS) {
+      this.deps.clearRetryCount();
+      this.deps.clearAutomaticRoomSearchState();
       this.autoRetryAtMs = null;
       this.autoRetryTriggered = false;
       this.publishRoomQuality(this.buildSnapshot('good', `Host-Probe ok: ${summaryDetails}`, this.hostSoloProbeEstimateMs, 0, totalPlayers, this.hostSoloProbeSampleCount, 'host-proxy'));
+      return;
+    }
+
+    const autoSearchState = this.deps.getAutomaticRoomSearchState();
+    if (autoSearchState.active) {
+      this.handleAutomaticSearchFailure(now, this.hostSoloProbeEstimateMs, 0, totalPlayers, this.hostSoloProbeSampleCount, 'host-proxy', summaryDetails);
       return;
     }
 
@@ -265,10 +291,15 @@ export class RoomQualityMonitor {
     minSamplesCollected = 0,
     source: RoomQualitySnapshot['source'] = 'team-ping',
   ): RoomQualitySnapshot {
+    const autoSearchState = this.deps.getAutomaticRoomSearchState();
     return {
       status,
       summary,
       source,
+      autoSearchActive: autoSearchState.active,
+      autoSearchAttempt: autoSearchState.currentAttempt,
+      autoSearchMaxAttempts: autoSearchState.maxAttempts,
+      autoSearchExhausted: autoSearchState.exhausted,
       thresholdMs: ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS,
       worstPingMs,
       measuredPlayers,
@@ -279,6 +310,57 @@ export class RoomQualityMonitor {
       retryMode: ROOM_QUALITY_RETRY_MODE,
       startBlocked: ROOM_QUALITY_START_POLICY === 'block',
     };
+  }
+
+  private handleAutomaticSearchFailure(
+    now: number,
+    pingMs: number,
+    measuredPlayers: number,
+    totalPlayers: number,
+    minSamplesCollected: number,
+    source: RoomQualitySnapshot['source'],
+    customSummary?: string,
+  ): void {
+    const autoSearchState = this.deps.getAutomaticRoomSearchState();
+    const baseSummary = customSummary ?? `${pingMs}ms > ${ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS}ms`;
+
+    if (autoSearchState.currentAttempt < autoSearchState.maxAttempts) {
+      if (this.autoRetryAtMs === null) {
+        this.autoRetryAtMs = now + ROOM_QUALITY_AUTO_RETRY_DELAY_MS;
+        this.autoRetryTriggered = false;
+      }
+      this.publishRoomQuality(
+        this.buildSnapshot(
+          'retrying',
+          `Auto-Suche ${autoSearchState.currentAttempt}/${autoSearchState.maxAttempts}: ${baseSummary} - neuer Raum folgt`,
+          pingMs,
+          measuredPlayers,
+          totalPlayers,
+          minSamplesCollected,
+          source,
+        ),
+      );
+      if (!this.autoRetryTriggered && now >= this.autoRetryAtMs) {
+        this.autoRetryTriggered = true;
+        this.deps.restartRoomForAutomaticRoomSearch();
+      }
+      return;
+    }
+
+    this.autoRetryAtMs = null;
+    this.autoRetryTriggered = false;
+    const exhaustedState = this.deps.markAutomaticRoomSearchExhausted();
+    this.publishRoomQuality(
+      this.buildSnapshot(
+        'bad',
+        `Auto-Suche erfolglos: kein guter Raum nach ${exhaustedState.maxAttempts} Versuchen`,
+        pingMs,
+        measuredPlayers,
+        totalPlayers,
+        minSamplesCollected,
+        source,
+      ),
+    );
   }
 
   private publishRoomQuality(snapshot: RoomQualitySnapshot): void {

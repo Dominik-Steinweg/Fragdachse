@@ -23,15 +23,23 @@ const PANEL_H  = 600;
 const PANEL_X  = GAME_WIDTH  / 2 - PANEL_W / 2;
 const PANEL_Y  = GAME_HEIGHT / 2 - PANEL_H / 2;
 const LOGO_Y   = 120;
+const READY_BTN_W = 180;
+const READY_BTN_H = 52;
+const READY_BTN_Y = PANEL_Y + PANEL_H - 116;
+const HOST_LABEL_Y = PANEL_Y + PANEL_H - 70;
 const ACTION_BTN_W = 160;
-const ACTION_BTN_H = 44;
-const ACTION_BTN_Y = PANEL_Y + PANEL_H - 52;
-const ACTION_BTN_OFFSET_X = 220;
-const READY_BTN_W = 220;
+const ACTION_BTN_H = 46;
+const ACTION_BTN_Y = PANEL_Y + PANEL_H - 34;
+const ACTION_BTN_GAP = 18;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
 const LIST_Y   = PANEL_Y + 60;
 const ROW_PING_X = PANEL_X + PANEL_W - 28; // 1332 – Ping rechts-bündig in Spielerzeile
+
+const READY_BTN_X = GAME_WIDTH / 2;
+const COPY_BTN_X = GAME_WIDTH / 2 - (ACTION_BTN_W + ACTION_BTN_GAP);
+const RETRY_BTN_X = GAME_WIDTH / 2;
+const AUTO_BTN_X = GAME_WIDTH / 2 + (ACTION_BTN_W + ACTION_BTN_GAP);
 
 function pingColor(ms: number): string {
   if (ms <= 50)  return toCssColor(COLORS.GREEN_2);
@@ -52,12 +60,16 @@ export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
   private playerRows:     Map<string, PlayerRow> = new Map();
   private statusText!:    Phaser.GameObjects.Text;
+  private roomQualityText!: Phaser.GameObjects.Text;
+  private hostActionsLabel!: Phaser.GameObjects.Text;
   private readyBtn!:      Phaser.GameObjects.Rectangle;
   private readyBtnLabel!: Phaser.GameObjects.Text;
   private copyBtn!:       Phaser.GameObjects.Rectangle;
   private copyBtnLabel!:  Phaser.GameObjects.Text;
   private retryBtn!:      Phaser.GameObjects.Rectangle;
   private retryBtnLabel!: Phaser.GameObjects.Text;
+  private autoBtn!:       Phaser.GameObjects.Rectangle;
+  private autoBtnLabel!:  Phaser.GameObjects.Text;
   private visible         = false;
   private btnLocked       = false;
   private roomQuality: RoomQualitySnapshot | null = null;
@@ -69,6 +81,7 @@ export class LobbyOverlay {
     private onReadyToggled: () => void,
     private onCopyRoomLink: () => void,
     private onRetryRoom: () => void,
+    private onStartAutomaticRoomSearch: () => void,
   ) {}
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
@@ -112,27 +125,19 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.statusText);
 
+    this.roomQualityText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 48, 'Ping-Check wird vorbereitet…', {
+      fontSize: '16px', fontFamily: 'monospace', color: TEXT_COLOR,
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.roomQualityText);
+
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 48, PANEL_W - 40, 2, COLORS.GOLD_1)
+      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 72, PANEL_W - 40, 2, COLORS.GOLD_1)
         .setScrollFactor(0),
     );
 
     // ── Bereit-Button ─────────────────────────────────────────────────────
-    this.copyBtn = this.scene.add.rectangle(GAME_WIDTH / 2 - ACTION_BTN_OFFSET_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.BLUE_4)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => { if (!this.btnLocked) this.onCopyRoomLink(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.copyBtn.setAlpha(0.8); })
-      .on('pointerout',   () => this.copyBtn.setAlpha(1))
-      .setScrollFactor(0);
-    objects.push(this.copyBtn);
-
-    this.copyBtnLabel = this.scene.add.text(GAME_WIDTH / 2 - ACTION_BTN_OFFSET_X, ACTION_BTN_Y, 'LINK', {
-      fontSize: '20px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
-    }).setOrigin(0.5).setScrollFactor(0);
-    objects.push(this.copyBtnLabel);
-
-    this.readyBtn = this.scene.add.rectangle(GAME_WIDTH / 2, ACTION_BTN_Y, READY_BTN_W, 52, UNREADY_COLOR)
+    this.readyBtn = this.scene.add.rectangle(READY_BTN_X, READY_BTN_Y, READY_BTN_W, READY_BTN_H, UNREADY_COLOR)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onReadyToggled(); })
       .on('pointerover',  () => { if (!this.btnLocked) this.readyBtn.setAlpha(0.8); })
@@ -140,12 +145,30 @@ export class LobbyOverlay {
       .setScrollFactor(0);
     objects.push(this.readyBtn);
 
-    this.readyBtnLabel = this.scene.add.text(GAME_WIDTH / 2, ACTION_BTN_Y, 'BEREIT', {
-      fontSize: '26px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    this.readyBtnLabel = this.scene.add.text(READY_BTN_X, READY_BTN_Y, 'BEREIT', {
+      fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.readyBtnLabel);
 
-    this.retryBtn = this.scene.add.rectangle(GAME_WIDTH / 2 + ACTION_BTN_OFFSET_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.GOLD_4)
+    this.hostActionsLabel = this.scene.add.text(GAME_WIDTH / 2, HOST_LABEL_Y, 'Host-Funktionen', {
+      fontSize: '16px', fontFamily: 'monospace', color: TEXT_COLOR, fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.hostActionsLabel);
+
+    this.copyBtn = this.scene.add.rectangle(COPY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.BLUE_4)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => { if (!this.btnLocked) this.onCopyRoomLink(); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.copyBtn.setAlpha(0.8); })
+      .on('pointerout',   () => this.copyBtn.setAlpha(1))
+      .setScrollFactor(0);
+    objects.push(this.copyBtn);
+
+    this.copyBtnLabel = this.scene.add.text(COPY_BTN_X, ACTION_BTN_Y, 'LINK', {
+      fontSize: '20px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.copyBtnLabel);
+
+    this.retryBtn = this.scene.add.rectangle(RETRY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.GOLD_4)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onRetryRoom(); })
       .on('pointerover',  () => { if (!this.btnLocked) this.retryBtn.setAlpha(0.8); })
@@ -153,10 +176,23 @@ export class LobbyOverlay {
       .setScrollFactor(0);
     objects.push(this.retryBtn);
 
-    this.retryBtnLabel = this.scene.add.text(GAME_WIDTH / 2 + ACTION_BTN_OFFSET_X, ACTION_BTN_Y, 'NEUER RAUM', {
+    this.retryBtnLabel = this.scene.add.text(RETRY_BTN_X, ACTION_BTN_Y, 'NEUER RAUM', {
       fontSize: '18px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.retryBtnLabel);
+
+    this.autoBtn = this.scene.add.rectangle(AUTO_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.GREEN_4)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => { if (!this.btnLocked) this.onStartAutomaticRoomSearch(); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.autoBtn.setAlpha(0.8); })
+      .on('pointerout',   () => this.autoBtn.setAlpha(1))
+      .setScrollFactor(0);
+    objects.push(this.autoBtn);
+
+    this.autoBtnLabel = this.scene.add.text(AUTO_BTN_X, ACTION_BTN_Y, 'AUTO-SUCHE', {
+      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.autoBtnLabel);
 
     // ── Container mit korrektem Depth erstellen ───────────────────────────
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
@@ -249,6 +285,9 @@ export class LobbyOverlay {
     this.statusText
       .setText('Host hat das Spiel verlassen.')
       .setStyle({ color: '#ff4444' });
+    this.roomQualityText
+      .setText('Ping-Check nicht verfuegbar.')
+      .setStyle({ color: '#ff4444' });
     this.btnLocked = true;
     this.readyBtn.disableInteractive().setAlpha(0.4);
     this.readyBtnLabel.setText('BEENDET');
@@ -309,32 +348,102 @@ export class LobbyOverlay {
   }
 
   private updateStatus(playerCount: number): void {
-    const roomSummary = this.roomQuality?.summary ? `  |  ${this.roomQuality.summary}` : '';
-    const color = this.roomQuality ? this.getRoomQualityColor(this.roomQuality.status) : TEXT_COLOR;
     if (playerCount < 2) {
-      this.statusText.setText(`Warte auf Mitspieler…${roomSummary}`).setStyle({ color });
+      this.statusText.setText('Warte auf Mitspieler…').setStyle({ color: TEXT_COLOR });
     } else {
       const readyCount = [...this.playerRows.keys()]
         .filter(id => this.bridge.getPlayerReady(id)).length;
-      this.statusText.setText(`${readyCount} / ${playerCount} bereit${roomSummary}`).setStyle({ color });
+      this.statusText.setText(`${readyCount} / ${playerCount} bereit`).setStyle({ color: TEXT_COLOR });
     }
+
+    const roomSummary = this.formatRoomQualityText();
+    const color = this.roomQuality ? this.getRoomQualityColor(this.roomQuality.status) : TEXT_COLOR;
+    this.roomQualityText.setText(roomSummary).setStyle({ color });
   }
 
   private updateRoomActionButtons(): void {
     const canShowActions = this.localIsHost;
-    const retryDisabled = this.btnLocked || this.roomQuality?.status === 'retrying';
-    const copyDisabled = this.btnLocked;
+    const autoSearchActive = this.roomQuality?.autoSearchActive === true;
+    const readyDisabled = this.btnLocked || (canShowActions && autoSearchActive);
+    const retryDisabled = this.btnLocked || autoSearchActive || this.roomQuality?.status === 'retrying';
+    const copyDisabled = this.btnLocked || autoSearchActive;
+    const autoDisabled = this.btnLocked;
 
+    this.readyBtn.setAlpha(!readyDisabled ? 1 : 0.4);
+    if (!readyDisabled) this.readyBtn.setInteractive({ useHandCursor: true });
+    else this.readyBtn.disableInteractive();
+
+    this.hostActionsLabel.setVisible(canShowActions);
     this.copyBtn.setVisible(canShowActions).setAlpha(canShowActions && !copyDisabled ? 1 : 0.4);
     this.copyBtnLabel.setVisible(canShowActions);
     this.retryBtn.setVisible(canShowActions).setAlpha(canShowActions && !retryDisabled ? 1 : 0.4);
     this.retryBtnLabel.setVisible(canShowActions);
+    this.autoBtn.setVisible(canShowActions).setAlpha(canShowActions && !autoDisabled ? 1 : 0.4);
+    this.autoBtnLabel.setVisible(canShowActions);
+    this.autoBtnLabel.setText(this.getAutoButtonLabel());
 
     if (canShowActions && !copyDisabled) this.copyBtn.setInteractive({ useHandCursor: true });
     else this.copyBtn.disableInteractive();
 
     if (canShowActions && !retryDisabled) this.retryBtn.setInteractive({ useHandCursor: true });
     else this.retryBtn.disableInteractive();
+
+    if (canShowActions && !autoDisabled) this.autoBtn.setInteractive({ useHandCursor: true });
+    else this.autoBtn.disableInteractive();
+  }
+
+  private formatRoomQualityText(): string {
+    if (!this.roomQuality) return 'Ping-Check wird vorbereitet…';
+
+    if (this.roomQuality.autoSearchActive) {
+      const attemptText = this.getAutoSearchAttemptText();
+      if (this.roomQuality.status === 'sampling' || this.roomQuality.status === 'waiting') {
+        return `Auto-Suche ${attemptText}: Raum wird geprueft. Klick auf STOPP beendet die Suche.`;
+      }
+      if (this.roomQuality.status === 'retrying') {
+        return `Auto-Suche ${attemptText}: Raum ungeeignet, neuer Raum folgt. Klick auf STOPP beendet die Suche.`;
+      }
+    }
+
+    if (this.roomQuality.autoSearchExhausted) {
+      return `Auto-Suche beendet: Kein guter Raum nach ${this.roomQuality.autoSearchMaxAttempts} Versuchen.`;
+    }
+
+    if (this.roomQuality.status === 'sampling') {
+      return this.roomQuality.source === 'host-proxy'
+        ? 'Host-Probe prueft die Raumqualitaet…'
+        : `Raumtest sammelt Ping-Daten (${this.roomQuality.minSamplesCollected}/${this.roomQuality.requiredSamples}).`;
+    }
+
+    if (this.roomQuality.status === 'waiting') {
+      return 'Host-Probe ohne Ergebnis. Link kann trotzdem geteilt werden.';
+    }
+
+    if (this.roomQuality.status === 'good' && this.roomQuality.worstPingMs !== null) {
+      return `Raumtest ok: ${this.roomQuality.worstPingMs}ms bei Ziel ${this.roomQuality.thresholdMs}ms.`;
+    }
+
+    if (this.roomQuality.status === 'bad' && this.roomQuality.worstPingMs !== null) {
+      return `Raumtest zu hoch: ${this.roomQuality.worstPingMs}ms bei Ziel ${this.roomQuality.thresholdMs}ms. Neuer Raum empfohlen.`;
+    }
+
+    if (this.roomQuality.status === 'retrying' && this.roomQuality.worstPingMs !== null) {
+      return `Raumtest zu hoch: ${this.roomQuality.worstPingMs}ms. Neuer Raum folgt.`;
+    }
+
+    return this.roomQuality.summary;
+  }
+
+  private getAutoButtonLabel(): string {
+    if (!this.roomQuality?.autoSearchActive) return 'AUTO-SUCHE';
+    return `STOPP ${this.getAutoSearchAttemptText()}`;
+  }
+
+  private getAutoSearchAttemptText(): string {
+    if (!this.roomQuality) return '1/1';
+    const currentAttempt = Math.max(1, this.roomQuality.autoSearchAttempt || 1);
+    const maxAttempts = Math.max(currentAttempt, this.roomQuality.autoSearchMaxAttempts || currentAttempt);
+    return `${currentAttempt}/${maxAttempts}`;
   }
 
   private getRoomQualityColor(status: RoomQualitySnapshot['status']): string {

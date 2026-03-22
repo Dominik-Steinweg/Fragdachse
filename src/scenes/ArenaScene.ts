@@ -50,11 +50,23 @@ import {
   CELL_SIZE, COLORS, DEPTH,
   DASH_T2_S,
   NET_TICK_INTERVAL_MS, NET_SMOOTH_TIME_MS,
+  ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import type { LoadoutCommitSnapshot } from '../types';
 import { dequantizeAngle } from '../utils/angle';
-import { clearRoomQualityRetryCount, copyCurrentRoomShareUrl, getRoomQualityRetryCount, restartRoomForQualityRetry } from '../utils/roomQuality';
+import {
+  beginAutomaticRoomSearch,
+  clearAutomaticRoomSearchState,
+  clearRoomQualityRetryCount,
+  consumeAutomaticRoomSearchAttempt,
+  copyCurrentRoomShareUrl,
+  getAutomaticRoomSearchState,
+  getRoomQualityRetryCount,
+  markAutomaticRoomSearchExhausted,
+  restartRoomForAutomaticRoomSearch,
+  restartRoomForQualityRetry,
+} from '../utils/roomQuality';
 import { RoomQualityMonitor } from '../network/RoomQualityMonitor';
 
 
@@ -406,6 +418,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.onReadyToggled(),
       () => { void this.onCopyRoomLink(); },
       () => this.onRetryRoom(),
+      () => this.onStartAutomaticRoomSearch(),
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
@@ -414,6 +427,11 @@ export class ArenaScene extends Phaser.Scene {
       getRetryCount: () => getRoomQualityRetryCount(),
       clearRetryCount: () => clearRoomQualityRetryCount(),
       restartRoomForQualityRetry: () => restartRoomForQualityRetry(),
+      restartRoomForAutomaticRoomSearch: () => restartRoomForAutomaticRoomSearch(),
+      getAutomaticRoomSearchState: () => getAutomaticRoomSearchState(),
+      consumeAutomaticRoomSearchAttempt: () => consumeAutomaticRoomSearchAttempt(),
+      clearAutomaticRoomSearchState: () => clearAutomaticRoomSearchState(),
+      markAutomaticRoomSearchExhausted: () => markAutomaticRoomSearchExhausted(),
     });
 
     // ── 16. Eigenen Ready-Status hart zurücksetzen ────────────────────────
@@ -502,7 +520,21 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private onRetryRoom(): void {
+    clearAutomaticRoomSearchState();
     restartRoomForQualityRetry();
+  }
+
+  private onStartAutomaticRoomSearch(): void {
+    const autoSearchState = getAutomaticRoomSearchState();
+    if (autoSearchState.active) {
+      clearAutomaticRoomSearchState();
+      clearRoomQualityRetryCount();
+      return;
+    }
+
+    clearRoomQualityRetryCount();
+    beginAutomaticRoomSearch(ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS);
+    restartRoomForAutomaticRoomSearch();
   }
 
   // ── State Machine ─────────────────────────────────────────────────────────
