@@ -11,6 +11,7 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import { ArenaHUD } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
+import { HelpOverlay } from './HelpOverlay';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
@@ -48,6 +49,12 @@ const CAROUSEL_START_Y  = 286;   // Y des "Loadout:"-Labels
 const CAROUSEL_ROW_STEP = 52;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
 const CAROUSEL_GROUP_DY = 20;    // Offset erste Karussell-Zeile unter "Loadout:"
 const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
+
+// ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
+const DIVIDER3_Y  = 510;  // Trennlinie unter Loadout
+const HELP_BTN_Y  = 540;  // Hilfe-Button Y-Position
+const HELP_BTN_W  = 160;  // Breite
+const HELP_BTN_H  = 34;   // Höhe
 const ARROW_X_LEFT      = 15;
 const ARROW_X_RIGHT     = 195;   // "[ > ]" (~42px) endet bei ≈237 – bleibt im 240px-Sidebar
 const ITEM_NAME_X       = 120;   // zentriert in 240px Sidebar
@@ -103,6 +110,7 @@ export class LeftSidePanel {
   private loadoutIndices:   Record<LoadoutSlot, number> = { weapon1: 0, weapon2: 0, utility: 0, ultimate: 0 };
   private loadoutNameTexts: Partial<Record<LoadoutSlot, Phaser.GameObjects.Text>> = {};
   private loadoutEnabled    = true;
+  private helpOverlay:      HelpOverlay | null = null;
 
   constructor(
     private scene:  Phaser.Scene,
@@ -220,6 +228,32 @@ export class LeftSidePanel {
       this.bridge.setLocalLoadoutSlot(slot, SLOT_ITEMS[slot][0].id);
     });
 
+    // ── Trennlinie 3 (unter Loadout) ──
+    const divider3 = this.scene.add.graphics();
+    divider3.lineStyle(1, COLORS.GREY_6, 0.5);
+    divider3.beginPath();
+    divider3.moveTo(20, DIVIDER3_Y);
+    divider3.lineTo(220, DIVIDER3_Y);
+    divider3.strokePath();
+    divider3.setScrollFactor(0);
+    objects.push(divider3);
+
+    // ── Hilfe-Button ──
+    const helpBtn = this.scene.add.rectangle(CENTER_X, HELP_BTN_Y, HELP_BTN_W, HELP_BTN_H, COLORS.GREY_7)
+      .setStrokeStyle(2, COLORS.GOLD_1)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.helpOverlay?.show())
+      .on('pointerover', () => helpBtn.setAlpha(0.7))
+      .on('pointerout',  () => helpBtn.setAlpha(1))
+      .setScrollFactor(0);
+    objects.push(helpBtn);
+    objects.push(
+      this.scene.add.text(CENTER_X, HELP_BTN_Y, 'HILFE', {
+        fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold',
+        color: toCssColor(COLORS.GOLD_1),
+      }).setOrigin(0.5).setScrollFactor(0),
+    );
+
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
 
@@ -231,6 +265,10 @@ export class LeftSidePanel {
     // ── Picker-Popup (world-space, über LobbyOverlay) ─────────────────────────
     this.pickerContainer = this.buildPickerContainer();
     this.pickerContainer.setVisible(false);
+
+    // ── Hilfe-Overlay (world-space, über allem) ───────────────────────────────
+    this.helpOverlay = new HelpOverlay(this.scene);
+    this.helpOverlay.build();
   }
 
   // ── Transitions ────────────────────────────────────────────────────────────
@@ -356,6 +394,7 @@ export class LeftSidePanel {
   destroy(): void {
     this.badgerPreview?.destroy();
     this.destroyPickerEffects();
+    this.helpOverlay?.destroy();
     this.arenaHUD.destroy();
     this.lobbyContainer.destroy(true);
     this.gameContainer.destroy(true);
