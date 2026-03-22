@@ -135,13 +135,13 @@ export class LivingBarEffect {
     const sf = Math.max(0.3, h / 14);
 
     this.idleCore = scene.add.particles(0, 0, TEX_BLOB, {
-      lifespan:  { min: 1200, max: 2500 },
-      frequency: 90,
+      lifespan:  { min: 1200, max: 1500 },
+      frequency: 10,
       quantity:  1,
       speedX:    { min: -2, max: 2 },
       speedY:    { min: -1, max: 1 },
       scale:     { start: 1.0 * sf, end: 0.4 * sf },
-      alpha:     { start: 0.35, end: 0.05 },
+      alpha:     { start: 0.05, end: 0.03 },
       tint:      [palette.mid, palette.dark, palette.light],
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
@@ -151,13 +151,13 @@ export class LivingBarEffect {
     container.add(this.idleCore);
 
     this.idleOuter = scene.add.particles(0, 0, TEX_BLOB, {
-      lifespan:  { min: 2000, max: 3500 },
-      frequency: 160,
+      lifespan:  { min: 1000, max: 2500 },
+      frequency: 10,
       quantity:  1,
       speedX:    { min: -1, max: 1 },
       speedY:    { min: -0.5, max: 0.5 },
       scale:     { start: 1.5 * sf, end: 0.7 * sf },
-      alpha:     { start: 0.2, end: 0.03 },
+      alpha:     { start: 0.1, end: 0.03 },
       tint:      [palette.dark, palette.mid],
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
