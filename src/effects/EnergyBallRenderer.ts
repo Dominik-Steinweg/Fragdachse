@@ -10,7 +10,6 @@ const TEX_ENERGY_GLOW  = '__energy_ball_glow';
 interface EnergyBallVisual {
   coreEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   shellEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  trailEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   glowImage: Phaser.GameObjects.Image;
   shellImage: Phaser.GameObjects.Image;
 }
@@ -112,20 +111,6 @@ export class EnergyBallRenderer {
     });
     shellEmitter.setDepth(DEPTH.PROJECTILES + 0.5);
 
-    const trailEmitter = this.scene.add.particles(x, y, TEX_ENERGY_SPARK, {
-      lifespan: { min: 120, max: 240 },
-      frequency: 18,
-      quantity: 1,
-      speedX: { min: -12, max: 12 },
-      speedY: { min: -12, max: 12 },
-      scale: { start: 0.75, end: 0.05 },
-      alpha: { start: 0.65, end: 0 },
-      tint: [this.mixColor(color, COLORS.BLUE_1, 0.7), color],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: true,
-    });
-    trailEmitter.setDepth(DEPTH.PROJECTILES - 0.1);
-
     const glowImage = this.scene.add.image(x, y, TEX_ENERGY_GLOW)
       .setDepth(DEPTH.PROJECTILES - 0.2)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -138,7 +123,7 @@ export class EnergyBallRenderer {
       .setAlpha(0.85)
       .setTint(this.mixColor(color, COLORS.BLUE_1, 0.55));
 
-    this.visuals.set(id, { coreEmitter, shellEmitter, trailEmitter, glowImage, shellImage });
+    this.visuals.set(id, { coreEmitter, shellEmitter, glowImage, shellImage });
     this.updateVisual(id, x, y, size, 0, 0, color);
   }
 
@@ -146,12 +131,6 @@ export class EnergyBallRenderer {
     const visual = this.visuals.get(id);
     if (!visual) return;
 
-    const speed = Math.max(1, Math.sqrt(vx * vx + vy * vy));
-    const nx = vx / speed;
-    const ny = vy / speed;
-    const tailDistance = Math.max(size * 0.95, 10);
-    const tailX = x - nx * tailDistance;
-    const tailY = y - ny * tailDistance;
     const spread = Math.max(size * 0.44, 5);
     const glowScale = Math.max(size / 18 * 2.2, 0.9);
 
@@ -164,11 +143,6 @@ export class EnergyBallRenderer {
     visual.shellEmitter.clearEmitZones();
     visual.shellEmitter.addEmitZone(circleZone(spread * 0.95, 1));
     visual.shellEmitter.setParticleScale(0.75 + size * 0.012, 0.1);
-
-    visual.trailEmitter.setPosition(tailX, tailY);
-    visual.trailEmitter.clearEmitZones();
-    visual.trailEmitter.addEmitZone(circleZone(spread * 0.3, 1));
-    visual.trailEmitter.setParticleScale(0.55 + size * 0.012, 0.05);
 
     visual.glowImage.setPosition(x, y);
     visual.glowImage.setScale(glowScale);
@@ -188,8 +162,6 @@ export class EnergyBallRenderer {
     visual.coreEmitter.destroy();
     visual.shellEmitter.stop();
     visual.shellEmitter.destroy();
-    visual.trailEmitter.stop();
-    visual.trailEmitter.destroy();
     visual.glowImage.destroy();
     visual.shellImage.destroy();
     this.visuals.delete(id);
