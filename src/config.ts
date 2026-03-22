@@ -167,9 +167,9 @@ export const GRID_COLS           = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 30
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
 export const ROCK_FILL_RATIO     = 0.30;
 export const DIRT_FILL_RATIO     = 0.05;   
-export const TREE_COUNT          = 2;
-export const CA_SMOOTHING_STEPS  = 3;    // Anzahl Cellular-Automata-Durchläufe (0 = kein Smoothing)
-export const CA_MIN_ROCK_NEIGHBORS = 2;  // Fels mit < N Nachbarn wird zu Boden
+export const TREE_COUNT          = 3;
+export const CA_SMOOTHING_STEPS  = 4;    // Anzahl Cellular-Automata-Durchläufe (0 = kein Smoothing)
+export const CA_MIN_ROCK_NEIGHBORS = 3;  // Fels mit < N Nachbarn wird zu Boden
 export const CA_MAX_FLOOR_NEIGHBORS = 4; // Boden mit > N Nachbarn wird zu Fels
 
 // ---- Gleise ----

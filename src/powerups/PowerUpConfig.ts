@@ -29,7 +29,7 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
 
 export const NUKE_CONFIG = {
   countdownMs:        5_000,
-  radius:             700,
+  radius:             750,
   maxDamage:          1000,
   minDamage:          50,
   edgePaddingPx:      120,
@@ -65,7 +65,7 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 9999, HOLY_HAND_GRENADE: 33, BFG: 34 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 10 },
   },
 };
 
