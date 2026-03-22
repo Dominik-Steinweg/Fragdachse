@@ -407,7 +407,7 @@ export const WEAPON_CONFIGS = {
     id:                   'SHOTGUN',
     displayName:          'Schrotflinte',
     cooldown:             700,
-    damage:               15,       // Schaden pro Pellet
+    damage:               9,       // Schaden pro Pellet
     range:                230,
     fire: {
       type:                 'projectile',
@@ -558,7 +558,7 @@ export const WEAPON_CONFIGS = {
     projectileStyle:      'flame' as ProjectileStyle,
     projectileColor:      0xff6600,    // feste Flammenfarbe (nicht Spielerfarbe)
     rockDamageMult:       0,           // Flammen machen keinen Schaden an Felsen
-    trainDamageMult:      0.05,        // 5% Schaden am Zug
+    trainDamageMult:      1,        // 100% Schaden am Zug
   } as WeaponConfig,
 
   /**

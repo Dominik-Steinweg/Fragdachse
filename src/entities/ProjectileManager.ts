@@ -379,12 +379,13 @@ export class ProjectileManager {
       tracked.colliders.push(c);
     }
     if (this.trainGroup) {
-      // Zug: Flamme wird sofort zerstört (bewegliches Objekt – kein Lingern sinnvoll)
+      // Zug: Flamme verursacht genau einmal Schaden und verschwindet sofort.
       const onTrainHit = this.onTrainHit;
-      const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
+      const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+        if (tracked.pendingDestroy) return;
         const trainMult = tracked.trainDamageMult ?? 1;
         if (trainMult !== 0) onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
-        tracked.bounceCount = tracked.maxBounces;
+        this.queueDestroyProjectile(tracked);
       });
       tracked.colliders.push(c);
     }
@@ -541,10 +542,21 @@ export class ProjectileManager {
   }
 
   /**
+   * Markiert ein Projektil zur sofortigen Entfernung aus Host-Logik und Phaser-Kollision.
+   * Das eigentliche Cleanup erfolgt gesammelt im nächsten hostUpdate().
+   */
+  private queueDestroyProjectile(proj: TrackedProjectile): void {
+    if (proj.pendingDestroy) return;
+    proj.pendingDestroy = true;
+    proj.body.setVelocity(0, 0);
+    proj.body.enable = false;
+  }
+
+  /**
    * Host: Snapshot der aktiven Projektile (für Kollisionserkennung im CombatSystem).
    */
   getActiveProjectiles(): readonly TrackedProjectile[] {
-    return [...this.projectiles];
+    return this.projectiles.filter(proj => !proj.pendingDestroy);
   }
 
   /**
@@ -598,6 +610,17 @@ export class ProjectileManager {
     const renderer         = this.bulletRenderer;
 
     this.projectiles = this.projectiles.filter(proj => {
+      if (proj.pendingDestroy) {
+        this.scene.physics.world.off('worldbounds', proj.boundsListener);
+        for (const c of proj.colliders) c.destroy();
+        proj.sprite.destroy();
+        renderer?.destroyVisual(proj.id);
+        this.tracerRenderer?.destroyTracer(proj.id);
+        this.flameRenderer?.destroyVisual(proj.id);
+        this.bfgRenderer?.destroyVisual(proj.id);
+        return false;
+      }
+
       const age = now - proj.createdAt;
 
       if (proj.isGrenade) {

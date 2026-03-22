@@ -244,6 +244,7 @@ export interface TrackedProjectile {
   id:              number;
   sprite:          Phaser.GameObjects.Shape;  // Rectangle (bullet) oder Arc (ball)
   body:            Phaser.Physics.Arcade.Body;
+  pendingDestroy?: boolean;
   bounceCount:     number;
   createdAt:       number;
   ownerId:         string;
