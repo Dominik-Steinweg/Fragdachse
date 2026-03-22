@@ -34,7 +34,9 @@
       "WebFetch(domain:opengameart.org)",
       "WebFetch(domain:forum.godotengine.org)",
       "WebFetch(domain:led.itch.io)",
-      "Bash(find C:Fragdachse/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js \\\\\\))"
+      "Bash(find C:Fragdachse/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js \\\\\\))",
+      "Bash(find C:Fragdachseassets -type f -name *dachs* -o -name *badger* -o -name *32x32*)",
+      "Bash(find C:Fragdachse -path *assets* -name *.png -o -path *assets* -name *.json)"
     ]
   }
 }

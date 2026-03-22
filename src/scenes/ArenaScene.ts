@@ -902,6 +902,7 @@ export class ArenaScene extends Phaser.Scene {
       if (localProfile) this.leftPanel.updateLocalName(localProfile.name);
       this.leftPanel.refreshColorIndicator();
       this.leftPanel.refreshColorPickerIfOpen();
+      this.leftPanel.updateLobby();
       if (bridge.isHost()) this.hostCheckReadyToStart();
     } else if (!this.matchTerminated && this.lobbyOverlay.isVisible()) {
       this.lobbyOverlay.hide();

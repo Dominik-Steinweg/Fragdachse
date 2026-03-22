@@ -12,24 +12,20 @@ import { ArenaHUD } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
-import { LivingBarEffect, paletteFromColor, createGradientTexture } from './LivingBarEffect';
+import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
+import { BadgerPreview } from './BadgerPreview';
 import type { LoadoutSlot } from '../types';
 
 // ── Layout-Konstanten (innerhalb des 240px-Sidebars) ─────────────────────────
-const NAME_LABEL_X = 20;
-const NAME_LABEL_Y = 80;
-const NAME_VALUE_X = 20;
-const NAME_VALUE_Y = 108;
-const EDIT_BTN_X   = 20;
-const EDIT_BTN_Y   = 136;
-
-const COLOR_LABEL_X      = 20;
-const COLOR_LABEL_Y      = 174;
-const COLOR_SWATCH_X     = 20;   // linke Kante des Indikator-Rechtecks
-const COLOR_SWATCH_Y     = 194;  // obere Kante
-const COLOR_SWATCH_W     = 200;  // Breite des Farbindikators
-const COLOR_SWATCH_H     = 14;   // Höhe (passend zu ArenaHUD-Bars)
-const TEX_COLOR_INDICATOR = '__lobby_color_indicator';
+const CENTER_X     = 120;  // Mitte des 240px Sidebars
+const NAME_LABEL_Y = 60;
+const NAME_VALUE_Y = 80;
+const EDIT_BTN_Y   = 114;
+const DIVIDER1_Y   = 148;  // Trennlinie zwischen Name-Sektion und Dachs
+const BADGER_Y     = 200;  // Dachs-Sprite-Mitte
+const DIVIDER2_Y   = 260;  // Trennlinie zwischen Dachs und Loadout
+const BADGER_SIZE        = 48;   // Anzeigegröße
+const BADGER_CLICK_SIZE  = 56;   // Klickbare Fläche
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_WORLD_X  = 12;
@@ -41,13 +37,14 @@ const SWATCH_SIZE     = 32;
 const SWATCH_GAP      = 4;
 const PICKER_COLS     = 4;
 const PICKER_GRID_Y   = 30;   // Y-Start des Gitters innerhalb des Popups
+const TEX_SWATCH_PREFIX = '__picker_swatch_';
 
 const LABEL_FONT = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2) };
-const NAME_FONT  = { fontSize: '18px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold' as const };
+const NAME_FONT  = { fontSize: '26px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold' as const };
 const EDIT_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_1) };
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = 258;   // Y des "Loadout:"-Labels
+const CAROUSEL_START_Y  = 286;   // Y des "Loadout:"-Labels
 const CAROUSEL_ROW_STEP = 52;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
 const CAROUSEL_GROUP_DY = 20;    // Offset erste Karussell-Zeile unter "Loadout:"
 const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
@@ -77,8 +74,10 @@ const SLOT_LABELS: Record<LoadoutSlot, string> = {
 
 // ── Swatch-Eintrag im Picker ──────────────────────────────────────────────────
 interface SwatchEntry {
-  rect:  Phaser.GameObjects.Rectangle;
-  color: number;
+  bg:     Phaser.GameObjects.Rectangle;
+  img:    Phaser.GameObjects.Image;
+  effect: LivingBarEffect;
+  color:  number;
 }
 
 export class LeftSidePanel {
@@ -90,11 +89,9 @@ export class LeftSidePanel {
   private nameEditOpen     = false;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
-  // Farbindikator im lobbyContainer (lokale Koordinaten)
-  private colorIndicatorRect!: Phaser.GameObjects.Rectangle;
-  private colorIndicatorImg!:  Phaser.GameObjects.Image;
-  private colorLivingEffect:   LivingBarEffect | null = null;
-  private currentIndicatorColor = 0;
+  // Dachs-Vorschau als Farbindikator
+  private badgerPreview: BadgerPreview | null = null;
+  private badgerClickZone!: Phaser.GameObjects.Rectangle;
 
   // Picker-Popup (eigener world-space-Container, depth OVERLAY+2)
   private pickerContainer!: Phaser.GameObjects.Container;
@@ -124,15 +121,18 @@ export class LeftSidePanel {
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
-      this.scene.add.text(NAME_LABEL_X, NAME_LABEL_Y, 'Dein Name:', LABEL_FONT)
+      this.scene.add.text(CENTER_X, NAME_LABEL_Y, 'Dein Name:', LABEL_FONT)
+        .setOrigin(0.5, 0)
         .setScrollFactor(0),
     );
 
-    this.localNameText = this.scene.add.text(NAME_VALUE_X, NAME_VALUE_Y, '', NAME_FONT)
+    this.localNameText = this.scene.add.text(CENTER_X, NAME_VALUE_Y, '', NAME_FONT)
+      .setOrigin(0.5, 0)
       .setScrollFactor(0);
     objects.push(this.localNameText);
 
-    const editBtn = this.scene.add.text(EDIT_BTN_X, EDIT_BTN_Y, '[ ÄNDERN ]', EDIT_FONT)
+    const editBtn = this.scene.add.text(CENTER_X, EDIT_BTN_Y, '[ ÄNDERN ]', EDIT_FONT)
+      .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.openNameEdit())
@@ -140,34 +140,41 @@ export class LeftSidePanel {
       .on('pointerout',   () => editBtn.setAlpha(1.0));
     objects.push(editBtn);
 
-    // ── Farbsektion ──
+    // ── Trennlinie ──
+    const divider = this.scene.add.graphics();
+    divider.lineStyle(1, COLORS.GREY_6, 0.5);
+    divider.beginPath();
+    divider.moveTo(20, DIVIDER1_Y);
+    divider.lineTo(220, DIVIDER1_Y);
+    divider.strokePath();
+    divider.setScrollFactor(0);
+    objects.push(divider);
+
+    // ── Dachs-Vorschau als Farbindikator ──
+    // Invisible click zone (sprite itself is not in lobbyContainer — it's world-space for preFX)
+    this.badgerClickZone = this.scene.add
+      .rectangle(CENTER_X, BADGER_Y, BADGER_CLICK_SIZE, BADGER_CLICK_SIZE, 0x000000, 0)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.toggleColorPicker());
+    objects.push(this.badgerClickZone);
     objects.push(
-      this.scene.add.text(COLOR_LABEL_X, COLOR_LABEL_Y, 'Farbe:', LABEL_FONT)
-        .setScrollFactor(0),
+      this.scene.add.text(CENTER_X, BADGER_Y + BADGER_SIZE / 2 + 6, '[ Farbe ändern ]', EDIT_FONT)
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.toggleColorPicker()),
     );
 
-    // Background rect (dark, acts as frame)
-    this.colorIndicatorRect = this.scene.add
-      .rectangle(COLOR_SWATCH_X, COLOR_SWATCH_Y, COLOR_SWATCH_W, COLOR_SWATCH_H, COLORS.GREY_8)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setStrokeStyle(1, COLORS.GREY_6)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.toggleColorPicker())
-      .on('pointerover',  () => this.colorIndicatorRect.setStrokeStyle(2, 0xffffff))
-      .on('pointerout',   () => this.colorIndicatorRect.setStrokeStyle(1, COLORS.GREY_6));
-    objects.push(this.colorIndicatorRect);
-
-    // Gradient image for the color fill (supports postFX glow)
-    const initColor = 0x888888;
-    const initPalette = paletteFromColor(initColor);
-    createGradientTexture(this.scene, TEX_COLOR_INDICATOR, initPalette, COLOR_SWATCH_W, COLOR_SWATCH_H);
-    this.colorIndicatorImg = this.scene.add.image(
-      COLOR_SWATCH_X + COLOR_SWATCH_W / 2,
-      COLOR_SWATCH_Y + COLOR_SWATCH_H / 2,
-      TEX_COLOR_INDICATOR,
-    ).setScrollFactor(0);
-    objects.push(this.colorIndicatorImg);
+    // ── Trennlinie 2 ──
+    const divider2 = this.scene.add.graphics();
+    divider2.lineStyle(1, COLORS.GREY_6, 0.5);
+    divider2.beginPath();
+    divider2.moveTo(20, DIVIDER2_Y);
+    divider2.lineTo(220, DIVIDER2_Y);
+    divider2.strokePath();
+    divider2.setScrollFactor(0);
+    objects.push(divider2);
 
     // ── Loadout-Karussell ──
     objects.push(
@@ -216,8 +223,10 @@ export class LeftSidePanel {
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
 
-    // LivingBarEffect for color indicator (created after container exists)
-    this.rebuildColorEffect(0x888888);
+    // BadgerPreview (world-space, separate from container for preFX support)
+    this.badgerPreview = new BadgerPreview(this.scene, CENTER_X, BADGER_Y, 0x888888, BADGER_SIZE);
+    this.badgerPreview.setScrollFactor(0);
+    this.badgerPreview.setDepth(DEPTH.OVERLAY);
 
     // ── Picker-Popup (world-space, über LobbyOverlay) ─────────────────────────
     this.pickerContainer = this.buildPickerContainer();
@@ -230,6 +239,7 @@ export class LeftSidePanel {
     this.closeColorPicker();
     this.nameEditEnabled = false;
     this.loadoutEnabled  = false;
+    this.badgerPreview?.sprite.setVisible(false);
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.pendingDelay?.remove();
@@ -261,6 +271,7 @@ export class LeftSidePanel {
     this.pendingDelay?.remove();
 
     this.arenaHUD.reset();
+    this.badgerPreview?.sprite.setVisible(true);
 
     this.scene.tweens.add({
       targets:  this.gameContainer,
@@ -300,10 +311,25 @@ export class LeftSidePanel {
     this.arenaHUD.flashSlot(slot);
   }
 
-  /** Aktualisiert den Farbindikator anhand des aktuellen Player-States. */
+  /** Aktualisiert den Dachs-Farbindikator und Spielernamen anhand des aktuellen Player-States. */
   refreshColorIndicator(): void {
     const color = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
-    if (color !== undefined) this.rebuildColorEffect(color);
+    if (color !== undefined) {
+      this.badgerPreview?.setColor(color);
+      this.localNameText?.setColor(toCssColor(color));
+    }
+  }
+
+  /** Per-frame lobby update: rotate badger towards mouse. */
+  updateLobby(): void {
+    if (!this.badgerPreview) return;
+    const pointer = this.scene.input.activePointer;
+    // Sprite is scrollFactor(0), so compare with screen coords directly
+    const angle = Phaser.Math.Angle.Between(
+      CENTER_X, BADGER_Y,
+      pointer.x, pointer.y,
+    );
+    this.badgerPreview.setRotation(angle);
   }
 
   /** Aktualisiert den Picker live, solange er offen ist (jeden Lobby-Frame). */
@@ -328,37 +354,18 @@ export class LeftSidePanel {
   }
 
   destroy(): void {
-    if (this.colorLivingEffect) this.colorLivingEffect.destroy();
+    this.badgerPreview?.destroy();
+    this.destroyPickerEffects();
     this.arenaHUD.destroy();
     this.lobbyContainer.destroy(true);
     this.gameContainer.destroy(true);
     this.pickerContainer.destroy(true);
   }
 
-  /** Rebuild gradient texture + LivingBarEffect when the color changes. */
-  private rebuildColorEffect(color: number): void {
-    if (color === this.currentIndicatorColor && this.colorLivingEffect) return;
-    this.currentIndicatorColor = color;
-    const palette = paletteFromColor(color);
-
-    // Update gradient texture
-    createGradientTexture(this.scene, TEX_COLOR_INDICATOR, palette, COLOR_SWATCH_W, COLOR_SWATCH_H);
-    this.colorIndicatorImg.setTexture(TEX_COLOR_INDICATOR);
-
-    // Recreate particle effect
-    if (this.colorLivingEffect) this.colorLivingEffect.destroy();
-    this.colorLivingEffect = new LivingBarEffect(
-      this.scene, this.lobbyContainer,
-      COLOR_SWATCH_X, COLOR_SWATCH_Y,
-      COLOR_SWATCH_W, COLOR_SWATCH_H,
-      palette,
-      { glowTarget: this.colorIndicatorImg, scrollFactor: 0 },
-    );
-  }
-
   // ── Color-Picker ──────────────────────────────────────────────────────────
 
   private buildPickerContainer(): Phaser.GameObjects.Container {
+    ensureLivingBarTextures(this.scene);
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     // Hintergrund
@@ -377,7 +384,10 @@ export class LeftSidePanel {
         }),
     );
 
-    // Farb-Swatches
+    const container = this.scene.add.container(PICKER_WORLD_X, PICKER_WORLD_Y, objects);
+    container.setDepth(DEPTH.OVERLAY + 2);
+
+    // Farb-Swatches (created after container, so LivingBarEffect can add emitters)
     this.pickerSwatches = [];
     PLAYER_COLORS.forEach((color, idx) => {
       const col = idx % PICKER_COLS;
@@ -385,21 +395,42 @@ export class LeftSidePanel {
       const sx  = PICKER_PADDING + col * (SWATCH_SIZE + SWATCH_GAP);
       const sy  = PICKER_GRID_Y  + row * (SWATCH_SIZE + SWATCH_GAP);
 
-      const rect = this.scene.add
-        .rectangle(sx, sy, SWATCH_SIZE, SWATCH_SIZE, color)
-        .setOrigin(0, 0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerover', () => { if (rect.alpha > 0.5) rect.setStrokeStyle(2, 0xffffff); })
-        .on('pointerout',  () => rect.setStrokeStyle(0))
+      // Background rect (border/frame)
+      const bg = this.scene.add
+        .rectangle(sx, sy, SWATCH_SIZE, SWATCH_SIZE, COLORS.GREY_9)
+        .setOrigin(0, 0);
+      container.add(bg);
+
+      // Gradient image for the swatch
+      const texKey = TEX_SWATCH_PREFIX + idx;
+      const palette = paletteFromColor(color);
+      createGradientTexture(this.scene, texKey, palette, SWATCH_SIZE, SWATCH_SIZE);
+      const img = this.scene.add.image(sx + SWATCH_SIZE / 2, sy + SWATCH_SIZE / 2, texKey);
+      container.add(img);
+
+      // LivingBarEffect (particles inside swatch area)
+      const effect = new LivingBarEffect(
+        this.scene, container,
+        sx, sy, SWATCH_SIZE, SWATCH_SIZE,
+        palette,
+      );
+
+      // Interactive zone on top
+      bg.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => { if (bg.alpha > 0.5) bg.setStrokeStyle(2, 0xffffff); })
+        .on('pointerout',  () => bg.setStrokeStyle(0))
         .on('pointerdown', () => this.requestColor(color));
 
-      objects.push(rect);
-      this.pickerSwatches.push({ rect, color });
+      this.pickerSwatches.push({ bg, img, effect, color });
     });
 
-    const container = this.scene.add.container(PICKER_WORLD_X, PICKER_WORLD_Y, objects);
-    container.setDepth(DEPTH.OVERLAY + 2);
     return container;
+  }
+
+  private destroyPickerEffects(): void {
+    for (const s of this.pickerSwatches) {
+      s.effect.destroy();
+    }
   }
 
   private toggleColorPicker(): void {
@@ -430,18 +461,23 @@ export class LeftSidePanel {
     const available = this.bridge.getAvailableColors();
     const ownColor  = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
 
-    for (const { rect, color } of this.pickerSwatches) {
+    for (const { bg, img, effect, color } of this.pickerSwatches) {
       const isOwn       = color === ownColor;
       const isFree      = available.includes(color);
       const isClickable = (isFree || isOwn) && !this.requestPending;
+      const visible     = isOwn || isFree;
 
-      rect.setAlpha(isOwn || isFree ? 1.0 : 0.07);
-      rect.setStrokeStyle(isOwn ? 3 : 0, COLORS.GREY_1);
+      bg.setAlpha(visible ? 1.0 : 0.07);
+      img.setAlpha(visible ? 1.0 : 0.07);
+      bg.setStrokeStyle(isOwn ? 3 : 0, COLORS.GREY_1);
+
+      if (visible) effect.start();
+      else effect.stop();
 
       if (isClickable) {
-        rect.setInteractive({ useHandCursor: true });
+        bg.setInteractive({ useHandCursor: true });
       } else {
-        rect.disableInteractive();
+        bg.disableInteractive();
       }
     }
   }
