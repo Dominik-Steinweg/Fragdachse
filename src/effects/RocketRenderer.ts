@@ -9,12 +9,15 @@ const TEX_ROCKET_GLOW = '__rocket_glow';
 interface RocketVisual {
   body: Phaser.GameObjects.Image;
   glow: Phaser.GameObjects.Image;
-  smokeEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   exhaustEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  lastSmokeX: number;
+  lastSmokeY: number;
+  lastSmokeAt: number;
 }
 
 export class RocketRenderer {
   private rockets = new Map<number, RocketVisual>();
+  private smokePuffs = new Set<Phaser.GameObjects.Image>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -95,21 +98,6 @@ export class RocketRenderer {
       .setAlpha(0.65)
       .setTint(0xffa347);
 
-    const smokeEmitter = this.scene.add.particles(x, y, TEX_ROCKET_SMOKE, {
-      lifespan: { min: 360, max: 620 },
-      frequency: 18,
-      quantity: 2,
-      speedX: { min: -18, max: 18 },
-      speedY: { min: -18, max: 18 },
-      scale: { start: 0.26, end: 0.7 },
-      alpha: { start: 0.62, end: 0 },
-      rotate: { min: 0, max: 360 },
-      tint: [COLORS.GREY_2, COLORS.GREY_3, COLORS.GREY_4],
-      blendMode: Phaser.BlendModes.NORMAL,
-      emitting: true,
-    });
-    smokeEmitter.setDepth(DEPTH.FIRE);
-
     const exhaustEmitter = this.scene.add.particles(x, y, TEX_ROCKET_EXHAUST, {
       lifespan: { min: 80, max: 140 },
       frequency: 18,
@@ -124,8 +112,41 @@ export class RocketRenderer {
     });
     exhaustEmitter.setDepth(DEPTH.PROJECTILES);
 
-    this.rockets.set(id, { body, glow, smokeEmitter, exhaustEmitter });
+    this.rockets.set(id, {
+      body,
+      glow,
+      exhaustEmitter,
+      lastSmokeX: x,
+      lastSmokeY: y,
+      lastSmokeAt: this.scene.time.now,
+    });
     this.updateVisual(id, x, y, size, 1, 0);
+  }
+
+  private spawnSmokePuff(x: number, y: number, size: number): void {
+    const puff = this.scene.add.image(x, y, TEX_ROCKET_SMOKE)
+      .setDepth(DEPTH.FIRE)
+      .setTint(COLORS.GREY_2)
+      .setAlpha(0.95)
+      .setScale(Math.max(size / 28, 0.28));
+
+    this.smokePuffs.add(puff);
+
+    const driftX = Phaser.Math.Between(-6, 6);
+    const driftY = Phaser.Math.Between(-10, -2);
+    this.scene.tweens.add({
+      targets: puff,
+      x: x + driftX,
+      y: y + driftY,
+      alpha: 0,
+      scale: puff.scaleX * 2.3,
+      duration: 1000,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.smokePuffs.delete(puff);
+        puff.destroy();
+      },
+    });
   }
 
   updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number): void {
@@ -146,9 +167,14 @@ export class RocketRenderer {
     visual.glow.setPosition(x, y);
     visual.glow.setScale(Math.max(size / 12, 0.8));
 
-    visual.smokeEmitter.setPosition(tailX, tailY);
-    visual.smokeEmitter.setAlpha(0.8);
-    visual.smokeEmitter.setParticleScale(Math.max(size / 32, 0.22), Math.max(size / 14, 0.75));
+    const distSinceSmoke = Phaser.Math.Distance.Between(visual.lastSmokeX, visual.lastSmokeY, tailX, tailY);
+    const now = this.scene.time.now;
+    if (distSinceSmoke >= Math.max(size * 0.55, 5) || now - visual.lastSmokeAt >= 22) {
+      this.spawnSmokePuff(tailX, tailY, size);
+      visual.lastSmokeX = tailX;
+      visual.lastSmokeY = tailY;
+      visual.lastSmokeAt = now;
+    }
 
     visual.exhaustEmitter.setPosition(tailX, tailY);
     visual.exhaustEmitter.setParticleScale(Math.max(size / 34, 0.18), 0.05);
@@ -159,8 +185,6 @@ export class RocketRenderer {
     if (!visual) return;
     visual.body.destroy();
     visual.glow.destroy();
-    visual.smokeEmitter.stop();
-    visual.smokeEmitter.destroy();
     visual.exhaustEmitter.stop();
     visual.exhaustEmitter.destroy();
     this.rockets.delete(id);
@@ -178,5 +202,9 @@ export class RocketRenderer {
     for (const id of this.getActiveIds()) {
       this.destroyVisual(id);
     }
+    for (const puff of this.smokePuffs) {
+      puff.destroy();
+    }
+    this.smokePuffs.clear();
   }
 }
