@@ -8,6 +8,7 @@ export interface ProjectileWeaponFireConfig {
   readonly projectileSpeed: number;     // px/s
   readonly projectileSize: number;      // px (quadratisch)
   readonly projectileMaxBounces: number;
+  readonly limitRangeToCursor?: boolean; // true = Reichweite dieses Schusses auf Cursor-Distanz begrenzen
   readonly impactExplosion?: ProjectileExplosionConfig;
 }
 
@@ -491,6 +492,7 @@ export const WEAPON_CONFIGS = {
       projectileSpeed:      700,
       projectileSize:       10,
       projectileMaxBounces: 0,
+      limitRangeToCursor:   true,
       impactExplosion: {
         radius:            110,
         maxDamage:         50,

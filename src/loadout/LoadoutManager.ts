@@ -209,8 +209,8 @@ export class LoadoutManager {
     slot:      LoadoutSlot,
     playerId:  string,
     angle:     number,
-    _targetX:  number,
-    _targetY:  number,
+    targetX:   number,
+    targetY:   number,
     now:       number,
     shotId?:   number,
     params?:   LoadoutUseParams,
@@ -237,11 +237,11 @@ export class LoadoutManager {
 
     switch (slot) {
       case 'weapon1':
-        this.fireWeapon(loadout.weapon1, x, y, angle, playerId, now, player.color, shotId);
+        this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
         break;
 
       case 'weapon2':
-        this.fireWeapon(loadout.weapon2, x, y, angle, playerId, now, player.color, shotId);
+        this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
         break;
 
       case 'utility': {
@@ -397,6 +397,8 @@ export class LoadoutManager {
     x:        number,
     y:        number,
     angle:    number,
+    targetX:  number,
+    targetY:  number,
     playerId: string,
     now:      number,
     playerColor: number,
@@ -430,12 +432,12 @@ export class LoadoutManager {
       const pelletOffsets = calcPelletAngles(pelletCount, cfg.pelletSpreadAngle ?? 0);
       for (const offset of pelletOffsets) {
         const pelletAngle = angle + offset + (Math.random() * 2 - 1) * halfSpreadRad;
-        this.dispatchWeaponFire(cfg, x, y, pelletAngle, playerId, playerColor, shotId);
+        this.dispatchWeaponFire(cfg, x, y, pelletAngle, targetX, targetY, playerId, playerColor, shotId);
       }
       didFire = true;
     } else {
       const finalAngle = angle + (Math.random() * 2 - 1) * halfSpreadRad;
-      didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, playerId, playerColor, shotId);
+      didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, shotId);
     }
     if (!didFire) return;
 
@@ -626,13 +628,15 @@ export class LoadoutManager {
     x:           number,
     y:           number,
     angle:       number,
+    targetX:     number,
+    targetY:     number,
     playerId:    string,
     playerColor: number,
     shotId?:     number,
   ): boolean {
     switch (config.fire.type) {
       case 'projectile':
-        return this.fireProjectileWeapon(config, config.fire, x, y, angle, playerId, playerColor);
+        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor);
 
       case 'hitscan':
         return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, shotId);
@@ -654,10 +658,16 @@ export class LoadoutManager {
     x:           number,
     y:           number,
     angle:       number,
+    targetX:     number,
+    targetY:     number,
     playerId:    string,
     playerColor: number,
   ): boolean {
-    const lifetime = (config.range / fireConfig.projectileSpeed) * 1000;
+    const cursorRange = Phaser.Math.Distance.Between(x, y, targetX, targetY);
+    const effectiveRange = fireConfig.limitRangeToCursor
+      ? Math.min(config.range, cursorRange)
+      : config.range;
+    const lifetime = (effectiveRange / fireConfig.projectileSpeed) * 1000;
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
