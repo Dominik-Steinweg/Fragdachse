@@ -7,6 +7,7 @@ export type PowerUpType = 'instant_heal' | 'buff_regen' | 'buff_damage' | 'globa
 export interface PowerUpDef {
   readonly id:          string;
   readonly type:        PowerUpType;
+  readonly displayName: string;
   readonly healAmount?: number;   // nur instant_heal (999 = Full HP)
   readonly durationMs?: number;   // nur buff_*
   readonly multiplier?: number;   // nur buff_*
@@ -17,12 +18,12 @@ export interface PowerUpDef {
 }
 
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
-  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', healAmount: 999,                     color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
-  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   durationMs: 10_000, multiplier: 2.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
-  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
-  NUKE:                { id: 'NUKE',                type: 'global_nuke',                                       color: COLORS.RED_2,    spriteKey: 'powerup_nuke' },
-  HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',                                  color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
-  BFG:                 { id: 'BFG',                type: 'bfg',                                                color: COLORS.GREEN_2,  spriteKey: 'powerup_bfg'  },
+  HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal', displayName: 'Medipack',            healAmount: 999,                     color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
+  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',   displayName: 'Adrenalin Spritze',  durationMs: 10_000, multiplier: 2.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
+  DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',  displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
+  NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuke' },
+  HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
+  BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_2,  spriteKey: 'powerup_bfg'  },
 };
 
 export const NUKE_CONFIG = {
@@ -59,7 +60,7 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   SCHEDULED_EVENT: {
     // chanceToDrop fehlt → immer 1.0
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100, NUKE: 0 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 100, DOUBLE_DAMAGE: 100, NUKE: 0 },
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
@@ -78,6 +79,7 @@ export interface ScheduledSpawn {
 }
 
 export const SCHEDULED_SPAWNS: ScheduledSpawn[] = [
+  { timeSeconds: 1, amount: 10 },
   { timeSeconds: 90, amount: 1 },
 ];
 

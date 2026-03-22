@@ -37,6 +37,7 @@ const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: number (Date.now()-Timestamp bis Utility wieder bereit)
 const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
+const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
@@ -912,6 +913,19 @@ export class NetworkBridge {
   /** Liest ob die Adrenalinspritze eines Spielers aktiv ist. */
   getPlayerAdrSyringeActive(playerId: string): boolean {
     return (this.playerStateMap.get(playerId)?.getState(KEY_ADR_SYRINGE) as boolean | undefined) ?? false;
+  }
+
+  /** Host-only: Publiziert die aktiven Buffs eines Spielers für die HUD-Anzeige. */
+  publishActiveBuffs(playerId: string, buffs: { defId: string; remainingFrac: number }[]): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    ps.setState(KEY_ACTIVE_BUFFS, buffs, true);
+  }
+
+  /** Liest die aktiven Buffs eines Spielers für die HUD-Anzeige. */
+  getPlayerActiveBuffs(playerId: string): { defId: string; remainingFrac: number }[] {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_ACTIVE_BUFFS) as { defId: string; remainingFrac: number }[] | undefined) ?? [];
   }
 
   // ── Frag-Tracking: pro Spieler (per-player state) ────────────────────────

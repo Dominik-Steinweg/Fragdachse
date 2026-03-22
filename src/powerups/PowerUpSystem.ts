@@ -298,6 +298,22 @@ export class PowerUpSystem {
     return this.getMultiplierForType(playerId, 'buff_damage');
   }
 
+  /** Aktive Buffs mit Restdauer-Anteil für die HUD-Anzeige. */
+  getActiveBuffsForHUD(playerId: string): { defId: string; remainingFrac: number }[] {
+    const buffs = this.activeBuffs.get(playerId);
+    if (!buffs) return [];
+    const now = Date.now();
+    const result: { defId: string; remainingFrac: number }[] = [];
+    for (const b of buffs) {
+      if (b.expiresAt <= now) continue;
+      const def = POWERUP_DEFS[b.defId];
+      if (!def?.durationMs) continue;
+      const remaining = b.expiresAt - now;
+      result.push({ defId: b.defId, remainingFrac: Math.min(1, remaining / def.durationMs) });
+    }
+    return result;
+  }
+
   private getMultiplierForType(playerId: string, type: string): number {
     const buffs = this.activeBuffs.get(playerId);
     if (!buffs) return 1;

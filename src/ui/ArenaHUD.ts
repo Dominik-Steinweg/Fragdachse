@@ -19,6 +19,7 @@ import {
   HP_MAX, ADRENALINE_MAX, RAGE_MAX,
   COLORS, toCssColor,
 } from '../config';
+import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import {
   type LivingBarPalette,
   rgbStr, createGradientTexture, rectZone,
@@ -54,6 +55,10 @@ const W2_BAR_Y  = 280;
 const UT_LBL_Y  = 306;
 const UT_BAR_Y  = 326;
 
+// Power-Up section (below utility bar)
+const DIV3_Y        = 352;
+const PU_SECTION_Y  = 362; // Y start for the power-up section
+
 // Fonts
 const LABEL_FONT  = { fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
 const NAME_FONT   = { fontSize: '26px', fontFamily: 'monospace', fontStyle: 'bold' as const, color: '#ffffff' };
@@ -84,6 +89,22 @@ const TEX_PARTICLE   = '_hud_particle';
 const TEX_CORE       = '_hud_core';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Derive a full BarPalette from a single base colour by shifting brightness. */
+function paletteFromColor(base: number): BarPalette {
+  const r = (base >> 16) & 0xff;
+  const g = (base >> 8) & 0xff;
+  const b = base & 0xff;
+  const darken  = (v: number, f: number) => Math.max(0, Math.round(v * f));
+  const lighten = (v: number, f: number) => Math.min(255, Math.round(v + (255 - v) * f));
+  const toHex   = (rv: number, gv: number, bv: number) => (rv << 16) | (gv << 8) | bv;
+  return {
+    dark:  toHex(darken(r, 0.55), darken(g, 0.55), darken(b, 0.55)),
+    mid:   base,
+    light: toHex(lighten(r, 0.35), lighten(g, 0.35), lighten(b, 0.35)),
+    spark: 0xffffff,
+  };
+}
 
 function makeBgTexture(scene: Phaser.Scene, key: string): void {
   if (scene.textures.exists(key)) return;
@@ -135,6 +156,12 @@ interface BarBundle {
   energized:    boolean;       // true = intense sparkle, false = calm breathing
 }
 
+/** Info about a single active power-up buff for HUD display. */
+export interface ActivePowerUpInfo {
+  defId:         string;
+  remainingFrac: number; // 1 = full, 0 = expired
+}
+
 /** Data pushed every frame from ArenaScene. */
 export interface ArenaHUDData {
   hp:                       number;
@@ -147,6 +174,7 @@ export interface ArenaHUDData {
   utilityDisplayName?:      string;
   adrenalineSyringeActive?: boolean;
   isUtilityOverridden?:     boolean;
+  activePowerUps?:          ActivePowerUpInfo[];
 }
 
 // ── Class ───────────────────────────────────────────────────────────────────
@@ -193,6 +221,14 @@ export class ArenaHUD {
   private weapon2AdrCost = 0;
   private w2Insufficient = false;
   private w2RedOverlay!: Phaser.GameObjects.Rectangle;
+
+  // Power-Up section
+  private puDivider!:   Phaser.GameObjects.Rectangle;
+  private puNoneLabel!: Phaser.GameObjects.Text;
+  /** Currently visible power-up bar entries (keyed by defId), using full BarBundle. */
+  private puEntries = new Map<string, BarBundle>();
+  /** Ordered list of currently shown defIds (for layout). */
+  private puOrder: string[] = [];
 
   constructor(
     private scene: Phaser.Scene,
@@ -279,6 +315,12 @@ export class ArenaHUD {
       quantity:  16,
     }).setScrollFactor(0);
     c.add(this.adrBurstEmitter);
+
+    // Power-Up section
+    this.puDivider = this.divider(DIV3_Y);
+    c.add(this.puDivider);
+    this.puNoneLabel = this.scene.add.text(BAR_X, PU_SECTION_Y, 'Power-Up: keins', LABEL_FONT).setScrollFactor(0);
+    c.add(this.puNoneLabel);
   }
 
   // ── Bar factory ───────────────────────────────────────────────────────────
@@ -414,6 +456,7 @@ export class ArenaHUD {
       this.onUtilityNameChanged(data.utilityDisplayName);
     }
     this.updateUtilityOverrideVisual(data.isUtilityOverridden ?? false);
+    this.updatePowerUpSection(data.activePowerUps ?? []);
   }
 
   flashSlot(slot: 'weapon1' | 'weapon2' | 'utility'): void {
@@ -478,11 +521,14 @@ export class ArenaHUD {
       b.energized = true; // force re-apply
       this.setBarEnergized(b, false);
     }
+    this.puNoneLabel.setVisible(true);
     if (this.nameScrollTween) {
       this.nameScrollTween.destroy();
       this.nameScrollTween = null;
     }
     this.nameText.x = BAR_X;
+    // Clear power-up entries
+    this.clearPowerUpEntries();
   }
 
   destroy(): void {
@@ -496,6 +542,7 @@ export class ArenaHUD {
     if (this.nameScrollTween) this.nameScrollTween.destroy();
     this.nameMask.destroy();
     this.adrBurstEmitter?.destroy();
+    this.clearPowerUpEntries();
   }
 
   // ── Name marquee ──────────────────────────────────────────────────────────
@@ -740,6 +787,85 @@ export class ArenaHUD {
     if (this.utilWobbleGlow) { this.util.fgImg.postFX.remove(this.utilWobbleGlow); this.utilWobbleGlow = null; }
     if (this.utilLabelPulseTween) { this.utilLabelPulseTween.destroy(); this.utilLabelPulseTween = null; }
     this.util.label.setScale(1);
+  }
+
+  // ── Power-Up section ───────────────────────────────────────────────────
+
+  /** Properly destroy all game objects inside a BarBundle. */
+  private destroyBarBundle(b: BarBundle): void {
+    b.idleEffect.destroy();
+    b.coreEmitter.destroy();
+    b.outerEmitter.destroy();
+    b.label.destroy();
+    b.bgImg.destroy();
+    b.fgImg.destroy();
+    b.border.destroy();
+    b.trail?.destroy();
+    b.valueText?.destroy();
+    b.highlight?.destroy();
+  }
+
+  private clearPowerUpEntries(): void {
+    for (const bundle of this.puEntries.values()) this.destroyBarBundle(bundle);
+    this.puEntries.clear();
+    this.puOrder = [];
+  }
+
+  /** Ensure the gradient texture for a power-up palette exists, create lazily. */
+  private ensurePuTexture(defId: string, palette: BarPalette): string {
+    const key = `_hud_pu_${defId}`;
+    if (!this.scene.textures.exists(key)) {
+      createGradientTexture(this.scene, key, palette, BAR_W, BAR_H);
+    }
+    return key;
+  }
+
+  private updatePowerUpSection(activePowerUps: ActivePowerUpInfo[]): void {
+    const activeIds = new Set(activePowerUps.map(p => p.defId));
+
+    // Check if the set of active IDs changed
+    let setChanged = activeIds.size !== this.puOrder.length;
+    if (!setChanged) {
+      for (const id of this.puOrder) {
+        if (!activeIds.has(id)) { setChanged = true; break; }
+      }
+    }
+
+    if (setChanged) {
+      // Destroy old entries and rebuild
+      this.clearPowerUpEntries();
+
+      let yOff = PU_SECTION_Y;
+      for (const pu of activePowerUps) {
+        const def = POWERUP_DEFS[pu.defId];
+        if (!def) continue;
+
+        const palette = paletteFromColor(def.color);
+        const texKey  = this.ensurePuTexture(pu.defId, palette);
+        const labelY  = yOff;
+        const barY    = yOff + 20;
+
+        const bundle = this.createBar(labelY, barY, `Power-Up: ${def.displayName}`, palette, texKey);
+        // Power-up bars are always energized
+        this.setBarEnergized(bundle, true);
+
+        this.puEntries.set(pu.defId, bundle);
+        this.puOrder.push(pu.defId);
+
+        yOff = barY + BAR_H + 12;
+      }
+    }
+
+    // Show/hide "keins" label
+    this.puNoneLabel.setVisible(this.puOrder.length === 0);
+
+    // Update fractions
+    for (const pu of activePowerUps) {
+      const bundle = this.puEntries.get(pu.defId);
+      if (!bundle) continue;
+      const frac = Math.max(0, Math.min(1, pu.remainingFrac));
+      this.setBarFrac(bundle, frac);
+    }
   }
 
   // ── Bar intensity mode ──────────────────────────────────────────────────

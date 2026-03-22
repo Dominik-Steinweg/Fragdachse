@@ -1276,6 +1276,7 @@ export class ArenaScene extends Phaser.Scene {
       const now = Date.now();
       const utilCfg = this.loadoutManager?.getEquippedUtilityConfig(localId);
       const syringeActive = (this.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1;
+      const activePowerUps = this.powerUpSystem?.getActiveBuffsForHUD(localId) ?? [];
       this.leftPanel.updateArenaHUD({
         hp:                      this.combatSystem.getHP(localId),
         adrenaline:              this.resourceSystem?.getAdrenaline(localId) ?? 0,
@@ -1287,6 +1288,7 @@ export class ArenaScene extends Phaser.Scene {
         utilityDisplayName:      utilCfg?.displayName,
         adrenalineSyringeActive: syringeActive,
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
+        activePowerUps,
       });
       this.localPlayerAlive    = this.combatSystem.isAlive(localId);
       this.localPlayerBurrowed = this.burrowSystem?.isBurrowed(localId) ?? false;
@@ -1314,6 +1316,8 @@ export class ArenaScene extends Phaser.Scene {
 
       // Publish adrenaline syringe state for client HUD
       bridge.publishAdrSyringeActive(player.id, (this.powerUpSystem?.getRegenMultiplier(player.id) ?? 1) > 1);
+      // Publish active buff durations for client HUD
+      bridge.publishActiveBuffs(player.id, this.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []);
 
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
@@ -1463,6 +1467,7 @@ export class ArenaScene extends Phaser.Scene {
         utilityDisplayName:      utilDisplayName,
         adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
         isUtilityOverridden:     overrideName !== '' || this.clientUtilityOverride !== null,
+        activePowerUps:          bridge.getPlayerActiveBuffs(localId2),
       });
       this.localPlayerAlive    = localState.alive;
       this.localPlayerBurrowed = localState.isBurrowed;
