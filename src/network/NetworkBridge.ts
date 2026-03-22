@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -50,6 +50,7 @@ const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   ein
 const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
+const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -83,6 +84,13 @@ export interface GameState {
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
+}
+
+export interface HostRoomQualityProbeResult {
+  estimateMs: number | null;
+  loopbackAverageMs: number | null;
+  browserRttMs: number | null;
+  successfulLoopbackSamples: number;
 }
 
 type LoadoutUseHandler = (
@@ -1025,6 +1033,41 @@ export class NetworkBridge {
     return (this.playerStateMap.get(playerId)?.getState(KEY_PING) as number | undefined) ?? 0;
   }
 
+  publishRoomQuality(snapshot: RoomQualitySnapshot | null): void {
+    setState(KEY_ROOM_QUALITY, snapshot, true);
+  }
+
+  getRoomQuality(): RoomQualitySnapshot | null {
+    return (getState(KEY_ROOM_QUALITY) as RoomQualitySnapshot | null | undefined) ?? null;
+  }
+
+  async measureHostRoomLoopback(sampleCount: number, timeoutMs: number): Promise<HostRoomQualityProbeResult> {
+    this.registerHostRpcHandler('rqp', async (): Promise<unknown> => ({ ackAt: Date.now() }));
+
+    const browserRttMs = this.getBrowserNetworkRtt();
+    const loopbackSamples: number[] = [];
+
+    for (let index = 0; index < sampleCount; index++) {
+      const measured = await this.measureSingleHostLoopback(timeoutMs);
+      if (measured !== null) loopbackSamples.push(measured);
+    }
+
+    const loopbackAverageMs = loopbackSamples.length > 0
+      ? loopbackSamples.reduce((sum, value) => sum + value, 0) / loopbackSamples.length
+      : null;
+
+    const estimateMs = loopbackAverageMs !== null
+      ? Math.round(loopbackAverageMs)
+      : browserRttMs;
+
+    return {
+      estimateMs,
+      loopbackAverageMs: loopbackAverageMs !== null ? Math.round(loopbackAverageMs) : null,
+      browserRttMs,
+      successfulLoopbackSamples: loopbackSamples.length,
+    };
+  }
+
   /**
    * Client-only: Sendet einen Ping-Request an den Host.
    * Für den Host kein-Op (bleibt bei Default-Ping 0 ms).
@@ -1159,6 +1202,32 @@ export class NetworkBridge {
     const envelope = data as Partial<RpcEnvelope>;
     if (typeof envelope.type !== 'string') return null;
     return { type: envelope.type, payload: envelope.payload };
+  }
+
+  private async measureSingleHostLoopback(timeoutMs: number): Promise<number | null> {
+    if (!isHost()) return null;
+    this.ensureRpcDispatchersRegistered();
+
+    const startedAt = performance.now();
+    try {
+      await Promise.race([
+        RPC.call(HOST_RPC_CHANNEL, { type: 'rqp', payload: { startedAt: Date.now() } }, RPC.Mode.HOST),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error('room probe timeout')), timeoutMs)),
+      ]);
+      return performance.now() - startedAt;
+    } catch {
+      return null;
+    }
+  }
+
+  private getBrowserNetworkRtt(): number | null {
+    const nav = navigator as Navigator & {
+      connection?: { rtt?: number };
+      mozConnection?: { rtt?: number };
+      webkitConnection?: { rtt?: number };
+    };
+    const rtt = nav.connection?.rtt ?? nav.mozConnection?.rtt ?? nav.webkitConnection?.rtt;
+    return typeof rtt === 'number' && Number.isFinite(rtt) && rtt > 0 ? Math.round(rtt) : null;
   }
 
   private computeAvailableColors(): number[] {

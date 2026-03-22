@@ -5,7 +5,7 @@
  */
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { PlayerProfile } from '../types';
+import type { PlayerProfile, RoomQualitySnapshot } from '../types';
 import {
   GAME_WIDTH, GAME_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   DEPTH, COLORS, toCssColor,
@@ -23,10 +23,14 @@ const PANEL_H  = 600;
 const PANEL_X  = GAME_WIDTH  / 2 - PANEL_W / 2;
 const PANEL_Y  = GAME_HEIGHT / 2 - PANEL_H / 2;
 const LOGO_Y   = 120;
+const ACTION_BTN_W = 160;
+const ACTION_BTN_H = 44;
+const ACTION_BTN_Y = PANEL_Y + PANEL_H - 52;
+const ACTION_BTN_OFFSET_X = 220;
+const READY_BTN_W = 220;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
 const LIST_Y   = PANEL_Y + 60;
-const BTN_Y      = PANEL_Y + PANEL_H - 52;
 const ROW_PING_X = PANEL_X + PANEL_W - 28; // 1332 – Ping rechts-bündig in Spielerzeile
 
 function pingColor(ms: number): string {
@@ -50,13 +54,21 @@ export class LobbyOverlay {
   private statusText!:    Phaser.GameObjects.Text;
   private readyBtn!:      Phaser.GameObjects.Rectangle;
   private readyBtnLabel!: Phaser.GameObjects.Text;
+  private copyBtn!:       Phaser.GameObjects.Rectangle;
+  private copyBtnLabel!:  Phaser.GameObjects.Text;
+  private retryBtn!:      Phaser.GameObjects.Rectangle;
+  private retryBtnLabel!: Phaser.GameObjects.Text;
   private visible         = false;
   private btnLocked       = false;
+  private roomQuality: RoomQualitySnapshot | null = null;
+  private localIsHost = false;
 
   constructor(
     private scene:          Phaser.Scene,
     private bridge:         NetworkBridge,
     private onReadyToggled: () => void,
+    private onCopyRoomLink: () => void,
+    private onRetryRoom: () => void,
   ) {}
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
@@ -107,7 +119,20 @@ export class LobbyOverlay {
     );
 
     // ── Bereit-Button ─────────────────────────────────────────────────────
-    this.readyBtn = this.scene.add.rectangle(GAME_WIDTH / 2, BTN_Y, 280, 52, UNREADY_COLOR)
+    this.copyBtn = this.scene.add.rectangle(GAME_WIDTH / 2 - ACTION_BTN_OFFSET_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.BLUE_4)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => { if (!this.btnLocked) this.onCopyRoomLink(); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.copyBtn.setAlpha(0.8); })
+      .on('pointerout',   () => this.copyBtn.setAlpha(1))
+      .setScrollFactor(0);
+    objects.push(this.copyBtn);
+
+    this.copyBtnLabel = this.scene.add.text(GAME_WIDTH / 2 - ACTION_BTN_OFFSET_X, ACTION_BTN_Y, 'LINK', {
+      fontSize: '20px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.copyBtnLabel);
+
+    this.readyBtn = this.scene.add.rectangle(GAME_WIDTH / 2, ACTION_BTN_Y, READY_BTN_W, 52, UNREADY_COLOR)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onReadyToggled(); })
       .on('pointerover',  () => { if (!this.btnLocked) this.readyBtn.setAlpha(0.8); })
@@ -115,14 +140,28 @@ export class LobbyOverlay {
       .setScrollFactor(0);
     objects.push(this.readyBtn);
 
-    this.readyBtnLabel = this.scene.add.text(GAME_WIDTH / 2, BTN_Y, 'BEREIT', {
+    this.readyBtnLabel = this.scene.add.text(GAME_WIDTH / 2, ACTION_BTN_Y, 'BEREIT', {
       fontSize: '26px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.readyBtnLabel);
 
+    this.retryBtn = this.scene.add.rectangle(GAME_WIDTH / 2 + ACTION_BTN_OFFSET_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.GOLD_4)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => { if (!this.btnLocked) this.onRetryRoom(); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.retryBtn.setAlpha(0.8); })
+      .on('pointerout',   () => this.retryBtn.setAlpha(1))
+      .setScrollFactor(0);
+    objects.push(this.retryBtn);
+
+    this.retryBtnLabel = this.scene.add.text(GAME_WIDTH / 2 + ACTION_BTN_OFFSET_X, ACTION_BTN_Y, 'NEUER RAUM', {
+      fontSize: '18px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.retryBtnLabel);
+
     // ── Container mit korrektem Depth erstellen ───────────────────────────
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
     this.container.setVisible(this.visible);
+    this.updateRoomActionButtons();
   }
 
   show(): void {
@@ -171,18 +210,35 @@ export class LobbyOverlay {
     this.updateStatus(connectedPlayers.length);
   }
 
+  setRoomQuality(snapshot: RoomQualitySnapshot | null, localIsHost: boolean): void {
+    this.roomQuality = snapshot;
+    this.localIsHost = localIsHost;
+    this.updateStatus(this.playerRows.size);
+    this.updateRoomActionButtons();
+  }
+
+  showCopySuccess(): void {
+    this.copyBtnLabel.setText('KOPIERT');
+    this.scene.time.delayedCall(1200, () => {
+      if (!this.copyBtnLabel.scene) return;
+      this.copyBtnLabel.setText('LINK');
+    });
+  }
+
   /** Button-Zustand nach isReady-Toggle anpassen. */
   setReadyButtonState(isReady: boolean): void {
     this.btnLocked = false;
     this.readyBtn.setFillStyle(isReady ? READY_COLOR : UNREADY_COLOR).setAlpha(1);
     this.readyBtnLabel.setText(isReady ? 'NICHT BEREIT' : 'BEREIT');
     this.readyBtn.setInteractive({ useHandCursor: true });
+    this.updateRoomActionButtons();
   }
 
   /** Button deaktivieren wenn Runde startet. */
   lockButton(): void {
     this.btnLocked = true;
     this.readyBtn.disableInteractive().setAlpha(0.4);
+    this.updateRoomActionButtons();
   }
 
   /**
@@ -196,6 +252,7 @@ export class LobbyOverlay {
     this.btnLocked = true;
     this.readyBtn.disableInteractive().setAlpha(0.4);
     this.readyBtnLabel.setText('BEENDET');
+    this.updateRoomActionButtons();
   }
 
   // ── Interne Hilfsmethoden ─────────────────────────────────────────────────
@@ -250,13 +307,40 @@ export class LobbyOverlay {
       row.ping.setText(`${ms}ms`).setColor(pingColor(ms));
     }
   }
+
   private updateStatus(playerCount: number): void {
+    const roomSummary = this.roomQuality?.summary ? `  |  ${this.roomQuality.summary}` : '';
+    const color = this.roomQuality ? this.getRoomQualityColor(this.roomQuality.status) : TEXT_COLOR;
     if (playerCount < 2) {
-      this.statusText.setText('Warte auf Mitspieler…').setStyle({ color: TEXT_COLOR });
+      this.statusText.setText(`Warte auf Mitspieler…${roomSummary}`).setStyle({ color });
     } else {
       const readyCount = [...this.playerRows.keys()]
         .filter(id => this.bridge.getPlayerReady(id)).length;
-      this.statusText.setText(`${readyCount} / ${playerCount} bereit`).setStyle({ color: TEXT_COLOR });
+      this.statusText.setText(`${readyCount} / ${playerCount} bereit${roomSummary}`).setStyle({ color });
     }
+  }
+
+  private updateRoomActionButtons(): void {
+    const canShowActions = this.localIsHost;
+    const retryDisabled = this.btnLocked || this.roomQuality?.status === 'retrying';
+    const copyDisabled = this.btnLocked;
+
+    this.copyBtn.setVisible(canShowActions).setAlpha(canShowActions && !copyDisabled ? 1 : 0.4);
+    this.copyBtnLabel.setVisible(canShowActions);
+    this.retryBtn.setVisible(canShowActions).setAlpha(canShowActions && !retryDisabled ? 1 : 0.4);
+    this.retryBtnLabel.setVisible(canShowActions);
+
+    if (canShowActions && !copyDisabled) this.copyBtn.setInteractive({ useHandCursor: true });
+    else this.copyBtn.disableInteractive();
+
+    if (canShowActions && !retryDisabled) this.retryBtn.setInteractive({ useHandCursor: true });
+    else this.retryBtn.disableInteractive();
+  }
+
+  private getRoomQualityColor(status: RoomQualitySnapshot['status']): string {
+    if (status === 'good') return toCssColor(COLORS.GREEN_2);
+    if (status === 'bad') return toCssColor(COLORS.RED_2);
+    if (status === 'retrying') return toCssColor(COLORS.GOLD_1);
+    return TEXT_COLOR;
   }
 }

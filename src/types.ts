@@ -101,6 +101,27 @@ export interface SyncedMeleeSwing {
 /** Globale Spielphase – nur vom Host per setState gesetzt */
 export type GamePhase = 'LOBBY' | 'ARENA';
 
+export type RoomQualityStatus = 'waiting' | 'sampling' | 'good' | 'bad' | 'retrying';
+
+export type RoomQualityRetryMode = 'suggest' | 'auto';
+
+export type RoomQualityStartPolicy = 'warn' | 'block';
+
+export interface RoomQualitySnapshot {
+  status: RoomQualityStatus;
+  summary: string;
+  source: 'host-proxy' | 'team-ping';
+  thresholdMs: number;
+  worstPingMs: number | null;
+  measuredPlayers: number;
+  totalPlayers: number;
+  minSamplesCollected: number;
+  requiredSamples: number;
+  retryCount: number;
+  retryMode: RoomQualityRetryMode;
+  startBlocked: boolean;
+}
+
 /** Loadout-Slot-Bezeichner */
 export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 

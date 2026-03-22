@@ -1,3 +1,5 @@
+import type { RoomQualityRetryMode, RoomQualityStartPolicy } from './types';
+
 // ---- Display ----
 export const GAME_WIDTH = 1920;
 export const GAME_HEIGHT = 1080;
@@ -241,5 +243,16 @@ export const NET_TICK_RATE_HZ     = 20;
 export const NET_TICK_INTERVAL_MS = 1000 / NET_TICK_RATE_HZ;  // 50 ms
 /** Zeitbasierte Glättung für Client-Interpolation (ms). ~1.5× Tick-Intervall. */
 export const NET_SMOOTH_TIME_MS   = 80;
+
+// ---- Raumqualitaet / Lobby ----
+export const ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS = 80;
+export const ROOM_QUALITY_REQUIRED_SAMPLES = 3;
+export const ROOM_QUALITY_SAMPLE_INTERVAL_MS = 500;
+export const ROOM_QUALITY_MAX_AUTO_RETRIES = 3;
+export const ROOM_QUALITY_AUTO_RETRY_DELAY_MS = 2500;
+export const ROOM_QUALITY_HOST_PROBE_SAMPLE_COUNT = 3;
+export const ROOM_QUALITY_HOST_PROBE_TIMEOUT_MS = 2500;
+export const ROOM_QUALITY_RETRY_MODE: RoomQualityRetryMode = 'suggest';
+export const ROOM_QUALITY_START_POLICY: RoomQualityStartPolicy = 'warn';
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.
