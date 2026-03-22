@@ -104,6 +104,14 @@ export type GamePhase = 'LOBBY' | 'ARENA';
 /** Loadout-Slot-Bezeichner */
 export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 
+/** Vollstaendiger, verbindlicher Lobby-Snapshot eines Spieler-Loadouts. */
+export interface LoadoutCommitSnapshot {
+  weapon1: string;
+  weapon2: string;
+  utility: string;
+  ultimate: string;
+}
+
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
   utilityChargeFraction?: number; // 0 = Minimalwurf, 1 = voller Wurf

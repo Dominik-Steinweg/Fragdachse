@@ -14,7 +14,7 @@ import { ResourceSystem }      from '../systems/ResourceSystem';
 import { BurrowSystem }        from '../systems/BurrowSystem';
 import { LoadoutManager }      from '../loadout/LoadoutManager';
 import type { LoadoutSelection } from '../loadout/LoadoutManager';
-import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import type { UtilityConfig, WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
@@ -52,6 +52,7 @@ import {
   NET_TICK_INTERVAL_MS, NET_SMOOTH_TIME_MS,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
+import type { LoadoutCommitSnapshot } from '../types';
 import { dequantizeAngle } from '../utils/angle';
 
 
@@ -455,6 +456,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.tearDownArena();
     this.leftPanel.transitionToLobby();
+  this.leftPanel.setLobbyFieldsLocked(false);
     this.rightPanel.transitionToLobby();
 
     if (bridge.isHost()) {
@@ -468,8 +470,13 @@ export class ArenaScene extends Phaser.Scene {
 
   private onReadyToggled(): void {
     this.isLocalReady = !this.isLocalReady;
-    bridge.setLocalReady(this.isLocalReady);
+    if (this.isLocalReady) {
+      bridge.setLocalReadyWithCommittedLoadout(this.buildLocalCommittedLoadoutSnapshot());
+    } else {
+      bridge.setLocalReady(false);
+    }
     this.lobbyOverlay.setReadyButtonState(this.isLocalReady);
+    this.leftPanel.setLobbyFieldsLocked(this.isLocalReady);
   }
 
   // ── State Machine ─────────────────────────────────────────────────────────
@@ -506,14 +513,14 @@ export class ArenaScene extends Phaser.Scene {
           this.combatSystem.initPlayer(profile.id);
           this.resourceSystem?.initPlayer(profile.id);
           this.burrowSystem?.initPlayer(profile.id);
-          this.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
+          this.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
         }
       }
     }
 
     this.leftPanel.transitionToGame();
     this.rightPanel.transitionToGame();
-    this.syncHostLoadoutsFromSelections();
+    this.syncHostLoadoutsFromCommittedSelections();
     this.arenaCountdown?.syncTo(bridge.getArenaStartTime());
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
@@ -538,6 +545,7 @@ export class ArenaScene extends Phaser.Scene {
     this.tearDownArena();
 
     this.leftPanel.transitionToLobby();
+    this.leftPanel.setLobbyFieldsLocked(false);
     this.rightPanel.transitionToLobby();
     this.rightPanel.showRoundResults(bridge.getRoundResults());
     this.lobbyOverlay.setReadyButtonState(false);
@@ -577,9 +585,19 @@ export class ArenaScene extends Phaser.Scene {
         this.combatSystem.initPlayer(profile.id);
         this.resourceSystem?.initPlayer(profile.id);
         this.burrowSystem?.initPlayer(profile.id);
-        this.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
+        this.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
       }
     }
+  }
+
+  private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
+    const localId = bridge.getLocalPlayerId();
+    return {
+      weapon1: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id,
+      weapon2: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? DEFAULT_LOADOUT.weapon2.id,
+      utility: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? DEFAULT_LOADOUT.utility.id,
+      ultimate: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id,
+    };
   }
 
   private resolveLoadoutSelection(playerId: string): LoadoutSelection {
@@ -595,11 +613,22 @@ export class ArenaScene extends Phaser.Scene {
     };
   }
 
-  private syncHostLoadoutsFromSelections(): void {
+  private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    if (!committed) return this.resolveLoadoutSelection(playerId);
+    return {
+      weapon1: WEAPON_CONFIGS[committed.weapon1 as keyof typeof WEAPON_CONFIGS],
+      weapon2: WEAPON_CONFIGS[committed.weapon2 as keyof typeof WEAPON_CONFIGS],
+      utility: UTILITY_CONFIGS[committed.utility as keyof typeof UTILITY_CONFIGS],
+      ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
+    };
+  }
+
+  private syncHostLoadoutsFromCommittedSelections(): void {
     if (!bridge.isHost() || !this.loadoutManager) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (!this.playerManager.hasPlayer(profile.id)) continue;
-      this.loadoutManager.syncSelectedLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
+      this.loadoutManager.syncSelectedLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
     }
   }
 
@@ -966,7 +995,7 @@ export class ArenaScene extends Phaser.Scene {
 
       if (bridge.isHost()) {
         this.spawnReadyPlayers();
-        if (countdownActive) this.syncHostLoadoutsFromSelections();
+        if (countdownActive) this.syncHostLoadoutsFromCommittedSelections();
         this.runHostUpdate(delta);
         if (!countdownActive && secs <= 0) {
           this.hostSaveRoundResults();
@@ -1565,7 +1594,7 @@ export class ArenaScene extends Phaser.Scene {
     const equipped = this.loadoutManager?.getEquippedWeaponConfig(localId, slot);
     if (equipped) return equipped;
 
-    const selection = this.resolveLoadoutSelection(localId);
+    const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
   }
 
@@ -1577,7 +1606,7 @@ export class ArenaScene extends Phaser.Scene {
     // Client-seitige Vorhersage für Utility-Override (BFG/HHG)
     if (this.clientUtilityOverride) return this.clientUtilityOverride;
     // Fallback: Loadout-Menü-Auswahl
-    const selection = this.resolveLoadoutSelection(localId);
+    const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
   }
 

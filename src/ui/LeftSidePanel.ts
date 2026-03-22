@@ -92,8 +92,12 @@ export class LeftSidePanel {
   private gameContainer!:  Phaser.GameObjects.Container;
   private arenaHUD!:       ArenaHUD;
   private localNameText!:  Phaser.GameObjects.Text;
+  private editBtn:         Phaser.GameObjects.Text | null = null;
+  private colorEditText:   Phaser.GameObjects.Text | null = null;
   private nameEditEnabled  = true;
   private nameEditOpen     = false;
+  private nameEditPopup:   HTMLDivElement | null = null;
+  private closeNameEditPopupFn: (() => void) | null = null;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
   // Dachs-Vorschau als Farbindikator
@@ -105,11 +109,15 @@ export class LeftSidePanel {
   private pickerSwatches:   SwatchEntry[] = [];
   private pickerOpen        = false;
   private requestPending    = false;
+  private pickerDismissDelay: Phaser.Time.TimerEvent | null = null;
+  private pickerDismissHandler: (() => void) | null = null;
 
   // Loadout-Karussell
   private loadoutIndices:   Record<LoadoutSlot, number> = { weapon1: 0, weapon2: 0, utility: 0, ultimate: 0 };
   private loadoutNameTexts: Partial<Record<LoadoutSlot, Phaser.GameObjects.Text>> = {};
+  private loadoutArrowButtons: Partial<Record<LoadoutSlot, { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text }>> = {};
   private loadoutEnabled    = true;
+  private lobbyFieldsLocked = false;
   private helpOverlay:      HelpOverlay | null = null;
 
   constructor(
@@ -146,6 +154,7 @@ export class LeftSidePanel {
       .on('pointerdown', () => this.openNameEdit())
       .on('pointerover',  () => editBtn.setAlpha(0.7))
       .on('pointerout',   () => editBtn.setAlpha(1.0));
+    this.editBtn = editBtn;
     objects.push(editBtn);
 
     // ── Trennlinie ──
@@ -166,13 +175,13 @@ export class LeftSidePanel {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.toggleColorPicker());
     objects.push(this.badgerClickZone);
-    objects.push(
-      this.scene.add.text(CENTER_X, BADGER_Y + BADGER_SIZE / 2 + 6, '[ Farbe ändern ]', EDIT_FONT)
-        .setOrigin(0.5, 0)
-        .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.toggleColorPicker()),
-    );
+    const colorEditText = this.scene.add.text(CENTER_X, BADGER_Y + BADGER_SIZE / 2 + 6, '[ Farbe ändern ]', EDIT_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.toggleColorPicker());
+    this.colorEditText = colorEditText;
+    objects.push(colorEditText);
 
     // ── Trennlinie 2 ──
     const divider2 = this.scene.add.graphics();
@@ -215,6 +224,7 @@ export class LeftSidePanel {
         .on('pointerover',  () => rightBtn.setAlpha(0.7))
         .on('pointerout',   () => rightBtn.setAlpha(1.0));
       objects.push(rightBtn);
+      this.loadoutArrowButtons[slot] = { left: leftBtn, right: rightBtn };
 
       // Slot-Label zentriert UNTER den Pfeilen
       objects.push(
@@ -269,12 +279,14 @@ export class LeftSidePanel {
     // ── Hilfe-Overlay (world-space, über allem) ───────────────────────────────
     this.helpOverlay = new HelpOverlay(this.scene);
     this.helpOverlay.build();
+    this.setLobbyFieldsLocked(false);
   }
 
   // ── Transitions ────────────────────────────────────────────────────────────
 
   transitionToGame(): void {
     this.closeColorPicker();
+    this.closeNameEditPopup();
     this.nameEditEnabled = false;
     this.loadoutEnabled  = false;
     this.badgerPreview?.sprite.setVisible(false);
@@ -327,6 +339,7 @@ export class LeftSidePanel {
         onComplete: () => {
           this.nameEditEnabled = true;
           this.loadoutEnabled  = true;
+          this.setLobbyFieldsLocked(false);
           this.pendingDelay    = null;
         },
       });
@@ -391,7 +404,24 @@ export class LeftSidePanel {
     this.refreshPickerSwatches();  // zeigt aktualisierten Pool
   }
 
+  setLobbyFieldsLocked(locked: boolean): void {
+    this.lobbyFieldsLocked = locked;
+    this.nameEditEnabled = !locked;
+    this.loadoutEnabled = !locked;
+
+    if (locked) {
+      this.closeColorPicker();
+      this.closeNameEditPopup();
+    }
+
+    this.updateNameEditButtonVisibility();
+    this.updateColorEditState();
+    this.updateLoadoutArrowVisibility();
+  }
+
   destroy(): void {
+    this.closeNameEditPopup();
+    this.cleanupPickerDismissListener();
     this.badgerPreview?.destroy();
     this.destroyPickerEffects();
     this.helpOverlay?.destroy();
@@ -474,20 +504,24 @@ export class LeftSidePanel {
   }
 
   private toggleColorPicker(): void {
+    if (this.lobbyFieldsLocked) return;
     if (this.pickerOpen) this.closeColorPicker();
     else                 this.openColorPicker();
   }
 
   private openColorPicker(): void {
+    if (this.lobbyFieldsLocked) return;
     this.pickerOpen = true;
     this.requestPending = false;
     this.refreshPickerSwatches();
     this.pickerContainer.setVisible(true);
+    this.schedulePickerDismissListener();
   }
 
   private closeColorPicker(): void {
     this.pickerOpen = false;
     this.pickerContainer.setVisible(false);
+    this.cleanupPickerDismissListener();
   }
 
   /**
@@ -523,11 +557,13 @@ export class LeftSidePanel {
   }
 
   private requestColor(color: number): void {
+    if (this.lobbyFieldsLocked) return;
     if (this.requestPending) return;
     const ownColor = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
     if (color === ownColor) { this.closeColorPicker(); return; }  // bereits eigene Farbe
 
     this.requestPending = true;
+    this.closeColorPicker();
     this.refreshPickerSwatches();  // alle Swatches sperren während Anfrage läuft
     this.bridge.sendColorRequest(color);
   }
@@ -630,10 +666,19 @@ export class LeftSidePanel {
     popup.appendChild(cancelBtn);
 
     document.body.appendChild(popup);
+    this.nameEditPopup = popup;
     inputElement.focus();
     inputElement.select();
 
-    const closePopup = () => { this.nameEditOpen = false; popup.remove(); };
+    const closePopup = () => {
+      if (this.nameEditPopup === popup) {
+        this.nameEditPopup = null;
+        this.closeNameEditPopupFn = null;
+      }
+      this.nameEditOpen = false;
+      popup.remove();
+    };
+    this.closeNameEditPopupFn = closePopup;
     const saveName   = () => {
       const input = inputElement.value.trim();
       if (input !== '') this.bridge.setLocalName(input);
@@ -646,6 +691,68 @@ export class LeftSidePanel {
       if (e.key === 'Enter')  saveName();
       if (e.key === 'Escape') closePopup();
     });
+  }
+
+  private closeNameEditPopup(): void {
+    this.closeNameEditPopupFn?.();
+  }
+
+  private updateNameEditButtonVisibility(): void {
+    this.editBtn?.setVisible(!this.lobbyFieldsLocked);
+    if (this.lobbyFieldsLocked) {
+      this.editBtn?.disableInteractive();
+      return;
+    }
+    this.editBtn?.setInteractive({ useHandCursor: true });
+  }
+
+  private updateColorEditState(): void {
+    const enabled = !this.lobbyFieldsLocked;
+    this.badgerClickZone.setAlpha(enabled ? 1 : 0);
+    if (enabled) this.badgerClickZone.setInteractive({ useHandCursor: true });
+    else this.badgerClickZone.disableInteractive();
+
+    this.colorEditText?.setVisible(enabled);
+    if (!this.colorEditText) return;
+    if (enabled) this.colorEditText.setInteractive({ useHandCursor: true });
+    else this.colorEditText.disableInteractive();
+  }
+
+  private updateLoadoutArrowVisibility(): void {
+    for (const buttons of Object.values(this.loadoutArrowButtons)) {
+      if (!buttons) continue;
+      buttons.left.setVisible(!this.lobbyFieldsLocked);
+      buttons.right.setVisible(!this.lobbyFieldsLocked);
+      if (this.lobbyFieldsLocked) {
+        buttons.left.disableInteractive();
+        buttons.right.disableInteractive();
+      } else {
+        buttons.left.setInteractive({ useHandCursor: true });
+        buttons.right.setInteractive({ useHandCursor: true });
+      }
+    }
+  }
+
+  private schedulePickerDismissListener(): void {
+    this.cleanupPickerDismissListener();
+    this.pickerDismissDelay = this.scene.time.delayedCall(120, () => {
+      this.pickerDismissDelay = null;
+      if (!this.pickerOpen) return;
+      this.pickerDismissHandler = () => {
+        if (!this.pickerOpen) return;
+        this.closeColorPicker();
+      };
+      this.scene.input.once('pointerdown', this.pickerDismissHandler);
+    });
+  }
+
+  private cleanupPickerDismissListener(): void {
+    this.pickerDismissDelay?.destroy();
+    this.pickerDismissDelay = null;
+    if (this.pickerDismissHandler) {
+      this.scene.input.off('pointerdown', this.pickerDismissHandler);
+      this.pickerDismissHandler = null;
+    }
   }
 
   // ── Arena-HUD Initialisation ─────────────────────────────────────────────
@@ -661,10 +768,10 @@ export class LeftSidePanel {
     this.arenaHUD.setPlayerInfo(name, color);
 
     // Loadout display names
-    const w1Id  = this.bridge.getPlayerLoadoutSlot(localId, 'weapon1');
-    const w2Id  = this.bridge.getPlayerLoadoutSlot(localId, 'weapon2');
-    const utId  = this.bridge.getPlayerLoadoutSlot(localId, 'utility');
-    const ulId  = this.bridge.getPlayerLoadoutSlot(localId, 'ultimate');
+    const w1Id  = this.bridge.getPlayerCommittedLoadoutSlot(localId, 'weapon1') ?? this.bridge.getPlayerLoadoutSlot(localId, 'weapon1');
+    const w2Id  = this.bridge.getPlayerCommittedLoadoutSlot(localId, 'weapon2') ?? this.bridge.getPlayerLoadoutSlot(localId, 'weapon2');
+    const utId  = this.bridge.getPlayerCommittedLoadoutSlot(localId, 'utility') ?? this.bridge.getPlayerLoadoutSlot(localId, 'utility');
+    const ulId  = this.bridge.getPlayerCommittedLoadoutSlot(localId, 'ultimate') ?? this.bridge.getPlayerLoadoutSlot(localId, 'ultimate');
 
     const w1Name  = (w1Id && WEAPON_CONFIGS[w1Id as keyof typeof WEAPON_CONFIGS]?.displayName) ?? 'Glock';
     const w2Name  = (w2Id && WEAPON_CONFIGS[w2Id as keyof typeof WEAPON_CONFIGS]?.displayName) ?? 'P90';

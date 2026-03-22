@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState } from '../types';
+import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -34,6 +34,7 @@ const KEY_LOADOUT_W1   = 'lw1';   // per-player: string (weapon1 item ID)
 const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
 const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
+const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: number (Date.now()-Timestamp bis Utility wieder bereit)
 const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
@@ -258,18 +259,62 @@ export class NetworkBridge {
 
   // ── Bereitschaftsstatus: pro Spieler ──────────────────────────────────────
   setLocalReady(ready: boolean): void {
+    if (!ready) {
+      myPlayer().setState(KEY_READY, false);
+      myPlayer().setState(KEY_LOADOUT_COMMITTED, null, true);
+      return;
+    }
     myPlayer().setState(KEY_READY, ready);
+  }
+
+  /**
+   * Friert das aktuelle Lobby-Loadout als verbindlichen Snapshot ein und markiert den Spieler als bereit.
+   * Die Reihenfolge ist bewusst: erst Snapshot, dann Ready-Flag.
+   */
+  setLocalReadyWithCommittedLoadout(snapshot: LoadoutCommitSnapshot): void {
+    myPlayer().setState(KEY_LOADOUT_COMMITTED, snapshot, true);
+    myPlayer().setState(KEY_READY, true);
   }
 
   getPlayerReady(playerId: string): boolean {
     return (this.playerStateMap.get(playerId)?.getState(KEY_READY) as boolean | undefined) ?? false;
   }
 
+  /** Liest den verbindlichen Ready-Loadout-Snapshot eines Spielers. */
+  getPlayerCommittedLoadout(playerId: string): LoadoutCommitSnapshot | null {
+    const raw = this.playerStateMap.get(playerId)?.getState(KEY_LOADOUT_COMMITTED) as Partial<LoadoutCommitSnapshot> | null | undefined;
+    if (!raw || typeof raw !== 'object') return null;
+    if (
+      typeof raw.weapon1 !== 'string'
+      || typeof raw.weapon2 !== 'string'
+      || typeof raw.utility !== 'string'
+      || typeof raw.ultimate !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      weapon1: raw.weapon1,
+      weapon2: raw.weapon2,
+      utility: raw.utility,
+      ultimate: raw.ultimate,
+    };
+  }
+
+  /** Liest eine committed Loadout-Slot-ID eines Spielers. */
+  getPlayerCommittedLoadoutSlot(playerId: string, slot: LoadoutSlot): string | undefined {
+    return this.getPlayerCommittedLoadout(playerId)?.[slot];
+  }
+
+  /** True, wenn ein Spieler einen vollstaendigen verbindlichen Ready-Snapshot hat. */
+  hasCommittedLoadout(playerId: string): boolean {
+    return this.getPlayerCommittedLoadout(playerId) !== null;
+  }
+
   /** Gibt zurück ob ALLE aktuell verbundenen Spieler bereit sind (min. 2). */
   areAllPlayersReady(): boolean {
     const ids = [...this.connectedPlayers.keys()];
     if (ids.length < 2) return false;
-    return ids.every(id => this.getPlayerReady(id));
+    return ids.every(id => this.getPlayerReady(id) && this.hasCommittedLoadout(id));
   }
 
   // ── Spielphase: Host → Alle (global, reliable) ────────────────────────────

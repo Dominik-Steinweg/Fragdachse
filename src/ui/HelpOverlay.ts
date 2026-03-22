@@ -46,8 +46,8 @@ const DESC_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
 const CONTROLS: [string, string][] = [
   ['W A S D',        'Bewegen'],
   ['LEERTASTE',      'Dash'],
-  ['LINKE MAUS',     'Weapon 1  (Treffer → Adrenalin)'],
-  ['RECHTE MAUS',    'Weapon 2  (kostet Adrenalin)'],
+  ['LINKE MAUST.',     'Weapon 1  (Treffer → Adrenalin)'],
+  ['RECHTE MAUST.',    'Weapon 2  (kostet Adrenalin)'],
   ['E  (halten)',    'Utility'],
   ['Q',              'Ultimate  (füllt sich durch Schaden)'],
   ['SHIFT',          'Einbuddeln  (kostet Adrenalin)'],
