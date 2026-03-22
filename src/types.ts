@@ -43,7 +43,7 @@ export interface PlayerNetState {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'flame' | 'bfg' | 'awp';
+export type ProjectileStyle = 'bullet' | 'ball' | 'flame' | 'bfg' | 'awp' | 'rocket';
 
 /**
  * Konfiguration für die Tracer-Leuchtlinie eines Projektils (data-driven).
@@ -59,6 +59,19 @@ export interface TracerConfig {
   readonly maxLength?: number;   // Max. sichtbare Trail-Länge in px (undefined = voller Pfad ab Spawn)
   readonly colorCore?: number;   // Farb-Override innere Linie (undefined = Projektil-/Spielerfarbe)
   readonly colorGlow?: number;   // Farb-Override äußerer Halo (undefined = Projektil-/Spielerfarbe)
+}
+
+/** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
+export interface ProjectileExplosionConfig {
+  readonly radius: number;
+  readonly maxDamage: number;
+  readonly minDamage: number;
+  readonly knockback: number;
+  readonly selfDamageMult: number;
+  readonly selfKnockbackMult?: number;
+  readonly rockDamageMult?: number;
+  readonly trainDamageMult?: number;
+  readonly color?: number;
 }
 
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
@@ -164,6 +177,7 @@ export interface ProjectileSpawnConfig {
   isGrenade:       boolean;
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName?:     string;        // Waffenname für Killfeed
+  explosion?:      ProjectileExplosionConfig;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
@@ -247,6 +261,13 @@ export interface ExplodedGrenade {
   effect: GrenadeEffectConfig;
 }
 
+export interface ExplodedProjectile {
+  x: number;
+  y: number;
+  ownerId: string;
+  effect: ProjectileExplosionConfig;
+}
+
 export interface SyncedSmokeCloud {
   id:      number;
   x:       number;
@@ -270,6 +291,7 @@ export interface TrackedProjectile {
   sprite:          Phaser.GameObjects.Shape;  // Rectangle (bullet) oder Arc (ball)
   body:            Phaser.Physics.Arcade.Body;
   pendingDestroy?: boolean;
+  pendingExplosion?: boolean;
   bounceCount:     number;
   createdAt:       number;
   ownerId:         string;
@@ -282,6 +304,7 @@ export interface TrackedProjectile {
   isGrenade:       boolean;
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName:      string;        // Waffenname für Killfeed
+  explosion?:      ProjectileExplosionConfig;
   fuseTime?:       number;
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil

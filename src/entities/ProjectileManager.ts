@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ProjectileSpawnConfig } from '../types';
+import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig } from '../types';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import { BULLET_STYLE, AWP_STYLE } from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
+import type { RocketRenderer }  from '../effects/RocketRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
 /** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
@@ -41,12 +42,18 @@ export class ProjectileManager {
   // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
   private bfgRenderer: BfgRenderer | null = null;
 
+  // ── Rocket-Renderer (Raketenkörper + Rauchspur) ────────────────────────
+  private rocketRenderer: RocketRenderer | null = null;
+
 
   // ── Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) ───────
   private tracerRenderer: TracerRenderer | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
+
+  // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
+  private pendingProjectileExplosions: ExplodedProjectile[] = [];
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -123,6 +130,11 @@ export class ProjectileManager {
     this.bfgRenderer = renderer;
   }
 
+  /** Injiziert den RocketRenderer fuer Raketen-Visualisierung. */
+  setRocketRenderer(renderer: RocketRenderer | null): void {
+    this.rocketRenderer = renderer;
+  }
+
   /** Injiziert den TracerRenderer für data-driven Leuchtlinien. */
   setTracerRenderer(renderer: TracerRenderer | null): void {
     this.tracerRenderer = renderer;
@@ -154,6 +166,7 @@ export class ProjectileManager {
     const isFlame  = cfg.projectileStyle === 'flame';
     const isBfg    = cfg.projectileStyle === 'bfg';
     const isAwp    = cfg.projectileStyle === 'awp';
+    const isRocket = cfg.projectileStyle === 'rocket';
 
     // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = isBall
@@ -172,6 +185,12 @@ export class ProjectileManager {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.bulletRenderer.createVisual(id, x, y, cfg.size, cfg.color, AWP_STYLE);
+    }
+
+    if (isRocket && this.rocketRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.rocketRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -223,6 +242,7 @@ export class ProjectileManager {
       isGrenade:      cfg.isGrenade,
       adrenalinGain:  cfg.adrenalinGain,
       weaponName:     cfg.weaponName ?? 'Waffe',
+      explosion:      cfg.explosion,
       fuseTime:        cfg.fuseTime,
       grenadeEffect:   cfg.grenadeEffect,
       projectileStyle: cfg.projectileStyle,
@@ -292,6 +312,35 @@ export class ProjectileManager {
       // BfgRenderer-Visual erstellen (Host rendert ebenfalls)
       if (this.bfgRenderer) {
         this.bfgRenderer.createVisual(id, x, y, cfg.size);
+      }
+    } else if (cfg.explosion && cfg.maxBounces === 0) {
+      body.setCollideWorldBounds(true);
+      body.onWorldBounds = true;
+      body.setBounce(0, 0);
+      const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
+        if (hitBody !== body) return;
+        this.queueProjectileExplosion(tracked);
+      };
+      tracked.boundsListener = boundsListener;
+      this.scene.physics.world.on('worldbounds', boundsListener);
+
+      if (this.rockGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
+          this.queueProjectileExplosion(tracked);
+        });
+        tracked.colliders.push(c);
+      }
+      if (this.trunkGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+          this.queueProjectileExplosion(tracked);
+        });
+        tracked.colliders.push(c);
+      }
+      if (this.trainGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+          this.queueProjectileExplosion(tracked);
+        });
+        tracked.colliders.push(c);
       }
     } else if (isFlame) {
       // Flammen: kein Bounce, Arena-Bounds und Hindernisse stoppen die Hitbox;
@@ -552,6 +601,29 @@ export class ProjectileManager {
     proj.body.enable = false;
   }
 
+  private destroyTrackedProjectile(proj: TrackedProjectile): void {
+    this.scene.physics.world.off('worldbounds', proj.boundsListener);
+    for (const c of proj.colliders) c.destroy();
+    proj.sprite.destroy();
+    this.bulletRenderer?.destroyVisual(proj.id);
+    this.tracerRenderer?.destroyTracer(proj.id);
+    this.flameRenderer?.destroyVisual(proj.id);
+    this.bfgRenderer?.destroyVisual(proj.id);
+    this.rocketRenderer?.destroyVisual(proj.id);
+  }
+
+  private queueProjectileExplosion(proj: TrackedProjectile): void {
+    if (proj.pendingExplosion || !proj.explosion) return;
+    proj.pendingExplosion = true;
+    this.pendingProjectileExplosions.push({
+      x: proj.sprite.x,
+      y: proj.sprite.y,
+      ownerId: proj.ownerId,
+      effect: proj.explosion,
+    });
+    this.queueDestroyProjectile(proj);
+  }
+
   /**
    * Host: Snapshot der aktiven Projektile (für Kollisionserkennung im CombatSystem).
    */
@@ -566,14 +638,15 @@ export class ProjectileManager {
     const idx = this.projectiles.findIndex(p => p.id === id);
     if (idx === -1) return;
     const proj = this.projectiles[idx];
-    this.scene.physics.world.off('worldbounds', proj.boundsListener);
-    for (const c of proj.colliders) c.destroy();
-    proj.sprite.destroy();
-    this.bulletRenderer?.destroyVisual(proj.id);
-    this.tracerRenderer?.destroyTracer(proj.id);
-    this.flameRenderer?.destroyVisual(proj.id);
-    this.bfgRenderer?.destroyVisual(proj.id);
+    this.destroyTrackedProjectile(proj);
     this.projectiles.splice(idx, 1);
+  }
+
+  triggerProjectileExplosion(id: number): boolean {
+    const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+    if (!proj?.explosion) return false;
+    this.queueProjectileExplosion(proj);
+    return true;
   }
 
   /**
@@ -582,15 +655,15 @@ export class ProjectileManager {
    */
   destroyAll(): void {
     for (const proj of this.projectiles) {
-      this.scene.physics.world.off('worldbounds', proj.boundsListener);
-      for (const c of proj.colliders) c.destroy();
-      proj.sprite.destroy();
+      this.destroyTrackedProjectile(proj);
     }
     this.projectiles = [];
     this.bulletRenderer?.destroyAll();
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
+    this.rocketRenderer?.destroyAll();
+    this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
   }
@@ -601,23 +674,19 @@ export class ProjectileManager {
    */
   hostUpdate(deltaMs = 16.67): {
     synced: SyncedProjectile[];
+    explodedProjectiles: ExplodedProjectile[];
     explodedGrenades: ExplodedGrenade[];
     countdownEvents: Array<{ x: number; y: number; value: number }>;
   } {
     const now              = Date.now();
+    const explodedProjectiles = this.pendingProjectileExplosions.splice(0);
     const explodedGrenades: ExplodedGrenade[] = [];
     const countdownEvents: Array<{ x: number; y: number; value: number }> = [];
     const renderer         = this.bulletRenderer;
 
     this.projectiles = this.projectiles.filter(proj => {
       if (proj.pendingDestroy) {
-        this.scene.physics.world.off('worldbounds', proj.boundsListener);
-        for (const c of proj.colliders) c.destroy();
-        proj.sprite.destroy();
-        renderer?.destroyVisual(proj.id);
-        this.tracerRenderer?.destroyTracer(proj.id);
-        this.flameRenderer?.destroyVisual(proj.id);
-        this.bfgRenderer?.destroyVisual(proj.id);
+        this.destroyTrackedProjectile(proj);
         return false;
       }
 
@@ -653,15 +722,20 @@ export class ProjectileManager {
         return true;
       } else {
         // Normales Projektil: Lifetime oder Max-Bounces
+        if (age > proj.lifetime && proj.explosion) {
+          explodedProjectiles.push({
+            x: proj.sprite.x,
+            y: proj.sprite.y,
+            ownerId: proj.ownerId,
+            effect: proj.explosion,
+          });
+          this.destroyTrackedProjectile(proj);
+          return false;
+        }
+
         const dead = age > proj.lifetime || proj.bounceCount > proj.maxBounces;
         if (dead) {
-          this.scene.physics.world.off('worldbounds', proj.boundsListener);
-          for (const c of proj.colliders) c.destroy();
-          proj.sprite.destroy();
-          renderer?.destroyVisual(proj.id);
-          this.tracerRenderer?.destroyTracer(proj.id);
-          this.flameRenderer?.destroyVisual(proj.id);
-          this.bfgRenderer?.destroyVisual(proj.id);
+          this.destroyTrackedProjectile(proj);
         } else if (proj.isFlame) {
           // Flammen-Hitbox: wachsen + verlangsamen
           this.updateFlameHitbox(proj, deltaMs / 1000);
@@ -755,6 +829,24 @@ export class ProjectileManager {
       }
     }
 
+    const rocketR = this.rocketRenderer;
+    if (rocketR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'rocket') {
+          if (!rocketR.has(proj.id)) {
+            rocketR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          }
+          rocketR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
+        }
+      }
+      const activeRocketIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'rocket').map(p => p.id),
+      );
+      for (const id of rocketR.getActiveIds()) {
+        if (!activeRocketIds.has(id)) rocketR.destroyVisual(id);
+      }
+    }
+
     // TracerRenderer-Visuals aktualisieren (Host rendert Tracer ebenfalls)
     const tracerR = this.tracerRenderer;
     if (tracerR) {
@@ -785,7 +877,7 @@ export class ProjectileManager {
       tracer: p.tracerConfig,
     }));
 
-    return { synced, explodedGrenades, countdownEvents };
+    return { synced, explodedProjectiles, explodedGrenades, countdownEvents };
   }
 
   // ── Client ────────────────────────────────────────────────────────────────
@@ -799,6 +891,7 @@ export class ProjectileManager {
     const activeIds = new Set(data.map(d => d.id));
     const renderer  = this.bulletRenderer;
     const flames    = this.flameRenderer;
+    const rockets   = this.rocketRenderer;
 
     // Verwaiste Visuals und States entfernen
     for (const [id, sprite] of this.clientVisuals) {
@@ -820,6 +913,14 @@ export class ProjectileManager {
       for (const id of flames.getActiveIds()) {
         if (!activeIds.has(id)) {
           flames.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (rockets) {
+      for (const id of rockets.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          rockets.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -846,6 +947,7 @@ export class ProjectileManager {
       const isFlame  = proj.style === 'flame';
       const isBfgP   = proj.style === 'bfg';
       const isAwpP   = proj.style === 'awp';
+      const isRocket = proj.style === 'rocket';
 
       // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
       const prev = this.clientProjStates.get(proj.id);
@@ -873,6 +975,11 @@ export class ProjectileManager {
           bfgR.createVisual(proj.id, proj.x, proj.y, proj.size);
         }
         bfgR.updateVisual(proj.id, proj.x, proj.y, proj.size);
+      } else if (isRocket && rockets) {
+        if (!rockets.has(proj.id)) {
+          rockets.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+        }
+        rockets.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isFlame && flames) {
         if (!flames.has(proj.id)) {
           flames.createVisual(proj.id, proj.x, proj.y, proj.size);
@@ -953,6 +1060,8 @@ export class ProjectileManager {
       const bfgRe = this.bfgRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
+      } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
+        this.rocketRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'flame' && flames && flames.has(id)) {
         const decayFactor = Math.pow(0.82, dt);
         flames.updateVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);

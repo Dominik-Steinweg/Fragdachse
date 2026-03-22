@@ -20,6 +20,13 @@ interface DashState {
   vNorm:   number;   // v_norm zum Dash-Zeitpunkt (skaliert mit Buffs)
 }
 
+interface ExternalImpulse {
+  vx: number;
+  vy: number;
+  startMs: number;
+  durationMs: number;
+}
+
 export class HostPhysicsSystem {
   private scene:         Phaser.Scene;
   private playerManager: PlayerManager;
@@ -47,7 +54,7 @@ export class HostPhysicsSystem {
   private burrowedPlayers = new Set<string>();
 
   // Rückstoß-Impulse (Zeit-basiertes Quad-Ease-Out Decay über mehrere Frames)
-  private pendingRecoils = new Map<string, { vx: number; vy: number; startMs: number; durationMs: number }>();
+  private pendingRecoils = new Map<string, ExternalImpulse[]>();
 
   constructor(
     scene:         Phaser.Scene,
@@ -74,7 +81,65 @@ export class HostPhysicsSystem {
    * Amplitude zum Zeitpunkt t: force * (1 - t/duration)²
    */
   addRecoil(playerId: string, vx: number, vy: number, durationMs = 180): void {
-    this.pendingRecoils.set(playerId, { vx, vy, startMs: Date.now(), durationMs });
+    const impulses = this.pendingRecoils.get(playerId) ?? [];
+    impulses.push({ vx, vy, startMs: Date.now(), durationMs });
+    this.pendingRecoils.set(playerId, impulses);
+  }
+
+  applyRadialImpulse(
+    x: number,
+    y: number,
+    radius: number,
+    force: number,
+    ownerId?: string,
+    selfMultiplier = 1,
+    durationMs = 260,
+  ): void {
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.combatSystem.isAlive(player.id)) continue;
+
+      const dx = player.sprite.x - x;
+      const dy = player.sprite.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > radius) continue;
+
+      const t = Phaser.Math.Clamp(dist / radius, 0, 1);
+      const falloff = 1 - t;
+      const mult = ownerId && player.id === ownerId ? selfMultiplier : 1;
+      const impulse = force * falloff * mult;
+      if (impulse <= 0) continue;
+
+      const nx = dist > 0.001 ? dx / dist : 0;
+      const ny = dist > 0.001 ? dy / dist : -1;
+      this.addRecoil(player.id, nx * impulse, ny * impulse, durationMs);
+    }
+  }
+
+  private consumeImpulseVelocity(playerId: string, now: number): { vx: number; vy: number } {
+    const impulses = this.pendingRecoils.get(playerId);
+    if (!impulses || impulses.length === 0) return { vx: 0, vy: 0 };
+
+    let totalVx = 0;
+    let totalVy = 0;
+    const remaining: ExternalImpulse[] = [];
+
+    for (const impulse of impulses) {
+      const elapsed = now - impulse.startMs;
+      if (elapsed >= impulse.durationMs) continue;
+      const t = elapsed / impulse.durationMs;
+      const factor = (1 - t) * (1 - t);
+      totalVx += impulse.vx * factor;
+      totalVy += impulse.vy * factor;
+      remaining.push(impulse);
+    }
+
+    if (remaining.length > 0) {
+      this.pendingRecoils.set(playerId, remaining);
+    } else {
+      this.pendingRecoils.delete(playerId);
+    }
+
+    return { vx: totalVx, vy: totalVy };
   }
 
   // ── Dash-Abfragen ─────────────────────────────────────────────────────────
@@ -216,16 +281,21 @@ export class HostPhysicsSystem {
       // Tote Spieler überspringen (body.enable = false durch CombatSystem)
       if (!this.combatSystem.isAlive(player.id)) continue;
 
+      const impulse = this.consumeImpulseVelocity(player.id, now);
+
       if (movementLocked) {
-        player.body.setVelocity(0, 0);
+        player.body.setVelocity(impulse.vx, impulse.vy);
         continue;
       }
 
       // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
       if (this.burrowSystem?.isStunned(player.id)) {
-        player.body.setVelocity(0, 0);
+        player.body.setVelocity(impulse.vx, impulse.vy);
         continue;
       }
+
+      let baseVx = 0;
+      let baseVy = 0;
 
       // ── 2. Dash: 2-Phasen Speed-Debt-Modell ─────────────────────────
       const dash = this.dashStates.get(player.id);
@@ -277,7 +347,9 @@ export class HostPhysicsSystem {
         }
 
         if (!done) {
-          player.body.setVelocity(dirX * dash.vNorm * speedFactor, dirY * dash.vNorm * speedFactor);
+          baseVx = dirX * dash.vNorm * speedFactor;
+          baseVy = dirY * dash.vNorm * speedFactor;
+          player.body.setVelocity(baseVx + impulse.vx, baseVy + impulse.vy);
           continue;
         }
         // done → fällt durch zur normalen Bewegung
@@ -294,27 +366,14 @@ export class HostPhysicsSystem {
       const speed      = (burrowed ? PLAYER_SPEED * BURROW_SPEED_FACTOR : PLAYER_SPEED) * speedMult;
 
       if (len > 0) {
-        player.body.setVelocity((dx / len) * speed, (dy / len) * speed);
+        baseVx = (dx / len) * speed;
+        baseVy = (dy / len) * speed;
       } else {
-        player.body.setVelocity(0, 0);
+        baseVx = 0;
+        baseVy = 0;
       }
 
-      // ── 4. Rückstoß-Impuls (Quad-Ease-Out Decay über durationMs) ────────
-      const recoil = this.pendingRecoils.get(player.id);
-      if (recoil) {
-        const elapsed = now - recoil.startMs;
-        if (elapsed >= recoil.durationMs) {
-          this.pendingRecoils.delete(player.id);
-        } else {
-          // Quad-Ease-Out: beginnt stark, endet sanft
-          const t      = elapsed / recoil.durationMs;
-          const factor = (1 - t) * (1 - t);
-          player.body.setVelocity(
-            player.body.velocity.x + recoil.vx * factor,
-            player.body.velocity.y + recoil.vy * factor,
-          );
-        }
-      }
+      player.body.setVelocity(baseVx + impulse.vx, baseVy + impulse.vy);
     }
   }
 }

@@ -669,6 +669,7 @@ export class LoadoutManager {
       isGrenade:       false,
       adrenalinGain:   config.adrenalinGain,
       weaponName:      config.displayName,
+      explosion:       fireConfig.impactExplosion,
       projectileStyle: config.projectileStyle,
       tracerConfig:    config.tracerConfig,
       detonable:       config.detonable,

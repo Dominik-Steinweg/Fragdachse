@@ -4,7 +4,7 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
-import type { SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig } from '../types';
+import type { SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -200,6 +200,30 @@ export class CombatSystem {
       if (dist <= radius) {
         this.applyDamage(player.id, damage, false, ownerId, 'Granate');
       }
+    }
+  }
+
+  applyExplosionDamage(
+    x: number,
+    y: number,
+    effect: ProjectileExplosionConfig,
+    ownerId: string,
+  ): void {
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.isAlive(player.id)) continue;
+
+      const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
+      if (dist > effect.radius) continue;
+
+      const t = Phaser.Math.Clamp(dist / effect.radius, 0, 1);
+      let damage = Phaser.Math.Linear(effect.maxDamage, effect.minDamage, t);
+      if (player.id === ownerId) {
+        damage *= effect.selfDamageMult;
+      }
+
+      const roundedDamage = Math.round(damage);
+      if (roundedDamage <= 0) continue;
+      this.applyDamage(player.id, roundedDamage, false, ownerId, 'Explosion');
     }
   }
 
@@ -722,7 +746,12 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName:    string,
   ): void {
-    this.projectileManager.destroyProjectile(projectileId);
+    const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    if (projectile?.explosion) {
+      this.projectileManager.triggerProjectileExplosion(projectileId);
+    } else {
+      this.projectileManager.destroyProjectile(projectileId);
+    }
     this.applyDamage(playerId, damage, true, shooterId, weaponName);
 
     // Adrenalin-Belohnung für den Schützen

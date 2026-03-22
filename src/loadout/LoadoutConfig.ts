@@ -1,5 +1,5 @@
 import { RAGE_MAX } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileStyle, TracerConfig } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileExplosionConfig, ProjectileStyle, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -8,6 +8,7 @@ export interface ProjectileWeaponFireConfig {
   readonly projectileSpeed: number;     // px/s
   readonly projectileSize: number;      // px (quadratisch)
   readonly projectileMaxBounces: number;
+  readonly impactExplosion?: ProjectileExplosionConfig;
 }
 
 export interface HitscanWeaponFireConfig {
@@ -477,6 +478,45 @@ export const WEAPON_CONFIGS = {
       aoeRadius:      80,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
     } satisfies DetonableConfig,
+  } as WeaponConfig,
+
+  ROCKET_LAUNCHER: {
+    id:                   'ROCKET_LAUNCHER',
+    displayName:          'Raketenwerfer',
+    cooldown:             950,
+    damage:               10,
+    range:                900,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      700,
+      projectileSize:       10,
+      projectileMaxBounces: 0,
+      impactExplosion: {
+        radius:            110,
+        maxDamage:         50,
+        minDamage:         10,
+        knockback:         1250,
+        selfDamageMult:    0.25,
+        rockDamageMult:    1,
+        trainDamageMult:   1.15,
+        color:             0xff8a3d,
+      } satisfies ProjectileExplosionConfig,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        28,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         7,
+    spreadPerShot:        2,
+    maxDynamicSpread:     10,
+    spreadRecoveryDelay:  450,
+    spreadRecoveryRate:   3,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'rocket' as ProjectileStyle,
+    projectileColor:      0xe8c170,
+    shotRecoilForce:      520,
+    shotRecoilDuration:   170,
+    shotScreenShake:      { duration: 120, intensity: 0.004 },
   } as WeaponConfig,
 
   /**

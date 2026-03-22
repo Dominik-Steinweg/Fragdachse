@@ -22,6 +22,7 @@ import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
+import { RocketRenderer }      from '../effects/RocketRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
@@ -80,6 +81,7 @@ export class ArenaScene extends Phaser.Scene {
   private bulletRenderer!:    BulletRenderer;
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
+  private rocketRenderer!:    RocketRenderer;
   private tracerRenderer!:    TracerRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
@@ -214,6 +216,9 @@ export class ArenaScene extends Phaser.Scene {
     this.bfgRenderer = new BfgRenderer(this);
     this.bfgRenderer.generateTextures();
     this.projectileManager.setBfgRenderer(this.bfgRenderer);
+    this.rocketRenderer = new RocketRenderer(this);
+    this.rocketRenderer.generateTextures();
+    this.projectileManager.setRocketRenderer(this.rocketRenderer);
     this.tracerRenderer = new TracerRenderer(this);
     this.projectileManager.setTracerRenderer(this.tracerRenderer);
     this.nukeRenderer = new NukeRenderer(this);
@@ -1168,6 +1173,53 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private applyExplosionEnvironmentDamage(
+    x: number,
+    y: number,
+    effect: import('../types').ProjectileExplosionConfig,
+    attackerId: string,
+  ): void {
+    const arenaResult = this.arenaResult;
+    const rockMult = effect.rockDamageMult ?? 1;
+    const trainMult = effect.trainDamageMult ?? 1;
+
+    if (rockMult !== 0 && arenaResult && this.rockRegistry) {
+      const rockObjects = arenaResult.rockObjects;
+      for (let i = 0; i < rockObjects.length; i++) {
+        const rock = rockObjects[i];
+        if (!rock?.active) continue;
+        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
+        if (dist > effect.radius) continue;
+        const t = Phaser.Math.Clamp(dist / effect.radius, 0, 1);
+        const damage = Math.round(Phaser.Math.Linear(effect.maxDamage, effect.minDamage, t) * rockMult);
+        if (damage <= 0) continue;
+        const newHp = this.rockRegistry.applyDamage(i, damage);
+        ArenaBuilder.updateRockVisual(rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
+        if (newHp <= 0) {
+          this.powerUpSystem?.onRockDestroyed(i);
+        }
+      }
+    }
+
+    if (trainMult !== 0 && this.trainManager) {
+      const trainState = this.trainManager.getNetSnapshot();
+      if (trainState?.alive) {
+        let minDist = Infinity;
+        for (const seg of this.trainManager.getSegmentPositions()) {
+          const dist = Phaser.Math.Distance.Between(x, y, seg.x, seg.y);
+          if (dist < minDist) minDist = dist;
+        }
+        if (minDist <= effect.radius) {
+          const t = Phaser.Math.Clamp(minDist / effect.radius, 0, 1);
+          const damage = Math.round(Phaser.Math.Linear(effect.maxDamage, effect.minDamage, t) * trainMult);
+          if (damage > 0) {
+            this.trainManager.applyDamage(damage, attackerId);
+          }
+        }
+      }
+    }
+  }
+
   /**
    * Nuke-spezifischer Umgebungsschaden mit distanzbasiertem Falloff (wie bei Spielern).
    */
@@ -1302,8 +1354,8 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.update();
     }
 
-    const { synced: projectiles, explodedGrenades, countdownEvents } = countdownActive
-      ? { synced: [], explodedGrenades: [], countdownEvents: [] }
+    const { synced: projectiles, explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
+      ? { synced: [], explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
       : this.projectileManager.hostUpdate(delta);
 
     // Granaten-Countdown-Events an alle Clients broadcasten
@@ -1325,6 +1377,25 @@ export class ArenaScene extends Phaser.Scene {
       // Explosion in Spielerfarbe des Auslösers (z.B. Roter Spieler zündet grünen Ball → rote Explosion)
       const detonatorColor = bridge.getPlayerColor(det.detonatorOwnerId);
       bridge.broadcastExplosionEffect(det.x, det.y, det.effect.aoeRadius, detonatorColor);
+    }
+
+    for (const explosion of explodedProjectiles) {
+      this.combatSystem.applyExplosionDamage(explosion.x, explosion.y, explosion.effect, explosion.ownerId);
+      this.hostPhysics.applyRadialImpulse(
+        explosion.x,
+        explosion.y,
+        explosion.effect.radius,
+        explosion.effect.knockback,
+        explosion.ownerId,
+        explosion.effect.selfKnockbackMult ?? 1,
+      );
+      this.applyExplosionEnvironmentDamage(explosion.x, explosion.y, explosion.effect, explosion.ownerId);
+      bridge.broadcastExplosionEffect(
+        explosion.x,
+        explosion.y,
+        explosion.effect.radius,
+        explosion.effect.color,
+      );
     }
 
     // Granaten-Explosionen verarbeiten
