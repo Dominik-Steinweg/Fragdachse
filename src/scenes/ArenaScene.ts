@@ -142,6 +142,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp', './assets/sprites/16x16HP.png');
+    this.load.image('powerup_arm', './assets/sprites/16x16Armor.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
     this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');
@@ -1233,8 +1234,10 @@ export class ArenaScene extends Phaser.Scene {
     // Host-lokale Visuals jeden Frame aktualisieren (HP-Bars, Sichtbarkeit, Dash-Trails)
     for (const player of this.playerManager.getAllPlayers()) {
       const hp    = this.combatSystem.getHP(player.id);
+      const armor = this.combatSystem.getArmor(player.id);
       const alive = this.combatSystem.isAlive(player.id);
       player.updateHP(hp);
+      player.updateArmor(armor);
       player.setVisible(alive);
       player.setRageTint(this.loadoutManager?.isUltimateActive(player.id) ?? false);
       player.syncBar();
@@ -1280,6 +1283,7 @@ export class ArenaScene extends Phaser.Scene {
       const activePowerUps = this.powerUpSystem?.getActiveBuffsForHUD(localId) ?? [];
       this.leftPanel.updateArenaHUD({
         hp:                      this.combatSystem.getHP(localId),
+        armor:                   this.combatSystem.getArmor(localId),
         adrenaline:              this.resourceSystem?.getAdrenaline(localId) ?? 0,
         rage:                    this.resourceSystem?.getRage(localId) ?? 0,
         isUltimateActive:        this.loadoutManager?.isUltimateActive(localId) ?? false,
@@ -1305,6 +1309,7 @@ export class ArenaScene extends Phaser.Scene {
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.playerManager.getAllPlayers()) {
       const hp         = this.combatSystem.getHP(player.id);
+      const armor      = this.combatSystem.getArmor(player.id);
       const alive      = this.combatSystem.isAlive(player.id);
       const adrenaline = this.resourceSystem?.getAdrenaline(player.id) ?? 0;
       const rage       = this.resourceSystem?.getRage(player.id) ?? 0;
@@ -1326,6 +1331,7 @@ export class ArenaScene extends Phaser.Scene {
         y: Math.round(player.sprite.y),
         rot: playerInput?.aim ?? 0,
         hp,
+        armor,
         alive,
         adrenaline: Math.round(adrenaline),
         rage: Math.round(rage),
@@ -1390,6 +1396,7 @@ export class ArenaScene extends Phaser.Scene {
           player.setTargetRotation(dequantizeAngle(ps.rot));
         }
         player.updateHP(ps.hp);
+        player.updateArmor(ps.armor);
         player.setVisible(ps.alive);
         player.setBurrowVisual(ps.isBurrowed);
         player.setRageTint(ps.isRaging);
@@ -1459,6 +1466,7 @@ export class ArenaScene extends Phaser.Scene {
         || undefined;
       this.leftPanel.updateArenaHUD({
         hp:                      localState.hp,
+        armor:                   localState.armor,
         adrenaline:              localState.adrenaline,
         rage:                    localState.rage,
         isUltimateActive:        localState.isRaging,

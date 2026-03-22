@@ -62,7 +62,7 @@ function weightedRandom(weights: Record<string, number>): string | null {
 
 // ── PowerUpSystem ──────────────────────────────────────────────────────────
 
-type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'isAlive' | 'applyDamage'>;
+type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive' | 'applyDamage'>;
 
 /**
  * Host-autoritäres System für Power-Ups auf dem Boden und aktive Buffs.
@@ -221,6 +221,9 @@ export class PowerUpSystem {
     switch (def.type) {
       case 'instant_heal':
         this.combat.healToFull(playerId);
+        break;
+      case 'instant_armor':
+        this.combat.addArmor(playerId, def.amount ?? 0);
         break;
       case 'buff_regen':
       case 'buff_damage': {

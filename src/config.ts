@@ -143,6 +143,8 @@ export const PLAYER_SPEED = 200;
 
 // ---- Combat ----
 export const HP_MAX           = 100;
+export const ARMOR_MAX        = 100;
+export const ARMOR_COLOR      = COLORS.GOLD_2;
 export const RESPAWN_DELAY_MS = 1000;
 export const HITSCAN_FAVOR_THE_SHOOTER_MS = 120;
 export const HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET = 36;
@@ -151,6 +153,9 @@ export const HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET = 36;
 export const HP_BAR_WIDTH    = PLAYER_SIZE;     // gleiche Breite wie Spieler
 export const HP_BAR_HEIGHT   = 5;
 export const HP_BAR_OFFSET_Y = 24;              // Pixel unter Sprite-Mittelpunkt
+export const ARMOR_BAR_WIDTH    = PLAYER_SIZE;
+export const ARMOR_BAR_HEIGHT   = 3;
+export const ARMOR_BAR_OFFSET_Y = HP_BAR_OFFSET_Y + HP_BAR_HEIGHT + 4;
 
 // ---- Effekt-Layer (über Baumkronen) ----
 export const DEPTH_TRACE = 16;

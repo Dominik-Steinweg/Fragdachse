@@ -8,14 +8,16 @@
  * Layout (top→bottom):
  *  1. Spielername (large, scrolling marquee if overflow)
  *  2. HP bar (green gradient) + numeric value
- *  3. Adrenalin bar (blue gradient) + particle burst on gain / syringe
- *  4. Ultimate bar (red gradient) – glow when ready
- *  5. Weapon 1 cooldown (metallic)
- *  6. Weapon 2 cooldown (metallic)
- *  7. Utility cooldown (gold) – wobble on special override
+ *  3. Armor bar (gold gradient) + numeric value
+ *  4. Adrenalin bar (blue gradient) + particle burst on gain / syringe
+ *  5. Ultimate bar (red gradient) – glow when ready
+ *  6. Weapon 1 cooldown (metallic)
+ *  7. Weapon 2 cooldown (metallic)
+ *  8. Utility cooldown (gold) – wobble on special override
  */
 import Phaser from 'phaser';
 import {
+  ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, ADRENALINE_MAX, RAGE_MAX,
   COLORS, toCssColor,
 } from '../config';
@@ -41,23 +43,26 @@ const DIV1_Y    = 52;
 const HP_LBL_Y  = 62;
 const HP_BAR_Y  = 82;
 
-const ADR_LBL_Y = 110;
-const ADR_BAR_Y = 130;
+const ARM_LBL_Y = 110;
+const ARM_BAR_Y = 130;
 
-const ULT_LBL_Y = 158;
-const ULT_BAR_Y = 178;
-const DIV2_Y    = 204;
+const ADR_LBL_Y = 158;
+const ADR_BAR_Y = 178;
 
-const W1_LBL_Y  = 214;
-const W1_BAR_Y  = 234;
-const W2_LBL_Y  = 260;
-const W2_BAR_Y  = 280;
-const UT_LBL_Y  = 306;
-const UT_BAR_Y  = 326;
+const ULT_LBL_Y = 206;
+const ULT_BAR_Y = 226;
+const DIV2_Y    = 252;
+
+const W1_LBL_Y  = 262;
+const W1_BAR_Y  = 282;
+const W2_LBL_Y  = 308;
+const W2_BAR_Y  = 328;
+const UT_LBL_Y  = 354;
+const UT_BAR_Y  = 374;
 
 // Power-Up section (below utility bar)
-const DIV3_Y        = 352;
-const PU_SECTION_Y  = 362; // Y start for the power-up section
+const DIV3_Y        = 400;
+const PU_SECTION_Y  = 410; // Y start for the power-up section
 
 // Fonts
 const LABEL_FONT  = { fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
@@ -73,6 +78,7 @@ interface BarPalette {
 }
 
 const PAL_HP:   BarPalette = { dark: COLORS.GREEN_4, mid: COLORS.GREEN_3, light: COLORS.GREEN_1, spark: 0xffffff };
+const PAL_ARM:  BarPalette = paletteFromColor(ARMOR_COLOR);
 const PAL_ADR:  BarPalette = { dark: COLORS.BLUE_4,  mid: COLORS.BLUE_3,  light: COLORS.BLUE_1,  spark: 0xffffff };
 const PAL_ULT:  BarPalette = { dark: COLORS.RED_3,   mid: COLORS.RED_2,   light: COLORS.RED_1,   spark: 0xffffff };
 const PAL_WPN:  BarPalette = { dark: COLORS.GREY_5,  mid: COLORS.GREY_4,  light: COLORS.GREY_2,  spark: COLORS.GREY_1 };
@@ -165,6 +171,7 @@ export interface ActivePowerUpInfo {
 /** Data pushed every frame from ArenaScene. */
 export interface ArenaHUDData {
   hp:                       number;
+  armor:                    number;
   adrenaline:               number;
   rage:                     number;
   isUltimateActive:         boolean;
@@ -181,6 +188,7 @@ export interface ArenaHUDData {
 
 export class ArenaHUD {
   private hp!:      BarBundle;
+  private armor!:   BarBundle;
   private adr!:     BarBundle;
   private ult!:     BarBundle;
   private w1!:      BarBundle;
@@ -199,6 +207,7 @@ export class ArenaHUD {
 
   // HP catch-up
   private hpTrailDelay:     Phaser.Time.TimerEvent | null = null;
+  private armorTrailDelay:  Phaser.Time.TimerEvent | null = null;
 
   // Adrenaline burst particles (separate from bar core emitter)
   private adrBurstEmitter:  Phaser.GameObjects.Particles.ParticleEmitter | null = null;
@@ -247,6 +256,7 @@ export class ArenaHUD {
 
     // Bar gradient textures
     createGradientTexture(s, '_hud_hp',   PAL_HP,   BAR_W, BAR_H);
+    createGradientTexture(s, '_hud_arm',  PAL_ARM,  BAR_W, BAR_H);
     createGradientTexture(s, '_hud_adr',  PAL_ADR,  BAR_W, BAR_H);
     createGradientTexture(s, '_hud_ult',  PAL_ULT,  BAR_W, BAR_H);
     createGradientTexture(s, '_hud_wpn',  PAL_WPN,  BAR_W, BAR_H);
@@ -291,6 +301,7 @@ export class ArenaHUD {
 
     // Bars
     this.hp   = this.createBar(HP_LBL_Y,  HP_BAR_Y,  'HP',        PAL_HP,   '_hud_hp',   { trail: true, value: true });
+    this.armor = this.createBar(ARM_LBL_Y, ARM_BAR_Y, 'Armor',    PAL_ARM,  '_hud_arm',  { trail: true, value: true, trailColor: ARMOR_COLOR });
     this.adr  = this.createBar(ADR_LBL_Y, ADR_BAR_Y, 'Adrenalin', PAL_ADR,  '_hud_adr');
     this.ult  = this.createBar(ULT_LBL_Y, ULT_BAR_Y, 'Ultimate',  PAL_ULT,  '_hud_ult');
     this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  'Waffe 1',   PAL_WPN,  '_hud_wpn',  { highlight: true });
@@ -331,7 +342,7 @@ export class ArenaHUD {
     labelText: string,
     palette:   BarPalette,
     texKey:    string,
-    opts?:     { trail?: boolean; value?: boolean; highlight?: boolean },
+    opts?:     { trail?: boolean; value?: boolean; highlight?: boolean; trailColor?: number },
   ): BarBundle {
     const c = this.container;
     const s = this.scene;
@@ -347,7 +358,7 @@ export class ArenaHUD {
     // HP trail
     let trail: Phaser.GameObjects.Rectangle | undefined;
     if (opts?.trail) {
-      trail = s.add.rectangle(BAR_X, barY, BAR_W, BAR_H, COL_HP_TRAIL)
+      trail = s.add.rectangle(BAR_X, barY, BAR_W, BAR_H, opts.trailColor ?? COL_HP_TRAIL)
         .setOrigin(0, 0).setScrollFactor(0);
       c.add(trail);
     }
@@ -446,6 +457,7 @@ export class ArenaHUD {
 
   update(data: ArenaHUDData): void {
     this.updateHP(data.hp);
+    this.updateArmor(data.armor);
     this.updateAdrenaline(data.adrenaline, data.adrenalineSyringeActive ?? false);
     this.updateUltimate(data.rage, data.isUltimateActive);
     this.updateCooldownBar(this.w1, data.weapon1CooldownFrac);
@@ -500,6 +512,7 @@ export class ArenaHUD {
     this.removeUltGlow();
     this.wasUltReady = false;
     this.hp.prevFrac = 1; this.hp.currentFrac = 1;
+    this.armor.prevFrac = 0; this.armor.currentFrac = 0;
     this.adr.prevFrac = 1; this.adr.currentFrac = 1;
     this.ult.prevFrac = 0; this.ult.currentFrac = 0;
     this.w1.prevFrac = 0; this.w1.currentFrac = 0;
@@ -507,6 +520,8 @@ export class ArenaHUD {
     this.util.prevFrac = 0; this.util.currentFrac = 0;
     this.hpTrailDelay?.remove();
     this.hpTrailDelay = null;
+    this.armorTrailDelay?.remove();
+    this.armorTrailDelay = null;
     this.removeAdrSyringe();
     this.removeUtilWobble();
     this.wasSyringeActive = false;
@@ -517,7 +532,7 @@ export class ArenaHUD {
     this.adrTickMarks = [];
     this.weapon2AdrCost = 0;
     // Reset all bars to idle breathing mode
-    for (const b of [this.hp, this.adr, this.ult, this.w1, this.w2, this.util]) {
+    for (const b of [this.hp, this.armor, this.adr, this.ult, this.w1, this.w2, this.util]) {
       b.energized = true; // force re-apply
       this.setBarEnergized(b, false);
     }
@@ -534,9 +549,10 @@ export class ArenaHUD {
   destroy(): void {
     this.removeUltGlow();
     this.hpTrailDelay?.remove();
+    this.armorTrailDelay?.remove();
     this.removeAdrSyringe();
     this.removeUtilWobble();
-    for (const b of [this.hp, this.adr, this.ult, this.w1, this.w2, this.util]) {
+    for (const b of [this.hp, this.armor, this.adr, this.ult, this.w1, this.w2, this.util]) {
       b.idleEffect.destroy();
     }
     if (this.nameScrollTween) this.nameScrollTween.destroy();
@@ -574,31 +590,50 @@ export class ArenaHUD {
   // ── HP ────────────────────────────────────────────────────────────────────
 
   private updateHP(hp: number): void {
-    const frac = Math.max(0, Math.min(1, hp / HP_MAX));
-    const prev = this.hp.prevFrac;
-
-    this.setBarFrac(this.hp, frac);
+    this.updateTrackedValueBar(this.hp, hp, HP_MAX, this.hpTrailDelay, timer => {
+      this.hpTrailDelay = timer;
+    });
     this.hp.valueText?.setText(`${Math.round(hp)}/${HP_MAX}`);
+  }
+
+  private updateArmor(armor: number): void {
+    this.updateTrackedValueBar(this.armor, armor, ARMOR_MAX, this.armorTrailDelay, timer => {
+      this.armorTrailDelay = timer;
+    });
+    this.armor.valueText?.setText(`${Math.round(armor)}/${ARMOR_MAX}`);
+  }
+
+  private updateTrackedValueBar(
+    bundle: BarBundle,
+    value: number,
+    maxValue: number,
+    trailDelay: Phaser.Time.TimerEvent | null,
+    setTrailDelay: (timer: Phaser.Time.TimerEvent | null) => void,
+  ): void {
+    const frac = Math.max(0, Math.min(1, value / maxValue));
+    const prev = bundle.prevFrac;
+
+    this.setBarFrac(bundle, frac);
 
     if (frac < prev - 0.005) {
-      this.hpTrailDelay?.remove();
-      this.hpTrailDelay = this.scene.time.delayedCall(400, () => {
+      trailDelay?.remove();
+      setTrailDelay(this.scene.time.delayedCall(400, () => {
         this.scene.tweens.add({
-          targets: this.hp.trail,
+          targets: bundle.trail,
           width: BAR_W * frac,
           duration: 600,
           ease: 'Power2',
         });
-        this.hpTrailDelay = null;
-      });
-      this.flashBorder(this.hp, COLORS.RED_2);
-      this.shakeBar(this.hp);
+        setTrailDelay(null);
+      }));
+      this.flashBorder(bundle, COLORS.RED_2);
+      this.shakeBar(bundle);
     } else if (frac > prev + 0.005) {
-      if (this.hp.trail) this.hp.trail.width = BAR_W * frac;
-      this.flashBar(this.hp);
+      if (bundle.trail) bundle.trail.width = BAR_W * frac;
+      this.flashBar(bundle);
     }
 
-    this.hp.prevFrac = frac;
+    bundle.prevFrac = frac;
   }
 
   // ── Adrenaline ────────────────────────────────────────────────────────────

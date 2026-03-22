@@ -31,6 +31,7 @@ export interface PlayerNetState {
   y:          number;
   rot:        number;   // Blickrichtung quantisiert als uint8 (0-255 → 0-2π)
   hp:         number;
+  armor:      number;
   alive:      boolean;
   adrenaline: number;   // 0–ADRENALINE_MAX
   rage:       number;   // 0–RAGE_MAX

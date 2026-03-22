@@ -7,6 +7,7 @@ import type { DetonationSystem }  from './DetonationSystem';
 import type { SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig } from '../types';
 import {
   ARENA_HEIGHT,
+  ARMOR_MAX,
   HP_MAX, RESPAWN_DELAY_MS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,
@@ -42,6 +43,7 @@ export interface HitscanTraceOptions {
 
 export class CombatSystem {
   private hp:            Map<string, number>                           = new Map();
+  private armor:         Map<string, number>                           = new Map();
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
   private readonly hitscanLine = new Phaser.Geom.Line();
@@ -114,6 +116,7 @@ export class CombatSystem {
 
   initPlayer(id: string): void {
     this.hp.set(id, HP_MAX);
+    this.armor.set(id, 0);
     this.alive.set(id, true);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
@@ -121,6 +124,7 @@ export class CombatSystem {
 
   removePlayer(id: string): void {
     this.hp.delete(id);
+    this.armor.delete(id);
     this.alive.delete(id);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
@@ -131,6 +135,7 @@ export class CombatSystem {
   // ── Abfragen ───────────────────────────────────────────────────────────────
 
   getHP(id: string):    number  { return this.hp.get(id)    ?? HP_MAX; }
+  getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
   isAlive(id: string):  boolean { return this.alive.get(id) ?? false;  }
 
   // ── Öffentliche Schadens-Methode ───────────────────────────────────────────
@@ -160,7 +165,12 @@ export class CombatSystem {
     const x = player?.sprite.x ?? 0;
     const y = player?.sprite.y ?? 0;
 
-    const newHp = Math.max(0, (this.hp.get(targetId) ?? HP_MAX) - amount);
+    const currentArmor = this.armor.get(targetId) ?? 0;
+    const absorbedByArmor = Math.min(currentArmor, amount);
+    const overflowDamage = Math.max(0, amount - absorbedByArmor);
+    const newArmor = Math.max(0, currentArmor - absorbedByArmor);
+    const newHp = Math.max(0, (this.hp.get(targetId) ?? HP_MAX) - overflowDamage);
+    this.armor.set(targetId, newArmor);
     this.hp.set(targetId, newHp);
 
     // Wut-Gewinn proportional zum Schaden
@@ -723,6 +733,7 @@ export class CombatSystem {
 
   private handleDeath(playerId: string, x: number, y: number): void {
     this.alive.set(playerId, false);
+    this.armor.set(playerId, 0);
 
     // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
     this.powerUpSystem?.removePlayer(playerId);
@@ -749,8 +760,16 @@ export class CombatSystem {
     this.hp.set(playerId, HP_MAX);
   }
 
+  addArmor(playerId: string, amount: number): number {
+    if (!this.isAlive(playerId)) return this.getArmor(playerId);
+    const newArmor = Phaser.Math.Clamp(this.getArmor(playerId) + amount, 0, ARMOR_MAX);
+    this.armor.set(playerId, newArmor);
+    return newArmor;
+  }
+
   private respawn(playerId: string): void {
     this.hp.set(playerId, HP_MAX);
+    this.armor.set(playerId, 0);
     this.alive.set(playerId, true);
     this.respawnTimers.delete(playerId);
     this.lastAttacker.delete(playerId);

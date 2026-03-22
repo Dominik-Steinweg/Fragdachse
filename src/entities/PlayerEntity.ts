@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import type { PlayerProfile } from '../types';
 import {
   PLAYER_SIZE, DEPTH,
+  ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
+  ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
   BURROW_ALPHA, BURROW_TINT,
 } from '../config';
@@ -13,7 +15,10 @@ export class PlayerEntity {
   private readonly colorHex: number;
   private hpBarBg:  Phaser.GameObjects.Rectangle;
   private hpBarFg:  Phaser.GameObjects.Rectangle;
+  private armorBarBg: Phaser.GameObjects.Rectangle;
+  private armorBarFg: Phaser.GameObjects.Rectangle;
   private currentHp = HP_MAX;
+  private currentArmor = 0;
 
   // Zielposition für client-seitige Interpolation (Lerp)
   private targetX = 0;
@@ -70,6 +75,15 @@ export class PlayerEntity {
     this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x00cc44);
     this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
     this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
+
+    this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
+    this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
+    this.armorBarBg.setVisible(false);
+
+    this.armorBarFg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, ARMOR_COLOR);
+    this.armorBarFg.setOrigin(0, 0.5);
+    this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
+    this.armorBarFg.setVisible(false);
 
     this.syncBar();
 
@@ -142,9 +156,12 @@ export class PlayerEntity {
    */
   syncBar(): void {
     const x = this.sprite.x;
-    const y = this.sprite.y + HP_BAR_OFFSET_Y;
-    this.hpBarBg.setPosition(x, y);
-    this.hpBarFg.setPosition(x - HP_BAR_WIDTH / 2, y);
+    const hpY = this.sprite.y + HP_BAR_OFFSET_Y;
+    const armorY = this.sprite.y + ARMOR_BAR_OFFSET_Y;
+    this.hpBarBg.setPosition(x, hpY);
+    this.hpBarFg.setPosition(x - HP_BAR_WIDTH / 2, hpY);
+    this.armorBarBg.setPosition(x, armorY);
+    this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
   }
 
   /** HP-Wert aktualisieren und Balken neu zeichnen. */
@@ -156,11 +173,23 @@ export class PlayerEntity {
     this.hpBarFg.setFillStyle(color);
   }
 
+  updateArmor(armor: number): void {
+    this.currentArmor = Math.max(0, Math.min(ARMOR_MAX, armor));
+    const ratio = this.currentArmor / ARMOR_MAX;
+    this.armorBarFg.width = ARMOR_BAR_WIDTH * ratio;
+    this.armorBarFg.setFillStyle(ARMOR_COLOR);
+    const visible = this.sprite.visible && this.currentArmor > 0;
+    this.armorBarBg.setVisible(visible);
+    this.armorBarFg.setVisible(visible);
+  }
+
   /** Sprite und Balken ein-/ausblenden (Tod / Respawn). */
   setVisible(visible: boolean): void {
     this.sprite.setVisible(visible);
     this.hpBarBg.setVisible(visible);
     this.hpBarFg.setVisible(visible);
+    this.armorBarBg.setVisible(visible && this.currentArmor > 0);
+    this.armorBarFg.setVisible(visible && this.currentArmor > 0);
 
     if (!visible && this.isAliveVisual) {
       // Übergang alive → dead: Sterbeanimation starten
@@ -225,6 +254,8 @@ export class PlayerEntity {
     this.glowTween?.stop();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
+    this.armorBarBg.destroy();
+    this.armorBarFg.destroy();
     this.sprite.destroy();
     this.deathSprite?.destroy();
   }
