@@ -104,6 +104,8 @@ export interface LivingBarEffectOpts {
   glowTarget?: Phaser.GameObjects.Image;
   /** Set to 0 for screen-fixed HUD elements. Default: don't override. */
   scrollFactor?: number;
+  /** Scales particle alpha and glow strength (0–1). Default: 1.0 (full intensity). */
+  intensity?: number;
 }
 
 export class LivingBarEffect {
@@ -126,6 +128,7 @@ export class LivingBarEffect {
   ) {
     ensureLivingBarTextures(scene);
     this.glowTarget = opts?.glowTarget ?? null;
+    const intensity = opts?.intensity ?? 1.0;
 
     // Shared emit zone
     this.emitZone = new Phaser.Geom.Rectangle(x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
@@ -141,7 +144,7 @@ export class LivingBarEffect {
       speedX:    { min: -2, max: 2 },
       speedY:    { min: -1, max: 1 },
       scale:     { start: 1.0 * sf, end: 0.4 * sf },
-      alpha:     { start: 0.05, end: 0.03 },
+      alpha:     { start: 0.05 * intensity, end: 0.03 * intensity },
       tint:      [palette.mid, palette.dark, palette.light],
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
@@ -157,7 +160,7 @@ export class LivingBarEffect {
       speedX:    { min: -1, max: 1 },
       speedY:    { min: -0.5, max: 0.5 },
       scale:     { start: 1.5 * sf, end: 0.7 * sf },
-      alpha:     { start: 0.1, end: 0.03 },
+      alpha:     { start: 0.1 * intensity, end: 0.03 * intensity },
       tint:      [palette.dark, palette.mid],
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
@@ -171,7 +174,7 @@ export class LivingBarEffect {
       this.breathGlow = this.glowTarget.postFX.addGlow(palette.mid, 0, 0, false, 0.1, 6);
       this.breathTween = scene.tweens.add({
         targets: this.breathGlow,
-        outerStrength: 2.5,
+        outerStrength: 2.5 * intensity,
         duration: 2000,
         yoyo: true,
         repeat: -1,

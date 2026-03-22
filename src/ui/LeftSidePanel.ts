@@ -447,11 +447,12 @@ export class LeftSidePanel {
       const img = this.scene.add.image(sx + SWATCH_SIZE / 2, sy + SWATCH_SIZE / 2, texKey);
       container.add(img);
 
-      // LivingBarEffect (particles inside swatch area)
+      // LivingBarEffect (particles inside swatch area, reduced intensity for small swatches)
       const effect = new LivingBarEffect(
         this.scene, container,
         sx, sy, SWATCH_SIZE, SWATCH_SIZE,
         palette,
+        { intensity: 0.25 },
       );
 
       // Interactive zone on top
