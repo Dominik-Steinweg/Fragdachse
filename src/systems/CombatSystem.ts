@@ -21,7 +21,7 @@ import {
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
 type LoadoutManagerType  = { getDamageMultiplier(id: string): number };
-type PowerUpSystemType   = { getDamageMultiplier(id: string): number };
+type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlayer(id: string): void };
 
 export interface HitscanTraceResult {
   readonly endX: number;
@@ -723,6 +723,9 @@ export class CombatSystem {
 
   private handleDeath(playerId: string, x: number, y: number): void {
     this.alive.set(playerId, false);
+
+    // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
+    this.powerUpSystem?.removePlayer(playerId);
 
     const player = this.playerManager.getPlayer(playerId);
     if (player) player.body.enable = false;
