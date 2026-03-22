@@ -1,5 +1,5 @@
 import { RAGE_MAX } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileExplosionConfig, ProjectileStyle, TracerConfig } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -10,6 +10,7 @@ export interface ProjectileWeaponFireConfig {
   readonly projectileMaxBounces: number;
   readonly limitRangeToCursor?: boolean; // true = Reichweite dieses Schusses auf Cursor-Distanz begrenzen
   readonly impactExplosion?: ProjectileExplosionConfig;
+  readonly homing?: ProjectileHomingConfig;
 }
 
 export interface HitscanWeaponFireConfig {
@@ -494,14 +495,14 @@ export const WEAPON_CONFIGS = {
       projectileMaxBounces: 0,
       limitRangeToCursor:   true,
       impactExplosion: {
-        radius:            110,
-        maxDamage:         50,
-        minDamage:         10,
-        knockback:         1250,
-        selfDamageMult:    0.25,
-        rockDamageMult:    1,
-        trainDamageMult:   1.15,
-        color:             0xff8a3d,
+        radius:          110,
+        maxDamage:       50,
+        minDamage:       10,
+        knockback:       1250,
+        selfDamageMult:  0.25,
+        rockDamageMult:  1,
+        trainDamageMult: 1.15,
+        color:           0xff8a3d,
       } satisfies ProjectileExplosionConfig,
     },
     allowedSlots:         ['weapon2'],
@@ -533,16 +534,28 @@ export const WEAPON_CONFIGS = {
       projectileSpeed:      700,
       projectileSize:       10,
       projectileMaxBounces: 0,
+      limitRangeToCursor:   true,
       impactExplosion: {
-        radius:            110,
-        maxDamage:         50,
-        minDamage:         10,
-        knockback:         1250,
-        selfDamageMult:    0.25,
-        rockDamageMult:    1,
-        trainDamageMult:   1.15,
-        color:             0xff8a3d,
+        radius:          110,
+        maxDamage:       50,
+        minDamage:       10,
+        knockback:       1250,
+        selfDamageMult:  0.25,
+        rockDamageMult:  1,
+        trainDamageMult: 1.15,
+        color:           0xff8a3d,
       } satisfies ProjectileExplosionConfig,
+      homing: {
+        acquireDelayMs:        100,
+        searchRadius:          300,
+        retargetIntervalMs:    50,
+        maxTurnDegreesPerStep: 12,
+        targetTypes:           ['players'],
+        requireLineOfSight:    true,
+        excludeOwner:          true,
+        distanceWeight:        1,
+        forwardWeight:         1,
+      } satisfies ProjectileHomingConfig,
     },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        28,
@@ -560,7 +573,59 @@ export const WEAPON_CONFIGS = {
     shotRecoilForce:      520,
     shotRecoilDuration:   170,
     shotScreenShake:      { duration: 120, intensity: 0.004 },
-  } as WeaponConfig,  
+  } as WeaponConfig,
+
+  MINI_ROCKET_LAUNCHER: {
+    id:                   'MINI_ROCKET_LAUNCHER',
+    displayName:          'Mini-Raketenwerfer',
+    cooldown:             75,
+    damage:               4,
+    range:                600,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      700,
+      projectileSize:       8,
+      projectileMaxBounces: 0,
+      limitRangeToCursor:   true,
+      impactExplosion: {
+        radius:          65,
+        maxDamage:       18,
+        minDamage:       4,
+        knockback:       520,
+        selfDamageMult:  0.25,
+        rockDamageMult:  1,
+        trainDamageMult: 1,
+        color:           0xffb36b,
+      } satisfies ProjectileExplosionConfig,
+      homing: {
+        acquireDelayMs:        100,
+        searchRadius:          300,
+        retargetIntervalMs:    50,
+        maxTurnDegreesPerStep: 12,
+        targetTypes:           ['players'],
+        requireLineOfSight:    true,
+        excludeOwner:          true,
+        distanceWeight:        1,
+        forwardWeight:         1,
+      } satisfies ProjectileHomingConfig,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        6,
+    adrenalinGain:        0,
+    spreadStanding:       5,
+    spreadMoving:         9,
+    spreadPerShot:        1.2,
+    maxDynamicSpread:     12,
+    spreadRecoveryDelay:  180,
+    spreadRecoveryRate:   3,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'rocket' as ProjectileStyle,
+    projectileColor:      0xf0c98a,
+    trainDamageMult:      1,
+    shotRecoilForce:      180,
+    shotRecoilDuration:   110,
+    shotScreenShake:      { duration: 70, intensity: 0.0015 },
+  } as WeaponConfig,
 
   /**
    * AWP – Bolt-Action-Scharfschützengewehr (CS2-inspiriert, Weapon2-Slot)

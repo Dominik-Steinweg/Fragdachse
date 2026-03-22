@@ -244,6 +244,26 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── 4. Combat-System ──────────────────────────────────────────────────
     this.combatSystem = new CombatSystem(this.playerManager, this.projectileManager, bridge);
+    this.projectileManager.setHomingTargetProvider((_config, _ownerId) => {
+      if (!bridge.isHost()) return [];
+
+      const targets = [];
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (!player.sprite.active) continue;
+        if (!this.combatSystem.isAlive(player.id)) continue;
+        if (this.burrowSystem?.isBurrowed(player.id)) continue;
+        targets.push({
+          id: player.id,
+          type: 'players' as const,
+          x: player.sprite.x,
+          y: player.sprite.y,
+        });
+      }
+      return targets;
+    });
+    this.projectileManager.setHomingLineOfSightChecker((sx, sy, ex, ey) => {
+      return this.combatSystem.hasLineOfSight(sx, sy, ex, ey);
+    });
 
     // ── 5. Effekt-System ──────────────────────────────────────────────────
     this.effectSystem = new EffectSystem(this, bridge);

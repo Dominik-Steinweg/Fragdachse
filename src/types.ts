@@ -74,6 +74,21 @@ export interface ProjectileExplosionConfig {
   readonly color?: number;
 }
 
+export type HomingTargetType = 'players' | 'train' | 'projectiles';
+
+/** Data-driven Zielsuche/Lenkung für Projektilwaffen. */
+export interface ProjectileHomingConfig {
+  readonly acquireDelayMs: number;
+  readonly searchRadius: number;
+  readonly retargetIntervalMs: number;
+  readonly maxTurnDegreesPerStep: number;
+  readonly targetTypes?: readonly HomingTargetType[];
+  readonly requireLineOfSight?: boolean;
+  readonly excludeOwner?: boolean;
+  readonly distanceWeight?: number;
+  readonly forwardWeight?: number;
+}
+
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
   id:      number;
@@ -178,6 +193,7 @@ export interface ProjectileSpawnConfig {
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName?:     string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
+  homing?:         ProjectileHomingConfig;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
@@ -305,6 +321,10 @@ export interface TrackedProjectile {
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName:      string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
+  homing?:         ProjectileHomingConfig;
+  lockedTargetId?: string | null;
+  lockedTargetType?: HomingTargetType;
+  lastHomingSearchAt?: number;
   fuseTime?:       number;
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil

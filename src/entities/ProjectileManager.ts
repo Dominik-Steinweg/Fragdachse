@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig } from '../types';
+import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType } from '../types';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import { BULLET_STYLE, AWP_STYLE } from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
@@ -23,6 +23,15 @@ interface ClientProjectileState {
   // Flammenwerfer-Decay: velocity nimmt exponentiell ab
   isFlame: boolean;
 }
+
+interface HomingTargetCandidate {
+  id: string;
+  type: HomingTargetType;
+  x: number;
+  y: number;
+}
+
+const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 
 export class ProjectileManager {
   private scene:       Phaser.Scene;
@@ -51,6 +60,10 @@ export class ProjectileManager {
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
+
+  // ── Homing-Zielsuche (Host-only, injiziert von ArenaScene) ──────────────
+  private homingTargetProvider: ((config: ProjectileHomingConfig, ownerId: string) => HomingTargetCandidate[]) | null = null;
+  private homingLineOfSightChecker: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null = null;
 
   // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
   private pendingProjectileExplosions: ExplodedProjectile[] = [];
@@ -143,6 +156,16 @@ export class ProjectileManager {
   /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
   setBfgLaserCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
     this.bfgLaserCallback = cb;
+  }
+
+  /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
+  setHomingTargetProvider(cb: ((config: ProjectileHomingConfig, ownerId: string) => HomingTargetCandidate[]) | null): void {
+    this.homingTargetProvider = cb;
+  }
+
+  /** Registriert die Host-seitige Line-of-Sight-Prüfung für Homing-Projektile. */
+  setHomingLineOfSightChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
+    this.homingLineOfSightChecker = cb;
   }
 
   // ── Host ──────────────────────────────────────────────────────────────────
@@ -243,6 +266,8 @@ export class ProjectileManager {
       adrenalinGain:  cfg.adrenalinGain,
       weaponName:     cfg.weaponName ?? 'Waffe',
       explosion:      cfg.explosion,
+      homing:         cfg.homing,
+      lockedTargetId: null,
       fuseTime:        cfg.fuseTime,
       grenadeEffect:   cfg.grenadeEffect,
       projectileStyle: cfg.projectileStyle,
@@ -629,6 +654,97 @@ export class ProjectileManager {
     this.queueDestroyProjectile(proj);
   }
 
+  private updateHomingProjectile(proj: TrackedProjectile, now: number): void {
+    const homing = proj.homing;
+    if (!homing || !this.homingTargetProvider) return;
+    if (now - proj.createdAt < homing.acquireDelayMs) return;
+
+    const lastSearchAt = proj.lastHomingSearchAt ?? 0;
+    if (lastSearchAt > 0 && now - lastSearchAt < homing.retargetIntervalMs) return;
+    proj.lastHomingSearchAt = now;
+
+    const target = this.selectHomingTarget(proj, homing);
+    if (!target) {
+      proj.lockedTargetId = null;
+      proj.lockedTargetType = undefined;
+      return;
+    }
+
+    proj.lockedTargetId = target.id;
+    proj.lockedTargetType = target.type;
+
+    const currentSpeed = proj.body.velocity.length();
+    if (currentSpeed <= 0.001) return;
+
+    const currentAngle = Math.atan2(proj.body.velocity.y, proj.body.velocity.x);
+    const targetAngle = Phaser.Math.Angle.Between(proj.sprite.x, proj.sprite.y, target.x, target.y);
+    const maxTurn = Phaser.Math.DegToRad(homing.maxTurnDegreesPerStep);
+    const angleDelta = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
+    const nextAngle = currentAngle + Phaser.Math.Clamp(angleDelta, -maxTurn, maxTurn);
+
+    proj.body.setVelocity(
+      Math.cos(nextAngle) * currentSpeed,
+      Math.sin(nextAngle) * currentSpeed,
+    );
+  }
+
+  private selectHomingTarget(proj: TrackedProjectile, homing: ProjectileHomingConfig): HomingTargetCandidate | null {
+    if (!this.homingTargetProvider) return null;
+
+    const targetTypes = homing.targetTypes ?? DEFAULT_HOMING_TARGET_TYPES;
+    const requireLineOfSight = homing.requireLineOfSight === true;
+    const excludeOwner = homing.excludeOwner !== false;
+    const searchRadius = Math.max(1, homing.searchRadius);
+    const distanceWeight = Math.max(0, homing.distanceWeight ?? 1);
+    const forwardWeight = Math.max(0, homing.forwardWeight ?? 1);
+    const velocity = proj.body.velocity;
+    const speed = velocity.length();
+    const dirX = speed > 0.001 ? velocity.x / speed : 0;
+    const dirY = speed > 0.001 ? velocity.y / speed : 0;
+
+    const candidates = this.homingTargetProvider(homing, proj.ownerId).filter(candidate => {
+      if (!targetTypes.includes(candidate.type)) return false;
+      if (excludeOwner && candidate.id === proj.ownerId) return false;
+
+      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
+      if (distance > searchRadius) return false;
+      if (requireLineOfSight && this.homingLineOfSightChecker) {
+        return this.homingLineOfSightChecker(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
+      }
+      return true;
+    });
+
+    if (candidates.length === 0) return null;
+
+    if (proj.lockedTargetId) {
+      const locked = candidates.find(candidate => candidate.id === proj.lockedTargetId && candidate.type === proj.lockedTargetType);
+      if (locked) return locked;
+    }
+
+    let bestTarget: HomingTargetCandidate | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (const candidate of candidates) {
+      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
+      const distanceScore = 1 - Phaser.Math.Clamp(distance / searchRadius, 0, 1);
+      let forwardScore = 0.5;
+
+      if (speed > 0.001) {
+        const toTargetX = (candidate.x - proj.sprite.x) / distance;
+        const toTargetY = (candidate.y - proj.sprite.y) / distance;
+        forwardScore = Phaser.Math.Clamp((dirX * toTargetX + dirY * toTargetY + 1) * 0.5, 0, 1);
+      }
+
+      const score = distanceScore * distanceWeight + forwardScore * forwardWeight;
+      if (score > bestScore) {
+        bestScore = score;
+        bestTarget = candidate;
+      }
+    }
+
+    return bestTarget;
+  }
+
   /**
    * Host: Snapshot der aktiven Projektile (für Kollisionserkennung im CombatSystem).
    */
@@ -752,6 +868,8 @@ export class ProjectileManager {
             proj.lastBfgLaserAt = bfgNow;
             this.bfgLaserCallback?.(proj);
           }
+        } else if (proj.homing) {
+          this.updateHomingProjectile(proj, now);
         }
 
         // Anti-Tunneling: Body-Ausrichtung nach Bounce aktualisieren
