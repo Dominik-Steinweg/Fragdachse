@@ -22,14 +22,14 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   ARMOR:         { id: 'ARMOR',         type: 'instant_armor', displayName: 'Armor',               amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
   ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',    displayName: 'Adrenalin Spritze',  durationMs: 10_000, multiplier: 2.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
-  NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuke' },
+  NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
   BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_2,  spriteKey: 'powerup_bfg'  },
 };
 
 export const NUKE_CONFIG = {
   countdownMs:        5_000,
-  radius:             500,
+  radius:             700,
   maxDamage:          1000,
   minDamage:          50,
   edgePaddingPx:      120,
@@ -53,24 +53,24 @@ export interface DropTable {
 export const DROP_TABLES: Record<string, DropTable> = {
   ENEMY_KILL: {
     chanceToDrop: 1.0,
-    items: { HEALTH_PACK: 70, ADRENALINE: 30, DOUBLE_DAMAGE: 0 },
+    items: { HEALTH_PACK: 80, ADRENALINE: 20, DOUBLE_DAMAGE: 0 },
   },
   ROCK_DESTROY: {
-    chanceToDrop: 0.2,
-    items: { HEALTH_PACK: 50, ARMOR: 35, ADRENALINE: 15, DOUBLE_DAMAGE: 0 },
+    chanceToDrop: 0.1,
+    items: { HEALTH_PACK: 0, ARMOR: 10, ADRENALINE: 0, DOUBLE_DAMAGE: 0 },
   },
   SCHEDULED_EVENT: {
     // chanceToDrop fehlt → immer 1.0
-    items: { HEALTH_PACK: 0, ADRENALINE: 100, DOUBLE_DAMAGE: 100, NUKE: 0 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100, NUKE: 0 },
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 0, HOLY_HAND_GRENADE: 33, BFG: 34 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 9999, HOLY_HAND_GRENADE: 33, BFG: 34 },
   },
 };
 
 /** Anzahl Power-Ups, die beim Zerstören des Zugs gespawnt werden. */
-export const TRAIN_DROP_COUNT = 6;
+export const TRAIN_DROP_COUNT = 1;
 
 // ── Geplante Spawns (Sekunden nach Rundenstart) ────────────────────────────
 
@@ -80,7 +80,6 @@ export interface ScheduledSpawn {
 }
 
 export const SCHEDULED_SPAWNS: ScheduledSpawn[] = [
-  { timeSeconds: 1, amount: 10 },
   { timeSeconds: 90, amount: 1 },
 ];
 

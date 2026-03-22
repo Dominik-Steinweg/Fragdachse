@@ -146,6 +146,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
     this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');
+    this.load.image('powerup_nuk', './assets/sprites/16x16nuke.png');
     this.load.image('badger', './assets/sprites/32x32dachsweapon01.png');
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
   }

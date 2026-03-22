@@ -4,7 +4,7 @@ import { DEPTH, COLORS } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';
 import type { EffectSystem } from '../effects/EffectSystem';
 
-const TEX_NUKE_ICON = 'powerup_nuke';
+const TEX_NUKE_ICON = 'powerup_nuk';
 
 interface NukeVisual {
   radius:        Phaser.GameObjects.Arc;
