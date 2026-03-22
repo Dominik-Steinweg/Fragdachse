@@ -553,5 +553,9 @@ export class LeftSidePanel {
     const ulName  = (ulId && ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]?.displayName) ?? 'Honigdachs-Wut';
 
     this.arenaHUD.setLoadoutNames(w1Name, w2Name, utName, ulName);
+
+    // Weapon 2 adrenaline cost → tick marks on adrenaline bar
+    const w2Cfg = w2Id ? WEAPON_CONFIGS[w2Id as keyof typeof WEAPON_CONFIGS] : undefined;
+    this.arenaHUD.setAdrenalinTickCost(w2Cfg?.adrenalinCost ?? 0);
   }
 }

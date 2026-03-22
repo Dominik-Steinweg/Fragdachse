@@ -50,9 +50,9 @@ const UT_LBL_Y  = 306;
 const UT_BAR_Y  = 326;
 
 // Fonts
-const LABEL_FONT  = { fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
-const NAME_FONT   = { fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold' as const, color: '#ffffff' };
-const VALUE_FONT  = { fontSize: '11px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1) };
+const LABEL_FONT  = { fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
+const NAME_FONT   = { fontSize: '26px', fontFamily: 'monospace', fontStyle: 'bold' as const, color: '#ffffff' };
+const VALUE_FONT  = { fontSize: '12px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1) };
 
 // ── Colour definitions per bar ──────────────────────────────────────────────
 interface BarPalette {
@@ -66,7 +66,7 @@ const PAL_HP:   BarPalette = { dark: COLORS.GREEN_4, mid: COLORS.GREEN_3, light:
 const PAL_ADR:  BarPalette = { dark: COLORS.BLUE_4,  mid: COLORS.BLUE_3,  light: COLORS.BLUE_1,  spark: 0xffffff };
 const PAL_ULT:  BarPalette = { dark: COLORS.RED_3,   mid: COLORS.RED_2,   light: COLORS.RED_1,   spark: 0xffffff };
 const PAL_WPN:  BarPalette = { dark: COLORS.GREY_5,  mid: COLORS.GREY_4,  light: COLORS.GREY_2,  spark: COLORS.GREY_1 };
-const PAL_UTIL: BarPalette = { dark: COLORS.GOLD_4,  mid: COLORS.GOLD_2,  light: COLORS.GOLD_1,  spark: 0xffffff };
+const PAL_UTIL: BarPalette = { dark: 0x8a4018,  mid: 0xd97030,  light: 0xf0a048,  spark: 0xffffff };
 
 const COL_HP_TRAIL = COLORS.RED_1;
 const COL_BAR_BG   = COLORS.GREY_9;
@@ -232,6 +232,12 @@ export class ArenaHUD {
 
   private currentUtilityName = '';
 
+  // Adrenaline tick marks (weapon2 cost indicators)
+  private adrTickMarks: Phaser.GameObjects.Rectangle[] = [];
+  private weapon2AdrCost = 0;
+  private w2Insufficient = false;
+  private w2RedOverlay!: Phaser.GameObjects.Rectangle;
+
   constructor(
     private scene: Phaser.Scene,
     private container: Phaser.GameObjects.Container,
@@ -310,6 +316,11 @@ export class ArenaHUD {
     this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  'Waffe 1',   PAL_WPN,  '_hud_wpn',  { highlight: true });
     this.w2   = this.createBar(W2_LBL_Y,  W2_BAR_Y,  'Waffe 2',   PAL_WPN,  '_hud_wpn',  { highlight: true });
     this.util = this.createBar(UT_LBL_Y,  UT_BAR_Y,  'Utility',   PAL_UTIL, '_hud_util', { highlight: true });
+
+    // Red overlay on weapon 2 bar — shown when adrenaline is insufficient
+    this.w2RedOverlay = this.scene.add.rectangle(BAR_X, W2_BAR_Y, BAR_W, BAR_H, COLORS.RED_3)
+      .setOrigin(0, 0).setScrollFactor(0).setAlpha(0);
+    c.add(this.w2RedOverlay);
 
     // Adrenaline burst particle emitter (intense, for hit-gain + syringe)
     this.adrBurstEmitter = this.scene.add.particles(0, 0, TEX_PARTICLE, {
@@ -512,6 +523,30 @@ export class ArenaHUD {
     });
   }
 
+  /**
+   * Set weapon 2 adrenaline cost per shot. Creates tick marks on the adrenaline
+   * bar showing how much each shot costs. Only shown if cost >= 5.
+   */
+  setAdrenalinTickCost(cost: number): void {
+    // Clean up old tick marks
+    for (const mark of this.adrTickMarks) mark.destroy();
+    this.adrTickMarks = [];
+    this.weapon2AdrCost = cost;
+
+    if (cost < 5) return;
+
+    // Create subtle tick marks at each cost interval
+    const steps = Math.floor(ADRENALINE_MAX / cost);
+    for (let i = 1; i <= steps; i++) {
+      const frac = (i * cost) / ADRENALINE_MAX;
+      const x = BAR_X + Math.round(BAR_W * frac);
+      const mark = this.scene.add.rectangle(x, ADR_BAR_Y + 2, 1, BAR_H - 4, 0xffffff, 0.3)
+        .setOrigin(0.5, 0).setScrollFactor(0);
+      this.container.add(mark);
+      this.adrTickMarks.push(mark);
+    }
+  }
+
   reset(): void {
     this.removeUltGlow();
     this.wasUltReady = false;
@@ -527,6 +562,11 @@ export class ArenaHUD {
     this.removeUtilWobble();
     this.wasSyringeActive = false;
     this.wasUtilityOverridden = false;
+    this.w2Insufficient = false;
+    this.w2RedOverlay.setAlpha(0);
+    for (const mark of this.adrTickMarks) mark.destroy();
+    this.adrTickMarks = [];
+    this.weapon2AdrCost = 0;
     // Reset all bars to idle breathing mode
     for (const b of [this.hp, this.adr, this.ult, this.w1, this.w2, this.util]) {
       b.energized = true; // force re-apply
@@ -630,11 +670,10 @@ export class ArenaHUD {
     } else if (!syringeActive && this.wasSyringeActive) {
       this.removeAdrSyringe();
     }
-    // Emit particles continuously while syringe is active
-    if (syringeActive && this.adrBurstEmitter) {
-      this.emitAdrBurst(frac);
-    }
     this.wasSyringeActive = syringeActive;
+
+    // Weapon 2 insufficient adrenaline indicator
+    this.updateW2InsufficientIndicator(adrenaline);
 
     this.adr.prevFrac = frac;
   }
@@ -645,6 +684,31 @@ export class ArenaHUD {
     const py = ADR_BAR_Y + BAR_H / 2;
     this.adrBurstEmitter.setPosition(px, py);
     this.adrBurstEmitter.explode(16);
+  }
+
+  /** Show red background on weapon 2 bar when adrenaline is too low for a single shot. */
+  private updateW2InsufficientIndicator(adrenaline: number): void {
+    if (this.weapon2AdrCost <= 0) return;
+    const insufficient = adrenaline < this.weapon2AdrCost;
+    if (insufficient === this.w2Insufficient) return;
+    this.w2Insufficient = insufficient;
+    if (insufficient) {
+      this.scene.tweens.killTweensOf(this.w2RedOverlay);
+      this.scene.tweens.add({
+        targets: this.w2RedOverlay,
+        alpha: 0.45,
+        duration: 200,
+        ease: 'Quad.easeOut',
+      });
+    } else {
+      this.scene.tweens.killTweensOf(this.w2RedOverlay);
+      this.scene.tweens.add({
+        targets: this.w2RedOverlay,
+        alpha: 0,
+        duration: 300,
+        ease: 'Quad.easeIn',
+      });
+    }
   }
 
   private startAdrSyringe(): void {
