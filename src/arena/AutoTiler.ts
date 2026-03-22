@@ -222,7 +222,14 @@ const ROCK_47_SPRITESHEET_ORDER: readonly number[] = [
   -1    // 54: nichts
 ];
 
+const BLOB47_TABLE = buildBlob47Table(ROCK_47_SPRITESHEET_ORDER);
+
 /** Vorgefertigte AutoTile-Konfiguration für das Rock-47-Blob-Tileset. */
 export const ROCK_AUTOTILE: AutoTileConfig = {
-  bitmaskToFrame: buildBlob47Table(ROCK_47_SPRITESHEET_ORDER),
+  bitmaskToFrame: BLOB47_TABLE,
+};
+
+/** AutoTile-Konfiguration für das Dirt-47-Blob-Tileset (gleiche Tile-Anordnung wie Rocks). */
+export const DIRT_AUTOTILE: AutoTileConfig = {
+  bitmaskToFrame: BLOB47_TABLE,
 };

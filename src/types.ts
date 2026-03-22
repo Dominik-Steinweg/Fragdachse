@@ -293,12 +293,16 @@ export interface TreeCell { gridX: number; gridY: number; }
 /** Eine Gleis-Gitterzelle (begehbar, Grundlage für spätere Zuglogik) */
 export interface TrackCell { gridX: number; gridY: number; }
 
+/** Eine Dirt-Gitterzelle (rein visuell, keine Kollision) */
+export interface DirtCell { gridX: number; gridY: number; }
+
 /** Vollständiger Arena-Layout-Deskriptor – wird vom Host generiert und via reliable-State verteilt */
 export interface ArenaLayout {
   seed:   number;
   rocks:  RockCell[];
   trees:  TreeCell[];
   tracks: TrackCell[];
+  dirt:   DirtCell[];
 }
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */

@@ -1,5 +1,5 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL } from '../config';
-import type { ArenaLayout, RockCell, TreeCell, TrackCell } from '../types';
+import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL } from '../config';
+import type { ArenaLayout, RockCell, TreeCell, TrackCell, DirtCell } from '../types';
 
 /**
  * Prozeduraler Arena-Generator – keine Phaser-Abhängigkeit.
@@ -109,7 +109,52 @@ export class ArenaGenerator {
       // Nochmalige Konnektivitätsprüfung nach Baumplatzierung
       if (!ArenaGenerator.isConnected(blocked)) continue;
 
-      return { seed: seed + attempt, rocks, trees, tracks };
+      // Dirt-Zellen: Unter/um Felsen, unter/um Gleise + zusammenhängende Zufallsflecken
+      const dirtSet = new Set<number>(); // gy * GRID_COLS + gx
+      const addWithMargin = (gx: number, gy: number) => {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = gx + dx;
+            const ny = gy + dy;
+            if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
+              dirtSet.add(ny * GRID_COLS + nx);
+            }
+          }
+        }
+      };
+      // 1. Felsen-Positionen + 1-Zellen-Rand drumherum
+      for (const { gridX, gridY } of rocks) addWithMargin(gridX, gridY);
+      // 2. Gleis-Positionen + 1-Zellen-Rand drumherum
+      for (const { gridX, gridY } of tracks) addWithMargin(gridX, gridY);
+      // 3. Zufällige Flecken – nur an Nachbarzellen von bestehendem Dirt (zusammenhängend)
+      //    Mehrere Passes, damit das Netz organisch wächst.
+      const passes = 3;
+      for (let p = 0; p < passes; p++) {
+        const frontier: number[] = [];
+        for (const key of dirtSet) {
+          const gx = key % GRID_COLS;
+          const gy = Math.floor(key / GRID_COLS);
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = gx + dx;
+              const ny = gy + dy;
+              if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+              const nk = ny * GRID_COLS + nx;
+              if (!dirtSet.has(nk)) frontier.push(nk);
+            }
+          }
+        }
+        for (const nk of frontier) {
+          if (rng() < DIRT_FILL_RATIO) dirtSet.add(nk);
+        }
+      }
+      const dirt: DirtCell[] = [];
+      for (const key of dirtSet) {
+        dirt.push({ gridX: key % GRID_COLS, gridY: Math.floor(key / GRID_COLS) });
+      }
+
+      return { seed: seed + attempt, rocks, trees, tracks, dirt };
     }
 
     throw new Error(

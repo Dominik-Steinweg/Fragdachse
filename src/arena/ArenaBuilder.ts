@@ -5,8 +5,8 @@ import {
   DEPTH, COLORS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
 } from '../config';
-import type { ArenaLayout, RockCell, TrackCell } from '../types';
-import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
+import type { ArenaLayout, RockCell, TrackCell, DirtCell } from '../types';
+import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
 
 export interface ArenaBuilderResult {
@@ -24,6 +24,8 @@ export interface ArenaBuilderResult {
   canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }>;
   /** Gleis-TileSprites (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
   trackObjects: Phaser.GameObjects.TileSprite[];
+  /** Dirt-Sprites (rein visuell, keine Kollision, keine HP) */
+  dirtObjects: Phaser.GameObjects.Image[];
 }
 
 export class ArenaBuilder {
@@ -64,6 +66,9 @@ export class ArenaBuilder {
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
     const trackObjects = this.buildTracks(layout.tracks ?? []);
 
+    // Dirt (rein visuell, keine Physik)
+    const dirtObjects = this.buildDirt(layout.dirt ?? []);
+
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
       const { gridX, gridY } = layout.rocks[i];
@@ -95,7 +100,7 @@ export class ArenaBuilder {
       canopyObjects.push({ gfx, worldX, worldY });
     }
 
-    return { rockGroup, rockObjects, rockGrid, trunkGroup, trunkObjects, canopyObjects, trackObjects };
+    return { rockGroup, rockObjects, rockGrid, trunkGroup, trunkObjects, canopyObjects, trackObjects, dirtObjects };
   }
 
   // ── Canopy-Transparenz (jeden Frame lokal) ─────────────────────────────────
@@ -219,6 +224,12 @@ export class ArenaBuilder {
       if (ts.active) ts.destroy();
     }
     result.trackObjects.length = 0;
+
+    // Dirt
+    for (const img of result.dirtObjects) {
+      if (img.active) img.destroy();
+    }
+    result.dirtObjects.length = 0;
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────
@@ -252,6 +263,38 @@ export class ArenaBuilder {
     img.setAngle(Phaser.Math.Between(0, 359));
     img.setDepth(DEPTH.CANOPY);
     return img;
+  }
+
+  /**
+   * Erstellt einen Dirt-Sprite aus dem Autotile-Spritesheet.
+   */
+  private createDirtVisual(worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
+    const img = this.scene.add.image(worldX, worldY, 'dirt', frame);
+    img.setDisplaySize(CELL_SIZE, CELL_SIZE);
+    img.setDepth(DEPTH.DIRT);
+    return img;
+  }
+
+  // ── Dirt ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Baut Dirt-Sprites mit Autotiling (rein visuell, keine Physik/Kollision).
+   */
+  private buildDirt(dirtCells: DirtCell[]): Phaser.GameObjects.Image[] {
+    if (dirtCells.length === 0) return [];
+
+    const dirtGrid = new RockGridIndex(dirtCells);
+    const isOccupied = (gx: number, gy: number) => dirtGrid.isOccupied(gx, gy);
+    const result: Phaser.GameObjects.Image[] = [];
+
+    for (const { gridX, gridY } of dirtCells) {
+      const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
+      const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
+      const frame  = AutoTiler.getFrame(mask, DIRT_AUTOTILE);
+      result.push(this.createDirtVisual(worldX, worldY, frame));
+    }
+    return result;
   }
 
   // ── Gleise ────────────────────────────────────────────────────────────────

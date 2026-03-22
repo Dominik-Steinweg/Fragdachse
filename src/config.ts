@@ -10,7 +10,8 @@ export const ARENA_OFFSET_Y = 12;
 // ---- Depth Layers ----
 export const DEPTH = {
   GRASS: 1,
-  TRACKS: 2,
+  DIRT: 2,
+  TRACKS: 3,
   ROCKS: 9,
   PLAYERS: 10,
   TRAIN: 11,  
@@ -159,7 +160,8 @@ export const DEPTH_FX = 25;
 export const CELL_SIZE           = 32;
 export const GRID_COLS           = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 30
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
-export const ROCK_FILL_RATIO     = 0.30;   
+export const ROCK_FILL_RATIO     = 0.30;
+export const DIRT_FILL_RATIO     = 0.05;   
 export const TREE_COUNT          = 2;
 export const CA_SMOOTHING_STEPS  = 3;    // Anzahl Cellular-Automata-Durchläufe (0 = kein Smoothing)
 export const CA_MIN_ROCK_NEIGHBORS = 2;  // Fels mit < N Nachbarn wird zu Boden
