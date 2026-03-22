@@ -7,6 +7,7 @@ import {
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,    ARENA_HEIGHT,
 } from '../config';
+import { LivingBarEffect, paletteFromColor } from './LivingBarEffect';
 
 type SlotPalette = {
   beamShadow: number;
@@ -344,6 +345,10 @@ export class UtilityChargeIndicator {
   private readonly barEdge: Phaser.GameObjects.Rectangle;
   private readonly barHatch: Phaser.GameObjects.Graphics;
 
+  private livingEffect: LivingBarEffect | null = null;
+  private currentEffectColor = 0;
+  private wasVisible = false;
+
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly getLocalSprite: () => Phaser.GameObjects.Image | undefined,
@@ -382,9 +387,26 @@ export class UtilityChargeIndicator {
     this.container.setVisible(false);
   }
 
+  /** Lazily create or recreate the LivingBarEffect when the color changes. */
+  private ensureLivingEffect(color: number): void {
+    if (this.livingEffect && this.currentEffectColor === color) return;
+    if (this.livingEffect) this.livingEffect.destroy();
+    const palette = paletteFromColor(color);
+    // Bar top-left in container-local coords: (CHARGE_BAR_START_X, -CHARGE_BAR_HEIGHT/2)
+    this.livingEffect = new LivingBarEffect(
+      this.scene, this.container,
+      CHARGE_BAR_START_X, -CHARGE_BAR_HEIGHT / 2,
+      CHARGE_BAR_WIDTH, CHARGE_BAR_HEIGHT,
+      palette,
+    );
+    this.currentEffectColor = color;
+  }
+
   update(preview: UtilityChargePreviewState | undefined): void {
     const sprite = this.getLocalSprite();
     if (!preview || !sprite) {
+      if (this.wasVisible && this.livingEffect) this.livingEffect.stop();
+      this.wasVisible = false;
       this.container.setVisible(false);
       return;
     }
@@ -403,11 +425,18 @@ export class UtilityChargeIndicator {
       this.barFill.width = 0;
       this.barEdge.setAlpha(0.36);
       this.barBg.setFillStyle(COLORS.GREY_7, 0.94);
+      if (this.livingEffect) this.livingEffect.stop();
+      this.wasVisible = false;
       this.drawBlockedHatch();
       return;
     }
 
     const fillColor = preview.isGateCharge ? COLORS.GREEN_2 : playerColor;
+    this.ensureLivingEffect(fillColor);
+
+    if (!this.wasVisible && this.livingEffect) this.livingEffect.start();
+    this.wasVisible = true;
+
     this.anchorCore.setFillStyle(fillColor, 0.98);
     this.stemCore.setFillStyle(fillColor, 0.72 + charge * 0.18);
     this.barBg.setFillStyle(COLORS.GREY_8, 0.92);
@@ -415,6 +444,8 @@ export class UtilityChargeIndicator {
     this.barFill.width = CHARGE_BAR_WIDTH * charge;
     this.barEdge.setAlpha(0.4 + charge * 0.45);
     this.barBg.setAlpha(0.72 + charge * 0.16);
+
+    if (this.livingEffect) this.livingEffect.setFilledWidth(CHARGE_BAR_WIDTH * charge);
   }
 
   private drawBlockedHatch(): void {
@@ -438,6 +469,7 @@ export class UtilityChargeIndicator {
   }
 
   destroy(): void {
+    if (this.livingEffect) this.livingEffect.destroy();
     this.container.destroy(true);
   }
 }

@@ -12,6 +12,7 @@ import { ArenaHUD } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { LivingBarEffect, paletteFromColor, createGradientTexture } from './LivingBarEffect';
 import type { LoadoutSlot } from '../types';
 
 // ── Layout-Konstanten (innerhalb des 240px-Sidebars) ─────────────────────────
@@ -24,9 +25,11 @@ const EDIT_BTN_Y   = 136;
 
 const COLOR_LABEL_X      = 20;
 const COLOR_LABEL_Y      = 174;
-const COLOR_SWATCH_X     = 20;   // linke Kante des Indikator-Squares
+const COLOR_SWATCH_X     = 20;   // linke Kante des Indikator-Rechtecks
 const COLOR_SWATCH_Y     = 194;  // obere Kante
-const COLOR_SWATCH_SIZE  = 32;
+const COLOR_SWATCH_W     = 200;  // Breite des Farbindikators
+const COLOR_SWATCH_H     = 14;   // Höhe (passend zu ArenaHUD-Bars)
+const TEX_COLOR_INDICATOR = '__lobby_color_indicator';
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_WORLD_X  = 12;
@@ -89,6 +92,9 @@ export class LeftSidePanel {
 
   // Farbindikator im lobbyContainer (lokale Koordinaten)
   private colorIndicatorRect!: Phaser.GameObjects.Rectangle;
+  private colorIndicatorImg!:  Phaser.GameObjects.Image;
+  private colorLivingEffect:   LivingBarEffect | null = null;
+  private currentIndicatorColor = 0;
 
   // Picker-Popup (eigener world-space-Container, depth OVERLAY+2)
   private pickerContainer!: Phaser.GameObjects.Container;
@@ -140,15 +146,28 @@ export class LeftSidePanel {
         .setScrollFactor(0),
     );
 
+    // Background rect (dark, acts as frame)
     this.colorIndicatorRect = this.scene.add
-      .rectangle(COLOR_SWATCH_X, COLOR_SWATCH_Y, COLOR_SWATCH_SIZE, COLOR_SWATCH_SIZE, 0x888888)
+      .rectangle(COLOR_SWATCH_X, COLOR_SWATCH_Y, COLOR_SWATCH_W, COLOR_SWATCH_H, COLORS.GREY_8)
       .setOrigin(0, 0)
       .setScrollFactor(0)
+      .setStrokeStyle(1, COLORS.GREY_6)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.toggleColorPicker())
       .on('pointerover',  () => this.colorIndicatorRect.setStrokeStyle(2, 0xffffff))
-      .on('pointerout',   () => this.colorIndicatorRect.setStrokeStyle(0));
+      .on('pointerout',   () => this.colorIndicatorRect.setStrokeStyle(1, COLORS.GREY_6));
     objects.push(this.colorIndicatorRect);
+
+    // Gradient image for the color fill (supports postFX glow)
+    const initColor = 0x888888;
+    const initPalette = paletteFromColor(initColor);
+    createGradientTexture(this.scene, TEX_COLOR_INDICATOR, initPalette, COLOR_SWATCH_W, COLOR_SWATCH_H);
+    this.colorIndicatorImg = this.scene.add.image(
+      COLOR_SWATCH_X + COLOR_SWATCH_W / 2,
+      COLOR_SWATCH_Y + COLOR_SWATCH_H / 2,
+      TEX_COLOR_INDICATOR,
+    ).setScrollFactor(0);
+    objects.push(this.colorIndicatorImg);
 
     // ── Loadout-Karussell ──
     objects.push(
@@ -196,6 +215,9 @@ export class LeftSidePanel {
 
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
+
+    // LivingBarEffect for color indicator (created after container exists)
+    this.rebuildColorEffect(0x888888);
 
     // ── Picker-Popup (world-space, über LobbyOverlay) ─────────────────────────
     this.pickerContainer = this.buildPickerContainer();
@@ -278,10 +300,10 @@ export class LeftSidePanel {
     this.arenaHUD.flashSlot(slot);
   }
 
-  /** Aktualisiert das Farbindikator-Quadrat anhand des aktuellen Player-States. */
+  /** Aktualisiert den Farbindikator anhand des aktuellen Player-States. */
   refreshColorIndicator(): void {
     const color = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
-    if (color !== undefined) this.colorIndicatorRect.setFillStyle(color);
+    if (color !== undefined) this.rebuildColorEffect(color);
   }
 
   /** Aktualisiert den Picker live, solange er offen ist (jeden Lobby-Frame). */
@@ -306,10 +328,32 @@ export class LeftSidePanel {
   }
 
   destroy(): void {
+    if (this.colorLivingEffect) this.colorLivingEffect.destroy();
     this.arenaHUD.destroy();
     this.lobbyContainer.destroy(true);
     this.gameContainer.destroy(true);
     this.pickerContainer.destroy(true);
+  }
+
+  /** Rebuild gradient texture + LivingBarEffect when the color changes. */
+  private rebuildColorEffect(color: number): void {
+    if (color === this.currentIndicatorColor && this.colorLivingEffect) return;
+    this.currentIndicatorColor = color;
+    const palette = paletteFromColor(color);
+
+    // Update gradient texture
+    createGradientTexture(this.scene, TEX_COLOR_INDICATOR, palette, COLOR_SWATCH_W, COLOR_SWATCH_H);
+    this.colorIndicatorImg.setTexture(TEX_COLOR_INDICATOR);
+
+    // Recreate particle effect
+    if (this.colorLivingEffect) this.colorLivingEffect.destroy();
+    this.colorLivingEffect = new LivingBarEffect(
+      this.scene, this.lobbyContainer,
+      COLOR_SWATCH_X, COLOR_SWATCH_Y,
+      COLOR_SWATCH_W, COLOR_SWATCH_H,
+      palette,
+      { glowTarget: this.colorIndicatorImg, scrollFactor: 0 },
+    );
   }
 
   // ── Color-Picker ──────────────────────────────────────────────────────────

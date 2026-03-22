@@ -19,6 +19,11 @@ import {
   HP_MAX, ADRENALINE_MAX, RAGE_MAX,
   COLORS, toCssColor,
 } from '../config';
+import {
+  type LivingBarPalette,
+  rgbStr, createGradientTexture, rectZone,
+  ensureLivingBarTextures, LivingBarEffect,
+} from './LivingBarEffect';
 
 // ── Layout ──────────────────────────────────────────────────────────────────
 const PANEL_W   = 240;
@@ -74,45 +79,11 @@ const COL_BAR_BG2  = COLORS.GREY_8;
 const COL_BORDER   = COLORS.GREY_6;
 const COL_DIVIDER  = COLORS.GREY_7;
 
-// Texture keys
+// Texture keys (energized-mode particles, specific to ArenaHUD)
 const TEX_PARTICLE   = '_hud_particle';
 const TEX_CORE       = '_hud_core';
-const TEX_OUTER      = '_hud_outer';
-const TEX_SPARK      = '_hud_spark';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-function hexToRgb(hex: number): { r: number; g: number; b: number } {
-  return { r: (hex >> 16) & 0xff, g: (hex >> 8) & 0xff, b: hex & 0xff };
-}
-
-function rgbStr(hex: number, a = 1): string {
-  const { r, g, b } = hexToRgb(hex);
-  return a === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`;
-}
-
-/** Create a horizontal 3-stop gradient canvas texture with glassy highlight. */
-function makeBarGradient(scene: Phaser.Scene, key: string, pal: BarPalette): void {
-  if (scene.textures.exists(key)) return;
-  const ct = scene.textures.createCanvas(key, BAR_W, BAR_H)!;
-  const ctx = ct.context;
-  // Main gradient: dark → mid → light
-  const grad = ctx.createLinearGradient(0, 0, BAR_W, 0);
-  grad.addColorStop(0,   rgbStr(pal.dark));
-  grad.addColorStop(0.5, rgbStr(pal.mid));
-  grad.addColorStop(1,   rgbStr(pal.light));
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, BAR_W, BAR_H);
-  // Top highlight for glassy depth
-  const topGrad = ctx.createLinearGradient(0, 0, 0, BAR_H);
-  topGrad.addColorStop(0, 'rgba(255,255,255,0.3)');
-  topGrad.addColorStop(0.4, 'rgba(255,255,255,0.05)');
-  topGrad.addColorStop(0.6, 'rgba(0,0,0,0.0)');
-  topGrad.addColorStop(1, 'rgba(0,0,0,0.15)');
-  ctx.fillStyle = topGrad;
-  ctx.fillRect(0, 0, BAR_W, BAR_H);
-  ct.refresh();
-}
 
 function makeBgTexture(scene: Phaser.Scene, key: string): void {
   if (scene.textures.exists(key)) return;
@@ -141,18 +112,6 @@ function makeRadialTexture(scene: Phaser.Scene, key: string, size: number, color
   ct.refresh();
 }
 
-/** Creates a random rectangular emit zone for particles within a bar. */
-function rectZone(x: number, y: number, w: number, h: number): {
-  zone: Phaser.Geom.Rectangle;
-  data: Phaser.Types.GameObjects.Particles.EmitZoneData;
-} {
-  const rect = new Phaser.Geom.Rectangle(x, y, w, h);
-  return {
-    zone: rect,
-    data: { type: 'random', source: rect } as Phaser.Types.GameObjects.Particles.EmitZoneData,
-  };
-}
-
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface BarBundle {
@@ -163,10 +122,9 @@ interface BarBundle {
   // Energized mode: small, fast, dense sparkle particles
   coreEmitter:  Phaser.GameObjects.Particles.ParticleEmitter;
   outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  // Idle mode: large, slow, overlapping blob particles (fluid feel)
-  idleCore:     Phaser.GameObjects.Particles.ParticleEmitter;
-  idleOuter:    Phaser.GameObjects.Particles.ParticleEmitter;
-  emitZone:     Phaser.Geom.Rectangle; // shared zone, updated in setBarFrac
+  energyZone:   Phaser.Geom.Rectangle; // emit zone for energized emitters
+  // Idle mode: reusable breathing effect
+  idleEffect:   LivingBarEffect;
   border:       Phaser.GameObjects.Rectangle;
   valueText?:   Phaser.GameObjects.Text;
   highlight?:   Phaser.GameObjects.Rectangle;
@@ -175,8 +133,6 @@ interface BarBundle {
   prevFrac:     number;
   currentFrac:  number;
   energized:    boolean;       // true = intense sparkle, false = calm breathing
-  breathTween:  Phaser.Tweens.Tween | null; // idle glow pulse
-  breathGlow:   Phaser.FX.Glow | null;      // idle PostFX glow
 }
 
 /** Data pushed every frame from ArenaScene. */
@@ -251,39 +207,27 @@ export class ArenaHUD {
   private ensureTextures(): void {
     const s = this.scene;
     makeBgTexture(s, '_hud_bar_bg');
-    makeBarGradient(s, '_hud_hp',   PAL_HP);
-    makeBarGradient(s, '_hud_adr',  PAL_ADR);
-    makeBarGradient(s, '_hud_ult',  PAL_ULT);
-    makeBarGradient(s, '_hud_wpn',  PAL_WPN);
-    makeBarGradient(s, '_hud_util', PAL_UTIL);
+    ensureLivingBarTextures(s);
 
-    // Soft particle for adrenaline bursts (16x16 radial glow)
+    // Bar gradient textures
+    createGradientTexture(s, '_hud_hp',   PAL_HP,   BAR_W, BAR_H);
+    createGradientTexture(s, '_hud_adr',  PAL_ADR,  BAR_W, BAR_H);
+    createGradientTexture(s, '_hud_ult',  PAL_ULT,  BAR_W, BAR_H);
+    createGradientTexture(s, '_hud_wpn',  PAL_WPN,  BAR_W, BAR_H);
+    createGradientTexture(s, '_hud_util', PAL_UTIL, BAR_W, BAR_H);
+
+    // Adrenaline burst particle (16x16 radial glow)
     makeRadialTexture(s, TEX_PARTICLE, 16, [
       [0,   'rgba(255,255,255,1)'],
       [0.3, 'rgba(255,255,255,0.6)'],
       [1,   'rgba(255,255,255,0)'],
     ]);
 
-    // Core energy particle (14x14, bright center) — main inner energy
+    // Energized-mode core particle (14x14, bright center)
     makeRadialTexture(s, TEX_CORE, 14, [
       [0,   'rgba(255,255,255,1.0)'],
       [0.3, 'rgba(255,255,255,0.7)'],
       [0.6, 'rgba(255,255,255,0.2)'],
-      [1,   'rgba(255,255,255,0)'],
-    ]);
-
-    // Outer glow particle (20x20, softer, wider spread)
-    makeRadialTexture(s, TEX_OUTER, 20, [
-      [0,   'rgba(255,255,255,0.8)'],
-      [0.3, 'rgba(255,255,255,0.4)'],
-      [0.7, 'rgba(255,255,255,0.1)'],
-      [1,   'rgba(255,255,255,0)'],
-    ]);
-
-    // Spark (6x6, sharp)
-    makeRadialTexture(s, TEX_SPARK, 6, [
-      [0,   'rgba(255,255,255,1)'],
-      [0.5, 'rgba(255,255,255,0.5)'],
       [1,   'rgba(255,255,255,0)'],
     ]);
   }
@@ -372,41 +316,14 @@ export class ArenaHUD {
     fgImg.setCrop(0, 0, BAR_W, BAR_H);
     c.add(fgImg);
 
-    // Shared emit zone (rectangle within the bar area)
-    const { zone: emitZone, data: zoneData } = rectZone(BAR_X + 2, barY + 1, BAR_W - 4, BAR_H - 2);
+    // Idle breathing effect (shared LivingBarEffect)
+    const idlePal: LivingBarPalette = { dark: palette.dark, mid: palette.mid, light: palette.light };
+    const idleEffect = new LivingBarEffect(s, c, BAR_X, barY, BAR_W, BAR_H, idlePal,
+      { glowTarget: fgImg, scrollFactor: 0 });
 
-    // ── Idle particles: large, slow, overlapping blobs — fluid/liquid feel ──
-    const idleCore = s.add.particles(0, 0, TEX_OUTER, {
-      lifespan:  { min: 1200, max: 2500 },
-      frequency: 90,
-      quantity:  1,
-      speedX:    { min: -2, max: 2 },
-      speedY:    { min: -1, max: 1 },
-      scale:     { start: 1.0, end: 0.4 },
-      alpha:     { start: 0.35, end: 0.05 },
-      tint:      [palette.mid, palette.dark, palette.light],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  true,
-    }).setScrollFactor(0);
-    idleCore.addEmitZone(zoneData);
-    c.add(idleCore);
+    // Energized particles: small, fast, dense sparkle (BFG core style)
+    const { zone: energyZone, data: energyZoneData } = rectZone(BAR_X + 2, barY + 1, BAR_W - 4, BAR_H - 2);
 
-    const idleOuter = s.add.particles(0, 0, TEX_OUTER, {
-      lifespan:  { min: 2000, max: 3500 },
-      frequency: 160,
-      quantity:  1,
-      speedX:    { min: -1, max: 1 },
-      speedY:    { min: -0.5, max: 0.5 },
-      scale:     { start: 1.5, end: 0.7 },
-      alpha:     { start: 0.2, end: 0.03 },
-      tint:      [palette.dark, palette.mid],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  true,
-    }).setScrollFactor(0);
-    idleOuter.addEmitZone(zoneData);
-    c.add(idleOuter);
-
-    // ── Energized particles: small, fast, dense sparkle (BFG core style) ──
     const coreEmitter = s.add.particles(0, 0, TEX_CORE, {
       lifespan:  { min: 200, max: 500 },
       frequency: 30,
@@ -419,10 +336,10 @@ export class ArenaHUD {
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     }).setScrollFactor(0);
-    coreEmitter.addEmitZone(zoneData);
+    coreEmitter.addEmitZone(energyZoneData);
     c.add(coreEmitter);
 
-    const outerEmitter = s.add.particles(0, 0, TEX_OUTER, {
+    const outerEmitter = s.add.particles(0, 0, '_living_blob', {
       lifespan:  { min: 400, max: 800 },
       frequency: 50,
       quantity:  1,
@@ -434,7 +351,7 @@ export class ArenaHUD {
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     }).setScrollFactor(0);
-    outerEmitter.addEmitZone(zoneData);
+    outerEmitter.addEmitZone(energyZoneData);
     c.add(outerEmitter);
 
     // Border
@@ -461,18 +378,7 @@ export class ArenaHUD {
       c.sendToBack(highlight);
     }
 
-    // Start in idle mode with breathing PostFX glow
-    const breathGlow = fgImg.postFX.addGlow(palette.mid, 0, 0, false, 0.1, 6);
-    const breathTween = s.tweens.add({
-      targets: breathGlow,
-      outerStrength: 2.5,
-      duration: 2000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    return { label, bgImg, trail, fgImg, coreEmitter, outerEmitter, idleCore, idleOuter, emitZone, border, valueText, highlight, palette, texKey, prevFrac: 1, currentFrac: 1, energized: false, breathTween, breathGlow };
+    return { label, bgImg, trail, fgImg, coreEmitter, outerEmitter, energyZone, idleEffect, border, valueText, highlight, palette, texKey, prevFrac: 1, currentFrac: 1, energized: false };
   }
 
   private divider(y: number): Phaser.GameObjects.Rectangle {
@@ -585,8 +491,7 @@ export class ArenaHUD {
     this.removeAdrSyringe();
     this.removeUtilWobble();
     for (const b of [this.hp, this.adr, this.ult, this.w1, this.w2, this.util]) {
-      b.breathTween?.destroy();
-      if (b.breathGlow) b.fgImg.postFX.remove(b.breathGlow);
+      b.idleEffect.destroy();
     }
     if (this.nameScrollTween) this.nameScrollTween.destroy();
     this.nameMask.destroy();
@@ -849,36 +754,17 @@ export class ArenaHUD {
     const hasFill = bundle.currentFrac > 0.03;
 
     if (energized) {
-      // Stop idle blobs, start energized sparkle
-      bundle.idleCore.stop();
-      bundle.idleOuter.stop();
+      // Stop idle breathing, start energized sparkle
+      bundle.idleEffect.stop();
       if (hasFill) {
         bundle.coreEmitter.start();
         bundle.outerEmitter.start();
       }
-      // Remove breathing glow
-      if (bundle.breathTween) { bundle.breathTween.destroy(); bundle.breathTween = null; }
-      if (bundle.breathGlow) { bundle.fgImg.postFX.remove(bundle.breathGlow); bundle.breathGlow = null; }
     } else {
-      // Stop energized sparkle, start idle blobs
+      // Stop energized sparkle, start idle breathing
       bundle.coreEmitter.stop();
       bundle.outerEmitter.stop();
-      if (hasFill) {
-        bundle.idleCore.start();
-        bundle.idleOuter.start();
-      }
-      // Start breathing glow
-      if (!bundle.breathGlow) {
-        bundle.breathGlow = bundle.fgImg.postFX.addGlow(bundle.palette.mid, 0, 0, false, 0.1, 6);
-        bundle.breathTween = this.scene.tweens.add({
-          targets: bundle.breathGlow,
-          outerStrength: 2.5,
-          duration: 2000,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      }
+      bundle.idleEffect.start();
     }
   }
 
@@ -890,21 +776,19 @@ export class ArenaHUD {
     bundle.fgImg.setCrop(0, 0, w, BAR_H);
     bundle.currentFrac = frac;
 
-    // Update the shared emit zone rectangle — all 4 emitters reference this.
+    // Update idle effect zone
+    bundle.idleEffect.setFilledWidth(w);
+
+    // Update energized zone
     if (w > 6) {
-      bundle.emitZone.width = w - 4;
+      bundle.energyZone.width = w - 4;
       if (bundle.energized) {
         if (!bundle.coreEmitter.emitting) bundle.coreEmitter.start();
         if (!bundle.outerEmitter.emitting) bundle.outerEmitter.start();
-      } else {
-        if (!bundle.idleCore.emitting) bundle.idleCore.start();
-        if (!bundle.idleOuter.emitting) bundle.idleOuter.start();
       }
     } else {
       bundle.coreEmitter.stop();
       bundle.outerEmitter.stop();
-      bundle.idleCore.stop();
-      bundle.idleOuter.stop();
     }
   }
 
