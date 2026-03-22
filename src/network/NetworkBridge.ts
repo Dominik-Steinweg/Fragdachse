@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
+import type { ExplosionVisualStyle, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -101,7 +101,7 @@ type LoadoutUseHandler = (
   clientY?: number,
 ) => void;
 
-type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, isHoly?: boolean) => void;
+type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type GrenadeCountdownHandler = (x: number, y: number, value: number) => void;
 type EffectHandler = (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void;
 type HitscanTracerHandler = (
@@ -584,17 +584,17 @@ export class NetworkBridge {
 
   // ── Explosions-Effekt-RPC: Host → Alle ────────────────────────────────────
 
-  broadcastExplosionEffect(x: number, y: number, radius: number, color?: number, isHoly?: boolean): void {
-    this.broadcastRpc('xfx', { x, y, r: radius, c: color, h: isHoly || undefined });
+  broadcastExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle): void {
+    this.broadcastRpc('xfx', { x, y, r: radius, c: color, s: visualStyle });
   }
 
-  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number, isHoly?: boolean) => void): void {
+  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void): void {
     this.explosionEffectHandler = handler;
     this.registerAllRpcHandler('xfx', async (data: unknown): Promise<unknown> => {
       const explosionEffectHandler = this.explosionEffectHandler;
       if (!explosionEffectHandler) return undefined;
-      const { x, y, r, c, h } = data as { x: number; y: number; r: number; c?: number; h?: boolean };
-      explosionEffectHandler(x, y, r, c, h);
+      const { x, y, r, c, s } = data as { x: number; y: number; r: number; c?: number; s?: ExplosionVisualStyle };
+      explosionEffectHandler(x, y, r, c, s);
       return undefined;
     });
   }

@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TracerConfig } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -135,8 +135,8 @@ interface BaseUtilityConfig {
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
 
   // Spezial-Flags (optional)
-  /** Goldene Explosion + Kamera-Shake (Heilige Handgranate etc.) */
-  readonly holyExplosion?: boolean;
+  /** Visueller Explosionsstil fuer Damage-Utilities (Heilige Handgranate etc.) */
+  readonly explosionVisualStyle?: ExplosionVisualStyle;
   /** Kein Cooldown-Publish nach Nutzung – für Ammo-basierte Einmal-Items,
    *  damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird. */
   readonly skipCooldownPublish?: boolean;
@@ -471,15 +471,17 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
-    // Runder Energieball – wird in Spielerfarbe gezeichnet.
-    // projectileColor kann gesetzt werden um die Farbe zu überschreiben (hier nicht gesetzt).
-    projectileStyle:  'ball' satisfies ProjectileStyle,
+    // Additiver Energieball mit Partikelkern und Schweif.
+    projectileStyle:  'energy_ball' satisfies ProjectileStyle,
     // Detonations-Tag: wird durch ASMD_PRIM (und spätere Detonatoren mit diesem Tag) gezündet
     detonable: {
       tag:            'asmd_ball',
       aoeDamage:      80,
       aoeRadius:      80,
+      knockback:      950,
+      selfKnockbackMult: 0.75,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
+      explosionVisualStyle: 'energy',
     } satisfies DetonableConfig,
   } as WeaponConfig,
 
@@ -507,11 +509,11 @@ export const WEAPON_CONFIGS = {
       } satisfies ProjectileExplosionConfig,
     },
     allowedSlots:         ['weapon2'],
-    adrenalinCost:        28,
+    adrenalinCost:        25,
     adrenalinGain:        0,
     spreadStanding:       0,
-    spreadMoving:         7,
-    spreadPerShot:        2,
+    spreadMoving:         0,
+    spreadPerShot:        0,
     maxDynamicSpread:     10,
     spreadRecoveryDelay:  450,
     spreadRecoveryRate:   3,
@@ -529,7 +531,7 @@ export const WEAPON_CONFIGS = {
     id:                   'MINI_ROCKET_LAUNCHER',
     displayName:          'Mini-Raketen',
     cooldown:             75,
-    damage:               4,
+    damage:               2,
     range:                700,
     fire: {
       type:                 'projectile',
@@ -539,8 +541,8 @@ export const WEAPON_CONFIGS = {
       limitRangeToCursor:   false,
       impactExplosion: {
         radius:          65,
-        maxDamage:       10,
-        minDamage:       4,
+        maxDamage:       6,
+        minDamage:       3,
         knockback:       320,
         selfDamageMult:  1,
         rockDamageMult:  1,
@@ -770,7 +772,7 @@ export const UTILITY_CONFIGS = {
     aoeDamage:       200,           // massiver Schaden
     allowedSlots:         [],            // NICHT im Loadout-Menü wählbar
     trainDamageMult:      1.0,           // 100% Schaden am Zug
-    holyExplosion:        true,          // goldene Explosion + Kamera-Shake
+    explosionVisualStyle: 'holy',        // goldene Explosion + Kamera-Shake
     skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
   } as UtilityConfig,
 

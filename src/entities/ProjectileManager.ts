@@ -5,6 +5,7 @@ import type { BulletRenderer }  from '../effects/BulletRenderer';
 import { BULLET_STYLE, AWP_STYLE } from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
+import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
 import type { RocketRenderer }  from '../effects/RocketRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
@@ -18,6 +19,7 @@ interface ClientProjectileState {
   vx: number;
   vy: number;
   size: number;
+  color: number;
   receivedAt: number;
   style?: string;
   // Flammenwerfer-Decay: velocity nimmt exponentiell ab
@@ -50,6 +52,9 @@ export class ProjectileManager {
 
   // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
   private bfgRenderer: BfgRenderer | null = null;
+
+  // ── Energy-Ball-Renderer (ASMD Secondary) ───────────────────────────────
+  private energyBallRenderer: EnergyBallRenderer | null = null;
 
   // ── Rocket-Renderer (Raketenkörper + Rauchspur) ────────────────────────
   private rocketRenderer: RocketRenderer | null = null;
@@ -143,6 +148,11 @@ export class ProjectileManager {
     this.bfgRenderer = renderer;
   }
 
+  /** Injiziert den EnergyBallRenderer fuer ASMD-Energieprojektile. */
+  setEnergyBallRenderer(renderer: EnergyBallRenderer | null): void {
+    this.energyBallRenderer = renderer;
+  }
+
   /** Injiziert den RocketRenderer fuer Raketen-Visualisierung. */
   setRocketRenderer(renderer: RocketRenderer | null): void {
     this.rocketRenderer = renderer;
@@ -185,6 +195,7 @@ export class ProjectileManager {
     const id = this.nextId++;
 
     const isBall   = cfg.projectileStyle === 'ball';
+    const isEnergyBall = cfg.projectileStyle === 'energy_ball';
     const isBullet = cfg.projectileStyle === 'bullet';
     const isFlame  = cfg.projectileStyle === 'flame';
     const isBfg    = cfg.projectileStyle === 'bfg';
@@ -192,7 +203,7 @@ export class ProjectileManager {
     const isRocket = cfg.projectileStyle === 'rocket';
 
     // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
-    const sprite: Phaser.GameObjects.Shape = isBall
+    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall)
       ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
       : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
     sprite.setDepth(DEPTH.PROJECTILES);
@@ -222,6 +233,12 @@ export class ProjectileManager {
         cfg.ownerColor ?? cfg.color,
         cfg.smokeTrailColor ?? cfg.color,
       );
+    }
+
+    if (isEnergyBall && this.energyBallRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.energyBallRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -649,6 +666,7 @@ export class ProjectileManager {
     this.tracerRenderer?.destroyTracer(proj.id);
     this.flameRenderer?.destroyVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
+    this.energyBallRenderer?.destroyVisual(proj.id);
     this.rocketRenderer?.destroyVisual(proj.id);
   }
 
@@ -793,6 +811,7 @@ export class ProjectileManager {
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
+    this.energyBallRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
     this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
@@ -962,6 +981,32 @@ export class ProjectileManager {
       }
     }
 
+    const energyBallR = this.energyBallRenderer;
+    if (energyBallR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'energy_ball') {
+          if (!energyBallR.has(proj.id)) {
+            energyBallR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          }
+          energyBallR.updateVisual(
+            proj.id,
+            proj.sprite.x,
+            proj.sprite.y,
+            proj.sprite.displayWidth,
+            proj.body.velocity.x,
+            proj.body.velocity.y,
+            proj.color,
+          );
+        }
+      }
+      const activeEnergyBallIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'energy_ball').map(p => p.id),
+      );
+      for (const id of energyBallR.getActiveIds()) {
+        if (!activeEnergyBallIds.has(id)) energyBallR.destroyVisual(id);
+      }
+    }
+
     const rocketR = this.rocketRenderer;
     if (rocketR) {
       for (const proj of this.projectiles) {
@@ -1035,6 +1080,7 @@ export class ProjectileManager {
     const renderer  = this.bulletRenderer;
     const flames    = this.flameRenderer;
     const rockets   = this.rocketRenderer;
+    const energyBalls = this.energyBallRenderer;
 
     // Verwaiste Visuals und States entfernen
     for (const [id, sprite] of this.clientVisuals) {
@@ -1068,6 +1114,14 @@ export class ProjectileManager {
         }
       }
     }
+    if (energyBalls) {
+      for (const id of energyBalls.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          energyBalls.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
     const bfgR = this.bfgRenderer;
     if (bfgR) {
       for (const id of bfgR.getActiveIds()) {
@@ -1088,6 +1142,7 @@ export class ProjectileManager {
     for (const proj of data) {
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
+      const isEnergyBallP = proj.style === 'energy_ball';
       const isBfgP   = proj.style === 'bfg';
       const isAwpP   = proj.style === 'awp';
       const isRocket = proj.style === 'rocket';
@@ -1108,6 +1163,7 @@ export class ProjectileManager {
         vx: proj.vx,
         vy: proj.vy,
         size: proj.size,
+        color: proj.color,
         receivedAt: now,
         style: proj.style,
         isFlame,
@@ -1118,6 +1174,11 @@ export class ProjectileManager {
           bfgR.createVisual(proj.id, proj.x, proj.y, proj.size);
         }
         bfgR.updateVisual(proj.id, proj.x, proj.y, proj.size);
+      } else if (isEnergyBallP && energyBalls) {
+        if (!energyBalls.has(proj.id)) {
+          energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+        }
+        energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
       } else if (isRocket && rockets) {
         if (!rockets.has(proj.id)) {
           rockets.createVisual(
@@ -1211,6 +1272,8 @@ export class ProjectileManager {
       const bfgRe = this.bfgRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
+      } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {
+        this.energyBallRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
         this.rocketRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'flame' && flames && flames.has(id)) {

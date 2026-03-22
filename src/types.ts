@@ -43,7 +43,10 @@ export interface PlayerNetState {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'flame' | 'bfg' | 'awp' | 'rocket';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket';
+
+/** Visueller Stil einer Explosion / Detonation. */
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy';
 
 /**
  * Konfiguration für die Tracer-Leuchtlinie eines Projektils (data-driven).
@@ -72,6 +75,7 @@ export interface ProjectileExplosionConfig {
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
   readonly color?: number;
+  readonly visualStyle?: ExplosionVisualStyle;
 }
 
 export type HomingTargetType = 'players' | 'train' | 'projectiles';
@@ -228,7 +232,7 @@ export interface DamageGrenadeEffect {
   damage: number;
   rockDamageMult?:  number;
   trainDamageMult?: number;
-  isHoly?:          boolean;  // Heilige Handgranate – goldene Explosion + Kamera-Shake
+  visualStyle?:     ExplosionVisualStyle;
 }
 
 export interface SmokeGrenadeEffect {
@@ -260,7 +264,11 @@ export interface DetonableConfig {
   readonly tag: string;              // Bezeichner, z.B. 'asmd_ball'
   readonly aoeDamage: number;        // Explosionsschaden bei Detonation
   readonly aoeRadius: number;        // Explosionsradius in px
+  readonly knockback?: number;       // Radialer Impuls analog Projektil-Explosionen
+  readonly selfKnockbackMult?: number;
   readonly allowCrossTeam: boolean;  // true = Gegner-Detonator kann es ebenfalls zünden
+  readonly explosionColor?: number;  // optionales VFX-Farb-Override
+  readonly explosionVisualStyle?: ExplosionVisualStyle;
   readonly rockDamageMult?:  number; // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number; // Schadensfaktor gegen den Zug (Default 1.0)
 }

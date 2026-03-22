@@ -592,7 +592,7 @@ export class LoadoutManager {
         damage: cfg.aoeDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
-        isHoly:          cfg.holyExplosion,
+        visualStyle:     cfg.explosionVisualStyle,
       };
     }
 

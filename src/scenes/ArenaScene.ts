@@ -22,6 +22,7 @@ import { FireSystem }          from '../effects/FireSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
+import { EnergyBallRenderer }  from '../effects/EnergyBallRenderer';
 import { RocketRenderer }      from '../effects/RocketRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
@@ -81,6 +82,7 @@ export class ArenaScene extends Phaser.Scene {
   private bulletRenderer!:    BulletRenderer;
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
+  private energyBallRenderer!: EnergyBallRenderer;
   private rocketRenderer!:    RocketRenderer;
   private tracerRenderer!:    TracerRenderer;
   private inputSystem!:       InputSystem;
@@ -216,6 +218,9 @@ export class ArenaScene extends Phaser.Scene {
     this.bfgRenderer = new BfgRenderer(this);
     this.bfgRenderer.generateTextures();
     this.projectileManager.setBfgRenderer(this.bfgRenderer);
+    this.energyBallRenderer = new EnergyBallRenderer(this);
+    this.energyBallRenderer.generateTextures();
+    this.projectileManager.setEnergyBallRenderer(this.energyBallRenderer);
     this.rocketRenderer = new RocketRenderer(this);
     this.rocketRenderer.generateTextures();
     this.projectileManager.setRocketRenderer(this.rocketRenderer);
@@ -352,8 +357,8 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
-    bridge.registerExplosionEffectHandler((x, y, radius, color, isHoly) => {
-      this.effectSystem.playExplosionEffect(x, y, radius, color, isHoly);
+    bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle) => {
+      this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
     });
 
     // ── 10b. Granaten-Countdown-RPC (alle Clients inkl. Host) ─────────────
@@ -1390,13 +1395,29 @@ export class ArenaScene extends Phaser.Scene {
       this.combatSystem.applyAoeDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
       );
+      if ((det.effect.knockback ?? 0) > 0) {
+        this.hostPhysics.applyRadialImpulse(
+          det.x,
+          det.y,
+          det.effect.aoeRadius,
+          det.effect.knockback ?? 0,
+          det.detonatorOwnerId,
+          det.effect.selfKnockbackMult ?? 1,
+        );
+      }
       this.applyAoeEnvironmentDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage,
         det.effect.rockDamageMult ?? 1, det.effect.trainDamageMult ?? 1, det.detonatorOwnerId,
       );
       // Explosion in Spielerfarbe des Auslösers (z.B. Roter Spieler zündet grünen Ball → rote Explosion)
       const detonatorColor = bridge.getPlayerColor(det.detonatorOwnerId);
-      bridge.broadcastExplosionEffect(det.x, det.y, det.effect.aoeRadius, detonatorColor);
+      bridge.broadcastExplosionEffect(
+        det.x,
+        det.y,
+        det.effect.aoeRadius,
+        det.effect.explosionColor ?? detonatorColor,
+        det.effect.explosionVisualStyle,
+      );
     }
 
     for (const explosion of explodedProjectiles) {
@@ -1415,6 +1436,7 @@ export class ArenaScene extends Phaser.Scene {
         explosion.y,
         explosion.effect.radius,
         explosion.effect.color,
+        explosion.effect.visualStyle,
       );
     }
 
@@ -1426,7 +1448,7 @@ export class ArenaScene extends Phaser.Scene {
           g.x, g.y, g.effect.radius, g.effect.damage,
           g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId,
         );
-        bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius, undefined, g.effect.isHoly);
+        bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius, undefined, g.effect.visualStyle);
       } else if (g.effect.type === 'fire') {
         this.fireSystem.hostCreateZone(g.x, g.y, g.effect, g.ownerId);
       } else {
