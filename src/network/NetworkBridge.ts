@@ -12,6 +12,9 @@ import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } f
 import type { PlayerState } from 'playroomkit';
 import type { PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
+import { NetworkPingController } from './NetworkPingController';
+import type { HostRoomQualityProbeResult } from './NetworkPingController';
+export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
 const ALL_RPC_CHANNEL  = 'rpc_all';
@@ -86,13 +89,6 @@ export interface GameState {
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
 
-export interface HostRoomQualityProbeResult {
-  estimateMs: number | null;
-  loopbackAverageMs: number | null;
-  browserRttMs: number | null;
-  successfulLoopbackSamples: number;
-}
-
 type LoadoutUseHandler = (
   slot: LoadoutSlot,
   angle: number,
@@ -147,8 +143,7 @@ export class NetworkBridge {
   private hostDispatcherRegistered = false;
   private allDispatcherRegistered = false;
   private knownPlayerColors: readonly number[] = [];
-  private hostClockOffsetMs = 0;
-  private bestClockSyncRttMs = Number.POSITIVE_INFINITY;
+  private pingController: NetworkPingController;
   private hostRpcHandlers = new Map<string, (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown>();
   private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
 
@@ -170,6 +165,19 @@ export class NetworkBridge {
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
+
+  constructor() {
+    this.pingController = new NetworkPingController({
+      isHost: () => isHost(),
+      getLocalPlayerId: () => myPlayer().id,
+      setLocalPing: (pingMs: number) => { myPlayer().setState(KEY_PING, pingMs); },
+      sendHostRpc: (type: string, payload: unknown) => this.sendHostRpc(type, payload),
+      broadcastRpc: (type: string, payload: unknown) => this.broadcastRpc(type, payload),
+      registerHostRpcHandler: (type, handler) => this.registerHostRpcHandler(type, handler),
+      registerAllRpcHandler: (type, handler) => this.registerAllRpcHandler(type, handler),
+      callHostRpc: (type: string, payload: unknown, timeoutMs: number) => this.callHostRpc(type, payload, timeoutMs),
+    });
+  }
 
   // ── Lobby-Initialisierung (einmalig vor activate()) ────────────────────────
   static async initializeLobby(): Promise<void> {
@@ -339,7 +347,7 @@ export class NetworkBridge {
 
   /** Lokale Schätzung der Host-Zeitbasis für hostseitige Timestamps. */
   getSynchronizedNow(): number {
-    return isHost() ? Date.now() : Date.now() + this.hostClockOffsetMs;
+    return this.pingController.getSynchronizedNow();
   }
 
   // ── Arena-Startzeit / Countdown: Host → Alle (global, reliable) ─────────
@@ -1042,30 +1050,7 @@ export class NetworkBridge {
   }
 
   async measureHostRoomLoopback(sampleCount: number, timeoutMs: number): Promise<HostRoomQualityProbeResult> {
-    this.registerHostRpcHandler('rqp', async (): Promise<unknown> => ({ ackAt: Date.now() }));
-
-    const browserRttMs = this.getBrowserNetworkRtt();
-    const loopbackSamples: number[] = [];
-
-    for (let index = 0; index < sampleCount; index++) {
-      const measured = await this.measureSingleHostLoopback(timeoutMs);
-      if (measured !== null) loopbackSamples.push(measured);
-    }
-
-    const loopbackAverageMs = loopbackSamples.length > 0
-      ? loopbackSamples.reduce((sum, value) => sum + value, 0) / loopbackSamples.length
-      : null;
-
-    const estimateMs = loopbackAverageMs !== null
-      ? Math.round(loopbackAverageMs)
-      : browserRttMs;
-
-    return {
-      estimateMs,
-      loopbackAverageMs: loopbackAverageMs !== null ? Math.round(loopbackAverageMs) : null,
-      browserRttMs,
-      successfulLoopbackSamples: loopbackSamples.length,
-    };
+    return await this.pingController.measureHostRoomLoopback(sampleCount, timeoutMs);
   }
 
   /**
@@ -1073,8 +1058,7 @@ export class NetworkBridge {
    * Für den Host kein-Op (bleibt bei Default-Ping 0 ms).
    */
   sendPingToHost(): void {
-    if (isHost()) return;
-    this.sendHostRpc('png', { ts: Date.now(), id: myPlayer().id });
+    this.pingController.sendPingToHost();
   }
 
   /**
@@ -1087,34 +1071,7 @@ export class NetworkBridge {
    *   Client ('pong'):        misst RTT, schreibt per-player-State KEY_PING
    */
   setupPingMeasurement(): void {
-    this.registerHostRpcHandler('png', async (data: unknown): Promise<unknown> => {
-      if (!isHost()) return undefined;
-      const { ts, id } = data as { ts: number; id: string };
-      this.broadcastRpc('pong', { ts, id, hostTs: Date.now() });
-      return undefined;
-    });
-    this.registerAllRpcHandler('pong', async (data: unknown): Promise<unknown> => {
-      const { ts, id, hostTs } = data as { ts: number; id: string; hostTs?: number };
-      if (id !== myPlayer().id) return undefined;
-      const now = Date.now();
-      const rtt = now - ts;
-      myPlayer().setState(KEY_PING, rtt);
-
-      if (!isHost() && typeof hostTs === 'number') {
-        const estimatedOffset = hostTs - (ts + rtt / 2);
-        if (!Number.isFinite(this.bestClockSyncRttMs)) {
-          this.bestClockSyncRttMs = rtt;
-          this.hostClockOffsetMs = estimatedOffset;
-          return undefined;
-        }
-        if (rtt <= this.bestClockSyncRttMs + 10) {
-          this.bestClockSyncRttMs = Math.min(this.bestClockSyncRttMs, rtt);
-          this.hostClockOffsetMs += (estimatedOffset - this.hostClockOffsetMs) * 0.35;
-        }
-      }
-
-      return undefined;
-    });
+    this.pingController.setupPingMeasurement();
   }
 
   // ── Rundenabschluss-Snapshot: Host → Alle (global, reliable) ─────────────
@@ -1150,6 +1107,14 @@ export class NetworkBridge {
   private sendHostRpc(type: string, payload: unknown): void {
     this.ensureRpcDispatchersRegistered();
     RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST).catch(console.error);
+  }
+
+  private callHostRpc(type: string, payload: unknown, timeoutMs: number): Promise<unknown> {
+    this.ensureRpcDispatchersRegistered();
+    return Promise.race([
+      RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST),
+      new Promise((_, reject) => window.setTimeout(() => reject(new Error(`RPC timeout: ${type}`)), timeoutMs)),
+    ]);
   }
 
   private broadcastRpc(type: string, payload: unknown): void {
@@ -1202,32 +1167,6 @@ export class NetworkBridge {
     const envelope = data as Partial<RpcEnvelope>;
     if (typeof envelope.type !== 'string') return null;
     return { type: envelope.type, payload: envelope.payload };
-  }
-
-  private async measureSingleHostLoopback(timeoutMs: number): Promise<number | null> {
-    if (!isHost()) return null;
-    this.ensureRpcDispatchersRegistered();
-
-    const startedAt = performance.now();
-    try {
-      await Promise.race([
-        RPC.call(HOST_RPC_CHANNEL, { type: 'rqp', payload: { startedAt: Date.now() } }, RPC.Mode.HOST),
-        new Promise((_, reject) => window.setTimeout(() => reject(new Error('room probe timeout')), timeoutMs)),
-      ]);
-      return performance.now() - startedAt;
-    } catch {
-      return null;
-    }
-  }
-
-  private getBrowserNetworkRtt(): number | null {
-    const nav = navigator as Navigator & {
-      connection?: { rtt?: number };
-      mozConnection?: { rtt?: number };
-      webkitConnection?: { rtt?: number };
-    };
-    const rtt = nav.connection?.rtt ?? nav.mozConnection?.rtt ?? nav.webkitConnection?.rtt;
-    return typeof rtt === 'number' && Number.isFinite(rtt) && rtt > 0 ? Math.round(rtt) : null;
   }
 
   private computeAvailableColors(): number[] {
