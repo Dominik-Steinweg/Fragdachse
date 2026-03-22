@@ -337,7 +337,12 @@ export class ProjectileManager {
         tracked.colliders.push(c);
       }
       if (this.trainGroup) {
+        const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+          const trainMult = tracked.trainDamageMult ?? 1;
+          if (trainMult !== 0 && tracked.damage > 0) {
+            onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+          }
           this.queueProjectileExplosion(tracked);
         });
         tracked.colliders.push(c);
