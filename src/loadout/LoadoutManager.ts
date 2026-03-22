@@ -674,6 +674,8 @@ export class LoadoutManager {
       size:            fireConfig.projectileSize,
       damage:          config.damage,
       color:           config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang
+      ownerColor:      playerColor,
+      smokeTrailColor: config.rocketSmokeTrailColor ?? playerColor,
       lifetime,
       maxBounces:      fireConfig.projectileMaxBounces,
       isGrenade:       false,

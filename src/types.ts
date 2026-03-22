@@ -98,6 +98,8 @@ export interface SyncedProjectile {
   vy:      number;  // Geschwindigkeit Y (px/s)
   size:    number;  // px – für korrekte Client-Darstellung
   color:   number;  // hex
+  ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
+  smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
 }
@@ -187,6 +189,7 @@ export interface ProjectileSpawnConfig {
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
   color:           number;        // hex
+  ownerColor?:     number;        // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   lifetime:        number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
   maxBounces:      number;        // 0 für Granaten
   isGrenade:       boolean;
@@ -194,6 +197,7 @@ export interface ProjectileSpawnConfig {
   weaponName?:     string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
   homing?:         ProjectileHomingConfig;
+  smokeTrailColor?: number;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
@@ -312,6 +316,7 @@ export interface TrackedProjectile {
   createdAt:       number;
   ownerId:         string;
   color:           number;  // hex – gespeichert bei Spawn, entkoppelt von Shape
+  ownerColor?:     number;
   boundsListener:  (hitBody: Phaser.Physics.Arcade.Body) => void;
   colliders:       Phaser.Physics.Arcade.Collider[];  // müssen beim Destroy explizit entfernt werden
   damage:          number;        // Schadenswert pro Direkttreffer
@@ -322,6 +327,7 @@ export interface TrackedProjectile {
   weaponName:      string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
   homing?:         ProjectileHomingConfig;
+  smokeTrailColor?: number;
   lockedTargetId?: string | null;
   lockedTargetType?: HomingTargetType;
   lastHomingSearchAt?: number;

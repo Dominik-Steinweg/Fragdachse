@@ -213,7 +213,15 @@ export class ProjectileManager {
     if (isRocket && this.rocketRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.rocketRenderer.createVisual(id, x, y, cfg.size, cfg.color);
+      this.rocketRenderer.createVisual(
+        id,
+        x,
+        y,
+        cfg.size,
+        cfg.color,
+        cfg.ownerColor ?? cfg.color,
+        cfg.smokeTrailColor ?? cfg.color,
+      );
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -257,6 +265,7 @@ export class ProjectileManager {
       createdAt:      Date.now(),
       ownerId,
       color:          cfg.color,
+      ownerColor:     cfg.ownerColor,
       boundsListener: () => {},
       colliders:      [],
       damage:         cfg.damage,
@@ -267,6 +276,7 @@ export class ProjectileManager {
       weaponName:     cfg.weaponName ?? 'Waffe',
       explosion:      cfg.explosion,
       homing:         cfg.homing,
+      smokeTrailColor: cfg.smokeTrailColor,
       lockedTargetId: null,
       fuseTime:        cfg.fuseTime,
       grenadeEffect:   cfg.grenadeEffect,
@@ -957,7 +967,15 @@ export class ProjectileManager {
       for (const proj of this.projectiles) {
         if (proj.projectileStyle === 'rocket') {
           if (!rocketR.has(proj.id)) {
-            rocketR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+            rocketR.createVisual(
+              proj.id,
+              proj.sprite.x,
+              proj.sprite.y,
+              proj.sprite.displayWidth,
+              proj.color,
+              proj.ownerColor ?? proj.color,
+              proj.smokeTrailColor ?? proj.color,
+            );
           }
           rocketR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
         }
@@ -996,6 +1014,8 @@ export class ProjectileManager {
       vy:     Math.round(p.body.velocity.y),
       size:   Math.round(p.sprite.displayWidth),
       color:  p.color,
+      ownerColor: p.ownerColor,
+      smokeTrailColor: p.smokeTrailColor,
       style:  p.projectileStyle,
       tracer: p.tracerConfig,
     }));
@@ -1100,7 +1120,15 @@ export class ProjectileManager {
         bfgR.updateVisual(proj.id, proj.x, proj.y, proj.size);
       } else if (isRocket && rockets) {
         if (!rockets.has(proj.id)) {
-          rockets.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+          rockets.createVisual(
+            proj.id,
+            proj.x,
+            proj.y,
+            proj.size,
+            proj.color,
+            proj.ownerColor ?? proj.color,
+            proj.smokeTrailColor ?? proj.color,
+          );
         }
         rockets.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isFlame && flames) {
