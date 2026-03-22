@@ -138,6 +138,8 @@ export class NetworkBridge {
   private hostDispatcherRegistered = false;
   private allDispatcherRegistered = false;
   private knownPlayerColors: readonly number[] = [];
+  private hostClockOffsetMs = 0;
+  private bestClockSyncRttMs = Number.POSITIVE_INFINITY;
   private hostRpcHandlers = new Map<string, (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown>();
   private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
 
@@ -282,6 +284,11 @@ export class NetworkBridge {
     return (getState(KEY_GAME_PHASE) as GamePhase | undefined) ?? 'LOBBY';
   }
 
+  /** Lokale Schätzung der Host-Zeitbasis für hostseitige Timestamps. */
+  getSynchronizedNow(): number {
+    return isHost() ? Date.now() : Date.now() + this.hostClockOffsetMs;
+  }
+
   // ── Arena-Startzeit / Countdown: Host → Alle (global, reliable) ─────────
 
   /** Host-only: Setzt den Zeitstempel, ab dem ARENA-Input und Match-Timer freigegeben sind. */
@@ -295,14 +302,16 @@ export class NetworkBridge {
   }
 
   /** true solange die Runde bereits in ARENA ist, aber der Start-Countdown noch läuft. */
-  isArenaCountdownActive(now = Date.now()): boolean {
-    return this.getGamePhase() === 'ARENA' && now < this.getArenaStartTime();
+  isArenaCountdownActive(now?: number): boolean {
+    const effectiveNow = now ?? this.getSynchronizedNow();
+    return this.getGamePhase() === 'ARENA' && effectiveNow < this.getArenaStartTime();
   }
 
   /** Verbleibende Countdown-Sekunden als 3,2,1 (sonst 0). */
-  computeArenaCountdownSecondsLeft(now = Date.now()): number {
-    if (!this.isArenaCountdownActive(now)) return 0;
-    return Math.max(0, Math.ceil((this.getArenaStartTime() - now) / 1000));
+  computeArenaCountdownSecondsLeft(now?: number): number {
+    const effectiveNow = now ?? this.getSynchronizedNow();
+    if (!this.isArenaCountdownActive(effectiveNow)) return 0;
+    return Math.max(0, Math.ceil((this.getArenaStartTime() - effectiveNow) / 1000));
   }
 
   // ── Rundenende-Zeitstempel: Host → Alle (global, reliable) ────────────────
@@ -322,7 +331,7 @@ export class NetworkBridge {
    * Wird niemals über das Netzwerk gesendet.
    */
   computeSecondsLeft(): number {
-    const now = Date.now();
+    const now = this.getSynchronizedNow();
     const effectiveNow = Math.max(now, this.getArenaStartTime());
     return Math.max(0, Math.ceil((this.getRoundEndTime() - effectiveNow) / 1000));
   }
@@ -993,13 +1002,29 @@ export class NetworkBridge {
     this.registerHostRpcHandler('png', async (data: unknown): Promise<unknown> => {
       if (!isHost()) return undefined;
       const { ts, id } = data as { ts: number; id: string };
-      this.broadcastRpc('pong', { ts, id });
+      this.broadcastRpc('pong', { ts, id, hostTs: Date.now() });
       return undefined;
     });
     this.registerAllRpcHandler('pong', async (data: unknown): Promise<unknown> => {
-      const { ts, id } = data as { ts: number; id: string };
+      const { ts, id, hostTs } = data as { ts: number; id: string; hostTs?: number };
       if (id !== myPlayer().id) return undefined;
-      myPlayer().setState(KEY_PING, Date.now() - ts);
+      const now = Date.now();
+      const rtt = now - ts;
+      myPlayer().setState(KEY_PING, rtt);
+
+      if (!isHost() && typeof hostTs === 'number') {
+        const estimatedOffset = hostTs - (ts + rtt / 2);
+        if (!Number.isFinite(this.bestClockSyncRttMs)) {
+          this.bestClockSyncRttMs = rtt;
+          this.hostClockOffsetMs = estimatedOffset;
+          return undefined;
+        }
+        if (rtt <= this.bestClockSyncRttMs + 10) {
+          this.bestClockSyncRttMs = Math.min(this.bestClockSyncRttMs, rtt);
+          this.hostClockOffsetMs += (estimatedOffset - this.hostClockOffsetMs) * 0.35;
+        }
+      }
+
       return undefined;
     });
   }

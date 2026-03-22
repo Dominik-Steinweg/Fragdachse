@@ -513,6 +513,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.leftPanel.transitionToGame();
     this.rightPanel.transitionToGame();
+    this.syncHostLoadoutsFromSelections();
     this.arenaCountdown?.syncTo(bridge.getArenaStartTime());
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
@@ -592,6 +593,14 @@ export class ArenaScene extends Phaser.Scene {
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
     };
+  }
+
+  private syncHostLoadoutsFromSelections(): void {
+    if (!bridge.isHost() || !this.loadoutManager) return;
+    for (const profile of bridge.getConnectedPlayers()) {
+      if (!this.playerManager.hasPlayer(profile.id)) continue;
+      this.loadoutManager.syncSelectedLoadout(profile.id, this.resolveLoadoutSelection(profile.id));
+    }
   }
 
   // ── Arena Aufbau / Teardown ───────────────────────────────────────────────
@@ -912,7 +921,7 @@ export class ArenaScene extends Phaser.Scene {
     if (inGame) {
       this.inputSystem.setInputEnabled(!countdownActive);
       this.inputSystem.update();
-      this.arenaCountdown?.update();
+      this.arenaCountdown?.update(bridge.getSynchronizedNow());
     } else {
       this.inputSystem.setInputEnabled(false);
       this.arenaCountdown?.clear();
@@ -947,7 +956,7 @@ export class ArenaScene extends Phaser.Scene {
           const trainState  = latestState?.train ?? null;
           if (trainState?.alive) {
             this.rightPanel.updateTrainHP(trainState.hp, trainState.maxHp);
-          } else if (Date.now() < trainEvent.spawnAt) {
+          } else if (bridge.getSynchronizedNow() < trainEvent.spawnAt) {
             // Noch nicht gespawnt – feste Ankunftszeit auf dem Runden-Timer anzeigen
             const arrivalTimerSecs = Math.max(0, Math.ceil((bridge.getRoundEndTime() - trainEvent.spawnAt) / 1000));
             this.rightPanel.setTrainArrival(arrivalTimerSecs);
@@ -957,6 +966,7 @@ export class ArenaScene extends Phaser.Scene {
 
       if (bridge.isHost()) {
         this.spawnReadyPlayers();
+        if (countdownActive) this.syncHostLoadoutsFromSelections();
         this.runHostUpdate(delta);
         if (!countdownActive && secs <= 0) {
           this.hostSaveRoundResults();
@@ -1585,7 +1595,7 @@ export class ArenaScene extends Phaser.Scene {
   private getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
     const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId);
-    const remaining = cooldownUntil - Date.now();
+    const remaining = cooldownUntil - bridge.getSynchronizedNow();
     if (remaining <= 0) return 0;
     const config = this.getLocalUtilityConfig();
     if (config.cooldown <= 0) return 0;

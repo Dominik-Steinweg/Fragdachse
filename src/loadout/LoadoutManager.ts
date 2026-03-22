@@ -102,6 +102,31 @@ export class LoadoutManager {
     this.bridge.publishUtilityOverrideName(playerId, '');
   }
 
+  /**
+   * Zieht eine geaenderte Lobby-Auswahl in das autoritative Host-Loadout nach,
+   * ohne unveraenderte Spieler jedes Frame neu zu initialisieren.
+   */
+  syncSelectedLoadout(playerId: string, selection?: LoadoutSelection): void {
+    const nextWeapon1 = selection?.weapon1 ?? WEAPON_CONFIGS.GLOCK;
+    const nextWeapon2 = selection?.weapon2 ?? WEAPON_CONFIGS.P90;
+    const nextUtility = selection?.utility ?? UTILITY_CONFIGS.HE_GRENADE;
+    const nextUltimate = selection?.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
+    const current = this.loadouts.get(playerId);
+    const currentUltimate = this.ultimateStates.get(playerId)?.config;
+
+    if (
+      current
+      && current.weapon1.config.id === nextWeapon1.id
+      && current.weapon2.config.id === nextWeapon2.id
+      && current.utility.config.id === nextUtility.id
+      && currentUltimate?.id === nextUltimate.id
+    ) {
+      return;
+    }
+
+    this.assignDefaultLoadout(playerId, selection);
+  }
+
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
     this.ultimateStates.delete(playerId);
