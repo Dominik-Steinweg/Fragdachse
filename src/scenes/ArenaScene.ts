@@ -238,10 +238,16 @@ export class ArenaScene extends Phaser.Scene {
     this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       let shotId: number | undefined;
       if (slot === 'weapon1' || slot === 'weapon2') {
+        // Client-seitige Cooldown-Prüfung: nur feuern wenn bereit
+        const now = Date.now();
+        const lastFired = this.weaponLastFired[slot];
+        const wepConfig = this.getLocalWeaponConfig(slot);
+        if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
+          return; // noch auf Cooldown → kein RPC, kein visuelles Feedback
+        }
         this.aimSystem?.notifyShot(slot);
         shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
-        // Track fire timestamp for client-side cooldown HUD
-        this.weaponLastFired[slot] = Date.now();
+        this.weaponLastFired[slot] = now;
         this.leftPanel.flashSlot(slot);
       }
       // Client-seitigen Utility-Override nach Benutzung zurücksetzen
