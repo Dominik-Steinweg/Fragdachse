@@ -517,82 +517,81 @@ export class LeftSidePanel {
     const localId     = this.bridge.getLocalPlayerId();
     const currentName = this.bridge.getConnectedPlayers().find(p => p.id === localId)?.name ?? '';
 
+    // Position relativ zum Canvas berechnen ([ ÄNDERN ] Button)
+    const canvas = this.scene.game.canvas;
+    const canvasRect = canvas.getBoundingClientRect();
+    const scaleX = canvasRect.width / this.scene.scale.width;
+    const scaleY = canvasRect.height / this.scene.scale.height;
+    const popupLeft = canvasRect.left + (CENTER_X + 80) * scaleX;
+    const popupTop  = canvasRect.top  + NAME_VALUE_Y * scaleY;
+
     const popup = document.createElement('div');
     Object.assign(popup.style, {
-      position:        'absolute',
-      top:             '50%',
-      left:            '50%',
-      transform:       'translate(-50%, -50%)',
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      border:          `3px solid ${toCssColor(COLORS.GREEN_4)}`,
-      borderRadius:    '8px',
-      padding:         '20px',
+      position:        'fixed',
+      top:             `${popupTop}px`,
+      left:            `${popupLeft}px`,
+      backgroundColor: toCssColor(COLORS.GREY_9),
+      border:          `1px solid ${toCssColor(COLORS.GREY_5)}`,
+      padding:         '10px',
       display:         'flex',
-      flexDirection:   'column',
-      gap:             '15px',
+      flexDirection:   'row',
+      gap:             '6px',
+      alignItems:      'center',
       zIndex:          '1000',
-      fontFamily:      'Arial, sans-serif',
-      boxShadow:       '0px 0px 20px rgba(0,0,0,0.8)',
+      fontFamily:      'monospace',
     });
+
+    const playerColor = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
+    const colorCss = playerColor !== undefined ? toCssColor(playerColor) : toCssColor(COLORS.GREY_1);
 
     const inputElement = document.createElement('input');
     inputElement.type  = 'text';
     inputElement.value = currentName;
     Object.assign(inputElement.style, {
-      fontSize:        '20px',
-      padding:         '10px',
-      textAlign:       'center',
-      border:          `2px solid ${toCssColor(COLORS.GREY_5)}`,
-      borderRadius:    '4px',
+      fontSize:        '22px',
+      padding:         '4px 8px',
+      border:          `1px solid ${toCssColor(COLORS.GREY_5)}`,
       backgroundColor: toCssColor(COLORS.GREY_8),
-      color:           toCssColor(COLORS.GREY_1),
+      color:           colorCss,
       outline:         'none',
-      width:           '250px',
-    });
-
-    const buttonContainer = document.createElement('div');
-    Object.assign(buttonContainer.style, {
-      display:        'flex',
-      justifyContent: 'space-between',
-      gap:            '10px',
+      width:           '160px',
+      fontFamily:      'monospace',
+      fontWeight:      'bold',
     });
 
     const confirmBtn     = document.createElement('button');
-    confirmBtn.innerText = 'Speichern';
+    confirmBtn.innerText = 'OK';
     Object.assign(confirmBtn.style, {
-      flex:            '1',
-      padding:         '10px',
-      fontSize:        '16px',
+      padding:         '4px 10px',
+      fontSize:        '13px',
       cursor:          'pointer',
       backgroundColor: toCssColor(COLORS.GREEN_4),
       color:           toCssColor(COLORS.GREY_1),
-      border:          'none',
-      borderRadius:    '4px',
+      border:          `1px solid ${toCssColor(COLORS.GREEN_3)}`,
+      fontFamily:      'monospace',
       fontWeight:      'bold',
     });
 
     const cancelBtn     = document.createElement('button');
-    cancelBtn.innerText = 'Abbrechen';
+    cancelBtn.innerText = 'X';
     Object.assign(cancelBtn.style, {
-      flex:            '1',
-      padding:         '10px',
-      fontSize:        '16px',
+      padding:         '4px 8px',
+      fontSize:        '13px',
       cursor:          'pointer',
       backgroundColor: toCssColor(COLORS.RED_4),
       color:           toCssColor(COLORS.GREY_1),
-      border:          'none',
-      borderRadius:    '4px',
+      border:          `1px solid ${toCssColor(COLORS.RED_3)}`,
+      fontFamily:      'monospace',
       fontWeight:      'bold',
     });
 
-    buttonContainer.appendChild(cancelBtn);
-    buttonContainer.appendChild(confirmBtn);
     popup.appendChild(inputElement);
-    popup.appendChild(buttonContainer);
+    popup.appendChild(confirmBtn);
+    popup.appendChild(cancelBtn);
 
-    const container = document.getElementById('game-container') || document.body;
-    container.appendChild(popup);
+    document.body.appendChild(popup);
     inputElement.focus();
+    inputElement.select();
 
     const closePopup = () => { this.nameEditOpen = false; popup.remove(); };
     const saveName   = () => {
