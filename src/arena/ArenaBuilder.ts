@@ -319,7 +319,8 @@ export class ArenaBuilder {
 
   /**
    * Erstellt einen TileSprite für eine vollständige Gleis-Spalte.
-   * Die Textur 'bg_tracks' (48×48 px) wird vertikal gekachelt.
+   * Die Textur 'bg_tracks' (64×32 px) passt exakt auf 2 Zellen Breite
+   * und wird vertikal ohne Skalierung pro 32 px Zeile gekachelt.
    */
   private createTrackColumnVisual(col: number, rowCount: number): Phaser.GameObjects.TileSprite {
     const w = CELL_SIZE * 2;

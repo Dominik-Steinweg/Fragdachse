@@ -166,7 +166,7 @@ export class ArenaScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
-    this.load.image('bg_tracks',  './assets/sprites/48x48tracks02.png');
+    this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
@@ -177,6 +177,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
     this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');
     this.load.image('powerup_nuk', './assets/sprites/16x16nuke.png');
+    this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
     this.load.image('badger', './assets/sprites/32x32dachsweapon01.png');
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
   }
@@ -234,21 +235,6 @@ export class ArenaScene extends Phaser.Scene {
     this.meteorRenderer = new MeteorRenderer(this);
     this.meteorRenderer.generateTextures();
     this.powerUpRenderer = new PowerUpRenderer(this);
-
-    // ── 3c. Prozedurale Power-Up-Textur: BFG ────────────────────────────
-    if (!this.textures.exists('powerup_bfg')) {
-      const s = 16;
-      const canvas = this.textures.createCanvas('powerup_bfg', s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.3, 'rgba(208,218,145,0.9)');
-      grad.addColorStop(0.6, 'rgba(168,202,88,0.6)');
-      grad.addColorStop(1, 'rgba(117,167,67,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
 
     // ── 4. Combat-System ──────────────────────────────────────────────────
     this.combatSystem = new CombatSystem(this.playerManager, this.projectileManager, bridge);

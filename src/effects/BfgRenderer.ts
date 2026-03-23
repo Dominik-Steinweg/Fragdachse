@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
-import { circleZone } from './EffectUtils';
+import {
+  configureAdditiveImage,
+  createEmitter,
+  destroyEmitter,
+  fillRadialGradientTexture,
+  setCircleEmitZone,
+} from './EffectUtils';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_BFG_CORE  = '__bfg_core';
@@ -40,12 +46,9 @@ interface BfgVisual {
  * Standalone-Modul – wird vom ProjectileManager für style='bfg' genutzt.
  */
 export class BfgRenderer {
-  private scene: Phaser.Scene;
   private visuals = new Map<number, BfgVisual>();
 
-  constructor(scene: Phaser.Scene) {
-    this.scene = scene;
-  }
+  constructor(private readonly scene: Phaser.Scene) {}
 
   // ── Texturen ──────────────────────────────────────────────────────────────
 
@@ -54,63 +57,35 @@ export class BfgRenderer {
     const texMgr = this.scene.textures;
 
     // Core: 24×24 – heller grüner Kern
-    if (!texMgr.exists(TEX_BFG_CORE)) {
-      const s = 24;
-      const canvas = texMgr.createCanvas(TEX_BFG_CORE, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.3, 'rgba(208,218,145,0.8)');   // GREEN_1-ish
-      grad.addColorStop(0.7, 'rgba(168,202,88,0.3)');    // GREEN_2-ish
-      grad.addColorStop(1, 'rgba(117,167,67,0.0)');      // GREEN_3-ish
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(texMgr, TEX_BFG_CORE, 24, [
+      [0, 'rgba(255,255,255,1.0)'],
+      [0.3, 'rgba(208,218,145,0.8)'],
+      [0.7, 'rgba(168,202,88,0.3)'],
+      [1, 'rgba(117,167,67,0.0)'],
+    ]);
 
     // Ember: 16×16 – äußerer Energiering
-    if (!texMgr.exists(TEX_BFG_EMBER)) {
-      const s = 16;
-      const canvas = texMgr.createCanvas(TEX_BFG_EMBER, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(168,202,88,0.9)');      // GREEN_2-ish
-      grad.addColorStop(0.4, 'rgba(117,167,67,0.6)');    // GREEN_3-ish
-      grad.addColorStop(0.8, 'rgba(70,130,50,0.2)');     // GREEN_4-ish
-      grad.addColorStop(1, 'rgba(37,86,46,0.0)');        // GREEN_5-ish
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(texMgr, TEX_BFG_EMBER, 16, [
+      [0, 'rgba(168,202,88,0.9)'],
+      [0.4, 'rgba(117,167,67,0.6)'],
+      [0.8, 'rgba(70,130,50,0.2)'],
+      [1, 'rgba(37,86,46,0.0)'],
+    ]);
 
     // Spark: 6×6 – kleine leuchtende Funken
-    if (!texMgr.exists(TEX_BFG_SPARK)) {
-      const s = 6;
-      const canvas = texMgr.createCanvas(TEX_BFG_SPARK, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.5, 'rgba(208,218,145,0.6)');   // GREEN_1-ish
-      grad.addColorStop(1, 'rgba(168,202,88,0.0)');      // GREEN_2-ish
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(texMgr, TEX_BFG_SPARK, 6, [
+      [0, 'rgba(255,255,255,1.0)'],
+      [0.5, 'rgba(208,218,145,0.6)'],
+      [1, 'rgba(168,202,88,0.0)'],
+    ]);
 
     // Glow: 48×48 – großer weicher grüner Halo
-    if (!texMgr.exists(TEX_BFG_GLOW)) {
-      const s = 48;
-      const canvas = texMgr.createCanvas(TEX_BFG_GLOW, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(168,202,88,0.6)');      // GREEN_2-ish
-      grad.addColorStop(0.4, 'rgba(117,167,67,0.3)');    // GREEN_3-ish
-      grad.addColorStop(0.7, 'rgba(70,130,50,0.1)');     // GREEN_4-ish
-      grad.addColorStop(1, 'rgba(37,86,46,0.0)');        // GREEN_5-ish
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(texMgr, TEX_BFG_GLOW, 48, [
+      [0, 'rgba(168,202,88,0.6)'],
+      [0.4, 'rgba(117,167,67,0.3)'],
+      [0.7, 'rgba(70,130,50,0.1)'],
+      [1, 'rgba(37,86,46,0.0)'],
+    ]);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -122,7 +97,7 @@ export class BfgRenderer {
     const spread = Math.max(size * 0.5, 6);
 
     // Kern: heller grüner Bereich
-    const coreEmitter = this.scene.add.particles(x, y, TEX_BFG_CORE, {
+    const coreEmitter = createEmitter(this.scene, x, y, TEX_BFG_CORE, {
       lifespan:  CORE_LIFESPAN,
       frequency: 14,
       quantity:  3,
@@ -134,10 +109,10 @@ export class BfgRenderer {
       rotate:    { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
-    });
-    coreEmitter.setDepth(DEPTH_BFG + 0.05);
-    coreEmitter.addEmitZone(circleZone(spread * 0.35, 3));
-    const outerEmitter = this.scene.add.particles(x, y, TEX_BFG_EMBER, {
+    }, DEPTH_BFG + 0.05);
+    setCircleEmitZone(coreEmitter, spread * 0.35, 3);
+
+    const outerEmitter = createEmitter(this.scene, x, y, TEX_BFG_EMBER, {
       lifespan:  OUTER_LIFESPAN,
       frequency: 18,
       quantity:  2,
@@ -149,10 +124,10 @@ export class BfgRenderer {
       rotate:    { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
-    });
-    outerEmitter.setDepth(DEPTH_BFG);
-    outerEmitter.addEmitZone(circleZone(spread, 2));
-    const sparkEmitter = this.scene.add.particles(x, y, TEX_BFG_SPARK, {
+    }, DEPTH_BFG);
+    setCircleEmitZone(outerEmitter, spread, 2);
+
+    const sparkEmitter = createEmitter(this.scene, x, y, TEX_BFG_SPARK, {
       lifespan:  SPARK_LIFESPAN,
       frequency: 40,
       quantity:  1,
@@ -163,18 +138,18 @@ export class BfgRenderer {
       tint:      BFG_COLORS_SPARK,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
-    });
-    sparkEmitter.setDepth(DEPTH_SPARK);
-    sparkEmitter.addEmitZone(circleZone(spread * 0.5, 1));
+    }, DEPTH_SPARK);
+    setCircleEmitZone(sparkEmitter, spread * 0.5, 1);
 
     // Glow: additiver grüner Halo
-    const glowImage = this.scene.add.image(x, y, TEX_BFG_GLOW);
-    glowImage.setBlendMode(Phaser.BlendModes.ADD);
-    glowImage.setDepth(DEPTH_BFG - 0.1);
-    glowImage.setAlpha(0.6);
+    const glowImage = configureAdditiveImage(
+      this.scene.add.image(x, y, TEX_BFG_GLOW),
+      DEPTH_BFG - 0.1,
+      0.6,
+      COLORS.GREEN_3,
+    );
     const glowScale = Math.max(size / 48 * 3.0, 0.6);
     glowImage.setScale(glowScale);
-    glowImage.setTint(COLORS.GREEN_3);
 
     this.visuals.set(id, { coreEmitter, outerEmitter, sparkEmitter, glowImage });
   }
@@ -197,14 +172,11 @@ export class BfgRenderer {
     // Emit-Zone-Radius an Größe anpassen
     const spread = Math.max(size * 0.5, 6);
 
-    visual.coreEmitter.clearEmitZones();
-    visual.coreEmitter.addEmitZone(circleZone(spread * 0.35, 3));
+    setCircleEmitZone(visual.coreEmitter, spread * 0.35, 3, true);
 
-    visual.outerEmitter.clearEmitZones();
-    visual.outerEmitter.addEmitZone(circleZone(spread, 2));
+    setCircleEmitZone(visual.outerEmitter, spread, 2, true);
 
-    visual.sparkEmitter.clearEmitZones();
-    visual.sparkEmitter.addEmitZone(circleZone(spread * 0.5, 1));
+    setCircleEmitZone(visual.sparkEmitter, spread * 0.5, 1, true);
 
     // Skalierung an Größe anpassen
     visual.coreEmitter.setParticleScale(0.4 + size * 0.012, 0.05);
@@ -216,12 +188,9 @@ export class BfgRenderer {
     const visual = this.visuals.get(id);
     if (!visual) return;
 
-    visual.coreEmitter.stop();
-    visual.coreEmitter.destroy();
-    visual.outerEmitter.stop();
-    visual.outerEmitter.destroy();
-    visual.sparkEmitter.stop();
-    visual.sparkEmitter.destroy();
+    destroyEmitter(visual.coreEmitter);
+    destroyEmitter(visual.outerEmitter);
+    destroyEmitter(visual.sparkEmitter);
     visual.glowImage.destroy();
 
     this.visuals.delete(id);

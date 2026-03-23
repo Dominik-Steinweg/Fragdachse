@@ -1,7 +1,14 @@
 import Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
 import type { EnergyBallVariant } from '../types';
-import { circleZone } from './EffectUtils';
+import {
+  configureAdditiveImage,
+  createEmitter,
+  destroyEmitter,
+  ensureCanvasTexture,
+  fillRadialGradientTexture,
+  setCircleEmitZone,
+} from './EffectUtils';
 
 const TEX_ENERGY_CORE  = '__energy_ball_core';
 const TEX_ENERGY_SHELL = '__energy_ball_shell';
@@ -123,24 +130,15 @@ export class EnergyBallRenderer {
   private generateDefaultTextures(): void {
     const textures = this.scene.textures;
 
-    if (!textures.exists(TEX_ENERGY_CORE)) {
-      const s = 20;
-      const canvas = textures.createCanvas(TEX_ENERGY_CORE, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.35, 'rgba(196,246,255,0.95)');
-      grad.addColorStop(0.7, 'rgba(115,190,211,0.3)');
-      grad.addColorStop(1, 'rgba(79,143,186,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(textures, TEX_ENERGY_CORE, 20, [
+      [0, 'rgba(255,255,255,1.0)'],
+      [0.35, 'rgba(196,246,255,0.95)'],
+      [0.7, 'rgba(115,190,211,0.3)'],
+      [1, 'rgba(79,143,186,0.0)'],
+    ]);
 
-    if (!textures.exists(TEX_ENERGY_SHELL)) {
+    ensureCanvasTexture(textures, TEX_ENERGY_SHELL, 28, 28, (ctx) => {
       const s = 28;
-      const canvas = textures.createCanvas(TEX_ENERGY_SHELL, s, s)!;
-      const ctx = canvas.context;
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -151,57 +149,33 @@ export class EnergyBallRenderer {
       ctx.beginPath();
       ctx.arc(s / 2, s / 2, 11.5, Math.PI * 0.2, Math.PI * 1.55);
       ctx.stroke();
-      canvas.refresh();
-    }
+    });
 
-    if (!textures.exists(TEX_ENERGY_SPARK)) {
-      const s = 8;
-      const canvas = textures.createCanvas(TEX_ENERGY_SPARK, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.5, 'rgba(164,221,219,0.65)');
-      grad.addColorStop(1, 'rgba(79,143,186,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(textures, TEX_ENERGY_SPARK, 8, [
+      [0, 'rgba(255,255,255,1.0)'],
+      [0.5, 'rgba(164,221,219,0.65)'],
+      [1, 'rgba(79,143,186,0.0)'],
+    ]);
 
-    if (!textures.exists(TEX_ENERGY_GLOW)) {
-      const s = 56;
-      const canvas = textures.createCanvas(TEX_ENERGY_GLOW, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(164,221,219,0.55)');
-      grad.addColorStop(0.45, 'rgba(115,190,211,0.28)');
-      grad.addColorStop(1, 'rgba(23,32,56,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(textures, TEX_ENERGY_GLOW, 56, [
+      [0, 'rgba(164,221,219,0.55)'],
+      [0.45, 'rgba(115,190,211,0.28)'],
+      [1, 'rgba(23,32,56,0.0)'],
+    ]);
   }
 
   private generatePlasmaTextures(): void {
     const textures = this.scene.textures;
 
-    if (!textures.exists(TEX_PLASMA_CORE)) {
-      const s = 20;
-      const canvas = textures.createCanvas(TEX_PLASMA_CORE, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.28, 'rgba(255,255,255,0.82)');
-      grad.addColorStop(0.56, 'rgba(214,214,214,0.34)');
-      grad.addColorStop(1, 'rgba(40,40,40,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(textures, TEX_PLASMA_CORE, 20, [
+      [0, 'rgba(255,255,255,1.0)'],
+      [0.28, 'rgba(255,255,255,0.82)'],
+      [0.56, 'rgba(214,214,214,0.34)'],
+      [1, 'rgba(40,40,40,0.0)'],
+    ]);
 
-    if (!textures.exists(TEX_PLASMA_SHELL)) {
+    ensureCanvasTexture(textures, TEX_PLASMA_SHELL, 28, 28, (ctx) => {
       const s = 28;
-      const canvas = textures.createCanvas(TEX_PLASMA_SHELL, s, s)!;
-      const ctx = canvas.context;
       ctx.strokeStyle = 'rgba(255,255,255,0.82)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -217,36 +191,21 @@ export class EnergyBallRenderer {
       ctx.beginPath();
       ctx.arc(s / 2, s / 2, 6.4, Math.PI * 1.2, Math.PI * 2.3);
       ctx.stroke();
-      canvas.refresh();
-    }
+    });
 
-    if (!textures.exists(TEX_PLASMA_SPARK)) {
-      const s = 8;
-      const canvas = textures.createCanvas(TEX_PLASMA_SPARK, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,0.96)');
-      grad.addColorStop(0.38, 'rgba(255,255,255,0.7)');
-      grad.addColorStop(0.72, 'rgba(190,190,190,0.2)');
-      grad.addColorStop(1, 'rgba(50,50,50,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(textures, TEX_PLASMA_SPARK, 8, [
+      [0, 'rgba(255,255,255,0.96)'],
+      [0.38, 'rgba(255,255,255,0.7)'],
+      [0.72, 'rgba(190,190,190,0.2)'],
+      [1, 'rgba(50,50,50,0.0)'],
+    ]);
 
-    if (!textures.exists(TEX_PLASMA_GLOW)) {
-      const s = 56;
-      const canvas = textures.createCanvas(TEX_PLASMA_GLOW, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,0.5)');
-      grad.addColorStop(0.32, 'rgba(255,255,255,0.22)');
-      grad.addColorStop(0.66, 'rgba(180,180,180,0.08)');
-      grad.addColorStop(1, 'rgba(0,0,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    fillRadialGradientTexture(textures, TEX_PLASMA_GLOW, 56, [
+      [0, 'rgba(255,255,255,0.5)'],
+      [0.32, 'rgba(255,255,255,0.22)'],
+      [0.66, 'rgba(180,180,180,0.08)'],
+      [1, 'rgba(0,0,0,0.0)'],
+    ]);
   }
 
   createVisual(id: number, x: number, y: number, size: number, color: number, variant: EnergyBallVariant = DEFAULT_VARIANT): void {
@@ -257,7 +216,7 @@ export class EnergyBallRenderer {
     const coreTints = this.getCoreParticleTints(color, variant, preset);
     const shellTints = this.getShellParticleTints(color, variant, preset);
 
-    const coreEmitter = this.scene.add.particles(x, y, textureSet.core, {
+    const coreEmitter = createEmitter(this.scene, x, y, textureSet.core, {
       lifespan: { min: 110, max: 220 },
       frequency: 16,
       quantity: 2,
@@ -268,10 +227,9 @@ export class EnergyBallRenderer {
       tint: coreTints,
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    });
-    coreEmitter.setDepth(DEPTH.PROJECTILES + 1);
+    }, DEPTH.PROJECTILES + 1);
 
-    const shellEmitter = this.scene.add.particles(x, y, textureSet.spark, {
+    const shellEmitter = createEmitter(this.scene, x, y, textureSet.spark, {
       lifespan: { min: 160, max: 320 },
       frequency: 28,
       quantity: 1,
@@ -282,20 +240,21 @@ export class EnergyBallRenderer {
       tint: shellTints,
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
-    });
-    shellEmitter.setDepth(DEPTH.PROJECTILES + 0.5);
+    }, DEPTH.PROJECTILES + 0.5);
 
-    const glowImage = this.scene.add.image(x, y, textureSet.glow)
-      .setDepth(DEPTH.PROJECTILES - 0.2)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(preset.glowAlpha)
-      .setTint(this.getGlowTint(color, variant, preset));
+    const glowImage = configureAdditiveImage(
+      this.scene.add.image(x, y, textureSet.glow),
+      DEPTH.PROJECTILES - 0.2,
+      preset.glowAlpha,
+      this.getGlowTint(color, variant, preset),
+    );
 
-    const shellImage = this.scene.add.image(x, y, textureSet.shell)
-      .setDepth(DEPTH.PROJECTILES + 0.8)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(preset.shellAlpha)
-      .setTint(this.getShellTint(color, variant, preset));
+    const shellImage = configureAdditiveImage(
+      this.scene.add.image(x, y, textureSet.shell),
+      DEPTH.PROJECTILES + 0.8,
+      preset.shellAlpha,
+      this.getShellTint(color, variant, preset),
+    );
 
     this.visuals.set(id, { coreEmitter, shellEmitter, glowImage, shellImage });
     this.updateVisual(id, x, y, size, 0, 0, color, variant);
@@ -317,13 +276,11 @@ export class EnergyBallRenderer {
     const glowScale = Math.max(size * preset.glowScaleFactor, preset.minGlowScale) * glowPulse;
 
     visual.coreEmitter.setPosition(x, y);
-    visual.coreEmitter.clearEmitZones();
-    visual.coreEmitter.addEmitZone(circleZone(spread * preset.coreZoneFactor, 2));
+    setCircleEmitZone(visual.coreEmitter, spread * preset.coreZoneFactor, 2, true);
     visual.coreEmitter.setParticleScale(preset.coreParticleScaleBase + size * preset.coreParticleScaleFactor, 0.08);
 
     visual.shellEmitter.setPosition(x, y);
-    visual.shellEmitter.clearEmitZones();
-    visual.shellEmitter.addEmitZone(circleZone(spread * preset.shellZoneFactor, 1));
+    setCircleEmitZone(visual.shellEmitter, spread * preset.shellZoneFactor, 1, true);
     visual.shellEmitter.setParticleScale(preset.shellParticleScaleBase + size * preset.shellParticleScaleFactor, 0.1);
 
     visual.glowImage.setPosition(x, y);
@@ -342,10 +299,8 @@ export class EnergyBallRenderer {
     const visual = this.visuals.get(id);
     if (!visual) return;
 
-    visual.coreEmitter.stop();
-    visual.coreEmitter.destroy();
-    visual.shellEmitter.stop();
-    visual.shellEmitter.destroy();
+    destroyEmitter(visual.coreEmitter);
+    destroyEmitter(visual.shellEmitter);
     visual.glowImage.destroy();
     visual.shellImage.destroy();
     this.visuals.delete(id);
