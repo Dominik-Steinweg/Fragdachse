@@ -96,7 +96,7 @@ export interface WeaponConfig {
   readonly tracerConfig?: TracerConfig;
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -113,10 +113,15 @@ export interface ChargedGateUtilityActivationConfig {
   readonly fullChargeDuration: number; // ms – muss voll aufgeladen werden um zu feuern
 }
 
+export interface TargetedClickUtilityActivationConfig {
+  readonly type: 'targeted_click';
+}
+
 export type UtilityActivationConfig =
   | InstantUtilityActivationConfig
   | ChargedThrowUtilityActivationConfig
-  | ChargedGateUtilityActivationConfig;
+  | ChargedGateUtilityActivationConfig
+  | TargetedClickUtilityActivationConfig;
 
 interface BaseUtilityConfig {
   readonly id: string;
@@ -174,7 +179,11 @@ export interface BfgUtilityConfig extends BaseUtilityConfig {
   readonly laserInterval: number;   // ms zwischen Laser-Salven
 }
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig;
+export interface NukeUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'nuke';
+}
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -831,6 +840,20 @@ export const UTILITY_CONFIGS = {
     laserDamage:         10,            // Schaden pro Laser-Treffer
     laserRadius:         256,           // Laser-Reichweite in px
     laserInterval:       100,           // alle 100ms Laser-Salve
+    allowedSlots:        [],            // NICHT im Loadout-Menü wählbar
+    skipCooldownPublish: true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
+  } as UtilityConfig,
+
+  NUKE: {
+    id:                  'NUKE',
+    displayName:         'Atombombe',
+    type:                'nuke',
+    cooldown:            0,             // Ammo-basiert (Einzelschuss), kein Cooldown
+    activation:          { type: 'targeted_click' } as TargetedClickUtilityActivationConfig,
+    projectileSpeed:     0,
+    projectileSize:      0,
+    fuseTime:            0,
+    maxBounces:          0,
     allowedSlots:        [],            // NICHT im Loadout-Menü wählbar
     skipCooldownPublish: true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
   } as UtilityConfig,

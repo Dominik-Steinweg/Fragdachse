@@ -49,7 +49,7 @@ export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy';
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'nuke';
 
 /**
  * Konfiguration für die Tracer-Leuchtlinie eines Projektils (data-driven).
@@ -189,6 +189,13 @@ export interface UtilityChargePreviewState {
   minThrowSpeed: number;
   maxThrowSpeed: number;
   isGateCharge?: boolean;  // true = Gate-Charge (muss voll aufgeladen werden, z.B. BFG)
+}
+
+/** Lokaler Preview-State für zielbasierte Utility-Aktionen. */
+export interface UtilityTargetingPreviewState {
+  angle: number;
+  targetX: number;
+  targetY: number;
 }
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */

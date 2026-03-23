@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import { AimSpreadModel } from './AimSpreadModel';
-import type { PlayerAimNetState, UtilityChargePreviewState, WeaponSlot } from '../types';
+import type { PlayerAimNetState, UtilityChargePreviewState, UtilityTargetingPreviewState, WeaponSlot } from '../types';
 import {
   COLORS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
@@ -32,6 +32,14 @@ const SLOT_PALETTES: Record<WeaponSlot, SlotPalette> = {
     crossGlow:  COLORS.GOLD_3,
     crossMain:  COLORS.GOLD_1,
   },
+};
+
+const TARGETING_PALETTE: SlotPalette = {
+  beamShadow: COLORS.RED_6,
+  beamGlow:   COLORS.RED_4,
+  beamCore:   COLORS.RED_2,
+  crossGlow:  COLORS.RED_3,
+  crossMain:  COLORS.RED_1,
 };
 
 // ── Visuelle Konstanten ────────────────────────────────────────────────────
@@ -102,7 +110,7 @@ export class AimSystem {
     this.confirmedHitUntil = this.scene.time.now + HIT_FLASH_MS;
   }
 
-  update(showAim: boolean, inArena: boolean, delta: number): void {
+  update(showAim: boolean, inArena: boolean, delta: number, utilityTargeting?: UtilityTargetingPreviewState): void {
     this.scene.input.setDefaultCursor(inArena ? 'none' : 'default');
 
     if (showAim && !this.prevShowAim) {
@@ -119,6 +127,13 @@ export class AimSystem {
 
     const sx = this.snap(sprite.x);
     const sy = this.snap(sprite.y);
+
+    if (utilityTargeting) {
+      const tx = this.snap(utilityTargeting.targetX);
+      const ty = this.snap(utilityTargeting.targetY);
+      this.drawTargetingReticle(tx, ty);
+      return;
+    }
 
     let localIsMoving = false;
     if (this.prevX === null) {
@@ -202,6 +217,39 @@ export class AimSystem {
     this.drawCrosshairArm(cx - gap, cy, cx - gap - CROSS_LINE_LEN, cy, 'horizontal', -1, frac, palette, accentColor);
     this.drawCrosshairArm(cx, cy + gap, cx, cy + gap + CROSS_LINE_LEN, 'vertical', 1, frac, palette, accentColor);
     this.drawCrosshairArm(cx, cy - gap, cx, cy - gap - CROSS_LINE_LEN, 'vertical', -1, frac, palette, accentColor);
+  }
+
+  private drawTargetingReticle(cx: number, cy: number): void {
+    const outerRadius = 26;
+    const innerRadius = 12;
+    const bracketGap = 34;
+    const bracketLen = 12;
+    const diamondRadius = 9;
+
+    this.gfx.lineStyle(7, TARGETING_PALETTE.beamShadow, 0.34);
+    this.gfx.strokeCircle(cx, cy, outerRadius + 2);
+    this.gfx.lineStyle(4, TARGETING_PALETTE.crossGlow, 0.46);
+    this.gfx.strokeCircle(cx, cy, outerRadius);
+    this.gfx.lineStyle(2, COLORS.GREY_1, 0.9);
+    this.gfx.strokeCircle(cx, cy, innerRadius);
+
+    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx - bracketGap, cy, cx - bracketGap - bracketLen, cy);
+    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx + bracketGap, cy, cx + bracketGap + bracketLen, cy);
+    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx, cy - bracketGap, cx, cy - bracketGap - bracketLen);
+    this.strokeLine(4, TARGETING_PALETTE.beamShadow, 0.28, cx, cy + bracketGap, cx, cy + bracketGap + bracketLen);
+
+    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx - bracketGap, cy, cx - bracketGap - bracketLen, cy);
+    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx + bracketGap, cy, cx + bracketGap + bracketLen, cy);
+    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx, cy - bracketGap, cx, cy - bracketGap - bracketLen);
+    this.strokeLine(2, TARGETING_PALETTE.crossMain, 0.95, cx, cy + bracketGap, cx, cy + bracketGap + bracketLen);
+
+    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx, cy - diamondRadius, cx + diamondRadius, cy);
+    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx + diamondRadius, cy, cx, cy + diamondRadius);
+    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx, cy + diamondRadius, cx - diamondRadius, cy);
+    this.strokeLine(2, TARGETING_PALETTE.beamCore, 0.9, cx - diamondRadius, cy, cx, cy - diamondRadius);
+
+    this.gfx.fillStyle(COLORS.GREY_1, 0.9);
+    this.gfx.fillCircle(cx, cy, 2);
   }
 
   private drawCrosshairArm(

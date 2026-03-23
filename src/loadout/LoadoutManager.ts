@@ -8,6 +8,7 @@ import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetSt
 import type {
   BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
+  NukeUtilityConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
@@ -61,6 +62,7 @@ export class LoadoutManager {
   private dashBurstChecker: ((id: string) => boolean) | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
   private armageddonSystem:   ArmageddonSystem | null = null;
+  private nukeStrikeHandler: ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
@@ -155,6 +157,11 @@ export class LoadoutManager {
     this.armageddonSystem = sys;
   }
 
+  /** Injiziert die Host-Logik für zielbasierte Nuke-Strikes. */
+  setNukeStrikeHandler(handler: ((playerId: string, targetX: number, targetY: number) => boolean) | null): void {
+    this.nukeStrikeHandler = handler;
+  }
+
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
 
   /**
@@ -245,7 +252,7 @@ export class LoadoutManager {
         break;
 
       case 'utility': {
-        this.useUtility(loadout.utility, x, y, angle, playerId, now, player.color, params);
+        this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
         break;
       }
 
@@ -468,6 +475,8 @@ export class LoadoutManager {
     x: number,
     y: number,
     angle: number,
+    targetX: number,
+    targetY: number,
     playerId: string,
     now: number,
     playerColor: number,
@@ -499,6 +508,12 @@ export class LoadoutManager {
         if ((params?.utilityChargeFraction ?? 0) < 1.0) return; // nicht voll geladen → abbrechen
         if (cfg.type === 'bfg') {
           didUse = this.fireBfgUtility(cfg as BfgUtilityConfig, x, y, angle, playerId);
+        }
+        break;
+
+      case 'targeted_click':
+        if (cfg.type === 'nuke') {
+          didUse = this.triggerNukeUtility(cfg as NukeUtilityConfig, playerId, targetX, targetY);
         }
         break;
 
@@ -582,6 +597,15 @@ export class LoadoutManager {
     });
 
     return true;
+  }
+
+  private triggerNukeUtility(
+    _cfg: NukeUtilityConfig,
+    playerId: string,
+    targetX: number,
+    targetY: number,
+  ): boolean {
+    return this.nukeStrikeHandler?.(playerId, targetX, targetY) ?? false;
   }
 
   private buildGrenadeEffect(cfg: UtilityConfig): GrenadeEffectConfig {

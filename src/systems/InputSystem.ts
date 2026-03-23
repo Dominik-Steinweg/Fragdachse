@@ -1,14 +1,24 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState } from '../types';
-import { DASH_T1_S, DASH_T2_S } from '../config';
+import type { PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState, UtilityTargetingPreviewState } from '../types';
+import {
+  DASH_T1_S, DASH_T2_S,
+  ARENA_OFFSET_X, ARENA_OFFSET_Y,
+  ARENA_WIDTH, ARENA_HEIGHT,
+} from '../config';
 import { quantizeAngle } from '../utils/angle';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
-import type { ChargedThrowUtilityActivationConfig, ChargedGateUtilityActivationConfig, UtilityConfig } from '../loadout/LoadoutConfig';
+import type {
+  ChargedThrowUtilityActivationConfig,
+  ChargedGateUtilityActivationConfig,
+  TargetedClickUtilityActivationConfig,
+  UtilityConfig,
+} from '../loadout/LoadoutConfig';
 
 /** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
 type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig;
+type TargetedActivation = TargetedClickUtilityActivationConfig;
 
 export class InputSystem {
   private scene:           Phaser.Scene;
@@ -35,6 +45,7 @@ export class InputSystem {
   private utilityHoldActive = false;
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
+  private utilityTargetingActive = false;
 
   // Aktueller Aim-Winkel (Radiant, für Rotation-Sync)
   private currentAimAngle = 0;
@@ -94,14 +105,14 @@ export class InputSystem {
   setLocalState(isStunned: boolean, isBurrowed: boolean): void {
     this.localIsStunned  = isStunned;
     this.localIsBurrowed = isBurrowed;
-    if (isStunned) this.cancelUtilityCharge();
+    if (isStunned) this.cancelUtilityInteraction();
   }
 
   setInputEnabled(enabled: boolean): void {
     this.inputEnabled = enabled;
     if (!enabled) {
       this.predictedUtilityCooldownUntil = 0;
-      this.cancelUtilityCharge();
+      this.cancelUtilityInteraction();
     }
   }
 
@@ -119,6 +130,14 @@ export class InputSystem {
 
   isUtilityPreviewActive(): boolean {
     return this.utilityHoldActive;
+  }
+
+  isUtilityChargePreviewActive(): boolean {
+    return this.utilityHoldActive;
+  }
+
+  isUtilityTargetingActive(): boolean {
+    return this.utilityTargetingActive;
   }
 
   getUtilityChargePreviewState(): UtilityChargePreviewState | undefined {
@@ -145,6 +164,20 @@ export class InputSystem {
     };
   }
 
+  getUtilityTargetingPreviewState(): UtilityTargetingPreviewState | undefined {
+    const sprite = this.getLocalSprite();
+    const cfg = this.getTargetedUtilityConfig();
+    if (!this.utilityTargetingActive || !sprite || !cfg) return undefined;
+
+    const pointer = this.scene.input.activePointer;
+    const target = this.clampPointToArena(pointer.x, pointer.y);
+    return {
+      angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
+      targetX: target.x,
+      targetY: target.y,
+    };
+  }
+
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
   update(): void {
     // ── 1. Bewegungs-Input (immer gesendet) ────────────────────────────────
@@ -163,7 +196,7 @@ export class InputSystem {
 
     // ── 2. Stun: keine weiteren Aktionen ───────────────────────────────────
     if (this.localIsStunned) {
-      this.cancelUtilityCharge();
+      this.cancelUtilityInteraction();
       return;
     }
 
@@ -189,7 +222,7 @@ export class InputSystem {
     const now     = Date.now();
 
     if (!sprite) {
-      this.cancelUtilityCharge();
+      this.cancelUtilityInteraction();
       return;
     }
 
@@ -197,6 +230,31 @@ export class InputSystem {
     const py    = pointer.y;
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, px, py);
     this.currentAimAngle = angle;
+
+    if (this.utilityTargetingActive) {
+      const targetedCfg = this.getTargetedUtilityConfig();
+      if (!targetedCfg) {
+        this.cancelUtilityTargeting();
+      } else {
+        const target = this.clampPointToArena(px, py);
+        const targetAngle = Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y);
+        this.currentAimAngle = targetAngle;
+
+        if (pointer.rightButtonDown() || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+          this.cancelUtilityTargeting();
+          return;
+        }
+
+        if (pointer.leftButtonDown()) {
+          this.predictedUtilityCooldownUntil = now + targetedCfg.cooldown;
+          this.onLoadoutUse('utility', targetAngle, target.x, target.y);
+          this.cancelUtilityTargeting();
+          return;
+        }
+
+        return;
+      }
+    }
 
     // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
@@ -209,6 +267,9 @@ export class InputSystem {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (this.beginTargetedUtilityAim(now)) {
+        return;
+      }
       if (!this.beginChargedUtilityHold(now)) {
         this.onLoadoutUse('utility', angle, px, py);
       }
@@ -245,6 +306,23 @@ export class InputSystem {
     const cfg = this.getLocalUtilityConfig?.();
     if (!cfg || (cfg.activation.type !== 'charged_throw' && cfg.activation.type !== 'charged_gate')) return undefined;
     return cfg as UtilityConfig & { activation: ChargeableActivation };
+  }
+
+  private getTargetedUtilityConfig(): (UtilityConfig & { activation: TargetedActivation }) | undefined {
+    const cfg = this.getLocalUtilityConfig?.();
+    if (!cfg || cfg.activation.type !== 'targeted_click') return undefined;
+    return cfg as UtilityConfig & { activation: TargetedActivation };
+  }
+
+  private beginTargetedUtilityAim(now: number): boolean {
+    const cfg = this.getTargetedUtilityConfig();
+    if (!cfg) return false;
+
+    if (now < this.getEffectiveUtilityCooldownUntil()) return true;
+
+    this.cancelUtilityCharge();
+    this.utilityTargetingActive = true;
+    return true;
   }
 
   private beginChargedUtilityHold(now: number): boolean {
@@ -316,6 +394,22 @@ export class InputSystem {
     if (!this.utilityHoldActive || this.utilityChargeStartedAt !== null) return false;
     const eligibleAt = this.utilityChargeEligibleAt ?? this.getEffectiveUtilityCooldownUntil();
     return now < eligibleAt;
+  }
+
+  private clampPointToArena(x: number, y: number): { x: number; y: number } {
+    return {
+      x: Phaser.Math.Clamp(x, ARENA_OFFSET_X, ARENA_OFFSET_X + ARENA_WIDTH),
+      y: Phaser.Math.Clamp(y, ARENA_OFFSET_Y, ARENA_OFFSET_Y + ARENA_HEIGHT),
+    };
+  }
+
+  private cancelUtilityTargeting(): void {
+    this.utilityTargetingActive = false;
+  }
+
+  private cancelUtilityInteraction(): void {
+    this.cancelUtilityCharge();
+    this.cancelUtilityTargeting();
   }
 
   private cancelUtilityCharge(): void {

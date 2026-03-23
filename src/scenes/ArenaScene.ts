@@ -95,6 +95,7 @@ export class ArenaScene extends Phaser.Scene {
   private aimSystem:   AimSystem | null = null;
   private utilityChargeIndicator: UtilityChargeIndicator | null = null;
   private arenaCountdown: ArenaCountdownOverlay | null = null;
+  private utilityTargetingHint: Phaser.GameObjects.Container | null = null;
 
   // Alive/Burrowed-Flags des lokalen Spielers (gesetzt in runHostUpdate/runClientUpdate)
   private localPlayerAlive    = false;
@@ -350,6 +351,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
+    this.utilityTargetingHint = this.createUtilityTargetingHint();
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY) => {
@@ -782,14 +784,20 @@ export class ArenaScene extends Phaser.Scene {
       this.loadoutManager.setCombatSystem(this.combatSystem);
       this.loadoutManager.setDashBurstChecker(id => this.hostPhysics.isDashBurst(id));
       this.loadoutManager.setPhysicsSystem(this.hostPhysics);
+      this.loadoutManager.setNukeStrikeHandler((playerId, targetX, targetY) => {
+        return this.powerUpSystem?.scheduleNukeStrike(playerId, targetX, targetY) ?? false;
+      });
       this.combatSystem.setBurrowSystem(this.burrowSystem);
       this.combatSystem.setResourceSystem(this.resourceSystem);
       this.combatSystem.setLoadoutManager(this.loadoutManager);
 
       // PowerUpSystem initialisieren
       this.powerUpSystem = new PowerUpSystem(this.playerManager, this.combatSystem, layout, {
+        onNukePickup: (playerId) => {
+          this.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.NUKE, 1);
+        },
         onNukeExploded: (x, y, radius, triggeredBy) => {
-          bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a);
+          bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a, 'nuke');
           this.applyNukeEnvironmentDamage(x, y, radius, triggeredBy);
         },
         onHolyHandGrenadePickup: (playerId) => {
@@ -1113,12 +1121,14 @@ export class ArenaScene extends Phaser.Scene {
     // Läuft nach Host-/Client-Update, damit lokale Autoritätsdaten im selben Frame wirken.
     const inArena = inGame && !this.matchTerminated;
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
+    const utilityTargeting = this.inputSystem.getUtilityTargetingPreviewState();
     const showAim = inArena
-                 && this.localPlayerAlive
-                 && !this.localPlayerBurrowed
-                 && !this.inputSystem.isUtilityPreviewActive();
-    this.aimSystem?.update(showAim, inArena, delta);
+           && this.localPlayerAlive
+           && !this.localPlayerBurrowed
+           && !this.inputSystem.isUtilityChargePreviewActive();
+    this.aimSystem?.update(showAim || utilityTargeting !== undefined, inArena, delta, utilityTargeting);
     this.utilityChargeIndicator?.update(this.inputSystem.getUtilityChargePreviewState());
+        this.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined);
   }
 
   private syncArenaFogOverlay(now: number, inArena: boolean, countdownActive: boolean): void {
@@ -1146,6 +1156,45 @@ export class ArenaScene extends Phaser.Scene {
 
     this.overlayTrackedLocalAlive = this.localPlayerAlive;
     this.arenaCountdown.update(now);
+  }
+
+  private createUtilityTargetingHint(): Phaser.GameObjects.Container {
+    const x = ARENA_OFFSET_X + ARENA_WIDTH * 0.5;
+    const y = ARENA_OFFSET_Y + 54;
+    const panel = this.add.rectangle(0, 0, 500, 64, COLORS.GREY_10, 0.72);
+    panel.setStrokeStyle(2, COLORS.RED_2, 0.9);
+    const title = this.add.text(0, -11, 'ATOMBOMBE: ZIELMODUS', {
+      fontFamily: 'monospace',
+      fontSize: '22px',
+      fontStyle: 'bold',
+      color: '#fff1cf',
+      stroke: '#241527',
+      strokeThickness: 5,
+    }).setOrigin(0.5);
+    const subtitle = this.add.text(0, 15, 'Linksklick: platzieren   Rechtsklick oder E: abbrechen', {
+      fontFamily: 'monospace',
+      fontSize: '15px',
+      color: '#ebede9',
+      stroke: '#241527',
+      strokeThickness: 4,
+    }).setOrigin(0.5);
+
+    const container = this.add.container(x, y, [panel, title, subtitle]);
+    container.setDepth(DEPTH.OVERLAY - 1);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+    return container;
+  }
+
+  private syncUtilityTargetingHint(inArena: boolean, isTargeting: boolean): void {
+    const hint = this.utilityTargetingHint;
+    if (!hint) return;
+
+    const visible = inArena && isTargeting && this.localPlayerAlive && !this.localPlayerBurrowed;
+    hint.setVisible(visible);
+    if (!visible) return;
+
+    hint.alpha = 0.9 + 0.1 * Math.sin(this.time.now / 160);
   }
 
   private getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number }[] {
@@ -1942,6 +1991,8 @@ export class ArenaScene extends Phaser.Scene {
           // Client-seitige Vorhersage: Utility-Override lokal setzen
           if (pu.defId === 'BFG') {
             this.clientUtilityOverride = UTILITY_CONFIGS.BFG;
+          } else if (pu.defId === 'NUKE') {
+            this.clientUtilityOverride = UTILITY_CONFIGS.NUKE;
           } else if (pu.defId === 'HOLY_HAND_GRENADE') {
             this.clientUtilityOverride = UTILITY_CONFIGS.HOLY_HAND_GRENADE;
           }

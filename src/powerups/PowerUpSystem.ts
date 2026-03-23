@@ -41,6 +41,7 @@ interface ActiveNukeStrike {
 }
 
 interface PowerUpSystemOptions {
+  onNukePickup?: (playerId: string) => void;
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
   onHolyHandGrenadePickup?: (playerId: string) => void;
   onBfgPickup?: (playerId: string) => void;
@@ -244,7 +245,7 @@ export class PowerUpSystem {
         break;
       }
       case 'global_nuke':
-        this.armNukeStrike(playerId);
+        this.options.onNukePickup?.(playerId);
         break;
       case 'holy_hand_grenade':
         this.options.onHolyHandGrenadePickup?.(playerId);
@@ -255,11 +256,11 @@ export class PowerUpSystem {
     }
   }
 
-  private armNukeStrike(playerId: string): void {
+  scheduleNukeStrike(playerId: string, targetX: number, targetY: number): boolean {
     const owner = this.playerManager.getPlayer(playerId);
-    if (!owner) return;
+    if (!owner || !this.combat.isAlive(playerId)) return false;
 
-    const spawn = this.findNukeSpawnPoint(owner.sprite.x, owner.sprite.y);
+    const spawn = this.clampNukePoint(targetX, targetY);
     const armedAt = Date.now();
     const strike: ActiveNukeStrike = {
       id:          this.nextNukeId++,
@@ -272,6 +273,7 @@ export class PowerUpSystem {
     };
 
     this.activeNukes.set(strike.id, strike);
+    return true;
   }
 
   private explodeNuke(strike: ActiveNukeStrike): void {
@@ -363,25 +365,11 @@ export class PowerUpSystem {
     return free[Math.floor(Math.random() * free.length)];
   }
 
-  private findNukeSpawnPoint(triggerX: number, triggerY: number): { x: number; y: number } {
-    const preferred = this.collectFreeCells(NUKE_CONFIG.edgePaddingPx)
-      .map(cell => ({
-        ...cell,
-        dist: Phaser.Math.Distance.Between(triggerX, triggerY, this.cellToWorldX(cell.gx), this.cellToWorldY(cell.gy)),
-      }));
-
-    const outsideBlast = preferred.filter(cell => cell.dist > NUKE_CONFIG.radius);
-    const primaryPool = outsideBlast.length > 0 ? outsideBlast : preferred;
-
-    if (primaryPool.length > 0) {
-      const sorted = [...primaryPool].sort((left, right) => right.dist - left.dist);
-      const topCount = Math.max(1, Math.ceil(sorted.length * NUKE_CONFIG.farSpawnTopFraction));
-      const pick = sorted[Math.floor(Math.random() * topCount)];
-      return { x: this.cellToWorldX(pick.gx), y: this.cellToWorldY(pick.gy) };
-    }
-
-    const fallback = this.getRandomFreeCell();
-    return { x: this.cellToWorldX(fallback.gx), y: this.cellToWorldY(fallback.gy) };
+  private clampNukePoint(x: number, y: number): { x: number; y: number } {
+    return {
+      x: Phaser.Math.Clamp(x, ARENA_OFFSET_X, ARENA_OFFSET_X + ARENA_WIDTH),
+      y: Phaser.Math.Clamp(y, ARENA_OFFSET_Y, ARENA_OFFSET_Y + ARENA_HEIGHT),
+    };
   }
 
   private collectFreeCells(edgePaddingPx: number): Array<{ gx: number; gy: number }> {

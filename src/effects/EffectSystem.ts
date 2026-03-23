@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { ExplosionVisualStyle, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { DEPTH, DEPTH_FX, DEPTH_TRACE, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
+import { DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
 import { edgeZone } from './EffectUtils';
 
 const HITSCAN_TRACER_FADE_MS = 120;
@@ -158,49 +158,62 @@ export class EffectSystem {
 
     const isHoly = visualStyle === 'holy';
     const isEnergy = visualStyle === 'energy';
+    const isNuke = visualStyle === 'nuke';
     const fillColor = isHoly
       ? 0xffd700
-      : (color ?? (isEnergy ? 0x73bed3 : 0xff2200));
-    const flashColor = isEnergy ? 0xe8fbff : (isHoly ? 0xffffff : 0xffffcc);
+      : (color ?? (isEnergy ? 0x73bed3 : (isNuke ? 0xffb347 : 0xff2200)));
+    const flashColor = isEnergy ? 0xe8fbff : (isHoly ? 0xffffff : (isNuke ? 0xfff2cc : 0xffffcc));
     const haloColor = isEnergy
       ? this.mixColor(fillColor, 0xffffff, 0.45)
-      : (isHoly ? 0xffee88 : this.mixColor(fillColor, 0xffffff, 0.2));
+      : (isHoly ? 0xffee88 : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
     const startRadius = 8;
-    const endScale    = radius / startRadius;
+    const endScale = radius / startRadius;
 
-    // 1. Innerer Blitz (weiß/hell)
+    if (isNuke) {
+      const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xfff1cf, 0.24);
+      skyFlash.setScrollFactor(0);
+      skyFlash.setDepth(DEPTH.OVERLAY - 2);
+      skyFlash.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets:    skyFlash,
+        alpha:      0,
+        duration:   420,
+        ease:       'Quad.easeOut',
+        onComplete: () => skyFlash.destroy(),
+      });
+    }
+
     const flash = this.scene.add.circle(x, y, startRadius, flashColor, 1);
     flash.setDepth(DEPTH_FX + 1);
     const flashEndScale = (radius * 0.3) / startRadius;
     this.scene.tweens.add({
       targets:    flash,
-      scaleX:     isEnergy ? flashEndScale * 1.2 : flashEndScale,
-      scaleY:     isEnergy ? flashEndScale * 1.2 : flashEndScale,
+      scaleX:     isEnergy ? flashEndScale * 1.2 : (isNuke ? flashEndScale * 1.5 : flashEndScale),
+      scaleY:     isEnergy ? flashEndScale * 1.2 : (isNuke ? flashEndScale * 1.5 : flashEndScale),
       alpha:      0,
-      duration:   isEnergy ? 180 : 150,
+      duration:   isEnergy ? 180 : (isNuke ? 240 : 150),
       ease:       'Power3Out',
       onComplete: () => flash.destroy(),
     });
 
-    if (isEnergy) {
-      const halo = this.scene.add.circle(x, y, startRadius, haloColor, 0.4);
+    if (isEnergy || isNuke) {
+      const halo = this.scene.add.circle(x, y, startRadius, haloColor, isNuke ? 0.55 : 0.4);
       halo.setDepth(DEPTH_FX + 0.5);
       halo.setBlendMode(Phaser.BlendModes.ADD);
       this.scene.tweens.add({
         targets:    halo,
-        scaleX:     (radius * 0.9) / startRadius,
-        scaleY:     (radius * 0.9) / startRadius,
+        scaleX:     (radius * (isNuke ? 1.3 : 0.9)) / startRadius,
+        scaleY:     (radius * (isNuke ? 1.3 : 0.9)) / startRadius,
         alpha:      0,
-        duration:   420,
+        duration:   isNuke ? 900 : 420,
         ease:       'Sine.easeOut',
         onComplete: () => halo.destroy(),
       });
     }
 
-    // 2. Haupt-Explosionsfüllung (wachsender Kreis)
-    const blast = this.scene.add.circle(x, y, startRadius, fillColor, isEnergy ? 0.5 : 0.7);
+    const blast = this.scene.add.circle(x, y, startRadius, fillColor, isEnergy ? 0.5 : (isNuke ? 0.88 : 0.7));
     blast.setDepth(DEPTH_FX);
-    if (isEnergy) {
+    if (isEnergy || isNuke) {
       blast.setBlendMode(Phaser.BlendModes.ADD);
     }
     this.scene.tweens.add({
@@ -208,27 +221,53 @@ export class EffectSystem {
       scaleX:     endScale,
       scaleY:     endScale,
       alpha:      0,
-      duration:   isEnergy ? 520 : 600,
-      ease:       isEnergy ? 'Sine.easeOut' : 'Power2Out',
+      duration:   isEnergy ? 520 : (isNuke ? 760 : 600),
+      ease:       isEnergy ? 'Sine.easeOut' : (isNuke ? 'Cubic.easeOut' : 'Power2Out'),
       onComplete: () => blast.destroy(),
     });
 
-    // 3. Schockwellen-Ring (Stroke-Kreis)
+    if (isNuke) {
+      const secondaryBlast = this.scene.add.circle(x, y, startRadius, 0xff7a2f, 0.55);
+      secondaryBlast.setDepth(DEPTH_FX + 0.2);
+      secondaryBlast.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets:    secondaryBlast,
+        scaleX:     (radius * 1.22) / startRadius,
+        scaleY:     (radius * 1.22) / startRadius,
+        alpha:      0,
+        duration:   980,
+        ease:       'Expo.easeOut',
+        onComplete: () => secondaryBlast.destroy(),
+      });
+
+      const heatHalo = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.25);
+      heatHalo.setDepth(DEPTH_FX + 0.3);
+      heatHalo.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets:    heatHalo,
+        scaleX:     (radius * 1.7) / startRadius,
+        scaleY:     (radius * 1.7) / startRadius,
+        alpha:      0,
+        duration:   1300,
+        ease:       'Sine.easeOut',
+        onComplete: () => heatHalo.destroy(),
+      });
+    }
+
     const ringStartRadius = radius * 0.5;
-    const ringEndScale    = (radius * 1.15) / ringStartRadius;
     const ring = this.scene.add.circle(x, y, ringStartRadius);
-    ring.setStrokeStyle(isEnergy ? 3 : (isHoly ? 3 : 2), isEnergy ? haloColor : fillColor, 0.8);
+    ring.setStrokeStyle(isEnergy ? 3 : (isHoly ? 3 : (isNuke ? 5 : 2)), isEnergy ? haloColor : fillColor, isNuke ? 0.95 : 0.8);
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_FX);
-    if (isEnergy) {
+    if (isEnergy || isNuke) {
       ring.setBlendMode(Phaser.BlendModes.ADD);
     }
     this.scene.tweens.add({
       targets:    ring,
-      scaleX:     ringEndScale,
-      scaleY:     ringEndScale,
+      scaleX:     isNuke ? (radius * 1.35) / ringStartRadius : (radius * 1.15) / ringStartRadius,
+      scaleY:     isNuke ? (radius * 1.35) / ringStartRadius : (radius * 1.15) / ringStartRadius,
       alpha:      0,
-      duration:   isEnergy ? 340 : 400,
+      duration:   isEnergy ? 340 : (isNuke ? 720 : 400),
       ease:       'Linear',
       onComplete: () => ring.destroy(),
     });
@@ -251,25 +290,58 @@ export class EffectSystem {
       });
     }
 
-    // 4. Funken-Partikel (explosiver Burst)
+    if (isNuke) {
+      const shockRingA = this.scene.add.circle(x, y, radius * 0.18);
+      shockRingA.setStrokeStyle(6, 0xfff0b8, 0.92);
+      shockRingA.setFillStyle(0, 0);
+      shockRingA.setDepth(DEPTH_FX + 0.1);
+      shockRingA.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets:    shockRingA,
+        scaleX:     6.2,
+        scaleY:     6.2,
+        alpha:      0,
+        duration:   920,
+        ease:       'Expo.easeOut',
+        onComplete: () => shockRingA.destroy(),
+      });
+
+      const shockRingB = this.scene.add.circle(x, y, radius * 0.12);
+      shockRingB.setStrokeStyle(3, 0xff7a2f, 0.8);
+      shockRingB.setFillStyle(0, 0);
+      shockRingB.setDepth(DEPTH_FX + 0.12);
+      shockRingB.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets:    shockRingB,
+        scaleX:     9.5,
+        scaleY:     9.5,
+        alpha:      0,
+        duration:   1180,
+        ease:       'Quad.easeOut',
+        onComplete: () => shockRingB.destroy(),
+      });
+    }
+
     const sparkTints = isHoly
       ? [0xffd700, 0xffffff, 0xffee88]
       : isEnergy
         ? [0xffffff, haloColor, fillColor]
-        : [fillColor, 0xffaa00, 0xff6600];
-    const sparkCount = Math.ceil(radius / (isHoly ? 3 : (isEnergy ? 2.4 : 5)));
+        : isNuke
+          ? [0xffffff, 0xfff0b8, 0xffa348, 0xff6422]
+          : [fillColor, 0xffaa00, 0xff6600];
+    const sparkCount = Math.ceil(radius / (isHoly ? 3 : (isEnergy ? 2.4 : (isNuke ? 1.2 : 5))));
     const sparkEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
-      lifespan:  isEnergy ? { min: 220, max: 520 } : { min: 300, max: 600 },
-      speed:     isEnergy ? { min: radius * 0.5, max: radius * 1.9 } : { min: 50, max: radius * 1.5 },
-      scale:     isEnergy ? { start: 1.45, end: 0 } : { start: 1.2, end: 0 },
-      alpha:     { start: isEnergy ? 1.0 : 0.9, end: 0 },
+      lifespan:  isEnergy ? { min: 220, max: 520 } : (isNuke ? { min: 450, max: 1100 } : { min: 300, max: 600 }),
+      speed:     isEnergy ? { min: radius * 0.5, max: radius * 1.9 } : (isNuke ? { min: radius * 0.65, max: radius * 2.8 } : { min: 50, max: radius * 1.5 }),
+      scale:     isEnergy ? { start: 1.45, end: 0 } : (isNuke ? { start: 2.2, end: 0 } : { start: 1.2, end: 0 }),
+      alpha:     { start: isEnergy ? 1.0 : (isNuke ? 1.0 : 0.9), end: 0 },
       tint:      sparkTints,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     });
     sparkEmitter.setDepth(DEPTH_FX);
     sparkEmitter.explode(sparkCount);
-    this.scene.time.delayedCall(800, () => sparkEmitter.destroy());
+    this.scene.time.delayedCall(isNuke ? 1400 : 800, () => sparkEmitter.destroy());
 
     if (isEnergy) {
       const arcEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
@@ -287,27 +359,58 @@ export class EffectSystem {
       this.scene.time.delayedCall(700, () => arcEmitter.destroy());
     }
 
-    // 5. Glut-Partikel (langsamer, mit Gravitation)
     const emberTints = isHoly
       ? [0xffd700, 0xffcc00]
       : isEnergy
         ? [haloColor, fillColor, this.mixColor(fillColor, 0x172038, 0.45)]
-        : [fillColor, 0xff4400];
-    const emberCount = Math.ceil(radius / (isHoly ? 4 : (isEnergy ? 4.8 : 8)));
+        : isNuke
+          ? [0xffd27a, 0xff8f42, 0x6a2a1b, 0x2e1d23]
+          : [fillColor, 0xff4400];
+    const emberCount = Math.ceil(radius / (isHoly ? 4 : (isEnergy ? 4.8 : (isNuke ? 2.3 : 8))));
     const emberEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_EMBER, {
-      lifespan:  isEnergy ? { min: 260, max: 620 } : { min: 500, max: 1000 },
-      speed:     isEnergy ? { min: radius * 0.15, max: radius * 0.95 } : { min: 20, max: radius * 0.8 },
-      scale:     isEnergy ? { start: 1.0, end: 0.1 } : { start: 0.8, end: 0.2 },
-      alpha:     { start: isEnergy ? 0.8 : 0.7, end: 0 },
+      lifespan:  isEnergy ? { min: 260, max: 620 } : (isNuke ? { min: 900, max: 1800 } : { min: 500, max: 1000 }),
+      speed:     isEnergy ? { min: radius * 0.15, max: radius * 0.95 } : (isNuke ? { min: radius * 0.2, max: radius * 1.1 } : { min: 20, max: radius * 0.8 }),
+      scale:     isEnergy ? { start: 1.0, end: 0.1 } : (isNuke ? { start: 1.3, end: 0.18 } : { start: 0.8, end: 0.2 }),
+      alpha:     { start: isEnergy ? 0.8 : (isNuke ? 0.92 : 0.7), end: 0 },
       tint:      emberTints,
-      gravityY:  isEnergy ? -20 : 40,
+      gravityY:  isEnergy ? -20 : (isNuke ? -180 : 40),
       emitting:  false,
     });
     emberEmitter.setDepth(DEPTH_FX);
     emberEmitter.explode(emberCount);
-    this.scene.time.delayedCall(isEnergy ? 900 : 1200, () => emberEmitter.destroy());
+    this.scene.time.delayedCall(isEnergy ? 900 : (isNuke ? 2200 : 1200), () => emberEmitter.destroy());
 
-    // 6. Heilige Handgranate: zusätzlicher goldener Außenring + Kamera-Shake
+    if (isNuke) {
+      const plumeEmitter = this.scene.add.particles(x, y + radius * 0.06, TEX_EXPLOSION_SPARK, {
+        lifespan:  { min: 950, max: 1800 },
+        speedX:    { min: -radius * 0.1, max: radius * 0.1 },
+        speedY:    { min: -radius * 0.95, max: -radius * 0.35 },
+        scale:     { start: 2.4, end: 0.15 },
+        alpha:     { start: 0.7, end: 0 },
+        tint:      [0xfff4d8, 0xffb347, 0x583a43, 0x20202b],
+        blendMode: Phaser.BlendModes.ADD,
+        gravityY:  -120,
+        emitting:  false,
+      });
+      plumeEmitter.setDepth(DEPTH_FX + 0.4);
+      plumeEmitter.explode(Math.max(Math.ceil(radius / 1.8), 140));
+      this.scene.time.delayedCall(2200, () => plumeEmitter.destroy());
+
+      const falloutEmitter = this.scene.add.particles(x, y - radius * 0.1, TEX_EXPLOSION_EMBER, {
+        lifespan:  { min: 1200, max: 2200 },
+        speedX:    { min: -radius * 0.22, max: radius * 0.22 },
+        speedY:    { min: -radius * 0.3, max: radius * 0.1 },
+        scale:     { start: 1.05, end: 0.12 },
+        alpha:     { start: 0.55, end: 0 },
+        tint:      [0x3b2a33, 0x5a3e42, 0x8a5c43],
+        gravityY:  45,
+        emitting:  false,
+      });
+      falloutEmitter.setDepth(DEPTH_FX + 0.35);
+      falloutEmitter.explode(Math.max(Math.ceil(radius / 3.1), 90));
+      this.scene.time.delayedCall(2600, () => falloutEmitter.destroy());
+    }
+
     if (isHoly) {
       const holyRingRadius = radius * 0.6;
       const holyRingEndScale = (radius * 1.4) / holyRingRadius;
@@ -328,6 +431,8 @@ export class EffectSystem {
       this.scene.cameras.main.shake(300, 0.008);
     } else if (isEnergy) {
       this.scene.cameras.main.shake(180, 0.005);
+    } else if (isNuke) {
+      this.scene.cameras.main.shake(550, 0.018);
     }
   }
 
