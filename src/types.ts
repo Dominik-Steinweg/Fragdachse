@@ -45,6 +45,9 @@ export interface PlayerNetState {
 /** Visueller Stil eines Projektils */
 export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket';
 
+/** Variant-Preset fuer Energy-Ball-Projektile. */
+export type EnergyBallVariant = 'default' | 'plasma';
+
 /** Visueller Stil einer Explosion / Detonation. */
 export type ExplosionVisualStyle = 'default' | 'holy' | 'energy';
 
@@ -105,6 +108,7 @@ export interface SyncedProjectile {
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
+  energyBallVariant?: EnergyBallVariant;
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
 }
 
@@ -205,6 +209,7 @@ export interface ProjectileSpawnConfig {
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
+  energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional, data-driven)
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // Projektil kann durch passende Detonatoren gezündet werden
@@ -342,6 +347,7 @@ export interface TrackedProjectile {
   fuseTime?:       number;
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil
+  energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional)
   // Detonations-System (optional)
   detonable?: DetonableConfig;  // dieses Projektil kann gezündet werden

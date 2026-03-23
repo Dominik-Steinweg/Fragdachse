@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType } from '../types';
+import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant } from '../types';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import { BULLET_STYLE, AWP_STYLE } from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
@@ -22,6 +22,7 @@ interface ClientProjectileState {
   color: number;
   receivedAt: number;
   style?: string;
+  energyBallVariant?: EnergyBallVariant;
   // Flammenwerfer-Decay: velocity nimmt exponentiell ab
   isFlame: boolean;
 }
@@ -238,7 +239,7 @@ export class ProjectileManager {
     if (isEnergyBall && this.energyBallRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.energyBallRenderer.createVisual(id, x, y, cfg.size, cfg.color);
+      this.energyBallRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.energyBallVariant);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -298,6 +299,7 @@ export class ProjectileManager {
       fuseTime:        cfg.fuseTime,
       grenadeEffect:   cfg.grenadeEffect,
       projectileStyle: cfg.projectileStyle,
+      energyBallVariant: cfg.energyBallVariant,
       tracerConfig:    cfg.tracerConfig,
       detonable:       cfg.detonable,
       detonator:       cfg.detonator,
@@ -986,7 +988,7 @@ export class ProjectileManager {
       for (const proj of this.projectiles) {
         if (proj.projectileStyle === 'energy_ball') {
           if (!energyBallR.has(proj.id)) {
-            energyBallR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+            energyBallR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color, proj.energyBallVariant);
           }
           energyBallR.updateVisual(
             proj.id,
@@ -996,6 +998,7 @@ export class ProjectileManager {
             proj.body.velocity.x,
             proj.body.velocity.y,
             proj.color,
+            proj.energyBallVariant,
           );
         }
       }
@@ -1062,6 +1065,7 @@ export class ProjectileManager {
       ownerColor: p.ownerColor,
       smokeTrailColor: p.smokeTrailColor,
       style:  p.projectileStyle,
+      energyBallVariant: p.energyBallVariant,
       tracer: p.tracerConfig,
     }));
 
@@ -1166,6 +1170,7 @@ export class ProjectileManager {
         color: proj.color,
         receivedAt: now,
         style: proj.style,
+        energyBallVariant: proj.energyBallVariant,
         isFlame,
       });
 
@@ -1176,9 +1181,9 @@ export class ProjectileManager {
         bfgR.updateVisual(proj.id, proj.x, proj.y, proj.size);
       } else if (isEnergyBallP && energyBalls) {
         if (!energyBalls.has(proj.id)) {
-          energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+          energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.energyBallVariant);
         }
-        energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
+        energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color, proj.energyBallVariant);
       } else if (isRocket && rockets) {
         if (!rockets.has(proj.id)) {
           rockets.createVisual(
@@ -1273,7 +1278,7 @@ export class ProjectileManager {
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
       } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {
-        this.energyBallRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color);
+        this.energyBallRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color, state.energyBallVariant);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
         this.rocketRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'flame' && flames && flames.has(id)) {

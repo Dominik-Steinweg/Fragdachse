@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TracerConfig } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -71,6 +71,7 @@ export interface WeaponConfig {
   // Visuelles Override
   readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
   readonly projectileStyle?: ProjectileStyle; // 'bullet' (eckig, Standard) | 'ball' (rund)
+  readonly energyBallVariant?: EnergyBallVariant;
   readonly rocketSmokeTrailColor?: number;   // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
 
   // Detonations-System
@@ -217,7 +218,7 @@ export const WEAPON_CONFIGS = {
     id:                   'GLOCK',
     displayName:          'Glock',
     cooldown:             150,
-    damage:               10,
+    damage:               8,
     range:                400,        
     fire: {
       type:                 'projectile',
@@ -252,7 +253,7 @@ export const WEAPON_CONFIGS = {
     id:                   'USP',
     displayName:          'USP',
     cooldown:             250,
-    damage:               14,
+    damage:               11,
     range:                600,        
     fire: {
       type:                 'projectile',
@@ -334,6 +335,46 @@ export const WEAPON_CONFIGS = {
   } as WeaponConfig,
 
   /**
+   * Plasma Gun - schnell schießend, wenig schaden, leichtes Homig
+   */
+  PLASMA: {
+    id:                   'PLASMA',
+    displayName:          'Plasma Gun',
+    cooldown:             110,
+    damage:               3,          // Direkttreffer-Schaden
+    range:                500,         
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      500,
+      projectileSize:       8,
+      projectileMaxBounces: 0,
+      homing: {
+        acquireDelayMs:        200,
+        searchRadius:          320,
+        retargetIntervalMs:    100,
+        maxTurnDegreesPerStep: 8,
+        targetTypes:           ['players'],
+        requireLineOfSight:    true,
+        excludeOwner:          true,
+        distanceWeight:        1,
+        forwardWeight:         1,
+      } satisfies ProjectileHomingConfig,
+    },
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        3,
+    spreadStanding:       15,
+    spreadMoving:         15,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'energy_ball' satisfies ProjectileStyle,
+    energyBallVariant:    'plasma' satisfies EnergyBallVariant,
+  } as WeaponConfig,
+
+  /**
    * "WEAPON2" - Rechte Maustaste
    */
 
@@ -341,7 +382,7 @@ export const WEAPON_CONFIGS = {
     id:                   'P90',
     displayName:          'P90',
     cooldown:             80,
-    damage:               7,
+    damage:               6,
     range:                500,        
     fire: {
       type:                 'projectile',
@@ -376,7 +417,7 @@ export const WEAPON_CONFIGS = {
     id:                   'AK47',
     displayName:          'AK-47',
     cooldown:             100,
-    damage:               10,
+    damage:               8,
     range:                1000,        
     fire: {
       type:                 'projectile',
@@ -411,7 +452,7 @@ export const WEAPON_CONFIGS = {
     id:                   'SHOTGUN',
     displayName:          'Schrotflinte',
     cooldown:             700,
-    damage:               9,       // Schaden pro Pellet
+    damage:               7,       // Schaden pro Pellet
     range:                230,
     fire: {
       type:                 'projectile',
@@ -476,7 +517,7 @@ export const WEAPON_CONFIGS = {
     // Detonations-Tag: wird durch ASMD_PRIM (und spätere Detonatoren mit diesem Tag) gezündet
     detonable: {
       tag:            'asmd_ball',
-      aoeDamage:      80,
+      aoeDamage:      60,
       aoeRadius:      80,
       knockback:      950,
       selfKnockbackMult: 0.75,
@@ -499,8 +540,8 @@ export const WEAPON_CONFIGS = {
       limitRangeToCursor:   true,
       impactExplosion: {
         radius:          110,
-        maxDamage:       50,
-        minDamage:       10,
+        maxDamage:       40,
+        minDamage:       5,
         knockback:       1250,
         selfDamageMult:  0.25,
         rockDamageMult:  1,
@@ -541,8 +582,8 @@ export const WEAPON_CONFIGS = {
       limitRangeToCursor:   false,
       impactExplosion: {
         radius:          65,
-        maxDamage:       6,
-        minDamage:       3,
+        maxDamage:       4,
+        minDamage:       2,
         knockback:       320,
         selfDamageMult:  1,
         rockDamageMult:  1,
@@ -621,7 +662,7 @@ export const WEAPON_CONFIGS = {
       alphaCore:  0.95,
       alphaGlow:  0.45,
       segments:   6,
-      fadeMs:     350,
+      fadeMs:     750,
       colorCore:  0xffffff,   // weißer Kern
       // colorGlow:  0xffdd66,   // gelb-goldener Halo
     } satisfies TracerConfig,
