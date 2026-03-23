@@ -61,16 +61,16 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   SCHEDULED_EVENT: {
     // chanceToDrop fehlt → immer 1.0
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100, NUKE: 0 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 10 },
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 0, HOLY_HAND_GRENADE: 100000, BFG: 10 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 10 },
   },
 };
 
 /** Anzahl Power-Ups, die beim Zerstören des Zugs gespawnt werden. */
-export const TRAIN_DROP_COUNT = 5;
+export const TRAIN_DROP_COUNT = 1;
 
 // ── Geplante Spawns (Sekunden nach Rundenstart) ────────────────────────────
 

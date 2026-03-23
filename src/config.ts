@@ -216,7 +216,7 @@ export const BURROW_TINT               = 0x8B5E3C;  // Braun
 export const BURROW_STUCK_DAMAGE_PER_SEC = 10;
 
 // ---- Schockwelle ----
-export const SHOCKWAVE_RADIUS          = 250;   // px
+export const SHOCKWAVE_RADIUS          = 150;   // px
 export const SHOCKWAVE_DAMAGE          = 30;
 export const SHOCKWAVE_KNOCKBACK       = 1400;   // px/s Impuls
 export const SELF_STUN_DURATION_MS     = 1000;

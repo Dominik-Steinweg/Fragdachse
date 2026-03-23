@@ -30,7 +30,7 @@ export const TRAIN = {
   HP_MAX:          300,
 
   /** Frags, die dem Last-Hit-Spieler gutgeschrieben werden */
-  KILL_FRAGS:      3,
+  KILL_FRAGS:      1,
 
   /** Sekunden nach Rundenstart bis der Zug einfährt */
   SPAWN_DELAY_S:   10,
