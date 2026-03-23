@@ -141,6 +141,10 @@ interface BaseUtilityConfig {
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
 
   // Spezial-Flags (optional)
+  /** Eigenes Projektil-Visual fuer geworfene Utilitys. */
+  readonly projectileStyle?: ProjectileStyle;
+  /** Optionales Farb-Override fuer das Utility-Projektil. */
+  readonly projectileColor?: number;
   /** Visueller Explosionsstil fuer Damage-Utilities (Heilige Handgranate etc.) */
   readonly explosionVisualStyle?: ExplosionVisualStyle;
   /** Kein Cooldown-Publish nach Nutzung – für Ammo-basierte Einmal-Items,
@@ -821,6 +825,8 @@ export const UTILITY_CONFIGS = {
     aoeRadius:       250,           // riesiger Radius
     aoeDamage:       200,           // massiver Schaden
     allowedSlots:         [],            // NICHT im Loadout-Menü wählbar
+    projectileStyle:      'holy_grenade' as ProjectileStyle,
+    projectileColor:      0xd9b13b,
     trainDamageMult:      1.0,           // 100% Schaden am Zug
     explosionVisualStyle: 'holy',        // goldene Explosion + Kamera-Shake
     skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)

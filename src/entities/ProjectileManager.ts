@@ -6,6 +6,7 @@ import { BULLET_STYLE, AWP_STYLE } from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
+import type { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import type { RocketRenderer }  from '../effects/RocketRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
@@ -56,6 +57,9 @@ export class ProjectileManager {
 
   // ── Energy-Ball-Renderer (ASMD Secondary) ───────────────────────────────
   private energyBallRenderer: EnergyBallRenderer | null = null;
+
+  // ── Holy-Grenade-Renderer (goldene Granate mit Kreuzstift) ─────────────
+  private holyGrenadeRenderer: HolyGrenadeRenderer | null = null;
 
   // ── Rocket-Renderer (Raketenkörper + Rauchspur) ────────────────────────
   private rocketRenderer: RocketRenderer | null = null;
@@ -154,6 +158,11 @@ export class ProjectileManager {
     this.energyBallRenderer = renderer;
   }
 
+  /** Injiziert den HolyGrenadeRenderer fuer die Heilige Handgranate. */
+  setHolyGrenadeRenderer(renderer: HolyGrenadeRenderer | null): void {
+    this.holyGrenadeRenderer = renderer;
+  }
+
   /** Injiziert den RocketRenderer fuer Raketen-Visualisierung. */
   setRocketRenderer(renderer: RocketRenderer | null): void {
     this.rocketRenderer = renderer;
@@ -201,6 +210,7 @@ export class ProjectileManager {
     const isFlame  = cfg.projectileStyle === 'flame';
     const isBfg    = cfg.projectileStyle === 'bfg';
     const isAwp    = cfg.projectileStyle === 'awp';
+    const isHolyGrenade = cfg.projectileStyle === 'holy_grenade';
     const isRocket = cfg.projectileStyle === 'rocket';
 
     // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
@@ -240,6 +250,12 @@ export class ProjectileManager {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.energyBallRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.energyBallVariant);
+    }
+
+    if (isHolyGrenade && this.holyGrenadeRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.holyGrenadeRenderer.createVisual(id, x, y, cfg.size);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -814,6 +830,7 @@ export class ProjectileManager {
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
     this.energyBallRenderer?.destroyAll();
+    this.holyGrenadeRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
     this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
@@ -1010,6 +1027,24 @@ export class ProjectileManager {
       }
     }
 
+    const holyGrenadeR = this.holyGrenadeRenderer;
+    if (holyGrenadeR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'holy_grenade') {
+          if (!holyGrenadeR.has(proj.id)) {
+            holyGrenadeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+          }
+          holyGrenadeR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
+        }
+      }
+      const activeHolyGrenadeIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'holy_grenade').map(p => p.id),
+      );
+      for (const id of holyGrenadeR.getActiveIds()) {
+        if (!activeHolyGrenadeIds.has(id)) holyGrenadeR.destroyVisual(id);
+      }
+    }
+
     const rocketR = this.rocketRenderer;
     if (rocketR) {
       for (const proj of this.projectiles) {
@@ -1085,6 +1120,7 @@ export class ProjectileManager {
     const flames    = this.flameRenderer;
     const rockets   = this.rocketRenderer;
     const energyBalls = this.energyBallRenderer;
+    const holyGrenades = this.holyGrenadeRenderer;
 
     // Verwaiste Visuals und States entfernen
     for (const [id, sprite] of this.clientVisuals) {
@@ -1126,6 +1162,14 @@ export class ProjectileManager {
         }
       }
     }
+    if (holyGrenades) {
+      for (const id of holyGrenades.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          holyGrenades.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
     const bfgR = this.bfgRenderer;
     if (bfgR) {
       for (const id of bfgR.getActiveIds()) {
@@ -1148,6 +1192,7 @@ export class ProjectileManager {
       const isFlame  = proj.style === 'flame';
       const isEnergyBallP = proj.style === 'energy_ball';
       const isBfgP   = proj.style === 'bfg';
+      const isHolyGrenadeP = proj.style === 'holy_grenade';
       const isAwpP   = proj.style === 'awp';
       const isRocket = proj.style === 'rocket';
 
@@ -1179,6 +1224,11 @@ export class ProjectileManager {
           bfgR.createVisual(proj.id, proj.x, proj.y, proj.size);
         }
         bfgR.updateVisual(proj.id, proj.x, proj.y, proj.size);
+      } else if (isHolyGrenadeP && holyGrenades) {
+        if (!holyGrenades.has(proj.id)) {
+          holyGrenades.createVisual(proj.id, proj.x, proj.y, proj.size);
+        }
+        holyGrenades.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isEnergyBallP && energyBalls) {
         if (!energyBalls.has(proj.id)) {
           energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.energyBallVariant);
@@ -1277,6 +1327,8 @@ export class ProjectileManager {
       const bfgRe = this.bfgRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
+      } else if (state.style === 'holy_grenade' && this.holyGrenadeRenderer?.has(id)) {
+        this.holyGrenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {
         this.energyBallRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color, state.energyBallVariant);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {

@@ -569,7 +569,7 @@ export class LoadoutManager {
       speed,
       size:          cfg.projectileSize,
       damage:        0,
-      color:         playerColor,
+      color:         cfg.projectileColor ?? playerColor,
       lifetime:      cfg.fuseTime,
       maxBounces:    cfg.maxBounces,
       isGrenade:     true,
@@ -577,6 +577,7 @@ export class LoadoutManager {
       weaponName:    cfg.displayName,
       fuseTime:      cfg.fuseTime,
       grenadeEffect: this.buildGrenadeEffect(cfg),
+      projectileStyle: cfg.projectileStyle,
     });
 
     return true;

@@ -43,7 +43,7 @@ export interface PlayerNetState {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'holy_grenade';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */
 export type EnergyBallVariant = 'default' | 'plasma';

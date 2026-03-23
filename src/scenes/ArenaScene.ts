@@ -23,6 +23,7 @@ import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
 import { EnergyBallRenderer }  from '../effects/EnergyBallRenderer';
+import { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../effects/RocketRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
@@ -83,6 +84,7 @@ export class ArenaScene extends Phaser.Scene {
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
   private energyBallRenderer!: EnergyBallRenderer;
+  private holyGrenadeRenderer!: HolyGrenadeRenderer;
   private rocketRenderer!:    RocketRenderer;
   private tracerRenderer!:    TracerRenderer;
   private inputSystem!:       InputSystem;
@@ -225,6 +227,9 @@ export class ArenaScene extends Phaser.Scene {
     this.energyBallRenderer = new EnergyBallRenderer(this);
     this.energyBallRenderer.generateTextures();
     this.projectileManager.setEnergyBallRenderer(this.energyBallRenderer);
+    this.holyGrenadeRenderer = new HolyGrenadeRenderer(this);
+    this.holyGrenadeRenderer.generateTextures();
+    this.projectileManager.setHolyGrenadeRenderer(this.holyGrenadeRenderer);
     this.rocketRenderer = new RocketRenderer(this);
     this.rocketRenderer.generateTextures();
     this.projectileManager.setRocketRenderer(this.rocketRenderer);
