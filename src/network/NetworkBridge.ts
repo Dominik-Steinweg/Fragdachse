@@ -135,6 +135,8 @@ interface RpcEnvelope {
 export class NetworkBridge {
   private playerStateMap   = new Map<string, PlayerState>();
   private connectedPlayers = new Map<string, PlayerProfile>();
+  private cachedConnectedPlayers: PlayerProfile[] = [];
+  private connectedPlayersCacheDirty = true;
 
   private joinCbs: Array<(profile: PlayerProfile) => void> = [];
   private quitCbs: Array<(id: string) => void>             = [];
@@ -228,11 +230,13 @@ export class NetworkBridge {
 
     onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
+      this.connectedPlayersCacheDirty = true;
 
       state.onQuit(() => {
         const hadColor = this.getPlayerColor(state.id) !== undefined;
         this.playerStateMap.delete(state.id);
         this.connectedPlayers.delete(state.id);
+        this.connectedPlayersCacheDirty = true;
         if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
       });
@@ -254,7 +258,18 @@ export class NetworkBridge {
   /** Gibt aktuelle Profile zurück. Name wird dynamisch aus dem Player-State gelesen,
    *  sodass Namensänderungen sofort ohne Rejoin sichtbar sind. */
   getConnectedPlayers(): PlayerProfile[] {
-    return [...this.playerStateMap.values()].map(s => this.extractProfile(s));
+    this.syncConnectedPlayers();
+    return this.cachedConnectedPlayers;
+  }
+
+  getPlayerName(playerId: string): string {
+    return this.getPlayerProfile(playerId)?.name ?? 'Player';
+  }
+
+  getPlayerProfile(playerId: string): PlayerProfile | undefined {
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return this.connectedPlayers.get(playerId);
+    return this.syncConnectedProfile(state);
   }
 
   // ── Input: Client → Host (pro Spieler, unreliable) ────────────────────────
@@ -1183,6 +1198,43 @@ export class NetworkBridge {
     if (!isHost()) return;
     if (this.knownPlayerColors.length === 0) return;
     this.setAvailableColors(this.computeAvailableColors());
+  }
+
+  private syncConnectedPlayers(): void {
+    let changed = this.connectedPlayersCacheDirty;
+
+    for (const state of this.playerStateMap.values()) {
+      const nextProfile = this.syncConnectedProfile(state);
+      if (this.connectedPlayers.get(state.id) !== nextProfile) changed = true;
+    }
+
+    if (!changed && this.cachedConnectedPlayers.length === this.connectedPlayers.size) return;
+
+    this.cachedConnectedPlayers = [...this.connectedPlayers.values()];
+    this.connectedPlayersCacheDirty = false;
+  }
+
+  private syncConnectedProfile(state: PlayerState): PlayerProfile {
+    const previous = this.connectedPlayers.get(state.id);
+    const stateName = state.getState(KEY_NAME) as string | undefined;
+    const stateColor = state.getState(KEY_PLAYER_COLOR) as number | undefined;
+
+    if (previous) {
+      const nextName = stateName || previous.name || 'Player';
+      const nextColor = stateColor ?? previous.colorHex;
+      if (nextName === previous.name && nextColor === previous.colorHex) {
+        return previous;
+      }
+      const nextProfile: PlayerProfile = { id: state.id, name: nextName, colorHex: nextColor };
+      this.connectedPlayers.set(state.id, nextProfile);
+      this.connectedPlayersCacheDirty = true;
+      return nextProfile;
+    }
+
+    const profile = this.extractProfile(state);
+    this.connectedPlayers.set(state.id, profile);
+    this.connectedPlayersCacheDirty = true;
+    return profile;
   }
 
   // ── Interner Helfer: PlayerState → PlayerProfile ──────────────────────────

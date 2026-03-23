@@ -159,6 +159,7 @@ interface BarBundle {
   texKey:       string;
   prevFrac:     number;
   currentFrac:  number;
+  renderedWidth: number;
   energized:    boolean;       // true = intense sparkle, false = calm breathing
 }
 
@@ -216,6 +217,8 @@ export class ArenaHUD {
   private adrSyringeGlow:   Phaser.FX.Glow | null = null;
   private adrSyringeTween:  Phaser.Tweens.Tween | null = null;
   private wasSyringeActive  = false;
+  private lastHpText: string | null = null;
+  private lastArmorText: string | null = null;
 
   // Utility override
   private utilWobbleGlow:     Phaser.FX.Glow | null = null;
@@ -431,7 +434,25 @@ export class ArenaHUD {
       c.sendToBack(highlight);
     }
 
-    return { label, bgImg, trail, fgImg, coreEmitter, outerEmitter, energyZone, idleEffect, border, valueText, highlight, palette, texKey, prevFrac: 1, currentFrac: 1, energized: false };
+    return {
+      label,
+      bgImg,
+      trail,
+      fgImg,
+      coreEmitter,
+      outerEmitter,
+      energyZone,
+      idleEffect,
+      border,
+      valueText,
+      highlight,
+      palette,
+      texKey,
+      prevFrac: 1,
+      currentFrac: 1,
+      renderedWidth: BAR_W,
+      energized: false,
+    };
   }
 
   private divider(y: number): Phaser.GameObjects.Rectangle {
@@ -518,6 +539,8 @@ export class ArenaHUD {
     this.w1.prevFrac = 0; this.w1.currentFrac = 0;
     this.w2.prevFrac = 0; this.w2.currentFrac = 0;
     this.util.prevFrac = 0; this.util.currentFrac = 0;
+    this.lastHpText = null;
+    this.lastArmorText = null;
     this.hpTrailDelay?.remove();
     this.hpTrailDelay = null;
     this.armorTrailDelay?.remove();
@@ -533,6 +556,7 @@ export class ArenaHUD {
     this.weapon2AdrCost = 0;
     // Reset all bars to idle breathing mode
     for (const b of [this.hp, this.armor, this.adr, this.ult, this.w1, this.w2, this.util]) {
+      b.renderedWidth = Math.max(0, Math.round(BAR_W * b.currentFrac));
       b.energized = true; // force re-apply
       this.setBarEnergized(b, false);
     }
@@ -593,14 +617,22 @@ export class ArenaHUD {
     this.updateTrackedValueBar(this.hp, hp, HP_MAX, this.hpTrailDelay, timer => {
       this.hpTrailDelay = timer;
     });
-    this.hp.valueText?.setText(`${Math.round(hp)}/${HP_MAX}`);
+    const nextText = `${Math.round(hp)}/${HP_MAX}`;
+    if (nextText !== this.lastHpText) {
+      this.hp.valueText?.setText(nextText);
+      this.lastHpText = nextText;
+    }
   }
 
   private updateArmor(armor: number): void {
     this.updateTrackedValueBar(this.armor, armor, ARMOR_MAX, this.armorTrailDelay, timer => {
       this.armorTrailDelay = timer;
     });
-    this.armor.valueText?.setText(`${Math.round(armor)}/${ARMOR_MAX}`);
+    const nextText = `${Math.round(armor)}/${ARMOR_MAX}`;
+    if (nextText !== this.lastArmorText) {
+      this.armor.valueText?.setText(nextText);
+      this.lastArmorText = nextText;
+    }
   }
 
   private updateTrackedValueBar(
@@ -934,8 +966,11 @@ export class ArenaHUD {
   /** Set the visible fill fraction and constrain particles to the filled area. */
   private setBarFrac(bundle: BarBundle, frac: number): void {
     const w = Math.max(0, Math.round(BAR_W * frac));
+    if (bundle.renderedWidth === w && Math.abs(bundle.currentFrac - frac) < 0.0001) return;
+
     bundle.fgImg.setCrop(0, 0, w, BAR_H);
     bundle.currentFrac = frac;
+    bundle.renderedWidth = w;
 
     // Update idle effect zone
     bundle.idleEffect.setFilledWidth(w);

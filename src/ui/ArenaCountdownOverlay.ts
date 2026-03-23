@@ -42,6 +42,10 @@ export class ArenaCountdownOverlay {
   private deathVeilClosing = false;
   private readonly baseX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
   private readonly baseY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
+  private lastRenderedRadius: number | null = null;
+  private lastRenderedAlpha: number | null = null;
+  private lastRenderedFocusX: number | null = null;
+  private lastRenderedFocusY: number | null = null;
 
   constructor(
     private scene: Phaser.Scene,
@@ -173,6 +177,7 @@ export class ArenaCountdownOverlay {
     this.mode = 'hidden';
     this.unlockAtMs = 0;
     this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
+    this.invalidateVeilCache();
     this.veil.clear();
     this.veil.setVisible(false);
   }
@@ -293,6 +298,7 @@ export class ArenaCountdownOverlay {
     this.deathVeilClosing = false;
     this.revealRadius = radius;
     this.veilAlpha = alpha;
+    this.invalidateVeilCache();
     this.text
       .setVisible(false)
       .setText('')
@@ -304,8 +310,18 @@ export class ArenaCountdownOverlay {
   private renderVeil(radius: number, alpha: number): void {
     const clampedAlpha = Phaser.Math.Clamp(alpha, 0, 1);
     if (clampedAlpha <= 0.01) {
+      this.invalidateVeilCache();
       this.veil.clear();
       this.veil.setVisible(false);
+      return;
+    }
+
+    if (
+      this.lastRenderedRadius === radius
+      && this.lastRenderedAlpha === clampedAlpha
+      && this.lastRenderedFocusX === this.lastFocusX
+      && this.lastRenderedFocusY === this.lastFocusY
+    ) {
       return;
     }
 
@@ -342,6 +358,18 @@ export class ArenaCountdownOverlay {
     this.veil.fillRect(ARENA_OFFSET_X, arenaBottom - 8, ARENA_WIDTH, 8);
     this.veil.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, 8, ARENA_HEIGHT);
     this.veil.fillRect(arenaRight - 8, ARENA_OFFSET_Y, 8, ARENA_HEIGHT);
+
+    this.lastRenderedRadius = radius;
+    this.lastRenderedAlpha = clampedAlpha;
+    this.lastRenderedFocusX = this.lastFocusX;
+    this.lastRenderedFocusY = this.lastFocusY;
+  }
+
+  private invalidateVeilCache(): void {
+    this.lastRenderedRadius = null;
+    this.lastRenderedAlpha = null;
+    this.lastRenderedFocusX = null;
+    this.lastRenderedFocusY = null;
   }
 
   private stopTextTweens(): void {

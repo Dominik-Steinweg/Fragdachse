@@ -150,6 +150,8 @@ export class ArenaScene extends Phaser.Scene {
   private netTickAccumulator = 0;
   // ── Client: letzte verarbeitete GameState-Version ────────────────────────
   private lastGameStateVersion = -1;
+  private leaderboardSignature = '';
+  private cachedLeaderboardEntries: { name: string; colorHex: number; frags: number; ping: number }[] = [];
 
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = {
     weapon1: 0,
@@ -1099,10 +1101,7 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       // Leaderboard mit aktuellen Frags und Ping aktualisieren (alle Clients)
-      const leaderboardEntries = bridge.getConnectedPlayers()
-        .map(p => ({ name: p.name, colorHex: p.colorHex, frags: bridge.getPlayerFrags(p.id), ping: bridge.getPlayerPing(p.id) }))
-        .sort((a, b) => b.frags - a.frags);
-      this.rightPanel.updateLeaderboard(leaderboardEntries);
+      this.rightPanel.updateLeaderboard(this.getLeaderboardEntries());
 
       if (this.arenaResult) {
         const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite ?? null;
@@ -1147,6 +1146,34 @@ export class ArenaScene extends Phaser.Scene {
 
     this.overlayTrackedLocalAlive = this.localPlayerAlive;
     this.arenaCountdown.update(now);
+  }
+
+  private getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number }[] {
+    const playerIds = bridge.getConnectedPlayerIds();
+    const signatureParts: string[] = [];
+
+    for (const playerId of playerIds) {
+      const name = bridge.getPlayerName(playerId);
+      const colorHex = bridge.getPlayerColor(playerId) ?? 0xffffff;
+      const frags = bridge.getPlayerFrags(playerId);
+      const ping = bridge.getPlayerPing(playerId);
+      signatureParts.push(`${playerId}:${name}:${colorHex}:${frags}:${ping}`);
+    }
+
+    const nextSignature = signatureParts.join('|');
+    if (nextSignature === this.leaderboardSignature) return this.cachedLeaderboardEntries;
+
+    this.leaderboardSignature = nextSignature;
+    this.cachedLeaderboardEntries = playerIds
+      .map(playerId => ({
+        name: bridge.getPlayerName(playerId),
+        colorHex: bridge.getPlayerColor(playerId) ?? 0xffffff,
+        frags: bridge.getPlayerFrags(playerId),
+        ping: bridge.getPlayerPing(playerId),
+      }))
+      .sort((a, b) => b.frags - a.frags);
+
+    return this.cachedLeaderboardEntries;
   }
 
   // ── AoE-Umgebungsschaden (Felsen + Zug) ──────────────────────────────────

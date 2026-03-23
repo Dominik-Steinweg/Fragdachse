@@ -66,6 +66,26 @@ function pingColor(ms: number): string {
   return toCssColor(COLORS.RED_3);
 }
 
+interface KillFeedEntryView {
+  killerText: string;
+  killerColor: string;
+  killerAlpha: number;
+  weaponText: string;
+  weaponAlpha: number;
+  victimText: string;
+  victimColor: string;
+  victimAlpha: number;
+}
+
+interface LeaderboardEntryView {
+  visible: boolean;
+  nameText: string;
+  nameColor: string;
+  fragsText: string;
+  pingText: string;
+  pingColor: string;
+}
+
 export class RightSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
@@ -96,6 +116,14 @@ export class RightSidePanel {
   private trainBarBg!:     Phaser.GameObjects.Rectangle;
   private trainBarFill!:   Phaser.GameObjects.Rectangle;
   private trainWidgetVisible = false;
+  private lastTimerText: string | null = null;
+  private lastTimerColor: string | null = null;
+  private lastTrainText: string | null = null;
+  private lastTrainBarWidth = -1;
+  private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
+  private leaderboardCache: (LeaderboardEntryView | null)[] = Array.from({ length: 12 }, () => null);
+  private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
+  private readonly cssColorCache = new Map<number, string>();
 
   // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
   private resultsHeader!: Phaser.GameObjects.Text;
@@ -168,8 +196,16 @@ export class RightSidePanel {
   updateTimer(secs: number): void {
     const mm = Math.floor(secs / 60);
     const ss = secs % 60;
-    this.timerText.setText(`${mm}:${ss.toString().padStart(2, '0')}`);
-    this.timerText.setColor(secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL);
+    const nextText = `${mm}:${ss.toString().padStart(2, '0')}`;
+    const nextColor = secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
+    if (nextText !== this.lastTimerText) {
+      this.timerText.setText(nextText);
+      this.lastTimerText = nextText;
+    }
+    if (nextColor !== this.lastTimerColor) {
+      this.timerText.setColor(nextColor);
+      this.lastTimerColor = nextColor;
+    }
   }
 
   /**
@@ -196,13 +232,34 @@ export class RightSidePanel {
       const pingText = this.lbPingRows[i];
       const entry    = entries[i];
       if (entry) {
-        row.name.setText(`${i + 1}. ${entry.name}`).setColor(toCssColor(entry.colorHex)).setVisible(true);
-        row.frags.setText(String(entry.frags)).setVisible(true);
-        pingText.setText(`${entry.ping}ms`).setColor(pingColor(entry.ping)).setVisible(true);
+        const nextView: LeaderboardEntryView = {
+          visible: true,
+          nameText: `${i + 1}. ${entry.name}`,
+          nameColor: this.toCachedCssColor(entry.colorHex),
+          fragsText: String(entry.frags),
+          pingText: `${entry.ping}ms`,
+          pingColor: pingColor(entry.ping),
+        };
+        const prevView = this.leaderboardCache[i];
+        if (!prevView || !prevView.visible) {
+          row.name.setVisible(true);
+          row.frags.setVisible(true);
+          pingText.setVisible(true);
+        }
+        if (!prevView || prevView.nameText !== nextView.nameText) row.name.setText(nextView.nameText);
+        if (!prevView || prevView.nameColor !== nextView.nameColor) row.name.setColor(nextView.nameColor);
+        if (!prevView || prevView.fragsText !== nextView.fragsText) row.frags.setText(nextView.fragsText);
+        if (!prevView || prevView.pingText !== nextView.pingText) pingText.setText(nextView.pingText);
+        if (!prevView || prevView.pingColor !== nextView.pingColor) pingText.setColor(nextView.pingColor);
+        this.leaderboardCache[i] = nextView;
       } else {
-        row.name.setVisible(false);
-        row.frags.setVisible(false);
-        pingText.setVisible(false);
+        const prevView = this.leaderboardCache[i];
+        if (prevView?.visible !== false) {
+          row.name.setVisible(false);
+          row.frags.setVisible(false);
+          pingText.setVisible(false);
+        }
+        this.leaderboardCache[i] = { visible: false, nameText: '', nameColor: '', fragsText: '', pingText: '', pingColor: '' };
       }
     }
   }
@@ -242,9 +299,18 @@ export class RightSidePanel {
     const mm = Math.floor(arrivalTimerSecs / 60);
     const ss = arrivalTimerSecs % 60;
     const timeStr = `${mm}:${ss.toString().padStart(2, '0')}`;
-    this.trainText.setText(`RB 54 um ${timeStr}`).setVisible(true);
-    this.trainBarBg.setVisible(false);
-    this.trainBarFill.setVisible(false);
+    const nextText = `RB 54 um ${timeStr}`;
+    if (this.lastTrainText !== nextText) {
+      this.trainText.setText(nextText);
+      this.lastTrainText = nextText;
+    }
+    if (this.lastTrainMode !== 'arrival') {
+      this.trainText.setVisible(true);
+      this.trainBarBg.setVisible(false);
+      this.trainBarFill.setVisible(false);
+      this.lastTrainMode = 'arrival';
+      this.lastTrainBarWidth = -1;
+    }
     this.trainWidgetVisible = true;
   }
 
@@ -252,25 +318,51 @@ export class RightSidePanel {
   updateTrainHP(hp: number, maxHp: number): void {
     const ratio = Math.max(0, hp / maxHp);
     const barMaxW = PANEL_WIDTH - 16;
-    this.trainText.setText('RB 54').setVisible(true);
-    this.trainBarBg.setVisible(true);
-    this.trainBarFill.setSize(barMaxW * ratio, TRAIN_BAR_H).setVisible(true);
+    const nextText = 'RB 54';
+    const nextWidth = barMaxW * ratio;
+    if (this.lastTrainText !== nextText) {
+      this.trainText.setText(nextText);
+      this.lastTrainText = nextText;
+    }
+    if (this.lastTrainMode !== 'hp') {
+      this.trainText.setVisible(true);
+      this.trainBarBg.setVisible(true);
+      this.trainBarFill.setVisible(true);
+      this.lastTrainMode = 'hp';
+    }
+    if (this.lastTrainBarWidth !== nextWidth) {
+      this.trainBarFill.setSize(nextWidth, TRAIN_BAR_H);
+      this.lastTrainBarWidth = nextWidth;
+    }
     this.trainWidgetVisible = true;
   }
 
   /** Zeigt "Zug fällt aus"-Meldung nach Zerstörung. */
   showTrainDestroyed(): void {
-    this.trainText.setText('RB 54 fällt\nheute leider aus').setVisible(true);
-    this.trainBarBg.setVisible(false);
-    this.trainBarFill.setVisible(false);
+    const nextText = 'RB 54 fällt\nheute leider aus';
+    if (this.lastTrainText !== nextText) {
+      this.trainText.setText(nextText);
+      this.lastTrainText = nextText;
+    }
+    if (this.lastTrainMode !== 'destroyed') {
+      this.trainText.setVisible(true);
+      this.trainBarBg.setVisible(false);
+      this.trainBarFill.setVisible(false);
+      this.lastTrainMode = 'destroyed';
+      this.lastTrainBarWidth = -1;
+    }
     this.trainWidgetVisible = true;
   }
 
   /** Blendet das Zug-Widget vollständig aus (z.B. nach Match-Ende). */
   hideTrainWidget(): void {
-    this.trainText.setVisible(false);
-    this.trainBarBg.setVisible(false);
-    this.trainBarFill.setVisible(false);
+    if (this.lastTrainMode !== 'hidden') {
+      this.trainText.setVisible(false);
+      this.trainBarBg.setVisible(false);
+      this.trainBarFill.setVisible(false);
+      this.lastTrainMode = 'hidden';
+      this.lastTrainBarWidth = -1;
+    }
     this.trainWidgetVisible = false;
   }
 
@@ -466,26 +558,55 @@ export class RightSidePanel {
       if (entry) {
         // Neuere Einträge sind opaker als ältere
         const alpha = 1 - i * 0.14;
+        const nextView: KillFeedEntryView = {
+          killerText: this.truncate(entry.killerName, KILLFEED_NAME_MAXLEN),
+          killerColor: this.toCachedCssColor(entry.killerColor),
+          killerAlpha: alpha,
+          weaponText: `→ ${this.truncate(entry.weapon, 10)} →`,
+          weaponAlpha: alpha * 0.55,
+          victimText: this.truncate(entry.victimName, KILLFEED_NAME_MAXLEN),
+          victimColor: this.toCachedCssColor(entry.victimColor),
+          victimAlpha: alpha,
+        };
+        const prevView = this.killFeedCache[i];
 
-        row.killer
-          .setText(this.truncate(entry.killerName, KILLFEED_NAME_MAXLEN))
-          .setColor(toCssColor(entry.killerColor))
-          .setAlpha(alpha);
+        if (!prevView || prevView.killerText !== nextView.killerText) row.killer.setText(nextView.killerText);
+        if (!prevView || prevView.killerColor !== nextView.killerColor) row.killer.setColor(nextView.killerColor);
+        if (!prevView || prevView.killerAlpha !== nextView.killerAlpha) row.killer.setAlpha(nextView.killerAlpha);
 
-        row.weapon
-          .setText(`→ ${this.truncate(entry.weapon, 10)} →`)
-          .setAlpha(alpha * 0.55);
+        if (!prevView || prevView.weaponText !== nextView.weaponText) row.weapon.setText(nextView.weaponText);
+        if (!prevView || prevView.weaponAlpha !== nextView.weaponAlpha) row.weapon.setAlpha(nextView.weaponAlpha);
 
-        row.victim
-          .setText(this.truncate(entry.victimName, KILLFEED_NAME_MAXLEN))
-          .setColor(toCssColor(entry.victimColor))
-          .setAlpha(alpha);
+        if (!prevView || prevView.victimText !== nextView.victimText) row.victim.setText(nextView.victimText);
+        if (!prevView || prevView.victimColor !== nextView.victimColor) row.victim.setColor(nextView.victimColor);
+        if (!prevView || prevView.victimAlpha !== nextView.victimAlpha) row.victim.setAlpha(nextView.victimAlpha);
+
+        this.killFeedCache[i] = nextView;
       } else {
-        row.killer.setText('');
-        row.weapon.setText('');
-        row.victim.setText('');
+        const prevView = this.killFeedCache[i];
+        if (!prevView || prevView.killerText !== '') row.killer.setText('');
+        if (!prevView || prevView.weaponText !== '') row.weapon.setText('');
+        if (!prevView || prevView.victimText !== '') row.victim.setText('');
+        this.killFeedCache[i] = {
+          killerText: '',
+          killerColor: '',
+          killerAlpha: row.killer.alpha,
+          weaponText: '',
+          weaponAlpha: row.weapon.alpha,
+          victimText: '',
+          victimColor: '',
+          victimAlpha: row.victim.alpha,
+        };
       }
     }
+  }
+
+  private toCachedCssColor(color: number): string {
+    const cached = this.cssColorCache.get(color);
+    if (cached) return cached;
+    const cssColor = toCssColor(color);
+    this.cssColorCache.set(color, cssColor);
+    return cssColor;
   }
 
   /** Kürzt einen String auf maxLen Zeichen (hängt … an wenn nötig). */
