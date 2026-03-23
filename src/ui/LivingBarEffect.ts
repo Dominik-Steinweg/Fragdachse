@@ -190,10 +190,13 @@ export class LivingBarEffect {
       if (this.active) {
         if (!this.idleCore.emitting) this.idleCore.start();
         if (!this.idleOuter.emitting) this.idleOuter.start();
+        this.ensureGlow();
       }
     } else {
+      this.emitZone.width = 0;
       this.idleCore.stop();
       this.idleOuter.stop();
+      this.removeGlow();
     }
   }
 
@@ -202,11 +205,7 @@ export class LivingBarEffect {
     this.active = false;
     this.idleCore.stop();
     this.idleOuter.stop();
-    if (this.breathTween) { this.breathTween.destroy(); this.breathTween = null; }
-    if (this.breathGlow && this.glowTarget) {
-      this.glowTarget.postFX.remove(this.breathGlow);
-      this.breathGlow = null;
-    }
+    this.removeGlow();
   }
 
   /** Resume the effect (particles start, glow added). */
@@ -215,17 +214,31 @@ export class LivingBarEffect {
     if (this.emitZone.width > 2) {
       this.idleCore.start();
       this.idleOuter.start();
+      this.ensureGlow();
     }
-    if (this.glowTarget && !this.breathGlow) {
-      this.breathGlow = this.glowTarget.postFX.addGlow(this.palette.mid, 0, 0, false, 0.1, 6);
-      this.breathTween = this.scene.tweens.add({
-        targets: this.breathGlow,
-        outerStrength: 2.5,
-        duration: 2000,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+  }
+
+  private ensureGlow(): void {
+    if (!this.glowTarget || this.breathGlow || this.emitZone.width <= 2) return;
+    this.breathGlow = this.glowTarget.postFX.addGlow(this.palette.mid, 0, 0, false, 0.1, 6);
+    this.breathTween = this.scene.tweens.add({
+      targets: this.breathGlow,
+      outerStrength: 2.5,
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  private removeGlow(): void {
+    if (this.breathTween) {
+      this.breathTween.destroy();
+      this.breathTween = null;
+    }
+    if (this.breathGlow && this.glowTarget) {
+      this.glowTarget.postFX.remove(this.breathGlow);
+      this.breathGlow = null;
     }
   }
 

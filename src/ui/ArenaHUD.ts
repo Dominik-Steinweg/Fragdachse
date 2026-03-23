@@ -983,6 +983,7 @@ export class ArenaHUD {
         if (!bundle.outerEmitter.emitting) bundle.outerEmitter.start();
       }
     } else {
+      bundle.energyZone.width = 0;
       bundle.coreEmitter.stop();
       bundle.outerEmitter.stop();
     }

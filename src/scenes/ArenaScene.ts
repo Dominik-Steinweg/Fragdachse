@@ -297,6 +297,8 @@ export class ArenaScene extends Phaser.Scene {
     this.inputSystem.setupUtilityConfigProvider(() => this.getLocalUtilityConfig());
     this.inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
+      if (!this.localPlayerAlive || this.localPlayerBurrowed) return;
+
       let shotId: number | undefined;
       if (slot === 'weapon1' || slot === 'weapon2') {
         // Client-seitige Cooldown-Prüfung: nur feuern wenn bereit
@@ -625,6 +627,7 @@ export class ArenaScene extends Phaser.Scene {
     bridge.setLocalReady(false);
     this.roundStartPending = false;
     this.overlayTrackedLocalAlive = null;
+    this.clientUtilityOverride = null;
     this.arenaCountdown?.clear();
 
     for (const p of [...this.playerManager.getAllPlayers()]) {
@@ -784,6 +787,14 @@ export class ArenaScene extends Phaser.Scene {
       this.loadoutManager.setCombatSystem(this.combatSystem);
       this.loadoutManager.setDashBurstChecker(id => this.hostPhysics.isDashBurst(id));
       this.loadoutManager.setPhysicsSystem(this.hostPhysics);
+      this.loadoutManager.setActionBlockedChecker((playerId, slot) => {
+        if (!this.combatSystem.isAlive(playerId)) return true;
+        if (slot === 'weapon1' || slot === 'weapon2' || slot === 'utility' || slot === 'ultimate') {
+          if (this.burrowSystem?.isBurrowed(playerId)) return true;
+          if (this.burrowSystem?.isStunned(playerId)) return true;
+        }
+        return false;
+      });
       this.loadoutManager.setNukeStrikeHandler((playerId, targetX, targetY) => {
         return this.powerUpSystem?.scheduleNukeStrike(playerId, targetX, targetY) ?? false;
       });
@@ -1008,6 +1019,7 @@ export class ArenaScene extends Phaser.Scene {
     this.detonationSystem?.reset();
     this.detonationSystem = null;
     this.loadoutManager?.setCombatSystem(null);
+    this.loadoutManager?.setActionBlockedChecker(null);
     this.loadoutManager = null;
     this.combatSystem.setBurrowSystem(null);
     this.combatSystem.setResourceSystem(null);
@@ -1039,6 +1051,7 @@ export class ArenaScene extends Phaser.Scene {
     this.trainSpawned        = false;
     this.trainDestroyedShown = false;
     this.rightPanel.hideTrainWidget();
+    this.clientUtilityOverride = null;
   }
 
   // ── Update ───────────────────────────────────────────────────────────────
@@ -1815,10 +1828,11 @@ export class ArenaScene extends Phaser.Scene {
     if (localState) {
       this.aimSystem?.setAuthoritativeState(localState.aim);
       this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);
+      const localUtilityConfig = this.getLocalUtilityConfig();
       const overrideName = bridge.getPlayerUtilityOverrideName(localId2);
       const utilDisplayName = overrideName
         || this.clientUtilityOverride?.displayName
-        || undefined;
+        || localUtilityConfig.displayName;
       this.leftPanel.updateArenaHUD({
         hp:                      localState.hp,
         armor:                   localState.armor,

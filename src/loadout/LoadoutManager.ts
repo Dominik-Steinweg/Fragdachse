@@ -63,6 +63,7 @@ export class LoadoutManager {
   private physicsSystem:      PhysicsSystemType | null = null;
   private armageddonSystem:   ArmageddonSystem | null = null;
   private nukeStrikeHandler: ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
+  private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
@@ -162,6 +163,11 @@ export class LoadoutManager {
     this.nukeStrikeHandler = handler;
   }
 
+  /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
+  setActionBlockedChecker(checker: ((playerId: string, slot: LoadoutSlot) => boolean) | null): void {
+    this.actionBlockedChecker = checker;
+  }
+
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
 
   /**
@@ -172,11 +178,14 @@ export class LoadoutManager {
     const loadout = this.loadouts.get(playerId);
     if (!loadout) return;
 
-    // Aktuellen Zustand sichern (Config + Cooldown-Zeitstempel)
-    this.savedUtilities.set(playerId, {
-      config:     loadout.utility.config,
-      lastUsedAt: loadout.utility.getLastUsedAt(),
-    });
+    // Nur das urspruengliche Basis-Utility sichern. Wenn bereits ein Spezial-Utility aktiv ist,
+    // darf ein neu eingesammeltes Spezial-Utility diesen Snapshot nicht ueberschreiben.
+    if (!this.savedUtilities.has(playerId)) {
+      this.savedUtilities.set(playerId, {
+        config:     loadout.utility.config,
+        lastUsedAt: loadout.utility.getLastUsedAt(),
+      });
+    }
 
     // Neues Utility einsetzen
     loadout.utility = new GenericUtility(config);
@@ -226,6 +235,7 @@ export class LoadoutManager {
   ): void {
     const loadout = this.loadouts.get(playerId);
     if (!loadout) return;
+    if (this.actionBlockedChecker?.(playerId, slot)) return;
 
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return;

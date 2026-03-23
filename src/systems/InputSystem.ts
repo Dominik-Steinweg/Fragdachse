@@ -105,7 +105,7 @@ export class InputSystem {
   setLocalState(isStunned: boolean, isBurrowed: boolean): void {
     this.localIsStunned  = isStunned;
     this.localIsBurrowed = isBurrowed;
-    if (isStunned) this.cancelUtilityInteraction();
+    if (isStunned || isBurrowed) this.cancelUtilityInteraction();
   }
 
   setInputEnabled(enabled: boolean): void {
