@@ -40,6 +40,7 @@ export class PlayerEntity {
   private burrowPhase: BurrowPhase = 'idle';
   private isRagingVisual   = false;
   private burrowTween: Phaser.Tweens.Tween | null = null;
+  private burrowTweenAlpha = 1;
 
   constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number) {
     this.id       = profile.id;
@@ -218,18 +219,31 @@ export class PlayerEntity {
     this.sprite.setScale(scale);
   }
 
-  setBurrowPhase(phase: BurrowPhase, animate: boolean): void {
-    if (this.burrowPhase === phase) return;
+  getBurrowPhase(): BurrowPhase {
+    return this.burrowPhase;
+  }
 
+  setBurrowPhase(phase: BurrowPhase, animate: boolean): void {
     const previousPhase = this.burrowPhase;
+    const changed = previousPhase !== phase;
+    if (!changed && !animate) return;
+
     this.burrowPhase = phase;
-    this.burrowTween?.stop();
-    this.burrowTween = null;
+
+    if (changed && (phase === 'underground' || phase === 'trapped')) {
+      this.stopBurrowTween(true);
+      this.sprite.setScale(1, 1);
+      this.burrowTweenAlpha = 1;
+    }
 
     if (animate && phase === 'windup' && previousPhase === 'idle') {
       this.playWindUpTween();
     } else if (animate && phase === 'recovery' && (previousPhase === 'underground' || previousPhase === 'trapped')) {
       this.playPopOutTween();
+    } else if (changed && phase === 'idle') {
+      this.stopBurrowTween(true);
+      this.sprite.setScale(1, 1);
+      this.burrowTweenAlpha = 1;
     }
 
     this.resolveVisual();
@@ -247,26 +261,33 @@ export class PlayerEntity {
    */
   private resolveVisual(): void {
     if (this.isRagingVisual) {
-      this.sprite.setAlpha(1.0);
+      this.sprite.setAlpha(this.burrowTweenAlpha);
       if (this.glowFx) this.glowFx.color = 0xff3333;
     } else {
-      this.sprite.setAlpha(1.0);
+      this.sprite.setAlpha(this.burrowTweenAlpha);
       if (this.glowFx) this.glowFx.color = this.colorHex;
     }
     this.applyDisplayVisibility();
   }
 
   private playWindUpTween(): void {
+    this.stopBurrowTween(false);
     this.sprite.setVisible(this.baseVisible);
-    this.sprite.setScale(1);
+    this.sprite.setScale(1, 1);
+    this.burrowTweenAlpha = 1;
+    const state = { scaleX: 1, scaleY: 1, alpha: 1 };
     this.burrowTween = this.sprite.scene.tweens.add({
-      targets: this.sprite,
-      y: this.sprite.y + 6,
-      scaleX: 1.08,
-      scaleY: 0.78,
+      targets: state,
+      scaleX: 1.16,
+      scaleY: 0.66,
+      alpha: 0.72,
       duration: 150,
       ease: 'Cubic.easeIn',
-      onUpdate: () => this.syncBar(),
+      onUpdate: () => {
+        this.sprite.setScale(state.scaleX, state.scaleY);
+        this.burrowTweenAlpha = state.alpha;
+        this.resolveVisual();
+      },
       onComplete: () => {
         this.burrowTween = null;
         this.resolveVisual();
@@ -275,23 +296,35 @@ export class PlayerEntity {
   }
 
   private playPopOutTween(): void {
+    this.stopBurrowTween(false);
     this.sprite.setVisible(this.baseVisible);
-    this.sprite.setScale(0.82, 0.72);
-    this.sprite.y -= 8;
-    this.syncBar();
+    const state = { scaleX: 0.72, scaleY: 1.28, alpha: 0.55 };
+    this.sprite.setScale(state.scaleX, state.scaleY);
+    this.burrowTweenAlpha = state.alpha;
+    this.resolveVisual();
     this.burrowTween = this.sprite.scene.tweens.add({
-      targets: this.sprite,
-      y: this.sprite.y + 8,
+      targets: state,
       scaleX: 1,
       scaleY: 1,
+      alpha: 1,
       duration: 180,
       ease: 'Back.easeOut',
-      onUpdate: () => this.syncBar(),
+      onUpdate: () => {
+        this.sprite.setScale(state.scaleX, state.scaleY);
+        this.burrowTweenAlpha = state.alpha;
+        this.resolveVisual();
+      },
       onComplete: () => {
         this.burrowTween = null;
         this.resolveVisual();
       },
     });
+  }
+
+  private stopBurrowTween(resetAlpha: boolean): void {
+    this.burrowTween?.stop();
+    this.burrowTween = null;
+    if (resetAlpha) this.burrowTweenAlpha = 1;
   }
 
   private applyDisplayVisibility(): void {
@@ -305,6 +338,7 @@ export class PlayerEntity {
   }
 
   destroy(): void {
+    this.stopBurrowTween(true);
     this.glowTween?.stop();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();

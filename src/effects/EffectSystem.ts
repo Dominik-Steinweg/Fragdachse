@@ -232,6 +232,9 @@ export class EffectSystem {
   syncBurrowState(playerId: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void {
     if ((phase === 'underground' || phase === 'trapped') && sprite) {
       this.ensureBurrowVisual(playerId, sprite);
+      const visual = this.burrowVisuals.get(playerId);
+      visual?.dirt.setPosition(sprite.x, sprite.y);
+      visual?.dust.setPosition(sprite.x, sprite.y);
       return;
     }
 
@@ -261,36 +264,86 @@ export class EffectSystem {
 
   private ensureBurrowVisual(playerId: string, sprite: Phaser.GameObjects.Image): void {
     const existing = this.burrowVisuals.get(playerId);
-    if (existing) return;
+    if (existing) {
+      existing.dirt.setPosition(sprite.x, sprite.y);
+      existing.dust.setPosition(sprite.x, sprite.y);
+      return;
+    }
 
     this.ensureTextures();
 
     const dirt = this.scene.add.particles(sprite.x, sprite.y, TEX_BURROW_DIRT, {
       lifespan: { min: 300, max: 440 },
-      speed: { min: 26, max: 72 },
-      scale: { start: 0.72, end: 0.06 },
-      alpha: { start: 0.78, end: 0 },
-      frequency: 48,
-      quantity: 2,
+      speed: { min: 32, max: 88 },
+      scale: { start: 0.9, end: 0.08 },
+      alpha: { start: 0.9, end: 0 },
+      frequency: 36,
+      quantity: 3,
       rotate: { min: -90, max: 90 },
     });
-    dirt.setDepth(DEPTH.PLAYERS - 0.1);
+    dirt.setDepth(DEPTH_FX - 0.2);
     dirt.addEmitZone(circleZone(12, 2));
-    dirt.startFollow(sprite);
 
     const dust = this.scene.add.particles(sprite.x, sprite.y, TEX_BURROW_DUST, {
       lifespan: { min: 340, max: 500 },
-      speed: { min: 12, max: 48 },
-      scale: { start: 1.05, end: 0.12 },
-      alpha: { start: 0.34, end: 0 },
-      frequency: 74,
-      quantity: 1,
+      speed: { min: 18, max: 56 },
+      scale: { start: 1.2, end: 0.14 },
+      alpha: { start: 0.42, end: 0 },
+      frequency: 58,
+      quantity: 2,
     });
-    dust.setDepth(DEPTH.PLAYERS - 0.15);
+    dust.setDepth(DEPTH_FX - 0.25);
     dust.addEmitZone(circleZone(14, 1));
-    dust.startFollow(sprite);
 
     this.burrowVisuals.set(playerId, { dirt, dust });
+  }
+
+  playBurrowPhaseEffect(x: number, y: number, phase: BurrowPhase): void {
+    this.ensureTextures();
+
+    if (phase === 'windup') {
+      const ring = this.scene.add.circle(x, y + 2, 12, 0, 0);
+      ring.setDepth(DEPTH_FX + 0.05);
+      ring.setStrokeStyle(4, 0x6f4a33, 0.8);
+      this.scene.tweens.add({
+        targets: ring,
+        scaleX: 1.35,
+        scaleY: 0.7,
+        alpha: 0,
+        duration: 150,
+        ease: 'Cubic.easeIn',
+        onComplete: () => ring.destroy(),
+      });
+
+      const dirtBurst = this.scene.add.particles(x, y + 2, TEX_BURROW_DIRT, {
+        lifespan: { min: 160, max: 280 },
+        speed: { min: 20, max: 66 },
+        scale: { start: 0.55, end: 0.04 },
+        alpha: { start: 0.7, end: 0 },
+        frequency: -1,
+        quantity: 10,
+      });
+      dirtBurst.setDepth(DEPTH_FX + 0.08);
+      dirtBurst.addEmitZone(circleZone(8, 10));
+      dirtBurst.explode(10, x, y + 2);
+      this.scene.time.delayedCall(320, () => dirtBurst.destroy());
+      return;
+    }
+
+    if (phase === 'recovery') {
+      const plume = this.scene.add.particles(x, y, TEX_BURROW_DUST, {
+        lifespan: { min: 220, max: 380 },
+        speed: { min: 26, max: 96 },
+        scale: { start: 1, end: 0.08 },
+        alpha: { start: 0.55, end: 0 },
+        frequency: -1,
+        quantity: 14,
+      });
+      plume.setDepth(DEPTH_FX + 0.1);
+      plume.addEmitZone(circleZone(9, 14));
+      plume.explode(14, x, y);
+      this.scene.time.delayedCall(400, () => plume.destroy());
+    }
   }
 
   // ── Granaten-Explosions-Effekt (überarbeitet: Flash + Blast + Ring + Partikel) ──

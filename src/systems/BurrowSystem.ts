@@ -297,6 +297,15 @@ export class BurrowSystem {
     const ox = origin.sprite.x;
     const oy = origin.sprite.y;
 
+    this.hostPhysics.applyRadialImpulse(
+      ox,
+      oy,
+      SHOCKWAVE_RADIUS,
+      SHOCKWAVE_KNOCKBACK,
+      id,
+      0,
+    );
+
     for (const other of this.playerMgr.getAllPlayers()) {
       if (other.id === id) continue;
       if (!this.combat.isAlive(other.id)) continue;
@@ -307,10 +316,6 @@ export class BurrowSystem {
 
       if (dist < SHOCKWAVE_RADIUS && dist > 0) {
         this.combat.applyDamage(other.id, SHOCKWAVE_DAMAGE);
-        const nx = dx / dist;
-        const ny = dy / dist;
-        (other.sprite.body as Phaser.Physics.Arcade.Body)
-          .setVelocity(nx * SHOCKWAVE_KNOCKBACK, ny * SHOCKWAVE_KNOCKBACK);
       }
     }
 

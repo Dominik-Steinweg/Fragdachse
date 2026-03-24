@@ -210,19 +210,19 @@ export const DASH_F_START =
   (3 * DASH_T1_S + 2 * DASH_T2_S - 2 * DASH_F_MIN * (DASH_T1_S + DASH_T2_S)) / DASH_T1_S;
 
 // ---- Burrow ----
-export const BURROW_MIN_ADRENALINE       = 10;
+export const BURROW_MIN_ADRENALINE       = 15;
 export const BURROW_WINDUP_DURATION_MS   = 150;
-export const BURROW_WINDUP_SPEED_FACTOR  = 0.5;
+export const BURROW_WINDUP_SPEED_FACTOR  = 0.8;
 export const BURROW_UNDERGROUND_SPEED_FACTOR = 1.3;
-export const BURROW_DRAIN_AMOUNT_PER_TICK = 10;
-export const BURROW_DRAIN_INTERVAL_MS    = 100;
-export const BURROW_STUCK_DAMAGE_PER_SEC = 10;
+export const BURROW_DRAIN_AMOUNT_PER_TICK = 5;
+export const BURROW_DRAIN_INTERVAL_MS    = 60;
+export const BURROW_STUCK_DAMAGE_PER_SEC = 25;
 export const BURROW_POPOUT_WEAPON_LOCK_MS = 300;
 
 // ---- Schockwelle ----
-export const SHOCKWAVE_RADIUS          = 150;   // px
-export const SHOCKWAVE_DAMAGE          = 30;
-export const SHOCKWAVE_KNOCKBACK       = 1400;   // px/s Impuls
+export const SHOCKWAVE_RADIUS          = 100;   // px
+export const SHOCKWAVE_DAMAGE          = 20;
+export const SHOCKWAVE_KNOCKBACK       = 2500;   // px/s Impuls
 
 // ---- Spielerfarben (12 auswählbare, einzigartige Farben) ----
 export const PLAYER_COLORS: readonly number[] = [

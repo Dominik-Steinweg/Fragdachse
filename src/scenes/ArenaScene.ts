@@ -134,6 +134,7 @@ export class ArenaScene extends Phaser.Scene {
   // ── Dash-Visual-Tracking (client-seitig) ──────────────────────────────────
   private dashPhase2StartTimes = new Map<string, number>(); // playerId → lokaler Zeitstempel
   private prevDashPhases       = new Map<string, number>(); // playerId → vorherige Phase
+  private prevBurrowPhases     = new Map<string, BurrowPhase>(); // playerId → vorherige Burrow-Phase
   private prevAliveStates      = new Map<string, boolean>(); // playerId → vorheriger alive-Status
   private dashTrailTimers      = new Map<string, number>(); // playerId → nächster Ghost ms
   private overlayTrackedLocalAlive: boolean | null = null;
@@ -374,8 +375,12 @@ export class ArenaScene extends Phaser.Scene {
     bridge.registerBurrowVisualHandler((playerId, phase) => {
       const entity = this.playerManager.getPlayer(playerId);
       if (!entity) return;
+      if (phase === 'windup' || phase === 'recovery') {
+        this.effectSystem.playBurrowPhaseEffect(entity.sprite.x, entity.sprite.y, phase);
+      }
       entity.setBurrowPhase(phase, true);
       this.effectSystem.syncBurrowState(playerId, phase, entity.sprite);
+      this.prevBurrowPhases.set(playerId, phase);
     });
 
     // ── 12. Schockwellen-Visualisierung ───────────────────────────────────
@@ -492,6 +497,7 @@ export class ArenaScene extends Phaser.Scene {
         this.loadoutManager?.removePlayer(id);
       }
       this.effectSystem.clearBurrowState(id);
+      this.prevBurrowPhases.delete(id);
       this.hostPhysics.removePlayer(id);
       this.playerManager.removePlayer(id);
     }
@@ -999,6 +1005,7 @@ export class ArenaScene extends Phaser.Scene {
     this.smokeSystem.destroyAll();
     this.fireSystem.destroyAll();
     this.effectSystem.clearAllBurrowStates();
+    this.prevBurrowPhases.clear();
 
     if (this.arenaResult) {
       ArenaBuilder.destroyDynamic(this.arenaResult);
@@ -1628,6 +1635,11 @@ export class ArenaScene extends Phaser.Scene {
       if (remoteInput) p.setRotation(dequantizeAngle(remoteInput.aim));
     }
 
+    for (const player of this.playerManager.getAllPlayers()) {
+      const burrowPhase = this.burrowSystem?.getPhase(player.id) ?? 'idle';
+      this.applyBurrowVisual(player, burrowPhase);
+    }
+
     // HUD des lokalen Host-Spielers aktualisieren
     const localPlayer = this.playerManager.getPlayer(localId);
     if (localPlayer) {
@@ -1764,8 +1776,6 @@ export class ArenaScene extends Phaser.Scene {
         player.updateHP(ps.hp);
         player.updateArmor(ps.armor);
         player.setVisible(ps.alive);
-        player.setBurrowPhase(ps.burrowPhase, false);
-        this.effectSystem.syncBurrowState(id, ps.burrowPhase, player.sprite);
         player.setRageTint(ps.isRaging);
 
         // ── Dash-Visual-Verarbeitung ──────────────────────────────────────
@@ -1780,6 +1790,7 @@ export class ArenaScene extends Phaser.Scene {
         }
         this.prevDashPhases.set(id, curPhase);
         this.applyDashVisual(player, id, curPhase);
+        this.applyBurrowVisual(player, ps.burrowPhase);
       }
 
       // Neue Projektil-Snapshots verarbeiten
@@ -1881,6 +1892,20 @@ export class ArenaScene extends Phaser.Scene {
     } else if (setScale) {
       player.setDashScale(1.0);
     }
+  }
+
+  private applyBurrowVisual(player: PlayerEntity, phase: BurrowPhase): void {
+    const previousPhase = this.prevBurrowPhases.get(player.id) ?? 'idle';
+    const shouldAnimate = previousPhase !== phase
+      && ((phase === 'windup' && previousPhase === 'idle')
+        || (phase === 'recovery' && (previousPhase === 'underground' || previousPhase === 'trapped')));
+
+    if (shouldAnimate) {
+      this.effectSystem.playBurrowPhaseEffect(player.sprite.x, player.sprite.y, phase);
+    }
+    player.setBurrowPhase(phase, shouldAnimate);
+    this.effectSystem.syncBurrowState(player.id, phase, player.sprite);
+    this.prevBurrowPhases.set(player.id, phase);
   }
 
   private getLocalWeaponConfig(slot: WeaponSlot): WeaponConfig {
