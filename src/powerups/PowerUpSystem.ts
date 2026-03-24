@@ -63,7 +63,7 @@ function weightedRandom(weights: Record<string, number>): string | null {
 
 // ── PowerUpSystem ──────────────────────────────────────────────────────────
 
-type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive' | 'applyDamage'>;
+type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive' | 'isBurrowed' | 'applyDamage'>;
 
 /**
  * Host-autoritäres System für Power-Ups auf dem Boden und aktive Buffs.
@@ -208,6 +208,7 @@ export class PowerUpSystem {
     const item = this.worldItems.get(uid);
     if (!item) return; // Existiert nicht (mehr)
     if (!this.combat.isAlive(playerId)) return; // Toter Spieler darf nicht aufheben
+    if (this.combat.isBurrowed(playerId)) return; // Eingebuddelte Spieler dürfen nichts einsammeln
 
     const dist = Phaser.Math.Distance.Between(playerX, playerY, item.x, item.y);
     if (dist > PICKUP_RADIUS * 2) return; // Zu weit weg → ignorieren (großzügiger Check)

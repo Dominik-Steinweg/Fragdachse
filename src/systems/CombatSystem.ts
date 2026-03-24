@@ -138,6 +138,7 @@ export class CombatSystem {
   getHP(id: string):    number  { return this.hp.get(id)    ?? HP_MAX; }
   getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
   isAlive(id: string):  boolean { return this.alive.get(id) ?? false;  }
+  isBurrowed(id: string): boolean { return this.burrowSystem?.isBurrowed(id) ?? false; }
 
   // ── Öffentliche Schadens-Methode ───────────────────────────────────────────
 
@@ -319,7 +320,7 @@ export class CombatSystem {
       const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      this.applyDamage(trace.hitPlayerId, actualDamage, true, shooterId, weaponName);
+      this.applyDamage(trace.hitPlayerId, actualDamage, false, shooterId, weaponName);
 
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
@@ -429,7 +430,7 @@ export class CombatSystem {
       const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      this.applyDamage(player.id, actualDamage, true, shooterId, weaponName);
+      this.applyDamage(player.id, actualDamage, false, shooterId, weaponName);
 
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
@@ -753,7 +754,7 @@ export class CombatSystem {
     } else {
       this.projectileManager.destroyProjectile(projectileId);
     }
-    this.applyDamage(playerId, damage, true, shooterId, weaponName);
+    this.applyDamage(playerId, damage, false, shooterId, weaponName);
 
     // Adrenalin-Belohnung für den Schützen
     if (adrenalinGain > 0) {

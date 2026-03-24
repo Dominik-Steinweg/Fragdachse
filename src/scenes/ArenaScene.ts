@@ -2053,6 +2053,7 @@ export class ArenaScene extends Phaser.Scene {
     const localId = bridge.getLocalPlayerId();
     const player  = this.playerManager.getPlayer(localId);
     if (!player || !player.sprite.active) return;
+    if (this.burrowSystem?.isBurrowed(localId)) return;
 
     const px = player.sprite.x;
     const py = player.sprite.y;
