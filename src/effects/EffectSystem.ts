@@ -1,19 +1,27 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { ExplosionVisualStyle, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
-import { edgeZone } from './EffectUtils';
+import { circleZone, edgeZone } from './EffectUtils';
 
 const HITSCAN_TRACER_FADE_MS = 120;
 const MELEE_SWING_FADE_MS    = 220;
 
+const TEX_BURROW_DIRT = '__burrow_dirt';
+const TEX_BURROW_DUST = '__burrow_dust';
 const TEX_EXPLOSION_SPARK = '__explosion_spark';
 const TEX_EXPLOSION_EMBER = '__explosion_ember';
+
+interface BurrowEmitterVisual {
+  dirt: Phaser.GameObjects.Particles.ParticleEmitter;
+  dust: Phaser.GameObjects.Particles.ParticleEmitter;
+}
 
 export class EffectSystem {
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
+  private burrowVisuals = new Map<string, BurrowEmitterVisual>();
   private texturesGenerated = false;
 
   constructor(
@@ -48,6 +56,34 @@ export class EffectSystem {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, 4, 4);
         emberCanvas.refresh();
+      }
+    }
+
+    if (!this.scene.textures.exists(TEX_BURROW_DIRT)) {
+      const dirtCanvas = this.scene.textures.createCanvas(TEX_BURROW_DIRT, 10, 10);
+      if (dirtCanvas) {
+        const ctx = dirtCanvas.context;
+        const gradient = ctx.createRadialGradient(5, 5, 1, 5, 5, 5);
+        gradient.addColorStop(0, 'rgba(126, 88, 58, 1)');
+        gradient.addColorStop(0.7, 'rgba(79, 58, 42, 0.85)');
+        gradient.addColorStop(1, 'rgba(38, 31, 28, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 10, 10);
+        dirtCanvas.refresh();
+      }
+    }
+
+    if (!this.scene.textures.exists(TEX_BURROW_DUST)) {
+      const dustCanvas = this.scene.textures.createCanvas(TEX_BURROW_DUST, 14, 14);
+      if (dustCanvas) {
+        const ctx = dustCanvas.context;
+        const gradient = ctx.createRadialGradient(7, 7, 1, 7, 7, 7);
+        gradient.addColorStop(0, 'rgba(145, 122, 100, 0.9)');
+        gradient.addColorStop(0.55, 'rgba(87, 75, 66, 0.55)');
+        gradient.addColorStop(1, 'rgba(42, 39, 37, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 14, 14);
+        dustCanvas.refresh();
       }
     }
   }
@@ -120,31 +156,141 @@ export class EffectSystem {
   // ── Schockwellen-Effekt: expandierender Goldring (Unburrow) ─────────────
 
   playShockwaveEffect(x: number, y: number): void {
+    this.ensureTextures();
+
     const startRadius = 10;
-    const endScale    = (SHOCKWAVE_RADIUS / startRadius) * 2;
-    const ring = this.scene.add.circle(x, y, startRadius, 0xffcc00, 0.7);
-    ring.setDepth(DEPTH_FX);
+    const endScale = SHOCKWAVE_RADIUS / startRadius;
+
+    const coreFlash = this.scene.add.circle(x, y, 12, 0xe7c59a, 0.65);
+    coreFlash.setDepth(DEPTH_FX + 0.3);
+    coreFlash.setBlendMode(Phaser.BlendModes.ADD);
     this.scene.tweens.add({
-      targets:    ring,
+      targets:    coreFlash,
+      scaleX:     2.6,
+      scaleY:     2.6,
+      alpha:      0,
+      duration:   180,
+      ease:       'Cubic.easeOut',
+      onComplete: () => coreFlash.destroy(),
+    });
+
+    const innerRing = this.scene.add.circle(x, y, startRadius, 0, 0);
+    innerRing.setDepth(DEPTH_FX + 0.2);
+    innerRing.setStrokeStyle(5, 0x8d5e3b, 0.85);
+    this.scene.tweens.add({
+      targets:    innerRing,
       scaleX:     endScale,
       scaleY:     endScale,
       alpha:      0,
-      duration:   350,
-      ease:       'Power2Out',
-      onComplete: () => ring.destroy(),
+      duration:   360,
+      ease:       'Cubic.easeOut',
+      onComplete: () => innerRing.destroy(),
     });
-    // Kleiner weißer Kernblitz
-    const flash = this.scene.add.circle(x, y, 8, 0xffffff, 1);
-    flash.setDepth(DEPTH_FX);
+
+    const dustRing = this.scene.add.circle(x, y, startRadius * 0.9, 0, 0);
+    dustRing.setDepth(DEPTH_FX + 0.1);
+    dustRing.setStrokeStyle(9, 0x3f342d, 0.42);
     this.scene.tweens.add({
-      targets:    flash,
-      scaleX:     4,
-      scaleY:     4,
+      targets:    dustRing,
+      scaleX:     endScale * 1.08,
+      scaleY:     endScale * 1.08,
       alpha:      0,
-      duration:   180,
-      ease:       'Power3Out',
-      onComplete: () => flash.destroy(),
+      duration:   430,
+      ease:       'Quart.easeOut',
+      onComplete: () => dustRing.destroy(),
     });
+
+    const dirtBurst = this.scene.add.particles(x, y, TEX_BURROW_DIRT, {
+      lifespan: { min: 280, max: 420 },
+      speed: { min: 70, max: 170 },
+      scale: { start: 0.8, end: 0.05 },
+      alpha: { start: 0.9, end: 0 },
+      rotate: { min: -120, max: 120 },
+      frequency: -1,
+      quantity: 22,
+      blendMode: Phaser.BlendModes.NORMAL,
+    });
+    dirtBurst.setDepth(DEPTH_FX + 0.25);
+    dirtBurst.addEmitZone(edgeZone(10, 22));
+    dirtBurst.explode(22, x, y);
+    this.scene.time.delayedCall(500, () => dirtBurst.destroy());
+
+    const dustBurst = this.scene.add.particles(x, y, TEX_BURROW_DUST, {
+      lifespan: { min: 320, max: 520 },
+      speed: { min: 28, max: 95 },
+      scale: { start: 1.3, end: 0.1 },
+      alpha: { start: 0.45, end: 0 },
+      quantity: 14,
+      frequency: -1,
+    });
+    dustBurst.setDepth(DEPTH_FX + 0.15);
+    dustBurst.addEmitZone(circleZone(10, 14));
+    dustBurst.explode(14, x, y);
+    this.scene.time.delayedCall(540, () => dustBurst.destroy());
+  }
+
+  syncBurrowState(playerId: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void {
+    if ((phase === 'underground' || phase === 'trapped') && sprite) {
+      this.ensureBurrowVisual(playerId, sprite);
+      return;
+    }
+
+    if (phase === 'idle' || phase === 'recovery' || phase === 'windup') {
+      this.clearBurrowState(playerId);
+    }
+  }
+
+  clearBurrowState(playerId: string): void {
+    const visual = this.burrowVisuals.get(playerId);
+    if (!visual) return;
+
+    visual.dirt.stop();
+    visual.dust.stop();
+    this.scene.time.delayedCall(500, () => {
+      visual.dirt.destroy();
+      visual.dust.destroy();
+    });
+    this.burrowVisuals.delete(playerId);
+  }
+
+  clearAllBurrowStates(): void {
+    for (const playerId of [...this.burrowVisuals.keys()]) {
+      this.clearBurrowState(playerId);
+    }
+  }
+
+  private ensureBurrowVisual(playerId: string, sprite: Phaser.GameObjects.Image): void {
+    const existing = this.burrowVisuals.get(playerId);
+    if (existing) return;
+
+    this.ensureTextures();
+
+    const dirt = this.scene.add.particles(sprite.x, sprite.y, TEX_BURROW_DIRT, {
+      lifespan: { min: 300, max: 440 },
+      speed: { min: 26, max: 72 },
+      scale: { start: 0.72, end: 0.06 },
+      alpha: { start: 0.78, end: 0 },
+      frequency: 48,
+      quantity: 2,
+      rotate: { min: -90, max: 90 },
+    });
+    dirt.setDepth(DEPTH.PLAYERS - 0.1);
+    dirt.addEmitZone(circleZone(12, 2));
+    dirt.startFollow(sprite);
+
+    const dust = this.scene.add.particles(sprite.x, sprite.y, TEX_BURROW_DUST, {
+      lifespan: { min: 340, max: 500 },
+      speed: { min: 12, max: 48 },
+      scale: { start: 1.05, end: 0.12 },
+      alpha: { start: 0.34, end: 0 },
+      frequency: 74,
+      quantity: 1,
+    });
+    dust.setDepth(DEPTH.PLAYERS - 0.15);
+    dust.addEmitZone(circleZone(14, 1));
+    dust.startFollow(sprite);
+
+    this.burrowVisuals.set(playerId, { dirt, dust });
   }
 
   // ── Granaten-Explosions-Effekt (überarbeitet: Flash + Blast + Ring + Partikel) ──

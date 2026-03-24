@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
@@ -53,6 +53,7 @@ export class InputSystem {
   // Lokaler Zustand vom Host empfangen
   private localIsStunned  = false;
   private localIsBurrowed = false;
+  private localBurrowPhase: BurrowPhase = 'idle';
   private inputEnabled    = true;
 
   constructor(
@@ -102,10 +103,13 @@ export class InputSystem {
    * Wird von ArenaScene jeden Frame mit dem aktuellen Spieler-Netzwerkstatus gesetzt,
    * damit Stun und Burrow-Zustand für Input-Gating berücksichtigt werden.
    */
-  setLocalState(isStunned: boolean, isBurrowed: boolean): void {
+  setLocalState(isStunned: boolean, isBurrowed: boolean, burrowPhase: BurrowPhase): void {
     this.localIsStunned  = isStunned;
     this.localIsBurrowed = isBurrowed;
-    if (isStunned || isBurrowed) this.cancelUtilityInteraction();
+    this.localBurrowPhase = burrowPhase;
+    if (isStunned || burrowPhase === 'windup' || burrowPhase === 'underground' || burrowPhase === 'trapped') {
+      this.cancelUtilityInteraction();
+    }
   }
 
   setInputEnabled(enabled: boolean): void {
@@ -211,7 +215,11 @@ export class InputSystem {
 
     // ── 4. Burrow-Toggle (Flanke) ───────────────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
-      this.bridge.sendBurrowRequest(!this.localIsBurrowed);
+      if (this.localBurrowPhase === 'idle') {
+        this.bridge.sendBurrowRequest(true);
+      } else if (this.localBurrowPhase === 'underground' || this.localBurrowPhase === 'trapped') {
+        this.bridge.sendBurrowRequest(false);
+      }
     }
 
     // ── 5. Loadout-Aktionen ────────────────────────────────────────────────
@@ -230,6 +238,10 @@ export class InputSystem {
     const py    = pointer.y;
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, px, py);
     this.currentAimAngle = angle;
+    const weaponsBlocked = this.localBurrowPhase !== 'idle';
+    const utilityBlocked = this.localBurrowPhase === 'windup'
+      || this.localBurrowPhase === 'underground'
+      || this.localBurrowPhase === 'trapped';
 
     if (this.utilityTargetingActive) {
       const targetedCfg = this.getTargetedUtilityConfig();
@@ -259,14 +271,14 @@ export class InputSystem {
     // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
-    if (pointer.leftButtonDown()) {
+    if (!weaponsBlocked && pointer.leftButtonDown()) {
       this.onLoadoutUse('weapon1', angle, px, py);
-    } else if (pointer.rightButtonDown()) {
+    } else if (!weaponsBlocked && pointer.rightButtonDown()) {
       // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
       this.onLoadoutUse('weapon2', angle, px, py);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keyE)) {
+    if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
       if (this.beginTargetedUtilityAim(now)) {
         return;
       }
@@ -297,7 +309,7 @@ export class InputSystem {
     }
 
     // Q-Taste → ultimate (keine Positionsdaten nötig)
-    if (Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+    if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.onLoadoutUse('ultimate', 0, 0, 0);
     }
   }

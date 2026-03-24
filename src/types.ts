@@ -25,6 +25,8 @@ export interface PlayerAimNetState {
   weapon2DynamicSpread: number;
 }
 
+export type BurrowPhase = 'idle' | 'windup' | 'underground' | 'trapped' | 'recovery';
+
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
   x:          number;
@@ -37,6 +39,7 @@ export interface PlayerNetState {
   rage:       number;   // 0–RAGE_MAX
   isBurrowed: boolean;
   isStunned:  boolean;
+  burrowPhase: BurrowPhase;
   isRaging:   boolean;  // Ultimate aktiv
   dashPhase:  0 | 1 | 2; // 0 = kein Dash, 1 = Burst, 2 = Recovery
   aim:        PlayerAimNetState;

@@ -4,33 +4,30 @@ import type { CombatSystem }       from './CombatSystem';
 import type { HostPhysicsSystem }  from './HostPhysicsSystem';
 import type { NetworkBridge }      from '../network/NetworkBridge';
 import type { ResourceSystem }     from './ResourceSystem';
+import type { BurrowPhase }        from '../types';
 import {
-  ADRENALINE_DRAIN_PER_SEC,
+  BURROW_DRAIN_AMOUNT_PER_TICK,
+  BURROW_DRAIN_INTERVAL_MS,
+  BURROW_MIN_ADRENALINE,
+  BURROW_POPOUT_WEAPON_LOCK_MS,
   BURROW_STUCK_DAMAGE_PER_SEC,
+  BURROW_UNDERGROUND_SPEED_FACTOR,
+  BURROW_WINDUP_DURATION_MS,
+  BURROW_WINDUP_SPEED_FACTOR,
   SHOCKWAVE_RADIUS, SHOCKWAVE_DAMAGE, SHOCKWAVE_KNOCKBACK,
-  SELF_STUN_DURATION_MS,
   PLAYER_SIZE, TRUNK_RADIUS,
 } from '../config';
 
-/**
- * Host-only: Verwaltet den Burrow-Zustand aller Spieler.
- *
- * Zustände:
- *  – burrowed:  aktiv vergrabend (Adrenalin > 0)
- *  – stuckAt0:  Adrenalin aufgebraucht, aber durch Objekt blockiert → Stuck-Schaden
- *  – stun:      kurz nach dem Auftauchen (keine Bewegung/Schuss)
- */
-export class BurrowSystem {
-  // Aktiv vergrabende Spieler
-  private burrowed:      Set<string>          = new Set();
-  // Spieler mit Adrenalin=0, die durch Rock/Trunk blockiert sind
-  private stuckAt0:      Set<string>          = new Set();
-  // Stun-Timestamp pro Spieler (ms)
-  private stunnedUntil:  Map<string, number>  = new Map();
-  // Akkumulierter Stick-Schaden (Nachkommastellen)
-  private stuckDmgAccum: Map<string, number>  = new Map();
+interface BurrowStateData {
+  phase: BurrowPhase;
+  phaseEndsAt: number;
+  drainElapsedMs: number;
+  stuckDamageAccum: number;
+}
 
-  // Arena-Objekte für Overlap-Check
+export class BurrowSystem {
+  private states = new Map<string, BurrowStateData>();
+
   private rockGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
 
@@ -55,29 +52,52 @@ export class BurrowSystem {
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
   initPlayer(id: string): void {
-    // Sicherstellen dass kein alter Zustand stören kann
-    this.burrowed.delete(id);
-    this.stuckAt0.delete(id);
-    this.stunnedUntil.delete(id);
-    this.stuckDmgAccum.delete(id);
+    this.resetState(id, false);
   }
 
   removePlayer(id: string): void {
-    this.burrowed.delete(id);
-    this.stuckAt0.delete(id);
-    this.stunnedUntil.delete(id);
-    this.stuckDmgAccum.delete(id);
+    this.resetState(id, false);
   }
 
   // ── Abfragen ───────────────────────────────────────────────────────────────
 
-  /** true für aktiv vergrabende UND stuck-vergrabene Spieler */
+  getPhase(id: string): BurrowPhase {
+    return this.states.get(id)?.phase ?? 'idle';
+  }
+
   isBurrowed(id: string): boolean {
-    return this.burrowed.has(id) || this.stuckAt0.has(id);
+    const phase = this.getPhase(id);
+    return phase === 'underground' || phase === 'trapped';
   }
 
   isStunned(id: string): boolean {
-    return Date.now() < (this.stunnedUntil.get(id) ?? 0);
+    return false;
+  }
+
+  isDashBlocked(id: string): boolean {
+    const phase = this.getPhase(id);
+    return phase === 'windup' || phase === 'underground' || phase === 'trapped';
+  }
+
+  isWeaponBlocked(id: string): boolean {
+    return this.getPhase(id) !== 'idle';
+  }
+
+  isUtilityBlocked(id: string): boolean {
+    const phase = this.getPhase(id);
+    return phase === 'windup' || phase === 'underground' || phase === 'trapped';
+  }
+
+  getMovementSpeedFactor(id: string): number {
+    switch (this.getPhase(id)) {
+      case 'windup':
+        return BURROW_WINDUP_SPEED_FACTOR;
+      case 'underground':
+      case 'trapped':
+        return BURROW_UNDERGROUND_SPEED_FACTOR;
+      default:
+        return 1;
+    }
   }
 
   // ── RPC-Handler ───────────────────────────────────────────────────────────
@@ -87,75 +107,148 @@ export class BurrowSystem {
    */
   handleBurrowRequest(id: string, wantsBurrowed: boolean): void {
     if (!this.combat.isAlive(id)) return;
-    if (this.isStunned(id))       return;
+    const phase = this.getPhase(id);
 
-    if (wantsBurrowed && !this.isBurrowed(id)) {
-      if (this.resources.getAdrenaline(id) > 0) this.enterBurrow(id);
-    } else if (!wantsBurrowed && this.isBurrowed(id)) {
-      this.tryExitBurrow(id);
+    if (wantsBurrowed) {
+      if (phase !== 'idle') return;
+      if (this.resources.getAdrenaline(id) < BURROW_MIN_ADRENALINE) return;
+      this.startWindUp(id);
+      return;
+    }
+
+    if (phase === 'underground') {
+      this.requestExit(id, 'manual');
     }
   }
 
   // ── Frame-Update (Host) ───────────────────────────────────────────────────
 
   update(delta: number): void {
-    // Adrenalin drainieren für aktiv vergrabende Spieler
-    for (const id of [...this.burrowed]) {
-      const drain = ADRENALINE_DRAIN_PER_SEC * delta / 1000;
-      this.resources.drainAdrenaline(id, drain);
-      if (this.resources.getAdrenaline(id) <= 0) {
-        this.tryExitBurrow(id); // forced (Adrenalin = 0)
+    const now = Date.now();
+
+    for (const [id, state] of [...this.states]) {
+      if (!this.combat.isAlive(id)) {
+        this.resetState(id, true);
+        continue;
+      }
+
+      switch (state.phase) {
+        case 'windup':
+          if (now >= state.phaseEndsAt) {
+            this.completeWindUp(id);
+          }
+          break;
+        case 'underground':
+          this.updateUndergroundState(id, state, delta);
+          break;
+        case 'trapped':
+          this.updateTrappedState(id, state, delta);
+          break;
+        case 'recovery':
+          if (now >= state.phaseEndsAt) {
+            this.states.delete(id);
+          }
+          break;
+        default:
+          break;
       }
     }
+  }
 
-    // Stuck-Schaden + Befreiungs-Check
-    for (const id of [...this.stuckAt0]) {
-      const accum = (this.stuckDmgAccum.get(id) ?? 0)
-                    + BURROW_STUCK_DAMAGE_PER_SEC * delta / 1000;
-      this.stuckDmgAccum.set(id, accum);
-
-      if (accum >= 1) {
-        const dmg = Math.floor(accum);
-        // Stuck-Schaden ignoriert Burrow-Invulnerabilität (skipBurrowCheck = true)
-        this.combat.applyDamage(id, dmg, true);
-        this.stuckDmgAccum.set(id, accum - dmg);
+  private updateUndergroundState(id: string, state: BurrowStateData, delta: number): void {
+    state.drainElapsedMs += delta;
+    while (state.drainElapsedMs >= BURROW_DRAIN_INTERVAL_MS) {
+      state.drainElapsedMs -= BURROW_DRAIN_INTERVAL_MS;
+      this.resources.drainAdrenaline(id, BURROW_DRAIN_AMOUNT_PER_TICK);
+      if (this.resources.getAdrenaline(id) <= 0) {
+        this.requestExit(id, 'depleted');
+        return;
       }
+    }
+  }
 
-      // Prüfen ob Blockierung aufgelöst (z. B. Fels zerstört)
-      if (!this.isOverlappingStatic(id)) {
-        this.stuckAt0.delete(id);
-        this.stuckDmgAccum.delete(id);
-        this.finalizeUnburrow(id);
-      }
+  private updateTrappedState(id: string, state: BurrowStateData, delta: number): void {
+    state.stuckDamageAccum += BURROW_STUCK_DAMAGE_PER_SEC * delta / 1000;
+
+    if (state.stuckDamageAccum >= 1) {
+      const damage = Math.floor(state.stuckDamageAccum);
+      this.combat.applyDamage(id, damage, true);
+      state.stuckDamageAccum -= damage;
+    }
+
+    if (!this.isOverlappingStatic(id)) {
+      this.finalizeExit(id);
     }
   }
 
   // ── Privat ─────────────────────────────────────────────────────────────────
 
-  private enterBurrow(id: string): void {
-    this.burrowed.add(id);
-    this.hostPhysics.setPlayerBurrowed(id, true);
-    this.bridge.broadcastBurrowVisual(id, true);
+  private startWindUp(id: string): void {
+    this.states.set(id, {
+      phase: 'windup',
+      phaseEndsAt: Date.now() + BURROW_WINDUP_DURATION_MS,
+      drainElapsedMs: 0,
+      stuckDamageAccum: 0,
+    });
+    this.bridge.broadcastBurrowVisual(id, 'windup');
   }
 
-  private tryExitBurrow(id: string): void {
-    this.burrowed.delete(id);
+  private completeWindUp(id: string): void {
+    const state = this.states.get(id);
+    if (!state || state.phase !== 'windup') return;
+
+    this.states.set(id, {
+      phase: 'underground',
+      phaseEndsAt: 0,
+      drainElapsedMs: 0,
+      stuckDamageAccum: 0,
+    });
+    this.hostPhysics.setPlayerBurrowed(id, true);
+    this.bridge.broadcastBurrowVisual(id, 'underground');
+  }
+
+  private requestExit(id: string, reason: 'manual' | 'depleted'): void {
+    const state = this.states.get(id);
+    if (!state || state.phase !== 'underground') return;
 
     if (this.isOverlappingStatic(id)) {
-      // Blockiert → stuck-Zustand (bleibt visuell vergraben, nimmt Schaden)
-      this.stuckAt0.add(id);
-      this.stuckDmgAccum.set(id, 0);
-      // Collider bleiben deaktiviert (isBurrowed() gibt weiterhin true zurück)
-    } else {
-      this.finalizeUnburrow(id);
+      if (reason === 'depleted') {
+        this.states.set(id, {
+          phase: 'trapped',
+          phaseEndsAt: 0,
+          drainElapsedMs: 0,
+          stuckDamageAccum: 0,
+        });
+      }
+      return;
     }
+
+    this.finalizeExit(id);
   }
 
-  private finalizeUnburrow(id: string): void {
+  private finalizeExit(id: string): void {
     this.hostPhysics.setPlayerBurrowed(id, false);
-    this.bridge.broadcastBurrowVisual(id, false);
+    this.states.set(id, {
+      phase: 'recovery',
+      phaseEndsAt: Date.now() + BURROW_POPOUT_WEAPON_LOCK_MS,
+      drainElapsedMs: 0,
+      stuckDamageAccum: 0,
+    });
+    this.bridge.broadcastBurrowVisual(id, 'recovery');
     this.applyShockwave(id);
-    this.stunnedUntil.set(id, Date.now() + SELF_STUN_DURATION_MS);
+  }
+
+  private resetState(id: string, broadcastIdle: boolean): void {
+    const phase = this.getPhase(id);
+    if (phase === 'idle') return;
+
+    if (phase === 'underground' || phase === 'trapped') {
+      this.hostPhysics.setPlayerBurrowed(id, false);
+    }
+    this.states.delete(id);
+    if (broadcastIdle) {
+      this.bridge.broadcastBurrowVisual(id, 'idle');
+    }
   }
 
   /**

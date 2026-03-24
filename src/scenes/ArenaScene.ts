@@ -42,7 +42,7 @@ import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { LobbyOverlay }        from './LobbyOverlay';
-import type { PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, WeaponSlot, RoomQualitySnapshot } from '../types';
+import type { BurrowPhase, PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, WeaponSlot, RoomQualitySnapshot } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';
 import {
   ARENA_HEIGHT,
@@ -371,10 +371,11 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── 11. RPC-Handler für Burrow-Visualisierung ─────────────────────────
-    bridge.registerBurrowVisualHandler((playerId, isBurrowed) => {
+    bridge.registerBurrowVisualHandler((playerId, phase) => {
       const entity = this.playerManager.getPlayer(playerId);
       if (!entity) return;
-      entity.setBurrowVisual(isBurrowed);
+      entity.setBurrowPhase(phase, true);
+      this.effectSystem.syncBurrowState(playerId, phase, entity.sprite);
     });
 
     // ── 12. Schockwellen-Visualisierung ───────────────────────────────────
@@ -490,6 +491,7 @@ export class ArenaScene extends Phaser.Scene {
         this.burrowSystem?.removePlayer(id);
         this.loadoutManager?.removePlayer(id);
       }
+      this.effectSystem.clearBurrowState(id);
       this.hostPhysics.removePlayer(id);
       this.playerManager.removePlayer(id);
     }
@@ -780,9 +782,11 @@ export class ArenaScene extends Phaser.Scene {
       this.loadoutManager.setPhysicsSystem(this.hostPhysics);
       this.loadoutManager.setActionBlockedChecker((playerId, slot) => {
         if (!this.combatSystem.isAlive(playerId)) return true;
-        if (slot === 'weapon1' || slot === 'weapon2' || slot === 'utility' || slot === 'ultimate') {
-          if (this.burrowSystem?.isBurrowed(playerId)) return true;
-          if (this.burrowSystem?.isStunned(playerId)) return true;
+        if (slot === 'weapon1' || slot === 'weapon2') {
+          if (this.burrowSystem?.isWeaponBlocked(playerId)) return true;
+        }
+        if (slot === 'utility' || slot === 'ultimate') {
+          if (this.burrowSystem?.isUtilityBlocked(playerId)) return true;
         }
         return false;
       });
@@ -994,6 +998,7 @@ export class ArenaScene extends Phaser.Scene {
     this.projectileManager.destroyAll();
     this.smokeSystem.destroyAll();
     this.fireSystem.destroyAll();
+    this.effectSystem.clearAllBurrowStates();
 
     if (this.arenaResult) {
       ArenaBuilder.destroyDynamic(this.arenaResult);
@@ -1633,6 +1638,7 @@ export class ArenaScene extends Phaser.Scene {
       this.inputSystem.setLocalState(
         this.burrowSystem?.isStunned(localId) ?? false,
         this.burrowSystem?.isBurrowed(localId) ?? false,
+        this.burrowSystem?.getPhase(localId) ?? 'idle',
       );
       localPlayer.setRotation(this.inputSystem.getAimAngle());
       const now = Date.now();
@@ -1673,6 +1679,7 @@ export class ArenaScene extends Phaser.Scene {
       const rage       = this.resourceSystem?.getRage(player.id) ?? 0;
       const isBurrowed = this.burrowSystem?.isBurrowed(player.id) ?? false;
       const isStunned  = this.burrowSystem?.isStunned(player.id)  ?? false;
+      const burrowPhase = this.burrowSystem?.getPhase(player.id) ?? 'idle';
       const isRaging   = this.loadoutManager?.isUltimateActive(player.id) ?? false;
       const isMoving   = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
       const aim        = this.loadoutManager?.getAimNetState(player.id, isMoving)
@@ -1695,6 +1702,7 @@ export class ArenaScene extends Phaser.Scene {
         rage: Math.round(rage),
         isBurrowed,
         isStunned,
+        burrowPhase,
         isRaging,
         dashPhase: this.hostPhysics.getDashPhase(player.id),
         aim: {
@@ -1756,7 +1764,8 @@ export class ArenaScene extends Phaser.Scene {
         player.updateHP(ps.hp);
         player.updateArmor(ps.armor);
         player.setVisible(ps.alive);
-        player.setBurrowVisual(ps.isBurrowed);
+        player.setBurrowPhase(ps.burrowPhase, false);
+        this.effectSystem.syncBurrowState(id, ps.burrowPhase, player.sprite);
         player.setRageTint(ps.isRaging);
 
         // ── Dash-Visual-Verarbeitung ──────────────────────────────────────
@@ -1818,7 +1827,7 @@ export class ArenaScene extends Phaser.Scene {
     const localState = state.players[localId2];
     if (localState) {
       this.aimSystem?.setAuthoritativeState(localState.aim);
-      this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed);
+      this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase);
       const localUtilityConfig = this.getLocalUtilityConfig();
       const overrideName = bridge.getPlayerUtilityOverrideName(localId2);
       const utilDisplayName = overrideName

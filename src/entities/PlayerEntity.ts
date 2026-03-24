@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
-import type { PlayerProfile } from '../types';
+import type { BurrowPhase, PlayerProfile } from '../types';
 import {
   PLAYER_SIZE, DEPTH,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
-  BURROW_ALPHA, BURROW_TINT,
 } from '../config';
 
 export class PlayerEntity {
@@ -35,10 +34,12 @@ export class PlayerEntity {
   // Sterbeanimation
   private deathSprite: Phaser.GameObjects.Sprite | null = null;
   private isAliveVisual = true; // verfolgt Übergang alive→dead für einmaligen Animationsstart
+  private baseVisible = true;
 
   // Visuelle Zustände – kombiniert in resolveVisual()
-  private isBurrowedVisual = false;
+  private burrowPhase: BurrowPhase = 'idle';
   private isRagingVisual   = false;
+  private burrowTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number) {
     this.id       = profile.id;
@@ -185,11 +186,8 @@ export class PlayerEntity {
 
   /** Sprite und Balken ein-/ausblenden (Tod / Respawn). */
   setVisible(visible: boolean): void {
-    this.sprite.setVisible(visible);
-    this.hpBarBg.setVisible(visible);
-    this.hpBarFg.setVisible(visible);
-    this.armorBarBg.setVisible(visible && this.currentArmor > 0);
-    this.armorBarFg.setVisible(visible && this.currentArmor > 0);
+    this.baseVisible = visible;
+    this.applyDisplayVisibility();
 
     if (!visible && this.isAliveVisual) {
       // Übergang alive → dead: Sterbeanimation starten
@@ -220,9 +218,20 @@ export class PlayerEntity {
     this.sprite.setScale(scale);
   }
 
-  /** Burrow-Visualisierung setzen. */
-  setBurrowVisual(isBurrowed: boolean): void {
-    this.isBurrowedVisual = isBurrowed;
+  setBurrowPhase(phase: BurrowPhase, animate: boolean): void {
+    if (this.burrowPhase === phase) return;
+
+    const previousPhase = this.burrowPhase;
+    this.burrowPhase = phase;
+    this.burrowTween?.stop();
+    this.burrowTween = null;
+
+    if (animate && phase === 'windup' && previousPhase === 'idle') {
+      this.playWindUpTween();
+    } else if (animate && phase === 'recovery' && (previousPhase === 'underground' || previousPhase === 'trapped')) {
+      this.playPopOutTween();
+    }
+
     this.resolveVisual();
   }
 
@@ -234,20 +243,65 @@ export class PlayerEntity {
 
   /**
    * Einheitliche Methode zur visuellen Darstellung.
-   * Priorität: Burrow > Rage > Normal.
-   * Bild bleibt ungetinted – Zustand wird über Glow-Aura-Farbe + Alpha vermittelt.
+   * Burrow arbeitet primär über Sichtbarkeit/Tweening, Rage nur noch über Glow.
    */
   private resolveVisual(): void {
-    if (this.isBurrowedVisual) {
-      this.sprite.setAlpha(BURROW_ALPHA);
-      if (this.glowFx) this.glowFx.color = BURROW_TINT;
-    } else if (this.isRagingVisual) {
+    if (this.isRagingVisual) {
       this.sprite.setAlpha(1.0);
       if (this.glowFx) this.glowFx.color = 0xff3333;
     } else {
       this.sprite.setAlpha(1.0);
       if (this.glowFx) this.glowFx.color = this.colorHex;
     }
+    this.applyDisplayVisibility();
+  }
+
+  private playWindUpTween(): void {
+    this.sprite.setVisible(this.baseVisible);
+    this.sprite.setScale(1);
+    this.burrowTween = this.sprite.scene.tweens.add({
+      targets: this.sprite,
+      y: this.sprite.y + 6,
+      scaleX: 1.08,
+      scaleY: 0.78,
+      duration: 150,
+      ease: 'Cubic.easeIn',
+      onUpdate: () => this.syncBar(),
+      onComplete: () => {
+        this.burrowTween = null;
+        this.resolveVisual();
+      },
+    });
+  }
+
+  private playPopOutTween(): void {
+    this.sprite.setVisible(this.baseVisible);
+    this.sprite.setScale(0.82, 0.72);
+    this.sprite.y -= 8;
+    this.syncBar();
+    this.burrowTween = this.sprite.scene.tweens.add({
+      targets: this.sprite,
+      y: this.sprite.y + 8,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 180,
+      ease: 'Back.easeOut',
+      onUpdate: () => this.syncBar(),
+      onComplete: () => {
+        this.burrowTween = null;
+        this.resolveVisual();
+      },
+    });
+  }
+
+  private applyDisplayVisibility(): void {
+    const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
+    const visible = this.baseVisible && !hiddenByBurrow;
+    this.sprite.setVisible(visible);
+    this.hpBarBg.setVisible(visible);
+    this.hpBarFg.setVisible(visible);
+    this.armorBarBg.setVisible(visible && this.currentArmor > 0);
+    this.armorBarFg.setVisible(visible && this.currentArmor > 0);
   }
 
   destroy(): void {

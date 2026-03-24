@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { ExplosionVisualStyle, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -117,7 +117,7 @@ type HitscanTracerHandler = (
 type DashHandler = (playerId: string, dx: number, dy: number) => void;
 type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
 type ShockwaveEffectHandler = (x: number, y: number) => void;
-type BurrowVisualHandler = (playerId: string, isBurrowed: boolean) => void;
+type BurrowVisualHandler = (playerId: string, phase: BurrowPhase) => void;
 type ColorRequestHandler = (requestedColor: number, requesterId: string) => void;
 type ColorAcceptedHandler = (requesterId: string, color: number) => void;
 type ColorDeniedHandler = (requesterId: string) => void;
@@ -791,17 +791,17 @@ export class NetworkBridge {
 
   // ── Burrow-Visualisierung: Host → Alle ────────────────────────────────────
 
-  broadcastBurrowVisual(playerId: string, isBurrowed: boolean): void {
-    this.broadcastRpc('bfx', { id: playerId, b: isBurrowed });
+  broadcastBurrowVisual(playerId: string, phase: BurrowPhase): void {
+    this.broadcastRpc('bfx', { id: playerId, p: phase });
   }
 
-  registerBurrowVisualHandler(cb: (playerId: string, isBurrowed: boolean) => void): void {
+  registerBurrowVisualHandler(cb: (playerId: string, phase: BurrowPhase) => void): void {
     this.burrowVisualHandler = cb;
     this.registerAllRpcHandler('bfx', async (data: unknown): Promise<unknown> => {
       const burrowVisualHandler = this.burrowVisualHandler;
       if (!burrowVisualHandler) return undefined;
-      const { id, b } = data as { id: string; b: boolean };
-      burrowVisualHandler(id, b);
+      const { id, p } = data as { id: string; p: BurrowPhase };
+      burrowVisualHandler(id, p);
       return undefined;
     });
   }

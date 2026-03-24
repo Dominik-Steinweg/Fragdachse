@@ -5,11 +5,15 @@ import type { CombatSystem }  from './CombatSystem';
 import {
   PLAYER_SPEED, PLAYER_SIZE,
   DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START,
-  BURROW_SPEED_FACTOR,
 } from '../config';
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
-type BurrowSystemType   = { isBurrowed(id: string): boolean; isStunned(id: string): boolean };
+type BurrowSystemType   = {
+  isBurrowed(id: string): boolean;
+  isStunned(id: string): boolean;
+  isDashBlocked(id: string): boolean;
+  getMovementSpeedFactor(id: string): number;
+};
 type LoadoutManagerType = { getSpeedMultiplier(id: string): number };
 
 interface DashState {
@@ -161,15 +165,15 @@ export class HostPhysicsSystem {
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
     if (!this.combatSystem.isAlive(playerId)) return;
-    if (this.burrowSystem?.isStunned(playerId)) return;
+    if (this.burrowSystem?.isDashBlocked(playerId)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
 
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len === 0) return; // kein Dash im Stand
 
-    const burrowed  = this.burrowSystem?.isBurrowed(playerId) ?? false;
+    const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(playerId) ?? 1;
     const speedMult = this.loadoutManager?.getSpeedMultiplier(playerId) ?? 1;
-    const vNorm     = (burrowed ? PLAYER_SPEED * BURROW_SPEED_FACTOR : PLAYER_SPEED) * speedMult;
+    const vNorm     = PLAYER_SPEED * burrowSpeedFactor * speedMult;
 
     this.dashStates.set(playerId, {
       phase:   1,
@@ -361,9 +365,9 @@ export class HostPhysicsSystem {
       const dy    = input?.dy ?? 0;
       const len   = Math.sqrt(dx * dx + dy * dy);
 
-      const burrowed   = this.burrowSystem?.isBurrowed(player.id) ?? false;
+      const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
       const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id) ?? 1;
-      const speed      = (burrowed ? PLAYER_SPEED * BURROW_SPEED_FACTOR : PLAYER_SPEED) * speedMult;
+      const speed      = PLAYER_SPEED * burrowSpeedFactor * speedMult;
 
       if (len > 0) {
         baseVx = (dx / len) * speed;
