@@ -5,6 +5,7 @@ import type { ArmageddonSystem }  from '../systems/ArmageddonSystem';
 import type { StinkCloudSystem }  from '../effects/StinkCloudSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
+import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
 import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, WeaponSlot } from '../types';
 import type {
   BfgUtilityConfig,
@@ -14,6 +15,7 @@ import type {
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
+  TeslaDomeWeaponFireConfig,
   UltimateConfig,
   UtilityConfig,
   WeaponConfig,
@@ -31,6 +33,7 @@ export interface LoadoutSelection {
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
 import { GenericUltimate } from './GenericUltimate';
+import { TeslaDomeWeapon } from './TeslaDomeWeapon';
 import type { BaseWeapon }   from './BaseWeapon';
 import type { BaseUtility }  from './BaseUtility';
 import type { BaseUltimate } from './BaseUltimate';
@@ -66,6 +69,7 @@ export class LoadoutManager {
   private armageddonSystem:   ArmageddonSystem | null = null;
   private nukeStrikeHandler: ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
   private stinkCloudSystem:   StinkCloudSystem | null = null;
+  private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
@@ -91,8 +95,8 @@ export class LoadoutManager {
     const utCfg  = selection?.utility  ?? UTILITY_CONFIGS.HE_GRENADE;
     const ultCfg = selection?.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
     this.loadouts.set(playerId, {
-      weapon1:  new GenericWeapon(w1Cfg),
-      weapon2:  new GenericWeapon(w2Cfg),
+      weapon1:  this.createWeapon(w1Cfg),
+      weapon2:  this.createWeapon(w2Cfg),
       utility:  new GenericUtility(utCfg),
       ultimate: new GenericUltimate(ultCfg),
     });
@@ -106,6 +110,7 @@ export class LoadoutManager {
     this.utilityAmmo.delete(playerId);
     this.bridge.publishUtilityCooldownUntil(playerId, 0);
     this.bridge.publishUtilityOverrideName(playerId, '');
+    this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
   }
 
   /**
@@ -140,6 +145,7 @@ export class LoadoutManager {
     this.savedUtilities.delete(playerId);
     this.utilityAmmo.delete(playerId);
     this.heldFireSlots.delete(playerId);
+    this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
   }
 
   setCombatSystem(combatSystem: CombatResolverType | null): void {
@@ -169,6 +175,11 @@ export class LoadoutManager {
   /** Injiziert das StinkCloudSystem für Stinkdrüsen-Utilities. */
   setStinkCloudSystem(sys: StinkCloudSystem | null): void {
     this.stinkCloudSystem = sys;
+  }
+
+  /** Injiziert das TeslaDomeSystem für kontinuierliche Tesla-Kuppeln. */
+  setTeslaDomeSystem(sys: TeslaDomeSystem | null): void {
+    this.teslaDomeSystem = sys;
   }
 
   /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
@@ -338,7 +349,12 @@ export class LoadoutManager {
     // holdSpeedFactor: Verlangsamung wenn Feuerknopf gehalten wird
     const held = this.heldFireSlots.get(playerId);
     if (held && Date.now() - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
-      const cfg        = this.loadouts.get(playerId)?.[held.slot].config;
+      const cfg = this.loadouts.get(playerId)?.[held.slot].config;
+      if (cfg?.fire.type === 'tesla_dome') {
+        const fireCfg = cfg.fire as TeslaDomeWeaponFireConfig;
+        const holdFactor = this.teslaDomeSystem?.isActive(playerId) ? fireCfg.movementSlowFactor : 1;
+        return ultimateMult * holdFactor;
+      }
       const holdFactor = cfg?.holdSpeedFactor ?? 1;
       return ultimateMult * holdFactor;
     }
@@ -429,6 +445,11 @@ export class LoadoutManager {
     playerColor: number,
     shotId?: number,
   ): void {
+    if (weapon.config.fire.type === 'tesla_dome') {
+      this.activateTeslaDomeWeapon(weapon, x, y, playerId, now, playerColor);
+      return;
+    }
+
     // 1. Cooldown-Check
     if (weapon.isOnCooldown(now)) return;
 
@@ -706,9 +727,37 @@ export class LoadoutManager {
       case 'flamethrower':
         return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor);
 
+      case 'tesla_dome':
+        return false;
+
       default:
         return false;
     }
+  }
+
+  private createWeapon(config: WeaponConfig): BaseWeapon {
+    if (config.fire.type === 'tesla_dome') {
+      return new TeslaDomeWeapon(config as WeaponConfig & { fire: TeslaDomeWeaponFireConfig });
+    }
+    return new GenericWeapon(config);
+  }
+
+  private activateTeslaDomeWeapon(
+    weapon: BaseWeapon,
+    x: number,
+    y: number,
+    playerId: string,
+    now: number,
+    playerColor: number,
+  ): void {
+    if (!this.teslaDomeSystem) return;
+    if (this.resourceSystem.getAdrenaline(playerId) <= 0) {
+      this.teslaDomeSystem.hostDeactivateForPlayer(playerId);
+      return;
+    }
+
+    const cfg = weapon.config as WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
+    this.teslaDomeSystem.hostRefresh(playerId, x, y, now, cfg, cfg.projectileColor ?? playerColor);
   }
 
   private fireProjectileWeapon(

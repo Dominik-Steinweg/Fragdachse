@@ -177,6 +177,7 @@ export class AimSystem {
     this.drawBeam(sx, sy, tx, ty, palette, frac);
 
     if (!inside) return;
+    if (cfg.showCrosshair === false) return;
 
     this.drawCrosshair(tx, ty, frac, palette, this.getAccentColor());
   }

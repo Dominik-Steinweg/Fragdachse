@@ -45,6 +45,24 @@ export interface PlayerNetState {
   aim:        PlayerAimNetState;
 }
 
+export type TeslaDomeTargetType = 'players' | 'train' | 'rocks';
+
+export interface SyncedTeslaDomeTarget {
+  x: number;
+  y: number;
+  type: TeslaDomeTargetType;
+}
+
+export interface SyncedTeslaDome {
+  ownerId: string;
+  x: number;
+  y: number;
+  radius: number;
+  color: number;
+  alpha: number;
+  targets: SyncedTeslaDomeTarget[];
+}
+
 /** Visueller Stil eines Projektils */
 export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'holy_grenade';
 

@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TracerConfig } from '../types';
+import type { LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -32,11 +32,31 @@ export interface FlamethrowerWeaponFireConfig {
   readonly velocityDecay: number;       // Geschwindigkeits-Faktor pro Sekunde (0-1)
 }
 
+export interface TeslaDomeWeaponFireConfig {
+  readonly type: 'tesla_dome';
+  readonly radius: number;
+  readonly damagePerTick: number;
+  readonly tickInterval: number;
+  readonly adrenalineDrainPerSecond: number;
+  readonly movementSlowFactor: number;
+  readonly requireLineOfSight: boolean;
+  readonly targetTypes: readonly TeslaDomeTargetType[];
+  readonly visualIndicatorAlpha: number;
+  readonly visualFieldAlpha: number;
+  readonly visualIdleArcCount: number;
+  readonly visualIdleArcLength: number;
+  readonly visualBoltThicknessMin: number;
+  readonly visualBoltThicknessMax: number;
+  readonly visualJitter: number;
+  readonly visualBranchChance: number;
+}
+
 export type WeaponFireConfig =
   | ProjectileWeaponFireConfig
   | HitscanWeaponFireConfig
   | MeleeWeaponFireConfig
-  | FlamethrowerWeaponFireConfig;
+  | FlamethrowerWeaponFireConfig
+  | TeslaDomeWeaponFireConfig;
 
 export interface WeaponConfig {
   readonly id: string;
@@ -94,6 +114,9 @@ export interface WeaponConfig {
   // Tracer-Leuchtlinie (optional, data-driven)
   // undefined = kein Tracer; TracerConfig.colorCore/colorGlow undefined = Spielerfarbe
   readonly tracerConfig?: TracerConfig;
+
+  // Aim-Reticle (optional, data-driven)
+  readonly showCrosshair?: boolean;      // false = Zielfadenkreuz ausblenden
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud';
@@ -722,6 +745,46 @@ export const WEAPON_CONFIGS = {
     projectileColor:      0xff6600,    // feste Flammenfarbe (nicht Spielerfarbe)
     rockDamageMult:       0,           // Flammen machen keinen Schaden an Felsen
     trainDamageMult:      1,        // 100% Schaden am Zug
+  } as WeaponConfig,
+
+  TESLA_DOME: {
+    id:                   'TESLA_DOME',
+    displayName:          'Tesla-Kuppel',
+    cooldown:             0,
+    damage:               0,
+    range:                0,
+    fire: {
+      type:                     'tesla_dome',
+      radius:                   190,
+      damagePerTick:            6,
+      tickInterval:             180,
+      adrenalineDrainPerSecond: 16,
+      movementSlowFactor:       0.58,
+      requireLineOfSight:       true,
+      targetTypes:              ['players', 'train'] satisfies readonly TeslaDomeTargetType[],
+      visualIndicatorAlpha:     0.32,
+      visualFieldAlpha:         0.24,
+      visualIdleArcCount:       4,
+      visualIdleArcLength:      72,
+      visualBoltThicknessMin:   1.5,
+      visualBoltThicknessMax:   4.5,
+      visualJitter:             18,
+      visualBranchChance:       0.38,
+    } satisfies TeslaDomeWeaponFireConfig,
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileColor:      0x9ae7ff,
+    showCrosshair:        false,
+    rockDamageMult:       0.55,
+    trainDamageMult:      0.8,
   } as WeaponConfig,
 
   /**

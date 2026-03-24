@@ -11,6 +11,7 @@ import { InputSystem }         from '../systems/InputSystem';
 import { HostPhysicsSystem }   from '../systems/HostPhysicsSystem';
 import { CombatSystem }        from '../systems/CombatSystem';
 import { ResourceSystem }      from '../systems/ResourceSystem';
+import { TeslaDomeSystem }     from '../systems/TeslaDomeSystem';
 import { BurrowSystem }        from '../systems/BurrowSystem';
 import { LoadoutManager }      from '../loadout/LoadoutManager';
 import type { LoadoutSelection } from '../loadout/LoadoutManager';
@@ -24,6 +25,7 @@ import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
 import { EnergyBallRenderer }  from '../effects/EnergyBallRenderer';
+import { TeslaDomeRenderer }   from '../effects/TeslaDomeRenderer';
 import { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../effects/RocketRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
@@ -86,6 +88,7 @@ export class ArenaScene extends Phaser.Scene {
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
   private energyBallRenderer!: EnergyBallRenderer;
+  private teslaDomeRenderer!: TeslaDomeRenderer;
   private holyGrenadeRenderer!: HolyGrenadeRenderer;
   private rocketRenderer!:    RocketRenderer;
   private tracerRenderer!:    TracerRenderer;
@@ -117,6 +120,7 @@ export class ArenaScene extends Phaser.Scene {
   private powerUpSystem:     PowerUpSystem     | null = null;
   private detonationSystem:  DetonationSystem  | null = null;
   private armageddonSystem:  ArmageddonSystem  | null = null;
+  private teslaDomeSystem:   TeslaDomeSystem   | null = null;
 
   // ── Zug-Event ─────────────────────────────────────────────────────────────
   private trainManager:       TrainManager  | null = null;
@@ -230,6 +234,8 @@ export class ArenaScene extends Phaser.Scene {
     this.energyBallRenderer = new EnergyBallRenderer(this);
     this.energyBallRenderer.generateTextures();
     this.projectileManager.setEnergyBallRenderer(this.energyBallRenderer);
+    this.teslaDomeRenderer = new TeslaDomeRenderer(this);
+    this.teslaDomeRenderer.generateTextures();
     this.holyGrenadeRenderer = new HolyGrenadeRenderer(this);
     this.holyGrenadeRenderer.generateTextures();
     this.projectileManager.setHolyGrenadeRenderer(this.holyGrenadeRenderer);
@@ -769,6 +775,25 @@ export class ArenaScene extends Phaser.Scene {
 
     if (bridge.isHost()) {
       this.resourceSystem = new ResourceSystem();
+      this.teslaDomeSystem = new TeslaDomeSystem(
+        this.playerManager,
+        this.combatSystem,
+        this.resourceSystem,
+      );
+      this.teslaDomeSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => {
+        return this.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex);
+      });
+      this.teslaDomeSystem.setRockCallbacks(
+        () => (this.arenaResult?.rockObjects ?? [])
+          .flatMap((rock, index) => (rock && rock.active)
+            ? [{ index, x: rock.x, y: rock.y }]
+            : []),
+        (index, damage, ownerId) => this.applyTeslaRockDamage(index, damage, ownerId),
+      );
+      this.teslaDomeSystem.setTrainCallbacks(
+        () => this.trainManager?.getNetSnapshot()?.alive ? this.trainManager.getSegmentPositions() : [],
+        (damage, ownerId) => this.trainManager?.applyDamage(damage, ownerId),
+      );
       this.burrowSystem   = new BurrowSystem(
         this.resourceSystem,
         this.playerManager,
@@ -789,6 +814,7 @@ export class ArenaScene extends Phaser.Scene {
       this.loadoutManager.setCombatSystem(this.combatSystem);
       this.loadoutManager.setDashBurstChecker(id => this.hostPhysics.isDashBurst(id));
       this.loadoutManager.setPhysicsSystem(this.hostPhysics);
+      this.loadoutManager.setTeslaDomeSystem(this.teslaDomeSystem);
       this.loadoutManager.setActionBlockedChecker((playerId, slot) => {
         if (!this.combatSystem.isAlive(playerId)) return true;
         if (slot === 'weapon1' || slot === 'weapon2') {
@@ -1015,6 +1041,7 @@ export class ArenaScene extends Phaser.Scene {
     this.smokeSystem.destroyAll();
     this.fireSystem.destroyAll();
     this.stinkCloudSystem.destroyAll();
+    this.teslaDomeRenderer.destroyAll();
     this.effectSystem.clearAllBurrowStates();
     this.prevBurrowPhases.clear();
 
@@ -1026,6 +1053,7 @@ export class ArenaScene extends Phaser.Scene {
     this.currentLayout  = null;
     this.powerUpSystem?.reset();
     this.powerUpSystem   = null;
+    this.teslaDomeSystem = null;
     this.resourceSystem?.setPowerUpSystem(null);
     this.resourceSystem = null;
     this.burrowSystem   = null;
@@ -1033,6 +1061,7 @@ export class ArenaScene extends Phaser.Scene {
     this.detonationSystem?.reset();
     this.detonationSystem = null;
     this.loadoutManager?.setCombatSystem(null);
+    this.loadoutManager?.setTeslaDomeSystem(null);
     this.loadoutManager?.setActionBlockedChecker(null);
     this.loadoutManager = null;
     this.combatSystem.setBurrowSystem(null);
@@ -1149,6 +1178,7 @@ export class ArenaScene extends Phaser.Scene {
     // Läuft nach Host-/Client-Update, damit lokale Autoritätsdaten im selben Frame wirken.
     const inArena = inGame && !this.matchTerminated;
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
+    this.teslaDomeRenderer?.update(delta);
     const utilityTargeting = this.inputSystem.getUtilityTargetingPreviewState();
     const showAim = inArena
            && this.localPlayerAlive
@@ -1409,6 +1439,23 @@ export class ArenaScene extends Phaser.Scene {
     bridge.broadcastBfgLaserBatch(laserLines, COLORS.GREEN_2);
   }
 
+  private applyTeslaRockDamage(index: number, damage: number, ownerId: string): void {
+    if (!this.rockRegistry || !this.arenaResult || !this.currentLayout) return;
+    const newHp = this.rockRegistry.applyDamage(index, damage);
+    ArenaBuilder.updateRockVisual(
+      this.arenaResult.rockObjects,
+      this.arenaResult.rockGroup,
+      this.arenaResult.rockGrid,
+      this.currentLayout.rocks,
+      index,
+      newHp,
+    );
+    if (newHp <= 0) {
+      this.powerUpSystem?.onRockDestroyed(index);
+    }
+    void ownerId;
+  }
+
   private applyNukeEnvironmentDamage(
     x: number,
     y: number,
@@ -1580,6 +1627,8 @@ export class ArenaScene extends Phaser.Scene {
             color: profile?.colorHex ?? 0xffffff,
           };
         });
+    const teslaDomes = countdownActive ? [] : (this.teslaDomeSystem?.hostUpdate(Date.now()) ?? []);
+    this.teslaDomeRenderer.syncVisuals(teslaDomes);
 
     // Feuer-Schadens-Ticks auf CombatSystem anwenden (inkl. Selbstschaden)
     for (const ev of fireDamageEvents) {
@@ -1763,7 +1812,7 @@ export class ArenaScene extends Phaser.Scene {
       };
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, stinkClouds, powerups, nukes, meteors, train });
+    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, stinkClouds, teslaDomes, powerups, nukes, meteors, train });
 
     // BFG-Screenshake während Flug (Host)
     if (projectiles.some(p => p.style === 'bfg')) {
@@ -1837,6 +1886,7 @@ export class ArenaScene extends Phaser.Scene {
       this.smokeSystem.syncVisuals(state.smokes);
       this.fireSystem.syncVisuals(state.fires ?? []);
       this.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
+      this.teslaDomeRenderer.syncVisuals(state.teslaDomes ?? []);
       // Hitscan-Traces und Melee-Swings werden per RPC empfangen (EffectSystem-Handler)
 
       if (state.rocks && this.arenaResult && this.currentLayout) {
