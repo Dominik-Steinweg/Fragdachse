@@ -96,7 +96,7 @@ export interface WeaponConfig {
   readonly tracerConfig?: TracerConfig;
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -187,7 +187,15 @@ export interface NukeUtilityConfig extends BaseUtilityConfig {
   readonly type: 'nuke';
 }
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig;
+export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'stinkcloud';
+  readonly cloudRadius: number;          // px – Schadensradius der Gaswolke
+  readonly cloudDuration: number;        // ms – Gesamtdauer der Wolke
+  readonly cloudDamagePerTick: number;   // HP Schaden pro Tick
+  readonly cloudTickInterval: number;    // ms zwischen Damage-Ticks
+}
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -780,7 +788,7 @@ export const UTILITY_CONFIGS = {
     id:                     'SMOKE_GRENADE',
     displayName:            'Smoke Granate',
     type:                   'smoke',
-    cooldown:               7000,
+    cooldown:               6000,
     activation:             STANDARD_GRENADE_CHARGE,
     projectileSpeed:        500,
     projectileSize:         10,
@@ -788,7 +796,7 @@ export const UTILITY_CONFIGS = {
     maxBounces:             3,
     smokeRadius:            240,
     smokeExpandDuration:    500,
-    smokeLingerDuration:    7000,
+    smokeLingerDuration:    9000,
     smokeDissipateDuration: 2000,
     smokeMaxAlpha:          0.95,
     allowedSlots:           ['utility'],
@@ -862,6 +870,25 @@ export const UTILITY_CONFIGS = {
     maxBounces:          0,
     allowedSlots:        [],            // NICHT im Loadout-Menü wählbar
     skipCooldownPublish: true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
+  } as UtilityConfig,
+
+  STINKDRUESEN: {
+    id:                  'STINKDRUESEN',
+    displayName:         'Stinkdrüsen',
+    type:                'stinkcloud',
+    cooldown:            8000,
+    activation:          { type: 'instant' } as InstantUtilityActivationConfig,
+    projectileSpeed:     0,             // Kein Projektil – Sofortaktivierung
+    projectileSize:      0,
+    fuseTime:            0,
+    maxBounces:          0,
+    cloudRadius:         180,           // px – Schadensradius
+    cloudDuration:       4000,          // ms – Dauer der Gaswolke
+    cloudDamagePerTick:  5,             // HP Schaden pro Tick
+    cloudTickInterval:   250,           // ms zwischen Damage-Ticks (= 20 DPS)
+    rockDamageMult:      0.1,           // 10% Schaden an Felsen
+    trainDamageMult:     0.5,           // 50% Schaden am Zug
+    allowedSlots:        ['utility'],
   } as UtilityConfig,
 } as const;
 

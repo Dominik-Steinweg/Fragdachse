@@ -19,6 +19,7 @@ import type { UtilityConfig, WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
+import { StinkCloudSystem }    from '../effects/StinkCloudSystem';
 import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
@@ -80,6 +81,7 @@ export class ArenaScene extends Phaser.Scene {
   private effectSystem!:      EffectSystem;
   private smokeSystem!:       SmokeSystem;
   private fireSystem!:        FireSystem;
+  private stinkCloudSystem!:  StinkCloudSystem;
   private bulletRenderer!:    BulletRenderer;
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
@@ -273,6 +275,7 @@ export class ArenaScene extends Phaser.Scene {
     this.nukeRenderer?.setEffectSystem(this.effectSystem);
     this.smokeSystem = new SmokeSystem(this);
     this.fireSystem  = new FireSystem(this);
+    this.stinkCloudSystem = new StinkCloudSystem(this);
 
     // ── 6. Host-Physik (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
     this.hostPhysics = new HostPhysicsSystem(
@@ -831,6 +834,9 @@ export class ArenaScene extends Phaser.Scene {
       this.armageddonSystem = new ArmageddonSystem();
       this.armageddonSystem.setRockGrid(this.arenaResult.rockGrid);
       this.loadoutManager.setArmageddonSystem(this.armageddonSystem);
+      this.loadoutManager.setStinkCloudSystem(this.stinkCloudSystem);
+      this.combatSystem.setStinkCloudSystem(this.stinkCloudSystem);
+      this.burrowSystem.setStinkCloudSystem(this.stinkCloudSystem);
 
       // BFG Laser-Callback: Host löst periodische Laser-Strahlen aus
       this.projectileManager.setBfgLaserCallback((proj) => {
@@ -932,6 +938,10 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // Spieler-Kollision → sofortiger Kill (skipBurrowCheck=true, kein Frag-Kredit)
+    this.trainManager.setCanHitPlayerCallback((playerId) => {
+      return !this.burrowSystem?.isBurrowed(playerId);
+    });
+
     this.trainManager.setPlayerHitCallback((playerId) => {
       this.combatSystem.applyDamage(playerId, 9999, true, TRAIN.TRAIN_KILLER_ID, 'Zug RB 54');
     });
@@ -1004,6 +1014,7 @@ export class ArenaScene extends Phaser.Scene {
     this.projectileManager.destroyAll();
     this.smokeSystem.destroyAll();
     this.fireSystem.destroyAll();
+    this.stinkCloudSystem.destroyAll();
     this.effectSystem.clearAllBurrowStates();
     this.prevBurrowPhases.clear();
 
@@ -1028,6 +1039,7 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setResourceSystem(null);
     this.combatSystem.setLoadoutManager(null);
     this.combatSystem.setPowerUpSystem(null);
+    this.combatSystem.setStinkCloudSystem(null);
     this.combatSystem.setArenaObstacles(null, null);
     this.combatSystem.setTrainSegments(null);
     this.combatSystem.setRockDamageCallback(null);
@@ -1553,9 +1565,34 @@ export class ArenaScene extends Phaser.Scene {
       ? { synced: [], damageEvents: [] }
       : this.fireSystem.hostUpdate(Date.now());
 
+    // Stinkwolken-Update (spieler-folgend)
+    const { synced: stinkClouds, damageEvents: stinkDmg } = countdownActive
+      ? { synced: [], damageEvents: [] }
+      : this.stinkCloudSystem.hostUpdate(Date.now(), (id) => {
+          const player = this.playerManager.getPlayer(id);
+          if (!player) return null;
+          const profile = bridge.getConnectedPlayers().find(p => p.id === id);
+          return {
+            x: player.sprite.x,
+            y: player.sprite.y,
+            alive: this.combatSystem.isAlive(id),
+            burrowed: this.burrowSystem?.isBurrowed(id) ?? false,
+            color: profile?.colorHex ?? 0xffffff,
+          };
+        });
+
     // Feuer-Schadens-Ticks auf CombatSystem anwenden (inkl. Selbstschaden)
     for (const ev of fireDamageEvents) {
       this.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true);
+      this.applyAoeEnvironmentDamage(
+        ev.x, ev.y, ev.radius, ev.damage,
+        ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
+      );
+    }
+
+    // Stinkwolken-Schadens-Ticks (kein Selbstschaden)
+    for (const ev of stinkDmg) {
+      this.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false);
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
@@ -1726,7 +1763,7 @@ export class ArenaScene extends Phaser.Scene {
       };
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, powerups, nukes, meteors, train });
+    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, stinkClouds, powerups, nukes, meteors, train });
 
     // BFG-Screenshake während Flug (Host)
     if (projectiles.some(p => p.style === 'bfg')) {
@@ -1799,6 +1836,7 @@ export class ArenaScene extends Phaser.Scene {
       // Effekte und Umgebung nur bei neuem State synchronisieren
       this.smokeSystem.syncVisuals(state.smokes);
       this.fireSystem.syncVisuals(state.fires ?? []);
+      this.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
       // Hitscan-Traces und Melee-Swings werden per RPC empfangen (EffectSystem-Handler)
 
       if (state.rocks && this.arenaResult && this.currentLayout) {

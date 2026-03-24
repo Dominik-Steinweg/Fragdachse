@@ -23,6 +23,7 @@ import {
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
 type LoadoutManagerType  = { getDamageMultiplier(id: string): number };
 type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlayer(id: string): void };
+type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
 
 export interface HitscanTraceResult {
   readonly endX: number;
@@ -65,8 +66,7 @@ export class CombatSystem {
   private resourceSystem:   ResourceSystem      | null  = null;
   private loadoutManager:   LoadoutManagerType  | null  = null;
   private powerUpSystem:    PowerUpSystemType   | null  = null;
-  private detonationSystem: DetonationSystem    | null  = null;
-  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
+  private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
 
@@ -87,6 +87,7 @@ export class CombatSystem {
   setLoadoutManager(lm: LoadoutManagerType | null): void { this.loadoutManager = lm; }
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
+  setStinkCloudSystem(sc: StinkCloudSystemType | null): void { this.stinkCloudSystem = sc; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -766,6 +767,8 @@ export class CombatSystem {
 
     // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
     this.powerUpSystem?.removePlayer(playerId);
+    // Stinkwolke beim Tod sofort deaktivieren
+    this.stinkCloudSystem?.hostDeactivateForPlayer(playerId);
 
     const player = this.playerManager.getPlayer(playerId);
     if (player) player.body.enable = false;

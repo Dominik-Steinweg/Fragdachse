@@ -2,6 +2,7 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { ArmageddonSystem }  from '../systems/ArmageddonSystem';
+import type { StinkCloudSystem }  from '../effects/StinkCloudSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
 import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, WeaponSlot } from '../types';
@@ -9,6 +10,7 @@ import type {
   BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
   NukeUtilityConfig,
+  StinkCloudUtilityConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
@@ -63,6 +65,7 @@ export class LoadoutManager {
   private physicsSystem:      PhysicsSystemType | null = null;
   private armageddonSystem:   ArmageddonSystem | null = null;
   private nukeStrikeHandler: ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
+  private stinkCloudSystem:   StinkCloudSystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
@@ -161,6 +164,11 @@ export class LoadoutManager {
   /** Injiziert die Host-Logik für zielbasierte Nuke-Strikes. */
   setNukeStrikeHandler(handler: ((playerId: string, targetX: number, targetY: number) => boolean) | null): void {
     this.nukeStrikeHandler = handler;
+  }
+
+  /** Injiziert das StinkCloudSystem für Stinkdrüsen-Utilities. */
+  setStinkCloudSystem(sys: StinkCloudSystem | null): void {
+    this.stinkCloudSystem = sys;
   }
 
   /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
@@ -528,7 +536,9 @@ export class LoadoutManager {
         break;
 
       case 'instant':
-        didUse = false;
+        if (cfg.type === 'stinkcloud') {
+          didUse = this.activateStinkCloud(cfg as StinkCloudUtilityConfig, playerId);
+        }
         break;
     }
 
@@ -617,6 +627,20 @@ export class LoadoutManager {
     targetY: number,
   ): boolean {
     return this.nukeStrikeHandler?.(playerId, targetX, targetY) ?? false;
+  }
+
+  private activateStinkCloud(cfg: StinkCloudUtilityConfig, playerId: string): boolean {
+    if (!this.stinkCloudSystem) return false;
+    this.stinkCloudSystem.hostActivate(
+      playerId,
+      cfg.cloudRadius,
+      cfg.cloudDuration,
+      cfg.cloudDamagePerTick,
+      cfg.cloudTickInterval,
+      cfg.rockDamageMult ?? 1,
+      cfg.trainDamageMult ?? 1,
+    );
+    return true;
   }
 
   private buildGrenadeEffect(cfg: UtilityConfig): GrenadeEffectConfig {

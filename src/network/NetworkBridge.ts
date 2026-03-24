@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -86,6 +86,7 @@ export interface GameState {
   nukes:        SyncedNukeStrike[];
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
+  stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
 
@@ -462,6 +463,7 @@ export class NetworkBridge {
     if (state.rocks.length > 0)        payload.r = state.rocks;
     if (state.smokes.length > 0)       payload.s = state.smokes;
     if (state.fires.length > 0)        payload.f = state.fires;
+    if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
     if (state.powerups.length > 0)     payload.u = state.powerups;
     if (state.nukes.length > 0)        payload.n = state.nukes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
@@ -482,6 +484,7 @@ export class NetworkBridge {
       rocks:         (raw.r as RockNetState[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
+      stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
       powerups:      (raw.u as SyncedPowerUp[]       | undefined) ?? [],
       nukes:         (raw.n as SyncedNukeStrike[]    | undefined) ?? [],
       meteors:       (raw.mt as SyncedMeteorStrike[] | undefined) ?? [],

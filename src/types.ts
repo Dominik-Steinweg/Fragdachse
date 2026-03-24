@@ -328,6 +328,16 @@ export interface SyncedFireZone {
   alpha:  number; // 0-1, für visuelles Fade-in/-out
 }
 
+export interface SyncedStinkCloud {
+  id:         number;
+  ownerId:    string;
+  x:          number;
+  y:          number;
+  radius:     number;
+  alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
+  ownerColor: number; // Spielerfarbe für Fairness-Kreis
+}
+
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
 export interface TrackedProjectile {
   id:              number;

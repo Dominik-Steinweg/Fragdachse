@@ -55,6 +55,7 @@ export class TrainManager {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   private onPlayerHit: ((playerId: string) => void)          | null = null;
+  private canHitPlayer: ((playerId: string) => boolean)      | null = null;
   private onDestroyed: ((r: TrainDestroyResult) => void)     | null = null;
   private onExited:    (() => void)                          | null = null;
 
@@ -73,6 +74,7 @@ export class TrainManager {
   // ── Callback-Injection ───────────────────────────────────────────────────
 
   setPlayerHitCallback(cb: (playerId: string) => void):     void { this.onPlayerHit = cb; }
+  setCanHitPlayerCallback(cb: (playerId: string) => boolean): void { this.canHitPlayer = cb; }
   setDestroyCallback(cb: (r: TrainDestroyResult) => void):  void { this.onDestroyed  = cb; }
   setExitedCallback(cb: () => void):                        void { this.onExited     = cb; }
 
@@ -329,6 +331,7 @@ export class TrainManager {
 
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.sprite.active) continue;
+      if (this.canHitPlayer && !this.canHitPlayer(player.id)) continue;
       const px = player.sprite.x;
       const py = player.sprite.y;
 
