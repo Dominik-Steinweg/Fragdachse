@@ -232,9 +232,6 @@ export class EffectSystem {
   syncBurrowState(playerId: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void {
     if ((phase === 'underground' || phase === 'trapped') && sprite) {
       this.ensureBurrowVisual(playerId, sprite);
-      const visual = this.burrowVisuals.get(playerId);
-      visual?.dirt.setPosition(sprite.x, sprite.y);
-      visual?.dust.setPosition(sprite.x, sprite.y);
       return;
     }
 
@@ -265,14 +262,12 @@ export class EffectSystem {
   private ensureBurrowVisual(playerId: string, sprite: Phaser.GameObjects.Image): void {
     const existing = this.burrowVisuals.get(playerId);
     if (existing) {
-      existing.dirt.setPosition(sprite.x, sprite.y);
-      existing.dust.setPosition(sprite.x, sprite.y);
       return;
     }
 
     this.ensureTextures();
 
-    const dirt = this.scene.add.particles(sprite.x, sprite.y, TEX_BURROW_DIRT, {
+    const dirt = this.scene.add.particles(0, 0, TEX_BURROW_DIRT, {
       lifespan: { min: 300, max: 440 },
       speed: { min: 32, max: 88 },
       scale: { start: 0.9, end: 0.08 },
@@ -283,8 +278,9 @@ export class EffectSystem {
     });
     dirt.setDepth(DEPTH_FX - 0.2);
     dirt.addEmitZone(circleZone(12, 2));
+    dirt.startFollow(sprite);
 
-    const dust = this.scene.add.particles(sprite.x, sprite.y, TEX_BURROW_DUST, {
+    const dust = this.scene.add.particles(0, 0, TEX_BURROW_DUST, {
       lifespan: { min: 340, max: 500 },
       speed: { min: 18, max: 56 },
       scale: { start: 1.2, end: 0.14 },
@@ -294,6 +290,7 @@ export class EffectSystem {
     });
     dust.setDepth(DEPTH_FX - 0.25);
     dust.addEmitZone(circleZone(14, 1));
+    dust.startFollow(sprite);
 
     this.burrowVisuals.set(playerId, { dirt, dust });
   }

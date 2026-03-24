@@ -762,7 +762,7 @@ export const WEAPON_CONFIGS = {
       movementSlowFactor:       0.58,
       requireLineOfSight:       true,
       targetTypes:              ['players', 'train'] satisfies readonly TeslaDomeTargetType[],
-      visualIndicatorAlpha:     0.32,
+      visualIndicatorAlpha:     0.12,
       visualFieldAlpha:         0.24,
       visualIdleArcCount:       4,
       visualIdleArcLength:      72,

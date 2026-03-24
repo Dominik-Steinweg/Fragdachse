@@ -1875,7 +1875,6 @@ export class ArenaScene extends Phaser.Scene {
           this.dashTrailTimers.delete(id);
         }
         this.prevDashPhases.set(id, curPhase);
-        this.applyDashVisual(player, id, curPhase);
         this.applyBurrowVisual(player, ps.burrowPhase);
       }
 
@@ -1912,6 +1911,10 @@ export class ArenaScene extends Phaser.Scene {
     // ── Jeden Frame: Smooth Interpolation + Extrapolation ───────────────
     for (const player of this.playerManager.getAllPlayers()) {
       player.lerpStep(lerpFactor);
+      const dashPhase = this.prevDashPhases.get(player.id) ?? 0;
+      if (dashPhase !== 0) {
+        this.applyDashVisual(player, player.id, dashPhase as 1 | 2);
+      }
     }
     this.trainRenderer?.render(lerpFactor);
     // Projektile zwischen Netzwerk-Ticks extrapolieren
