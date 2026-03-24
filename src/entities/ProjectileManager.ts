@@ -24,6 +24,7 @@ interface ClientProjectileState {
   receivedAt: number;
   style?: string;
   energyBallVariant?: EnergyBallVariant;
+  ownerColor?: number;
   // Flammenwerfer-Decay: velocity nimmt exponentiell ab
   isFlame: boolean;
 }
@@ -63,6 +64,9 @@ export class ProjectileManager {
 
   // ── Rocket-Renderer (Raketenkörper + Rauchspur) ────────────────────────
   private rocketRenderer: RocketRenderer | null = null;
+
+  // ── Translocator-Puck-Renderer ──────────────────────────────────────────
+  private translocatorPuckRenderer: import('../effects/TranslocatorPuckRenderer').TranslocatorPuckRenderer | null = null;
 
 
   // ── Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) ───────
@@ -168,6 +172,11 @@ export class ProjectileManager {
     this.rocketRenderer = renderer;
   }
 
+  /** Injiziert den TranslocatorPuckRenderer. */
+  setTranslocatorPuckRenderer(renderer: import('../effects/TranslocatorPuckRenderer').TranslocatorPuckRenderer | null): void {
+    this.translocatorPuckRenderer = renderer;
+  }
+
   /** Injiziert den TracerRenderer für data-driven Leuchtlinien. */
   setTracerRenderer(renderer: TracerRenderer | null): void {
     this.tracerRenderer = renderer;
@@ -201,7 +210,7 @@ export class ProjectileManager {
     angle:   number,
     ownerId: string,
     cfg:     ProjectileSpawnConfig,
-  ): void {
+  ): number {
     const id = this.nextId++;
 
     const isBall   = cfg.projectileStyle === 'ball';
@@ -212,6 +221,7 @@ export class ProjectileManager {
     const isAwp    = cfg.projectileStyle === 'awp';
     const isHolyGrenade = cfg.projectileStyle === 'holy_grenade';
     const isRocket = cfg.projectileStyle === 'rocket';
+    const isTranslocatorPuck = cfg.projectileStyle === 'translocator_puck';
 
     // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
     const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall)
@@ -256,6 +266,12 @@ export class ProjectileManager {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.holyGrenadeRenderer.createVisual(id, x, y, cfg.size);
+    }
+
+    if (isTranslocatorPuck && this.translocatorPuckRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.translocatorPuckRenderer.createVisual(id, x, y, cfg.ownerColor ?? cfg.color);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
@@ -337,7 +353,26 @@ export class ProjectileManager {
       // Anti-Tunneling
       originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isBfg && !cfg.isGrenade
         ? cfg.size : undefined,
+
+      // Erweiterte Flugphysik
+      frictionDelayMs: cfg.frictionDelayMs,
+      airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
+      bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
+      stopSpeedThreshold: cfg.stopSpeedThreshold,
+      frictionActivated: false,
     };
+
+    // Phaser-Damping für Air-Friction vorbereiten
+    if (cfg.airFrictionDecayPerSec !== undefined) {
+      body.useDamping = true;
+      // Drag erst nach frictionDelayMs aktivieren; bis dahin kein Luftwiderstand (Faktor 1)
+      if (!cfg.frictionDelayMs || cfg.frictionDelayMs <= 0) {
+        body.setDrag(cfg.airFrictionDecayPerSec, cfg.airFrictionDecayPerSec);
+        tracked.frictionActivated = true;
+      } else {
+        body.setDrag(1, 1);
+      }
+    }
 
     if (isBfg) {
       // BFG: Welt-Bounds zerstören das Projektil; Felsen/Zug werden per Overlap beschädigt,
@@ -477,6 +512,7 @@ export class ProjectileManager {
     }
 
     this.projectiles.push(tracked);
+    return id;
   }
 
   /**
@@ -530,7 +566,21 @@ export class ProjectileManager {
   ): void {
     body.setCollideWorldBounds(true);
     body.onWorldBounds = true;
+    // Elastischer Bounce (Richtungsumkehr durch Phaser); Geschwindigkeitsreduktion
+    // erfolgt manuell über applyBounceFriction, damit die GESAMTE Geschwindigkeit
+    // (nicht nur die Normalkomponente) mit dem Multiplikator reduziert wird.
     body.setBounce(1, 1);
+
+    const isTranslocatorPuck = tracked.projectileStyle === 'translocator_puck';
+
+    // Hilfsfunktion: reduziert bei jedem Abprallen die Gesamtgeschwindigkeit
+    const applyBounceFriction = () => {
+      const mult = tracked.bounceFrictionMultiplier;
+      if (mult !== undefined && mult < 1) {
+        body.velocity.x *= mult;
+        body.velocity.y *= mult;
+      }
+    };
 
     const isBullet     = tracked.projectileStyle === 'bullet';
     const isAwp        = tracked.projectileStyle === 'awp';
@@ -543,6 +593,7 @@ export class ProjectileManager {
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
       if (hitBody !== body) return;
       tracked.bounceCount++;
+      applyBounceFriction();
       // Funken an Arena-Wand: Velocity ist nach Bounce bereits reflektiert
       if (isBullet || isAwp) {
         playImpact(
@@ -565,6 +616,7 @@ export class ProjectileManager {
       const onHit       = this.onRockHit;
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         tracked.bounceCount++;
+        applyBounceFriction();
         // Funken bei Fels-Aufprall
         if (isBullet || isAwp) {
           playImpact(
@@ -590,6 +642,7 @@ export class ProjectileManager {
     if (this.trunkGroup) {
       const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
         tracked.bounceCount++;
+        applyBounceFriction();
         // Funken bei Baumstamm-Aufprall
         if (isBullet || isAwp) {
           playImpact(
@@ -610,9 +663,12 @@ export class ProjectileManager {
     if (this.trainGroup) {
       const onTrainHit = this.onTrainHit;
       const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
-        const trainMult = tracked.trainDamageMult ?? 1;
-        if (trainMult !== 0) {
-          onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+        // Translocator prallt am Zug ab ohne Schaden
+        if (!isTranslocatorPuck) {
+          const trainMult = tracked.trainDamageMult ?? 1;
+          if (trainMult !== 0) {
+            onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+          }
         }
         // Funken bei Zug-Aufprall
         if (isBullet || isAwp) {
@@ -623,6 +679,7 @@ export class ProjectileManager {
           );
         }
         tracked.bounceCount++;
+        applyBounceFriction();
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
           body.setVelocity(0, 0);
@@ -685,7 +742,9 @@ export class ProjectileManager {
     this.flameRenderer?.destroyVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
     this.energyBallRenderer?.destroyVisual(proj.id);
+    this.holyGrenadeRenderer?.destroyVisual(proj.id);
     this.rocketRenderer?.destroyVisual(proj.id);
+    this.translocatorPuckRenderer?.destroyVisual(proj.id);
   }
 
   private queueProjectileExplosion(proj: TrackedProjectile): void {
@@ -799,6 +858,13 @@ export class ProjectileManager {
   }
 
   /**
+   * Host: Gibt ein aktives Projektil anhand seiner ID zurück.
+   */
+  getProjectileById(id: number): TrackedProjectile | undefined {
+    return this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+  }
+
+  /**
    * Host: Einzelnes Projektil sofort zerstören (z.B. nach Spielertreffer).
    */
   destroyProjectile(id: number): void {
@@ -832,6 +898,7 @@ export class ProjectileManager {
     this.energyBallRenderer?.destroyAll();
     this.holyGrenadeRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
+    this.translocatorPuckRenderer?.destroyAll();
     this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
@@ -888,6 +955,21 @@ export class ProjectileManager {
           }
         }
 
+        // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
+        if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
+          if (proj.frictionDelayMs === undefined || age >= proj.frictionDelayMs) {
+            proj.body.setDrag(proj.airFrictionDecayPerSec, proj.airFrictionDecayPerSec);
+            proj.frictionActivated = true;
+          }
+        }
+        // Stop-Threshold: unter Mindestgeschwindigkeit komplett anhalten
+        if (proj.frictionActivated && proj.stopSpeedThreshold !== undefined) {
+          const speedSq = proj.body.velocity.lengthSq();
+          if (speedSq > 0 && speedSq < proj.stopSpeedThreshold * proj.stopSpeedThreshold) {
+            proj.body.setVelocity(0, 0);
+          }
+        }
+
         return true;
       } else {
         // Normales Projektil: Lifetime oder Max-Bounces
@@ -918,6 +1000,21 @@ export class ProjectileManager {
           }
         } else if (proj.homing) {
           this.updateHomingProjectile(proj, now);
+        }
+
+        // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
+        if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
+          if (proj.frictionDelayMs === undefined || age >= proj.frictionDelayMs) {
+            proj.body.setDrag(proj.airFrictionDecayPerSec, proj.airFrictionDecayPerSec);
+            proj.frictionActivated = true;
+          }
+        }
+        // Stop-Threshold: unter Mindestgeschwindigkeit komplett anhalten
+        if (proj.frictionActivated && proj.stopSpeedThreshold !== undefined) {
+          const speedSq = proj.body.velocity.lengthSq();
+          if (speedSq > 0 && speedSq < proj.stopSpeedThreshold * proj.stopSpeedThreshold) {
+            proj.body.setVelocity(0, 0);
+          }
         }
 
         // Anti-Tunneling: Body-Ausrichtung nach Bounce aktualisieren
@@ -1071,6 +1168,25 @@ export class ProjectileManager {
       }
     }
 
+    // TranslocatorPuckRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
+    const tlPuckR = this.translocatorPuckRenderer;
+    if (tlPuckR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'translocator_puck') {
+          if (!tlPuckR.has(proj.id)) {
+            tlPuckR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.ownerColor ?? proj.color);
+          }
+          tlPuckR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.ownerColor ?? proj.color);
+        }
+      }
+      const activePuckIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'translocator_puck').map(p => p.id),
+      );
+      for (const id of tlPuckR.getActiveIds()) {
+        if (!activePuckIds.has(id)) tlPuckR.destroyVisual(id);
+      }
+    }
+
     // TracerRenderer-Visuals aktualisieren (Host rendert Tracer ebenfalls)
     const tracerR = this.tracerRenderer;
     if (tracerR) {
@@ -1121,6 +1237,7 @@ export class ProjectileManager {
     const rockets   = this.rocketRenderer;
     const energyBalls = this.energyBallRenderer;
     const holyGrenades = this.holyGrenadeRenderer;
+    const tlPucks = this.translocatorPuckRenderer;
 
     // Verwaiste Visuals und States entfernen
     for (const [id, sprite] of this.clientVisuals) {
@@ -1166,6 +1283,14 @@ export class ProjectileManager {
       for (const id of holyGrenades.getActiveIds()) {
         if (!activeIds.has(id)) {
           holyGrenades.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (tlPucks) {
+      for (const id of tlPucks.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          tlPucks.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -1216,6 +1341,7 @@ export class ProjectileManager {
         receivedAt: now,
         style: proj.style,
         energyBallVariant: proj.energyBallVariant,
+        ownerColor: proj.ownerColor,
         isFlame,
       });
 
@@ -1234,6 +1360,11 @@ export class ProjectileManager {
           energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.energyBallVariant);
         }
         energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color, proj.energyBallVariant);
+      } else if (proj.style === 'translocator_puck' && tlPucks) {
+        if (!tlPucks.has(proj.id)) {
+          tlPucks.createVisual(proj.id, proj.x, proj.y, proj.ownerColor ?? proj.color);
+        }
+        tlPucks.updateVisual(proj.id, proj.x, proj.y, proj.ownerColor ?? proj.color);
       } else if (isRocket && rockets) {
         if (!rockets.has(proj.id)) {
           rockets.createVisual(
@@ -1331,6 +1462,8 @@ export class ProjectileManager {
         this.holyGrenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {
         this.energyBallRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color, state.energyBallVariant);
+      } else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) {
+        this.translocatorPuckRenderer.updateVisual(id, ex, ey, state.ownerColor ?? state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
         this.rocketRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'flame' && flames && flames.has(id)) {

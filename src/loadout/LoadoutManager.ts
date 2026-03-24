@@ -70,6 +70,7 @@ export class LoadoutManager {
   private nukeStrikeHandler: ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
   private stinkCloudSystem:   StinkCloudSystem | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
+  private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
@@ -146,6 +147,7 @@ export class LoadoutManager {
     this.utilityAmmo.delete(playerId);
     this.heldFireSlots.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
+    this.translocatorSystem?.removePlayer(playerId);
   }
 
   setCombatSystem(combatSystem: CombatResolverType | null): void {
@@ -160,6 +162,10 @@ export class LoadoutManager {
   /** Injiziert das HostPhysicsSystem für Rückstoß-Impulse. */
   setPhysicsSystem(ps: PhysicsSystemType | null): void {
     this.physicsSystem = ps;
+  }
+
+  setTranslocatorSystem(sys: import('../systems/TranslocatorSystem').TranslocatorSystem | null): void {
+    this.translocatorSystem = sys;
   }
 
   /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
@@ -532,15 +538,19 @@ export class LoadoutManager {
 
     switch (cfg.activation.type) {
       case 'charged_throw':
-        didUse = this.throwGrenadeUtility(
-          cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },
-          x,
-          y,
-          angle,
-          playerId,
-          playerColor,
-          params?.utilityChargeFraction ?? 0,
-        );
+        if (cfg.type === 'translocator') {
+          didUse = this.translocatorSystem?.handleUse(playerId, angle, targetX, targetY, now, params) ?? false;
+        } else {
+          didUse = this.throwGrenadeUtility(
+            cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },
+            x,
+            y,
+            angle,
+            playerId,
+            playerColor,
+            params?.utilityChargeFraction ?? 0,
+          );
+        }
         break;
 
       case 'charged_gate':
@@ -609,6 +619,10 @@ export class LoadoutManager {
       fuseTime:      cfg.fuseTime,
       grenadeEffect: this.buildGrenadeEffect(cfg),
       projectileStyle: cfg.projectileStyle,
+      frictionDelayMs: cfg.frictionDelayMs,
+      airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
+      bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
+      stopSpeedThreshold: cfg.stopSpeedThreshold,
     });
 
     return true;

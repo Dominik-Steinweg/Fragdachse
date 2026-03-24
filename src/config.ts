@@ -234,6 +234,12 @@ export const PLAYER_COLORS: readonly number[] = [
   COLORS.PURPLE_3, COLORS.PURPLE_2,
 ] as const;
 
+// ---- Utilities ----
+export const TRANSLOCATOR_COOLDOWN = 2000; // ms
+export const TRANSLOCATOR_SPEED    = 1200; // px/s
+export const TRANSLOCATOR_SIZE     = 16;   // px
+export const TRANSLOCATOR_BOUNCES  = 1;    // Wie oft prallt der Puck ab
+
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;
 export const ARENA_COUNTDOWN_SEC = 3;

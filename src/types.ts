@@ -64,7 +64,7 @@ export interface SyncedTeslaDome {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'holy_grenade';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'holy_grenade' | 'translocator_puck';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */
 export type EnergyBallVariant = 'default' | 'plasma';
@@ -155,6 +155,14 @@ export interface SyncedMeleeSwing {
   range:      number;   // maximale Reichweite in px
   color:      number;   // Spielerfarbe (hex)
   shooterId:  string;
+}
+
+/** RPC Payload Interface für Teleport-Effekte (Host → Clients). */
+export interface SyncedTranslocatorFlash {
+  x: number;
+  y: number;
+  color: number; // Spielerfarbe
+  type: 'start' | 'end';
 }
 
 /** Globale Spielphase – nur vom Host per setState gesetzt */
@@ -257,6 +265,12 @@ export interface ProjectileSpawnConfig {
   bfgLaserRadius?:   number;    // Laser-Reichweite in px
   bfgLaserDamage?:   number;    // Schaden pro Laser-Treffer
   bfgLaserInterval?: number;    // ms zwischen Laser-Salven
+
+  // Erweiterte Flugphysik (Granaten/Translocator)
+  frictionDelayMs?: number;           // ms Flugzeit bevor der Speed reduziert wird
+  airFrictionDecayPerSec?: number;    // Speed Multiplikator pro Sekunde
+  bounceFrictionMultiplier?: number;  // Speed Multiplikator beim Abprallen
+  stopSpeedThreshold?: number;        // Speed, ab der das Projektil auf 0 gestoppt wird
 }
 
 export interface DamageGrenadeEffect {
@@ -413,6 +427,13 @@ export interface TrackedProjectile {
   bfgHitPlayers?:    Set<string>;     // Debounce: jeden Spieler nur 1x direkt treffen
   bfgHitRocks?:      Set<number>;     // Debounce: jeden Fels nur 1x zerstören
   bfgHitTrain?:      boolean;         // Debounce: Zug nur 1x pro Projektil beschädigen
+
+  // Erweiterte Flugphysik
+  frictionDelayMs?: number;
+  airFrictionDecayPerSec?: number;
+  bounceFrictionMultiplier?: number;
+  stopSpeedThreshold?: number;
+  frictionActivated?: boolean;  // true sobald Phaser-Damping aktiviert wurde
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;

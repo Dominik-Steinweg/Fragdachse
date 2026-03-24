@@ -36,6 +36,9 @@ import { PowerUpRenderer }     from '../powerups/PowerUpRenderer';
 import { MeteorRenderer }      from '../effects/MeteorRenderer';
 import { DetonationSystem }    from '../systems/DetonationSystem';
 import { ArmageddonSystem }    from '../systems/ArmageddonSystem';
+import { TranslocatorSystem }  from '../systems/TranslocatorSystem';
+import { TranslocatorTeleportRenderer } from '../effects/TranslocatorTeleportRenderer';
+import { TranslocatorPuckRenderer } from '../effects/TranslocatorPuckRenderer';
 import type { MeteorImpactEvent } from '../systems/ArmageddonSystem';
 import { TrainManager }        from '../train/TrainManager';
 import { TrainRenderer }       from '../train/TrainRenderer';
@@ -92,6 +95,7 @@ export class ArenaScene extends Phaser.Scene {
   private holyGrenadeRenderer!: HolyGrenadeRenderer;
   private rocketRenderer!:    RocketRenderer;
   private tracerRenderer!:    TracerRenderer;
+  private translocatorPuckRenderer!: TranslocatorPuckRenderer;
   private inputSystem!:       InputSystem;
   private hostPhysics!:       HostPhysicsSystem;
   private lobbyOverlay!:      LobbyOverlay;
@@ -121,6 +125,7 @@ export class ArenaScene extends Phaser.Scene {
   private detonationSystem:  DetonationSystem  | null = null;
   private armageddonSystem:  ArmageddonSystem  | null = null;
   private teslaDomeSystem:   TeslaDomeSystem   | null = null;
+  private translocatorSystem: TranslocatorSystem | null = null;
 
   // ── Zug-Event ─────────────────────────────────────────────────────────────
   private trainManager:       TrainManager  | null = null;
@@ -130,6 +135,8 @@ export class ArenaScene extends Phaser.Scene {
   private powerUpRenderer:     PowerUpRenderer | null = null;
   private trainSpawned          = false;
   private trainDestroyedShown   = false;
+
+  private translocatorTeleportRenderer: TranslocatorTeleportRenderer | null = null;
 
   private pickupCooldownUntil = 0; // Spam-Schutz für Pickup-RPC
   private clientUtilityOverride: UtilityConfig | null = null; // Client-seitige Vorhersage für Utility-Override (BFG/HHG)
@@ -242,6 +249,9 @@ export class ArenaScene extends Phaser.Scene {
     this.rocketRenderer = new RocketRenderer(this);
     this.rocketRenderer.generateTextures();
     this.projectileManager.setRocketRenderer(this.rocketRenderer);
+    this.translocatorPuckRenderer = new TranslocatorPuckRenderer(this);
+    this.translocatorPuckRenderer.generateTextures();
+    this.projectileManager.setTranslocatorPuckRenderer(this.translocatorPuckRenderer);
     this.tracerRenderer = new TracerRenderer(this);
     this.projectileManager.setTracerRenderer(this.tracerRenderer);
     this.nukeRenderer = new NukeRenderer(this);
@@ -297,6 +307,11 @@ export class ArenaScene extends Phaser.Scene {
     this.inputSystem.setup();
     this.inputSystem.setupUtilityConfigProvider(() => this.getLocalUtilityConfig());
     this.inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
+    this.inputSystem.setupTranslocatorRecallCheck(() => {
+      const cfg = this.getLocalUtilityConfig();
+      if (!cfg || cfg.type !== 'translocator') return false;
+      return this.translocatorSystem?.getActivePuckId(bridge.getLocalPlayerId()) !== undefined;
+    });
     this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       if (!this.localPlayerAlive || this.localPlayerBurrowed) return;
 
@@ -402,6 +417,11 @@ export class ArenaScene extends Phaser.Scene {
       if (shooterId === bridge.getLocalPlayerId()) {
         this.cameras.main.shake(duration, intensity);
       }
+    });
+
+    // ── 12c. Translocator-Effekte ─────────────────────────────────────────
+    bridge.registerTranslocatorFlashHandler((x, y, color, type) => {
+      this.translocatorTeleportRenderer?.playFlash(x, y, color, type);
     });
 
     // ── 13. Farb-System ───────────────────────────────────────────────────
@@ -810,11 +830,19 @@ export class ArenaScene extends Phaser.Scene {
         bridge,
       );
 
+      this.translocatorSystem = new TranslocatorSystem(
+        this.playerManager,
+        this.projectileManager,
+        this.combatSystem,
+        null
+      );
+
       // Rück-Referenzen setzen
       this.loadoutManager.setCombatSystem(this.combatSystem);
       this.loadoutManager.setDashBurstChecker(id => this.hostPhysics.isDashBurst(id));
       this.loadoutManager.setPhysicsSystem(this.hostPhysics);
       this.loadoutManager.setTeslaDomeSystem(this.teslaDomeSystem);
+      this.loadoutManager.setTranslocatorSystem(this.translocatorSystem);
       this.loadoutManager.setActionBlockedChecker((playerId, slot) => {
         if (!this.combatSystem.isAlive(playerId)) return true;
         if (slot === 'weapon1' || slot === 'weapon2') {
@@ -940,6 +968,9 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── TrainRenderer (alle Clients inkl. Host) ──────────────────────────────
     this.trainRenderer = new TrainRenderer(this);
+
+    // ── TranslocatorTeleportRenderer (alle Clients inkl. Host) ──────────────
+    this.translocatorTeleportRenderer = new TranslocatorTeleportRenderer(this);
   }
 
   /**
@@ -954,6 +985,7 @@ export class ArenaScene extends Phaser.Scene {
     bridge.publishTrainEvent({ trackX, direction, spawnAt });
 
     this.trainManager = new TrainManager(this, this.playerManager, trackX, direction);
+    this.translocatorSystem?.setTrainManager(this.trainManager);
     this.trainSpawned = false;
     this.trainDestroyedShown = false;
 

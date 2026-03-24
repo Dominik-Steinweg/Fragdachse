@@ -128,6 +128,7 @@ type KillEventHandler = (event: KillEvent) => void;
 type MeleeSwingHandler = (swing: SyncedMeleeSwing) => void;
 type PowerUpPickupHandler = (uid: number, playerId: string) => void;
 type TrainDestroyedHandler = () => void;
+type TranslocatorFlashHandler = (x: number, y: number, color: number, type: 'start' | 'end') => void;
 
 interface RpcEnvelope {
   type: string;
@@ -168,6 +169,7 @@ export class NetworkBridge {
   private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
+  private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
 
   constructor() {
@@ -695,6 +697,23 @@ export class NetworkBridge {
         sid?: number;
       };
       hitscanTracerHandler(sx, sy, ex, ey, c, t, id, sid);
+      return undefined;
+    });
+  }
+
+  // ── Translocator-Effekt-RPC: Host → Alle ───────────────────────────────────
+
+  broadcastTranslocatorFlash(x: number, y: number, color: number, type: 'start' | 'end'): void {
+    this.broadcastRpc('tlfx', { x, y, c: color, t: type });
+  }
+
+  registerTranslocatorFlashHandler(handler: TranslocatorFlashHandler): void {
+    this.translocatorFlashHandler = handler;
+    this.registerAllRpcHandler('tlfx', async (data: unknown): Promise<unknown> => {
+      const translocatorFlashHandler = this.translocatorFlashHandler;
+      if (!translocatorFlashHandler) return undefined;
+      const { x, y, c, t } = data as { x: number; y: number; c: number; t: 'start' | 'end' };
+      translocatorFlashHandler(x, y, c, t);
       return undefined;
     });
   }

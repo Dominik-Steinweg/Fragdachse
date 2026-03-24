@@ -1,4 +1,4 @@
-import { COLORS, RAGE_MAX } from '../config';
+import { COLORS, RAGE_MAX, TRANSLOCATOR_COOLDOWN, TRANSLOCATOR_SPEED, TRANSLOCATOR_SIZE, TRANSLOCATOR_BOUNCES } from '../config';
 import type { LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
@@ -119,7 +119,7 @@ export interface WeaponConfig {
   readonly showCrosshair?: boolean;      // false = Zielfadenkreuz ausblenden
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -158,6 +158,12 @@ interface BaseUtilityConfig {
   readonly maxBounces: number;      // 0 = kein Abprallen, >0 = Explosion nach n Abprallern
 
   readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die dieses Utility eingesetzt werden darf
+
+  // Erweiterte Flugphysik (Friction / Decay)
+  readonly frictionDelayMs?: number;        // ms Flugzeit bevor der Speed reduziert wird
+  readonly airFrictionDecayPerSec?: number; // Faktor pro Sekunde (0.5 = halbiert sich jede Sekunde)
+  readonly bounceFrictionMultiplier?: number; // Faktor, mit dem Speed beim Abprallen multipliziert wird
+  readonly stopSpeedThreshold?: number;     // Speed (px/s), ab der das Projektil auf 0 stoppt
 
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
@@ -218,7 +224,12 @@ export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
   readonly cloudTickInterval: number;    // ms zwischen Damage-Ticks
 }
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig;
+export interface TranslocatorUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'translocator';
+  // Translocator-spezifische Configs koennen hier rein
+}
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TranslocatorUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -845,6 +856,10 @@ export const UTILITY_CONFIGS = {
     aoeRadius:       80,
     aoeDamage:       60,
     allowedSlots:    ['utility'],
+    frictionDelayMs:           400,
+    airFrictionDecayPerSec:    0.2,
+    bounceFrictionMultiplier:  0.3,
+    stopSpeedThreshold:        20,
   } as UtilityConfig,
 
   SMOKE_GRENADE: {
@@ -953,6 +968,26 @@ export const UTILITY_CONFIGS = {
     trainDamageMult:     0.5,           // 50% Schaden am Zug
     allowedSlots:        ['utility'],
   } as UtilityConfig,
+
+  TRANSLOCATOR: {
+    id:                   'TRANSLOCATOR',
+    displayName:          'Translocator',
+    type:                 'translocator',
+    cooldown:             TRANSLOCATOR_COOLDOWN,
+    activation:           STANDARD_GRENADE_CHARGE,
+    projectileSpeed:      TRANSLOCATOR_SPEED, 
+    projectileSize:       TRANSLOCATOR_SIZE,
+    fuseTime:             0,         // Kein auto-explode
+    maxBounces:           TRANSLOCATOR_BOUNCES, 
+    allowedSlots:         ['utility'],
+    frictionDelayMs:           300,
+    airFrictionDecayPerSec:    0.15,
+    bounceFrictionMultiplier:  0.3,
+    stopSpeedThreshold:        15,
+    projectileStyle:      'translocator_puck' as ProjectileStyle,
+    projectileColor:      COLORS.GREY_3,
+    skipCooldownPublish:  true,      // Cooldown wird vom TranslocatorSystem gesetzt (beim Teleport), nicht beim Wurf.
+  } as TranslocatorUtilityConfig,
 } as const;
 
 export const ULTIMATE_CONFIGS = {

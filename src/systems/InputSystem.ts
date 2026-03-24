@@ -100,6 +100,16 @@ export class InputSystem {
   }
 
   /**
+   * Callback: gibt true zurück wenn der Translocator-Puck aktiv ist und E
+   * sofort (ohne Aufladen) den Teleport auslösen soll.
+   */
+  private isTranslocatorRecallReady: (() => boolean) | null = null;
+
+  setupTranslocatorRecallCheck(cb: () => boolean): void {
+    this.isTranslocatorRecallReady = cb;
+  }
+
+  /**
    * Wird von ArenaScene jeden Frame mit dem aktuellen Spieler-Netzwerkstatus gesetzt,
    * damit Stun und Burrow-Zustand für Input-Gating berücksichtigt werden.
    */
@@ -279,6 +289,11 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
+      if (this.isTranslocatorRecallReady?.()) {
+        this.onLoadoutUse('utility', angle, px, py);
+        return;
+      }
       if (this.beginTargetedUtilityAim(now)) {
         return;
       }
