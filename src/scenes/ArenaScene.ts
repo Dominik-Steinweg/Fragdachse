@@ -29,6 +29,8 @@ import { TeslaDomeRenderer }   from '../effects/TeslaDomeRenderer';
 import { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../effects/RocketRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
+import { GrenadeRenderer }     from '../effects/GrenadeRenderer';
+import { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
@@ -94,6 +96,8 @@ export class ArenaScene extends Phaser.Scene {
   private teslaDomeRenderer!: TeslaDomeRenderer;
   private holyGrenadeRenderer!: HolyGrenadeRenderer;
   private rocketRenderer!:    RocketRenderer;
+  private grenadeRenderer!:   GrenadeRenderer;
+  private muzzleFlashRenderer!: MuzzleFlashRenderer;
   private tracerRenderer!:    TracerRenderer;
   private translocatorPuckRenderer!: TranslocatorPuckRenderer;
   private inputSystem!:       InputSystem;
@@ -249,11 +253,21 @@ export class ArenaScene extends Phaser.Scene {
     this.rocketRenderer = new RocketRenderer(this);
     this.rocketRenderer.generateTextures();
     this.projectileManager.setRocketRenderer(this.rocketRenderer);
+    this.grenadeRenderer = new GrenadeRenderer(this);
+    this.grenadeRenderer.generateTextures();
+    this.projectileManager.setGrenadeRenderer(this.grenadeRenderer);
     this.translocatorPuckRenderer = new TranslocatorPuckRenderer(this);
     this.translocatorPuckRenderer.generateTextures();
     this.projectileManager.setTranslocatorPuckRenderer(this.translocatorPuckRenderer);
     this.tracerRenderer = new TracerRenderer(this);
     this.projectileManager.setTracerRenderer(this.tracerRenderer);
+    this.muzzleFlashRenderer = new MuzzleFlashRenderer(this);
+    this.muzzleFlashRenderer.generateTextures();
+    this.projectileManager.setMuzzleFlashRenderer(this.muzzleFlashRenderer);
+    this.projectileManager.setOwnerPositionProvider((ownerId) => {
+      const player = this.playerManager.getPlayer(ownerId);
+      return player ? { x: player.sprite.x, y: player.sprite.y } : null;
+    });
     this.nukeRenderer = new NukeRenderer(this);
     this.nukeRenderer.generateTextures();
     this.meteorRenderer = new MeteorRenderer(this);
@@ -285,6 +299,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── 5. Effekt-System ──────────────────────────────────────────────────
     this.effectSystem = new EffectSystem(this, bridge);
+    this.effectSystem.setMuzzleFlashRenderer(this.muzzleFlashRenderer);
     this.effectSystem.setup(() => {
       this.aimSystem?.notifyConfirmedHit();
     });
@@ -2111,6 +2126,7 @@ export class ArenaScene extends Phaser.Scene {
       localPlayer.color,
       config.fire.traceThickness,
       shotId,
+      config.fire.visualPreset,
     );
 
     return shotId;

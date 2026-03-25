@@ -64,10 +64,16 @@ export interface SyncedTeslaDome {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'holy_grenade' | 'translocator_puck';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
-export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp';
+export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'negev';
+
+/** Data-driven Preset fuer klassische geworfene Granaten. */
+export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov';
+
+/** Visuelles Preset fuer Hitscan-Strahlen. */
+export type HitscanVisualPreset = 'default' | 'asmd_primary';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */
 export type EnergyBallVariant = 'default' | 'plasma';
@@ -123,6 +129,7 @@ export interface ProjectileHomingConfig {
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
   id:      number;
+  ownerId: string;
   x:       number;
   y:       number;
   vx:      number;  // Geschwindigkeit X (px/s) – für Client-seitige Trail-Orientierung
@@ -133,6 +140,7 @@ export interface SyncedProjectile {
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
   bulletVisualPreset?: BulletVisualPreset;
+  grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
 }
@@ -145,6 +153,7 @@ export interface SyncedHitscanTrace {
   endY:       number;
   color:      number;
   thickness:  number;
+  visualPreset?: HitscanVisualPreset;
   shooterId?: string;
   shotId?:    number;
 }
@@ -250,6 +259,7 @@ export interface ProjectileSpawnConfig {
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
   bulletVisualPreset?: BulletVisualPreset;
+  grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional, data-driven)
   // Detonations-System (optional)
@@ -405,6 +415,7 @@ export interface TrackedProjectile {
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil
   bulletVisualPreset?: BulletVisualPreset;
+  grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional)
   // Detonations-System (optional)

@@ -4,7 +4,7 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
-import type { SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig } from '../types';
+import type { HitscanVisualPreset, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -281,6 +281,7 @@ export class CombatSystem {
     playerColor: number,
     adrenalinGain: number,
     weaponName: string,
+    visualPreset: HitscanVisualPreset = 'default',
     shotId?: number,
     detonatorCfg?: DetonatorConfig,
     rockDamageMult = 1,
@@ -305,6 +306,7 @@ export class CombatSystem {
       endY: Math.round(trace.endY),
       color: playerColor,
       thickness: traceThickness,
+      visualPreset,
       shooterId,
       shotId,
     });
@@ -567,7 +569,7 @@ export class CombatSystem {
     // Direkt per RPC an alle Clients senden (einmalig, statt per-frame in GameState)
     this.bridge.broadcastHitscanTracer(
       trace.startX, trace.startY, trace.endX, trace.endY,
-      trace.color, trace.thickness, trace.shooterId, trace.shotId,
+      trace.color, trace.thickness, trace.visualPreset, trace.shooterId, trace.shotId,
     );
     // Lokale Wiedergabe auf dem Host (EffectSystem bekommt das RPC auch)
   }

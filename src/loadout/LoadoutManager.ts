@@ -619,6 +619,7 @@ export class LoadoutManager {
       fuseTime:      cfg.fuseTime,
       grenadeEffect: this.buildGrenadeEffect(cfg),
       projectileStyle: cfg.projectileStyle,
+      grenadeVisualPreset: cfg.grenadeVisualPreset,
       frictionDelayMs: cfg.frictionDelayMs,
       airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
       bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
@@ -840,6 +841,7 @@ export class LoadoutManager {
       playerColor,
       config.adrenalinGain,
       config.displayName,
+      fireConfig.visualPreset,
       shotId,
       config.detonator,  // DetonatorConfig weitergeben (optional)
       config.rockDamageMult  ?? 1,

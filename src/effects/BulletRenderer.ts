@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, isPointInsideArena } from '../config';
 import type { BulletVisualPreset } from '../types';
 import { configureAdditiveImage, ensureCanvasTexture } from './EffectUtils';
 
@@ -57,6 +57,7 @@ const BODY_TEXTURE_KEYS: Record<BulletVisualPreset, string> = {
   ak47: '__bullet_body_ak47',
   shotgun: '__bullet_body_shotgun',
   awp: '__bullet_body_awp',
+  negev: '__bullet_body_negev',
 };
 
 const ACCENT_TEXTURE_KEYS: Record<BulletVisualPreset, string | undefined> = {
@@ -67,6 +68,7 @@ const ACCENT_TEXTURE_KEYS: Record<BulletVisualPreset, string | undefined> = {
   ak47: '__bullet_accent_ak47',
   shotgun: '__bullet_accent_shotgun',
   awp: '__bullet_accent_awp',
+  negev: '__bullet_accent_negev',
 };
 
 const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
@@ -245,6 +247,31 @@ const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
     impactFlashAlpha: 0.48,
     impactFlashDuration: 110,
   },
+  negev: {
+    bodyTextureKey: BODY_TEXTURE_KEYS.negev,
+    accentTextureKey: ACCENT_TEXTURE_KEYS.negev,
+    scaleBoost:      0.9,
+    trailLengthMult: 8.2,
+    trailAlpha:      0.82,
+    trailScaleYMult: 0.86,
+    glowScale:       1.65,
+    glowAlpha:       0.26,
+    accentAlpha:     0.58,
+    accentScaleX:    1.2,
+    accentScaleY:    0.74,
+    sparkCount:      9,
+    sparkLifespan:   160,
+    sparkSpeedMin:   105,
+    sparkSpeedMax:   280,
+    sparkSpreadDeg:  28,
+    sparkGravityY:   140,
+    sparkScaleStart: 0.92,
+    sparkScaleEnd:   0.06,
+    sparkColors:     [0xffffff, 0xffecaa, 0xffc45e, 0xff7b26],
+    impactFlashScale: 1.45,
+    impactFlashAlpha: 0.18,
+    impactFlashDuration: 48,
+  },
 };
 
 // ── Interner State pro Bullet ──────────────────────────────────────────────
@@ -359,6 +386,18 @@ export class BulletRenderer {
           ctx.fill();
         });
         break;
+      case 'negev':
+        ensureCanvasTexture(texMgr, key, 15, 4, (ctx) => {
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(0.5, 2);
+          ctx.lineTo(11.3, 0.8);
+          ctx.lineTo(14.3, 2);
+          ctx.lineTo(11.3, 3.2);
+          ctx.closePath();
+          ctx.fill();
+        });
+        break;
       default:
         ensureCanvasTexture(texMgr, key, 14, 6, (ctx) => {
           const r = 3;
@@ -428,6 +467,13 @@ export class BulletRenderer {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(1.5, 2.1, 12.5, 1.8);
           ctx.fillRect(13.8, 1.4, 3.8, 3.2);
+        });
+        break;
+      case 'negev':
+        ensureCanvasTexture(texMgr, key, 15, 4, (ctx) => {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(1, 1.4, 8.5, 1.2);
+          ctx.fillRect(9.8, 1, 2.8, 2);
         });
         break;
       default:
@@ -643,6 +689,7 @@ export class BulletRenderer {
    * Nutzt die im Visual gespeicherte Stil-Konfiguration für Spark-Werte.
    */
   playImpactSparks(id: number, x: number, y: number, dirX: number, dirY: number, _color: number): void {
+    if (!isPointInsideArena(x, y)) return;
     const bv  = this.bullets.get(id);
     const cfg = bv?.config ?? BULLET_STYLE_PRESETS.default;
 

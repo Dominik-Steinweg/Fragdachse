@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ExplosionVisualStyle, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, getBeamPaletteForPlayerColor } from '../config';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
+import { COLORS, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
 import { circleZone, edgeZone } from './EffectUtils';
+import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 
 const HITSCAN_TRACER_FADE_MS = 120;
 const MELEE_SWING_FADE_MS    = 220;
@@ -22,12 +23,17 @@ export class EffectSystem {
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
+  private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private texturesGenerated = false;
 
   constructor(
     private scene:  Phaser.Scene,
     private bridge: NetworkBridge,
   ) {}
+
+  setMuzzleFlashRenderer(renderer: MuzzleFlashRenderer | null): void {
+    this.muzzleFlashRenderer = renderer;
+  }
 
   /** Erzeugt kleine Canvas-Texturen für Explosions-Partikel (einmalig). */
   private ensureTextures(): void {
@@ -100,7 +106,7 @@ export class EffectSystem {
       if (type === 'death') this.playDeathEffect(x, y);
     });
 
-    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, shooterId, shotId) => {
+    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, visualPreset, shooterId, shotId) => {
       this.playSyncedHitscanTracer({
         startX,
         startY,
@@ -108,6 +114,7 @@ export class EffectSystem {
         endY,
         color,
         thickness,
+        visualPreset,
         shooterId,
         shotId,
       });
@@ -212,7 +219,7 @@ export class EffectSystem {
     });
     dirtBurst.setDepth(DEPTH_FX + 0.25);
     dirtBurst.addEmitZone(edgeZone(10, 22));
-    dirtBurst.explode(22, x, y);
+    dirtBurst.explode(22);
     this.scene.time.delayedCall(500, () => dirtBurst.destroy());
 
     const dustBurst = this.scene.add.particles(x, y, TEX_BURROW_DUST, {
@@ -225,7 +232,7 @@ export class EffectSystem {
     });
     dustBurst.setDepth(DEPTH_FX + 0.15);
     dustBurst.addEmitZone(circleZone(10, 14));
-    dustBurst.explode(14, x, y);
+    dustBurst.explode(14);
     this.scene.time.delayedCall(540, () => dustBurst.destroy());
   }
 
@@ -322,7 +329,7 @@ export class EffectSystem {
       });
       dirtBurst.setDepth(DEPTH_FX + 0.08);
       dirtBurst.addEmitZone(circleZone(8, 10));
-      dirtBurst.explode(10, x, y + 2);
+      dirtBurst.explode(10);
       this.scene.time.delayedCall(320, () => dirtBurst.destroy());
       return;
     }
@@ -338,7 +345,7 @@ export class EffectSystem {
       });
       plume.setDepth(DEPTH_FX + 0.1);
       plume.addEmitZone(circleZone(9, 14));
-      plume.explode(14, x, y);
+      plume.explode(14);
       this.scene.time.delayedCall(400, () => plume.destroy());
     }
   }
@@ -765,21 +772,50 @@ export class EffectSystem {
     endY: number,
     playerColor: number,
     thickness: number,
+    visualPreset: HitscanVisualPreset = 'default',
   ): void {
+    const clippedEnd = clipPointToArenaRay(startX, startY, endX, endY);
+    const renderEndX = clippedEnd.x;
+    const renderEndY = clippedEnd.y;
     const palette = getBeamPaletteForPlayerColor(playerColor);
     const gfx = this.scene.add.graphics();
     gfx.setDepth(DEPTH_TRACE);
 
-    this.strokeTracer(gfx, palette.shadow, Math.max(thickness + 6, 6), 0.20, startX, startY, endX, endY);
-    this.strokeTracer(gfx, palette.glow, Math.max(thickness + 3, 4), 0.45, startX, startY, endX, endY);
-    this.strokeTracer(gfx, palette.core, Math.max(thickness, 2), 0.95, startX, startY, endX, endY);
+    this.muzzleFlashRenderer?.playHitscanFlash(startX, startY, renderEndX - startX, renderEndY - startY, visualPreset, playerColor);
 
-    gfx.fillStyle(palette.glow, 0.40);
-    gfx.fillCircle(startX, startY, Math.max(thickness * 1.35, 4));
-    gfx.fillStyle(palette.core, 0.85);
-    gfx.fillCircle(startX, startY, Math.max(thickness * 0.75, 2));
-    gfx.fillStyle(palette.core, 0.65);
-    gfx.fillCircle(endX, endY, Math.max(thickness * 0.6, 2));
+    if (visualPreset === 'asmd_primary') {
+      const energyCore = this.mixColor(playerColor, 0xffffff, 0.72);
+      const energyGlow = this.mixColor(playerColor, COLORS.BLUE_2, 0.42);
+      this.strokeTracer(gfx, energyGlow, Math.max(thickness + 10, 10), 0.16, startX, startY, renderEndX, renderEndY);
+      this.strokeTracer(gfx, energyGlow, Math.max(thickness + 6, 6), 0.32, startX, startY, renderEndX, renderEndY);
+      this.strokeTracer(gfx, energyCore, Math.max(thickness + 3, 4), 0.72, startX, startY, renderEndX, renderEndY);
+      this.strokeTracer(gfx, 0xffffff, Math.max(thickness, 2), 0.95, startX, startY, renderEndX, renderEndY);
+
+      const beamMidX = (startX + renderEndX) * 0.5;
+      const beamMidY = (startY + renderEndY) * 0.5;
+      gfx.fillStyle(energyGlow, 0.18);
+      gfx.fillCircle(beamMidX, beamMidY, Math.max(thickness * 1.8, 5));
+      gfx.fillStyle(energyCore, 0.3);
+      gfx.fillCircle(startX, startY, Math.max(thickness * 1.9, 5));
+      gfx.fillStyle(0xffffff, 0.5);
+      gfx.fillCircle(startX, startY, Math.max(thickness * 0.9, 2));
+      gfx.fillStyle(energyCore, 0.36);
+      gfx.fillCircle(renderEndX, renderEndY, Math.max(thickness * 1.25, 4));
+      gfx.fillStyle(0xffffff, 0.7);
+      gfx.fillCircle(renderEndX, renderEndY, Math.max(thickness * 0.55, 2));
+      this.playHitscanImpact(renderEndX, renderEndY, playerColor, thickness, visualPreset);
+    } else {
+      this.strokeTracer(gfx, palette.shadow, Math.max(thickness + 6, 6), 0.20, startX, startY, renderEndX, renderEndY);
+      this.strokeTracer(gfx, palette.glow, Math.max(thickness + 3, 4), 0.45, startX, startY, renderEndX, renderEndY);
+      this.strokeTracer(gfx, palette.core, Math.max(thickness, 2), 0.95, startX, startY, renderEndX, renderEndY);
+
+      gfx.fillStyle(palette.glow, 0.40);
+      gfx.fillCircle(startX, startY, Math.max(thickness * 1.35, 4));
+      gfx.fillStyle(palette.core, 0.85);
+      gfx.fillCircle(startX, startY, Math.max(thickness * 0.75, 2));
+      gfx.fillStyle(palette.core, 0.65);
+      gfx.fillCircle(renderEndX, renderEndY, Math.max(thickness * 0.6, 2));
+    }
 
     this.scene.tweens.add({
       targets:    gfx,
@@ -798,15 +834,59 @@ export class EffectSystem {
     playerColor: number,
     thickness: number,
     shotId: number,
+    visualPreset: HitscanVisualPreset = 'default',
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
-    this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness);
+    this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, visualPreset);
   }
 
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
-    const { startX, startY, endX, endY, color, thickness, shooterId, shotId } = trace;
+    const { startX, startY, endX, endY, color, thickness, visualPreset, shooterId, shotId } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
-    this.playHitscanTracer(startX, startY, endX, endY, color, thickness);
+    this.playHitscanTracer(startX, startY, endX, endY, color, thickness, visualPreset);
+  }
+
+  private playHitscanImpact(
+    x: number,
+    y: number,
+    playerColor: number,
+    thickness: number,
+    visualPreset: HitscanVisualPreset,
+  ): void {
+    if (!isPointInsideArena(x, y)) return;
+    const baseColor = visualPreset === 'asmd_primary'
+      ? this.mixColor(playerColor, COLORS.BLUE_1, 0.48)
+      : this.mixColor(playerColor, 0xffffff, 0.3);
+    const halo = this.scene.add.circle(x, y, Math.max(thickness * 2.4, 7), baseColor, visualPreset === 'asmd_primary' ? 0.42 : 0.24);
+    halo.setDepth(DEPTH_TRACE + 0.1);
+    halo.setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: halo,
+      alpha: 0,
+      scaleX: 1.8,
+      scaleY: 1.8,
+      duration: visualPreset === 'asmd_primary' ? 170 : 90,
+      ease: 'Quad.easeOut',
+      onComplete: () => halo.destroy(),
+    });
+
+    if (visualPreset === 'asmd_primary') {
+      const sparks = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+        lifespan: { min: 120, max: 260 },
+        quantity: 10,
+        frequency: -1,
+        speed: { min: 24, max: 150 },
+        angle: { min: 0, max: 360 },
+        scale: { start: 0.9, end: 0 },
+        alpha: { start: 0.9, end: 0 },
+        tint: [0xffffff, this.mixColor(playerColor, 0xffffff, 0.45), this.mixColor(playerColor, COLORS.BLUE_2, 0.3)],
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      sparks.setDepth(DEPTH_TRACE + 0.12);
+      sparks.explode(10);
+      this.scene.time.delayedCall(320, () => sparks.destroy());
+    }
   }
 
   private consumePredictedTracerId(shotId: number): boolean {

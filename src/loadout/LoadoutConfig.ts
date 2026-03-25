@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -16,6 +16,7 @@ export interface ProjectileWeaponFireConfig {
 export interface HitscanWeaponFireConfig {
   readonly type: 'hitscan';
   readonly traceThickness: number;      // px - für spätere Ray-/Sweep-Checks
+  readonly visualPreset?: HitscanVisualPreset;
 }
 
 export interface MeleeWeaponFireConfig {
@@ -173,6 +174,7 @@ interface BaseUtilityConfig {
   // Spezial-Flags (optional)
   /** Eigenes Projektil-Visual fuer geworfene Utilitys. */
   readonly projectileStyle?: ProjectileStyle;
+  readonly grenadeVisualPreset?: GrenadeVisualPreset;
   /** Optionales Farb-Override fuer das Utility-Projektil. */
   readonly projectileColor?: number;
   /** Visueller Explosionsstil fuer Damage-Utilities (Heilige Handgranate etc.) */
@@ -316,6 +318,7 @@ export const WEAPON_CONFIGS = {
     fire: {
       type:                 'hitscan',
       traceThickness:       3,
+      visualPreset:         'asmd_primary' as HitscanVisualPreset,
     },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
@@ -837,6 +840,8 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     projectileStyle:      'bullet' as ProjectileStyle,
     holdSpeedFactor:      0.3,
+    projectileColor:      0xc79c4f,
+    bulletVisualPreset:   'negev' as BulletVisualPreset,
     shotScreenShake:      { duration: 60, intensity: 0.002 },    
     tracerConfig: {
       widthCore:  1,
@@ -866,6 +871,9 @@ export const UTILITY_CONFIGS = {
     aoeRadius:       80,
     aoeDamage:       60,
     allowedSlots:    ['utility'],
+    projectileStyle: 'grenade' as ProjectileStyle,
+    grenadeVisualPreset: 'he' as GrenadeVisualPreset,
+    projectileColor: 0x6f8151,
     frictionDelayMs:           400,
     airFrictionDecayPerSec:    0.2,
     bounceFrictionMultiplier:  0.3,
@@ -888,6 +896,9 @@ export const UTILITY_CONFIGS = {
     smokeDissipateDuration: 2000,
     smokeMaxAlpha:          0.95,
     allowedSlots:           ['utility'],
+    projectileStyle:        'grenade' as ProjectileStyle,
+    grenadeVisualPreset:    'smoke' as GrenadeVisualPreset,
+    projectileColor:        0x6a7680,
     frictionDelayMs:           400,
     airFrictionDecayPerSec:    0.2,
     bounceFrictionMultiplier:  0.3,
@@ -910,6 +921,9 @@ export const UTILITY_CONFIGS = {
     fireLingerDuration: 4000,
     rockDamageMult:     0,  // Molotov macht keinen Schaden an Felsen
     allowedSlots:       ['utility'],
+    projectileStyle:    'grenade' as ProjectileStyle,
+    grenadeVisualPreset:'molotov' as GrenadeVisualPreset,
+    projectileColor:    0x8a4a20,
     frictionDelayMs:           400,
     airFrictionDecayPerSec:    0.2,
     bounceFrictionMultiplier:  0.3,

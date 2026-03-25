@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -114,6 +114,7 @@ type HitscanTracerHandler = (
   endY: number,
   color: number,
   thickness: number,
+  visualPreset?: HitscanVisualPreset,
   shooterId?: string,
   shotId?: number,
 ) => void;
@@ -683,10 +684,11 @@ export class NetworkBridge {
     endY: number,
     color: number,
     thickness: number,
+    visualPreset?: HitscanVisualPreset,
     shooterId?: string,
     shotId?: number,
   ): void {
-    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, id: shooterId, sid: shotId });
+    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, vp: visualPreset, id: shooterId, sid: shotId });
   }
 
   registerHitscanTracerHandler(handler: HitscanTracerHandler): void {
@@ -694,17 +696,18 @@ export class NetworkBridge {
     this.registerAllRpcHandler('htfx', async (data: unknown): Promise<unknown> => {
       const hitscanTracerHandler = this.hitscanTracerHandler;
       if (!hitscanTracerHandler) return undefined;
-      const { sx, sy, ex, ey, c, t, id, sid } = data as {
+      const { sx, sy, ex, ey, c, t, vp, id, sid } = data as {
         sx: number;
         sy: number;
         ex: number;
         ey: number;
         c: number;
         t: number;
+        vp?: HitscanVisualPreset;
         id?: string;
         sid?: number;
       };
-      hitscanTracerHandler(sx, sy, ex, ey, c, t, id, sid);
+      hitscanTracerHandler(sx, sy, ex, ey, c, t, vp, id, sid);
       return undefined;
     });
   }

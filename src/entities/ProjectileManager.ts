@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
-import { DEPTH } from '../config';
-import type { BulletVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant } from '../types';
+import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
+import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant, ProjectileStyle } from '../types';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
+import type { GrenadeRenderer } from '../effects/GrenadeRenderer';
 import type { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
+import type { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
 import type { RocketRenderer }  from '../effects/RocketRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
@@ -23,6 +25,7 @@ interface ClientProjectileState {
   receivedAt: number;
   style?: string;
   bulletVisualPreset?: BulletVisualPreset;
+  grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   ownerColor?: number;
   // Flammenwerfer-Decay: velocity nimmt exponentiell ab
@@ -64,6 +67,9 @@ export class ProjectileManager {
   // ── Energy-Ball-Renderer (ASMD Secondary) ───────────────────────────────
   private energyBallRenderer: EnergyBallRenderer | null = null;
 
+  // ── Grenade-Renderer (HE/Smoke/Molotov) ────────────────────────────────
+  private grenadeRenderer: GrenadeRenderer | null = null;
+
   // ── Holy-Grenade-Renderer (goldene Granate mit Kreuzstift) ─────────────
   private holyGrenadeRenderer: HolyGrenadeRenderer | null = null;
 
@@ -76,6 +82,10 @@ export class ProjectileManager {
 
   // ── Tracer-Renderer (data-driven Leuchtlinien, alle Projektilstile) ───────
   private tracerRenderer: TracerRenderer | null = null;
+
+  // ── MuzzleFlash-Renderer (lokales Schuss-Feedback, kein Netzstate) ───────
+  private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
+  private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
@@ -167,6 +177,11 @@ export class ProjectileManager {
     this.energyBallRenderer = renderer;
   }
 
+  /** Injiziert den GrenadeRenderer fuer klassische Granaten. */
+  setGrenadeRenderer(renderer: GrenadeRenderer | null): void {
+    this.grenadeRenderer = renderer;
+  }
+
   /** Injiziert den HolyGrenadeRenderer fuer die Heilige Handgranate. */
   setHolyGrenadeRenderer(renderer: HolyGrenadeRenderer | null): void {
     this.holyGrenadeRenderer = renderer;
@@ -185,6 +200,15 @@ export class ProjectileManager {
   /** Injiziert den TracerRenderer für data-driven Leuchtlinien. */
   setTracerRenderer(renderer: TracerRenderer | null): void {
     this.tracerRenderer = renderer;
+  }
+
+  /** Injiziert den MuzzleFlashRenderer fuer lokale Spawn-Effekte. */
+  setMuzzleFlashRenderer(renderer: MuzzleFlashRenderer | null): void {
+    this.muzzleFlashRenderer = renderer;
+  }
+
+  setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
+    this.ownerPositionProvider = provider;
   }
 
   /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
@@ -224,6 +248,7 @@ export class ProjectileManager {
     const isFlame  = cfg.projectileStyle === 'flame';
     const isBfg    = cfg.projectileStyle === 'bfg';
     const isAwp    = cfg.projectileStyle === 'awp';
+    const isGrenadeVisual = cfg.projectileStyle === 'grenade';
     const isHolyGrenade = cfg.projectileStyle === 'holy_grenade';
     const isRocket = cfg.projectileStyle === 'rocket';
     const isTranslocatorPuck = cfg.projectileStyle === 'translocator_puck';
@@ -281,6 +306,12 @@ export class ProjectileManager {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.energyBallRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.energyBallVariant);
+    }
+
+    if (isGrenadeVisual && this.grenadeRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.grenadeRenderer.createVisual(id, x, y, cfg.size, cfg.grenadeVisualPreset ?? 'he');
     }
 
     if (isHolyGrenade && this.holyGrenadeRenderer) {
@@ -353,6 +384,7 @@ export class ProjectileManager {
       grenadeEffect:   cfg.grenadeEffect,
       projectileStyle: cfg.projectileStyle,
       bulletVisualPreset: cfg.bulletVisualPreset,
+      grenadeVisualPreset: cfg.grenadeVisualPreset,
       energyBallVariant: cfg.energyBallVariant,
       tracerConfig:    cfg.tracerConfig,
       detonable:       cfg.detonable,
@@ -532,6 +564,18 @@ export class ProjectileManager {
     if (cfg.tracerConfig && this.tracerRenderer) {
       this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.ownerColor ?? cfg.color);
     }
+
+    const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
+    this.muzzleFlashRenderer?.playProjectileFlash(
+      muzzleOrigin.x,
+      muzzleOrigin.y,
+      Math.cos(angle) * cfg.speed,
+      Math.sin(angle) * cfg.speed,
+      cfg.projectileStyle,
+      cfg.bulletVisualPreset,
+      cfg.energyBallVariant,
+      cfg.ownerColor ?? cfg.color,
+    );
 
     this.projectiles.push(tracked);
     return id;
@@ -763,7 +807,11 @@ export class ProjectileManager {
     this.tracerRenderer?.destroyTracer(proj.id);
     this.flameRenderer?.destroyVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
+    if (proj.projectileStyle === 'energy_ball') {
+      this.energyBallRenderer?.playImpact(proj.sprite.x, proj.sprite.y, proj.color, proj.energyBallVariant, proj.sprite.displayWidth / 16);
+    }
     this.energyBallRenderer?.destroyVisual(proj.id);
+    this.grenadeRenderer?.destroyVisual(proj.id);
     this.holyGrenadeRenderer?.destroyVisual(proj.id);
     this.rocketRenderer?.destroyVisual(proj.id);
     this.translocatorPuckRenderer?.destroyVisual(proj.id);
@@ -918,6 +966,7 @@ export class ProjectileManager {
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
     this.energyBallRenderer?.destroyAll();
+    this.grenadeRenderer?.destroyAll();
     this.holyGrenadeRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
     this.translocatorPuckRenderer?.destroyAll();
@@ -1190,6 +1239,24 @@ export class ProjectileManager {
       }
     }
 
+    const grenadeR = this.grenadeRenderer;
+    if (grenadeR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'grenade') {
+          if (!grenadeR.has(proj.id)) {
+            grenadeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.grenadeVisualPreset ?? 'he');
+          }
+          grenadeR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
+        }
+      }
+      const activeGrenadeIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'grenade').map(p => p.id),
+      );
+      for (const id of grenadeR.getActiveIds()) {
+        if (!activeGrenadeIds.has(id)) grenadeR.destroyVisual(id);
+      }
+    }
+
     // TranslocatorPuckRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
     const tlPuckR = this.translocatorPuckRenderer;
     if (tlPuckR) {
@@ -1229,6 +1296,7 @@ export class ProjectileManager {
 
     const synced: SyncedProjectile[] = this.projectiles.map(p => ({
       id:     p.id,
+      ownerId: p.ownerId,
       x:      Math.round(p.sprite.x),
       y:      Math.round(p.sprite.y),
       vx:     Math.round(p.body.velocity.x),
@@ -1239,6 +1307,7 @@ export class ProjectileManager {
       smokeTrailColor: p.smokeTrailColor,
       style:  p.projectileStyle,
       bulletVisualPreset: p.bulletVisualPreset,
+      grenadeVisualPreset: p.grenadeVisualPreset,
       energyBallVariant: p.energyBallVariant,
       tracer: p.tracerConfig,
     }));
@@ -1259,6 +1328,7 @@ export class ProjectileManager {
     const flames    = this.flameRenderer;
     const rockets   = this.rocketRenderer;
     const energyBalls = this.energyBallRenderer;
+    const grenades = this.grenadeRenderer;
     const holyGrenades = this.holyGrenadeRenderer;
     const tlPucks = this.translocatorPuckRenderer;
 
@@ -1297,7 +1367,19 @@ export class ProjectileManager {
     if (energyBalls) {
       for (const id of energyBalls.getActiveIds()) {
         if (!activeIds.has(id)) {
+          const state = this.clientProjStates.get(id);
+          if (state?.style === 'energy_ball') {
+            energyBalls.playImpact(state.serverX, state.serverY, state.color, state.energyBallVariant, state.size / 16);
+          }
           energyBalls.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (grenades) {
+      for (const id of grenades.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          grenades.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -1343,6 +1425,7 @@ export class ProjectileManager {
       const isHolyGrenadeP = proj.style === 'holy_grenade';
       const isAwpP   = proj.style === 'awp';
       const isRocket = proj.style === 'rocket';
+      const isGrenadeP = proj.style === 'grenade';
       const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
 
       // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
@@ -1365,10 +1448,33 @@ export class ProjectileManager {
         receivedAt: now,
         style: proj.style,
         bulletVisualPreset: proj.bulletVisualPreset,
+        grenadeVisualPreset: proj.grenadeVisualPreset,
         energyBallVariant: proj.energyBallVariant,
         ownerColor: proj.ownerColor,
         isFlame,
       });
+
+      if (!prev) {
+        const ownerPos = this.ownerPositionProvider?.(proj.ownerId) ?? null;
+        const flashOrigin = ownerPos
+          ? getTopDownMuzzleOriginFromVector(ownerPos.x, ownerPos.y, proj.vx, proj.vy)
+          : getTopDownMuzzleOriginFromVector(
+              proj.x - (Math.hypot(proj.vx, proj.vy) > 0.0001 ? (proj.vx / Math.hypot(proj.vx, proj.vy)) * MUZZLE_PROJECTILE_FALLBACK_BACKTRACK : 0),
+              proj.y - (Math.hypot(proj.vx, proj.vy) > 0.0001 ? (proj.vy / Math.hypot(proj.vx, proj.vy)) * MUZZLE_PROJECTILE_FALLBACK_BACKTRACK : 0),
+              proj.vx,
+              proj.vy,
+            );
+        this.muzzleFlashRenderer?.playProjectileFlash(
+          flashOrigin.x,
+          flashOrigin.y,
+          proj.vx,
+          proj.vy,
+          proj.style as ProjectileStyle | undefined,
+          proj.bulletVisualPreset,
+          proj.energyBallVariant,
+          proj.ownerColor ?? proj.color,
+        );
+      }
 
       if (isBfgP && bfgR) {
         if (!bfgR.has(proj.id)) {
@@ -1385,6 +1491,11 @@ export class ProjectileManager {
           energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.energyBallVariant);
         }
         energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color, proj.energyBallVariant);
+      } else if (isGrenadeP && grenades) {
+        if (!grenades.has(proj.id)) {
+          grenades.createVisual(proj.id, proj.x, proj.y, proj.size, proj.grenadeVisualPreset ?? 'he');
+        }
+        grenades.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (proj.style === 'translocator_puck' && tlPucks) {
         if (!tlPucks.has(proj.id)) {
           tlPucks.createVisual(proj.id, proj.x, proj.y, proj.ownerColor ?? proj.color);
@@ -1483,6 +1594,8 @@ export class ProjectileManager {
       const bfgRe = this.bfgRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
+      } else if (state.style === 'grenade' && this.grenadeRenderer?.has(id)) {
+        this.grenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'holy_grenade' && this.holyGrenadeRenderer?.has(id)) {
         this.holyGrenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {

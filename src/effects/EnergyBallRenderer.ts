@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, DEPTH } from '../config';
+import { COLORS, DEPTH, isPointInsideArena } from '../config';
 import type { EnergyBallVariant } from '../types';
 import {
   configureAdditiveImage,
@@ -318,6 +318,65 @@ export class EnergyBallRenderer {
     for (const id of this.getActiveIds()) {
       this.destroyVisual(id);
     }
+  }
+
+  playImpact(x: number, y: number, color: number, variant: EnergyBallVariant = DEFAULT_VARIANT, scale = 1): void {
+    if (!isPointInsideArena(x, y)) return;
+    const preset = this.getPreset(variant);
+    const textureSet = this.getTextureSet(variant);
+    const glowTint = this.getGlowTint(color, variant, preset);
+    const shellTint = this.getShellTint(color, variant, preset);
+
+    const glow = configureAdditiveImage(
+      this.scene.add.image(x, y, textureSet.glow),
+      DEPTH.PROJECTILES + 1.4,
+      variant === 'plasma' ? 0.72 : 0.64,
+      glowTint,
+    ).setScale((preset.minGlowScale + scale * 0.7) * (variant === 'plasma' ? 1.15 : 1.35));
+
+    this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scaleX: glow.scaleX * 1.6,
+      scaleY: glow.scaleY * 1.6,
+      duration: variant === 'plasma' ? 180 : 240,
+      ease: 'Quad.easeOut',
+      onComplete: () => glow.destroy(),
+    });
+
+    const shell = configureAdditiveImage(
+      this.scene.add.image(x, y, textureSet.shell),
+      DEPTH.PROJECTILES + 1.5,
+      variant === 'plasma' ? 0.82 : 0.76,
+      shellTint,
+    ).setScale((preset.minShellScale + scale * 0.5) * 0.95);
+    this.scene.tweens.add({
+      targets: shell,
+      alpha: 0,
+      scaleX: shell.scaleX * 1.9,
+      scaleY: shell.scaleY * 1.9,
+      rotation: Math.PI * 0.65,
+      duration: variant === 'plasma' ? 160 : 220,
+      ease: 'Cubic.easeOut',
+      onComplete: () => shell.destroy(),
+    });
+
+    const sparkEmitter = createEmitter(this.scene, x, y, textureSet.spark, {
+      lifespan: { min: variant === 'plasma' ? 120 : 160, max: variant === 'plasma' ? 280 : 340 },
+      quantity: variant === 'plasma' ? 12 : 16,
+      frequency: -1,
+      speed: { min: 40 * scale, max: 180 * scale },
+      angle: { min: 0, max: 360 },
+      scale: { start: variant === 'plasma' ? 0.65 : 0.9, end: 0.04 },
+      alpha: { start: 0.95, end: 0 },
+      tint: variant === 'plasma'
+        ? [0xffffff, this.mixColor(color, 0xffffff, 0.18), this.mixColor(color, 0x000000, 0.15)]
+        : [0xffffff, color, this.mixColor(color, COLORS.BLUE_1, 0.42)],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }, DEPTH.PROJECTILES + 1.45);
+    sparkEmitter.explode(variant === 'plasma' ? 12 : 16);
+    this.scene.time.delayedCall(420, () => destroyEmitter(sparkEmitter));
   }
 
   private mixColor(source: number, target: number, t: number): number {

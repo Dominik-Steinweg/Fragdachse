@@ -8,6 +8,8 @@ export const ARENA_WIDTH = 1440;
 export const ARENA_HEIGHT = 1056;
 export const ARENA_OFFSET_X = (GAME_WIDTH - ARENA_WIDTH) / 2; // 240
 export const ARENA_OFFSET_Y = 12;
+export const ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
+export const ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
 
 // ---- Depth Layers ----
 export const DEPTH = {
@@ -142,6 +144,8 @@ export function toCssColor(color: number): `#${string}` {
 // ---- Player ----
 export const PLAYER_SIZE  = 32;
 export const PLAYER_SPEED = 200;
+export const MUZZLE_FORWARD_OFFSET = PLAYER_SIZE * 0.7;
+export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
 
 // ---- Combat ----
 export const HP_MAX           = 100;
@@ -218,6 +222,62 @@ export const BURROW_DRAIN_AMOUNT_PER_TICK = 5;
 export const BURROW_DRAIN_INTERVAL_MS    = 60;
 export const BURROW_STUCK_DAMAGE_PER_SEC = 25;
 export const BURROW_POPOUT_WEAPON_LOCK_MS = 300;
+
+export interface MuzzleOrigin {
+  x: number;
+  y: number;
+}
+
+export function getTopDownMuzzleOrigin(originX: number, originY: number, aimAngle: number, forwardOffset = MUZZLE_FORWARD_OFFSET): MuzzleOrigin {
+  return {
+    x: originX + Math.cos(aimAngle) * forwardOffset,
+    y: originY + Math.sin(aimAngle) * forwardOffset,
+  };
+}
+
+export function getTopDownMuzzleOriginFromVector(originX: number, originY: number, vx: number, vy: number, forwardOffset = MUZZLE_FORWARD_OFFSET): MuzzleOrigin {
+  const len = Math.hypot(vx, vy);
+  if (len <= 0.0001) {
+    return { x: originX, y: originY };
+  }
+
+  return {
+    x: originX + (vx / len) * forwardOffset,
+    y: originY + (vy / len) * forwardOffset,
+  };
+}
+
+export function isPointInsideArena(x: number, y: number): boolean {
+  return x >= ARENA_OFFSET_X && x <= ARENA_MAX_X && y >= ARENA_OFFSET_Y && y <= ARENA_MAX_Y;
+}
+
+export function clampPointToArena(x: number, y: number): MuzzleOrigin {
+  return {
+    x: Phaser.Math.Clamp(x, ARENA_OFFSET_X, ARENA_MAX_X),
+    y: Phaser.Math.Clamp(y, ARENA_OFFSET_Y, ARENA_MAX_Y),
+  };
+}
+
+export function clipPointToArenaRay(startX: number, startY: number, endX: number, endY: number): { x: number; y: number; inside: boolean } {
+  const inside = isPointInsideArena(endX, endY);
+  if (inside) return { x: endX, y: endY, inside: true };
+
+  const dx = endX - startX;
+  const dy = endY - startY;
+  let t = 1;
+
+  if (dx > 0) t = Math.min(t, (ARENA_MAX_X - startX) / dx);
+  else if (dx < 0) t = Math.min(t, (ARENA_OFFSET_X - startX) / dx);
+
+  if (dy > 0) t = Math.min(t, (ARENA_MAX_Y - startY) / dy);
+  else if (dy < 0) t = Math.min(t, (ARENA_OFFSET_Y - startY) / dy);
+
+  return {
+    x: startX + t * dx,
+    y: startY + t * dy,
+    inside: false,
+  };
+}
 
 // ---- Schockwelle ----
 export const SHOCKWAVE_RADIUS          = 100;   // px

@@ -3,8 +3,7 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
-  ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH, ARENA_HEIGHT,
+  clampPointToArena,
 } from '../config';
 import { quantizeAngle } from '../utils/angle';
 
@@ -164,7 +163,8 @@ export class InputSystem {
     const isGate = cfg.activation.type === 'charged_gate';
 
     const pointer = this.scene.input.activePointer;
-    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, pointer.x, pointer.y);
+    const clampedTarget = clampPointToArena(pointer.x, pointer.y);
+    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     return {
       angle,
       chargeFraction: startedAt === null
@@ -184,7 +184,7 @@ export class InputSystem {
     if (!this.utilityTargetingActive || !sprite || !cfg) return undefined;
 
     const pointer = this.scene.input.activePointer;
-    const target = this.clampPointToArena(pointer.x, pointer.y);
+    const target = clampPointToArena(pointer.x, pointer.y);
     return {
       angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
       targetX: target.x,
@@ -246,7 +246,8 @@ export class InputSystem {
 
     const px    = pointer.x;
     const py    = pointer.y;
-    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, px, py);
+    const clampedTarget = clampPointToArena(px, py);
+    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     this.currentAimAngle = angle;
     const weaponsBlocked = this.localBurrowPhase !== 'idle';
     const utilityBlocked = this.localBurrowPhase === 'windup'
@@ -258,7 +259,7 @@ export class InputSystem {
       if (!targetedCfg) {
         this.cancelUtilityTargeting();
       } else {
-        const target = this.clampPointToArena(px, py);
+        const target = clampPointToArena(px, py);
         const targetAngle = Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y);
         this.currentAimAngle = targetAngle;
 
@@ -282,23 +283,23 @@ export class InputSystem {
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
     if (!weaponsBlocked && pointer.leftButtonDown()) {
-      this.onLoadoutUse('weapon1', angle, px, py);
+      this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y);
     } else if (!weaponsBlocked && pointer.rightButtonDown()) {
       // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
-      this.onLoadoutUse('weapon2', angle, px, py);
+      this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y);
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
-        this.onLoadoutUse('utility', angle, px, py);
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y);
         return;
       }
       if (this.beginTargetedUtilityAim(now)) {
         return;
       }
       if (!this.beginChargedUtilityHold(now)) {
-        this.onLoadoutUse('utility', angle, px, py);
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y);
       }
     }
 
@@ -316,7 +317,7 @@ export class InputSystem {
 
     const releasedUtility = Phaser.Input.Keyboard.JustUp(this.keyE);
     if (releasedUtility && this.utilityChargeStartedAt !== null) {
-      this.releaseChargedUtility(angle, px, py, now);
+      this.releaseChargedUtility(angle, clampedTarget.x, clampedTarget.y, now);
     } else if (releasedUtility) {
       this.cancelUtilityCharge();
     } else if (this.utilityHoldActive && !this.keyE.isDown) {
@@ -421,13 +422,6 @@ export class InputSystem {
     if (!this.utilityHoldActive || this.utilityChargeStartedAt !== null) return false;
     const eligibleAt = this.utilityChargeEligibleAt ?? this.getEffectiveUtilityCooldownUntil();
     return now < eligibleAt;
-  }
-
-  private clampPointToArena(x: number, y: number): { x: number; y: number } {
-    return {
-      x: Phaser.Math.Clamp(x, ARENA_OFFSET_X, ARENA_OFFSET_X + ARENA_WIDTH),
-      y: Phaser.Math.Clamp(y, ARENA_OFFSET_Y, ARENA_OFFSET_Y + ARENA_HEIGHT),
-    };
   }
 
   private cancelUtilityTargeting(): void {
