@@ -1363,14 +1363,16 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    // Zugschaden
+    // Zugschaden – Abstand zur nächsten Kante des Segments (nicht nur Mittelpunkt)
     if (trainMult !== 0 && this.trainManager) {
       const trainState = this.trainManager.getNetSnapshot();
       if (trainState?.alive) {
-        // Treffer, wenn irgendein Segment-Mittelpunkt im AoE-Radius liegt
-        const segments = this.trainManager.getSegmentPositions();
-        for (const seg of segments) {
-          if (Phaser.Math.Distance.Between(x, y, seg.x, seg.y) <= radius) {
+        for (const seg of this.trainManager.getSegObjects()) {
+          if (!seg.active) continue;
+          const b = seg.getBounds();
+          const dx = Math.max(b.left - x, 0, x - b.right);
+          const dy = Math.max(b.top  - y, 0, y - b.bottom);
+          if (Math.sqrt(dx * dx + dy * dy) <= radius) {
             this.trainManager.applyDamage(damage * trainMult, attackerId);
             break; // Nur einmal pro AoE treffen
           }
@@ -1410,10 +1412,15 @@ export class ArenaScene extends Phaser.Scene {
     if (trainMult !== 0 && this.trainManager) {
       const trainState = this.trainManager.getNetSnapshot();
       if (trainState?.alive) {
+        // Abstand zur nächsten Kante des nächsten Segments (nicht nur Mittelpunkt)
         let minDist = Infinity;
-        for (const seg of this.trainManager.getSegmentPositions()) {
-          const dist = Phaser.Math.Distance.Between(x, y, seg.x, seg.y);
-          if (dist < minDist) minDist = dist;
+        for (const seg of this.trainManager.getSegObjects()) {
+          if (!seg.active) continue;
+          const b = seg.getBounds();
+          const dx = Math.max(b.left - x, 0, x - b.right);
+          const dy = Math.max(b.top  - y, 0, y - b.bottom);
+          const d  = Math.sqrt(dx * dx + dy * dy);
+          if (d < minDist) minDist = d;
         }
         if (minDist <= effect.radius) {
           const t = Phaser.Math.Clamp(minDist / effect.radius, 0, 1);

@@ -774,6 +774,7 @@ export class EffectSystem {
     thickness: number,
     visualPreset: HitscanVisualPreset = 'default',
   ): void {
+    this.ensureTextures();
     const clippedEnd = clipPointToArenaRay(startX, startY, endX, endY);
     const renderEndX = clippedEnd.x;
     const renderEndY = clippedEnd.y;

@@ -202,7 +202,7 @@ export const ADRENALINE_REGEN_PER_SEC  = 10;    // passiv, Host
 export const ADRENALINE_DRAIN_PER_SEC  = 20;   // während Burrow
 export const ADRENALINE_REGEN_PAUSE_MS = 500;  // Pause nach Verbrauch
 
-export const RAGE_MAX                  = 300;
+export const RAGE_MAX                  = 600;
 export const RAGE_PER_DAMAGE           = 1;    // Wut pro Schadenspunkt
 
 // ---- Dash ----

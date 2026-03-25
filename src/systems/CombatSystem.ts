@@ -47,11 +47,12 @@ export class CombatSystem {
   private armor:         Map<string, number>                           = new Map();
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
-  private readonly hitscanLine = new Phaser.Geom.Line();
-  private readonly meleeLine   = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
-  private readonly arenaBounds = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
-  private readonly scratchCircle = new Phaser.Geom.Circle();
-  private readonly scratchPoints: Phaser.Geom.Point[] = [];
+  private readonly hitscanLine       = new Phaser.Geom.Line();
+  private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
+  private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+  private readonly scratchCircle     = new Phaser.Geom.Circle();
+  private readonly scratchPoints:    Phaser.Geom.Point[] = [];
+  private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
   private meleeSwingIdCounter = 0;
 
   // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
@@ -368,14 +369,13 @@ export class CombatSystem {
       }
     }
 
-    // Zug-Segment am Endpunkt suchen
+    // Zug-Bounding-Box am Endpunkt suchen (gesamter Zug als ein Block, keine Lücken)
     if (trainMult !== 0 && this.trainSegObjects && this.onTrainDamage) {
-      for (const seg of this.trainSegObjects) {
-        if (!seg.active) continue;
-        const hit = this.findNearestRectangleHit(hitLine, seg.getBounds());
+      const trainBounds = this.computeTrainBounds();
+      if (trainBounds) {
+        const hit = this.findNearestRectangleHit(hitLine, trainBounds);
         if (hit && Math.abs(hit.distance - endDist) < EPSILON) {
           this.onTrainDamage(damage * trainMult, shooterId);
-          return;
         }
       }
     }
@@ -663,9 +663,9 @@ export class CombatSystem {
     }
 
     if (this.trainSegObjects) {
-      for (const seg of this.trainSegObjects) {
-        if (!seg.active) continue;
-        const hit = this.findNearestRectangleHit(line, seg.getBounds());
+      const trainBounds = this.computeTrainBounds();
+      if (trainBounds) {
+        const hit = this.findNearestRectangleHit(line, trainBounds);
         if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
       }
     }
@@ -703,6 +703,29 @@ export class CombatSystem {
         if (best === null || hit.distance < best) return hit.distance;
         return best;
       }, null);
+  }
+
+  /**
+   * Berechnet die kombinierte Bounding-Box aller aktiven Zug-Segmente.
+   * Behandelt den gesamten Zug (inkl. Lücken) als ein zusammenhängendes Hindernis.
+   * Gibt null zurück wenn kein aktives Segment vorhanden.
+   */
+  private computeTrainBounds(): Phaser.Geom.Rectangle | null {
+    if (!this.trainSegObjects || this.trainSegObjects.length === 0) return null;
+    let minY = Infinity, maxY = -Infinity;
+    let trainX = 0, trainW = 0;
+    let anyActive = false;
+    for (const seg of this.trainSegObjects) {
+      if (!seg.active) continue;
+      anyActive = true;
+      const b = seg.getBounds();
+      if (b.top    < minY) minY = b.top;
+      if (b.bottom > maxY) maxY = b.bottom;
+      trainX = b.x;
+      trainW = b.width;
+    }
+    if (!anyActive) return null;
+    return this.scratchTrainRect.setTo(trainX, minY, trainW, maxY - minY);
   }
 
   private findNearestRectangleHit(
