@@ -806,6 +806,7 @@ export class LoadoutManager {
       explosion:       fireConfig.impactExplosion,
       homing:          fireConfig.homing,
       projectileStyle: config.projectileStyle,
+      bulletVisualPreset: config.bulletVisualPreset,
       energyBallVariant: config.energyBallVariant,
       tracerConfig:    config.tracerConfig,
       detonable:       config.detonable,

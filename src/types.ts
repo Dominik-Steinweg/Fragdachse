@@ -66,6 +66,9 @@ export interface SyncedTeslaDome {
 /** Visueller Stil eines Projektils */
 export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'holy_grenade' | 'translocator_puck';
 
+/** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
+export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp';
+
 /** Variant-Preset fuer Energy-Ball-Projektile. */
 export type EnergyBallVariant = 'default' | 'plasma';
 
@@ -129,6 +132,7 @@ export interface SyncedProjectile {
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
+  bulletVisualPreset?: BulletVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
 }
@@ -245,6 +249,7 @@ export interface ProjectileSpawnConfig {
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil (Standard: 'bullet')
+  bulletVisualPreset?: BulletVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional, data-driven)
   // Detonations-System (optional)
@@ -399,6 +404,7 @@ export interface TrackedProjectile {
   fuseTime?:       number;
   grenadeEffect?:  GrenadeEffectConfig;
   projectileStyle?: ProjectileStyle;  // visueller Darstellungsstil
+  bulletVisualPreset?: BulletVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracerConfig?:    TracerConfig;     // Tracer-Leuchtlinie (optional)
   // Detonations-System (optional)

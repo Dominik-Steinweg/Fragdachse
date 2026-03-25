@@ -1,5 +1,5 @@
-import { COLORS, RAGE_MAX, TRANSLOCATOR_COOLDOWN, TRANSLOCATOR_SPEED, TRANSLOCATOR_SIZE, TRANSLOCATOR_BOUNCES } from '../config';
-import type { LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
+import { COLORS, RAGE_MAX } from '../config';
+import type { BulletVisualPreset, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -91,6 +91,7 @@ export interface WeaponConfig {
   // Visuelles Override
   readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
   readonly projectileStyle?: ProjectileStyle; // 'bullet' (eckig, Standard) | 'ball' (rund)
+  readonly bulletVisualPreset?: BulletVisualPreset;
   readonly energyBallVariant?: EnergyBallVariant;
   readonly rocketSmokeTrailColor?: number;   // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
 
@@ -291,49 +292,16 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
+    projectileColor:      0xd2a25f,
     projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'glock' as BulletVisualPreset,
     tracerConfig: {
       widthCore:  1,
-      widthGlow:  3,
-      alphaCore:  0.45,
-      alphaGlow:  0.15,
+      widthGlow:  2,
+      alphaCore:  0.25,
+      alphaGlow:  0.05,
       segments:   4,
-      fadeMs:     160,
-      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
-      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
-    } satisfies TracerConfig,    
-  } as WeaponConfig,
-
-  USP: {
-    id:                   'USP',
-    displayName:          'USP',
-    cooldown:             250,
-    damage:               11,
-    range:                600,        
-    fire: {
-      type:                 'projectile',
-      projectileSpeed:      1200,
-      projectileSize:       3,
-      projectileMaxBounces: 1,
-    },
-    allowedSlots:         ['weapon1'],
-    adrenalinCost:        0,
-    adrenalinGain:        10,
-    spreadStanding:       0,
-    spreadMoving:         20,
-    spreadPerShot:        5,
-    maxDynamicSpread:     25,
-    spreadRecoveryDelay:  400,
-    spreadRecoveryRate:   5,
-    spreadRecoverySpeed:  100,
-    projectileStyle:      'bullet' as ProjectileStyle,
-    tracerConfig: {
-      widthCore:  1,
-      widthGlow:  3,
-      alphaCore:  0.45,
-      alphaGlow:  0.15,
-      segments:   4,
-      fadeMs:     160,
+      fadeMs:     80,
       // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
       // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
     } satisfies TracerConfig,    
@@ -429,6 +397,44 @@ export const WEAPON_CONFIGS = {
     energyBallVariant:    'plasma' satisfies EnergyBallVariant,
   } as WeaponConfig,
 
+  XBOW: {
+    id:                   'XBOW',
+    displayName:          'XXX-BOW',
+    cooldown:             900,
+    damage:               8,       // Schaden pro Pellet
+    range:                700,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1300,
+      projectileSize:       4,
+      projectileMaxBounces: 1,
+    },
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        5,
+    spreadStanding:       0,
+    spreadMoving:         5,
+    spreadPerShot:        5,
+    maxDynamicSpread:     5,
+    spreadRecoveryDelay:  500,
+    spreadRecoveryRate:   3,
+    spreadRecoverySpeed:  100,
+    pelletCount:          3,
+    pelletSpreadAngle:    15,
+    projectileColor:      0x8d7a5a,
+    projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'xbow' as BulletVisualPreset,
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  2,
+      alphaCore:  0.24,
+      alphaGlow:  0.08,
+      segments:   5,
+      fadeMs:     120,
+      maxLength:  120,
+    } satisfies TracerConfig,    
+  } as WeaponConfig,
+
   /**
    * "WEAPON2" - Rechte Maustaste
    */
@@ -442,7 +448,7 @@ export const WEAPON_CONFIGS = {
     fire: {
       type:                 'projectile',
       projectileSpeed:      1200,
-      projectileSize:       2,
+      projectileSize:       4,
       projectileMaxBounces: 10,
     },
     allowedSlots:         ['weapon2'],
@@ -455,29 +461,30 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
+    projectileColor:      0xd7b06b,
     projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'p90' as BulletVisualPreset,
     tracerConfig: {
       widthCore:  1,
       widthGlow:  4,
       alphaCore:  0.45,
-      alphaGlow:  0.15,
-      segments:   4,
-      fadeMs:     160,
-      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
-      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+      alphaGlow:  0.16,
+      segments:   5,
+      fadeMs:     140,
+      maxLength:  95,
     } satisfies TracerConfig,
   } as WeaponConfig,
 
   AK47: {
     id:                   'AK47',
     displayName:          'AK-47',
-    cooldown:             100,
-    damage:               8,
+    cooldown:             140,
+    damage:               9,
     range:                1000,        
     fire: {
       type:                 'projectile',
       projectileSpeed:      1200,
-      projectileSize:       3,
+      projectileSize:       6,
       projectileMaxBounces: 10,
     },
     allowedSlots:         ['weapon2'],
@@ -490,16 +497,17 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   2,
     spreadRecoverySpeed:  100,
+    projectileColor:      0xc88444,
     projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'ak47' as BulletVisualPreset,
     tracerConfig: {
-      widthCore:  1,
-      widthGlow:  3,
+      widthCore:  1.5,
+      widthGlow:  4,
       alphaCore:  0.75,
-      alphaGlow:  0.25,
+      alphaGlow:  0.22,
       segments:   5,
-      fadeMs:     200,
-      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
-      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+      fadeMs:     220,
+      maxLength:  150,
     } satisfies TracerConfig,    
   } as WeaponConfig,
 
@@ -527,16 +535,17 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     pelletCount:          5,
     pelletSpreadAngle:    16,
+    projectileColor:      0xa9a097,
     projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'shotgun' as BulletVisualPreset,
     tracerConfig: {
-      widthCore:  1,
-      widthGlow:  3,
-      alphaCore:  0.45,
-      alphaGlow:  0.15,
-      segments:   4,
-      fadeMs:     160,
-      // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
-      // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
+      widthCore:  1.2,
+      widthGlow:  3.5,
+      alphaCore:  0.3,
+      alphaGlow:  0.1,
+      segments:   3,
+      fadeMs:     110,
+      maxLength:  70,
     } satisfies TracerConfig,    
   } as WeaponConfig,
 
@@ -706,6 +715,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   10,
     spreadRecoverySpeed:  100,
     projectileStyle:      'awp' as ProjectileStyle,
+    bulletVisualPreset:   'awp' as BulletVisualPreset,
     holdSpeedFactor:      0.5,
     shotRecoilForce:      750,         // px/s Anfangsimpuls (Quad-Ease-Out über shotRecoilDuration)
     shotRecoilDuration:   200,         // ms – Rückstoß hält 200ms an → deutlich sichtbar
@@ -878,6 +888,10 @@ export const UTILITY_CONFIGS = {
     smokeDissipateDuration: 2000,
     smokeMaxAlpha:          0.95,
     allowedSlots:           ['utility'],
+    frictionDelayMs:           400,
+    airFrictionDecayPerSec:    0.2,
+    bounceFrictionMultiplier:  0.3,
+    stopSpeedThreshold:        20,    
   } as UtilityConfig,
 
   MOLOTOV_GRENADE: {
@@ -896,6 +910,10 @@ export const UTILITY_CONFIGS = {
     fireLingerDuration: 4000,
     rockDamageMult:     0,  // Molotov macht keinen Schaden an Felsen
     allowedSlots:       ['utility'],
+    frictionDelayMs:           400,
+    airFrictionDecayPerSec:    0.2,
+    bounceFrictionMultiplier:  0.3,
+    stopSpeedThreshold:        20,    
   } as UtilityConfig,
 
   HOLY_HAND_GRENADE: {
@@ -916,6 +934,10 @@ export const UTILITY_CONFIGS = {
     trainDamageMult:      1.0,           // 100% Schaden am Zug
     explosionVisualStyle: 'holy',        // goldene Explosion + Kamera-Shake
     skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
+    frictionDelayMs:           400,
+    airFrictionDecayPerSec:    0.2,
+    bounceFrictionMultiplier:  0.3,
+    stopSpeedThreshold:        20,    
   } as UtilityConfig,
 
   BFG: {
@@ -973,12 +995,12 @@ export const UTILITY_CONFIGS = {
     id:                   'TRANSLOCATOR',
     displayName:          'Translocator',
     type:                 'translocator',
-    cooldown:             TRANSLOCATOR_COOLDOWN,
+    cooldown:             1000,
     activation:           STANDARD_GRENADE_CHARGE,
-    projectileSpeed:      TRANSLOCATOR_SPEED, 
-    projectileSize:       TRANSLOCATOR_SIZE,
+    projectileSpeed:      600, 
+    projectileSize:       16,
     fuseTime:             0,         // Kein auto-explode
-    maxBounces:           TRANSLOCATOR_BOUNCES, 
+    maxBounces:           3, 
     allowedSlots:         ['utility'],
     frictionDelayMs:           300,
     airFrictionDecayPerSec:    0.15,

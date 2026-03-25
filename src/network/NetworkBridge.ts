@@ -101,6 +101,7 @@ type LoadoutUseHandler = (
   params?: LoadoutUseParams,
   clientX?: number,
   clientY?: number,
+  clientNow?: number,
 ) => void;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
@@ -542,12 +543,13 @@ export class NetworkBridge {
     params?: LoadoutUseParams,
     clientX?: number,
     clientY?: number,
+    clientNow?: number,
   ): void {
     if (isHost()) {
-      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY);
+      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow);
       return;
     }
-    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY });
+    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow });
   }
 
   registerLoadoutUseHandler(
@@ -561,6 +563,7 @@ export class NetworkBridge {
       params?: LoadoutUseParams,
       clientX?: number,
       clientY?: number,
+      clientNow?: number,
     ) => void,
   ): void {
     this.loadoutUseHandler = handler;
@@ -568,7 +571,7 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
-      const { slot, angle, tx, ty, sid, prm, px, py } = data as {
+      const { slot, angle, tx, ty, sid, prm, px, py, ts } = data as {
         slot: LoadoutSlot;
         angle: number;
         tx: number;
@@ -577,8 +580,13 @@ export class NetworkBridge {
         prm?: LoadoutUseParams;
         px?: number;
         py?: number;
+        ts?: number;
       };
-      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py);
+      // Verwende Client-Timestamp für Cooldown-Tracking (verhindert Schussverlust bei variierender RPC-Latenz).
+      // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
+      const hostNow = Date.now();
+      const clientNow = (typeof ts === 'number' && Math.abs(hostNow - ts) <= 200) ? ts : hostNow;
+      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow);
       return undefined;
     });
   }

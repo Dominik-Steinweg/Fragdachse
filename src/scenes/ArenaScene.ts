@@ -315,10 +315,10 @@ export class ArenaScene extends Phaser.Scene {
     this.inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       if (!this.localPlayerAlive || this.localPlayerBurrowed) return;
 
+      const now = Date.now();
       let shotId: number | undefined;
       if (slot === 'weapon1' || slot === 'weapon2') {
         // Client-seitige Cooldown-Prüfung: nur feuern wenn bereit
-        const now = Date.now();
         const lastFired = this.weaponLastFired[slot];
         const wepConfig = this.getLocalWeaponConfig(slot);
         if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
@@ -336,7 +336,7 @@ export class ArenaScene extends Phaser.Scene {
       }
       // Lokale Sprite-Position mitsenden für Hitscan-Kompensation bei 20Hz Tick-Rate
       const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
-      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y);
+      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, now);
     });
 
     bridge.registerDashHandler((playerId, dx, dy) => {
@@ -372,10 +372,10 @@ export class ArenaScene extends Phaser.Scene {
     this.utilityTargetingHint = this.createUtilityTargetingHint();
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
-    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY) => {
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, Date.now(), shotId, params, clientX, clientY);
+      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY);
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────

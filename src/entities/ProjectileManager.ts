@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
-import type { TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant } from '../types';
+import type { BulletVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant } from '../types';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
-import { BULLET_STYLE, AWP_STYLE } from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
@@ -23,6 +22,7 @@ interface ClientProjectileState {
   color: number;
   receivedAt: number;
   style?: string;
+  bulletVisualPreset?: BulletVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   ownerColor?: number;
   // Flammenwerfer-Decay: velocity nimmt exponentiell ab
@@ -37,6 +37,11 @@ interface HomingTargetCandidate {
 }
 
 const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
+
+function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset): BulletVisualPreset {
+  if (preset) return preset;
+  return style === 'awp' ? 'awp' : 'default';
+}
 
 export class ProjectileManager {
   private scene:       Phaser.Scene;
@@ -232,14 +237,30 @@ export class ProjectileManager {
     if (isBullet && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.bulletRenderer.createVisual(id, x, y, cfg.size, cfg.color, BULLET_STYLE);
+      this.bulletRenderer.createVisual(
+        id,
+        x,
+        y,
+        cfg.size,
+        cfg.color,
+        resolveBulletVisualPreset(cfg.projectileStyle, cfg.bulletVisualPreset),
+        cfg.ownerColor ?? cfg.color,
+      );
     }
 
     // AWP-Projektile sind unsichtbar (Rendering übernimmt BulletRenderer mit AWP-Stil)
     if (isAwp && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.bulletRenderer.createVisual(id, x, y, cfg.size, cfg.color, AWP_STYLE);
+      this.bulletRenderer.createVisual(
+        id,
+        x,
+        y,
+        cfg.size,
+        cfg.color,
+        resolveBulletVisualPreset(cfg.projectileStyle, cfg.bulletVisualPreset),
+        cfg.ownerColor ?? cfg.color,
+      );
     }
 
     if (isRocket && this.rocketRenderer) {
@@ -331,6 +352,7 @@ export class ProjectileManager {
       fuseTime:        cfg.fuseTime,
       grenadeEffect:   cfg.grenadeEffect,
       projectileStyle: cfg.projectileStyle,
+      bulletVisualPreset: cfg.bulletVisualPreset,
       energyBallVariant: cfg.energyBallVariant,
       tracerConfig:    cfg.tracerConfig,
       detonable:       cfg.detonable,
@@ -508,7 +530,7 @@ export class ProjectileManager {
 
     // Tracer-Leuchtlinie (optional, data-driven via tracerConfig)
     if (cfg.tracerConfig && this.tracerRenderer) {
-      this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.color);
+      this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.ownerColor ?? cfg.color);
     }
 
     this.projectiles.push(tracked);
@@ -1216,6 +1238,7 @@ export class ProjectileManager {
       ownerColor: p.ownerColor,
       smokeTrailColor: p.smokeTrailColor,
       style:  p.projectileStyle,
+      bulletVisualPreset: p.bulletVisualPreset,
       energyBallVariant: p.energyBallVariant,
       tracer: p.tracerConfig,
     }));
@@ -1320,6 +1343,7 @@ export class ProjectileManager {
       const isHolyGrenadeP = proj.style === 'holy_grenade';
       const isAwpP   = proj.style === 'awp';
       const isRocket = proj.style === 'rocket';
+      const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
 
       // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
       const prev = this.clientProjStates.get(proj.id);
@@ -1340,6 +1364,7 @@ export class ProjectileManager {
         color: proj.color,
         receivedAt: now,
         style: proj.style,
+        bulletVisualPreset: proj.bulletVisualPreset,
         energyBallVariant: proj.energyBallVariant,
         ownerColor: proj.ownerColor,
         isFlame,
@@ -1385,7 +1410,7 @@ export class ProjectileManager {
         flames.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isAwpP && renderer) {
         if (!renderer.has(proj.id)) {
-          renderer.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, AWP_STYLE);
+          renderer.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);
         }
         renderer.syncToBody(proj.id, proj.x, proj.y, proj.vx, proj.vy);
         if (velocityFlipped) {
@@ -1393,7 +1418,7 @@ export class ProjectileManager {
         }
       } else if (isBullet && renderer) {
         if (!renderer.has(proj.id)) {
-          renderer.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, BULLET_STYLE);
+          renderer.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);
         }
         renderer.updatePosition(proj.id, proj.x, proj.y, proj.vx, proj.vy);
         if (velocityFlipped) {
@@ -1416,7 +1441,7 @@ export class ProjectileManager {
       // Tracer (unabhängig vom Renderer-Typ, data-driven via proj.tracer)
       if (proj.tracer && tracerRc) {
         if (!tracerRc.has(proj.id)) {
-          tracerRc.createTracer(proj.id, proj.x, proj.y, proj.tracer, proj.color);
+          tracerRc.createTracer(proj.id, proj.x, proj.y, proj.tracer, proj.ownerColor ?? proj.color);
         }
         tracerRc.updateTracer(proj.id, proj.x, proj.y, proj.vx, proj.vy);
       }
