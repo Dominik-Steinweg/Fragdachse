@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
 import { RockGridIndex } from '../arena/RockGridIndex';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { PlaceableRockUtilityConfig } from '../loadout/LoadoutConfig';
+import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
@@ -14,9 +14,7 @@ import {
 } from '../config';
 import type { ArenaLayout, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
 
-interface RuntimeRockRecord extends SyncedPlaceableRock {
-  kind: PlaceableKind;
-}
+interface RuntimeRockRecord extends SyncedPlaceableRock {}
 
 export interface PlacementSyncResult {
   added: SyncedPlaceableRock[];
@@ -56,6 +54,10 @@ export class PlacementSystem {
     return this.runtimeRocks.get(id);
   }
 
+  getAllRuntimeRocks(): readonly SyncedPlaceableRock[] {
+    return [...this.runtimeRocks.values()];
+  }
+
   hasRuntimeRock(id: number): boolean {
     return this.runtimeRocks.has(id);
   }
@@ -85,8 +87,21 @@ export class PlacementSystem {
     return { ...rock };
   }
 
+  applyDamage(id: number, damage: number): SyncedPlaceableRock | undefined {
+    const rock = this.runtimeRocks.get(id);
+    if (!rock) return undefined;
+    rock.hp = Math.max(0, rock.hp - damage);
+    return { ...rock };
+  }
+
+  updateAngle(id: number, angle: number): void {
+    const rock = this.runtimeRocks.get(id);
+    if (!rock) return;
+    rock.angle = angle;
+  }
+
   tryPlaceRock(
-    cfg: PlaceableRockUtilityConfig,
+    cfg: PlaceableUtilityConfig,
     playerId: string,
     ownerColor: number,
     originX: number,
@@ -100,6 +115,7 @@ export class PlacementSystem {
 
     const rock: RuntimeRockRecord = {
       id: this.nextRockId++,
+      kind: cfg.placeable.kind,
       gridX: preview.gridX,
       gridY: preview.gridY,
       hp: cfg.placeable.maxHp,
@@ -108,7 +124,7 @@ export class PlacementSystem {
       ownerColor,
       expiresAt: now + cfg.placeable.lifetimeMs,
       warningStartsAt: now + Math.max(0, cfg.placeable.lifetimeMs - cfg.placeable.warningPulseMs),
-      kind: 'rock',
+      angle: preview.angle,
     };
 
     this.runtimeRocks.set(rock.id, rock);
@@ -136,7 +152,7 @@ export class PlacementSystem {
     for (const incoming of snapshot) {
       const current = this.runtimeRocks.get(incoming.id);
       if (!current) {
-        this.runtimeRocks.set(incoming.id, { ...incoming, kind: 'rock' });
+        this.runtimeRocks.set(incoming.id, { ...incoming });
         this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
         this.nextRockId = Math.max(this.nextRockId, incoming.id + 1);
         added.push({ ...incoming });
@@ -151,8 +167,10 @@ export class PlacementSystem {
         || current.ownerColor !== incoming.ownerColor
         || current.expiresAt !== incoming.expiresAt
         || current.warningStartsAt !== incoming.warningStartsAt
+        || current.kind !== incoming.kind
+        || current.angle !== incoming.angle
       ) {
-        this.runtimeRocks.set(incoming.id, { ...incoming, kind: 'rock' });
+        this.runtimeRocks.set(incoming.id, { ...incoming });
         if (current.gridX !== incoming.gridX || current.gridY !== incoming.gridY) {
           this.rockGrid.remove(current.gridX, current.gridY);
           this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
@@ -165,7 +183,7 @@ export class PlacementSystem {
   }
 
   getPlacementPreview(
-    cfg: PlaceableRockUtilityConfig,
+    cfg: PlaceableUtilityConfig,
     originX: number,
     originY: number,
     pointerX: number,
@@ -190,7 +208,7 @@ export class PlacementSystem {
       isValid,
       frame: AutoTiler.getFrame(mask, ROCK_AUTOTILE),
       range: cfg.placeable.range,
-      kind: 'rock',
+      kind: cfg.placeable.kind,
     };
   }
 
@@ -235,7 +253,7 @@ export class PlacementSystem {
     return best ? { gridX: best.gridX, gridY: best.gridY } : null;
   }
 
-  private canPlaceAt(gx: number, gy: number, cfg: PlaceableRockUtilityConfig): boolean {
+  private canPlaceAt(gx: number, gy: number, cfg: PlaceableUtilityConfig): boolean {
     for (const cell of cfg.placeable.footprint) {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;

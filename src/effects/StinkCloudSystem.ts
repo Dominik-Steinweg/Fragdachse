@@ -108,18 +108,24 @@ export interface StinkCloudDamageEvent {
   ownerId:        string;
   rockDamageMult: number;
   trainDamageMult: number;
+  visualVariant?: 'stink' | 'spore';
 }
 
 /* ── Host-side active cloud tracking ── */
 interface ActiveStinkCloud {
   id:             number;
   ownerId:        string;
+  ownerColor:     number;
   radius:         number;
   duration:       number;       // ms
   damagePerTick:  number;
   tickInterval:   number;       // ms
   rockDamageMult: number;
   trainDamageMult: number;
+  visualVariant:  'stink' | 'spore';
+  followOwner:    boolean;
+  x:              number;
+  y:              number;
   createdAt:      number;
   lastTickAt:     number;
 }
@@ -198,13 +204,50 @@ export class StinkCloudSystem {
     this.activeZones.push({
       id: this.nextId++,
       ownerId,
+      ownerColor: 0xffffff,
       radius,
       duration,
       damagePerTick,
       tickInterval,
       rockDamageMult,
       trainDamageMult,
+      visualVariant: 'stink',
+      followOwner: true,
+      x: 0,
+      y: 0,
       createdAt:  now,
+      lastTickAt: now,
+    });
+  }
+
+  hostCreateStationaryCloud(
+    ownerId: string,
+    ownerColor: number,
+    x: number,
+    y: number,
+    radius: number,
+    duration: number,
+    damagePerTick: number,
+    tickInterval: number,
+    rockDamageMult: number,
+    trainDamageMult: number,
+  ): void {
+    const now = Date.now();
+    this.activeZones.push({
+      id: this.nextId++,
+      ownerId,
+      ownerColor,
+      radius,
+      duration,
+      damagePerTick,
+      tickInterval,
+      rockDamageMult,
+      trainDamageMult,
+      visualVariant: 'spore',
+      followOwner: false,
+      x,
+      y,
+      createdAt: now,
       lastTickAt: now,
     });
   }
@@ -225,10 +268,15 @@ export class StinkCloudSystem {
       const zone = this.activeZones[i];
       const info = playerLookup(zone.ownerId);
 
-      // Deaktivierung: Spieler tot, eingebuddelt, oder nicht mehr vorhanden
-      if (!info || !info.alive || info.burrowed) {
-        this.activeZones.splice(i, 1);
-        continue;
+      if (zone.followOwner) {
+        // Deaktivierung: Spieler tot, eingebuddelt, oder nicht mehr vorhanden
+        if (!info || !info.alive || info.burrowed) {
+          this.activeZones.splice(i, 1);
+          continue;
+        }
+        zone.x = info.x;
+        zone.y = info.y;
+        zone.ownerColor = info.color;
       }
 
       // Duration abgelaufen
@@ -242,13 +290,14 @@ export class StinkCloudSystem {
       if (now - zone.lastTickAt >= zone.tickInterval) {
         zone.lastTickAt += zone.tickInterval;
         damageEvents.push({
-          x:               info.x,
-          y:               info.y,
+          x:               zone.x,
+          y:               zone.y,
           radius:          zone.radius,
           damage:          zone.damagePerTick,
           ownerId:         zone.ownerId,
           rockDamageMult:  zone.rockDamageMult,
           trainDamageMult: zone.trainDamageMult,
+          visualVariant:   zone.visualVariant,
         });
       }
 
@@ -256,11 +305,12 @@ export class StinkCloudSystem {
       synced.push({
         id:         zone.id,
         ownerId:    zone.ownerId,
-        x:          Math.round(info.x),
-        y:          Math.round(info.y),
+        x:          Math.round(zone.x),
+        y:          Math.round(zone.y),
         radius:     zone.radius,
         alpha:      Math.round(this.computeAlpha(elapsed, zone.duration) * 100) / 100,
-        ownerColor: info.color,
+        ownerColor: zone.ownerColor,
+        visualVariant: zone.visualVariant,
       });
     }
 
@@ -340,22 +390,23 @@ export class StinkCloudSystem {
 
   private createVisual(cloud: SyncedStinkCloud): StinkCloudVisual {
     const r = Math.max(cloud.radius, 8);
+    const isSpore = cloud.visualVariant === 'spore';
 
     const groundGlow = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.12)
-      .setTint(TINT_GROUND_GLOW)
+      .setTint(isSpore ? 0x5b3818 : TINT_GROUND_GLOW)
       .setBlendMode(Phaser.BlendModes.MULTIPLY)
       .setAlpha(0.26);
 
     const damageAura = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.08)
-      .setTint(TINT_DAMAGE_GLOW)
+      .setTint(isSpore ? 0xc7d85a : TINT_DAMAGE_GLOW)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.18);
 
     const reactionPulse = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.04)
-      .setTint(TINT_CHEM_CYAN)
+      .setTint(isSpore ? 0xf0e68c : TINT_CHEM_CYAN)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0);
 
@@ -373,14 +424,14 @@ export class StinkCloudSystem {
 
     const outerGlow = this.scene.add.image(0, 0, TEX_STINK_HAZE)
       .setOrigin(0.5)
-      .setTint(TINT_CHEM_BLUE)
+      .setTint(isSpore ? 0xf6c14d : TINT_CHEM_BLUE)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.2);
     container.add(outerGlow);
 
     const neonCore = this.scene.add.image(0, 0, TEX_STINK_HAZE)
       .setOrigin(0.5)
-      .setTint(TINT_ACID)
+      .setTint(isSpore ? 0xf0e97f : TINT_ACID)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.26);
     container.add(neonCore);
@@ -500,6 +551,7 @@ export class StinkCloudSystem {
     const alpha  = Phaser.Math.Clamp(cloud.alpha, 0, 1);
     const t      = (this.scene.time.now - visual.birthTime) * 0.001;
     const rScale = radius / REF_RADIUS;
+    const isSpore = cloud.visualVariant === 'spore';
     const visible = alpha > 0.01;
     const pulseWave = Phaser.Math.Clamp(Math.pow((Math.sin(t * 2.8 + 0.8) + 1) * 0.5, 6), 0, 1);
     const damagePulse = Phaser.Math.Clamp(Math.pow((Math.sin(t * 1.7 - 0.4) + 1) * 0.5, 2.2), 0, 1);
@@ -511,21 +563,21 @@ export class StinkCloudSystem {
       .setPosition(x, y)
       .setVisible(visible)
       .setScale(1.52 * rScale, 1.42 * rScale)
-      .setAlpha((0.2 + damagePulse * 0.06) * alpha)
+      .setAlpha((isSpore ? 0.14 : 0.2 + damagePulse * 0.06) * alpha)
       .setRotation(Math.sin(t * 0.11) * 0.08);
 
     visual.damageAura
       .setPosition(x, y)
       .setVisible(visible)
       .setScale(1.06 * rScale * (1 + damagePulse * 0.035), 1.02 * rScale * (1 + damagePulse * 0.028))
-      .setAlpha((0.16 + damagePulse * 0.1) * alpha)
+      .setAlpha((isSpore ? 0.12 + damagePulse * 0.08 : 0.16 + damagePulse * 0.1) * alpha)
       .setRotation(Math.cos(t * 0.16) * 0.05);
 
     visual.reactionPulse
       .setPosition(x, y - radius * 0.02)
       .setVisible(visible)
       .setScale((0.54 + pulseWave * 0.38) * rScale, (0.5 + pulseWave * 0.34) * rScale)
-      .setAlpha((pulseWave * 0.2) * alpha)
+      .setAlpha((pulseWave * (isSpore ? 0.12 : 0.2)) * alpha)
       .setRotation(Math.sin(t * 0.35 + 0.6) * 0.14);
 
     const corePulse = 1 + Math.sin(t * 0.42) * 0.06;
@@ -602,7 +654,7 @@ export class StinkCloudSystem {
     visual.plumeEmitter.setParticleScale(0.18 * rScale, Phaser.Math.Linear(0.94, 1.46, alpha) * rScale);
 
     /* ── Fairness circle ── */
-    this.drawFairnessCircle(visual.fairnessCircle, x, y, radius, cloud.ownerColor, alpha, t);
+    this.drawFairnessCircle(visual.fairnessCircle, x, y, radius, cloud.ownerColor, alpha, t, isSpore);
 
     /* ── Emit-zone resize ── */
     const target = Math.max(radius * 0.86, 12);
@@ -627,27 +679,28 @@ export class StinkCloudSystem {
     color: number,
     alpha: number,
     time: number,
+    isSpore = false,
   ): void {
     gfx.clear();
     if (alpha < 0.01) return;
 
-    gfx.lineStyle(2.2, TINT_RIM_GLOW, 0.03 * alpha);
+    gfx.lineStyle(2.2, isSpore ? 0xf2dc76 : TINT_RIM_GLOW, 0.03 * alpha);
     gfx.strokeCircle(x, y, radius);
 
-    gfx.lineStyle(1.8, TINT_CHEM_BLUE, 0.035 * alpha);
+    gfx.lineStyle(1.8, isSpore ? 0xe4a94d : TINT_CHEM_BLUE, 0.035 * alpha);
     gfx.strokeCircle(x, y, radius * 1.01);
 
     gfx.lineStyle(1.2, color, 0.22 * alpha);
     gfx.strokeCircle(x, y, radius);
 
-    gfx.lineStyle(0.8, TINT_SULFUR, 0.08 * alpha);
+    gfx.lineStyle(0.8, isSpore ? 0xf4e6a3 : TINT_SULFUR, 0.08 * alpha);
     gfx.strokeCircle(x, y, radius * 0.93);
 
     for (let i = 0; i < 4; i++) {
       const span = 0.48 + Math.sin(time * 0.55 + i) * 0.08;
       const center = time * 0.24 + i * (Math.PI / 2) + Math.sin(time * 0.4 + i * 1.7) * 0.18;
       const arcRadius = radius * (0.96 + Math.sin(time * 0.8 + i) * 0.015);
-      gfx.lineStyle(1.2, i % 2 === 0 ? TINT_RIM_GLOW : TINT_CHEM_CYAN, 0.04 * alpha);
+      gfx.lineStyle(1.2, i % 2 === 0 ? (isSpore ? 0xf2dc76 : TINT_RIM_GLOW) : (isSpore ? 0xe4a94d : TINT_CHEM_CYAN), 0.04 * alpha);
       gfx.beginPath();
       gfx.arc(x, y, arcRadius, center - span * 0.5, center + span * 0.5, false);
       gfx.strokePath();

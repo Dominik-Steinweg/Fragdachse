@@ -15,7 +15,7 @@ export interface PlayerInput {
   placementPreview?: PlacementPreviewNetState | null;
 }
 
-export type PlaceableKind = 'rock';
+export type PlaceableKind = 'rock' | 'turret';
 
 export interface PlacementPreviewNetState {
   active: boolean;
@@ -81,7 +81,7 @@ export interface SyncedTeslaDome {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'spore' | 'flame' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'gauss' | 'negev';
@@ -126,6 +126,16 @@ export interface ProjectileExplosionConfig {
   readonly trainDamageMult?: number;
   readonly color?: number;
   readonly visualStyle?: ExplosionVisualStyle;
+}
+
+export interface ImpactCloudConfig {
+  readonly radius: number;
+  readonly duration: number;
+  readonly damagePerTick: number;
+  readonly tickInterval: number;
+  readonly rockDamageMult?: number;
+  readonly trainDamageMult?: number;
+  readonly visualVariant?: 'stink' | 'spore';
 }
 
 export type HomingTargetType = 'players' | 'train' | 'projectiles';
@@ -298,6 +308,7 @@ export interface ProjectileSpawnConfig {
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName?:     string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
+  impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
   smokeTrailColor?: number;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
@@ -428,6 +439,7 @@ export interface SyncedStinkCloud {
   radius:     number;
   alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
   ownerColor: number; // Spielerfarbe für Fairness-Kreis
+  visualVariant?: 'stink' | 'spore';
 }
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
@@ -451,6 +463,7 @@ export interface TrackedProjectile {
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName:      string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
+  impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
   smokeTrailColor?: number;
   lockedTargetId?: string | null;
@@ -546,6 +559,7 @@ export interface RockNetState { id: number; hp: number; }
 
 export interface SyncedPlaceableRock {
   id: number;
+  kind: PlaceableKind;
   gridX: number;
   gridY: number;
   hp: number;
@@ -554,6 +568,7 @@ export interface SyncedPlaceableRock {
   ownerColor: number;
   expiresAt: number;
   warningStartsAt: number;
+  angle: number;
 }
 
 /** Konfiguration des Zug-Events – einmalig vom Host veröffentlicht (reliable) */

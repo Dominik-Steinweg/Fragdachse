@@ -12,7 +12,9 @@ import type {
   ChargedThrowUtilityActivationConfig,
   GaussUltimateConfig,
   NukeUtilityConfig,
+  PlaceableTurretUtilityConfig,
   PlaceableRockUtilityConfig,
+  PlaceableUtilityConfig,
   StinkCloudUtilityConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -78,7 +80,7 @@ export class LoadoutManager {
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
-  private placeableRockHandler: ((cfg: PlaceableRockUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
+  private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
@@ -224,8 +226,21 @@ export class LoadoutManager {
     this.actionBlockedChecker = checker;
   }
 
-  setPlaceableRockHandler(handler: ((cfg: PlaceableRockUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null): void {
+  setPlaceableRockHandler(handler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null): void {
     this.placeableRockHandler = handler;
+  }
+
+  fireAutomatedWeapon(
+    config: WeaponConfig,
+    x: number,
+    y: number,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    playerId: string,
+    playerColor: number,
+  ): boolean {
+    return this.dispatchWeaponFire(config, x, y, angle, targetX, targetY, playerId, playerColor);
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
@@ -753,8 +768,8 @@ export class LoadoutManager {
         break;
 
       case 'placement_mode':
-        if (cfg.type === 'placeable_rock') {
-          didUse = this.placeableRockHandler?.(cfg as PlaceableRockUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor) ?? false;
+        if (cfg.type === 'placeable_rock' || cfg.type === 'placeable_turret') {
+          didUse = this.placeableRockHandler?.(cfg as PlaceableUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor) ?? false;
         }
         break;
 
@@ -999,6 +1014,7 @@ export class LoadoutManager {
       adrenalinGain:   config.adrenalinGain,
       weaponName:      config.displayName,
       explosion:       fireConfig.impactExplosion,
+      impactCloud:     fireConfig.impactCloud,
       homing:          fireConfig.homing,
       projectileStyle: config.projectileStyle,
       bulletVisualPreset: config.bulletVisualPreset,

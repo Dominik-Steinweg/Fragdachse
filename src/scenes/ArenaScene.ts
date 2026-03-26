@@ -13,11 +13,12 @@ import { HostPhysicsSystem }   from '../systems/HostPhysicsSystem';
 import { CombatSystem }        from '../systems/CombatSystem';
 import { ResourceSystem }      from '../systems/ResourceSystem';
 import { TeslaDomeSystem }     from '../systems/TeslaDomeSystem';
+import { TurretSystem }        from '../systems/TurretSystem';
 import { BurrowSystem }        from '../systems/BurrowSystem';
 import { LoadoutManager }      from '../loadout/LoadoutManager';
 import type { LoadoutSelection } from '../loadout/LoadoutManager';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
-import type { PlaceableRockUtilityConfig, UtilityConfig, WeaponConfig }   from '../loadout/LoadoutConfig';
+import type { PlaceableRockUtilityConfig, PlaceableTurretUtilityConfig, PlaceableUtilityConfig, UtilityConfig, WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
@@ -30,6 +31,7 @@ import { GaussRenderer }       from '../effects/GaussRenderer';
 import { TeslaDomeRenderer }   from '../effects/TeslaDomeRenderer';
 import { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../effects/RocketRenderer';
+import { SporeRenderer }       from '../effects/SporeRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
 import { GrenadeRenderer }     from '../effects/GrenadeRenderer';
 import { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
@@ -85,6 +87,13 @@ import {
 } from '../utils/roomQuality';
 import { RoomQualityMonitor } from '../network/RoomQualityMonitor';
 
+interface TurretVisualState {
+  image: Phaser.GameObjects.Image;
+  rangeCircle: Phaser.GameObjects.Graphics;
+  hpBarBg: Phaser.GameObjects.Rectangle;
+  hpBarFg: Phaser.GameObjects.Rectangle;
+}
+
 
 export class ArenaScene extends Phaser.Scene {
   private playerManager!:     PlayerManager;
@@ -102,6 +111,7 @@ export class ArenaScene extends Phaser.Scene {
   private teslaDomeRenderer!: TeslaDomeRenderer;
   private holyGrenadeRenderer!: HolyGrenadeRenderer;
   private rocketRenderer!:    RocketRenderer;
+  private sporeRenderer!:     SporeRenderer;
   private grenadeRenderer!:   GrenadeRenderer;
   private muzzleFlashRenderer!: MuzzleFlashRenderer;
   private tracerRenderer!:    TracerRenderer;
@@ -125,6 +135,9 @@ export class ArenaScene extends Phaser.Scene {
   private localPlacementPreviewImage: Phaser.GameObjects.Image | null = null;
   private remotePlacementPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private placementErrorText: Phaser.GameObjects.Text | null = null;
+  private turretVisuals = new Map<number, TurretVisualState>();
+  private arenaClipMaskShape: Phaser.GameObjects.Graphics | null = null;
+  private arenaClipMask: Phaser.Display.Masks.GeometryMask | null = null;
 
   // Alive/Burrowed-Flags des lokalen Spielers (gesetzt in runHostUpdate/runClientUpdate)
   private localPlayerAlive    = false;
@@ -144,6 +157,7 @@ export class ArenaScene extends Phaser.Scene {
   private detonationSystem:  DetonationSystem  | null = null;
   private armageddonSystem:  ArmageddonSystem  | null = null;
   private teslaDomeSystem:   TeslaDomeSystem   | null = null;
+  private turretSystem:      TurretSystem      | null = null;
   private translocatorSystem: TranslocatorSystem | null = null;
 
   // ── Zug-Event ─────────────────────────────────────────────────────────────
@@ -240,6 +254,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── 1. Statische Arena (einmalig, nie zerstört) ────────────────────────
     const builder = new ArenaBuilder(this);
     builder.buildStatic();
+    this.ensureArenaClipMask();
 
     // ── 2. Spieler-System ─────────────────────────────────────────────────
     this.playerManager = new PlayerManager(this);
@@ -271,6 +286,9 @@ export class ArenaScene extends Phaser.Scene {
     this.rocketRenderer = new RocketRenderer(this);
     this.rocketRenderer.generateTextures();
     this.projectileManager.setRocketRenderer(this.rocketRenderer);
+    this.sporeRenderer = new SporeRenderer(this);
+    this.sporeRenderer.generateTextures();
+    this.projectileManager.setSporeRenderer(this.sporeRenderer);
     this.grenadeRenderer = new GrenadeRenderer(this);
     this.grenadeRenderer.generateTextures();
     this.projectileManager.setGrenadeRenderer(this.grenadeRenderer);
@@ -325,6 +343,7 @@ export class ArenaScene extends Phaser.Scene {
     this.smokeSystem = new SmokeSystem(this);
     this.fireSystem  = new FireSystem(this);
     this.stinkCloudSystem = new StinkCloudSystem(this);
+    this.ensureTurretTexture();
 
     // ── 6. Host-Physik (ohne rockGroup – wird nach Arena-Aufbau injiziert) ─
     this.hostPhysics = new HostPhysicsSystem(
@@ -374,7 +393,7 @@ export class ArenaScene extends Phaser.Scene {
       const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
       const awaitResult = slot === 'utility'
         && this.inputSystem.isUtilityPlacementActive()
-        && this.getLocalUtilityConfig().type === 'placeable_rock';
+        && this.getLocalUtilityConfig().activation.type === 'placement_mode';
       const loadoutPromise = bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, now, awaitResult);
       if (awaitResult) {
         void loadoutPromise.then((ok) => {
@@ -846,14 +865,20 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setArenaObstacles(this.arenaResult.rockObjects, this.arenaResult.trunkObjects);
 
     // Rock/Train-Damage-Callbacks für Hitscan/Melee-Objektschaden
-    this.combatSystem.setRockDamageCallback((rockIndex, damage) => {
-      if (!this.rockRegistry || !this.arenaResult) return;
-      const newHp = this.rockRegistry.applyDamage(rockIndex, damage);
-      this.updateRockVisualById(rockIndex, newHp);
+    this.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
+      const newHp = this.applyObstacleDamageById(rockIndex, damage, attackerId);
       if (newHp <= 0) this.handleDestroyedRock(rockIndex, 'damage');
     });
     this.combatSystem.setTrainDamageCallback((damage, attackerId) => {
       this.trainManager?.applyDamage(damage, attackerId);
+    });
+    this.combatSystem.setProjectileImpactCallback((projectileId, x, y) => {
+      const projectile = this.projectileManager.getProjectileById(projectileId);
+      if (!projectile) return;
+      this.spawnImpactCloudFromProjectile(projectile, x, y);
+    });
+    this.projectileManager.setProjectileImpactCallback((proj, x, y) => {
+      this.spawnImpactCloudFromProjectile(proj, x, y);
     });
     this.hostPhysics.setRockGroup(
       this.arenaResult.rockGroup,
@@ -867,9 +892,20 @@ export class ArenaScene extends Phaser.Scene {
         this.combatSystem,
         this.resourceSystem,
       );
+      this.turretSystem = new TurretSystem(
+        this.playerManager,
+        this.combatSystem,
+      );
       this.teslaDomeSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => {
         return this.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex);
       });
+      this.turretSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => {
+        return this.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex);
+      });
+      this.turretSystem.setTurretProvider(
+        () => this.placementSystem?.getAllRuntimeRocks() ?? [],
+        (id, angle) => this.placementSystem?.updateAngle(id, angle),
+      );
       this.teslaDomeSystem.setRockCallbacks(
         () => (this.arenaResult?.rockObjects ?? [])
           .flatMap((rock, index) => (rock && rock.active)
@@ -910,6 +946,11 @@ export class ArenaScene extends Phaser.Scene {
       this.loadoutManager.setPhysicsSystem(this.hostPhysics);
       this.loadoutManager.setTeslaDomeSystem(this.teslaDomeSystem);
       this.loadoutManager.setTranslocatorSystem(this.translocatorSystem);
+      this.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY) => {
+        const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
+        const weapon = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
+        this.loadoutManager?.fireAutomatedWeapon(weapon, x, y, angle, targetX, targetY, ownerId, color);
+      });
       this.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor) => {
         return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor);
       });
@@ -1012,10 +1053,9 @@ export class ArenaScene extends Phaser.Scene {
       this.rockRegistry = new RockRegistry(layout);
       const arenaResult  = this.arenaResult;
 
-      this.projectileManager.setRockHitCallback((rockId, damage) => {
-        if (!this.rockRegistry || !arenaResult) return;
-        const newHp = this.rockRegistry.applyDamage(rockId, damage);
-        this.updateRockVisualById(rockId, newHp);
+      this.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
+        if (!arenaResult) return;
+        const newHp = this.applyObstacleDamageById(rockId, damage, attackerId);
         if (newHp <= 0) this.handleDestroyedRock(rockId, 'damage');
       });
 
@@ -1149,6 +1189,9 @@ export class ArenaScene extends Phaser.Scene {
     this.localPlacementPreviewImage?.setVisible(false);
     this.placeableUtilityHint?.setVisible(false);
     this.placementErrorText?.setVisible(false);
+    for (const id of [...this.turretVisuals.keys()]) {
+      this.destroyTurretVisual(id);
+    }
     for (const preview of this.remotePlacementPreviewImages.values()) {
       preview.destroy();
     }
@@ -1164,6 +1207,7 @@ export class ArenaScene extends Phaser.Scene {
     this.powerUpSystem?.reset();
     this.powerUpSystem   = null;
     this.teslaDomeSystem = null;
+    this.turretSystem    = null;
     this.resourceSystem?.setPowerUpSystem(null);
     this.resourceSystem = null;
     this.burrowSystem   = null;
@@ -1185,10 +1229,14 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setTrainSegments(null);
     this.combatSystem.setRockDamageCallback(null);
     this.combatSystem.setTrainDamageCallback(null);
+    this.combatSystem.setProjectileImpactCallback(null);
     this.combatSystem.setKillCallback(() => { /* noop */ });
     this.hostPhysics.setBurrowSystem(null);
     this.hostPhysics.setLoadoutManager(null);
     this.projectileManager.setRockGroup(null, null, null);
+    this.projectileManager.setRockHitCallback(() => { /* noop */ });
+    this.projectileManager.setProjectileImpactCallback(null);
+    this.projectileManager.setBfgLaserCallback(null);
     this.hostPhysics.setRockGroup(null, null);
 
     this.powerUpRenderer?.clear();
@@ -1380,7 +1428,7 @@ export class ArenaScene extends Phaser.Scene {
     const y = ARENA_OFFSET_Y + 54;
     const panel = this.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, COLORS.BROWN_2, 0.9);
-    const title = this.add.text(0, -11, 'FELSBAU: ZIELMODUS', {
+    const title = this.add.text(0, -11, 'BAUMODUS', {
       fontFamily: 'monospace',
       fontSize: '22px',
       fontStyle: 'bold',
@@ -1416,9 +1464,9 @@ export class ArenaScene extends Phaser.Scene {
     const sprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     const cfg = this.getLocalUtilityConfig();
     if (!sprite || !this.placementSystem || !this.inputSystem.isUtilityPlacementActive()) return undefined;
-    if (cfg.type !== 'placeable_rock') return undefined;
+    if (cfg.activation.type !== 'placement_mode') return undefined;
     const pointer = this.input.activePointer;
-    return this.placementSystem.getPlacementPreview(cfg as PlaceableRockUtilityConfig, sprite.x, sprite.y, pointer.x, pointer.y);
+    return this.placementSystem.getPlacementPreview(cfg as PlaceableUtilityConfig, sprite.x, sprite.y, pointer.x, pointer.y);
   }
 
   private renderPlacementPreview(inArena: boolean, preview: UtilityPlacementPreviewState | undefined): void {
@@ -1437,13 +1485,15 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const ownerColor = bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0];
-    const image = this.ensurePlacementPreviewImage(undefined);
+    const image = this.ensurePlacementPreviewImage(undefined, preview.kind);
     image
       .setPosition(preview.targetX, preview.targetY)
-      .setFrame(preview.frame)
       .setTint(ownerColor)
-      .setAlpha(preview.isValid ? UTILITY_CONFIGS.FELSBAU.placeable.previewAlpha : 0.25)
+      .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
       .setVisible(true);
+    if (preview.kind === 'rock') {
+      image.setFrame(preview.frame);
+    }
 
     this.placementRangeGraphics?.lineStyle(2, ownerColor, 0.5);
     this.placementRangeGraphics?.strokeCircle(localPlayer.sprite.x, localPlayer.sprite.y, preview.range);
@@ -1471,16 +1521,18 @@ export class ArenaScene extends Phaser.Scene {
     for (const playerId of bridge.getConnectedPlayerIds()) {
       if (playerId === bridge.getLocalPlayerId()) continue;
       const preview = bridge.getPlayerInput(playerId)?.placementPreview as PlacementPreviewNetState | undefined;
-      if (!preview?.active || preview.kind !== 'rock') continue;
+      if (!preview?.active) continue;
       activeIds.add(playerId);
-      const image = this.ensurePlacementPreviewImage(playerId);
+      const image = this.ensurePlacementPreviewImage(playerId, preview.kind);
       const ownerColor = bridge.getPlayerColor(playerId) ?? COLORS.GREY_3;
       image
         .setPosition(preview.x, preview.y)
-        .setFrame(preview.frame)
         .setTint(ownerColor)
         .setAlpha(preview.isValid ? 0.38 : 0.18)
         .setVisible(true);
+      if (preview.kind === 'rock') {
+        image.setFrame(preview.frame);
+      }
     }
 
     for (const [playerId, image] of this.remotePlacementPreviewImages) {
@@ -1489,25 +1541,87 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private ensurePlacementPreviewImage(playerId?: string): Phaser.GameObjects.Image {
+  private ensurePlacementPreviewImage(playerId: string | undefined, kind: PlacementPreviewNetState['kind']): Phaser.GameObjects.Image {
+    const texture = this.getPlaceableTextureKey(kind);
     if (playerId === undefined) {
       if (!this.localPlacementPreviewImage) {
-        this.localPlacementPreviewImage = this.add.image(0, 0, 'rocks', 0)
+        this.localPlacementPreviewImage = this.add.image(0, 0, texture, 0)
           .setDisplaySize(CELL_SIZE, CELL_SIZE)
           .setDepth(DEPTH.OVERLAY - 2)
           .setVisible(false);
       }
+      this.localPlacementPreviewImage.setTexture(texture, 0);
       return this.localPlacementPreviewImage;
     }
 
     const existing = this.remotePlacementPreviewImages.get(playerId);
-    if (existing) return existing;
-    const created = this.add.image(0, 0, 'rocks', 0)
+    if (existing) {
+      existing.setTexture(texture, 0);
+      return existing;
+    }
+    const created = this.add.image(0, 0, texture, 0)
       .setDisplaySize(CELL_SIZE, CELL_SIZE)
       .setDepth(DEPTH.OVERLAY - 3)
       .setVisible(false);
     this.remotePlacementPreviewImages.set(playerId, created);
+    created.setTexture(texture, 0);
     return created;
+  }
+
+  private getPlacementPreviewAlpha(kind: PlacementPreviewNetState['kind']): number {
+    return kind === 'turret'
+      ? UTILITY_CONFIGS.FLIEGENPILZ.placeable.previewAlpha
+      : UTILITY_CONFIGS.FELSBAU.placeable.previewAlpha;
+  }
+
+  private getPlaceableTextureKey(kind: PlacementPreviewNetState['kind']): string {
+    return kind === 'turret' ? 'placeable_turret' : 'rocks';
+  }
+
+  private ensureTurretTexture(): void {
+    if (!this.textures.exists('placeable_turret')) {
+      const graphics = this.make.graphics({ x: 0, y: 0 });
+      graphics.clear();
+      graphics.fillStyle(0x000000, 0.18);
+      graphics.fillEllipse(16, 18, 20, 12);
+      graphics.fillStyle(0x78161e, 1);
+      graphics.fillCircle(16, 14, 10.5);
+      graphics.fillStyle(0xa91e24, 1);
+      graphics.fillCircle(16, 13, 9.5);
+      graphics.fillStyle(0xcf3135, 1);
+      graphics.fillCircle(16, 12, 8.4);
+      graphics.fillStyle(0xf4f0e6, 1);
+      graphics.fillCircle(11.5, 9.8, 1.9);
+      graphics.fillCircle(16.2, 8.4, 1.5);
+      graphics.fillCircle(20.3, 10.8, 1.8);
+      graphics.fillCircle(12.8, 14.2, 1.6);
+      graphics.fillCircle(19.4, 15.2, 1.3);
+      graphics.fillStyle(0xe6dcc1, 1);
+      graphics.fillEllipse(16, 18.6, 7.5, 5.5);
+      graphics.lineStyle(1.2, 0x4a1014, 0.7);
+      graphics.strokeCircle(16, 13.4, 9.8);
+      graphics.generateTexture('placeable_turret', 32, 32);
+      graphics.destroy();
+    }
+
+    if (!this.textures.exists('placeable_turret_proxy')) {
+      const graphics = this.make.graphics({ x: 0, y: 0 });
+      graphics.clear();
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillRect(0, 0, 32, 32);
+      graphics.generateTexture('placeable_turret_proxy', 32, 32);
+      graphics.destroy();
+    }
+  }
+
+  private ensureArenaClipMask(): void {
+    if (this.arenaClipMaskShape && this.arenaClipMask) return;
+    const maskShape = this.add.graphics();
+    maskShape.fillStyle(0xffffff, 1);
+    maskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+    maskShape.setVisible(false);
+    this.arenaClipMaskShape = maskShape;
+    this.arenaClipMask = maskShape.createGeometryMask();
   }
 
   private showPlacementError(message: string): void {
@@ -1526,7 +1640,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private placePlaceableRock(
-    cfg: PlaceableRockUtilityConfig,
+    cfg: PlaceableUtilityConfig,
     playerId: string,
     originX: number,
     originY: number,
@@ -1537,7 +1651,6 @@ export class ArenaScene extends Phaser.Scene {
   ): boolean {
     const rock = this.placementSystem?.tryPlaceRock(cfg, playerId, playerColor, originX, originY, targetX, targetY, now);
     if (!rock) return false;
-    this.rockRegistry?.register(rock.id, rock.maxHp);
     this.materializePlaceableRock(rock, true);
     return true;
   }
@@ -1546,7 +1659,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.arenaResult || !this.currentLayout) return;
     this.ensureRuntimeRockSlot(rock);
 
-    if (!this.arenaResult.rockObjects[rock.id]?.active) {
+    if (!this.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'rock') {
       ArenaBuilder.spawnRockAndRetile(
         this,
         this.arenaResult.rockObjects,
@@ -1559,15 +1672,34 @@ export class ArenaScene extends Phaser.Scene {
         rock.hp,
         rock.maxHp,
       );
+    } else if (!this.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'turret') {
+      const world = this.gridToWorld(rock.gridX, rock.gridY);
+      const proxy = this.add.image(world.x, world.y, 'placeable_turret_proxy')
+        .setDisplaySize(CELL_SIZE, CELL_SIZE)
+        .setDepth(DEPTH.ROCKS)
+        .setVisible(false)
+        .setActive(true);
+      this.arenaResult.rockObjects[rock.id] = proxy;
+      this.arenaResult.rockGroup.add(proxy);
+      (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      this.arenaResult.rockGroup.refresh();
+      this.createOrUpdateTurretVisual(rock);
+    } else if (rock.kind === 'turret') {
+      this.createOrUpdateTurretVisual(rock);
     }
 
     this.updateRockVisualById(rock.id, rock.hp);
 
     if (playSpawnFx) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
-      this.playRockDustBurst(world.x, world.y, rock.ownerColor);
+      if (rock.kind === 'turret') {
+        this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
+      } else {
+        this.playRockDustBurst(world.x, world.y, rock.ownerColor);
+      }
       if (rock.ownerId === bridge.getLocalPlayerId()) {
-        this.cameras.main.shake(UTILITY_CONFIGS.FELSBAU.placeable.spawnShakeDuration, UTILITY_CONFIGS.FELSBAU.placeable.spawnShakeIntensity);
+        const shakeCfg = rock.kind === 'turret' ? UTILITY_CONFIGS.FLIEGENPILZ.placeable : UTILITY_CONFIGS.FELSBAU.placeable;
+        this.cameras.main.shake(shakeCfg.spawnShakeDuration, shakeCfg.spawnShakeIntensity);
       }
     }
   }
@@ -1576,7 +1708,17 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.arenaResult || !this.currentLayout) return;
     if (playDust) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
-      this.playRockDustBurst(world.x, world.y, rock.ownerColor);
+      if (rock.kind === 'turret') {
+        this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
+      } else {
+        this.playRockDustBurst(world.x, world.y, rock.ownerColor);
+      }
+    }
+    if (rock.kind === 'turret') {
+      ArenaBuilder.destroyRock(this.arenaResult.rockObjects, this.arenaResult.rockGroup, rock.id);
+      this.arenaResult.rockGrid.remove(rock.gridX, rock.gridY);
+      this.destroyTurretVisual(rock.id);
+      return;
     }
     ArenaBuilder.destroyRockAndRetile(
       this.arenaResult.rockObjects,
@@ -1598,6 +1740,10 @@ export class ArenaScene extends Phaser.Scene {
   private updateRockVisualById(rockId: number, hp: number): void {
     if (!this.arenaResult || !this.currentLayout) return;
     const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
+    if (runtimeRock?.kind === 'turret') {
+      this.createOrUpdateTurretVisual({ ...runtimeRock, hp });
+      return;
+    }
     ArenaBuilder.updateRockVisual(
       this.arenaResult.rockObjects,
       this.arenaResult.rockGroup,
@@ -1614,15 +1760,119 @@ export class ArenaScene extends Phaser.Scene {
   private handleDestroyedRock(rockId: number, reason: 'damage' | 'decay'): void {
     const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock) {
-      this.placementSystem?.removeRock(rockId);
-      this.rockRegistry?.remove(rockId);
-      if (reason === 'decay') {
-        this.removePlaceableRockVisual(runtimeRock, true);
+      if (runtimeRock.kind === 'turret') {
+        this.spawnTurretDeathCloud(runtimeRock);
       }
+      this.placementSystem?.removeRock(rockId);
+      this.removePlaceableRockVisual(runtimeRock, true);
       return;
     }
 
     this.powerUpSystem?.onRockDestroyed(rockId);
+  }
+
+  private applyObstacleDamageById(rockId: number, damage: number, attackerId: string): number {
+    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
+    if (runtimeRock) {
+      if (runtimeRock.kind === 'turret' && runtimeRock.ownerId === attackerId) {
+        return runtimeRock.hp;
+      }
+      const updated = this.placementSystem?.applyDamage(rockId, damage);
+      const hp = updated?.hp ?? 0;
+      this.updateRockVisualById(rockId, hp);
+      return hp;
+    }
+
+    if (!this.rockRegistry) return 0;
+    const newHp = this.rockRegistry.applyDamage(rockId, damage);
+    this.updateRockVisualById(rockId, newHp);
+    return newHp;
+  }
+
+  private spawnImpactCloudFromProjectile(proj: import('../types').TrackedProjectile, x: number, y: number): void {
+    if (!proj.impactCloud) return;
+    const ownerColor = proj.ownerColor ?? bridge.getPlayerColor(proj.ownerId) ?? proj.color;
+    this.stinkCloudSystem.hostCreateStationaryCloud(
+      proj.ownerId,
+      ownerColor,
+      x,
+      y,
+      proj.impactCloud.radius,
+      proj.impactCloud.duration,
+      proj.impactCloud.damagePerTick,
+      proj.impactCloud.tickInterval,
+      proj.impactCloud.rockDamageMult ?? 1,
+      proj.impactCloud.trainDamageMult ?? 1,
+    );
+  }
+
+  private spawnTurretDeathCloud(rock: SyncedPlaceableRock): void {
+    if (rock.kind !== 'turret') return;
+    const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
+    const weaponCfg = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
+    if (weaponCfg.fire.type !== 'projectile' || !weaponCfg.fire.impactCloud) return;
+
+    const world = this.gridToWorld(rock.gridX, rock.gridY);
+    const cloud = weaponCfg.fire.impactCloud;
+    this.stinkCloudSystem.hostCreateStationaryCloud(
+      rock.ownerId,
+      rock.ownerColor,
+      world.x,
+      world.y,
+      turretCfg.placeable.deathCloudRadius,
+      cloud.duration,
+      cloud.damagePerTick,
+      cloud.tickInterval,
+      cloud.rockDamageMult ?? 1,
+      cloud.trainDamageMult ?? 1,
+    );
+  }
+
+  private createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {
+    const world = this.gridToWorld(rock.gridX, rock.gridY);
+    let visual = this.turretVisuals.get(rock.id);
+    if (!visual) {
+      const image = this.add.image(world.x, world.y, 'placeable_turret')
+        .setDisplaySize(CELL_SIZE, CELL_SIZE)
+        .setDepth(DEPTH.ROCKS + 0.2);
+      image.preFX?.addGlow(rock.ownerColor, 5, 0, false, 0.12, 10);
+
+      const rangeCircle = this.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
+      if (this.arenaClipMask) {
+        rangeCircle.setMask(this.arenaClipMask);
+      }
+      const hpBarBg = this.add.rectangle(world.x, world.y + 22, 24, 4, 0x333333)
+        .setDepth(DEPTH.ROCKS + 0.35);
+      const hpBarFg = this.add.rectangle(world.x - 12, world.y + 22, 24, 4, 0x00cc44)
+        .setOrigin(0, 0.5)
+        .setDepth(DEPTH.ROCKS + 0.4);
+
+      visual = { image, rangeCircle, hpBarBg, hpBarFg };
+      this.turretVisuals.set(rock.id, visual);
+    }
+
+    const ratio = Phaser.Math.Clamp(rock.hp / Math.max(1, rock.maxHp), 0, 1);
+    visual.image.setPosition(world.x, world.y).setRotation(rock.angle);
+    visual.rangeCircle.clear();
+    visual.rangeCircle.lineStyle(1.4, rock.ownerColor, 0.48);
+    visual.rangeCircle.strokeCircle(world.x, world.y, UTILITY_CONFIGS.FLIEGENPILZ.placeable.targetRange);
+
+    visual.hpBarBg.setPosition(world.x, world.y + 22).setVisible(ratio < 1);
+    visual.hpBarFg
+      .setPosition(world.x - 12, world.y + 22)
+      .setSize(24 * ratio, 4)
+      .setFillStyle(ratio > 0.5 ? 0x00cc44 : ratio > 0.25 ? 0xffcc00 : 0xff3300)
+      .setVisible(ratio < 1);
+  }
+
+  private destroyTurretVisual(id: number): void {
+    const visual = this.turretVisuals.get(id);
+    if (!visual) return;
+    visual.image.destroy();
+    visual.rangeCircle.destroy();
+    visual.hpBarBg.destroy();
+    visual.hpBarFg.destroy();
+    this.turretVisuals.delete(id);
   }
 
   private playRockDustBurst(x: number, y: number, ownerColor: number): void {
@@ -1646,6 +1896,29 @@ export class ArenaScene extends Phaser.Scene {
     }, DEPTH.ROCKS + 1);
     emitter.explode(18);
     this.time.delayedCall(650, () => destroyEmitter(emitter));
+  }
+
+  private playTurretSpawnBurst(x: number, y: number, ownerColor: number): void {
+    fillRadialGradientTexture(this.textures, 'turret_spore_particle', 20, [
+      [0, '#fff6b8'],
+      [0.45, '#e3d86b'],
+      [0.8, '#9e5b2d'],
+      [1, 'rgba(0,0,0,0)'],
+    ]);
+
+    const emitter = createEmitter(this, x, y, 'turret_spore_particle', {
+      lifespan: { min: 260, max: 620 },
+      speedX: { min: -55, max: 55 },
+      speedY: { min: -65, max: 20 },
+      quantity: 12,
+      scale: { start: 0.38, end: 0.05 },
+      alpha: { start: 0.55, end: 0 },
+      tint: [ownerColor, 0xe6da7a, 0xf5edd0],
+      emitting: false,
+      blendMode: Phaser.BlendModes.ADD,
+    }, DEPTH.ROCKS + 1);
+    emitter.explode(14);
+    this.time.delayedCall(700, () => destroyEmitter(emitter));
   }
 
   private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
@@ -1701,18 +1974,15 @@ export class ArenaScene extends Phaser.Scene {
     const arenaResult = this.arenaResult;
 
     // Felsschaden
-    if (rockMult !== 0 && arenaResult && this.rockRegistry) {
+    if (rockMult !== 0 && arenaResult) {
       const rockObjects = arenaResult.rockObjects;
       for (let i = 0; i < rockObjects.length; i++) {
         const rock = rockObjects[i];
         if (!rock?.active) continue;
         const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
         if (dist > radius) continue;
-        const newHp = this.rockRegistry.applyDamage(i, damage * rockMult);
-        ArenaBuilder.updateRockVisual(rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
-        if (newHp <= 0) {
-          this.powerUpSystem?.onRockDestroyed(i);
-        }
+        const newHp = this.applyObstacleDamageById(i, damage * rockMult, attackerId);
+        if (newHp <= 0) this.handleDestroyedRock(i, 'damage');
       }
     }
 
@@ -1744,7 +2014,7 @@ export class ArenaScene extends Phaser.Scene {
     const rockMult = effect.rockDamageMult ?? 1;
     const trainMult = effect.trainDamageMult ?? 1;
 
-    if (rockMult !== 0 && arenaResult && this.rockRegistry) {
+    if (rockMult !== 0 && arenaResult) {
       const rockObjects = arenaResult.rockObjects;
       for (let i = 0; i < rockObjects.length; i++) {
         const rock = rockObjects[i];
@@ -1754,11 +2024,8 @@ export class ArenaScene extends Phaser.Scene {
         const t = Phaser.Math.Clamp(dist / effect.radius, 0, 1);
         const damage = Math.round(Phaser.Math.Linear(effect.maxDamage, effect.minDamage, t) * rockMult);
         if (damage <= 0) continue;
-        const newHp = this.rockRegistry.applyDamage(i, damage);
-        ArenaBuilder.updateRockVisual(rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
-        if (newHp <= 0) {
-          this.powerUpSystem?.onRockDestroyed(i);
-        }
+        const newHp = this.applyObstacleDamageById(i, damage, attackerId);
+        if (newHp <= 0) this.handleDestroyedRock(i, 'damage');
       }
     }
 
@@ -1811,18 +2078,15 @@ export class ArenaScene extends Phaser.Scene {
 
     // Felsen-Laser (skipRockIndex um zu verhindern dass der Zielfels seine eigene LoS blockiert)
     const arenaResult = this.arenaResult;
-    if (arenaResult && this.rockRegistry) {
+    if (arenaResult) {
       for (let i = 0; i < arenaResult.rockObjects.length; i++) {
         const rock = arenaResult.rockObjects[i];
         if (!rock?.active) continue;
         const dist = Phaser.Math.Distance.Between(px, py, rock.x, rock.y);
         if (dist > radius) continue;
         if (!this.combatSystem.hasLineOfSight(px, py, rock.x, rock.y, i)) continue;
-        const newHp = this.rockRegistry.applyDamage(i, damage);
-        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
-        if (newHp <= 0) {
-          this.powerUpSystem?.onRockDestroyed(i);
-        }
+        const newHp = this.applyObstacleDamageById(i, damage, proj.ownerId);
+        if (newHp <= 0) this.handleDestroyedRock(i, 'damage');
         laserLines.push({ sx: px, sy: py, ex: rock.x, ey: rock.y });
       }
     }
@@ -1847,20 +2111,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private applyTeslaRockDamage(index: number, damage: number, ownerId: string): void {
-    if (!this.rockRegistry || !this.arenaResult || !this.currentLayout) return;
-    const newHp = this.rockRegistry.applyDamage(index, damage);
-    ArenaBuilder.updateRockVisual(
-      this.arenaResult.rockObjects,
-      this.arenaResult.rockGroup,
-      this.arenaResult.rockGrid,
-      this.currentLayout.rocks,
-      index,
-      newHp,
-    );
-    if (newHp <= 0) {
-      this.powerUpSystem?.onRockDestroyed(index);
-    }
-    void ownerId;
+    if (!this.arenaResult || !this.currentLayout) return;
+    const newHp = this.applyObstacleDamageById(index, damage, ownerId);
+    if (newHp <= 0) this.handleDestroyedRock(index, 'damage');
   }
 
   private applyNukeEnvironmentDamage(
@@ -1874,7 +2127,7 @@ export class ArenaScene extends Phaser.Scene {
     const trainMult: number = NUKE_CONFIG.trainDamageMult;
 
     // Felsschaden mit Distanz-Falloff
-    if (rockMult !== 0 && arenaResult && this.rockRegistry) {
+    if (rockMult !== 0 && arenaResult) {
       for (let i = 0; i < arenaResult.rockObjects.length; i++) {
         const rock = arenaResult.rockObjects[i];
         if (!rock?.active) continue;
@@ -1882,11 +2135,8 @@ export class ArenaScene extends Phaser.Scene {
         if (dist > radius) continue;
         const t = Phaser.Math.Clamp(dist / radius, 0, 1);
         const baseDmg = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, t);
-        const newHp = this.rockRegistry.applyDamage(i, Math.round(baseDmg * rockMult));
-        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, i, newHp);
-        if (newHp <= 0) {
-          this.powerUpSystem?.onRockDestroyed(i);
-        }
+        const newHp = this.applyObstacleDamageById(i, Math.round(baseDmg * rockMult), triggeredBy);
+        if (newHp <= 0) this.handleDestroyedRock(i, 'damage');
       }
     }
 
@@ -2034,6 +2284,11 @@ export class ArenaScene extends Phaser.Scene {
             color: profile?.colorHex ?? 0xffffff,
           };
         });
+    if (!countdownActive) {
+      const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
+      const turretWeapon = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
+      this.turretSystem?.hostUpdate(Date.now(), turretCfg, turretWeapon);
+    }
     const teslaDomes = countdownActive ? [] : (this.teslaDomeSystem?.hostUpdate(Date.now()) ?? []);
     this.teslaDomeRenderer.syncVisuals(teslaDomes);
 
@@ -2188,8 +2443,10 @@ export class ArenaScene extends Phaser.Scene {
 
     const now = Date.now();
     for (const expiredRock of this.placementSystem?.update(now) ?? []) {
+      if (expiredRock.kind === 'turret') {
+        this.spawnTurretDeathCloud(expiredRock);
+      }
       this.removePlaceableRockVisual(expiredRock, true);
-      this.rockRegistry?.remove(expiredRock.id);
     }
 
     const players: Record<string, PlayerNetState> = {};

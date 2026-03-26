@@ -10,6 +10,7 @@ import type { GrenadeRenderer } from '../effects/GrenadeRenderer';
 import type { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import type { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
 import type { RocketRenderer }  from '../effects/RocketRenderer';
+import type { SporeRenderer }  from '../effects/SporeRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
 /** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
@@ -81,6 +82,9 @@ export class ProjectileManager {
   // ── Rocket-Renderer (Raketenkörper + Rauchspur) ────────────────────────
   private rocketRenderer: RocketRenderer | null = null;
 
+  // ── Spore-Renderer (organische Cluster + toxische Spur) ────────────────
+  private sporeRenderer: SporeRenderer | null = null;
+
   // ── Translocator-Puck-Renderer ──────────────────────────────────────────
   private translocatorPuckRenderer: import('../effects/TranslocatorPuckRenderer').TranslocatorPuckRenderer | null = null;
 
@@ -101,12 +105,13 @@ export class ProjectileManager {
 
   // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
   private pendingProjectileExplosions: ExplodedProjectile[] = [];
+  private projectileImpactCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private rockObjects: (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
-  private onRockHit:   ((rockId: number, damage: number) => void) | null = null;
+  private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
 
   // ── Zug-Kollision ─────────────────────────────────────────────────────────
   private trainGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -136,7 +141,7 @@ export class ProjectileManager {
    * Registriert einen Callback, der bei jedem Projektil-Felsen-Treffer (Host)
    * aufgerufen wird. Gibt den Index in layout.rocks[] weiter.
    */
-  setRockHitCallback(cb: (rockId: number, damage: number) => void): void {
+  setRockHitCallback(cb: (rockId: number, damage: number, attackerId: string) => void): void {
     this.onRockHit = cb;
   }
 
@@ -202,6 +207,11 @@ export class ProjectileManager {
     this.rocketRenderer = renderer;
   }
 
+  /** Injiziert den SporeRenderer fuer Sporen-Projektile. */
+  setSporeRenderer(renderer: SporeRenderer | null): void {
+    this.sporeRenderer = renderer;
+  }
+
   /** Injiziert den TranslocatorPuckRenderer. */
   setTranslocatorPuckRenderer(renderer: import('../effects/TranslocatorPuckRenderer').TranslocatorPuckRenderer | null): void {
     this.translocatorPuckRenderer = renderer;
@@ -224,6 +234,10 @@ export class ProjectileManager {
   /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
   setBfgLaserCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
     this.bfgLaserCallback = cb;
+  }
+
+  setProjectileImpactCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
+    this.projectileImpactCallback = cb;
   }
 
   /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
@@ -254,6 +268,7 @@ export class ProjectileManager {
 
     const isBall   = cfg.projectileStyle === 'ball';
     const isEnergyBall = cfg.projectileStyle === 'energy_ball';
+    const isSpore = cfg.projectileStyle === 'spore';
     const isBullet = cfg.projectileStyle === 'bullet';
     const isFlame  = cfg.projectileStyle === 'flame';
     const isBfg    = cfg.projectileStyle === 'bfg';
@@ -265,7 +280,7 @@ export class ProjectileManager {
     const isTranslocatorPuck = cfg.projectileStyle === 'translocator_puck';
 
     // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
-    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall)
+    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isSpore)
       ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
       : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
     sprite.setDepth(DEPTH.PROJECTILES);
@@ -315,6 +330,12 @@ export class ProjectileManager {
         cfg.ownerColor ?? cfg.color,
         cfg.smokeTrailColor ?? cfg.color,
       );
+    }
+
+    if (isSpore && this.sporeRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.sporeRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
     if (isEnergyBall && this.energyBallRenderer) {
@@ -392,6 +413,7 @@ export class ProjectileManager {
       adrenalinGain:  cfg.adrenalinGain,
       weaponName:     cfg.weaponName ?? 'Waffe',
       explosion:      cfg.explosion,
+      impactCloud:    cfg.impactCloud,
       homing:         cfg.homing,
       smokeTrailColor: cfg.smokeTrailColor,
       lockedTargetId: null,
@@ -468,7 +490,7 @@ export class ProjectileManager {
           if (idx !== -1 && hitSet && !hitSet.has(idx)) {
             hitSet.add(idx);
             const rockMult = tracked.rockDamageMult ?? 1;
-            onHit(idx, tracked.damage * rockMult);
+            onHit(idx, tracked.damage * rockMult, tracked.ownerId);
           }
         });
         tracked.colliders.push(c);
@@ -491,6 +513,44 @@ export class ProjectileManager {
       // BfgRenderer-Visual erstellen (Host rendert ebenfalls)
       if (isBfg && this.bfgRenderer) {
         this.bfgRenderer.createVisual(id, x, y, cfg.size);
+      }
+    } else if (cfg.impactCloud && cfg.maxBounces === 0) {
+      body.setCollideWorldBounds(true);
+      body.onWorldBounds = true;
+      body.setBounce(0, 0);
+      const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
+        if (hitBody !== body) return;
+        this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
+        this.queueDestroyProjectile(tracked);
+      };
+      tracked.boundsListener = boundsListener;
+      this.scene.physics.world.on('worldbounds', boundsListener);
+
+      if (this.rockGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
+          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
+          this.queueDestroyProjectile(tracked);
+        });
+        tracked.colliders.push(c);
+      }
+      if (this.trunkGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
+          this.queueDestroyProjectile(tracked);
+        });
+        tracked.colliders.push(c);
+      }
+      if (this.trainGroup) {
+        const onTrainHit = this.onTrainHit;
+        const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+          const trainMult = tracked.trainDamageMult ?? 1;
+          if (trainMult !== 0 && tracked.damage > 0) {
+            onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+          }
+          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
+          this.queueDestroyProjectile(tracked);
+        });
+        tracked.colliders.push(c);
       }
     } else if (cfg.explosion && cfg.maxBounces === 0) {
       body.setCollideWorldBounds(true);
@@ -716,7 +776,7 @@ export class ProjectileManager {
         const rockMult = tracked.rockDamageMult ?? 1;
         if (rockMult === 0) return;
         const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Image);
-        if (idx !== -1) onHit(idx, tracked.damage * rockMult);
+        if (idx !== -1) onHit(idx, tracked.damage * rockMult, tracked.ownerId);
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
           body.setVelocity(0, 0);
@@ -832,10 +892,14 @@ export class ProjectileManager {
     if (proj.projectileStyle === 'energy_ball') {
       this.energyBallRenderer?.playImpact(proj.sprite.x, proj.sprite.y, proj.color, proj.energyBallVariant, proj.sprite.displayWidth / 16);
     }
+    if (proj.projectileStyle === 'spore') {
+      this.sporeRenderer?.playImpact(proj.sprite.x, proj.sprite.y, proj.color, Math.max(proj.sprite.displayWidth / 16, 0.9));
+    }
     this.energyBallRenderer?.destroyVisual(proj.id);
     this.grenadeRenderer?.destroyVisual(proj.id);
     this.holyGrenadeRenderer?.destroyVisual(proj.id);
     this.rocketRenderer?.destroyVisual(proj.id);
+    this.sporeRenderer?.destroyVisual(proj.id);
     this.translocatorPuckRenderer?.destroyVisual(proj.id);
   }
 
@@ -849,6 +913,10 @@ export class ProjectileManager {
       effect: proj.explosion,
     });
     this.queueDestroyProjectile(proj);
+  }
+
+  private emitProjectileImpact(proj: TrackedProjectile, x: number, y: number): void {
+    this.projectileImpactCallback?.(proj, x, y);
   }
 
   private updateHomingProjectile(proj: TrackedProjectile, now: number): void {
@@ -992,6 +1060,7 @@ export class ProjectileManager {
     this.grenadeRenderer?.destroyAll();
     this.holyGrenadeRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
+    this.sporeRenderer?.destroyAll();
     this.translocatorPuckRenderer?.destroyAll();
     this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
@@ -1074,6 +1143,12 @@ export class ProjectileManager {
             ownerId: proj.ownerId,
             effect: proj.explosion,
           });
+          this.destroyTrackedProjectile(proj);
+          return false;
+        }
+
+        if (age > proj.lifetime && proj.impactCloud) {
+          this.emitProjectileImpact(proj, proj.sprite.x, proj.sprite.y);
           this.destroyTrackedProjectile(proj);
           return false;
         }
@@ -1288,6 +1363,32 @@ export class ProjectileManager {
       }
     }
 
+    const sporeR = this.sporeRenderer;
+    if (sporeR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'spore') {
+          if (!sporeR.has(proj.id)) {
+            sporeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          }
+          sporeR.updateVisual(
+            proj.id,
+            proj.sprite.x,
+            proj.sprite.y,
+            proj.sprite.displayWidth,
+            proj.body.velocity.x,
+            proj.body.velocity.y,
+            proj.color,
+          );
+        }
+      }
+      const activeSporeIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'spore').map(p => p.id),
+      );
+      for (const id of sporeR.getActiveIds()) {
+        if (!activeSporeIds.has(id)) sporeR.destroyVisual(id);
+      }
+    }
+
     const grenadeR = this.grenadeRenderer;
     if (grenadeR) {
       for (const proj of this.projectiles) {
@@ -1376,6 +1477,7 @@ export class ProjectileManager {
     const renderer  = this.bulletRenderer;
     const flames    = this.flameRenderer;
     const rockets   = this.rocketRenderer;
+    const spores = this.sporeRenderer;
     const energyBalls = this.energyBallRenderer;
     const grenades = this.grenadeRenderer;
     const holyGrenades = this.holyGrenadeRenderer;
@@ -1409,6 +1511,18 @@ export class ProjectileManager {
       for (const id of rockets.getActiveIds()) {
         if (!activeIds.has(id)) {
           rockets.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (spores) {
+      for (const id of spores.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          const state = this.clientProjStates.get(id);
+          if (state?.style === 'spore') {
+            spores.playImpact(state.serverX, state.serverY, state.color, Math.max(state.size / 16, 0.9));
+          }
+          spores.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -1470,6 +1584,7 @@ export class ProjectileManager {
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
       const isEnergyBallP = proj.style === 'energy_ball';
+      const isSporeP = proj.style === 'spore';
       const isBfgP   = proj.style === 'bfg';
       const isHolyGrenadeP = proj.style === 'holy_grenade';
       const isAwpP   = proj.style === 'awp';
@@ -1541,6 +1656,11 @@ export class ProjectileManager {
           energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.energyBallVariant);
         }
         energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color, proj.energyBallVariant);
+      } else if (isSporeP && spores) {
+        if (!spores.has(proj.id)) {
+          spores.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+        }
+        spores.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
       } else if (isGrenadeP && grenades) {
         if (!grenades.has(proj.id)) {
           grenades.createVisual(proj.id, proj.x, proj.y, proj.size, proj.grenadeVisualPreset ?? 'he', proj.ownerColor ?? proj.color);
@@ -1652,6 +1772,8 @@ export class ProjectileManager {
         this.holyGrenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {
         this.energyBallRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color, state.energyBallVariant);
+      } else if (state.style === 'spore' && this.sporeRenderer?.has(id)) {
+        this.sporeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color);
       } else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) {
         this.translocatorPuckRenderer.updateVisual(id, ex, ey, state.ownerColor ?? state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {

@@ -72,8 +72,9 @@ export class CombatSystem {
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
 
   // Callbacks für Objekt-Schaden (gesetzt von ArenaScene)
-  private onRockDamage:  ((rockIndex: number, damage: number) => void) | null = null;
+  private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
+  private onProjectileImpact: ((projectileId: number, x: number, y: number) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -101,12 +102,16 @@ export class CombatSystem {
     this.trainSegObjects = segments;
   }
 
-  setRockDamageCallback(cb: ((rockIndex: number, damage: number) => void) | null): void {
+  setRockDamageCallback(cb: ((rockIndex: number, damage: number, attackerId: string) => void) | null): void {
     this.onRockDamage = cb;
   }
 
   setTrainDamageCallback(cb: ((damage: number, attackerId: string) => void) | null): void {
     this.onTrainDamage = cb;
+  }
+
+  setProjectileImpactCallback(cb: ((projectileId: number, x: number, y: number) => void) | null): void {
+    this.onProjectileImpact = cb;
   }
 
   /** Setzt den Kill-Callback (Host-only). */
@@ -374,7 +379,7 @@ export class CombatSystem {
         }
       }
       if (bestRockIdx >= 0) {
-        this.onRockDamage(bestRockIdx, damage * rockMult);
+        this.onRockDamage(bestRockIdx, damage * rockMult, shooterId);
         return; // Fels blockiert – kein Zug dahinter
       }
     }
@@ -479,7 +484,7 @@ export class CombatSystem {
         while (ad >  Math.PI) ad -= 2 * Math.PI;
         while (ad < -Math.PI) ad += 2 * Math.PI;
         if (Math.abs(ad) > halfArcRad) continue;
-        this.onRockDamage(i, damage * rockMult);
+        this.onRockDamage(i, damage * rockMult, shooterId);
       }
     }
 
@@ -784,6 +789,9 @@ export class CombatSystem {
     weaponName:    string,
   ): void {
     const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    if (projectile?.impactCloud) {
+      this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
+    }
     if (projectile?.explosion) {
       this.projectileManager.triggerProjectileExplosion(projectileId);
     } else {

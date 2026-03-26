@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -10,6 +10,7 @@ export interface ProjectileWeaponFireConfig {
   readonly projectileMaxBounces: number;
   readonly limitRangeToCursor?: boolean; // true = Reichweite dieses Schusses auf Cursor-Distanz begrenzen
   readonly impactExplosion?: ProjectileExplosionConfig;
+  readonly impactCloud?: ImpactCloudConfig;
   readonly homing?: ProjectileHomingConfig;
 }
 
@@ -121,7 +122,7 @@ export interface WeaponConfig {
   readonly showCrosshair?: boolean;      // false = Zielfadenkreuz ausblenden
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -153,8 +154,8 @@ export type UtilityActivationConfig =
   | TargetedClickUtilityActivationConfig
   | PlacementModeUtilityActivationConfig;
 
-export interface PlaceableRockPlacementConfig {
-  readonly kind: 'rock';
+export interface PlaceablePlacementConfig {
+  readonly kind: 'rock' | 'turret';
   readonly range: number;
   readonly footprint: readonly PlaceableFootprintCell[];
   readonly maxHp: number;
@@ -164,6 +165,17 @@ export interface PlaceableRockPlacementConfig {
   readonly warningPulseMs: number;
   readonly spawnShakeDuration: number;
   readonly spawnShakeIntensity: number;
+}
+
+export interface PlaceableRockPlacementConfig extends PlaceablePlacementConfig {
+  readonly kind: 'rock';
+}
+
+export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig {
+  readonly kind: 'turret';
+  readonly targetRange: number;
+  readonly muzzleOffset: number;
+  readonly deathCloudRadius: number;
 }
 
 interface BaseUtilityConfig {
@@ -256,7 +268,16 @@ export interface PlaceableRockUtilityConfig extends BaseUtilityConfig {
   readonly placeable: PlaceableRockPlacementConfig;
 }
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig;
+export interface PlaceableTurretUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'placeable_turret';
+  readonly activation: PlacementModeUtilityActivationConfig;
+  readonly placeable: PlaceableTurretPlacementConfig;
+  readonly weaponId: string;
+}
+
+export type PlaceableUtilityConfig = PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -451,7 +472,7 @@ export const WEAPON_CONFIGS = {
     id:                   'XBOW',
     displayName:          'XXX-BOW',
     cooldown:             900,
-    damage:               8,       // Schaden pro Pellet
+    damage:               6,       // Schaden pro Pellet
     range:                700,
     fire: {
       type:                 'projectile',
@@ -470,7 +491,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
     pelletCount:          3,
-    pelletSpreadAngle:    15,
+    pelletSpreadAngle:    5,
     projectileColor:      0x8d7a5a,
     projectileStyle:      'bullet' as ProjectileStyle,
     bulletVisualPreset:   'xbow' as BulletVisualPreset,
@@ -733,6 +754,55 @@ export const WEAPON_CONFIGS = {
     shotRecoilForce:      180,
     shotRecoilDuration:   110,
     shotScreenShake:      { duration: 70, intensity: 0.0015 },
+  } as WeaponConfig,
+
+  SPOREN: {
+    id:                   'SPOREN',
+    displayName:          'Sporen',
+    cooldown:             1250,
+    damage:               5,
+    range:                400,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      320,
+      projectileSize:       10,
+      projectileMaxBounces: 0,
+      impactCloud: {
+        radius:          32,
+        duration:        3200,
+        damagePerTick:   4,
+        tickInterval:    250,
+        rockDamageMult:  1,
+        trainDamageMult: 1,
+        visualVariant:   'spore',
+      } satisfies ImpactCloudConfig,
+      homing: {
+        acquireDelayMs:        80,
+        searchRadius:          320,
+        retargetIntervalMs:    40,
+        maxTurnDegreesPerStep: 26,
+        targetTypes:           ['players'],
+        requireLineOfSight:    true,
+        excludeOwner:          true,
+        distanceWeight:        1,
+        forwardWeight:         0.5,
+      } satisfies ProjectileHomingConfig,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'spore' as ProjectileStyle,
+    projectileColor:      0xe7f28b,
+    showCrosshair:        false,
+    rockDamageMult:       1,
+    trainDamageMult:      1,
   } as WeaponConfig,
 
   /**
@@ -1096,6 +1166,35 @@ export const UTILITY_CONFIGS = {
       spawnShakeIntensity: 0.0025,
     },
   } as PlaceableRockUtilityConfig,
+
+  FLIEGENPILZ: {
+    id:                  'FLIEGENPILZ',
+    displayName:         'Fliegenpilz',
+    type:                'placeable_turret',
+    cooldown:            200,
+    activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
+    projectileSpeed:     0,
+    projectileSize:      0,
+    fuseTime:            0,
+    maxBounces:          0,
+    allowedSlots:        ['utility'],
+    weaponId:            'SPOREN',
+    placeable: {
+      kind:               'turret',
+      range:              320,
+      footprint:          [{ dx: 0, dy: 0 }] as const,
+      maxHp:              100,
+      lifetimeMs:         20000,
+      previewAlpha:       0.55,
+      ownerTintStrength:  0.72,
+      warningPulseMs:     3500,
+      spawnShakeDuration: 120,
+      spawnShakeIntensity: 0.0028,
+      targetRange:        320,
+      muzzleOffset:       26,
+      deathCloudRadius:   64,
+    },
+  } as PlaceableTurretUtilityConfig,
 } as const;
 
 export const ULTIMATE_CONFIGS = {
