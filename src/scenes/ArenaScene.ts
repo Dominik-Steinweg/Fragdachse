@@ -1849,6 +1849,9 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     // ── Netzwerk-Tick-Rate-Drosselung: State nur alle NET_TICK_INTERVAL_MS senden ──
+    // Stinkwolken zwischen Host-Ticks interpolieren (läuft jeden Frame)
+    this.stinkCloudSystem.clientUpdate(delta);
+
     this.netTickAccumulator += delta;
     if (this.netTickAccumulator < NET_TICK_INTERVAL_MS) return;
     this.netTickAccumulator -= NET_TICK_INTERVAL_MS;
@@ -2015,6 +2018,8 @@ export class ArenaScene extends Phaser.Scene {
     this.trainRenderer?.render(lerpFactor);
     // Projektile zwischen Netzwerk-Ticks extrapolieren
     this.projectileManager.clientExtrapolate();
+    // Stinkwolken zwischen Netzwerk-Ticks interpolieren
+    this.stinkCloudSystem.clientUpdate(delta);
 
     const localId2 = bridge.getLocalPlayerId();
     const localPlayerClient = this.playerManager.getPlayer(localId2);

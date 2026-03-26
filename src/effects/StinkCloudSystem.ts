@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, NET_SMOOTH_TIME_MS } from '../config';
 import { circleZone, edgeZone, ensureCanvasTexture } from './EffectUtils';
 import type { SyncedStinkCloud } from '../types';
 
@@ -163,6 +163,14 @@ interface StinkCloudVisual {
   fairnessCircle: Phaser.GameObjects.Graphics;
   zoneRadius:     number;
   birthTime:      number;
+  /** Interpolated display position (lerped toward target each frame) */
+  displayX:       number;
+  displayY:       number;
+  /** Latest server-authoritative position */
+  targetX:        number;
+  targetY:        number;
+  /** Latest full cloud snapshot for per-frame rendering */
+  lastCloud:      SyncedStinkCloud;
 }
 
 export class StinkCloudSystem {
@@ -287,8 +295,26 @@ export class StinkCloudSystem {
       if (!visual) {
         visual = this.createVisual(cloud);
         this.visuals.set(cloud.id, visual);
+      } else {
+        visual.targetX   = cloud.x;
+        visual.targetY   = cloud.y;
+        visual.lastCloud = cloud;
       }
-      this.updateVisual(visual, cloud);
+      // Always render on sync using current interpolated display position
+      this.updateVisual(visual, visual.displayX, visual.displayY, visual.lastCloud);
+    }
+  }
+
+  /**
+   * Per-frame update: lerps display positions toward server targets and
+   * re-renders each active cloud. Call this every game frame.
+   */
+  clientUpdate(delta: number): void {
+    const factor = 1 - Math.exp(-delta / NET_SMOOTH_TIME_MS);
+    for (const visual of this.visuals.values()) {
+      visual.displayX = Phaser.Math.Linear(visual.displayX, visual.targetX, factor);
+      visual.displayY = Phaser.Math.Linear(visual.displayY, visual.targetY, factor);
+      this.updateVisual(visual, visual.displayX, visual.displayY, visual.lastCloud);
     }
   }
 
@@ -457,14 +483,19 @@ export class StinkCloudSystem {
       edgeEmitter,
       innerEmitter,
       fairnessCircle,
-      zoneRadius: r,
-      birthTime: this.scene.time.now,
+      zoneRadius:  r,
+      birthTime:   this.scene.time.now,
+      displayX:    cloud.x,
+      displayY:    cloud.y,
+      targetX:     cloud.x,
+      targetY:     cloud.y,
+      lastCloud:   cloud,
     };
   }
 
   // ── Visual Update ─────────────────────────────────────────────────────────
 
-  private updateVisual(visual: StinkCloudVisual, cloud: SyncedStinkCloud): void {
+  private updateVisual(visual: StinkCloudVisual, x: number, y: number, cloud: SyncedStinkCloud): void {
     const radius = Math.max(cloud.radius, 8);
     const alpha  = Phaser.Math.Clamp(cloud.alpha, 0, 1);
     const t      = (this.scene.time.now - visual.birthTime) * 0.001;
@@ -474,24 +505,24 @@ export class StinkCloudSystem {
     const damagePulse = Phaser.Math.Clamp(Math.pow((Math.sin(t * 1.7 - 0.4) + 1) * 0.5, 2.2), 0, 1);
 
     /* ── Position container + emitters ── */
-    visual.container.setPosition(cloud.x, cloud.y).setVisible(visible);
+    visual.container.setPosition(x, y).setVisible(visible);
 
     visual.groundGlow
-      .setPosition(cloud.x, cloud.y)
+      .setPosition(x, y)
       .setVisible(visible)
       .setScale(1.52 * rScale, 1.42 * rScale)
       .setAlpha((0.2 + damagePulse * 0.06) * alpha)
       .setRotation(Math.sin(t * 0.11) * 0.08);
 
     visual.damageAura
-      .setPosition(cloud.x, cloud.y)
+      .setPosition(x, y)
       .setVisible(visible)
       .setScale(1.06 * rScale * (1 + damagePulse * 0.035), 1.02 * rScale * (1 + damagePulse * 0.028))
       .setAlpha((0.16 + damagePulse * 0.1) * alpha)
       .setRotation(Math.cos(t * 0.16) * 0.05);
 
     visual.reactionPulse
-      .setPosition(cloud.x, cloud.y - radius * 0.02)
+      .setPosition(x, y - radius * 0.02)
       .setVisible(visible)
       .setScale((0.54 + pulseWave * 0.38) * rScale, (0.5 + pulseWave * 0.34) * rScale)
       .setAlpha((pulseWave * 0.2) * alpha)
@@ -547,31 +578,31 @@ export class StinkCloudSystem {
     }
 
     /* ── Edge emitter ── */
-    visual.edgeEmitter.setPosition(cloud.x, cloud.y).setVisible(visible);
+    visual.edgeEmitter.setPosition(x, y).setVisible(visible);
     visual.edgeEmitter.setAlpha(Phaser.Math.Linear(0.1, 0.24, alpha));
     visual.edgeEmitter.setFrequency(Math.floor(Phaser.Math.Linear(54, 24, alpha)), 3);
     visual.edgeEmitter.setParticleScale(0.24 * rScale, Phaser.Math.Linear(1.08, 1.68, alpha) * rScale);
 
     /* ── Inner emitter ── */
-    visual.innerEmitter.setPosition(cloud.x, cloud.y).setVisible(visible);
+    visual.innerEmitter.setPosition(x, y).setVisible(visible);
     visual.innerEmitter.setAlpha(Phaser.Math.Linear(0.12, 0.28, alpha));
     visual.innerEmitter.setFrequency(Math.floor(Phaser.Math.Linear(74, 34, alpha)), 2);
     visual.innerEmitter.setParticleScale(0.22 * rScale, Phaser.Math.Linear(0.82, 1.26, alpha) * rScale);
 
     /* ── Neon accent emitter ── */
-    visual.accentEmitter.setPosition(cloud.x, cloud.y - radius * 0.04).setVisible(visible);
+    visual.accentEmitter.setPosition(x, y - radius * 0.04).setVisible(visible);
     visual.accentEmitter.setAlpha(Phaser.Math.Linear(0.08, 0.18 + pulseWave * 0.14, alpha));
     visual.accentEmitter.setFrequency(Math.floor(Phaser.Math.Linear(54, 18, alpha)), 1);
     visual.accentEmitter.setParticleScale(0.1 * rScale, Phaser.Math.Linear(0.24, 0.66 + pulseWave * 0.18, alpha) * rScale);
 
     /* ── Upward plume emitter ── */
-    visual.plumeEmitter.setPosition(cloud.x, cloud.y + radius * 0.12).setVisible(visible);
+    visual.plumeEmitter.setPosition(x, y + radius * 0.12).setVisible(visible);
     visual.plumeEmitter.setAlpha(Phaser.Math.Linear(0.08, 0.18, alpha));
     visual.plumeEmitter.setFrequency(Math.floor(Phaser.Math.Linear(92, 42, alpha)), 2);
     visual.plumeEmitter.setParticleScale(0.18 * rScale, Phaser.Math.Linear(0.94, 1.46, alpha) * rScale);
 
     /* ── Fairness circle ── */
-    this.drawFairnessCircle(visual.fairnessCircle, cloud.x, cloud.y, radius, cloud.ownerColor, alpha, t);
+    this.drawFairnessCircle(visual.fairnessCircle, x, y, radius, cloud.ownerColor, alpha, t);
 
     /* ── Emit-zone resize ── */
     const target = Math.max(radius * 0.86, 12);

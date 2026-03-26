@@ -31,7 +31,7 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
   NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
-  BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_2,  spriteKey: 'powerup_bfg'  },
+  BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_3,  spriteKey: 'powerup_bfg'  },
 };
 
 export const TIMED_POWERUP_PEDESTAL_COUNT = 4;
@@ -39,7 +39,7 @@ export const TIMED_POWERUP_PEDESTAL_COUNT = 4;
 export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUpConfig> = {
   HEALTH_PACK: {
     defId: 'HEALTH_PACK',
-    weight: 250,
+    weight: 300,
     respawnMs: 20_000,
     spawnOnArenaStart: true,
   },
@@ -51,7 +51,7 @@ export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUp
   },    
   ADRENALINE: {
     defId: 'ADRENALINE',
-    weight: 50,
+    weight: 0,
     respawnMs: 20_000,
     spawnOnArenaStart: false,
   },     
