@@ -51,9 +51,9 @@ interface GrenadeVisual {
 
 const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
   he: {
-    bodyScale:       1.0,
-    glowAlpha:       0.32,
-    glowScale:       1.4,
+    bodyScale:       0.6,
+    glowAlpha:       0.62,
+    glowScale:       1.7,
     detailAlpha:     0.90,
     trailAlpha:      0.20,
     trailFrequency:  44,
@@ -64,9 +64,9 @@ const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
     trailTints:      [0xc4d888, 0x6a7a40, 0x30381a],
   },
   smoke: {
-    bodyScale:       1.0,
-    glowAlpha:       0.28,
-    glowScale:       1.3,
+    bodyScale:       0.6,
+    glowAlpha:       0.58,
+    glowScale:       1.6,
     detailAlpha:     0.86,
     trailAlpha:      0.18,
     trailFrequency:  28,
@@ -77,16 +77,17 @@ const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
     trailTints:      [0xe0eaee, 0x90a8b2, 0x485460],
   },
   molotov: {
-    bodyScale:       0.5,
-    glowAlpha:       0.42,
-    glowScale:       1.65,
+    bodyScale:       0.6,
+    glowAlpha:       0.68,
+    glowScale:       1.8,
     detailAlpha:     0.94,
-    trailAlpha:      0.82,
-    trailFrequency:  200,
-    trailLifespan:   { min: 5, max: 10 },
-    trailScaleStart: 0.28,
-    trailScaleEnd:   0.01,
-    trailSpeed:      16,
+    // Spark trail: frequent small bright sparks
+    trailAlpha:      0.76,
+    trailFrequency:  18,
+    trailLifespan:   { min: 100, max: 210 },
+    trailScaleStart: 0.34,
+    trailScaleEnd:   0.02,
+    trailSpeed:      26,
     trailTints:      [0xffffff, 0xffee50, 0xff8018],
   },
 };
@@ -182,17 +183,17 @@ export class GrenadeRenderer {
 
     visual.glow.setPosition(x, y).setScale(baseScale * cfg.glowScale).setRotation(-spin * 0.18);
 
-    const isMolotov = visual.preset === 'molotov';
-    const bodyRot   = isMolotov ? angle + Math.PI / 2 : spin;
-    visual.body.setPosition(x, y).setScale(baseScale).setRotation(bodyRot);
-    visual.detail.setPosition(x, y).setScale(baseScale).setRotation(bodyRot);
+    // All three grenade types tumble freely – bottles spin just like HE/Smoke.
+    visual.body.setPosition(x, y).setScale(baseScale).setRotation(spin);
+    visual.detail.setPosition(x, y).setScale(baseScale).setRotation(spin);
 
     visual.trail.setPosition(tailX, tailY);
 
-    if (isMolotov) {
+    if (visual.preset === 'molotov') {
       const now  = this.scene.time.now;
       const dist = Phaser.Math.Distance.Between(visual.lastFireX, visual.lastFireY, tailX, tailY);
-      if (dist >= Math.max(size * 0.38, 4) || now - visual.lastFireAt >= 20) {
+      // Spawn small ember puffs at moderate intervals – not as dense as rocket smoke.
+      if (dist >= Math.max(size * 0.55, 6) || now - visual.lastFireAt >= 38) {
         this.spawnFirePuff(tailX, tailY, size);
         visual.lastFireX  = tailX;
         visual.lastFireY  = tailY;
@@ -202,23 +203,24 @@ export class GrenadeRenderer {
   }
 
   private spawnFirePuff(x: number, y: number, size: number): void {
+    // Small ember/glow puff – noticeable but much subtler than rocket smoke.
     const puff = this.scene.add.image(x, y, TEX_MOLOTOV_FIRE_PUFF)
       .setDepth(DEPTH.FIRE)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.90)
-      .setScale(Math.max(size / 26, 0.22));
+      .setAlpha(0.68)
+      .setScale(Math.max(size / 46, 0.14));
 
     this.firePuffs.add(puff);
 
-    const driftX = Phaser.Math.Between(-4, 4);
-    const driftY = Phaser.Math.Between(-11, -2);
+    const driftX = Phaser.Math.Between(-3, 3);
+    const driftY = Phaser.Math.Between(-6, 0);
     this.scene.tweens.add({
       targets:  puff,
       x:        x + driftX,
       y:        y + driftY,
       alpha:    0,
-      scale:    puff.scaleX * 2.6,
-      duration: 700,
+      scale:    puff.scaleX * 2.0,
+      duration: 360,
       ease:     'Quad.easeOut',
       onComplete: () => {
         this.firePuffs.delete(puff);

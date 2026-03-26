@@ -5,7 +5,7 @@ import { COLORS, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_S
 import { circleZone, edgeZone } from './EffectUtils';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 
-const HITSCAN_TRACER_FADE_MS = 120;
+const HITSCAN_TRACER_FADE_MS = 320;
 const MELEE_SWING_FADE_MS    = 220;
 
 const TEX_BURROW_DIRT = '__burrow_dirt';

@@ -335,7 +335,7 @@ export const WEAPON_CONFIGS = {
   ASMD_PRIM: {
     id:                   'ASMD_PRIM',
     displayName:          'ASMD Primär',
-    cooldown:             500,
+    cooldown:             700,
     damage:               10,
     range:                650,
     fire: {
@@ -887,9 +887,9 @@ export const UTILITY_CONFIGS = {
     type:            'explosive',
     cooldown:        6000,
     activation:      STANDARD_GRENADE_CHARGE,
-    projectileSpeed: 500,
+    projectileSpeed: 800,
     projectileSize:  10,
-    fuseTime:        750,
+    fuseTime:        1000,
     maxBounces:      3,
     aoeRadius:       80,
     aoeDamage:       60,
@@ -897,9 +897,9 @@ export const UTILITY_CONFIGS = {
     projectileStyle: 'grenade' as ProjectileStyle,
     grenadeVisualPreset: 'he' as GrenadeVisualPreset,
     projectileColor: 0x6f8151,
-    frictionDelayMs:           400,
-    airFrictionDecayPerSec:    0.2,
-    bounceFrictionMultiplier:  0.3,
+    frictionDelayMs:           300,
+    airFrictionDecayPerSec:    0.3,
+    bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,
   } as UtilityConfig,
 
@@ -909,9 +909,9 @@ export const UTILITY_CONFIGS = {
     type:                   'smoke',
     cooldown:               6000,
     activation:             STANDARD_GRENADE_CHARGE,
-    projectileSpeed:        500,
+    projectileSpeed:        800,
     projectileSize:         10,
-    fuseTime:               750,
+    fuseTime:               1000,
     maxBounces:             3,
     smokeRadius:            240,
     smokeExpandDuration:    500,
@@ -922,9 +922,9 @@ export const UTILITY_CONFIGS = {
     projectileStyle:        'grenade' as ProjectileStyle,
     grenadeVisualPreset:    'smoke' as GrenadeVisualPreset,
     projectileColor:        0x6a7680,
-    frictionDelayMs:           400,
-    airFrictionDecayPerSec:    0.2,
-    bounceFrictionMultiplier:  0.3,
+    frictionDelayMs:           300,
+    airFrictionDecayPerSec:    0.3,
+    bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,    
   } as UtilityConfig,
 
@@ -934,9 +934,9 @@ export const UTILITY_CONFIGS = {
     type:               'molotov',
     cooldown:           8000,
     activation:         STANDARD_GRENADE_CHARGE,
-    projectileSpeed:    500,
+    projectileSpeed:    800,
     projectileSize:     10,
-    fuseTime:           750,
+    fuseTime:           1000,
     maxBounces:         3,
     fireRadius:         160,
     fireDamagePerTick:  8,
@@ -947,9 +947,9 @@ export const UTILITY_CONFIGS = {
     projectileStyle:    'grenade' as ProjectileStyle,
     grenadeVisualPreset:'molotov' as GrenadeVisualPreset,
     projectileColor:    0x8a4a20,
-    frictionDelayMs:           400,
-    airFrictionDecayPerSec:    0.2,
-    bounceFrictionMultiplier:  0.3,
+    frictionDelayMs:           300,
+    airFrictionDecayPerSec:    0.3,
+    bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,    
   } as UtilityConfig,
 
@@ -959,11 +959,11 @@ export const UTILITY_CONFIGS = {
     type:            'explosive',
     cooldown:        0,             // Ammo-basiert (Einzelschuss), kein Cooldown
     activation:      STANDARD_GRENADE_CHARGE,
-    projectileSpeed: 500,
+    projectileSpeed: 900,
     projectileSize:  14,
     fuseTime:        3000,          // 3 Sekunden Zünder
     maxBounces:      999,             // bleibt liegen
-    aoeRadius:       250,           // riesiger Radius
+    aoeRadius:       350,           // riesiger Radius
     aoeDamage:       200,           // massiver Schaden
     allowedSlots:         [],            // NICHT im Loadout-Menü wählbar
     projectileStyle:      'holy_grenade' as ProjectileStyle,
@@ -971,9 +971,9 @@ export const UTILITY_CONFIGS = {
     trainDamageMult:      1.0,           // 100% Schaden am Zug
     explosionVisualStyle: 'holy',        // goldene Explosion + Kamera-Shake
     skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
-    frictionDelayMs:           400,
-    airFrictionDecayPerSec:    0.2,
-    bounceFrictionMultiplier:  0.3,
+    frictionDelayMs:           300,
+    airFrictionDecayPerSec:    0.3,
+    bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,    
   } as UtilityConfig,
 
@@ -1085,7 +1085,7 @@ export const ULTIMATE_CONFIGS = {
     cooldown:           0,
     rageRequired:       200,
     rageCost:           200,
-    chargeDuration:     1000,
+    chargeDuration:     1500,
     chargeColor:        0x78d6ff,
     movementSlowFactor: 0.72,
     projectileSpeed:    1500,
