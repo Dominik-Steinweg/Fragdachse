@@ -326,7 +326,7 @@ export class ProjectileManager {
     if (isGrenadeVisual && this.grenadeRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
-      this.grenadeRenderer.createVisual(id, x, y, cfg.size, cfg.grenadeVisualPreset ?? 'he');
+      this.grenadeRenderer.createVisual(id, x, y, cfg.size, cfg.grenadeVisualPreset ?? 'he', cfg.ownerColor ?? cfg.color);
     }
 
     if (isHolyGrenade && this.holyGrenadeRenderer) {
@@ -1293,7 +1293,7 @@ export class ProjectileManager {
       for (const proj of this.projectiles) {
         if (proj.projectileStyle === 'grenade') {
           if (!grenadeR.has(proj.id)) {
-            grenadeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.grenadeVisualPreset ?? 'he');
+            grenadeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.grenadeVisualPreset ?? 'he', proj.ownerColor ?? proj.color);
           }
           grenadeR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
         }
@@ -1543,7 +1543,7 @@ export class ProjectileManager {
         energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color, proj.energyBallVariant);
       } else if (isGrenadeP && grenades) {
         if (!grenades.has(proj.id)) {
-          grenades.createVisual(proj.id, proj.x, proj.y, proj.size, proj.grenadeVisualPreset ?? 'he');
+          grenades.createVisual(proj.id, proj.x, proj.y, proj.size, proj.grenadeVisualPreset ?? 'he', proj.ownerColor ?? proj.color);
         }
         grenades.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (proj.style === 'translocator_puck' && tlPucks) {
