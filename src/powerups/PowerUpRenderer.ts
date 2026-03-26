@@ -346,7 +346,7 @@ export class PowerUpRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH.PLAYERS - 0.95);
-    burst.explode(18, x, y);
+    burst.explode(18);
     this.scene.time.delayedCall(450, () => destroyEmitter(burst));
   }
 
@@ -406,7 +406,7 @@ export class PowerUpRenderer {
       emitting: false,
     }, DEPTH.PLAYERS - 0.85);
     setCircleEmitZone(pixelBurst, 12, 14, true);
-    pixelBurst.explode(14, x, y);
+    pixelBurst.explode(14);
 
     const embers = createEmitter(this.scene, x, y, TEX_POWERUP_PEDESTAL_PARTICLE, {
       lifespan: { min: 160, max: 280 },
@@ -420,7 +420,7 @@ export class PowerUpRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH.PLAYERS - 0.83);
-    embers.explode(10, x, y);
+    embers.explode(10);
 
     this.scene.time.delayedCall(420, () => {
       destroyEmitter(pixelBurst);

@@ -39,27 +39,51 @@ export const TIMED_POWERUP_PEDESTAL_COUNT = 5;
 export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUpConfig> = {
   HEALTH_PACK: {
     defId: 'HEALTH_PACK',
-    weight: 50,
+    weight: 300,
     respawnMs: 20_000,
     spawnOnArenaStart: true,
   },
+ ARMOR: {
+    defId: 'ARMOR',
+    weight: 100,
+    respawnMs: 30_000,
+    spawnOnArenaStart: false,
+  },    
+  ADRENALINE: {
+    defId: 'ADRENALINE',
+    weight: 0,
+    respawnMs: 20_000,
+    spawnOnArenaStart: true,
+  },     
   DOUBLE_DAMAGE: {
     defId: 'DOUBLE_DAMAGE',
-    weight: 70,
+    weight: 50,
     respawnMs: 90_000,
     spawnOnArenaStart: false,
   },
-  BFG: {
-    defId: 'BFG',
+  NUKE: {
+    defId: 'NUKE',
     weight: 30,
     respawnMs: 90_000,
+    spawnOnArenaStart: false,
+  },     
+  HOLY_HAND_GRENADE: {
+    defId: 'HOLY_HAND_GRENADE',
+    weight: 20,
+    respawnMs: 90_000,
+    spawnOnArenaStart: false,
+  },      
+  BFG: {
+    defId: 'BFG',
+    weight: 0,
+    respawnMs: 90_000,
     spawnOnArenaStart: true,
-  },
+  },   
 };
 
 export const POWERUP_PEDESTAL_CONFIG = {
   announceLeadMs: 5_000,
-  edgePaddingCells: 1,
+  edgePaddingCells: 2,
   minSpacingCells: 7,
   renderBaseRadius: 10,
   renderInnerRadius: 8,
@@ -101,7 +125,7 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 10 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 50 },
   },
 };
 
