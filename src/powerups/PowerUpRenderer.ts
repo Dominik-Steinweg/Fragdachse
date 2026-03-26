@@ -11,10 +11,11 @@ import {
 } from '../effects/EffectUtils';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE } from './PowerUpConfig';
 
-const TEX_POWERUP_PEDESTAL_GLOW = '__powerup_pedestal_glow';
-const TEX_POWERUP_PEDESTAL_PARTICLE = '__powerup_pedestal_particle';
-const TEX_POWERUP_PEDESTAL_PIXEL = '__powerup_pedestal_pixel';
-const TEX_POWERUP_PEDESTAL_FLASH = '__powerup_pedestal_flash';
+const TEX_POWERUP_PEDESTAL_OUTER_GLOW = '__powerup_pedestal_outer_glow';
+const TEX_POWERUP_PEDESTAL_GLOW      = '__powerup_pedestal_glow';
+const TEX_POWERUP_PEDESTAL_PARTICLE  = '__powerup_pedestal_particle';
+const TEX_POWERUP_PEDESTAL_PIXEL     = '__powerup_pedestal_pixel';
+const TEX_POWERUP_PEDESTAL_FLASH     = '__powerup_pedestal_flash';
 
 interface ItemVisual {
   container: Phaser.GameObjects.Container;
@@ -23,6 +24,7 @@ interface ItemVisual {
 
 interface PedestalVisual {
   container: Phaser.GameObjects.Container;
+  outerGlow: Phaser.GameObjects.Image;
   glow: Phaser.GameObjects.Image;
   aura: Phaser.GameObjects.Image;
   ringOuter: Phaser.GameObjects.Arc;
@@ -144,6 +146,13 @@ export class PowerUpRenderer {
       const container = this.scene.add.container(pedestal.x, pedestal.y);
       container.setDepth(DEPTH.PLAYERS - 2);
 
+      const outerGlow = configureAdditiveImage(
+        this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_OUTER_GLOW),
+        DEPTH.PLAYERS - 2.35,
+        0.0,
+        glowColor,
+      );
+
       const shadow = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 6, 0x04070c, 0.42);
       const base = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius, 0x0c121c, 0.96)
         .setStrokeStyle(2, 0x25313c, 0.95);
@@ -196,9 +205,10 @@ export class PowerUpRenderer {
       }, DEPTH.PLAYERS - 2.05);
       setCircleEmitZone(sparkEmitter, POWERUP_PEDESTAL_CONFIG.renderInnerRadius + 3, 1, true);
 
-      container.add([glow, aura, shadow, base, plate, core, ringOuter, ringInner]);
+      container.add([outerGlow, glow, aura, shadow, base, plate, core, ringOuter, ringInner]);
       this.pedestals.set(pedestal.id, {
         container,
+        outerGlow,
         glow,
         aura,
         ringOuter,
@@ -223,12 +233,16 @@ export class PowerUpRenderer {
 
   updatePedestals(now: number): void {
     for (const [id, visual] of this.pedestals) {
-      const phase = now / 1000 + id * 0.37;
-      const breath = 0.5 + 0.5 * Math.sin(phase * 2.2);
+      const phase   = now / 1000 + id * 0.37;
+      const breath  = 0.5 + 0.5 * Math.sin(phase * 2.2);
+      // Zweite schnellere Welle – Schwebung mit breath erzeugt das Wabern
+      const shimmer = 0.5 + 0.5 * Math.sin(phase * 5.8 + id * 1.3);
       const hasPowerUp = visual.state.hasPowerUp;
       const timeUntilRespawn = visual.state.nextRespawnAt > 0 ? visual.state.nextRespawnAt - now : Number.POSITIVE_INFINITY;
       const isAnnouncing = !hasPowerUp && Number.isFinite(timeUntilRespawn) && timeUntilRespawn > 0 && timeUntilRespawn <= POWERUP_PEDESTAL_CONFIG.announceLeadMs;
 
+      let outerGlowAlpha = 0.26 + breath * 0.14;
+      let outerGlowScale = 0.86 + breath * 0.17;
       let glowAlpha = 0.18 + breath * 0.08;
       let glowScale = 0.82 + breath * 0.06;
       let auraAlpha = 0.14 + breath * 0.06;
@@ -241,6 +255,9 @@ export class PowerUpRenderer {
       let ambientFrequency = 135;
 
       if (hasPowerUp) {
+        // Schwebungseffekt: breath (2.2 Hz) + shimmer (5.8 Hz) → Beat ~0.57 Hz
+        outerGlowAlpha = 0.28 + breath * 0.20 + shimmer * 0.12;
+        outerGlowScale = 0.90 + breath * 0.18 + shimmer * 0.08;
         glowAlpha = 0.34 + breath * 0.14;
         glowScale = 0.92 + breath * 0.11;
         auraAlpha = 0.22 + breath * 0.1;
@@ -254,6 +271,8 @@ export class PowerUpRenderer {
       } else if (isAnnouncing) {
         const blink = 0.5 + 0.5 * Math.sin(now / 90 + id * 1.7);
         const progress = 1 - (timeUntilRespawn / POWERUP_PEDESTAL_CONFIG.announceLeadMs);
+        outerGlowAlpha = 0.12 + blink * (0.26 + progress * 0.16);
+        outerGlowScale = 0.88 + blink * 0.20 + progress * 0.10;
         glowAlpha = 0.24 + blink * (0.28 + progress * 0.14);
         glowScale = 0.88 + blink * 0.16 + progress * 0.12;
         auraAlpha = 0.18 + blink * 0.2;
@@ -267,6 +286,7 @@ export class PowerUpRenderer {
       }
 
       visual.container.setScale(ringPulse);
+      visual.outerGlow.setAlpha(outerGlowAlpha).setScale(outerGlowScale);
       visual.glow.setAlpha(glowAlpha).setScale(glowScale);
       visual.aura.setAlpha(auraAlpha).setScale(auraScale);
       visual.ringOuter.setAlpha(ringOuterAlpha).setScale(ringPulse);
@@ -290,6 +310,16 @@ export class PowerUpRenderer {
   }
 
   private ensureTextures(): void {
+    // Großes weiches Außenleuchten – wird per Tint in die Power-Up-Farbe eingefärbt
+    fillRadialGradientTexture(this.scene.textures, TEX_POWERUP_PEDESTAL_OUTER_GLOW, 160, [
+      [0,    'rgba(255,255,255,0.92)'],
+      [0.14, 'rgba(255,255,255,0.60)'],
+      [0.35, 'rgba(255,255,255,0.22)'],
+      [0.62, 'rgba(255,255,255,0.06)'],
+      [0.85, 'rgba(255,255,255,0.01)'],
+      [1,    'rgba(255,255,255,0.00)'],
+    ]);
+
     fillRadialGradientTexture(this.scene.textures, TEX_POWERUP_PEDESTAL_GLOW, POWERUP_PEDESTAL_CONFIG.renderGlowSize, [
       [0, 'rgba(255,255,255,0.92)'],
       [0.22, 'rgba(255,255,255,0.34)'],

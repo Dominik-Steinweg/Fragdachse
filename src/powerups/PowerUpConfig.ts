@@ -27,50 +27,50 @@ export interface TimedPedestalPowerUpConfig {
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal',  displayName: 'Medipack',            amount: 999,                        color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
   ARMOR:         { id: 'ARMOR',         type: 'instant_armor', displayName: 'Armor',               amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
-  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',    displayName: 'Adrenalin Spritze',  durationMs: 10_000, multiplier: 2.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
+  ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',    displayName: 'Adrenalin Spritze',  durationMs: 3_000, multiplier: 3.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
   NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
   BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_2,  spriteKey: 'powerup_bfg'  },
 };
 
-export const TIMED_POWERUP_PEDESTAL_COUNT = 5;
+export const TIMED_POWERUP_PEDESTAL_COUNT = 4;
 
 export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUpConfig> = {
   HEALTH_PACK: {
     defId: 'HEALTH_PACK',
-    weight: 300,
+    weight: 250,
     respawnMs: 20_000,
     spawnOnArenaStart: true,
   },
  ARMOR: {
     defId: 'ARMOR',
-    weight: 100,
+    weight: 0,
     respawnMs: 30_000,
     spawnOnArenaStart: false,
   },    
   ADRENALINE: {
     defId: 'ADRENALINE',
-    weight: 0,
+    weight: 50,
     respawnMs: 20_000,
-    spawnOnArenaStart: true,
+    spawnOnArenaStart: false,
   },     
   DOUBLE_DAMAGE: {
     defId: 'DOUBLE_DAMAGE',
     weight: 50,
-    respawnMs: 90_000,
+    respawnMs: 70_000,
     spawnOnArenaStart: false,
   },
   NUKE: {
     defId: 'NUKE',
-    weight: 30,
+    weight: 0,
     respawnMs: 90_000,
     spawnOnArenaStart: false,
   },     
   HOLY_HAND_GRENADE: {
     defId: 'HOLY_HAND_GRENADE',
-    weight: 20,
-    respawnMs: 90_000,
+    weight: 50,
+    respawnMs: 70_000,
     spawnOnArenaStart: false,
   },      
   BFG: {
@@ -117,7 +117,7 @@ export interface DropTable {
 export const DROP_TABLES: Record<string, DropTable> = {
   ENEMY_KILL: {
     chanceToDrop: 1.0,
-    items: { HEALTH_PACK: 80, ADRENALINE: 20, DOUBLE_DAMAGE: 0 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 100, DOUBLE_DAMAGE: 0 },
   },
   ROCK_DESTROY: {
     chanceToDrop: 0.1,
@@ -125,7 +125,7 @@ export const DROP_TABLES: Record<string, DropTable> = {
   },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 50 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 50, HOLY_HAND_GRENADE: 0, BFG: 50 },
   },
 };
 
