@@ -41,6 +41,10 @@ export class ResourceSystem {
     return this.rage.get(id) ?? 0;
   }
 
+  setRage(id: string, value: number): void {
+    this.rage.set(id, Math.max(0, Math.min(RAGE_MAX, value)));
+  }
+
   /**
    * Fügt Adrenalin hinzu (gedeckelt auf ADRENALINE_MAX).
    * Pausiert die Regeneration NICHT – wird als Belohnung für Treffer genutzt.

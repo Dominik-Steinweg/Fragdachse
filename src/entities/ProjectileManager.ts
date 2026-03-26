@@ -5,6 +5,7 @@ import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
+import type { GaussRenderer }   from '../effects/GaussRenderer';
 import type { GrenadeRenderer } from '../effects/GrenadeRenderer';
 import type { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import type { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
@@ -43,6 +44,7 @@ const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 
 function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset): BulletVisualPreset {
   if (preset) return preset;
+  if (style === 'gauss') return 'gauss';
   return style === 'awp' ? 'awp' : 'default';
 }
 
@@ -66,6 +68,9 @@ export class ProjectileManager {
 
   // ── Energy-Ball-Renderer (ASMD Secondary) ───────────────────────────────
   private energyBallRenderer: EnergyBallRenderer | null = null;
+
+  // ── Gauss-Renderer (elektrische Overlay-Visuals) ───────────────────────
+  private gaussRenderer: GaussRenderer | null = null;
 
   // ── Grenade-Renderer (HE/Smoke/Molotov) ────────────────────────────────
   private grenadeRenderer: GrenadeRenderer | null = null;
@@ -177,6 +182,11 @@ export class ProjectileManager {
     this.energyBallRenderer = renderer;
   }
 
+  /** Injiziert den GaussRenderer fuer elektrische Projektil-Overlays. */
+  setGaussRenderer(renderer: GaussRenderer | null): void {
+    this.gaussRenderer = renderer;
+  }
+
   /** Injiziert den GrenadeRenderer fuer klassische Granaten. */
   setGrenadeRenderer(renderer: GrenadeRenderer | null): void {
     this.grenadeRenderer = renderer;
@@ -248,6 +258,7 @@ export class ProjectileManager {
     const isFlame  = cfg.projectileStyle === 'flame';
     const isBfg    = cfg.projectileStyle === 'bfg';
     const isAwp    = cfg.projectileStyle === 'awp';
+    const isGauss  = cfg.projectileStyle === 'gauss';
     const isGrenadeVisual = cfg.projectileStyle === 'grenade';
     const isHolyGrenade = cfg.projectileStyle === 'holy_grenade';
     const isRocket = cfg.projectileStyle === 'rocket';
@@ -274,7 +285,7 @@ export class ProjectileManager {
     }
 
     // AWP-Projektile sind unsichtbar (Rendering übernimmt BulletRenderer mit AWP-Stil)
-    if (isAwp && this.bulletRenderer) {
+    if ((isAwp || isGauss) && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.bulletRenderer.createVisual(
@@ -286,6 +297,10 @@ export class ProjectileManager {
         resolveBulletVisualPreset(cfg.projectileStyle, cfg.bulletVisualPreset),
         cfg.ownerColor ?? cfg.color,
       );
+    }
+
+    if (isGauss && this.gaussRenderer) {
+      this.gaussRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
     if (isRocket && this.rocketRenderer) {
@@ -405,7 +420,7 @@ export class ProjectileManager {
       bfgLaserDamage:   cfg.bfgLaserDamage,
       bfgLaserInterval: cfg.bfgLaserInterval,
       // Anti-Tunneling
-      originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isBfg && !cfg.isGrenade
+      originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isBfg && !isGauss && !cfg.isGrenade
         ? cfg.size : undefined,
 
       // Erweiterte Flugphysik
@@ -428,7 +443,7 @@ export class ProjectileManager {
       }
     }
 
-    if (isBfg) {
+    if (isBfg || isGauss) {
       // BFG: Welt-Bounds zerstören das Projektil; Felsen/Zug werden per Overlap beschädigt,
       // das Projektil fliegt aber durch alles durch (kein physischer Stopp).
       body.setCollideWorldBounds(true);
@@ -446,11 +461,14 @@ export class ProjectileManager {
         const onHit       = this.onRockHit;
         const c = this.scene.physics.add.overlap(sprite, this.rockGroup, (_proj, rockGO) => {
           if (!rockObjects || !onHit) return;
-          if (!tracked.bfgHitRocks) tracked.bfgHitRocks = new Set();
+            if (isGauss && !tracked.gaussHitRocks) tracked.gaussHitRocks = new Set();
+            if (!isGauss && !tracked.bfgHitRocks) tracked.bfgHitRocks = new Set();
           const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Image);
-          if (idx !== -1 && !tracked.bfgHitRocks.has(idx)) {
-            tracked.bfgHitRocks.add(idx);
-            onHit(idx, tracked.damage);
+          const hitSet = isGauss ? tracked.gaussHitRocks : tracked.bfgHitRocks;
+          if (idx !== -1 && hitSet && !hitSet.has(idx)) {
+            hitSet.add(idx);
+            const rockMult = tracked.rockDamageMult ?? 1;
+            onHit(idx, tracked.damage * rockMult);
           }
         });
         tracked.colliders.push(c);
@@ -460,16 +478,18 @@ export class ProjectileManager {
       if (this.trainGroup) {
         const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
-          if (tracked.bfgHitTrain) return;
-          tracked.bfgHitTrain = true;
-          onTrainHit?.(tracked.damage, tracked.ownerId);
+          if (isGauss ? tracked.gaussHitTrain : tracked.bfgHitTrain) return;
+          if (isGauss) tracked.gaussHitTrain = true;
+          else tracked.bfgHitTrain = true;
+          const trainMult = tracked.trainDamageMult ?? 1;
+          onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
         });
         tracked.colliders.push(c);
       }
       // Trunks: kein Collider/Overlap – Projektil fliegt einfach durch
 
       // BfgRenderer-Visual erstellen (Host rendert ebenfalls)
-      if (this.bfgRenderer) {
+      if (isBfg && this.bfgRenderer) {
         this.bfgRenderer.createVisual(id, x, y, cfg.size);
       }
     } else if (cfg.explosion && cfg.maxBounces === 0) {
@@ -650,10 +670,11 @@ export class ProjectileManager {
 
     const isBullet     = tracked.projectileStyle === 'bullet';
     const isAwp        = tracked.projectileStyle === 'awp';
+    const isGauss      = tracked.projectileStyle === 'gauss';
     const renderer     = this.bulletRenderer;
 
     const playImpact = (bx: number, by: number, bvx: number, bvy: number, col: number) => {
-      if ((isBullet || isAwp) && renderer) renderer.playImpactSparks(tracked.id, bx, by, bvx, bvy, col);
+      if ((isBullet || isAwp || isGauss) && renderer) renderer.playImpactSparks(tracked.id, bx, by, bvx, bvy, col);
     };
 
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
@@ -661,7 +682,7 @@ export class ProjectileManager {
       tracked.bounceCount++;
       applyBounceFriction();
       // Funken an Arena-Wand: Velocity ist nach Bounce bereits reflektiert
-      if (isBullet || isAwp) {
+      if (isBullet || isAwp || isGauss) {
         playImpact(
           body.x + body.halfWidth, body.y + body.halfHeight,
           body.velocity.x, body.velocity.y,
@@ -684,7 +705,7 @@ export class ProjectileManager {
         tracked.bounceCount++;
         applyBounceFriction();
         // Funken bei Fels-Aufprall
-        if (isBullet || isAwp) {
+        if (isBullet || isAwp || isGauss) {
           playImpact(
             body.x + body.halfWidth, body.y + body.halfHeight,
             body.velocity.x, body.velocity.y,
@@ -710,7 +731,7 @@ export class ProjectileManager {
         tracked.bounceCount++;
         applyBounceFriction();
         // Funken bei Baumstamm-Aufprall
-        if (isBullet || isAwp) {
+        if (isBullet || isAwp || isGauss) {
           playImpact(
             body.x + body.halfWidth, body.y + body.halfHeight,
             body.velocity.x, body.velocity.y,
@@ -737,7 +758,7 @@ export class ProjectileManager {
           }
         }
         // Funken bei Zug-Aufprall
-        if (isBullet || isAwp) {
+        if (isBullet || isAwp || isGauss) {
           playImpact(
             body.x + body.halfWidth, body.y + body.halfHeight,
             body.velocity.x, body.velocity.y,
@@ -807,6 +828,7 @@ export class ProjectileManager {
     this.tracerRenderer?.destroyTracer(proj.id);
     this.flameRenderer?.destroyVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
+    this.gaussRenderer?.destroyVisual(proj.id);
     if (proj.projectileStyle === 'energy_ball') {
       this.energyBallRenderer?.playImpact(proj.sprite.x, proj.sprite.y, proj.color, proj.energyBallVariant, proj.sprite.displayWidth / 16);
     }
@@ -965,6 +987,7 @@ export class ProjectileManager {
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
+    this.gaussRenderer?.destroyAll();
     this.energyBallRenderer?.destroyAll();
     this.grenadeRenderer?.destroyAll();
     this.holyGrenadeRenderer?.destroyAll();
@@ -1109,7 +1132,7 @@ export class ProjectileManager {
     // BulletRenderer-Visuals an Physik-Body synchronisieren (Bullet + AWP)
     if (renderer) {
       for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp') {
+        if (proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp' || proj.projectileStyle === 'gauss') {
           renderer.syncToBody(
             proj.id, proj.sprite.x, proj.sprite.y,
             proj.body.velocity.x, proj.body.velocity.y,
@@ -1118,7 +1141,7 @@ export class ProjectileManager {
       }
       // Verwaiste Bullet/AWP-Visuals entfernen
       const activeBulletIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'bullet' || p.projectileStyle === 'awp').map(p => p.id),
+        this.projectiles.filter(p => p.projectileStyle === 'bullet' || p.projectileStyle === 'awp' || p.projectileStyle === 'gauss').map(p => p.id),
       );
       for (const id of renderer.getActiveIds()) {
         if (!activeBulletIds.has(id)) renderer.destroyVisual(id);
@@ -1165,6 +1188,32 @@ export class ProjectileManager {
       );
       for (const id of bfgR.getActiveIds()) {
         if (!activeBfgIds.has(id)) bfgR.destroyVisual(id);
+      }
+    }
+
+    const gaussR = this.gaussRenderer;
+    if (gaussR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'gauss') {
+          if (!gaussR.has(proj.id)) {
+            gaussR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          }
+          gaussR.updateVisual(
+            proj.id,
+            proj.sprite.x,
+            proj.sprite.y,
+            proj.sprite.displayWidth,
+            proj.body.velocity.x,
+            proj.body.velocity.y,
+            proj.color,
+          );
+        }
+      }
+      const activeGaussIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'gauss').map(p => p.id),
+      );
+      for (const id of gaussR.getActiveIds()) {
+        if (!activeGaussIds.has(id)) gaussR.destroyVisual(id);
       }
     }
 
@@ -1424,13 +1473,14 @@ export class ProjectileManager {
       const isBfgP   = proj.style === 'bfg';
       const isHolyGrenadeP = proj.style === 'holy_grenade';
       const isAwpP   = proj.style === 'awp';
+      const isGaussP = proj.style === 'gauss';
       const isRocket = proj.style === 'rocket';
       const isGrenadeP = proj.style === 'grenade';
       const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
 
       // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
       const prev = this.clientProjStates.get(proj.id);
-      const velocityFlipped = prev && (isBullet || isAwpP) &&
+      const velocityFlipped = prev && (isBullet || isAwpP || isGaussP) &&
         (prev.vx * proj.vx < -1 || prev.vy * proj.vy < -1);
       // Tracer-Spawn nach Abpraller zurücksetzen (vor dem Tracer-Update weiter unten)
       if (velocityFlipped && tracerRc && tracerRc.has(proj.id)) {
@@ -1519,7 +1569,7 @@ export class ProjectileManager {
           flames.createVisual(proj.id, proj.x, proj.y, proj.size);
         }
         flames.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
-      } else if (isAwpP && renderer) {
+      } else if ((isAwpP || isGaussP) && renderer) {
         if (!renderer.has(proj.id)) {
           renderer.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);
         }
@@ -1594,6 +1644,8 @@ export class ProjectileManager {
       const bfgRe = this.bfgRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
+      } else if (state.style === 'gauss' && this.gaussRenderer?.has(id)) {
+        this.gaussRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color);
       } else if (state.style === 'grenade' && this.grenadeRenderer?.has(id)) {
         this.grenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
       } else if (state.style === 'holy_grenade' && this.holyGrenadeRenderer?.has(id)) {
@@ -1607,7 +1659,7 @@ export class ProjectileManager {
       } else if (state.style === 'flame' && flames && flames.has(id)) {
         const decayFactor = Math.pow(0.82, dt);
         flames.updateVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);
-      } else if (state.style === 'awp' && renderer && renderer.has(id)) {
+      } else if ((state.style === 'awp' || state.style === 'gauss') && renderer && renderer.has(id)) {
         renderer.syncToBody(id, ex, ey, state.vx, state.vy);
       } else if (state.style === 'bullet' && renderer && renderer.has(id)) {
         renderer.updatePosition(id, ex, ey, state.vx, state.vy);

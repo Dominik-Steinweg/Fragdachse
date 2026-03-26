@@ -25,6 +25,7 @@ import { BulletRenderer }      from '../effects/BulletRenderer';
 import { FlameRenderer }       from '../effects/FlameRenderer';
 import { BfgRenderer }         from '../effects/BfgRenderer';
 import { EnergyBallRenderer }  from '../effects/EnergyBallRenderer';
+import { GaussRenderer }       from '../effects/GaussRenderer';
 import { TeslaDomeRenderer }   from '../effects/TeslaDomeRenderer';
 import { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../effects/RocketRenderer';
@@ -62,6 +63,7 @@ import {
   DASH_T2_S,
   NET_TICK_INTERVAL_MS, NET_SMOOTH_TIME_MS,
   ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS,
+  RAGE_MAX,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import type { LoadoutCommitSnapshot } from '../types';
@@ -93,6 +95,7 @@ export class ArenaScene extends Phaser.Scene {
   private flameRenderer!:     FlameRenderer;
   private bfgRenderer!:       BfgRenderer;
   private energyBallRenderer!: EnergyBallRenderer;
+  private gaussRenderer!:     GaussRenderer;
   private teslaDomeRenderer!: TeslaDomeRenderer;
   private holyGrenadeRenderer!: HolyGrenadeRenderer;
   private rocketRenderer!:    RocketRenderer;
@@ -109,6 +112,8 @@ export class ArenaScene extends Phaser.Scene {
   private rightPanel!: RightSidePanel;
   private aimSystem:   AimSystem | null = null;
   private utilityChargeIndicator: UtilityChargeIndicator | null = null;
+  private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
+    private gaussWarningGraphics: Phaser.GameObjects.Graphics | null = null;
   private arenaCountdown: ArenaCountdownOverlay | null = null;
   private utilityTargetingHint: Phaser.GameObjects.Container | null = null;
 
@@ -245,6 +250,9 @@ export class ArenaScene extends Phaser.Scene {
     this.energyBallRenderer = new EnergyBallRenderer(this);
     this.energyBallRenderer.generateTextures();
     this.projectileManager.setEnergyBallRenderer(this.energyBallRenderer);
+    this.gaussRenderer = new GaussRenderer(this);
+    this.gaussRenderer.generateTextures();
+    this.projectileManager.setGaussRenderer(this.gaussRenderer);
     this.teslaDomeRenderer = new TeslaDomeRenderer(this);
     this.teslaDomeRenderer.generateTextures();
     this.holyGrenadeRenderer = new HolyGrenadeRenderer(this);
@@ -322,6 +330,8 @@ export class ArenaScene extends Phaser.Scene {
     this.inputSystem.setup();
     this.inputSystem.setupUtilityConfigProvider(() => this.getLocalUtilityConfig());
     this.inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
+    this.inputSystem.setupUltimateConfigProvider(() => this.getLocalUltimateConfig());
+    this.inputSystem.setupLocalRageProvider(() => this.getLocalRage());
     this.inputSystem.setupTranslocatorRecallCheck(() => {
       const cfg = this.getLocalUtilityConfig();
       if (!cfg || cfg.type !== 'translocator') return false;
@@ -380,6 +390,11 @@ export class ArenaScene extends Phaser.Scene {
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
     this.utilityChargeIndicator = new UtilityChargeIndicator(
+      this,
+      () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
+    );
+    this.ultimateChargeIndicator = new UtilityChargeIndicator(
       this,
       () => this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
@@ -657,8 +672,10 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.leftPanel.transitionToGame();
+    this.gaussWarningGraphics = this.add.graphics().setDepth(DEPTH.OVERLAY - 2);
     this.rightPanel.transitionToGame();
     this.syncHostLoadoutsFromCommittedSelections();
+    this.resetLocalArenaHudState();
     this.overlayTrackedLocalAlive = null;
     this.arenaCountdown?.syncTo(bridge.getArenaStartTime());
     this.lobbyOverlay.lockButton();
@@ -672,6 +689,7 @@ export class ArenaScene extends Phaser.Scene {
     this.overlayTrackedLocalAlive = null;
     this.clientUtilityOverride = null;
     this.arenaCountdown?.clear();
+    this.resetLocalArenaHudState();
 
     for (const p of [...this.playerManager.getAllPlayers()]) {
       if (bridge.isHost()) {
@@ -728,6 +746,7 @@ export class ArenaScene extends Phaser.Scene {
         this.combatSystem.initPlayer(profile.id);
         this.resourceSystem?.initPlayer(profile.id);
         this.burrowSystem?.initPlayer(profile.id);
+        this.loadoutManager?.resetUltimateState(profile.id);
         this.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
       }
     }
@@ -1091,6 +1110,7 @@ export class ArenaScene extends Phaser.Scene {
     this.teslaDomeRenderer.destroyAll();
     this.effectSystem.clearAllBurrowStates();
     this.prevBurrowPhases.clear();
+    this.gaussWarningGraphics?.clear();
 
     if (this.arenaResult) {
       ArenaBuilder.destroyDynamic(this.arenaResult);
@@ -1110,6 +1130,7 @@ export class ArenaScene extends Phaser.Scene {
     this.loadoutManager?.setCombatSystem(null);
     this.loadoutManager?.setTeslaDomeSystem(null);
     this.loadoutManager?.setActionBlockedChecker(null);
+    this.loadoutManager?.resetAllUltimateStates();
     this.loadoutManager = null;
     this.combatSystem.setBurrowSystem(null);
     this.combatSystem.setResourceSystem(null);
@@ -1227,12 +1248,15 @@ export class ArenaScene extends Phaser.Scene {
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     this.teslaDomeRenderer?.update(delta);
     const utilityTargeting = this.inputSystem.getUtilityTargetingPreviewState();
+        const ultimatePreview = this.inputSystem.getUltimateChargePreviewState();
     const showAim = inArena
            && this.localPlayerAlive
            && !this.localPlayerBurrowed
            && !this.inputSystem.isUtilityChargePreviewActive();
-    this.aimSystem?.update(showAim || utilityTargeting !== undefined, inArena, delta, utilityTargeting);
+        this.aimSystem?.update(showAim || utilityTargeting !== undefined, inArena, delta, utilityTargeting, ultimatePreview);
     this.utilityChargeIndicator?.update(this.inputSystem.getUtilityChargePreviewState());
+        this.ultimateChargeIndicator?.update(ultimatePreview);
+    this.renderRemoteGaussWarnings();
         this.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined);
   }
 
@@ -1795,14 +1819,18 @@ export class ArenaScene extends Phaser.Scene {
       localPlayer.setRotation(this.inputSystem.getAimAngle());
       const now = Date.now();
       const utilCfg = this.loadoutManager?.getEquippedUtilityConfig(localId);
+      const ultCfg = this.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getLocalUltimateConfig();
       const syringeActive = (this.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1;
       const activePowerUps = this.powerUpSystem?.getActiveBuffsForHUD(localId) ?? [];
+      const ultimateThresholds = this.loadoutManager?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
       this.leftPanel.updateArenaHUD({
         hp:                      this.combatSystem.getHP(localId),
         armor:                   this.combatSystem.getArmor(localId),
         adrenaline:              this.resourceSystem?.getAdrenaline(localId) ?? 0,
         rage:                    this.resourceSystem?.getRage(localId) ?? 0,
         isUltimateActive:        this.loadoutManager?.isUltimateActive(localId) ?? false,
+        ultimateRequiredRage:    ultCfg?.rageRequired ?? 300,
+        ultimateThresholds,
         weapon1CooldownFrac:     this.loadoutManager?.getCooldownFrac(localId, 'weapon1', now) ?? 0,
         weapon2CooldownFrac:     this.loadoutManager?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
@@ -1833,6 +1861,9 @@ export class ArenaScene extends Phaser.Scene {
       const isStunned  = this.burrowSystem?.isStunned(player.id)  ?? false;
       const burrowPhase = this.burrowSystem?.getPhase(player.id) ?? 'idle';
       const isRaging   = this.loadoutManager?.isUltimateActive(player.id) ?? false;
+      const isChargingUltimate = this.loadoutManager?.isUltimateCharging(player.id) ?? false;
+      const ultimateChargeFraction = this.loadoutManager?.getUltimateChargeFraction(player.id, Date.now()) ?? 0;
+      const ultimateChargeRange = this.loadoutManager?.getUltimateChargeRange(player.id) ?? 0;
       const isMoving   = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
       const aim        = this.loadoutManager?.getAimNetState(player.id, isMoving)
                       ?? this.getDefaultAimState(isMoving);
@@ -1856,6 +1887,9 @@ export class ArenaScene extends Phaser.Scene {
         isStunned,
         burrowPhase,
         isRaging,
+        isChargingUltimate,
+        ultimateChargeFraction,
+        ultimateChargeRange,
         dashPhase: this.hostPhysics.getDashPhase(player.id),
         aim: {
           revision:             aim.revision,
@@ -1985,6 +2019,8 @@ export class ArenaScene extends Phaser.Scene {
       this.aimSystem?.setAuthoritativeState(localState.aim);
       this.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase);
       const localUtilityConfig = this.getLocalUtilityConfig();
+      const localUltimateConfig = this.getLocalUltimateConfig();
+      const ultimateThresholds = this.getLocalUltimateThresholds();
       const overrideName = bridge.getPlayerUtilityOverrideName(localId2);
       const utilDisplayName = overrideName
         || this.clientUtilityOverride?.displayName
@@ -1995,6 +2031,8 @@ export class ArenaScene extends Phaser.Scene {
         adrenaline:              localState.adrenaline,
         rage:                    localState.rage,
         isUltimateActive:        localState.isRaging,
+        ultimateRequiredRage:    localUltimateConfig.rageRequired,
+        ultimateThresholds,
         weapon1CooldownFrac:     this.getClientWeaponCooldownFrac('weapon1'),
         weapon2CooldownFrac:     this.getClientWeaponCooldownFrac('weapon2'),
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
@@ -2072,6 +2110,106 @@ export class ArenaScene extends Phaser.Scene {
     // Fallback: Loadout-Menü-Auswahl
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
+  }
+
+  private getLocalUltimateConfig() {
+    const localId = bridge.getLocalPlayerId();
+    const equipped = this.loadoutManager?.getEquippedUltimateConfig(localId);
+    if (equipped) return equipped;
+    const selection = this.resolveCommittedLoadoutSelection(localId);
+    return selection.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
+  }
+
+  private getLocalUltimateThresholds(): number[] {
+    const localId = bridge.getLocalPlayerId();
+    const fromManager = this.loadoutManager?.getUltimateThresholds(localId);
+    if (fromManager && fromManager.length > 0) return fromManager;
+    const config = this.getLocalUltimateConfig();
+    if (config.type === 'gauss') {
+      const thresholds: number[] = [];
+      for (let value = config.rageCost; value < RAGE_MAX; value += config.rageCost) {
+        thresholds.push(value);
+      }
+      return thresholds;
+    }
+    return [config.rageRequired];
+  }
+
+  private renderRemoteGaussWarnings(): void {
+    const graphics = this.gaussWarningGraphics;
+    graphics?.clear();
+    if (!graphics) return;
+
+    const state = bridge.getLatestGameState();
+    if (!state || bridge.getGamePhase() !== 'ARENA') return;
+
+    const localId = bridge.getLocalPlayerId();
+    const time = this.time.now;
+    for (const [playerId, playerState] of Object.entries(state.players)) {
+      if (playerId === localId || !playerState.alive || !playerState.isChargingUltimate) continue;
+      const range = Math.max(0, playerState.ultimateChargeRange ?? 0);
+      const chargeFraction = Phaser.Math.Clamp(playerState.ultimateChargeFraction ?? 0, 0, 1);
+      if (range <= 0 || chargeFraction <= 0) continue;
+
+      const dirX = Math.cos(dequantizeAngle(playerState.rot));
+      const dirY = Math.sin(dequantizeAngle(playerState.rot));
+      const pulse = 0.65 + 0.35 * Math.sin(time * 0.018 + chargeFraction * Math.PI * 2);
+      const beamLength = Phaser.Math.Linear(80, Math.min(range, 320), chargeFraction);
+      const startX = playerState.x + dirX * 26;
+      const startY = playerState.y + dirY * 26;
+      const endX = startX + dirX * beamLength;
+      const endY = startY + dirY * beamLength;
+      const sideX = -dirY;
+      const sideY = dirX;
+      const beamWidth = 10 + chargeFraction * 16;
+
+      graphics.fillStyle(0x8fe9ff, 0.08 + chargeFraction * 0.12);
+      graphics.beginPath();
+      graphics.moveTo(startX + sideX * beamWidth, startY + sideY * beamWidth);
+      graphics.lineTo(endX + sideX * beamWidth * 0.3, endY + sideY * beamWidth * 0.3);
+      graphics.lineTo(endX - sideX * beamWidth * 0.3, endY - sideY * beamWidth * 0.3);
+      graphics.lineTo(startX - sideX * beamWidth, startY - sideY * beamWidth);
+      graphics.closePath();
+      graphics.fillPath();
+
+      graphics.lineStyle(2 + chargeFraction * 3, 0xdaf7ff, 0.3 + chargeFraction * 0.35);
+      graphics.beginPath();
+      graphics.moveTo(startX, startY);
+      graphics.lineTo(endX, endY);
+      graphics.strokePath();
+
+      graphics.lineStyle(1.5, 0x8fe9ff, 0.45 + chargeFraction * 0.25);
+      graphics.strokeCircle(startX, startY, 12 + chargeFraction * 10 + pulse * 3);
+      graphics.strokeCircle(startX, startY, 22 + chargeFraction * 18 + pulse * 6);
+    }
+  }
+
+  private resetLocalArenaHudState(): void {
+    const config = this.getLocalUltimateConfig();
+    this.leftPanel.updateArenaHUD({
+      hp: 100,
+      armor: 0,
+      adrenaline: 0,
+      rage: 0,
+      isUltimateActive: false,
+      ultimateRequiredRage: config.rageRequired,
+      ultimateThresholds: this.getLocalUltimateThresholds(),
+      weapon1CooldownFrac: 0,
+      weapon2CooldownFrac: 0,
+      utilityCooldownFrac: 0,
+      utilityDisplayName: this.getLocalUtilityConfig().displayName,
+      adrenalineSyringeActive: false,
+      isUtilityOverridden: false,
+      activePowerUps: [],
+    });
+  }
+
+  private getLocalRage(): number {
+    const localId = bridge.getLocalPlayerId();
+    if (bridge.isHost()) {
+      return this.resourceSystem?.getRage(localId) ?? 0;
+    }
+    return bridge.getLatestGameState()?.players[localId]?.rage ?? 0;
   }
 
   /** Client-seitiger Waffen-Cooldown basierend auf lokalem Fire-Timestamp und Config-Cooldown. */

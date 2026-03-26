@@ -252,19 +252,42 @@ export interface ArmageddonMeteorConfig {
   readonly trainDamageMult?: number;    // Schadensfaktor gegen den Zug (Default 1.0)
 }
 
-export interface UltimateConfig {
+interface BaseUltimateConfig {
   readonly id: string;
   readonly displayName: string;
   readonly cooldown: number;          // ms (0 = rage-gated, kein Zeitcooldown)
-  readonly rageRequired: number;      // Rage-Wert zum Aktivieren (= RAGE_MAX)
+  readonly rageRequired: number;      // Mindest-Rage zum Aktivieren
+}
+
+export interface BuffUltimateConfig extends BaseUltimateConfig {
+  readonly type: 'buff';
   readonly duration: number;          // ms wie lange der Effekt anhält
   readonly speedMultiplier: number;   // z.B. 1.3 = 30% schneller
   readonly damageMultiplier: number;  // z.B. 2.0 = doppelter Schaden
   readonly rageDrainDuration: number; // ms über die Rage von max→0 sinkt
-
-  // Armageddon-Ultimate (optional, nur bei Armageddon gesetzt)
   readonly armageddon?: ArmageddonMeteorConfig;
 }
+
+export interface GaussUltimateConfig extends BaseUltimateConfig {
+  readonly type: 'gauss';
+  readonly rageCost: number;
+  readonly chargeDuration: number;
+  readonly chargeColor: number;
+  readonly movementSlowFactor: number;
+  readonly projectileSpeed: number;
+  readonly projectileSize: number;
+  readonly projectileColor: number;
+  readonly bulletVisualPreset: BulletVisualPreset;
+  readonly tracerConfig: TracerConfig;
+  readonly damage: number;
+  readonly range: number;
+  readonly rockDamageMult: number;
+  readonly trainDamageMult?: number;
+  readonly shotRecoilForce: number;
+  readonly shotRecoilDuration: number;
+}
+
+export type UltimateConfig = BuffUltimateConfig | GaussUltimateConfig;
 
 // ── Item-Registrierung ────────────────────────────────────────────────────────
 
@@ -1028,15 +1051,16 @@ export const UTILITY_CONFIGS = {
 
 export const ULTIMATE_CONFIGS = {
   HONEY_BADGER_RAGE: {
+    type:               'buff',
     id:                 'HONEY_BADGER_RAGE',
     displayName:        'Honigdachs-Wut',
     cooldown:           0,          // rage-gated, kein Zeitcooldown
-    rageRequired:       RAGE_MAX,   // 300
+    rageRequired:       300,
     duration:           5000,
     speedMultiplier:    1.5,
     damageMultiplier:   1.5,
     rageDrainDuration:  5000,
-  } as UltimateConfig,
+  } as BuffUltimateConfig,
 
   /**
    * ARMAGEDDON – Inspiriert vom Druiden-Skill aus Diablo 2.
@@ -1044,10 +1068,11 @@ export const ULTIMATE_CONFIGS = {
    * Jeder Meteor zeigt einen Warnkreis, fällt dann herab und macht AoE-Schaden.
    */
   ARMAGEDDON: {
+    type:               'buff',
     id:                 'ARMAGEDDON',
     displayName:        'Armageddon',
     cooldown:           0,
-    rageRequired:       RAGE_MAX,
+    rageRequired:       300,
     duration:           7000,
     speedMultiplier:    1.0,
     damageMultiplier:   1.0,
@@ -1063,7 +1088,40 @@ export const ULTIMATE_CONFIGS = {
       rockDamageMult:     0.5,
       trainDamageMult:    0.5,
     },
-  } as UltimateConfig,
+  } as BuffUltimateConfig,
+
+  GAUSS_RIFLE: {
+    type:               'gauss',
+    id:                 'GAUSS_RIFLE',
+    displayName:        'Gauss-Gewehr',
+    cooldown:           0,
+    rageRequired:       200,
+    rageCost:           200,
+    chargeDuration:     400,
+    chargeColor:        0x78d6ff,
+    movementSlowFactor: 0.72,
+    projectileSpeed:    3500,
+    projectileSize:     16,
+    projectileColor:    0xc8f6ff,
+    bulletVisualPreset: 'gauss',
+    tracerConfig: {
+      widthCore:  8,
+      widthGlow:  22,
+      alphaCore:  0.96,
+      alphaGlow:  0.72,
+      segments:   12,
+      fadeMs:     1400,
+      maxLength:  340,
+      colorCore:  0xf4ffff,
+      colorGlow:  0x59c7ff,
+    } satisfies TracerConfig,
+    damage:             100,
+    range:              1800,
+    rockDamageMult:     2,
+    trainDamageMult:    1,
+    shotRecoilForce:    750,
+    shotRecoilDuration: 200,
+  } as GaussUltimateConfig,
 } as const;
 
 // ── Standard-Loadout für alle Spieler beim Spawn ──────────────────────────────

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import { AimSpreadModel } from './AimSpreadModel';
-import type { PlayerAimNetState, UtilityChargePreviewState, UtilityTargetingPreviewState, WeaponSlot } from '../types';
+import type { PlayerAimNetState, UltimateChargePreviewState, UtilityChargePreviewState, UtilityTargetingPreviewState, WeaponSlot } from '../types';
 import {
   COLORS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
@@ -110,7 +110,13 @@ export class AimSystem {
     this.confirmedHitUntil = this.scene.time.now + HIT_FLASH_MS;
   }
 
-  update(showAim: boolean, inArena: boolean, delta: number, utilityTargeting?: UtilityTargetingPreviewState): void {
+  update(
+    showAim: boolean,
+    inArena: boolean,
+    delta: number,
+    utilityTargeting?: UtilityTargetingPreviewState,
+    ultimatePreview?: UltimateChargePreviewState,
+  ): void {
     this.scene.input.setDefaultCursor(inArena ? 'none' : 'default');
 
     if (showAim && !this.prevShowAim) {
@@ -132,6 +138,11 @@ export class AimSystem {
       const tx = this.snap(utilityTargeting.targetX);
       const ty = this.snap(utilityTargeting.targetY);
       this.drawTargetingReticle(tx, ty);
+      return;
+    }
+
+    if (ultimatePreview?.reticleStyle === 'gauss' && ultimatePreview.range) {
+      this.drawGaussAimReticle(sx, sy, ultimatePreview);
       return;
     }
 
@@ -251,6 +262,52 @@ export class AimSystem {
 
     this.gfx.fillStyle(COLORS.GREY_1, 0.9);
     this.gfx.fillCircle(cx, cy, 2);
+  }
+
+  private drawGaussAimReticle(sx: number, sy: number, preview: UltimateChargePreviewState): void {
+    const range = Math.max(0, preview.range ?? 0);
+    const chargeFraction = Phaser.Math.Clamp(preview.chargeFraction, 0, 1);
+    const color = preview.colorOverride ?? this.getAccentColor();
+    const pulse = 0.5 + 0.5 * Math.sin(this.scene.time.now * 0.02 + chargeFraction * Math.PI * 2);
+    const nx = Math.cos(preview.angle);
+    const ny = Math.sin(preview.angle);
+    const ex = sx + nx * range;
+    const ey = sy + ny * range;
+    const clipped = this.clipToArena(sx, sy, ex, ey);
+    const tx = this.snap(clipped.x);
+    const ty = this.snap(clipped.y);
+    const sideX = -ny;
+    const sideY = nx;
+    const railOffset = 6 + chargeFraction * 6;
+
+    this.strokeLine(12, COLORS.GREY_10, 0.16 + chargeFraction * 0.04, sx, sy, tx, ty);
+    this.strokeLine(7, this.mixWithWhite(color, 0.2), 0.18 + chargeFraction * 0.1, sx, sy, tx, ty);
+    this.strokeLine(3, this.mixWithWhite(color, 0.55), 0.5 + chargeFraction * 0.16, sx, sy, tx, ty);
+
+    this.strokeLine(3, color, 0.28 + chargeFraction * 0.2, sx + sideX * railOffset, sy + sideY * railOffset, tx + sideX * railOffset * 0.4, ty + sideY * railOffset * 0.4);
+    this.strokeLine(3, color, 0.28 + chargeFraction * 0.2, sx - sideX * railOffset, sy - sideY * railOffset, tx - sideX * railOffset * 0.4, ty - sideY * railOffset * 0.4);
+
+    const ringRadius = 16 + chargeFraction * 12 + pulse * 2;
+    this.gfx.lineStyle(6, COLORS.GREY_10, 0.28);
+    this.gfx.strokeCircle(tx, ty, ringRadius + 3);
+    this.gfx.lineStyle(3, this.mixWithWhite(color, 0.38), 0.45 + chargeFraction * 0.15);
+    this.gfx.strokeCircle(tx, ty, ringRadius);
+    this.gfx.lineStyle(1.5, COLORS.GREY_1, 0.8);
+    this.gfx.strokeCircle(tx, ty, Math.max(8, ringRadius - 9));
+
+    const chevronGap = ringRadius + 10;
+    const chevronDepth = 14 + chargeFraction * 8;
+    this.strokeLine(3, COLORS.GREY_10, 0.3, tx + sideX * chevronGap, ty + sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
+    this.strokeLine(3, COLORS.GREY_10, 0.3, tx - sideX * chevronGap, ty - sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
+    this.strokeLine(2, color, 0.9, tx + sideX * chevronGap, ty + sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
+    this.strokeLine(2, color, 0.9, tx - sideX * chevronGap, ty - sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
+
+    const rearGap = ringRadius + 6;
+    this.strokeLine(2, this.mixWithWhite(color, 0.5), 0.85, tx + sideX * rearGap, ty + sideY * rearGap, tx + sideX * (rearGap + 10), ty + sideY * (rearGap + 10));
+    this.strokeLine(2, this.mixWithWhite(color, 0.5), 0.85, tx - sideX * rearGap, ty - sideY * rearGap, tx - sideX * (rearGap + 10), ty - sideY * (rearGap + 10));
+
+    this.gfx.fillStyle(this.mixWithWhite(color, 0.65), 0.95);
+    this.gfx.fillCircle(tx, ty, 2 + chargeFraction * 2);
   }
 
   private drawCrosshairArm(
@@ -451,7 +508,7 @@ export class UtilityChargeIndicator {
     this.currentEffectColor = color;
   }
 
-  update(preview: UtilityChargePreviewState | undefined): void {
+  update(preview: UtilityChargePreviewState | UltimateChargePreviewState | undefined): void {
     const sprite = this.getLocalSprite();
     if (!preview || !sprite) {
       if (this.wasVisible && this.livingEffect) this.livingEffect.stop();
@@ -480,7 +537,7 @@ export class UtilityChargeIndicator {
       return;
     }
 
-    const fillColor = preview.isGateCharge ? COLORS.GREEN_2 : playerColor;
+    const fillColor = preview.colorOverride ?? (preview.isGateCharge ? COLORS.GREEN_2 : playerColor);
     this.ensureLivingEffect(fillColor);
 
     if (!this.wasVisible && this.livingEffect) this.livingEffect.start();

@@ -172,12 +172,16 @@ export class CombatSystem {
     const absorbedByArmor = Math.min(currentArmor, amount);
     const overflowDamage = Math.max(0, amount - absorbedByArmor);
     const newArmor = Math.max(0, currentArmor - absorbedByArmor);
-    const newHp = Math.max(0, (this.hp.get(targetId) ?? HP_MAX) - overflowDamage);
+    const currentHp = this.hp.get(targetId) ?? HP_MAX;
+    const newHp = Math.max(0, currentHp - overflowDamage);
     this.armor.set(targetId, newArmor);
     this.hp.set(targetId, newHp);
 
-    // Wut-Gewinn proportional zum Schaden
-    this.resourceSystem?.addRage(targetId, amount * RAGE_PER_DAMAGE);
+    // Wut-Gewinn nur aus tatsaechlich verlorenem HP-Wert, nie aus Armor oder Overkill.
+    const hpLost = currentHp - newHp;
+    if (hpLost > 0) {
+      this.resourceSystem?.addRage(targetId, hpLost * RAGE_PER_DAMAGE);
+    }
 
     this.bridge.broadcastEffect('hit', x, y, attackerId);
 
@@ -255,11 +259,17 @@ export class CombatSystem {
           const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
           const actualDamage = proj.damage * loadoutMult * powerUpMult;
 
-          if (proj.isBfg) {
-            // BFG: Piercing – Spieler nur 1x treffen, Projektil fliegt weiter
+          if (proj.isBfg || proj.projectileStyle === 'gauss') {
+            // Piercing-Projektile: Spieler nur 1x treffen, Projektil fliegt weiter.
             if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-            if (proj.bfgHitPlayers.has(player.id)) continue;
-            proj.bfgHitPlayers.add(player.id);
+            if (proj.projectileStyle === 'gauss') {
+              if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
+              if (proj.gaussHitPlayers.has(player.id)) continue;
+              proj.gaussHitPlayers.add(player.id);
+            } else {
+              if (proj.bfgHitPlayers.has(player.id)) continue;
+              proj.bfgHitPlayers.add(player.id);
+            }
             this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName);
             continue; // kein break, kein destroyProjectile
           }

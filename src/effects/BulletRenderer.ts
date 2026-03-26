@@ -57,6 +57,7 @@ const BODY_TEXTURE_KEYS: Record<BulletVisualPreset, string> = {
   ak47: '__bullet_body_ak47',
   shotgun: '__bullet_body_shotgun',
   awp: '__bullet_body_awp',
+  gauss: '__bullet_body_gauss',
   negev: '__bullet_body_negev',
 };
 
@@ -68,6 +69,7 @@ const ACCENT_TEXTURE_KEYS: Record<BulletVisualPreset, string | undefined> = {
   ak47: '__bullet_accent_ak47',
   shotgun: '__bullet_accent_shotgun',
   awp: '__bullet_accent_awp',
+  gauss: '__bullet_accent_gauss',
   negev: '__bullet_accent_negev',
 };
 
@@ -247,6 +249,31 @@ const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
     impactFlashAlpha: 0.48,
     impactFlashDuration: 110,
   },
+  gauss: {
+    bodyTextureKey: BODY_TEXTURE_KEYS.gauss,
+    accentTextureKey: ACCENT_TEXTURE_KEYS.gauss,
+    scaleBoost:      1.75,
+    trailLengthMult: 9.8,
+    trailAlpha:      0.95,
+    trailScaleYMult: 2.4,
+    glowScale:       3.4,
+    glowAlpha:       0.62,
+    accentAlpha:     0.88,
+    accentScaleX:    1.42,
+    accentScaleY:    1.1,
+    sparkCount:      22,
+    sparkLifespan:   320,
+    sparkSpeedMin:   120,
+    sparkSpeedMax:   420,
+    sparkSpreadDeg:  65,
+    sparkGravityY:   80,
+    sparkScaleStart: 1.8,
+    sparkScaleEnd:   0.18,
+    sparkColors:     [0xffffff, 0xd9fbff, 0x8ae0ff, 0x3ab4ff],
+    impactFlashScale: 3.1,
+    impactFlashAlpha: 0.72,
+    impactFlashDuration: 140,
+  },
   negev: {
     bodyTextureKey: BODY_TEXTURE_KEYS.negev,
     accentTextureKey: ACCENT_TEXTURE_KEYS.negev,
@@ -386,6 +413,18 @@ export class BulletRenderer {
           ctx.fill();
         });
         break;
+      case 'gauss':
+        ensureCanvasTexture(texMgr, key, 24, 10, (ctx) => {
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(0.5, 5);
+          ctx.lineTo(12, 1.1);
+          ctx.lineTo(22.8, 5);
+          ctx.lineTo(12, 8.9);
+          ctx.closePath();
+          ctx.fill();
+        });
+        break;
       case 'negev':
         ensureCanvasTexture(texMgr, key, 15, 4, (ctx) => {
           ctx.fillStyle = '#ffffff';
@@ -467,6 +506,14 @@ export class BulletRenderer {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(1.5, 2.1, 12.5, 1.8);
           ctx.fillRect(13.8, 1.4, 3.8, 3.2);
+        });
+        break;
+      case 'gauss':
+        ensureCanvasTexture(texMgr, key, 24, 10, (ctx) => {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(1.5, 4.1, 10, 1.8);
+          ctx.fillRect(11.8, 2.6, 6.2, 4.8);
+          ctx.fillRect(18.4, 4.1, 3.8, 1.8);
         });
         break;
       case 'negev':

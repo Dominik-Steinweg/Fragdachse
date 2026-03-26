@@ -176,6 +176,8 @@ export interface ArenaHUDData {
   adrenaline:               number;
   rage:                     number;
   isUltimateActive:         boolean;
+  ultimateRequiredRage:     number;
+  ultimateThresholds:       number[];
   weapon1CooldownFrac:      number;
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
@@ -205,6 +207,7 @@ export class ArenaHUD {
   private ultGlow:          Phaser.FX.Glow | null = null;
   private ultPulseTween:    Phaser.Tweens.Tween | null = null;
   private wasUltReady       = false;
+  private ultThresholdMarks: Phaser.GameObjects.Rectangle[] = [];
 
   // HP catch-up
   private hpTrailDelay:     Phaser.Time.TimerEvent | null = null;
@@ -310,6 +313,7 @@ export class ArenaHUD {
     this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  'Waffe 1',   PAL_WPN,  '_hud_wpn',  { highlight: true });
     this.w2   = this.createBar(W2_LBL_Y,  W2_BAR_Y,  'Waffe 2',   PAL_WPN,  '_hud_wpn',  { highlight: true });
     this.util = this.createBar(UT_LBL_Y,  UT_BAR_Y,  'Utility',   PAL_UTIL, '_hud_util', { highlight: true });
+    this.syncUltimateThresholdMarks([]);
 
     // Red overlay on weapon 2 bar — shown when adrenaline is insufficient
     this.w2RedOverlay = this.scene.add.rectangle(BAR_X, W2_BAR_Y, BAR_W, BAR_H, COLORS.RED_3)
@@ -480,7 +484,7 @@ export class ArenaHUD {
     this.updateHP(data.hp);
     this.updateArmor(data.armor);
     this.updateAdrenaline(data.adrenaline, data.adrenalineSyringeActive ?? false);
-    this.updateUltimate(data.rage, data.isUltimateActive);
+    this.updateUltimate(data.rage, data.ultimateRequiredRage, data.ultimateThresholds, data.isUltimateActive);
     this.updateCooldownBar(this.w1, data.weapon1CooldownFrac);
     this.updateCooldownBar(this.w2, data.weapon2CooldownFrac);
     this.updateCooldownBar(this.util, data.utilityCooldownFrac);
@@ -756,7 +760,7 @@ export class ArenaHUD {
 
   // ── Ultimate ──────────────────────────────────────────────────────────────
 
-  private updateUltimate(rage: number, isActive: boolean): void {
+  private updateUltimate(rage: number, requiredRage: number, thresholds: number[], isActive: boolean): void {
     const frac = Math.max(0, Math.min(1, rage / RAGE_MAX));
     const prev = this.ult.prevFrac;
     this.setBarFrac(this.ult, frac);
@@ -765,12 +769,40 @@ export class ArenaHUD {
       this.flashBar(this.ult);
     }
 
-    const isReady = frac >= 1 || isActive;
+    const requiredFrac = Math.max(0, Math.min(1, requiredRage / RAGE_MAX));
+    const isReady = rage >= requiredRage || isActive;
     this.setBarEnergized(this.ult, isReady);
     if (isReady && !this.wasUltReady) this.addUltGlow();
     else if (!isReady && this.wasUltReady) this.removeUltGlow();
     this.wasUltReady = isReady;
     this.ult.prevFrac = frac;
+
+    this.syncUltimateThresholdMarks(thresholds);
+  }
+
+  private syncUltimateThresholdMarks(thresholds: number[]): void {
+    const normalized = thresholds
+      .filter(value => value > 0 && value < RAGE_MAX)
+      .sort((left, right) => left - right);
+
+    while (this.ultThresholdMarks.length < normalized.length) {
+      const mark = this.scene.add.rectangle(BAR_X, ULT_BAR_Y - 2, 2, BAR_H + 4, COLORS.GREY_1, 0.9)
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0);
+      this.container.add(mark);
+      this.ultThresholdMarks.push(mark);
+    }
+
+    while (this.ultThresholdMarks.length > normalized.length) {
+      this.ultThresholdMarks.pop()?.destroy();
+    }
+
+    normalized.forEach((value, index) => {
+      const frac = Phaser.Math.Clamp(value / RAGE_MAX, 0, 1);
+      const mark = this.ultThresholdMarks[index];
+      mark.setVisible(true);
+      mark.x = BAR_X + BAR_W * frac;
+    });
   }
 
   private addUltGlow(): void {

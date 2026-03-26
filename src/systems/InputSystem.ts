@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, PlayerInput, LoadoutSlot, LoadoutUseParams, UtilityChargePreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
@@ -11,7 +11,9 @@ const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
   ChargedThrowUtilityActivationConfig,
   ChargedGateUtilityActivationConfig,
+  GaussUltimateConfig,
   TargetedClickUtilityActivationConfig,
+  UltimateConfig,
   UtilityConfig,
 } from '../loadout/LoadoutConfig';
 
@@ -40,11 +42,15 @@ export class InputSystem {
   private onLoadoutUse: ((slot: LoadoutSlot, angle: number, targetX: number, targetY: number, params?: LoadoutUseParams) => void) | null = null;
   private getLocalUtilityConfig: (() => UtilityConfig | undefined) | null = null;
   private getLocalUtilityCooldownUntil: (() => number) | null = null;
+  private getLocalUltimateConfig: (() => UltimateConfig | undefined) | null = null;
+  private getLocalRage: (() => number) | null = null;
   private predictedUtilityCooldownUntil = 0;
   private utilityHoldActive = false;
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
   private utilityTargetingActive = false;
+  private ultimateHoldActive = false;
+  private ultimateChargeStartedAt: number | null = null;
 
   // Aktueller Aim-Winkel (Radiant, für Rotation-Sync)
   private currentAimAngle = 0;
@@ -98,6 +104,14 @@ export class InputSystem {
     this.getLocalUtilityCooldownUntil = cb;
   }
 
+  setupUltimateConfigProvider(cb: () => UltimateConfig | undefined): void {
+    this.getLocalUltimateConfig = cb;
+  }
+
+  setupLocalRageProvider(cb: () => number): void {
+    this.getLocalRage = cb;
+  }
+
   /**
    * Callback: gibt true zurück wenn der Translocator-Puck aktiv ist und E
    * sofort (ohne Aufladen) den Teleport auslösen soll.
@@ -118,6 +132,7 @@ export class InputSystem {
     this.localBurrowPhase = burrowPhase;
     if (isStunned || burrowPhase === 'windup' || burrowPhase === 'underground' || burrowPhase === 'trapped') {
       this.cancelUtilityInteraction();
+      this.cancelUltimateCharge();
     }
   }
 
@@ -151,6 +166,31 @@ export class InputSystem {
 
   isUtilityTargetingActive(): boolean {
     return this.utilityTargetingActive;
+  }
+
+  getUltimateChargePreviewState(): UltimateChargePreviewState | undefined {
+    const sprite = this.getLocalSprite();
+    const cfg = this.getGaussUltimateConfig();
+    if (!this.ultimateHoldActive || !sprite || !cfg) return undefined;
+
+    const pointer = this.scene.input.activePointer;
+    const clampedTarget = clampPointToArena(pointer.x, pointer.y);
+    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
+    const chargeFraction = this.ultimateChargeStartedAt === null
+      ? 0
+      : this.computeGaussChargeFraction(this.ultimateChargeStartedAt, cfg, Date.now());
+
+    return {
+      angle,
+      chargeFraction,
+      cooldownFrac: 0,
+      isBlocked: (this.getLocalRage?.() ?? 0) < cfg.rageRequired,
+      minThrowSpeed: 0,
+      maxThrowSpeed: cfg.projectileSpeed,
+      colorOverride: cfg.chargeColor,
+      range: cfg.range,
+      reticleStyle: 'gauss',
+    };
   }
 
   getUtilityChargePreviewState(): UtilityChargePreviewState | undefined {
@@ -211,6 +251,7 @@ export class InputSystem {
     // ── 2. Stun: keine weiteren Aktionen ───────────────────────────────────
     if (this.localIsStunned) {
       this.cancelUtilityInteraction();
+      this.cancelUltimateCharge();
       return;
     }
 
@@ -253,6 +294,7 @@ export class InputSystem {
     const utilityBlocked = this.localBurrowPhase === 'windup'
       || this.localBurrowPhase === 'underground'
       || this.localBurrowPhase === 'trapped';
+    const ultimateCfg = this.getLocalUltimateConfig?.();
 
     if (this.utilityTargetingActive) {
       const targetedCfg = this.getTargetedUtilityConfig();
@@ -324,10 +366,28 @@ export class InputSystem {
       this.cancelUtilityCharge();
     }
 
-    // Q-Taste → ultimate (keine Positionsdaten nötig)
-    if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
-      this.onLoadoutUse('ultimate', 0, 0, 0);
+    const gaussCfg = ultimateCfg?.type === 'gauss' ? ultimateCfg : undefined;
+    if (!utilityBlocked && gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      this.beginUltimateCharge(now, gaussCfg, angle, clampedTarget.x, clampedTarget.y);
+    } else if (!utilityBlocked && !gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y);
     }
+
+    if (this.ultimateHoldActive && this.ultimateChargeStartedAt !== null && this.keyQ.isDown && gaussCfg) {
+      this.scene.cameras.main.shake(50, 0.0022);
+    }
+
+    const releasedUltimate = Phaser.Input.Keyboard.JustUp(this.keyQ);
+    if (releasedUltimate && gaussCfg) {
+      this.releaseUltimateCharge(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
+    } else if (this.ultimateHoldActive && !this.keyQ.isDown) {
+      this.cancelUltimateCharge();
+    }
+  }
+
+  private getGaussUltimateConfig(): GaussUltimateConfig | undefined {
+    const cfg = this.getLocalUltimateConfig?.();
+    return cfg?.type === 'gauss' ? cfg : undefined;
   }
 
   private getChargeableUtilityConfig(): (UtilityConfig & { activation: ChargeableActivation }) | undefined {
@@ -437,5 +497,49 @@ export class InputSystem {
     this.utilityHoldActive = false;
     this.utilityChargeEligibleAt = null;
     this.utilityChargeStartedAt = null;
+  }
+
+  private beginUltimateCharge(
+    now: number,
+    _cfg: GaussUltimateConfig,
+    angle: number,
+    targetX: number,
+    targetY: number,
+  ): void {
+    const rage = this.getLocalRage?.() ?? 0;
+    const cfg = this.getGaussUltimateConfig();
+    if (!cfg || rage < cfg.rageRequired) return;
+    this.ultimateHoldActive = true;
+    this.ultimateChargeStartedAt = now;
+    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press' });
+  }
+
+  private releaseUltimateCharge(
+    angle: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    cfg: GaussUltimateConfig,
+  ): void {
+    const startedAt = this.ultimateChargeStartedAt;
+    this.cancelUltimateCharge();
+    if (startedAt === null) return;
+
+    const chargeFraction = this.computeGaussChargeFraction(startedAt, cfg, now);
+    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, {
+      ultimateAction: 'release',
+      ultimateChargeFraction: chargeFraction,
+    });
+  }
+
+  private computeGaussChargeFraction(startedAt: number, cfg: GaussUltimateConfig, now: number): number {
+    if (cfg.chargeDuration <= 0) return 1;
+    const elapsed = now - startedAt;
+    return Math.max(0, Math.min(1, elapsed / cfg.chargeDuration));
+  }
+
+  private cancelUltimateCharge(): void {
+    this.ultimateHoldActive = false;
+    this.ultimateChargeStartedAt = null;
   }
 }

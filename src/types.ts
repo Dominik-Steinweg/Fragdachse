@@ -41,6 +41,9 @@ export interface PlayerNetState {
   isStunned:  boolean;
   burrowPhase: BurrowPhase;
   isRaging:   boolean;  // Ultimate aktiv
+  isChargingUltimate?: boolean;
+  ultimateChargeFraction?: number;
+  ultimateChargeRange?: number;
   dashPhase:  0 | 1 | 2; // 0 = kein Dash, 1 = Burst, 2 = Recovery
   aim:        PlayerAimNetState;
 }
@@ -64,10 +67,10 @@ export interface SyncedTeslaDome {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'flame' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
-export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'negev';
+export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'gauss' | 'negev';
 
 /** Data-driven Preset fuer klassische geworfene Granaten. */
 export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov';
@@ -220,6 +223,8 @@ export interface LoadoutCommitSnapshot {
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
   utilityChargeFraction?: number; // 0 = Minimalwurf, 1 = voller Wurf
+  ultimateAction?: 'press' | 'release';
+  ultimateChargeFraction?: number;
 }
 
 /** Lokaler Preview-State für aufladbare Utility-Aktionen. */
@@ -231,6 +236,20 @@ export interface UtilityChargePreviewState {
   minThrowSpeed: number;
   maxThrowSpeed: number;
   isGateCharge?: boolean;  // true = Gate-Charge (muss voll aufgeladen werden, z.B. BFG)
+  colorOverride?: number;
+}
+
+export interface UltimateChargePreviewState {
+  angle: number;
+  chargeFraction: number;
+  cooldownFrac: number;
+  isBlocked: boolean;
+  minThrowSpeed: number;
+  maxThrowSpeed: number;
+  isGateCharge?: boolean;
+  colorOverride?: number;
+  range?: number;
+  reticleStyle?: 'gauss';
 }
 
 /** Lokaler Preview-State für zielbasierte Utility-Aktionen. */
@@ -444,6 +463,9 @@ export interface TrackedProjectile {
   bfgHitPlayers?:    Set<string>;     // Debounce: jeden Spieler nur 1x direkt treffen
   bfgHitRocks?:      Set<number>;     // Debounce: jeden Fels nur 1x zerstören
   bfgHitTrain?:      boolean;         // Debounce: Zug nur 1x pro Projektil beschädigen
+  gaussHitPlayers?:  Set<string>;     // Debounce: jeden Spieler nur 1x pro Schuss treffen
+  gaussHitRocks?:    Set<number>;     // Debounce: jeden Fels nur 1x pro Schuss treffen
+  gaussHitTrain?:    boolean;         // Debounce: Zug nur 1x pro Schuss treffen
 
   // Erweiterte Flugphysik
   frictionDelayMs?: number;

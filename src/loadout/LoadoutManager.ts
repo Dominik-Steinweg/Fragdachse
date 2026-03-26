@@ -10,6 +10,7 @@ import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetSt
 import type {
   BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
+  GaussUltimateConfig,
   NukeUtilityConfig,
   StinkCloudUtilityConfig,
   FlamethrowerWeaponFireConfig,
@@ -20,7 +21,7 @@ import type {
   UtilityConfig,
   WeaponConfig,
 } from './LoadoutConfig';
-import { COLORS } from '../config';
+import { COLORS, RAGE_MAX } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 
@@ -49,6 +50,10 @@ interface UltimateState {
   active:    boolean;
   startTime: number;
   config:    UltimateConfig;
+  consumedRage: number;
+  durationMs: number;
+  drainDurationMs: number;
+  gaussChargeStartedAt: number | null;
 }
 
 type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
@@ -105,6 +110,10 @@ export class LoadoutManager {
       active:    false,
       startTime: 0,
       config:    ultCfg,
+      consumedRage: 0,
+      durationMs: 0,
+      drainDurationMs: 0,
+      gaussChargeStartedAt: null,
     });
     // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
     this.savedUtilities.delete(playerId);
@@ -148,6 +157,26 @@ export class LoadoutManager {
     this.heldFireSlots.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.translocatorSystem?.removePlayer(playerId);
+  }
+
+  resetUltimateState(playerId: string): void {
+    const state = this.ultimateStates.get(playerId);
+    if (!state) return;
+    if (state.active && state.config.type === 'buff' && state.config.armageddon && this.armageddonSystem) {
+      this.armageddonSystem.deactivate(playerId);
+    }
+    state.active = false;
+    state.startTime = 0;
+    state.consumedRage = 0;
+    state.durationMs = 0;
+    state.drainDurationMs = 0;
+    state.gaussChargeStartedAt = null;
+  }
+
+  resetAllUltimateStates(): void {
+    for (const playerId of this.ultimateStates.keys()) {
+      this.resetUltimateState(playerId);
+    }
   }
 
   setCombatSystem(combatSystem: CombatResolverType | null): void {
@@ -293,20 +322,46 @@ export class LoadoutManager {
 
       case 'ultimate': {
         const ultState = this.ultimateStates.get(playerId);
-        if (ultState?.active) return;            // bereits aktiv
         const cfg  = loadout.ultimate.config;
-        const rage = this.resourceSystem.getRage(playerId);
-        if (rage < cfg.rageRequired) return;     // nicht genug Rage
-        this.ultimateStates.set(playerId, { active: true, startTime: now, config: cfg });
-
-        // Armageddon: Meteor-Spawning starten
-        if (cfg.armageddon && this.armageddonSystem) {
-          const pm = this.playerManager;
-          this.armageddonSystem.activate(playerId, cfg.armageddon, () => {
-            const p = pm.getPlayer(playerId);
-            return p ? { x: p.sprite.x, y: p.sprite.y } : null;
+        if (cfg.type === 'buff') {
+          if (ultState?.active) return;
+          const rage = this.resourceSystem.getRage(playerId);
+          if (rage < cfg.rageRequired) return;
+          const consumedRage = Math.min(rage, RAGE_MAX);
+          const scale = consumedRage / cfg.rageRequired;
+          const durationMs = Math.max(1, Math.round(cfg.duration * scale));
+          const drainDurationMs = Math.max(1, Math.round(cfg.rageDrainDuration * scale));
+          this.ultimateStates.set(playerId, {
+            active: true,
+            startTime: now,
+            config: cfg,
+            consumedRage,
+            durationMs,
+            drainDurationMs,
+            gaussChargeStartedAt: null,
           });
+
+          if (cfg.armageddon && this.armageddonSystem) {
+            const pm = this.playerManager;
+            this.armageddonSystem.activate(playerId, cfg.armageddon, () => {
+              const p = pm.getPlayer(playerId);
+              return p ? { x: p.sprite.x, y: p.sprite.y } : null;
+            });
+          }
+          return;
         }
+
+        this.handleGaussUltimateUse(
+          cfg,
+          playerId,
+          x,
+          y,
+          angle,
+          now,
+          player.color,
+          ultState,
+          params,
+        );
         break;
       }
     }
@@ -326,18 +381,22 @@ export class LoadoutManager {
     // Ultimate: Rage proportional drainieren + Effekt nach duration deaktivieren
     for (const [playerId, state] of this.ultimateStates) {
       if (!state.active) continue;
+      if (state.config.type !== 'buff') continue;
 
       const elapsed  = now - state.startTime;
-      const fraction = Math.min(1, elapsed / state.config.rageDrainDuration);
-      const targetRage  = state.config.rageRequired * (1 - fraction);
+      const fraction = Math.min(1, elapsed / state.drainDurationMs);
+      const targetRage  = state.consumedRage * (1 - fraction);
       const currentRage = this.resourceSystem.getRage(playerId);
       const drain = currentRage - targetRage;
       if (drain > 0) {
         this.resourceSystem.addRage(playerId, -drain);
       }
 
-      if (elapsed >= state.config.duration) {
+      if (elapsed >= state.durationMs) {
         state.active = false;
+        state.consumedRage = 0;
+        state.durationMs = 0;
+        state.drainDurationMs = 0;
         // Armageddon: Meteor-Spawning stoppen (In-Flight-Meteore schlagen noch ein)
         if (state.config.armageddon && this.armageddonSystem) {
           this.armageddonSystem.deactivate(playerId);
@@ -350,7 +409,10 @@ export class LoadoutManager {
 
   getSpeedMultiplier(playerId: string): number {
     const state        = this.ultimateStates.get(playerId);
-    const ultimateMult = state?.active ? state.config.speedMultiplier : 1;
+    const ultimateMult = state?.active && state.config.type === 'buff' ? state.config.speedMultiplier : 1;
+    const gaussSlowMult = state?.config.type === 'gauss' && state.gaussChargeStartedAt !== null
+      ? state.config.movementSlowFactor
+      : 1;
 
     // holdSpeedFactor: Verlangsamung wenn Feuerknopf gehalten wird
     const held = this.heldFireSlots.get(playerId);
@@ -359,22 +421,139 @@ export class LoadoutManager {
       if (cfg?.fire.type === 'tesla_dome') {
         const fireCfg = cfg.fire as TeslaDomeWeaponFireConfig;
         const holdFactor = this.teslaDomeSystem?.isActive(playerId) ? fireCfg.movementSlowFactor : 1;
-        return ultimateMult * holdFactor;
+        return ultimateMult * gaussSlowMult * holdFactor;
       }
       const holdFactor = cfg?.holdSpeedFactor ?? 1;
-      return ultimateMult * holdFactor;
+      return ultimateMult * gaussSlowMult * holdFactor;
     }
 
-    return ultimateMult;
+    return ultimateMult * gaussSlowMult;
   }
 
   getDamageMultiplier(playerId: string): number {
     const state = this.ultimateStates.get(playerId);
-    return state?.active ? state.config.damageMultiplier : 1;
+    return state?.active && state.config.type === 'buff' ? state.config.damageMultiplier : 1;
   }
 
   isUltimateActive(playerId: string): boolean {
     return this.ultimateStates.get(playerId)?.active ?? false;
+  }
+
+  getEquippedUltimateConfig(playerId: string): UltimateConfig | undefined {
+    return this.loadouts.get(playerId)?.ultimate.config;
+  }
+
+  getUltimateRequiredRage(playerId: string): number {
+    return this.loadouts.get(playerId)?.ultimate.config.rageRequired ?? RAGE_MAX;
+  }
+
+  isUltimateCharging(playerId: string): boolean {
+    return this.ultimateStates.get(playerId)?.gaussChargeStartedAt !== null;
+  }
+
+  getUltimateChargeFraction(playerId: string, now: number): number {
+    const state = this.ultimateStates.get(playerId);
+    if (!state || state.config.type !== 'gauss' || state.gaussChargeStartedAt === null) return 0;
+    if (state.config.chargeDuration <= 0) return 1;
+    return Math.max(0, Math.min(1, (now - state.gaussChargeStartedAt) / state.config.chargeDuration));
+  }
+
+  getUltimateChargeRange(playerId: string): number {
+    const state = this.ultimateStates.get(playerId);
+    if (state?.config.type === 'gauss') return state.config.range;
+    const config = this.loadouts.get(playerId)?.ultimate.config;
+    return config?.type === 'gauss' ? config.range : 0;
+  }
+
+  getUltimateThresholds(playerId: string): number[] {
+    const config = this.loadouts.get(playerId)?.ultimate.config;
+    if (!config) return [];
+    if (config.type === 'gauss') {
+      const thresholds: number[] = [];
+      for (let value = config.rageCost; value < RAGE_MAX; value += config.rageCost) {
+        thresholds.push(value);
+      }
+      return thresholds;
+    }
+    return [config.rageRequired];
+  }
+
+  private handleGaussUltimateUse(
+    cfg: GaussUltimateConfig,
+    playerId: string,
+    x: number,
+    y: number,
+    angle: number,
+    now: number,
+    playerColor: number,
+    state: UltimateState | undefined,
+    params?: LoadoutUseParams,
+  ): void {
+    const action = params?.ultimateAction;
+    const currentState = state ?? {
+      active: false,
+      startTime: 0,
+      config: cfg,
+      consumedRage: 0,
+      durationMs: 0,
+      drainDurationMs: 0,
+      gaussChargeStartedAt: null,
+    };
+    currentState.config = cfg;
+
+    if (action === 'press') {
+      if (currentState.gaussChargeStartedAt !== null) return;
+      if (this.resourceSystem.getRage(playerId) < cfg.rageRequired) return;
+      currentState.gaussChargeStartedAt = now;
+      this.ultimateStates.set(playerId, currentState);
+      return;
+    }
+
+    if (action === 'release') {
+      const startedAt = currentState.gaussChargeStartedAt;
+      currentState.gaussChargeStartedAt = null;
+      this.ultimateStates.set(playerId, currentState);
+      if (startedAt === null) return;
+      if (this.resourceSystem.getRage(playerId) < cfg.rageCost) return;
+      if ((params?.ultimateChargeFraction ?? 0) < 1) return;
+      this.fireGaussUltimate(cfg, x, y, angle, playerId, playerColor);
+      this.resourceSystem.addRage(playerId, -cfg.rageCost);
+    }
+  }
+
+  private fireGaussUltimate(
+    cfg: GaussUltimateConfig,
+    x: number,
+    y: number,
+    angle: number,
+    playerId: string,
+    playerColor: number,
+  ): void {
+    const lifetime = (cfg.range / cfg.projectileSpeed) * 1000;
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed:             cfg.projectileSpeed,
+      size:              cfg.projectileSize,
+      damage:            cfg.damage,
+      color:             cfg.projectileColor,
+      ownerColor:        playerColor,
+      lifetime,
+      maxBounces:        0,
+      isGrenade:         false,
+      adrenalinGain:     0,
+      weaponName:        cfg.displayName,
+      projectileStyle:   'gauss',
+      bulletVisualPreset: cfg.bulletVisualPreset,
+      tracerConfig:      cfg.tracerConfig,
+      rockDamageMult:    cfg.rockDamageMult,
+      trainDamageMult:   cfg.trainDamageMult,
+    });
+
+    this.physicsSystem?.addRecoil(
+      playerId,
+      -Math.cos(angle) * cfg.shotRecoilForce,
+      -Math.sin(angle) * cfg.shotRecoilForce,
+      cfg.shotRecoilDuration,
+    );
   }
 
   // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────

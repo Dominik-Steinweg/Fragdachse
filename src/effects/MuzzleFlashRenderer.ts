@@ -14,6 +14,7 @@ type MuzzleFlashPreset =
   | 'ak47'
   | 'shotgun'
   | 'awp'
+  | 'gauss'
   | 'negev'
   | 'rocket'
   | 'flame'
@@ -43,6 +44,7 @@ const FLASH_PRESETS: Record<MuzzleFlashPreset, FlashPresetConfig> = {
   ak47: { tint: 0xffc46e, alpha: 0.68, scaleX: 1.08, scaleY: 0.52, duration: 56, sparkCount: 6, sparkSpeed: 86, sparkSpread: 17, sparkTints: [0xffffff, 0xffd28f, 0xff8e35] },
   shotgun: { tint: 0xffe6b3, alpha: 0.76, scaleX: 1.22, scaleY: 0.8, duration: 76, sparkCount: 7, sparkSpeed: 96, sparkSpread: 26, sparkTints: [0xffffff, 0xffdf9e, 0xff9145] },
   awp: { tint: 0xfff3c2, alpha: 0.82, scaleX: 1.35, scaleY: 0.52, duration: 88, sparkCount: 8, sparkSpeed: 110, sparkSpread: 14, sparkTints: [0xffffff, 0xfff0c8, 0xffb35f] },
+  gauss: { tint: 0xbef4ff, alpha: 0.95, scaleX: 1.65, scaleY: 1.02, duration: 110, sparkCount: 10, sparkSpeed: 96, sparkSpread: 20, sparkTints: [0xffffff, 0xcff8ff, 0x78d6ff], useEnergyCore: true },
   negev: { tint: 0xffcc74, alpha: 0.62, scaleX: 1.0, scaleY: 0.46, duration: 40, sparkCount: 5, sparkSpeed: 90, sparkSpread: 20, sparkTints: [0xffffff, 0xffd98d, 0xff8f2e] },
   rocket: { tint: 0xffa247, alpha: 0.72, scaleX: 1.12, scaleY: 0.72, duration: 90, sparkCount: 6, sparkSpeed: 72, sparkSpread: 16, sparkTints: [0xffffff, 0xffc475, 0xff7131] },
   flame: { tint: 0xff8c34, alpha: 0.42, scaleX: 0.95, scaleY: 0.62, duration: 54, sparkCount: 5, sparkSpeed: 48, sparkSpread: 22, sparkTints: [0xffffff, 0xffcf6f, 0xff6326] },
@@ -187,6 +189,7 @@ export class MuzzleFlashRenderer {
     if (style === 'rocket') return 'rocket';
     if (style === 'flame') return 'flame';
     if (style === 'bfg') return 'energy';
+    if (style === 'gauss') return 'gauss';
     if (style === 'awp') return 'awp';
 
     switch (bulletPreset) {
@@ -196,6 +199,7 @@ export class MuzzleFlashRenderer {
       case 'ak47': return 'ak47';
       case 'shotgun': return 'shotgun';
       case 'awp': return 'awp';
+      case 'gauss': return 'gauss';
       case 'negev': return 'negev';
       default: return 'default';
     }
