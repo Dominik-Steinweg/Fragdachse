@@ -64,6 +64,7 @@ import {
   NET_TICK_INTERVAL_MS, NET_SMOOTH_TIME_MS,
   ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS,
   RAGE_MAX,
+  getTopDownMuzzleOrigin,
 } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import type { LoadoutCommitSnapshot } from '../types';
@@ -2151,37 +2152,84 @@ export class ArenaScene extends Phaser.Scene {
       const chargeFraction = Phaser.Math.Clamp(playerState.ultimateChargeFraction ?? 0, 0, 1);
       if (range <= 0 || chargeFraction <= 0) continue;
 
-      const dirX = Math.cos(dequantizeAngle(playerState.rot));
-      const dirY = Math.sin(dequantizeAngle(playerState.rot));
-      const pulse = 0.65 + 0.35 * Math.sin(time * 0.018 + chargeFraction * Math.PI * 2);
-      const beamLength = Phaser.Math.Linear(80, Math.min(range, 320), chargeFraction);
-      const startX = playerState.x + dirX * 26;
-      const startY = playerState.y + dirY * 26;
-      const endX = startX + dirX * beamLength;
-      const endY = startY + dirY * beamLength;
-      const sideX = -dirY;
-      const sideY = dirX;
-      const beamWidth = 10 + chargeFraction * 16;
+      const aimAngle = dequantizeAngle(playerState.rot);
+      const dirX = Math.cos(aimAngle);
+      const dirY = Math.sin(aimAngle);
+      const pulse = 0.92 + 0.08 * Math.sin(time * 0.018);
+      const beamLength = Math.max(10, range * chargeFraction);
+      const muzzle = getTopDownMuzzleOrigin(playerState.x, playerState.y, aimAngle);
+      const clipped = this.clipBeamToArena(muzzle.x, muzzle.y, muzzle.x + dirX * beamLength, muzzle.y + dirY * beamLength);
+      const startX = Math.round(muzzle.x);
+      const startY = Math.round(muzzle.y);
+      const endX = Math.round(clipped.x);
+      const endY = Math.round(clipped.y);
+      const alpha = Math.max(0.04, chargeFraction * chargeFraction);
 
-      graphics.fillStyle(0x8fe9ff, 0.08 + chargeFraction * 0.12);
-      graphics.beginPath();
-      graphics.moveTo(startX + sideX * beamWidth, startY + sideY * beamWidth);
-      graphics.lineTo(endX + sideX * beamWidth * 0.3, endY + sideY * beamWidth * 0.3);
-      graphics.lineTo(endX - sideX * beamWidth * 0.3, endY - sideY * beamWidth * 0.3);
-      graphics.lineTo(startX - sideX * beamWidth, startY - sideY * beamWidth);
-      graphics.closePath();
-      graphics.fillPath();
-
-      graphics.lineStyle(2 + chargeFraction * 3, 0xdaf7ff, 0.3 + chargeFraction * 0.35);
+      graphics.lineStyle(18, 0x0a1118, 0.05 * alpha);
       graphics.beginPath();
       graphics.moveTo(startX, startY);
       graphics.lineTo(endX, endY);
       graphics.strokePath();
 
-      graphics.lineStyle(1.5, 0x8fe9ff, 0.45 + chargeFraction * 0.25);
-      graphics.strokeCircle(startX, startY, 12 + chargeFraction * 10 + pulse * 3);
-      graphics.strokeCircle(startX, startY, 22 + chargeFraction * 18 + pulse * 6);
+      graphics.lineStyle(14, 0xbcefff, 0.14 * alpha * pulse);
+      graphics.beginPath();
+      graphics.moveTo(startX, startY);
+      graphics.lineTo(endX, endY);
+      graphics.strokePath();
+
+      graphics.lineStyle(9, 0x78d6ff, 0.3 * alpha * pulse);
+      graphics.beginPath();
+      graphics.moveTo(startX, startY);
+      graphics.lineTo(endX, endY);
+      graphics.strokePath();
+
+      graphics.lineStyle(4, 0xe1fbff, 0.55 * alpha);
+      graphics.beginPath();
+      graphics.moveTo(startX, startY);
+      graphics.lineTo(endX, endY);
+      graphics.strokePath();
+
+      graphics.lineStyle(2, 0xffffff, 0.9 * alpha);
+      graphics.beginPath();
+      graphics.moveTo(startX, startY);
+      graphics.lineTo(endX, endY);
+      graphics.strokePath();
+
+      const emitterRadius = 6 + chargeFraction * 6;
+      graphics.fillStyle(0xbcefff, 0.12 * alpha * pulse);
+      graphics.fillCircle(startX, startY, emitterRadius * 2.1);
+      graphics.fillStyle(0x78d6ff, 0.25 * alpha);
+      graphics.fillCircle(startX, startY, emitterRadius * 1.3);
+      graphics.fillStyle(0xffffff, 0.5 * alpha);
+      graphics.fillCircle(startX, startY, Math.max(2, emitterRadius * 0.55));
     }
+  }
+
+  private clipBeamToArena(
+    sx: number,
+    sy: number,
+    ex: number,
+    ey: number,
+  ): { x: number; y: number } {
+    const inside = ex >= ARENA_OFFSET_X
+      && ex <= ARENA_OFFSET_X + ARENA_WIDTH
+      && ey >= ARENA_OFFSET_Y
+      && ey <= ARENA_OFFSET_Y + ARENA_HEIGHT;
+    if (inside) return { x: ex, y: ey };
+
+    const dx = ex - sx;
+    const dy = ey - sy;
+    let t = 1;
+    const maxX = ARENA_OFFSET_X + ARENA_WIDTH;
+    const maxY = ARENA_OFFSET_Y + ARENA_HEIGHT;
+
+    if (dx > 0) t = Math.min(t, (maxX - sx) / dx);
+    else if (dx < 0) t = Math.min(t, (ARENA_OFFSET_X - sx) / dx);
+
+    if (dy > 0) t = Math.min(t, (maxY - sy) / dy);
+    else if (dy < 0) t = Math.min(t, (ARENA_OFFSET_Y - sy) / dy);
+
+    return { x: sx + t * dx, y: sy + t * dy };
   }
 
   private resetLocalArenaHudState(): void {

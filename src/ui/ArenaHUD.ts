@@ -786,7 +786,7 @@ export class ArenaHUD {
       .sort((left, right) => left - right);
 
     while (this.ultThresholdMarks.length < normalized.length) {
-      const mark = this.scene.add.rectangle(BAR_X, ULT_BAR_Y - 2, 2, BAR_H + 4, COLORS.GREY_1, 0.9)
+      const mark = this.scene.add.rectangle(BAR_X, ULT_BAR_Y, 1, BAR_H, COL_DIVIDER, 0.5)
         .setOrigin(0.5, 0)
         .setScrollFactor(0);
       this.container.add(mark);

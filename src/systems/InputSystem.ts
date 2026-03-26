@@ -290,10 +290,12 @@ export class InputSystem {
     const clampedTarget = clampPointToArena(px, py);
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     this.currentAimAngle = angle;
-    const weaponsBlocked = this.localBurrowPhase !== 'idle';
+    const ultimateCharging = this.ultimateHoldActive;
+    const weaponsBlocked = this.localBurrowPhase !== 'idle' || ultimateCharging;
     const utilityBlocked = this.localBurrowPhase === 'windup'
       || this.localBurrowPhase === 'underground'
-      || this.localBurrowPhase === 'trapped';
+      || this.localBurrowPhase === 'trapped'
+      || ultimateCharging;
     const ultimateCfg = this.getLocalUltimateConfig?.();
 
     if (this.utilityTargetingActive) {
@@ -509,6 +511,7 @@ export class InputSystem {
     const rage = this.getLocalRage?.() ?? 0;
     const cfg = this.getGaussUltimateConfig();
     if (!cfg || rage < cfg.rageRequired) return;
+    this.cancelUtilityInteraction();
     this.ultimateHoldActive = true;
     this.ultimateChargeStartedAt = now;
     this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press' });

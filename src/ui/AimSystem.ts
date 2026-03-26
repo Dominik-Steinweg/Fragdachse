@@ -6,6 +6,7 @@ import {
   COLORS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,    ARENA_HEIGHT,
+  getTopDownMuzzleOrigin,
 } from '../config';
 import { LivingBarEffect, paletteFromColor } from './LivingBarEffect';
 
@@ -268,46 +269,35 @@ export class AimSystem {
     const range = Math.max(0, preview.range ?? 0);
     const chargeFraction = Phaser.Math.Clamp(preview.chargeFraction, 0, 1);
     const color = preview.colorOverride ?? this.getAccentColor();
-    const pulse = 0.5 + 0.5 * Math.sin(this.scene.time.now * 0.02 + chargeFraction * Math.PI * 2);
     const nx = Math.cos(preview.angle);
     const ny = Math.sin(preview.angle);
-    const ex = sx + nx * range;
-    const ey = sy + ny * range;
-    const clipped = this.clipToArena(sx, sy, ex, ey);
+    const muzzle = getTopDownMuzzleOrigin(sx, sy, preview.angle);
+    const beamLength = Math.max(10, range * chargeFraction);
+    const ex = muzzle.x + nx * beamLength;
+    const ey = muzzle.y + ny * beamLength;
+    const clipped = this.clipToArena(muzzle.x, muzzle.y, ex, ey);
+    const startX = this.snap(muzzle.x);
+    const startY = this.snap(muzzle.y);
     const tx = this.snap(clipped.x);
     const ty = this.snap(clipped.y);
-    const sideX = -ny;
-    const sideY = nx;
-    const railOffset = 6 + chargeFraction * 6;
+    const glowColor = this.mixWithWhite(color, 0.2);
+    const coreColor = this.mixWithWhite(color, 0.62);
+    const alpha = Math.max(0.04, chargeFraction * chargeFraction);
+    const pulse = 0.92 + 0.08 * Math.sin(this.scene.time.now * 0.018);
 
-    this.strokeLine(12, COLORS.GREY_10, 0.16 + chargeFraction * 0.04, sx, sy, tx, ty);
-    this.strokeLine(7, this.mixWithWhite(color, 0.2), 0.18 + chargeFraction * 0.1, sx, sy, tx, ty);
-    this.strokeLine(3, this.mixWithWhite(color, 0.55), 0.5 + chargeFraction * 0.16, sx, sy, tx, ty);
+    this.strokeLine(18, COLORS.GREY_10, 0.05 * alpha, startX, startY, tx, ty);
+    this.strokeLine(14, glowColor, 0.14 * alpha * pulse, startX, startY, tx, ty);
+    this.strokeLine(9, color, 0.3 * alpha * pulse, startX, startY, tx, ty);
+    this.strokeLine(4, coreColor, 0.55 * alpha, startX, startY, tx, ty);
+    this.strokeLine(2, 0xffffff, 0.9 * alpha, startX, startY, tx, ty);
 
-    this.strokeLine(3, color, 0.28 + chargeFraction * 0.2, sx + sideX * railOffset, sy + sideY * railOffset, tx + sideX * railOffset * 0.4, ty + sideY * railOffset * 0.4);
-    this.strokeLine(3, color, 0.28 + chargeFraction * 0.2, sx - sideX * railOffset, sy - sideY * railOffset, tx - sideX * railOffset * 0.4, ty - sideY * railOffset * 0.4);
-
-    const ringRadius = 16 + chargeFraction * 12 + pulse * 2;
-    this.gfx.lineStyle(6, COLORS.GREY_10, 0.28);
-    this.gfx.strokeCircle(tx, ty, ringRadius + 3);
-    this.gfx.lineStyle(3, this.mixWithWhite(color, 0.38), 0.45 + chargeFraction * 0.15);
-    this.gfx.strokeCircle(tx, ty, ringRadius);
-    this.gfx.lineStyle(1.5, COLORS.GREY_1, 0.8);
-    this.gfx.strokeCircle(tx, ty, Math.max(8, ringRadius - 9));
-
-    const chevronGap = ringRadius + 10;
-    const chevronDepth = 14 + chargeFraction * 8;
-    this.strokeLine(3, COLORS.GREY_10, 0.3, tx + sideX * chevronGap, ty + sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
-    this.strokeLine(3, COLORS.GREY_10, 0.3, tx - sideX * chevronGap, ty - sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
-    this.strokeLine(2, color, 0.9, tx + sideX * chevronGap, ty + sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
-    this.strokeLine(2, color, 0.9, tx - sideX * chevronGap, ty - sideY * chevronGap, tx + nx * chevronDepth, ty + ny * chevronDepth);
-
-    const rearGap = ringRadius + 6;
-    this.strokeLine(2, this.mixWithWhite(color, 0.5), 0.85, tx + sideX * rearGap, ty + sideY * rearGap, tx + sideX * (rearGap + 10), ty + sideY * (rearGap + 10));
-    this.strokeLine(2, this.mixWithWhite(color, 0.5), 0.85, tx - sideX * rearGap, ty - sideY * rearGap, tx - sideX * (rearGap + 10), ty - sideY * (rearGap + 10));
-
-    this.gfx.fillStyle(this.mixWithWhite(color, 0.65), 0.95);
-    this.gfx.fillCircle(tx, ty, 2 + chargeFraction * 2);
+    const emitterRadius = 6 + chargeFraction * 6;
+    this.gfx.fillStyle(glowColor, 0.12 * alpha * pulse);
+    this.gfx.fillCircle(startX, startY, emitterRadius * 2.1);
+    this.gfx.fillStyle(color, 0.25 * alpha);
+    this.gfx.fillCircle(startX, startY, emitterRadius * 1.3);
+    this.gfx.fillStyle(0xffffff, 0.5 * alpha);
+    this.gfx.fillCircle(startX, startY, Math.max(2, emitterRadius * 0.55));
   }
 
   private drawCrosshairArm(
