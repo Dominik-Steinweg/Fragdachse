@@ -60,9 +60,11 @@ export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUp
 export const POWERUP_PEDESTAL_CONFIG = {
   announceLeadMs: 5_000,
   edgePaddingCells: 1,
-  renderBaseWidth: 26,
-  renderBaseHeight: 14,
-  renderGlowSize: 54,
+  minSpacingCells: 7,
+  renderBaseRadius: 10,
+  renderInnerRadius: 8,
+  renderCoreRadius: 4,
+  renderGlowSize: 72,
 } as const;
 
 export const NUKE_CONFIG = {

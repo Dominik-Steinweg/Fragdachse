@@ -207,18 +207,89 @@ export class ArenaGenerator {
       }
     }
 
-    ArenaGenerator.shuffle(candidates, rng);
-
     const pedestals: ArenaLayout['powerUpPedestals'] = [];
-    const count = Math.min(TIMED_POWERUP_PEDESTAL_COUNT, candidates.length);
-    for (let i = 0; i < count; i++) {
-      const cell = candidates[i];
+    const selectedCells = ArenaGenerator.pickDistributedPedestalCells(rng, candidates, TIMED_POWERUP_PEDESTAL_COUNT);
+    for (let i = 0; i < selectedCells.length; i++) {
+      const cell = selectedCells[i];
       const defId = ArenaGenerator.pickWeightedPedestalDef(rng);
       if (!defId) break;
       pedestals.push({ id: i + 1, defId, gridX: cell.gx, gridY: cell.gy });
     }
 
     return pedestals;
+  }
+
+  private static pickDistributedPedestalCells(
+    rng: () => number,
+    candidates: Array<{ gx: number; gy: number }>,
+    requestedCount: number,
+  ): Array<{ gx: number; gy: number }> {
+    if (candidates.length === 0 || requestedCount <= 0) return [];
+
+    const pool = [...candidates];
+    ArenaGenerator.shuffle(pool, rng);
+
+    const selected: Array<{ gx: number; gy: number }> = [pool.shift()!];
+    const targetCount = Math.min(requestedCount, candidates.length);
+    const minSpacingSq = POWERUP_PEDESTAL_CONFIG.minSpacingCells * POWERUP_PEDESTAL_CONFIG.minSpacingCells;
+
+    while (selected.length < targetCount && pool.length > 0) {
+      let bestIndex = 0;
+      let bestScore = -1;
+      let bestMinDistSq = -1;
+
+      for (let index = 0; index < pool.length; index++) {
+        const candidate = pool[index];
+        let minDistSq = Number.POSITIVE_INFINITY;
+        for (const chosen of selected) {
+          const dx = candidate.gx - chosen.gx;
+          const dy = candidate.gy - chosen.gy;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < minDistSq) minDistSq = distSq;
+        }
+
+        const spacingBonus = Math.min(minDistSq, minSpacingSq) / minSpacingSq;
+        const edgeBias = ArenaGenerator.distanceToArenaEdge(candidate.gx, candidate.gy) * 0.12;
+        const jitter = rng() * 0.025;
+        const score = minDistSq + spacingBonus + edgeBias + jitter;
+        if (score > bestScore) {
+          bestScore = score;
+          bestMinDistSq = minDistSq;
+          bestIndex = index;
+        }
+      }
+
+      const chosen = pool.splice(bestIndex, 1)[0];
+      selected.push(chosen);
+
+      if (bestMinDistSq >= minSpacingSq) {
+        for (let index = pool.length - 1; index >= 0; index--) {
+          const candidate = pool[index];
+          let tooClose = false;
+          for (const existing of selected) {
+            const dx = candidate.gx - existing.gx;
+            const dy = candidate.gy - existing.gy;
+            if (dx * dx + dy * dy < minSpacingSq) {
+              tooClose = true;
+              break;
+            }
+          }
+          if (tooClose && pool.length > (targetCount - selected.length)) {
+            pool.splice(index, 1);
+          }
+        }
+      }
+    }
+
+    return selected;
+  }
+
+  private static distanceToArenaEdge(gx: number, gy: number): number {
+    const distLeft = gx;
+    const distRight = GRID_COLS - 1 - gx;
+    const distTop = gy;
+    const distBottom = GRID_ROWS - 1 - gy;
+    return Math.min(distLeft, distRight, distTop, distBottom);
   }
 
   private static pickWeightedPedestalDef(rng: () => number): string | null {
