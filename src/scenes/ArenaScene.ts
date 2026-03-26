@@ -1779,15 +1779,19 @@ export class ArenaScene extends Phaser.Scene {
       this.applyDashVisual(player, player.id, dashPhase, false);
     }
 
-    const powerups = this.powerUpSystem?.getNetSnapshot() ?? [];
-    const nukes    = this.powerUpSystem?.getNukeSnapshot() ?? [];
-    const meteors  = this.armageddonSystem?.getSnapshot() ?? [];
-    const train    = this.trainManager?.getNetSnapshot() ?? null;
+    const powerups  = this.powerUpSystem?.getNetSnapshot() ?? [];
+    const pedestals = this.powerUpSystem?.getPedestalSnapshot() ?? [];
+    const nukes     = this.powerUpSystem?.getNukeSnapshot() ?? [];
+    const meteors   = this.armageddonSystem?.getSnapshot() ?? [];
+    const train     = this.trainManager?.getNetSnapshot() ?? null;
+    const syncedNow = bridge.getSynchronizedNow();
 
     // Zug-Renderer auf dem Host direkt aktualisieren (kein Client-Update-Pfad)
     this.trainRenderer?.update(train);
     // PowerUp-Sprites auch auf dem Host rendern + Pickup prüfen
+    this.powerUpRenderer?.syncPedestals(pedestals);
     this.powerUpRenderer?.sync(powerups);
+    this.powerUpRenderer?.updatePedestals(syncedNow);
     this.nukeRenderer?.sync(nukes);
     this.meteorRenderer?.sync(meteors);
     this.checkLocalPickup(powerups);
@@ -1901,7 +1905,7 @@ export class ArenaScene extends Phaser.Scene {
       };
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, stinkClouds, teslaDomes, powerups, nukes, meteors, train });
+    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, stinkClouds, teslaDomes, powerups, pedestals, nukes, meteors, train });
 
     // BFG-Screenshake während Flug (Host)
     if (projectiles.some(p => p.style === 'bfg')) {
@@ -1991,11 +1995,14 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       this.trainRenderer?.setTarget(state.train ?? null);
+      this.powerUpRenderer?.syncPedestals(state.pedestals ?? []);
       this.powerUpRenderer?.sync(state.powerups ?? []);
       this.nukeRenderer?.sync(state.nukes ?? []);
       this.meteorRenderer?.sync(state.meteors ?? []);
       this.checkLocalPickup(state.powerups ?? []);
     }
+
+    this.powerUpRenderer?.updatePedestals(bridge.getSynchronizedNow());
 
     // ── Jeden Frame: Smooth Interpolation + Extrapolation ───────────────
     for (const player of this.playerManager.getAllPlayers()) {

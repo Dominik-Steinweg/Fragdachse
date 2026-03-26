@@ -375,13 +375,17 @@ export class InputSystem {
       this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y);
     }
 
-    if (this.ultimateHoldActive && this.ultimateChargeStartedAt !== null && this.keyQ.isDown && gaussCfg) {
-      this.scene.cameras.main.shake(50, 0.0022);
+    if (this.ultimateHoldActive && this.ultimateChargeStartedAt !== null && gaussCfg) {
+      const chargeFraction = this.computeGaussChargeFraction(this.ultimateChargeStartedAt, gaussCfg, now);
+      if (chargeFraction >= 1.0) {
+        this.autoFireAndMaybeRechargeGauss(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
+      } else if (this.keyQ.isDown) {
+        this.scene.cameras.main.shake(50, 0.0022);
+      }
     }
 
-    const releasedUltimate = Phaser.Input.Keyboard.JustUp(this.keyQ);
-    if (releasedUltimate && gaussCfg) {
-      this.releaseUltimateCharge(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
+    if (Phaser.Input.Keyboard.JustUp(this.keyQ) && gaussCfg) {
+      this.cancelUltimateCharge();
     } else if (this.ultimateHoldActive && !this.keyQ.isDown) {
       this.cancelUltimateCharge();
     }
@@ -539,6 +543,31 @@ export class InputSystem {
     if (cfg.chargeDuration <= 0) return 1;
     const elapsed = now - startedAt;
     return Math.max(0, Math.min(1, elapsed / cfg.chargeDuration));
+  }
+
+  private autoFireAndMaybeRechargeGauss(
+    angle: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    cfg: GaussUltimateConfig,
+  ): void {
+    if (this.ultimateChargeStartedAt === null) return;
+
+    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, {
+      ultimateAction: 'release',
+      ultimateChargeFraction: 1.0,
+    });
+
+    if (this.keyQ.isDown) {
+      const rage = this.getLocalRage?.() ?? 0;
+      if (rage >= cfg.rageRequired) {
+        this.ultimateChargeStartedAt = now;
+        this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press' });
+        return;
+      }
+    }
+    this.cancelUltimateCharge();
   }
 
   private cancelUltimateCharge(): void {

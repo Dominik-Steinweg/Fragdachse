@@ -1,5 +1,6 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL } from '../config';
 import type { ArenaLayout, RockCell, TreeCell, TrackCell, DirtCell } from '../types';
+import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 
 /**
  * Prozeduraler Arena-Generator – keine Phaser-Abhängigkeit.
@@ -154,7 +155,9 @@ export class ArenaGenerator {
         dirt.push({ gridX: key % GRID_COLS, gridY: Math.floor(key / GRID_COLS) });
       }
 
-      return { seed: seed + attempt, rocks, trees, tracks, dirt };
+      const powerUpPedestals = ArenaGenerator.generatePowerUpPedestals(rng, blocked, trackCols);
+
+      return { seed: seed + attempt, rocks, trees, tracks, dirt, powerUpPedestals };
     }
 
     throw new Error(
@@ -186,6 +189,50 @@ export class ArenaGenerator {
       }
     }
     return { trackCols, tracks };
+  }
+
+  private static generatePowerUpPedestals(
+    rng: () => number,
+    blocked: boolean[][],
+    trackCols: Set<number>,
+  ) {
+    const candidates: Array<{ gx: number; gy: number }> = [];
+    const margin = POWERUP_PEDESTAL_CONFIG.edgePaddingCells;
+
+    for (let gy = margin; gy < GRID_ROWS - margin; gy++) {
+      for (let gx = margin; gx < GRID_COLS - margin; gx++) {
+        if (blocked[gy][gx]) continue;
+        if (trackCols.has(gx)) continue;
+        candidates.push({ gx, gy });
+      }
+    }
+
+    ArenaGenerator.shuffle(candidates, rng);
+
+    const pedestals: ArenaLayout['powerUpPedestals'] = [];
+    const count = Math.min(TIMED_POWERUP_PEDESTAL_COUNT, candidates.length);
+    for (let i = 0; i < count; i++) {
+      const cell = candidates[i];
+      const defId = ArenaGenerator.pickWeightedPedestalDef(rng);
+      if (!defId) break;
+      pedestals.push({ id: i + 1, defId, gridX: cell.gx, gridY: cell.gy });
+    }
+
+    return pedestals;
+  }
+
+  private static pickWeightedPedestalDef(rng: () => number): string | null {
+    const entries = Object.values(TIMED_POWERUP_PEDESTAL_CONFIGS).filter(cfg => cfg.weight > 0);
+    if (entries.length === 0) return null;
+
+    const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+    let roll = rng() * total;
+    for (const entry of entries) {
+      roll -= entry.weight;
+      if (roll <= 0) return entry.defId;
+    }
+
+    return entries[entries.length - 1].defId;
   }
 
   /**

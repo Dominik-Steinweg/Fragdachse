@@ -492,6 +492,14 @@ export interface TrackCell { gridX: number; gridY: number; }
 /** Eine Dirt-Gitterzelle (rein visuell, keine Kollision) */
 export interface DirtCell { gridX: number; gridY: number; }
 
+/** Ein fester Power-Up-Podest-Slot der gesamten Runde. */
+export interface PowerUpPedestalCell {
+  id: number;
+  defId: string;
+  gridX: number;
+  gridY: number;
+}
+
 /** Vollständiger Arena-Layout-Deskriptor – wird vom Host generiert und via reliable-State verteilt */
 export interface ArenaLayout {
   seed:   number;
@@ -499,6 +507,7 @@ export interface ArenaLayout {
   trees:  TreeCell[];
   tracks: TrackCell[];
   dirt:   DirtCell[];
+  powerUpPedestals: PowerUpPedestalCell[];
 }
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
@@ -527,6 +536,16 @@ export interface SyncedPowerUp {
   defId: string;   // Schlüssel in POWERUP_DEFS
   x:     number;
   y:     number;
+}
+
+/** Synchronisierter Laufzeit-Zustand eines festen Power-Up-Podests. */
+export interface SyncedPowerUpPedestal {
+  id: number;
+  defId: string;
+  x: number;
+  y: number;
+  hasPowerUp: boolean;
+  nextRespawnAt: number;
 }
 
 /** Aktiver Nuke-Strike (Host → Clients via GameState) */

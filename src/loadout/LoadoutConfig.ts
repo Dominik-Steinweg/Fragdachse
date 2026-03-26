@@ -1050,18 +1050,6 @@ export const UTILITY_CONFIGS = {
 } as const;
 
 export const ULTIMATE_CONFIGS = {
-  HONEY_BADGER_RAGE: {
-    type:               'buff',
-    id:                 'HONEY_BADGER_RAGE',
-    displayName:        'Honigdachs-Wut',
-    cooldown:           0,          // rage-gated, kein Zeitcooldown
-    rageRequired:       300,
-    duration:           5000,
-    speedMultiplier:    1.5,
-    damageMultiplier:   1.5,
-    rageDrainDuration:  5000,
-  } as BuffUltimateConfig,
-
   /**
    * ARMAGEDDON – Inspiriert vom Druiden-Skill aus Diablo 2.
    * Spawnt ~70 Meteore über 7 Sekunden im Radius um den Spieler.
@@ -1097,7 +1085,7 @@ export const ULTIMATE_CONFIGS = {
     cooldown:           0,
     rageRequired:       200,
     rageCost:           200,
-    chargeDuration:     800,
+    chargeDuration:     1000,
     chargeColor:        0x78d6ff,
     movementSlowFactor: 0.72,
     projectileSpeed:    1500,
@@ -1122,6 +1110,18 @@ export const ULTIMATE_CONFIGS = {
     shotRecoilForce:    750,
     shotRecoilDuration: 200,
   } as GaussUltimateConfig,
+
+  HONEY_BADGER_RAGE: {
+    type:               'buff',
+    id:                 'HONEY_BADGER_RAGE',
+    displayName:        'Honigdachs-Wut',
+    cooldown:           0,          // rage-gated, kein Zeitcooldown
+    rageRequired:       300,
+    duration:           5000,
+    speedMultiplier:    1.5,
+    damageMultiplier:   1.5,
+    rageDrainDuration:  5000,
+  } as BuffUltimateConfig,  
 } as const;
 
 // ── Standard-Loadout für alle Spieler beim Spawn ──────────────────────────────
@@ -1130,5 +1130,5 @@ export const DEFAULT_LOADOUT = {
   weapon1:  WEAPON_CONFIGS.GLOCK,
   weapon2:  WEAPON_CONFIGS.P90,
   utility:  UTILITY_CONFIGS.HE_GRENADE,
-  ultimate: ULTIMATE_CONFIGS.HONEY_BADGER_RAGE,
+  ultimate: ULTIMATE_CONFIGS.ARMAGEDDON,
 } as const;

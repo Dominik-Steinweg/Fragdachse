@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedPowerUp, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -83,6 +83,7 @@ export interface GameState {
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
+  pedestals:    SyncedPowerUpPedestal[]; // feste Power-Up-Podeste
   nukes:        SyncedNukeStrike[];
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
@@ -471,6 +472,7 @@ export class NetworkBridge {
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
     if (state.teslaDomes.length > 0)   payload.td = state.teslaDomes;
     if (state.powerups.length > 0)     payload.u = state.powerups;
+    if (state.pedestals.length > 0)    payload.pd = state.pedestals;
     if (state.nukes.length > 0)        payload.n = state.nukes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
     if (state.train)                   payload.t = state.train;
@@ -493,6 +495,7 @@ export class NetworkBridge {
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
       teslaDomes:    (raw.td as SyncedTeslaDome[]    | undefined) ?? [],
       powerups:      (raw.u as SyncedPowerUp[]       | undefined) ?? [],
+      pedestals:     (raw.pd as SyncedPowerUpPedestal[] | undefined) ?? [],
       nukes:         (raw.n as SyncedNukeStrike[]    | undefined) ?? [],
       meteors:       (raw.mt as SyncedMeteorStrike[] | undefined) ?? [],
       train:         (raw.t as SyncedTrainState      | undefined) ?? null,

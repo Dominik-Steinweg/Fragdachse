@@ -17,6 +17,13 @@ export interface PowerUpDef {
   readonly spriteKey?:  string;
 }
 
+export interface TimedPedestalPowerUpConfig {
+  readonly defId: string;
+  readonly weight: number;
+  readonly respawnMs: number;
+  readonly spawnOnArenaStart: boolean;
+}
+
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal',  displayName: 'Medipack',            amount: 999,                        color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
   ARMOR:         { id: 'ARMOR',         type: 'instant_armor', displayName: 'Armor',               amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
@@ -26,6 +33,37 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
   BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_2,  spriteKey: 'powerup_bfg'  },
 };
+
+export const TIMED_POWERUP_PEDESTAL_COUNT = 5;
+
+export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUpConfig> = {
+  HEALTH_PACK: {
+    defId: 'HEALTH_PACK',
+    weight: 50,
+    respawnMs: 20_000,
+    spawnOnArenaStart: true,
+  },
+  DOUBLE_DAMAGE: {
+    defId: 'DOUBLE_DAMAGE',
+    weight: 70,
+    respawnMs: 90_000,
+    spawnOnArenaStart: false,
+  },
+  BFG: {
+    defId: 'BFG',
+    weight: 30,
+    respawnMs: 90_000,
+    spawnOnArenaStart: true,
+  },
+};
+
+export const POWERUP_PEDESTAL_CONFIG = {
+  announceLeadMs: 5_000,
+  edgePaddingCells: 1,
+  renderBaseWidth: 26,
+  renderBaseHeight: 14,
+  renderGlowSize: 54,
+} as const;
 
 export const NUKE_CONFIG = {
   countdownMs:        5_000,
@@ -59,10 +97,6 @@ export const DROP_TABLES: Record<string, DropTable> = {
     chanceToDrop: 0.1,
     items: { HEALTH_PACK: 0, ARMOR: 10, ADRENALINE: 0, DOUBLE_DAMAGE: 0 },
   },
-  SCHEDULED_EVENT: {
-    // chanceToDrop fehlt → immer 1.0
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 100, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 10 },
-  },
   TRAIN_DESTROY: {
     // chanceToDrop fehlt → immer 1.0 (Zug gibt immer Power-Ups)
     items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 10, HOLY_HAND_GRENADE: 10, BFG: 10 },
@@ -71,17 +105,6 @@ export const DROP_TABLES: Record<string, DropTable> = {
 
 /** Anzahl Power-Ups, die beim Zerstören des Zugs gespawnt werden. */
 export const TRAIN_DROP_COUNT = 1;
-
-// ── Geplante Spawns (Sekunden nach Rundenstart) ────────────────────────────
-
-export interface ScheduledSpawn {
-  readonly timeSeconds: number;
-  readonly amount:      number;
-}
-
-export const SCHEDULED_SPAWNS: ScheduledSpawn[] = [
-  { timeSeconds: 90, amount: 1 },
-];
 
 // ── Pickup-Radius (Pixel) ──────────────────────────────────────────────────
 

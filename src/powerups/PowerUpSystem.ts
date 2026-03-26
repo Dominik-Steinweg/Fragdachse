@@ -4,11 +4,11 @@ import {
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH, ARENA_HEIGHT,
 } from '../config';
-import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp } from '../types';
+import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem }  from '../systems/CombatSystem';
 import {
-  POWERUP_DEFS, DROP_TABLES, SCHEDULED_SPAWNS,
+  POWERUP_DEFS, DROP_TABLES, TIMED_POWERUP_PEDESTAL_CONFIGS,
   PICKUP_RADIUS, NUKE_CONFIG,
   type PowerUpDef, type DropTable,
 } from './PowerUpConfig';
@@ -28,6 +28,17 @@ interface WorldItem {
   def:  PowerUpDef;
   x:    number; // Welt-Koordinate
   y:    number;
+}
+
+interface PedestalRuntime {
+  id: number;
+  def: PowerUpDef;
+  x: number;
+  y: number;
+  respawnMs: number;
+  spawnOnArenaStart: boolean;
+  currentUid: number | null;
+  nextRespawnAt: number;
 }
 
 interface ActiveNukeStrike {
@@ -75,25 +86,33 @@ export class PowerUpSystem {
   private worldItems  = new Map<number, WorldItem>();
   private activeBuffs = new Map<string, ActiveBuff[]>(); // playerId → Buffs
   private activeNukes = new Map<number, ActiveNukeStrike>();
+  private pedestals   = new Map<number, PedestalRuntime>();
+  private itemToPedestal = new Map<number, number>();
   private nextUid     = 1;
   private nextNukeId  = 1;
 
-  // Scheduled-Spawn-Tracking
-  private arenaStartTime         = 0;
-  private scheduledSpawnsFired   = new Set<number>(); // Indices bereits ausgelöster Einträge
+  private arenaStartTime = 0;
+  private pedestalsActivated = false;
 
   constructor(
     private playerManager: PlayerManager,
     private combat:        PowerUpSystemDeps,
     private layout:        ArenaLayout,
     private options:       PowerUpSystemOptions = {},
-  ) {}
+  ) {
+    this.buildPedestals();
+  }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
-  /** Aufrufen bei Rundenstart, um den Timer für Scheduled Spawns zu starten. */
+  /** Aufrufen bei Rundenstart, um die host-autoritären Podest-Timer zu starten. */
   setArenaStartTime(ts: number): void {
     this.arenaStartTime = ts;
+    this.pedestalsActivated = false;
+    for (const pedestal of this.pedestals.values()) {
+      pedestal.currentUid = null;
+      pedestal.nextRespawnAt = pedestal.spawnOnArenaStart ? 0 : (ts > 0 ? ts + pedestal.respawnMs : 0);
+    }
   }
 
   /** Komplett zurücksetzen (Rundenende / Teardown). */
@@ -101,10 +120,15 @@ export class PowerUpSystem {
     this.worldItems.clear();
     this.activeBuffs.clear();
     this.activeNukes.clear();
+    this.itemToPedestal.clear();
     this.nextUid = 1;
     this.nextNukeId = 1;
     this.arenaStartTime = 0;
-    this.scheduledSpawnsFired.clear();
+    this.pedestalsActivated = false;
+    for (const pedestal of this.pedestals.values()) {
+      pedestal.currentUid = null;
+      pedestal.nextRespawnAt = 0;
+    }
   }
 
   /** Buffs eines abgehenden Spielers aufräumen. */
@@ -127,17 +151,22 @@ export class PowerUpSystem {
       }
     }
 
-    // 2) Scheduled Spawns prüfen
+    // 2) Feste Podeste aktivieren und respawnen
     if (this.arenaStartTime > 0) {
-      const elapsed = (now - this.arenaStartTime) / 1000;
-      for (let i = 0; i < SCHEDULED_SPAWNS.length; i++) {
-        if (this.scheduledSpawnsFired.has(i)) continue;
-        if (elapsed >= SCHEDULED_SPAWNS[i].timeSeconds) {
-          this.scheduledSpawnsFired.add(i);
-          for (let n = 0; n < SCHEDULED_SPAWNS[i].amount; n++) {
-            this.spawnFromTable('SCHEDULED_EVENT');
+      if (!this.pedestalsActivated && now >= this.arenaStartTime) {
+        this.pedestalsActivated = true;
+        for (const pedestal of this.pedestals.values()) {
+          if (pedestal.spawnOnArenaStart) {
+            this.spawnPedestalItem(pedestal);
           }
         }
+      }
+
+      for (const pedestal of this.pedestals.values()) {
+        if (pedestal.currentUid !== null) continue;
+        if (pedestal.nextRespawnAt <= 0) continue;
+        if (now < pedestal.nextRespawnAt) continue;
+        this.spawnPedestalItem(pedestal);
       }
     }
 
@@ -180,8 +209,7 @@ export class PowerUpSystem {
       y = ARENA_OFFSET_Y + cell.gy * CELL_SIZE + CELL_SIZE / 2;
     }
 
-    const uid = this.nextUid++;
-    this.worldItems.set(uid, { uid, def, x, y });
+    this.spawnPowerUpDef(def, x, y);
   }
 
   /** Callback: Ein Spieler wurde getötet → Drop an Todesposition. */
@@ -214,6 +242,15 @@ export class PowerUpSystem {
     if (dist > PICKUP_RADIUS * 2) return; // Zu weit weg → ignorieren (großzügiger Check)
 
     this.worldItems.delete(uid);
+    const pedestalId = this.itemToPedestal.get(uid);
+    if (pedestalId !== undefined) {
+      const pedestal = this.pedestals.get(pedestalId);
+      if (pedestal) {
+        pedestal.currentUid = null;
+        pedestal.nextRespawnAt = Date.now() + pedestal.respawnMs;
+      }
+      this.itemToPedestal.delete(uid);
+    }
     this.applyEffect(playerId, item.def);
   }
 
@@ -342,6 +379,21 @@ export class PowerUpSystem {
     return result;
   }
 
+  getPedestalSnapshot(): SyncedPowerUpPedestal[] {
+    const result: SyncedPowerUpPedestal[] = [];
+    for (const pedestal of this.pedestals.values()) {
+      result.push({
+        id: pedestal.id,
+        defId: pedestal.def.id,
+        x: pedestal.x,
+        y: pedestal.y,
+        hasPowerUp: pedestal.currentUid !== null,
+        nextRespawnAt: pedestal.currentUid === null ? pedestal.nextRespawnAt : 0,
+      });
+    }
+    return result;
+  }
+
   getNukeSnapshot(): SyncedNukeStrike[] {
     const result: SyncedNukeStrike[] = [];
     for (const strike of this.activeNukes.values()) {
@@ -378,6 +430,13 @@ export class PowerUpSystem {
 
     for (const r of this.layout.rocks) blocked.add(`${r.gridX}_${r.gridY}`);
     for (const t of this.layout.trees) blocked.add(`${t.gridX}_${t.gridY}`);
+    for (const track of this.layout.tracks) {
+      blocked.add(`${track.gridX}_${track.gridY}`);
+      blocked.add(`${track.gridX + 1}_${track.gridY}`);
+    }
+    for (const pedestal of this.layout.powerUpPedestals) {
+      blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
+    }
 
     for (const p of this.playerManager.getAllPlayers()) {
       if (!p.sprite.active) continue;
@@ -425,5 +484,39 @@ export class PowerUpSystem {
 
   private cellToWorldY(gy: number): number {
     return ARENA_OFFSET_Y + gy * CELL_SIZE + CELL_SIZE / 2;
+  }
+
+  private buildPedestals(): void {
+    this.pedestals.clear();
+    for (const cell of this.layout.powerUpPedestals) {
+      const def = POWERUP_DEFS[cell.defId];
+      const cfg = TIMED_POWERUP_PEDESTAL_CONFIGS[cell.defId];
+      if (!def || !cfg) continue;
+
+      this.pedestals.set(cell.id, {
+        id: cell.id,
+        def,
+        x: this.cellToWorldX(cell.gridX),
+        y: this.cellToWorldY(cell.gridY),
+        respawnMs: cfg.respawnMs,
+        spawnOnArenaStart: cfg.spawnOnArenaStart,
+        currentUid: null,
+        nextRespawnAt: 0,
+      });
+    }
+  }
+
+  private spawnPowerUpDef(def: PowerUpDef, x: number, y: number): number {
+    const uid = this.nextUid++;
+    this.worldItems.set(uid, { uid, def, x, y });
+    return uid;
+  }
+
+  private spawnPedestalItem(pedestal: PedestalRuntime): void {
+    if (pedestal.currentUid !== null) return;
+    const uid = this.spawnPowerUpDef(pedestal.def, pedestal.x, pedestal.y);
+    pedestal.currentUid = uid;
+    pedestal.nextRespawnAt = 0;
+    this.itemToPedestal.set(uid, pedestal.id);
   }
 }

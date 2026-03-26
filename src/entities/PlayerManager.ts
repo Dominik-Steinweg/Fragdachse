@@ -74,6 +74,9 @@ export class PlayerManager {
         blocked.add(`${track.gridX}_${track.gridY}`);
         blocked.add(`${track.gridX + 1}_${track.gridY}`);
       }
+      for (const pedestal of this.layout.powerUpPedestals) {
+        blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
+      }
     }
 
     // Aktuell belegte Spieler-Zellen ausschließen
