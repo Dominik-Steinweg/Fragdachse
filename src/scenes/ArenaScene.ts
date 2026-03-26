@@ -8,6 +8,7 @@ import { PlayerManager }       from '../entities/PlayerManager';
 import type { PlayerEntity }   from '../entities/PlayerEntity';
 import { ProjectileManager }   from '../entities/ProjectileManager';
 import { InputSystem }         from '../systems/InputSystem';
+import { PlacementSystem }     from '../systems/PlacementSystem';
 import { HostPhysicsSystem }   from '../systems/HostPhysicsSystem';
 import { CombatSystem }        from '../systems/CombatSystem';
 import { ResourceSystem }      from '../systems/ResourceSystem';
@@ -16,7 +17,7 @@ import { BurrowSystem }        from '../systems/BurrowSystem';
 import { LoadoutManager }      from '../loadout/LoadoutManager';
 import type { LoadoutSelection } from '../loadout/LoadoutManager';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
-import type { UtilityConfig, WeaponConfig }   from '../loadout/LoadoutConfig';
+import type { PlaceableRockUtilityConfig, UtilityConfig, WeaponConfig }   from '../loadout/LoadoutConfig';
 import { EffectSystem }        from '../effects/EffectSystem';
 import { SmokeSystem }         from '../effects/SmokeSystem';
 import { FireSystem }          from '../effects/FireSystem';
@@ -32,6 +33,7 @@ import { RocketRenderer }      from '../effects/RocketRenderer';
 import { TracerRenderer }      from '../effects/TracerRenderer';
 import { GrenadeRenderer }     from '../effects/GrenadeRenderer';
 import { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
+import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../effects/EffectUtils';
 import { PowerUpSystem }        from '../powerups/PowerUpSystem';
 import { PICKUP_RADIUS, TRAIN_DROP_COUNT, NUKE_CONFIG } from '../powerups/PowerUpConfig';
 import { NukeRenderer }        from '../powerups/NukeRenderer';
@@ -51,7 +53,7 @@ import { RightSidePanel }      from '../ui/RightSidePanel';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { LobbyOverlay }        from './LobbyOverlay';
-import type { BurrowPhase, PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, WeaponSlot, RoomQualitySnapshot } from '../types';
+import type { BurrowPhase, PlacementPreviewNetState, PlayerAimNetState, PlayerNetState, GamePhase, PlayerProfile, SyncedPlaceableRock, UtilityPlacementPreviewState, WeaponSlot, RoomQualitySnapshot } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';
 import {
   ARENA_HEIGHT,
@@ -117,6 +119,12 @@ export class ArenaScene extends Phaser.Scene {
     private gaussWarningGraphics: Phaser.GameObjects.Graphics | null = null;
   private arenaCountdown: ArenaCountdownOverlay | null = null;
   private utilityTargetingHint: Phaser.GameObjects.Container | null = null;
+  private placeableUtilityHint: Phaser.GameObjects.Container | null = null;
+  private placementRangeGraphics: Phaser.GameObjects.Graphics | null = null;
+  private placementInvalidGraphics: Phaser.GameObjects.Graphics | null = null;
+  private localPlacementPreviewImage: Phaser.GameObjects.Image | null = null;
+  private remotePlacementPreviewImages = new Map<string, Phaser.GameObjects.Image>();
+  private placementErrorText: Phaser.GameObjects.Text | null = null;
 
   // Alive/Burrowed-Flags des lokalen Spielers (gesetzt in runHostUpdate/runClientUpdate)
   private localPlayerAlive    = false;
@@ -126,6 +134,7 @@ export class ArenaScene extends Phaser.Scene {
   private arenaResult:   ArenaBuilderResult | null = null;
   private rockRegistry:  RockRegistry | null       = null;
   private currentLayout: import('../types').ArenaLayout | null = null;
+  private placementSystem: PlacementSystem | null = null;
 
   // ── Host-only Systeme ─────────────────────────────────────────────────────
   private resourceSystem:    ResourceSystem    | null = null;
@@ -333,6 +342,7 @@ export class ArenaScene extends Phaser.Scene {
     this.inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     this.inputSystem.setupUltimateConfigProvider(() => this.getLocalUltimateConfig());
     this.inputSystem.setupLocalRageProvider(() => this.getLocalRage());
+    this.inputSystem.setupUtilityPlacementPreviewProvider(() => this.getLocalPlacementPreview());
     this.inputSystem.setupTranslocatorRecallCheck(() => {
       const cfg = this.getLocalUtilityConfig();
       if (!cfg || cfg.type !== 'translocator') return false;
@@ -362,7 +372,17 @@ export class ArenaScene extends Phaser.Scene {
       }
       // Lokale Sprite-Position mitsenden für Hitscan-Kompensation bei 20Hz Tick-Rate
       const localSprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
-      bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, now);
+      const awaitResult = slot === 'utility'
+        && this.inputSystem.isUtilityPlacementActive()
+        && this.getLocalUtilityConfig().type === 'placeable_rock';
+      const loadoutPromise = bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, now, awaitResult);
+      if (awaitResult) {
+        void loadoutPromise.then((ok) => {
+          if (!ok) this.showPlacementError('Bau fehlgeschlagen');
+        }).catch(() => {
+          this.showPlacementError('Bau fehlgeschlagen');
+        });
+      }
     });
 
     bridge.registerDashHandler((playerId, dx, dy) => {
@@ -401,12 +421,23 @@ export class ArenaScene extends Phaser.Scene {
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
     this.utilityTargetingHint = this.createUtilityTargetingHint();
+    this.placeableUtilityHint = this.createPlaceableUtilityHint();
+    this.placementRangeGraphics = this.add.graphics().setDepth(DEPTH.OVERLAY - 2);
+    this.placementInvalidGraphics = this.add.graphics().setDepth(DEPTH.OVERLAY - 1);
+    this.placementErrorText = this.add.text(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + 96, '', {
+      fontFamily: 'monospace',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: '#ffd38c',
+      stroke: '#241527',
+      strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(DEPTH.OVERLAY).setVisible(false);
 
     // ── 9. Loadout-RPC-Handler (Dispatch an LoadoutManager auf Host) ──────
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
-      if (!bridge.isHost()) return;
-      if (bridge.isArenaCountdownActive()) return;
-      this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY);
+      if (!bridge.isHost()) return false;
+      if (bridge.isArenaCountdownActive()) return false;
+      return this.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY) ?? false;
     });
 
     // ── 10. Explosions-Effekt-RPC (alle Clients inkl. Host) ───────────────
@@ -803,6 +834,7 @@ export class ArenaScene extends Phaser.Scene {
     this.currentLayout = layout;
     const builder = new ArenaBuilder(this);
     this.arenaResult = builder.buildDynamic(layout);
+    this.placementSystem = new PlacementSystem(layout, this.arenaResult.rockGrid, this.playerManager);
 
     this.playerManager.setLayout(layout);
 
@@ -817,8 +849,8 @@ export class ArenaScene extends Phaser.Scene {
     this.combatSystem.setRockDamageCallback((rockIndex, damage) => {
       if (!this.rockRegistry || !this.arenaResult) return;
       const newHp = this.rockRegistry.applyDamage(rockIndex, damage);
-      ArenaBuilder.updateRockVisual(this.arenaResult.rockObjects, this.arenaResult.rockGroup, this.arenaResult.rockGrid, this.currentLayout!.rocks, rockIndex, newHp);
-      if (newHp <= 0) this.powerUpSystem?.onRockDestroyed(rockIndex);
+      this.updateRockVisualById(rockIndex, newHp);
+      if (newHp <= 0) this.handleDestroyedRock(rockIndex, 'damage');
     });
     this.combatSystem.setTrainDamageCallback((damage, attackerId) => {
       this.trainManager?.applyDamage(damage, attackerId);
@@ -878,6 +910,9 @@ export class ArenaScene extends Phaser.Scene {
       this.loadoutManager.setPhysicsSystem(this.hostPhysics);
       this.loadoutManager.setTeslaDomeSystem(this.teslaDomeSystem);
       this.loadoutManager.setTranslocatorSystem(this.translocatorSystem);
+      this.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor) => {
+        return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor);
+      });
       this.loadoutManager.setActionBlockedChecker((playerId, slot) => {
         if (!this.combatSystem.isAlive(playerId)) return true;
         if (slot === 'weapon1' || slot === 'weapon2') {
@@ -980,11 +1015,8 @@ export class ArenaScene extends Phaser.Scene {
       this.projectileManager.setRockHitCallback((rockId, damage) => {
         if (!this.rockRegistry || !arenaResult) return;
         const newHp = this.rockRegistry.applyDamage(rockId, damage);
-        ArenaBuilder.updateRockVisual(arenaResult.rockObjects, arenaResult.rockGroup, arenaResult.rockGrid, this.currentLayout!.rocks, rockId, newHp);
-        // Power-Up droppen wenn der Fels zerstört wurde
-        if (newHp <= 0) {
-          this.powerUpSystem?.onRockDestroyed(rockId);
-        }
+        this.updateRockVisualById(rockId, newHp);
+        if (newHp <= 0) this.handleDestroyedRock(rockId, 'damage');
       });
 
       // Pickup-RPC vom Client entgegennehmen
@@ -1112,6 +1144,15 @@ export class ArenaScene extends Phaser.Scene {
     this.effectSystem.clearAllBurrowStates();
     this.prevBurrowPhases.clear();
     this.gaussWarningGraphics?.clear();
+    this.placementRangeGraphics?.clear();
+    this.placementInvalidGraphics?.clear();
+    this.localPlacementPreviewImage?.setVisible(false);
+    this.placeableUtilityHint?.setVisible(false);
+    this.placementErrorText?.setVisible(false);
+    for (const preview of this.remotePlacementPreviewImages.values()) {
+      preview.destroy();
+    }
+    this.remotePlacementPreviewImages.clear();
 
     if (this.arenaResult) {
       ArenaBuilder.destroyDynamic(this.arenaResult);
@@ -1119,6 +1160,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.rockRegistry   = null;
     this.currentLayout  = null;
+    this.placementSystem = null;
     this.powerUpSystem?.reset();
     this.powerUpSystem   = null;
     this.teslaDomeSystem = null;
@@ -1130,6 +1172,7 @@ export class ArenaScene extends Phaser.Scene {
     this.detonationSystem = null;
     this.loadoutManager?.setCombatSystem(null);
     this.loadoutManager?.setTeslaDomeSystem(null);
+    this.loadoutManager?.setPlaceableRockHandler(null);
     this.loadoutManager?.setActionBlockedChecker(null);
     this.loadoutManager?.resetAllUltimateStates();
     this.loadoutManager = null;
@@ -1249,16 +1292,21 @@ export class ArenaScene extends Phaser.Scene {
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     this.teslaDomeRenderer?.update(delta);
     const utilityTargeting = this.inputSystem.getUtilityTargetingPreviewState();
-        const ultimatePreview = this.inputSystem.getUltimateChargePreviewState();
+    const utilityPlacement = this.getLocalPlacementPreview();
+    const ultimatePreview = this.inputSystem.getUltimateChargePreviewState();
     const showAim = inArena
            && this.localPlayerAlive
            && !this.localPlayerBurrowed
-           && !this.inputSystem.isUtilityChargePreviewActive();
-        this.aimSystem?.update(showAim || utilityTargeting !== undefined, inArena, delta, utilityTargeting, ultimatePreview);
+         && !this.inputSystem.isUtilityChargePreviewActive()
+         && !this.inputSystem.isUtilityPlacementActive();
+    this.aimSystem?.update(showAim || utilityTargeting !== undefined, inArena, delta, utilityTargeting, ultimatePreview);
     this.utilityChargeIndicator?.update(this.inputSystem.getUtilityChargePreviewState());
-        this.ultimateChargeIndicator?.update(ultimatePreview);
+    this.ultimateChargeIndicator?.update(ultimatePreview);
     this.renderRemoteGaussWarnings();
-        this.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined);
+    this.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined);
+    this.syncPlaceableUtilityHint(inArena, utilityPlacement !== undefined);
+    this.renderPlacementPreview(inArena, utilityPlacement);
+    this.renderRemotePlacementPreviews(inArena);
   }
 
   private syncArenaFogOverlay(now: number, inArena: boolean, countdownActive: boolean): void {
@@ -1325,6 +1373,286 @@ export class ArenaScene extends Phaser.Scene {
     if (!visible) return;
 
     hint.alpha = 0.9 + 0.1 * Math.sin(this.time.now / 160);
+  }
+
+  private createPlaceableUtilityHint(): Phaser.GameObjects.Container {
+    const x = ARENA_OFFSET_X + ARENA_WIDTH * 0.5;
+    const y = ARENA_OFFSET_Y + 54;
+    const panel = this.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
+    panel.setStrokeStyle(2, COLORS.BROWN_2, 0.9);
+    const title = this.add.text(0, -11, 'FELSBAU: ZIELMODUS', {
+      fontFamily: 'monospace',
+      fontSize: '22px',
+      fontStyle: 'bold',
+      color: '#fff1cf',
+      stroke: '#241527',
+      strokeThickness: 5,
+    }).setOrigin(0.5);
+    const subtitle = this.add.text(0, 15, 'E oder Linksklick: bauen   Rechtsklick: abbrechen', {
+      fontFamily: 'monospace',
+      fontSize: '15px',
+      color: '#ebede9',
+      stroke: '#241527',
+      strokeThickness: 4,
+    }).setOrigin(0.5);
+
+    const container = this.add.container(x, y, [panel, title, subtitle]);
+    container.setDepth(DEPTH.OVERLAY - 1);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+    return container;
+  }
+
+  private syncPlaceableUtilityHint(inArena: boolean, isTargeting: boolean): void {
+    const hint = this.placeableUtilityHint;
+    if (!hint) return;
+    const visible = inArena && isTargeting && this.localPlayerAlive && !this.localPlayerBurrowed;
+    hint.setVisible(visible);
+    if (!visible) return;
+    hint.alpha = 0.9 + 0.1 * Math.sin(this.time.now / 160);
+  }
+
+  private getLocalPlacementPreview(): UtilityPlacementPreviewState | undefined {
+    const sprite = this.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const cfg = this.getLocalUtilityConfig();
+    if (!sprite || !this.placementSystem || !this.inputSystem.isUtilityPlacementActive()) return undefined;
+    if (cfg.type !== 'placeable_rock') return undefined;
+    const pointer = this.input.activePointer;
+    return this.placementSystem.getPlacementPreview(cfg as PlaceableRockUtilityConfig, sprite.x, sprite.y, pointer.x, pointer.y);
+  }
+
+  private renderPlacementPreview(inArena: boolean, preview: UtilityPlacementPreviewState | undefined): void {
+    this.placementRangeGraphics?.clear();
+    this.placementInvalidGraphics?.clear();
+
+    if (!inArena || !preview || !this.localPlayerAlive || this.localPlayerBurrowed) {
+      this.localPlacementPreviewImage?.setVisible(false);
+      return;
+    }
+
+    const localPlayer = this.playerManager.getPlayer(bridge.getLocalPlayerId());
+    if (!localPlayer) {
+      this.localPlacementPreviewImage?.setVisible(false);
+      return;
+    }
+
+    const ownerColor = bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0];
+    const image = this.ensurePlacementPreviewImage(undefined);
+    image
+      .setPosition(preview.targetX, preview.targetY)
+      .setFrame(preview.frame)
+      .setTint(ownerColor)
+      .setAlpha(preview.isValid ? UTILITY_CONFIGS.FELSBAU.placeable.previewAlpha : 0.25)
+      .setVisible(true);
+
+    this.placementRangeGraphics?.lineStyle(2, ownerColor, 0.5);
+    this.placementRangeGraphics?.strokeCircle(localPlayer.sprite.x, localPlayer.sprite.y, preview.range);
+
+    if (!preview.isValid) {
+      const radius = CELL_SIZE * 0.36;
+      this.placementInvalidGraphics?.lineStyle(4, COLORS.RED_2, 0.95);
+      this.placementInvalidGraphics?.strokeCircle(preview.targetX, preview.targetY, radius);
+      this.placementInvalidGraphics?.beginPath();
+      this.placementInvalidGraphics?.moveTo(preview.targetX - radius * 0.7, preview.targetY - radius * 0.7);
+      this.placementInvalidGraphics?.lineTo(preview.targetX + radius * 0.7, preview.targetY + radius * 0.7);
+      this.placementInvalidGraphics?.strokePath();
+    }
+  }
+
+  private renderRemotePlacementPreviews(inArena: boolean): void {
+    if (!inArena) {
+      for (const preview of this.remotePlacementPreviewImages.values()) {
+        preview.setVisible(false);
+      }
+      return;
+    }
+
+    const activeIds = new Set<string>();
+    for (const playerId of bridge.getConnectedPlayerIds()) {
+      if (playerId === bridge.getLocalPlayerId()) continue;
+      const preview = bridge.getPlayerInput(playerId)?.placementPreview as PlacementPreviewNetState | undefined;
+      if (!preview?.active || preview.kind !== 'rock') continue;
+      activeIds.add(playerId);
+      const image = this.ensurePlacementPreviewImage(playerId);
+      const ownerColor = bridge.getPlayerColor(playerId) ?? COLORS.GREY_3;
+      image
+        .setPosition(preview.x, preview.y)
+        .setFrame(preview.frame)
+        .setTint(ownerColor)
+        .setAlpha(preview.isValid ? 0.38 : 0.18)
+        .setVisible(true);
+    }
+
+    for (const [playerId, image] of this.remotePlacementPreviewImages) {
+      if (activeIds.has(playerId)) continue;
+      image.setVisible(false);
+    }
+  }
+
+  private ensurePlacementPreviewImage(playerId?: string): Phaser.GameObjects.Image {
+    if (playerId === undefined) {
+      if (!this.localPlacementPreviewImage) {
+        this.localPlacementPreviewImage = this.add.image(0, 0, 'rocks', 0)
+          .setDisplaySize(CELL_SIZE, CELL_SIZE)
+          .setDepth(DEPTH.OVERLAY - 2)
+          .setVisible(false);
+      }
+      return this.localPlacementPreviewImage;
+    }
+
+    const existing = this.remotePlacementPreviewImages.get(playerId);
+    if (existing) return existing;
+    const created = this.add.image(0, 0, 'rocks', 0)
+      .setDisplaySize(CELL_SIZE, CELL_SIZE)
+      .setDepth(DEPTH.OVERLAY - 3)
+      .setVisible(false);
+    this.remotePlacementPreviewImages.set(playerId, created);
+    return created;
+  }
+
+  private showPlacementError(message: string): void {
+    if (!this.placementErrorText) return;
+    this.placementErrorText.setText(message);
+    this.placementErrorText.setAlpha(1);
+    this.placementErrorText.setVisible(true);
+    this.tweens.killTweensOf(this.placementErrorText);
+    this.tweens.add({
+      targets: this.placementErrorText,
+      alpha: 0,
+      duration: 1100,
+      ease: 'Quad.easeOut',
+      onComplete: () => this.placementErrorText?.setVisible(false),
+    });
+  }
+
+  private placePlaceableRock(
+    cfg: PlaceableRockUtilityConfig,
+    playerId: string,
+    originX: number,
+    originY: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    playerColor: number,
+  ): boolean {
+    const rock = this.placementSystem?.tryPlaceRock(cfg, playerId, playerColor, originX, originY, targetX, targetY, now);
+    if (!rock) return false;
+    this.rockRegistry?.register(rock.id, rock.maxHp);
+    this.materializePlaceableRock(rock, true);
+    return true;
+  }
+
+  private materializePlaceableRock(rock: SyncedPlaceableRock, playSpawnFx: boolean): void {
+    if (!this.arenaResult || !this.currentLayout) return;
+    this.ensureRuntimeRockSlot(rock);
+
+    if (!this.arenaResult.rockObjects[rock.id]?.active) {
+      ArenaBuilder.spawnRockAndRetile(
+        this,
+        this.arenaResult.rockObjects,
+        this.arenaResult.rockGroup,
+        this.arenaResult.rockGrid,
+        this.currentLayout.rocks,
+        rock.id,
+        rock.ownerColor,
+        UTILITY_CONFIGS.FELSBAU.placeable.ownerTintStrength,
+        rock.hp,
+        rock.maxHp,
+      );
+    }
+
+    this.updateRockVisualById(rock.id, rock.hp);
+
+    if (playSpawnFx) {
+      const world = this.gridToWorld(rock.gridX, rock.gridY);
+      this.playRockDustBurst(world.x, world.y, rock.ownerColor);
+      if (rock.ownerId === bridge.getLocalPlayerId()) {
+        this.cameras.main.shake(UTILITY_CONFIGS.FELSBAU.placeable.spawnShakeDuration, UTILITY_CONFIGS.FELSBAU.placeable.spawnShakeIntensity);
+      }
+    }
+  }
+
+  private removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
+    if (!this.arenaResult || !this.currentLayout) return;
+    if (playDust) {
+      const world = this.gridToWorld(rock.gridX, rock.gridY);
+      this.playRockDustBurst(world.x, world.y, rock.ownerColor);
+    }
+    ArenaBuilder.destroyRockAndRetile(
+      this.arenaResult.rockObjects,
+      this.arenaResult.rockGroup,
+      this.arenaResult.rockGrid,
+      this.currentLayout.rocks,
+      rock.id,
+    );
+  }
+
+  private ensureRuntimeRockSlot(rock: SyncedPlaceableRock): void {
+    if (!this.currentLayout || !this.arenaResult) return;
+    this.currentLayout.rocks[rock.id] = { gridX: rock.gridX, gridY: rock.gridY };
+    while (this.arenaResult.rockObjects.length <= rock.id) {
+      this.arenaResult.rockObjects.push(null);
+    }
+  }
+
+  private updateRockVisualById(rockId: number, hp: number): void {
+    if (!this.arenaResult || !this.currentLayout) return;
+    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
+    ArenaBuilder.updateRockVisual(
+      this.arenaResult.rockObjects,
+      this.arenaResult.rockGroup,
+      this.arenaResult.rockGrid,
+      this.currentLayout.rocks,
+      rockId,
+      hp,
+      runtimeRock?.maxHp ?? this.rockRegistry?.getMaxHP(rockId) ?? 200,
+      runtimeRock?.ownerColor,
+      runtimeRock ? UTILITY_CONFIGS.FELSBAU.placeable.ownerTintStrength : 0,
+    );
+  }
+
+  private handleDestroyedRock(rockId: number, reason: 'damage' | 'decay'): void {
+    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
+    if (runtimeRock) {
+      this.placementSystem?.removeRock(rockId);
+      this.rockRegistry?.remove(rockId);
+      if (reason === 'decay') {
+        this.removePlaceableRockVisual(runtimeRock, true);
+      }
+      return;
+    }
+
+    this.powerUpSystem?.onRockDestroyed(rockId);
+  }
+
+  private playRockDustBurst(x: number, y: number, ownerColor: number): void {
+    fillRadialGradientTexture(this.textures, 'placement_dust_particle', 24, [
+      [0, '#fff6d6'],
+      [0.35, '#d7b594'],
+      [0.75, '#7a4841'],
+      [1, 'rgba(0,0,0,0)'],
+    ]);
+
+    const emitter = createEmitter(this, x, y, 'placement_dust_particle', {
+      lifespan: { min: 260, max: 520 },
+      speed: { min: 30, max: 120 },
+      angle: { min: 0, max: 360 },
+      quantity: 16,
+      scale: { start: 0.55, end: 0.05 },
+      alpha: { start: 0.45, end: 0 },
+      tint: [ownerColor, COLORS.BROWN_2, COLORS.BROWN_4],
+      gravityY: -20,
+      emitting: false,
+    }, DEPTH.ROCKS + 1);
+    emitter.explode(18);
+    this.time.delayedCall(650, () => destroyEmitter(emitter));
+  }
+
+  private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
+    return {
+      x: ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2,
+      y: ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2,
+    };
   }
 
   private getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number }[] {
@@ -1858,6 +2186,12 @@ export class ArenaScene extends Phaser.Scene {
     // Accumulator-Überlauf verhindern (z.B. bei Tab-Wechsel / großen Deltas)
     if (this.netTickAccumulator > NET_TICK_INTERVAL_MS) this.netTickAccumulator = 0;
 
+    const now = Date.now();
+    for (const expiredRock of this.placementSystem?.update(now) ?? []) {
+      this.removePlaceableRockVisual(expiredRock, true);
+      this.rockRegistry?.remove(expiredRock.id);
+    }
+
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.playerManager.getAllPlayers()) {
       const hp         = this.combatSystem.getHP(player.id);
@@ -1870,7 +2204,7 @@ export class ArenaScene extends Phaser.Scene {
       const burrowPhase = this.burrowSystem?.getPhase(player.id) ?? 'idle';
       const isRaging   = this.loadoutManager?.isUltimateActive(player.id) ?? false;
       const isChargingUltimate = this.loadoutManager?.isUltimateCharging(player.id) ?? false;
-      const ultimateChargeFraction = this.loadoutManager?.getUltimateChargeFraction(player.id, Date.now()) ?? 0;
+      const ultimateChargeFraction = this.loadoutManager?.getUltimateChargeFraction(player.id, now) ?? 0;
       const ultimateChargeRange = this.loadoutManager?.getUltimateChargeRange(player.id) ?? 0;
       const isMoving   = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
       const aim        = this.loadoutManager?.getAimNetState(player.id, isMoving)
@@ -1908,7 +2242,21 @@ export class ArenaScene extends Phaser.Scene {
       };
     }
 
-    bridge.publishGameState({ players, projectiles, rocks, smokes, fires, stinkClouds, teslaDomes, powerups, pedestals, nukes, meteors, train });
+    bridge.publishGameState({
+      players,
+      projectiles,
+      rocks,
+      placeableRocks: this.placementSystem?.getNetSnapshot() ?? [],
+      smokes,
+      fires,
+      stinkClouds,
+      teslaDomes,
+      powerups,
+      pedestals,
+      nukes,
+      meteors,
+      train,
+    });
 
     // BFG-Screenshake während Flug (Host)
     if (projectiles.some(p => p.style === 'bfg')) {
@@ -1986,14 +2334,21 @@ export class ArenaScene extends Phaser.Scene {
 
       if (state.rocks && this.arenaResult && this.currentLayout) {
         for (const rs of state.rocks) {
-          ArenaBuilder.updateRockVisual(
-            this.arenaResult.rockObjects,
-            this.arenaResult.rockGroup,
-            this.arenaResult.rockGrid,
-            this.currentLayout.rocks,
-            rs.id,
-            rs.hp,
-          );
+          this.updateRockVisualById(rs.id, rs.hp);
+        }
+      }
+
+      if (this.placementSystem) {
+        const placementChanges = this.placementSystem.syncFromSnapshot(state.placeableRocks ?? []);
+        for (const rock of placementChanges.added) {
+          this.materializePlaceableRock(rock, true);
+        }
+        for (const rock of placementChanges.updated) {
+          this.materializePlaceableRock(rock, false);
+          this.updateRockVisualById(rock.id, rock.hp);
+        }
+        for (const rock of placementChanges.removed) {
+          this.removePlaceableRockVisual(rock, bridge.getSynchronizedNow() >= rock.expiresAt);
         }
       }
 

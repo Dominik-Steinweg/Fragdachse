@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ export interface WeaponConfig {
   readonly showCrosshair?: boolean;      // false = Zielfadenkreuz ausblenden
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -142,11 +142,29 @@ export interface TargetedClickUtilityActivationConfig {
   readonly type: 'targeted_click';
 }
 
+export interface PlacementModeUtilityActivationConfig {
+  readonly type: 'placement_mode';
+}
+
 export type UtilityActivationConfig =
   | InstantUtilityActivationConfig
   | ChargedThrowUtilityActivationConfig
   | ChargedGateUtilityActivationConfig
-  | TargetedClickUtilityActivationConfig;
+  | TargetedClickUtilityActivationConfig
+  | PlacementModeUtilityActivationConfig;
+
+export interface PlaceableRockPlacementConfig {
+  readonly kind: 'rock';
+  readonly range: number;
+  readonly footprint: readonly PlaceableFootprintCell[];
+  readonly maxHp: number;
+  readonly lifetimeMs: number;
+  readonly previewAlpha: number;
+  readonly ownerTintStrength: number;
+  readonly warningPulseMs: number;
+  readonly spawnShakeDuration: number;
+  readonly spawnShakeIntensity: number;
+}
 
 interface BaseUtilityConfig {
   readonly id: string;
@@ -232,7 +250,13 @@ export interface TranslocatorUtilityConfig extends BaseUtilityConfig {
   // Translocator-spezifische Configs koennen hier rein
 }
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TranslocatorUtilityConfig;
+export interface PlaceableRockUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'placeable_rock';
+  readonly activation: PlacementModeUtilityActivationConfig;
+  readonly placeable: PlaceableRockPlacementConfig;
+}
+
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -1047,6 +1071,31 @@ export const UTILITY_CONFIGS = {
     projectileColor:      COLORS.GREY_3,
     skipCooldownPublish:  true,      // Cooldown wird vom TranslocatorSystem gesetzt (beim Teleport), nicht beim Wurf.
   } as TranslocatorUtilityConfig,
+
+  FELSBAU: {
+    id:                  'FELSBAU',
+    displayName:         'Felsbau',
+    type:                'placeable_rock',
+    cooldown:            200,
+    activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
+    projectileSpeed:     0,
+    projectileSize:      0,
+    fuseTime:            0,
+    maxBounces:          0,
+    allowedSlots:        ['utility'],
+    placeable: {
+      kind:               'rock',
+      range:              160,
+      footprint:          [{ dx: 0, dy: 0 }] as const,
+      maxHp:              200,
+      lifetimeMs:         60000,
+      previewAlpha:       0.5,
+      ownerTintStrength:  0.85,
+      warningPulseMs:     3500,
+      spawnShakeDuration: 110,
+      spawnShakeIntensity: 0.0025,
+    },
+  } as PlaceableRockUtilityConfig,
 } as const;
 
 export const ULTIMATE_CONFIGS = {

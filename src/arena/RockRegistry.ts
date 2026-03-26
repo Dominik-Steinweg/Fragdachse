@@ -6,8 +6,8 @@ import type { ArenaLayout, RockNetState } from '../types';
  * Nur auf dem Host instanziiert; Clients empfangen Snapshots via GameState.
  */
 export class RockRegistry {
-  /** rockIndex → aktueller HP-Wert */
-  private hpMap = new Map<number, number>();
+  /** rockIndex → aktueller HP-Wert + max HP */
+  private hpMap = new Map<number, { hp: number; maxHp: number }>();
 
   constructor(layout: ArenaLayout) {
     this.reset(layout);
@@ -17,13 +17,21 @@ export class RockRegistry {
   reset(layout: ArenaLayout): void {
     this.hpMap.clear();
     for (let i = 0; i < layout.rocks.length; i++) {
-      this.hpMap.set(i, ROCK_HP_MAX);
+      this.hpMap.set(i, { hp: ROCK_HP_MAX, maxHp: ROCK_HP_MAX });
     }
+  }
+
+  register(id: number, maxHp: number): void {
+    this.hpMap.set(id, { hp: maxHp, maxHp });
   }
 
   /** Gibt den aktuellen HP-Wert für Felsen id zurück. */
   getHP(id: number): number {
-    return this.hpMap.get(id) ?? ROCK_HP_MAX;
+    return this.hpMap.get(id)?.hp ?? ROCK_HP_MAX;
+  }
+
+  getMaxHP(id: number): number {
+    return this.hpMap.get(id)?.maxHp ?? ROCK_HP_MAX;
   }
 
   /**
@@ -33,15 +41,15 @@ export class RockRegistry {
   applyDamage(id: number, damage: number): number {
     const current = this.hpMap.get(id);
     if (current === undefined) return 0; // Bereits zerstört
-    const newHp = Math.max(0, current - damage);
-    this.hpMap.set(id, newHp);
+    const newHp = Math.max(0, current.hp - damage);
+    this.hpMap.set(id, { hp: newHp, maxHp: current.maxHp });
     return newHp;
   }
 
   /** Gibt true zurück wenn der Felsen 0 HP hat. */
   isDestroyed(id: number): boolean {
     const hp = this.hpMap.get(id);
-    return hp !== undefined && hp <= 0;
+    return hp !== undefined && hp.hp <= 0;
   }
 
   /** Entfernt den Felsen aus der Registry (nach Zerstörung). */
@@ -55,9 +63,9 @@ export class RockRegistry {
    */
   getNetSnapshot(): RockNetState[] {
     const result: RockNetState[] = [];
-    for (const [id, hp] of this.hpMap) {
-      if (hp < ROCK_HP_MAX) {
-        result.push({ id, hp });
+    for (const [id, state] of this.hpMap) {
+      if (state.hp < state.maxHp) {
+        result.push({ id, hp: state.hp });
       }
     }
     return result;

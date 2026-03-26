@@ -12,6 +12,20 @@ export interface PlayerInput {
   dx: number;  // -1 | 0 | 1
   dy: number;  // -1 | 0 | 1
   aim: number; // Aim-Winkel quantisiert als uint8 (0-255 → 0-2π)
+  placementPreview?: PlacementPreviewNetState | null;
+}
+
+export type PlaceableKind = 'rock';
+
+export interface PlacementPreviewNetState {
+  active: boolean;
+  kind: PlaceableKind;
+  gridX: number;
+  gridY: number;
+  x: number;
+  y: number;
+  isValid: boolean;
+  frame: number;
 }
 
 /** Waffen-Slots mit Spread/Crosshair-Relevanz. */
@@ -259,6 +273,18 @@ export interface UtilityTargetingPreviewState {
   targetY: number;
 }
 
+export interface UtilityPlacementPreviewState {
+  angle: number;
+  targetX: number;
+  targetY: number;
+  gridX: number;
+  gridY: number;
+  isValid: boolean;
+  frame: number;
+  range: number;
+  kind: PlaceableKind;
+}
+
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
 export interface ProjectileSpawnConfig {
   speed:           number;
@@ -483,6 +509,11 @@ export interface TrackedProjectile {
 /** Ein Felsen-Gitterzelle (relativ zur Arena, 48px-Raster) */
 export interface RockCell { gridX: number; gridY: number; }
 
+export interface PlaceableFootprintCell {
+  dx: number;
+  dy: number;
+}
+
 /** Ein Baum-Gitterzelle (Trunk + Canopy, relativ zur Arena) */
 export interface TreeCell { gridX: number; gridY: number; }
 
@@ -512,6 +543,18 @@ export interface ArenaLayout {
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
 export interface RockNetState { id: number; hp: number; }
+
+export interface SyncedPlaceableRock {
+  id: number;
+  gridX: number;
+  gridY: number;
+  hp: number;
+  maxHp: number;
+  ownerId: string;
+  ownerColor: number;
+  expiresAt: number;
+  warningStartsAt: number;
+}
 
 /** Konfiguration des Zug-Events – einmalig vom Host veröffentlicht (reliable) */
 export interface TrainEventConfig {

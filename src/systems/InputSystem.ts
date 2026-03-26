@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
@@ -12,6 +12,7 @@ import type {
   ChargedThrowUtilityActivationConfig,
   ChargedGateUtilityActivationConfig,
   GaussUltimateConfig,
+  PlacementModeUtilityActivationConfig,
   TargetedClickUtilityActivationConfig,
   UltimateConfig,
   UtilityConfig,
@@ -20,6 +21,7 @@ import type {
 /** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
 type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig;
 type TargetedActivation = TargetedClickUtilityActivationConfig;
+type PlacementActivation = PlacementModeUtilityActivationConfig;
 
 export class InputSystem {
   private scene:           Phaser.Scene;
@@ -49,8 +51,11 @@ export class InputSystem {
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
   private utilityTargetingActive = false;
+  private utilityPlacementActive = false;
   private ultimateHoldActive = false;
   private ultimateChargeStartedAt: number | null = null;
+  private getUtilityPlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
+  private placementPreviewState: PlacementPreviewNetState | null = null;
 
   // Aktueller Aim-Winkel (Radiant, für Rotation-Sync)
   private currentAimAngle = 0;
@@ -168,6 +173,19 @@ export class InputSystem {
     return this.utilityTargetingActive;
   }
 
+  isUtilityPlacementActive(): boolean {
+    return this.utilityPlacementActive;
+  }
+
+  getUtilityPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
+    if (!this.utilityPlacementActive) return undefined;
+    return this.getUtilityPlacementPreviewProvider?.();
+  }
+
+  setupUtilityPlacementPreviewProvider(cb: () => UtilityPlacementPreviewState | undefined): void {
+    this.getUtilityPlacementPreviewProvider = cb;
+  }
+
   getUltimateChargePreviewState(): UltimateChargePreviewState | undefined {
     const sprite = this.getLocalSprite();
     const cfg = this.getGaussUltimateConfig();
@@ -243,7 +261,12 @@ export class InputSystem {
       if (this.keyS.isDown) dy += 1;
     }
 
-    const input: PlayerInput = { dx, dy, aim: quantizeAngle(this.currentAimAngle) };
+    const input: PlayerInput = {
+      dx,
+      dy,
+      aim: quantizeAngle(this.currentAimAngle),
+      placementPreview: this.placementPreviewState,
+    };
     this.bridge.sendLocalInput(input);
 
     if (!this.inputEnabled) return;
@@ -282,6 +305,7 @@ export class InputSystem {
 
     if (!sprite) {
       this.cancelUtilityInteraction();
+      this.placementPreviewState = null;
       return;
     }
 
@@ -291,7 +315,7 @@ export class InputSystem {
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     this.currentAimAngle = angle;
     const ultimateCharging = this.ultimateHoldActive;
-    const weaponsBlocked = this.localBurrowPhase !== 'idle' || ultimateCharging;
+    const weaponsBlocked = this.localBurrowPhase !== 'idle' || ultimateCharging || this.utilityPlacementActive;
     const utilityBlocked = this.localBurrowPhase === 'windup'
       || this.localBurrowPhase === 'underground'
       || this.localBurrowPhase === 'trapped'
@@ -323,6 +347,31 @@ export class InputSystem {
       }
     }
 
+    if (this.utilityPlacementActive) {
+      const preview = this.getUtilityPlacementPreviewState();
+      this.syncPlacementPreviewState(preview);
+
+      if (!preview) {
+        this.cancelUtilityPlacement();
+        return;
+      }
+
+      if (pointer.rightButtonDown()) {
+        this.cancelUtilityPlacement();
+        return;
+      }
+
+      if (Phaser.Input.Keyboard.JustDown(this.keyE) || pointer.leftButtonDown()) {
+        if (preview.isValid) {
+          this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY);
+        }
+        this.cancelUtilityPlacement();
+        return;
+      }
+
+      return;
+    }
+
     // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
@@ -337,6 +386,10 @@ export class InputSystem {
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y);
+        return;
+      }
+      if (this.beginPlacementUtilityAim(now)) {
+        this.syncPlacementPreviewState(this.getUtilityPlacementPreviewState());
         return;
       }
       if (this.beginTargetedUtilityAim(now)) {
@@ -367,6 +420,8 @@ export class InputSystem {
     } else if (this.utilityHoldActive && !this.keyE.isDown) {
       this.cancelUtilityCharge();
     }
+
+    this.syncPlacementPreviewState(undefined);
 
     const gaussCfg = ultimateCfg?.type === 'gauss' ? ultimateCfg : undefined;
     if (!utilityBlocked && gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
@@ -406,6 +461,22 @@ export class InputSystem {
     const cfg = this.getLocalUtilityConfig?.();
     if (!cfg || cfg.activation.type !== 'targeted_click') return undefined;
     return cfg as UtilityConfig & { activation: TargetedActivation };
+  }
+
+  private getPlacementUtilityConfig(): (UtilityConfig & { activation: PlacementActivation }) | undefined {
+    const cfg = this.getLocalUtilityConfig?.();
+    if (!cfg || cfg.activation.type !== 'placement_mode') return undefined;
+    return cfg as UtilityConfig & { activation: PlacementActivation };
+  }
+
+  private beginPlacementUtilityAim(now: number): boolean {
+    const cfg = this.getPlacementUtilityConfig();
+    if (!cfg) return false;
+    if (now < this.getEffectiveUtilityCooldownUntil()) return true;
+    this.cancelUtilityCharge();
+    this.cancelUtilityTargeting();
+    this.utilityPlacementActive = true;
+    return true;
   }
 
   private beginTargetedUtilityAim(now: number): boolean {
@@ -494,15 +565,39 @@ export class InputSystem {
     this.utilityTargetingActive = false;
   }
 
+  private cancelUtilityPlacement(): void {
+    this.utilityPlacementActive = false;
+    this.placementPreviewState = null;
+  }
+
   private cancelUtilityInteraction(): void {
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
+    this.cancelUtilityPlacement();
   }
 
   private cancelUtilityCharge(): void {
     this.utilityHoldActive = false;
     this.utilityChargeEligibleAt = null;
     this.utilityChargeStartedAt = null;
+  }
+
+  private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {
+    if (!this.utilityPlacementActive || !preview) {
+      this.placementPreviewState = null;
+      return;
+    }
+
+    this.placementPreviewState = {
+      active: true,
+      kind: preview.kind,
+      gridX: preview.gridX,
+      gridY: preview.gridY,
+      x: preview.targetX,
+      y: preview.targetY,
+      isValid: preview.isValid,
+      frame: preview.frame,
+    };
   }
 
   private beginUltimateCharge(

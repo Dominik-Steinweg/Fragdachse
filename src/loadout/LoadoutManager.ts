@@ -12,6 +12,7 @@ import type {
   ChargedThrowUtilityActivationConfig,
   GaussUltimateConfig,
   NukeUtilityConfig,
+  PlaceableRockUtilityConfig,
   StinkCloudUtilityConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -77,6 +78,7 @@ export class LoadoutManager {
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
+  private placeableRockHandler: ((cfg: PlaceableRockUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
@@ -222,6 +224,10 @@ export class LoadoutManager {
     this.actionBlockedChecker = checker;
   }
 
+  setPlaceableRockHandler(handler: ((cfg: PlaceableRockUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null): void {
+    this.placeableRockHandler = handler;
+  }
+
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
 
   /**
@@ -286,20 +292,20 @@ export class LoadoutManager {
     params?:   LoadoutUseParams,
     clientX?:  number,
     clientY?:  number,
-  ): void {
+  ): boolean {
     const loadout = this.loadouts.get(playerId);
-    if (!loadout) return;
-    if (this.actionBlockedChecker?.(playerId, slot)) return;
+    if (!loadout) return false;
+    if (this.actionBlockedChecker?.(playerId, slot)) return false;
 
     const player = this.playerManager.getPlayer(playerId);
-    if (!player) return;
+    if (!player) return false;
     // Client-Position verwenden falls vorhanden (kompensiert Netzwerk-Tick-Latenz),
     // sonst Fallback auf autoritative Host-Position.
     const x = clientX ?? player.sprite.x;
     const y = clientY ?? player.sprite.y;
 
     // Schießen während Dash-Phase 1 (Burst) blockiert
-    if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return;
+    if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return false;
 
     // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
     if (slot === 'weapon1' || slot === 'weapon2') {
@@ -308,25 +314,22 @@ export class LoadoutManager {
 
     switch (slot) {
       case 'weapon1':
-        this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
-        break;
+        return this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
 
       case 'weapon2':
-        this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
-        break;
+        return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
 
       case 'utility': {
-        this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
-        break;
+        return this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
       }
 
       case 'ultimate': {
         const ultState = this.ultimateStates.get(playerId);
         const cfg  = loadout.ultimate.config;
         if (cfg.type === 'buff') {
-          if (ultState?.active) return;
+          if (ultState?.active) return false;
           const rage = this.resourceSystem.getRage(playerId);
-          if (rage < cfg.rageRequired) return;
+          if (rage < cfg.rageRequired) return false;
           const consumedRage = Math.min(rage, RAGE_MAX);
           const scale = consumedRage / cfg.rageRequired;
           const durationMs = Math.max(1, Math.round(cfg.duration * scale));
@@ -348,7 +351,7 @@ export class LoadoutManager {
               return p ? { x: p.sprite.x, y: p.sprite.y } : null;
             });
           }
-          return;
+          return true;
         }
 
         this.handleGaussUltimateUse(
@@ -362,9 +365,11 @@ export class LoadoutManager {
           ultState,
           params,
         );
-        break;
+        return true;
       }
     }
+
+    return false;
   }
 
   // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
@@ -629,20 +634,20 @@ export class LoadoutManager {
     now:      number,
     playerColor: number,
     shotId?: number,
-  ): void {
+  ): boolean {
     if (weapon.config.fire.type === 'tesla_dome') {
       this.activateTeslaDomeWeapon(weapon, x, y, playerId, now, playerColor);
-      return;
+      return true;
     }
 
     // 1. Cooldown-Check
-    if (weapon.isOnCooldown(now)) return;
+    if (weapon.isOnCooldown(now)) return false;
 
     const cfg = weapon.config;
 
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
     if (cfg.adrenalinCost > 0) {
-      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return;
+      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return false;
     }
 
     // 3. Spread-Parameter berechnen
@@ -670,7 +675,7 @@ export class LoadoutManager {
       const finalAngle = angle + (Math.random() * 2 - 1) * halfSpreadRad;
       didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, shotId);
     }
-    if (!didFire) return;
+    if (!didFire) return false;
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
     if (cfg.adrenalinCost > 0) {
@@ -692,6 +697,8 @@ export class LoadoutManager {
     if (cfg.shotScreenShake) {
       this.bridge.broadcastShotFx(playerId, cfg.shotScreenShake.duration, cfg.shotScreenShake.intensity);
     }
+
+    return true;
   }
 
   private useUtility(
@@ -705,12 +712,12 @@ export class LoadoutManager {
     now: number,
     playerColor: number,
     params?: LoadoutUseParams,
-  ): void {
-    if (utility.isOnCooldown(now)) return;
+  ): boolean {
+    if (utility.isOnCooldown(now)) return false;
 
     // Ammo-Check (falls Ammo-Tracking aktiv, z.B. Heilige Handgranate)
     const ammo = this.utilityAmmo.get(playerId);
-    if (ammo !== undefined && ammo <= 0) return;
+    if (ammo !== undefined && ammo <= 0) return false;
 
     const cfg = utility.config;
     let didUse = false;
@@ -733,7 +740,7 @@ export class LoadoutManager {
         break;
 
       case 'charged_gate':
-        if ((params?.utilityChargeFraction ?? 0) < 1.0) return; // nicht voll geladen → abbrechen
+        if ((params?.utilityChargeFraction ?? 0) < 1.0) return false; // nicht voll geladen → abbrechen
         if (cfg.type === 'bfg') {
           didUse = this.fireBfgUtility(cfg as BfgUtilityConfig, x, y, angle, playerId);
         }
@@ -742,6 +749,12 @@ export class LoadoutManager {
       case 'targeted_click':
         if (cfg.type === 'nuke') {
           didUse = this.triggerNukeUtility(cfg as NukeUtilityConfig, playerId, targetX, targetY);
+        }
+        break;
+
+      case 'placement_mode':
+        if (cfg.type === 'placeable_rock') {
+          didUse = this.placeableRockHandler?.(cfg as PlaceableRockUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor) ?? false;
         }
         break;
 
@@ -770,6 +783,8 @@ export class LoadoutManager {
         }
       }
     }
+
+    return didUse;
   }
 
   private throwGrenadeUtility(

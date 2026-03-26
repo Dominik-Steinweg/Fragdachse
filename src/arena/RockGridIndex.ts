@@ -38,6 +38,12 @@ export class RockGridIndex {
     this.grid[gy * GRID_COLS + gx] = -1;
   }
 
+  /** Belegt oder überschreibt eine Zelle mit einem Rock-Index. */
+  set(gx: number, gy: number, rockId: number): void {
+    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return;
+    this.grid[gy * GRID_COLS + gx] = rockId;
+  }
+
   /** Gibt Rock-Indizes aller belegten Nachbarzellen zurück (bis zu 8). */
   getNeighborIndices(gx: number, gy: number): number[] {
     const result: number[] = [];

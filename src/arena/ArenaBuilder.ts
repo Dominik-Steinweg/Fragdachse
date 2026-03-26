@@ -135,6 +135,9 @@ export class ArenaBuilder {
     rocks:       readonly RockCell[],
     id:          number,
     hp:          number,
+    maxHp = ROCK_HP_MAX,
+    ownerColor?: number,
+    ownerTintStrength = 0,
   ): void {
     if (hp <= 0) {
       ArenaBuilder.destroyRockAndRetile(rockObjects, rockGroup, rockGrid, rocks, id);
@@ -144,9 +147,47 @@ export class ArenaBuilder {
     if (!img?.active) return;
 
     // Glatte Abstufung in ROCK_TINT_STEPS Schritten: 0xffffff (voll) → 0x666666 (fast zerstört)
-    const ratio = Math.round((hp / ROCK_HP_MAX) * ROCK_TINT_STEPS) / ROCK_TINT_STEPS;
+    const ratio = Math.round((hp / Math.max(1, maxHp)) * ROCK_TINT_STEPS) / ROCK_TINT_STEPS;
     const gray  = Math.round(0x66 + (0xFF - 0x66) * ratio);
-    img.setTint((gray << 16) | (gray << 8) | gray);
+    const damageTint = (gray << 16) | (gray << 8) | gray;
+    img.setTint(ArenaBuilder.mixTint(damageTint, ownerColor, ownerTintStrength));
+  }
+
+  static spawnRockAndRetile(
+    scene: Phaser.Scene,
+    rockObjects: (Phaser.GameObjects.Image | null)[],
+    rockGroup: Phaser.Physics.Arcade.StaticGroup,
+    rockGrid: RockGridIndex,
+    rocks: readonly RockCell[],
+    id: number,
+    ownerColor?: number,
+    ownerTintStrength = 0,
+    hp = ROCK_HP_MAX,
+    maxHp = ROCK_HP_MAX,
+  ): Phaser.GameObjects.Image {
+    const { gridX, gridY } = rocks[id];
+    const isOccupied = (gx: number, gy: number) => gx === gridX && gy === gridY
+      ? true
+      : rockGrid.isOccupied(gx, gy);
+    const frame = AutoTiler.getFrame(AutoTiler.computeMask(gridX, gridY, isOccupied), ROCK_AUTOTILE);
+    const img = ArenaBuilder.createRockVisual(scene, ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2, ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2, frame);
+    rockObjects[id] = img;
+    rockGroup.add(img);
+    (img.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+    rockGroup.refresh();
+    rockGrid.set(gridX, gridY, id);
+
+    const neighborIds = rockGrid.getNeighborIndices(gridX, gridY);
+    for (const neighborId of neighborIds) {
+      const neighbor = rockObjects[neighborId];
+      if (!neighbor?.active) continue;
+      const cell = rocks[neighborId];
+      const neighborFrame = AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, (gx, gy) => rockGrid.isOccupied(gx, gy)), ROCK_AUTOTILE);
+      neighbor.setFrame(neighborFrame);
+    }
+
+    ArenaBuilder.updateRockVisual(rockObjects, rockGroup, rockGrid, rocks, id, hp, maxHp, ownerColor, ownerTintStrength);
+    return img;
   }
 
   /**
@@ -238,10 +279,29 @@ export class ArenaBuilder {
    * Erstellt einen Felsen-Sprite aus dem Autotile-Spritesheet.
    */
   private createRockVisual(worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
-    const img = this.scene.add.image(worldX, worldY, 'rocks', frame);
+    return ArenaBuilder.createRockVisual(this.scene, worldX, worldY, frame);
+  }
+
+  private static createRockVisual(scene: Phaser.Scene, worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
+    const img = scene.add.image(worldX, worldY, 'rocks', frame);
     img.setDisplaySize(CELL_SIZE, CELL_SIZE);
     img.setDepth(DEPTH.ROCKS);
     return img;
+  }
+
+  private static mixTint(baseColor: number, ownerColor?: number, strength = 0): number {
+    if (ownerColor === undefined || strength <= 0) return baseColor;
+    const mix = Phaser.Math.Clamp(strength, 0, 1);
+    const baseRed = (baseColor >> 16) & 0xff;
+    const baseGreen = (baseColor >> 8) & 0xff;
+    const baseBlue = baseColor & 0xff;
+    const ownerRed = (ownerColor >> 16) & 0xff;
+    const ownerGreen = (ownerColor >> 8) & 0xff;
+    const ownerBlue = ownerColor & 0xff;
+    const red = Math.round(baseRed + (ownerRed - baseRed) * mix);
+    const green = Math.round(baseGreen + (ownerGreen - baseGreen) * mix);
+    const blue = Math.round(baseBlue + (ownerBlue - baseBlue) * mix);
+    return (red << 16) | (green << 8) | blue;
   }
 
   /**

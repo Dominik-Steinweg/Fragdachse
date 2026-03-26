@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot, SyncedPlaceableRock } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -80,6 +80,7 @@ export interface GameState {
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectile[];
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
+  placeableRocks: SyncedPlaceableRock[];
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
@@ -103,7 +104,7 @@ type LoadoutUseHandler = (
   clientX?: number,
   clientY?: number,
   clientNow?: number,
-) => void;
+) => boolean;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type GrenadeCountdownHandler = (x: number, y: number, value: number) => void;
@@ -467,6 +468,7 @@ export class NetworkBridge {
     const payload: Record<string, unknown> = { p: state.players, _s: ++this.publishSeq };
     if (state.projectiles.length > 0)  payload.j = state.projectiles;
     if (state.rocks.length > 0)        payload.r = state.rocks;
+    if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
     if (state.smokes.length > 0)       payload.s = state.smokes;
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
@@ -490,6 +492,7 @@ export class NetworkBridge {
       players:       raw.p as Record<string, PlayerNetState>,
       projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
       rocks:         (raw.r as RockNetState[]       | undefined) ?? [],
+      placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
@@ -538,7 +541,7 @@ export class NetworkBridge {
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
 
-  sendLoadoutUse(
+  async sendLoadoutUse(
     slot: LoadoutSlot,
     angle: number,
     targetX: number,
@@ -548,12 +551,17 @@ export class NetworkBridge {
     clientX?: number,
     clientY?: number,
     clientNow?: number,
-  ): void {
+    awaitResult = false,
+  ): Promise<boolean> {
     if (isHost()) {
-      this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow);
-      return;
+      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? false;
     }
-    this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow });
+    if (!awaitResult) {
+      this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow });
+      return true;
+    }
+    const result = await this.callHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow }, 1200);
+    return Boolean((result as { ok?: boolean } | undefined)?.ok);
   }
 
   registerLoadoutUseHandler(
@@ -568,7 +576,7 @@ export class NetworkBridge {
       clientX?: number,
       clientY?: number,
       clientNow?: number,
-    ) => void,
+    ) => boolean,
   ): void {
     this.loadoutUseHandler = handler;
     this.registerHostRpcHandler('lu', async (data: unknown, caller: PlayerState): Promise<unknown> => {
@@ -590,8 +598,8 @@ export class NetworkBridge {
       // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
       const hostNow = Date.now();
       const clientNow = (typeof ts === 'number' && Math.abs(hostNow - ts) <= 200) ? ts : hostNow;
-      loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow);
-      return undefined;
+      const ok = loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow);
+      return { ok };
     });
   }
 
