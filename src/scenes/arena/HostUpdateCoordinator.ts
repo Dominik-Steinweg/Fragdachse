@@ -92,6 +92,8 @@ export class HostUpdateCoordinator {
     for (const det of detonations) {
       this.ctx.combatSystem.applyAoeDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
+        false,
+        { category: 'explosion', weaponName: 'Detonation' },
       );
       if ((det.effect.knockback ?? 0) > 0) {
         this.ctx.hostPhysics.applyRadialImpulse(
@@ -113,7 +115,14 @@ export class HostUpdateCoordinator {
     }
 
     for (const explosion of explodedProjectiles) {
-      this.ctx.combatSystem.applyExplosionDamage(explosion.x, explosion.y, explosion.effect, explosion.ownerId);
+      this.ctx.combatSystem.applyExplosionDamage(
+        explosion.x,
+        explosion.y,
+        explosion.effect,
+        explosion.ownerId,
+        explosion.sourceSlot,
+        explosion.weaponName ?? 'Explosion',
+      );
       this.ctx.hostPhysics.applyRadialImpulse(
         explosion.x, explosion.y, explosion.effect.radius,
         explosion.effect.knockback, explosion.ownerId,
@@ -128,7 +137,11 @@ export class HostUpdateCoordinator {
 
     for (const g of explodedGrenades) {
       if (g.effect.type === 'damage') {
-        this.ctx.combatSystem.applyAoeDamage(g.x, g.y, g.effect.radius, g.effect.damage, g.ownerId);
+        this.ctx.combatSystem.applyAoeDamage(g.x, g.y, g.effect.radius, g.effect.damage, g.ownerId, false, {
+          category: 'explosion',
+          weaponName: 'Granate',
+          sourceSlot: 'utility',
+        });
         this.applyAoeEnvironmentDamage(
           g.x, g.y, g.effect.radius, g.effect.damage,
           g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId,
@@ -168,10 +181,16 @@ export class HostUpdateCoordinator {
     }
 
     const teslaDomes = countdownActive ? [] : (this.ctx.teslaDomeSystem?.hostUpdate(Date.now()) ?? []);
+    const energyShields = countdownActive ? [] : (this.ctx.energyShieldSystem?.hostUpdate(Date.now()) ?? []);
     this.renderers.teslaDome.syncVisuals(teslaDomes);
+    this.renderers.energyShield.syncVisuals(energyShields);
 
     for (const ev of fireDamageEvents) {
-      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true);
+      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true, {
+        category: 'damage_over_time',
+        weaponName: 'Feuer',
+        sourceSlot: 'utility',
+      });
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
@@ -179,7 +198,11 @@ export class HostUpdateCoordinator {
     }
 
     for (const ev of stinkDmg) {
-      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false);
+      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
+        category: 'damage_over_time',
+        weaponName: 'Gas',
+        sourceSlot: 'utility',
+      });
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
@@ -191,6 +214,7 @@ export class HostUpdateCoordinator {
       this.ctx.combatSystem.applyAoeDamage(
         mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
         mi.selfDamageMult > 0,
+        { category: 'explosion', weaponName: 'Meteor', sourceSlot: 'ultimate' },
       );
       this.applyAoeEnvironmentDamage(
         mi.x, mi.y, mi.radius, mi.damage,
@@ -274,6 +298,7 @@ export class HostUpdateCoordinator {
       const utilCfg   = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const activePowerUps = this.ctx.powerUpSystem?.getActiveBuffsForHUD(localId) ?? [];
+      const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
       const ultimateThresholds = this.ctx.loadoutManager?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
       this.ctx.leftPanel.updateArenaHUD({
         hp:                      this.ctx.combatSystem.getHP(localId),
@@ -290,6 +315,7 @@ export class HostUpdateCoordinator {
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
         activePowerUps,
+        shieldBuff,
       });
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
       this.localPlayerState.burrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
@@ -331,6 +357,13 @@ export class HostUpdateCoordinator {
 
       bridge.publishAdrSyringeActive(player.id, (this.ctx.powerUpSystem?.getRegenMultiplier(player.id) ?? 1) > 1);
       bridge.publishActiveBuffs(player.id, this.ctx.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []);
+      bridge.publishShieldBuffHud(player.id, this.ctx.loadoutManager?.getShieldBuffHudState(player.id, now) ?? {
+        visible: false,
+        defId: 'SHIELD_OVERCHARGE',
+        value: 0,
+        maxValue: 1,
+        damageBonusPct: 0,
+      });
 
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
@@ -368,6 +401,7 @@ export class HostUpdateCoordinator {
       fires,
       stinkClouds,
       teslaDomes,
+      energyShields,
       powerups,
       pedestals,
       nukes,
@@ -531,6 +565,16 @@ export class HostUpdateCoordinator {
       const dist = Phaser.Math.Distance.Between(px, py, player.sprite.x, player.sprite.y);
       if (dist > radius) continue;
       if (!this.ctx.combatSystem.hasLineOfSight(px, py, player.sprite.x, player.sprite.y)) continue;
+      if (this.ctx.energyShieldSystem?.tryBlockDamage({
+        targetId: player.id,
+        category: 'hitscan',
+        damage,
+        sourceX: px,
+        sourceY: py,
+        now: Date.now(),
+      })) {
+        continue;
+      }
       this.ctx.combatSystem.applyDamage(player.id, damage, false, proj.ownerId, 'BFG');
       laserLines.push({ sx: px, sy: py, ex: player.sprite.x, ey: player.sprite.y });
     }

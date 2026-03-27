@@ -4,6 +4,7 @@ import { FlameRenderer }       from '../../effects/FlameRenderer';
 import { BfgRenderer }         from '../../effects/BfgRenderer';
 import { EnergyBallRenderer }  from '../../effects/EnergyBallRenderer';
 import { GaussRenderer }       from '../../effects/GaussRenderer';
+import { EnergyShieldRenderer } from '../../effects/EnergyShieldRenderer';
 import { TeslaDomeRenderer }   from '../../effects/TeslaDomeRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
@@ -28,6 +29,7 @@ export interface RendererBundle {
   bfg:                 BfgRenderer;
   energyBall:          EnergyBallRenderer;
   gauss:               GaussRenderer;
+  energyShield:        EnergyShieldRenderer;
   teslaDome:           TeslaDomeRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
@@ -61,6 +63,9 @@ export function createRendererBundle(scene: Phaser.Scene): RendererBundle {
   const gauss = new GaussRenderer(scene);
   gauss.generateTextures();
 
+  const energyShield = new EnergyShieldRenderer(scene);
+  energyShield.generateTextures();
+
   const teslaDome = new TeslaDomeRenderer(scene);
   teslaDome.generateTextures();
 
@@ -93,7 +98,7 @@ export function createRendererBundle(scene: Phaser.Scene): RendererBundle {
   const powerUp = new PowerUpRenderer(scene);
 
   return {
-    bullet, flame, bfg, energyBall, gauss, teslaDome, holyGrenade,
+    bullet, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck,
     nuke, meteor, powerUp,
     train: null,

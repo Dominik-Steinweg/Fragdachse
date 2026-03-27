@@ -166,6 +166,7 @@ export class ClientUpdateCoordinator {
         adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
         isUtilityOverridden:     overrideName !== '' || this.clientUtilityOverride !== null,
         activePowerUps:          bridge.getPlayerActiveBuffs(localId2),
+        shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
       });
       this.localPlayerState.alive    = localState.alive;
       this.localPlayerState.burrowed = localState.isBurrowed;

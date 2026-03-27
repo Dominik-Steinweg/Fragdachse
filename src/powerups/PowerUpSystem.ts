@@ -74,7 +74,7 @@ function weightedRandom(weights: Record<string, number>): string | null {
 
 // ── PowerUpSystem ──────────────────────────────────────────────────────────
 
-type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive' | 'isBurrowed' | 'applyDamage'>;
+type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive' | 'isBurrowed' | 'applyDamage' | 'applyExplosionDamage'>;
 
 /**
  * Host-autoritäres System für Power-Ups auf dem Boden und aktive Buffs.
@@ -315,16 +315,13 @@ export class PowerUpSystem {
   }
 
   private explodeNuke(strike: ActiveNukeStrike): void {
-    for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.combat.isAlive(player.id)) continue;
-
-      const dist = Phaser.Math.Distance.Between(strike.x, strike.y, player.sprite.x, player.sprite.y);
-      if (dist > strike.radius) continue;
-
-      const clampedT = Phaser.Math.Clamp(dist / strike.radius, 0, 1);
-      const damage = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, clampedT);
-      this.combat.applyDamage(player.id, Math.round(damage), false, strike.triggeredBy, 'Atombombe');
-    }
+    this.combat.applyExplosionDamage(strike.x, strike.y, {
+      radius: strike.radius,
+      maxDamage: NUKE_CONFIG.maxDamage,
+      minDamage: NUKE_CONFIG.minDamage,
+      knockback: 0,
+      selfDamageMult: 1,
+    }, strike.triggeredBy, 'utility', 'Atombombe');
 
     this.options.onNukeExploded?.(strike.x, strike.y, strike.radius, strike.triggeredBy);
   }

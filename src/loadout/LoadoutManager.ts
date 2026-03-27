@@ -5,11 +5,14 @@ import type { ArmageddonSystem }  from '../systems/ArmageddonSystem';
 import type { StinkCloudSystem }  from '../effects/StinkCloudSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
+import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
+import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, WeaponSlot } from '../types';
+import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
   BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
+  EnergyShieldWeaponFireConfig,
   GaussUltimateConfig,
   NukeUtilityConfig,
   PlaceableTurretUtilityConfig,
@@ -37,6 +40,7 @@ export interface LoadoutSelection {
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
 import { GenericUltimate } from './GenericUltimate';
+import { EnergyShieldWeapon } from './EnergyShieldWeapon';
 import { TeslaDomeWeapon } from './TeslaDomeWeapon';
 import type { BaseWeapon }   from './BaseWeapon';
 import type { BaseUtility }  from './BaseUtility';
@@ -78,6 +82,8 @@ export class LoadoutManager {
   private nukeStrikeHandler: ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
   private stinkCloudSystem:   StinkCloudSystem | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
+  private energyShieldSystem: EnergyShieldSystem | null = null;
+  private shieldBuffSystem:   ShieldBuffSystem | null = null;
   private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
   private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
@@ -125,6 +131,8 @@ export class LoadoutManager {
     this.bridge.publishUtilityCooldownUntil(playerId, 0);
     this.bridge.publishUtilityOverrideName(playerId, '');
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
+    this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
+    this.shieldBuffSystem?.resetPlayer(playerId);
   }
 
   /**
@@ -160,6 +168,8 @@ export class LoadoutManager {
     this.utilityAmmo.delete(playerId);
     this.heldFireSlots.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
+    this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
+    this.shieldBuffSystem?.removePlayer(playerId);
     this.translocatorSystem?.removePlayer(playerId);
   }
 
@@ -221,6 +231,14 @@ export class LoadoutManager {
     this.teslaDomeSystem = sys;
   }
 
+  setEnergyShieldSystem(sys: EnergyShieldSystem | null): void {
+    this.energyShieldSystem = sys;
+  }
+
+  setShieldBuffSystem(sys: ShieldBuffSystem | null): void {
+    this.shieldBuffSystem = sys;
+  }
+
   /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
   setActionBlockedChecker(checker: ((playerId: string, slot: LoadoutSlot) => boolean) | null): void {
     this.actionBlockedChecker = checker;
@@ -240,7 +258,7 @@ export class LoadoutManager {
     playerId: string,
     playerColor: number,
   ): boolean {
-    return this.dispatchWeaponFire(config, x, y, angle, targetX, targetY, playerId, playerColor);
+    return this.dispatchWeaponFire(config, x, y, angle, targetX, targetY, playerId, playerColor, undefined);
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
@@ -329,10 +347,10 @@ export class LoadoutManager {
 
     switch (slot) {
       case 'weapon1':
-        return this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
+        return this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon1', shotId);
 
       case 'weapon2':
-        return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, shotId);
+        return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId);
 
       case 'utility': {
         return this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
@@ -443,6 +461,11 @@ export class LoadoutManager {
         const holdFactor = this.teslaDomeSystem?.isActive(playerId) ? fireCfg.movementSlowFactor : 1;
         return ultimateMult * gaussSlowMult * holdFactor;
       }
+      if (cfg?.fire.type === 'energy_shield') {
+        const fireCfg = cfg.fire as EnergyShieldWeaponFireConfig;
+        const holdFactor = this.energyShieldSystem?.isActive(playerId) ? fireCfg.movementSlowFactor : 1;
+        return ultimateMult * gaussSlowMult * holdFactor;
+      }
       const holdFactor = cfg?.holdSpeedFactor ?? 1;
       return ultimateMult * gaussSlowMult * holdFactor;
     }
@@ -453,6 +476,29 @@ export class LoadoutManager {
   getDamageMultiplier(playerId: string): number {
     const state = this.ultimateStates.get(playerId);
     return state?.active && state.config.type === 'buff' ? state.config.damageMultiplier : 1;
+  }
+
+  getWeaponDamageMultiplier(playerId: string, slot: WeaponSlot, now = Date.now()): number {
+    const baseMultiplier = this.getDamageMultiplier(playerId);
+    if (slot !== 'weapon1') return baseMultiplier;
+
+    const fireCfg = this.getEquippedEnergyShieldFireConfig(playerId);
+    if (!fireCfg || !this.shieldBuffSystem) return baseMultiplier;
+    return baseMultiplier * this.shieldBuffSystem.getPrimaryDamageMultiplier(playerId, fireCfg, now);
+  }
+
+  getShieldBuffHudState(playerId: string, now = Date.now()): ShieldBuffHudState {
+    const fireCfg = this.getEquippedEnergyShieldFireConfig(playerId);
+    if (!fireCfg || !this.shieldBuffSystem) {
+      return {
+        visible: false,
+        defId: 'SHIELD_OVERCHARGE',
+        value: 0,
+        maxValue: 1,
+        damageBonusPct: 0,
+      };
+    }
+    return this.shieldBuffSystem.getHudState(playerId, fireCfg, true, now);
   }
 
   isUltimateActive(playerId: string): boolean {
@@ -648,10 +694,15 @@ export class LoadoutManager {
     playerId: string,
     now:      number,
     playerColor: number,
+    sourceSlot: WeaponSlot,
     shotId?: number,
   ): boolean {
     if (weapon.config.fire.type === 'tesla_dome') {
       this.activateTeslaDomeWeapon(weapon, x, y, playerId, now, playerColor);
+      return true;
+    }
+    if (weapon.config.fire.type === 'energy_shield') {
+      this.activateEnergyShieldWeapon(weapon, playerId, now, playerColor);
       return true;
     }
 
@@ -683,12 +734,12 @@ export class LoadoutManager {
       const pelletOffsets = calcPelletAngles(pelletCount, cfg.pelletSpreadAngle ?? 0);
       for (const offset of pelletOffsets) {
         const pelletAngle = angle + offset + (Math.random() * 2 - 1) * halfSpreadRad;
-        this.dispatchWeaponFire(cfg, x, y, pelletAngle, targetX, targetY, playerId, playerColor, shotId);
+        this.dispatchWeaponFire(cfg, x, y, pelletAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
       }
       didFire = true;
     } else {
       const finalAngle = angle + (Math.random() * 2 - 1) * halfSpreadRad;
-      didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, shotId);
+      didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
     }
     if (!didFire) return false;
 
@@ -936,22 +987,24 @@ export class LoadoutManager {
     targetY:     number,
     playerId:    string,
     playerColor: number,
+    sourceSlot?: LoadoutSlot,
     shotId?:     number,
   ): boolean {
     switch (config.fire.type) {
       case 'projectile':
-        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor);
+        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot);
 
       case 'hitscan':
-        return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, shotId);
+        return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId);
 
       case 'melee':
-        return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor);
+        return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined);
 
       case 'flamethrower':
-        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor);
+        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
 
       case 'tesla_dome':
+      case 'energy_shield':
         return false;
 
       default:
@@ -962,6 +1015,9 @@ export class LoadoutManager {
   private createWeapon(config: WeaponConfig): BaseWeapon {
     if (config.fire.type === 'tesla_dome') {
       return new TeslaDomeWeapon(config as WeaponConfig & { fire: TeslaDomeWeaponFireConfig });
+    }
+    if (config.fire.type === 'energy_shield') {
+      return new EnergyShieldWeapon(config as WeaponConfig & { fire: EnergyShieldWeaponFireConfig });
     }
     return new GenericWeapon(config);
   }
@@ -984,6 +1040,22 @@ export class LoadoutManager {
     this.teslaDomeSystem.hostRefresh(playerId, x, y, now, cfg, cfg.projectileColor ?? playerColor);
   }
 
+  private activateEnergyShieldWeapon(
+    weapon: BaseWeapon,
+    playerId: string,
+    now: number,
+    playerColor: number,
+  ): void {
+    if (!this.energyShieldSystem) return;
+    if (this.resourceSystem.getAdrenaline(playerId) <= 0) {
+      this.energyShieldSystem.hostDeactivateForPlayer(playerId);
+      return;
+    }
+
+    const cfg = weapon.config as WeaponConfig & { fire: EnergyShieldWeaponFireConfig };
+    this.energyShieldSystem.hostRefresh(playerId, now, cfg, cfg.projectileColor ?? playerColor);
+  }
+
   private fireProjectileWeapon(
     config:      WeaponConfig,
     fireConfig:  ProjectileWeaponFireConfig,
@@ -994,6 +1066,7 @@ export class LoadoutManager {
     targetY:     number,
     playerId:    string,
     playerColor: number,
+    sourceSlot?: LoadoutSlot,
   ): boolean {
     const cursorRange = Phaser.Math.Distance.Between(x, y, targetX, targetY);
     const effectiveRange = fireConfig.limitRangeToCursor
@@ -1024,6 +1097,7 @@ export class LoadoutManager {
       detonator:       config.detonator,
       rockDamageMult:  config.rockDamageMult,
       trainDamageMult: config.trainDamageMult,
+      sourceSlot,
     });
 
     return true;
@@ -1037,6 +1111,7 @@ export class LoadoutManager {
     angle:       number,
     playerId:    string,
     playerColor: number,
+    sourceSlot:  WeaponSlot | undefined,
     shotId?:     number,
   ): boolean {
     void playerColor;
@@ -1052,6 +1127,7 @@ export class LoadoutManager {
       config.adrenalinGain,
       config.displayName,
       fireConfig.visualPreset,
+      sourceSlot,
       shotId,
       config.detonator,  // DetonatorConfig weitergeben (optional)
       config.rockDamageMult  ?? 1,
@@ -1067,6 +1143,7 @@ export class LoadoutManager {
     angle:       number,
     playerId:    string,
     playerColor: number,
+    sourceSlot?: WeaponSlot,
   ): boolean {
     return this.combatSystem?.resolveMeleeSwing(
       playerId,
@@ -1079,6 +1156,7 @@ export class LoadoutManager {
       config.adrenalinGain,
       config.displayName,
       playerColor,
+      sourceSlot,
       config.rockDamageMult  ?? 1,
       config.trainDamageMult ?? 1,
     ) ?? false;
@@ -1092,6 +1170,7 @@ export class LoadoutManager {
     angle:       number,
     playerId:    string,
     playerColor: number,
+    sourceSlot?: LoadoutSlot,
   ): boolean {
     // Lifetime berechnen: Bei velocityDecay < 1 verlangsamt sich die Hitbox exponentiell.
     // Zurückgelegte Strecke = speed / -ln(decay) * (1 - decay^t)
@@ -1129,8 +1208,15 @@ export class LoadoutManager {
       hitboxGrowRate:  fireConfig.hitboxGrowRate,
       hitboxMaxSize:   fireConfig.hitboxEndSize,
       velocityDecay:   fireConfig.velocityDecay,
+      sourceSlot,
     });
 
     return true;
+  }
+
+  private getEquippedEnergyShieldFireConfig(playerId: string): EnergyShieldWeaponFireConfig | null {
+    const weapon = this.loadouts.get(playerId)?.weapon2.config;
+    if (!weapon || weapon.fire.type !== 'energy_shield') return null;
+    return weapon.fire as EnergyShieldWeaponFireConfig;
   }
 }

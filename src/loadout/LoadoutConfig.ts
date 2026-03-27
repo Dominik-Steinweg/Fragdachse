@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -53,12 +53,33 @@ export interface TeslaDomeWeaponFireConfig {
   readonly visualBranchChance: number;
 }
 
+export interface EnergyShieldWeaponFireConfig {
+  readonly type: 'energy_shield';
+  readonly blockArcDegrees: number;
+  readonly anchorDistance: number;
+  readonly visualRadius: number;
+  readonly visualThickness: number;
+  readonly adrenalineDrainPerSecond: number;
+  readonly movementSlowFactor: number;
+  readonly flashDurationMs: number;
+  readonly flashMaxAlpha: number;
+  readonly buffMax: number;
+  readonly buffGainFactor: number;
+  readonly buffDecayDelayMs: number;
+  readonly buffDecayPerSecond: number;
+  readonly buffMaxBonus: number;
+  readonly blockableCategories: readonly ShieldBlockCategory[];
+  readonly visualInnerAlpha: number;
+  readonly visualOuterAlpha: number;
+}
+
 export type WeaponFireConfig =
   | ProjectileWeaponFireConfig
   | HitscanWeaponFireConfig
   | MeleeWeaponFireConfig
   | FlamethrowerWeaponFireConfig
-  | TeslaDomeWeaponFireConfig;
+  | TeslaDomeWeaponFireConfig
+  | EnergyShieldWeaponFireConfig;
 
 export interface WeaponConfig {
   readonly id: string;
@@ -926,6 +947,45 @@ export const WEAPON_CONFIGS = {
     showCrosshair:        false,
     rockDamageMult:       0.55,
     trainDamageMult:      0.8,
+  } as WeaponConfig,
+
+  ENERGY_SHIELD: {
+    id:                   'ENERGY_SHIELD',
+    displayName:          'Energie-Schild',
+    cooldown:             0,
+    damage:               0,
+    range:                0,
+    fire: {
+      type:                     'energy_shield',
+      blockArcDegrees:          120,
+      anchorDistance:           2,
+      visualRadius:             18,
+      visualThickness:          4,
+      adrenalineDrainPerSecond: 5,
+      movementSlowFactor:       0.7,
+      flashDurationMs:          140,
+      flashMaxAlpha:            1,
+      buffMax:                  100,
+      buffGainFactor:           0.5,
+      buffDecayDelayMs:         2000,
+      buffDecayPerSecond:       5,
+      buffMaxBonus:             2,
+      blockableCategories:      ['projectile', 'hitscan', 'melee', 'explosion', 'tesla'] satisfies readonly ShieldBlockCategory[],
+      visualInnerAlpha:         0.36,
+      visualOuterAlpha:         0.9,
+    } satisfies EnergyShieldWeaponFireConfig,
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileColor:      0x78f0ff,
+    showCrosshair:        false,
   } as WeaponConfig,
 
   /**

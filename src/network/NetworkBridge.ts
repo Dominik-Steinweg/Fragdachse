@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot, SyncedPlaceableRock } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, ShieldBuffHudState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedEnergyShield, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot, SyncedPlaceableRock } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -42,6 +42,7 @@ const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: number (Date.now()-Timestamp 
 const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
+const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
@@ -90,6 +91,7 @@ export interface GameState {
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
   teslaDomes:   SyncedTeslaDome[];
+  energyShields: SyncedEnergyShield[];
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
 
@@ -473,6 +475,7 @@ export class NetworkBridge {
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
     if (state.teslaDomes.length > 0)   payload.td = state.teslaDomes;
+    if (state.energyShields.length > 0) payload.es = state.energyShields;
     if (state.powerups.length > 0)     payload.u = state.powerups;
     if (state.pedestals.length > 0)    payload.pd = state.pedestals;
     if (state.nukes.length > 0)        payload.n = state.nukes;
@@ -497,6 +500,7 @@ export class NetworkBridge {
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
       teslaDomes:    (raw.td as SyncedTeslaDome[]    | undefined) ?? [],
+      energyShields: (raw.es as SyncedEnergyShield[] | undefined) ?? [],
       powerups:      (raw.u as SyncedPowerUp[]       | undefined) ?? [],
       pedestals:     (raw.pd as SyncedPowerUpPedestal[] | undefined) ?? [],
       nukes:         (raw.n as SyncedNukeStrike[]    | undefined) ?? [],
@@ -1061,6 +1065,23 @@ export class NetworkBridge {
   /** Liest die aktiven Buffs eines Spielers für die HUD-Anzeige. */
   getPlayerActiveBuffs(playerId: string): { defId: string; remainingFrac: number }[] {
     return (this.playerStateMap.get(playerId)?.getState(KEY_ACTIVE_BUFFS) as { defId: string; remainingFrac: number }[] | undefined) ?? [];
+  }
+
+  publishShieldBuffHud(playerId: string, state: ShieldBuffHudState): void {
+    if (!isHost()) return;
+    const ps = this.playerStateMap.get(playerId);
+    if (!ps) return;
+    ps.setState(KEY_SHIELD_BUFF, state, true);
+  }
+
+  getPlayerShieldBuffHud(playerId: string): ShieldBuffHudState {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_SHIELD_BUFF) as ShieldBuffHudState | undefined) ?? {
+      visible: false,
+      defId: 'SHIELD_OVERCHARGE',
+      value: 0,
+      maxValue: 1,
+      damageBonusPct: 0,
+    };
   }
 
   // ── Frag-Tracking: pro Spieler (per-player state) ────────────────────────

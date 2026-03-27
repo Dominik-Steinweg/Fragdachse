@@ -428,6 +428,7 @@ export class ProjectileManager {
       detonator:       cfg.detonator,
       rockDamageMult:  cfg.rockDamageMult,
       trainDamageMult: cfg.trainDamageMult,
+      sourceSlot:      cfg.sourceSlot,
       // Flammenwerfer-Felder
       isFlame:         cfg.isFlame,
       hitboxGrowRate:  cfg.hitboxGrowRate,
@@ -911,6 +912,8 @@ export class ProjectileManager {
       y: proj.sprite.y,
       ownerId: proj.ownerId,
       effect: proj.explosion,
+      sourceSlot: proj.sourceSlot,
+      weaponName: proj.weaponName,
     });
     this.queueDestroyProjectile(proj);
   }

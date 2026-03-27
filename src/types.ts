@@ -62,6 +62,16 @@ export interface PlayerNetState {
   aim:        PlayerAimNetState;
 }
 
+export type ShieldBlockCategory = 'projectile' | 'hitscan' | 'melee' | 'explosion' | 'tesla' | 'damage_over_time';
+
+export interface ShieldBuffHudState {
+  visible: boolean;
+  defId: string;
+  value: number;
+  maxValue: number;
+  damageBonusPct: number;
+}
+
 export type TeslaDomeTargetType = 'players' | 'train' | 'rocks';
 
 export interface SyncedTeslaDomeTarget {
@@ -78,6 +88,19 @@ export interface SyncedTeslaDome {
   color: number;
   alpha: number;
   targets: SyncedTeslaDomeTarget[];
+}
+
+export interface SyncedEnergyShield {
+  ownerId: string;
+  x: number;
+  y: number;
+  angle: number;
+  radius: number;
+  thickness: number;
+  arcDegrees: number;
+  color: number;
+  alpha: number;
+  flashAlpha: number;
 }
 
 /** Visueller Stil eines Projektils */
@@ -342,6 +365,7 @@ export interface ProjectileSpawnConfig {
   airFrictionDecayPerSec?: number;    // Speed Multiplikator pro Sekunde
   bounceFrictionMultiplier?: number;  // Speed Multiplikator beim Abprallen
   stopSpeedThreshold?: number;        // Speed, ab der das Projektil auf 0 gestoppt wird
+  sourceSlot?: LoadoutSlot;
 }
 
 export interface DamageGrenadeEffect {
@@ -412,6 +436,8 @@ export interface ExplodedProjectile {
   y: number;
   ownerId: string;
   effect: ProjectileExplosionConfig;
+  sourceSlot?: LoadoutSlot;
+  weaponName?: string;
 }
 
 export interface SyncedSmokeCloud {
@@ -512,6 +538,7 @@ export interface TrackedProjectile {
   bounceFrictionMultiplier?: number;
   stopSpeedThreshold?: number;
   frictionActivated?: boolean;  // true sobald Phaser-Damping aktiviert wurde
+  sourceSlot?: LoadoutSlot;
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;

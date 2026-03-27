@@ -22,6 +22,7 @@ import {
   COLORS, toCssColor,
 } from '../config';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
+import type { ShieldBuffHudState } from '../types';
 import {
   type LivingBarPalette,
   rgbStr, createGradientTexture, rectZone,
@@ -167,6 +168,7 @@ interface BarBundle {
 export interface ActivePowerUpInfo {
   defId:         string;
   remainingFrac: number; // 1 = full, 0 = expired
+  valueText?:    string;
 }
 
 /** Data pushed every frame from ArenaScene. */
@@ -185,6 +187,7 @@ export interface ArenaHUDData {
   adrenalineSyringeActive?: boolean;
   isUtilityOverridden?:     boolean;
   activePowerUps?:          ActivePowerUpInfo[];
+  shieldBuff?:              ShieldBuffHudState;
 }
 
 // ── Class ───────────────────────────────────────────────────────────────────
@@ -493,7 +496,14 @@ export class ArenaHUD {
       this.onUtilityNameChanged(data.utilityDisplayName);
     }
     this.updateUtilityOverrideVisual(data.isUtilityOverridden ?? false);
-    this.updatePowerUpSection(data.activePowerUps ?? []);
+    const shieldPowerUps = data.shieldBuff?.visible
+      ? [{
+          defId: data.shieldBuff.defId,
+          remainingFrac: data.shieldBuff.maxValue > 0 ? data.shieldBuff.value / data.shieldBuff.maxValue : 0,
+          valueText: `+${data.shieldBuff.damageBonusPct}%`,
+        }]
+      : [];
+    this.updatePowerUpSection([...shieldPowerUps, ...(data.activePowerUps ?? [])]);
   }
 
   flashSlot(slot: 'weapon1' | 'weapon2' | 'utility'): void {
@@ -944,7 +954,14 @@ export class ArenaHUD {
         const labelY  = yOff;
         const barY    = yOff + 20;
 
-        const bundle = this.createBar(labelY, barY, `Power-Up: ${def.displayName}`, palette, texKey);
+        const bundle = this.createBar(
+          labelY,
+          barY,
+          `Power-Up: ${def.displayName}`,
+          palette,
+          texKey,
+          pu.defId === 'SHIELD_OVERCHARGE' ? { value: true } : undefined,
+        );
         // Power-up bars are always energized
         this.setBarEnergized(bundle, true);
 
@@ -964,6 +981,7 @@ export class ArenaHUD {
       if (!bundle) continue;
       const frac = Math.max(0, Math.min(1, pu.remainingFrac));
       this.setBarFrac(bundle, frac);
+      bundle.valueText?.setText(pu.valueText ?? '');
     }
   }
 

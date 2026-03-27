@@ -5,6 +5,8 @@ import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
 import { ResourceSystem }    from '../../systems/ResourceSystem';
 import { TeslaDomeSystem }   from '../../systems/TeslaDomeSystem';
+import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
+import { ShieldBuffSystem }   from '../../systems/ShieldBuffSystem';
 import { TurretSystem }      from '../../systems/TurretSystem';
 import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
@@ -223,10 +225,17 @@ export class ArenaLifecycleCoordinator {
 
     if (bridge.isHost()) {
       this.ctx.resourceSystem = new ResourceSystem();
+      this.ctx.shieldBuffSystem = new ShieldBuffSystem();
       this.ctx.teslaDomeSystem = new TeslaDomeSystem(
         this.ctx.playerManager,
         this.ctx.combatSystem,
         this.ctx.resourceSystem,
+      );
+      this.ctx.energyShieldSystem = new EnergyShieldSystem(
+        this.ctx.playerManager,
+        this.ctx.resourceSystem,
+        bridge,
+        this.ctx.shieldBuffSystem,
       );
       this.ctx.turretSystem = new TurretSystem(
         this.ctx.playerManager,
@@ -249,6 +258,7 @@ export class ArenaLifecycleCoordinator {
             : []),
         (index, damage, ownerId) => this.hostUpdate.applyTeslaRockDamage(index, damage, ownerId),
       );
+      this.ctx.teslaDomeSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
       this.ctx.teslaDomeSystem.setTrainCallbacks(
         () => this.ctx.trainManager?.getNetSnapshot()?.alive ? this.ctx.trainManager.getSegmentPositions() : [],
         (damage, ownerId) => this.ctx.trainManager?.applyDamage(damage, ownerId),
@@ -280,6 +290,8 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setDashBurstChecker(id => this.ctx.hostPhysics.isDashBurst(id));
       this.ctx.loadoutManager.setPhysicsSystem(this.ctx.hostPhysics);
       this.ctx.loadoutManager.setTeslaDomeSystem(this.ctx.teslaDomeSystem);
+      this.ctx.loadoutManager.setEnergyShieldSystem(this.ctx.energyShieldSystem);
+      this.ctx.loadoutManager.setShieldBuffSystem(this.ctx.shieldBuffSystem);
       this.ctx.loadoutManager.setTranslocatorSystem(this.ctx.translocatorSystem);
       this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
@@ -305,6 +317,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.combatSystem.setBurrowSystem(this.ctx.burrowSystem);
       this.ctx.combatSystem.setResourceSystem(this.ctx.resourceSystem);
       this.ctx.combatSystem.setLoadoutManager(this.ctx.loadoutManager);
+      this.ctx.combatSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
 
       this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
         onNukePickup: (playerId) => {
@@ -407,6 +420,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.fireSystem.destroyAll();
     this.ctx.stinkCloudSystem.destroyAll();
     this.renderers.teslaDome.destroyAll();
+    this.renderers.energyShield.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
     this.placementPreview.clearForTeardown();
     this.rockVisualHelper.destroyAllTurretVisuals();
@@ -420,6 +434,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.placementSystem = null;
     this.ctx.powerUpSystem?.reset();
     this.ctx.powerUpSystem  = null;
+    this.ctx.shieldBuffSystem = null;
+    this.ctx.energyShieldSystem = null;
     this.ctx.teslaDomeSystem = null;
     this.ctx.turretSystem    = null;
     this.ctx.resourceSystem?.setPowerUpSystem(null);
@@ -430,6 +446,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.detonationSystem = null;
     this.ctx.loadoutManager?.setCombatSystem(null);
     this.ctx.loadoutManager?.setTeslaDomeSystem(null);
+    this.ctx.loadoutManager?.setEnergyShieldSystem(null);
+    this.ctx.loadoutManager?.setShieldBuffSystem(null);
     this.ctx.loadoutManager?.setPlaceableRockHandler(null);
     this.ctx.loadoutManager?.setActionBlockedChecker(null);
     this.ctx.loadoutManager?.resetAllUltimateStates();
@@ -437,6 +455,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setBurrowSystem(null);
     this.ctx.combatSystem.setResourceSystem(null);
     this.ctx.combatSystem.setLoadoutManager(null);
+    this.ctx.combatSystem.setEnergyShieldSystem(null);
     this.ctx.combatSystem.setPowerUpSystem(null);
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setArenaObstacles(null, null);

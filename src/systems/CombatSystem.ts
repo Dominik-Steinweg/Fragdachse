@@ -4,7 +4,8 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
-import type { HitscanVisualPreset, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig } from '../types';
+import type { EnergyShieldSystem } from './EnergyShieldSystem';
+import type { HitscanVisualPreset, LoadoutSlot, ShieldBlockCategory, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -21,9 +22,15 @@ import {
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
-type LoadoutManagerType  = { getDamageMultiplier(id: string): number };
+type LoadoutManagerType  = { getDamageMultiplier(id: string): number; getWeaponDamageMultiplier(id: string, slot: WeaponSlot, now?: number): number };
 type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlayer(id: string): void };
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
+
+interface AoeDamageOptions {
+  category?: ShieldBlockCategory;
+  weaponName?: string;
+  sourceSlot?: LoadoutSlot;
+}
 
 export interface HitscanTraceResult {
   readonly endX: number;
@@ -66,6 +73,7 @@ export class CombatSystem {
   private burrowSystem:     BurrowSystemType    | null  = null;
   private resourceSystem:   ResourceSystem      | null  = null;
   private loadoutManager:   LoadoutManagerType  | null  = null;
+  private energyShieldSystem: EnergyShieldSystem | null = null;
   private powerUpSystem:    PowerUpSystemType   | null  = null;
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
@@ -87,6 +95,7 @@ export class CombatSystem {
   setBurrowSystem(bs: BurrowSystemType | null): void     { this.burrowSystem   = bs; }
   setResourceSystem(rs: ResourceSystem | null): void     { this.resourceSystem = rs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void { this.loadoutManager = lm; }
+  setEnergyShieldSystem(es: EnergyShieldSystem | null): void { this.energyShieldSystem = es; }
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void { this.stinkCloudSystem = sc; }
@@ -204,13 +213,16 @@ export class CombatSystem {
     damage: number,
     ownerId: string,
     includeSelf = false,
+    options?: AoeDamageOptions,
   ): void {
     for (const player of this.playerManager.getAllPlayers()) {
       if (!includeSelf && player.id === ownerId) continue;
       if (!this.isAlive(player.id)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
       if (dist <= radius) {
-        this.applyDamage(player.id, damage, false, ownerId, 'Granate');
+        const category = options?.category ?? 'explosion';
+        if (this.shouldBlockWithShield(player.id, category, damage, x, y)) continue;
+        this.applyDamage(player.id, damage, false, ownerId, options?.weaponName ?? 'Granate');
       }
     }
   }
@@ -220,6 +232,8 @@ export class CombatSystem {
     y: number,
     effect: ProjectileExplosionConfig,
     ownerId: string,
+    sourceSlot?: LoadoutSlot,
+    weaponName = 'Explosion',
   ): void {
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isAlive(player.id)) continue;
@@ -235,8 +249,28 @@ export class CombatSystem {
 
       const roundedDamage = Math.round(damage);
       if (roundedDamage <= 0) continue;
-      this.applyDamage(player.id, roundedDamage, false, ownerId, 'Explosion');
+      if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
+      void sourceSlot;
+      this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName);
     }
+  }
+
+  private shouldBlockWithShield(
+    targetId: string,
+    category: ShieldBlockCategory,
+    damage: number,
+    sourceX: number,
+    sourceY: number,
+  ): boolean {
+    if (!this.energyShieldSystem) return false;
+    return this.energyShieldSystem.tryBlockDamage({
+      targetId,
+      category,
+      damage,
+      sourceX,
+      sourceY,
+      now: Date.now(),
+    });
   }
 
   // ── Host-Update: Projektil-Spieler-Kollisionserkennung ────────────────────
@@ -260,9 +294,16 @@ export class CombatSystem {
 
         if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.sprite.getBounds())) {
           // Damage-Multiplier des Schützen (Ultimate + PowerUp)
-          const loadoutMult  = this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1;
+          const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
+            ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
+            : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
           const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
           const actualDamage = proj.damage * loadoutMult * powerUpMult;
+
+          if (this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
+            this.projectileManager.destroyProjectile(proj.id);
+            break;
+          }
 
           if (proj.isBfg || proj.projectileStyle === 'gauss') {
             // Piercing-Projektile: Spieler nur 1x treffen, Projektil fliegt weiter.
@@ -298,6 +339,7 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName: string,
     visualPreset: HitscanVisualPreset = 'default',
+    sourceSlot?: WeaponSlot,
     shotId?: number,
     detonatorCfg?: DetonatorConfig,
     rockDamageMult = 1,
@@ -335,9 +377,12 @@ export class CombatSystem {
     }
 
     if (trace.hitPlayerId) {
-      const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
+      const loadoutMult  = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
+      if (this.shouldBlockWithShield(trace.hitPlayerId, 'hitscan', actualDamage, startX, startY)) return true;
       this.applyDamage(trace.hitPlayerId, actualDamage, false, shooterId, weaponName);
 
       if (adrenalinGain > 0) {
@@ -417,6 +462,7 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName:    string,
     playerColor:   number,
+    sourceSlot?:   WeaponSlot,
     rockDamageMult  = 1,
     trainDamageMult = 1,
   ): boolean {
@@ -444,9 +490,12 @@ export class CombatSystem {
       this.meleeLine.setTo(x, y, player.sprite.x, player.sprite.y);
       if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
 
-      const loadoutMult  = this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1;
+      const loadoutMult  = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
+      if (this.shouldBlockWithShield(player.id, 'melee', actualDamage, x, y)) continue;
       this.applyDamage(player.id, actualDamage, false, shooterId, weaponName);
 
       if (adrenalinGain > 0) {

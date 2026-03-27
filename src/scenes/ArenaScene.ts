@@ -173,6 +173,7 @@ export class ArenaScene extends Phaser.Scene {
       arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null,
+      shieldBuffSystem: null, energyShieldSystem: null,
       teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, trainManager: null,
     };
 
@@ -362,6 +363,7 @@ export class ArenaScene extends Phaser.Scene {
         const state = bridge.getLatestGameState();
         if (state) {
           this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
+          this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
           this.renderers.train?.setTarget(state.train ?? null);
           this.renderers.powerUp.syncPedestals(state.pedestals ?? []);
           this.renderers.powerUp.sync(state.powerups ?? []);
@@ -384,6 +386,7 @@ export class ArenaScene extends Phaser.Scene {
     const inArena = inGame && !terminated;
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     this.renderers.teslaDome.update(delta);
+    this.renderers.energyShield.update(delta);
 
     const utilityTargeting = this.ctx.inputSystem.getUtilityTargetingPreviewState();
     const utilityPlacement = this.getLocalPlacementPreview();

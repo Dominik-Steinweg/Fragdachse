@@ -3,6 +3,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { SyncedTeslaDome, SyncedTeslaDomeTarget } from '../types';
 import type { CombatSystem } from './CombatSystem';
+import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { ResourceSystem } from './ResourceSystem';
 
 interface ActiveTeslaDome {
@@ -36,6 +37,7 @@ export class TeslaDomeSystem {
   private rockDamageHandler: RockDamageHandler | null = null;
   private trainTargetProvider: TrainTargetProvider | null = null;
   private trainDamageHandler: TrainDamageHandler | null = null;
+  private energyShieldSystem: EnergyShieldSystem | null = null;
 
   private static readonly HOLD_GRACE_MS = 150;
 
@@ -57,6 +59,10 @@ export class TeslaDomeSystem {
   setTrainCallbacks(provider: TrainTargetProvider | null, damageHandler: TrainDamageHandler | null): void {
     this.trainTargetProvider = provider;
     this.trainDamageHandler = damageHandler;
+  }
+
+  setEnergyShieldSystem(system: EnergyShieldSystem | null): void {
+    this.energyShieldSystem = system;
   }
 
   hostRefresh(
@@ -210,6 +216,16 @@ export class TeslaDomeSystem {
       if (!player.sprite.active) continue;
       if (!this.combatSystem.isAlive(player.id)) continue;
       if (!this.combatSystem.isBurrowed(player.id) && playerTargets.some(target => target.x === player.sprite.x && target.y === player.sprite.y)) {
+        if (this.energyShieldSystem?.tryBlockDamage({
+          targetId: player.id,
+          category: 'tesla',
+          damage,
+          sourceX: dome.x,
+          sourceY: dome.y,
+          now: Date.now(),
+        })) {
+          continue;
+        }
         this.combatSystem.applyDamage(player.id, damage, false, dome.ownerId, dome.config.displayName);
       }
     }
