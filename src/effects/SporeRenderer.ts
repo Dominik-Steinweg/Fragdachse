@@ -265,7 +265,7 @@ export class SporeRenderer {
       emitting: false,
     }, DEPTH.PROJECTILES + 1.7);
     setCircleEmitZone(burst, Math.max(8, scale * 9), 28, true);
-    burst.explode(28, x, y);
+    burst.explode(28, 0, 0);
 
     const haze = createEmitter(this.scene, x, y, TEX_SPORE_TRAIL, {
       lifespan: { min: 260, max: 540 },
@@ -278,7 +278,7 @@ export class SporeRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH.FIRE + 0.2);
-    haze.explode(10, x, y);
+    haze.explode(10, 0, 0);
 
     this.scene.tweens.add({
       targets: glow,
