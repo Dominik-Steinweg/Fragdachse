@@ -21,12 +21,10 @@ import {
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH, ARENA_HEIGHT, CELL_SIZE, COLORS, DEPTH,
   ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS,
-  getTopDownMuzzleOrigin,
   NET_SMOOTH_TIME_MS,
 } from '../config';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
-import { dequantizeAngle }       from '../utils/angle';
 import {
   beginAutomaticRoomSearch,
   clearAutomaticRoomSearchState,
@@ -51,6 +49,7 @@ import {
   HostUpdateCoordinator,
   RpcCoordinator,
   ArenaLifecycleCoordinator,
+  GaussWarningRenderer,
   createRendererBundle,
   wireRenderersToProjManager,
   wireRenderersToEffectSystem,
@@ -60,7 +59,6 @@ export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaClipMaskShape: Phaser.GameObjects.Graphics | null = null;
   private arenaClipMask: Phaser.Display.Masks.GeometryMask | null = null;
-  private gaussWarningGraphics: Phaser.GameObjects.Graphics | null = null;
   private utilityChargeIndicator: UtilityChargeIndicator | null = null;
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
 
@@ -70,6 +68,7 @@ export class ArenaScene extends Phaser.Scene {
   private localPlayerState!: LocalPlayerState;
   private rockVisualHelper!: RockVisualHelper;
   private placementPreview!: PlacementPreviewRenderer;
+  private gaussWarning!: GaussWarningRenderer;
   private hostUpdate!: HostUpdateCoordinator;
   private clientUpdate!: ClientUpdateCoordinator;
   private rpcCoordinator!: RpcCoordinator;
@@ -122,7 +121,7 @@ export class ArenaScene extends Phaser.Scene {
     const builder = new ArenaBuilder(this);
     builder.buildStatic();
     this.ensureArenaClipMask();
-    this.ensureTurretTexture();
+
 
     // ── Scene-lifetime systems ─────────────────────────────────────────────
     const playerManager    = new PlayerManager(this);
@@ -201,10 +200,10 @@ export class ArenaScene extends Phaser.Scene {
     effectSystem.setup(() => { aimSystem.notifyConfirmedHit(); });
 
     // ── Shared state & helpers ─────────────────────────────────────────────
-    this.gaussWarningGraphics = this.add.graphics().setDepth(DEPTH.OVERLAY - 2);
     this.localPlayerState = new LocalPlayerState();
     this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask);
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
+    this.gaussWarning      = new GaussWarningRenderer(this);
 
     // ── Coordinators ──────────────────────────────────────────────────────
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
@@ -398,7 +397,7 @@ export class ArenaScene extends Phaser.Scene {
     this.utilityChargeIndicator?.update(this.ctx.inputSystem.getUtilityChargePreviewState());
     this.ultimateChargeIndicator?.update(ultimatePreview);
 
-    this.renderRemoteGaussWarnings(inArena);
+    this.gaussWarning.update(inArena);
     this.placementPreview.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.syncPlaceableUtilityHint(inArena, utilityPlacement !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.renderPlacementPreview(inArena, utilityPlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
@@ -493,73 +492,6 @@ export class ArenaScene extends Phaser.Scene {
     this.ctx.arenaCountdown.update(now);
   }
 
-  private renderRemoteGaussWarnings(inArena: boolean): void {
-    const graphics = this.gaussWarningGraphics;
-    graphics?.clear();
-    if (!graphics) return;
-
-    const state = bridge.getLatestGameState();
-    if (!state || !inArena) return;
-
-    const localId = bridge.getLocalPlayerId();
-    const time = this.time.now;
-    for (const [playerId, playerState] of Object.entries(state.players)) {
-      if (playerId === localId || !playerState.alive || !playerState.isChargingUltimate) continue;
-      const range = Math.max(0, playerState.ultimateChargeRange ?? 0);
-      const chargeFraction = Phaser.Math.Clamp(playerState.ultimateChargeFraction ?? 0, 0, 1);
-      if (range <= 0 || chargeFraction <= 0) continue;
-
-      const aimAngle = dequantizeAngle(playerState.rot);
-      const dirX = Math.cos(aimAngle);
-      const dirY = Math.sin(aimAngle);
-      const pulse = 0.92 + 0.08 * Math.sin(time * 0.018);
-      const beamLength = Math.max(10, range * chargeFraction);
-      const muzzle = getTopDownMuzzleOrigin(playerState.x, playerState.y, aimAngle);
-      const clipped = this.clipBeamToArena(muzzle.x, muzzle.y, muzzle.x + dirX * beamLength, muzzle.y + dirY * beamLength);
-      const startX = Math.round(muzzle.x);
-      const startY = Math.round(muzzle.y);
-      const endX   = Math.round(clipped.x);
-      const endY   = Math.round(clipped.y);
-      const alpha  = Math.max(0.04, chargeFraction * chargeFraction);
-
-      graphics.lineStyle(18, 0x0a1118, 0.05 * alpha);
-      graphics.beginPath(); graphics.moveTo(startX, startY); graphics.lineTo(endX, endY); graphics.strokePath();
-      graphics.lineStyle(14, 0xbcefff, 0.14 * alpha * pulse);
-      graphics.beginPath(); graphics.moveTo(startX, startY); graphics.lineTo(endX, endY); graphics.strokePath();
-      graphics.lineStyle(9, 0x78d6ff, 0.3 * alpha * pulse);
-      graphics.beginPath(); graphics.moveTo(startX, startY); graphics.lineTo(endX, endY); graphics.strokePath();
-      graphics.lineStyle(4, 0xe1fbff, 0.55 * alpha);
-      graphics.beginPath(); graphics.moveTo(startX, startY); graphics.lineTo(endX, endY); graphics.strokePath();
-      graphics.lineStyle(2, 0xffffff, 0.9 * alpha);
-      graphics.beginPath(); graphics.moveTo(startX, startY); graphics.lineTo(endX, endY); graphics.strokePath();
-
-      const emitterRadius = 6 + chargeFraction * 6;
-      graphics.fillStyle(0xbcefff, 0.12 * alpha * pulse);
-      graphics.fillCircle(startX, startY, emitterRadius * 2.1);
-      graphics.fillStyle(0x78d6ff, 0.25 * alpha);
-      graphics.fillCircle(startX, startY, emitterRadius * 1.3);
-      graphics.fillStyle(0xffffff, 0.5 * alpha);
-      graphics.fillCircle(startX, startY, Math.max(2, emitterRadius * 0.55));
-    }
-  }
-
-  private clipBeamToArena(sx: number, sy: number, ex: number, ey: number): { x: number; y: number } {
-    const inside = ex >= ARENA_OFFSET_X && ex <= ARENA_OFFSET_X + ARENA_WIDTH
-      && ey >= ARENA_OFFSET_Y && ey <= ARENA_OFFSET_Y + ARENA_HEIGHT;
-    if (inside) return { x: ex, y: ey };
-
-    const dx = ex - sx;
-    const dy = ey - sy;
-    let t = 1;
-    const maxX = ARENA_OFFSET_X + ARENA_WIDTH;
-    const maxY = ARENA_OFFSET_Y + ARENA_HEIGHT;
-    if (dx > 0) t = Math.min(t, (maxX - sx) / dx);
-    else if (dx < 0) t = Math.min(t, (ARENA_OFFSET_X - sx) / dx);
-    if (dy > 0) t = Math.min(t, (maxY - sy) / dy);
-    else if (dy < 0) t = Math.min(t, (ARENA_OFFSET_Y - sy) / dy);
-    return { x: sx + t * dx, y: sy + t * dy };
-  }
-
   private getLocalPlacementPreview() {
     const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     const cfg = this.clientUpdate.getLocalUtilityConfig();
@@ -577,31 +509,6 @@ export class ArenaScene extends Phaser.Scene {
       utility:  bridge.getPlayerLoadoutSlot(localId, 'utility')  ?? DEFAULT_LOADOUT.utility.id,
       ultimate: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id,
     };
-  }
-
-  private ensureTurretTexture(): void {
-    if (!this.textures.exists('placeable_turret')) {
-      const g = this.make.graphics({ x: 0, y: 0 });
-      g.clear();
-      g.fillStyle(0x000000, 0.18); g.fillEllipse(16, 18, 20, 12);
-      g.fillStyle(0x78161e, 1);    g.fillCircle(16, 14, 10.5);
-      g.fillStyle(0xa91e24, 1);    g.fillCircle(16, 13, 9.5);
-      g.fillStyle(0xcf3135, 1);    g.fillCircle(16, 12, 8.4);
-      g.fillStyle(0xf4f0e6, 1);
-      g.fillCircle(11.5, 9.8, 1.9); g.fillCircle(16.2, 8.4, 1.5);
-      g.fillCircle(20.3, 10.8, 1.8); g.fillCircle(12.8, 14.2, 1.6);
-      g.fillCircle(19.4, 15.2, 1.3);
-      g.fillStyle(0xe6dcc1, 1);    g.fillEllipse(16, 18.6, 7.5, 5.5);
-      g.lineStyle(1.2, 0x4a1014, 0.7); g.strokeCircle(16, 13.4, 9.8);
-      g.generateTexture('placeable_turret', 32, 32);
-      g.destroy();
-    }
-    if (!this.textures.exists('placeable_turret_proxy')) {
-      const g = this.make.graphics({ x: 0, y: 0 });
-      g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 32, 32);
-      g.generateTexture('placeable_turret_proxy', 32, 32);
-      g.destroy();
-    }
   }
 
   private ensureArenaClipMask(): void {

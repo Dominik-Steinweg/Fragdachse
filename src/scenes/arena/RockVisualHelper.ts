@@ -29,7 +29,34 @@ export class RockVisualHelper {
     private readonly scene: Phaser.Scene,
     private readonly ctx: ArenaContext,
     private readonly arenaClipMask: Phaser.Display.Masks.GeometryMask | null,
-  ) {}
+  ) {
+    this.ensureTurretTextures();
+  }
+
+  private ensureTurretTextures(): void {
+    if (!this.scene.textures.exists('placeable_turret')) {
+      const g = this.scene.make.graphics({ x: 0, y: 0 });
+      g.clear();
+      g.fillStyle(0x000000, 0.18); g.fillEllipse(16, 18, 20, 12);
+      g.fillStyle(0x78161e, 1);    g.fillCircle(16, 14, 10.5);
+      g.fillStyle(0xa91e24, 1);    g.fillCircle(16, 13, 9.5);
+      g.fillStyle(0xcf3135, 1);    g.fillCircle(16, 12, 8.4);
+      g.fillStyle(0xf4f0e6, 1);
+      g.fillCircle(11.5, 9.8, 1.9); g.fillCircle(16.2, 8.4, 1.5);
+      g.fillCircle(20.3, 10.8, 1.8); g.fillCircle(12.8, 14.2, 1.6);
+      g.fillCircle(19.4, 15.2, 1.3);
+      g.fillStyle(0xe6dcc1, 1);    g.fillEllipse(16, 18.6, 7.5, 5.5);
+      g.lineStyle(1.2, 0x4a1014, 0.7); g.strokeCircle(16, 13.4, 9.8);
+      g.generateTexture('placeable_turret', 32, 32);
+      g.destroy();
+    }
+    if (!this.scene.textures.exists('placeable_turret_proxy')) {
+      const g = this.scene.make.graphics({ x: 0, y: 0 });
+      g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 32, 32);
+      g.generateTexture('placeable_turret_proxy', 32, 32);
+      g.destroy();
+    }
+  }
 
   materializePlaceableRock(rock: SyncedPlaceableRock, playSpawnFx: boolean): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;

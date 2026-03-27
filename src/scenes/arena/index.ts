@@ -6,5 +6,6 @@ export { ClientUpdateCoordinator }       from './ClientUpdateCoordinator';
 export { HostUpdateCoordinator }         from './HostUpdateCoordinator';
 export { RpcCoordinator }               from './RpcCoordinator';
 export { ArenaLifecycleCoordinator }    from './ArenaLifecycleCoordinator';
+export { GaussWarningRenderer }         from './GaussWarningRenderer';
 export { createRendererBundle, wireRenderersToProjManager, wireRenderersToEffectSystem } from './RendererBundle';
 export type { RendererBundle }           from './RendererBundle';
