@@ -102,6 +102,9 @@ export class ClientUpdateCoordinator {
         for (const rs of state.rocks) {
           this.rockVisualHelper.updateRockVisualById(rs.id, rs.hp);
         }
+        if (state.rocks.length > 0) {
+          this.rockVisualHelper.rebuildStaticShadows();
+        }
       }
 
       if (this.ctx.placementSystem) {

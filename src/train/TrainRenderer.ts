@@ -51,6 +51,18 @@ export class TrainRenderer {
     this.lastAlive = true;
   }
 
+  getShadowState(): SyncedTrainState | null {
+    if (!this.lastAlive) return null;
+    return {
+      alive: true,
+      x: this.lastX,
+      y: this.displayY,
+      dir: this.lastDir,
+      hp: this.lastHp,
+      maxHp: this.lastMaxHp,
+    };
+  }
+
   /**
    * Jeden Render-Frame aufrufen. Interpoliert displayY → targetY.
    * @param lerpFactor Zeitbasierter Interpolationsfaktor (0–1)
@@ -77,7 +89,17 @@ export class TrainRenderer {
    */
   update(state: SyncedTrainState | null): void {
     this.gfx.clear();
-    if (!state || !state.alive) return;
+    if (!state || !state.alive) {
+      this.lastAlive = false;
+      return;
+    }
+    this.targetY = state.y;
+    this.displayY = state.y;
+    this.lastDir = state.dir;
+    this.lastX = state.x;
+    this.lastHp = state.hp;
+    this.lastMaxHp = state.maxHp;
+    this.lastAlive = true;
     this.draw(state);
   }
 

@@ -532,9 +532,10 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    const trainState = bridge.isHost()
-      ? (this.ctx.trainManager?.getNetSnapshot() ?? null)
-      : (bridge.getLatestGameState()?.train ?? null);
+    const trainState = this.renderers.train?.getShadowState()
+      ?? (bridge.isHost()
+        ? (this.ctx.trainManager?.getNetSnapshot() ?? null)
+        : (bridge.getLatestGameState()?.train ?? null));
 
     this.renderers.shadow.syncDynamicShadows(
       this.ctx.playerManager.getAllPlayers(),

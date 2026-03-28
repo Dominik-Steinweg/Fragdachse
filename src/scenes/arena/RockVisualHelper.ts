@@ -249,6 +249,10 @@ export class RockVisualHelper {
     }
   }
 
+  rebuildStaticShadows(): void {
+    this.refreshStaticShadows();
+  }
+
   spawnTurretDeathCloud(rock: SyncedPlaceableRock): void {
     if (rock.kind !== 'turret') return;
     const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
