@@ -95,6 +95,7 @@ export interface SyncedEnergyShield {
   x: number;
   y: number;
   angle: number;
+  anchorDistance: number;
   radius: number;
   thickness: number;
   arcDegrees: number;

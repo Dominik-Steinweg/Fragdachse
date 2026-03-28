@@ -128,6 +128,10 @@ export function wireRenderersToProjManager(
     const player = playerManager.getPlayer(ownerId);
     return player ? { x: player.sprite.x, y: player.sprite.y } : null;
   });
+  bundle.energyShield.setOwnerPositionProvider((ownerId) => {
+    const player = playerManager.getPlayer(ownerId);
+    return player ? { x: player.sprite.x, y: player.sprite.y } : null;
+  });
 }
 
 /** Wire the EffectSystem to renderers that need it (muzzle flash, nuke). */

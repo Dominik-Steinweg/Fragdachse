@@ -140,6 +140,7 @@ export class EnergyShieldSystem {
         x: Math.round(anchorX),
         y: Math.round(anchorY),
         angle: aimAngle,
+        anchorDistance: shield.config.fire.anchorDistance,
         radius: shield.config.fire.visualRadius,
         thickness: shield.config.fire.visualThickness,
         arcDegrees: shield.config.fire.blockArcDegrees,

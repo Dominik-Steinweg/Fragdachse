@@ -24,6 +24,7 @@ interface ShieldVisual {
   targetY: number;
   currentAngle: number;
   targetAngle: number;
+  anchorDistance: number;
   currentRadius: number;
   targetRadius: number;
   currentThickness: number;
@@ -32,6 +33,7 @@ interface ShieldVisual {
   targetAlpha: number;
   currentFlashAlpha: number;
   targetFlashAlpha: number;
+  lastBurstAt: number;
   arcDegrees: number;
   color: number;
 }
@@ -40,24 +42,29 @@ const SHIELD_SMOOTH_TIME_MS = 46;
 
 export class EnergyShieldRenderer {
   private readonly visuals = new Map<string, ShieldVisual>();
+  private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
+    this.ownerPositionProvider = provider;
+  }
 
   generateTextures(): void {
     const textures = this.scene.textures;
 
     fillRadialGradientTexture(textures, TEX_SHIELD_GLOW, 128, [
-      [0, 'rgba(255,255,255,0.34)'],
-      [0.28, 'rgba(180,244,255,0.18)'],
-      [0.66, 'rgba(90,200,255,0.06)'],
-      [1, 'rgba(20,60,90,0.0)'],
+      [0, 'rgba(255,255,255,0.52)'],
+      [0.22, 'rgba(255,255,255,0.2)'],
+      [0.54, 'rgba(255,255,255,0.08)'],
+      [1, 'rgba(255,255,255,0.0)'],
     ]);
 
     ensureCanvasTexture(textures, TEX_SHIELD_PARTICLE, 10, 10, (ctx) => {
       const g = ctx.createRadialGradient(5, 5, 0, 5, 5, 5);
       g.addColorStop(0, 'rgba(255,255,255,1.0)');
-      g.addColorStop(0.45, 'rgba(170,240,255,0.65)');
-      g.addColorStop(1, 'rgba(60,160,220,0.0)');
+      g.addColorStop(0.45, 'rgba(255,255,255,0.52)');
+      g.addColorStop(1, 'rgba(255,255,255,0.0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 10, 10);
     });
@@ -85,6 +92,7 @@ export class EnergyShieldRenderer {
       visual.targetX = shield.x;
       visual.targetY = shield.y;
       visual.targetAngle = shield.angle;
+      visual.anchorDistance = shield.anchorDistance;
       visual.targetRadius = shield.radius;
       visual.targetThickness = shield.thickness;
       visual.targetAlpha = shield.alpha;
@@ -96,16 +104,27 @@ export class EnergyShieldRenderer {
 
   update(delta: number): void {
     const lerp = 1 - Math.exp(-delta / SHIELD_SMOOTH_TIME_MS);
+    const now = this.scene.time.now;
 
-    for (const visual of this.visuals.values()) {
-      visual.currentX = Phaser.Math.Linear(visual.currentX, visual.targetX, lerp);
-      visual.currentY = Phaser.Math.Linear(visual.currentY, visual.targetY, lerp);
+    for (const [ownerId, visual] of this.visuals) {
+      const ownerPos = this.ownerPositionProvider?.(ownerId) ?? null;
+      if (ownerPos) {
+        visual.currentX = ownerPos.x + Math.cos(visual.targetAngle) * visual.anchorDistance;
+        visual.currentY = ownerPos.y + Math.sin(visual.targetAngle) * visual.anchorDistance;
+      } else {
+        visual.currentX = visual.targetX;
+        visual.currentY = visual.targetY;
+      }
       visual.currentAngle = Phaser.Math.Angle.RotateTo(visual.currentAngle, visual.targetAngle, lerp * Math.PI);
       visual.currentRadius = Phaser.Math.Linear(visual.currentRadius, visual.targetRadius, lerp);
       visual.currentThickness = Phaser.Math.Linear(visual.currentThickness, visual.targetThickness, lerp);
       visual.currentAlpha = Phaser.Math.Linear(visual.currentAlpha, visual.targetAlpha, lerp);
       visual.currentFlashAlpha = Phaser.Math.Linear(visual.currentFlashAlpha, visual.targetFlashAlpha, lerp);
-      this.redrawVisual(visual);
+      if (visual.currentFlashAlpha > 0.12 && now - visual.lastBurstAt > 70) {
+        this.burstFlashParticles(visual);
+        visual.lastBurstAt = now;
+      }
+      this.redrawVisual(visual, now);
     }
   }
 
@@ -165,6 +184,7 @@ export class EnergyShieldRenderer {
       targetY: shield.y,
       currentAngle: shield.angle,
       targetAngle: shield.angle,
+      anchorDistance: shield.anchorDistance,
       currentRadius: shield.radius,
       targetRadius: shield.radius,
       currentThickness: shield.thickness,
@@ -173,12 +193,13 @@ export class EnergyShieldRenderer {
       targetAlpha: shield.alpha,
       currentFlashAlpha: shield.flashAlpha,
       targetFlashAlpha: shield.flashAlpha,
+      lastBurstAt: -Infinity,
       arcDegrees: shield.arcDegrees,
       color: shield.color,
     };
   }
 
-  private redrawVisual(visual: ShieldVisual): void {
+  private redrawVisual(visual: ShieldVisual, now: number): void {
     const start = visual.currentAngle - Phaser.Math.DegToRad(visual.arcDegrees) * 0.5;
     const end = visual.currentAngle + Phaser.Math.DegToRad(visual.arcDegrees) * 0.5;
     const radius = Math.max(4, visual.currentRadius);
@@ -186,44 +207,55 @@ export class EnergyShieldRenderer {
     const flash = Phaser.Math.Clamp(visual.currentFlashAlpha, 0, 1);
     const shieldAlpha = Phaser.Math.Clamp(visual.currentAlpha, 0, 1);
     const midAngle = (start + end) * 0.5;
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
+    const flickerA = 0.5 + 0.5 * Math.sin(now * 0.012 + visual.color * 0.0003);
+    const flickerB = 0.5 + 0.5 * Math.sin(now * 0.018 + 1.7);
     const haloScaleX = Math.max(0.82, (radius * 1.8) / 128);
     const haloScaleY = Math.max(0.62, (radius * 1.02) / 128);
 
     visual.halo
-      .setPosition(visual.currentX + Math.cos(midAngle) * 1.5, visual.currentY + Math.sin(midAngle) * 1.5)
+      .setPosition(visual.currentX, visual.currentY)
       .setRotation(visual.currentAngle)
       .setScale(haloScaleX, haloScaleY)
       .setTint(visual.color)
-      .setAlpha(0.24 + shieldAlpha * 0.34 + flash * 0.3);
+      .setAlpha(0.22 + shieldAlpha * 0.42 + pulse * 0.08 + flash * 0.24);
 
-    visual.rimEmitter.setPosition(visual.currentX, visual.currentY);
-    visual.sparkEmitter.setPosition(
-      visual.currentX + Math.cos(midAngle) * radius,
-      visual.currentY + Math.sin(midAngle) * radius,
-    );
-    const emitFlashParticles = flash > 0.06;
-    visual.rimEmitter.emitting = emitFlashParticles;
-    visual.sparkEmitter.emitting = emitFlashParticles;
-    if (emitFlashParticles) {
-      visual.rimEmitter.setParticleSpeed(0, 5 + flash * 10);
-      visual.sparkEmitter.setParticleSpeed(12, 24 + flash * 20);
-    }
+    visual.rimEmitter.emitting = false;
+    visual.sparkEmitter.emitting = false;
 
     visual.glow.clear();
-    visual.glow.lineStyle(thickness + 7, visual.color, Math.max(0.18, shieldAlpha * 0.44 + flash * 0.36));
+    visual.glow.lineStyle(thickness + 8, visual.color, Math.max(0.24, shieldAlpha * 0.5 + pulse * 0.08 + flash * 0.28));
     visual.glow.beginPath();
     visual.glow.arc(visual.currentX, visual.currentY, radius + 0.5, start, end, false);
     visual.glow.strokePath();
 
     visual.core.clear();
-    visual.core.lineStyle(thickness + 0.9, 0x8ef3ff, Math.max(0.14, shieldAlpha * 0.82 + flash * 0.42));
+    visual.core.lineStyle(thickness + 1.2, visual.color, Math.max(0.34, shieldAlpha * 0.74 + pulse * 0.08 + flash * 0.18));
     visual.core.beginPath();
     visual.core.arc(visual.currentX, visual.currentY, radius, start, end, false);
     visual.core.strokePath();
 
-    visual.core.lineStyle(Math.max(1.2, thickness * 0.7), visual.color, Math.max(0.4, shieldAlpha * 1.12 + flash * 0.26));
+    const segmentBaseLen = Phaser.Math.DegToRad(Math.max(10, visual.arcDegrees * 0.16));
+    const segments = [
+      { center: start + (end - start) * (0.18 + flickerA * 0.08), len: segmentBaseLen * (0.85 + flickerB * 0.3), alpha: 0.38 + flickerA * 0.18 },
+      { center: start + (end - start) * (0.48 + pulse * 0.06), len: segmentBaseLen * (0.8 + flickerA * 0.35), alpha: 0.3 + pulse * 0.18 },
+      { center: start + (end - start) * (0.76 - flickerB * 0.08), len: segmentBaseLen * (0.75 + pulse * 0.25), alpha: 0.34 + flickerB * 0.16 },
+    ];
+
+    for (const segment of segments) {
+      const segStart = segment.center - segment.len * 0.5;
+      const segEnd = segment.center + segment.len * 0.5;
+      visual.core.lineStyle(Math.max(1.4, thickness * 0.78), 0xffffff, Math.min(0.9, segment.alpha + flash * 0.24));
+      visual.core.beginPath();
+      visual.core.arc(visual.currentX, visual.currentY, radius - 0.15, segStart, segEnd, false);
+      visual.core.strokePath();
+    }
+
+    const scanCenter = start + (((now * 0.00055) % 1) * (end - start));
+    const scanLen = Phaser.Math.DegToRad(12 + pulse * 10);
+    visual.core.lineStyle(Math.max(1.8, thickness * 0.92), 0xffffff, 0.3 + flash * 0.32);
     visual.core.beginPath();
-    visual.core.arc(visual.currentX, visual.currentY, Math.max(2, radius - thickness * 0.8), start + 0.05, end - 0.05, false);
+    visual.core.arc(visual.currentX, visual.currentY, radius + 0.2, scanCenter - scanLen * 0.5, scanCenter + scanLen * 0.5, false);
     visual.core.strokePath();
 
     const capRadius = Math.max(1.6, thickness * 0.45 + flash * 0.8);
@@ -231,8 +263,24 @@ export class EnergyShieldRenderer {
     const startY = visual.currentY + Math.sin(start) * radius;
     const endX = visual.currentX + Math.cos(end) * radius;
     const endY = visual.currentY + Math.sin(end) * radius;
-    visual.core.fillStyle(0x8ef3ff, Math.max(0.28, shieldAlpha * 0.85 + flash * 0.15));
+    visual.core.fillStyle(0xffffff, Math.max(0.22, shieldAlpha * 0.42 + flash * 0.18));
     visual.core.fillCircle(startX, startY, capRadius);
     visual.core.fillCircle(endX, endY, capRadius);
+
+    const innerRadius = Math.max(2, radius - thickness * 0.95);
+    visual.core.lineStyle(1, visual.color, Math.max(0.18, shieldAlpha * 0.46 + flickerA * 0.1));
+    visual.core.beginPath();
+    visual.core.arc(visual.currentX, visual.currentY, innerRadius, start + 0.08, end - 0.08, false);
+    visual.core.strokePath();
+  }
+
+  private burstFlashParticles(visual: ShieldVisual): void {
+    const midAngle = visual.currentAngle;
+    const burstX = visual.currentX + Math.cos(midAngle) * visual.currentRadius;
+    const burstY = visual.currentY + Math.sin(midAngle) * visual.currentRadius;
+    visual.rimEmitter.setParticleSpeed(0, 8 + visual.currentFlashAlpha * 12);
+    visual.sparkEmitter.setParticleSpeed(12, 24 + visual.currentFlashAlpha * 24);
+    visual.rimEmitter.explode(6, burstX, burstY);
+    visual.sparkEmitter.explode(10, burstX, burstY);
   }
 }
