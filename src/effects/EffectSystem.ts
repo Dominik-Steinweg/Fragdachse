@@ -15,8 +15,10 @@ const TEX_EXPLOSION_EMBER = '__explosion_ember';
 const TEX_BLOOD_DROPLET = '__blood_droplet';
 const TEX_BLOOD_STREAK = '__blood_streak';
 const TEX_BLOOD_STAIN = '__blood_stain';
-const TEX_DAMAGE_VIGNETTE = '__damage_vignette';
-const TEX_DAMAGE_VIGNETTE_SPOT = '__damage_vignette_spot';
+const TEX_DAMAGE_VIGNETTE_TOP    = '__damage_vignette_top';
+const TEX_DAMAGE_VIGNETTE_BOTTOM = '__damage_vignette_bottom';
+const TEX_DAMAGE_VIGNETTE_LEFT   = '__damage_vignette_left';
+const TEX_DAMAGE_VIGNETTE_RIGHT  = '__damage_vignette_right';
 const TEX_DEATH_PIXEL_GLOW = '__death_pixel_glow';
 
 const DEPTH_BLOOD_STAIN = DEPTH.PLAYERS - 0.05;
@@ -43,8 +45,10 @@ export class EffectSystem {
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private texturesGenerated = false;
-  private damageVignetteBase: Phaser.GameObjects.Image | null = null;
-  private damageVignetteSpot: Phaser.GameObjects.Image | null = null;
+  private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
+  private damageVignetteBottom: Phaser.GameObjects.Image | null = null;
+  private damageVignetteLeft:   Phaser.GameObjects.Image | null = null;
+  private damageVignetteRight:  Phaser.GameObjects.Image | null = null;
   private deathPixelChunks: DeathPixelChunk[] | null = null;
 
   constructor(
@@ -59,10 +63,14 @@ export class EffectSystem {
   }
 
   destroy(): void {
-    this.damageVignetteBase?.destroy();
-    this.damageVignetteSpot?.destroy();
-    this.damageVignetteBase = null;
-    this.damageVignetteSpot = null;
+    this.damageVignetteTop?.destroy();
+    this.damageVignetteBottom?.destroy();
+    this.damageVignetteLeft?.destroy();
+    this.damageVignetteRight?.destroy();
+    this.damageVignetteTop    = null;
+    this.damageVignetteBottom = null;
+    this.damageVignetteLeft   = null;
+    this.damageVignetteRight  = null;
     this.deathPixelChunks = null;
   }
 
@@ -168,27 +176,40 @@ export class EffectSystem {
       }
     });
 
-    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
-      const cx = GAME_WIDTH / 2;
-      const cy = GAME_HEIGHT / 2;
-      const innerRadius = GAME_HEIGHT * 0.34;
-      const outerRadius = Math.max(GAME_WIDTH, GAME_HEIGHT) * 0.72;
-      const gradient = ctx.createRadialGradient(cx, cy, innerRadius, cx, cy, outerRadius);
-      gradient.addColorStop(0, 'rgba(255,255,255,0)');
-      gradient.addColorStop(0.55, 'rgba(255,255,255,0)');
-      gradient.addColorStop(0.82, 'rgba(255,255,255,0.42)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0.95)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_TOP, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
+      const depth = GAME_HEIGHT * 0.32;
+      const grad = ctx.createLinearGradient(0, 0, 0, depth);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, GAME_WIDTH, depth);
     });
 
-    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_SPOT, 640, 640, (ctx) => {
-      const gradient = ctx.createRadialGradient(320, 320, 18, 320, 320, 320);
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.35, 'rgba(255,255,255,0.42)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 640, 640);
+    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_BOTTOM, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
+      const depth = GAME_HEIGHT * 0.32;
+      const grad = ctx.createLinearGradient(0, GAME_HEIGHT, 0, GAME_HEIGHT - depth);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, GAME_HEIGHT - depth, GAME_WIDTH, depth);
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_LEFT, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
+      const depth = GAME_WIDTH * 0.18;
+      const grad = ctx.createLinearGradient(0, 0, depth, 0);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, depth, GAME_HEIGHT);
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_RIGHT, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
+      const depth = GAME_WIDTH * 0.18;
+      const grad = ctx.createLinearGradient(GAME_WIDTH, 0, GAME_WIDTH - depth, 0);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(GAME_WIDTH - depth, 0, depth, GAME_HEIGHT);
     });
 
     ensureCanvasTexture(this.scene.textures, TEX_DEATH_PIXEL_GLOW, 24, 24, (ctx) => {
@@ -1252,81 +1273,71 @@ export class EffectSystem {
   }
 
   private ensureDamageVignette(): void {
-    if (this.damageVignetteBase?.scene && this.damageVignetteSpot?.scene) return;
+    if (
+      this.damageVignetteTop?.scene &&
+      this.damageVignetteBottom?.scene &&
+      this.damageVignetteLeft?.scene &&
+      this.damageVignetteRight?.scene
+    ) return;
 
     this.ensureTextures();
 
-    this.damageVignetteBase = this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, TEX_DAMAGE_VIGNETTE)
-      .setDepth(DEPTH_DAMAGE_VIGNETTE)
-      .setScrollFactor(0)
-      .setTint(DAMAGE_VIGNETTE_VFX.color)
-      .setAlpha(0)
-      .setVisible(false);
+    const createEdge = (tex: string) =>
+      this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, tex)
+        .setDepth(DEPTH_DAMAGE_VIGNETTE)
+        .setScrollFactor(0)
+        .setTint(DAMAGE_VIGNETTE_VFX.color)
+        .setAlpha(0)
+        .setVisible(false);
 
-    this.damageVignetteSpot = this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, TEX_DAMAGE_VIGNETTE_SPOT)
-      .setDepth(DEPTH_DAMAGE_VIGNETTE)
-      .setScrollFactor(0)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(DAMAGE_VIGNETTE_VFX.color)
-      .setScale(DAMAGE_VIGNETTE_VFX.spotScale)
-      .setAlpha(0)
-      .setVisible(false);
+    this.damageVignetteTop    = createEdge(TEX_DAMAGE_VIGNETTE_TOP);
+    this.damageVignetteBottom = createEdge(TEX_DAMAGE_VIGNETTE_BOTTOM);
+    this.damageVignetteLeft   = createEdge(TEX_DAMAGE_VIGNETTE_LEFT);
+    this.damageVignetteRight  = createEdge(TEX_DAMAGE_VIGNETTE_RIGHT);
   }
 
   private playDamageVignette(effect: SyncedHitEffect): void {
     this.ensureDamageVignette();
 
-    const base = this.damageVignetteBase;
-    const spot = this.damageVignetteSpot;
-    if (!base || !spot) return;
+    const top    = this.damageVignetteTop;
+    const bottom = this.damageVignetteBottom;
+    const left   = this.damageVignetteLeft;
+    const right  = this.damageVignetteRight;
+    if (!top || !bottom || !left || !right) return;
 
-    const centerX = GAME_WIDTH / 2;
-    const centerY = GAME_HEIGHT / 2;
     const alpha = this.resolveDamageVignetteAlpha(effect.totalDamage);
     const sourceDirX = -effect.dirX;
     const sourceDirY = -effect.dirY;
-    const nextBaseAlpha = Phaser.Math.Clamp(
-      Math.max(base.alpha, alpha) + DAMAGE_VIGNETTE_VFX.stackAlphaBonus * 0.35,
+
+    const currentMax = Math.max(top.alpha, bottom.alpha, left.alpha, right.alpha);
+    const nextDirAlpha = Phaser.Math.Clamp(
+      Math.max(currentMax, alpha) + DAMAGE_VIGNETTE_VFX.stackAlphaBonus,
       0,
       DAMAGE_VIGNETTE_VFX.maxAlpha,
     );
-    const nextSpotAlpha = Phaser.Math.Clamp(
-      Math.max(spot.alpha, alpha * DAMAGE_VIGNETTE_VFX.spotAlphaMultiplier) + DAMAGE_VIGNETTE_VFX.stackAlphaBonus,
-      0,
-      DAMAGE_VIGNETTE_VFX.maxAlpha * 1.1,
-    );
+    const frameAlpha = nextDirAlpha * DAMAGE_VIGNETTE_VFX.frameAlphaRatio;
 
-    base.setVisible(true).setAlpha(nextBaseAlpha).setScale(DAMAGE_VIGNETTE_VFX.baseScale);
-    spot
-      .setVisible(true)
-      .setAlpha(nextSpotAlpha)
-      .setScale(DAMAGE_VIGNETTE_VFX.spotScale)
-      .setPosition(
-        centerX + sourceDirX * DAMAGE_VIGNETTE_VFX.directionOffsetPx,
-        centerY + sourceDirY * DAMAGE_VIGNETTE_VFX.directionOffsetPx,
-      );
+    top   .setVisible(true).setAlpha(Phaser.Math.Clamp(frameAlpha + nextDirAlpha * Math.max(0, -sourceDirY), 0, DAMAGE_VIGNETTE_VFX.maxAlpha));
+    bottom.setVisible(true).setAlpha(Phaser.Math.Clamp(frameAlpha + nextDirAlpha * Math.max(0, sourceDirY),  0, DAMAGE_VIGNETTE_VFX.maxAlpha));
+    left  .setVisible(true).setAlpha(Phaser.Math.Clamp(frameAlpha + nextDirAlpha * Math.max(0, -sourceDirX), 0, DAMAGE_VIGNETTE_VFX.maxAlpha));
+    right .setVisible(true).setAlpha(Phaser.Math.Clamp(frameAlpha + nextDirAlpha * Math.max(0, sourceDirX),  0, DAMAGE_VIGNETTE_VFX.maxAlpha));
 
-    this.scene.tweens.killTweensOf(base);
-    this.scene.tweens.killTweensOf(spot);
+    this.scene.tweens.killTweensOf(top);
+    this.scene.tweens.killTweensOf(bottom);
+    this.scene.tweens.killTweensOf(left);
+    this.scene.tweens.killTweensOf(right);
 
     this.scene.tweens.add({
-      targets: [base, spot],
+      targets: [top, bottom, left, right],
       alpha: 0,
       duration: DAMAGE_VIGNETTE_VFX.durationMs,
       ease: 'Quad.easeOut',
       onComplete: () => {
-        base.setVisible(false);
-        spot.setVisible(false);
+        top.setVisible(false);
+        bottom.setVisible(false);
+        left.setVisible(false);
+        right.setVisible(false);
       },
-    });
-
-    this.scene.tweens.add({
-      targets: base,
-      scaleX: DAMAGE_VIGNETTE_VFX.pulseScale,
-      scaleY: DAMAGE_VIGNETTE_VFX.pulseScale,
-      yoyo: true,
-      duration: 90,
-      ease: 'Quad.easeOut',
     });
   }
 

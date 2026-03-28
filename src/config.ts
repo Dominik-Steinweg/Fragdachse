@@ -255,20 +255,17 @@ export const DEATH_DISINTEGRATION_VFX = {
 
 export const DAMAGE_VIGNETTE_VFX = {
   color: COLORS.RED_3,
-  durationMs: 500,
+  durationMs: 800,
   damageFloor: 6,
   damageMid: 22,
   damageCeil: 58,
   alphaMin: 0.1,
-  alphaMid: 0.2,
-  alphaMax: 0.32,
-  maxAlpha: 0.42,
+  alphaMid: 0.3,
+  alphaMax: 0.52,
+  maxAlpha: 0.72,
   stackAlphaBonus: 0.08,
-  directionOffsetPx: 460,
-  baseScale: 1.0,
-  spotScale: 2.2,
-  pulseScale: 1.03,
-  spotAlphaMultiplier: 1.28,
+  /** Fraction of the directional alpha shown uniformly on all 4 edges (the base frame). */
+  frameAlphaRatio: 0.2,
 } as const;
 
 // ---- HP-Balken ----
