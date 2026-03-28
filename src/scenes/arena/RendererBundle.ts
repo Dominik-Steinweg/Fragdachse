@@ -17,6 +17,7 @@ import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleport
 import { NukeRenderer }        from '../../powerups/NukeRenderer';
 import { PowerUpRenderer }     from '../../powerups/PowerUpRenderer';
 import { MeteorRenderer }      from '../../effects/MeteorRenderer';
+import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { ProjectileManager } from '../../entities/ProjectileManager';
 import type { PlayerManager }     from '../../entities/PlayerManager';
@@ -41,13 +42,17 @@ export interface RendererBundle {
   nuke:                NukeRenderer;
   meteor:              MeteorRenderer;
   powerUp:             PowerUpRenderer;
+  shadow:              ShadowSystem;
   // Round-scoped: created in buildArena(), destroyed in tearDownArena()
   train:               TrainRenderer | null;
   translocatorTeleport: TranslocatorTeleportRenderer | null;
 }
 
 /** Create and generate textures for all scene-lifetime renderers. */
-export function createRendererBundle(scene: Phaser.Scene): RendererBundle {
+export function createRendererBundle(
+  scene: Phaser.Scene,
+  arenaMask: Phaser.Display.Masks.GeometryMask | null = null,
+): RendererBundle {
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
 
@@ -96,11 +101,12 @@ export function createRendererBundle(scene: Phaser.Scene): RendererBundle {
   meteor.generateTextures();
 
   const powerUp = new PowerUpRenderer(scene);
+  const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
     bullet, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck,
-    nuke, meteor, powerUp,
+    nuke, meteor, powerUp, shadow,
     train: null,
     translocatorTeleport: null,
   };

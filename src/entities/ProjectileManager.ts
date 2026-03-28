@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
+import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant, ProjectileStyle } from '../types';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
@@ -1027,6 +1028,35 @@ export class ProjectileManager {
     return this.projectiles.find(p => p.id === id && !p.pendingDestroy);
   }
 
+  getShadowSamples(): ShadowProjectileSample[] {
+    if (this.projectiles.length > 0) {
+      return this.projectiles
+        .filter((projectile) => projectile.sprite.active && !projectile.pendingDestroy)
+        .map((projectile) => ({
+          id: projectile.id,
+          x: projectile.sprite.x,
+          y: projectile.sprite.y,
+          size: Math.max(projectile.sprite.displayWidth, projectile.sprite.displayHeight),
+          style: projectile.projectileStyle,
+        }));
+    }
+
+    const now = performance.now();
+    const samples: ShadowProjectileSample[] = [];
+    for (const [id, state] of this.clientProjStates) {
+      const extrapolated = this.extrapolateClientProjectileState(state, now);
+      if (!extrapolated) continue;
+      samples.push({
+        id,
+        x: extrapolated.x,
+        y: extrapolated.y,
+        size: state.size,
+        style: state.style as ProjectileStyle | undefined,
+      });
+    }
+    return samples;
+  }
+
   /**
    * Host: Einzelnes Projektil sofort zerstören (z.B. nach Spielertreffer).
    */
@@ -1068,6 +1098,7 @@ export class ProjectileManager {
     this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
+    this.clientProjStates.clear();
   }
 
   /**
@@ -1745,49 +1776,34 @@ export class ProjectileManager {
     const flames   = this.flameRenderer;
 
     for (const [id, state] of this.clientProjStates) {
-      const dt = (now - state.receivedAt) / 1000; // Sekunden seit letztem Server-Update
-      if (dt <= 0) continue;
+      const extrapolated = this.extrapolateClientProjectileState(state, now);
+      if (!extrapolated) continue;
 
-      let ex: number, ey: number;
-
-      if (state.isFlame) {
-        // Flammen: exponentielle Velocity-Decay (velocityDecay ≈ 0.82 pro Sekunde)
-        // Geschlossene Integralform: pos = serverPos + v₀ * (1 - decay^t) / (-ln(decay))
-        const decay = 0.82; // Muss dem Config-Wert entsprechen
-        const lnDecay = Math.log(decay); // negativ
-        const integralFactor = (1 - Math.pow(decay, dt)) / (-lnDecay);
-        ex = state.serverX + state.vx * integralFactor;
-        ey = state.serverY + state.vy * integralFactor;
-      } else {
-        // Bullets/Balls: lineare Extrapolation
-        ex = state.serverX + state.vx * dt;
-        ey = state.serverY + state.vy * dt;
-      }
+      const { x: ex, y: ey, velocityX, velocityY } = extrapolated;
 
       const bfgRe = this.bfgRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
         bfgRe.updateVisual(id, ex, ey, state.size);
       } else if (state.style === 'gauss' && this.gaussRenderer?.has(id)) {
-        this.gaussRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color);
+        this.gaussRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color);
       } else if (state.style === 'grenade' && this.grenadeRenderer?.has(id)) {
-        this.grenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
+        this.grenadeRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'holy_grenade' && this.holyGrenadeRenderer?.has(id)) {
-        this.holyGrenadeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
+        this.holyGrenadeRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {
-        this.energyBallRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color, state.energyBallVariant);
+        this.energyBallRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color, state.energyBallVariant);
       } else if (state.style === 'spore' && this.sporeRenderer?.has(id)) {
-        this.sporeRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy, state.color);
+        this.sporeRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color);
       } else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) {
         this.translocatorPuckRenderer.updateVisual(id, ex, ey, state.ownerColor ?? state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
-        this.rocketRenderer.updateVisual(id, ex, ey, state.size, state.vx, state.vy);
+        this.rocketRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'flame' && flames && flames.has(id)) {
-        const decayFactor = Math.pow(0.82, dt);
-        flames.updateVisual(id, ex, ey, state.size, state.vx * decayFactor, state.vy * decayFactor);
+        flames.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if ((state.style === 'awp' || state.style === 'gauss') && renderer && renderer.has(id)) {
-        renderer.syncToBody(id, ex, ey, state.vx, state.vy);
+        renderer.syncToBody(id, ex, ey, velocityX, velocityY);
       } else if (state.style === 'bullet' && renderer && renderer.has(id)) {
-        renderer.updatePosition(id, ex, ey, state.vx, state.vy);
+        renderer.updatePosition(id, ex, ey, velocityX, velocityY);
       } else {
         const sprite = this.clientVisuals.get(id);
         if (sprite) sprite.setPosition(ex, ey);
@@ -1796,8 +1812,36 @@ export class ProjectileManager {
       // Tracer: unabhängig vom Renderer, wenn vorhanden
       const tracerRe = this.tracerRenderer;
       if (tracerRe && tracerRe.has(id)) {
-        tracerRe.updateTracer(id, ex, ey, state.vx, state.vy);
+        tracerRe.updateTracer(id, ex, ey, velocityX, velocityY);
       }
     }
+  }
+
+  private extrapolateClientProjectileState(
+    state: ClientProjectileState,
+    now: number,
+  ): { x: number; y: number; velocityX: number; velocityY: number } | null {
+    const dt = (now - state.receivedAt) / 1000;
+    if (dt <= 0) return null;
+
+    if (state.isFlame) {
+      const decay = 0.82;
+      const lnDecay = Math.log(decay);
+      const integralFactor = (1 - Math.pow(decay, dt)) / (-lnDecay);
+      const decayFactor = Math.pow(decay, dt);
+      return {
+        x: state.serverX + state.vx * integralFactor,
+        y: state.serverY + state.vy * integralFactor,
+        velocityX: state.vx * decayFactor,
+        velocityY: state.vy * decayFactor,
+      };
+    }
+
+    return {
+      x: state.serverX + state.vx * dt,
+      y: state.serverY + state.vy * dt,
+      velocityX: state.vx,
+      velocityY: state.vy,
+    };
   }
 }

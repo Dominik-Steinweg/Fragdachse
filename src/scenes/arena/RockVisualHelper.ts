@@ -6,6 +6,7 @@ import { WEAPON_CONFIGS }   from '../../loadout/LoadoutConfig';
 import { bridge }           from '../../network/bridge';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH } from '../../config';
 import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../../effects/EffectUtils';
+import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
 
@@ -29,6 +30,7 @@ export class RockVisualHelper {
     private readonly scene: Phaser.Scene,
     private readonly ctx: ArenaContext,
     private readonly arenaClipMask: Phaser.Display.Masks.GeometryMask | null,
+    private readonly shadowSystem: ShadowSystem | null,
   ) {
     this.ensureTurretTextures();
   }
@@ -61,6 +63,7 @@ export class RockVisualHelper {
   materializePlaceableRock(rock: SyncedPlaceableRock, playSpawnFx: boolean): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
     this.ensureRuntimeRockSlot(rock);
+    let refreshStaticShadows = false;
 
     if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'rock') {
       ArenaBuilder.spawnRockAndRetile(
@@ -75,6 +78,7 @@ export class RockVisualHelper {
         rock.hp,
         rock.maxHp,
       );
+      refreshStaticShadows = true;
     } else if (!this.ctx.arenaResult.rockObjects[rock.id]?.active && rock.kind === 'turret') {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
       const proxy = this.scene.add.image(world.x, world.y, 'placeable_turret_proxy')
@@ -87,11 +91,13 @@ export class RockVisualHelper {
       (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
       this.ctx.arenaResult.rockGroup.refresh();
       this.createOrUpdateTurretVisual(rock);
+      refreshStaticShadows = true;
     } else if (rock.kind === 'turret') {
       this.createOrUpdateTurretVisual(rock);
     }
 
     this.updateRockVisualById(rock.id, rock.hp);
+    if (refreshStaticShadows) this.refreshStaticShadows();
 
     if (playSpawnFx) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
@@ -123,6 +129,7 @@ export class RockVisualHelper {
       ArenaBuilder.destroyRock(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.rockGroup, rock.id);
       this.ctx.arenaResult.rockGrid.remove(rock.gridX, rock.gridY);
       this.destroyTurretVisual(rock.id);
+      this.refreshStaticShadows();
       return;
     }
     ArenaBuilder.destroyRockAndRetile(
@@ -132,6 +139,7 @@ export class RockVisualHelper {
       this.ctx.currentLayout.rocks,
       rock.id,
     );
+    this.refreshStaticShadows();
   }
 
   updateRockVisualById(rockId: number, hp: number): void {
@@ -184,6 +192,7 @@ export class RockVisualHelper {
       return;
     }
 
+    this.refreshStaticShadows();
     this.ctx.powerUpSystem?.onRockDestroyed(rockId);
   }
 
@@ -321,5 +330,13 @@ export class RockVisualHelper {
     }, DEPTH.ROCKS + 1);
     emitter.explode(14);
     this.scene.time.delayedCall(700, () => destroyEmitter(emitter));
+  }
+
+  private refreshStaticShadows(): void {
+    this.shadowSystem?.rebuildArenaStaticShadows(
+      this.ctx.currentLayout,
+      this.ctx.arenaResult,
+      this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+    );
   }
 }

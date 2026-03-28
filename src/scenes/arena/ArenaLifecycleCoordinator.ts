@@ -407,6 +407,11 @@ export class ArenaLifecycleCoordinator {
     // Round-scoped renderers (all clients)
     this.renderers.train = new TrainRenderer(this.scene);
     this.renderers.translocatorTeleport = new TranslocatorTeleportRenderer(this.scene);
+    this.renderers.shadow.rebuildArenaStaticShadows(
+      this.ctx.currentLayout,
+      this.ctx.arenaResult,
+      this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+    );
 
     // Reset per-round state in coordinators
     this.hostUpdate.resetPerRound();
@@ -482,6 +487,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.trainManager = null;
     this.renderers.train?.destroy();
     this.renderers.train = null;
+    this.renderers.shadow.clear();
     this.renderers.translocatorTeleport = null;
     this.ctx.projectileManager.setTrainGroup(null);
     this.ctx.projectileManager.setTrainHitCallback(null);

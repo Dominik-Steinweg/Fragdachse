@@ -178,7 +178,7 @@ export class ArenaScene extends Phaser.Scene {
     };
 
     // ── Renderers ─────────────────────────────────────────────────────────
-    this.renderers = createRendererBundle(this);
+    this.renderers = createRendererBundle(this, this.arenaClipMask);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     wireRenderersToEffectSystem(this.renderers, effectSystem);
 
@@ -202,7 +202,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Shared state & helpers ─────────────────────────────────────────────
     this.localPlayerState = new LocalPlayerState();
-    this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask);
+    this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow);
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
     this.gaussWarning      = new GaussWarningRenderer(this);
 
@@ -405,6 +405,7 @@ export class ArenaScene extends Phaser.Scene {
     this.placementPreview.syncPlaceableUtilityHint(inArena, utilityPlacement !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.renderPlacementPreview(inArena, utilityPlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.renderRemotePlacementPreviews(inArena);
+    this.syncWorldShadows(inArena);
   }
 
   // ── Network events ────────────────────────────────────────────────────────
@@ -522,6 +523,24 @@ export class ArenaScene extends Phaser.Scene {
     maskShape.setVisible(false);
     this.arenaClipMaskShape = maskShape;
     this.arenaClipMask = maskShape.createGeometryMask();
+    this.renderers?.shadow.setArenaMask(this.arenaClipMask);
+  }
+
+  private syncWorldShadows(inArena: boolean): void {
+    if (!inArena || !this.ctx.currentLayout || !this.ctx.arenaResult) {
+      this.renderers.shadow.clear();
+      return;
+    }
+
+    const trainState = bridge.isHost()
+      ? (this.ctx.trainManager?.getNetSnapshot() ?? null)
+      : (bridge.getLatestGameState()?.train ?? null);
+
+    this.renderers.shadow.syncDynamicShadows(
+      this.ctx.playerManager.getAllPlayers(),
+      this.ctx.projectileManager.getShadowSamples(),
+      trainState,
+    );
   }
 
   private initializeRoomQuality(): void {
