@@ -209,6 +209,34 @@ export interface SyncedHitscanTrace {
   shotId?:    number;
 }
 
+export interface SyncedHitEffect {
+  type:       'hit';
+  x:          number;
+  y:          number;
+  targetId:   string;
+  shooterId?: string;
+  targetColor?: number;
+  totalDamage: number;
+  hpLost:      number;
+  armorLost:   number;
+  isKill:      boolean;
+  dirX:        number;
+  dirY:        number;
+  seed:        number;
+}
+
+export interface SyncedDeathEffect {
+  type:        'death';
+  x:           number;
+  y:           number;
+  targetId:    string;
+  targetColor?: number;
+  rotation:    number;
+  seed:        number;
+}
+
+export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;
+
 /** Kurzlebiger Melee-Swing für VFX-Replikation (Host → Clients, unreliable). */
 export interface SyncedMeleeSwing {
   swingId:    number;   // pro Session eindeutig, für Client-Deduplizierung

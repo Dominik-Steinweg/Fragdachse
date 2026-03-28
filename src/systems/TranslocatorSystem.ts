@@ -139,7 +139,10 @@ export class TranslocatorSystem {
       const otherBounds = otherPlayer.sprite.getBounds();
       if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, otherBounds)) {
         // Telefrag! Mache extrem hohen Schaden
-        this.combatSystem.applyDamage(otherPlayer.id, 9999, true, playerId, 'Translocator');
+        this.combatSystem.applyDamage(otherPlayer.id, 9999, true, playerId, 'Translocator', {
+          sourceX: x,
+          sourceY: y,
+        });
       }
     }
 
@@ -151,7 +154,10 @@ export class TranslocatorSystem {
         const segBounds = new Phaser.Geom.Rectangle(seg.x - 32, seg.y - 32, 64, 64);
         if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, segBounds)) {
           // Spieler in den Zug teleportiert
-          this.combatSystem.applyDamage(playerId, 9999, true, 'train', 'Zug');
+          this.combatSystem.applyDamage(playerId, 9999, true, 'train', 'Zug', {
+            sourceX: seg.x,
+            sourceY: seg.y,
+          });
           break;
         }
       }

@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, ShieldBuffHudState, SyncedProjectile, SyncedHitscanTrace, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedEnergyShield, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot, SyncedPlaceableRock } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, ShieldBuffHudState, SyncedProjectile, SyncedHitscanTrace, SyncedCombatEffect, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedEnergyShield, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot, SyncedPlaceableRock } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -110,7 +110,7 @@ type LoadoutUseHandler = (
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type GrenadeCountdownHandler = (x: number, y: number, value: number) => void;
-type EffectHandler = (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void;
+type EffectHandler = (effect: SyncedCombatEffect) => void;
 type HitscanTracerHandler = (
   startX: number,
   startY: number,
@@ -664,17 +664,16 @@ export class NetworkBridge {
   }
 
   // ── Effekt-RPC: Host → Alle (visuelles Feedback) ──────────────────────────
-  broadcastEffect(type: 'hit' | 'death', x: number, y: number, shooterId?: string): void {
-    this.broadcastRpc('fx', { type, x, y, shooterId });
+  broadcastEffect(effect: SyncedCombatEffect): void {
+    this.broadcastRpc('fx', effect);
   }
 
-  registerEffectHandler(cb: (type: 'hit' | 'death', x: number, y: number, shooterId?: string) => void): void {
+  registerEffectHandler(cb: (effect: SyncedCombatEffect) => void): void {
     this.effectHandler = cb;
     this.registerAllRpcHandler('fx', async (data: unknown): Promise<unknown> => {
       const effectHandler = this.effectHandler;
       if (!effectHandler) return undefined;
-      const { type, x, y, shooterId } = data as { type: 'hit' | 'death'; x: number; y: number; shooterId?: string };
-      effectHandler(type, x, y, shooterId);
+      effectHandler(data as SyncedCombatEffect);
       return undefined;
     });
   }

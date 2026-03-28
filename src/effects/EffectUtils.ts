@@ -106,3 +106,29 @@ export function destroyEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmi
   emitter.stop();
   emitter.destroy();
 }
+
+export function createSeededRandom(seed: number): () => number {
+  let state = (seed >>> 0) || 0x6d2b79f5;
+
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function mixColors(colorA: number, colorB: number, amount: number): number {
+  const t = Phaser.Math.Clamp(amount, 0, 1);
+  const ar = (colorA >> 16) & 0xff;
+  const ag = (colorA >> 8) & 0xff;
+  const ab = colorA & 0xff;
+  const br = (colorB >> 16) & 0xff;
+  const bg = (colorB >> 8) & 0xff;
+  const bb = colorB & 0xff;
+
+  const rr = Math.round(Phaser.Math.Linear(ar, br, t));
+  const rg = Math.round(Phaser.Math.Linear(ag, bg, t));
+  const rb = Math.round(Phaser.Math.Linear(ab, bb, t));
+  return (rr << 16) | (rg << 8) | rb;
+}

@@ -179,7 +179,10 @@ export class BurrowSystem {
 
     if (state.stuckDamageAccum >= 1) {
       const damage = Math.floor(state.stuckDamageAccum);
-      this.combat.applyDamage(id, damage, true);
+      const player = this.playerMgr.getPlayer(id);
+      this.combat.applyDamage(id, damage, true, undefined, undefined, player
+        ? { sourceX: player.sprite.x, sourceY: player.sprite.y - PLAYER_SIZE }
+        : undefined);
       state.stuckDamageAccum -= damage;
     }
 
@@ -323,7 +326,10 @@ export class BurrowSystem {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist < SHOCKWAVE_RADIUS && dist > 0) {
-        this.combat.applyDamage(other.id, SHOCKWAVE_DAMAGE);
+        this.combat.applyDamage(other.id, SHOCKWAVE_DAMAGE, false, undefined, undefined, {
+          sourceX: ox,
+          sourceY: oy,
+        });
       }
     }
 

@@ -226,7 +226,10 @@ export class TeslaDomeSystem {
         })) {
           continue;
         }
-        this.combatSystem.applyDamage(player.id, damage, false, dome.ownerId, dome.config.displayName);
+        this.combatSystem.applyDamage(player.id, damage, false, dome.ownerId, dome.config.displayName, {
+          sourceX: dome.x,
+          sourceY: dome.y,
+        });
       }
     }
 

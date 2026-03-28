@@ -54,7 +54,7 @@ export class TrainManager {
   private segObjects:   Phaser.GameObjects.Rectangle[] = [];
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
-  private onPlayerHit: ((playerId: string) => void)          | null = null;
+  private onPlayerHit: ((playerId: string, sourceX: number, sourceY: number) => void) | null = null;
   private canHitPlayer: ((playerId: string) => boolean)      | null = null;
   private onDestroyed: ((r: TrainDestroyResult) => void)     | null = null;
   private onExited:    (() => void)                          | null = null;
@@ -73,7 +73,7 @@ export class TrainManager {
 
   // ── Callback-Injection ───────────────────────────────────────────────────
 
-  setPlayerHitCallback(cb: (playerId: string) => void):     void { this.onPlayerHit = cb; }
+  setPlayerHitCallback(cb: (playerId: string, sourceX: number, sourceY: number) => void): void { this.onPlayerHit = cb; }
   setCanHitPlayerCallback(cb: (playerId: string) => boolean): void { this.canHitPlayer = cb; }
   setDestroyCallback(cb: (r: TrainDestroyResult) => void):  void { this.onDestroyed  = cb; }
   setExitedCallback(cb: () => void):                        void { this.onExited     = cb; }
@@ -341,7 +341,7 @@ export class TrainManager {
           Math.abs(px - this.trackX) < halfW + pr &&
           Math.abs(py - ys[i])       < halfH + pr
         ) {
-          this.onPlayerHit(player.id);
+          this.onPlayerHit(player.id, this.trackX, ys[i]);
           break; // einen Kill pro Spieler pro Frame reicht
         }
       }

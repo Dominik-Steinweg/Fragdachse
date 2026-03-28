@@ -57,6 +57,8 @@ export class PlayerEntity {
     this.body.setCollideWorldBounds(true);
 
     // Leuchtende Spielerfarb-Aura (vgl. PowerUpRenderer)
+    // setPadding nötig, damit der Glow nicht an den Sprite-Grenzen abgeschnitten wird
+    this.sprite.preFX?.setPadding(20);
     this.glowFx = this.sprite.preFX?.addGlow(profile.colorHex, 4, 0, false, 0.1, 16) ?? null;
     if (this.glowFx) {
       this.glowTween = scene.tweens.add({

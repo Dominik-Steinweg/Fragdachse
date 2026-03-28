@@ -37,7 +37,10 @@
       "Bash(find C:Fragdachse/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js \\\\\\))",
       "Bash(find C:Fragdachseassets -type f -name *dachs* -o -name *badger* -o -name *32x32*)",
       "Bash(find C:Fragdachse -path *assets* -name *.png -o -path *assets* -name *.json)",
-      "Bash(node -e \"const p = require\\(''./node_modules/phaser/package.json''\\); console.log\\(p.version\\)\")"
+      "Bash(node -e \"const p = require\\(''./node_modules/phaser/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(find . -path ./node_modules -prune -o -name *.ts -type f -exec grep -l \"setMask\\\\|mask =\" {})",
+      "Bash(2)",
+      "Bash(grep -r \"outerStrength\\\\|createGeometryMask\\\\|setMask\" src --include=*.ts)"
     ]
   }
 }

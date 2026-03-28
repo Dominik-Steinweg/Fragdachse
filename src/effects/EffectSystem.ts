@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { COLORS, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
-import { circleZone, edgeZone } from './EffectUtils';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
+import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
+import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 
 const HITSCAN_TRACER_FADE_MS = 320;
@@ -12,10 +12,28 @@ const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
 const TEX_EXPLOSION_SPARK = '__explosion_spark';
 const TEX_EXPLOSION_EMBER = '__explosion_ember';
+const TEX_BLOOD_DROPLET = '__blood_droplet';
+const TEX_BLOOD_STREAK = '__blood_streak';
+const TEX_BLOOD_STAIN = '__blood_stain';
+const TEX_DAMAGE_VIGNETTE = '__damage_vignette';
+const TEX_DAMAGE_VIGNETTE_SPOT = '__damage_vignette_spot';
+const TEX_DEATH_PIXEL_GLOW = '__death_pixel_glow';
+
+const DEPTH_BLOOD_STAIN = DEPTH.PLAYERS - 0.05;
+const DEPTH_DAMAGE_VIGNETTE = DEPTH.OVERLAY - 1;
 
 interface BurrowEmitterVisual {
   dirt: Phaser.GameObjects.Particles.ParticleEmitter;
   dust: Phaser.GameObjects.Particles.ParticleEmitter;
+}
+
+interface DeathPixelChunk {
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
+  color: number;
+  brightness: number;
 }
 
 export class EffectSystem {
@@ -25,14 +43,27 @@ export class EffectSystem {
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private texturesGenerated = false;
+  private damageVignetteBase: Phaser.GameObjects.Image | null = null;
+  private damageVignetteSpot: Phaser.GameObjects.Image | null = null;
+  private deathPixelChunks: DeathPixelChunk[] | null = null;
 
   constructor(
     private scene:  Phaser.Scene,
     private bridge: NetworkBridge,
-  ) {}
+  ) {
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
+  }
 
   setMuzzleFlashRenderer(renderer: MuzzleFlashRenderer | null): void {
     this.muzzleFlashRenderer = renderer;
+  }
+
+  destroy(): void {
+    this.damageVignetteBase?.destroy();
+    this.damageVignetteSpot?.destroy();
+    this.damageVignetteBase = null;
+    this.damageVignetteSpot = null;
+    this.deathPixelChunks = null;
   }
 
   /** Erzeugt kleine Canvas-Texturen für Explosions-Partikel (einmalig). */
@@ -92,18 +123,99 @@ export class EffectSystem {
         dustCanvas.refresh();
       }
     }
+
+    ensureCanvasTexture(this.scene.textures, TEX_BLOOD_DROPLET, 14, 14, (ctx) => {
+      const gradient = ctx.createRadialGradient(7, 7, 1, 7, 7, 7);
+      gradient.addColorStop(0, 'rgba(255,255,255,1)');
+      gradient.addColorStop(0.65, 'rgba(255,255,255,0.78)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(7, 7, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_BLOOD_STREAK, 36, 16, (ctx) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath();
+      ctx.ellipse(20, 8, 12, 3.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.68)';
+      ctx.beginPath();
+      ctx.ellipse(11, 8, 8, 2.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.46)';
+      ctx.beginPath();
+      ctx.ellipse(5, 8, 4, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_BLOOD_STAIN, 42, 42, (ctx) => {
+      const circles: Array<{ x: number; y: number; r: number; alpha: number }> = [
+        { x: 18, y: 16, r: 8, alpha: 0.9 },
+        { x: 24, y: 20, r: 10, alpha: 0.75 },
+        { x: 14, y: 24, r: 7, alpha: 0.58 },
+        { x: 28, y: 27, r: 6, alpha: 0.52 },
+      ];
+
+      for (const circle of circles) {
+        ctx.fillStyle = `rgba(255,255,255,${circle.alpha})`;
+        ctx.beginPath();
+        ctx.arc(circle.x, circle.y, circle.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
+      const cx = GAME_WIDTH / 2;
+      const cy = GAME_HEIGHT / 2;
+      const innerRadius = GAME_HEIGHT * 0.34;
+      const outerRadius = Math.max(GAME_WIDTH, GAME_HEIGHT) * 0.72;
+      const gradient = ctx.createRadialGradient(cx, cy, innerRadius, cx, cy, outerRadius);
+      gradient.addColorStop(0, 'rgba(255,255,255,0)');
+      gradient.addColorStop(0.55, 'rgba(255,255,255,0)');
+      gradient.addColorStop(0.82, 'rgba(255,255,255,0.42)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0.95)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_SPOT, 640, 640, (ctx) => {
+      const gradient = ctx.createRadialGradient(320, 320, 18, 320, 320, 320);
+      gradient.addColorStop(0, 'rgba(255,255,255,1)');
+      gradient.addColorStop(0.35, 'rgba(255,255,255,0.42)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 640, 640);
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_DEATH_PIXEL_GLOW, 24, 24, (ctx) => {
+      const gradient = ctx.createRadialGradient(12, 12, 1, 12, 12, 12);
+      gradient.addColorStop(0, 'rgba(255,255,255,1)');
+      gradient.addColorStop(0.55, 'rgba(255,255,255,0.52)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 24, 24);
+    });
   }
 
   /** RPC-Handler registrieren – Effekte werden bei ALLEN Clients (inkl. Host) abgespielt. */
   setup(onLocalConfirmedHit?: () => void): void {
-    this.bridge.registerEffectHandler((type, x, y, shooterId) => {
-      if (type === 'hit') {
-        if (shooterId === this.bridge.getLocalPlayerId()) {
+    this.ensureTextures();
+
+    this.bridge.registerEffectHandler((effect: SyncedCombatEffect) => {
+      if (effect.type === 'hit') {
+        if (effect.shooterId === this.bridge.getLocalPlayerId()) {
           onLocalConfirmedHit?.();
         }
-        this.playHitEffect(x, y);
+        this.playHitEffect(effect);
+        if (effect.targetId === this.bridge.getLocalPlayerId()) {
+          this.playDamageVignette(effect);
+        }
       }
-      if (type === 'death') this.playDeathEffect(x, y);
+      if (effect.type === 'death') this.playDeathEffect(effect);
     });
 
     this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, visualPreset, shooterId, shotId) => {
@@ -125,20 +237,112 @@ export class EffectSystem {
     });
   }
 
-  // ── Treffer-Effekt: kleiner roter Ring ────────────────────────────────────
+  // ── Treffer-Effekt: gerichteter Blood-Splatter ───────────────────────────
 
-  private playHitEffect(x: number, y: number): void {
-    const ring = this.scene.add.circle(x, y, PLAYER_SIZE * 0.45, 0xff3333, 0.85);
-    ring.setDepth(DEPTH_FX);
+  private playHitEffect(effect: SyncedHitEffect): void {
+    this.ensureTextures();
+
+    const rng = createSeededRandom(effect.seed);
+    const band = this.getBloodBand(effect.totalDamage);
+    const damageScale = effect.isKill ? BLOOD_HIT_VFX.killshotMultiplier : 1;
+    const baseAngle = Math.atan2(effect.dirY, effect.dirX);
+    const originX = effect.x + effect.dirX * BLOOD_HIT_VFX.spawnPushPx;
+    const originY = effect.y + effect.dirY * BLOOD_HIT_VFX.spawnPushPx;
+    const coreTint = this.pickBloodTint(rng);
+    const coreSplash = this.scene.add.image(originX, originY, TEX_BLOOD_STAIN)
+      .setDepth(DEPTH_FX - 0.2)
+      .setTint(coreTint)
+      .setAlpha(BLOOD_HIT_VFX.coreSplashAlpha)
+      .setScale(BLOOD_HIT_VFX.coreSplashScale * damageScale)
+      .setRotation((rng() - 0.5) * 0.4);
+
     this.scene.tweens.add({
-      targets:    ring,
-      scaleX:     2.8,
-      scaleY:     2.8,
-      alpha:      0,
-      duration:   100,
-      ease:       'Power2Out',
-      onComplete: () => ring.destroy(),
+      targets: coreSplash,
+      alpha: 0,
+      scaleX: BLOOD_HIT_VFX.coreSplashScale * damageScale * 1.28,
+      scaleY: BLOOD_HIT_VFX.coreSplashScale * damageScale * 1.28,
+      duration: BLOOD_HIT_VFX.coreSplashDurationMs,
+      ease: 'Cubic.easeOut',
+      onComplete: () => coreSplash.destroy(),
     });
+
+    const streakCount = this.randomInt(rng, band.streakCountMin, band.streakCountMax);
+    const dropletCount = this.randomInt(rng, band.dropletCountMin, band.dropletCountMax);
+    const stainCount = this.randomInt(rng, band.stainCountMin, band.stainCountMax);
+    let stainsCreated = 0;
+
+    for (let i = 0; i < streakCount; i++) {
+      const angle = baseAngle + Phaser.Math.DegToRad((rng() - 0.5) * band.spreadDeg * 2);
+      const directionX = Math.cos(angle);
+      const directionY = Math.sin(angle);
+      const lateralX = -directionY;
+      const lateralY = directionX;
+      const lateral = (rng() - 0.5) * BLOOD_HIT_VFX.lateralJitterPx;
+      const startX = originX + lateralX * lateral;
+      const startY = originY + lateralY * lateral;
+      const travel = this.randomBetween(rng, band.travelMinPx, band.travelMaxPx) * damageScale;
+      const endX = startX + directionX * travel + lateralX * (rng() - 0.5) * 14;
+      const endY = startY + directionY * travel + lateralY * (rng() - 0.5) * 14;
+      const scale = this.randomBetween(rng, band.streakScaleMin, band.streakScaleMax) * damageScale;
+      const tint = this.pickBloodTint(rng);
+      const streak = this.scene.add.image(startX, startY, TEX_BLOOD_STREAK)
+        .setDepth(DEPTH_FX)
+        .setTint(tint)
+        .setRotation(angle)
+        .setScale(scale)
+        .setAlpha(0.84);
+
+      const duration = this.randomBetween(rng, band.flightMinMs, band.flightMaxMs);
+      const leaveStain = stainsCreated < stainCount && (i < stainCount || rng() > 0.45);
+      if (leaveStain) stainsCreated += 1;
+
+      this.scene.tweens.add({
+        targets: streak,
+        x: endX,
+        y: endY,
+        alpha: 0,
+        duration,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          streak.destroy();
+          if (leaveStain) {
+            this.spawnBloodStain(
+              endX,
+              endY,
+              this.randomBetween(rng, band.stainScaleMin, band.stainScaleMax) * damageScale,
+              band.stainAlpha,
+              band.stainFadeMs,
+              tint,
+              (rng() - 0.5) * Math.PI,
+            );
+          }
+        },
+      });
+    }
+
+    for (let i = 0; i < dropletCount; i++) {
+      const angle = baseAngle + Phaser.Math.DegToRad((rng() - 0.5) * Math.max(14, band.spreadDeg * 1.35) * 2);
+      const directionX = Math.cos(angle);
+      const directionY = Math.sin(angle);
+      const travel = this.randomBetween(rng, band.travelMinPx * 0.5, band.travelMaxPx * 0.75) * damageScale;
+      const startX = effect.x + directionX * BLOOD_HIT_VFX.spawnPushPx * 0.7;
+      const startY = effect.y + directionY * BLOOD_HIT_VFX.spawnPushPx * 0.7;
+      const droplet = this.scene.add.image(startX, startY, TEX_BLOOD_DROPLET)
+        .setDepth(DEPTH_FX + 0.05)
+        .setTint(this.pickBloodTint(rng))
+        .setScale(this.randomBetween(rng, band.dropletScaleMin, band.dropletScaleMax) * damageScale)
+        .setAlpha(0.74);
+
+      this.scene.tweens.add({
+        targets: droplet,
+        x: startX + directionX * travel,
+        y: startY + directionY * travel,
+        alpha: 0,
+        duration: this.randomBetween(rng, band.flightMinMs, band.flightMaxMs) * 0.85,
+        ease: 'Quad.easeOut',
+        onComplete: () => droplet.destroy(),
+      });
+    }
   }
 
   // ── Dash-Trail-Effekt ─────────────────────────────────────────────────────
@@ -1012,30 +1216,294 @@ export class EffectSystem {
     );
   }
 
-  // ── Todes-Effekt: drei Explosionsringe + weißer Blitz ────────────────────
+  private spawnBloodStain(
+    x: number,
+    y: number,
+    scale: number,
+    alpha: number,
+    fadeMs: number,
+    tint: number,
+    rotation: number,
+  ): void {
+    const stain = this.scene.add.image(x, y, TEX_BLOOD_STAIN)
+      .setDepth(DEPTH_BLOOD_STAIN)
+      .setTint(tint)
+      .setAlpha(0)
+      .setScale(scale * 0.82)
+      .setRotation(rotation);
 
-  private playDeathEffect(x: number, y: number): void {
-    // Drei konzentrische Ringe in unterschiedlichen Farben und Verzögerungen
-    const rings: Array<{ color: number; delay: number; scale: number; duration: number }> = [
-      { color: 0xff6600, delay: 0,   scale: 12, duration: 550 },
-      { color: 0xff3300, delay: 60,  scale: 9,  duration: 380 },
-      { color: 0xffcc00, delay: 120, scale: 7,  duration: 240 },
-    ];
+    this.scene.tweens.add({
+      targets: stain,
+      alpha,
+      scaleX: scale,
+      scaleY: scale,
+      duration: 80,
+      ease: 'Quad.easeOut',
+    });
 
-    for (const r of rings) {
-      const ring = this.scene.add.circle(x, y, 8, r.color, 1);
-      ring.setDepth(DEPTH_FX);
+    this.scene.tweens.add({
+      targets: stain,
+      alpha: 0,
+      delay: BLOOD_HIT_VFX.stainDelayMs,
+      duration: fadeMs,
+      ease: 'Sine.easeIn',
+      onComplete: () => stain.destroy(),
+    });
+  }
+
+  private ensureDamageVignette(): void {
+    if (this.damageVignetteBase?.scene && this.damageVignetteSpot?.scene) return;
+
+    this.ensureTextures();
+
+    this.damageVignetteBase = this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, TEX_DAMAGE_VIGNETTE)
+      .setDepth(DEPTH_DAMAGE_VIGNETTE)
+      .setScrollFactor(0)
+      .setTint(DAMAGE_VIGNETTE_VFX.color)
+      .setAlpha(0)
+      .setVisible(false);
+
+    this.damageVignetteSpot = this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, TEX_DAMAGE_VIGNETTE_SPOT)
+      .setDepth(DEPTH_DAMAGE_VIGNETTE)
+      .setScrollFactor(0)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(DAMAGE_VIGNETTE_VFX.color)
+      .setScale(DAMAGE_VIGNETTE_VFX.spotScale)
+      .setAlpha(0)
+      .setVisible(false);
+  }
+
+  private playDamageVignette(effect: SyncedHitEffect): void {
+    this.ensureDamageVignette();
+
+    const base = this.damageVignetteBase;
+    const spot = this.damageVignetteSpot;
+    if (!base || !spot) return;
+
+    const centerX = GAME_WIDTH / 2;
+    const centerY = GAME_HEIGHT / 2;
+    const alpha = this.resolveDamageVignetteAlpha(effect.totalDamage);
+    const sourceDirX = -effect.dirX;
+    const sourceDirY = -effect.dirY;
+    const nextBaseAlpha = Phaser.Math.Clamp(
+      Math.max(base.alpha, alpha) + DAMAGE_VIGNETTE_VFX.stackAlphaBonus * 0.35,
+      0,
+      DAMAGE_VIGNETTE_VFX.maxAlpha,
+    );
+    const nextSpotAlpha = Phaser.Math.Clamp(
+      Math.max(spot.alpha, alpha * DAMAGE_VIGNETTE_VFX.spotAlphaMultiplier) + DAMAGE_VIGNETTE_VFX.stackAlphaBonus,
+      0,
+      DAMAGE_VIGNETTE_VFX.maxAlpha * 1.1,
+    );
+
+    base.setVisible(true).setAlpha(nextBaseAlpha).setScale(DAMAGE_VIGNETTE_VFX.baseScale);
+    spot
+      .setVisible(true)
+      .setAlpha(nextSpotAlpha)
+      .setScale(DAMAGE_VIGNETTE_VFX.spotScale)
+      .setPosition(
+        centerX + sourceDirX * DAMAGE_VIGNETTE_VFX.directionOffsetPx,
+        centerY + sourceDirY * DAMAGE_VIGNETTE_VFX.directionOffsetPx,
+      );
+
+    this.scene.tweens.killTweensOf(base);
+    this.scene.tweens.killTweensOf(spot);
+
+    this.scene.tweens.add({
+      targets: [base, spot],
+      alpha: 0,
+      duration: DAMAGE_VIGNETTE_VFX.durationMs,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        base.setVisible(false);
+        spot.setVisible(false);
+      },
+    });
+
+    this.scene.tweens.add({
+      targets: base,
+      scaleX: DAMAGE_VIGNETTE_VFX.pulseScale,
+      scaleY: DAMAGE_VIGNETTE_VFX.pulseScale,
+      yoyo: true,
+      duration: 90,
+      ease: 'Quad.easeOut',
+    });
+  }
+
+  private resolveDamageVignetteAlpha(totalDamage: number): number {
+    if (totalDamage <= DAMAGE_VIGNETTE_VFX.damageMid) {
+      const t = Phaser.Math.Clamp(
+        (totalDamage - DAMAGE_VIGNETTE_VFX.damageFloor)
+          / Math.max(1, DAMAGE_VIGNETTE_VFX.damageMid - DAMAGE_VIGNETTE_VFX.damageFloor),
+        0,
+        1,
+      );
+      return Phaser.Math.Linear(DAMAGE_VIGNETTE_VFX.alphaMin, DAMAGE_VIGNETTE_VFX.alphaMid, t);
+    }
+
+    const t = Phaser.Math.Clamp(
+      (totalDamage - DAMAGE_VIGNETTE_VFX.damageMid)
+        / Math.max(1, DAMAGE_VIGNETTE_VFX.damageCeil - DAMAGE_VIGNETTE_VFX.damageMid),
+      0,
+      1,
+    );
+    return Phaser.Math.Linear(DAMAGE_VIGNETTE_VFX.alphaMid, DAMAGE_VIGNETTE_VFX.alphaMax, t);
+  }
+
+  private getBloodBand(totalDamage: number) {
+    if (totalDamage <= BLOOD_HIT_VFX.bands.light.maxDamage) return BLOOD_HIT_VFX.bands.light;
+    if (totalDamage <= BLOOD_HIT_VFX.bands.medium.maxDamage) return BLOOD_HIT_VFX.bands.medium;
+    return BLOOD_HIT_VFX.bands.heavy;
+  }
+
+  private pickBloodTint(rng: () => number): number {
+    const idx = Math.min(BLOOD_HIT_VFX.palette.length - 1, Math.floor(rng() * BLOOD_HIT_VFX.palette.length));
+    return BLOOD_HIT_VFX.palette[idx] ?? BLOOD_HIT_VFX.palette[0];
+  }
+
+  private randomBetween(rng: () => number, min: number, max: number): number {
+    return Phaser.Math.Linear(min, max, rng());
+  }
+
+  private randomInt(rng: () => number, min: number, max: number): number {
+    return Math.floor(min + rng() * (max - min + 1));
+  }
+
+  // ── Todes-Effekt: Pixel-Disintegration statt Ring-Explosion ──────────────
+
+  private playDeathEffect(effect: SyncedDeathEffect): void {
+    this.ensureTextures();
+
+    const chunks = this.getDeathPixelChunks();
+    if (chunks.length === 0) return;
+
+    const rng = createSeededRandom(effect.seed);
+    const auraColor = effect.targetColor ?? COLORS.GREY_2;
+    const cos = Math.cos(effect.rotation);
+    const sin = Math.sin(effect.rotation);
+
+    for (const chunk of chunks) {
+      const rx = chunk.offsetX * cos - chunk.offsetY * sin;
+      const ry = chunk.offsetX * sin + chunk.offsetY * cos;
+      const radialAngle = Math.hypot(rx, ry) > 0.15 ? Math.atan2(ry, rx) : rng() * Math.PI * 2;
+      const angle = radialAngle + (rng() - 0.5) * 1.2;
+      const travel = this.randomBetween(rng, DEATH_DISINTEGRATION_VFX.travelMinPx, DEATH_DISINTEGRATION_VFX.travelMaxPx);
+      const endX = effect.x + rx * 1.15 + Math.cos(angle) * travel + (rng() - 0.5) * DEATH_DISINTEGRATION_VFX.jitterPx;
+      const endY = effect.y + ry * 1.15 + Math.sin(angle) * travel + (rng() - 0.5) * DEATH_DISINTEGRATION_VFX.jitterPx;
+      const tintedColor = mixColors(
+        chunk.color,
+        auraColor,
+        DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness),
+      );
+      const pixel = this.scene.add.rectangle(effect.x + rx, effect.y + ry, chunk.width, chunk.height, tintedColor, DEATH_DISINTEGRATION_VFX.alpha)
+        .setDepth(DEPTH_FX - 0.1)
+        .setOrigin(0.5)
+        .setScale(DEATH_DISINTEGRATION_VFX.scaleStart);
+
       this.scene.tweens.add({
-        targets:    ring,
-        scaleX:     r.scale,
-        scaleY:     r.scale,
-        alpha:      0,
-        delay:      r.delay,
-        duration:   r.duration,
-        ease:       'Power3Out',
-        onComplete: () => ring.destroy(),
+        targets: pixel,
+        x: endX,
+        y: endY,
+        angle: (rng() - 0.5) * DEATH_DISINTEGRATION_VFX.rotationMaxDeg,
+        alpha: 0,
+        scaleX: DEATH_DISINTEGRATION_VFX.scaleEnd,
+        scaleY: DEATH_DISINTEGRATION_VFX.scaleEnd,
+        duration: DEATH_DISINTEGRATION_VFX.durationMs,
+        ease: 'Cubic.easeOut',
+        onComplete: () => pixel.destroy(),
       });
     }
+
+    for (let i = 0; i < DEATH_DISINTEGRATION_VFX.glowCount; i++) {
+      const angle = rng() * Math.PI * 2;
+      const travel = this.randomBetween(rng, DEATH_DISINTEGRATION_VFX.glowTravelMinPx, DEATH_DISINTEGRATION_VFX.glowTravelMaxPx);
+      const glow = this.scene.add.image(effect.x, effect.y, TEX_DEATH_PIXEL_GLOW)
+        .setDepth(DEPTH_FX + 0.05)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(auraColor)
+        .setAlpha(DEATH_DISINTEGRATION_VFX.glowAlpha)
+        .setScale(this.randomBetween(rng, DEATH_DISINTEGRATION_VFX.glowScaleMin, DEATH_DISINTEGRATION_VFX.glowScaleMax));
+
+      this.scene.tweens.add({
+        targets: glow,
+        x: effect.x + Math.cos(angle) * travel,
+        y: effect.y + Math.sin(angle) * travel,
+        alpha: 0,
+        duration: DEATH_DISINTEGRATION_VFX.durationMs,
+        ease: 'Sine.easeOut',
+        onComplete: () => glow.destroy(),
+      });
+    }
+  }
+
+  private getDeathPixelChunks(): DeathPixelChunk[] {
+    if (this.deathPixelChunks) return this.deathPixelChunks;
+    if (!this.scene.textures.exists('badger')) {
+      this.deathPixelChunks = [];
+      return this.deathPixelChunks;
+    }
+
+    const texture = this.scene.textures.get('badger');
+    const sourceImage = texture.getSourceImage() as CanvasImageSource & { width?: number; height?: number };
+    const width = Math.max(1, Number(sourceImage?.width) || PLAYER_SIZE);
+    const height = Math.max(1, Number(sourceImage?.height) || PLAYER_SIZE);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) {
+      this.deathPixelChunks = [];
+      return this.deathPixelChunks;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(sourceImage, 0, 0, width, height);
+    const imageData = ctx.getImageData(0, 0, width, height).data;
+    const scaleX = PLAYER_SIZE / width;
+    const scaleY = PLAYER_SIZE / height;
+    const chunkSize = DEATH_DISINTEGRATION_VFX.chunkSizePx;
+    const chunks: DeathPixelChunk[] = [];
+
+    for (let py = 0; py < height; py += chunkSize) {
+      for (let px = 0; px < width; px += chunkSize) {
+        let weightSum = 0;
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        const blockWidth = Math.min(chunkSize, width - px);
+        const blockHeight = Math.min(chunkSize, height - py);
+
+        for (let sy = 0; sy < blockHeight; sy++) {
+          for (let sx = 0; sx < blockWidth; sx++) {
+            const idx = ((py + sy) * width + (px + sx)) * 4;
+            const alpha = imageData[idx + 3] / 255;
+            if (alpha <= 0.08) continue;
+            weightSum += alpha;
+            red += imageData[idx] * alpha;
+            green += imageData[idx + 1] * alpha;
+            blue += imageData[idx + 2] * alpha;
+          }
+        }
+
+        if (weightSum <= 0.01) continue;
+
+        const avgRed = Math.round(red / weightSum);
+        const avgGreen = Math.round(green / weightSum);
+        const avgBlue = Math.round(blue / weightSum);
+        chunks.push({
+          offsetX: (px + blockWidth / 2 - width / 2) * scaleX,
+          offsetY: (py + blockHeight / 2 - height / 2) * scaleY,
+          width: Math.max(1, blockWidth * scaleX),
+          height: Math.max(1, blockHeight * scaleY),
+          color: (avgRed << 16) | (avgGreen << 8) | avgBlue,
+          brightness: (avgRed + avgGreen + avgBlue) / (255 * 3),
+        });
+      }
+    }
+
+    this.deathPixelChunks = chunks;
+    return chunks;
   }
 
   private strokeTracer(

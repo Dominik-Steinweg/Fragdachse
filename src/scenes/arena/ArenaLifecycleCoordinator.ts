@@ -573,8 +573,11 @@ export class ArenaLifecycleCoordinator {
     this.ctx.trainManager.setCanHitPlayerCallback((playerId) => {
       return !this.ctx.burrowSystem?.isBurrowed(playerId);
     });
-    this.ctx.trainManager.setPlayerHitCallback((playerId) => {
-      this.ctx.combatSystem.applyDamage(playerId, 9999, true, TRAIN.TRAIN_KILLER_ID, 'Zug RB 54');
+    this.ctx.trainManager.setPlayerHitCallback((playerId, sourceX, sourceY) => {
+      this.ctx.combatSystem.applyDamage(playerId, 9999, true, TRAIN.TRAIN_KILLER_ID, 'Zug RB 54', {
+        sourceX,
+        sourceY,
+      });
     });
 
     this.ctx.trainManager.setDestroyCallback((result) => {

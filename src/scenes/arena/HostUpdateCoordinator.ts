@@ -575,7 +575,10 @@ export class HostUpdateCoordinator {
       })) {
         continue;
       }
-      this.ctx.combatSystem.applyDamage(player.id, damage, false, proj.ownerId, 'BFG');
+      this.ctx.combatSystem.applyDamage(player.id, damage, false, proj.ownerId, 'BFG', {
+        sourceX: px,
+        sourceY: py,
+      });
       laserLines.push({ sx: px, sy: py, ex: player.sprite.x, ey: player.sprite.y });
     }
 

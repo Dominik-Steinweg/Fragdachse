@@ -5,7 +5,7 @@ import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
-import type { HitscanVisualPreset, LoadoutSlot, ShieldBlockCategory, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
+import type { HitscanVisualPreset, LoadoutSlot, ShieldBlockCategory, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -30,6 +30,13 @@ interface AoeDamageOptions {
   category?: ShieldBlockCategory;
   weaponName?: string;
   sourceSlot?: LoadoutSlot;
+}
+
+interface DamageVisualContext {
+  sourceX?: number;
+  sourceY?: number;
+  dirX?: number;
+  dirY?: number;
 }
 
 export interface HitscanTraceResult {
@@ -61,6 +68,7 @@ export class CombatSystem {
   private readonly scratchPoints:    Phaser.Geom.Point[] = [];
   private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
   private meleeSwingIdCounter = 0;
+  private effectSeedCounter = 1;
 
   // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
   private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
@@ -168,8 +176,10 @@ export class CombatSystem {
     skipBurrowCheck  = false,
     attackerId?:     string,
     weaponName?:     string,
+    visualContext?:  DamageVisualContext,
   ): void {
     if (!this.isAlive(targetId)) return;
+    if (amount <= 0) return;
     if (!skipBurrowCheck && this.burrowSystem?.isBurrowed(targetId)) return;
 
     // Letzten Angreifer tracken (Selbstschaden ausgenommen)
@@ -188,18 +198,34 @@ export class CombatSystem {
     const newArmor = Math.max(0, currentArmor - absorbedByArmor);
     const currentHp = this.hp.get(targetId) ?? HP_MAX;
     const newHp = Math.max(0, currentHp - overflowDamage);
+    const armorLost = currentArmor - newArmor;
+    const hpLost = currentHp - newHp;
+    const totalDamage = armorLost + hpLost;
     this.armor.set(targetId, newArmor);
     this.hp.set(targetId, newHp);
 
     // Wut-Gewinn nur aus tatsaechlich verlorenem HP-Wert, nie aus Armor oder Overkill.
-    const hpLost = currentHp - newHp;
     if (hpLost > 0) {
       this.resourceSystem?.addRage(targetId, hpLost * RAGE_PER_DAMAGE);
     }
 
-    this.bridge.broadcastEffect('hit', x, y, attackerId);
+    if (totalDamage > 0) {
+      const hitSeed = this.nextEffectSeed();
+      this.bridge.broadcastEffect(this.buildHitEffect(
+        targetId,
+        x,
+        y,
+        attackerId,
+        totalDamage,
+        hpLost,
+        armorLost,
+        newHp === 0,
+        visualContext,
+        hitSeed,
+      ));
+    }
 
-    if (newHp === 0) this.handleDeath(targetId, x, y);
+    if (newHp === 0) this.handleDeath(targetId, x, y, this.nextEffectSeed());
   }
 
   /**
@@ -222,7 +248,7 @@ export class CombatSystem {
       if (dist <= radius) {
         const category = options?.category ?? 'explosion';
         if (this.shouldBlockWithShield(player.id, category, damage, x, y)) continue;
-        this.applyDamage(player.id, damage, false, ownerId, options?.weaponName ?? 'Granate');
+        this.applyDamage(player.id, damage, false, ownerId, options?.weaponName ?? 'Granate', { sourceX: x, sourceY: y });
       }
     }
   }
@@ -251,7 +277,7 @@ export class CombatSystem {
       if (roundedDamage <= 0) continue;
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
       void sourceSlot;
-      this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName);
+      this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y });
     }
   }
 
@@ -316,7 +342,12 @@ export class CombatSystem {
               if (proj.bfgHitPlayers.has(player.id)) continue;
               proj.bfgHitPlayers.add(player.id);
             }
-            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName);
+            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, {
+              sourceX: proj.sprite.x,
+              sourceY: proj.sprite.y,
+              dirX: proj.body.velocity.x,
+              dirY: proj.body.velocity.y,
+            });
             continue; // kein break, kein destroyProjectile
           }
 
@@ -383,7 +414,12 @@ export class CombatSystem {
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       if (this.shouldBlockWithShield(trace.hitPlayerId, 'hitscan', actualDamage, startX, startY)) return true;
-      this.applyDamage(trace.hitPlayerId, actualDamage, false, shooterId, weaponName);
+      this.applyDamage(trace.hitPlayerId, actualDamage, false, shooterId, weaponName, {
+        sourceX: startX,
+        sourceY: startY,
+        dirX: Math.cos(angle),
+        dirY: Math.sin(angle),
+      });
 
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
@@ -496,7 +532,12 @@ export class CombatSystem {
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       if (this.shouldBlockWithShield(player.id, 'melee', actualDamage, x, y)) continue;
-      this.applyDamage(player.id, actualDamage, false, shooterId, weaponName);
+      this.applyDamage(player.id, actualDamage, false, shooterId, weaponName, {
+        sourceX: x,
+        sourceY: y,
+        dirX: Math.cos(angle),
+        dirY: Math.sin(angle),
+      });
 
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
@@ -829,6 +870,99 @@ export class CombatSystem {
     return bestHit;
   }
 
+  private nextEffectSeed(): number {
+    const seed = Math.imul(this.effectSeedCounter++, 0x9e3779b1);
+    return seed >>> 0;
+  }
+
+  private buildHitEffect(
+    targetId: string,
+    x: number,
+    y: number,
+    attackerId: string | undefined,
+    totalDamage: number,
+    hpLost: number,
+    armorLost: number,
+    isKill: boolean,
+    visualContext: DamageVisualContext | undefined,
+    seed: number,
+  ): SyncedHitEffect {
+    const target = this.playerManager.getPlayer(targetId);
+    const direction = this.resolveDamageDirection(targetId, attackerId, visualContext, seed, x, y);
+
+    return {
+      type: 'hit',
+      x,
+      y,
+      targetId,
+      shooterId: attackerId,
+      targetColor: target?.color,
+      totalDamage,
+      hpLost,
+      armorLost,
+      isKill,
+      dirX: direction.dirX,
+      dirY: direction.dirY,
+      seed,
+    };
+  }
+
+  private buildDeathEffect(playerId: string, x: number, y: number, seed: number): SyncedDeathEffect {
+    const player = this.playerManager.getPlayer(playerId);
+    return {
+      type: 'death',
+      x,
+      y,
+      targetId: playerId,
+      targetColor: player?.color,
+      rotation: player?.sprite.rotation ?? 0,
+      seed,
+    };
+  }
+
+  private resolveDamageDirection(
+    targetId: string,
+    attackerId: string | undefined,
+    visualContext: DamageVisualContext | undefined,
+    seed: number,
+    targetX: number,
+    targetY: number,
+  ): { dirX: number; dirY: number } {
+    let dirX = visualContext?.dirX ?? 0;
+    let dirY = visualContext?.dirY ?? 0;
+
+    if (Math.hypot(dirX, dirY) <= 0.0001 && visualContext?.sourceX !== undefined && visualContext?.sourceY !== undefined) {
+      dirX = targetX - visualContext.sourceX;
+      dirY = targetY - visualContext.sourceY;
+    }
+
+    if (Math.hypot(dirX, dirY) <= 0.0001 && attackerId) {
+      const attacker = this.playerManager.getPlayer(attackerId);
+      if (attacker) {
+        dirX = targetX - attacker.sprite.x;
+        dirY = targetY - attacker.sprite.y;
+      }
+    }
+
+    const len = Math.hypot(dirX, dirY);
+    if (len > 0.0001) {
+      return { dirX: dirX / len, dirY: dirY / len };
+    }
+
+    return this.fallbackDamageDirection(targetX, targetY, seed);
+  }
+
+  private fallbackDamageDirection(targetX: number, targetY: number, seed: number): { dirX: number; dirY: number } {
+    const centerX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
+    const centerY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
+    const baseAngle = Math.atan2(targetY - centerY, targetX - centerX);
+    const jitterDeg = ((seed >>> 5) % 41) - 20;
+    const angle = Number.isFinite(baseAngle)
+      ? baseAngle + jitterDeg * (Math.PI / 180)
+      : (seed % 360) * (Math.PI / 180);
+    return { dirX: Math.cos(angle), dirY: Math.sin(angle) };
+  }
+
   private handleHit(
     projectileId:  number,
     playerId:      string,
@@ -838,6 +972,14 @@ export class CombatSystem {
     weaponName:    string,
   ): void {
     const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    const visualContext: DamageVisualContext | undefined = projectile
+      ? {
+          sourceX: projectile.sprite.x,
+          sourceY: projectile.sprite.y,
+          dirX: projectile.body.velocity.x,
+          dirY: projectile.body.velocity.y,
+        }
+      : undefined;
     if (projectile?.impactCloud) {
       this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
     }
@@ -846,7 +988,7 @@ export class CombatSystem {
     } else {
       this.projectileManager.destroyProjectile(projectileId);
     }
-    this.applyDamage(playerId, damage, false, shooterId, weaponName);
+    this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
 
     // Adrenalin-Belohnung für den Schützen
     if (adrenalinGain > 0) {
@@ -854,7 +996,7 @@ export class CombatSystem {
     }
   }
 
-  private handleDeath(playerId: string, x: number, y: number): void {
+  private handleDeath(playerId: string, x: number, y: number, seed: number): void {
     this.alive.set(playerId, false);
     this.armor.set(playerId, 0);
 
@@ -866,7 +1008,7 @@ export class CombatSystem {
     const player = this.playerManager.getPlayer(playerId);
     if (player) player.body.enable = false;
 
-    this.bridge.broadcastEffect('death', x, y);
+    this.bridge.broadcastEffect(this.buildDeathEffect(playerId, x, y, seed));
 
     // Kill-Callback auslösen (Host-only, kein Selbstkill)
     const killerId = this.lastAttacker.get(playerId);
