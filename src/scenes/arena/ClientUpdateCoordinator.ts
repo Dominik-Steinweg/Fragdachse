@@ -99,10 +99,12 @@ export class ClientUpdateCoordinator {
       // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
 
       if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
+        let staticShadowTopologyChanged = false;
         for (const rs of state.rocks) {
           this.rockVisualHelper.updateRockVisualById(rs.id, rs.hp);
+          if (rs.hp <= 0) staticShadowTopologyChanged = true;
         }
-        if (state.rocks.length > 0) {
+        if (staticShadowTopologyChanged) {
           this.rockVisualHelper.rebuildStaticShadows();
         }
       }

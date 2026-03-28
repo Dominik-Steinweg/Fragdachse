@@ -17,6 +17,7 @@ export type ShadowShape = 'cell' | 'circle' | 'ellipse' | 'capsule';
 export interface ShadowCasterConfig {
   readonly enabled: boolean;
   readonly layerDepth: number;
+  readonly airborneHeightPx?: number;
   readonly castHeightPx: number;
   readonly opacity: number;
   readonly softnessPx: number;
@@ -65,10 +66,10 @@ export const SHADOW_CASTERS = {
   trunk: {
     enabled: true,
     layerDepth: DEPTH.ROCKS - 0.2,
-    castHeightPx: 100,
+    castHeightPx: 60,
     opacity: 0.84,
     softnessPx: 10,
-    blurLayers: 32,
+    blurLayers: 24,
     stretch: 0.75,
     inflatePx: 1,
     shape: 'circle',
@@ -78,13 +79,14 @@ export const SHADOW_CASTERS = {
   canopy: {
     enabled: true,
     layerDepth: DEPTH.CANOPY - 0.2,
-    castHeightPx: 110,
-    opacity: 0.58,
-    softnessPx: 48,
+    airborneHeightPx: 60,
+    castHeightPx: 32,
+    opacity: 0.78,
+    softnessPx: 98,
     blurLayers: 32,
     stretch: 1.35,
     inflatePx: 12,
-    shape: 'ellipse',
+    shape: 'circle',
     footprintWidthPx: CANOPY_RADIUS * 1.64,
     footprintHeightPx: CANOPY_RADIUS * 1.34,
   },
@@ -143,10 +145,11 @@ export const SHADOW_CASTERS = {
   projectileRocket: {
     enabled: true,
     layerDepth: DEPTH.PROJECTILES - 0.12,
-    castHeightPx: 14,
-    opacity: 0.98,
-    softnessPx: 8,
-    blurLayers: 4,
+    airborneHeightPx: 18,
+    castHeightPx: 8,
+    opacity: 0.58,
+    softnessPx: 24,
+    blurLayers: 8,
     stretch: 0.72,
     inflatePx: 1,
     shape: 'ellipse',
@@ -156,6 +159,7 @@ export const SHADOW_CASTERS = {
   projectileGrenade: {
     enabled: true,
     layerDepth: DEPTH.PROJECTILES - 0.12,
+    airborneHeightPx: 12,
     castHeightPx: 12,
     opacity: 0.98,
     softnessPx: 8,
@@ -169,6 +173,7 @@ export const SHADOW_CASTERS = {
   projectileHolyGrenade: {
     enabled: true,
     layerDepth: DEPTH.PROJECTILES - 0.12,
+    airborneHeightPx: 13,
     castHeightPx: 13,
     opacity: 0.2,
     softnessPx: 8,

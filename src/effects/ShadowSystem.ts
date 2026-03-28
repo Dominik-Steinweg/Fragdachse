@@ -191,16 +191,24 @@ export class ShadowSystem {
     width = preset.footprintWidthPx,
     height = preset.footprintHeightPx,
   ): void {
-    const maxExtent = Math.max(width, height) * 0.5 + preset.castHeightPx * preset.stretch + preset.softnessPx + 16;
+    const maxExtent = Math.max(width, height) * 0.5
+      + (preset.airborneHeightPx ?? 0)
+      + preset.castHeightPx * preset.stretch
+      + preset.softnessPx
+      + 16;
     if (!this.isVisibleInArena(x, y, maxExtent)) return;
 
     const steps = Math.max(1, preset.blurLayers);
     const denominator = Math.max(1, steps - 1);
     const dir = WORLD_SHADOW_CONFIG.lightDirection;
+    const airborneHeight = preset.airborneHeightPx ?? 0;
+    const useAirborneGap = airborneHeight > 0;
 
     for (let step = steps - 1; step >= 0; step -= 1) {
       const t = step / denominator;
-      const offsetScale = preset.castHeightPx * (0.28 + t * preset.stretch);
+      const offsetScale = useAirborneGap
+        ? airborneHeight + preset.castHeightPx * (0.14 + t * preset.stretch)
+        : preset.castHeightPx * (0.28 + t * preset.stretch);
       const inflate = preset.inflatePx + preset.softnessPx * t;
       const alpha = preset.opacity * (0.28 + (1 - t) * 0.72) / steps;
       const drawX = x + dir.x * offsetScale;
