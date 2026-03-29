@@ -44,17 +44,21 @@ const TARGETING_PALETTE: SlotPalette = {
 };
 
 // ── Visuelle Konstanten ────────────────────────────────────────────────────
-const CROSS_SHADOW_COLOR = COLORS.GREY_10;
-const CROSS_LINE_LEN     = 9;
-const CROSS_LINE_W       = 2;
-const CROSS_GAP_MIN      = 5;
-const CROSS_GAP_MAX      = 28;
-const CROSS_SHADOW_W     = 5;
-const CROSS_GLOW_W       = 3;
-const CENTER_DOT_SIZE    = 2;
-const END_CAP_LEN        = 3;
-const HIT_FLASH_MS       = 100;
+const CROSS_SHADOW_COLOR  = COLORS.GREY_10;
+const HIT_FLASH_MS        = 100;
 
+// Fadenkreuz – Punkt + Spread-Ring
+const RING_SHADOW_W      = 5;    // Schattenbreite Ring/Indikator
+const RING_GLOW_W        = 3;    // Glowbreite Ring/Indikator
+const RING_GAP_MIN       = 5;    // Ringradius bei 0 % Spread
+const RING_GAP_MAX       = 20;   // Ringradius bei 100 % Spread
+const CENTER_DOT_R       = 1.5;  // Radius Mittelpunkt
+const RING_BASE_ALPHA    = 0.08; // Ringalpha ohne Spread
+const RING_SPREAD_ALPHA  = 0.14; // Zusatzalpha bei vollem Spread
+const PULSE_SPEED        = 0.005;
+const PULSE_AMP          = 0.025;
+
+// Beam
 const BEAM_SEGMENTS      = 14;
 const BEAM_SHADOW_W      = 4;
 const BEAM_GLOW_W        = 2;
@@ -65,7 +69,8 @@ const BEAM_CORE_ALPHA    = 0.34;
 const BEAM_START_FADE_AT = 0.10;
 const BEAM_END_FADE_AT   = 0.90;
 
-const RANGE_BAR_HALF_LEN = 8;
+// Reichweiten-Indikator
+const RANGE_BAR_HALF_LEN = 9;
 
 const MOVE_THRESHOLD = 0.3;
 
@@ -198,7 +203,9 @@ export class AimSystem {
     if (dist > cfg.range) {
       const rx = sx + nx * cfg.range;
       const ry = sy + ny * cfg.range;
-      this.drawRangeIndicator(this.snap(rx), this.snap(ry), nx, ny, palette, accentColor);
+      if (rx >= AX1 && rx <= AX2 && ry >= AY1 && ry <= AY2) {
+        this.drawRangeIndicator(this.snap(rx), this.snap(ry), nx, ny, palette, accentColor);
+      }
     }
   }
 
@@ -227,17 +234,33 @@ export class AimSystem {
     palette: SlotPalette,
     accentColor: number,
   ): void {
-    const gap = CROSS_GAP_MIN + frac * (CROSS_GAP_MAX - CROSS_GAP_MIN);
+    const gap   = RING_GAP_MIN + frac * (RING_GAP_MAX - RING_GAP_MIN);
+    const pulse = 1 + PULSE_AMP * Math.sin(this.scene.time.now * PULSE_SPEED);
+    const isHit = this.scene.time.now <= this.confirmedHitUntil;
 
-    this.gfx.fillStyle(CROSS_SHADOW_COLOR, 0.42);
-    this.gfx.fillRect(cx - CENTER_DOT_SIZE, cy - CENTER_DOT_SIZE, CENTER_DOT_SIZE * 2, CENTER_DOT_SIZE * 2);
-    this.gfx.fillStyle(accentColor, 0.96);
-    this.gfx.fillRect(cx - CENTER_DOT_SIZE + 1, cy - CENTER_DOT_SIZE + 1, CENTER_DOT_SIZE * 2 - 2, CENTER_DOT_SIZE * 2 - 2);
+    // Spread-Ring
+    const ringR     = gap * 1.1;
+    const ringColor = isHit ? accentColor : palette.crossGlow;
+    const ringAlpha = isHit
+      ? Math.min(0.85, (RING_BASE_ALPHA + frac * RING_SPREAD_ALPHA) * 5.5)
+      : (RING_BASE_ALPHA + frac * RING_SPREAD_ALPHA) * pulse;
 
-    this.drawCrosshairArm(cx + gap, cy, cx + gap + CROSS_LINE_LEN, cy, 'horizontal', 1, frac, palette, accentColor);
-    this.drawCrosshairArm(cx - gap, cy, cx - gap - CROSS_LINE_LEN, cy, 'horizontal', -1, frac, palette, accentColor);
-    this.drawCrosshairArm(cx, cy + gap, cx, cy + gap + CROSS_LINE_LEN, 'vertical', 1, frac, palette, accentColor);
-    this.drawCrosshairArm(cx, cy - gap, cx, cy - gap - CROSS_LINE_LEN, 'vertical', -1, frac, palette, accentColor);
+    this.gfx.lineStyle(RING_SHADOW_W, CROSS_SHADOW_COLOR, 0.22);
+    this.gfx.strokeCircle(cx, cy, ringR + 1.5);
+    this.gfx.lineStyle(RING_GLOW_W + 2, ringColor, ringAlpha * 0.45);
+    this.gfx.strokeCircle(cx, cy, ringR + 1);
+    this.gfx.lineStyle(2, ringColor, ringAlpha);
+    this.gfx.strokeCircle(cx, cy, ringR);
+
+    // Mittelpunkt – intensiverer Glow
+    this.gfx.fillStyle(accentColor, 0.12);
+    this.gfx.fillCircle(cx, cy, CENTER_DOT_R + 6);
+    this.gfx.fillStyle(accentColor, 0.28);
+    this.gfx.fillCircle(cx, cy, CENTER_DOT_R + 3.5);
+    this.gfx.fillStyle(CROSS_SHADOW_COLOR, 0.55);
+    this.gfx.fillCircle(cx, cy, CENTER_DOT_R + 1.5);
+    this.gfx.fillStyle(accentColor, 0.97);
+    this.gfx.fillCircle(cx, cy, CENTER_DOT_R);
   }
 
   private drawRangeIndicator(
@@ -248,7 +271,7 @@ export class AimSystem {
     palette: SlotPalette,
     accentColor: number,
   ): void {
-    // Perpendicular to the aim direction
+    // Senkrecht zur Schussrichtung
     const px = -ny;
     const py =  nx;
     const x1 = rx - px * RANGE_BAR_HALF_LEN;
@@ -256,9 +279,9 @@ export class AimSystem {
     const x2 = rx + px * RANGE_BAR_HALF_LEN;
     const y2 = ry + py * RANGE_BAR_HALF_LEN;
 
-    this.strokeLine(CROSS_SHADOW_W, CROSS_SHADOW_COLOR, 0.40, x1, y1, x2, y2);
-    this.strokeLine(CROSS_GLOW_W,   palette.crossGlow,  0.30, x1, y1, x2, y2);
-    this.strokeLine(CROSS_LINE_W + 1, accentColor,      0.88, x1, y1, x2, y2);
+    this.strokeLine(RING_SHADOW_W, CROSS_SHADOW_COLOR, 0.28, x1, y1, x2, y2);
+    this.strokeLine(RING_GLOW_W,  palette.crossGlow,  0.18, x1, y1, x2, y2);
+    this.strokeLine(2,            accentColor,         0.55, x1, y1, x2, y2);
   }
 
   private drawTargetingReticle(cx: number, cy: number): void {
@@ -329,35 +352,6 @@ export class AimSystem {
     this.gfx.fillCircle(startX, startY, Math.max(2, emitterRadius * 0.55));
   }
 
-  private drawCrosshairArm(
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    axis: 'horizontal' | 'vertical',
-    dir: 1 | -1,
-    frac: number,
-    palette: SlotPalette,
-    accentColor: number,
-  ): void {
-    const sx1 = this.snap(x1);
-    const sy1 = this.snap(y1);
-    const sx2 = this.snap(x2);
-    const sy2 = this.snap(y2);
-
-    this.strokeLine(CROSS_SHADOW_W, CROSS_SHADOW_COLOR, 0.30, sx1, sy1, sx2, sy2);
-    this.strokeLine(CROSS_GLOW_W, palette.crossGlow, 0.18 + frac * 0.08, sx1, sy1, sx2, sy2);
-    this.strokeLine(CROSS_LINE_W, palette.crossMain, 0.95, sx1, sy1, sx2, sy2);
-
-    if (axis === 'horizontal') {
-      this.strokeLine(2, accentColor, 0.88, sx2, sy2 - END_CAP_LEN, sx2, sy2 + END_CAP_LEN);
-      this.strokeLine(1, accentColor, 0.94, sx2 - dir * 2, sy1, sx1 + dir * 2, sy1);
-      return;
-    }
-
-    this.strokeLine(2, accentColor, 0.88, sx2 - END_CAP_LEN, sy2, sx2 + END_CAP_LEN, sy2);
-    this.strokeLine(1, accentColor, 0.94, sx1, sy2 - dir * 2, sx1, sy1 + dir * 2);
-  }
 
   private strokeSegmentedLine(
     width: number,
