@@ -202,21 +202,105 @@ export class ShadowSystem {
     const denominator = Math.max(1, steps - 1);
     const dir = WORLD_SHADOW_CONFIG.lightDirection;
     const airborneHeight = preset.airborneHeightPx ?? 0;
-    const useAirborneGap = airborneHeight > 0;
+
+    // Fixed directional offset for all layers.
+    const offsetScale = airborneHeight + preset.castHeightPx * preset.stretch;
+    const dx = dir.x * offsetScale;
+    const dy = dir.y * offsetScale;
+    const drawX = x + dx;
+    const drawY = y + dy;
 
     for (let step = steps - 1; step >= 0; step -= 1) {
       const t = step / denominator;
-      const offsetScale = useAirborneGap
-        ? airborneHeight + preset.castHeightPx * (0.14 + t * preset.stretch)
-        : preset.castHeightPx * (0.28 + t * preset.stretch);
       const inflate = preset.inflatePx + preset.softnessPx * t;
-      const alpha = preset.opacity * (0.28 + (1 - t) * 0.72) / steps;
-      const drawX = x + dir.x * offsetScale;
-      const drawY = y + dir.y * offsetScale;
+      const alpha = preset.opacity * (1 - t * 0.88) / steps;
       const drawWidth = Math.max(1, width + inflate * 2);
       const drawHeight = Math.max(1, height + inflate * 2);
-      this.fillShape(graphics, preset.shape, drawX, drawY, drawWidth, drawHeight, alpha);
+
+      // Grounded casters use projection shapes (convex hull of source + shadow)
+      // so the shadow reads as a single directional form rather than a detached copy.
+      // Airborne casters keep the simple offset shape since the gap is intentional.
+      if (airborneHeight === 0 && preset.shape === 'cell') {
+        this.fillCellProjection(graphics, x, y, drawWidth, drawHeight, dx, dy, alpha);
+      } else if (airborneHeight === 0 && (preset.shape === 'circle' || preset.shape === 'ellipse')) {
+        const radius = Math.max(drawWidth, drawHeight) * 0.5;
+        this.fillStadiumShadow(graphics, x, y, radius, dx, dy, alpha);
+      } else {
+        this.fillShape(graphics, preset.shape, drawX, drawY, drawWidth, drawHeight, alpha);
+      }
     }
+  }
+
+  // Draws the convex hull of two circles (stadium / capsule shape): one circle
+  // at the caster's ground position and one at the shadow landing position.
+  // This gives circular/ellipse casters a directional shadow that reads as a
+  // projection rather than a displaced copy of the object.
+  private fillStadiumShadow(
+    graphics: Phaser.GameObjects.Graphics,
+    cx: number,
+    cy: number,
+    radius: number,
+    dx: number,
+    dy: number,
+    alpha: number,
+  ): void {
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    graphics.fillStyle(WORLD_SHADOW_CONFIG.color, alpha);
+    if (dist < 0.5) {
+      graphics.fillCircle(cx, cy, radius);
+      return;
+    }
+
+    // Perpendicular unit vector to the shadow direction
+    const px = -dy / dist;
+    const py = dx / dist;
+
+    // Parallelogram connecting the two circles
+    const quad: Phaser.Geom.Point[] = [
+      new Phaser.Geom.Point(cx + px * radius,      cy + py * radius),
+      new Phaser.Geom.Point(cx + dx + px * radius, cy + dy + py * radius),
+      new Phaser.Geom.Point(cx + dx - px * radius, cy + dy - py * radius),
+      new Phaser.Geom.Point(cx - px * radius,      cy - py * radius),
+    ];
+    graphics.fillPoints(quad, true);
+
+    // Source circle (covered by caster sprite) and shadow circle
+    graphics.fillCircle(cx, cy, radius);
+    graphics.fillCircle(cx + dx, cy + dy, radius);
+  }
+
+  // Draws the convex hull of the source rect (at cx,cy) and the shadow rect
+  // (at cx+dx, cy+dy), both with the given width/height. For a diagonal offset
+  // this produces a hexagon that looks like a natural directional shadow rather
+  // than two perpendicular 90° strips sticking out from under the caster.
+  private fillCellProjection(
+    graphics: Phaser.GameObjects.Graphics,
+    cx: number,
+    cy: number,
+    width: number,
+    height: number,
+    dx: number,
+    dy: number,
+    alpha: number,
+  ): void {
+    const hw = width / 2;
+    const hh = height / 2;
+
+    // Convex hull of source rect (at cx,cy) and shadow rect (at cx+dx, cy+dy).
+    // lightDirection is always {x>0, y>0}, so the shadow goes bottom-right and
+    // the hull is always this clockwise hexagon:
+    //   source-TL → source-TR → shadow-TR → shadow-BR → shadow-BL → source-BL
+    const points: Phaser.Geom.Point[] = [
+      new Phaser.Geom.Point(cx - hw,      cy - hh),        // source TL
+      new Phaser.Geom.Point(cx + hw,      cy - hh),        // source TR
+      new Phaser.Geom.Point(cx + hw + dx, cy - hh + dy),   // shadow TR
+      new Phaser.Geom.Point(cx + hw + dx, cy + hh + dy),   // shadow BR
+      new Phaser.Geom.Point(cx - hw + dx, cy + hh + dy),   // shadow BL
+      new Phaser.Geom.Point(cx - hw,      cy + hh),        // source BL
+    ];
+
+    graphics.fillStyle(WORLD_SHADOW_CONFIG.color, alpha);
+    graphics.fillPoints(points, true);
   }
 
   private fillShape(
