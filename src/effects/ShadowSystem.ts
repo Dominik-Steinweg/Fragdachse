@@ -21,8 +21,38 @@ interface ShadowLayerBucket {
   readonly dynamicGraphics: Phaser.GameObjects.Graphics;
 }
 
+// ---------------------------------------------------------------------------
+// Pre-computed stadium arc tables.
+// lightDirection is a compile-time constant so dirAngle never changes.
+// Computing cos/sin once at module load avoids repeated trig calls per frame.
+// ---------------------------------------------------------------------------
+const STADIUM_ARC_N = 8; // arc subdivisions per semicircle
+const _stadiumDirAngle = Math.atan2(
+  WORLD_SHADOW_CONFIG.lightDirection.y,
+  WORLD_SHADOW_CONFIG.lightDirection.x,
+);
+// Back cap: source semicircle faces away from shadow direction
+const STADIUM_BACK_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: number }> =
+  Array.from({ length: STADIUM_ARC_N + 1 }, (_, i) => {
+    const a = _stadiumDirAngle + Math.PI / 2 + (Math.PI * i) / STADIUM_ARC_N;
+    return { cos: Math.cos(a), sin: Math.sin(a) };
+  });
+// Front cap: shadow semicircle faces toward shadow direction
+const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: number }> =
+  Array.from({ length: STADIUM_ARC_N + 1 }, (_, i) => {
+    const a = _stadiumDirAngle - Math.PI / 2 + (Math.PI * i) / STADIUM_ARC_N;
+    return { cos: Math.cos(a), sin: Math.sin(a) };
+  });
+
 export class ShadowSystem {
   private readonly layers = new Map<string, ShadowLayerBucket>();
+
+  // Reusable point buffers — mutated in-place each draw call to avoid
+  // allocating hundreds of Phaser.Geom.Point objects per frame.
+  private readonly stadiumPts: Array<{ x: number; y: number }> =
+    Array.from({ length: (STADIUM_ARC_N + 1) * 2 }, () => ({ x: 0, y: 0 }));
+  private readonly cellPts: Array<{ x: number; y: number }> =
+    Array.from({ length: 6 }, () => ({ x: 0, y: 0 }));
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -167,17 +197,20 @@ export class ShadowSystem {
   }
 
   private computeTrainSegmentYs(locoY: number, direction: 1 | -1): number[] {
-    const heights = [TRAIN.LOCO_HEIGHT, ...new Array(TRAIN.WAGON_COUNT).fill(TRAIN.WAGON_HEIGHT)];
+    // Avoid new Array().fill() — all wagon heights are identical (WAGON_HEIGHT).
     const ys: number[] = [locoY];
     let previousY = locoY;
-    let previousHeight = heights[0];
 
-    for (let index = 1; index < heights.length; index += 1) {
-      const height = heights[index];
-      const gap = previousHeight / 2 + TRAIN.SEGMENT_GAP + height / 2;
-      previousY -= direction * gap;
+    // Loco → first wagon
+    const firstGap = TRAIN.LOCO_HEIGHT / 2 + TRAIN.SEGMENT_GAP + TRAIN.WAGON_HEIGHT / 2;
+    previousY -= direction * firstGap;
+    ys.push(previousY);
+
+    // Remaining wagons (wagon → wagon gap is constant)
+    const wagonGap = TRAIN.WAGON_HEIGHT + TRAIN.SEGMENT_GAP;
+    for (let index = 1; index < TRAIN.WAGON_COUNT; index += 1) {
+      previousY -= direction * wagonGap;
       ys.push(previousY);
-      previousHeight = height;
     }
 
     return ys;
@@ -232,10 +265,8 @@ export class ShadowSystem {
   }
 
   // Draws the convex hull of two circles as a single closed polygon (stadium).
-  // Using one fillPoints call avoids alpha-doubling at the seams between the
-  // connecting strip and the two cap circles.
-  //   - Source semicircle faces away from the shadow direction (back cap)
-  //   - Shadow semicircle faces toward the shadow direction (front cap)
+  // Uses pre-computed arc tables (no trig per call) and a reusable point buffer
+  // (no allocations per call) for zero GC pressure on the hot dynamic path.
   private fillStadiumShadow(
     graphics: Phaser.GameObjects.Graphics,
     cx: number,
@@ -245,36 +276,28 @@ export class ShadowSystem {
     dy: number,
     alpha: number,
   ): void {
-    const dist = Math.sqrt(dx * dx + dy * dy);
     graphics.fillStyle(WORLD_SHADOW_CONFIG.color, alpha);
-    if (dist < 0.5) {
+    if (dx * dx + dy * dy < 0.25) {
       graphics.fillCircle(cx, cy, radius);
       return;
     }
 
-    const dirAngle = Math.atan2(dy, dx);
-    const N = 8; // arc subdivisions per semicircle
-    const points: Phaser.Geom.Point[] = [];
-
-    // Back cap: source semicircle sweeping the half facing away from shadow
+    const pts = this.stadiumPts;
+    const N = STADIUM_ARC_N;
+    // Back cap — source semicircle (pre-computed angles, no trig here)
     for (let i = 0; i <= N; i++) {
-      const angle = dirAngle + Math.PI / 2 + Math.PI * (i / N);
-      points.push(new Phaser.Geom.Point(
-        cx + Math.cos(angle) * radius,
-        cy + Math.sin(angle) * radius,
-      ));
+      const arc = STADIUM_BACK_ARC[i];
+      pts[i].x = cx + arc.cos * radius;
+      pts[i].y = cy + arc.sin * radius;
+    }
+    // Front cap — shadow semicircle
+    for (let i = 0; i <= N; i++) {
+      const arc = STADIUM_FRONT_ARC[i];
+      pts[N + 1 + i].x = cx + dx + arc.cos * radius;
+      pts[N + 1 + i].y = cy + dy + arc.sin * radius;
     }
 
-    // Front cap: shadow semicircle sweeping the half facing toward shadow
-    for (let i = 0; i <= N; i++) {
-      const angle = dirAngle - Math.PI / 2 + Math.PI * (i / N);
-      points.push(new Phaser.Geom.Point(
-        cx + dx + Math.cos(angle) * radius,
-        cy + dy + Math.sin(angle) * radius,
-      ));
-    }
-
-    graphics.fillPoints(points, true);
+    graphics.fillPoints(pts, true);
   }
 
   // Draws the convex hull of the source rect (at cx,cy) and the shadow rect
@@ -298,17 +321,16 @@ export class ShadowSystem {
     // lightDirection is always {x>0, y>0}, so the shadow goes bottom-right and
     // the hull is always this clockwise hexagon:
     //   source-TL → source-TR → shadow-TR → shadow-BR → shadow-BL → source-BL
-    const points: Phaser.Geom.Point[] = [
-      new Phaser.Geom.Point(cx - hw,      cy - hh),        // source TL
-      new Phaser.Geom.Point(cx + hw,      cy - hh),        // source TR
-      new Phaser.Geom.Point(cx + hw + dx, cy - hh + dy),   // shadow TR
-      new Phaser.Geom.Point(cx + hw + dx, cy + hh + dy),   // shadow BR
-      new Phaser.Geom.Point(cx - hw + dx, cy + hh + dy),   // shadow BL
-      new Phaser.Geom.Point(cx - hw,      cy + hh),        // source BL
-    ];
+    const p = this.cellPts;
+    p[0].x = cx - hw;      p[0].y = cy - hh;        // source TL
+    p[1].x = cx + hw;      p[1].y = cy - hh;        // source TR
+    p[2].x = cx + hw + dx; p[2].y = cy - hh + dy;   // shadow TR
+    p[3].x = cx + hw + dx; p[3].y = cy + hh + dy;   // shadow BR
+    p[4].x = cx - hw + dx; p[4].y = cy + hh + dy;   // shadow BL
+    p[5].x = cx - hw;      p[5].y = cy + hh;        // source BL
 
     graphics.fillStyle(WORLD_SHADOW_CONFIG.color, alpha);
-    graphics.fillPoints(points, true);
+    graphics.fillPoints(p, true);
   }
 
   private fillShape(

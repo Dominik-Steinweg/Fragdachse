@@ -158,7 +158,7 @@ export const HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET = 36;
 export const BLOOD_HIT_VFX = {
   spawnPushPx: PLAYER_SIZE * 0.18,
   lateralJitterPx: 8,
-  killshotMultiplier: 1.35,
+  killshotMultiplier: 2.5,
   palette: [0x3c070b, 0x5b0d12, 0x76171b, 0x8d2429] as const,
   coreSplashScale: 0.95,
   coreSplashAlpha: 0.78,
@@ -180,8 +180,8 @@ export const BLOOD_HIT_VFX = {
       dropletScaleMax: 0.34,
       flightMinMs: 110,
       flightMaxMs: 190,
-      stainCountMin: 0,
-      stainCountMax: 1,
+      stainCountMin: 1,
+      stainCountMax: 3,
       stainScaleMin: 0.16,
       stainScaleMax: 0.28,
       stainAlpha: 0.18,
@@ -229,7 +229,7 @@ export const BLOOD_HIT_VFX = {
       stainScaleMin: 0.34,
       stainScaleMax: 0.72,
       stainAlpha: 0.32,
-      stainFadeMs: 1200,
+      stainFadeMs: 1500,
     },
   },
 } as const;
