@@ -65,6 +65,8 @@ const BEAM_CORE_ALPHA    = 0.34;
 const BEAM_START_FADE_AT = 0.10;
 const BEAM_END_FADE_AT   = 0.90;
 
+const RANGE_BAR_HALF_LEN = 8;
+
 const MOVE_THRESHOLD = 0.3;
 
 const AX1 = ARENA_OFFSET_X;
@@ -182,16 +184,22 @@ export class AimSystem {
     const ex = sx + nx * rangeDist;
     const ey = sy + ny * rangeDist;
 
-    const { x: cx, y: cy, inside } = this.clipToArena(sx, sy, ex, ey);
+    const { x: cx, y: cy } = this.clipToArena(sx, sy, ex, ey);
     const tx = this.snap(cx);
     const ty = this.snap(cy);
 
     this.drawBeam(sx, sy, tx, ty, palette, frac);
 
-    if (!inside) return;
     if (cfg.showCrosshair === false) return;
 
-    this.drawCrosshair(tx, ty, frac, palette, this.getAccentColor());
+    const accentColor = this.getAccentColor();
+    this.drawCrosshair(this.snap(px), this.snap(py), frac, palette, accentColor);
+
+    if (dist > cfg.range) {
+      const rx = sx + nx * cfg.range;
+      const ry = sy + ny * cfg.range;
+      this.drawRangeIndicator(this.snap(rx), this.snap(ry), nx, ny, palette, accentColor);
+    }
   }
 
   destroy(): void {
@@ -230,6 +238,27 @@ export class AimSystem {
     this.drawCrosshairArm(cx - gap, cy, cx - gap - CROSS_LINE_LEN, cy, 'horizontal', -1, frac, palette, accentColor);
     this.drawCrosshairArm(cx, cy + gap, cx, cy + gap + CROSS_LINE_LEN, 'vertical', 1, frac, palette, accentColor);
     this.drawCrosshairArm(cx, cy - gap, cx, cy - gap - CROSS_LINE_LEN, 'vertical', -1, frac, palette, accentColor);
+  }
+
+  private drawRangeIndicator(
+    rx: number,
+    ry: number,
+    nx: number,
+    ny: number,
+    palette: SlotPalette,
+    accentColor: number,
+  ): void {
+    // Perpendicular to the aim direction
+    const px = -ny;
+    const py =  nx;
+    const x1 = rx - px * RANGE_BAR_HALF_LEN;
+    const y1 = ry - py * RANGE_BAR_HALF_LEN;
+    const x2 = rx + px * RANGE_BAR_HALF_LEN;
+    const y2 = ry + py * RANGE_BAR_HALF_LEN;
+
+    this.strokeLine(CROSS_SHADOW_W, CROSS_SHADOW_COLOR, 0.40, x1, y1, x2, y2);
+    this.strokeLine(CROSS_GLOW_W,   palette.crossGlow,  0.30, x1, y1, x2, y2);
+    this.strokeLine(CROSS_LINE_W + 1, accentColor,      0.88, x1, y1, x2, y2);
   }
 
   private drawTargetingReticle(cx: number, cy: number): void {
