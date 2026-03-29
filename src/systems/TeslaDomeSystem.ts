@@ -23,11 +23,20 @@ interface TeslaRockTarget {
   y: number;
 }
 
+interface TeslaTurretTarget {
+  id: number;
+  x: number;
+  y: number;
+  ownerId: string;
+}
+
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
 type RockTargetProvider = () => readonly TeslaRockTarget[];
 type RockDamageHandler = (index: number, damage: number, ownerId: string) => void;
 type TrainTargetProvider = () => readonly { x: number; y: number }[];
 type TrainDamageHandler = (damage: number, ownerId: string) => void;
+type TurretTargetProvider = () => readonly TeslaTurretTarget[];
+type TurretDamageHandler = (id: number, damage: number, ownerId: string) => void;
 
 export class TeslaDomeSystem {
   private readonly activeDomes = new Map<string, ActiveTeslaDome>();
@@ -37,6 +46,8 @@ export class TeslaDomeSystem {
   private rockDamageHandler: RockDamageHandler | null = null;
   private trainTargetProvider: TrainTargetProvider | null = null;
   private trainDamageHandler: TrainDamageHandler | null = null;
+  private turretTargetProvider: TurretTargetProvider | null = null;
+  private turretDamageHandler: TurretDamageHandler | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
 
   private static readonly HOLD_GRACE_MS = 150;
@@ -59,6 +70,11 @@ export class TeslaDomeSystem {
   setTrainCallbacks(provider: TrainTargetProvider | null, damageHandler: TrainDamageHandler | null): void {
     this.trainTargetProvider = provider;
     this.trainDamageHandler = damageHandler;
+  }
+
+  setTurretCallbacks(provider: TurretTargetProvider | null, damageHandler: TurretDamageHandler | null): void {
+    this.turretTargetProvider = provider;
+    this.turretDamageHandler = damageHandler;
   }
 
   setEnergyShieldSystem(system: EnergyShieldSystem | null): void {
@@ -192,6 +208,16 @@ export class TeslaDomeSystem {
       }
     }
 
+    if (fire.targetTypes.includes('turrets') && this.turretTargetProvider) {
+      for (const turret of this.turretTargetProvider()) {
+        if (turret.ownerId === dome.ownerId) continue;
+        const dist = Phaser.Math.Distance.Between(dome.x, dome.y, turret.x, turret.y);
+        if (dist > radius) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, turret.x, turret.y, turret.id)) continue;
+        targets.push({ x: turret.x, y: turret.y, type: 'turrets' });
+      }
+    }
+
     if (fire.targetTypes.includes('train') && this.trainTargetProvider) {
       for (const segment of this.trainTargetProvider()) {
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, segment.x, segment.y);
@@ -238,6 +264,16 @@ export class TeslaDomeSystem {
       for (const rock of this.rockTargetProvider()) {
         if (!rockTargets.some(target => target.x === rock.x && target.y === rock.y)) continue;
         this.rockDamageHandler(rock.index, rockDamage, dome.ownerId);
+      }
+    }
+
+    const turretTargets = targets.filter(target => target.type === 'turrets');
+    const turretDamage = damage * (dome.config.rockDamageMult ?? 1);
+    if (turretDamage > 0 && turretTargets.length > 0 && this.turretTargetProvider && this.turretDamageHandler) {
+      for (const turret of this.turretTargetProvider()) {
+        if (turret.ownerId === dome.ownerId) continue;
+        if (!turretTargets.some(target => target.x === turret.x && target.y === turret.y)) continue;
+        this.turretDamageHandler(turret.id, turretDamage, dome.ownerId);
       }
     }
 

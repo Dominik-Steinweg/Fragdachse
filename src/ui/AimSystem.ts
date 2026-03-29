@@ -193,20 +193,21 @@ export class AimSystem {
     const tx = this.snap(cx);
     const ty = this.snap(cy);
 
-    this.drawBeam(sx, sy, tx, ty, palette, frac);
-
-    if (cfg.showCrosshair === false) return;
-
     const accentColor = this.getAccentColor();
-    this.drawCrosshair(this.snap(px), this.snap(py), frac, palette, accentColor);
 
-    if (dist > cfg.range) {
-      const rx = sx + nx * cfg.range;
-      const ry = sy + ny * cfg.range;
-      if (rx >= AX1 && rx <= AX2 && ry >= AY1 && ry <= AY2) {
-        this.drawRangeIndicator(this.snap(rx), this.snap(ry), nx, ny, palette, accentColor);
+    if (cfg.showCrosshair !== false) {
+      this.drawBeam(sx, sy, tx, ty, palette, frac);
+
+      if (dist > cfg.range) {
+        const rx = sx + nx * cfg.range;
+        const ry = sy + ny * cfg.range;
+        if (rx >= AX1 && rx <= AX2 && ry >= AY1 && ry <= AY2) {
+          this.drawRangeIndicator(this.snap(rx), this.snap(ry), nx, ny, palette, accentColor);
+        }
       }
     }
+
+    this.drawCrosshair(this.snap(px), this.snap(py), frac, palette, accentColor);
   }
 
   destroy(): void {

@@ -649,7 +649,7 @@ export const WEAPON_CONFIGS = {
   ASMD_SEC: {
     id:                   'ASMD_SEC',
     displayName:          'ASMD Sekundär',
-    cooldown:             500,
+    cooldown:             700,
     damage:               20,          // Direkttreffer-Schaden
     range:                500,         
     fire: {
@@ -696,7 +696,7 @@ export const WEAPON_CONFIGS = {
       limitRangeToCursor:   true,
       impactExplosion: {
         radius:          110,
-        maxDamage:       40,
+        maxDamage:       30,
         minDamage:       5,
         knockback:       1250,
         selfDamageMult:  0.25,
@@ -739,7 +739,7 @@ export const WEAPON_CONFIGS = {
       impactExplosion: {
         radius:          65,
         maxDamage:       4,
-        minDamage:       2,
+        minDamage:       1,
         knockback:       320,
         selfDamageMult:  1,
         rockDamageMult:  1,
@@ -921,9 +921,9 @@ export const WEAPON_CONFIGS = {
       damagePerTick:            6,
       tickInterval:             180,
       adrenalineDrainPerSecond: 16,
-      movementSlowFactor:       0.58,
+      movementSlowFactor:       0.3,
       requireLineOfSight:       true,
-      targetTypes:              ['players', 'train'] satisfies readonly TeslaDomeTargetType[],
+      targetTypes:              ['players', 'train', 'turrets'] satisfies readonly TeslaDomeTargetType[],
       visualIndicatorAlpha:     0.12,
       visualFieldAlpha:         0.24,
       visualIdleArcCount:       4,
@@ -961,8 +961,8 @@ export const WEAPON_CONFIGS = {
       anchorDistance:           2,
       visualRadius:             18,
       visualThickness:          5,
-      adrenalineDrainPerSecond: 25,
-      movementSlowFactor:       0.3,
+      adrenalineDrainPerSecond: 40,
+      movementSlowFactor:       0.1,
       flashDurationMs:          140,
       flashMaxAlpha:            1,
       buffMax:                  100,

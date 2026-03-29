@@ -258,6 +258,17 @@ export class ArenaLifecycleCoordinator {
             : []),
         (index, damage, ownerId) => this.hostUpdate.applyTeslaRockDamage(index, damage, ownerId),
       );
+      this.ctx.teslaDomeSystem.setTurretCallbacks(
+        () => (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
+          .filter(r => r.kind === 'turret')
+          .map(r => ({
+            id: r.id,
+            x: ARENA_OFFSET_X + r.gridX * CELL_SIZE + CELL_SIZE / 2,
+            y: ARENA_OFFSET_Y + r.gridY * CELL_SIZE + CELL_SIZE / 2,
+            ownerId: r.ownerId,
+          })),
+        (id, damage, ownerId) => this.hostUpdate.applyTeslaTurretDamage(id, damage, ownerId),
+      );
       this.ctx.teslaDomeSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
       this.ctx.teslaDomeSystem.setTrainCallbacks(
         () => this.ctx.trainManager?.getNetSnapshot()?.alive ? this.ctx.trainManager.getSegmentPositions() : [],

@@ -620,6 +620,11 @@ export class HostUpdateCoordinator {
     if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(index, 'damage');
   }
 
+  applyTeslaTurretDamage(id: number, damage: number, ownerId: string): void {
+    const newHp = this.rockVisualHelper.applyObstacleDamageById(id, damage, ownerId);
+    if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage');
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   private applyDashVisual(player: PlayerEntity, id: string, curPhase: number, setScale = true): void {
