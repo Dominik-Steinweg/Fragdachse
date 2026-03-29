@@ -231,10 +231,11 @@ export class ShadowSystem {
     }
   }
 
-  // Draws the convex hull of two circles (stadium / capsule shape): one circle
-  // at the caster's ground position and one at the shadow landing position.
-  // This gives circular/ellipse casters a directional shadow that reads as a
-  // projection rather than a displaced copy of the object.
+  // Draws the convex hull of two circles as a single closed polygon (stadium).
+  // Using one fillPoints call avoids alpha-doubling at the seams between the
+  // connecting strip and the two cap circles.
+  //   - Source semicircle faces away from the shadow direction (back cap)
+  //   - Shadow semicircle faces toward the shadow direction (front cap)
   private fillStadiumShadow(
     graphics: Phaser.GameObjects.Graphics,
     cx: number,
@@ -251,22 +252,29 @@ export class ShadowSystem {
       return;
     }
 
-    // Perpendicular unit vector to the shadow direction
-    const px = -dy / dist;
-    const py = dx / dist;
+    const dirAngle = Math.atan2(dy, dx);
+    const N = 8; // arc subdivisions per semicircle
+    const points: Phaser.Geom.Point[] = [];
 
-    // Parallelogram connecting the two circles
-    const quad: Phaser.Geom.Point[] = [
-      new Phaser.Geom.Point(cx + px * radius,      cy + py * radius),
-      new Phaser.Geom.Point(cx + dx + px * radius, cy + dy + py * radius),
-      new Phaser.Geom.Point(cx + dx - px * radius, cy + dy - py * radius),
-      new Phaser.Geom.Point(cx - px * radius,      cy - py * radius),
-    ];
-    graphics.fillPoints(quad, true);
+    // Back cap: source semicircle sweeping the half facing away from shadow
+    for (let i = 0; i <= N; i++) {
+      const angle = dirAngle + Math.PI / 2 + Math.PI * (i / N);
+      points.push(new Phaser.Geom.Point(
+        cx + Math.cos(angle) * radius,
+        cy + Math.sin(angle) * radius,
+      ));
+    }
 
-    // Source circle (covered by caster sprite) and shadow circle
-    graphics.fillCircle(cx, cy, radius);
-    graphics.fillCircle(cx + dx, cy + dy, radius);
+    // Front cap: shadow semicircle sweeping the half facing toward shadow
+    for (let i = 0; i <= N; i++) {
+      const angle = dirAngle - Math.PI / 2 + Math.PI * (i / N);
+      points.push(new Phaser.Geom.Point(
+        cx + dx + Math.cos(angle) * radius,
+        cy + dy + Math.sin(angle) * radius,
+      ));
+    }
+
+    graphics.fillPoints(points, true);
   }
 
   // Draws the convex hull of the source rect (at cx,cy) and the shadow rect
