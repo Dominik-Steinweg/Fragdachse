@@ -50,7 +50,7 @@ export class TeslaDomeSystem {
   private turretDamageHandler: TurretDamageHandler | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
 
-  private static readonly HOLD_GRACE_MS = 150;
+  private static readonly HOLD_GRACE_MS = 500;
 
   constructor(
     private readonly playerManager: PlayerManager,

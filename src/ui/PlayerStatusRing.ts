@@ -312,7 +312,9 @@ export class PlayerStatusRing {
   private stopLivingEmitters(): void {
     for (const bundle of this.livingEmitters.values()) {
       bundle.core.stop();
+      bundle.core.killAll();
       bundle.outer.stop();
+      bundle.outer.killAll();
     }
   }
 
@@ -481,7 +483,9 @@ export class PlayerStatusRing {
       if (!bundle.outer.emitting) bundle.outer.start();
     } else {
       bundle.core.stop();
+      bundle.core.killAll();
       bundle.outer.stop();
+      bundle.outer.killAll();
     }
   }
 

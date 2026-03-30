@@ -317,12 +317,12 @@ export class ArenaScene extends Phaser.Scene {
     this.rpcCoordinator.setLifecycle(this.lifecycle);
     this.rpcCoordinator.registerAll();
 
-    bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
-    bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
-
     if (bridge.isHost()) {
       bridge.initColorPool(PLAYER_COLORS);
     }
+
+    bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
+    bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
 
     this.lifecycle.initialize();
     bridge.setupPingMeasurement();
