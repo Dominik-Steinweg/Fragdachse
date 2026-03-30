@@ -365,7 +365,7 @@ export const WEAPON_CONFIGS = {
     id:                   'GLOCK',
     displayName:          'Glock',
     cooldown:             150,
-    damage:               8,
+    damage:               6,
     range:                400,        
     fire: {
       type:                 'projectile',
@@ -402,7 +402,7 @@ export const WEAPON_CONFIGS = {
     id:                   'ASMD_PRIM',
     displayName:          'ASMD Primär',
     cooldown:             700,
-    damage:               10,
+    damage:               8,
     range:                650,
     fire: {
       type:                 'hitscan',
@@ -650,7 +650,7 @@ export const WEAPON_CONFIGS = {
     id:                   'ASMD_SEC',
     displayName:          'ASMD Sekundär',
     cooldown:             700,
-    damage:               20,          // Direkttreffer-Schaden
+    damage:               15,          // Direkttreffer-Schaden
     range:                500,         
     fire: {
       type:                 'projectile',
@@ -673,7 +673,7 @@ export const WEAPON_CONFIGS = {
     // Detonations-Tag: wird durch ASMD_PRIM (und spätere Detonatoren mit diesem Tag) gezündet
     detonable: {
       tag:            'asmd_ball',
-      aoeDamage:      60,
+      aoeDamage:      40,
       aoeRadius:      80,
       knockback:      950,
       selfKnockbackMult: 0.75,
@@ -918,7 +918,7 @@ export const WEAPON_CONFIGS = {
     fire: {
       type:                     'tesla_dome',
       radius:                   190,
-      damagePerTick:            6,
+      damagePerTick:            5,
       tickInterval:             180,
       adrenalineDrainPerSecond: 16,
       movementSlowFactor:       0.3,
@@ -1121,6 +1121,7 @@ export const UTILITY_CONFIGS = {
     allowedSlots:         [],            // NICHT im Loadout-Menü wählbar
     projectileStyle:      'holy_grenade' as ProjectileStyle,
     projectileColor:      0xd9b13b,
+    rockDamageMult:     0.5,           // 50% Schaden an Felsen
     trainDamageMult:      1.0,           // 100% Schaden am Zug
     explosionVisualStyle: 'holy',        // goldene Explosion + Kamera-Shake
     skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
