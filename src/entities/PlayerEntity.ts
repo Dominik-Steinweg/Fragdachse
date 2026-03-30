@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { BurrowPhase, PlayerProfile } from '../types';
 import {
-  PLAYER_SIZE, DEPTH,
+  PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
@@ -12,6 +12,7 @@ export class PlayerEntity {
   readonly sprite: Phaser.GameObjects.Image;
 
   private readonly colorHex: number;
+  private readonly isEnemy: boolean;
   private hpBarBg:  Phaser.GameObjects.Rectangle;
   private hpBarFg:  Phaser.GameObjects.Rectangle;
   private armorBarBg: Phaser.GameObjects.Rectangle;
@@ -43,9 +44,10 @@ export class PlayerEntity {
   private burrowTween: Phaser.Tweens.Tween | null = null;
   private burrowTweenAlpha = 1;
 
-  constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number) {
+  constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number, isEnemy = false) {
     this.id       = profile.id;
     this.colorHex = profile.colorHex;
+    this.isEnemy  = isEnemy;
     this.targetX  = x;
     this.targetY  = y;
 
@@ -77,7 +79,7 @@ export class PlayerEntity {
     this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
 
     // HP-Balken Vordergrund (farbig, links ausgerichtet)
-    this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x00cc44);
+    this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
     this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
     this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
 
@@ -179,7 +181,9 @@ export class PlayerEntity {
     this.currentHp = Math.max(0, Math.min(HP_MAX, hp));
     const ratio    = this.currentHp / HP_MAX;
     this.hpBarFg.width = HP_BAR_WIDTH * ratio;
-    const color    = ratio > 0.5 ? 0x00cc44 : ratio > 0.25 ? 0xffcc00 : 0xff3300;
+    const color = this.isEnemy
+      ? (ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4)
+      : (ratio > 0.5 ? 0x00cc44 : ratio > 0.25 ? 0xffcc00 : 0xff3300);
     this.hpBarFg.setFillStyle(color);
   }
 

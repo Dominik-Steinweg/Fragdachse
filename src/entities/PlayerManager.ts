@@ -11,9 +11,14 @@ export class PlayerManager {
   private scene:   Phaser.Scene;
   private players: Map<string, PlayerEntity> = new Map();
   private layout:  ArenaLayout | null = null;
+  private localPlayerId: string | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  setLocalPlayerId(id: string): void {
+    this.localPlayerId = id;
   }
 
   /**
@@ -33,6 +38,7 @@ export class PlayerManager {
       this.scene, profile,
       ARENA_OFFSET_X + spawn.x,
       ARENA_OFFSET_Y + spawn.y,
+      this.localPlayerId !== null && profile.id !== this.localPlayerId,
     );
     this.players.set(profile.id, entity);
   }

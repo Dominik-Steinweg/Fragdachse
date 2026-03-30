@@ -127,6 +127,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Scene-lifetime systems ─────────────────────────────────────────────
     const playerManager    = new PlayerManager(this);
+    playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
     const projectileManager = new ProjectileManager(this);
     const combatSystem     = new CombatSystem(playerManager, projectileManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
