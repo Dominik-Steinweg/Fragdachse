@@ -101,8 +101,16 @@ export class ArenaGenerator {
       // Nochmals shuffeln für unabhängige Baumpositionierung
       ArenaGenerator.shuffle(shuffledForTrees, rng);
 
+      // Mindestabstand zwischen Bäumen: 4 Felder in alle Richtungen (Chebyshev-Distanz ≥ 4).
+      // Entspricht 4 × 32 px = 128 px – verhindert das Überdecken von Stämmen und Kronen.
+      const TREE_MIN_SPACING = 4;
       for (const { gx, gy } of shuffledForTrees) {
         if (trees.length >= TREE_COUNT) break;
+        // Prüfe Chebyshev-Abstand zu allen bereits platzierten Bäumen
+        const tooClose = trees.some(
+          t => Math.max(Math.abs(gx - t.gridX), Math.abs(gy - t.gridY)) < TREE_MIN_SPACING,
+        );
+        if (tooClose) continue;
         blocked[gy][gx] = true;
         trees.push({ gridX: gx, gridY: gy });
       }

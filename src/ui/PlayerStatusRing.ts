@@ -144,6 +144,7 @@ export class PlayerStatusRing {
   private readonly sparkGraphics: Phaser.GameObjects.Graphics;
 
   private readonly livingEmitters = new Map<SegmentKey, SegmentEmitterBundle>();
+  private armorEmitter: SegmentEmitterBundle | null = null;
 
   private active = false;
   private latestData: LocalArenaHudData | null = null;
@@ -190,6 +191,7 @@ export class PlayerStatusRing {
     for (const segment of SEGMENTS) {
       this.livingEmitters.set(segment.key, this.createLivingEmitters(segment));
     }
+    this.armorEmitter = this.createArmorEmitters();
 
     this.container = scene.add.container(0, 0, [
       this.shadowGraphics,
@@ -267,6 +269,10 @@ export class PlayerStatusRing {
       bundle.core.destroy();
       bundle.outer.destroy();
     }
+    if (this.armorEmitter) {
+      this.armorEmitter.core.destroy();
+      this.armorEmitter.outer.destroy();
+    }
     this.container.destroy(true);
   }
 
@@ -315,6 +321,12 @@ export class PlayerStatusRing {
       bundle.core.killAll();
       bundle.outer.stop();
       bundle.outer.killAll();
+    }
+    if (this.armorEmitter) {
+      this.armorEmitter.core.stop();
+      this.armorEmitter.core.killAll();
+      this.armorEmitter.outer.stop();
+      this.armorEmitter.outer.killAll();
     }
   }
 
@@ -453,6 +465,7 @@ export class PlayerStatusRing {
     this.syncEmitterBundle(SEGMENTS[1], this.hpFrac, alpha, this.isHpEmitterActive(now));
     this.syncEmitterBundle(SEGMENTS[0], this.adrFrac, alpha, this.adrenalineBoostActive);
     this.syncEmitterBundle(SEGMENTS[2], this.rageFrac, alpha, this.rageReady);
+    this.syncArmorEmitter(alpha);
   }
 
   private syncEmitterBundle(segment: SegmentConfig, fraction: number, alpha: number, isActive: boolean): void {
@@ -528,6 +541,78 @@ export class PlayerStatusRing {
 
   private isHpEmitterActive(now: number): boolean {
     return (this.hpFlashUntil - now) > 0;
+  }
+
+  private createArmorEmitters(): SegmentEmitterBundle {
+    const coreSource = new ArcRingRandomSource();
+    const outerSource = new ArcRingRandomSource();
+    const coreZone = { type: 'random', source: coreSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
+    const outerZone = { type: 'random', source: outerSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
+
+    const core = this.scene.add.particles(0, 0, '_living_blob', {
+      lifespan: { min: 2500, max: 4500 },
+      frequency: LIVING_EMITTER_IDLE_FREQUENCY,
+      quantity: 1,
+      speedX: { min: -1.5, max: 1.5 },
+      speedY: { min: -0.8, max: 0.8 },
+      scale: { start: 0.55, end: 0.18 },
+      alpha: { start: 0.12, end: 0.04 },
+      tint: [PAL_ARMOR.mid, PAL_ARMOR.dark, PAL_ARMOR.light],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: true,
+    });
+    core.addEmitZone(coreZone);
+    core.setDepth(LIVING_EMITTER_DEPTH);
+
+    const outer = this.scene.add.particles(0, 0, '_living_blob', {
+      lifespan: { min: 2000, max: 4000 },
+      frequency: LIVING_EMITTER_IDLE_FREQUENCY,
+      quantity: 1,
+      speedX: { min: -0.8, max: 0.8 },
+      speedY: { min: -0.4, max: 0.4 },
+      scale: { start: 0.75, end: 0.28 },
+      alpha: { start: 0.08, end: 0.02 },
+      tint: [PAL_ARMOR.dark, PAL_ARMOR.mid, PAL_ARMOR.light],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: true,
+    });
+    outer.addEmitZone(outerZone);
+    outer.setDepth(LIVING_EMITTER_DEPTH);
+
+    return { core, outer, coreSource, outerSource, activeMode: false };
+  }
+
+  private syncArmorEmitter(alpha: number): void {
+    const bundle = this.armorEmitter;
+    if (!bundle) return;
+
+    const centerX = this.container.x;
+    const centerY = this.container.y;
+    // Armor follows the HP arc, so use SEGMENTS[1] as the angular template
+    const section = this.getFilledSection(SEGMENTS[1], this.armorFrac);
+
+    bundle.core.setPosition(centerX, centerY);
+    bundle.outer.setPosition(centerX, centerY);
+
+    const fracScale = Phaser.Math.Clamp(this.armorFrac, 0, 1);
+    bundle.core.setAlpha(alpha * 0.9 * fracScale);
+    bundle.outer.setAlpha(alpha * 0.85 * fracScale);
+
+    // Both sources spawn right inside the thin armor rim
+    const rimInner = RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS;
+    const rimOuter = RING_OUTER_RADIUS + 0.4;
+    bundle.coreSource.set(rimInner, rimOuter, section);
+    bundle.outerSource.set(rimInner - 0.4, rimOuter + 0.8, section);
+
+    if (this.armorFrac > 0.03 && section) {
+      if (!bundle.core.emitting) bundle.core.start();
+      if (!bundle.outer.emitting) bundle.outer.start();
+    } else {
+      bundle.core.stop();
+      bundle.core.killAll();
+      bundle.outer.stop();
+      bundle.outer.killAll();
+    }
   }
 
   private drawSegmentLayer(
