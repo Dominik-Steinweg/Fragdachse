@@ -16,6 +16,7 @@ import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/Lo
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
 import type { LoadoutSlot } from '../types';
+import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
 
 // ── Layout-Konstanten (innerhalb des 240px-Sidebars) ─────────────────────────
 const CENTER_X     = 120;  // Mitte des 240px Sidebars
@@ -591,7 +592,7 @@ export class LeftSidePanel {
     this.nameEditOpen = true;
 
     const localId     = this.bridge.getLocalPlayerId();
-    const currentName = this.bridge.getConnectedPlayers().find(p => p.id === localId)?.name ?? '';
+    const currentName = clampPlayerNameInput(this.bridge.getConnectedPlayers().find(p => p.id === localId)?.name ?? '');
 
     // Position relativ zum Canvas berechnen ([ ÄNDERN ] Button)
     const canvas = this.scene.game.canvas;
@@ -623,6 +624,7 @@ export class LeftSidePanel {
     const inputElement = document.createElement('input');
     inputElement.type  = 'text';
     inputElement.value = currentName;
+    inputElement.maxLength = PLAYER_NAME_MAX_LENGTH;
     Object.assign(inputElement.style, {
       fontSize:        '22px',
       padding:         '4px 8px',
@@ -670,6 +672,11 @@ export class LeftSidePanel {
     inputElement.focus();
     inputElement.select();
 
+    inputElement.addEventListener('input', () => {
+      const clamped = clampPlayerNameInput(inputElement.value);
+      if (inputElement.value !== clamped) inputElement.value = clamped;
+    });
+
     const closePopup = () => {
       if (this.nameEditPopup === popup) {
         this.nameEditPopup = null;
@@ -680,8 +687,13 @@ export class LeftSidePanel {
     };
     this.closeNameEditPopupFn = closePopup;
     const saveName   = () => {
-      const input = inputElement.value.trim();
-      if (input !== '') this.bridge.setLocalName(input);
+      const input = sanitizePlayerName(inputElement.value);
+      if (input === '') {
+        inputElement.focus();
+        inputElement.select();
+        return;
+      }
+      this.bridge.setLocalName(input);
       closePopup();
     };
 

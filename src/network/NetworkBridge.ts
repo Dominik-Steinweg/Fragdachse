@@ -14,6 +14,7 @@ import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, PlayerInpu
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
+import { sanitizePlayerName } from '../utils/playerName';
 export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -295,7 +296,7 @@ export class NetworkBridge {
 
   /** Setzt den eigenen Anzeigenamen (überschreibt Playroom-Profil-Name). */
   setLocalName(name: string): void {
-    myPlayer().setState(KEY_NAME, name.trim() || 'Player');
+    myPlayer().setState(KEY_NAME, sanitizePlayerName(name) || 'Player');
   }
 
   // ── Bereitschaftsstatus: pro Spieler ──────────────────────────────────────
@@ -1287,7 +1288,7 @@ export class NetworkBridge {
     const stateColor = state.getState(KEY_PLAYER_COLOR) as number | undefined;
 
     if (previous) {
-      const nextName = stateName || previous.name || 'Player';
+      const nextName = sanitizePlayerName(stateName || previous.name || '') || 'Player';
       const nextColor = stateColor ?? previous.colorHex;
       if (nextName === previous.name && nextColor === previous.colorHex) {
         return previous;
@@ -1321,7 +1322,7 @@ export class NetworkBridge {
 
     return {
       id:       state.id,
-      name:     stateName || profile.name || 'Player',
+      name:     sanitizePlayerName(stateName || profile.name || '') || 'Player',
       colorHex,
     };
   }

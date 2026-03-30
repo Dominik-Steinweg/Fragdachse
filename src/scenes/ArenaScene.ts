@@ -12,6 +12,7 @@ import { FireSystem }            from '../effects/FireSystem';
 import { StinkCloudSystem }      from '../effects/StinkCloudSystem';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
+import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
@@ -63,6 +64,7 @@ export class ArenaScene extends Phaser.Scene {
   private utilityChargeIndicator: UtilityChargeIndicator | null = null;
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
+  private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
 
   // ── Coordinators ──────────────────────────────────────────────────────────
   private ctx!: ArenaContext;
@@ -165,6 +167,7 @@ export class ArenaScene extends Phaser.Scene {
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
     );
+    this.enemyHoverNameLabel = new EnemyHoverNameLabel(this);
 
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
@@ -419,6 +422,11 @@ export class ArenaScene extends Phaser.Scene {
     const inArena = inGame && !terminated;
     this.playerStatusRing?.setActive(inArena);
     this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(!inArena);
+    if (inArena) {
+      this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
+    } else {
+      this.enemyHoverNameLabel?.clear(true);
+    }
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     this.renderers.teslaDome.update(delta);
     this.renderers.energyShield.update(delta);
@@ -548,6 +556,37 @@ export class ArenaScene extends Phaser.Scene {
       utility:  bridge.getPlayerLoadoutSlot(localId, 'utility')  ?? DEFAULT_LOADOUT.utility.id,
       ultimate: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id,
     };
+  }
+
+  private getEnemyHoverNameTarget(): { name: string; x: number; y: number } | null {
+    const pointer = this.input.activePointer;
+    const localId = bridge.getLocalPlayerId();
+    let nearest: { name: string; x: number; y: number; distanceSq: number } | null = null;
+
+    for (const player of this.ctx.playerManager.getAllPlayers()) {
+      if (player.id === localId) continue;
+
+      const sprite = player.sprite;
+      if (!sprite.active || !sprite.visible) continue;
+
+      const dx = pointer.x - sprite.x;
+      const dy = pointer.y - sprite.y;
+      const radius = Math.max(sprite.displayWidth, sprite.displayHeight) * 0.5;
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq > radius * radius) continue;
+
+      if (!nearest || distanceSq < nearest.distanceSq) {
+        nearest = {
+          name: bridge.getPlayerName(player.id),
+          x: sprite.x,
+          y: sprite.y,
+          distanceSq,
+        };
+      }
+    }
+
+    if (!nearest) return null;
+    return { name: nearest.name, x: nearest.x, y: nearest.y };
   }
 
   private ensureArenaClipMask(): void {
