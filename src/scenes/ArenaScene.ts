@@ -233,6 +233,18 @@ export class ArenaScene extends Phaser.Scene {
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
 
       let shotId: number | undefined;
+      const localId = bridge.getLocalPlayerId();
+      const weapon2Cost = slot === 'weapon2'
+        ? (this.clientUpdate.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0)
+        : 0;
+      const currentAdrenaline = bridge.isHost()
+        ? (this.ctx.resourceSystem?.getAdrenaline(localId) ?? 0)
+        : (bridge.getLatestGameState()?.players[localId]?.adrenaline ?? 0);
+      const predictedWeapon2Failure = slot === 'weapon2'
+        && !bridge.isHost()
+        && weapon2Cost > 0
+        && currentAdrenaline + 0.0001 < weapon2Cost;
+
       if (slot === 'weapon1' || slot === 'weapon2') {
         const now = Date.now();
         const lastFired = this.clientUpdate.weaponLastFiredRecord()[slot];
@@ -249,6 +261,19 @@ export class ArenaScene extends Phaser.Scene {
         && inputSystem.isUtilityPlacementActive()
         && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode';
       const loadoutPromise = bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, Date.now(), awaitResult);
+      if (slot === 'weapon2') {
+        if (predictedWeapon2Failure) {
+          this.playerStatusRing?.notifyAdrenalineInsufficientShot();
+        }
+        if (bridge.isHost()) {
+          void loadoutPromise.then((ok) => {
+            const hostAdrenaline = this.ctx.resourceSystem?.getAdrenaline(localId) ?? 0;
+            if (!ok && weapon2Cost > 0 && hostAdrenaline + 0.0001 < weapon2Cost) {
+              this.playerStatusRing?.notifyAdrenalineInsufficientShot();
+            }
+          });
+        }
+      }
       if (awaitResult) {
         void loadoutPromise.then((ok) => {
           if (!ok) this.placementPreview.showPlacementError('Bau fehlgeschlagen');
@@ -392,6 +417,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
     this.playerStatusRing?.setActive(inArena);
+    this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(!inArena);
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     this.renderers.teslaDome.update(delta);
     this.renderers.energyShield.update(delta);

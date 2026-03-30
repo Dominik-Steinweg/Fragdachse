@@ -18,6 +18,7 @@ export class PlayerEntity {
   private armorBarFg: Phaser.GameObjects.Rectangle;
   private currentHp = HP_MAX;
   private currentArmor = 0;
+  private worldBarsVisible = true;
 
   // Zielposition für client-seitige Interpolation (Lerp)
   private targetX = 0;
@@ -107,6 +108,11 @@ export class PlayerEntity {
     return this.colorHex;
   }
 
+  setWorldBarsVisible(visible: boolean): void {
+    this.worldBarsVisible = visible;
+    this.applyDisplayVisibility();
+  }
+
   /** Sprite + Physik-Body + HP-Balken positionieren (Host: Respawn). */
   setPosition(x: number, y: number): void {
     this.targetX = x;
@@ -182,7 +188,7 @@ export class PlayerEntity {
     const ratio = this.currentArmor / ARMOR_MAX;
     this.armorBarFg.width = ARMOR_BAR_WIDTH * ratio;
     this.armorBarFg.setFillStyle(ARMOR_COLOR);
-    const visible = this.sprite.visible && this.currentArmor > 0;
+    const visible = this.sprite.visible && this.worldBarsVisible && this.currentArmor > 0;
     this.armorBarBg.setVisible(visible);
     this.armorBarFg.setVisible(visible);
   }
@@ -332,11 +338,12 @@ export class PlayerEntity {
   private applyDisplayVisibility(): void {
     const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
     const visible = this.baseVisible && !hiddenByBurrow;
+    const barsVisible = visible && this.worldBarsVisible;
     this.sprite.setVisible(visible);
-    this.hpBarBg.setVisible(visible);
-    this.hpBarFg.setVisible(visible);
-    this.armorBarBg.setVisible(visible && this.currentArmor > 0);
-    this.armorBarFg.setVisible(visible && this.currentArmor > 0);
+    this.hpBarBg.setVisible(barsVisible);
+    this.hpBarFg.setVisible(barsVisible);
+    this.armorBarBg.setVisible(barsVisible && this.currentArmor > 0);
+    this.armorBarFg.setVisible(barsVisible && this.currentArmor > 0);
   }
 
   destroy(): void {
