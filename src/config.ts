@@ -23,6 +23,7 @@ export const DEPTH = {
   FIRE: 16,
   SMOKE: 18,
   CANOPY: 20,
+  LOCAL_UI: 22,
   OVERLAY: 100,
 } as const;
 

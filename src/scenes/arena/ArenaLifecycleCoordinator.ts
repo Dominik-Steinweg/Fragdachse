@@ -20,6 +20,7 @@ import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleport
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
+import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
@@ -677,22 +678,14 @@ export class ArenaLifecycleCoordinator {
 
   private resetLocalArenaHudState(): void {
     const config = this.clientUpdate.getLocalUltimateConfig();
-    this.ctx.leftPanel.updateArenaHUD({
-      hp: 100,
-      armor: 0,
-      adrenaline: 0,
-      rage: 0,
-      isUltimateActive: false,
+    const hudData = buildInitialLocalArenaHudData({
       ultimateRequiredRage: config.rageRequired,
       ultimateThresholds:   this.clientUpdate.getLocalUltimateThresholds(),
-      weapon1CooldownFrac:  0,
-      weapon2CooldownFrac:  0,
-      utilityCooldownFrac:  0,
       utilityDisplayName:   this.clientUpdate.getLocalUtilityConfig().displayName,
-      adrenalineSyringeActive: false,
-      isUtilityOverridden:  false,
-      activePowerUps:       [],
+      weapon2AdrenalineCost: this.clientUpdate.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
     });
+    this.ctx.leftPanel.updateArenaHUD(hudData);
+    this.ctx.playerStatusRing?.update(hudData);
   }
 
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {

@@ -3,6 +3,7 @@ import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S } from '../../config';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import type { PlaceableTurretUtilityConfig }        from '../../loadout/LoadoutConfig';
+import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
@@ -297,10 +298,11 @@ export class HostUpdateCoordinator {
       const now = Date.now();
       const utilCfg   = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
+      const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
       const activePowerUps = this.ctx.powerUpSystem?.getActiveBuffsForHUD(localId) ?? [];
       const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
       const ultimateThresholds = this.ctx.loadoutManager?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
-      this.ctx.leftPanel.updateArenaHUD({
+      const hudData = buildLocalArenaHudData({
         hp:                      this.ctx.combatSystem.getHP(localId),
         armor:                   this.ctx.combatSystem.getArmor(localId),
         adrenaline:              this.ctx.resourceSystem?.getAdrenaline(localId) ?? 0,
@@ -316,7 +318,10 @@ export class HostUpdateCoordinator {
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
         activePowerUps,
         shieldBuff,
+        weapon2AdrenalineCost:   weapon2Cfg?.adrenalinCost ?? 0,
       });
+      this.ctx.leftPanel.updateArenaHUD(hudData);
+      this.ctx.playerStatusRing?.update(hudData);
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
       this.localPlayerState.burrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
     }

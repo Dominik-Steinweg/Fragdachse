@@ -11,6 +11,7 @@ import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
 import type { RightSidePanel }      from '../../ui/RightSidePanel';
 import type { AimSystem }           from '../../ui/AimSystem';
 import type { ArenaCountdownOverlay } from '../../ui/ArenaCountdownOverlay';
+import type { LocalArenaHudData }   from '../../ui/LocalArenaHudData';
 import type { ArenaBuilderResult }  from '../../arena/ArenaBuilder';
 import type { RockRegistry }        from '../../arena/RockRegistry';
 import type { PlacementSystem }     from '../../systems/PlacementSystem';
@@ -27,6 +28,11 @@ import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { TrainManager }        from '../../train/TrainManager';
 import type { ArenaLayout }         from '../../types';
+
+interface PlayerStatusRingLike {
+  setActive(active: boolean): void;
+  update(data: LocalArenaHudData): void;
+}
 
 /**
  * Shared dependency container passed to all arena coordinators.
@@ -53,6 +59,7 @@ export interface ArenaContext {
   readonly rightPanel:        RightSidePanel;
   readonly aimSystem:         AimSystem | null;
   readonly arenaCountdown:    ArenaCountdownOverlay | null;
+  readonly playerStatusRing:  PlayerStatusRingLike | null;
 
   // ── Round-scoped (null outside a round; managed by ArenaLifecycleCoordinator) ──
   arenaResult:       ArenaBuilderResult | null;

@@ -12,6 +12,7 @@ import { FireSystem }            from '../effects/FireSystem';
 import { StinkCloudSystem }      from '../effects/StinkCloudSystem';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
+import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { LobbyOverlay }          from './LobbyOverlay';
@@ -61,6 +62,7 @@ export class ArenaScene extends Phaser.Scene {
   private arenaClipMask: Phaser.Display.Masks.GeometryMask | null = null;
   private utilityChargeIndicator: UtilityChargeIndicator | null = null;
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
+  private playerStatusRing: PlayerStatusRing | null = null;
 
   // ── Coordinators ──────────────────────────────────────────────────────────
   private ctx!: ArenaContext;
@@ -158,6 +160,10 @@ export class ArenaScene extends Phaser.Scene {
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
+    this.playerStatusRing = new PlayerStatusRing(
+      this,
+      () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+    );
 
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
@@ -169,6 +175,7 @@ export class ArenaScene extends Phaser.Scene {
       playerManager, projectileManager, combatSystem, effectSystem,
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
       leftPanel, rightPanel, aimSystem, arenaCountdown,
+      playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
       arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
@@ -384,6 +391,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
+    this.playerStatusRing?.setActive(inArena);
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     this.renderers.teslaDome.update(delta);
     this.renderers.energyShield.update(delta);

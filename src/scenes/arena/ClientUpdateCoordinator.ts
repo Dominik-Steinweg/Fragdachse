@@ -5,6 +5,7 @@ import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
+import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
@@ -156,7 +157,7 @@ export class ClientUpdateCoordinator {
       const utilDisplayName = overrideName
         || this.clientUtilityOverride?.displayName
         || localUtilityConfig.displayName;
-      this.ctx.leftPanel.updateArenaHUD({
+      const hudData = buildLocalArenaHudData({
         hp:                      localState.hp,
         armor:                   localState.armor,
         adrenaline:              localState.adrenaline,
@@ -172,7 +173,10 @@ export class ClientUpdateCoordinator {
         isUtilityOverridden:     overrideName !== '' || this.clientUtilityOverride !== null,
         activePowerUps:          bridge.getPlayerActiveBuffs(localId2),
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
+        weapon2AdrenalineCost:   this.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
       });
+      this.ctx.leftPanel.updateArenaHUD(hudData);
+      this.ctx.playerStatusRing?.update(hudData);
       this.localPlayerState.alive    = localState.alive;
       this.localPlayerState.burrowed = localState.isBurrowed;
     }
