@@ -134,6 +134,8 @@ export class ClientUpdateCoordinator {
       const dashPhase = this.prevDashPhases.get(player.id) ?? 0;
       if (dashPhase !== 0) {
         this.applyDashVisual(player, player.id, dashPhase as 1 | 2);
+      } else {
+        player.setDashScale(1.0);
       }
     }
 
