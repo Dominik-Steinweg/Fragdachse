@@ -297,6 +297,7 @@ export class ClientUpdateCoordinator {
 
   private applyDashVisual(player: PlayerEntity, id: string, curPhase: 1 | 2): void {
     if (curPhase === 1) {
+      player.setDashScale(0.5);
       const now = this.scene.time.now;
       const nextGhost = this.dashTrailTimers.get(id) ?? 0;
       if (now >= nextGhost) {

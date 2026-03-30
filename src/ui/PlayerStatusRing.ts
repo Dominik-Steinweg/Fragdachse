@@ -38,6 +38,7 @@ interface SegmentEmitterBundle {
   outer: Phaser.GameObjects.Particles.ParticleEmitter;
   coreSource: ArcRingRandomSource;
   outerSource: ArcRingRandomSource;
+  activeMode: boolean;
 }
 
 const RING_GAP_PX = 16;
@@ -53,8 +54,9 @@ const FLASH_MS = 180;
 const BURST_MS = 320;
 const WARNING_MS = 380;
 const WARNING_DEBOUNCE_MS = 220;
-const LIVING_EMITTER_IDLE_FREQUENCY = 50;
-const LIVING_EMITTER_ACTIVE_FREQUENCY = 10;
+const LIVING_EMITTER_IDLE_FREQUENCY = 20;
+const LIVING_EMITTER_ACTIVE_FREQUENCY = 5;
+const LIVING_EMITTER_DEPTH = DEPTH.LOCAL_UI;
 
 const PAL_HP: SegmentPalette = { dark: COLORS.GREEN_3, mid: 0x00cc44, light: COLORS.GREEN_1, spark: 0xffffff };
 const PAL_ADR: SegmentPalette = { dark: COLORS.BLUE_3, mid: COLORS.BLUE_2, light: COLORS.BLUE_1, spark: 0xffffff };
@@ -275,7 +277,7 @@ export class PlayerStatusRing {
     const outerZone = { type: 'random', source: outerSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
 
     const core = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 300, max: 500 },
+      lifespan: { min: 3000, max: 5000 },
       frequency: LIVING_EMITTER_IDLE_FREQUENCY,
       quantity: 1,
       speedX: { min: -2, max: 2 },
@@ -284,13 +286,13 @@ export class PlayerStatusRing {
       alpha: { start: 0.05, end: 0.03 },
       tint: [segment.palette.mid, segment.palette.dark, segment.palette.light],
       blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
+      emitting: true,
     });
     core.addEmitZone(coreZone);
-    core.setDepth(DEPTH.LOCAL_UI);
+    core.setDepth(LIVING_EMITTER_DEPTH);
 
     const outer = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 300, max: 700 },
+      lifespan: { min: 3000, max: 7000 },
       frequency: LIVING_EMITTER_IDLE_FREQUENCY,
       quantity: 1,
       speedX: { min: -1, max: 1 },
@@ -299,12 +301,12 @@ export class PlayerStatusRing {
       alpha: { start: 0.09, end: 0.03 },
       tint: [segment.palette.dark, segment.palette.mid],
       blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
+      emitting: true,
     });
     outer.addEmitZone(outerZone);
-    outer.setDepth(DEPTH.LOCAL_UI);
+    outer.setDepth(LIVING_EMITTER_DEPTH);
 
-    return { core, outer, coreSource, outerSource };
+    return { core, outer, coreSource, outerSource, activeMode: false };
   }
 
   private stopLivingEmitters(): void {
@@ -463,8 +465,13 @@ export class PlayerStatusRing {
     bundle.outer.setPosition(centerX, centerY);
     bundle.core.setAlpha(alpha * 0.92);
     bundle.outer.setAlpha(alpha * 0.88);
-    bundle.core.setFrequency(isActive ? LIVING_EMITTER_ACTIVE_FREQUENCY : LIVING_EMITTER_IDLE_FREQUENCY, 1);
-    bundle.outer.setFrequency(isActive ? LIVING_EMITTER_ACTIVE_FREQUENCY : LIVING_EMITTER_IDLE_FREQUENCY, 1);
+
+    if (bundle.activeMode !== isActive) {
+      bundle.activeMode = isActive;
+      const freq = isActive ? LIVING_EMITTER_ACTIVE_FREQUENCY : LIVING_EMITTER_IDLE_FREQUENCY;
+      bundle.core.setFrequency(freq, 1);
+      bundle.outer.setFrequency(freq, 1);
+    }
     bundle.coreSource.set(RING_INNER_RADIUS + 0.8, RING_INNER_RADIUS + RING_THICKNESS * 0.72, section);
     bundle.outerSource.set(RING_INNER_RADIUS + 0.2, RING_OUTER_RADIUS - 0.4, section);
 
