@@ -284,7 +284,7 @@ export class PlayerStatusRing {
       speedY: { min: -1, max: 1 },
       scale: { start: 0.72, end: 0.28 },
       alpha: { start: 0.05, end: 0.03 },
-      tint: [segment.palette.mid, segment.palette.dark, segment.palette.light],
+      tint: [segment.palette.mid, segment.palette.dark, segment.palette.mid],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
@@ -299,7 +299,7 @@ export class PlayerStatusRing {
       speedY: { min: -0.5, max: 0.5 },
       scale: { start: 1.05, end: 0.5 },
       alpha: { start: 0.09, end: 0.03 },
-      tint: [segment.palette.dark, segment.palette.mid],
+      tint: [segment.palette.dark, segment.palette.dark, segment.palette.mid],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
@@ -463,8 +463,9 @@ export class PlayerStatusRing {
 
     bundle.core.setPosition(centerX, centerY);
     bundle.outer.setPosition(centerX, centerY);
-    bundle.core.setAlpha(alpha * 0.92);
-    bundle.outer.setAlpha(alpha * 0.88);
+    const fracScale = Phaser.Math.Clamp(fraction, 0, 1);
+    bundle.core.setAlpha(alpha * 0.92 * fracScale);
+    bundle.outer.setAlpha(alpha * 0.88 * fracScale);
 
     if (bundle.activeMode !== isActive) {
       bundle.activeMode = isActive;
