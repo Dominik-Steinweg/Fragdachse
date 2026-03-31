@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
+import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
 import { FlameRenderer }       from '../../effects/FlameRenderer';
 import { BfgRenderer }         from '../../effects/BfgRenderer';
 import { EnergyBallRenderer }  from '../../effects/EnergyBallRenderer';
@@ -26,6 +27,7 @@ import type { EffectSystem }      from '../../effects/EffectSystem';
 /** All visual renderers grouped together. Round-scoped renderers start as null. */
 export interface RendererBundle {
   bullet:              BulletRenderer;
+  asmdPrimary:         AsmdPrimaryRenderer;
   flame:               FlameRenderer;
   bfg:                 BfgRenderer;
   energyBall:          EnergyBallRenderer;
@@ -55,6 +57,9 @@ export function createRendererBundle(
 ): RendererBundle {
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
+
+  const asmdPrimary = new AsmdPrimaryRenderer(scene);
+  asmdPrimary.generateTextures();
 
   const flame = new FlameRenderer(scene);
   flame.generateTextures();
@@ -104,7 +109,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
+    bullet, asmdPrimary, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck,
     nuke, meteor, powerUp, shadow,
     train: null,
@@ -143,5 +148,7 @@ export function wireRenderersToProjManager(
 /** Wire the EffectSystem to renderers that need it (muzzle flash, nuke). */
 export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem: EffectSystem): void {
   effectSystem.setMuzzleFlashRenderer(bundle.muzzleFlash);
+  bundle.asmdPrimary.setMuzzleFlashRenderer(bundle.muzzleFlash);
+  effectSystem.setAsmdPrimaryRenderer(bundle.asmdPrimary);
   bundle.nuke.setEffectSystem(effectSystem);
 }
