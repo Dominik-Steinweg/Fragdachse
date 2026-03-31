@@ -1160,6 +1160,7 @@ export class LoadoutManager {
       sourceSlot,
       config.rockDamageMult  ?? 1,
       config.trainDamageMult ?? 1,
+      fireConfig.visualPreset,
     ) ?? false;
   }
 

@@ -5,7 +5,7 @@ import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
-import type { HitscanVisualPreset, LoadoutSlot, ShieldBlockCategory, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
+import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, ShieldBlockCategory, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -520,10 +520,15 @@ export class CombatSystem {
     sourceSlot?:   WeaponSlot,
     rockDamageMult  = 1,
     trainDamageMult = 1,
+    visualPreset: MeleeVisualPreset = 'default',
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
     const halfArcRad = (arcDegrees * Math.PI / 180) / 2;
+    let hitPlayer = false;
+    let nearestHitDistance = Number.POSITIVE_INFINITY;
+    let impactX: number | undefined;
+    let impactY: number | undefined;
 
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isMeleeTargetCandidate(player.id, shooterId)) continue;
@@ -557,6 +562,12 @@ export class CombatSystem {
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
       });
+      hitPlayer = true;
+      if (dist < nearestHitDistance) {
+        nearestHitDistance = dist;
+        impactX = player.sprite.x;
+        impactY = player.sprite.y;
+      }
 
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
@@ -567,7 +578,7 @@ export class CombatSystem {
     this.applyMeleeObjectDamage(x, y, angle, range, halfArcRad, damage, rockDamageMult, trainDamageMult, shooterId);
 
     // Swing-VFX für alle Clients in die Replikations-Queue einreihen
-    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId });
+    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY });
     return true;
   }
 

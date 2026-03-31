@@ -116,6 +116,9 @@ export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov';
 /** Visuelles Preset fuer Hitscan-Strahlen. */
 export type HitscanVisualPreset = 'default' | 'asmd_primary';
 
+/** Visuelles Preset fuer Melee-Swings. */
+export type MeleeVisualPreset = 'default' | 'zeus_taser';
+
 /** Variant-Preset fuer Energy-Ball-Projektile. */
 export type EnergyBallVariant = 'default' | 'plasma';
 
@@ -250,6 +253,10 @@ export interface SyncedMeleeSwing {
   range:      number;   // maximale Reichweite in px
   color:      number;   // Spielerfarbe (hex)
   shooterId:  string;
+  visualPreset?: MeleeVisualPreset;
+  hitPlayer?: boolean;
+  impactX?: number;
+  impactY?: number;
 }
 
 /** RPC Payload Interface für Teleport-Effekte (Host → Clients). */

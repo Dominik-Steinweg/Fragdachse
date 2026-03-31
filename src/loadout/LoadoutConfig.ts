@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -23,6 +23,7 @@ export interface HitscanWeaponFireConfig {
 export interface MeleeWeaponFireConfig {
   readonly type: 'melee';
   readonly hitArcDegrees: number;       // Öffnungswinkel vor dem Spieler
+  readonly visualPreset?: MeleeVisualPreset;
 }
 
 export interface FlamethrowerWeaponFireConfig {
@@ -431,10 +432,10 @@ export const WEAPON_CONFIGS = {
     displayName:          'Dachsbiss',
     cooldown:             350,
     damage:               50,
-    range:                80,        
+    range:                50,        
     fire: {
       type:                 'melee',
-      hitArcDegrees:        60,
+      hitArcDegrees:        80,
    },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
@@ -447,6 +448,31 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
     trainDamageMult: 1.5, // 150% Schaden am Zug
+  } as WeaponConfig,
+
+  TASER: {
+    id:                   'TASER',
+    displayName:          'Zeus',
+    cooldown:             1500,
+    damage:               200,
+    range:                80,        
+    fire: {
+      type:                 'melee',
+      hitArcDegrees:        70,
+      visualPreset:         'zeus_taser' satisfies MeleeVisualPreset,
+   },
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        100,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+    trainDamageMult: 1.0, // 100% Schaden am Zug
+    rockDamageMult:  0,   // macht keinen Schaden an Felsen    
   } as WeaponConfig,
 
   /**

@@ -754,6 +754,10 @@ export class NetworkBridge {
       sid: swing.swingId, x: swing.x, y: swing.y,
       a: swing.angle, ad: swing.arcDegrees, r: swing.range,
       c: swing.color, id: swing.shooterId,
+      vp: swing.visualPreset,
+      hp: swing.hitPlayer,
+      hx: swing.impactX,
+      hy: swing.impactY,
     });
   }
 
@@ -762,12 +766,16 @@ export class NetworkBridge {
     this.registerAllRpcHandler('msfx', async (data: unknown): Promise<unknown> => {
       const meleeSwingHandler = this.meleeSwingHandler;
       if (!meleeSwingHandler) return undefined;
-      const { sid, x, y, a, ad, r, c, id } = data as {
+      const { sid, x, y, a, ad, r, c, id, vp, hp, hx, hy } = data as {
         sid: number; x: number; y: number;
         a: number; ad: number; r: number;
         c: number; id: string;
+        vp?: SyncedMeleeSwing['visualPreset'];
+        hp?: boolean;
+        hx?: number;
+        hy?: number;
       };
-      meleeSwingHandler({ swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id });
+      meleeSwingHandler({ swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id, visualPreset: vp, hitPlayer: hp, impactX: hx, impactY: hy });
       return undefined;
     });
   }

@@ -5,6 +5,7 @@ import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, D
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
+import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
 const HITSCAN_TRACER_FADE_MS = 320;
 const MELEE_SWING_FADE_MS    = 220;
@@ -46,6 +47,7 @@ export class EffectSystem {
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
+  private zeusTaserRenderer: ZeusTaserRenderer | null = null;
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
   private damageVignetteBottom: Phaser.GameObjects.Image | null = null;
@@ -66,6 +68,10 @@ export class EffectSystem {
 
   setAsmdPrimaryRenderer(renderer: AsmdPrimaryRenderer | null): void {
     this.asmdPrimaryRenderer = renderer;
+  }
+
+  setZeusTaserRenderer(renderer: ZeusTaserRenderer | null): void {
+    this.zeusTaserRenderer = renderer;
   }
 
   destroy(): void {
@@ -1208,6 +1214,21 @@ export class EffectSystem {
     }
     if (this.processedMeleeSwingKeys.has(key)) return;
     this.processedMeleeSwingKeys.set(key, now + 500);
+
+    if (swing.visualPreset === 'zeus_taser' && this.zeusTaserRenderer) {
+      this.zeusTaserRenderer.playSwing(
+        swing.x,
+        swing.y,
+        swing.angle,
+        swing.arcDegrees,
+        swing.range,
+        swing.color,
+        swing.hitPlayer ?? false,
+        swing.impactX,
+        swing.impactY,
+      );
+      return;
+    }
 
     this.playMeleeSwingEffect(
       swing.x, swing.y,
