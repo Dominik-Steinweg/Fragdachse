@@ -404,6 +404,7 @@ export class ClientUpdateCoordinator {
       trace.hitPlayerId ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       config.fire.visualPreset,
       config.shotAudio?.successKey,
+      config.shotAudio?.successVolume,
     );
 
     return shotId;

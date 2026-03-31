@@ -124,6 +124,7 @@ type HitscanTracerHandler = (
   shooterId?: string,
   shotId?: number,
   shotAudioKey?: ShotAudioKey,
+  shotAudioVolume?: number,
 ) => void;
 type DashHandler = (playerId: string, dx: number, dy: number) => void;
 type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
@@ -705,8 +706,9 @@ export class NetworkBridge {
     shooterId?: string,
     shotId?: number,
     shotAudioKey?: ShotAudioKey,
+    shotAudioVolume?: number,
   ): void {
-    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId, sa: shotAudioKey });
+    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId, sa: shotAudioKey, sv: shotAudioVolume });
   }
 
   registerHitscanTracerHandler(handler: HitscanTracerHandler): void {
@@ -714,7 +716,7 @@ export class NetworkBridge {
     this.registerAllRpcHandler('htfx', async (data: unknown): Promise<unknown> => {
       const hitscanTracerHandler = this.hitscanTracerHandler;
       if (!hitscanTracerHandler) return undefined;
-      const { sx, sy, ex, ey, c, t, ik, vp, id, sid, sa } = data as {
+      const { sx, sy, ex, ey, c, t, ik, vp, id, sid, sa, sv } = data as {
         sx: number;
         sy: number;
         ex: number;
@@ -726,8 +728,9 @@ export class NetworkBridge {
         id?: string;
         sid?: number;
         sa?: ShotAudioKey;
+        sv?: number;
       };
-      hitscanTracerHandler(sx, sy, ex, ey, c, t, ik, vp, id, sid, sa);
+      hitscanTracerHandler(sx, sy, ex, ey, c, t, ik, vp, id, sid, sa, sv);
       return undefined;
     });
   }

@@ -619,6 +619,7 @@ export class LoadoutManager {
       rockDamageMult:    cfg.rockDamageMult,
       trainDamageMult:   cfg.trainDamageMult,
       shotAudioKey:      cfg.shotAudio?.successKey,
+      shotAudioVolume:   cfg.shotAudio?.successVolume,
     });
 
     this.physicsSystem?.addRecoil(
@@ -1106,6 +1107,7 @@ export class LoadoutManager {
       trainDamageMult: config.trainDamageMult,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
+      shotAudioVolume: config.shotAudio?.successVolume,
     });
 
     return true;
@@ -1137,6 +1139,7 @@ export class LoadoutManager {
       config.displayName,
       fireConfig.visualPreset,
       config.shotAudio?.successKey,
+      config.shotAudio?.successVolume,
       sourceSlot,
       shotId,
       config.detonator,  // DetonatorConfig weitergeben (optional)

@@ -685,14 +685,15 @@ export const WEAPON_CONFIGS = {
       widthCore:  1.2,
       widthGlow:  3.5,
       alphaCore:  0.3,
-      alphaGlow:  0.1,
+      alphaGlow:  0.3,
       segments:   3,
-      fadeMs:     110,
-      maxLength:  70,
+      fadeMs:     210,
+      maxLength:  150,
     } satisfies TracerConfig,
     shotAudio: {
       successKey: 'shot_shotgun',
       failureKey: 'shot_dry_trigger',
+      successVolume: 0.3,
     },
   } as WeaponConfig,
 

@@ -437,6 +437,7 @@ export class ProjectileManager {
       trainDamageMult: cfg.trainDamageMult,
       sourceSlot:      cfg.sourceSlot,
       shotAudioKey:    cfg.shotAudioKey,
+      shotAudioVolume: cfg.shotAudioVolume,
       // Flammenwerfer-Felder
       isFlame:         cfg.isFlame,
       hitboxGrowRate:  cfg.hitboxGrowRate,
@@ -665,7 +666,7 @@ export class ProjectileManager {
       cfg.energyBallVariant,
       cfg.ownerColor ?? cfg.color,
     );
-    this.shotAudioSystem?.playShot(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
+    this.shotAudioSystem?.playShot(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId, cfg.shotAudioVolume);
 
     this.projectiles.push(tracked);
     return id;
@@ -1503,6 +1504,7 @@ export class ProjectileManager {
       energyBallVariant: p.energyBallVariant,
       tracer: p.tracerConfig,
       shotAudioKey: p.shotAudioKey,
+      shotAudioVolume: p.shotAudioVolume,
     }));
 
     return { synced, explodedProjectiles, explodedGrenades, countdownEvents };
@@ -1682,7 +1684,7 @@ export class ProjectileManager {
           proj.energyBallVariant,
           proj.ownerColor ?? proj.color,
         );
-        this.shotAudioSystem?.playShot(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
+        this.shotAudioSystem?.playShot(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId, proj.shotAudioVolume);
       }
 
       if (isBfgP && bfgR) {

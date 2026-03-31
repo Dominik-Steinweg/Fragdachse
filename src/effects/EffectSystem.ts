@@ -1079,16 +1079,17 @@ export class EffectSystem {
     impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
     shotAudioKey?: string,
+    shotAudioVolume?: number,
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
-    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId());
+    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId(), shotAudioVolume);
     this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, impactKind, visualPreset);
   }
 
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
-    const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey } = trace;
+    const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, shotAudioVolume } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
-    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, shooterId);
+    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, shooterId, shotAudioVolume);
     this.playHitscanTracer(startX, startY, endX, endY, color, thickness, impactKind ?? 'environment', visualPreset);
   }
 

@@ -389,6 +389,7 @@ export class CombatSystem {
     weaponName: string,
     visualPreset: HitscanVisualPreset = 'default',
     shotAudioKey?: ShotAudioKey,
+    shotAudioVolume?: number,
     sourceSlot?: WeaponSlot,
     shotId?: number,
     detonatorCfg?: DetonatorConfig,
@@ -419,6 +420,7 @@ export class CombatSystem {
       shooterId,
       shotId,
       shotAudioKey,
+      shotAudioVolume,
     });
 
     // Hitscan-Detonation prüfen (z.B. ASMD Primary zündet ASMD Secondary-Ball)

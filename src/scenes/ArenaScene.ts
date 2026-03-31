@@ -248,14 +248,15 @@ export class ArenaScene extends Phaser.Scene {
     });
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
-        shotAudioSystem.playFailure(this.clientUpdate.getLocalWeaponConfig(slot).shotAudio?.failureKey);
+        const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
+        shotAudioSystem.playFailure(shotAudio?.failureKey, shotAudio?.failureVolume ?? 1);
         return;
       }
 
       if (slot === 'ultimate') {
         const ultimate = this.clientUpdate.getLocalUltimateConfig();
         if (ultimate.type === 'gauss') {
-          shotAudioSystem.playFailure(ultimate.shotAudio?.failureKey);
+          shotAudioSystem.playFailure(ultimate.shotAudio?.failureKey, ultimate.shotAudio?.failureVolume ?? 1);
         }
       }
     };
