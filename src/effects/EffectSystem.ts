@@ -4,6 +4,7 @@ import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisua
 import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
+import { BiteRenderer } from './BiteRenderer';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
@@ -47,6 +48,7 @@ export class EffectSystem {
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
+  private biteRenderer: BiteRenderer | null = null;
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
@@ -68,6 +70,10 @@ export class EffectSystem {
 
   setAsmdPrimaryRenderer(renderer: AsmdPrimaryRenderer | null): void {
     this.asmdPrimaryRenderer = renderer;
+  }
+
+  setBiteRenderer(renderer: BiteRenderer | null): void {
+    this.biteRenderer = renderer;
   }
 
   setZeusTaserRenderer(renderer: ZeusTaserRenderer | null): void {
@@ -1214,6 +1220,21 @@ export class EffectSystem {
     }
     if (this.processedMeleeSwingKeys.has(key)) return;
     this.processedMeleeSwingKeys.set(key, now + 500);
+
+    if (swing.visualPreset === 'bite' && this.biteRenderer) {
+      this.biteRenderer.playSwing(
+        swing.x,
+        swing.y,
+        swing.angle,
+        swing.arcDegrees,
+        swing.range,
+        swing.color,
+        swing.hitPlayer ?? false,
+        swing.impactX,
+        swing.impactY,
+      );
+      return;
+    }
 
     if (swing.visualPreset === 'zeus_taser' && this.zeusTaserRenderer) {
       this.zeusTaserRenderer.playSwing(

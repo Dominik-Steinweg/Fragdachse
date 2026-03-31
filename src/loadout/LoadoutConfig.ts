@@ -436,7 +436,8 @@ export const WEAPON_CONFIGS = {
     fire: {
       type:                 'melee',
       hitArcDegrees:        80,
-   },
+      visualPreset:         'bite' satisfies MeleeVisualPreset,
+    },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        50,
@@ -447,7 +448,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
-    trainDamageMult: 1.5, // 150% Schaden am Zug
+    trainDamageMult:      1.5, // 150% Schaden am Zug
   } as WeaponConfig,
 
   TASER: {

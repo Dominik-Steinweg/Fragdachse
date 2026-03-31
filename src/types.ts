@@ -117,7 +117,7 @@ export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov';
 export type HitscanVisualPreset = 'default' | 'asmd_primary';
 
 /** Visuelles Preset fuer Melee-Swings. */
-export type MeleeVisualPreset = 'default' | 'zeus_taser';
+export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */
 export type EnergyBallVariant = 'default' | 'plasma';

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
 import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
+import { BiteRenderer } from '../../effects/BiteRenderer';
 import { ZeusTaserRenderer } from '../../effects/ZeusTaserRenderer';
 import { FlameRenderer }       from '../../effects/FlameRenderer';
 import { BfgRenderer }         from '../../effects/BfgRenderer';
@@ -29,6 +30,7 @@ import type { EffectSystem }      from '../../effects/EffectSystem';
 export interface RendererBundle {
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
+  bite:                BiteRenderer;
   zeusTaser:           ZeusTaserRenderer;
   flame:               FlameRenderer;
   bfg:                 BfgRenderer;
@@ -62,6 +64,9 @@ export function createRendererBundle(
 
   const asmdPrimary = new AsmdPrimaryRenderer(scene);
   asmdPrimary.generateTextures();
+
+  const bite = new BiteRenderer(scene);
+  bite.generateTextures();
 
   const zeusTaser = new ZeusTaserRenderer(scene);
   zeusTaser.generateTextures();
@@ -114,7 +119,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, zeusTaser, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
+    bullet, asmdPrimary, bite, zeusTaser, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck,
     nuke, meteor, powerUp, shadow,
     train: null,
@@ -155,6 +160,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setMuzzleFlashRenderer(bundle.muzzleFlash);
   bundle.asmdPrimary.setMuzzleFlashRenderer(bundle.muzzleFlash);
   effectSystem.setAsmdPrimaryRenderer(bundle.asmdPrimary);
+  effectSystem.setBiteRenderer(bundle.bite);
   effectSystem.setZeusTaserRenderer(bundle.zeusTaser);
   bundle.nuke.setEffectSystem(effectSystem);
 }
