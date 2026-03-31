@@ -1,6 +1,6 @@
 import { bridge }          from '../../network/bridge';
 import { dequantizeAngle } from '../../utils/angle';
-import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS } from '../../config';
+import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
@@ -124,7 +124,10 @@ export class ClientUpdateCoordinator {
         }
       }
 
-      this.ctx.trainManager; // accessed via bundle.train below
+      const trainState = state.train;
+      this.ctx.combatSystem.setClientTrainBounds(
+        trainState?.alive ? { x: trainState.x, y: trainState.y, dir: trainState.dir } : null,
+      );
 
       this.checkLocalPickup(state.powerups ?? []);
     }
@@ -374,10 +377,11 @@ export class ClientUpdateCoordinator {
     if (!localPlayer) return undefined;
 
     const shotId = this.nextPredictedHitscanShotId++;
+    const muzzleOrigin = getTopDownMuzzleOrigin(localPlayer.sprite.x, localPlayer.sprite.y, angle);
     const trace  = this.ctx.combatSystem.traceHitscan({
       shooterId:  bridge.getLocalPlayerId(),
-      startX:     localPlayer.sprite.x,
-      startY:     localPlayer.sprite.y,
+      startX:     muzzleOrigin.x,
+      startY:     muzzleOrigin.y,
       angle,
       range:      config.range,
       traceThickness: config.fire.traceThickness,
@@ -385,8 +389,8 @@ export class ClientUpdateCoordinator {
     });
 
     this.ctx.effectSystem.playPredictedHitscanTracer(
-      localPlayer.sprite.x,
-      localPlayer.sprite.y,
+      muzzleOrigin.x,
+      muzzleOrigin.y,
       trace.endX,
       trace.endY,
       localPlayer.color,

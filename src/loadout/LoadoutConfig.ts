@@ -492,8 +492,8 @@ export const WEAPON_CONFIGS = {
   XBOW: {
     id:                   'XBOW',
     displayName:          'XXX-BOW',
-    cooldown:             900,
-    damage:               6,       // Schaden pro Pellet
+    cooldown:             700,
+    damage:               5,       // Schaden pro Pellet
     range:                700,
     fire: {
       type:                 'projectile',
@@ -1243,7 +1243,7 @@ export const UTILITY_CONFIGS = {
       kind:               'turret',
       range:              240,
       footprint:          [{ dx: 0, dy: 0 }] as const,
-      maxHp:              100,
+      maxHp:              50,
       lifetimeMs:         12000,
       previewAlpha:       0.55,
       ownerTintStrength:  0.72,

@@ -17,6 +17,7 @@ import {
   PLAYER_SIZE,
   RAGE_PER_DAMAGE, ADRENALINE_START,
 } from '../config';
+import { TRAIN } from '../train/TrainConfig';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -86,6 +87,8 @@ export class CombatSystem {
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
+  /** Client-seitiger Fallback: vorberechnete Zug-Bounds aus SyncedTrainState */
+  private clientTrainBounds: Phaser.Geom.Rectangle | null = null;
 
   // Callbacks für Objekt-Schaden (gesetzt von ArenaScene)
   private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
@@ -117,6 +120,20 @@ export class CombatSystem {
 
   setTrainSegments(segments: readonly Phaser.GameObjects.Rectangle[] | null): void {
     this.trainSegObjects = segments;
+  }
+
+  /** Client-only: setzt vorberechnete Zug-Bounds direkt (ohne Segment-Objekte). */
+  setClientTrainBounds(state: { x: number; y: number; dir: 1 | -1 } | null): void {
+    if (!state) { this.clientTrainBounds = null; return; }
+    const rearExtent = TRAIN.LOCO_HEIGHT / 2 + TRAIN.WAGON_COUNT * (TRAIN.SEGMENT_GAP + TRAIN.WAGON_HEIGHT);
+    const minY = state.dir === 1 ? state.y - rearExtent : state.y - TRAIN.LOCO_HEIGHT / 2;
+    const maxY = state.dir === 1 ? state.y + TRAIN.LOCO_HEIGHT / 2 : state.y + rearExtent;
+    this.clientTrainBounds = new Phaser.Geom.Rectangle(
+      state.x - TRAIN.HITBOX_WIDTH / 2,
+      minY,
+      TRAIN.HITBOX_WIDTH,
+      maxY - minY,
+    );
   }
 
   setRockDamageCallback(cb: ((rockIndex: number, damage: number, attackerId: string) => void) | null): void {
@@ -767,12 +784,10 @@ export class CombatSystem {
       }
     }
 
-    if (this.trainSegObjects) {
-      const trainBounds = this.computeTrainBounds();
-      if (trainBounds) {
-        const hit = this.findNearestRectangleHit(line, trainBounds);
-        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
-      }
+    const trainBounds = this.computeTrainBounds();
+    if (trainBounds) {
+      const hit = this.findNearestRectangleHit(line, trainBounds);
+      if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
     }
 
     return bestHit;
@@ -816,7 +831,7 @@ export class CombatSystem {
    * Gibt null zurück wenn kein aktives Segment vorhanden.
    */
   private computeTrainBounds(): Phaser.Geom.Rectangle | null {
-    if (!this.trainSegObjects || this.trainSegObjects.length === 0) return null;
+    if (!this.trainSegObjects || this.trainSegObjects.length === 0) return this.clientTrainBounds;
     let minY = Infinity, maxY = -Infinity;
     let trainX = 0, trainW = 0;
     let anyActive = false;

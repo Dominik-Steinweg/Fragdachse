@@ -27,7 +27,7 @@ import type {
   UtilityConfig,
   WeaponConfig,
 } from './LoadoutConfig';
-import { COLORS, RAGE_MAX } from '../config';
+import { COLORS, RAGE_MAX, getTopDownMuzzleOrigin } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 
@@ -1115,10 +1115,11 @@ export class LoadoutManager {
     shotId?:     number,
   ): boolean {
     void playerColor;
+    const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
     return this.combatSystem?.resolveHitscanShot(
       playerId,
-      x,
-      y,
+      muzzleOrigin.x,
+      muzzleOrigin.y,
       angle,
       config.range,
       config.damage,
