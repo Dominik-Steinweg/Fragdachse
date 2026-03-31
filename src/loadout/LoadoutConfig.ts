@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -142,6 +142,9 @@ export interface WeaponConfig {
 
   // Aim-Reticle (optional, data-driven)
   readonly showCrosshair?: boolean;      // false = Zielfadenkreuz ausblenden
+
+  // Audio (optional, data-driven)
+  readonly shotAudio?: LoadoutShotAudioConfig;
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret';
@@ -352,6 +355,7 @@ export interface GaussUltimateConfig extends BaseUltimateConfig {
   readonly trainDamageMult?: number;
   readonly shotRecoilForce: number;
   readonly shotRecoilDuration: number;
+  readonly shotAudio?: LoadoutShotAudioConfig;
 }
 
 export type UltimateConfig = BuffUltimateConfig | GaussUltimateConfig;
@@ -396,7 +400,11 @@ export const WEAPON_CONFIGS = {
       fadeMs:     80,
       // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
       // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
-    } satisfies TracerConfig,    
+    } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_glock',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   ASMD_PRIM: {
@@ -425,6 +433,10 @@ export const WEAPON_CONFIGS = {
       triggerTags: ['asmd_ball'],
     } satisfies DetonatorConfig,
     rockDamageMult:  0,   // ASMD Primary macht keinen Schaden an Felsen
+    shotAudio: {
+      successKey: 'shot_asmd_primary',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   BITE: {
@@ -514,6 +526,10 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     projectileStyle:      'energy_ball' satisfies ProjectileStyle,
     energyBallVariant:    'plasma' satisfies EnergyBallVariant,
+    shotAudio: {
+      successKey: 'shot_plasma',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   XBOW: {
@@ -551,7 +567,11 @@ export const WEAPON_CONFIGS = {
       segments:   5,
       fadeMs:     120,
       maxLength:  120,
-    } satisfies TracerConfig,    
+    } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_crossbow',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   /**
@@ -627,7 +647,11 @@ export const WEAPON_CONFIGS = {
       segments:   5,
       fadeMs:     220,
       maxLength:  150,
-    } satisfies TracerConfig,    
+    } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_ak47',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   SHOTGUN: {
@@ -665,7 +689,11 @@ export const WEAPON_CONFIGS = {
       segments:   3,
       fadeMs:     110,
       maxLength:  70,
-    } satisfies TracerConfig,    
+    } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_shotgun',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   /**
@@ -707,6 +735,10 @@ export const WEAPON_CONFIGS = {
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
       explosionVisualStyle: 'energy',
     } satisfies DetonableConfig,
+    shotAudio: {
+      successKey: 'shot_asmd_secondary',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   ROCKET_LAUNCHER: {
@@ -1344,6 +1376,10 @@ export const ULTIMATE_CONFIGS = {
     trainDamageMult:    1,
     shotRecoilForce:    750,
     shotRecoilDuration: 200,
+    shotAudio: {
+      successKey: 'shot_gauss',
+      failureKey: 'shot_dry_trigger',
+    },
   } as GaussUltimateConfig,
 
   HONEY_BADGER_RAGE: {

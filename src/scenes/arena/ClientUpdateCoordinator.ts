@@ -213,6 +213,11 @@ export class ClientUpdateCoordinator {
     return shotId;
   }
 
+  rollbackRejectedLoadoutFire(slot: WeaponSlot): void {
+    this.weaponLastFired[slot] = 0;
+    this.predictedHitscanCooldownUntil[slot] = 0;
+  }
+
   notifyUtilityFired(): void {
     if (this.clientUtilityOverride) this.clientUtilityOverride = null;
     this.ctx.leftPanel.flashSlot('utility');
@@ -398,6 +403,7 @@ export class ClientUpdateCoordinator {
       shotId,
       trace.hitPlayerId ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       config.fire.visualPreset,
+      config.shotAudio?.successKey,
     );
 
     return shotId;

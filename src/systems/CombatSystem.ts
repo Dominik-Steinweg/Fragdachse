@@ -5,7 +5,7 @@ import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
-import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, ShieldBlockCategory, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
+import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -388,6 +388,7 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName: string,
     visualPreset: HitscanVisualPreset = 'default',
+    shotAudioKey?: ShotAudioKey,
     sourceSlot?: WeaponSlot,
     shotId?: number,
     detonatorCfg?: DetonatorConfig,
@@ -417,6 +418,7 @@ export class CombatSystem {
       visualPreset,
       shooterId,
       shotId,
+      shotAudioKey,
     });
 
     // Hitscan-Detonation prüfen (z.B. ASMD Primary zündet ASMD Secondary-Ball)
@@ -705,7 +707,7 @@ export class CombatSystem {
     // Direkt per RPC an alle Clients senden (einmalig, statt per-frame in GameState)
     this.bridge.broadcastHitscanTracer(
       trace.startX, trace.startY, trace.endX, trace.endY,
-      trace.color, trace.thickness, trace.impactKind, trace.visualPreset, trace.shooterId, trace.shotId,
+      trace.color, trace.thickness, trace.impactKind, trace.visualPreset, trace.shooterId, trace.shotId, trace.shotAudioKey,
     );
     // Lokale Wiedergabe auf dem Host (EffectSystem bekommt das RPC auch)
   }

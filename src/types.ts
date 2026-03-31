@@ -197,6 +197,7 @@ export interface SyncedProjectile {
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
+  shotAudioKey?: ShotAudioKey;
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
@@ -213,6 +214,7 @@ export interface SyncedHitscanTrace {
   visualPreset?: HitscanVisualPreset;
   shooterId?: string;
   shotId?:    number;
+  shotAudioKey?: ShotAudioKey;
 }
 
 export interface SyncedHitEffect {
@@ -298,6 +300,15 @@ export interface RoomQualitySnapshot {
 /** Loadout-Slot-Bezeichner */
 export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 
+/** Audio-Key eines data-driven Schuss-/Dry-Trigger-Sounds. */
+export type ShotAudioKey = string;
+
+/** Audio-Metadaten fuer schussbezogene Loadout-Aktionen. */
+export interface LoadoutShotAudioConfig {
+  readonly successKey: ShotAudioKey;
+  readonly failureKey?: ShotAudioKey;
+}
+
 /** Vollstaendiger, verbindlicher Lobby-Snapshot eines Spieler-Loadouts. */
 export interface LoadoutCommitSnapshot {
   weapon1: string;
@@ -311,6 +322,16 @@ export interface LoadoutUseParams {
   utilityChargeFraction?: number; // 0 = Minimalwurf, 1 = voller Wurf
   ultimateAction?: 'press' | 'release';
   ultimateChargeFraction?: number;
+  inputStarted?: boolean;
+}
+
+export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid';
+export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
+
+export interface LoadoutUseResult {
+  ok: boolean;
+  reason?: LoadoutUseFailureReason;
+  resourceKind?: LoadoutUseResourceKind;
 }
 
 /** Lokaler Preview-State für aufladbare Utility-Aktionen. */
@@ -405,6 +426,7 @@ export interface ProjectileSpawnConfig {
   bounceFrictionMultiplier?: number;  // Speed Multiplikator beim Abprallen
   stopSpeedThreshold?: number;        // Speed, ab der das Projektil auf 0 gestoppt wird
   sourceSlot?: LoadoutSlot;
+  shotAudioKey?: ShotAudioKey;
 }
 
 export interface DamageGrenadeEffect {
@@ -578,6 +600,7 @@ export interface TrackedProjectile {
   stopSpeedThreshold?: number;
   frictionActivated?: boolean;  // true sobald Phaser-Damping aktiviert wurde
   sourceSlot?: LoadoutSlot;
+  shotAudioKey?: ShotAudioKey;
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;

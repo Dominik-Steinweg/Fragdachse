@@ -10,6 +10,8 @@ import { EffectSystem }          from '../effects/EffectSystem';
 import { SmokeSystem }           from '../effects/SmokeSystem';
 import { FireSystem }            from '../effects/FireSystem';
 import { StinkCloudSystem }      from '../effects/StinkCloudSystem';
+import { preloadShotAudio }      from '../audio/ShotAudioCatalog';
+import { ShotAudioSystem }       from '../audio/ShotAudioSystem';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
@@ -39,7 +41,7 @@ import {
   restartRoomForAutomaticRoomSearch,
   restartRoomForQualityRetry,
 } from '../utils/roomQuality';
-import type { GamePhase, LoadoutCommitSnapshot, PlayerProfile, RoomQualitySnapshot } from '../types';
+import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot } from '../types';
 
 import {
   type ArenaContext,
@@ -88,6 +90,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
+    preloadShotAudio(this.load);
     this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
@@ -133,6 +136,14 @@ export class ArenaScene extends Phaser.Scene {
     const projectileManager = new ProjectileManager(this);
     const combatSystem     = new CombatSystem(playerManager, projectileManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
+    const shotAudioSystem  = new ShotAudioSystem(
+      this,
+      () => bridge.getLocalPlayerId(),
+      () => {
+        const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+        return sprite ? { x: sprite.x, y: sprite.y } : null;
+      },
+    );
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);
     const stinkCloudSystem = new StinkCloudSystem(this);
@@ -140,6 +151,8 @@ export class ArenaScene extends Phaser.Scene {
     const inputSystem      = new InputSystem(
       this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
     );
+    projectileManager.setShotAudioSystem(shotAudioSystem);
+    effectSystem.setShotAudioSystem(shotAudioSystem);
 
     // ── UI (scene-lifetime) ────────────────────────────────────────────────
     const leftPanel  = new LeftSidePanel(this, bridge);
@@ -233,27 +246,57 @@ export class ArenaScene extends Phaser.Scene {
       if (!cfg || cfg.type !== 'translocator') return false;
       return this.ctx.translocatorSystem?.getActivePuckId(bridge.getLocalPlayerId()) !== undefined;
     });
+    const playLocalFailureSound = (slot: LoadoutSlot): void => {
+      if (slot === 'weapon1' || slot === 'weapon2') {
+        shotAudioSystem.playFailure(this.clientUpdate.getLocalWeaponConfig(slot).shotAudio?.failureKey);
+        return;
+      }
+
+      if (slot === 'ultimate') {
+        const ultimate = this.clientUpdate.getLocalUltimateConfig();
+        if (ultimate.type === 'gauss') {
+          shotAudioSystem.playFailure(ultimate.shotAudio?.failureKey);
+        }
+      }
+    };
+    const handleLocalLoadoutFailure = (
+      slot: LoadoutSlot,
+      result: LoadoutUseResult | null,
+      inputStarted: boolean,
+    ): void => {
+      if (!result || result.ok) return;
+
+      if (slot === 'ultimate') {
+        inputSystem.cancelLocalUltimateChargePreview();
+      }
+
+      if ((slot === 'weapon1' || slot === 'weapon2') && (result.reason === 'cooldown' || result.reason === 'resource')) {
+        this.clientUpdate.rollbackRejectedLoadoutFire(slot);
+      }
+
+      if (slot === 'weapon2' && result.reason === 'resource' && result.resourceKind === 'adrenaline') {
+        this.playerStatusRing?.notifyAdrenalineInsufficientShot();
+      }
+
+      if (!inputStarted) return;
+      if (result.reason === 'cooldown' || result.reason === 'resource') {
+        playLocalFailureSound(slot);
+      }
+    };
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
 
       let shotId: number | undefined;
-      const localId = bridge.getLocalPlayerId();
-      const weapon2Cost = slot === 'weapon2'
-        ? (this.clientUpdate.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0)
-        : 0;
-      const currentAdrenaline = bridge.isHost()
-        ? (this.ctx.resourceSystem?.getAdrenaline(localId) ?? 0)
-        : (bridge.getLatestGameState()?.players[localId]?.adrenaline ?? 0);
-      const predictedWeapon2Failure = slot === 'weapon2'
-        && !bridge.isHost()
-        && weapon2Cost > 0
-        && currentAdrenaline + 0.0001 < weapon2Cost;
+      const inputStarted = params?.inputStarted === true;
 
       if (slot === 'weapon1' || slot === 'weapon2') {
         const now = Date.now();
         const lastFired = this.clientUpdate.weaponLastFiredRecord()[slot];
         const wepConfig = this.clientUpdate.getLocalWeaponConfig(slot);
-        if (lastFired > 0 && now - lastFired < wepConfig.cooldown) return;
+        if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
+          if (inputStarted) playLocalFailureSound(slot);
+          return;
+        }
         shotId = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);
       }
       if (slot === 'utility') {
@@ -264,23 +307,16 @@ export class ArenaScene extends Phaser.Scene {
       const awaitResult = slot === 'utility'
         && inputSystem.isUtilityPlacementActive()
         && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode';
-      const loadoutPromise = bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, Date.now(), awaitResult);
-      if (slot === 'weapon2') {
-        if (predictedWeapon2Failure) {
-          this.playerStatusRing?.notifyAdrenalineInsufficientShot();
-        }
-        if (bridge.isHost()) {
-          void loadoutPromise.then((ok) => {
-            const hostAdrenaline = this.ctx.resourceSystem?.getAdrenaline(localId) ?? 0;
-            if (!ok && weapon2Cost > 0 && hostAdrenaline + 0.0001 < weapon2Cost) {
-              this.playerStatusRing?.notifyAdrenalineInsufficientShot();
-            }
-          });
-        }
+      const awaitFailureResult = inputStarted && (slot === 'weapon2' || slot === 'ultimate');
+      const loadoutPromise = bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, Date.now(), awaitResult || awaitFailureResult);
+      if (awaitFailureResult) {
+        void loadoutPromise.then((result) => {
+          handleLocalLoadoutFailure(slot, result, inputStarted);
+        });
       }
       if (awaitResult) {
-        void loadoutPromise.then((ok) => {
-          if (!ok) this.placementPreview.showPlacementError('Bau fehlgeschlagen');
+        void loadoutPromise.then((result) => {
+          if (!result?.ok) this.placementPreview.showPlacementError('Bau fehlgeschlagen');
         }).catch(() => {
           this.placementPreview.showPlacementError('Bau fehlgeschlagen');
         });

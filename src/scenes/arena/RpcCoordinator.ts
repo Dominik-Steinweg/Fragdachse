@@ -64,9 +64,10 @@ export class RpcCoordinator {
 
   private registerLoadoutUseHandler(): void {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
-      if (!bridge.isHost()) return false;
-      if (bridge.isArenaCountdownActive()) return false;
-      return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY) ?? false;
+      if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
+      if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
+      return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY)
+        ?? { ok: false, reason: 'blocked' };
     });
   }
 

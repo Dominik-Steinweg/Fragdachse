@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, PlayerInput, PlayerProfile, PlayerNetState, ShieldBuffHudState, SyncedProjectile, SyncedHitscanTrace, SyncedCombatEffect, SyncedMeleeSwing, SyncedSmokeCloud, SyncedFireZone, SyncedStinkCloud, SyncedTeslaDome, SyncedEnergyShield, SyncedPowerUp, SyncedPowerUpPedestal, SyncedNukeStrike, SyncedMeteorStrike, GamePhase, ArenaLayout, RockNetState, LoadoutSlot, LoadoutUseParams, TrainEventConfig, SyncedTrainState, LoadoutCommitSnapshot, RoomQualitySnapshot, SyncedPlaceableRock } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedCombatEffect, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -107,7 +107,7 @@ type LoadoutUseHandler = (
   clientX?: number,
   clientY?: number,
   clientNow?: number,
-) => boolean;
+) => LoadoutUseResult;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type GrenadeCountdownHandler = (x: number, y: number, value: number) => void;
@@ -123,6 +123,7 @@ type HitscanTracerHandler = (
   visualPreset?: HitscanVisualPreset,
   shooterId?: string,
   shotId?: number,
+  shotAudioKey?: ShotAudioKey,
 ) => void;
 type DashHandler = (playerId: string, dx: number, dy: number) => void;
 type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
@@ -558,16 +559,16 @@ export class NetworkBridge {
     clientY?: number,
     clientNow?: number,
     awaitResult = false,
-  ): Promise<boolean> {
+  ): Promise<LoadoutUseResult | null> {
     if (isHost()) {
-      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? false;
+      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
     }
     if (!awaitResult) {
       this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow });
-      return true;
+      return null;
     }
     const result = await this.callHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow }, 1200);
-    return Boolean((result as { ok?: boolean } | undefined)?.ok);
+    return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
   }
 
   registerLoadoutUseHandler(
@@ -582,7 +583,7 @@ export class NetworkBridge {
       clientX?: number,
       clientY?: number,
       clientNow?: number,
-    ) => boolean,
+    ) => LoadoutUseResult,
   ): void {
     this.loadoutUseHandler = handler;
     this.registerHostRpcHandler('lu', async (data: unknown, caller: PlayerState): Promise<unknown> => {
@@ -604,8 +605,7 @@ export class NetworkBridge {
       // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
       const hostNow = Date.now();
       const clientNow = (typeof ts === 'number' && Math.abs(hostNow - ts) <= 200) ? ts : hostNow;
-      const ok = loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow);
-      return { ok };
+      return loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow);
     });
   }
 
@@ -704,8 +704,9 @@ export class NetworkBridge {
     visualPreset?: HitscanVisualPreset,
     shooterId?: string,
     shotId?: number,
+    shotAudioKey?: ShotAudioKey,
   ): void {
-    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId });
+    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId, sa: shotAudioKey });
   }
 
   registerHitscanTracerHandler(handler: HitscanTracerHandler): void {
@@ -713,7 +714,7 @@ export class NetworkBridge {
     this.registerAllRpcHandler('htfx', async (data: unknown): Promise<unknown> => {
       const hitscanTracerHandler = this.hitscanTracerHandler;
       if (!hitscanTracerHandler) return undefined;
-      const { sx, sy, ex, ey, c, t, ik, vp, id, sid } = data as {
+      const { sx, sy, ex, ey, c, t, ik, vp, id, sid, sa } = data as {
         sx: number;
         sy: number;
         ex: number;
@@ -724,8 +725,9 @@ export class NetworkBridge {
         vp?: HitscanVisualPreset;
         id?: string;
         sid?: number;
+        sa?: ShotAudioKey;
       };
-      hitscanTracerHandler(sx, sy, ex, ey, c, t, ik, vp, id, sid);
+      hitscanTracerHandler(sx, sy, ex, ey, c, t, ik, vp, id, sid, sa);
       return undefined;
     });
   }

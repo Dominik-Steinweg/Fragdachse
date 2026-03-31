@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant, ProjectileStyle } from '../types';
+import type { ShotAudioSystem } from '../audio/ShotAudioSystem';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
@@ -95,6 +96,7 @@ export class ProjectileManager {
 
   // ── MuzzleFlash-Renderer (lokales Schuss-Feedback, kein Netzstate) ───────
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
+  private shotAudioSystem: ShotAudioSystem | null = null;
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
@@ -226,6 +228,10 @@ export class ProjectileManager {
   /** Injiziert den MuzzleFlashRenderer fuer lokale Spawn-Effekte. */
   setMuzzleFlashRenderer(renderer: MuzzleFlashRenderer | null): void {
     this.muzzleFlashRenderer = renderer;
+  }
+
+  setShotAudioSystem(system: ShotAudioSystem | null): void {
+    this.shotAudioSystem = system;
   }
 
   setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
@@ -430,6 +436,7 @@ export class ProjectileManager {
       rockDamageMult:  cfg.rockDamageMult,
       trainDamageMult: cfg.trainDamageMult,
       sourceSlot:      cfg.sourceSlot,
+      shotAudioKey:    cfg.shotAudioKey,
       // Flammenwerfer-Felder
       isFlame:         cfg.isFlame,
       hitboxGrowRate:  cfg.hitboxGrowRate,
@@ -658,6 +665,7 @@ export class ProjectileManager {
       cfg.energyBallVariant,
       cfg.ownerColor ?? cfg.color,
     );
+    this.shotAudioSystem?.playShot(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
 
     this.projectiles.push(tracked);
     return id;
@@ -1494,6 +1502,7 @@ export class ProjectileManager {
       grenadeVisualPreset: p.grenadeVisualPreset,
       energyBallVariant: p.energyBallVariant,
       tracer: p.tracerConfig,
+      shotAudioKey: p.shotAudioKey,
     }));
 
     return { synced, explodedProjectiles, explodedGrenades, countdownEvents };
@@ -1673,6 +1682,7 @@ export class ProjectileManager {
           proj.energyBallVariant,
           proj.ownerColor ?? proj.color,
         );
+        this.shotAudioSystem?.playShot(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
       }
 
       if (isBfgP && bfgR) {

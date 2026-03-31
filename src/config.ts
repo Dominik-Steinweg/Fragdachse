@@ -11,6 +11,11 @@ export const ARENA_OFFSET_Y = 12;
 export const ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
 export const ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
 
+// ---- Audio ----
+export const SOUND_ENABLED = true;
+export const SHOT_AUDIO_REMOTE_MAX_DISTANCE = 1440;
+export const SHOT_AUDIO_PAN_RANGE = ARENA_WIDTH * 0.5;
+
 // ---- Depth Layers ----
 export const DEPTH = {
   GRASS: 1,

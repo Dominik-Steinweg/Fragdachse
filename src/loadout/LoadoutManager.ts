@@ -8,7 +8,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
+import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
   BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
@@ -91,6 +91,8 @@ export class LoadoutManager {
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
   private static readonly HOLD_EXPIRE_MS = 100;
+
+  private readonly okResult: LoadoutUseResult = { ok: true };
 
   // ── Utility-Override (Heilige Handgranate etc.) ─────────────────────────
   private savedUtilities    = new Map<string, { config: UtilityConfig; lastUsedAt: number }>();
@@ -325,20 +327,20 @@ export class LoadoutManager {
     params?:   LoadoutUseParams,
     clientX?:  number,
     clientY?:  number,
-  ): boolean {
+  ): LoadoutUseResult {
     const loadout = this.loadouts.get(playerId);
-    if (!loadout) return false;
-    if (this.actionBlockedChecker?.(playerId, slot)) return false;
+    if (!loadout) return { ok: false, reason: 'invalid' };
+    if (this.actionBlockedChecker?.(playerId, slot)) return { ok: false, reason: 'blocked' };
 
     const player = this.playerManager.getPlayer(playerId);
-    if (!player) return false;
+    if (!player) return { ok: false, reason: 'invalid' };
     // Client-Position verwenden falls vorhanden (kompensiert Netzwerk-Tick-Latenz),
     // sonst Fallback auf autoritative Host-Position.
     const x = clientX ?? player.sprite.x;
     const y = clientY ?? player.sprite.y;
 
     // Schießen während Dash-Phase 1 (Burst) blockiert
-    if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return false;
+    if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return { ok: false, reason: 'blocked' };
 
     // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
     if (slot === 'weapon1' || slot === 'weapon2') {
@@ -353,16 +355,18 @@ export class LoadoutManager {
         return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId);
 
       case 'utility': {
-        return this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
+        return this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params)
+          ? this.okResult
+          : { ok: false, reason: 'blocked' };
       }
 
       case 'ultimate': {
         const ultState = this.ultimateStates.get(playerId);
         const cfg  = loadout.ultimate.config;
         if (cfg.type === 'buff') {
-          if (ultState?.active) return false;
+          if (ultState?.active) return { ok: false, reason: 'blocked' };
           const rage = this.resourceSystem.getRage(playerId);
-          if (rage < cfg.rageRequired) return false;
+          if (rage < cfg.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
           const consumedRage = Math.min(rage, RAGE_MAX);
           const scale = consumedRage / cfg.rageRequired;
           const durationMs = Math.max(1, Math.round(cfg.duration * scale));
@@ -384,10 +388,10 @@ export class LoadoutManager {
               return p ? { x: p.sprite.x, y: p.sprite.y } : null;
             });
           }
-          return true;
+          return this.okResult;
         }
 
-        this.handleGaussUltimateUse(
+        return this.handleGaussUltimateUse(
           cfg,
           playerId,
           x,
@@ -398,11 +402,10 @@ export class LoadoutManager {
           ultState,
           params,
         );
-        return true;
       }
     }
 
-    return false;
+    return { ok: false, reason: 'invalid' };
   }
 
   // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
@@ -554,7 +557,7 @@ export class LoadoutManager {
     playerColor: number,
     state: UltimateState | undefined,
     params?: LoadoutUseParams,
-  ): void {
+  ): LoadoutUseResult {
     const action = params?.ultimateAction;
     const currentState = state ?? {
       active: false,
@@ -568,23 +571,26 @@ export class LoadoutManager {
     currentState.config = cfg;
 
     if (action === 'press') {
-      if (currentState.gaussChargeStartedAt !== null) return;
-      if (this.resourceSystem.getRage(playerId) < cfg.rageRequired) return;
+      if (currentState.gaussChargeStartedAt !== null) return { ok: false, reason: 'blocked' };
+      if (this.resourceSystem.getRage(playerId) < cfg.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
       currentState.gaussChargeStartedAt = now;
       this.ultimateStates.set(playerId, currentState);
-      return;
+      return this.okResult;
     }
 
     if (action === 'release') {
       const startedAt = currentState.gaussChargeStartedAt;
       currentState.gaussChargeStartedAt = null;
       this.ultimateStates.set(playerId, currentState);
-      if (startedAt === null) return;
-      if (this.resourceSystem.getRage(playerId) < cfg.rageCost) return;
-      if ((params?.ultimateChargeFraction ?? 0) < 1) return;
+      if (startedAt === null) return { ok: false, reason: 'blocked' };
+      if (this.resourceSystem.getRage(playerId) < cfg.rageCost) return { ok: false, reason: 'resource', resourceKind: 'rage' };
+      if ((params?.ultimateChargeFraction ?? 0) < 1) return { ok: false, reason: 'blocked' };
       this.fireGaussUltimate(cfg, x, y, angle, playerId, playerColor);
       this.resourceSystem.addRage(playerId, -cfg.rageCost);
+      return this.okResult;
     }
+
+    return { ok: false, reason: 'blocked' };
   }
 
   private fireGaussUltimate(
@@ -612,6 +618,7 @@ export class LoadoutManager {
       tracerConfig:      cfg.tracerConfig,
       rockDamageMult:    cfg.rockDamageMult,
       trainDamageMult:   cfg.trainDamageMult,
+      shotAudioKey:      cfg.shotAudio?.successKey,
     });
 
     this.physicsSystem?.addRecoil(
@@ -696,24 +703,24 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot: WeaponSlot,
     shotId?: number,
-  ): boolean {
+  ): LoadoutUseResult {
     if (weapon.config.fire.type === 'tesla_dome') {
       this.activateTeslaDomeWeapon(weapon, x, y, playerId, now, playerColor);
-      return true;
+      return this.okResult;
     }
     if (weapon.config.fire.type === 'energy_shield') {
       this.activateEnergyShieldWeapon(weapon, playerId, now, playerColor);
-      return true;
+      return this.okResult;
     }
 
     // 1. Cooldown-Check
-    if (weapon.isOnCooldown(now)) return false;
+    if (weapon.isOnCooldown(now)) return { ok: false, reason: 'cooldown' };
 
     const cfg = weapon.config;
 
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
     if (cfg.adrenalinCost > 0) {
-      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return false;
+      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
     }
 
     // 3. Spread-Parameter berechnen
@@ -741,7 +748,7 @@ export class LoadoutManager {
       const finalAngle = angle + (Math.random() * 2 - 1) * halfSpreadRad;
       didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
     }
-    if (!didFire) return false;
+    if (!didFire) return { ok: false, reason: 'blocked' };
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
     if (cfg.adrenalinCost > 0) {
@@ -764,7 +771,7 @@ export class LoadoutManager {
       this.bridge.broadcastShotFx(playerId, cfg.shotScreenShake.duration, cfg.shotScreenShake.intensity);
     }
 
-    return true;
+    return this.okResult;
   }
 
   private useUtility(
@@ -1098,6 +1105,7 @@ export class LoadoutManager {
       rockDamageMult:  config.rockDamageMult,
       trainDamageMult: config.trainDamageMult,
       sourceSlot,
+      shotAudioKey:    config.shotAudio?.successKey,
     });
 
     return true;
@@ -1128,6 +1136,7 @@ export class LoadoutManager {
       config.adrenalinGain,
       config.displayName,
       fireConfig.visualPreset,
+      config.shotAudio?.successKey,
       sourceSlot,
       shotId,
       config.detonator,  // DetonatorConfig weitergeben (optional)

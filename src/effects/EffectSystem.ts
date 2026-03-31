@@ -5,6 +5,7 @@ import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, D
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { BiteRenderer } from './BiteRenderer';
+import type { ShotAudioSystem } from '../audio/ShotAudioSystem';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
@@ -50,6 +51,7 @@ export class EffectSystem {
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private biteRenderer: BiteRenderer | null = null;
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
+  private shotAudioSystem: ShotAudioSystem | null = null;
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
   private damageVignetteBottom: Phaser.GameObjects.Image | null = null;
@@ -78,6 +80,10 @@ export class EffectSystem {
 
   setZeusTaserRenderer(renderer: ZeusTaserRenderer | null): void {
     this.zeusTaserRenderer = renderer;
+  }
+
+  setShotAudioSystem(system: ShotAudioSystem | null): void {
+    this.shotAudioSystem = system;
   }
 
   destroy(): void {
@@ -257,7 +263,7 @@ export class EffectSystem {
       if (effect.type === 'death') this.playDeathEffect(effect);
     });
 
-    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId) => {
+    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey) => {
       this.playSyncedHitscanTracer({
         startX,
         startY,
@@ -269,6 +275,7 @@ export class EffectSystem {
         visualPreset,
         shooterId,
         shotId,
+        shotAudioKey,
       });
     });
 
@@ -1071,14 +1078,17 @@ export class EffectSystem {
     shotId: number,
     impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
+    shotAudioKey?: string,
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
+    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId());
     this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, impactKind, visualPreset);
   }
 
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
-    const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId } = trace;
+    const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
+    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, shooterId);
     this.playHitscanTracer(startX, startY, endX, endY, color, thickness, impactKind ?? 'environment', visualPreset);
   }
 

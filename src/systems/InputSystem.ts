@@ -56,6 +56,8 @@ export class InputSystem {
   private ultimateChargeStartedAt: number | null = null;
   private getUtilityPlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
   private placementPreviewState: PlacementPreviewNetState | null = null;
+  private prevLeftPointerDown = false;
+  private prevRightPointerDown = false;
 
   // Aktueller Aim-Winkel (Radiant, für Rotation-Sync)
   private currentAimAngle = 0;
@@ -146,6 +148,8 @@ export class InputSystem {
     if (!enabled) {
       this.predictedUtilityCooldownUntil = 0;
       this.cancelUtilityInteraction();
+      this.prevLeftPointerDown = false;
+      this.prevRightPointerDown = false;
     }
   }
 
@@ -175,6 +179,10 @@ export class InputSystem {
 
   isUtilityPlacementActive(): boolean {
     return this.utilityPlacementActive;
+  }
+
+  cancelLocalUltimateChargePreview(): void {
+    this.cancelUltimateCharge();
   }
 
   getUtilityPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
@@ -311,6 +319,12 @@ export class InputSystem {
 
     const px    = pointer.x;
     const py    = pointer.y;
+    const leftPointerDown = pointer.leftButtonDown();
+    const rightPointerDown = pointer.rightButtonDown();
+    const leftInputStarted = leftPointerDown && !this.prevLeftPointerDown;
+    const rightInputStarted = rightPointerDown && !this.prevRightPointerDown;
+    this.prevLeftPointerDown = leftPointerDown;
+    this.prevRightPointerDown = rightPointerDown;
     const clampedTarget = clampPointToArena(px, py);
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     this.currentAimAngle = angle;
@@ -375,11 +389,11 @@ export class InputSystem {
     // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
-    if (!weaponsBlocked && pointer.leftButtonDown()) {
-      this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y);
-    } else if (!weaponsBlocked && pointer.rightButtonDown()) {
+    if (!weaponsBlocked && leftPointerDown) {
+      this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y, { inputStarted: leftInputStarted });
+    } else if (!weaponsBlocked && rightPointerDown) {
       // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
-      this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y);
+      this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { inputStarted: rightInputStarted });
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
@@ -427,7 +441,7 @@ export class InputSystem {
     if (!utilityBlocked && gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.beginUltimateCharge(now, gaussCfg, angle, clampedTarget.x, clampedTarget.y);
     } else if (!utilityBlocked && !gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
-      this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y);
+      this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
     }
 
     if (this.ultimateHoldActive && this.ultimateChargeStartedAt !== null && gaussCfg) {
@@ -609,11 +623,15 @@ export class InputSystem {
   ): void {
     const rage = this.getLocalRage?.() ?? 0;
     const cfg = this.getGaussUltimateConfig();
-    if (!cfg || rage < cfg.rageRequired) return;
+    if (!cfg) return;
+    if (rage < cfg.rageRequired) {
+      this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press', inputStarted: true });
+      return;
+    }
     this.cancelUtilityInteraction();
     this.ultimateHoldActive = true;
     this.ultimateChargeStartedAt = now;
-    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press' });
+    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press', inputStarted: true });
   }
 
   private releaseUltimateCharge(
