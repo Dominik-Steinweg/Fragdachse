@@ -197,6 +197,8 @@ export interface SyncedProjectile {
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
+export type HitscanImpactKind = 'none' | 'player' | 'environment';
+
 export interface SyncedHitscanTrace {
   startX:     number;
   startY:     number;
@@ -204,6 +206,7 @@ export interface SyncedHitscanTrace {
   endY:       number;
   color:      number;
   thickness:  number;
+  impactKind?: HitscanImpactKind;
   visualPreset?: HitscanVisualPreset;
   shooterId?: string;
   shotId?:    number;

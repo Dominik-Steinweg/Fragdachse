@@ -45,6 +45,7 @@ export interface HitscanTraceResult {
   readonly endY: number;
   readonly distance: number;
   readonly hitPlayerId: string | null;
+  readonly hitObstacle: boolean;
 }
 
 export interface HitscanTraceOptions {
@@ -412,6 +413,7 @@ export class CombatSystem {
       endY: Math.round(trace.endY),
       color: playerColor,
       thickness: traceThickness,
+      impactKind: trace.hitPlayerId ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       visualPreset,
       shooterId,
       shotId,
@@ -647,6 +649,7 @@ export class CombatSystem {
       endY: startY + dirY * closestDistance,
       distance: closestDistance,
       hitPlayerId,
+      hitObstacle: obstacleHit !== null && closestDistance >= obstacleHit.distance,
     };
   }
 
@@ -691,7 +694,7 @@ export class CombatSystem {
     // Direkt per RPC an alle Clients senden (einmalig, statt per-frame in GameState)
     this.bridge.broadcastHitscanTracer(
       trace.startX, trace.startY, trace.endX, trace.endY,
-      trace.color, trace.thickness, trace.visualPreset, trace.shooterId, trace.shotId,
+      trace.color, trace.thickness, trace.impactKind, trace.visualPreset, trace.shooterId, trace.shotId,
     );
     // Lokale Wiedergabe auf dem Host (EffectSystem bekommt das RPC auch)
   }

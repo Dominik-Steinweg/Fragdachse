@@ -50,7 +50,7 @@ const FLASH_PRESETS: Record<MuzzleFlashPreset, FlashPresetConfig> = {
   flame: { tint: 0xff8c34, alpha: 0.42, scaleX: 0.95, scaleY: 0.62, duration: 54, sparkCount: 5, sparkSpeed: 48, sparkSpread: 22, sparkTints: [0xffffff, 0xffcf6f, 0xff6326] },
   energy: { tint: 0xc8f7ff, alpha: 0.66, scaleX: 1.0, scaleY: 0.82, duration: 84, sparkCount: 6, sparkSpeed: 64, sparkSpread: 24, sparkTints: [0xffffff, 0xc8f7ff, 0x73bed3], useEnergyCore: true },
   plasma: { tint: 0xf1f1f1, alpha: 0.6, scaleX: 0.92, scaleY: 0.78, duration: 70, sparkCount: 5, sparkSpeed: 54, sparkSpread: 24, sparkTints: [0xffffff, 0xdedede, 0x9ea4a8], useEnergyCore: true },
-  asmd_primary: { tint: 0xd7fbff, alpha: 0.82, scaleX: 1.22, scaleY: 0.94, duration: 96, sparkCount: 8, sparkSpeed: 74, sparkSpread: 18, sparkTints: [0xffffff, 0xbdf3ff, 0x73bed3], useEnergyCore: true },
+  asmd_primary: { tint: 0xd7fbff, alpha: 0.92, scaleX: 1.42, scaleY: 1.04, duration: 118, sparkCount: 12, sparkSpeed: 104, sparkSpread: 22, sparkTints: [0xffffff, 0xdaf9ff, 0x9de7ff, 0x73bed3], useEnergyCore: true },
 };
 
 export class MuzzleFlashRenderer {

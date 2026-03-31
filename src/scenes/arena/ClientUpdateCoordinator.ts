@@ -396,6 +396,7 @@ export class ClientUpdateCoordinator {
       localPlayer.color,
       config.fire.traceThickness,
       shotId,
+      trace.hitPlayerId ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       config.fire.visualPreset,
     );
 

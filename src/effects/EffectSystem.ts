@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
-import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
+import { circleZone, createEmitter, createSeededRandom, destroyEmitter, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 
 const HITSCAN_TRACER_FADE_MS = 320;
@@ -12,6 +12,8 @@ const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
 const TEX_EXPLOSION_SPARK = '__explosion_spark';
 const TEX_EXPLOSION_EMBER = '__explosion_ember';
+const TEX_ASMD_BEAM_GLOW = '__asmd_beam_glow';
+const TEX_ASMD_BEAM_CORE = '__asmd_beam_core';
 const TEX_BLOOD_DROPLET = '__blood_droplet';
 const TEX_BLOOD_STREAK = '__blood_streak';
 const TEX_BLOOD_STAIN = '__blood_stain';
@@ -103,6 +105,43 @@ export class EffectSystem {
         emberCanvas.refresh();
       }
     }
+
+    ensureCanvasTexture(this.scene.textures, TEX_ASMD_BEAM_GLOW, 96, 36, (ctx) => {
+      ctx.clearRect(0, 0, 96, 36);
+      const bodyGradient = ctx.createLinearGradient(0, 0, 96, 0);
+      bodyGradient.addColorStop(0, 'rgba(255,255,255,0)');
+      bodyGradient.addColorStop(0.18, 'rgba(255,255,255,0.72)');
+      bodyGradient.addColorStop(0.82, 'rgba(255,255,255,0.72)');
+      bodyGradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = bodyGradient;
+      ctx.beginPath();
+      ctx.roundRect(4, 6, 88, 24, 12);
+      ctx.fill();
+
+      ctx.globalCompositeOperation = 'destination-in';
+      const verticalGradient = ctx.createLinearGradient(0, 0, 0, 36);
+      verticalGradient.addColorStop(0, 'rgba(255,255,255,0)');
+      verticalGradient.addColorStop(0.28, 'rgba(255,255,255,0.92)');
+      verticalGradient.addColorStop(0.72, 'rgba(255,255,255,0.92)');
+      verticalGradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = verticalGradient;
+      ctx.fillRect(0, 0, 96, 36);
+      ctx.globalCompositeOperation = 'source-over';
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_ASMD_BEAM_CORE, 96, 14, (ctx) => {
+      ctx.clearRect(0, 0, 96, 14);
+      const bodyGradient = ctx.createLinearGradient(0, 0, 96, 0);
+      bodyGradient.addColorStop(0, 'rgba(255,255,255,0)');
+      bodyGradient.addColorStop(0.12, 'rgba(255,255,255,0.58)');
+      bodyGradient.addColorStop(0.5, 'rgba(255,255,255,1)');
+      bodyGradient.addColorStop(0.88, 'rgba(255,255,255,0.58)');
+      bodyGradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = bodyGradient;
+      ctx.beginPath();
+      ctx.roundRect(4, 4, 88, 6, 3);
+      ctx.fill();
+    });
 
     if (!this.scene.textures.exists(TEX_BURROW_DIRT)) {
       const dirtCanvas = this.scene.textures.createCanvas(TEX_BURROW_DIRT, 10, 10);
@@ -239,7 +278,7 @@ export class EffectSystem {
       if (effect.type === 'death') this.playDeathEffect(effect);
     });
 
-    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, visualPreset, shooterId, shotId) => {
+    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId) => {
       this.playSyncedHitscanTracer({
         startX,
         startY,
@@ -247,6 +286,7 @@ export class EffectSystem {
         endY,
         color,
         thickness,
+        impactKind,
         visualPreset,
         shooterId,
         shotId,
@@ -997,50 +1037,40 @@ export class EffectSystem {
     endY: number,
     playerColor: number,
     thickness: number,
+    impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
   ): void {
     this.ensureTextures();
     const clippedEnd = clipPointToArenaRay(startX, startY, endX, endY);
     const renderEndX = clippedEnd.x;
     const renderEndY = clippedEnd.y;
+    const clippedDx = renderEndX - endX;
+    const clippedDy = renderEndY - endY;
+    const clippedByArena = (clippedDx * clippedDx) + (clippedDy * clippedDy) > 0.25;
+    const resolvedImpactKind: HitscanImpactKind = impactKind === 'none' && clippedByArena ? 'environment' : impactKind;
     const palette = getBeamPaletteForPlayerColor(playerColor);
-    const gfx = this.scene.add.graphics();
-    gfx.setDepth(DEPTH_TRACE);
 
     this.muzzleFlashRenderer?.playHitscanFlash(startX, startY, renderEndX - startX, renderEndY - startY, visualPreset, playerColor);
 
     if (visualPreset === 'asmd_primary') {
-      const energyCore = this.mixColor(playerColor, 0xffffff, 0.72);
-      const energyGlow = this.mixColor(playerColor, COLORS.BLUE_2, 0.42);
-      this.strokeTracer(gfx, energyGlow, Math.max(thickness + 10, 10), 0.16, startX, startY, renderEndX, renderEndY);
-      this.strokeTracer(gfx, energyGlow, Math.max(thickness + 6, 6), 0.32, startX, startY, renderEndX, renderEndY);
-      this.strokeTracer(gfx, energyCore, Math.max(thickness + 3, 4), 0.72, startX, startY, renderEndX, renderEndY);
-      this.strokeTracer(gfx, 0xffffff, Math.max(thickness, 2), 0.95, startX, startY, renderEndX, renderEndY);
+      this.playAsmdPrimaryTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind);
+      return;
+    }
 
-      const beamMidX = (startX + renderEndX) * 0.5;
-      const beamMidY = (startY + renderEndY) * 0.5;
-      gfx.fillStyle(energyGlow, 0.18);
-      gfx.fillCircle(beamMidX, beamMidY, Math.max(thickness * 1.8, 5));
-      gfx.fillStyle(energyCore, 0.3);
-      gfx.fillCircle(startX, startY, Math.max(thickness * 1.9, 5));
-      gfx.fillStyle(0xffffff, 0.5);
-      gfx.fillCircle(startX, startY, Math.max(thickness * 0.9, 2));
-      gfx.fillStyle(energyCore, 0.36);
-      gfx.fillCircle(renderEndX, renderEndY, Math.max(thickness * 1.25, 4));
-      gfx.fillStyle(0xffffff, 0.7);
-      gfx.fillCircle(renderEndX, renderEndY, Math.max(thickness * 0.55, 2));
-      this.playHitscanImpact(renderEndX, renderEndY, playerColor, thickness, visualPreset);
-    } else {
-      this.strokeTracer(gfx, palette.shadow, Math.max(thickness + 6, 6), 0.20, startX, startY, renderEndX, renderEndY);
-      this.strokeTracer(gfx, palette.glow, Math.max(thickness + 3, 4), 0.45, startX, startY, renderEndX, renderEndY);
-      this.strokeTracer(gfx, palette.core, Math.max(thickness, 2), 0.95, startX, startY, renderEndX, renderEndY);
+    const gfx = this.scene.add.graphics();
+    gfx.setDepth(DEPTH_TRACE);
+    this.strokeTracer(gfx, palette.shadow, Math.max(thickness + 6, 6), 0.20, startX, startY, renderEndX, renderEndY);
+    this.strokeTracer(gfx, palette.glow, Math.max(thickness + 3, 4), 0.45, startX, startY, renderEndX, renderEndY);
+    this.strokeTracer(gfx, palette.core, Math.max(thickness, 2), 0.95, startX, startY, renderEndX, renderEndY);
 
-      gfx.fillStyle(palette.glow, 0.40);
-      gfx.fillCircle(startX, startY, Math.max(thickness * 1.35, 4));
-      gfx.fillStyle(palette.core, 0.85);
-      gfx.fillCircle(startX, startY, Math.max(thickness * 0.75, 2));
+    gfx.fillStyle(palette.glow, 0.40);
+    gfx.fillCircle(startX, startY, Math.max(thickness * 1.35, 4));
+    gfx.fillStyle(palette.core, 0.85);
+    gfx.fillCircle(startX, startY, Math.max(thickness * 0.75, 2));
+    if (resolvedImpactKind !== 'none') {
       gfx.fillStyle(palette.core, 0.65);
       gfx.fillCircle(renderEndX, renderEndY, Math.max(thickness * 0.6, 2));
+      this.playHitscanImpact(renderEndX, renderEndY, playerColor, thickness, visualPreset, resolvedImpactKind);
     }
 
     this.scene.tweens.add({
@@ -1060,16 +1090,17 @@ export class EffectSystem {
     playerColor: number,
     thickness: number,
     shotId: number,
+    impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
-    this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, visualPreset);
+    this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, impactKind, visualPreset);
   }
 
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
-    const { startX, startY, endX, endY, color, thickness, visualPreset, shooterId, shotId } = trace;
+    const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
-    this.playHitscanTracer(startX, startY, endX, endY, color, thickness, visualPreset);
+    this.playHitscanTracer(startX, startY, endX, endY, color, thickness, impactKind ?? 'environment', visualPreset);
   }
 
   private playHitscanImpact(
@@ -1078,12 +1109,16 @@ export class EffectSystem {
     playerColor: number,
     thickness: number,
     visualPreset: HitscanVisualPreset,
+    impactKind: HitscanImpactKind = 'environment',
   ): void {
-    if (!isPointInsideArena(x, y)) return;
+    if (impactKind === 'none' || !isPointInsideArena(x, y)) return;
     const baseColor = visualPreset === 'asmd_primary'
       ? this.mixColor(playerColor, COLORS.BLUE_1, 0.48)
       : this.mixColor(playerColor, 0xffffff, 0.3);
-    const halo = this.scene.add.circle(x, y, Math.max(thickness * 2.4, 7), baseColor, visualPreset === 'asmd_primary' ? 0.42 : 0.24);
+    const haloRadius = visualPreset === 'asmd_primary'
+      ? Math.max(thickness * (impactKind === 'player' ? 2.6 : 3.4), impactKind === 'player' ? 7 : 9)
+      : Math.max(thickness * 2.4, 7);
+    const halo = this.scene.add.circle(x, y, haloRadius, baseColor, visualPreset === 'asmd_primary' ? 0.42 : 0.24);
     halo.setDepth(DEPTH_TRACE + 0.1);
     halo.setBlendMode(Phaser.BlendModes.ADD);
     this.scene.tweens.add({
@@ -1097,22 +1132,341 @@ export class EffectSystem {
     });
 
     if (visualPreset === 'asmd_primary') {
-      const sparks = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
-        lifespan: { min: 120, max: 260 },
-        quantity: 10,
+      const flashColor = this.mixColor(playerColor, 0xffffff, impactKind === 'player' ? 0.58 : 0.42);
+      const flash = this.scene.add.circle(x, y, Math.max(thickness * (impactKind === 'player' ? 1.8 : 1.35), 3), flashColor, 0.72);
+      flash.setDepth(DEPTH_TRACE + 0.13);
+      flash.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: flash,
+        alpha: 0,
+        scaleX: impactKind === 'player' ? 1.7 : 1.45,
+        scaleY: impactKind === 'player' ? 1.7 : 1.45,
+        duration: impactKind === 'player' ? 120 : 100,
+        ease: 'Quad.easeOut',
+        onComplete: () => flash.destroy(),
+      });
+
+      const sparks = createEmitter(this.scene, x, y, TEX_EXPLOSION_SPARK, {
+        lifespan: impactKind === 'player' ? { min: 90, max: 180 } : { min: 120, max: 260 },
+        quantity: impactKind === 'player' ? 9 : 15,
         frequency: -1,
-        speed: { min: 24, max: 150 },
+        speed: impactKind === 'player' ? { min: 36, max: 110 } : { min: 55, max: 180 },
         angle: { min: 0, max: 360 },
-        scale: { start: 0.9, end: 0 },
+        scale: { start: impactKind === 'player' ? 0.8 : 1.0, end: 0 },
         alpha: { start: 0.9, end: 0 },
-        tint: [0xffffff, this.mixColor(playerColor, 0xffffff, 0.45), this.mixColor(playerColor, COLORS.BLUE_2, 0.3)],
+        tint: [0xffffff, this.mixColor(playerColor, 0xffffff, 0.45), playerColor],
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
-      });
-      sparks.setDepth(DEPTH_TRACE + 0.12);
-      sparks.explode(10);
-      this.scene.time.delayedCall(320, () => sparks.destroy());
+      }, DEPTH_TRACE + 0.12);
+      sparks.explode(impactKind === 'player' ? 9 : 15);
+      this.scene.time.delayedCall(320, () => destroyEmitter(sparks));
+
+      this.playAsmdImpactArcs(x, y, Math.max(thickness * (impactKind === 'player' ? 2.3 : 3), 8), playerColor, flashColor, impactKind === 'player' ? 3 : 5, impactKind === 'player' ? 130 : 180);
     }
+  }
+
+  private playAsmdPrimaryTracer(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    playerColor: number,
+    thickness: number,
+    impactKind: HitscanImpactKind,
+  ): void {
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const beamLength = Math.hypot(dx, dy);
+    if (beamLength <= 1) {
+      if (impactKind !== 'none') this.playHitscanImpact(endX, endY, playerColor, thickness, 'asmd_primary', impactKind);
+      return;
+    }
+
+    const angle = Math.atan2(dy, dx);
+    const beamThickness = Math.max(thickness * 2.35, 8);
+    const segmentCount = Phaser.Math.Clamp(Math.round(beamLength / 64), 4, 11);
+    const segmentLength = beamLength / segmentCount;
+    const glowColor = playerColor;
+    const accentColor = this.mixColor(playerColor, 0xffffff, 0.28);
+    const coreColor = this.mixColor(playerColor, 0xffffff, 0.6);
+
+    this.playAsmdPrimaryMuzzleBurst(startX, startY, angle, playerColor, beamThickness);
+
+    for (let index = 0; index < segmentCount; index++) {
+      const startT = index / segmentCount;
+      const endT = (index + 1) / segmentCount;
+      const centerT = (startT + endT) * 0.5;
+      const segmentX = Phaser.Math.Linear(startX, endX, centerT);
+      const segmentY = Phaser.Math.Linear(startY, endY, centerT);
+      const segment = this.scene.add.container(segmentX, segmentY);
+      segment.setDepth(DEPTH_TRACE + 0.02 + centerT * 0.05);
+      segment.setRotation(angle);
+      segment.setAlpha(Phaser.Math.Linear(0.78, 1, centerT));
+
+      const outerGlow = this.scene.add.image(0, 0, TEX_ASMD_BEAM_GLOW)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(glowColor)
+        .setAlpha(0.52)
+        .setDisplaySize(segmentLength * 1.12, beamThickness * 2.25);
+      const fringeGlow = this.scene.add.image(0, Phaser.Math.FloatBetween(-beamThickness * 0.12, beamThickness * 0.12), TEX_ASMD_BEAM_GLOW)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(accentColor)
+        .setAlpha(0.3)
+        .setDisplaySize(segmentLength * 1.18, beamThickness * 1.45);
+      const core = this.scene.add.image(0, 0, TEX_ASMD_BEAM_CORE)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(accentColor)
+        .setAlpha(0.94)
+        .setDisplaySize(segmentLength * 1.04, Math.max(thickness * 1.25, 3.4));
+      const hotCore = this.scene.add.image(0, 0, TEX_ASMD_BEAM_CORE)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(coreColor)
+        .setAlpha(0.56)
+        .setDisplaySize(segmentLength * 0.94, Math.max(thickness * 0.5, 1.7));
+      const arcs = this.createAsmdArcOverlay(segmentLength, beamThickness, glowColor, accentColor, Phaser.Math.Linear(0.8, 1.25, centerT));
+      segment.add([outerGlow, fringeGlow, core, hotCore, arcs]);
+
+      this.scene.tweens.add({
+        targets: segment,
+        alpha: 0,
+        scaleX: 1.04,
+        scaleY: 0.72,
+        delay: Math.round(startT * 92),
+        duration: Math.round(Phaser.Math.Linear(96, 190, endT)),
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          segment.removeAll(true);
+          segment.destroy();
+        },
+      });
+    }
+
+    this.playAsmdBeamParticles(startX, startY, endX, endY, playerColor, beamThickness);
+    if (impactKind !== 'none') this.playHitscanImpact(endX, endY, playerColor, thickness, 'asmd_primary', impactKind);
+  }
+
+  private playAsmdPrimaryMuzzleBurst(
+    x: number,
+    y: number,
+    angle: number,
+    playerColor: number,
+    beamThickness: number,
+  ): void {
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
+    const glowColor = playerColor;
+    const accentColor = this.mixColor(playerColor, 0xffffff, 0.42);
+    const hotColor = this.mixColor(playerColor, 0xffffff, 0.68);
+    const flashX = x + dirX * beamThickness * 0.55;
+    const flashY = y + dirY * beamThickness * 0.55;
+
+    const bloom = this.scene.add.circle(x, y, Math.max(beamThickness * 1.18, 7), glowColor, 0.28);
+    bloom.setDepth(DEPTH_TRACE + 0.1);
+    bloom.setBlendMode(Phaser.BlendModes.ADD);
+
+    const flare = this.scene.add.image(flashX, flashY, TEX_ASMD_BEAM_GLOW)
+      .setDepth(DEPTH_TRACE + 0.11)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(accentColor)
+      .setAlpha(0.62)
+      .setRotation(angle)
+      .setDisplaySize(Math.max(beamThickness * 5.8, 34), Math.max(beamThickness * 2.4, 14));
+    const core = this.scene.add.image(flashX, flashY, TEX_ASMD_BEAM_CORE)
+      .setDepth(DEPTH_TRACE + 0.12)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(hotColor)
+      .setAlpha(0.78)
+      .setRotation(angle)
+      .setDisplaySize(Math.max(beamThickness * 4.1, 22), Math.max(beamThickness * 0.7, 3));
+
+    this.scene.tweens.add({
+      targets: [bloom, flare, core],
+      alpha: 0,
+      scaleX: 1.22,
+      scaleY: 1.22,
+      duration: 120,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        bloom.destroy();
+        flare.destroy();
+        core.destroy();
+      },
+    });
+
+    const angleDeg = Phaser.Math.RadToDeg(angle);
+    const sparks = createEmitter(this.scene, x, y, TEX_EXPLOSION_SPARK, {
+      lifespan: { min: 80, max: 150 },
+      quantity: 12,
+      frequency: -1,
+      angle: { min: angleDeg - 24, max: angleDeg + 24 },
+      speed: { min: 80, max: 240 },
+      scale: { start: 0.92, end: 0 },
+      alpha: { start: 0.84, end: 0 },
+      tint: [hotColor, accentColor, glowColor],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }, DEPTH_TRACE + 0.13);
+    sparks.explode(12);
+    this.scene.time.delayedCall(220, () => destroyEmitter(sparks));
+  }
+
+  private playAsmdBeamParticles(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    playerColor: number,
+    beamThickness: number,
+  ): void {
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const beamLength = Math.hypot(dx, dy);
+    if (beamLength <= 8) return;
+
+    const angleDeg = Phaser.Math.RadToDeg(Math.atan2(dy, dx));
+    const accentColor = this.mixColor(playerColor, 0xffffff, 0.35);
+    const hotColor = this.mixColor(playerColor, 0xffffff, 0.62);
+    const quantity = Phaser.Math.Clamp(Math.round(beamLength / 28), 12, 30);
+    const frontQuantity = Phaser.Math.Clamp(Math.round(beamLength / 44), 8, 18);
+    const beamZone = {
+      type: 'random',
+      source: new Phaser.Geom.Line(startX, startY, endX, endY),
+    } as Phaser.Types.GameObjects.Particles.EmitZoneData;
+    const frontZone = {
+      type: 'random',
+      source: new Phaser.Geom.Line(
+        Phaser.Math.Linear(startX, endX, 0.58),
+        Phaser.Math.Linear(startY, endY, 0.58),
+        endX,
+        endY,
+      ),
+    } as Phaser.Types.GameObjects.Particles.EmitZoneData;
+
+    const flow = createEmitter(this.scene, 0, 0, TEX_EXPLOSION_SPARK, {
+      lifespan: { min: 70, max: 135 },
+      quantity,
+      frequency: -1,
+      emitZone: beamZone,
+      angle: { min: angleDeg - 10, max: angleDeg + 10 },
+      speed: { min: 120, max: 320 },
+      scale: { start: Math.max(beamThickness * 0.11, 0.75), end: 0 },
+      alpha: { start: 0.66, end: 0 },
+      tint: [playerColor, accentColor, hotColor],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }, DEPTH_TRACE + 0.08);
+    flow.explode(quantity);
+
+    const front = createEmitter(this.scene, 0, 0, TEX_EXPLOSION_SPARK, {
+      lifespan: { min: 140, max: 220 },
+      quantity: frontQuantity,
+      frequency: -1,
+      emitZone: frontZone,
+      angle: { min: angleDeg - 24, max: angleDeg + 24 },
+      speed: { min: 40, max: 160 },
+      scale: { start: Math.max(beamThickness * 0.14, 1.05), end: 0 },
+      alpha: { start: 0.84, end: 0 },
+      tint: [hotColor, accentColor, playerColor],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }, DEPTH_TRACE + 0.1);
+    front.explode(frontQuantity);
+
+    this.scene.time.delayedCall(320, () => {
+      destroyEmitter(flow);
+      destroyEmitter(front);
+    });
+  }
+
+  private createAsmdArcOverlay(
+    segmentLength: number,
+    beamThickness: number,
+    playerColor: number,
+    accentColor: number,
+    turbulence: number,
+  ): Phaser.GameObjects.Graphics {
+    const gfx = this.scene.add.graphics();
+    gfx.setBlendMode(Phaser.BlendModes.ADD);
+    const halfLength = segmentLength * 0.52;
+    const lineCount = turbulence > 1 ? 3 : 2;
+
+    for (let index = 0; index < lineCount; index++) {
+      const side = index % 2 === 0 ? -1 : 1;
+      const baseOffset = side * beamThickness * Phaser.Math.FloatBetween(0.16, 0.34);
+      const amplitude = beamThickness * Phaser.Math.FloatBetween(0.22, 0.46) * turbulence;
+      const points: Array<{ x: number; y: number }> = [];
+
+      for (let step = 0; step <= 4; step++) {
+        const progress = step / 4;
+        const x = Phaser.Math.Linear(-halfLength, halfLength, progress);
+        const zigzag = step === 0 || step === 4 ? 0 : ((step % 2 === 0 ? 1 : -1) * amplitude * Phaser.Math.FloatBetween(0.45, 1));
+        const y = baseOffset + zigzag + Phaser.Math.FloatBetween(-beamThickness * 0.06, beamThickness * 0.06);
+        points.push({ x, y });
+      }
+
+      gfx.lineStyle(Math.max(beamThickness * 0.08, 1.6), playerColor, 0.22);
+      gfx.beginPath();
+      gfx.moveTo(points[0].x, points[0].y);
+      for (let step = 1; step < points.length; step++) gfx.lineTo(points[step].x, points[step].y);
+      gfx.strokePath();
+
+      gfx.lineStyle(Math.max(beamThickness * 0.04, 0.9), accentColor, 0.42);
+      gfx.beginPath();
+      gfx.moveTo(points[0].x, points[0].y);
+      for (let step = 1; step < points.length; step++) gfx.lineTo(points[step].x, points[step].y);
+      gfx.strokePath();
+    }
+
+    return gfx;
+  }
+
+  private playAsmdImpactArcs(
+    x: number,
+    y: number,
+    radius: number,
+    playerColor: number,
+    accentColor: number,
+    boltCount: number,
+    duration: number,
+  ): void {
+    const gfx = this.scene.add.graphics();
+    gfx.setPosition(x, y);
+    gfx.setDepth(DEPTH_TRACE + 0.14);
+    gfx.setBlendMode(Phaser.BlendModes.ADD);
+
+    for (let bolt = 0; bolt < boltCount; bolt++) {
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const length = Phaser.Math.FloatBetween(radius * 0.9, radius * 1.8);
+      const jitter = radius * Phaser.Math.FloatBetween(0.16, 0.32);
+      const points = [
+        { x: 0, y: 0 },
+        { x: Math.cos(angle) * length * 0.35 + Phaser.Math.FloatBetween(-jitter, jitter), y: Math.sin(angle) * length * 0.35 + Phaser.Math.FloatBetween(-jitter, jitter) },
+        { x: Math.cos(angle) * length * 0.72 + Phaser.Math.FloatBetween(-jitter, jitter), y: Math.sin(angle) * length * 0.72 + Phaser.Math.FloatBetween(-jitter, jitter) },
+        { x: Math.cos(angle) * length, y: Math.sin(angle) * length },
+      ];
+
+      gfx.lineStyle(Math.max(radius * 0.08, 1.8), playerColor, 0.24);
+      gfx.beginPath();
+      gfx.moveTo(points[0].x, points[0].y);
+      for (let index = 1; index < points.length; index++) gfx.lineTo(points[index].x, points[index].y);
+      gfx.strokePath();
+
+      gfx.lineStyle(Math.max(radius * 0.04, 1), accentColor, 0.44);
+      gfx.beginPath();
+      gfx.moveTo(points[0].x, points[0].y);
+      for (let index = 1; index < points.length; index++) gfx.lineTo(points[index].x, points[index].y);
+      gfx.strokePath();
+    }
+
+    this.scene.tweens.add({
+      targets: gfx,
+      alpha: 0,
+      scaleX: 1.12,
+      scaleY: 1.12,
+      duration,
+      ease: 'Quad.easeOut',
+      onComplete: () => gfx.destroy(),
+    });
   }
 
   private consumePredictedTracerId(shotId: number): boolean {
