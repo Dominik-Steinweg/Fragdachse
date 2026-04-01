@@ -41,7 +41,7 @@ import {
   restartRoomForAutomaticRoomSearch,
   restartRoomForQualityRetry,
 } from '../utils/roomQuality';
-import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot } from '../types';
+import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 
 import {
   type ArenaContext,
@@ -58,6 +58,26 @@ import {
   wireRenderersToProjManager,
   wireRenderersToEffectSystem,
 } from './arena';
+
+function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
+  const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
+
+  switch (projectile.style) {
+    case 'rocket':
+    case 'bfg':
+      return Math.max(baseRadius, CELL_SIZE * 4);
+    case 'grenade':
+    case 'holy_grenade':
+      return Math.max(baseRadius, CELL_SIZE * 3.5);
+    case 'energy_ball':
+    case 'spore':
+      return Math.max(baseRadius, CELL_SIZE * 3);
+    case 'flame':
+      return Math.max(baseRadius, CELL_SIZE * 1.5);
+    default:
+      return baseRadius;
+  }
+}
 
 export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
@@ -200,6 +220,38 @@ export class ArenaScene extends Phaser.Scene {
       shieldBuffSystem: null, energyShieldSystem: null,
       teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, trainManager: null,
     };
+
+    playerManager.setSpawnContextProvider((playerId) => {
+      const latestState = bridge.getLatestGameState();
+      const runtimePlaceables = this.ctx.placementSystem?.getAllRuntimeRocks() ?? latestState?.placeableRocks ?? [];
+      const turretRange = UTILITY_CONFIGS.FLIEGENPILZ.placeable.targetRange;
+
+      return {
+        fires: latestState?.fires ?? [],
+        stinkClouds: latestState?.stinkClouds ?? [],
+        teslaDomes: latestState?.teslaDomes ?? [],
+        nukes: latestState?.nukes ?? [],
+        meteors: latestState?.meteors ?? [],
+        turrets: runtimePlaceables
+          .filter((placeable) => placeable.kind === 'turret' && placeable.ownerId !== playerId)
+          .map((placeable) => ({
+            x: ARENA_OFFSET_X + placeable.gridX * CELL_SIZE + CELL_SIZE * 0.5,
+            y: ARENA_OFFSET_Y + placeable.gridY * CELL_SIZE + CELL_SIZE * 0.5,
+            ownerId: placeable.ownerId,
+            range: turretRange,
+          })),
+        projectiles: (latestState?.projectiles ?? [])
+          .filter((projectile) => projectile.ownerId !== playerId)
+          .map((projectile) => ({
+            x: projectile.x,
+            y: projectile.y,
+            ownerId: projectile.ownerId,
+            radius: resolveSpawnProjectileDangerRadius(projectile),
+          })),
+        isRelevantOpponent: (otherPlayerId) => combatSystem.isAlive(otherPlayerId),
+        hasLineOfSight: (sx, sy, ex, ey) => combatSystem.hasLineOfSight(sx, sy, ex, ey),
+      };
+    });
 
     // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, this.arenaClipMask);

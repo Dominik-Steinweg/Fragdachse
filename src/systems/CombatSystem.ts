@@ -1081,7 +1081,7 @@ export class CombatSystem {
     if (!player) return;
 
     player.body.enable = true;
-    const spawn = this.playerManager.getSpawnPoint();
+    const spawn = this.playerManager.getSpawnPoint(playerId);
     player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
   }
 }

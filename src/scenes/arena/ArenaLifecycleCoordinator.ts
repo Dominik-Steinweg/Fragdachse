@@ -49,6 +49,11 @@ export class ArenaLifecycleCoordinator {
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
   private trainDestroyedShown = false;
 
+  private layoutRetryCount = 0;
+  private arenaEnteredAt   = 0;
+  private arenaBuilt       = false;
+  private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
+
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly ctx: ArenaContext,
@@ -81,6 +86,17 @@ export class ArenaLifecycleCoordinator {
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.lastPhase = bridge.getGamePhase();
+
+    // If the scene was created after the host already transitioned to ARENA,
+    // detectPhaseChange() will never see LOBBY→ARENA. Schedule the transition
+    // on the next frame so all create()-time setup (RPC, callbacks) completes first.
+    if (this.lastPhase === 'ARENA') {
+      this.scene.time.delayedCall(0, () => {
+        if (bridge.getGamePhase() === 'ARENA' && !this.arenaBuilt && !this.matchTerminated) {
+          this.onTransitionToArena();
+        }
+      });
+    }
   }
 
   // ── Phase detection ───────────────────────────────────────────────────────
@@ -94,10 +110,27 @@ export class ArenaLifecycleCoordinator {
       return;
     }
 
-    if (current === this.lastPhase) return;
+    if (current === this.lastPhase) {
+      // Safety net: if we've been in ARENA for >5s without having built the
+      // arena, something went wrong during the transition — recover gracefully.
+      if (current === 'ARENA' && !this.arenaBuilt) {
+        const now = Date.now();
+        if (this.arenaEnteredAt === 0) {
+          this.arenaEnteredAt = now;
+        } else if (now - this.arenaEnteredAt > 5_000) {
+          this.arenaEnteredAt = 0;
+          this.terminateMatch();
+        }
+      }
+      return;
+    }
+
     const prev     = this.lastPhase;
     this.lastPhase = current;
-    if (prev === 'LOBBY' && current === 'ARENA') this.onTransitionToArena();
+    if (prev === 'LOBBY' && current === 'ARENA') {
+      this.arenaEnteredAt = Date.now();
+      this.onTransitionToArena();
+    }
     if (prev === 'ARENA' && current === 'LOBBY') this.onTransitionToLobby();
   }
 
@@ -154,6 +187,8 @@ export class ArenaLifecycleCoordinator {
   terminateMatch(): void {
     if (this.matchTerminated) return;
     this.matchTerminated = true;
+    this.arenaBuilt = false;
+    this.arenaEnteredAt = 0;
 
     this.isLocalReady = false;
     bridge.setLocalReady(false);
@@ -512,11 +547,19 @@ export class ArenaLifecycleCoordinator {
   private onTransitionToArena(): void {
     const layout = bridge.getArenaLayout();
     if (!layout) {
+      this.layoutRetryCount++;
+      if (this.layoutRetryCount >= ArenaLifecycleCoordinator.LAYOUT_RETRY_LIMIT) {
+        this.layoutRetryCount = 0;
+        this.terminateMatch();
+        return;
+      }
       this.scene.time.delayedCall(16, () => this.onTransitionToArena());
       return;
     }
+    this.layoutRetryCount = 0;
 
     this.buildArena(layout);
+    this.arenaBuilt = true;
 
     for (const profile of bridge.getConnectedPlayers()) {
       if (bridge.getPlayerReady(profile.id) && !this.ctx.playerManager.hasPlayer(profile.id)) {
@@ -544,6 +587,8 @@ export class ArenaLifecycleCoordinator {
   private get localPlayerState() { return this.hostUpdate['localPlayerState']; }
 
   private onTransitionToLobby(): void {
+    this.arenaBuilt = false;
+    this.arenaEnteredAt = 0;
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;

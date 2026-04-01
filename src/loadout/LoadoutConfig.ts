@@ -466,7 +466,7 @@ export const WEAPON_CONFIGS = {
   TASER: {
     id:                   'TASER',
     displayName:          'Zeus',
-    cooldown:             1500,
+    cooldown:             4000,
     damage:               200,
     range:                80,        
     fire: {
@@ -658,7 +658,7 @@ export const WEAPON_CONFIGS = {
     id:                   'SHOTGUN',
     displayName:          'Schrotflinte',
     cooldown:             700,
-    damage:               7,       // Schaden pro Pellet
+    damage:               10,       // Schaden pro Pellet
     range:                230,
     fire: {
       type:                 'projectile',
@@ -978,7 +978,7 @@ export const WEAPON_CONFIGS = {
     fire: {
       type:                     'tesla_dome',
       radius:                   190,
-      damagePerTick:            5,
+      damagePerTick:            7,
       tickInterval:             180,
       adrenalineDrainPerSecond: 16,
       movementSlowFactor:       0.3,
