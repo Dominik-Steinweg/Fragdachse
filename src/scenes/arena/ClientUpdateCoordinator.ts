@@ -76,6 +76,7 @@ export class ClientUpdateCoordinator {
         }
         player.updateHP(ps.hp);
         player.updateArmor(ps.armor);
+        player.updateBurnStacks(ps.burnStacks ?? 0);
         player.setVisible(ps.alive);
         player.setRageTint(ps.isRaging);
 

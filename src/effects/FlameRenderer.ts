@@ -1,17 +1,16 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { circleZone } from './EffectUtils';
-
-// ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
-const TEX_FLAME_EMBER = '__flame_ember';
-const TEX_FLAME_CORE  = '__flame_core';
-const TEX_FLAME_SPARK = '__flame_spark';
-const TEX_FLAME_GLOW  = '__flame_glow';
-
-// ── Farb-Palette (feste Flammenfarben, KEINE Spielerfarbe) ─────────────────
-const FLAME_COLORS_CORE  = [0xffee88, 0xffcc44, 0xff9922, 0xffffff];
-const FLAME_COLORS_OUTER = [0xff6622, 0xff4400, 0xdd2200, 0xcc3300];
-const FLAME_COLORS_SPARK = [0xffffff, 0xffee88, 0xffaa44, 0xff6622];
+import {
+  ensureFlameTextures,
+  FLAME_COLORS_CORE,
+  FLAME_COLORS_OUTER,
+  FLAME_COLORS_SPARK,
+  TEX_FLAME_CORE,
+  TEX_FLAME_EMBER,
+  TEX_FLAME_SPARK,
+  TEX_FLAME_GLOW,
+} from './FlameShared';
 
 // ── Konfigurations-Konstanten ──────────────────────────────────────────────
 const CORE_LIFESPAN    = { min: 120, max: 280 };
@@ -55,66 +54,7 @@ export class FlameRenderer {
    * Muss vor createFlameVisual() aufgerufen werden.
    */
   generateTextures(): void {
-    const texMgr = this.scene.textures;
-
-    // Ember: weicher Kreis 16×16 – Basis für Kern- und Außenflamme
-    if (!texMgr.exists(TEX_FLAME_EMBER)) {
-      const s = 16;
-      const canvas = texMgr.createCanvas(TEX_FLAME_EMBER, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.3, 'rgba(255,238,136,0.8)');
-      grad.addColorStop(0.7, 'rgba(255,153,34,0.4)');
-      grad.addColorStop(1, 'rgba(255,68,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-
-    // Core-Textur: größerer weicher Kreis 24×24
-    if (!texMgr.exists(TEX_FLAME_CORE)) {
-      const s = 24;
-      const canvas = texMgr.createCanvas(TEX_FLAME_CORE, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.4, 'rgba(255,255,200,0.7)');
-      grad.addColorStop(0.8, 'rgba(255,200,100,0.2)');
-      grad.addColorStop(1, 'rgba(255,100,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-
-    // Spark: kleiner heller Punkt 6×6
-    if (!texMgr.exists(TEX_FLAME_SPARK)) {
-      const s = 6;
-      const canvas = texMgr.createCanvas(TEX_FLAME_SPARK, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.5, 'rgba(255,238,136,0.6)');
-      grad.addColorStop(1, 'rgba(255,170,68,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-
-    // Glow: großer weicher Kreis 48×48 – additiver Leucht-Halo pro Hitbox
-    if (!texMgr.exists(TEX_FLAME_GLOW)) {
-      const s = 48;
-      const canvas = texMgr.createCanvas(TEX_FLAME_GLOW, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0, 'rgba(255,200,80,0.6)');
-      grad.addColorStop(0.4, 'rgba(255,140,30,0.3)');
-      grad.addColorStop(0.7, 'rgba(255,80,0,0.1)');
-      grad.addColorStop(1, 'rgba(255,40,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
+    ensureFlameTextures(this.scene);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────

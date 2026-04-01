@@ -40,6 +40,18 @@ interface DamageVisualContext {
   dirY?: number;
 }
 
+interface BurnStackState {
+  expiresAt: number;
+}
+
+interface BurnAttackerState {
+  stacks: BurnStackState[];
+  nextTickAt: number;
+  damagePerTick: number;
+  tickIntervalMs: number;
+  weaponName: string;
+}
+
 export interface HitscanTraceResult {
   readonly endX: number;
   readonly endY: number;
@@ -63,6 +75,7 @@ export class CombatSystem {
   private armor:         Map<string, number>                           = new Map();
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
+  private burnStates:    Map<string, Map<string, BurnAttackerState>>   = new Map();
   private readonly hitscanLine       = new Phaser.Geom.Line();
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
   private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
@@ -160,11 +173,14 @@ export class CombatSystem {
     this.hp.set(id, HP_MAX);
     this.armor.set(id, 0);
     this.alive.set(id, true);
+    this.clearBurnForPlayer(id);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
   }
 
   removePlayer(id: string): void {
+    this.clearBurnForPlayer(id);
+    this.clearBurnByAttacker(id);
     this.hp.delete(id);
     this.armor.delete(id);
     this.alive.delete(id);
@@ -180,6 +196,16 @@ export class CombatSystem {
   getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
   isAlive(id: string):  boolean { return this.alive.get(id) ?? false;  }
   isBurrowed(id: string): boolean { return this.burrowSystem?.isBurrowed(id) ?? false; }
+  getBurnStackCount(id: string): number {
+    const attackerStates = this.burnStates.get(id);
+    if (!attackerStates) return 0;
+
+    let totalStacks = 0;
+    for (const state of attackerStates.values()) {
+      totalStacks += state.stacks.length;
+    }
+    return totalStacks;
+  }
 
   // ── Öffentliche Schadens-Methode ───────────────────────────────────────────
 
@@ -244,6 +270,74 @@ export class CombatSystem {
     }
 
     if (newHp === 0) this.handleDeath(targetId, x, y, this.nextEffectSeed());
+  }
+
+  applyBurnStack(
+    targetId: string,
+    attackerId: string,
+    durationMs: number,
+    damagePerTick: number,
+    tickIntervalMs: number,
+    weaponName: string,
+  ): void {
+    if (!this.isAlive(targetId)) return;
+    if (durationMs <= 0 || damagePerTick <= 0 || tickIntervalMs <= 0) return;
+
+    const now = Date.now();
+    let targetState = this.burnStates.get(targetId);
+    if (!targetState) {
+      targetState = new Map();
+      this.burnStates.set(targetId, targetState);
+    }
+
+    let attackerState = targetState.get(attackerId);
+    if (!attackerState) {
+      attackerState = {
+        stacks: [],
+        nextTickAt: now + tickIntervalMs,
+        damagePerTick,
+        tickIntervalMs,
+        weaponName,
+      };
+      targetState.set(attackerId, attackerState);
+    }
+
+    attackerState.damagePerTick = damagePerTick;
+    attackerState.tickIntervalMs = tickIntervalMs;
+    attackerState.weaponName = weaponName;
+    attackerState.stacks.push({ expiresAt: now + durationMs });
+  }
+
+  updateBurnEffects(now: number): void {
+    for (const [targetId, attackerStates] of [...this.burnStates]) {
+      if (!this.isAlive(targetId) || this.isBurrowed(targetId)) {
+        this.clearBurnForPlayer(targetId);
+        continue;
+      }
+
+      for (const [attackerId, state] of [...attackerStates]) {
+        state.stacks = state.stacks.filter(stack => stack.expiresAt > now);
+        if (state.stacks.length === 0) {
+          attackerStates.delete(attackerId);
+          continue;
+        }
+
+        while (now >= state.nextTickAt && state.stacks.length > 0 && this.isAlive(targetId)) {
+          const damage = state.damagePerTick * state.stacks.length;
+          const attacker = this.playerManager.getPlayer(attackerId);
+          this.applyDamage(targetId, damage, false, attackerId, state.weaponName, attacker
+            ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y }
+            : undefined);
+          state.nextTickAt += state.tickIntervalMs;
+
+          if (!this.isAlive(targetId)) break;
+        }
+      }
+
+      if (attackerStates.size === 0) {
+        this.burnStates.delete(targetId);
+      }
+    }
   }
 
   /**
@@ -367,6 +461,17 @@ export class CombatSystem {
               dirY: proj.body.velocity.y,
             });
             continue; // kein break, kein destroyProjectile
+          }
+
+          if (proj.isFlame) {
+            this.applyBurnStack(
+              player.id,
+              proj.ownerId,
+              proj.burnDurationMs ?? 0,
+              proj.burnDamagePerTick ?? 0,
+              proj.burnTickIntervalMs ?? 0,
+              proj.weaponName,
+            );
           }
 
           this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
@@ -1032,6 +1137,7 @@ export class CombatSystem {
   private handleDeath(playerId: string, x: number, y: number, seed: number): void {
     this.alive.set(playerId, false);
     this.armor.set(playerId, 0);
+    this.clearBurnForPlayer(playerId);
 
     // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
     this.powerUpSystem?.removePlayer(playerId);
@@ -1071,6 +1177,7 @@ export class CombatSystem {
     this.hp.set(playerId, HP_MAX);
     this.armor.set(playerId, 0);
     this.alive.set(playerId, true);
+    this.clearBurnForPlayer(playerId);
     this.respawnTimers.delete(playerId);
     this.lastAttacker.delete(playerId);
     this.lastWeapon.delete(playerId);
@@ -1083,5 +1190,16 @@ export class CombatSystem {
     player.body.enable = true;
     const spawn = this.playerManager.getSpawnPoint(playerId);
     player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
+  }
+
+  private clearBurnForPlayer(playerId: string): void {
+    this.burnStates.delete(playerId);
+  }
+
+  private clearBurnByAttacker(attackerId: string): void {
+    for (const [targetId, attackerStates] of this.burnStates) {
+      attackerStates.delete(attackerId);
+      if (attackerStates.size === 0) this.burnStates.delete(targetId);
+    }
   }
 }

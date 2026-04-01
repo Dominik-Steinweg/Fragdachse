@@ -15,10 +15,9 @@ import type {
   EnergyShieldWeaponFireConfig,
   GaussUltimateConfig,
   NukeUtilityConfig,
-  PlaceableTurretUtilityConfig,
-  PlaceableRockUtilityConfig,
   PlaceableUtilityConfig,
   StinkCloudUtilityConfig,
+  TaserUtilityConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
@@ -835,6 +834,18 @@ export class LoadoutManager {
       case 'instant':
         if (cfg.type === 'stinkcloud') {
           didUse = this.activateStinkCloud(cfg as StinkCloudUtilityConfig, playerId);
+        } else if (cfg.type === 'taser') {
+          const taserCfg = cfg as TaserUtilityConfig;
+          didUse = this.combatSystem?.resolveMeleeSwing(
+            playerId, x, y, angle,
+            taserCfg.range, taserCfg.hitArcDegrees, taserCfg.damage,
+            0,           // kein Adrenalin-Gain
+            taserCfg.displayName, playerColor,
+            undefined,   // kein sourceSlot (Utility)
+            taserCfg.rockDamageMult ?? 1,
+            taserCfg.trainDamageMult ?? 1,
+            taserCfg.visualPreset,
+          ) ?? false;
         }
         break;
     }
@@ -1222,6 +1233,9 @@ export class LoadoutManager {
       hitboxGrowRate:  fireConfig.hitboxGrowRate,
       hitboxMaxSize:   fireConfig.hitboxEndSize,
       velocityDecay:   fireConfig.velocityDecay,
+      burnDurationMs:    fireConfig.burnDurationMs,
+      burnDamagePerTick: fireConfig.burnDamagePerTick,
+      burnTickIntervalMs: fireConfig.burnTickIntervalMs,
       sourceSlot,
     });
 

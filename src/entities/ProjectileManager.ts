@@ -443,6 +443,9 @@ export class ProjectileManager {
       hitboxGrowRate:  cfg.hitboxGrowRate,
       hitboxMaxSize:   cfg.hitboxMaxSize,
       velocityDecay:   cfg.velocityDecay,
+      burnDurationMs:    cfg.burnDurationMs,
+      burnDamagePerTick: cfg.burnDamagePerTick,
+      burnTickIntervalMs: cfg.burnTickIntervalMs,
       initialSpeed:    cfg.speed,
       // Granaten-Countdown
       lastCountdownEmitted: null,

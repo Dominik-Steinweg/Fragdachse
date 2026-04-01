@@ -33,6 +33,9 @@ export interface FlamethrowerWeaponFireConfig {
   readonly hitboxEndSize: number;       // px – Maximalgröße nach Wachstum
   readonly hitboxGrowRate: number;      // px/s – Wachstumsrate der Hitbox
   readonly velocityDecay: number;       // Geschwindigkeits-Faktor pro Sekunde (0-1)
+  readonly burnDurationMs: number;
+  readonly burnDamagePerTick: number;
+  readonly burnTickIntervalMs: number;
 }
 
 export interface TeslaDomeWeaponFireConfig {
@@ -147,7 +150,7 @@ export interface WeaponConfig {
   readonly shotAudio?: LoadoutShotAudioConfig;
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -282,6 +285,14 @@ export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
   readonly cloudTickInterval: number;    // ms zwischen Damage-Ticks
 }
 
+export interface TaserUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'taser';
+  readonly damage: number;
+  readonly range: number;
+  readonly hitArcDegrees: number;
+  readonly visualPreset: MeleeVisualPreset;
+}
+
 export interface TranslocatorUtilityConfig extends BaseUtilityConfig {
   readonly type: 'translocator';
   // Translocator-spezifische Configs koennen hier rein
@@ -302,7 +313,7 @@ export interface PlaceableTurretUtilityConfig extends BaseUtilityConfig {
 
 export type PlaceableUtilityConfig = PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -943,7 +954,7 @@ export const WEAPON_CONFIGS = {
     id:                   'FLAMETHROWER',
     displayName:          'Flammenwerfer',
     cooldown:             70,          // 20 Hitboxen/s
-    damage:               4,           // pro Hitbox-Treffer
+    damage:               2,           // reduzierter Direkttreffer; Burn trägt den Rest
     range:                250,         // px maximale Flammenreichweite
     fire: {
       type:               'flamethrower',
@@ -952,6 +963,9 @@ export const WEAPON_CONFIGS = {
       hitboxEndSize:      120,          // px Maximalgröße
       hitboxGrowRate:     60,          // px/s Wachstum
       velocityDecay:      0.82,        // 95% der Geschwindigkeit verbleiben pro Sekunde → ~750 px Reichweite
+      burnDurationMs:     2000,
+      burnDamagePerTick:  0.25,
+      burnTickIntervalMs: 250,
     },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        0.5,           // Adrenalin-Kosten pro Hitbox
@@ -1315,6 +1329,25 @@ export const UTILITY_CONFIGS = {
       deathCloudRadius:   64,
     },
   } as PlaceableTurretUtilityConfig,
+
+  ZEUS_TASER: {
+    id:              'ZEUS_TASER',
+    displayName:     'Zeus',
+    type:            'taser',
+    cooldown:        4000,
+    activation:      { type: 'instant' } as InstantUtilityActivationConfig,
+    damage:          200,
+    range:           80,
+    hitArcDegrees:   70,
+    visualPreset:    'zeus_taser' satisfies MeleeVisualPreset,
+    allowedSlots:    ['utility'],
+    projectileSpeed: 0,
+    projectileSize:  0,
+    fuseTime:        0,
+    maxBounces:      0,
+    trainDamageMult: 1.0,
+    rockDamageMult:  0,
+  } as TaserUtilityConfig,
 } as const;
 
 export const ULTIMATE_CONFIGS = {

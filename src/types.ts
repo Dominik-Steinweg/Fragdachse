@@ -55,6 +55,7 @@ export interface PlayerNetState {
   isStunned:  boolean;
   burrowPhase: BurrowPhase;
   isRaging:   boolean;  // Ultimate aktiv
+  burnStacks: number;
   isChargingUltimate?: boolean;
   ultimateChargeFraction?: number;
   ultimateChargeRange?: number;
@@ -417,6 +418,9 @@ export interface ProjectileSpawnConfig {
   hitboxGrowRate?:  number;     // Hitbox-Wachstum in px/s
   hitboxMaxSize?:   number;     // maximale Hitbox-Größe in px
   velocityDecay?:   number;     // Geschwindigkeits-Multiplikator pro Sekunde (0-1, kleiner = schnellerer Abbau)
+  burnDurationMs?:    number;
+  burnDamagePerTick?: number;
+  burnTickIntervalMs?: number;
 
   // BFG (optional)
   isBfg?:            boolean;   // true = BFG-Projektil (durchschlagend, Laser-Sub-Attacke)
@@ -581,6 +585,9 @@ export interface TrackedProjectile {
   hitboxMaxSize?:   number;     // px Maximum
   velocityDecay?:   number;     // Speed-Multiplikator pro Sekunde
   initialSpeed?:    number;     // Geschwindigkeit bei Spawn (für Decay-Berechnung)
+  burnDurationMs?:    number;
+  burnDamagePerTick?: number;
+  burnTickIntervalMs?: number;
 
   // Granaten-Countdown (Host-intern)
   lastCountdownEmitted?: number | null;  // letzter emittierter Countdown-Wert (Dedup)

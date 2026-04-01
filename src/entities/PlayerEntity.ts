@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { BurrowPhase, PlayerProfile } from '../types';
+import { PlayerBurnRenderer } from '../effects/PlayerBurnRenderer';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
@@ -32,6 +33,8 @@ export class PlayerEntity {
   // Glow-Aura für Spielerfarbe
   private glowFx: Phaser.FX.Glow | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
+  private burnRenderer: PlayerBurnRenderer | null = null;
+  private burnStacks = 0;
 
   // Sterbeanimation
   private deathSprite: Phaser.GameObjects.Sprite | null = null;
@@ -174,6 +177,7 @@ export class PlayerEntity {
     this.hpBarFg.setPosition(x - HP_BAR_WIDTH / 2, hpY);
     this.armorBarBg.setPosition(x, armorY);
     this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
+    this.syncAttachedEffects();
   }
 
   /** HP-Wert aktualisieren und Balken neu zeichnen. */
@@ -195,6 +199,23 @@ export class PlayerEntity {
     const visible = this.sprite.visible && this.worldBarsVisible && this.currentArmor > 0;
     this.armorBarBg.setVisible(visible);
     this.armorBarFg.setVisible(visible);
+  }
+
+  updateBurnStacks(stacks: number): void {
+    const nextStacks = Math.max(0, Math.floor(stacks));
+    this.burnStacks = nextStacks;
+
+    if (nextStacks <= 0) {
+      this.burnRenderer?.destroy();
+      this.burnRenderer = null;
+      return;
+    }
+
+    if (!this.burnRenderer) {
+      this.burnRenderer = new PlayerBurnRenderer(this.sprite.scene);
+    }
+
+    this.syncAttachedEffects();
   }
 
   /** Sprite und Balken ein-/ausblenden (Tod / Respawn). */
@@ -280,6 +301,7 @@ export class PlayerEntity {
       if (this.glowFx) this.glowFx.color = this.colorHex;
     }
     this.applyDisplayVisibility();
+    this.syncAttachedEffects();
   }
 
   private playWindUpTween(): void {
@@ -348,11 +370,17 @@ export class PlayerEntity {
     this.hpBarFg.setVisible(barsVisible);
     this.armorBarBg.setVisible(barsVisible && this.currentArmor > 0);
     this.armorBarFg.setVisible(barsVisible && this.currentArmor > 0);
+    this.syncAttachedEffects();
+  }
+
+  private syncAttachedEffects(): void {
+    this.burnRenderer?.sync(this.sprite.x, this.sprite.y, PLAYER_SIZE, this.burnStacks, this.sprite.visible);
   }
 
   destroy(): void {
     this.stopBurrowTween(true);
     this.glowTween?.stop();
+    this.burnRenderer?.destroy();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();

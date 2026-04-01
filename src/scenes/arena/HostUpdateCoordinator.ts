@@ -60,6 +60,7 @@ export class HostUpdateCoordinator {
   runHostUpdate(delta: number): void {
     if (!this.active) return;
     const countdownActive = bridge.isArenaCountdownActive();
+    const now = Date.now();
 
     if (!countdownActive && this.ctx.resourceSystem && this.ctx.burrowSystem) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -79,6 +80,7 @@ export class HostUpdateCoordinator {
     if (!countdownActive) {
       this.ctx.detonationSystem?.checkProjectileDetonations();
       this.ctx.combatSystem.update();
+      this.ctx.combatSystem.updateBurnEffects(now);
     }
 
     const { synced: projectiles, explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
@@ -247,6 +249,7 @@ export class HostUpdateCoordinator {
       const alive = this.ctx.combatSystem.isAlive(player.id);
       player.updateHP(hp);
       player.updateArmor(armor);
+      player.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(player.id));
       player.setVisible(alive);
       player.setRageTint(this.ctx.loadoutManager?.isUltimateActive(player.id) ?? false);
       player.syncBar();
@@ -334,7 +337,6 @@ export class HostUpdateCoordinator {
     this.netTickAccumulator -= NET_TICK_INTERVAL_MS;
     if (this.netTickAccumulator > NET_TICK_INTERVAL_MS) this.netTickAccumulator = 0;
 
-    const now = Date.now();
     for (const expiredRock of this.ctx.placementSystem?.update(now) ?? []) {
       if (expiredRock.kind === 'turret') {
         this.rockVisualHelper.spawnTurretDeathCloud(expiredRock);
@@ -353,6 +355,7 @@ export class HostUpdateCoordinator {
       const isStunned  = this.ctx.burrowSystem?.isStunned(player.id)  ?? false;
       const burrowPhase = this.ctx.burrowSystem?.getPhase(player.id) ?? 'idle';
       const isRaging   = this.ctx.loadoutManager?.isUltimateActive(player.id) ?? false;
+      const burnStacks = this.ctx.combatSystem.getBurnStackCount(player.id);
       const isChargingUltimate = this.ctx.loadoutManager?.isUltimateCharging(player.id) ?? false;
       const ultimateChargeFraction = this.ctx.loadoutManager?.getUltimateChargeFraction(player.id, now) ?? 0;
       const ultimateChargeRange    = this.ctx.loadoutManager?.getUltimateChargeRange(player.id) ?? 0;
@@ -384,6 +387,7 @@ export class HostUpdateCoordinator {
         isStunned,
         burrowPhase,
         isRaging,
+        burnStacks,
         isChargingUltimate,
         ultimateChargeFraction,
         ultimateChargeRange,
