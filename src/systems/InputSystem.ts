@@ -490,6 +490,7 @@ export class InputSystem {
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
     this.utilityPlacementActive = true;
+    this.bridge.sendDecoyStealthBreakRequest();
     return true;
   }
 
@@ -501,6 +502,7 @@ export class InputSystem {
 
     this.cancelUtilityCharge();
     this.utilityTargetingActive = true;
+    this.bridge.sendDecoyStealthBreakRequest();
     return true;
   }
 
@@ -513,6 +515,7 @@ export class InputSystem {
     this.utilityChargeEligibleAt = now < cooldownUntil ? cooldownUntil : now;
     this.utilityChargeStartedAt = null;
     this.maybeStartHeldUtilityCharge(now);
+    this.bridge.sendDecoyStealthBreakRequest();
     return true;
   }
 
@@ -631,6 +634,7 @@ export class InputSystem {
     this.cancelUtilityInteraction();
     this.ultimateHoldActive = true;
     this.ultimateChargeStartedAt = now;
+    this.bridge.sendDecoyStealthBreakRequest();
     this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press', inputStarted: true });
   }
 
@@ -676,6 +680,7 @@ export class InputSystem {
       const rage = this.getLocalRage?.() ?? 0;
       if (rage >= cfg.rageRequired) {
         this.ultimateChargeStartedAt = now;
+        this.bridge.sendDecoyStealthBreakRequest();
         this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press' });
         return;
       }

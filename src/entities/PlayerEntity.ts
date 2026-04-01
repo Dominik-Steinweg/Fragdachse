@@ -33,6 +33,10 @@ export class PlayerEntity {
   // Glow-Aura für Spielerfarbe
   private glowFx: Phaser.FX.Glow | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
+  private stealthTween: Phaser.Tweens.Tween | null = null;
+  private stealthScanTween: Phaser.Tweens.Tween | null = null;
+  private stealthShell: Phaser.GameObjects.Image | null = null;
+  private stealthScan: Phaser.GameObjects.Image | null = null;
   private burnRenderer: PlayerBurnRenderer | null = null;
   private burnStacks = 0;
 
@@ -44,8 +48,16 @@ export class PlayerEntity {
   // Visuelle Zustände – kombiniert in resolveVisual()
   private burrowPhase: BurrowPhase = 'idle';
   private isRagingVisual   = false;
+  private isDecoyStealthed = false;
   private burrowTween: Phaser.Tweens.Tween | null = null;
   private burrowTweenAlpha = 1;
+  private stealthTweenAlpha = 1;
+  private stealthGlowStrength = 4;
+  private stealthShellAlpha = 0;
+  private stealthShellScaleX = 1;
+  private stealthShellScaleY = 1;
+  private stealthShellRotation = 0;
+  private stealthScanProgress = 0;
 
   constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number, isEnemy = false) {
     this.id       = profile.id;
@@ -66,16 +78,21 @@ export class PlayerEntity {
     // setPadding nötig, damit der Glow nicht an den Sprite-Grenzen abgeschnitten wird
     this.sprite.preFX?.setPadding(20);
     this.glowFx = this.sprite.preFX?.addGlow(profile.colorHex, 4, 0, false, 0.1, 16) ?? null;
-    if (this.glowFx) {
-      this.glowTween = scene.tweens.add({
-        targets:       this.glowFx,
-        outerStrength: { from: 3, to: 7 },
-        duration:      1000,
-        yoyo:          true,
-        repeat:        -1,
-        ease:          'Sine.easeInOut',
-      });
-    }
+    this.startDefaultGlowTween();
+
+    this.stealthShell = scene.add.image(x, y, 'badger');
+    this.stealthShell.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+    this.stealthShell.setDepth(DEPTH.PLAYERS + 0.03);
+    this.stealthShell.setTint(profile.colorHex);
+    this.stealthShell.setBlendMode(Phaser.BlendModes.ADD);
+    this.stealthShell.setVisible(false);
+
+    this.stealthScan = scene.add.image(x, y, 'badger');
+    this.stealthScan.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+    this.stealthScan.setDepth(DEPTH.PLAYERS + 0.04);
+    this.stealthScan.setTint(profile.colorHex);
+    this.stealthScan.setBlendMode(Phaser.BlendModes.ADD);
+    this.stealthScan.setVisible(false);
 
     // HP-Balken Hintergrund (dunkelgrau, zentriert)
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
@@ -111,6 +128,10 @@ export class PlayerEntity {
 
   get color(): number {
     return this.colorHex;
+  }
+
+  isDecoyStealthedVisual(): boolean {
+    return this.isDecoyStealthed;
   }
 
   setWorldBarsVisible(visible: boolean): void {
@@ -288,19 +309,98 @@ export class PlayerEntity {
     this.resolveVisual();
   }
 
+  setDecoyStealth(active: boolean): void {
+    if (this.isDecoyStealthed === active) return;
+    this.isDecoyStealthed = active;
+
+    if (active) {
+      this.glowTween?.stop();
+      this.glowTween = null;
+      this.stealthTween?.stop();
+      this.stealthScanTween?.stop();
+      const state = { alpha: 0.028, glow: 0.18, shellAlpha: 0.075, shellScaleX: 1.02, shellScaleY: 0.98, shellRotation: -0.02 };
+      this.stealthTweenAlpha = state.alpha;
+      this.stealthGlowStrength = state.glow;
+      this.stealthShellAlpha = state.shellAlpha;
+      this.stealthShellScaleX = state.shellScaleX;
+      this.stealthShellScaleY = state.shellScaleY;
+      this.stealthShellRotation = state.shellRotation;
+      this.stealthScanProgress = 0;
+      this.stealthTween = this.sprite.scene.tweens.add({
+        targets: state,
+        alpha: 0.045,
+        glow: 0.42,
+        shellAlpha: 0.13,
+        shellScaleX: 1.055,
+        shellScaleY: 1.035,
+        shellRotation: 0.024,
+        duration: 2600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        onUpdate: () => {
+          this.stealthTweenAlpha = state.alpha;
+          this.stealthGlowStrength = state.glow;
+          this.stealthShellAlpha = state.shellAlpha;
+          this.stealthShellScaleX = state.shellScaleX;
+          this.stealthShellScaleY = state.shellScaleY;
+          this.stealthShellRotation = state.shellRotation;
+          this.syncStealthOverlay();
+          this.resolveVisual();
+        },
+      });
+      this.stealthScanTween = this.sprite.scene.tweens.add({
+        targets: this,
+        stealthScanProgress: 1,
+        duration: 1650,
+        ease: 'Sine.easeInOut',
+        repeat: -1,
+        onRepeat: () => {
+          this.stealthScanProgress = 0;
+        },
+        onUpdate: () => {
+          this.syncStealthOverlay();
+        },
+      });
+    } else {
+      this.stealthTween?.stop();
+      this.stealthTween = null;
+      this.stealthScanTween?.stop();
+      this.stealthScanTween = null;
+      this.stealthTweenAlpha = 1;
+      this.stealthGlowStrength = 4;
+      this.stealthShellAlpha = 0;
+      this.stealthShellScaleX = 1;
+      this.stealthShellScaleY = 1;
+      this.stealthShellRotation = 0;
+      this.stealthScanProgress = 0;
+      this.stealthShell?.setVisible(false);
+      this.stealthScan?.setVisible(false);
+      this.startDefaultGlowTween();
+    }
+
+    this.resolveVisual();
+  }
+
   /**
    * Einheitliche Methode zur visuellen Darstellung.
    * Burrow arbeitet primär über Sichtbarkeit/Tweening, Rage nur noch über Glow.
    */
   private resolveVisual(): void {
+    const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
     if (this.isRagingVisual) {
-      this.sprite.setAlpha(this.burrowTweenAlpha);
+      this.sprite.setAlpha(alpha);
       if (this.glowFx) this.glowFx.color = 0xff3333;
     } else {
-      this.sprite.setAlpha(this.burrowTweenAlpha);
+      this.sprite.setAlpha(alpha);
       if (this.glowFx) this.glowFx.color = this.colorHex;
     }
+    if (this.glowFx && this.isDecoyStealthed) {
+      this.glowFx.outerStrength = this.stealthGlowStrength;
+      this.glowFx.innerStrength = 0;
+    }
     this.applyDisplayVisibility();
+    this.syncStealthOverlay();
     this.syncAttachedEffects();
   }
 
@@ -364,13 +464,68 @@ export class PlayerEntity {
   private applyDisplayVisibility(): void {
     const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
     const visible = this.baseVisible && !hiddenByBurrow;
-    const barsVisible = visible && this.worldBarsVisible;
+    const barsVisible = visible && this.worldBarsVisible && !this.isDecoyStealthed;
+    const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
     this.sprite.setVisible(visible);
     this.hpBarBg.setVisible(barsVisible);
     this.hpBarFg.setVisible(barsVisible);
     this.armorBarBg.setVisible(barsVisible && this.currentArmor > 0);
     this.armorBarFg.setVisible(barsVisible && this.currentArmor > 0);
+    this.hpBarBg.setAlpha(alpha * 0.92);
+    this.hpBarFg.setAlpha(alpha);
+    this.armorBarBg.setAlpha(alpha * 0.92);
+    this.armorBarFg.setAlpha(alpha);
+    this.stealthShell?.setVisible(visible && this.isDecoyStealthed);
+    this.stealthScan?.setVisible(visible && this.isDecoyStealthed);
     this.syncAttachedEffects();
+  }
+
+  private syncStealthOverlay(): void {
+    if (!this.stealthShell || !this.stealthScan) return;
+
+    const visible = this.sprite.visible && this.isDecoyStealthed;
+    this.stealthShell.setVisible(visible);
+    this.stealthScan.setVisible(visible);
+    if (!visible) return;
+
+    const spriteScaleX = this.sprite.scaleX || 1;
+    const spriteScaleY = this.sprite.scaleY || 1;
+    const spriteRotation = this.sprite.rotation;
+
+    this.stealthShell
+      .setPosition(this.sprite.x, this.sprite.y)
+      .setRotation(spriteRotation + this.stealthShellRotation)
+      .setScale(spriteScaleX * this.stealthShellScaleX, spriteScaleY * this.stealthShellScaleY)
+      .setAlpha(this.stealthShellAlpha)
+      .setTint(this.colorHex);
+
+    const frameWidth = this.stealthScan.frame.cutWidth;
+    const frameHeight = this.stealthScan.frame.cutHeight;
+    const cropWidth = Math.max(5, Math.round(frameWidth * 0.24));
+    const scanX = Math.round((frameWidth - cropWidth) * Phaser.Math.Clamp(this.stealthScanProgress, 0, 1));
+    const scanPulse = Math.sin(this.stealthScanProgress * Math.PI);
+    const scanAlpha = 0.015 + scanPulse * 0.11;
+
+    this.stealthScan
+      .setPosition(this.sprite.x, this.sprite.y)
+      .setRotation(spriteRotation)
+      .setScale(spriteScaleX * 1.03, spriteScaleY * (0.985 + scanPulse * 0.07))
+      .setAlpha(scanAlpha)
+      .setTint(this.colorHex)
+      .setCrop(scanX, 0, cropWidth, frameHeight);
+  }
+
+  private startDefaultGlowTween(): void {
+    if (!this.glowFx) return;
+    this.glowTween?.stop();
+    this.glowTween = this.sprite.scene.tweens.add({
+      targets:       this.glowFx,
+      outerStrength: { from: 3, to: 7 },
+      duration:      1000,
+      yoyo:          true,
+      repeat:        -1,
+      ease:          'Sine.easeInOut',
+    });
   }
 
   private syncAttachedEffects(): void {
@@ -380,12 +535,16 @@ export class PlayerEntity {
   destroy(): void {
     this.stopBurrowTween(true);
     this.glowTween?.stop();
+    this.stealthTween?.stop();
+    this.stealthScanTween?.stop();
     this.burnRenderer?.destroy();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();
     this.armorBarFg.destroy();
     this.sprite.destroy();
+    this.stealthShell?.destroy();
+    this.stealthScan?.destroy();
     this.deathSprite?.destroy();
   }
 }

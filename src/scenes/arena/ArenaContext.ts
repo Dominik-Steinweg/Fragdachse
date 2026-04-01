@@ -27,6 +27,7 @@ import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
 import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { TrainManager }        from '../../train/TrainManager';
+import type { DecoySystem }         from '../../systems/DecoySystem';
 import type { ArenaLayout }         from '../../types';
 
 interface PlayerStatusRingLike {
@@ -53,6 +54,7 @@ export interface ArenaContext {
   readonly smokeSystem:       SmokeSystem;
   readonly fireSystem:        FireSystem;
   readonly stinkCloudSystem:  StinkCloudSystem;
+  readonly decoySystem:       DecoySystem;
   readonly hostPhysics:       HostPhysicsSystem;
   readonly inputSystem:       InputSystem;
   readonly leftPanel:         LeftSidePanel;

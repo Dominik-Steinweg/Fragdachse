@@ -110,6 +110,7 @@ export class ShadowSystem {
     for (const player of players) {
       const sprite = player.sprite;
       if (!sprite.active || !sprite.visible) continue;
+      if (player.isDecoyStealthedVisual()) continue;
       const burrowPhase = player.getBurrowPhase();
       if (burrowPhase === 'underground' || burrowPhase === 'trapped') continue;
 

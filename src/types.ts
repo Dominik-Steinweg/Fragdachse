@@ -41,6 +41,11 @@ export interface PlayerAimNetState {
 
 export type BurrowPhase = 'idle' | 'windup' | 'underground' | 'trapped' | 'recovery';
 
+export interface SyncedActiveHudBuff {
+  defId: string;
+  remainingFrac: number;
+}
+
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
   x:          number;
@@ -59,6 +64,8 @@ export interface PlayerNetState {
   isChargingUltimate?: boolean;
   ultimateChargeFraction?: number;
   ultimateChargeRange?: number;
+  isDecoyStealthed?: boolean;
+  decoyStealthRemainingFrac?: number;
   dashPhase:  0 | 1 | 2; // 0 = kein Dash, 1 = Burst, 2 = Recovery
   aim:        PlayerAimNetState;
 }
@@ -103,6 +110,19 @@ export interface SyncedEnergyShield {
   color: number;
   alpha: number;
   flashAlpha: number;
+}
+
+export interface SyncedDecoy {
+  id: number;
+  ownerId: string;
+  x: number;
+  y: number;
+  rot: number;
+  hp: number;
+  maxHp: number;
+  armor: number;
+  maxArmor: number;
+  color: number;
 }
 
 /** Visueller Stil eines Projektils */

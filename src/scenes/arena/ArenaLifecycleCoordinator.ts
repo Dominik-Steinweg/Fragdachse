@@ -22,6 +22,7 @@ import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../..
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y } from '../../config';
+import { PLAYER_SPEED } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
 import type { ArenaContext }          from './ArenaContext';
@@ -237,6 +238,10 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.rockObjects,
       this.ctx.arenaResult.trunkGroup,
     );
+    this.ctx.decoySystem.setObstacleGroups(
+      this.ctx.arenaResult.rockGroup,
+      this.ctx.arenaResult.trunkGroup,
+    );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
@@ -325,6 +330,13 @@ export class ArenaLifecycleCoordinator {
         this.ctx.resourceSystem,
         bridge,
       );
+      this.ctx.decoySystem.setCombatStateReader(this.ctx.combatSystem);
+      this.ctx.decoySystem.setRunSpeedResolver((playerId) => {
+        return PLAYER_SPEED * (this.ctx.loadoutManager?.getSpeedMultiplier(playerId) ?? 1);
+      });
+      this.ctx.decoySystem.setCooldownStarter((playerId, utilityId, when) => {
+        this.ctx.loadoutManager?.beginUtilityCooldown(playerId, utilityId, when);
+      });
 
       this.ctx.translocatorSystem = new TranslocatorSystem(
         this.ctx.playerManager,
@@ -340,6 +352,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setEnergyShieldSystem(this.ctx.energyShieldSystem);
       this.ctx.loadoutManager.setShieldBuffSystem(this.ctx.shieldBuffSystem);
       this.ctx.loadoutManager.setTranslocatorSystem(this.ctx.translocatorSystem);
+      this.ctx.loadoutManager.setDecoySystem(this.ctx.decoySystem);
       this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
@@ -365,6 +378,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.combatSystem.setResourceSystem(this.ctx.resourceSystem);
       this.ctx.combatSystem.setLoadoutManager(this.ctx.loadoutManager);
       this.ctx.combatSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
+      this.ctx.combatSystem.setDecoySystem(this.ctx.decoySystem);
 
       this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
         onNukePickup: (playerId) => {
@@ -471,6 +485,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.smokeSystem.destroyAll();
     this.ctx.fireSystem.destroyAll();
     this.ctx.stinkCloudSystem.destroyAll();
+    this.ctx.decoySystem.clearAll();
     this.renderers.teslaDome.destroyAll();
     this.renderers.energyShield.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
@@ -500,6 +515,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.setTeslaDomeSystem(null);
     this.ctx.loadoutManager?.setEnergyShieldSystem(null);
     this.ctx.loadoutManager?.setShieldBuffSystem(null);
+    this.ctx.loadoutManager?.setDecoySystem(null);
     this.ctx.loadoutManager?.setPlaceableRockHandler(null);
     this.ctx.loadoutManager?.setActionBlockedChecker(null);
     this.ctx.loadoutManager?.resetAllUltimateStates();
@@ -508,6 +524,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setResourceSystem(null);
     this.ctx.combatSystem.setLoadoutManager(null);
     this.ctx.combatSystem.setEnergyShieldSystem(null);
+    this.ctx.combatSystem.setDecoySystem(null);
     this.ctx.combatSystem.setPowerUpSystem(null);
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setArenaObstacles(null, null);
@@ -518,6 +535,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setKillCallback(() => { /* noop */ });
     this.ctx.hostPhysics.setBurrowSystem(null);
     this.ctx.hostPhysics.setLoadoutManager(null);
+    this.ctx.decoySystem.setCombatStateReader(null);
+    this.ctx.decoySystem.setRunSpeedResolver(null);
+    this.ctx.decoySystem.setCooldownStarter(null);
+    this.ctx.decoySystem.setObstacleGroups(null, null);
     this.ctx.projectileManager.setRockGroup(null, null, null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
     this.ctx.projectileManager.setProjectileImpactCallback(null);

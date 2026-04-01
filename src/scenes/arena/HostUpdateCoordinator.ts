@@ -30,6 +30,7 @@ export class HostUpdateCoordinator {
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly dashTrailTimers      = new Map<string, number>();
   private readonly prevBurrowPhases     = new Map<string, import('../../types').BurrowPhase>();
+  private readonly prevStealthStates    = new Map<string, boolean>();
   private trainSpawned = false;
 
   constructor(
@@ -54,6 +55,7 @@ export class HostUpdateCoordinator {
     this.prevDashPhases.clear();
     this.dashTrailTimers.clear();
     this.prevBurrowPhases.clear();
+    this.prevStealthStates.clear();
     this.trainSpawned = false;
   }
 
@@ -77,6 +79,7 @@ export class HostUpdateCoordinator {
     }
 
     this.ctx.hostPhysics.update(countdownActive);
+    const decoys = countdownActive ? [] : this.ctx.decoySystem.hostUpdate(now);
     if (!countdownActive) {
       this.ctx.detonationSystem?.checkProjectileDetonations();
       this.ctx.combatSystem.update();
@@ -252,6 +255,13 @@ export class HostUpdateCoordinator {
       player.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(player.id));
       player.setVisible(alive);
       player.setRageTint(this.ctx.loadoutManager?.isUltimateActive(player.id) ?? false);
+      const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
+      const wasStealthed = this.prevStealthStates.get(player.id) ?? false;
+      if (isStealthed !== wasStealthed) {
+        this.ctx.effectSystem.playStealthTransitionEffect(player.sprite.x, player.sprite.y, !isStealthed, player.color);
+      }
+      player.setDecoyStealth(isStealthed);
+      this.prevStealthStates.set(player.id, isStealthed);
       player.syncBar();
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
       if (dashPhase === 0) this.dashTrailTimers.delete(player.id);
@@ -303,6 +313,7 @@ export class HostUpdateCoordinator {
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
       const activePowerUps = this.ctx.powerUpSystem?.getActiveBuffsForHUD(localId) ?? [];
+      const stealthBuff = this.ctx.decoySystem.getStealthBuff(localId, now);
       const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
       const ultimateThresholds = this.ctx.loadoutManager?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
       const hudData = buildLocalArenaHudData({
@@ -319,7 +330,7 @@ export class HostUpdateCoordinator {
         utilityDisplayName:      utilCfg?.displayName,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
-        activePowerUps,
+        activePowerUps:          stealthBuff ? [...activePowerUps, stealthBuff] : activePowerUps,
         shieldBuff,
         weapon2AdrenalineCost:   weapon2Cfg?.adrenalinCost ?? 0,
       });
@@ -359,12 +370,16 @@ export class HostUpdateCoordinator {
       const isChargingUltimate = this.ctx.loadoutManager?.isUltimateCharging(player.id) ?? false;
       const ultimateChargeFraction = this.ctx.loadoutManager?.getUltimateChargeFraction(player.id, now) ?? 0;
       const ultimateChargeRange    = this.ctx.loadoutManager?.getUltimateChargeRange(player.id) ?? 0;
+      const isDecoyStealthed = this.ctx.decoySystem.isStealthed(player.id);
+      const decoyStealthRemainingFrac = this.ctx.decoySystem.getStealthRemainingFrac(player.id, now);
       const isMoving = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
       const aim      = this.ctx.loadoutManager?.getAimNetState(player.id, isMoving)
                      ?? this.getDefaultAimState(isMoving);
 
       bridge.publishAdrSyringeActive(player.id, (this.ctx.powerUpSystem?.getRegenMultiplier(player.id) ?? 1) > 1);
-      bridge.publishActiveBuffs(player.id, this.ctx.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []);
+      const activeBuffs = this.ctx.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? [];
+      const stealthBuff = this.ctx.decoySystem.getStealthBuff(player.id, now);
+      bridge.publishActiveBuffs(player.id, stealthBuff ? [...activeBuffs, stealthBuff] : activeBuffs);
       bridge.publishShieldBuffHud(player.id, this.ctx.loadoutManager?.getShieldBuffHudState(player.id, now) ?? {
         visible: false,
         defId: 'SHIELD_OVERCHARGE',
@@ -391,6 +406,8 @@ export class HostUpdateCoordinator {
         isChargingUltimate,
         ultimateChargeFraction,
         ultimateChargeRange,
+        isDecoyStealthed,
+        decoyStealthRemainingFrac,
         dashPhase: this.ctx.hostPhysics.getDashPhase(player.id),
         aim: {
           revision:             aim.revision,
@@ -406,6 +423,7 @@ export class HostUpdateCoordinator {
       projectiles,
       rocks,
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
+      decoys,
       smokes,
       fires,
       stinkClouds,

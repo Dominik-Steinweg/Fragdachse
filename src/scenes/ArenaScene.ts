@@ -6,6 +6,7 @@ import { ProjectileManager }     from '../entities/ProjectileManager';
 import { InputSystem }           from '../systems/InputSystem';
 import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
 import { CombatSystem }          from '../systems/CombatSystem';
+import { DecoySystem }           from '../systems/DecoySystem';
 import { EffectSystem }          from '../effects/EffectSystem';
 import { SmokeSystem }           from '../effects/SmokeSystem';
 import { FireSystem }            from '../effects/FireSystem';
@@ -155,6 +156,7 @@ export class ArenaScene extends Phaser.Scene {
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
     const projectileManager = new ProjectileManager(this);
     const combatSystem     = new CombatSystem(playerManager, projectileManager, bridge);
+    const decoySystem      = new DecoySystem(this, playerManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
     const shotAudioSystem  = new ShotAudioSystem(
       this,
@@ -210,6 +212,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Assemble ArenaContext ──────────────────────────────────────────────
     this.ctx = {
       playerManager, projectileManager, combatSystem, effectSystem,
+      decoySystem,
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
       leftPanel, rightPanel, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
@@ -672,6 +675,11 @@ export class ArenaScene extends Phaser.Scene {
           distanceSq,
         };
       }
+    }
+
+    const decoyTarget = this.ctx.decoySystem.getHoverNameTarget(pointer.x, pointer.y);
+    if (decoyTarget && (!nearest || decoyTarget.distanceSq < nearest.distanceSq)) {
+      nearest = decoyTarget;
     }
 
     if (!nearest) return null;

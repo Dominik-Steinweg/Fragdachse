@@ -5,6 +5,7 @@ import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
+import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
 import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
   ARENA_HEIGHT,
@@ -57,6 +58,7 @@ export interface HitscanTraceResult {
   readonly endY: number;
   readonly distance: number;
   readonly hitPlayerId: string | null;
+  readonly hitDecoyId: number | null;
   readonly hitObstacle: boolean;
 }
 
@@ -68,6 +70,11 @@ export interface HitscanTraceOptions {
   readonly range: number;
   readonly traceThickness: number;
   readonly applyFavorTheShooter: boolean;
+}
+
+interface HitscanSpriteTarget {
+  sprite: Phaser.GameObjects.Image;
+  body: { velocity: { x: number; y: number } } | null;
 }
 
 export class CombatSystem {
@@ -99,6 +106,7 @@ export class CombatSystem {
   private energyShieldSystem: EnergyShieldSystem | null = null;
   private powerUpSystem:    PowerUpSystemType   | null  = null;
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
+  private decoySystem:      DecoySystem | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
   /** Client-seitiger Fallback: vorberechnete Zug-Bounds aus SyncedTrainState */
@@ -124,6 +132,7 @@ export class CombatSystem {
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void { this.stinkCloudSystem = sc; }
+  setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -225,6 +234,7 @@ export class CombatSystem {
     if (!this.isAlive(targetId)) return;
     if (amount <= 0) return;
     if (!skipBurrowCheck && this.burrowSystem?.isBurrowed(targetId)) return;
+    this.decoySystem?.breakStealth(targetId, Date.now());
 
     // Letzten Angreifer tracken (Selbstschaden ausgenommen)
     if (attackerId && attackerId !== targetId) {
@@ -424,6 +434,7 @@ export class CombatSystem {
     for (const proj of this.projectileManager.getActiveProjectiles()) {
       if (proj.isGrenade) continue;  // Granaten treffen nicht direkt, nur AoE
       const projBounds = proj.sprite.getBounds();
+      let projectileConsumed = false;
 
       for (const player of this.playerManager.getAllPlayers()) {
         if (!this.isAlive(player.id))                     continue;
@@ -440,6 +451,7 @@ export class CombatSystem {
 
           if (this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
             this.projectileManager.destroyProjectile(proj.id);
+            projectileConsumed = true;
             break;
           }
 
@@ -475,7 +487,50 @@ export class CombatSystem {
           }
 
           this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+          projectileConsumed = true;
           break;  // Projektil trifft maximal einen Spieler pro Frame
+        }
+      }
+
+      if (projectileConsumed) continue;
+
+      for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+        if (proj.ownerId === decoy.ownerId) continue;
+
+        if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, decoy.sprite.getBounds())) {
+          const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
+            ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
+            : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
+          const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
+          const actualDamage = proj.damage * loadoutMult * powerUpMult;
+          const decoyKey = `decoy_${decoy.id}`;
+
+          if (proj.isBfg || proj.projectileStyle === 'gauss') {
+            if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
+            if (proj.projectileStyle === 'gauss') {
+              if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
+              if (proj.gaussHitPlayers.has(decoyKey)) continue;
+              proj.gaussHitPlayers.add(decoyKey);
+            } else {
+              if (proj.bfgHitPlayers.has(decoyKey)) continue;
+              proj.bfgHitPlayers.add(decoyKey);
+            }
+
+            const hit = this.decoySystem?.applyDamage(decoy.id, actualDamage, proj.ownerId, proj.weaponName, {
+              sourceX: proj.sprite.x,
+              sourceY: proj.sprite.y,
+              dirX: proj.body.velocity.x,
+              dirY: proj.body.velocity.y,
+            }) ?? false;
+            if (hit && proj.adrenalinGain > 0) {
+              this.resourceSystem?.addAdrenaline(proj.ownerId, proj.adrenalinGain);
+            }
+            continue;
+          }
+
+          this.handleDecoyHit(proj.id, decoy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+          projectileConsumed = true;
+          break;
         }
       }
     }
@@ -550,6 +605,22 @@ export class CombatSystem {
       });
 
       if (adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
+    } else if (trace.hitDecoyId !== null) {
+      const loadoutMult  = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = damage * loadoutMult * powerUpMult;
+      const hit = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, weaponName, {
+        sourceX: startX,
+        sourceY: startY,
+        dirX: Math.cos(angle),
+        dirY: Math.sin(angle),
+      }) ?? false;
+
+      if (hit && adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     } else {
@@ -683,6 +754,48 @@ export class CombatSystem {
       }
     }
 
+    for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+      if (decoy.ownerId === shooterId) continue;
+
+      const dx   = decoy.sprite.x - x;
+      const dy   = decoy.sprite.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > range + PLAYER_SIZE * 0.5) continue;
+
+      let angleDiff = Math.atan2(dy, dx) - angle;
+      while (angleDiff >  Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+      if (Math.abs(angleDiff) > halfArcRad) continue;
+
+      this.meleeLine.setTo(x, y, decoy.sprite.x, decoy.sprite.y);
+      if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
+
+      const loadoutMult  = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = damage * loadoutMult * powerUpMult;
+      const hit = this.decoySystem?.applyDamage(decoy.id, actualDamage, shooterId, weaponName, {
+        sourceX: x,
+        sourceY: y,
+        dirX: Math.cos(angle),
+        dirY: Math.sin(angle),
+      }) ?? false;
+      if (!hit) continue;
+
+      hitPlayer = true;
+      if (dist < nearestHitDistance) {
+        nearestHitDistance = dist;
+        impactX = decoy.sprite.x;
+        impactY = decoy.sprite.y;
+      }
+
+      if (adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
+    }
+
     // Melee-Objektschaden: Felsen und Zug im Trefferbogen prüfen
     this.applyMeleeObjectDamage(x, y, angle, range, halfArcRad, damage, rockDamageMult, trainDamageMult, shooterId);
 
@@ -749,10 +862,11 @@ export class CombatSystem {
     if (obstacleHit) closestDistance = obstacleHit.distance;
 
     let hitPlayerId: string | null = null;
+    let hitDecoyId: number | null = null;
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isHitscanTargetCandidate(player.id, shooterId)) continue;
 
-      const hitDistance = this.getHitscanPlayerHitDistance(
+      const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
         player,
         traceThickness,
@@ -762,6 +876,23 @@ export class CombatSystem {
 
       closestDistance = hitDistance;
       hitPlayerId = player.id;
+      hitDecoyId = null;
+    }
+
+    for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+      if (decoy.ownerId === shooterId) continue;
+
+      const hitDistance = this.getHitscanTargetHitDistance(
+        this.hitscanLine,
+        decoy,
+        traceThickness,
+        applyFavorTheShooter,
+      );
+      if (hitDistance === null || hitDistance > closestDistance) continue;
+
+      closestDistance = hitDistance;
+      hitPlayerId = null;
+      hitDecoyId = decoy.id;
     }
 
     return {
@@ -769,6 +900,7 @@ export class CombatSystem {
       endY: startY + dirY * closestDistance,
       distance: closestDistance,
       hitPlayerId,
+      hitDecoyId,
       hitObstacle: obstacleHit !== null && closestDistance >= obstacleHit.distance,
     };
   }
@@ -872,18 +1004,18 @@ export class CombatSystem {
     return this.bridge.getLatestGameState()?.players[playerId]?.isBurrowed ?? false;
   }
 
-  private getHitscanPlayerHitDistance(
+  private getHitscanTargetHitDistance(
     line: Phaser.Geom.Line,
-    player: ReturnType<PlayerManager['getAllPlayers']>[number],
+    target: HitscanSpriteTarget,
     traceThickness: number,
     applyFavorTheShooter: boolean,
   ): number | null {
     if (applyFavorTheShooter) {
-      return this.getFavorTheShooterHitDistance(line, player, traceThickness);
+      return this.getFavorTheShooterHitDistance(line, target, traceThickness);
     }
 
     const baseRadius = PLAYER_SIZE * 0.5 + traceThickness * 0.5;
-    return this.findNearestCircleHit(line, player.sprite.x, player.sprite.y, baseRadius)?.distance ?? null;
+    return this.findNearestCircleHit(line, target.sprite.x, target.sprite.y, baseRadius)?.distance ?? null;
   }
 
   private findNearestObstacleHit(
@@ -918,25 +1050,25 @@ export class CombatSystem {
 
   private getFavorTheShooterHitDistance(
     line: Phaser.Geom.Line,
-    player: ReturnType<PlayerManager['getAllPlayers']>[number],
+    target: HitscanSpriteTarget,
     traceThickness: number,
   ): number | null {
     const baseRadius = PLAYER_SIZE * 0.5 + traceThickness * 0.5;
-    const currentHit = this.findNearestCircleHit(line, player.sprite.x, player.sprite.y, baseRadius);
+    const currentHit = this.findNearestCircleHit(line, target.sprite.x, target.sprite.y, baseRadius);
 
-    const velocity = player.body.velocity;
-    const rewindX = player.sprite.x - velocity.x * (HITSCAN_FAVOR_THE_SHOOTER_MS / 1000);
-    const rewindY = player.sprite.y - velocity.y * (HITSCAN_FAVOR_THE_SHOOTER_MS / 1000);
+    const velocity = target.body?.velocity ?? { x: 0, y: 0 };
+    const rewindX = target.sprite.x - velocity.x * (HITSCAN_FAVOR_THE_SHOOTER_MS / 1000);
+    const rewindY = target.sprite.y - velocity.y * (HITSCAN_FAVOR_THE_SHOOTER_MS / 1000);
     const rewindHit = this.findNearestCircleHit(line, rewindX, rewindY, baseRadius);
 
     const rewindOffset = Math.min(
       HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET,
-      Phaser.Math.Distance.Between(player.sprite.x, player.sprite.y, rewindX, rewindY),
+      Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, rewindX, rewindY),
     );
     const sweepHit = this.findNearestCircleHit(
       line,
-      (player.sprite.x + rewindX) * 0.5,
-      (player.sprite.y + rewindY) * 0.5,
+      (target.sprite.x + rewindX) * 0.5,
+      (target.sprite.y + rewindY) * 0.5,
       baseRadius + rewindOffset * 0.5,
     );
 
@@ -1134,6 +1266,38 @@ export class CombatSystem {
     }
   }
 
+  private handleDecoyHit(
+    projectileId: number,
+    decoyId: number,
+    damage: number,
+    shooterId: string,
+    adrenalinGain: number,
+    weaponName: string,
+  ): void {
+    const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    const visualContext = projectile
+      ? {
+          sourceX: projectile.sprite.x,
+          sourceY: projectile.sprite.y,
+          dirX: projectile.body.velocity.x,
+          dirY: projectile.body.velocity.y,
+        }
+      : undefined;
+    if (projectile?.impactCloud) {
+      this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
+    }
+    if (projectile?.explosion) {
+      this.projectileManager.triggerProjectileExplosion(projectileId);
+    } else {
+      this.projectileManager.destroyProjectile(projectileId);
+    }
+    this.decoySystem?.applyDamage(decoyId, damage, shooterId, weaponName, visualContext);
+
+    if (adrenalinGain > 0) {
+      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+    }
+  }
+
   private handleDeath(playerId: string, x: number, y: number, seed: number): void {
     this.alive.set(playerId, false);
     this.armor.set(playerId, 0);
@@ -1143,6 +1307,7 @@ export class CombatSystem {
     this.powerUpSystem?.removePlayer(playerId);
     // Stinkwolke beim Tod sofort deaktivieren
     this.stinkCloudSystem?.hostDeactivateForPlayer(playerId);
+    this.decoySystem?.clearPlayer(playerId);
 
     const player = this.playerManager.getPlayer(playerId);
     if (player) player.body.enable = false;

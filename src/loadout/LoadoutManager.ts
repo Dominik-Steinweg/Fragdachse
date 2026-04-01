@@ -12,6 +12,7 @@ import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, LoadoutUseResu
 import type {
   BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
+  DecoyUtilityConfig,
   EnergyShieldWeaponFireConfig,
   GaussUltimateConfig,
   NukeUtilityConfig,
@@ -84,6 +85,7 @@ export class LoadoutManager {
   private energyShieldSystem: EnergyShieldSystem | null = null;
   private shieldBuffSystem:   ShieldBuffSystem | null = null;
   private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
+  private decoySystem: import('../systems/DecoySystem').DecoySystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
   private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
 
@@ -172,6 +174,15 @@ export class LoadoutManager {
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.removePlayer(playerId);
     this.translocatorSystem?.removePlayer(playerId);
+    this.decoySystem?.clearPlayer(playerId);
+  }
+
+  beginUtilityCooldown(playerId: string, utilityId: string, now: number): void {
+    const loadout = this.loadouts.get(playerId);
+    if (!loadout) return;
+    if (loadout.utility.config.id !== utilityId) return;
+    loadout.utility.recordUse(now);
+    this.bridge.publishUtilityCooldownUntil(playerId, now + loadout.utility.config.cooldown);
   }
 
   resetUltimateState(playerId: string): void {
@@ -210,6 +221,10 @@ export class LoadoutManager {
 
   setTranslocatorSystem(sys: import('../systems/TranslocatorSystem').TranslocatorSystem | null): void {
     this.translocatorSystem = sys;
+  }
+
+  setDecoySystem(sys: import('../systems/DecoySystem').DecoySystem | null): void {
+    this.decoySystem = sys;
   }
 
   /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
@@ -344,6 +359,7 @@ export class LoadoutManager {
     // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
     if (slot === 'weapon1' || slot === 'weapon2') {
       this.heldFireSlots.set(playerId, { slot, lastAt: now });
+      this.decoySystem?.breakStealth(playerId, now);
     }
 
     switch (slot) {
@@ -354,12 +370,16 @@ export class LoadoutManager {
         return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId);
 
       case 'utility': {
+        if (loadout.utility.config.type !== 'decoy') {
+          this.decoySystem?.breakStealth(playerId, now);
+        }
         return this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params)
           ? this.okResult
           : { ok: false, reason: 'blocked' };
       }
 
       case 'ultimate': {
+        this.decoySystem?.breakStealth(playerId, now);
         const ultState = this.ultimateStates.get(playerId);
         const cfg  = loadout.ultimate.config;
         if (cfg.type === 'buff') {
@@ -846,6 +866,8 @@ export class LoadoutManager {
             taserCfg.trainDamageMult ?? 1,
             taserCfg.visualPreset,
           ) ?? false;
+        } else if (cfg.type === 'decoy') {
+          didUse = this.decoySystem?.activate(cfg as DecoyUtilityConfig, playerId, angle, playerColor, now) ?? false;
         }
         break;
     }

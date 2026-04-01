@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedCombatEffect, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -83,6 +83,7 @@ export interface GameState {
   projectiles:  SyncedProjectile[];
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
   placeableRocks: SyncedPlaceableRock[];
+  decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
@@ -137,6 +138,7 @@ type ColorChangeHandler = (playerId: string, color: number) => void;
 type KillEventHandler = (event: KillEvent) => void;
 type MeleeSwingHandler = (swing: SyncedMeleeSwing) => void;
 type PowerUpPickupHandler = (uid: number, playerId: string) => void;
+type DecoyStealthBreakHandler = (playerId: string) => void;
 type TrainDestroyedHandler = () => void;
 type TranslocatorFlashHandler = (x: number, y: number, color: number, type: 'start' | 'end') => void;
 
@@ -178,6 +180,7 @@ export class NetworkBridge {
   private killEventHandler: KillEventHandler | null = null;
   private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
+  private decoyStealthBreakHandler: DecoyStealthBreakHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
@@ -475,6 +478,7 @@ export class NetworkBridge {
     if (state.projectiles.length > 0)  payload.j = state.projectiles;
     if (state.rocks.length > 0)        payload.r = state.rocks;
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
+    if (state.decoys.length > 0)       payload.dc = state.decoys;
     if (state.smokes.length > 0)       payload.s = state.smokes;
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
@@ -500,6 +504,7 @@ export class NetworkBridge {
       projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
       rocks:         (raw.r as RockNetState[]       | undefined) ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
+      decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
@@ -628,6 +633,23 @@ export class NetworkBridge {
       if (!cb) return undefined;
       const { uid } = data as { uid: number };
       cb(uid, caller.id);
+      return undefined;
+    });
+  }
+
+  sendDecoyStealthBreakRequest(): void {
+    if (isHost()) {
+      this.decoyStealthBreakHandler?.(myPlayer().id);
+      return;
+    }
+    this.sendHostRpc('dbr', {});
+  }
+
+  registerDecoyStealthBreakHandler(handler: (playerId: string) => void): void {
+    this.decoyStealthBreakHandler = handler;
+    this.registerHostRpcHandler('dbr', async (_data: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return undefined;
+      this.decoyStealthBreakHandler?.(caller.id);
       return undefined;
     });
   }
@@ -1071,7 +1093,7 @@ export class NetworkBridge {
   }
 
   /** Host-only: Publiziert die aktiven Buffs eines Spielers für die HUD-Anzeige. */
-  publishActiveBuffs(playerId: string, buffs: { defId: string; remainingFrac: number }[]): void {
+  publishActiveBuffs(playerId: string, buffs: SyncedActiveHudBuff[]): void {
     if (!isHost()) return;
     const ps = this.playerStateMap.get(playerId);
     if (!ps) return;
@@ -1079,8 +1101,8 @@ export class NetworkBridge {
   }
 
   /** Liest die aktiven Buffs eines Spielers für die HUD-Anzeige. */
-  getPlayerActiveBuffs(playerId: string): { defId: string; remainingFrac: number }[] {
-    return (this.playerStateMap.get(playerId)?.getState(KEY_ACTIVE_BUFFS) as { defId: string; remainingFrac: number }[] | undefined) ?? [];
+  getPlayerActiveBuffs(playerId: string): SyncedActiveHudBuff[] {
+    return (this.playerStateMap.get(playerId)?.getState(KEY_ACTIVE_BUFFS) as SyncedActiveHudBuff[] | undefined) ?? [];
   }
 
   publishShieldBuffHud(playerId: string, state: ShieldBuffHudState): void {

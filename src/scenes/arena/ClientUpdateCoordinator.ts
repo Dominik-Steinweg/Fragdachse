@@ -24,6 +24,7 @@ export class ClientUpdateCoordinator {
   private readonly prevAliveStates      = new Map<string, boolean>();
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly prevBurrowPhases     = new Map<string, BurrowPhase>();
+  private readonly prevStealthStates    = new Map<string, boolean>();
   private readonly dashPhase2StartTimes = new Map<string, number>();
   private readonly dashTrailTimers      = new Map<string, number>();
   private weaponLastFired: Record<'weapon1' | 'weapon2', number> = { weapon1: 0, weapon2: 0 };
@@ -79,6 +80,13 @@ export class ClientUpdateCoordinator {
         player.updateBurnStacks(ps.burnStacks ?? 0);
         player.setVisible(ps.alive);
         player.setRageTint(ps.isRaging);
+        const isStealthed = ps.isDecoyStealthed ?? false;
+        const wasStealthed = this.prevStealthStates.get(id) ?? false;
+        if (isStealthed !== wasStealthed) {
+          this.ctx.effectSystem.playStealthTransitionEffect(player.sprite.x, player.sprite.y, !isStealthed, player.color);
+        }
+        player.setDecoyStealth(isStealthed);
+        this.prevStealthStates.set(id, isStealthed);
 
         const curPhase = ps.dashPhase ?? 0;
         if (curPhase === 2 && (this.prevDashPhases.get(id) ?? 0) !== 2) {
@@ -93,6 +101,7 @@ export class ClientUpdateCoordinator {
       }
 
       this.ctx.projectileManager.clientSyncVisuals(state.projectiles);
+      this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
       this.ctx.smokeSystem.syncVisuals(state.smokes);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
       this.ctx.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
@@ -142,6 +151,8 @@ export class ClientUpdateCoordinator {
         player.setDashScale(1.0);
       }
     }
+
+    this.ctx.decoySystem.updateVisuals(lerpFactor);
 
     this.ctx.projectileManager.clientExtrapolate();
     this.ctx.stinkCloudSystem.clientUpdate(delta);
@@ -297,6 +308,7 @@ export class ClientUpdateCoordinator {
     this.prevAliveStates.clear();
     this.prevDashPhases.clear();
     this.prevBurrowPhases.clear();
+    this.prevStealthStates.clear();
     this.dashPhase2StartTimes.clear();
     this.dashTrailTimers.clear();
     this.weaponLastFired = { weapon1: 0, weapon2: 0 };

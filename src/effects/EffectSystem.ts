@@ -487,6 +487,57 @@ export class EffectSystem {
     this.scene.time.delayedCall(540, () => dustBurst.destroy());
   }
 
+  playStealthTransitionEffect(x: number, y: number, revealing: boolean, color: number = COLORS.GREY_2): void {
+    this.ensureTextures();
+    const particleCount = revealing ? 16 : 12;
+    const core = this.scene.add.circle(x, y, revealing ? 10 : 7, color, revealing ? 0.22 : 0.14);
+    core.setDepth(DEPTH_FX + 0.2);
+    core.setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: core,
+      scaleX: revealing ? 2.3 : 1.7,
+      scaleY: revealing ? 2.3 : 1.7,
+      alpha: 0,
+      duration: revealing ? 280 : 220,
+      ease: 'Cubic.easeOut',
+      onComplete: () => core.destroy(),
+    });
+
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.32;
+      const travel = Phaser.Math.Between(revealing ? 16 : 10, revealing ? 42 : 26);
+      const size = Phaser.Math.Between(2, 4);
+      const pixel = this.scene.add.rectangle(x, y, size, size, color, revealing ? 0.72 : 0.5);
+      pixel.setDepth(DEPTH_FX + 0.1);
+      pixel.setRotation(Math.random() * Math.PI);
+
+      this.scene.tweens.add({
+        targets: pixel,
+        x: x + Math.cos(angle) * travel,
+        y: y + Math.sin(angle) * travel,
+        alpha: 0,
+        angle: Phaser.Math.Between(-160, 160),
+        duration: revealing ? 360 : 280,
+        ease: 'Quad.easeOut',
+        onComplete: () => pixel.destroy(),
+      });
+    }
+
+    const dust = this.scene.add.particles(x, y, TEX_BURROW_DUST, {
+      lifespan: { min: 220, max: 420 },
+      speed: { min: 10, max: revealing ? 70 : 44 },
+      scale: { start: revealing ? 0.8 : 0.55, end: 0.05 },
+      alpha: { start: revealing ? 0.32 : 0.22, end: 0 },
+      quantity: particleCount,
+      frequency: -1,
+      tint: { min: color, max: color },
+    });
+    dust.setDepth(DEPTH_FX + 0.05);
+    dust.addEmitZone(circleZone(revealing ? 8 : 6, particleCount));
+    dust.explode(particleCount);
+    this.scene.time.delayedCall(450, () => dust.destroy());
+  }
+
   syncBurrowState(playerId: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void {
     if ((phase === 'underground' || phase === 'trapped') && sprite) {
       this.ensureBurrowVisual(playerId, sprite);

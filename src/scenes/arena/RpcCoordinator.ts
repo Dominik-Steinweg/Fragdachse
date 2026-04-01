@@ -30,6 +30,7 @@ export class RpcCoordinator {
   registerAll(): void {
     this.registerDashHandler();
     this.registerBurrowRpcHandler();
+    this.registerDecoyStealthBreakHandler();
     this.registerLoadoutUseHandler();
     this.registerExplosionEffectHandler();
     this.registerGrenadeCountdownHandler();
@@ -59,6 +60,14 @@ export class RpcCoordinator {
       if (bridge.getGamePhase() !== 'ARENA') return;
       if (bridge.isArenaCountdownActive()) return;
       this.ctx.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
+    });
+  }
+
+  private registerDecoyStealthBreakHandler(): void {
+    bridge.registerDecoyStealthBreakHandler((playerId) => {
+      if (!bridge.isHost()) return;
+      if (bridge.getGamePhase() !== 'ARENA') return;
+      this.ctx.decoySystem.breakStealth(playerId, Date.now());
     });
   }
 

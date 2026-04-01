@@ -150,7 +150,7 @@ export interface WeaponConfig {
   readonly shotAudio?: LoadoutShotAudioConfig;
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser' | 'decoy';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -293,6 +293,17 @@ export interface TaserUtilityConfig extends BaseUtilityConfig {
   readonly visualPreset: MeleeVisualPreset;
 }
 
+export interface DecoyUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'decoy';
+  readonly decoyLifetimeMs: number;
+  readonly stealthDurationMs: number;
+  readonly stealthAlphaMin: number;
+  readonly stealthAlphaMax: number;
+  readonly stealthGlowOuterStrength: number;
+  readonly wobblePeriodMs: number;
+  readonly dissipateDustBurst: number;
+}
+
 export interface TranslocatorUtilityConfig extends BaseUtilityConfig {
   readonly type: 'translocator';
   // Translocator-spezifische Configs koennen hier rein
@@ -313,7 +324,7 @@ export interface PlaceableTurretUtilityConfig extends BaseUtilityConfig {
 
 export type PlaceableUtilityConfig = PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | DecoyUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -1348,6 +1359,27 @@ export const UTILITY_CONFIGS = {
     trainDamageMult: 1.0,
     rockDamageMult:  0,
   } as TaserUtilityConfig,
+
+  DECOY: {
+    id:                        'DECOY',
+    displayName:               'Decoy',
+    type:                      'decoy',
+    cooldown:                  12000,
+    activation:                { type: 'instant' } as InstantUtilityActivationConfig,
+    projectileSpeed:           0,
+    projectileSize:            0,
+    fuseTime:                  0,
+    maxBounces:                0,
+    allowedSlots:              ['utility'],
+    decoyLifetimeMs:           3000,
+    stealthDurationMs:         10000,
+    stealthAlphaMin:           0.1,
+    stealthAlphaMax:           0.17,
+    stealthGlowOuterStrength:  1.2,
+    wobblePeriodMs:            2400,
+    dissipateDustBurst:        18,
+    skipCooldownPublish:       true,
+  } as DecoyUtilityConfig,
 } as const;
 
 export const ULTIMATE_CONFIGS = {

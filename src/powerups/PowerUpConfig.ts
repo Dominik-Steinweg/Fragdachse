@@ -2,7 +2,7 @@
 
 import { ARMOR_COLOR, COLORS } from '../config';
 
-export type PowerUpType = 'instant_heal' | 'instant_armor' | 'buff_regen' | 'buff_damage' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg';
+export type PowerUpType = 'instant_heal' | 'instant_armor' | 'buff_regen' | 'buff_damage' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
 
 export interface PowerUpDef {
   readonly id:          string;
@@ -29,6 +29,7 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   ARMOR:         { id: 'ARMOR',         type: 'instant_armor', displayName: 'Armor',               amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
   ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',    displayName: 'Adrenalin Spritze',  durationMs: 3_000, multiplier: 3.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
+  DECOY_STEALTH: { id: 'DECOY_STEALTH', type: 'decoy_stealth', displayName: 'Unsichtbarkeit', color: COLORS.GREY_2 },
   SHIELD_OVERCHARGE: { id: 'SHIELD_OVERCHARGE', type: 'shield_overcharge', displayName: 'Schildladung', color: 0x78f0ff },
   NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
