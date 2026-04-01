@@ -489,27 +489,55 @@ export class EffectSystem {
 
   playStealthTransitionEffect(x: number, y: number, revealing: boolean, color: number = COLORS.GREY_2): void {
     this.ensureTextures();
-    const particleCount = revealing ? 16 : 12;
-    const core = this.scene.add.circle(x, y, revealing ? 10 : 7, color, revealing ? 0.22 : 0.14);
+    const particleCount = revealing ? 28 : 22;
+    const core = this.scene.add.circle(x, y, revealing ? 16 : 12, color, revealing ? 0.34 : 0.24);
     core.setDepth(DEPTH_FX + 0.2);
     core.setBlendMode(Phaser.BlendModes.ADD);
     this.scene.tweens.add({
       targets: core,
-      scaleX: revealing ? 2.3 : 1.7,
-      scaleY: revealing ? 2.3 : 1.7,
+      scaleX: revealing ? 3.2 : 2.3,
+      scaleY: revealing ? 3.2 : 2.3,
       alpha: 0,
-      duration: revealing ? 280 : 220,
+      duration: revealing ? 380 : 320,
       ease: 'Cubic.easeOut',
       onComplete: () => core.destroy(),
     });
 
+    const ring = this.scene.add.circle(x, y, revealing ? 16 : 12, 0, 0);
+    ring.setDepth(DEPTH_FX + 0.16);
+    ring.setStrokeStyle(revealing ? 6 : 5, color, revealing ? 0.7 : 0.54);
+    ring.setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: ring,
+      scaleX: revealing ? 3.8 : 2.6,
+      scaleY: revealing ? 3.8 : 2.6,
+      alpha: 0,
+      duration: revealing ? 440 : 360,
+      ease: 'Quart.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+
+    const outerRing = this.scene.add.circle(x, y, revealing ? 22 : 18, 0, 0);
+    outerRing.setDepth(DEPTH_FX + 0.12);
+    outerRing.setStrokeStyle(revealing ? 10 : 8, color, revealing ? 0.24 : 0.18);
+    this.scene.tweens.add({
+      targets: outerRing,
+      scaleX: revealing ? 2.6 : 2.1,
+      scaleY: revealing ? 2.6 : 2.1,
+      alpha: 0,
+      duration: revealing ? 520 : 420,
+      ease: 'Cubic.easeOut',
+      onComplete: () => outerRing.destroy(),
+    });
+
     for (let i = 0; i < particleCount; i++) {
       const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.32;
-      const travel = Phaser.Math.Between(revealing ? 16 : 10, revealing ? 42 : 26);
-      const size = Phaser.Math.Between(2, 4);
-      const pixel = this.scene.add.rectangle(x, y, size, size, color, revealing ? 0.72 : 0.5);
+      const travel = Phaser.Math.Between(revealing ? 24 : 14, revealing ? 68 : 42);
+      const size = Phaser.Math.Between(2, 5);
+      const pixel = this.scene.add.rectangle(x, y, size, size, color, revealing ? 0.82 : 0.6);
       pixel.setDepth(DEPTH_FX + 0.1);
       pixel.setRotation(Math.random() * Math.PI);
+      pixel.setBlendMode(Phaser.BlendModes.ADD);
 
       this.scene.tweens.add({
         targets: pixel,
@@ -517,17 +545,17 @@ export class EffectSystem {
         y: y + Math.sin(angle) * travel,
         alpha: 0,
         angle: Phaser.Math.Between(-160, 160),
-        duration: revealing ? 360 : 280,
+        duration: revealing ? 440 : 340,
         ease: 'Quad.easeOut',
         onComplete: () => pixel.destroy(),
       });
     }
 
     const dust = this.scene.add.particles(x, y, TEX_BURROW_DUST, {
-      lifespan: { min: 220, max: 420 },
-      speed: { min: 10, max: revealing ? 70 : 44 },
-      scale: { start: revealing ? 0.8 : 0.55, end: 0.05 },
-      alpha: { start: revealing ? 0.32 : 0.22, end: 0 },
+      lifespan: { min: 260, max: 520 },
+      speed: { min: 18, max: revealing ? 110 : 72 },
+      scale: { start: revealing ? 1.05 : 0.78, end: 0.05 },
+      alpha: { start: revealing ? 0.44 : 0.3, end: 0 },
       quantity: particleCount,
       frequency: -1,
       tint: { min: color, max: color },
@@ -535,7 +563,22 @@ export class EffectSystem {
     dust.setDepth(DEPTH_FX + 0.05);
     dust.addEmitZone(circleZone(revealing ? 8 : 6, particleCount));
     dust.explode(particleCount);
-    this.scene.time.delayedCall(450, () => dust.destroy());
+    this.scene.time.delayedCall(560, () => dust.destroy());
+
+    const spark = this.scene.add.particles(x, y, '_living_blob', {
+      lifespan: { min: 180, max: 360 },
+      speed: { min: 20, max: revealing ? 160 : 110 },
+      scale: { start: revealing ? 0.95 : 0.7, end: 0.02 },
+      alpha: { start: revealing ? 0.62 : 0.46, end: 0 },
+      quantity: revealing ? 18 : 12,
+      frequency: -1,
+      tint: [color],
+      blendMode: Phaser.BlendModes.ADD,
+    });
+    spark.setDepth(DEPTH_FX + 0.22);
+    spark.addEmitZone(circleZone(revealing ? 10 : 8, revealing ? 18 : 12));
+    spark.explode(revealing ? 18 : 12);
+    this.scene.time.delayedCall(420, () => spark.destroy());
   }
 
   syncBurrowState(playerId: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void {

@@ -348,7 +348,7 @@ export class PlayerStatusRing {
 
     this.container.setVisible(true);
     this.container.setPosition(sprite.x + wobbleX, sprite.y + wobbleY);
-    this.container.setAlpha(Phaser.Math.Clamp(sprite.alpha * 0.95, 0, 0.95));
+    this.container.setAlpha(0.95);
 
     this.updateHpTrail(now);
 
@@ -366,7 +366,7 @@ export class PlayerStatusRing {
     this.drawFilledSegments(now);
     this.drawSparks(now);
 
-    this.syncLivingEmitters(sprite.alpha, now);
+    this.syncLivingEmitters(1, now);
   }
 
   private updateHpTrail(now: number): void {

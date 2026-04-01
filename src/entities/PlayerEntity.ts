@@ -37,6 +37,8 @@ export class PlayerEntity {
   private stealthScanTween: Phaser.Tweens.Tween | null = null;
   private stealthShell: Phaser.GameObjects.Image | null = null;
   private stealthScan: Phaser.GameObjects.Image | null = null;
+  private stealthAmbientParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private stealthTrailParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private burnRenderer: PlayerBurnRenderer | null = null;
   private burnStacks = 0;
 
@@ -93,6 +95,35 @@ export class PlayerEntity {
     this.stealthScan.setTint(profile.colorHex);
     this.stealthScan.setBlendMode(Phaser.BlendModes.ADD);
     this.stealthScan.setVisible(false);
+
+    this.stealthAmbientParticles = scene.add.particles(x, y, '_living_blob', {
+      lifespan: { min: 260, max: 520 },
+      frequency: 110,
+      quantity: 1,
+      speed: { min: 4, max: 18 },
+      scale: { start: 0.3, end: 0.02 },
+      alpha: { start: 0.14, end: 0 },
+      tint: [profile.colorHex],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    this.stealthAmbientParticles.setDepth(DEPTH.PLAYERS + 0.01);
+    this.stealthAmbientParticles.startFollow(this.sprite, 0, 0, false);
+
+    this.stealthTrailParticles = scene.add.particles(x, y, '_living_blob', {
+      lifespan: { min: 220, max: 460 },
+      frequency: 55,
+      quantity: 1,
+      speedX: { min: -8, max: 8 },
+      speedY: { min: -8, max: 8 },
+      scale: { start: 0.22, end: 0.01 },
+      alpha: { start: 0.1, end: 0 },
+      tint: [profile.colorHex],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    this.stealthTrailParticles.setDepth(DEPTH.PLAYERS);
+    this.stealthTrailParticles.startFollow(this.sprite, 0, 0, false);
 
     // HP-Balken Hintergrund (dunkelgrau, zentriert)
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
@@ -362,6 +393,8 @@ export class PlayerEntity {
           this.syncStealthOverlay();
         },
       });
+      this.stealthAmbientParticles?.start();
+      this.stealthTrailParticles?.start();
     } else {
       this.stealthTween?.stop();
       this.stealthTween = null;
@@ -376,6 +409,10 @@ export class PlayerEntity {
       this.stealthScanProgress = 0;
       this.stealthShell?.setVisible(false);
       this.stealthScan?.setVisible(false);
+      this.stealthAmbientParticles?.stop();
+      this.stealthAmbientParticles?.killAll();
+      this.stealthTrailParticles?.stop();
+      this.stealthTrailParticles?.killAll();
       this.startDefaultGlowTween();
     }
 
@@ -513,6 +550,13 @@ export class PlayerEntity {
       .setAlpha(scanAlpha)
       .setTint(this.colorHex)
       .setCrop(scanX, 0, cropWidth, frameHeight);
+
+    const speed = Math.hypot(this.body.velocity.x, this.body.velocity.y);
+    const trailAlpha = Phaser.Math.Clamp(0.05 + speed / 6500, 0.05, 0.11);
+    this.stealthAmbientParticles?.setAlpha(this.stealthShellAlpha * 0.9);
+    this.stealthAmbientParticles?.setFrequency(120);
+    this.stealthTrailParticles?.setAlpha(trailAlpha);
+    this.stealthTrailParticles?.setFrequency(speed > 14 ? 48 : 86);
   }
 
   private startDefaultGlowTween(): void {
@@ -537,6 +581,8 @@ export class PlayerEntity {
     this.glowTween?.stop();
     this.stealthTween?.stop();
     this.stealthScanTween?.stop();
+    this.stealthAmbientParticles?.destroy();
+    this.stealthTrailParticles?.destroy();
     this.burnRenderer?.destroy();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
