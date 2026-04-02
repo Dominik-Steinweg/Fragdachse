@@ -5,6 +5,7 @@ export interface PlayerProfile {
   id:       string;
   name:     string;
   colorHex: number;
+  teamId?:  TeamId | null;
 }
 
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
@@ -169,6 +170,7 @@ export interface ProjectileExplosionConfig {
   readonly minDamage: number;
   readonly knockback: number;
   readonly selfDamageMult: number;
+  readonly allowTeamDamage?: boolean;
   readonly selfKnockbackMult?: number;
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
@@ -295,6 +297,10 @@ export interface SyncedTranslocatorFlash {
 /** Globale Spielphase – nur vom Host per setState gesetzt */
 export type GamePhase = 'LOBBY' | 'ARENA';
 
+export type GameMode = 'deathmatch' | 'team_deathmatch';
+
+export type TeamId = 'blue' | 'red';
+
 export type RoomQualityStatus = 'waiting' | 'sampling' | 'good' | 'bad' | 'retrying';
 
 export type RoomQualityRetryMode = 'suggest' | 'auto';
@@ -409,6 +415,7 @@ export interface ProjectileSpawnConfig {
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
   color:           number;        // hex
+  allowTeamDamage?: boolean;
   ownerColor?:     number;        // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   lifetime:        number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
   maxBounces:      number;        // 0 für Granaten
@@ -462,6 +469,7 @@ export interface DamageGrenadeEffect {
   type: 'damage';
   radius: number;
   damage: number;
+  allowTeamDamage?: boolean;
   rockDamageMult?:  number;
   trainDamageMult?: number;
   visualStyle?:     ExplosionVisualStyle;
@@ -482,6 +490,7 @@ export interface FireGrenadeEffect {
   damagePerTick: number;
   tickInterval: number;    // ms
   lingerDuration: number;  // ms
+  allowTeamDamage?: boolean;
   rockDamageMult?:  number;
   trainDamageMult?: number;
 }
@@ -569,6 +578,7 @@ export interface TrackedProjectile {
   createdAt:       number;
   ownerId:         string;
   color:           number;  // hex – gespeichert bei Spawn, entkoppelt von Shape
+  allowTeamDamage?: boolean;
   ownerColor?:     number;
   boundsListener:  (hitBody: Phaser.Physics.Arcade.Body) => void;
   colliders:       Phaser.Physics.Arcade.Collider[];  // müssen beim Destroy explizit entfernt werden

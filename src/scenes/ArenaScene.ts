@@ -154,6 +154,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Scene-lifetime systems ─────────────────────────────────────────────
     const playerManager    = new PlayerManager(this);
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
+    playerManager.setRelationshipResolver((localPlayerId, otherPlayerId) => bridge.isEnemyPair(localPlayerId, otherPlayerId));
     const projectileManager = new ProjectileManager(this);
     const combatSystem     = new CombatSystem(playerManager, projectileManager, bridge);
     const decoySystem      = new DecoySystem(this, playerManager, bridge);
@@ -546,7 +547,12 @@ export class ArenaScene extends Phaser.Scene {
   // ── Network events ────────────────────────────────────────────────────────
 
   private onPlayerJoined(profile: PlayerProfile): void {
-    if (bridge.isHost()) bridge.hostAssignColor(profile.id);
+    if (bridge.isHost()) {
+      bridge.hostAssignColor(profile.id);
+      if (bridge.getGameMode() === 'team_deathmatch') {
+        bridge.hostEnsureTeamAssignment(profile.id);
+      }
+    }
   }
 
   private onPlayerLeft(id: string): void {

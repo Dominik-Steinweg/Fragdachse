@@ -102,7 +102,7 @@ export class DecoySystem {
       owner.sprite.x,
       owner.sprite.y,
       playerColor,
-      playerId !== this.bridge.getLocalPlayerId(),
+      this.bridge.isEnemyPair(this.bridge.getLocalPlayerId(), playerId),
       true,
     );
     entity.setRotation(angle);
@@ -192,7 +192,7 @@ export class DecoySystem {
           snapshot.x,
           snapshot.y,
           snapshot.color,
-          snapshot.ownerId !== localPlayerId,
+          this.bridge.isEnemyPair(localPlayerId, snapshot.ownerId),
           false,
         );
         this.entities.set(snapshot.id, entity);

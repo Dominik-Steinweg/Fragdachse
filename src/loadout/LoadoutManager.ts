@@ -912,6 +912,7 @@ export class LoadoutManager {
       size:          cfg.projectileSize,
       damage:        0,
       color:         cfg.projectileColor ?? playerColor,
+      allowTeamDamage: cfg.allowTeamDamage,
       lifetime:      cfg.fuseTime,
       maxBounces:    cfg.maxBounces,
       isGrenade:     true,
@@ -942,6 +943,7 @@ export class LoadoutManager {
       size:             cfg.projectileSize,
       damage:           cfg.directDamage,
       color:            COLORS.GREEN_2,
+      allowTeamDamage:  cfg.allowTeamDamage,
       lifetime:         5000,      // großzügig – endet durch Arena-Wand
       maxBounces:       0,
       isGrenade:        false,
@@ -986,6 +988,7 @@ export class LoadoutManager {
         type:   'damage',
         radius: cfg.aoeRadius,
         damage: cfg.aoeDamage,
+        allowTeamDamage: cfg.allowTeamDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
         visualStyle:     cfg.explosionVisualStyle,
@@ -999,6 +1002,7 @@ export class LoadoutManager {
         damagePerTick:  cfg.fireDamagePerTick,
         tickInterval:   cfg.fireTickInterval,
         lingerDuration: cfg.fireLingerDuration,
+        allowTeamDamage: cfg.allowTeamDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
       };

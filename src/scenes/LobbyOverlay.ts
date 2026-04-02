@@ -5,10 +5,10 @@
  */
 import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { PlayerProfile, RoomQualitySnapshot } from '../types';
+import type { PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import {
   GAME_WIDTH, GAME_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  DEPTH, COLORS, toCssColor,
+  DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
@@ -33,8 +33,10 @@ const ACTION_BTN_Y = PANEL_Y + PANEL_H - 34;
 const ACTION_BTN_GAP = 18;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
-const LIST_Y   = PANEL_Y + 60;
+const LIST_Y   = PANEL_Y + 76;
 const ROW_PING_X = PANEL_X + PANEL_W - 28; // 1332 – Ping rechts-bündig in Spielerzeile
+const TEAM_HEADER_ROW_H = 20;
+const TEAM_SECTION_GAP = 10;
 
 const READY_BTN_X = GAME_WIDTH / 2;
 const COPY_BTN_X = GAME_WIDTH / 2 - (ACTION_BTN_W + ACTION_BTN_GAP);
@@ -59,6 +61,7 @@ type PlayerRow = {
 export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
   private playerRows:     Map<string, PlayerRow> = new Map();
+  private teamHeaders:     Record<TeamId, Phaser.GameObjects.Text> | null = null;
   private statusText!:    Phaser.GameObjects.Text;
   private roomQualityText!: Phaser.GameObjects.Text;
   private hostActionsLabel!: Phaser.GameObjects.Text;
@@ -129,6 +132,15 @@ export class LobbyOverlay {
       fontSize: '16px', fontFamily: 'monospace', color: TEXT_COLOR,
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.roomQualityText);
+
+    const blueHeader = this.scene.add.text(LIST_X + 40, LIST_Y, 'Team Blau', {
+      fontSize: '18px', fontFamily: 'monospace', color: toCssColor(TEAM_BLUE_COLOR), fontStyle: 'bold',
+    }).setScrollFactor(0).setVisible(false);
+    const redHeader = this.scene.add.text(LIST_X + 40, LIST_Y, 'Team Rot', {
+      fontSize: '18px', fontFamily: 'monospace', color: toCssColor(TEAM_RED_COLOR), fontStyle: 'bold',
+    }).setScrollFactor(0).setVisible(false);
+    this.teamHeaders = { blue: blueHeader, red: redHeader };
+    objects.push(blueHeader, redHeader);
 
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
@@ -240,7 +252,7 @@ export class LobbyOverlay {
       }
     }
 
-    this.repositionRows();
+    this.repositionRows(connectedPlayers);
     this.refreshBadges();
     this.refreshPings();
     this.updateStatus(connectedPlayers.length);
@@ -320,17 +332,52 @@ export class LobbyOverlay {
     this.playerRows.set(profile.id, { bg, name, badge, label, ping });
   }
 
-  private repositionRows(): void {
-    let idx = 0;
-    for (const row of this.playerRows.values()) {
-      const y = LIST_Y + idx * ROW_H;
-      row.bg.setPosition(GAME_WIDTH / 2, y).setOrigin(0.5, 0);
-      row.name.setPosition(LIST_X + 40, y + 10);
-      row.badge.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
-      row.label.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
-      row.ping.setPosition(ROW_PING_X, y + (ROW_H - 6) / 2);
-      idx++;
+  private repositionRows(connectedPlayers: PlayerProfile[]): void {
+    const mode = this.bridge.getGameMode();
+    if (mode !== 'team_deathmatch') {
+      this.teamHeaders?.blue.setVisible(false);
+      this.teamHeaders?.red.setVisible(false);
+      let idx = 0;
+      for (const profile of connectedPlayers) {
+        const row = this.playerRows.get(profile.id);
+        if (!row) continue;
+        const y = LIST_Y + idx * ROW_H;
+        this.positionRow(row, y);
+        idx++;
+      }
+      return;
     }
+
+    const bluePlayers = connectedPlayers.filter((profile) => profile.teamId === 'blue');
+    const redPlayers = connectedPlayers.filter((profile) => profile.teamId === 'red');
+    let currentY = LIST_Y;
+
+    this.teamHeaders?.blue.setVisible(true).setPosition(LIST_X + 40, currentY);
+    currentY += TEAM_HEADER_ROW_H;
+    for (const profile of bluePlayers) {
+      const row = this.playerRows.get(profile.id);
+      if (!row) continue;
+      this.positionRow(row, currentY);
+      currentY += ROW_H;
+    }
+
+    currentY += TEAM_SECTION_GAP;
+    this.teamHeaders?.red.setVisible(true).setPosition(LIST_X + 40, currentY);
+    currentY += TEAM_HEADER_ROW_H;
+    for (const profile of redPlayers) {
+      const row = this.playerRows.get(profile.id);
+      if (!row) continue;
+      this.positionRow(row, currentY);
+      currentY += ROW_H;
+    }
+  }
+
+  private positionRow(row: PlayerRow, y: number): void {
+    row.bg.setPosition(GAME_WIDTH / 2, y).setOrigin(0.5, 0);
+    row.name.setPosition(LIST_X + 40, y + 10);
+    row.badge.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
+    row.label.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
+    row.ping.setPosition(ROW_PING_X, y + (ROW_H - 6) / 2);
   }
 
   private refreshBadges(): void {

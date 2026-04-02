@@ -417,6 +417,9 @@ export const PLAYER_COLORS: readonly number[] = [
   COLORS.PURPLE_3, COLORS.PURPLE_2,
 ] as const;
 
+export const TEAM_BLUE_COLOR = COLORS.BLUE_3;
+export const TEAM_RED_COLOR = COLORS.RED_3;
+
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;
 export const ARENA_COUNTDOWN_SEC = 3;

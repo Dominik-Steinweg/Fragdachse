@@ -410,6 +410,7 @@ export class ProjectileManager {
       createdAt:      Date.now(),
       ownerId,
       color:          cfg.color,
+      allowTeamDamage: cfg.allowTeamDamage,
       ownerColor:     cfg.ownerColor,
       boundsListener: () => {},
       colliders:      [],

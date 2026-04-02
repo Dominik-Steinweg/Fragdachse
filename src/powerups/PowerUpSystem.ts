@@ -321,6 +321,7 @@ export class PowerUpSystem {
       minDamage: NUKE_CONFIG.minDamage,
       knockback: 0,
       selfDamageMult: 1,
+      allowTeamDamage: NUKE_CONFIG.allowTeamDamage,
     }, strike.triggeredBy, 'utility', 'Atombombe');
 
     this.options.onNukeExploded?.(strike.x, strike.y, strike.radius, strike.triggeredBy);

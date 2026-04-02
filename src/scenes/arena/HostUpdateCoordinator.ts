@@ -12,7 +12,7 @@ import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
 import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
-import type { PlayerAimNetState, PlayerNetState, TrackedProjectile } from '../../types';
+import type { PlayerAimNetState, PlayerNetState, TeamId, TrackedProjectile } from '../../types';
 
 /**
  * Runs every frame on the host.
@@ -25,7 +25,7 @@ export class HostUpdateCoordinator {
   private active = true;
   private netTickAccumulator = 0;
   private leaderboardSignature = '';
-  private cachedLeaderboardEntries: { name: string; colorHex: number; frags: number; ping: number }[] = [];
+  private cachedLeaderboardEntries: { name: string; colorHex: number; frags: number; ping: number; teamId: TeamId | null }[] = [];
   private readonly dashPhase2StartTimes = new Map<string, number>();
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly dashTrailTimers      = new Map<string, number>();
@@ -145,6 +145,7 @@ export class HostUpdateCoordinator {
       if (g.effect.type === 'damage') {
         this.ctx.combatSystem.applyAoeDamage(g.x, g.y, g.effect.radius, g.effect.damage, g.ownerId, false, {
           category: 'explosion',
+          allowTeamDamage: g.effect.allowTeamDamage,
           weaponName: 'Granate',
           sourceSlot: 'utility',
         });
@@ -441,11 +442,11 @@ export class HostUpdateCoordinator {
     }
   }
 
-  getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number }[] {
+  getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number; teamId: TeamId | null }[] {
     const playerIds = bridge.getConnectedPlayerIds();
     const signatureParts: string[] = [];
     for (const playerId of playerIds) {
-      signatureParts.push(`${playerId}:${bridge.getPlayerName(playerId)}:${bridge.getPlayerColor(playerId) ?? 0xffffff}:${bridge.getPlayerFrags(playerId)}:${bridge.getPlayerPing(playerId)}`);
+      signatureParts.push(`${playerId}:${bridge.getPlayerName(playerId)}:${bridge.getPlayerColor(playerId) ?? 0xffffff}:${bridge.getPlayerFrags(playerId)}:${bridge.getPlayerPing(playerId)}:${bridge.getGameMode() === 'team_deathmatch' ? bridge.getPlayerTeam(playerId) ?? 'none' : 'none'}`);
     }
     const nextSignature = signatureParts.join('|');
     if (nextSignature === this.leaderboardSignature) return this.cachedLeaderboardEntries;
@@ -456,6 +457,7 @@ export class HostUpdateCoordinator {
         colorHex: bridge.getPlayerColor(playerId) ?? 0xffffff,
         frags:    bridge.getPlayerFrags(playerId),
         ping:     bridge.getPlayerPing(playerId),
+        teamId:   bridge.getGameMode() === 'team_deathmatch' ? bridge.getPlayerTeam(playerId) : null,
       }))
       .sort((a, b) => b.frags - a.frags);
     return this.cachedLeaderboardEntries;
@@ -592,6 +594,7 @@ export class HostUpdateCoordinator {
       const dist = Phaser.Math.Distance.Between(px, py, player.sprite.x, player.sprite.y);
       if (dist > radius) continue;
       if (!this.ctx.combatSystem.hasLineOfSight(px, py, player.sprite.x, player.sprite.y)) continue;
+      if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
       if (this.ctx.energyShieldSystem?.tryBlockDamage({
         targetId: player.id,
         category: 'hitscan',
@@ -605,6 +608,8 @@ export class HostUpdateCoordinator {
       this.ctx.combatSystem.applyDamage(player.id, damage, false, proj.ownerId, 'BFG', {
         sourceX: px,
         sourceY: py,
+      }, {
+        allowTeamDamage: proj.allowTeamDamage,
       });
       laserLines.push({ sx: px, sy: py, ex: player.sprite.x, ey: player.sprite.y });
     }

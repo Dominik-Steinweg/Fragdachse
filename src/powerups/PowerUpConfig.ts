@@ -98,6 +98,7 @@ export const NUKE_CONFIG = {
   radius:             750,
   maxDamage:          1000,
   minDamage:          50,
+  allowTeamDamage:    true,
   edgePaddingPx:      120,
   farSpawnTopFraction: 0.25,
   warningColor:       COLORS.RED_2,

@@ -10,8 +10,8 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
-import { MAX_PLAYERS } from '../config';
+import type { BurrowPhase, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
@@ -27,6 +27,7 @@ const KEY_PROJECTILES  = 'prj';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
 const KEY_NAME         = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
+const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch'
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
@@ -34,6 +35,7 @@ const KEY_ARENA_LAYOUT = 'aly';   // global: ArenaLayout (reliable, einmalig pro
 const KEY_ROCK_HP      = 'rck';   // global: RockNetState[] (unreliable, Delta-Snapshot)
 const KEY_AVAIL_COLORS = 'avc';   // global: number[] (verfügbarer Farbpool, reliable)
 const KEY_PLAYER_COLOR = 'clr';   // per-player: number (benutzerdefinierte Spielerfarbe)
+const KEY_PLAYER_TEAM  = 'ptm';   // per-player: 'blue' | 'red' (gemerkte TDM-Teamwahl)
 const KEY_LOADOUT_W1   = 'lw1';   // per-player: string (weapon1 item ID)
 const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
 const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
@@ -76,6 +78,7 @@ export interface RoundResult {
   name:     string;
   colorHex: number;
   frags:    number;
+  teamId:   TeamId | null;
 }
 
 export interface GameState {
@@ -147,6 +150,8 @@ interface RpcEnvelope {
   payload: unknown;
 }
 
+const TEAM_IDS: readonly TeamId[] = ['blue', 'red'];
+
 export class NetworkBridge {
   private playerStateMap   = new Map<string, PlayerState>();
   private connectedPlayers = new Map<string, PlayerProfile>();
@@ -195,6 +200,13 @@ export class NetworkBridge {
       registerHostRpcHandler: (type, handler) => this.registerHostRpcHandler(type, handler),
       registerAllRpcHandler: (type, handler) => this.registerAllRpcHandler(type, handler),
       callHostRpc: (type: string, payload: unknown, timeoutMs: number) => this.callHostRpc(type, payload, timeoutMs),
+    });
+
+    this.registerHostRpcHandler('tmr', async (payload: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return false;
+      const teamId = (payload as { teamId?: unknown } | null)?.teamId;
+      if (teamId !== 'blue' && teamId !== 'red') return false;
+      return this.hostHandleTeamRequest(teamId, caller.id);
     });
   }
 
@@ -287,6 +299,94 @@ export class NetworkBridge {
     const state = this.playerStateMap.get(playerId);
     if (!state) return this.connectedPlayers.get(playerId);
     return this.syncConnectedProfile(state);
+  }
+
+  getGameMode(): GameMode {
+    return (getState(KEY_GAME_MODE) as GameMode | undefined) ?? 'deathmatch';
+  }
+
+  setGameMode(mode: GameMode): void {
+    if (!isHost()) return;
+    if (mode === 'team_deathmatch') {
+      this.hostAssignMissingTeams();
+    }
+    setState(KEY_GAME_MODE, mode, true);
+    this.connectedPlayersCacheDirty = true;
+  }
+
+  getPlayerTeam(playerId: string): TeamId | null {
+    const teamId = this.playerStateMap.get(playerId)?.getState(KEY_PLAYER_TEAM) as TeamId | undefined;
+    return teamId === 'blue' || teamId === 'red' ? teamId : null;
+  }
+
+  getTeamColor(teamId: TeamId): number {
+    return teamId === 'blue' ? TEAM_BLUE_COLOR : TEAM_RED_COLOR;
+  }
+
+  getPlayerColor(playerId: string): number | undefined {
+    return this.getEffectivePlayerColor(playerId);
+  }
+
+  getEffectivePlayerColor(playerId: string): number | undefined {
+    if (this.getGameMode() === 'team_deathmatch') {
+      const teamId = this.getPlayerTeam(playerId);
+      if (teamId) return this.getTeamColor(teamId);
+    }
+    return this.getStoredPlayerColor(playerId);
+  }
+
+  getPlayerDmColor(playerId: string): number | undefined {
+    return this.getStoredPlayerColor(playerId);
+  }
+
+  areTeammates(firstPlayerId: string, secondPlayerId: string): boolean {
+    if (firstPlayerId === secondPlayerId) return true;
+    if (this.getGameMode() !== 'team_deathmatch') return false;
+    const firstTeam = this.getPlayerTeam(firstPlayerId);
+    const secondTeam = this.getPlayerTeam(secondPlayerId);
+    return firstTeam !== null && firstTeam === secondTeam;
+  }
+
+  isEnemyPair(firstPlayerId: string, secondPlayerId: string): boolean {
+    if (firstPlayerId === secondPlayerId) return false;
+    if (this.getGameMode() !== 'team_deathmatch') return true;
+    const firstTeam = this.getPlayerTeam(firstPlayerId);
+    const secondTeam = this.getPlayerTeam(secondPlayerId);
+    if (!firstTeam || !secondTeam) return true;
+    return firstTeam !== secondTeam;
+  }
+
+  canPlayerChangeTeam(playerId: string): boolean {
+    return !this.getPlayerReady(playerId);
+  }
+
+  async requestTeamChange(teamId: TeamId): Promise<boolean> {
+    const playerId = this.getLocalPlayerId();
+    if (this.getPlayerTeam(playerId) === teamId) return true;
+    if (this.isHost()) {
+      return this.hostHandleTeamRequest(teamId, playerId);
+    }
+    const result = await this.callHostRpc('tmr', { teamId }, 1000).catch(() => false);
+    return result === true;
+  }
+
+  hostEnsureTeamAssignment(playerId: string): void {
+    if (!isHost()) return;
+    if (this.getPlayerTeam(playerId)) return;
+    this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, this.pickBalancedTeam(), true);
+    this.connectedPlayersCacheDirty = true;
+  }
+
+  hostAssignMissingTeams(): void {
+    if (!isHost()) return;
+    const playerIds = [...this.connectedPlayers.keys()];
+    const unassigned = playerIds.filter((playerId) => !this.getPlayerTeam(playerId));
+    if (unassigned.length === 0) return;
+    unassigned.sort(() => Math.random() - 0.5);
+    for (const playerId of unassigned) {
+      this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, this.pickBalancedTeam(), true);
+    }
+    this.connectedPlayersCacheDirty = true;
   }
 
   // ── Input: Client → Host (pro Spieler, unreliable) ────────────────────────
@@ -919,18 +1019,13 @@ export class NetworkBridge {
 
   // ── Spielerfarbe: pro Spieler ─────────────────────────────────────────────
 
-  /** Liest die benutzerdefinierte Farbe eines Spielers (undefined = noch keine). */
-  getPlayerColor(playerId: string): number | undefined {
-    return this.playerStateMap.get(playerId)?.getState(KEY_PLAYER_COLOR) as number | undefined;
-  }
-
   /**
    * Host-only: Weist einem Spieler automatisch eine zufällige verfügbare Farbe zu
    * und aktualisiert den Farbpool. Kein-Op wenn Spieler bereits eine Farbe hat.
    */
   hostAssignColor(playerId: string): void {
     if (!isHost()) return;
-    if (this.getPlayerColor(playerId) !== undefined) return;
+    if (this.getStoredPlayerColor(playerId) !== undefined) return;
     const available = this.computeAvailableColors();
     if (available.length === 0) return;
     const idx   = Math.floor(Math.random() * available.length);
@@ -945,7 +1040,7 @@ export class NetworkBridge {
    */
   hostReclaimColor(playerId: string): void {
     if (!isHost()) return;
-    const color = this.getPlayerColor(playerId);
+    const color = this.getStoredPlayerColor(playerId);
     if (color === undefined) return;
     this.reconcileColorPool();
   }
@@ -1294,7 +1389,7 @@ export class NetworkBridge {
     if (this.knownPlayerColors.length === 0) return this.getAvailableColors();
     const usedColors = new Set<number>();
     for (const id of this.connectedPlayers.keys()) {
-      const color = this.getPlayerColor(id);
+      const color = this.getStoredPlayerColor(id);
       if (color !== undefined) usedColors.add(color);
     }
     return this.knownPlayerColors.filter(color => !usedColors.has(color));
@@ -1323,15 +1418,16 @@ export class NetworkBridge {
   private syncConnectedProfile(state: PlayerState): PlayerProfile {
     const previous = this.connectedPlayers.get(state.id);
     const stateName = state.getState(KEY_NAME) as string | undefined;
-    const stateColor = state.getState(KEY_PLAYER_COLOR) as number | undefined;
+    const effectiveColor = this.getEffectivePlayerColor(state.id);
+    const teamId = this.getPlayerTeam(state.id);
 
     if (previous) {
       const nextName = sanitizePlayerName(stateName || previous.name || '') || 'Player';
-      const nextColor = stateColor ?? previous.colorHex;
-      if (nextName === previous.name && nextColor === previous.colorHex) {
+      const nextColor = effectiveColor ?? previous.colorHex;
+      if (nextName === previous.name && nextColor === previous.colorHex && previous.teamId === teamId) {
         return previous;
       }
-      const nextProfile: PlayerProfile = { id: state.id, name: nextName, colorHex: nextColor };
+      const nextProfile: PlayerProfile = { id: state.id, name: nextName, colorHex: nextColor, teamId };
       this.connectedPlayers.set(state.id, nextProfile);
       this.connectedPlayersCacheDirty = true;
       return nextProfile;
@@ -1347,11 +1443,12 @@ export class NetworkBridge {
   private extractProfile(state: PlayerState): PlayerProfile {
     const profile    = state.getProfile();
     const stateName  = state.getState(KEY_NAME)         as string | undefined;
-    const stateColor = state.getState(KEY_PLAYER_COLOR) as number | undefined;
+    const effectiveColor = this.getEffectivePlayerColor(state.id);
+    const teamId = this.getPlayerTeam(state.id);
 
     let colorHex: number;
-    if (stateColor !== undefined) {
-      colorHex = stateColor;
+    if (effectiveColor !== undefined) {
+      colorHex = effectiveColor;
     } else {
       const rawHex = (profile.color as unknown as Record<string, unknown> | undefined)?.hex ?? '#ffffff';
       const parsed = parseInt(String(rawHex).replace('#', ''), 16);
@@ -1362,6 +1459,35 @@ export class NetworkBridge {
       id:       state.id,
       name:     sanitizePlayerName(stateName || profile.name || '') || 'Player',
       colorHex,
+      teamId,
     };
+  }
+
+  private getStoredPlayerColor(playerId: string): number | undefined {
+    return this.playerStateMap.get(playerId)?.getState(KEY_PLAYER_COLOR) as number | undefined;
+  }
+
+  private hostHandleTeamRequest(teamId: TeamId, requesterId: string): boolean {
+    if (!isHost()) return false;
+    if (!this.canPlayerChangeTeam(requesterId)) return false;
+    this.playerStateMap.get(requesterId)?.setState(KEY_PLAYER_TEAM, teamId, true);
+    this.connectedPlayersCacheDirty = true;
+    return true;
+  }
+
+  private pickBalancedTeam(): TeamId {
+    const blueCount = this.getTeamPlayerCount('blue');
+    const redCount = this.getTeamPlayerCount('red');
+    if (blueCount < redCount) return 'blue';
+    if (redCount < blueCount) return 'red';
+    return Math.random() < 0.5 ? 'blue' : 'red';
+  }
+
+  private getTeamPlayerCount(teamId: TeamId): number {
+    let count = 0;
+    for (const playerId of this.connectedPlayers.keys()) {
+      if (this.getPlayerTeam(playerId) === teamId) count++;
+    }
+    return count;
   }
 }

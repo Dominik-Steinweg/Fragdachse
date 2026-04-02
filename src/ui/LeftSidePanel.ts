@@ -15,7 +15,7 @@ import { HelpOverlay } from './HelpOverlay';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
-import type { LoadoutSlot } from '../types';
+import type { GameMode, LoadoutSlot, TeamId } from '../types';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
 
 // ── Layout-Konstanten (innerhalb des 240px-Sidebars) ─────────────────────────
@@ -23,11 +23,14 @@ const CENTER_X     = 120;  // Mitte des 240px Sidebars
 const NAME_LABEL_Y = 60;
 const NAME_VALUE_Y = 80;
 const EDIT_BTN_Y   = 114;
-const DIVIDER1_Y   = 148;  // Trennlinie zwischen Name-Sektion und Dachs
-const BADGER_Y     = 200;  // Dachs-Sprite-Mitte
-const DIVIDER2_Y   = 260;  // Trennlinie zwischen Dachs und Loadout
+const MODE_LABEL_Y = 132;
+const MODE_ROW_Y   = 150;
+const DIVIDER1_Y   = 176;  // Trennlinie zwischen Name-/Modus-Sektion und Dachs
+const BADGER_Y     = 222;  // Dachs-Sprite-Mitte
+const DIVIDER2_Y   = 286;  // Trennlinie zwischen Dachs und Loadout
 const BADGER_SIZE        = 48;   // Anzeigegröße
 const BADGER_CLICK_SIZE  = 56;   // Klickbare Fläche
+const TEAM_SELECT_Y      = BADGER_Y + BADGER_SIZE / 2 + 6;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_WORLD_X  = 12;
@@ -46,19 +49,32 @@ const NAME_FONT  = { fontSize: '26px', fontFamily: 'monospace', color: toCssColo
 const EDIT_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_1) };
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = 286;   // Y des "Loadout:"-Labels
+const CAROUSEL_START_Y  = 312;   // Y des "Loadout:"-Labels
 const CAROUSEL_ROW_STEP = 52;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
 const CAROUSEL_GROUP_DY = 20;    // Offset erste Karussell-Zeile unter "Loadout:"
 const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const DIVIDER3_Y  = 510;  // Trennlinie unter Loadout
-const HELP_BTN_Y  = 540;  // Hilfe-Button Y-Position
+const DIVIDER3_Y  = 536;  // Trennlinie unter Loadout
+const HELP_BTN_Y  = 566;  // Hilfe-Button Y-Position
 const HELP_BTN_W  = 160;  // Breite
 const HELP_BTN_H  = 34;   // Höhe
 const ARROW_X_LEFT      = 15;
 const ARROW_X_RIGHT     = 195;   // "[ > ]" (~42px) endet bei ≈237 – bleibt im 240px-Sidebar
 const ITEM_NAME_X       = 120;   // zentriert in 240px Sidebar
+
+const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch'];
+const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
+
+function getModeLabel(mode: GameMode): string {
+  return mode === 'team_deathmatch' ? 'Team Deathmatch' : 'Deathmatch';
+}
+
+function getTeamLabel(teamId: TeamId | null): string {
+  if (teamId === 'blue') return 'Team Blau';
+  if (teamId === 'red') return 'Team Rot';
+  return 'Team waehlen';
+}
 
 type LoadoutCarouselItem = {
   id: string;
@@ -94,7 +110,10 @@ export class LeftSidePanel {
   private arenaHUD!:       ArenaHUD;
   private localNameText!:  Phaser.GameObjects.Text;
   private editBtn:         Phaser.GameObjects.Text | null = null;
+  private modeNameText:    Phaser.GameObjects.Text | null = null;
+  private modeArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
   private colorEditText:   Phaser.GameObjects.Text | null = null;
+  private teamArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
   private nameEditEnabled  = true;
   private nameEditOpen     = false;
   private nameEditPopup:   HTMLDivElement | null = null;
@@ -158,6 +177,35 @@ export class LeftSidePanel {
     this.editBtn = editBtn;
     objects.push(editBtn);
 
+    objects.push(
+      this.scene.add.text(CENTER_X, MODE_LABEL_Y, 'Spielmodus:', LABEL_FONT)
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0),
+    );
+
+    const modeLeftBtn = this.scene.add.text(ARROW_X_LEFT, MODE_ROW_Y, '[ < ]', EDIT_FONT)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.stepGameMode(-1))
+      .on('pointerover', () => modeLeftBtn.setAlpha(0.7))
+      .on('pointerout', () => modeLeftBtn.setAlpha(1.0));
+    objects.push(modeLeftBtn);
+
+    const modeNameText = this.scene.add.text(ITEM_NAME_X, MODE_ROW_Y, '', {
+      fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setScrollFactor(0);
+    this.modeNameText = modeNameText;
+    objects.push(modeNameText);
+
+    const modeRightBtn = this.scene.add.text(ARROW_X_RIGHT, MODE_ROW_Y, '[ > ]', EDIT_FONT)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.stepGameMode(+1))
+      .on('pointerover', () => modeRightBtn.setAlpha(0.7))
+      .on('pointerout', () => modeRightBtn.setAlpha(1.0));
+    objects.push(modeRightBtn);
+    this.modeArrowButtons = { left: modeLeftBtn, right: modeRightBtn };
+
     // ── Trennlinie ──
     const divider = this.scene.add.graphics();
     divider.lineStyle(1, COLORS.GREY_6, 0.5);
@@ -183,6 +231,25 @@ export class LeftSidePanel {
       .on('pointerdown', () => this.toggleColorPicker());
     this.colorEditText = colorEditText;
     objects.push(colorEditText);
+
+    const teamLeftBtn = this.scene.add.text(ARROW_X_LEFT, TEAM_SELECT_Y, '[ < ]', EDIT_FONT)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.stepTeam(-1))
+      .on('pointerover', () => teamLeftBtn.setAlpha(0.7))
+      .on('pointerout', () => teamLeftBtn.setAlpha(1.0));
+    teamLeftBtn.setVisible(false);
+    objects.push(teamLeftBtn);
+
+    const teamRightBtn = this.scene.add.text(ARROW_X_RIGHT, TEAM_SELECT_Y, '[ > ]', EDIT_FONT)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.stepTeam(+1))
+      .on('pointerover', () => teamRightBtn.setAlpha(0.7))
+      .on('pointerout', () => teamRightBtn.setAlpha(1.0));
+    teamRightBtn.setVisible(false);
+    objects.push(teamRightBtn);
+    this.teamArrowButtons = { left: teamLeftBtn, right: teamRightBtn };
 
     // ── Trennlinie 2 ──
     const divider2 = this.scene.add.graphics();
@@ -281,6 +348,7 @@ export class LeftSidePanel {
     this.helpOverlay = new HelpOverlay(this.scene);
     this.helpOverlay.build();
     this.setLobbyFieldsLocked(false);
+    this.refreshColorIndicator();
   }
 
   // ── Transitions ────────────────────────────────────────────────────────────
@@ -366,10 +434,15 @@ export class LeftSidePanel {
   /** Aktualisiert den Dachs-Farbindikator und Spielernamen anhand des aktuellen Player-States. */
   refreshColorIndicator(): void {
     const color = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
+    const mode = this.bridge.getGameMode();
+    const teamId = this.bridge.getPlayerTeam(this.bridge.getLocalPlayerId());
     if (color !== undefined) {
       this.badgerPreview?.setColor(color);
       this.localNameText?.setColor(toCssColor(color));
     }
+    this.modeNameText?.setText(getModeLabel(mode));
+    this.updateModeSelectorState();
+    this.updateTeamSelectorState(mode, teamId);
   }
 
   /** Per-frame lobby update: rotate badger towards mouse. */
@@ -386,6 +459,10 @@ export class LeftSidePanel {
 
   /** Aktualisiert den Picker live, solange er offen ist (jeden Lobby-Frame). */
   refreshColorPickerIfOpen(): void {
+    if (this.bridge.getGameMode() === 'team_deathmatch') {
+      this.closeColorPicker();
+      return;
+    }
     if (!this.pickerOpen) return;
     this.refreshPickerSwatches();
   }
@@ -418,6 +495,8 @@ export class LeftSidePanel {
     this.updateNameEditButtonVisibility();
     this.updateColorEditState();
     this.updateLoadoutArrowVisibility();
+    this.updateModeSelectorState();
+    this.updateTeamSelectorState(this.bridge.getGameMode(), this.bridge.getPlayerTeam(this.bridge.getLocalPlayerId()));
   }
 
   destroy(): void {
@@ -558,6 +637,7 @@ export class LeftSidePanel {
   }
 
   private requestColor(color: number): void {
+    if (this.bridge.getGameMode() === 'team_deathmatch') return;
     if (this.lobbyFieldsLocked) return;
     if (this.requestPending) return;
     const ownColor = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
@@ -719,13 +799,15 @@ export class LeftSidePanel {
   }
 
   private updateColorEditState(): void {
-    const enabled = !this.lobbyFieldsLocked;
+    const mode = this.bridge.getGameMode();
+    const enabled = !this.lobbyFieldsLocked && mode !== 'team_deathmatch';
     this.badgerClickZone.setAlpha(enabled ? 1 : 0);
     if (enabled) this.badgerClickZone.setInteractive({ useHandCursor: true });
     else this.badgerClickZone.disableInteractive();
 
-    this.colorEditText?.setVisible(enabled);
+    this.colorEditText?.setVisible(mode !== 'team_deathmatch' && !this.lobbyFieldsLocked);
     if (!this.colorEditText) return;
+    this.colorEditText.setText('[ Farbe aendern ]');
     if (enabled) this.colorEditText.setInteractive({ useHandCursor: true });
     else this.colorEditText.disableInteractive();
   }
@@ -742,6 +824,72 @@ export class LeftSidePanel {
         buttons.left.setInteractive({ useHandCursor: true });
         buttons.right.setInteractive({ useHandCursor: true });
       }
+    }
+  }
+
+  private stepGameMode(delta: -1 | 1): void {
+    if (this.lobbyFieldsLocked || !this.bridge.isHost()) return;
+    const currentMode = this.bridge.getGameMode();
+    const currentIndex = MODE_OPTIONS.indexOf(currentMode);
+    const nextIndex = (currentIndex + delta + MODE_OPTIONS.length) % MODE_OPTIONS.length;
+    this.bridge.setGameMode(MODE_OPTIONS[nextIndex]);
+    this.refreshColorIndicator();
+  }
+
+  private stepTeam(delta: -1 | 1): void {
+    if (this.bridge.getGameMode() !== 'team_deathmatch') return;
+    if (this.lobbyFieldsLocked) return;
+    const localId = this.bridge.getLocalPlayerId();
+    if (!this.bridge.canPlayerChangeTeam(localId)) return;
+    const currentTeam = this.bridge.getPlayerTeam(localId) ?? 'blue';
+    const currentIndex = TEAM_OPTIONS.indexOf(currentTeam);
+    const nextIndex = (currentIndex + delta + TEAM_OPTIONS.length) % TEAM_OPTIONS.length;
+    void this.bridge.requestTeamChange(TEAM_OPTIONS[nextIndex]).then((changed) => {
+      if (changed) this.refreshColorIndicator();
+    });
+  }
+
+  private updateModeSelectorState(): void {
+    const isHost = this.bridge.isHost();
+    const enabled = !this.lobbyFieldsLocked && isHost;
+    const alpha = enabled ? 1 : 0.35;
+    this.modeArrowButtons?.left.setVisible(isHost).setAlpha(alpha);
+    this.modeArrowButtons?.right.setVisible(isHost).setAlpha(alpha);
+    if (enabled) {
+      this.modeArrowButtons?.left.setInteractive({ useHandCursor: true });
+      this.modeArrowButtons?.right.setInteractive({ useHandCursor: true });
+    } else {
+      this.modeArrowButtons?.left.disableInteractive();
+      this.modeArrowButtons?.right.disableInteractive();
+    }
+  }
+
+  private updateTeamSelectorState(mode: GameMode, teamId: TeamId | null): void {
+    const isTdm = mode === 'team_deathmatch';
+    const canChangeTeam = isTdm && !this.lobbyFieldsLocked && this.bridge.canPlayerChangeTeam(this.bridge.getLocalPlayerId());
+    const alpha = canChangeTeam ? 1 : 0.35;
+
+    if (isTdm) {
+      this.closeColorPicker();
+    }
+
+    this.teamArrowButtons?.left.setVisible(isTdm).setAlpha(alpha);
+    this.teamArrowButtons?.right.setVisible(isTdm).setAlpha(alpha);
+    if (canChangeTeam) {
+      this.teamArrowButtons?.left.setInteractive({ useHandCursor: true });
+      this.teamArrowButtons?.right.setInteractive({ useHandCursor: true });
+    } else {
+      this.teamArrowButtons?.left.disableInteractive();
+      this.teamArrowButtons?.right.disableInteractive();
+    }
+
+    if (!this.colorEditText) return;
+    if (isTdm) {
+      this.colorEditText.setVisible(true);
+      this.colorEditText.setText(getTeamLabel(teamId));
+      this.colorEditText.disableInteractive();
+    } else {
+      this.updateColorEditState();
     }
   }
 

@@ -30,8 +30,13 @@ type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
 
 interface AoeDamageOptions {
   category?: ShieldBlockCategory;
+  allowTeamDamage?: boolean;
   weaponName?: string;
   sourceSlot?: LoadoutSlot;
+}
+
+interface DamageApplicationOptions {
+  allowTeamDamage?: boolean;
 }
 
 interface DamageVisualContext {
@@ -230,9 +235,11 @@ export class CombatSystem {
     attackerId?:     string,
     weaponName?:     string,
     visualContext?:  DamageVisualContext,
+    options?:        DamageApplicationOptions,
   ): void {
     if (!this.isAlive(targetId)) return;
     if (amount <= 0) return;
+    if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
     if (!skipBurrowCheck && this.burrowSystem?.isBurrowed(targetId)) return;
     this.decoySystem?.breakStealth(targetId, Date.now());
 
@@ -291,6 +298,7 @@ export class CombatSystem {
     weaponName: string,
   ): void {
     if (!this.isAlive(targetId)) return;
+    if (!this.canDamageTarget(attackerId, targetId)) return;
     if (durationMs <= 0 || damagePerTick <= 0 || tickIntervalMs <= 0) return;
 
     const now = Date.now();
@@ -366,11 +374,12 @@ export class CombatSystem {
     for (const player of this.playerManager.getAllPlayers()) {
       if (!includeSelf && player.id === ownerId) continue;
       if (!this.isAlive(player.id)) continue;
+      if (!this.canDamageTarget(ownerId, player.id, options?.allowTeamDamage)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
       if (dist <= radius) {
         const category = options?.category ?? 'explosion';
         if (this.shouldBlockWithShield(player.id, category, damage, x, y)) continue;
-        this.applyDamage(player.id, damage, false, ownerId, options?.weaponName ?? 'Granate', { sourceX: x, sourceY: y });
+        this.applyDamage(player.id, damage, false, ownerId, options?.weaponName ?? 'Granate', { sourceX: x, sourceY: y }, options);
       }
     }
   }
@@ -394,13 +403,23 @@ export class CombatSystem {
       if (player.id === ownerId) {
         damage *= effect.selfDamageMult;
       }
+      if (!this.canDamageTarget(ownerId, player.id, effect.allowTeamDamage)) continue;
 
       const roundedDamage = Math.round(damage);
       if (roundedDamage <= 0) continue;
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
       void sourceSlot;
-      this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y });
+      this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
+        allowTeamDamage: effect.allowTeamDamage,
+      });
     }
+  }
+
+  canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage = false): boolean {
+    if (!attackerId) return true;
+    if (attackerId === targetId) return true;
+    if (allowTeamDamage) return true;
+    return !this.bridge.areTeammates(attackerId, targetId);
   }
 
   private shouldBlockWithShield(
@@ -448,8 +467,9 @@ export class CombatSystem {
             : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
           const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
           const actualDamage = proj.damage * loadoutMult * powerUpMult;
+          const canDealDamage = this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage);
 
-          if (this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
+          if (canDealDamage && this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
             this.projectileManager.destroyProjectile(proj.id);
             projectileConsumed = true;
             break;
@@ -471,11 +491,13 @@ export class CombatSystem {
               sourceY: proj.sprite.y,
               dirX: proj.body.velocity.x,
               dirY: proj.body.velocity.y,
+            }, {
+              allowTeamDamage: proj.allowTeamDamage,
             });
             continue; // kein break, kein destroyProjectile
           }
 
-          if (proj.isFlame) {
+          if (proj.isFlame && canDealDamage) {
             this.applyBurnStack(
               player.id,
               proj.ownerId,
@@ -486,7 +508,7 @@ export class CombatSystem {
             );
           }
 
-          this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+          this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName, canDealDamage);
           projectileConsumed = true;
           break;  // Projektil trifft maximal einen Spieler pro Frame
         }
@@ -596,7 +618,8 @@ export class CombatSystem {
         : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      if (this.shouldBlockWithShield(trace.hitPlayerId, 'hitscan', actualDamage, startX, startY)) return true;
+      const canDealDamage = this.canDamageTarget(shooterId, trace.hitPlayerId);
+      if (canDealDamage && this.shouldBlockWithShield(trace.hitPlayerId, 'hitscan', actualDamage, startX, startY)) return true;
       this.applyDamage(trace.hitPlayerId, actualDamage, false, shooterId, weaponName, {
         sourceX: startX,
         sourceY: startY,
@@ -604,7 +627,7 @@ export class CombatSystem {
         dirY: Math.sin(angle),
       });
 
-      if (adrenalinGain > 0) {
+      if (canDealDamage && adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     } else if (trace.hitDecoyId !== null) {
@@ -735,7 +758,8 @@ export class CombatSystem {
         : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      if (this.shouldBlockWithShield(player.id, 'melee', actualDamage, x, y)) continue;
+      const canDealDamage = this.canDamageTarget(shooterId, player.id);
+      if (canDealDamage && this.shouldBlockWithShield(player.id, 'melee', actualDamage, x, y)) continue;
       this.applyDamage(player.id, actualDamage, false, shooterId, weaponName, {
         sourceX: x,
         sourceY: y,
@@ -749,7 +773,7 @@ export class CombatSystem {
         impactY = player.sprite.y;
       }
 
-      if (adrenalinGain > 0) {
+      if (canDealDamage && adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     }
@@ -1240,6 +1264,7 @@ export class CombatSystem {
     shooterId:     string,
     adrenalinGain: number,
     weaponName:    string,
+    allowDamage = true,
   ): void {
     const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
     const visualContext: DamageVisualContext | undefined = projectile
@@ -1258,10 +1283,12 @@ export class CombatSystem {
     } else {
       this.projectileManager.destroyProjectile(projectileId);
     }
-    this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
+    if (allowDamage) {
+      this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
+    }
 
     // Adrenalin-Belohnung für den Schützen
-    if (adrenalinGain > 0) {
+    if (allowDamage && adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
     }
   }

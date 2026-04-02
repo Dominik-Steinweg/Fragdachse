@@ -181,6 +181,7 @@ export class ArenaLifecycleCoordinator {
       name:     p.name,
       colorHex: p.colorHex,
       frags:    bridge.getPlayerFrags(p.id),
+      teamId:   bridge.getGameMode() === 'team_deathmatch' ? bridge.getPlayerTeam(p.id) : null,
     }));
     bridge.publishRoundResults(results);
   }

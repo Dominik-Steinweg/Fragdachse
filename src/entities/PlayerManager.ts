@@ -89,6 +89,7 @@ export class PlayerManager {
   private layout:  ArenaLayout | null = null;
   private localPlayerId: string | null = null;
   private spawnContextProvider: SpawnContextProvider | null = null;
+  private relationshipResolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -96,6 +97,10 @@ export class PlayerManager {
 
   setLocalPlayerId(id: string): void {
     this.localPlayerId = id;
+  }
+
+  setRelationshipResolver(resolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null): void {
+    this.relationshipResolver = resolver;
   }
 
   setSpawnContextProvider(provider: SpawnContextProvider | null): void {
@@ -119,9 +124,15 @@ export class PlayerManager {
       this.scene, profile,
       ARENA_OFFSET_X + spawn.x,
       ARENA_OFFSET_Y + spawn.y,
-      this.localPlayerId !== null && profile.id !== this.localPlayerId,
+      this.localPlayerId !== null && this.resolveIsEnemy(profile.id),
     );
     this.players.set(profile.id, entity);
+  }
+
+  private resolveIsEnemy(otherPlayerId: string): boolean {
+    if (this.localPlayerId === null) return true;
+    if (this.localPlayerId === otherPlayerId) return false;
+    return this.relationshipResolver?.(this.localPlayerId, otherPlayerId) ?? true;
   }
 
   /** Zerstört die PlayerEntity. */

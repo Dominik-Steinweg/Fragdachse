@@ -241,6 +241,7 @@ export class TeslaDomeSystem {
       if (player.id === dome.ownerId) continue;
       if (!player.sprite.active) continue;
       if (!this.combatSystem.isAlive(player.id)) continue;
+      if (!this.combatSystem.canDamageTarget(dome.ownerId, player.id)) continue;
       if (!this.combatSystem.isBurrowed(player.id) && playerTargets.some(target => target.x === player.sprite.x && target.y === player.sprite.y)) {
         if (this.energyShieldSystem?.tryBlockDamage({
           targetId: player.id,

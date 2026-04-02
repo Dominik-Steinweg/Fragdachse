@@ -216,6 +216,7 @@ interface BaseUtilityConfig {
   readonly projectileSize: number;  // px
   readonly fuseTime: number;        // ms bis Explosion
   readonly maxBounces: number;      // 0 = kein Abprallen, >0 = Explosion nach n Abprallern
+  readonly allowTeamDamage?: boolean;
 
   readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die dieses Utility eingesetzt werden darf
 
@@ -1195,6 +1196,7 @@ export const UTILITY_CONFIGS = {
     id:              'HOLY_HAND_GRENADE',
     displayName:     'Heilige Handgranate',
     type:            'explosive',
+    allowTeamDamage: true,
     cooldown:        0,             // Ammo-basiert (Einzelschuss), kein Cooldown
     activation:      STANDARD_GRENADE_CHARGE,
     projectileSpeed: 900,
@@ -1220,6 +1222,7 @@ export const UTILITY_CONFIGS = {
     id:                  'BFG',
     displayName:         'BFG',
     type:                'bfg',
+    allowTeamDamage:     true,
     cooldown:            0,             // Ammo-basiert (Einzelschuss), kein Cooldown
     activation:          { type: 'charged_gate', fullChargeDuration: 900 } as ChargedGateUtilityActivationConfig,
     projectileSpeed:     250,           // langsames, großes Projektil
@@ -1238,6 +1241,7 @@ export const UTILITY_CONFIGS = {
     id:                  'NUKE',
     displayName:         'Atombombe',
     type:                'nuke',
+    allowTeamDamage:     true,
     cooldown:            0,             // Ammo-basiert (Einzelschuss), kein Cooldown
     activation:          { type: 'targeted_click' } as TargetedClickUtilityActivationConfig,
     projectileSpeed:     0,

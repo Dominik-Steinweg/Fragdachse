@@ -9,6 +9,7 @@
  */
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, COLORS, toCssColor } from '../config';
+import type { TeamId } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
@@ -86,6 +87,19 @@ interface LeaderboardEntryView {
   pingColor: string;
 }
 
+interface LeaderboardEntry {
+  name: string;
+  colorHex: number;
+  frags: number;
+  ping: number;
+  teamId: TeamId | null;
+}
+
+interface TeamHeaderRow {
+  label: Phaser.GameObjects.Text;
+  score: Phaser.GameObjects.Text;
+}
+
 export class RightSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
@@ -111,6 +125,7 @@ export class RightSidePanel {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
   }[] = [];  private lbPingRows: Phaser.GameObjects.Text[] = [];
+  private lbTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
   // ── Zug-Widget ────────────────────────────────────────────────────────────
   private trainText!:      Phaser.GameObjects.Text;
   private trainBarBg!:     Phaser.GameObjects.Rectangle;
@@ -132,6 +147,7 @@ export class RightSidePanel {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
   }[] = [];
+  private resultsTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
 
   constructor(private scene: Phaser.Scene) {}
 
@@ -226,7 +242,16 @@ export class RightSidePanel {
    * Aktualisiert das Arena-Leaderboard.
    * entries muss bereits absteigend nach Frags sortiert sein.
    */
-  updateLeaderboard(entries: { name: string; colorHex: number; frags: number; ping: number }[]): void {
+  updateLeaderboard(entries: LeaderboardEntry[]): void {
+    if (entries.some((entry) => entry.teamId === 'blue' || entry.teamId === 'red')) {
+      this.renderGroupedLeaderboard(entries);
+      return;
+    }
+
+    this.lbTeamHeaders?.blue.label.setVisible(false);
+    this.lbTeamHeaders?.blue.score.setVisible(false);
+    this.lbTeamHeaders?.red.label.setVisible(false);
+    this.lbTeamHeaders?.red.score.setVisible(false);
     for (let i = 0; i < this.lbRows.length; i++) {
       const row      = this.lbRows[i];
       const pingText = this.lbPingRows[i];
@@ -269,8 +294,18 @@ export class RightSidePanel {
    * null oder alle Frags = 0 → Bereich bleibt leer.
    */
   showRoundResults(results: RoundResult[] | null): void {
+    if (results && results.some((result) => result.teamId === 'blue' || result.teamId === 'red')) {
+      this.renderGroupedRoundResults(results);
+      return;
+    }
+
     const sorted  = results ? [...results].sort((a, b) => b.frags - a.frags) : null;
     const hasData = !!sorted && sorted.some(r => r.frags > 0);
+
+    this.resultsTeamHeaders?.blue.label.setVisible(false);
+    this.resultsTeamHeaders?.blue.score.setVisible(false);
+    this.resultsTeamHeaders?.red.label.setVisible(false);
+    this.resultsTeamHeaders?.red.score.setVisible(false);
 
     this.resultsHeader.setVisible(hasData);
     this.resultsSep.setVisible(hasData);
@@ -481,6 +516,36 @@ export class RightSidePanel {
       }).setOrigin(1, 0.5).setScrollFactor(0),
     );
 
+    const blueLabel = this.scene.add.text(SIDEBAR_LEFT_X, LB_START_Y, 'TEAM BLAU', {
+      fontSize: LB_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.BLUE_2),
+      fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+    const blueScore = this.scene.add.text(LB_FRAGS_X, LB_START_Y, '', {
+      fontSize: LB_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.BLUE_2),
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    const redLabel = this.scene.add.text(SIDEBAR_LEFT_X, LB_START_Y, 'TEAM ROT', {
+      fontSize: LB_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.RED_2),
+      fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+    const redScore = this.scene.add.text(LB_FRAGS_X, LB_START_Y, '', {
+      fontSize: LB_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.RED_2),
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    this.lbTeamHeaders = {
+      blue: { label: blueLabel, score: blueScore },
+      red: { label: redLabel, score: redScore },
+    };
+    this.gameContainer.add([blueLabel, blueScore, redLabel, redScore]);
+
     // ── Leaderboard-Einträge (Max. 12 Spieler) ────────────────────────────────
     for (let i = 0; i < 12; i++) {
       const y = LB_START_Y + i * LB_ENTRY_H;
@@ -526,6 +591,36 @@ export class RightSidePanel {
     ).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
 
     this.lobbyContainer.add([this.resultsHeader, this.resultsSep]);
+
+    const blueLabel = this.scene.add.text(SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
+      fontSize: RESULTS_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.BLUE_2),
+      fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+    const blueScore = this.scene.add.text(SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
+      fontSize: RESULTS_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.BLUE_2),
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    const redLabel = this.scene.add.text(SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM ROT', {
+      fontSize: RESULTS_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.RED_2),
+      fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+    const redScore = this.scene.add.text(SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
+      fontSize: RESULTS_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.RED_2),
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    this.resultsTeamHeaders = {
+      blue: { label: blueLabel, score: blueScore },
+      red: { label: redLabel, score: redScore },
+    };
+    this.lobbyContainer.add([blueLabel, blueScore, redLabel, redScore]);
 
     // ── Endstand-Einträge (Max. 12 Spieler) ──────────────────────────────────
     for (let i = 0; i < 12; i++) {
@@ -612,5 +707,86 @@ export class RightSidePanel {
   /** Kürzt einen String auf maxLen Zeichen (hängt … an wenn nötig). */
   private truncate(s: string, maxLen: number): string {
     return s.length <= maxLen ? s : `${s.slice(0, maxLen - 1)}…`;
+  }
+
+  private renderGroupedLeaderboard(entries: LeaderboardEntry[]): void {
+    const blueEntries = entries.filter((entry) => entry.teamId === 'blue').sort((a, b) => b.frags - a.frags);
+    const redEntries = entries.filter((entry) => entry.teamId === 'red').sort((a, b) => b.frags - a.frags);
+    const blueScore = blueEntries.reduce((sum, entry) => sum + entry.frags, 0);
+    const redScore = redEntries.reduce((sum, entry) => sum + entry.frags, 0);
+
+    this.lbTeamHeaders?.blue.label.setVisible(true).setPosition(SIDEBAR_LEFT_X, LB_START_Y);
+    this.lbTeamHeaders?.blue.score.setVisible(true).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
+
+    let rowIndex = 0;
+    rowIndex = this.renderGroupedLeaderboardTeamRows(blueEntries, rowIndex, LB_START_Y + 20);
+
+    this.lbTeamHeaders?.red.label.setVisible(true).setPosition(SIDEBAR_LEFT_X, LB_START_Y + 20 + blueEntries.length * LB_ENTRY_H + 12);
+    this.lbTeamHeaders?.red.score.setVisible(true).setText(String(redScore)).setPosition(LB_FRAGS_X, LB_START_Y + 20 + blueEntries.length * LB_ENTRY_H + 12);
+    rowIndex = this.renderGroupedLeaderboardTeamRows(redEntries, rowIndex, LB_START_Y + 32 + blueEntries.length * LB_ENTRY_H + 12);
+
+    for (let i = rowIndex; i < this.lbRows.length; i++) {
+      this.lbRows[i].name.setVisible(false);
+      this.lbRows[i].frags.setVisible(false);
+      this.lbPingRows[i].setVisible(false);
+      this.leaderboardCache[i] = { visible: false, nameText: '', nameColor: '', fragsText: '', pingText: '', pingColor: '' };
+    }
+  }
+
+  private renderGroupedLeaderboardTeamRows(entries: LeaderboardEntry[], startRowIndex: number, startY: number): number {
+    let rowIndex = startRowIndex;
+    for (let i = 0; i < entries.length && rowIndex < this.lbRows.length; i++, rowIndex++) {
+      const row = this.lbRows[rowIndex];
+      const pingText = this.lbPingRows[rowIndex];
+      const entry = entries[i];
+      const y = startY + i * LB_ENTRY_H;
+      row.name.setPosition(SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
+      row.frags.setPosition(LB_FRAGS_X, y).setText(String(entry.frags)).setVisible(true);
+      pingText.setPosition(LB_PING_X, y).setText(`${entry.ping}ms`).setColor(pingColor(entry.ping)).setVisible(true);
+      this.leaderboardCache[rowIndex] = {
+        visible: true,
+        nameText: entry.name,
+        nameColor: this.toCachedCssColor(entry.colorHex),
+        fragsText: String(entry.frags),
+        pingText: `${entry.ping}ms`,
+        pingColor: pingColor(entry.ping),
+      };
+    }
+    return rowIndex;
+  }
+
+  private renderGroupedRoundResults(results: RoundResult[]): void {
+    const blueEntries = results.filter((result) => result.teamId === 'blue').sort((a, b) => b.frags - a.frags);
+    const redEntries = results.filter((result) => result.teamId === 'red').sort((a, b) => b.frags - a.frags);
+    const hasData = blueEntries.length > 0 || redEntries.length > 0;
+    const blueScore = blueEntries.reduce((sum, entry) => sum + entry.frags, 0);
+    const redScore = redEntries.reduce((sum, entry) => sum + entry.frags, 0);
+
+    this.resultsHeader.setVisible(hasData);
+    this.resultsSep.setVisible(hasData);
+    this.resultsTeamHeaders?.blue.label.setVisible(hasData).setPosition(SIDEBAR_LEFT_X, RESULTS_START_Y);
+    this.resultsTeamHeaders?.blue.score.setVisible(hasData).setText(String(blueScore)).setPosition(SIDEBAR_RIGHT_X, RESULTS_START_Y);
+    this.resultsTeamHeaders?.red.label.setVisible(hasData).setPosition(SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    this.resultsTeamHeaders?.red.score.setVisible(hasData).setText(String(redScore)).setPosition(SIDEBAR_RIGHT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+
+    let rowIndex = 0;
+    rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, RESULTS_START_Y + 18);
+    rowIndex = this.renderGroupedResultRows(redEntries, rowIndex, RESULTS_START_Y + 30 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    for (let i = rowIndex; i < this.resultsRows.length; i++) {
+      this.resultsRows[i].name.setVisible(false);
+      this.resultsRows[i].frags.setVisible(false);
+    }
+  }
+
+  private renderGroupedResultRows(entries: RoundResult[], startRowIndex: number, startY: number): number {
+    let rowIndex = startRowIndex;
+    for (let i = 0; i < entries.length && rowIndex < this.resultsRows.length; i++, rowIndex++) {
+      const row = this.resultsRows[rowIndex];
+      const entry = entries[i];
+      const y = startY + i * RESULTS_ENTRY_H;
+      row.name.setPosition(SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
+      row.frags.setPosition(SIDEBAR_RIGHT_X, y).setText(String(entry.frags)).setVisible(true);
+    }
+    return rowIndex;
   }
 }
