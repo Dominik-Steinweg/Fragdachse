@@ -26,6 +26,7 @@ import type { ShieldBuffSystem }    from '../../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
 import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
+import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import type { TrainManager }        from '../../train/TrainManager';
 import type { DecoySystem }         from '../../systems/DecoySystem';
 import type { ArenaLayout }         from '../../types';
@@ -68,6 +69,7 @@ export interface ArenaContext {
   currentLayout:     ArenaLayout        | null;
   placementSystem:   PlacementSystem    | null;
   rockRegistry:      RockRegistry       | null;
+  captureTheBeerSystem: CaptureTheBeerSystem | null;
 
   // Host-only round systems (null on clients and null outside a round)
   resourceSystem:    ResourceSystem    | null;

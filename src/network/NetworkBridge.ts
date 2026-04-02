@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -80,6 +80,7 @@ export interface RoundResult {
   colorHex: number;
   frags:    number;
   teamId:   TeamId | null;
+  teamScore?: number;
 }
 
 export interface GameState {
@@ -95,6 +96,7 @@ export interface GameState {
   nukes:        SyncedNukeStrike[];
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
+  captureTheBeer: SyncedCaptureTheBeerState | null;
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
   teslaDomes:   SyncedTeslaDome[];
   energyShields: SyncedEnergyShield[];
@@ -590,6 +592,7 @@ export class NetworkBridge {
     if (state.nukes.length > 0)        payload.n = state.nukes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
     if (state.train)                   payload.t = state.train;
+    if (state.captureTheBeer)          payload.cb = state.captureTheBeer;
     setState(KEY_GAME_STATE, payload, false);
   }
 
@@ -616,6 +619,7 @@ export class NetworkBridge {
       nukes:         (raw.n as SyncedNukeStrike[]    | undefined) ?? [],
       meteors:       (raw.mt as SyncedMeteorStrike[] | undefined) ?? [],
       train:         (raw.t as SyncedTrainState      | undefined) ?? null,
+      captureTheBeer: (raw.cb as SyncedCaptureTheBeerState | undefined) ?? null,
     };
     this.cachedGameState = state;
     this.gameStateVersion++;

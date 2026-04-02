@@ -103,6 +103,7 @@ export class CombatSystem {
 
   // Callback: (killerId, victimId, weaponName) – Host-only
   private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number) => void) | null = null;
+  private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:     BurrowSystemType    | null  = null;
@@ -183,6 +184,10 @@ export class CombatSystem {
   /** Setzt den Kill-Callback (Host-only). */
   setKillCallback(cb: (killerId: string, victimId: string, weapon: string, x: number, y: number) => void): void {
     this.onKillCb = cb;
+  }
+
+  setDeathCallback(cb: ((playerId: string, x: number, y: number) => void) | null): void {
+    this.onDeathCb = cb;
   }
 
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
@@ -1333,6 +1338,7 @@ export class CombatSystem {
     this.alive.set(playerId, false);
     this.armor.set(playerId, 0);
     this.clearBurnForPlayer(playerId);
+    this.onDeathCb?.(playerId, x, y);
 
     // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
     this.powerUpSystem?.removePlayer(playerId);

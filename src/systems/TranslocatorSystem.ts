@@ -9,6 +9,7 @@ import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 export class TranslocatorSystem {
   // Map von playerId -> id des aktiven Pucks
   private activePucks = new Map<string, number>();
+  private onUseCb: ((playerId: string) => void) | null = null;
 
   constructor(
     private playerManager: PlayerManager,
@@ -19,6 +20,10 @@ export class TranslocatorSystem {
 
   public setTrainManager(tm: TrainManager | null): void {
     this.trainManager = tm;
+  }
+
+  public setUseCallback(cb: ((playerId: string) => void) | null): void {
+    this.onUseCb = cb;
   }
 
   public getActivePuckId(playerId: string): number | undefined {
@@ -54,6 +59,8 @@ export class TranslocatorSystem {
   private throwPuck(playerId: string, angle: number, now: number, params: any): boolean {
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return false;
+
+    this.onUseCb?.(playerId);
 
     const cfg = UTILITY_CONFIGS.TRANSLOCATOR;
     const speed = cfg.projectileSpeed ?? 1200;
@@ -96,6 +103,8 @@ export class TranslocatorSystem {
   private teleportToPuck(playerId: string, puck: any, now: number): boolean {
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return false;
+
+    this.onUseCb?.(playerId);
 
     // 1. Puck Koordinaten lesen und Puck zerstören
     const targetX = puck.sprite.x;

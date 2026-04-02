@@ -88,6 +88,7 @@ export class LoadoutManager {
   private decoySystem: import('../systems/DecoySystem').DecoySystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
   private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
+  private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
@@ -225,6 +226,10 @@ export class LoadoutManager {
 
   setDecoySystem(sys: import('../systems/DecoySystem').DecoySystem | null): void {
     this.decoySystem = sys;
+  }
+
+  setUtilityUsedCallback(cb: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null): void {
+    this.utilityUsedCallback = cb;
   }
 
   /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
@@ -873,6 +878,8 @@ export class LoadoutManager {
     }
 
     if (didUse) {
+      this.utilityUsedCallback?.(playerId, cfg.type);
+
       // skipCooldownPublish: kein recordUse/publishCooldown für Ammo-basierte Einmal-Items,
       // damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird.
       if (!cfg.skipCooldownPublish) {

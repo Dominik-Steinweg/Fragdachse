@@ -302,6 +302,8 @@ export type GameMode = 'deathmatch' | 'team_deathmatch' | 'capture_the_beer';
 
 export type TeamId = 'blue' | 'red';
 
+export type CaptureTheBeerBeerState = 'home' | 'carried' | 'dropped';
+
 export type RoomQualityStatus = 'waiting' | 'sampling' | 'good' | 'bad' | 'retrying';
 
 export type RoomQualityRetryMode = 'suggest' | 'auto';
@@ -759,4 +761,19 @@ export interface SyncedMeteorStrike {
   spawnedAt: number;   // Date.now()-Zeitpunkt des Spawns (Warnkreis erscheint)
   impactAt:  number;   // Date.now()-Zeitpunkt des Einschlags
   ownerId:   string;   // Spieler-ID des Casters
+}
+
+export interface SyncedCaptureTheBeerBeer {
+  teamId: TeamId;
+  defaultX: number;
+  defaultY: number;
+  x: number;
+  y: number;
+  holderId: string | null;
+  state: CaptureTheBeerBeerState;
+}
+
+export interface SyncedCaptureTheBeerState {
+  scores: Record<TeamId, number>;
+  beers: SyncedCaptureTheBeerBeer[];
 }

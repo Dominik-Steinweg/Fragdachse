@@ -93,6 +93,7 @@ interface LeaderboardEntry {
   frags: number;
   ping: number;
   teamId: TeamId | null;
+  teamScore?: number;
 }
 
 interface TeamHeaderRow {
@@ -712,8 +713,8 @@ export class RightSidePanel {
   private renderGroupedLeaderboard(entries: LeaderboardEntry[]): void {
     const blueEntries = entries.filter((entry) => entry.teamId === 'blue').sort((a, b) => b.frags - a.frags);
     const redEntries = entries.filter((entry) => entry.teamId === 'red').sort((a, b) => b.frags - a.frags);
-    const blueScore = blueEntries.reduce((sum, entry) => sum + entry.frags, 0);
-    const redScore = redEntries.reduce((sum, entry) => sum + entry.frags, 0);
+    const blueScore = this.resolveGroupedTeamScore(blueEntries);
+    const redScore = this.resolveGroupedTeamScore(redEntries);
 
     this.lbTeamHeaders?.blue.label.setVisible(true).setPosition(SIDEBAR_LEFT_X, LB_START_Y);
     this.lbTeamHeaders?.blue.score.setVisible(true).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
@@ -759,8 +760,8 @@ export class RightSidePanel {
     const blueEntries = results.filter((result) => result.teamId === 'blue').sort((a, b) => b.frags - a.frags);
     const redEntries = results.filter((result) => result.teamId === 'red').sort((a, b) => b.frags - a.frags);
     const hasData = blueEntries.length > 0 || redEntries.length > 0;
-    const blueScore = blueEntries.reduce((sum, entry) => sum + entry.frags, 0);
-    const redScore = redEntries.reduce((sum, entry) => sum + entry.frags, 0);
+    const blueScore = this.resolveGroupedTeamScore(blueEntries);
+    const redScore = this.resolveGroupedTeamScore(redEntries);
 
     this.resultsHeader.setVisible(hasData);
     this.resultsSep.setVisible(hasData);
@@ -788,5 +789,11 @@ export class RightSidePanel {
       row.frags.setPosition(SIDEBAR_RIGHT_X, y).setText(String(entry.frags)).setVisible(true);
     }
     return rowIndex;
+  }
+
+  private resolveGroupedTeamScore(entries: Array<{ frags: number; teamScore?: number }>): number {
+    const scoredEntry = entries.find((entry) => entry.teamScore !== undefined);
+    if (scoredEntry?.teamScore !== undefined) return scoredEntry.teamScore;
+    return entries.reduce((sum, entry) => sum + entry.frags, 0);
   }
 }

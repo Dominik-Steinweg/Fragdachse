@@ -224,7 +224,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null,
+      arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null, captureTheBeerSystem: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -507,6 +507,7 @@ export class ArenaScene extends Phaser.Scene {
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
         const state = bridge.getLatestGameState();
         if (state) {
+          this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
           this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
           this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
           this.renderers.train?.setTarget(state.train ?? null);
@@ -518,6 +519,8 @@ export class ArenaScene extends Phaser.Scene {
         this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
         this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
       }
+
+      this.ctx.captureTheBeerSystem?.updateVisuals();
 
       this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
 

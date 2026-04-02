@@ -9,6 +9,7 @@ import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { ShieldBuffSystem }   from '../../systems/ShieldBuffSystem';
 import { TurretSystem }      from '../../systems/TurretSystem';
 import { BurrowSystem }      from '../../systems/BurrowSystem';
+import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
 import { PowerUpSystem }     from '../../powerups/PowerUpSystem';
@@ -35,7 +36,7 @@ import type { LobbyOverlay }          from '../LobbyOverlay';
 import type { ArenaLayout, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../../types';
 import type { RoundResult }           from '../../network/NetworkBridge';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
-import { isTeamGameMode } from '../../gameModes';
+import { CAPTURE_THE_BEER_MODE, isTeamGameMode } from '../../gameModes';
 
 /**
  * Manages the arena round lifecycle.
@@ -177,13 +178,19 @@ export class ArenaLifecycleCoordinator {
 
   hostSaveRoundResults(): void {
     if (!bridge.isHost()) return;
-    const results: RoundResult[] = bridge.getConnectedPlayers().map(p => ({
-      id:       p.id,
-      name:     p.name,
-      colorHex: p.colorHex,
-      frags:    bridge.getPlayerFrags(p.id),
-      teamId:   isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(p.id) : null,
-    }));
+    const results: RoundResult[] = bridge.getConnectedPlayers().map((p) => {
+      const teamId = isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(p.id) : null;
+      return {
+        id:       p.id,
+        name:     p.name,
+        colorHex: p.colorHex,
+        frags:    bridge.getPlayerFrags(p.id),
+        teamId,
+        teamScore: bridge.getGameMode() === CAPTURE_THE_BEER_MODE && teamId
+          ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
+          : undefined,
+      };
+    });
     bridge.publishRoundResults(results);
   }
 
@@ -232,6 +239,9 @@ export class ArenaLifecycleCoordinator {
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
+    this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
+      ? new CaptureTheBeerSystem(this.scene, this.ctx.playerManager)
+      : null;
 
     this.ctx.playerManager.setLayout(layout);
 
@@ -257,6 +267,9 @@ export class ArenaLifecycleCoordinator {
       const projectile = this.ctx.projectileManager.getProjectileById(projectileId);
       if (!projectile) return;
       this.spawnImpactCloudFromProjectile(projectile, x, y);
+    });
+    this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
+      this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
     });
     this.ctx.projectileManager.setProjectileImpactCallback((proj, x, y) => {
       this.spawnImpactCloudFromProjectile(proj, x, y);
@@ -325,6 +338,9 @@ export class ArenaLifecycleCoordinator {
         bridge,
       );
       this.ctx.burrowSystem.setGroups(this.ctx.arenaResult.rockGroup, this.ctx.arenaResult.trunkGroup);
+      this.ctx.burrowSystem.setBurrowStartCallback((playerId) => {
+        this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
+      });
 
       this.ctx.loadoutManager = new LoadoutManager(
         this.ctx.playerManager,
@@ -346,6 +362,9 @@ export class ArenaLifecycleCoordinator {
         this.ctx.combatSystem,
         null,
       );
+      this.ctx.translocatorSystem.setUseCallback((playerId) => {
+        this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
+      });
 
       this.ctx.loadoutManager.setCombatSystem(this.ctx.combatSystem);
       this.ctx.loadoutManager.setDashBurstChecker(id => this.ctx.hostPhysics.isDashBurst(id));
@@ -355,6 +374,11 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setShieldBuffSystem(this.ctx.shieldBuffSystem);
       this.ctx.loadoutManager.setTranslocatorSystem(this.ctx.translocatorSystem);
       this.ctx.loadoutManager.setDecoySystem(this.ctx.decoySystem);
+      this.ctx.loadoutManager.setUtilityUsedCallback((playerId, utilityType) => {
+        if (utilityType === 'decoy') {
+          this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
+        }
+      });
       this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
@@ -465,6 +489,11 @@ export class ArenaLifecycleCoordinator {
       if (trackCell !== undefined) {
         this.setupHostTrainEvent(trackCell.gridX);
       }
+
+      this.ctx.captureTheBeerSystem?.setInteractionPredicate((playerId) => {
+        return this.ctx.combatSystem.isAlive(playerId)
+          && !(this.ctx.burrowSystem?.isBurrowed(playerId) ?? false);
+      });
     }
 
     // Round-scoped renderers (all clients)
@@ -498,6 +527,9 @@ export class ArenaLifecycleCoordinator {
       ArenaBuilder.destroyDynamic(this.ctx.arenaResult);
       this.ctx.arenaResult = null;
     }
+    this.ctx.captureTheBeerSystem?.destroy();
+    this.ctx.captureTheBeerSystem = null;
+    this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     this.ctx.placementSystem = null;

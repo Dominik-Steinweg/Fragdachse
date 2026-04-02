@@ -33,6 +33,7 @@ export class BurrowSystem {
   private rockGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private stinkCloudSystem: StinkCloudSystemType | null = null;
+  private onBurrowStartCb: ((playerId: string) => void) | null = null;
 
   constructor(
     private resources:    ResourceSystem,
@@ -54,6 +55,10 @@ export class BurrowSystem {
 
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void {
     this.stinkCloudSystem = sc;
+  }
+
+  setBurrowStartCallback(cb: ((playerId: string) => void) | null): void {
+    this.onBurrowStartCb = cb;
   }
 
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
@@ -200,6 +205,7 @@ export class BurrowSystem {
       drainElapsedMs: 0,
       stuckDamageAccum: 0,
     });
+    this.onBurrowStartCb?.(id);
     this.bridge.broadcastBurrowVisual(id, 'windup');
   }
 

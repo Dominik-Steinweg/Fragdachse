@@ -7,7 +7,7 @@ import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
-import { isTeamGameMode } from '../../gameModes';
+import { CAPTURE_THE_BEER_MODE, isTeamGameMode } from '../../gameModes';
 import type { ArenaContext }      from './ArenaContext';
 import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
@@ -26,7 +26,7 @@ export class HostUpdateCoordinator {
   private active = true;
   private netTickAccumulator = 0;
   private leaderboardSignature = '';
-  private cachedLeaderboardEntries: { name: string; colorHex: number; frags: number; ping: number; teamId: TeamId | null }[] = [];
+  private cachedLeaderboardEntries: { name: string; colorHex: number; frags: number; ping: number; teamId: TeamId | null; teamScore?: number }[] = [];
   private readonly dashPhase2StartTimes = new Map<string, number>();
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly dashTrailTimers      = new Map<string, number>();
@@ -420,6 +420,8 @@ export class HostUpdateCoordinator {
       };
     }
 
+    const captureTheBeer = this.ctx.captureTheBeerSystem?.hostUpdate(!countdownActive) ?? null;
+
     bridge.publishGameState({
       players,
       projectiles,
@@ -436,6 +438,7 @@ export class HostUpdateCoordinator {
       nukes,
       meteors,
       train,
+      captureTheBeer,
     });
 
     if (projectiles.some(p => p.style === 'bfg')) {
@@ -443,9 +446,14 @@ export class HostUpdateCoordinator {
     }
   }
 
-  getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number; teamId: TeamId | null }[] {
+  getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number; teamId: TeamId | null; teamScore?: number }[] {
     const playerIds = bridge.getConnectedPlayerIds();
     const signatureParts: string[] = [];
+    const blueTeamScore = this.resolveTeamObjectiveScore('blue');
+    const redTeamScore = this.resolveTeamObjectiveScore('red');
+    if (blueTeamScore !== null || redTeamScore !== null) {
+      signatureParts.push(`ctb:${blueTeamScore ?? 0}:${redTeamScore ?? 0}`);
+    }
     for (const playerId of playerIds) {
       signatureParts.push(`${playerId}:${bridge.getPlayerName(playerId)}:${bridge.getPlayerColor(playerId) ?? 0xffffff}:${bridge.getPlayerFrags(playerId)}:${bridge.getPlayerPing(playerId)}:${isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(playerId) ?? 'none' : 'none'}`);
     }
@@ -459,9 +467,30 @@ export class HostUpdateCoordinator {
         frags:    bridge.getPlayerFrags(playerId),
         ping:     bridge.getPlayerPing(playerId),
         teamId:   isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(playerId) : null,
+        teamScore: this.resolveEntryTeamScore(playerId, blueTeamScore, redTeamScore),
       }))
       .sort((a, b) => b.frags - a.frags);
     return this.cachedLeaderboardEntries;
+  }
+
+  private resolveTeamObjectiveScore(teamId: TeamId): number | null {
+    if (bridge.getGameMode() !== CAPTURE_THE_BEER_MODE) return null;
+    if (bridge.isHost()) {
+      return this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0;
+    }
+    return bridge.getLatestGameState()?.captureTheBeer?.scores[teamId] ?? 0;
+  }
+
+  private resolveEntryTeamScore(
+    playerId: string,
+    blueTeamScore: number | null,
+    redTeamScore: number | null,
+  ): number | undefined {
+    if (bridge.getGameMode() !== CAPTURE_THE_BEER_MODE) return undefined;
+    const teamId = bridge.getPlayerTeam(playerId);
+    if (teamId === 'blue') return blueTeamScore ?? 0;
+    if (teamId === 'red') return redTeamScore ?? 0;
+    return undefined;
   }
 
   // ── AoE helpers ──────────────────────────────────────────────────────────
