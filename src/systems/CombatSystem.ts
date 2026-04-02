@@ -128,6 +128,10 @@ export class CombatSystem {
     private bridge:            NetworkBridge,
   ) {}
 
+  syncArenaBounds(): void {
+    this.arenaBounds.setTo(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+  }
+
   // ── Referenz-Injection ────────────────────────────────────────────────────
 
   setBurrowSystem(bs: BurrowSystemType | null): void     { this.burrowSystem   = bs; }

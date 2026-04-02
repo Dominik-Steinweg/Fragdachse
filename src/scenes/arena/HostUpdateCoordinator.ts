@@ -7,6 +7,7 @@ import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
+import { isTeamGameMode } from '../../gameModes';
 import type { ArenaContext }      from './ArenaContext';
 import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
@@ -446,7 +447,7 @@ export class HostUpdateCoordinator {
     const playerIds = bridge.getConnectedPlayerIds();
     const signatureParts: string[] = [];
     for (const playerId of playerIds) {
-      signatureParts.push(`${playerId}:${bridge.getPlayerName(playerId)}:${bridge.getPlayerColor(playerId) ?? 0xffffff}:${bridge.getPlayerFrags(playerId)}:${bridge.getPlayerPing(playerId)}:${bridge.getGameMode() === 'team_deathmatch' ? bridge.getPlayerTeam(playerId) ?? 'none' : 'none'}`);
+      signatureParts.push(`${playerId}:${bridge.getPlayerName(playerId)}:${bridge.getPlayerColor(playerId) ?? 0xffffff}:${bridge.getPlayerFrags(playerId)}:${bridge.getPlayerPing(playerId)}:${isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(playerId) ?? 'none' : 'none'}`);
     }
     const nextSignature = signatureParts.join('|');
     if (nextSignature === this.leaderboardSignature) return this.cachedLeaderboardEntries;
@@ -457,7 +458,7 @@ export class HostUpdateCoordinator {
         colorHex: bridge.getPlayerColor(playerId) ?? 0xffffff,
         frags:    bridge.getPlayerFrags(playerId),
         ping:     bridge.getPlayerPing(playerId),
-        teamId:   bridge.getGameMode() === 'team_deathmatch' ? bridge.getPlayerTeam(playerId) : null,
+        teamId:   isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(playerId) : null,
       }))
       .sort((a, b) => b.frags - a.frags);
     return this.cachedLeaderboardEntries;

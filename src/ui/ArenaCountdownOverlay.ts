@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import {
+  GAME_WIDTH,
+  GAME_HEIGHT,
   ARENA_HEIGHT,
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
-  ARENA_WIDTH,
+  ARENA_VIEWPORT_WIDTH,
   DEPTH,
   COLORS,
   toCssColor,
@@ -22,7 +24,7 @@ const TWEEN_DURATION_MS = 1100;
 const GO_FLOAT_DISTANCE_PX = 40;
 const GO_TEXT_DURATION_MS = 420;
 const GO_FONT_SIZE_PX = 184;
-const REVEAL_TARGET_RADIUS_PX = Math.max(ARENA_WIDTH, ARENA_HEIGHT) * 1.2;
+const REVEAL_TARGET_RADIUS_PX = Math.max(ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT) * 1.2;
 
 type OverlayMode = 'hidden' | 'countdown' | 'death' | 'respawn-reveal';
 
@@ -33,15 +35,15 @@ export class ArenaCountdownOverlay {
   private mode: OverlayMode = 'hidden';
   private unlockAtMs = 0;
   private lastShownNumber = 0;
-  private lastFocusX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
+  private lastFocusX = GAME_WIDTH / 2;
   private lastFocusY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
   private revealRadius = VEIL_RADIUS_PX;
   private veilAlpha = VEIL_ALPHA;
   private goTriggeredForUnlock = false;
   private deathVeilHoldUntilMs = 0;
   private deathVeilClosing = false;
-  private readonly baseX = ARENA_OFFSET_X + ARENA_WIDTH / 2;
-  private readonly baseY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
+  private readonly baseX = GAME_WIDTH / 2;
+  private readonly baseY = GAME_HEIGHT / 2;
   private lastRenderedRadius: number | null = null;
   private lastRenderedAlpha: number | null = null;
   private lastRenderedFocusX: number | null = null;
@@ -191,8 +193,9 @@ export class ArenaCountdownOverlay {
   private captureFocusPoint(): void {
     const sprite = this.getFocusSprite();
     if (sprite?.active) {
-      this.lastFocusX = sprite.x;
-      this.lastFocusY = sprite.y;
+      const camera = this.scene.cameras.main;
+      this.lastFocusX = sprite.x - camera.scrollX;
+      this.lastFocusY = sprite.y - camera.scrollY;
     }
   }
 
@@ -328,7 +331,7 @@ export class ArenaCountdownOverlay {
     this.veil.setVisible(true);
     this.veil.clear();
 
-    const arenaRight = ARENA_OFFSET_X + ARENA_WIDTH;
+    const arenaRight = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH;
     const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
 
     for (let y = ARENA_OFFSET_Y; y < arenaBottom; y += VEIL_CELL_SIZE) {
@@ -354,8 +357,8 @@ export class ArenaCountdownOverlay {
     }
 
     this.veil.fillStyle(COLORS.GREY_10, clampedAlpha * 0.35);
-    this.veil.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, 8);
-    this.veil.fillRect(ARENA_OFFSET_X, arenaBottom - 8, ARENA_WIDTH, 8);
+    this.veil.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_VIEWPORT_WIDTH, 8);
+    this.veil.fillRect(ARENA_OFFSET_X, arenaBottom - 8, ARENA_VIEWPORT_WIDTH, 8);
     this.veil.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, 8, ARENA_HEIGHT);
     this.veil.fillRect(arenaRight - 8, ARENA_OFFSET_Y, 8, ARENA_HEIGHT);
 

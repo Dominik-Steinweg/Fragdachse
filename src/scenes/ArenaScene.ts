@@ -24,9 +24,10 @@ import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC,
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH, ARENA_HEIGHT, CELL_SIZE, COLORS, DEPTH,
+  ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, MAX_ARENA_WIDTH, GAME_WIDTH, CELL_SIZE, COLORS, DEPTH,
   ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS,
   NET_SMOOTH_TIME_MS,
+  applyArenaMetricsForMode,
 } from '../config';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
@@ -43,6 +44,7 @@ import {
   restartRoomForQualityRetry,
 } from '../utils/roomQuality';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
+import { isTeamGameMode, usesDynamicCamera } from '../gameModes';
 
 import {
   type ArenaContext,
@@ -105,6 +107,7 @@ export class ArenaScene extends Phaser.Scene {
   private lobbyOverlay!: LobbyOverlay;
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
+  private lastCameraScrollX = 0;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -130,6 +133,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   create(): void {
+    applyArenaMetricsForMode(bridge.getGameMode());
+
     this.anims.create({
       key:       'player_death',
       frames:    this.anims.generateFrameNames('dachs_death', {
@@ -436,12 +441,14 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.syncArenaMetrics();
     this.lifecycle.detectPhaseChange();
 
     const phase           = bridge.getGamePhase();
     const inGame          = phase === 'ARENA';
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
+    this.syncMainCamera(delta, inGame && !terminated);
 
     if (inGame) {
       this.ctx.inputSystem.setInputEnabled(!countdownActive);
@@ -521,6 +528,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
+    this.syncMainCamera(delta, inArena);
     this.playerStatusRing?.setActive(inArena);
     this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(!inArena);
     if (inArena) {
@@ -557,7 +565,7 @@ export class ArenaScene extends Phaser.Scene {
   private onPlayerJoined(profile: PlayerProfile): void {
     if (bridge.isHost()) {
       bridge.hostAssignColor(profile.id);
-      if (bridge.getGameMode() === 'team_deathmatch') {
+      if (isTeamGameMode(bridge.getGameMode())) {
         bridge.hostEnsureTeamAssignment(profile.id);
       }
     }
@@ -650,7 +658,7 @@ export class ArenaScene extends Phaser.Scene {
     const cfg = this.clientUpdate.getLocalUtilityConfig();
     if (!sprite || !this.ctx.placementSystem || !this.ctx.inputSystem.isUtilityPlacementActive()) return undefined;
     if (cfg.activation.type !== 'placement_mode') return undefined;
-    const pointer = this.input.activePointer;
+    const pointer = this.getPointerWorldPoint();
     return this.ctx.placementSystem.getPlacementPreview(cfg as PlaceableUtilityConfig, sprite.x, sprite.y, pointer.x, pointer.y);
   }
 
@@ -665,7 +673,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getEnemyHoverNameTarget(): { name: string; x: number; y: number } | null {
-    const pointer = this.input.activePointer;
+    const pointer = this.getPointerWorldPoint();
     const localId = bridge.getLocalPlayerId();
     let nearest: { name: string; x: number; y: number; distanceSq: number } | null = null;
 
@@ -704,11 +712,46 @@ export class ArenaScene extends Phaser.Scene {
     if (this.arenaClipMaskShape && this.arenaClipMask) return;
     const maskShape = this.add.graphics();
     maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+    maskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_WIDTH, ARENA_HEIGHT);
     maskShape.setVisible(false);
     this.arenaClipMaskShape = maskShape;
     this.arenaClipMask = maskShape.createGeometryMask();
     this.renderers?.shadow.setArenaMask(this.arenaClipMask);
+  }
+
+  private syncArenaMetrics(): void {
+    applyArenaMetricsForMode(bridge.getGameMode());
+    this.physics.world.setBounds(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+    this.cameras.main.setBounds(0, 0, Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X), this.scale.height);
+    this.ctx?.combatSystem.syncArenaBounds();
+  }
+
+  private syncMainCamera(delta: number, inArena: boolean): void {
+    const camera = this.cameras.main;
+    camera.scrollY = 0;
+
+    if (!inArena || !usesDynamicCamera(bridge.getGameMode())) {
+      this.lastCameraScrollX = 0;
+      camera.scrollX = 0;
+      return;
+    }
+
+    const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    if (!localSprite?.active || !this.localPlayerState.alive) {
+      camera.scrollX = this.lastCameraScrollX;
+      return;
+    }
+
+    const maxScrollX = Math.max(0, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH));
+    const targetScrollX = Phaser.Math.Clamp(localSprite.x - GAME_WIDTH * 0.5, 0, maxScrollX);
+    const followLerp = 1 - Math.exp(-delta / 120);
+    camera.scrollX = Phaser.Math.Linear(camera.scrollX, targetScrollX, followLerp);
+    this.lastCameraScrollX = camera.scrollX;
+  }
+
+  private getPointerWorldPoint(): Phaser.Math.Vector2 {
+    const pointer = this.input.activePointer;
+    return this.cameras.main.getWorldPoint(pointer.x, pointer.y);
   }
 
   private syncWorldShadows(inArena: boolean): void {

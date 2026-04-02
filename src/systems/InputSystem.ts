@@ -200,7 +200,8 @@ export class InputSystem {
     if (!this.ultimateHoldActive || !sprite || !cfg) return undefined;
 
     const pointer = this.scene.input.activePointer;
-    const clampedTarget = clampPointToArena(pointer.x, pointer.y);
+    const pointerWorld = this.getPointerWorldPoint(pointer);
+    const clampedTarget = clampPointToArena(pointerWorld.x, pointerWorld.y);
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     const chargeFraction = this.ultimateChargeStartedAt === null
       ? 0
@@ -229,7 +230,8 @@ export class InputSystem {
     const isGate = cfg.activation.type === 'charged_gate';
 
     const pointer = this.scene.input.activePointer;
-    const clampedTarget = clampPointToArena(pointer.x, pointer.y);
+    const pointerWorld = this.getPointerWorldPoint(pointer);
+    const clampedTarget = clampPointToArena(pointerWorld.x, pointerWorld.y);
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     return {
       angle,
@@ -250,7 +252,8 @@ export class InputSystem {
     if (!this.utilityTargetingActive || !sprite || !cfg) return undefined;
 
     const pointer = this.scene.input.activePointer;
-    const target = clampPointToArena(pointer.x, pointer.y);
+    const pointerWorld = this.getPointerWorldPoint(pointer);
+    const target = clampPointToArena(pointerWorld.x, pointerWorld.y);
     return {
       angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
       targetX: target.x,
@@ -317,8 +320,9 @@ export class InputSystem {
       return;
     }
 
-    const px    = pointer.x;
-    const py    = pointer.y;
+    const pointerWorld = this.getPointerWorldPoint(pointer);
+    const px    = pointerWorld.x;
+    const py    = pointerWorld.y;
     const leftPointerDown = pointer.leftButtonDown();
     const rightPointerDown = pointer.rightButtonDown();
     const leftInputStarted = leftPointerDown && !this.prevLeftPointerDown;
@@ -492,6 +496,10 @@ export class InputSystem {
     this.utilityPlacementActive = true;
     this.bridge.sendDecoyStealthBreakRequest();
     return true;
+  }
+
+  private getPointerWorldPoint(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
+    return this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
   }
 
   private beginTargetedUtilityAim(now: number): boolean {

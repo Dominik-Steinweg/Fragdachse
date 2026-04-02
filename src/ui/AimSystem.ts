@@ -74,11 +74,6 @@ const RANGE_BAR_HALF_LEN = 9;
 
 const MOVE_THRESHOLD = 0.3;
 
-const AX1 = ARENA_OFFSET_X;
-const AY1 = ARENA_OFFSET_Y;
-const AX2 = ARENA_OFFSET_X + ARENA_WIDTH;
-const AY2 = ARENA_OFFSET_Y + ARENA_HEIGHT;
-
 const CHARGE_ANCHOR_OFFSET_X = 18;
 const CHARGE_STEM_LENGTH = 12;
 const CHARGE_BAR_GAP = 6;
@@ -178,8 +173,9 @@ export class AimSystem {
     const frac = maxTotal > 0 ? Math.min(1, totalSpread / maxTotal) : 0;
 
     const pointer = this.scene.input.activePointer;
-    const px = pointer.x;
-    const py = pointer.y;
+    const pointerWorld = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const px = pointerWorld.x;
+    const py = pointerWorld.y;
     const dx = px - sx;
     const dy = py - sy;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -201,7 +197,12 @@ export class AimSystem {
       if (dist > cfg.range) {
         const rx = sx + nx * cfg.range;
         const ry = sy + ny * cfg.range;
-        if (rx >= AX1 && rx <= AX2 && ry >= AY1 && ry <= AY2) {
+        if (
+          rx >= ARENA_OFFSET_X
+          && rx <= ARENA_OFFSET_X + ARENA_WIDTH
+          && ry >= ARENA_OFFSET_Y
+          && ry <= ARENA_OFFSET_Y + ARENA_HEIGHT
+        ) {
           this.drawRangeIndicator(this.snap(rx), this.snap(ry), nx, ny, palette, accentColor);
         }
       }
@@ -436,18 +437,22 @@ export class AimSystem {
     sx: number, sy: number,
     ex: number, ey: number,
   ): { x: number; y: number; inside: boolean } {
-    const inside = ex >= AX1 && ex <= AX2 && ey >= AY1 && ey <= AY2;
+    const minX = ARENA_OFFSET_X;
+    const minY = ARENA_OFFSET_Y;
+    const maxX = ARENA_OFFSET_X + ARENA_WIDTH;
+    const maxY = ARENA_OFFSET_Y + ARENA_HEIGHT;
+    const inside = ex >= minX && ex <= maxX && ey >= minY && ey <= maxY;
     if (inside) return { x: ex, y: ey, inside: true };
 
     const dx = ex - sx;
     const dy = ey - sy;
     let t = 1;
 
-    if (dx > 0) t = Math.min(t, (AX2 - sx) / dx);
-    else if (dx < 0) t = Math.min(t, (AX1 - sx) / dx);
+    if (dx > 0) t = Math.min(t, (maxX - sx) / dx);
+    else if (dx < 0) t = Math.min(t, (minX - sx) / dx);
 
-    if (dy > 0) t = Math.min(t, (AY2 - sy) / dy);
-    else if (dy < 0) t = Math.min(t, (AY1 - sy) / dy);
+    if (dy > 0) t = Math.min(t, (maxY - sy) / dy);
+    else if (dy < 0) t = Math.min(t, (minY - sy) / dy);
 
     return { x: sx + t * dx, y: sy + t * dy, inside: false };
   }

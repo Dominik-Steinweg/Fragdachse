@@ -1,7 +1,7 @@
 import { bridge }                from '../../network/bridge';
 import { UTILITY_CONFIGS }       from '../../loadout/LoadoutConfig';
 import type { PlaceableRockUtilityConfig, PlaceableTurretUtilityConfig, PlaceableUtilityConfig } from '../../loadout/LoadoutConfig';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, CELL_SIZE, COLORS, DEPTH, PLAYER_COLORS } from '../../config';
+import { GAME_WIDTH, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, PLAYER_COLORS } from '../../config';
 import type { ArenaContext }             from './ArenaContext';
 import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
 
@@ -30,7 +30,7 @@ export class PlacementPreviewRenderer {
     this.invalidGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 1);
 
     this.errorText = scene.add.text(
-      ARENA_OFFSET_X + ARENA_WIDTH * 0.5,
+      GAME_WIDTH * 0.5,
       ARENA_OFFSET_Y + 96,
       '',
       {
@@ -41,7 +41,7 @@ export class PlacementPreviewRenderer {
         stroke: '#241527',
         strokeThickness: 5,
       },
-    ).setOrigin(0.5).setDepth(DEPTH.OVERLAY).setVisible(false);
+    ).setOrigin(0.5).setDepth(DEPTH.OVERLAY).setScrollFactor(0).setVisible(false);
 
     this.utilityTargetingHint = this.createUtilityTargetingHint();
     this.placeableUtilityHint = this.createPlaceableUtilityHint();
@@ -200,7 +200,7 @@ export class PlacementPreviewRenderer {
   }
 
   private createUtilityTargetingHint(): Phaser.GameObjects.Container {
-    const x = ARENA_OFFSET_X + ARENA_WIDTH * 0.5;
+    const x = GAME_WIDTH * 0.5;
     const y = ARENA_OFFSET_Y + 54;
     const panel = this.scene.add.rectangle(0, 0, 500, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, COLORS.RED_2, 0.9);
@@ -228,7 +228,7 @@ export class PlacementPreviewRenderer {
   }
 
   private createPlaceableUtilityHint(): Phaser.GameObjects.Container {
-    const x = ARENA_OFFSET_X + ARENA_WIDTH * 0.5;
+    const x = GAME_WIDTH * 0.5;
     const y = ARENA_OFFSET_Y + 54;
     const panel = this.scene.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, COLORS.BROWN_2, 0.9);

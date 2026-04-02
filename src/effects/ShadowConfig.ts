@@ -42,12 +42,12 @@ export const WORLD_SHADOW_CONFIG = {
   lightDirection: { x: 0.75, y: 0.75 },
   cullMarginPx: 140,
   arenaBounds: {
-    minX: ARENA_OFFSET_X,
-    minY: ARENA_OFFSET_Y,
-    maxX: ARENA_MAX_X,
-    maxY: ARENA_MAX_Y,
+    get minX() { return ARENA_OFFSET_X; },
+    get minY() { return ARENA_OFFSET_Y; },
+    get maxX() { return ARENA_MAX_X; },
+    get maxY() { return ARENA_MAX_Y; },
   },
-} as const;
+};
 
 export const SHADOW_CASTERS = {
   rock: {

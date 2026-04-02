@@ -1,21 +1,26 @@
-import type { RoomQualityRetryMode, RoomQualityStartPolicy } from './types';
+import type { GameMode, RoomQualityRetryMode, RoomQualityStartPolicy } from './types';
+import { usesExpandedArena } from './gameModes';
 
 // ---- Display ----
 export const GAME_WIDTH = 1920;
 export const GAME_HEIGHT = 1080;
 
-export const ARENA_WIDTH = 1440;
+export const DEFAULT_ARENA_WIDTH = 1440;
+export const CAPTURE_THE_BEER_ARENA_WIDTH = DEFAULT_ARENA_WIDTH * 3;
+export const MAX_ARENA_WIDTH = CAPTURE_THE_BEER_ARENA_WIDTH;
+export let ARENA_WIDTH = DEFAULT_ARENA_WIDTH;
 export const ARENA_HEIGHT = 1056;
-export const ARENA_OFFSET_X = (GAME_WIDTH - ARENA_WIDTH) / 2; // 240
+export const ARENA_OFFSET_X = (GAME_WIDTH - DEFAULT_ARENA_WIDTH) / 2; // 240
 export const ARENA_OFFSET_Y = 12;
-export const ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
+export const ARENA_VIEWPORT_WIDTH = GAME_WIDTH - ARENA_OFFSET_X * 2;
+export let ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
 export const ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
 
 // ---- Audio ----
 export const SOUND_ENABLED = true;
 export const SOUND_MASTER_VOLUME = 0.25;
-export const SHOT_AUDIO_REMOTE_MAX_DISTANCE = 1440;
-export const SHOT_AUDIO_PAN_RANGE = ARENA_WIDTH * 0.5;
+export let SHOT_AUDIO_REMOTE_MAX_DISTANCE = ARENA_WIDTH;
+export let SHOT_AUDIO_PAN_RANGE = ARENA_WIDTH * 0.5;
 export const SHOT_AUDIO_REMOTE_CLOSE_VOLUME = 0.58;
 export const SHOT_AUDIO_REMOTE_FAR_VOLUME = 0.1;
 export const SHOT_AUDIO_REMOTE_DISTANCE_EXPONENT = 0.45;
@@ -292,7 +297,7 @@ export const DEPTH_FX = 25;
 
 // ---- Prozedurales Arena-Grid ----
 export const CELL_SIZE           = 32;
-export const GRID_COLS           = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 30
+export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 / 135
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
 export const ROCK_FILL_RATIO     = 0.30;
 export const DIRT_FILL_RATIO     = 0.05;   
@@ -305,9 +310,19 @@ export const CA_MAX_FLOOR_NEIGHBORS = 4; // Boden mit > N Nachbarn wird zu Fels
 /** Anzahl Gleise pro Runde */
 export const TRACK_COUNT           = 1;
 /** Erste erlaubte Spalte (≥ 25 % der Arena-Breite, inklusive) */
-export const TRACK_SPAWN_MIN_COL   = Math.floor(GRID_COLS * 0.25); // 7
+export let TRACK_SPAWN_MIN_COL     = Math.floor(GRID_COLS * 0.25);
 /** Letzte erlaubte Spalte (≤ 75 % der Arena-Breite, inklusive) */
-export const TRACK_SPAWN_MAX_COL   = Math.floor(GRID_COLS * 0.75); // 22
+export let TRACK_SPAWN_MAX_COL     = Math.floor(GRID_COLS * 0.75);
+
+export function applyArenaMetricsForMode(mode: GameMode): void {
+  ARENA_WIDTH = usesExpandedArena(mode) ? CAPTURE_THE_BEER_ARENA_WIDTH : DEFAULT_ARENA_WIDTH;
+  ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
+  SHOT_AUDIO_REMOTE_MAX_DISTANCE = ARENA_WIDTH;
+  SHOT_AUDIO_PAN_RANGE = ARENA_WIDTH * 0.5;
+  GRID_COLS = Math.floor(ARENA_WIDTH / CELL_SIZE);
+  TRACK_SPAWN_MIN_COL = Math.floor(GRID_COLS * 0.25);
+  TRACK_SPAWN_MAX_COL = Math.floor(GRID_COLS * 0.75);
+}
 
 // ---- Felsen HP ----
 export const ROCK_HP_MAX         = 200;

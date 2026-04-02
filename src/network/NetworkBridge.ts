@@ -15,6 +15,7 @@ import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
+import { isTeamGameMode } from '../gameModes';
 export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -27,7 +28,7 @@ const KEY_PROJECTILES  = 'prj';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
 const KEY_NAME         = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
-const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch'
+const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
@@ -307,7 +308,7 @@ export class NetworkBridge {
 
   setGameMode(mode: GameMode): void {
     if (!isHost()) return;
-    if (mode === 'team_deathmatch') {
+    if (isTeamGameMode(mode)) {
       this.hostAssignMissingTeams();
     }
     setState(KEY_GAME_MODE, mode, true);
@@ -328,7 +329,7 @@ export class NetworkBridge {
   }
 
   getEffectivePlayerColor(playerId: string): number | undefined {
-    if (this.getGameMode() === 'team_deathmatch') {
+    if (isTeamGameMode(this.getGameMode())) {
       const teamId = this.getPlayerTeam(playerId);
       if (teamId) return this.getTeamColor(teamId);
     }
@@ -341,7 +342,7 @@ export class NetworkBridge {
 
   areTeammates(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return true;
-    if (this.getGameMode() !== 'team_deathmatch') return false;
+    if (!isTeamGameMode(this.getGameMode())) return false;
     const firstTeam = this.getPlayerTeam(firstPlayerId);
     const secondTeam = this.getPlayerTeam(secondPlayerId);
     return firstTeam !== null && firstTeam === secondTeam;
@@ -349,7 +350,7 @@ export class NetworkBridge {
 
   isEnemyPair(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return false;
-    if (this.getGameMode() !== 'team_deathmatch') return true;
+    if (!isTeamGameMode(this.getGameMode())) return true;
     const firstTeam = this.getPlayerTeam(firstPlayerId);
     const secondTeam = this.getPlayerTeam(secondPlayerId);
     if (!firstTeam || !secondTeam) return true;

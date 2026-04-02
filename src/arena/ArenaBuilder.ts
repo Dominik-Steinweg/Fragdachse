@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT,
-  ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
+  ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_WIDTH,
   DEPTH, COLORS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
 } from '../config';
@@ -398,7 +398,8 @@ export class ArenaBuilder {
   private drawSidebars(): void {
     this.scene.add
       .rectangle(ARENA_OFFSET_X / 2, GAME_HEIGHT / 2, ARENA_OFFSET_X, GAME_HEIGHT, COLORS.GREY_10)
-      .setDepth(0);
+      .setScrollFactor(0)
+      .setDepth(DEPTH.LOCAL_UI - 1);
     this.scene.add
       .rectangle(
         GAME_WIDTH - ARENA_OFFSET_X / 2,
@@ -407,15 +408,16 @@ export class ArenaBuilder {
         GAME_HEIGHT,
         COLORS.GREY_9,
       )
-      .setDepth(0);
+      .setScrollFactor(0)
+      .setDepth(DEPTH.LOCAL_UI - 1);
   }
 
   private drawGrass(): void {
     this.scene.add
       .tileSprite(
-        ARENA_OFFSET_X + ARENA_WIDTH / 2,
+        ARENA_OFFSET_X + MAX_ARENA_WIDTH / 2,
         ARENA_OFFSET_Y + ARENA_HEIGHT / 2,
-        ARENA_WIDTH,
+        MAX_ARENA_WIDTH,
         ARENA_HEIGHT,
         'bg_grass',
       )

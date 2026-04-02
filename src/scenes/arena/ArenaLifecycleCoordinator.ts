@@ -35,6 +35,7 @@ import type { LobbyOverlay }          from '../LobbyOverlay';
 import type { ArenaLayout, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../../types';
 import type { RoundResult }           from '../../network/NetworkBridge';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
+import { isTeamGameMode } from '../../gameModes';
 
 /**
  * Manages the arena round lifecycle.
@@ -181,7 +182,7 @@ export class ArenaLifecycleCoordinator {
       name:     p.name,
       colorHex: p.colorHex,
       frags:    bridge.getPlayerFrags(p.id),
-      teamId:   bridge.getGameMode() === 'team_deathmatch' ? bridge.getPlayerTeam(p.id) : null,
+      teamId:   isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(p.id) : null,
     }));
     bridge.publishRoundResults(results);
   }

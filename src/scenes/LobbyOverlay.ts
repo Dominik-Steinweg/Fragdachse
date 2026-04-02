@@ -7,9 +7,10 @@ import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import {
-  GAME_WIDTH, GAME_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
+  GAME_WIDTH, GAME_HEIGHT, ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
+import { isTeamGameMode } from '../gameModes';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const BG_COLOR      = COLORS.GREY_9;
@@ -100,9 +101,9 @@ export class LobbyOverlay {
     // ── Halbtransparenter Hintergrund ─────────────────────────────────────
     objects.push(
       this.scene.add.rectangle(
-        ARENA_OFFSET_X + ARENA_WIDTH / 2,
+        ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH / 2,
         ARENA_OFFSET_Y + ARENA_HEIGHT / 2,
-        ARENA_WIDTH,
+        ARENA_VIEWPORT_WIDTH,
         ARENA_HEIGHT,
         BG_COLOR,
         0.10,
@@ -334,7 +335,7 @@ export class LobbyOverlay {
 
   private repositionRows(connectedPlayers: PlayerProfile[]): void {
     const mode = this.bridge.getGameMode();
-    if (mode !== 'team_deathmatch') {
+    if (!isTeamGameMode(mode)) {
       this.teamHeaders?.blue.setVisible(false);
       this.teamHeaders?.red.setVisible(false);
       let idx = 0;
