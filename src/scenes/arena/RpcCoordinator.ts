@@ -32,6 +32,7 @@ export class RpcCoordinator {
     this.registerBurrowRpcHandler();
     this.registerDecoyStealthBreakHandler();
     this.registerLoadoutUseHandler();
+    this.registerCaptureTheBeerFxHandler();
     this.registerExplosionEffectHandler();
     this.registerGrenadeCountdownHandler();
     this.registerBfgLaserBatchHandler();
@@ -77,6 +78,12 @@ export class RpcCoordinator {
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY)
         ?? { ok: false, reason: 'blocked' };
+    });
+  }
+
+  private registerCaptureTheBeerFxHandler(): void {
+    bridge.registerCaptureTheBeerFxHandler((event) => {
+      this.renderers.beer.playFx(event);
     });
   }
 

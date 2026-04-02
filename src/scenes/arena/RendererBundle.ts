@@ -17,6 +17,7 @@ import { MuzzleFlashRenderer } from '../../effects/MuzzleFlashRenderer';
 import { TracerRenderer }      from '../../effects/TracerRenderer';
 import { TranslocatorPuckRenderer } from '../../effects/TranslocatorPuckRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
+import { CaptureTheBeerRenderer } from '../../effects/CaptureTheBeerRenderer';
 import { NukeRenderer }        from '../../powerups/NukeRenderer';
 import { PowerUpRenderer }     from '../../powerups/PowerUpRenderer';
 import { MeteorRenderer }      from '../../effects/MeteorRenderer';
@@ -45,6 +46,7 @@ export interface RendererBundle {
   muzzleFlash:         MuzzleFlashRenderer;
   tracer:              TracerRenderer;
   translocatorPuck:    TranslocatorPuckRenderer;
+  beer:                CaptureTheBeerRenderer;
   nuke:                NukeRenderer;
   meteor:              MeteorRenderer;
   powerUp:             PowerUpRenderer;
@@ -104,6 +106,9 @@ export function createRendererBundle(
   const translocatorPuck = new TranslocatorPuckRenderer(scene);
   translocatorPuck.generateTextures();
 
+  const beer = new CaptureTheBeerRenderer(scene, arenaMask);
+  beer.generateTextures();
+
   const tracer = new TracerRenderer(scene);
 
   const muzzleFlash = new MuzzleFlashRenderer(scene);
@@ -120,7 +125,7 @@ export function createRendererBundle(
 
   return {
     bullet, asmdPrimary, bite, zeusTaser, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
-    rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck,
+    rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, meteor, powerUp, shadow,
     train: null,
     translocatorTeleport: null,

@@ -275,9 +275,11 @@ export class HostUpdateCoordinator {
     const nukes     = this.ctx.powerUpSystem?.getNukeSnapshot()      ?? [];
     const meteors   = this.ctx.armageddonSystem?.getSnapshot()       ?? [];
     const train     = this.ctx.trainManager?.getNetSnapshot()        ?? null;
+    const captureTheBeer = this.ctx.captureTheBeerSystem?.hostUpdate(!countdownActive) ?? null;
     const syncedNow = bridge.getSynchronizedNow();
 
     this.renderers.train?.update(train);
+    this.renderers.beer.sync(captureTheBeer?.beers ?? []);
     this.renderers.powerUp.syncPedestals(pedestals);
     this.renderers.powerUp.sync(powerups);
     this.renderers.powerUp.updatePedestals(syncedNow);
@@ -419,8 +421,6 @@ export class HostUpdateCoordinator {
         },
       };
     }
-
-    const captureTheBeer = this.ctx.captureTheBeerSystem?.hostUpdate(!countdownActive) ?? null;
 
     bridge.publishGameState({
       players,

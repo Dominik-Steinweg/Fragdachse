@@ -240,8 +240,13 @@ export class ArenaLifecycleCoordinator {
     this.ctx.arenaResult = builder.buildDynamic(layout);
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
     this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
-      ? new CaptureTheBeerSystem(this.scene, this.ctx.playerManager)
+      ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
+    if (bridge.isHost()) {
+      this.ctx.captureTheBeerSystem?.setFxHandler((event) => {
+        bridge.broadcastCaptureTheBeerFx(event);
+      });
+    }
 
     this.ctx.playerManager.setLayout(layout);
 
@@ -589,6 +594,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.trainManager = null;
     this.renderers.train?.destroy();
     this.renderers.train = null;
+    this.renderers.beer.clear();
     this.renderers.shadow.clear();
     this.renderers.translocatorTeleport = null;
     this.ctx.projectileManager.setTrainGroup(null);

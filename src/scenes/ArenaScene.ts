@@ -24,7 +24,7 @@ import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC,
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, MAX_ARENA_WIDTH, GAME_WIDTH, CELL_SIZE, COLORS, DEPTH,
+  ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, GAME_WIDTH, CELL_SIZE, COLORS, DEPTH,
   ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS,
   NET_SMOOTH_TIME_MS,
   applyArenaMetricsForMode,
@@ -508,6 +508,7 @@ export class ArenaScene extends Phaser.Scene {
         const state = bridge.getLatestGameState();
         if (state) {
           this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
+          this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
           this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
           this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
           this.renderers.train?.setTarget(state.train ?? null);
@@ -519,8 +520,6 @@ export class ArenaScene extends Phaser.Scene {
         this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
         this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
       }
-
-      this.ctx.captureTheBeerSystem?.updateVisuals();
 
       this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
 
@@ -541,6 +540,7 @@ export class ArenaScene extends Phaser.Scene {
       this.enemyHoverNameLabel?.clear(true);
     }
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
+    this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.teslaDome.update(delta);
     this.renderers.energyShield.update(delta);
 
@@ -715,12 +715,14 @@ export class ArenaScene extends Phaser.Scene {
   private ensureArenaClipMask(): void {
     if (this.arenaClipMaskShape && this.arenaClipMask) return;
     const maskShape = this.add.graphics();
+    maskShape.setScrollFactor(0);
     maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_WIDTH, ARENA_HEIGHT);
+    maskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT);
     maskShape.setVisible(false);
     this.arenaClipMaskShape = maskShape;
     this.arenaClipMask = maskShape.createGeometryMask();
     this.renderers?.shadow.setArenaMask(this.arenaClipMask);
+    this.renderers?.beer.setArenaMask(this.arenaClipMask);
   }
 
   private syncArenaMetrics(): void {

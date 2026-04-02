@@ -2,19 +2,18 @@ import Phaser from 'phaser';
 import { bridge } from '../network/bridge';
 import type { PlayerManager } from '../entities/PlayerManager';
 import {
-  DEPTH,
-  TEAM_BLUE_COLOR,
-  TEAM_RED_COLOR,
+  MUZZLE_FORWARD_OFFSET,
   getCaptureTheBeerBaseWorldBounds,
+  getCaptureTheBeerHomeWorldPosition,
   getTopDownMuzzleOrigin,
 } from '../config';
-import type { SyncedCaptureTheBeerBeer, SyncedCaptureTheBeerState, TeamId } from '../types';
+import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, SyncedCaptureTheBeerState, TeamId } from '../types';
 
 const BEER_SIZE = 16;
 const BEER_HALF_SIZE = BEER_SIZE * 0.5;
-const BEER_DEPTH = DEPTH.PLAYERS + 0.05;
 
 type InteractionPredicate = (playerId: string) => boolean;
+type CaptureTheBeerFxHandler = (event: CaptureTheBeerFxEvent) => void;
 
 interface LocalBeerState extends SyncedCaptureTheBeerBeer {
   pickupBlockedByPlayerId: string | null;
@@ -26,35 +25,30 @@ interface LocalCaptureTheBeerState {
 }
 
 export class CaptureTheBeerSystem {
-  private readonly bottleRects = new Map<TeamId, Phaser.GameObjects.Rectangle>();
   private readonly scratchBeerBounds = new Phaser.Geom.Rectangle();
   private state: LocalCaptureTheBeerState;
   private interactionPredicate: InteractionPredicate | null = null;
+  private fxHandler: CaptureTheBeerFxHandler | null = null;
 
-  constructor(
-    private readonly scene: Phaser.Scene,
-    private readonly playerManager: PlayerManager,
-  ) {
+  constructor(private readonly playerManager: PlayerManager) {
     this.state = this.createInitialState();
-    this.bottleRects.set('blue', this.createBottleRect(TEAM_BLUE_COLOR));
-    this.bottleRects.set('red', this.createBottleRect(TEAM_RED_COLOR));
-    this.updateVisuals();
   }
 
   setInteractionPredicate(predicate: InteractionPredicate | null): void {
     this.interactionPredicate = predicate;
   }
 
+  setFxHandler(handler: CaptureTheBeerFxHandler | null): void {
+    this.fxHandler = handler;
+  }
+
   reset(): void {
     this.state = this.createInitialState();
-    this.updateVisuals();
   }
 
   destroy(): void {
-    for (const rect of this.bottleRects.values()) {
-      rect.destroy();
-    }
-    this.bottleRects.clear();
+    this.interactionPredicate = null;
+    this.fxHandler = null;
   }
 
   syncSnapshot(snapshot: SyncedCaptureTheBeerState | null): void {
@@ -98,16 +92,6 @@ export class CaptureTheBeerSystem {
     return this.buildSnapshot();
   }
 
-  updateVisuals(): void {
-    for (const beer of this.state.beers) {
-      const rect = this.bottleRects.get(beer.teamId);
-      if (!rect) continue;
-      const position = this.resolveVisualPosition(beer);
-      rect.setVisible(true);
-      rect.setPosition(position.x, position.y);
-    }
-  }
-
   dropBeerForPlayer(playerId: string, x?: number, y?: number): void {
     for (const beer of this.state.beers) {
       if (beer.holderId !== playerId) continue;
@@ -117,6 +101,12 @@ export class CaptureTheBeerSystem {
       beer.x = x ?? carrier?.sprite.x ?? beer.x;
       beer.y = y ?? carrier?.sprite.y ?? beer.y;
       beer.pickupBlockedByPlayerId = playerId;
+      this.emitFx({
+        kind: 'drop',
+        beerTeamId: beer.teamId,
+        x: beer.x,
+        y: beer.y,
+      });
     }
   }
 
@@ -132,9 +122,9 @@ export class CaptureTheBeerSystem {
   }
 
   private createBeerState(teamId: TeamId): LocalBeerState {
-    const bounds = getCaptureTheBeerBaseWorldBounds(teamId);
-    const defaultX = bounds.x + bounds.width * 0.5;
-    const defaultY = bounds.y + bounds.height * 0.5;
+    const home = getCaptureTheBeerHomeWorldPosition(teamId);
+    const defaultX = home.x;
+    const defaultY = home.y;
     return {
       teamId,
       defaultX,
@@ -145,13 +135,6 @@ export class CaptureTheBeerSystem {
       state: 'home',
       pickupBlockedByPlayerId: null,
     };
-  }
-
-  private createBottleRect(color: number): Phaser.GameObjects.Rectangle {
-    const rect = this.scene.add.rectangle(0, 0, BEER_SIZE, BEER_SIZE, color, 1);
-    rect.setDepth(BEER_DEPTH);
-    rect.setStrokeStyle(2, 0x000000, 1);
-    return rect;
   }
 
   private buildSnapshot(): SyncedCaptureTheBeerState {
@@ -229,7 +212,7 @@ export class CaptureTheBeerSystem {
 
         if (teamId === beer.teamId) {
           if (beer.state === 'dropped') {
-            this.returnBeerHome(beer);
+            this.returnBeerHome(beer, true);
           }
         } else {
           beer.holderId = player.id;
@@ -256,30 +239,39 @@ export class CaptureTheBeerSystem {
       if (ownBeer.state !== 'home') continue;
 
       this.state.scores[carrierTeam] += 1;
-      this.returnBeerHome(beer);
+      this.emitFx({
+        kind: 'score',
+        beerTeamId: beer.teamId,
+        scoreTeamId: carrierTeam,
+        x: beer.x,
+        y: beer.y,
+      });
+      this.returnBeerHome(beer, true);
     }
   }
 
-  private returnBeerHome(beer: LocalBeerState): void {
+  private returnBeerHome(beer: LocalBeerState, emitResetFx: boolean): void {
+    const sourceX = beer.x;
+    const sourceY = beer.y;
     beer.holderId = null;
     beer.state = 'home';
     beer.x = beer.defaultX;
     beer.y = beer.defaultY;
     beer.pickupBlockedByPlayerId = null;
-  }
-
-  private resolveVisualPosition(beer: LocalBeerState): { x: number; y: number } {
-    if (beer.state === 'carried' && beer.holderId) {
-      const carrier = this.playerManager.getPlayer(beer.holderId);
-      if (carrier && carrier.body.enable) {
-        return this.resolveCarrierPosition(carrier.sprite.x, carrier.sprite.y, carrier.sprite.rotation);
-      }
+    if (emitResetFx) {
+      this.emitFx({
+        kind: 'reset',
+        beerTeamId: beer.teamId,
+        sourceX,
+        sourceY,
+        targetX: beer.defaultX,
+        targetY: beer.defaultY,
+      });
     }
-    return { x: beer.x, y: beer.y };
   }
 
   private resolveCarrierPosition(x: number, y: number, rotation: number): { x: number; y: number } {
-    return getTopDownMuzzleOrigin(x, y, rotation - Math.PI / 2);
+    return getTopDownMuzzleOrigin(x, y, rotation - Math.PI / 2, MUZZLE_FORWARD_OFFSET);
   }
 
   private isPlayerTouchingBeer(playerBounds: Phaser.Geom.Rectangle, beer: LocalBeerState): boolean {
@@ -301,5 +293,9 @@ export class CaptureTheBeerSystem {
       && player.sprite.x <= bounds.x + bounds.width
       && player.sprite.y >= bounds.y
       && player.sprite.y <= bounds.y + bounds.height;
+  }
+
+  private emitFx(event: CaptureTheBeerFxEvent): void {
+    this.fxHandler?.(event);
   }
 }

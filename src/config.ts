@@ -302,7 +302,9 @@ export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 /
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
 export const ROCK_FILL_RATIO     = 0.30;
 export const DIRT_FILL_RATIO     = 0.05;   
-export const TREE_COUNT          = 3;
+export const DEFAULT_TREE_COUNT  = 3;
+export const CAPTURE_THE_BEER_TREE_COUNT = 8;
+export let TREE_COUNT            = DEFAULT_TREE_COUNT;
 export const CA_SMOOTHING_STEPS  = 4;    // Anzahl Cellular-Automata-Durchläufe (0 = kein Smoothing)
 export const CA_MIN_ROCK_NEIGHBORS = 3;  // Fels mit < N Nachbarn wird zu Boden
 export const CA_MAX_FLOOR_NEIGHBORS = 4; // Boden mit > N Nachbarn wird zu Fels
@@ -352,6 +354,17 @@ export function getCaptureTheBeerTeamSpawnRegion(teamId: TeamId): ArenaGridRegio
   return { minGridX: GRID_COLS - width, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
 }
 
+export function getCaptureTheBeerMiddleThirdRegion(): ArenaGridRegion {
+  const width = Math.max(1, Math.floor(GRID_COLS / 3));
+  const minGridX = Math.floor((GRID_COLS - width) / 2);
+  return {
+    minGridX,
+    maxGridX: minGridX + width - 1,
+    minGridY: 0,
+    maxGridY: GRID_ROWS - 1,
+  };
+}
+
 export function getCaptureTheBeerBaseWorldBounds(teamId: TeamId): { x: number; y: number; width: number; height: number } {
   const region = getCaptureTheBeerBaseRegion(teamId);
   const x = ARENA_OFFSET_X + region.minGridX * CELL_SIZE;
@@ -359,6 +372,15 @@ export function getCaptureTheBeerBaseWorldBounds(teamId: TeamId): { x: number; y
   const width = (region.maxGridX - region.minGridX + 1) * CELL_SIZE;
   const height = (region.maxGridY - region.minGridY + 1) * CELL_SIZE;
   return { x, y, width, height };
+}
+
+export function getCaptureTheBeerHomeWorldPosition(teamId: TeamId): { x: number; y: number } {
+  const bounds = getCaptureTheBeerBaseWorldBounds(teamId);
+  const inset = Math.min(bounds.width * 0.5, CELL_SIZE * 1.5);
+  return {
+    x: teamId === 'blue' ? bounds.x + bounds.width - inset : bounds.x + inset,
+    y: bounds.y + bounds.height * 0.5,
+  };
 }
 
 export function isCaptureTheBeerBaseModeActive(): boolean {
@@ -380,6 +402,8 @@ export function applyArenaMetricsForMode(mode: GameMode): void {
   TRACK_SPAWN_MIN_COL = Math.floor(GRID_COLS * 0.25);
   TRACK_SPAWN_MAX_COL = Math.floor(GRID_COLS * 0.75);
   CAPTURE_THE_BEER_BASES_ACTIVE = mode === CAPTURE_THE_BEER_MODE;
+  TREE_COUNT = mode === CAPTURE_THE_BEER_MODE ? CAPTURE_THE_BEER_TREE_COUNT : DEFAULT_TREE_COUNT;
+  ARENA_DURATION_SEC = mode === CAPTURE_THE_BEER_MODE ? CAPTURE_THE_BEER_ARENA_DURATION_SEC : DEFAULT_ARENA_DURATION_SEC;
 }
 
 // ---- Felsen HP ----
@@ -499,7 +523,9 @@ export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;
 export const ARENA_COUNTDOWN_SEC = 3;
-export const ARENA_DURATION_SEC = 120;
+export const DEFAULT_ARENA_DURATION_SEC = 120;
+export const CAPTURE_THE_BEER_ARENA_DURATION_SEC = 300;
+export let ARENA_DURATION_SEC = DEFAULT_ARENA_DURATION_SEC;
 
 // ---- Netzwerk ----
 /** Netzwerk-Tick-Rate: Wie oft der Host den Game State an Clients sendet. */

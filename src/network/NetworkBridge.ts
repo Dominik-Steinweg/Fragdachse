@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -147,6 +147,7 @@ type PowerUpPickupHandler = (uid: number, playerId: string) => void;
 type DecoyStealthBreakHandler = (playerId: string) => void;
 type TrainDestroyedHandler = () => void;
 type TranslocatorFlashHandler = (x: number, y: number, color: number, type: 'start' | 'end') => void;
+type CaptureTheBeerFxHandler = (event: CaptureTheBeerFxEvent) => void;
 
 interface RpcEnvelope {
   type: string;
@@ -191,6 +192,7 @@ export class NetworkBridge {
   private decoyStealthBreakHandler: DecoyStealthBreakHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
+  private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
 
   constructor() {
@@ -875,6 +877,78 @@ export class NetworkBridge {
       if (!translocatorFlashHandler) return undefined;
       const { x, y, c, t } = data as { x: number; y: number; c: number; t: 'start' | 'end' };
       translocatorFlashHandler(x, y, c, t);
+      return undefined;
+    });
+  }
+
+  broadcastCaptureTheBeerFx(event: CaptureTheBeerFxEvent): void {
+    if (event.kind === 'drop' || event.kind === 'score') {
+      this.broadcastRpc('btfx', {
+        k: event.kind,
+        bt: event.beerTeamId,
+        x: event.x,
+        y: event.y,
+        ...(event.kind === 'score' ? { st: event.scoreTeamId } : {}),
+      });
+      return;
+    }
+
+    this.broadcastRpc('btfx', {
+      k: 'reset',
+      bt: event.beerTeamId,
+      sx: event.sourceX,
+      sy: event.sourceY,
+      tx: event.targetX,
+      ty: event.targetY,
+    });
+  }
+
+  registerCaptureTheBeerFxHandler(handler: CaptureTheBeerFxHandler): void {
+    this.captureTheBeerFxHandler = handler;
+    this.registerAllRpcHandler('btfx', async (data: unknown): Promise<unknown> => {
+      const captureTheBeerFxHandler = this.captureTheBeerFxHandler;
+      if (!captureTheBeerFxHandler) return undefined;
+      const payload = data as {
+        k: CaptureTheBeerFxEvent['kind'];
+        bt: TeamId;
+        x?: number;
+        y?: number;
+        st?: TeamId;
+        sx?: number;
+        sy?: number;
+        tx?: number;
+        ty?: number;
+      };
+
+      if (payload.k === 'reset') {
+        captureTheBeerFxHandler({
+          kind: 'reset',
+          beerTeamId: payload.bt,
+          sourceX: payload.sx ?? 0,
+          sourceY: payload.sy ?? 0,
+          targetX: payload.tx ?? 0,
+          targetY: payload.ty ?? 0,
+        });
+        return undefined;
+      }
+
+      if (payload.k === 'score') {
+        captureTheBeerFxHandler({
+          kind: 'score',
+          beerTeamId: payload.bt,
+          scoreTeamId: payload.st ?? payload.bt,
+          x: payload.x ?? 0,
+          y: payload.y ?? 0,
+        });
+        return undefined;
+      }
+
+      captureTheBeerFxHandler({
+        kind: 'drop',
+        beerTeamId: payload.bt,
+        x: payload.x ?? 0,
+        y: payload.y ?? 0,
+      });
       return undefined;
     });
   }

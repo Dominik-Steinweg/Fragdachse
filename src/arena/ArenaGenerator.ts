@@ -1,4 +1,4 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, isCaptureTheBeerBaseCell } from '../config';
+import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseCell, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
 import type { ArenaLayout, RockCell, TreeCell, TrackCell, DirtCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 
@@ -210,12 +210,14 @@ export class ArenaGenerator {
   ) {
     const candidates: Array<{ gx: number; gy: number }> = [];
     const margin = POWERUP_PEDESTAL_CONFIG.edgePaddingCells;
+    const middleThirdRegion = isCaptureTheBeerBaseModeActive() ? getCaptureTheBeerMiddleThirdRegion() : null;
 
     for (let gy = margin; gy < GRID_ROWS - margin; gy++) {
       for (let gx = margin; gx < GRID_COLS - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
         if (isCaptureTheBeerBaseCell(gx, gy)) continue;
+        if (middleThirdRegion && !isGridCellInArenaRegion(middleThirdRegion, gx, gy)) continue;
         candidates.push({ gx, gy });
       }
     }

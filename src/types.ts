@@ -304,6 +304,35 @@ export type TeamId = 'blue' | 'red';
 
 export type CaptureTheBeerBeerState = 'home' | 'carried' | 'dropped';
 
+export interface CaptureTheBeerDropFxEvent {
+  kind: 'drop';
+  beerTeamId: TeamId;
+  x: number;
+  y: number;
+}
+
+export interface CaptureTheBeerScoreFxEvent {
+  kind: 'score';
+  beerTeamId: TeamId;
+  scoreTeamId: TeamId;
+  x: number;
+  y: number;
+}
+
+export interface CaptureTheBeerResetFxEvent {
+  kind: 'reset';
+  beerTeamId: TeamId;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+}
+
+export type CaptureTheBeerFxEvent =
+  | CaptureTheBeerDropFxEvent
+  | CaptureTheBeerScoreFxEvent
+  | CaptureTheBeerResetFxEvent;
+
 export type RoomQualityStatus = 'waiting' | 'sampling' | 'good' | 'bad' | 'retrying';
 
 export type RoomQualityRetryMode = 'suggest' | 'auto';
