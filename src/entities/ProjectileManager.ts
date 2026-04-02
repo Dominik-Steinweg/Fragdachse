@@ -1500,6 +1500,7 @@ export class ProjectileManager {
       vy:     Math.round(p.body.velocity.y),
       size:   Math.round(p.sprite.displayWidth),
       color:  p.color,
+      allowTeamDamage: p.allowTeamDamage,
       ownerColor: p.ownerColor,
       smokeTrailColor: p.smokeTrailColor,
       style:  p.projectileStyle,

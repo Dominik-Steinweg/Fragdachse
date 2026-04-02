@@ -237,7 +237,11 @@ export class ArenaScene extends Phaser.Scene {
         nukes: latestState?.nukes ?? [],
         meteors: latestState?.meteors ?? [],
         turrets: runtimePlaceables
-          .filter((placeable) => placeable.kind === 'turret' && placeable.ownerId !== playerId)
+          .filter((placeable) => (
+            placeable.kind === 'turret'
+            && playerId !== null
+            && combatSystem.canDamageTarget(placeable.ownerId, playerId)
+          ))
           .map((placeable) => ({
             x: ARENA_OFFSET_X + placeable.gridX * CELL_SIZE + CELL_SIZE * 0.5,
             y: ARENA_OFFSET_Y + placeable.gridY * CELL_SIZE + CELL_SIZE * 0.5,
@@ -245,14 +249,16 @@ export class ArenaScene extends Phaser.Scene {
             range: turretRange,
           })),
         projectiles: (latestState?.projectiles ?? [])
-          .filter((projectile) => projectile.ownerId !== playerId)
+          .filter((projectile) => playerId !== null && combatSystem.canDamageTarget(projectile.ownerId, playerId, projectile.allowTeamDamage))
           .map((projectile) => ({
             x: projectile.x,
             y: projectile.y,
             ownerId: projectile.ownerId,
             radius: resolveSpawnProjectileDangerRadius(projectile),
           })),
-        isRelevantOpponent: (otherPlayerId) => combatSystem.isAlive(otherPlayerId),
+        isRelevantOpponent: (otherPlayerId) => playerId === null
+          ? combatSystem.isAlive(otherPlayerId)
+          : combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
         hasLineOfSight: (sx, sy, ex, ey) => combatSystem.hasLineOfSight(sx, sy, ex, ey),
       };
     });
@@ -263,13 +269,15 @@ export class ArenaScene extends Phaser.Scene {
     wireRenderersToEffectSystem(this.renderers, effectSystem);
 
     // Homing providers (closed over ctx, read at call-time → safe after teardown)
-    projectileManager.setHomingTargetProvider((_config, _ownerId) => {
+    projectileManager.setHomingTargetProvider((_config, ownerId) => {
       if (!bridge.isHost()) return [];
       const targets = [];
       for (const player of playerManager.getAllPlayers()) {
+        if (player.id === ownerId) continue;
         if (!player.sprite.active) continue;
         if (!combatSystem.isAlive(player.id)) continue;
         if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
+        if (!combatSystem.canDamageTarget(ownerId, player.id)) continue;
         targets.push({ id: player.id, type: 'players' as const, x: player.sprite.x, y: player.sprite.y });
       }
       return targets;

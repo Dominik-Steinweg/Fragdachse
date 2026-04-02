@@ -91,6 +91,7 @@ export class TurretSystem {
       if (!player.sprite.active) continue;
       if (!this.combatSystem.isAlive(player.id)) continue;
       if (this.combatSystem.isBurrowed(player.id)) continue;
+      if (!this.combatSystem.canDamageTarget(turret.ownerId, player.id)) continue;
 
       const distance = Phaser.Math.Distance.Between(turretX, turretY, player.sprite.x, player.sprite.y);
       if (distance > range || distance >= bestDistance) continue;

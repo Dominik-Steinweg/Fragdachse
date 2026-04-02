@@ -192,6 +192,7 @@ export class TeslaDomeSystem {
         if (!player.sprite.active) continue;
         if (!this.combatSystem.isAlive(player.id)) continue;
         if (this.combatSystem.isBurrowed(player.id)) continue;
+        if (!this.combatSystem.canDamageTarget(dome.ownerId, player.id)) continue;
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, player.sprite.x, player.sprite.y);
         if (dist > radius) continue;
         if (!this.hasLineOfSight(fire, dome.x, dome.y, player.sprite.x, player.sprite.y)) continue;
@@ -210,7 +211,7 @@ export class TeslaDomeSystem {
 
     if (fire.targetTypes.includes('turrets') && this.turretTargetProvider) {
       for (const turret of this.turretTargetProvider()) {
-        if (turret.ownerId === dome.ownerId) continue;
+        if (!this.combatSystem.canDamageTarget(dome.ownerId, turret.ownerId)) continue;
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, turret.x, turret.y);
         if (dist > radius) continue;
         if (!this.hasLineOfSight(fire, dome.x, dome.y, turret.x, turret.y, turret.id)) continue;
@@ -272,7 +273,7 @@ export class TeslaDomeSystem {
     const turretDamage = damage * (dome.config.rockDamageMult ?? 1);
     if (turretDamage > 0 && turretTargets.length > 0 && this.turretTargetProvider && this.turretDamageHandler) {
       for (const turret of this.turretTargetProvider()) {
-        if (turret.ownerId === dome.ownerId) continue;
+        if (!this.combatSystem.canDamageTarget(dome.ownerId, turret.ownerId)) continue;
         if (!turretTargets.some(target => target.x === turret.x && target.y === turret.y)) continue;
         this.turretDamageHandler(turret.id, turretDamage, dome.ownerId);
       }

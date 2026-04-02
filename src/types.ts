@@ -213,6 +213,7 @@ export interface SyncedProjectile {
   vy:      number;  // Geschwindigkeit Y (px/s)
   size:    number;  // px – für korrekte Client-Darstellung
   color:   number;  // hex
+  allowTeamDamage?: boolean;
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
