@@ -183,15 +183,26 @@ export class ArenaGenerator {
    * sowie alle TrackCells (jede Zelle einer Gleis-Spalte).
    */
   private static generateTracks(rng: () => number): { trackCols: Set<number>; tracks: TrackCell[] } {
+    const trackCols = new Set<number>();
+    const tracks: TrackCell[] = [];
+
+    if (isCaptureTheBeerBaseModeActive()) {
+      // CTB: Gleise exakt in die Mitte der Arena setzen (2 Spalten zentriert)
+      const col = Math.floor((GRID_COLS - 2) / 2);
+      trackCols.add(col);
+      trackCols.add(col + 1);
+      for (let gy = 0; gy < GRID_ROWS; gy++) {
+        tracks.push({ gridX: col, gridY: gy });
+      }
+      return { trackCols, tracks };
+    }
+
     const available: number[] = [];
     for (let c = TRACK_SPAWN_MIN_COL; c <= TRACK_SPAWN_MAX_COL; c++) {
-      if (isCaptureTheBeerBaseCell(c, 0) || isCaptureTheBeerBaseCell(c + 1, 0)) continue;
       available.push(c);
     }
     ArenaGenerator.shuffle(available, rng);
 
-    const trackCols = new Set<number>();
-    const tracks: TrackCell[] = [];
     for (let i = 0; i < Math.min(TRACK_COUNT, available.length); i++) {
       const col = available[i];
       trackCols.add(col);

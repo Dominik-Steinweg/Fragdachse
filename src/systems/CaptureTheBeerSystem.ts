@@ -2,10 +2,8 @@ import Phaser from 'phaser';
 import { bridge } from '../network/bridge';
 import type { PlayerManager } from '../entities/PlayerManager';
 import {
-  MUZZLE_FORWARD_OFFSET,
   getCaptureTheBeerBaseWorldBounds,
   getCaptureTheBeerHomeWorldPosition,
-  getTopDownMuzzleOrigin,
 } from '../config';
 import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, SyncedCaptureTheBeerState, TeamId } from '../types';
 
@@ -189,7 +187,7 @@ export class CaptureTheBeerSystem {
       if (beer.state !== 'carried' || !beer.holderId) continue;
       const carrier = this.playerManager.getPlayer(beer.holderId);
       if (!carrier) continue;
-      const position = this.resolveCarrierPosition(carrier.sprite.x, carrier.sprite.y, carrier.sprite.rotation);
+      const position = this.resolveCarrierPosition(carrier.sprite.x, carrier.sprite.y);
       beer.x = position.x;
       beer.y = position.y;
     }
@@ -218,7 +216,7 @@ export class CaptureTheBeerSystem {
           beer.holderId = player.id;
           beer.state = 'carried';
           beer.pickupBlockedByPlayerId = null;
-          const position = this.resolveCarrierPosition(player.sprite.x, player.sprite.y, player.sprite.rotation);
+          const position = this.resolveCarrierPosition(player.sprite.x, player.sprite.y);
           beer.x = position.x;
           beer.y = position.y;
         }
@@ -270,8 +268,8 @@ export class CaptureTheBeerSystem {
     }
   }
 
-  private resolveCarrierPosition(x: number, y: number, rotation: number): { x: number; y: number } {
-    return getTopDownMuzzleOrigin(x, y, rotation - Math.PI / 2, MUZZLE_FORWARD_OFFSET);
+  private resolveCarrierPosition(x: number, y: number): { x: number; y: number } {
+    return { x, y };
   }
 
   private isPlayerTouchingBeer(playerBounds: Phaser.Geom.Rectangle, beer: LocalBeerState): boolean {
