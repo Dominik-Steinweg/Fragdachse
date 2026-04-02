@@ -6,6 +6,7 @@ import type {
   SyncedMeteorStrike,
   SyncedNukeStrike,
   SyncedStinkCloud,
+  TeamId,
   SyncedTeslaDome,
 } from '../types';
 import { PlayerEntity }       from './PlayerEntity';
@@ -14,6 +15,10 @@ import {
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,
   CELL_SIZE, GRID_COLS, GRID_ROWS,
+  type ArenaGridRegion,
+  getCaptureTheBeerBaseRegion,
+  getCaptureTheBeerTeamSpawnRegion,
+  isCaptureTheBeerBaseModeActive,
 } from '../config';
 
 const PREFERRED_OPPONENT_DISTANCE_PX = CELL_SIZE * 10;
@@ -90,6 +95,7 @@ export class PlayerManager {
   private localPlayerId: string | null = null;
   private spawnContextProvider: SpawnContextProvider | null = null;
   private relationshipResolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null = null;
+  private teamResolver: ((playerId: string) => TeamId | null) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -101,6 +107,10 @@ export class PlayerManager {
 
   setRelationshipResolver(resolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null): void {
     this.relationshipResolver = resolver;
+  }
+
+  setTeamResolver(resolver: ((playerId: string) => TeamId | null) | null): void {
+    this.teamResolver = resolver;
   }
 
   setSpawnContextProvider(provider: SpawnContextProvider | null): void {
@@ -162,48 +172,17 @@ export class PlayerManager {
    * Wird sowohl für Initial-Spawn als auch für Respawns verwendet.
    */
   getSpawnPoint(requestingPlayerId: string | null = null): { x: number; y: number } {
-    const blocked = new Set<string>();
     const spawnContext = this.spawnContextProvider?.(requestingPlayerId) ?? EMPTY_SPAWN_CONTEXT;
 
-    // Felsen, Baumstümpfe und Gleise aus dem Layout blockieren
-    if (this.layout) {
-      for (const r of this.layout.rocks) blocked.add(`${r.gridX}_${r.gridY}`);
-      for (const t of this.layout.trees) blocked.add(`${t.gridX}_${t.gridY}`);
-      for (const track of this.layout.tracks) {
-        blocked.add(`${track.gridX}_${track.gridY}`);
-        blocked.add(`${track.gridX + 1}_${track.gridY}`);
-      }
-      for (const pedestal of this.layout.powerUpPedestals) {
-        blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
-      }
+    if (isCaptureTheBeerBaseModeActive() && requestingPlayerId) {
+      const teamId = this.teamResolver?.(requestingPlayerId) ?? null;
+      const blockedForBaseSpawn = this.buildBlockedCells(requestingPlayerId, spawnContext, false);
+      const baseSpawn = this.tryGetCaptureTheBeerSpawn(teamId, blockedForBaseSpawn);
+      if (baseSpawn) return baseSpawn;
     }
 
-    // Aktuell belegte Spieler-Zellen ausschließen
-    for (const p of this.players.values()) {
-      if (!p.sprite.active) continue;
-      if (requestingPlayerId && p.id === requestingPlayerId) continue;
-      if (spawnContext.isRelevantOpponent && !spawnContext.isRelevantOpponent(p.id)) continue;
-      const gx = Math.floor((p.sprite.x - ARENA_OFFSET_X) / CELL_SIZE);
-      const gy = Math.floor((p.sprite.y - ARENA_OFFSET_Y) / CELL_SIZE);
-      blocked.add(`${gx}_${gy}`);
-    }
-
-    // Alle freien Zellen sammeln
-    const free: SpawnCandidate[] = [];
-    for (let gy = 0; gy < GRID_ROWS; gy++) {
-      for (let gx = 0; gx < GRID_COLS; gx++) {
-        if (!blocked.has(`${gx}_${gy}`)) {
-          const x = gx * CELL_SIZE + CELL_SIZE / 2;
-          const y = gy * CELL_SIZE + CELL_SIZE / 2;
-          free.push({
-            x,
-            y,
-            worldX: ARENA_OFFSET_X + x,
-            worldY: ARENA_OFFSET_Y + y,
-          });
-        }
-      }
-    }
+    const blocked = this.buildBlockedCells(requestingPlayerId, spawnContext, true);
+    const free = this.collectFreeCells(blocked);
 
     if (free.length === 0) {
       return { x: CELL_SIZE / 2, y: CELL_SIZE / 2 }; // Notfall-Fallback
@@ -245,6 +224,89 @@ export class PlayerManager {
     if (minimumChoice) return minimumChoice;
 
     return this.pickCandidate(evaluations) ?? { x: CELL_SIZE / 2, y: CELL_SIZE / 2 };
+  }
+
+  private buildBlockedCells(
+    requestingPlayerId: string | null,
+    spawnContext: SpawnContextSnapshot,
+    respectRelevantOpponentFilter: boolean,
+  ): Set<string> {
+    const blocked = new Set<string>();
+
+    // Felsen, Baumstümpfe und Gleise aus dem Layout blockieren
+    if (this.layout) {
+      for (const r of this.layout.rocks) blocked.add(`${r.gridX}_${r.gridY}`);
+      for (const t of this.layout.trees) blocked.add(`${t.gridX}_${t.gridY}`);
+      for (const track of this.layout.tracks) {
+        blocked.add(`${track.gridX}_${track.gridY}`);
+        blocked.add(`${track.gridX + 1}_${track.gridY}`);
+      }
+      for (const pedestal of this.layout.powerUpPedestals) {
+        blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
+      }
+    }
+
+    // Aktuell belegte Spieler-Zellen ausschließen
+    for (const p of this.players.values()) {
+      if (!p.sprite.active) continue;
+      if (requestingPlayerId && p.id === requestingPlayerId) continue;
+      if (respectRelevantOpponentFilter && spawnContext.isRelevantOpponent && !spawnContext.isRelevantOpponent(p.id)) continue;
+      const gx = Math.floor((p.sprite.x - ARENA_OFFSET_X) / CELL_SIZE);
+      const gy = Math.floor((p.sprite.y - ARENA_OFFSET_Y) / CELL_SIZE);
+      blocked.add(`${gx}_${gy}`);
+    }
+
+    return blocked;
+  }
+
+  private collectFreeCells(blocked: ReadonlySet<string>, region?: ArenaGridRegion): SpawnCandidate[] {
+    const free: SpawnCandidate[] = [];
+    const minGridX = region?.minGridX ?? 0;
+    const maxGridX = region?.maxGridX ?? GRID_COLS - 1;
+    const minGridY = region?.minGridY ?? 0;
+    const maxGridY = region?.maxGridY ?? GRID_ROWS - 1;
+
+    for (let gy = minGridY; gy <= maxGridY; gy++) {
+      for (let gx = minGridX; gx <= maxGridX; gx++) {
+        if (!blocked.has(`${gx}_${gy}`)) {
+          const x = gx * CELL_SIZE + CELL_SIZE / 2;
+          const y = gy * CELL_SIZE + CELL_SIZE / 2;
+          free.push({
+            x,
+            y,
+            worldX: ARENA_OFFSET_X + x,
+            worldY: ARENA_OFFSET_Y + y,
+          });
+        }
+      }
+    }
+
+    return free;
+  }
+
+  private tryGetCaptureTheBeerSpawn(
+    teamId: TeamId | null,
+    blocked: ReadonlySet<string>,
+  ): { x: number; y: number } | null {
+    if (!teamId) return null;
+
+    const baseCandidates = this.collectFreeCells(blocked, getCaptureTheBeerBaseRegion(teamId));
+    if (baseCandidates.length > 0) {
+      return this.pickRandomSpawn(baseCandidates);
+    }
+
+    const teamZoneCandidates = this.collectFreeCells(blocked, getCaptureTheBeerTeamSpawnRegion(teamId));
+    if (teamZoneCandidates.length > 0) {
+      return this.pickRandomSpawn(teamZoneCandidates);
+    }
+
+    return null;
+  }
+
+  private pickRandomSpawn(candidates: readonly SpawnCandidate[]): { x: number; y: number } | null {
+    if (candidates.length === 0) return null;
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    return { x: chosen.x, y: chosen.y };
   }
 
   private buildRelaxedOpponentThresholds(): number[] {

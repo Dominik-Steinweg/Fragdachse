@@ -1,4 +1,4 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL } from '../config';
+import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, isCaptureTheBeerBaseCell } from '../config';
 import type { ArenaLayout, RockCell, TreeCell, TrackCell, DirtCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 
@@ -68,7 +68,7 @@ export class ArenaGenerator {
       const rocks: RockCell[] = [];
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         for (let gx = 0; gx < GRID_COLS; gx++) {
-          if (map[gy][gx] && !trackCols.has(gx)) {
+          if (map[gy][gx] && !trackCols.has(gx) && !isCaptureTheBeerBaseCell(gx, gy)) {
             blocked[gy][gx] = true;
             rocks.push({ gridX: gx, gridY: gy });
           }
@@ -95,6 +95,7 @@ export class ArenaGenerator {
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
+          !isCaptureTheBeerBaseCell(gx, gy) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -126,6 +127,7 @@ export class ArenaGenerator {
             const nx = gx + dx;
             const ny = gy + dy;
             if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
+              if (isCaptureTheBeerBaseCell(nx, ny)) continue;
               dirtSet.add(ny * GRID_COLS + nx);
             }
           }
@@ -149,6 +151,7 @@ export class ArenaGenerator {
               const nx = gx + dx;
               const ny = gy + dy;
               if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+              if (isCaptureTheBeerBaseCell(nx, ny)) continue;
               const nk = ny * GRID_COLS + nx;
               if (!dirtSet.has(nk)) frontier.push(nk);
             }
@@ -182,6 +185,7 @@ export class ArenaGenerator {
   private static generateTracks(rng: () => number): { trackCols: Set<number>; tracks: TrackCell[] } {
     const available: number[] = [];
     for (let c = TRACK_SPAWN_MIN_COL; c <= TRACK_SPAWN_MAX_COL; c++) {
+      if (isCaptureTheBeerBaseCell(c, 0) || isCaptureTheBeerBaseCell(c + 1, 0)) continue;
       available.push(c);
     }
     ArenaGenerator.shuffle(available, rng);
@@ -211,6 +215,7 @@ export class ArenaGenerator {
       for (let gx = margin; gx < GRID_COLS - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
+        if (isCaptureTheBeerBaseCell(gx, gy)) continue;
         candidates.push({ gx, gy });
       }
     }

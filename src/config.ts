@@ -1,5 +1,5 @@
-import type { GameMode, RoomQualityRetryMode, RoomQualityStartPolicy } from './types';
-import { usesExpandedArena } from './gameModes';
+import type { GameMode, RoomQualityRetryMode, RoomQualityStartPolicy, TeamId } from './types';
+import { CAPTURE_THE_BEER_MODE, usesExpandedArena } from './gameModes';
 
 // ---- Display ----
 export const GAME_WIDTH = 1920;
@@ -30,6 +30,7 @@ export const DEPTH = {
   GRASS: 1,
   DIRT: 2,
   TRACKS: 3,
+  BASES: 4,
   ROCKS: 9,
   PLAYERS: 10,
   TRAIN: 11,  
@@ -313,6 +314,62 @@ export const TRACK_COUNT           = 1;
 export let TRACK_SPAWN_MIN_COL     = Math.floor(GRID_COLS * 0.25);
 /** Letzte erlaubte Spalte (≤ 75 % der Arena-Breite, inklusive) */
 export let TRACK_SPAWN_MAX_COL     = Math.floor(GRID_COLS * 0.75);
+export const CAPTURE_THE_BEER_BASE_WIDTH_CELLS = 8;
+export const CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS = CAPTURE_THE_BEER_BASE_WIDTH_CELLS * 2;
+export let CAPTURE_THE_BEER_BASES_ACTIVE = false;
+
+export interface ArenaGridRegion {
+  minGridX: number;
+  maxGridX: number;
+  minGridY: number;
+  maxGridY: number;
+}
+
+export function isGridCellInArenaRegion(region: ArenaGridRegion, gx: number, gy: number): boolean {
+  return gx >= region.minGridX
+    && gx <= region.maxGridX
+    && gy >= region.minGridY
+    && gy <= region.maxGridY;
+}
+
+function clampCaptureTheBeerRegionWidth(widthCells: number): number {
+  return Math.max(1, Math.min(widthCells, Math.max(1, GRID_COLS)));
+}
+
+export function getCaptureTheBeerBaseRegion(teamId: TeamId): ArenaGridRegion {
+  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_BASE_WIDTH_CELLS);
+  if (teamId === 'blue') {
+    return { minGridX: 0, maxGridX: width - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+  }
+  return { minGridX: GRID_COLS - width, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+}
+
+export function getCaptureTheBeerTeamSpawnRegion(teamId: TeamId): ArenaGridRegion {
+  const width = clampCaptureTheBeerRegionWidth(CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS);
+  if (teamId === 'blue') {
+    return { minGridX: 0, maxGridX: width - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+  }
+  return { minGridX: GRID_COLS - width, maxGridX: GRID_COLS - 1, minGridY: 0, maxGridY: GRID_ROWS - 1 };
+}
+
+export function getCaptureTheBeerBaseWorldBounds(teamId: TeamId): { x: number; y: number; width: number; height: number } {
+  const region = getCaptureTheBeerBaseRegion(teamId);
+  const x = ARENA_OFFSET_X + region.minGridX * CELL_SIZE;
+  const y = ARENA_OFFSET_Y + region.minGridY * CELL_SIZE;
+  const width = (region.maxGridX - region.minGridX + 1) * CELL_SIZE;
+  const height = (region.maxGridY - region.minGridY + 1) * CELL_SIZE;
+  return { x, y, width, height };
+}
+
+export function isCaptureTheBeerBaseModeActive(): boolean {
+  return CAPTURE_THE_BEER_BASES_ACTIVE;
+}
+
+export function isCaptureTheBeerBaseCell(gx: number, gy: number): boolean {
+  if (!CAPTURE_THE_BEER_BASES_ACTIVE) return false;
+  return isGridCellInArenaRegion(getCaptureTheBeerBaseRegion('blue'), gx, gy)
+    || isGridCellInArenaRegion(getCaptureTheBeerBaseRegion('red'), gx, gy);
+}
 
 export function applyArenaMetricsForMode(mode: GameMode): void {
   ARENA_WIDTH = usesExpandedArena(mode) ? CAPTURE_THE_BEER_ARENA_WIDTH : DEFAULT_ARENA_WIDTH;
@@ -322,6 +379,7 @@ export function applyArenaMetricsForMode(mode: GameMode): void {
   GRID_COLS = Math.floor(ARENA_WIDTH / CELL_SIZE);
   TRACK_SPAWN_MIN_COL = Math.floor(GRID_COLS * 0.25);
   TRACK_SPAWN_MAX_COL = Math.floor(GRID_COLS * 0.75);
+  CAPTURE_THE_BEER_BASES_ACTIVE = mode === CAPTURE_THE_BEER_MODE;
 }
 
 // ---- Felsen HP ----
@@ -434,6 +492,9 @@ export const PLAYER_COLORS: readonly number[] = [
 
 export const TEAM_BLUE_COLOR = COLORS.BLUE_3;
 export const TEAM_RED_COLOR = COLORS.RED_3;
+export const CAPTURE_THE_BEER_BASE_TINT_ALPHA = 0.80;
+export const CAPTURE_THE_BEER_BLUE_BASE_TINT = TEAM_BLUE_COLOR;
+export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;
 
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;

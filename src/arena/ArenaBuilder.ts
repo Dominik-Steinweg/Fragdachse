@@ -4,12 +4,19 @@ import {
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_WIDTH,
   DEPTH, COLORS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
+  CAPTURE_THE_BEER_BASE_TINT_ALPHA,
+  CAPTURE_THE_BEER_BLUE_BASE_TINT,
+  CAPTURE_THE_BEER_RED_BASE_TINT,
+  getCaptureTheBeerBaseWorldBounds,
+  isCaptureTheBeerBaseModeActive,
 } from '../config';
 import type { ArenaLayout, RockCell, TrackCell, DirtCell } from '../types';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
 
 export interface ArenaBuilderResult {
+  /** Team-Basis-Tintflächen (round-scoped) */
+  baseZoneObjects: Phaser.GameObjects.Rectangle[];
   /** StaticGroup mit Felsen-Sprites (für Kollision + HP-Tracking) */
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
   /** Paralleles Array zu layout.rocks – null-Slots = bereits zerstört */
@@ -53,6 +60,7 @@ export class ArenaBuilder {
    * gespeichert werden; `destroy()` räumt alles wieder auf.
    */
   buildDynamic(layout: ArenaLayout): ArenaBuilderResult {
+    const baseZoneObjects = this.buildCaptureTheBeerBaseZones();
     const rockGroup    = this.scene.physics.add.staticGroup();
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockObjects:  (Phaser.GameObjects.Image | null)[] = [];
@@ -100,7 +108,17 @@ export class ArenaBuilder {
       canopyObjects.push({ gfx, worldX, worldY });
     }
 
-    return { rockGroup, rockObjects, rockGrid, trunkGroup, trunkObjects, canopyObjects, trackObjects, dirtObjects };
+    return {
+      baseZoneObjects,
+      rockGroup,
+      rockObjects,
+      rockGrid,
+      trunkGroup,
+      trunkObjects,
+      canopyObjects,
+      trackObjects,
+      dirtObjects,
+    };
   }
 
   // ── Canopy-Transparenz (jeden Frame lokal) ─────────────────────────────────
@@ -240,6 +258,11 @@ export class ArenaBuilder {
    * Sidebars/Gras bleiben erhalten (diese sind statisch).
    */
   static destroyDynamic(result: ArenaBuilderResult): void {
+    for (const zone of result.baseZoneObjects) {
+      if (zone.active) zone.destroy();
+    }
+    result.baseZoneObjects.length = 0;
+
     // Felsen
     for (const img of result.rockObjects) {
       if (img?.active) img.destroy();
@@ -333,6 +356,31 @@ export class ArenaBuilder {
     img.setDisplaySize(CELL_SIZE, CELL_SIZE);
     img.setDepth(DEPTH.DIRT);
     return img;
+  }
+
+  private buildCaptureTheBeerBaseZones(): Phaser.GameObjects.Rectangle[] {
+    if (!isCaptureTheBeerBaseModeActive()) return [];
+
+    return [
+      this.createBaseZoneVisual(getCaptureTheBeerBaseWorldBounds('blue'), CAPTURE_THE_BEER_BLUE_BASE_TINT),
+      this.createBaseZoneVisual(getCaptureTheBeerBaseWorldBounds('red'), CAPTURE_THE_BEER_RED_BASE_TINT),
+    ];
+  }
+
+  private createBaseZoneVisual(
+    bounds: { x: number; y: number; width: number; height: number },
+    color: number,
+  ): Phaser.GameObjects.Rectangle {
+    const rect = this.scene.add.rectangle(
+      bounds.x + bounds.width / 2,
+      bounds.y + bounds.height / 2,
+      bounds.width,
+      bounds.height,
+      color,
+      CAPTURE_THE_BEER_BASE_TINT_ALPHA,
+    );
+    rect.setDepth(DEPTH.BASES);
+    return rect;
   }
 
   // ── Dirt ───────────────────────────────────────────────────────────────────
