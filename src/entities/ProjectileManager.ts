@@ -781,8 +781,18 @@ export class ProjectileManager {
       const rockObjects = this.rockObjects;
       const onHit       = this.onRockHit;
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+        if (tracked.bounceProcessedThisStep) {
+          // Phasers zweite Velocity-Spiegelung rückgängig machen, damit keine Doppelumkehr entsteht
+          if (tracked.velocityAfterFirstBounce) {
+            body.velocity.x = tracked.velocityAfterFirstBounce.x;
+            body.velocity.y = tracked.velocityAfterFirstBounce.y;
+          }
+          return;
+        }
+        tracked.bounceProcessedThisStep = true;
         tracked.bounceCount++;
         applyBounceFriction();
+        tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
         // Funken bei Fels-Aufprall
         if (isBullet || isAwp || isGauss) {
           playImpact(
@@ -807,8 +817,17 @@ export class ProjectileManager {
 
     if (this.trunkGroup) {
       const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+        if (tracked.bounceProcessedThisStep) {
+          if (tracked.velocityAfterFirstBounce) {
+            body.velocity.x = tracked.velocityAfterFirstBounce.x;
+            body.velocity.y = tracked.velocityAfterFirstBounce.y;
+          }
+          return;
+        }
+        tracked.bounceProcessedThisStep = true;
         tracked.bounceCount++;
         applyBounceFriction();
+        tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
         // Funken bei Baumstamm-Aufprall
         if (isBullet || isAwp || isGauss) {
           playImpact(
@@ -829,6 +848,14 @@ export class ProjectileManager {
     if (this.trainGroup) {
       const onTrainHit = this.onTrainHit;
       const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+        if (tracked.bounceProcessedThisStep) {
+          if (tracked.velocityAfterFirstBounce) {
+            body.velocity.x = tracked.velocityAfterFirstBounce.x;
+            body.velocity.y = tracked.velocityAfterFirstBounce.y;
+          }
+          return;
+        }
+        tracked.bounceProcessedThisStep = true;
         // Translocator prallt am Zug ab ohne Schaden
         if (!isTranslocatorPuck) {
           const trainMult = tracked.trainDamageMult ?? 1;
@@ -846,6 +873,7 @@ export class ProjectileManager {
         }
         tracked.bounceCount++;
         applyBounceFriction();
+        tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
           body.setVelocity(0, 0);
@@ -1267,6 +1295,10 @@ export class ProjectileManager {
     countdownEvents: Array<{ x: number; y: number; value: number }>;
   } {
     const now              = Date.now();
+    for (const proj of this.projectiles) {
+      proj.bounceProcessedThisStep = false;
+      proj.velocityAfterFirstBounce = undefined;
+    }
     const explodedProjectiles = this.pendingProjectileExplosions.splice(0);
     const explodedGrenades: ExplodedGrenade[] = [];
     const countdownEvents: Array<{ x: number; y: number; value: number }> = [];

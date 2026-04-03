@@ -684,6 +684,10 @@ export interface TrackedProjectile {
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;
+
+  // Multi-Rock-Kollisions-Schutz: verhindert Doppel-Velocity-Flip wenn zwei Felsen im selben Step getroffen werden
+  bounceProcessedThisStep?: boolean;
+  velocityAfterFirstBounce?: { x: number; y: number };
 }
 
 // ---- Prozedurales Arena-Layout ----
