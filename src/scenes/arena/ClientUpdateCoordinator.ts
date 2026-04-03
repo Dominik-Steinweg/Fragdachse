@@ -293,6 +293,11 @@ export class ClientUpdateCoordinator {
     return bridge.getLatestGameState()?.players[localId]?.rage ?? 0;
   }
 
+  getLocalAdrenaline(): number {
+    const localId = bridge.getLocalPlayerId();
+    return bridge.getLatestGameState()?.players[localId]?.adrenaline ?? 0;
+  }
+
   getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
     const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId);

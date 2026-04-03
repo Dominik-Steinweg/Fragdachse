@@ -14,6 +14,7 @@ import { StinkCloudSystem }      from '../effects/StinkCloudSystem';
 import { preloadShotAudio }      from '../audio/ShotAudioCatalog';
 import { ShotAudioSystem }       from '../audio/ShotAudioSystem';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
+import { ScopeOverlay } from '../ui/ScopeOverlay';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
@@ -90,6 +91,7 @@ export class ArenaScene extends Phaser.Scene {
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
+  private scopeOverlay: ScopeOverlay | null = null;
 
   // ── Coordinators ──────────────────────────────────────────────────────────
   private ctx!: ArenaContext;
@@ -141,7 +143,7 @@ export class ArenaScene extends Phaser.Scene {
         prefix:  'Animation test (Dachs tot) (geist dunkler fade)-NEU ',
         suffix:  '.aseprite',
         start:   0,
-        end:     38,
+        end:     37,
       }),
       frameRate: 60,
       repeat:    0,
@@ -195,6 +197,7 @@ export class ArenaScene extends Phaser.Scene {
       (slot) => this.clientUpdate.getLocalWeaponConfig(slot),
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
+    this.scopeOverlay = new ScopeOverlay(this);
     this.utilityChargeIndicator = new UtilityChargeIndicator(
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
@@ -310,6 +313,15 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
+    inputSystem.setupWeapon2ConfigProvider(() => this.clientUpdate.getLocalWeaponConfig('weapon2'));
+    inputSystem.setupCanStartScopeCheck(() => {
+      const wepConfig = this.clientUpdate.getLocalWeaponConfig('weapon2');
+      const lastFired = this.clientUpdate.weaponLastFiredRecord()['weapon2'];
+      const cooldownOk = lastFired === 0 || Date.now() - lastFired >= wepConfig.cooldown;
+      const adrenalineOk = wepConfig.adrenalinCost === 0
+        || this.clientUpdate.getLocalAdrenaline() >= wepConfig.adrenalinCost;
+      return cooldownOk && adrenalineOk;
+    });
     inputSystem.setupUtilityPlacementPreviewProvider(() => this.getLocalPlacementPreview());
     inputSystem.setupTranslocatorRecallCheck(() => {
       const cfg = this.clientUpdate.getLocalUtilityConfig();
@@ -361,6 +373,12 @@ export class ArenaScene extends Phaser.Scene {
       const inputStarted = params?.inputStarted === true;
 
       if (slot === 'weapon1' || slot === 'weapon2') {
+        // scopeHolding: kein Schuss, nur holdSpeedFactor auf Host-Seite aktiv halten.
+        // Weder Cooldown-Check noch notifyLoadoutFired – sonst würde der echte Schuss blockiert.
+        if (params?.scopeHolding) {
+          bridge.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
+          return;
+        }
         const now = Date.now();
         const lastFired = this.clientUpdate.weaponLastFiredRecord()[slot];
         const wepConfig = this.clientUpdate.getLocalWeaponConfig(slot);
@@ -552,7 +570,22 @@ export class ArenaScene extends Phaser.Scene {
       && !this.localPlayerState.burrowed
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
       && !this.ctx.inputSystem.isUtilityPlacementActive();
+    const scopeProgress = this.ctx.inputSystem.getScopeProgress();
+    this.ctx.aimSystem?.setScopeProgress(scopeProgress);
     this.ctx.aimSystem?.update(showAim || utilityTargeting !== undefined, inArena, delta, utilityTargeting, ultimatePreview);
+
+    // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
+    if (this.scopeOverlay) {
+      const scopeCfg = this.ctx.inputSystem.getWeapon2ScopeConfig();
+      if (scopeCfg) {
+        const pointer = this.input.activePointer;
+        this.scopeOverlay.update(scopeProgress, pointer.x, pointer.y, delta, scopeCfg);
+      } else {
+        // Keine Scope-Waffe ausgerüstet – Overlay ausblenden
+        this.scopeOverlay.update(0, 0, 0, delta, { scopeInMs: 1, fullScopeViewRadius: 0, edgeSoftnessPx: 0, unscopedSpreadDeg: 0, unscopeSpeedMs: 200 });
+      }
+    }
+
     this.utilityChargeIndicator?.update(this.ctx.inputSystem.getUtilityChargePreviewState());
     this.ultimateChargeIndicator?.update(ultimatePreview);
 

@@ -42,7 +42,9 @@
       "Bash(2)",
       "Bash(grep -r \"outerStrength\\\\|createGeometryMask\\\\|setMask\" src --include=*.ts)",
       "Bash(grep -l \"damage\\\\|hit\\\\|indicator\\\\|direction\" C:\\\\Fragdachse/src/ui/*.ts)",
-      "Bash(find C:/Fragdachse/src -name Train* -o -name train*)"
+      "Bash(find C:/Fragdachse/src -name Train* -o -name train*)",
+      "Bash(python -c \"import json; d=json.load\\(open\\(''C:/Fragdachse/public/assets/player/dachs_death_ani3.json''\\)\\); print\\(len\\(d[''frames'']\\), ''frames''\\); print\\(''last:'', list\\(d[''frames''].keys\\(\\)\\)[-1]\\)\")",
+      "Bash(node -e \"const d=require\\(''./public/assets/player/dachs_death_ani3.json''\\); const keys=Object.keys\\(d.frames\\); console.log\\(''count:'', keys.length\\); console.log\\(''last:'', keys[keys.length-1]\\);\")"
     ]
   }
 }

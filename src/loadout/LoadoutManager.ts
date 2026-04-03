@@ -367,12 +367,17 @@ export class LoadoutManager {
       this.decoySystem?.breakStealth(playerId, now);
     }
 
+    // scopeHolding: Scope-Waffe wird gehalten, aber noch kein Schuss – nur holdSpeedFactor aktiv
+    if (params?.scopeHolding && (slot === 'weapon1' || slot === 'weapon2')) {
+      return this.okResult;
+    }
+
     switch (slot) {
       case 'weapon1':
         return this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon1', shotId);
 
       case 'weapon2':
-        return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId);
+        return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId, params);
 
       case 'utility': {
         if (loadout.utility.config.type !== 'decoy') {
@@ -727,7 +732,8 @@ export class LoadoutManager {
     now:      number,
     playerColor: number,
     sourceSlot: WeaponSlot,
-    shotId?: number,
+    shotId?:  number,
+    params?:  LoadoutUseParams,
   ): LoadoutUseResult {
     if (weapon.config.fire.type === 'tesla_dome') {
       this.activateTeslaDomeWeapon(weapon, x, y, playerId, now, playerColor);
@@ -753,7 +759,16 @@ export class LoadoutManager {
     // daher ist velocity immer aktuell (kein Netzwerk-Lag wie bei getPlayerInput).
     const shooterBody = this.playerManager.getPlayer(playerId)?.body;
     const isMoving    = isVelocityMoving(shooterBody?.velocity.x ?? 0, shooterBody?.velocity.y ?? 0);
-    const baseSpread    = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
+    // Bei Scope-Waffen: Spread interpoliert zwischen unscopedSpreadDeg (scope=0) und normalem Spread (scope=1)
+    const scopeCfg      = cfg.scopeConfig;
+    const scopeProgress = params?.scopeProgress;
+    let baseSpread: number;
+    if (scopeCfg !== undefined && scopeProgress !== undefined) {
+      const fullyAimedSpread = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
+      baseSpread = scopeCfg.unscopedSpreadDeg + (fullyAimedSpread - scopeCfg.unscopedSpreadDeg) * scopeProgress;
+    } else {
+      baseSpread = isMoving ? cfg.spreadMoving : cfg.spreadStanding;
+    }
     const totalSpreadDeg = Math.max(0, baseSpread + weapon.getDynamicSpread());
     const halfSpreadRad  = (totalSpreadDeg * Math.PI / 180) / 2;
 

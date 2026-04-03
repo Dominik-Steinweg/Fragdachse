@@ -386,6 +386,8 @@ export interface LoadoutUseParams {
   ultimateAction?: 'press' | 'release';
   ultimateChargeFraction?: number;
   inputStarted?: boolean;
+  scopeProgress?: number;  // 0–1, für fire-on-release Scope-Waffen (beim Loslassen gesetzt)
+  scopeHolding?: boolean;  // true = RMB gehalten aber noch kein Schuss (nur holdSpeedFactor aktiv)
 }
 
 export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid';
@@ -604,6 +606,9 @@ export interface TrackedProjectile {
   id:              number;
   sprite:          Phaser.GameObjects.Shape;  // Rectangle (bullet) oder Arc (ball)
   body:            Phaser.Physics.Arcade.Body;
+  lastX:           number;
+  lastY:           number;
+  lastBounceCount: number;
   pendingDestroy?: boolean;
   pendingExplosion?: boolean;
   bounceCount:     number;

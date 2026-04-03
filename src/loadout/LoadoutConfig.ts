@@ -148,6 +148,18 @@ export interface WeaponConfig {
 
   // Audio (optional, data-driven)
   readonly shotAudio?: LoadoutShotAudioConfig;
+
+  // Scope-Mechanik (optional, data-driven) – aktiviert Zielrohr-Effekt mit fire-on-release
+  readonly scopeConfig?: ScopeModeConfig;
+}
+
+/** Konfiguration für Waffen mit Einscop-Mechanik (z.B. AWP). */
+export interface ScopeModeConfig {
+  readonly scopeInMs: number;            // ms bis voller Scope (sichtbarer Kreis minimal), z.B. 1000
+  readonly fullScopeViewRadius: number;  // Sichtbarer Radius in px bei vollem Scope, z.B. 64
+  readonly edgeSoftnessPx: number;       // Weichheits-Breite am Rand der Sichtverdunkelung, z.B. 40
+  readonly unscopedSpreadDeg: number;    // Streuung (Grad) bei scope=0 (sehr ungenau), z.B. 30
+  readonly unscopeSpeedMs: number;       // ms zum Entscopen nach Schuss / Loslassen, z.B. 250
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser' | 'decoy';
@@ -919,7 +931,7 @@ export const WEAPON_CONFIGS = {
   AWP: {
     id:                   'AWP',
     displayName:          'AWP',
-    cooldown:             1500,
+    cooldown:             800,
     damage:               100,
     range:                1800,
     fire: {
@@ -929,7 +941,7 @@ export const WEAPON_CONFIGS = {
       projectileMaxBounces: 1,
     },
     allowedSlots:         ['weapon2'],
-    adrenalinCost:        60,
+    adrenalinCost:        40,
     adrenalinGain:        0,
     spreadStanding:       0,
     spreadMoving:         35,
@@ -955,6 +967,13 @@ export const WEAPON_CONFIGS = {
       colorCore:  0xffffff,   // weißer Kern
       // colorGlow:  0xffdd66,   // gelb-goldener Halo
     } satisfies TracerConfig,
+    scopeConfig: {
+      scopeInMs:           1200,  // 1,5s bis voller Scope
+      fullScopeViewRadius: 48,    // px sichtbarer Radius bei vollem Scope
+      edgeSoftnessPx:      90,    // weicher Übergang am Rand
+      unscopedSpreadDeg:   50,    // sehr ungenau ohne Scope
+      unscopeSpeedMs:      250,   // schnelles Entscopen nach Schuss
+    },
   } as WeaponConfig,
 
   /**
@@ -1124,7 +1143,7 @@ export const UTILITY_CONFIGS = {
     id:              'HE_GRENADE',
     displayName:     'HE Granate',
     type:            'explosive',
-    cooldown:        6000,
+    cooldown:        3000,
     activation:      STANDARD_GRENADE_CHARGE,
     projectileSpeed: 800,
     projectileSize:  10,
@@ -1171,7 +1190,7 @@ export const UTILITY_CONFIGS = {
     id:                 'MOLOTOV_GRENADE',
     displayName:        'Molotov',
     type:               'molotov',
-    cooldown:           8000,
+    cooldown:           5000,
     activation:         STANDARD_GRENADE_CHARGE,
     projectileSpeed:    800,
     projectileSize:     10,
@@ -1275,7 +1294,7 @@ export const UTILITY_CONFIGS = {
     id:                   'TRANSLOCATOR',
     displayName:          'Translocator',
     type:                 'translocator',
-    cooldown:             1000,
+    cooldown:             3000,
     activation:           STANDARD_GRENADE_CHARGE,
     projectileSpeed:      600, 
     projectileSize:       16,
@@ -1295,7 +1314,7 @@ export const UTILITY_CONFIGS = {
     id:                  'FELSBAU',
     displayName:         'Felsbau',
     type:                'placeable_rock',
-    cooldown:            200,
+    cooldown:            1000,
     activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
     projectileSpeed:     0,
     projectileSize:      0,
@@ -1375,8 +1394,8 @@ export const UTILITY_CONFIGS = {
     fuseTime:                  0,
     maxBounces:                0,
     allowedSlots:              ['utility'],
-    decoyLifetimeMs:           3000,
-    stealthDurationMs:         10000,
+    decoyLifetimeMs:           6000,
+    stealthDurationMs:         6000,
     stealthAlphaMin:           0.1,
     stealthAlphaMax:           0.17,
     stealthGlowOuterStrength:  1.2,

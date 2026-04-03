@@ -89,6 +89,7 @@ export class AimSystem {
   private prevY: number | null = null;
   private prevShowAim = false;
   private confirmedHitUntil = 0;
+  private scopeProgress = 0;
 
   constructor(
     private readonly scene:           Phaser.Scene,
@@ -111,6 +112,10 @@ export class AimSystem {
 
   notifyConfirmedHit(): void {
     this.confirmedHitUntil = this.scene.time.now + HIT_FLASH_MS;
+  }
+
+  setScopeProgress(progress: number): void {
+    this.scopeProgress = progress;
   }
 
   update(
@@ -191,7 +196,7 @@ export class AimSystem {
 
     const accentColor = this.getAccentColor();
 
-    if (cfg.showCrosshair !== false) {
+    if (cfg.showCrosshair !== false && this.scopeProgress < 0.1) {
       this.drawBeam(sx, sy, tx, ty, palette, frac);
 
       if (dist > cfg.range) {

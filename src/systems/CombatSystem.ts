@@ -6,7 +6,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
+import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -81,6 +81,10 @@ interface HitscanSpriteTarget {
   sprite: Phaser.GameObjects.Image;
   body: { velocity: { x: number; y: number } } | null;
 }
+
+type SweptProjectileHit =
+  | { kind: 'player'; playerId: string; distance: number; x: number; y: number }
+  | { kind: 'decoy'; decoyId: number; distance: number; x: number; y: number };
 
 export class CombatSystem {
   private hp:            Map<string, number>                           = new Map();
@@ -461,6 +465,15 @@ export class CombatSystem {
 
     for (const proj of this.projectileManager.getActiveProjectiles()) {
       if (proj.isGrenade) continue;  // Granaten treffen nicht direkt, nur AoE
+
+      if (this.shouldUseContinuousProjectileCollision(proj)) {
+        const travelDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
+        if (travelDistance > 0.5) {
+          this.tryResolveContinuousProjectileHit(proj);
+          continue;
+        }
+      }
+
       const projBounds = proj.sprite.getBounds();
       let projectileConsumed = false;
 
@@ -565,6 +578,107 @@ export class CombatSystem {
         }
       }
     }
+  }
+
+  private shouldUseContinuousProjectileCollision(proj: TrackedProjectile): boolean {
+    return proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp';
+  }
+
+  private tryResolveContinuousProjectileHit(proj: TrackedProjectile): boolean {
+    const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
+    const travelDistance = Phaser.Geom.Line.Length(line);
+    if (travelDistance <= 0.5) return false;
+
+    const blockerDistance = this.findNearestProjectilePathBlockerDistance(line);
+    const projectileRadius = Math.max(proj.sprite.displayWidth, proj.sprite.displayHeight) * 0.5;
+    let bestHit: SweptProjectileHit | null = null;
+
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.isAlive(player.id)) continue;
+      if (proj.ownerId === player.id) continue;
+      if (this.burrowSystem?.isBurrowed(player.id)) continue;
+
+      const hit = this.findNearestCircleHit(line, player.sprite.x, player.sprite.y, PLAYER_SIZE * 0.5 + projectileRadius);
+      if (!hit) continue;
+      if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
+      if (!bestHit || hit.distance < bestHit.distance) {
+        bestHit = { kind: 'player', playerId: player.id, distance: hit.distance, x: hit.x, y: hit.y };
+      }
+    }
+
+    for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+      if (proj.ownerId === decoy.ownerId) continue;
+
+      const decoyRadius = Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5 + projectileRadius;
+      const hit = this.findNearestCircleHit(line, decoy.sprite.x, decoy.sprite.y, decoyRadius);
+      if (!hit) continue;
+      if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
+      if (!bestHit || hit.distance < bestHit.distance) {
+        bestHit = { kind: 'decoy', decoyId: decoy.id, distance: hit.distance, x: hit.x, y: hit.y };
+      }
+    }
+
+    if (!bestHit) return false;
+
+    const vx = proj.body.velocity.x;
+    const vy = proj.body.velocity.y;
+    proj.body.reset(bestHit.x, bestHit.y);
+    proj.body.setVelocity(vx, vy);
+
+    const loadoutMult = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
+      ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
+      : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
+    const powerUpMult = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
+    const actualDamage = proj.damage * loadoutMult * powerUpMult;
+
+    if (bestHit.kind === 'player') {
+      const canDealDamage = this.canDamageTarget(proj.ownerId, bestHit.playerId, proj.allowTeamDamage);
+
+      if (canDealDamage && this.shouldBlockWithShield(bestHit.playerId, 'projectile', actualDamage, bestHit.x, bestHit.y)) {
+        this.projectileManager.destroyProjectile(proj.id);
+        return true;
+      }
+
+      this.handleHit(proj.id, bestHit.playerId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName, canDealDamage);
+      return true;
+    }
+
+    this.handleDecoyHit(proj.id, bestHit.decoyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+    return true;
+  }
+
+  private findNearestProjectilePathBlockerDistance(line: Phaser.Geom.Line): number | null {
+    let bestDistance: number | null = null;
+
+    if (this.rockObjects) {
+      for (const rock of this.rockObjects) {
+        if (!rock?.active) continue;
+        const hit = this.findNearestRectangleHit(line, rock.getBounds());
+        if (hit && (bestDistance === null || hit.distance < bestDistance)) {
+          bestDistance = hit.distance;
+        }
+      }
+    }
+
+    if (this.trunkObjects) {
+      for (const trunk of this.trunkObjects) {
+        if (!trunk.active) continue;
+        const hit = this.findNearestCircleHit(line, trunk.x, trunk.y, trunk.radius);
+        if (hit && (bestDistance === null || hit.distance < bestDistance)) {
+          bestDistance = hit.distance;
+        }
+      }
+    }
+
+    const trainBounds = this.computeTrainBounds();
+    if (trainBounds) {
+      const hit = this.findNearestRectangleHit(line, trainBounds);
+      if (hit && (bestDistance === null || hit.distance < bestDistance)) {
+        bestDistance = hit.distance;
+      }
+    }
+
+    return bestDistance;
   }
 
   resolveHitscanShot(

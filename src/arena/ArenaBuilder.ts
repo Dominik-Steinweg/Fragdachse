@@ -218,6 +218,7 @@ export class ArenaBuilder {
     rocks:       readonly RockCell[],
     id:          number,
   ): void {
+    if (!rocks[id]) return;
     const { gridX, gridY } = rocks[id];
     ArenaBuilder.destroyRock(rockObjects, rockGroup, id);
     rockGrid.remove(gridX, gridY);
@@ -228,6 +229,7 @@ export class ArenaBuilder {
     for (const nid of neighborIds) {
       const img = rockObjects[nid];
       if (!img?.active) continue;
+      if (!rocks[nid]) continue;
       const { gridX: ngx, gridY: ngy } = rocks[nid];
       const mask  = AutoTiler.computeMask(ngx, ngy, isOccupied);
       const frame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);

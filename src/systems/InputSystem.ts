@@ -13,9 +13,11 @@ import type {
   ChargedGateUtilityActivationConfig,
   GaussUltimateConfig,
   PlacementModeUtilityActivationConfig,
+  ScopeModeConfig,
   TargetedClickUtilityActivationConfig,
   UltimateConfig,
   UtilityConfig,
+  WeaponConfig,
 } from '../loadout/LoadoutConfig';
 
 /** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
@@ -58,6 +60,12 @@ export class InputSystem {
   private placementPreviewState: PlacementPreviewNetState | null = null;
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
+
+  // Scope-Mechanik (für Waffen mit scopeConfig, z.B. AWP)
+  private scopeStartedAt: number | null = null;  // Timestamp des RMB-Press
+  private scopeProgress = 0;                     // 0–1, aktueller Scope-Fortschritt
+  private getWeapon2Config: (() => WeaponConfig | undefined) | null = null;
+  private canStartScope: (() => boolean) | null = null;
 
   // Aktueller Aim-Winkel (Radiant, für Rotation-Sync)
   private currentAimAngle = 0;
@@ -117,6 +125,25 @@ export class InputSystem {
 
   setupLocalRageProvider(cb: () => number): void {
     this.getLocalRage = cb;
+  }
+
+  setupWeapon2ConfigProvider(cb: () => WeaponConfig | undefined): void {
+    this.getWeapon2Config = cb;
+  }
+
+  /** Callback: gibt true zurück wenn Cooldown und Adrenalin für weapon2 ausreichen. */
+  setupCanStartScopeCheck(cb: () => boolean): void {
+    this.canStartScope = cb;
+  }
+
+  /** Aktueller Scope-Fortschritt (0–1) für ScopeOverlay und AimSystem. */
+  getScopeProgress(): number {
+    return this.scopeProgress;
+  }
+
+  /** Gibt die ScopeModeConfig der aktuellen weapon2 zurück, oder undefined. */
+  getWeapon2ScopeConfig(): ScopeModeConfig | undefined {
+    return this.getWeapon2Config?.()?.scopeConfig;
   }
 
   /**
@@ -395,9 +422,39 @@ export class InputSystem {
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
     if (!weaponsBlocked && leftPointerDown) {
       this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y, { inputStarted: leftInputStarted });
-    } else if (!weaponsBlocked && rightPointerDown) {
-      // RMB gedrückt halten → weapon2 (Dauerfeuer, kein Client-Throttle)
-      this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { inputStarted: rightInputStarted });
+    } else if (!weaponsBlocked) {
+      // RMB → weapon2: Scope-Waffen (z.B. AWP) nutzen fire-on-release Mechanik,
+      // andere Waffen feuern weiterhin per Dauerfeuer.
+      const scopeCfg = this.getWeapon2Config?.()?.scopeConfig;
+      if (scopeCfg) {
+        if (rightPointerDown) {
+          // Scope-In: Fortschritt berechnen, nur holdSpeedFactor aktiv halten (kein Schuss)
+          if (rightInputStarted) {
+            // Neuen Scope nur starten wenn Cooldown und Adrenalin es erlauben
+            if (this.canStartScope && !this.canStartScope()) return;
+            this.scopeStartedAt = now;
+          }
+          const elapsed = this.scopeStartedAt !== null ? now - this.scopeStartedAt : 0;
+          this.scopeProgress = Math.min(1, elapsed / scopeCfg.scopeInMs);
+          this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { scopeHolding: true });
+        } else if (this.scopeStartedAt !== null) {
+          // RMB losgelassen → Schuss auslösen mit berechnetem Scope-Fortschritt
+          const elapsed = now - this.scopeStartedAt;
+          const progress = Math.min(1, elapsed / scopeCfg.scopeInMs);
+          this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { scopeProgress: progress });
+          this.scopeStartedAt = null;
+          this.scopeProgress = 0;
+        }
+      } else if (rightPointerDown) {
+        // Normales Dauerfeuer für Nicht-Scope-Waffen
+        this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { inputStarted: rightInputStarted });
+      }
+    }
+
+    // Scope abbrechen wenn Waffen geblockt (z.B. Burrow, Ultimate)
+    if (weaponsBlocked && this.scopeStartedAt !== null) {
+      this.scopeStartedAt = null;
+      this.scopeProgress = 0;
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {

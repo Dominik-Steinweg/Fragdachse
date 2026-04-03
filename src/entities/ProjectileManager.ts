@@ -56,6 +56,7 @@ export class ProjectileManager {
   private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile
   private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals (ball-Stil)
   private nextId        = 0;
+  private readonly scratchPoints: Phaser.Geom.Point[] = [];
 
   // ── Client-Extrapolation ──────────────────────────────────────────────────
   private clientProjStates = new Map<number, ClientProjectileState>();
@@ -406,6 +407,9 @@ export class ProjectileManager {
       id,
       sprite,
       body,
+      lastX:          x,
+      lastY:          y,
+      lastBounceCount: 0,
       bounceCount:    0,
       createdAt:      Date.now(),
       ownerId,
@@ -884,6 +888,144 @@ export class ProjectileManager {
     }
   }
 
+  private shouldUseContinuousRockCollision(proj: TrackedProjectile): boolean {
+    return (proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp')
+      && !proj.isGrenade
+      && !proj.isFlame
+      && !proj.isBfg
+      && !proj.pendingDestroy
+      && proj.lastBounceCount === proj.bounceCount
+      && !!this.rockObjects;
+  }
+
+  private resolveContinuousRockCollision(proj: TrackedProjectile): void {
+    if (!this.rockObjects) return;
+
+    const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
+    const segmentLength = Phaser.Geom.Line.Length(line);
+    if (segmentLength <= 0.5) return;
+
+    let bestRockIndex = -1;
+    let bestRect: Phaser.Geom.Rectangle | null = null;
+    let bestHit: { distance: number; x: number; y: number } | null = null;
+
+    for (let i = 0; i < this.rockObjects.length; i++) {
+      const rock = this.rockObjects[i];
+      if (!rock?.active) continue;
+      const rect = rock.getBounds();
+      const hit = this.findNearestRectangleHit(line, rect);
+      if (!hit) continue;
+      if (!bestHit || hit.distance < bestHit.distance) {
+        bestHit = hit;
+        bestRockIndex = i;
+        bestRect = rect;
+      }
+    }
+
+    if (!bestHit || !bestRect || bestRockIndex < 0) return;
+
+    const normal = this.getRectangleImpactNormal(bestRect, bestHit.x, bestHit.y);
+    const speedBeforeX = proj.body.velocity.x;
+    const speedBeforeY = proj.body.velocity.y;
+    let nextVx = speedBeforeX;
+    let nextVy = speedBeforeY;
+
+    if (Math.abs(normal.x) > 0.001) nextVx *= -1;
+    if (Math.abs(normal.y) > 0.001) nextVy *= -1;
+
+    const frictionMultiplier = proj.bounceFrictionMultiplier;
+    if (frictionMultiplier !== undefined && frictionMultiplier < 1) {
+      nextVx *= frictionMultiplier;
+      nextVy *= frictionMultiplier;
+    }
+
+    proj.bounceCount++;
+
+    const rockMult = proj.rockDamageMult ?? 1;
+    if (rockMult !== 0) {
+      this.onRockHit?.(bestRockIndex, proj.damage * rockMult, proj.ownerId);
+    }
+
+    this.bulletRenderer?.playImpactSparks(proj.id, bestHit.x, bestHit.y, nextVx, nextVy, proj.color);
+
+    if (proj.bounceCount > proj.maxBounces) {
+      proj.body.reset(bestHit.x, bestHit.y);
+      proj.body.setVelocity(0, 0);
+      proj.body.enable = false;
+      return;
+    }
+
+    const normalLength = Math.hypot(normal.x, normal.y) || 1;
+    const offsetDistance = Math.max(proj.sprite.displayWidth * 0.5 + 0.5, 1);
+    const resolvedX = bestHit.x + (normal.x / normalLength) * offsetDistance;
+    const resolvedY = bestHit.y + (normal.y / normalLength) * offsetDistance;
+
+    proj.body.reset(resolvedX, resolvedY);
+    proj.body.setVelocity(nextVx, nextVy);
+  }
+
+  private getRectangleImpactNormal(
+    rect: Phaser.Geom.Rectangle,
+    x: number,
+    y: number,
+  ): { x: number; y: number } {
+    const distances = [
+      { axis: 'left', value: Math.abs(x - rect.left) },
+      { axis: 'right', value: Math.abs(x - rect.right) },
+      { axis: 'top', value: Math.abs(y - rect.top) },
+      { axis: 'bottom', value: Math.abs(y - rect.bottom) },
+    ] as const;
+
+    const minDistance = Math.min(...distances.map((entry) => entry.value));
+    const epsilon = 0.75;
+    let nx = 0;
+    let ny = 0;
+
+    for (const entry of distances) {
+      if (entry.value > minDistance + epsilon) continue;
+      switch (entry.axis) {
+        case 'left':
+          nx -= 1;
+          break;
+        case 'right':
+          nx += 1;
+          break;
+        case 'top':
+          ny -= 1;
+          break;
+        case 'bottom':
+          ny += 1;
+          break;
+      }
+    }
+
+    if (nx === 0 && ny === 0) {
+      nx = projFallbackSign(x - rect.centerX);
+      ny = projFallbackSign(y - rect.centerY);
+    }
+
+    return { x: nx, y: ny };
+  }
+
+  private findNearestRectangleHit(
+    line: Phaser.Geom.Line,
+    rect: Phaser.Geom.Rectangle,
+  ): { distance: number; x: number; y: number } | null {
+    const points = Phaser.Geom.Intersects.GetLineToRectangle(line, rect, this.scratchPoints);
+    let bestHit: { distance: number; x: number; y: number } | null = null;
+
+    for (const point of points) {
+      const distance = Phaser.Math.Distance.Between(line.x1, line.y1, point.x, point.y);
+      if (distance <= 0.01) continue;
+      if (!bestHit || distance < bestHit.distance) {
+        bestHit = { distance, x: point.x, y: point.y };
+      }
+    }
+
+    points.length = 0;
+    return bestHit;
+  }
+
   /**
    * Markiert ein Projektil zur sofortigen Entfernung aus Host-Logik und Phaser-Kollision.
    * Das eigentliche Cleanup erfolgt gesammelt im nächsten hostUpdate().
@@ -1200,6 +1342,14 @@ export class ProjectileManager {
           return false;
         }
 
+        if (this.shouldUseContinuousRockCollision(proj)) {
+          this.resolveContinuousRockCollision(proj);
+          if (proj.pendingDestroy) {
+            this.destroyTrackedProjectile(proj);
+            return false;
+          }
+        }
+
         const dead = age > proj.lifetime || proj.bounceCount > proj.maxBounces;
         if (dead) {
           this.destroyTrackedProjectile(proj);
@@ -1246,6 +1396,10 @@ export class ProjectileManager {
             proj.body.setOffset((orig - bw) / 2, (orig - bh) / 2);
           }
         }
+
+        proj.lastX = proj.sprite.x;
+        proj.lastY = proj.sprite.y;
+        proj.lastBounceCount = proj.bounceCount;
 
         return !dead;
       }
@@ -1861,4 +2015,10 @@ export class ProjectileManager {
       velocityY: state.vy,
     };
   }
+}
+
+function projFallbackSign(value: number): number {
+  if (value > 0) return 1;
+  if (value < 0) return -1;
+  return 0;
 }
