@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { BurrowPhase, PlayerProfile } from '../types';
 import { PlayerBurnRenderer } from '../effects/PlayerBurnRenderer';
+import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
@@ -81,6 +82,9 @@ export class PlayerEntity {
     this.sprite.preFX?.setPadding(20);
     this.glowFx = this.sprite.preFX?.addGlow(profile.colorHex, 4, 0, false, 0.1, 16) ?? null;
     this.startDefaultGlowTween();
+
+    // Spawn-Animation beim ersten Erscheinen
+    this.playSpawnEffect();
 
     this.stealthShell = scene.add.image(x, y, 'badger');
     this.stealthShell.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
@@ -288,15 +292,70 @@ export class PlayerEntity {
         });
       }
     } else if (visible && !this.isAliveVisual) {
-      // Übergang dead → alive (Respawn): Animation abbrechen
+      // Übergang dead → alive (Respawn): Animation abbrechen + Spawn-Effekt
       this.isAliveVisual = true;
       if (this.deathSprite) {
         this.deathSprite.stop();
         this.deathSprite.setVisible(false);
       }
+      this.playSpawnEffect();
     } else if (visible) {
       this.isAliveVisual = true;
     }
+  }
+
+  /** Spawn-/Respawn-Effekt: Sprite materialisiert sich, Welt-Effekte werden abgespielt.
+   *  Wird beim initialen Spawn (Constructor) und bei jedem Respawn aufgerufen. */
+  playSpawnEffect(): void {
+    const scene = this.sprite.scene;
+
+    // Sprite kurz auf Scale/Alpha 0 setzen und dann animiert einblenden
+    this.sprite.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setScale(0);
+    this.sprite.setAlpha(0);
+
+    // Shine-Sweep (Phaser 3.90 preFX): Materialisierungs-Schimmer
+    const shineFx = this.sprite.preFX?.addShine(2.2, 0.5, 4);
+
+    // Glow-Flash: aufgepumpt starten, dann auf Normal abklingen
+    this.glowTween?.stop();
+    if (this.glowFx) {
+      this.glowFx.outerStrength = 22;
+      this.glowTween = scene.tweens.add({
+        targets:       this.glowFx,
+        outerStrength: 5,
+        duration:      480,
+        ease:          'Quad.easeOut',
+        onComplete:    () => {
+          if (shineFx) this.sprite.preFX?.remove(shineFx);
+          this.startDefaultGlowTween();
+        },
+      });
+    } else {
+      this.startDefaultGlowTween();
+    }
+
+    // Sprite: Scale 0 → 1.15 (Überschwingen) → 1, Alpha 0 → 1
+    scene.tweens.add({
+      targets:  this.sprite,
+      scaleX:   { from: 0, to: 1.15 },
+      scaleY:   { from: 0, to: 1.15 },
+      alpha:    { from: 0, to: 1 },
+      duration: 300,
+      ease:     'Back.easeOut',
+      onComplete: () => {
+        scene.tweens.add({
+          targets:  this.sprite,
+          scaleX:   1,
+          scaleY:   1,
+          duration: 130,
+          ease:     'Quad.easeInOut',
+        });
+      },
+    });
+
+    // World-Space-Effekte (Ringe, Partikel, Lichtstrahl, Kern-Flash)
+    new SpawnEffectRenderer(scene).play(this.sprite.x, this.sprite.y, this.colorHex);
   }
 
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite). */
