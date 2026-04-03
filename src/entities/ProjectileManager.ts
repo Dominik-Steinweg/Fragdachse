@@ -409,7 +409,6 @@ export class ProjectileManager {
       body,
       lastX:          x,
       lastY:          y,
-      lastBounceCount: 0,
       bounceCount:    0,
       createdAt:      Date.now(),
       ownerId,
@@ -781,6 +780,7 @@ export class ProjectileManager {
       const rockObjects = this.rockObjects;
       const onHit       = this.onRockHit;
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+        const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
         if (tracked.bounceProcessedThisStep) {
           // Phasers zweite Velocity-Spiegelung rückgängig machen, damit keine Doppelumkehr entsteht
           if (tracked.velocityAfterFirstBounce) {
@@ -804,7 +804,6 @@ export class ProjectileManager {
         if (!applyRockDamage || !rockObjects || !onHit) return;
         const rockMult = tracked.rockDamageMult ?? 1;
         if (rockMult === 0) return;
-        const idx = rockObjects.indexOf(rockGO as Phaser.GameObjects.Image);
         if (idx !== -1) onHit(idx, tracked.damage * rockMult, tracked.ownerId);
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
@@ -922,7 +921,7 @@ export class ProjectileManager {
       && !proj.isFlame
       && !proj.isBfg
       && !proj.pendingDestroy
-      && proj.lastBounceCount === proj.bounceCount
+      && !proj.bounceProcessedThisStep
       && !!this.rockObjects;
   }
 
@@ -952,11 +951,9 @@ export class ProjectileManager {
 
     if (!bestHit || !bestRect || bestRockIndex < 0) return;
 
+    let nextVx = proj.body.velocity.x;
+    let nextVy = proj.body.velocity.y;
     const normal = this.getRectangleImpactNormal(bestRect, bestHit.x, bestHit.y);
-    const speedBeforeX = proj.body.velocity.x;
-    const speedBeforeY = proj.body.velocity.y;
-    let nextVx = speedBeforeX;
-    let nextVy = speedBeforeY;
 
     if (Math.abs(normal.x) > 0.001) nextVx *= -1;
     if (Math.abs(normal.y) > 0.001) nextVy *= -1;
@@ -1295,10 +1292,6 @@ export class ProjectileManager {
     countdownEvents: Array<{ x: number; y: number; value: number }>;
   } {
     const now              = Date.now();
-    for (const proj of this.projectiles) {
-      proj.bounceProcessedThisStep = false;
-      proj.velocityAfterFirstBounce = undefined;
-    }
     const explodedProjectiles = this.pendingProjectileExplosions.splice(0);
     const explodedGrenades: ExplodedGrenade[] = [];
     const countdownEvents: Array<{ x: number; y: number; value: number }> = [];
@@ -1353,6 +1346,9 @@ export class ProjectileManager {
             proj.body.setVelocity(0, 0);
           }
         }
+
+        proj.bounceProcessedThisStep = false;
+        proj.velocityAfterFirstBounce = undefined;
 
         return true;
       } else {
@@ -1431,7 +1427,8 @@ export class ProjectileManager {
 
         proj.lastX = proj.sprite.x;
         proj.lastY = proj.sprite.y;
-        proj.lastBounceCount = proj.bounceCount;
+        proj.bounceProcessedThisStep = false;
+        proj.velocityAfterFirstBounce = undefined;
 
         return !dead;
       }

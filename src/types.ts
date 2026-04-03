@@ -608,7 +608,6 @@ export interface TrackedProjectile {
   body:            Phaser.Physics.Arcade.Body;
   lastX:           number;
   lastY:           number;
-  lastBounceCount: number;
   pendingDestroy?: boolean;
   pendingExplosion?: boolean;
   bounceCount:     number;
