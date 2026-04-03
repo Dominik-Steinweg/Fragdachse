@@ -397,7 +397,9 @@ export class EnergyShieldRenderer {
     const burstY = visual.currentY + Math.sin(midAngle) * visual.currentRadius;
     visual.rimEmitter.setParticleSpeed(0, 8 + visual.currentFlashAlpha * 12);
     visual.sparkEmitter.setParticleSpeed(12, 24 + visual.currentFlashAlpha * 24);
-    visual.rimEmitter.explode(6,  burstX, burstY);
-    visual.sparkEmitter.explode(10, burstX, burstY);
+    visual.rimEmitter.setPosition(burstX, burstY);
+    visual.rimEmitter.explode(6, 0, 0);
+    visual.sparkEmitter.setPosition(burstX, burstY);
+    visual.sparkEmitter.explode(10, 0, 0);
   }
 }

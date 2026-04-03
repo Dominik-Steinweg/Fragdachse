@@ -535,7 +535,7 @@ export class CaptureTheBeerRenderer {
       emitting: false,
     }, DEPTH_FX + 0.66);
     this.applyArenaMask(foamEmitter);
-    foamEmitter.explode(foamCount, x, y);
+    foamEmitter.explode(foamCount, 0, 0);
 
     const bubbleEmitter = createEmitter(this.scene, x, y, TEX_BEER_BUBBLE, {
       lifespan: { min: 340, max: 760 },
@@ -549,7 +549,7 @@ export class CaptureTheBeerRenderer {
       emitting: false,
     }, DEPTH_FX + 0.7);
     this.applyArenaMask(bubbleEmitter);
-    bubbleEmitter.explode(bubbleCount, x, y);
+    bubbleEmitter.explode(bubbleCount, 0, 0);
 
     this.scene.time.delayedCall(1100, () => {
       destroyEmitter(foamEmitter);
@@ -720,7 +720,7 @@ export class CaptureTheBeerRenderer {
       source: new Phaser.Geom.Circle(0, 0, 16),
       quantity: 96,
     } as Phaser.Types.GameObjects.Particles.EmitZoneData);
-    shell.explode(96, x, y);
+    shell.explode(96, 0, 0);
 
     const plume = createEmitter(this.scene, x, y + 8, TEX_BEER_BUBBLE, {
       lifespan: { min: 980, max: 1760 },
@@ -736,7 +736,7 @@ export class CaptureTheBeerRenderer {
       emitting: false,
     }, DEPTH_FX + 0.88);
     this.applyArenaMask(plume);
-    plume.explode(132, x, y + 8);
+    plume.explode(132, 0, 0);
 
     this.scene.time.delayedCall(1900, () => {
       destroyEmitter(shell);
