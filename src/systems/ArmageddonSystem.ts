@@ -1,7 +1,7 @@
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, CELL_SIZE } from '../config';
 import type { ArmageddonMeteorConfig } from '../loadout/LoadoutConfig';
 import type { RockGridIndex } from '../arena/RockGridIndex';
-import type { SyncedMeteorStrike } from '../types';
+import type { RadialDamageFalloffConfig, SyncedMeteorStrike } from '../types';
 
 // ── Typen ────────────────────────────────────────────────────────────────────
 
@@ -10,6 +10,7 @@ export interface MeteorImpactEvent {
   y:              number;
   radius:         number;
   damage:         number;
+  damageFalloff?: RadialDamageFalloffConfig;
   ownerId:        string;
   selfDamageMult: number;
   rockDamageMult: number;
@@ -104,6 +105,7 @@ export class ArmageddonSystem {
           y:               m.y,
           radius:          m.radius,
           damage:          cfg?.meteorDamage ?? 35,
+          damageFalloff:   cfg?.meteorDamageFalloff,
           ownerId:         m.ownerId,
           selfDamageMult:  cfg?.selfDamageMult ?? 0,
           rockDamageMult:  cfg?.rockDamageMult ?? 1,

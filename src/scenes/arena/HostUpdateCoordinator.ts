@@ -6,6 +6,7 @@ import type { PlaceableTurretUtilityConfig }        from '../../loadout/LoadoutC
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
+import { computeProjectileExplosionDamage, computeRadialDamage } from '../../utils/radialDamage';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
 import { CAPTURE_THE_BEER_MODE, isTeamGameMode } from '../../gameModes';
 import type { ArenaContext }      from './ArenaContext';
@@ -13,7 +14,7 @@ import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
 import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
-import type { PlayerAimNetState, PlayerNetState, TeamId, TrackedProjectile } from '../../types';
+import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, TeamId, TrackedProjectile } from '../../types';
 
 /**
  * Runs every frame on the host.
@@ -100,7 +101,11 @@ export class HostUpdateCoordinator {
       this.ctx.combatSystem.applyAoeDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
         false,
-        { category: 'explosion', weaponName: 'Detonation' },
+        {
+          category: 'explosion',
+          weaponName: 'Detonation',
+          damageFalloff: det.effect.damageFalloff,
+        },
       );
       if ((det.effect.knockback ?? 0) > 0) {
         this.ctx.hostPhysics.applyRadialImpulse(
@@ -112,6 +117,7 @@ export class HostUpdateCoordinator {
       this.applyAoeEnvironmentDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage,
         det.effect.rockDamageMult ?? 1, det.effect.trainDamageMult ?? 1, det.detonatorOwnerId,
+        det.effect.damageFalloff,
       );
       const detonatorColor = bridge.getPlayerColor(det.detonatorOwnerId);
       bridge.broadcastExplosionEffect(
@@ -149,10 +155,12 @@ export class HostUpdateCoordinator {
           allowTeamDamage: g.effect.allowTeamDamage,
           weaponName: 'Granate',
           sourceSlot: 'utility',
+          damageFalloff: g.effect.damageFalloff,
         });
         this.applyAoeEnvironmentDamage(
           g.x, g.y, g.effect.radius, g.effect.damage,
           g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId,
+          g.effect.damageFalloff,
         );
         bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius, undefined, g.effect.visualStyle);
       } else if (g.effect.type === 'fire') {
@@ -222,11 +230,18 @@ export class HostUpdateCoordinator {
       this.ctx.combatSystem.applyAoeDamage(
         mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
         mi.selfDamageMult > 0,
-        { category: 'explosion', weaponName: 'Meteor', sourceSlot: 'ultimate' },
+        {
+          category: 'explosion',
+          weaponName: 'Meteor',
+          sourceSlot: 'ultimate',
+          damageFalloff: mi.damageFalloff,
+          selfDamageMult: mi.selfDamageMult,
+        },
       );
       this.applyAoeEnvironmentDamage(
         mi.x, mi.y, mi.radius, mi.damage,
         mi.rockDamageMult, mi.trainDamageMult, mi.ownerId,
+        mi.damageFalloff,
       );
       bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622);
     }
@@ -498,6 +513,7 @@ export class HostUpdateCoordinator {
   applyAoeEnvironmentDamage(
     x: number, y: number, radius: number, damage: number,
     rockMult: number, trainMult: number, attackerId: string,
+    damageFalloff?: RadialDamageFalloffConfig,
   ): void {
     const arenaResult = this.ctx.arenaResult;
 
@@ -508,7 +524,9 @@ export class HostUpdateCoordinator {
         if (!rock?.active) continue;
         const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
         if (dist > radius) continue;
-        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, damage * rockMult, attackerId);
+        const scaledDamage = Math.round(computeRadialDamage(dist, radius, damage, damageFalloff) * rockMult);
+        if (scaledDamage <= 0) continue;
+        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, scaledDamage, attackerId);
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
       }
     }
@@ -521,8 +539,11 @@ export class HostUpdateCoordinator {
           const b  = seg.getBounds();
           const dx = Math.max(b.left - x, 0, x - b.right);
           const dy = Math.max(b.top  - y, 0, y - b.bottom);
-          if (Math.sqrt(dx * dx + dy * dy) <= radius) {
-            this.ctx.trainManager.applyDamage(damage * trainMult, attackerId);
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist <= radius) {
+            const scaledDamage = Math.round(computeRadialDamage(dist, radius, damage, damageFalloff) * trainMult);
+            if (scaledDamage <= 0) continue;
+            this.ctx.trainManager.applyDamage(scaledDamage, attackerId);
             break;
           }
         }
@@ -546,8 +567,7 @@ export class HostUpdateCoordinator {
         if (!rock?.active) continue;
         const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
         if (dist > effect.radius) continue;
-        const t = Phaser.Math.Clamp(dist / effect.radius, 0, 1);
-        const damage = Math.round(Phaser.Math.Linear(effect.maxDamage, effect.minDamage, t) * rockMult);
+        const damage = Math.round(computeProjectileExplosionDamage(dist, effect) * rockMult);
         if (damage <= 0) continue;
         const newHp = this.rockVisualHelper.applyObstacleDamageById(i, damage, attackerId);
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
@@ -567,8 +587,7 @@ export class HostUpdateCoordinator {
           if (d < minDist) minDist = d;
         }
         if (minDist <= effect.radius) {
-          const t = Phaser.Math.Clamp(minDist / effect.radius, 0, 1);
-          const damage = Math.round(Phaser.Math.Linear(effect.maxDamage, effect.minDamage, t) * trainMult);
+          const damage = Math.round(computeProjectileExplosionDamage(minDist, effect) * trainMult);
           if (damage > 0) this.ctx.trainManager.applyDamage(damage, attackerId);
         }
       }
@@ -586,8 +605,7 @@ export class HostUpdateCoordinator {
         if (!rock?.active) continue;
         const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
         if (dist > radius) continue;
-        const t = Phaser.Math.Clamp(dist / radius, 0, 1);
-        const baseDmg = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, t);
+        const baseDmg = computeRadialDamage(dist, radius, NUKE_CONFIG.maxDamage, { minDamage: NUKE_CONFIG.minDamage });
         const newHp = this.rockVisualHelper.applyObstacleDamageById(i, Math.round(baseDmg * rockMult), triggeredBy);
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
       }
@@ -602,8 +620,7 @@ export class HostUpdateCoordinator {
           if (d < minDist) minDist = d;
         }
         if (minDist <= radius) {
-          const t = Phaser.Math.Clamp(minDist / radius, 0, 1);
-          const baseDmg = Phaser.Math.Linear(NUKE_CONFIG.maxDamage, NUKE_CONFIG.minDamage, t);
+          const baseDmg = computeRadialDamage(minDist, radius, NUKE_CONFIG.maxDamage, { minDamage: NUKE_CONFIG.minDamage });
           this.ctx.trainManager.applyDamage(Math.round(baseDmg * trainMult), triggeredBy);
         }
       }

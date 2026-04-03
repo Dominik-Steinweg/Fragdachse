@@ -147,6 +147,11 @@ export type EnergyBallVariant = 'default' | 'plasma';
 /** Visueller Stil einer Explosion / Detonation. */
 export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'nuke';
 
+/** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
+export interface RadialDamageFalloffConfig {
+  readonly minDamage: number;
+}
+
 /**
  * Konfiguration für die Tracer-Leuchtlinie eines Projektils (data-driven).
  * Alle Felder ohne `?` sind Pflichtangaben.
@@ -167,7 +172,7 @@ export interface TracerConfig {
 export interface ProjectileExplosionConfig {
   readonly radius: number;
   readonly maxDamage: number;
-  readonly minDamage: number;
+  readonly minDamage?: number;  // undefined = konstanter Schaden im gesamten Radius
   readonly knockback: number;
   readonly selfDamageMult: number;
   readonly allowTeamDamage?: boolean;
@@ -503,6 +508,7 @@ export interface DamageGrenadeEffect {
   type: 'damage';
   radius: number;
   damage: number;
+  damageFalloff?:   RadialDamageFalloffConfig;
   allowTeamDamage?: boolean;
   rockDamageMult?:  number;
   trainDamageMult?: number;
@@ -539,6 +545,7 @@ export interface DetonableConfig {
   readonly tag: string;              // Bezeichner, z.B. 'asmd_ball'
   readonly aoeDamage: number;        // Explosionsschaden bei Detonation
   readonly aoeRadius: number;        // Explosionsradius in px
+  readonly damageFalloff?: RadialDamageFalloffConfig;
   readonly knockback?: number;       // Radialer Impuls analog Projektil-Explosionen
   readonly selfKnockbackMult?: number;
   readonly allowCrossTeam: boolean;  // true = Gegner-Detonator kann es ebenfalls zünden

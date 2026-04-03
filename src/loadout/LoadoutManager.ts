@@ -1010,6 +1010,7 @@ export class LoadoutManager {
         type:   'damage',
         radius: cfg.aoeRadius,
         damage: cfg.aoeDamage,
+        damageFalloff:   cfg.damageFalloff,
         allowTeamDamage: cfg.allowTeamDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,

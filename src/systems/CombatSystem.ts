@@ -6,7 +6,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
@@ -19,6 +19,7 @@ import {
   RAGE_PER_DAMAGE, ADRENALINE_START,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
+import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -33,6 +34,8 @@ interface AoeDamageOptions {
   allowTeamDamage?: boolean;
   weaponName?: string;
   sourceSlot?: LoadoutSlot;
+  damageFalloff?: RadialDamageFalloffConfig;
+  selfDamageMult?: number;
 }
 
 interface DamageApplicationOptions {
@@ -389,11 +392,19 @@ export class CombatSystem {
       if (!this.isAlive(player.id)) continue;
       if (!this.canDamageTarget(ownerId, player.id, options?.allowTeamDamage)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
-      if (dist <= radius) {
-        const category = options?.category ?? 'explosion';
-        if (this.shouldBlockWithShield(player.id, category, damage, x, y)) continue;
-        this.applyDamage(player.id, damage, false, ownerId, options?.weaponName ?? 'Granate', { sourceX: x, sourceY: y }, options);
+      if (dist > radius) continue;
+
+      let appliedDamage = computeRadialDamage(dist, radius, damage, options?.damageFalloff);
+      if (player.id === ownerId) {
+        appliedDamage *= options?.selfDamageMult ?? 1;
       }
+
+      const roundedDamage = Math.round(appliedDamage);
+      if (roundedDamage <= 0) continue;
+
+      const category = options?.category ?? 'explosion';
+      if (this.shouldBlockWithShield(player.id, category, roundedDamage, x, y)) continue;
+      this.applyDamage(player.id, roundedDamage, false, ownerId, options?.weaponName ?? 'Granate', { sourceX: x, sourceY: y }, options);
     }
   }
 
@@ -411,8 +422,7 @@ export class CombatSystem {
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
       if (dist > effect.radius) continue;
 
-      const t = Phaser.Math.Clamp(dist / effect.radius, 0, 1);
-      let damage = Phaser.Math.Linear(effect.maxDamage, effect.minDamage, t);
+      let damage = computeProjectileExplosionDamage(dist, effect);
       if (player.id === ownerId) {
         damage *= effect.selfDamageMult;
       }

@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -259,6 +259,7 @@ export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
   readonly type: 'explosive';
   readonly aoeRadius: number;       // px
   readonly aoeDamage: number;       // HP-Schaden im Radius
+  readonly damageFalloff?: RadialDamageFalloffConfig;
 }
 
 export interface SmokeUtilityConfig extends BaseUtilityConfig {
@@ -349,6 +350,7 @@ export interface ArmageddonMeteorConfig {
   readonly meteorSpawnRadius: number;   // px – Radius um den Spieler, in dem Meteore spawnen
   readonly meteorDamageRadius: number;  // px – AoE-Schadensradius beim Einschlag
   readonly meteorDamage: number;        // HP-Schaden pro Einschlag
+  readonly meteorDamageFalloff?: RadialDamageFalloffConfig;
   readonly meteorFallDuration: number;  // ms – Vorwarnzeit bevor der Meteor einschlägt
   readonly meteorsPerSecond: number;    // Spawn-Rate (leicht zufällig verteilt)
   readonly meteorRadiusJitter: number;   // 0–1 – prozentuale Zufallsabweichung des Radius (0.1 = ±10%)
@@ -764,8 +766,9 @@ export const WEAPON_CONFIGS = {
     // Detonations-Tag: wird durch ASMD_PRIM (und spätere Detonatoren mit diesem Tag) gezündet
     detonable: {
       tag:            'asmd_ball',
-      aoeDamage:      40,
+      aoeDamage:      50,
       aoeRadius:      80,
+      damageFalloff:  { minDamage: 10 } satisfies RadialDamageFalloffConfig,
       knockback:      950,
       selfKnockbackMult: 0.75,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
@@ -1149,8 +1152,9 @@ export const UTILITY_CONFIGS = {
     projectileSize:  10,
     fuseTime:        1000,
     maxBounces:      3,
-    aoeRadius:       80,
+    aoeRadius:       120,
     aoeDamage:       60,
+    damageFalloff:   { minDamage: 10 } satisfies RadialDamageFalloffConfig,
     allowedSlots:    ['utility'],
     projectileStyle: 'grenade' as ProjectileStyle,
     grenadeVisualPreset: 'he' as GrenadeVisualPreset,
@@ -1222,12 +1226,12 @@ export const UTILITY_CONFIGS = {
     projectileSize:  14,
     fuseTime:        3000,          // 3 Sekunden Zünder
     maxBounces:      999,             // bleibt liegen
-    aoeRadius:       350,           // riesiger Radius
-    aoeDamage:       200,           // massiver Schaden
+    aoeRadius:       400,           // riesiger Radius
+    aoeDamage:       250,           // massiver Schaden
+    damageFalloff:   { minDamage: 50 } satisfies RadialDamageFalloffConfig,
     allowedSlots:         [],            // NICHT im Loadout-Menü wählbar
     projectileStyle:      'holy_grenade' as ProjectileStyle,
     projectileColor:      0xd9b13b,
-    rockDamageMult:     0.5,           // 50% Schaden an Felsen
     trainDamageMult:      1.0,           // 100% Schaden am Zug
     explosionVisualStyle: 'holy',        // goldene Explosion + Kamera-Shake
     skipCooldownPublish:  true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
@@ -1425,6 +1429,7 @@ export const ULTIMATE_CONFIGS = {
       meteorSpawnRadius:  350,    // px um den Spieler
       meteorDamageRadius: 64,     // px AoE bei Einschlag (~1.5 Tiles)
       meteorDamage:       60,     // HP pro Meteor
+      meteorDamageFalloff: { minDamage: 40 } satisfies RadialDamageFalloffConfig,
       meteorFallDuration: 1200,   // ms Vorwarnung
       meteorsPerSecond:   10,     // ~70 Meteore in 7 Sekunden
       meteorRadiusJitter: 0.1,    // ±10% Radius-Zufallsabweichung
