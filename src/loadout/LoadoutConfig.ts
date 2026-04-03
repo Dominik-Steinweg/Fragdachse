@@ -395,7 +395,20 @@ export interface GaussUltimateConfig extends BaseUltimateConfig {
   readonly shotAudio?: LoadoutShotAudioConfig;
 }
 
-export type UltimateConfig = BuffUltimateConfig | GaussUltimateConfig;
+export interface AirstrikeUltimateConfig extends BaseUltimateConfig {
+  readonly type: 'airstrike';
+  readonly rageCost: number;          // Rage-Kosten pro Einschlag
+  readonly delayMs: number;           // ms Verzögerung zwischen Zielen und Explosion
+  readonly radius: number;            // AoE-Schadensradius (px)
+  readonly maxDamage: number;         // Schaden im Zentrum
+  readonly minDamage: number;         // Schaden am Rand
+  readonly allowTeamDamage: boolean;
+  readonly selfDamageMult: number;    // 0 = Auslöser immun
+  readonly rockDamageMult: number;
+  readonly trainDamageMult: number;
+}
+
+export type UltimateConfig = BuffUltimateConfig | GaussUltimateConfig | AirstrikeUltimateConfig;
 
 // ── Item-Registrierung ────────────────────────────────────────────────────────
 
@@ -1475,6 +1488,23 @@ export const ULTIMATE_CONFIGS = {
       failureKey: 'shot_dry_trigger',
     },
   } as GaussUltimateConfig,
+
+  AIRSTRIKE: {
+    type:               'airstrike',
+    id:                 'AIRSTRIKE',
+    displayName:        'Luftangriff',
+    cooldown:           0,        // rage-gated, kein Zeitcooldown
+    rageRequired:       200,      // Mindest-Rage zum Betreten des Zielmodus
+    rageCost:           200,      // Rage-Kosten pro Einschlag
+    delayMs:            2000,     // 2 Sek. Verzögerung vor Explosion
+    radius:             150,      // px – AoE-Radius (größer als Armageddon-Meteor)
+    maxDamage:          350,      // Schaden im Zentrum
+    minDamage:          60,       // Schaden am Rand
+    allowTeamDamage:    true,
+    selfDamageMult:     0,        // Auslöser immun
+    rockDamageMult:     0.5,
+    trainDamageMult:    1.0,
+  } as AirstrikeUltimateConfig,
 
   HONEY_BADGER_RAGE: {
     type:               'buff',

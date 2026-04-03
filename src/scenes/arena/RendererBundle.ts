@@ -21,6 +21,7 @@ import { CaptureTheBeerRenderer } from '../../effects/CaptureTheBeerRenderer';
 import { NukeRenderer }        from '../../powerups/NukeRenderer';
 import { PowerUpRenderer }     from '../../powerups/PowerUpRenderer';
 import { MeteorRenderer }      from '../../effects/MeteorRenderer';
+import { AirstrikeRenderer }   from '../../effects/AirstrikeRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { ProjectileManager } from '../../entities/ProjectileManager';
@@ -48,6 +49,7 @@ export interface RendererBundle {
   translocatorPuck:    TranslocatorPuckRenderer;
   beer:                CaptureTheBeerRenderer;
   nuke:                NukeRenderer;
+  airstrike:           AirstrikeRenderer;
   meteor:              MeteorRenderer;
   powerUp:             PowerUpRenderer;
   shadow:              ShadowSystem;
@@ -117,6 +119,9 @@ export function createRendererBundle(
   const nuke = new NukeRenderer(scene);
   nuke.generateTextures();
 
+  const airstrike = new AirstrikeRenderer(scene);
+  airstrike.generateTextures();
+
   const meteor = new MeteorRenderer(scene);
   meteor.generateTextures();
 
@@ -126,7 +131,7 @@ export function createRendererBundle(
   return {
     bullet, asmdPrimary, bite, zeusTaser, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, meteor, powerUp, shadow,
+    nuke, airstrike, meteor, powerUp, shadow,
     train: null,
     translocatorTeleport: null,
   };
@@ -168,4 +173,5 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setBiteRenderer(bundle.bite);
   effectSystem.setZeusTaserRenderer(bundle.zeusTaser);
   bundle.nuke.setEffectSystem(effectSystem);
+  bundle.airstrike.setEffectSystem(effectSystem);
 }

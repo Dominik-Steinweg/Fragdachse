@@ -19,8 +19,9 @@ export class PlacementPreviewRenderer {
   private readonly rangeGraphics:   Phaser.GameObjects.Graphics;
   private readonly invalidGraphics: Phaser.GameObjects.Graphics;
   private readonly errorText:       Phaser.GameObjects.Text;
-  private readonly utilityTargetingHint:  Phaser.GameObjects.Container;
-  private readonly placeableUtilityHint:  Phaser.GameObjects.Container;
+  private readonly utilityTargetingHint:   Phaser.GameObjects.Container;
+  private readonly placeableUtilityHint:   Phaser.GameObjects.Container;
+  private readonly airstrikeTargetingHint: Phaser.GameObjects.Container;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -43,8 +44,9 @@ export class PlacementPreviewRenderer {
       },
     ).setOrigin(0.5).setDepth(DEPTH.OVERLAY).setScrollFactor(0).setVisible(false);
 
-    this.utilityTargetingHint = this.createUtilityTargetingHint();
-    this.placeableUtilityHint = this.createPlaceableUtilityHint();
+    this.utilityTargetingHint   = this.createUtilityTargetingHint();
+    this.placeableUtilityHint   = this.createPlaceableUtilityHint();
+    this.airstrikeTargetingHint = this.createAirstrikeTargetingHint();
   }
 
   renderPlacementPreview(inArena: boolean, preview: UtilityPlacementPreviewState | undefined, localPlayerAlive: boolean, localPlayerBurrowed: boolean): void {
@@ -126,6 +128,13 @@ export class PlacementPreviewRenderer {
     this.utilityTargetingHint.alpha = 0.9 + 0.1 * Math.sin(this.scene.time.now / 160);
   }
 
+  syncAirstrikeTargetingHint(inArena: boolean, isTargeting: boolean, alive: boolean, burrowed: boolean): void {
+    const visible = inArena && isTargeting && alive && !burrowed;
+    this.airstrikeTargetingHint.setVisible(visible);
+    if (!visible) return;
+    this.airstrikeTargetingHint.alpha = 0.9 + 0.1 * Math.sin(this.scene.time.now / 160);
+  }
+
   syncPlaceableUtilityHint(inArena: boolean, isTargeting: boolean, alive: boolean, burrowed: boolean): void {
     const visible = inArena && isTargeting && alive && !burrowed;
     this.placeableUtilityHint.setVisible(visible);
@@ -152,6 +161,7 @@ export class PlacementPreviewRenderer {
     this.invalidGraphics.clear();
     this.localPlacementPreviewImage?.setVisible(false);
     this.placeableUtilityHint.setVisible(false);
+    this.airstrikeTargetingHint.setVisible(false);
     this.errorText.setVisible(false);
     for (const preview of this.remotePlacementPreviewImages.values()) {
       preview.destroy();
@@ -213,6 +223,34 @@ export class PlacementPreviewRenderer {
       strokeThickness: 5,
     }).setOrigin(0.5);
     const subtitle = this.scene.add.text(0, 15, 'Linksklick: platzieren   Rechtsklick oder E: abbrechen', {
+      fontFamily: 'monospace',
+      fontSize: '15px',
+      color: '#ebede9',
+      stroke: '#241527',
+      strokeThickness: 4,
+    }).setOrigin(0.5);
+
+    const container = this.scene.add.container(x, y, [panel, title, subtitle]);
+    container.setDepth(DEPTH.OVERLAY - 1);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+    return container;
+  }
+
+  private createAirstrikeTargetingHint(): Phaser.GameObjects.Container {
+    const x = GAME_WIDTH * 0.5;
+    const y = ARENA_OFFSET_Y + 54;
+    const panel = this.scene.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
+    panel.setStrokeStyle(2, 0xff6600, 0.9);
+    const title = this.scene.add.text(0, -11, 'LUFTANGRIFF: ZIELMODUS', {
+      fontFamily: 'monospace',
+      fontSize: '22px',
+      fontStyle: 'bold',
+      color: '#ffcc66',
+      stroke: '#241527',
+      strokeThickness: 5,
+    }).setOrigin(0.5);
+    const subtitle = this.scene.add.text(0, 15, 'Linksklick: Ziel markieren   Rechtsklick oder Q: abbrechen', {
       fontFamily: 'monospace',
       fontSize: '15px',
       color: '#ebede9',

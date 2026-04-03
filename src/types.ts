@@ -796,6 +796,17 @@ export interface SyncedNukeStrike {
   triggeredBy: string;
 }
 
+/** Aktiver Luftangriff-Strike (Host → Clients via GameState) */
+export interface SyncedAirstrikeStrike {
+  id:          number;
+  x:           number;
+  y:           number;
+  radius:      number;
+  armedAt:     number;   // Date.now()-Zeitpunkt des Spawns
+  explodeAt:   number;   // Date.now()-Zeitpunkt der Explosion
+  triggeredBy: string;
+}
+
 /** Aktiver Armageddon-Meteor (Host → Clients via GameState) */
 export interface SyncedMeteorStrike {
   id:        number;   // Eindeutige Meteor-ID

@@ -10,6 +10,7 @@ import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
 import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
+  AirstrikeUltimateConfig,
   BfgUtilityConfig,
   ChargedThrowUtilityActivationConfig,
   DecoyUtilityConfig,
@@ -79,7 +80,8 @@ export class LoadoutManager {
   private dashBurstChecker: ((id: string) => boolean) | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
   private armageddonSystem:   ArmageddonSystem | null = null;
-  private nukeStrikeHandler: ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
+  private nukeStrikeHandler:      ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
+  private airstrikeHandler:        ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null = null;
   private stinkCloudSystem:   StinkCloudSystem | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
@@ -240,6 +242,11 @@ export class LoadoutManager {
   /** Injiziert die Host-Logik für zielbasierte Nuke-Strikes. */
   setNukeStrikeHandler(handler: ((playerId: string, targetX: number, targetY: number) => boolean) | null): void {
     this.nukeStrikeHandler = handler;
+  }
+
+  /** Injiziert die Host-Logik für Luftangriff-Strikes. */
+  setAirstrikeHandler(handler: ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null): void {
+    this.airstrikeHandler = handler;
   }
 
   /** Injiziert das StinkCloudSystem für Stinkdrüsen-Utilities. */
@@ -417,6 +424,15 @@ export class LoadoutManager {
               return p ? { x: p.sprite.x, y: p.sprite.y } : null;
             });
           }
+          return this.okResult;
+        }
+
+        if (cfg.type === 'airstrike') {
+          const rage = this.resourceSystem.getRage(playerId);
+          if (rage < cfg.rageCost) return { ok: false, reason: 'resource', resourceKind: 'rage' };
+          const ok = this.airstrikeHandler?.(playerId, targetX, targetY, cfg) ?? false;
+          if (!ok) return { ok: false, reason: 'blocked' };
+          this.resourceSystem.addRage(playerId, -cfg.rageCost);
           return this.okResult;
         }
 

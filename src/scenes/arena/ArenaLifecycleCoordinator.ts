@@ -15,6 +15,7 @@ import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
 import { PowerUpSystem }     from '../../powerups/PowerUpSystem';
 import { DetonationSystem }  from '../../systems/DetonationSystem';
 import { ArmageddonSystem }  from '../../systems/ArmageddonSystem';
+import { AirstrikeSystem }   from '../../systems/AirstrikeSystem';
 import { TrainManager }      from '../../train/TrainManager';
 import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
@@ -436,6 +437,17 @@ export class ArenaLifecycleCoordinator {
       this.ctx.armageddonSystem = new ArmageddonSystem();
       this.ctx.armageddonSystem.setRockGrid(this.ctx.arenaResult.rockGrid);
       this.ctx.loadoutManager.setArmageddonSystem(this.ctx.armageddonSystem);
+
+      this.ctx.airstrikeSystem = new AirstrikeSystem();
+      this.ctx.airstrikeSystem.setExplodedCallback((x, y, radius, triggeredBy, cfg) => {
+        bridge.broadcastExplosionEffect(x, y, radius, 0xff9933, 'nuke');
+        this.hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, cfg, triggeredBy);
+      });
+      this.ctx.loadoutManager.setAirstrikeHandler((playerId, targetX, targetY, cfg) => {
+        const player = this.ctx.playerManager.getPlayer(playerId);
+        if (!player || !this.ctx.combatSystem.isAlive(playerId)) return false;
+        return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
+      });
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.combatSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.burrowSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
@@ -586,9 +598,12 @@ export class ArenaLifecycleCoordinator {
 
     this.renderers.powerUp.clear();
     this.renderers.nuke.clear();
+    this.renderers.airstrike.clear();
     this.renderers.meteor.clear();
     this.ctx.armageddonSystem?.destroyAll();
     this.ctx.armageddonSystem = null;
+    this.ctx.airstrikeSystem?.clear();
+    this.ctx.airstrikeSystem = null;
 
     this.ctx.trainManager?.destroy();
     this.ctx.trainManager = null;

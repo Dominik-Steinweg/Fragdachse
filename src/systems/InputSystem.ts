@@ -9,6 +9,7 @@ import { quantizeAngle } from '../utils/angle';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
+  AirstrikeUltimateConfig,
   ChargedThrowUtilityActivationConfig,
   ChargedGateUtilityActivationConfig,
   GaussUltimateConfig,
@@ -56,6 +57,7 @@ export class InputSystem {
   private utilityPlacementActive = false;
   private ultimateHoldActive = false;
   private ultimateChargeStartedAt: number | null = null;
+  private ultimateTargetingActive = false;   // Zielmodus für Airstrike-Ultimate
   private getUtilityPlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
   private placementPreviewState: PlacementPreviewNetState | null = null;
   private prevLeftPointerDown = false;
@@ -167,6 +169,7 @@ export class InputSystem {
     if (isStunned || burrowPhase === 'windup' || burrowPhase === 'underground' || burrowPhase === 'trapped') {
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
+      this.ultimateTargetingActive = false;
     }
   }
 
@@ -208,8 +211,13 @@ export class InputSystem {
     return this.utilityPlacementActive;
   }
 
+  isUltimateTargetingActive(): boolean {
+    return this.ultimateTargetingActive;
+  }
+
   cancelLocalUltimateChargePreview(): void {
     this.cancelUltimateCharge();
+    this.ultimateTargetingActive = false;
   }
 
   getUtilityPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
@@ -288,6 +296,23 @@ export class InputSystem {
     };
   }
 
+  /** Gibt den Zielmodus-Vorschau-Zustand für das Airstrike-Ultimate zurück. */
+  getAirstrikeTargetingPreviewState(): UtilityTargetingPreviewState | undefined {
+    const sprite = this.getLocalSprite();
+    if (!this.ultimateTargetingActive || !sprite) return undefined;
+    const cfg = this.getAirstrikeUltimateConfig();
+    if (!cfg) return undefined;
+
+    const pointer = this.scene.input.activePointer;
+    const pointerWorld = this.getPointerWorldPoint(pointer);
+    const target = clampPointToArena(pointerWorld.x, pointerWorld.y);
+    return {
+      angle: Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
+      targetX: target.x,
+      targetY: target.y,
+    };
+  }
+
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
   update(): void {
     // ── 1. Bewegungs-Input (immer gesendet) ────────────────────────────────
@@ -313,6 +338,7 @@ export class InputSystem {
     if (this.localIsStunned) {
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
+      this.ultimateTargetingActive = false;
       return;
     }
 
@@ -385,6 +411,38 @@ export class InputSystem {
           this.predictedUtilityCooldownUntil = now + targetedCfg.cooldown;
           this.onLoadoutUse('utility', targetAngle, target.x, target.y);
           this.cancelUtilityTargeting();
+          return;
+        }
+
+        return;
+      }
+    }
+
+    // ── Airstrike-Ultimate Zielmodus ───────────────────────────────────────
+    if (this.ultimateTargetingActive) {
+      const asCfg = this.getAirstrikeUltimateConfig();
+      if (!asCfg) {
+        this.ultimateTargetingActive = false;
+      } else {
+        const target = clampPointToArena(px, py);
+        const targetAngle = Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y);
+        this.currentAimAngle = targetAngle;
+
+        // Rage prüfen: bei zu wenig Rage automatisch verlassen
+        const rage = this.getLocalRage?.() ?? 0;
+        if (rage < asCfg.rageCost) {
+          this.ultimateTargetingActive = false;
+          return;
+        }
+
+        if (pointer.rightButtonDown() || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+          this.ultimateTargetingActive = false;
+          return;
+        }
+
+        if (leftInputStarted) {
+          this.onLoadoutUse?.('ultimate', targetAngle, target.x, target.y, { inputStarted: true });
+          // Nach dem Schuss im Zielmodus bleiben: Rage-Check erfolgt nächsten Frame
           return;
         }
 
@@ -498,10 +556,21 @@ export class InputSystem {
 
     this.syncPlacementPreviewState(undefined);
 
-    const gaussCfg = ultimateCfg?.type === 'gauss' ? ultimateCfg : undefined;
+    const gaussCfg     = ultimateCfg?.type === 'gauss'     ? ultimateCfg as GaussUltimateConfig     : undefined;
+    const airstrikeCfg = ultimateCfg?.type === 'airstrike' ? ultimateCfg as AirstrikeUltimateConfig : undefined;
     if (!utilityBlocked && gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.beginUltimateCharge(now, gaussCfg, angle, clampedTarget.x, clampedTarget.y);
-    } else if (!utilityBlocked && !gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+    } else if (!utilityBlocked && airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      const rage = this.getLocalRage?.() ?? 0;
+      if (rage >= airstrikeCfg.rageCost) {
+        this.cancelUtilityInteraction();
+        this.ultimateTargetingActive = true;
+        this.bridge.sendDecoyStealthBreakRequest();
+      } else {
+        // Keine Rage: Feedback an Host senden (zeigt "zu wenig Rage"-Meldung)
+        this.onLoadoutUse?.('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
+      }
+    } else if (!utilityBlocked && !gaussCfg && !airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
     }
 
@@ -524,6 +593,11 @@ export class InputSystem {
   private getGaussUltimateConfig(): GaussUltimateConfig | undefined {
     const cfg = this.getLocalUltimateConfig?.();
     return cfg?.type === 'gauss' ? cfg : undefined;
+  }
+
+  private getAirstrikeUltimateConfig(): AirstrikeUltimateConfig | undefined {
+    const cfg = this.getLocalUltimateConfig?.();
+    return cfg?.type === 'airstrike' ? cfg : undefined;
   }
 
   private getChargeableUtilityConfig(): (UtilityConfig & { activation: ChargeableActivation }) | undefined {

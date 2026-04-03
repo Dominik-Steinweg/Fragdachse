@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S } from '../../config';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
-import type { PlaceableTurretUtilityConfig }        from '../../loadout/LoadoutConfig';
+import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
@@ -225,6 +225,11 @@ export class HostUpdateCoordinator {
       );
     }
 
+    // Airstrike-Strikes detonieren
+    if (!countdownActive) {
+      this.ctx.airstrikeSystem?.update(Date.now());
+    }
+
     const meteorImpacts = countdownActive ? [] : (this.ctx.armageddonSystem?.update(Date.now(), delta) ?? []);
     for (const mi of meteorImpacts) {
       this.ctx.combatSystem.applyAoeDamage(
@@ -285,10 +290,11 @@ export class HostUpdateCoordinator {
       this.applyDashVisual(player, player.id, dashPhase, false);
     }
 
-    const powerups  = this.ctx.powerUpSystem?.getNetSnapshot()       ?? [];
-    const pedestals = this.ctx.powerUpSystem?.getPedestalSnapshot()  ?? [];
-    const nukes     = this.ctx.powerUpSystem?.getNukeSnapshot()      ?? [];
-    const meteors   = this.ctx.armageddonSystem?.getSnapshot()       ?? [];
+    const powerups    = this.ctx.powerUpSystem?.getNetSnapshot()       ?? [];
+    const pedestals   = this.ctx.powerUpSystem?.getPedestalSnapshot()  ?? [];
+    const nukes       = this.ctx.powerUpSystem?.getNukeSnapshot()      ?? [];
+    const airstrikes  = this.ctx.airstrikeSystem?.getSnapshot()        ?? [];
+    const meteors     = this.ctx.armageddonSystem?.getSnapshot()       ?? [];
     const train     = this.ctx.trainManager?.getNetSnapshot()        ?? null;
     const captureTheBeer = this.ctx.captureTheBeerSystem?.hostUpdate(!countdownActive) ?? null;
     const syncedNow = bridge.getSynchronizedNow();
@@ -299,6 +305,7 @@ export class HostUpdateCoordinator {
     this.renderers.powerUp.sync(powerups);
     this.renderers.powerUp.updatePedestals(syncedNow);
     this.renderers.nuke.sync(nukes);
+    this.renderers.airstrike.sync(airstrikes);
     this.renderers.meteor.sync(meteors);
     this.checkLocalPickup(powerups);
 
@@ -451,6 +458,7 @@ export class HostUpdateCoordinator {
       powerups,
       pedestals,
       nukes,
+      airstrikes,
       meteors,
       train,
       captureTheBeer,
@@ -622,6 +630,56 @@ export class HostUpdateCoordinator {
         if (minDist <= radius) {
           const baseDmg = computeRadialDamage(minDist, radius, NUKE_CONFIG.maxDamage, { minDamage: NUKE_CONFIG.minDamage });
           this.ctx.trainManager.applyDamage(Math.round(baseDmg * trainMult), triggeredBy);
+        }
+      }
+    }
+  }
+
+  applyAirstrikeEnvironmentDamage(
+    x:           number,
+    y:           number,
+    radius:      number,
+    cfg:         AirstrikeUltimateConfig,
+    triggeredBy: string,
+  ): void {
+    const arenaResult = this.ctx.arenaResult;
+    const falloff = { minDamage: cfg.minDamage };
+
+    // Spieler-Schaden
+    this.ctx.combatSystem.applyAoeDamage(x, y, radius, cfg.maxDamage, triggeredBy, cfg.selfDamageMult > 0, {
+      category:       'explosion',
+      weaponName:     'Luftangriff',
+      sourceSlot:     'ultimate',
+      allowTeamDamage: cfg.allowTeamDamage,
+      selfDamageMult:  cfg.selfDamageMult,
+      damageFalloff:   falloff,
+    });
+
+    // Felsen-Schaden
+    if (cfg.rockDamageMult !== 0 && arenaResult) {
+      for (let i = 0; i < arenaResult.rockObjects.length; i++) {
+        const rock = arenaResult.rockObjects[i];
+        if (!rock?.active) continue;
+        const dist = Phaser.Math.Distance.Between(x, y, rock.x, rock.y);
+        if (dist > radius) continue;
+        const baseDmg = computeRadialDamage(dist, radius, cfg.maxDamage, falloff);
+        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, Math.round(baseDmg * cfg.rockDamageMult), triggeredBy);
+        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage');
+      }
+    }
+
+    // Zug-Schaden
+    if (cfg.trainDamageMult !== 0 && this.ctx.trainManager) {
+      const trainState = this.ctx.trainManager.getNetSnapshot();
+      if (trainState?.alive) {
+        let minDist = Infinity;
+        for (const seg of this.ctx.trainManager.getSegmentPositions()) {
+          const d = Phaser.Math.Distance.Between(x, y, seg.x, seg.y);
+          if (d < minDist) minDist = d;
+        }
+        if (minDist <= radius) {
+          const baseDmg = computeRadialDamage(minDist, radius, cfg.maxDamage, falloff);
+          this.ctx.trainManager.applyDamage(Math.round(baseDmg * cfg.trainDamageMult), triggeredBy);
         }
       }
     }

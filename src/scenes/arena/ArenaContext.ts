@@ -21,6 +21,7 @@ import type { LoadoutManager }      from '../../loadout/LoadoutManager';
 import type { PowerUpSystem }       from '../../powerups/PowerUpSystem';
 import type { DetonationSystem }    from '../../systems/DetonationSystem';
 import type { ArmageddonSystem }    from '../../systems/ArmageddonSystem';
+import type { AirstrikeSystem }     from '../../systems/AirstrikeSystem';
 import type { EnergyShieldSystem }  from '../../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }    from '../../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
@@ -78,6 +79,7 @@ export interface ArenaContext {
   powerUpSystem:     PowerUpSystem     | null;
   detonationSystem:  DetonationSystem  | null;
   armageddonSystem:  ArmageddonSystem  | null;
+  airstrikeSystem:   AirstrikeSystem   | null;
   shieldBuffSystem:  ShieldBuffSystem  | null;
   energyShieldSystem: EnergyShieldSystem | null;
   teslaDomeSystem:   TeslaDomeSystem   | null;

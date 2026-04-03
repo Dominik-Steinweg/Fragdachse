@@ -229,7 +229,7 @@ export class ArenaScene extends Phaser.Scene {
       // Round-scoped (start null)
       arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null, captureTheBeerSystem: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
-      powerUpSystem: null, detonationSystem: null, armageddonSystem: null,
+      powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, trainManager: null,
     };
@@ -533,6 +533,7 @@ export class ArenaScene extends Phaser.Scene {
           this.renderers.powerUp.syncPedestals(state.pedestals ?? []);
           this.renderers.powerUp.sync(state.powerups ?? []);
           this.renderers.nuke.sync(state.nukes ?? []);
+          this.renderers.airstrike.sync(state.airstrikes ?? []);
           this.renderers.meteor.sync(state.meteors ?? []);
         }
         this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
@@ -562,9 +563,10 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.teslaDome.update(delta);
     this.renderers.energyShield.update(delta);
 
-    const utilityTargeting = this.ctx.inputSystem.getUtilityTargetingPreviewState();
-    const utilityPlacement = this.getLocalPlacementPreview();
-    const ultimatePreview  = this.ctx.inputSystem.getUltimateChargePreviewState();
+    const utilityTargeting    = this.ctx.inputSystem.getUtilityTargetingPreviewState();
+    const airstrikeTargeting  = this.ctx.inputSystem.getAirstrikeTargetingPreviewState();
+    const utilityPlacement    = this.getLocalPlacementPreview();
+    const ultimatePreview     = this.ctx.inputSystem.getUltimateChargePreviewState();
     const showAim = inArena
       && this.localPlayerState.alive
       && !this.localPlayerState.burrowed
@@ -572,7 +574,8 @@ export class ArenaScene extends Phaser.Scene {
       && !this.ctx.inputSystem.isUtilityPlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
     this.ctx.aimSystem?.setScopeProgress(scopeProgress);
-    this.ctx.aimSystem?.update(showAim || utilityTargeting !== undefined, inArena, delta, utilityTargeting, ultimatePreview);
+    const targetingForReticle = utilityTargeting ?? airstrikeTargeting;
+    this.ctx.aimSystem?.update(showAim || targetingForReticle !== undefined, inArena, delta, targetingForReticle, ultimatePreview);
 
     // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
     if (this.scopeOverlay) {
@@ -591,6 +594,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.gaussWarning.update(inArena);
     this.placementPreview.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
+    this.placementPreview.syncAirstrikeTargetingHint(inArena, airstrikeTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.syncPlaceableUtilityHint(inArena, utilityPlacement !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.renderPlacementPreview(inArena, utilityPlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.renderRemotePlacementPreviews(inArena);

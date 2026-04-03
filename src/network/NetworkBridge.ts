@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -53,7 +53,8 @@ const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschl
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
 const KEY_POWERUPS       = 'pup'; // global: SyncedPowerUp[]    (unreliable, host-authoritative Power-Ups auf dem Boden)
-const KEY_NUKE_STRIKES   = 'nks'; // global: SyncedNukeStrike[] (unreliable, host-authoritative aktive Nukes)
+const KEY_NUKE_STRIKES   = 'nks'; // global: SyncedNukeStrike[]      (unreliable, host-authoritative aktive Nukes)
+const KEY_AIR_STRIKES    = 'ask'; // global: SyncedAirstrikeStrike[] (unreliable, host-authoritative Luftangriffe)
 const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   einmalig pro Runde)
 const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
@@ -94,6 +95,7 @@ export interface GameState {
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
   pedestals:    SyncedPowerUpPedestal[]; // feste Power-Up-Podeste
   nukes:        SyncedNukeStrike[];
+  airstrikes:   SyncedAirstrikeStrike[];  // Luftangriff-Strikes (Warn- + Einschlagsphase)
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
   captureTheBeer: SyncedCaptureTheBeerState | null;
@@ -591,7 +593,8 @@ export class NetworkBridge {
     if (state.energyShields.length > 0) payload.es = state.energyShields;
     if (state.powerups.length > 0)     payload.u = state.powerups;
     if (state.pedestals.length > 0)    payload.pd = state.pedestals;
-    if (state.nukes.length > 0)        payload.n = state.nukes;
+    if (state.nukes.length > 0)        payload.n  = state.nukes;
+    if (state.airstrikes.length > 0)   payload.ak = state.airstrikes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
     if (state.train)                   payload.t = state.train;
     if (state.captureTheBeer)          payload.cb = state.captureTheBeer;
@@ -618,8 +621,9 @@ export class NetworkBridge {
       energyShields: (raw.es as SyncedEnergyShield[] | undefined) ?? [],
       powerups:      (raw.u as SyncedPowerUp[]       | undefined) ?? [],
       pedestals:     (raw.pd as SyncedPowerUpPedestal[] | undefined) ?? [],
-      nukes:         (raw.n as SyncedNukeStrike[]    | undefined) ?? [],
-      meteors:       (raw.mt as SyncedMeteorStrike[] | undefined) ?? [],
+      nukes:         (raw.n  as SyncedNukeStrike[]       | undefined) ?? [],
+      airstrikes:    (raw.ak as SyncedAirstrikeStrike[] | undefined) ?? [],
+      meteors:       (raw.mt as SyncedMeteorStrike[]    | undefined) ?? [],
       train:         (raw.t as SyncedTrainState      | undefined) ?? null,
       captureTheBeer: (raw.cb as SyncedCaptureTheBeerState | undefined) ?? null,
     };
