@@ -533,6 +533,9 @@ export interface FireGrenadeEffect {
   allowTeamDamage?: boolean;
   rockDamageMult?:  number;
   trainDamageMult?: number;
+  burnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
+  burnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
+  burnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
 }
 
 export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect;

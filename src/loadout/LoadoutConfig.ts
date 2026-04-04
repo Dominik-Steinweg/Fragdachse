@@ -277,6 +277,9 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly fireDamagePerTick: number;   // HP Schaden pro Tick
   readonly fireTickInterval: number;    // ms zwischen Damage-Ticks (z.B. 200)
   readonly fireLingerDuration: number;  // ms wie lange das Feuer brennt
+  readonly fireBurnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
+  readonly fireBurnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
+  readonly fireBurnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
 }
 
 export interface BfgUtilityConfig extends BaseUtilityConfig {
@@ -580,6 +583,34 @@ export const WEAPON_CONFIGS = {
       successKey: 'shot_plasma',
       failureKey: 'shot_dry_trigger',
     },
+  } as WeaponConfig,
+
+  HYDRA: {
+    id:                   'HYDRA',
+    displayName:          'Hydra Gun',
+    cooldown:             600,
+    damage:               16,          // Direkttreffer-Schaden
+    range:                1000,         
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      350,
+      projectileSize:       16,
+      projectileMaxBounces: 3,
+    },
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        16,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    splitCount:           2, // Anzahl der zusätzlichen Projektile, die beim Aufprall abgespalten werden
+    splitSpread:          5, // zusätzlicher Spread der abgespaltenen Projektile in Grad (z.B. 5 = ±5°)
+    spreadRecoveryDelay:  400,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+    // Soll auf energy_ball basieren, aber es soll eine eigene Variante mit eigenerem Renderer für die Hydra-Projektile erzeugt werden
+    projectileStyle:  'energy_ball' satisfies ProjectileStyle,   
   } as WeaponConfig,
 
   XBOW: {
@@ -1215,8 +1246,11 @@ export const UTILITY_CONFIGS = {
     maxBounces:         3,
     fireRadius:         160,
     fireDamagePerTick:  8,
-    fireTickInterval:   200,
+    fireTickInterval:   250,
     fireLingerDuration: 4000,
+    fireBurnDurationMs:     2000,  // Burn-Stack hält 1,5 s pro Tick
+    fireBurnDamagePerTick:  0.25,  // Gleicher Wert wie Flammenwerfer
+    fireBurnTickIntervalMs: 250,   // Gleicher Takt wie Flammenwerfer
     rockDamageMult:     0,  // Molotov macht keinen Schaden an Felsen
     allowedSlots:       ['utility'],
     projectileStyle:    'grenade' as ProjectileStyle,

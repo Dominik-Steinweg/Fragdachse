@@ -20,6 +20,9 @@ export interface FireDamageEvent {
   ownerId: string;
   rockDamageMult:  number;
   trainDamageMult: number;
+  burnDurationMs?:     number;
+  burnDamagePerTick?:  number;
+  burnTickIntervalMs?: number;
 }
 
 /* ── Internal host-side tracking ── */
@@ -100,6 +103,9 @@ export class FireSystem {
           ownerId: zone.ownerId,
           rockDamageMult:  zone.config.rockDamageMult  ?? 1,
           trainDamageMult: zone.config.trainDamageMult ?? 1,
+          burnDurationMs:     zone.config.burnDurationMs,
+          burnDamagePerTick:  zone.config.burnDamagePerTick,
+          burnTickIntervalMs: zone.config.burnTickIntervalMs,
         });
       }
 

@@ -211,6 +211,19 @@ export class HostUpdateCoordinator {
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
       );
+
+      if (ev.burnDurationMs && ev.burnDamagePerTick && ev.burnTickIntervalMs) {
+        for (const player of this.ctx.playerManager.getAllPlayers()) {
+          const dist = Phaser.Math.Distance.Between(ev.x, ev.y, player.sprite.x, player.sprite.y);
+          if (dist <= ev.radius) {
+            this.ctx.combatSystem.applyBurnStack(
+              player.id, ev.ownerId,
+              ev.burnDurationMs, ev.burnDamagePerTick, ev.burnTickIntervalMs,
+              'Molotov',
+            );
+          }
+        }
+      }
     }
 
     for (const ev of stinkDmg) {

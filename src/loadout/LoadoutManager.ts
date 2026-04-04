@@ -1044,6 +1044,9 @@ export class LoadoutManager {
         allowTeamDamage: cfg.allowTeamDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
+        burnDurationMs:     cfg.fireBurnDurationMs,
+        burnDamagePerTick:  cfg.fireBurnDamagePerTick,
+        burnTickIntervalMs: cfg.fireBurnTickIntervalMs,
       };
     }
 
