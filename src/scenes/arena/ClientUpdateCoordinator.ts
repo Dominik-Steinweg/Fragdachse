@@ -3,6 +3,7 @@ import { dequantizeAngle } from '../../utils/angle';
 import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
+import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
@@ -440,12 +441,12 @@ export class ClientUpdateCoordinator {
   private resolveCommittedLoadoutSelection(playerId: string) {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) return this.resolveLoadoutSelection(playerId);
-    return {
+    return sanitizeLoadoutSelectionForMode({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
       weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],
       utility:  UTILITY_CONFIGS[committed.utility as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    };
+    }, bridge.getGameMode());
   }
 
   private resolveLoadoutSelection(playerId: string) {
@@ -453,11 +454,11 @@ export class ClientUpdateCoordinator {
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
     const ulId = bridge.getPlayerLoadoutSlot(playerId, 'ultimate');
-    return {
+    return sanitizeLoadoutSelectionForMode({
       weapon1:  w1Id ? WEAPON_CONFIGS[w1Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    };
+    }, bridge.getGameMode());
   }
 }

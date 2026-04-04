@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
 import { RockGridIndex } from '../arena/RockGridIndex';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
+import type { PlaceableUtilityConfig, TunnelUltimateConfig } from '../loadout/LoadoutConfig';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
@@ -209,7 +209,63 @@ export class PlacementSystem {
       frame: AutoTiler.getFrame(mask, ROCK_AUTOTILE),
       range: cfg.placeable.range,
       kind: cfg.placeable.kind,
+      sourceSlot: 'utility',
     };
+  }
+
+  getTunnelPlacementPreview(
+    cfg: TunnelUltimateConfig,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+    anchor?: { x: number; y: number; gridX: number; gridY: number } | null,
+  ): UtilityPlacementPreviewState | undefined {
+    const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, cfg.placement.range);
+    if (!targetCell) return undefined;
+
+    const targetWorld = this.gridToWorld(targetCell.gridX, targetCell.gridY);
+    const isTargetValid = this.canPlaceSingleCell(targetCell.gridX, targetCell.gridY);
+    const isDistinct = !anchor || anchor.gridX !== targetCell.gridX || anchor.gridY !== targetCell.gridY;
+
+    return {
+      angle: Phaser.Math.Angle.Between(originX, originY, targetWorld.x, targetWorld.y),
+      targetX: targetWorld.x,
+      targetY: targetWorld.y,
+      gridX: targetCell.gridX,
+      gridY: targetCell.gridY,
+      isValid: isTargetValid && isDistinct,
+      frame: 0,
+      range: cfg.placement.range,
+      kind: 'tunnel',
+      stage: anchor ? 2 : 1,
+      anchorX: anchor?.x,
+      anchorY: anchor?.y,
+      anchorGridX: anchor?.gridX,
+      anchorGridY: anchor?.gridY,
+      sourceSlot: 'ultimate',
+    };
+  }
+
+  canPlaceSingleCell(gx: number, gy: number): boolean {
+    return this.canPlaceCells([{ dx: 0, dy: 0 }], gx, gy);
+  }
+
+  getClampedTargetCell(
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+    range: number,
+  ): { gridX: number; gridY: number; x: number; y: number } | null {
+    const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, range);
+    if (!targetCell) return null;
+    const world = this.gridToWorld(targetCell.gridX, targetCell.gridY);
+    return { ...targetCell, x: world.x, y: world.y };
+  }
+
+  getWorldPointForCell(gridX: number, gridY: number): { x: number; y: number } {
+    return this.gridToWorld(gridX, gridY);
   }
 
   private resolveTargetCell(originX: number, originY: number, pointerX: number, pointerY: number, range: number): { gridX: number; gridY: number } | null {
@@ -254,7 +310,11 @@ export class PlacementSystem {
   }
 
   private canPlaceAt(gx: number, gy: number, cfg: PlaceableUtilityConfig): boolean {
-    for (const cell of cfg.placeable.footprint) {
+    return this.canPlaceCells(cfg.placeable.footprint, gx, gy);
+  }
+
+  private canPlaceCells(footprint: readonly { dx: number; dy: number }[], gx: number, gy: number): boolean {
+    for (const cell of footprint) {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;
       if (tx < 0 || tx >= GRID_COLS || ty < 0 || ty >= GRID_ROWS) return false;

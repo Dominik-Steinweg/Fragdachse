@@ -10,12 +10,14 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
 import { isTeamGameMode } from '../gameModes';
+import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
+import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -97,6 +99,7 @@ export interface GameState {
   nukes:        SyncedNukeStrike[];
   airstrikes:   SyncedAirstrikeStrike[];  // Luftangriff-Strikes (Warn- + Einschlagsphase)
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
+  tunnels:      SyncedTunnel[];
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
   captureTheBeer: SyncedCaptureTheBeerState | null;
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
@@ -318,7 +321,63 @@ export class NetworkBridge {
       this.hostAssignMissingTeams();
     }
     setState(KEY_GAME_MODE, mode, true);
+    this.hostReconcileLoadoutsForMode(mode);
     this.connectedPlayersCacheDirty = true;
+  }
+
+  hostReconcileLoadoutsForMode(mode: GameMode): void {
+    if (!isHost()) return;
+
+    for (const playerId of this.connectedPlayers.keys()) {
+      const snapshot = resolveLoadoutSelectionIds({
+        weapon1: WEAPON_CONFIGS[this.getPlayerLoadoutSlot(playerId, 'weapon1') as keyof typeof WEAPON_CONFIGS],
+        weapon2: WEAPON_CONFIGS[this.getPlayerLoadoutSlot(playerId, 'weapon2') as keyof typeof WEAPON_CONFIGS],
+        utility: UTILITY_CONFIGS[this.getPlayerLoadoutSlot(playerId, 'utility') as keyof typeof UTILITY_CONFIGS],
+        ultimate: ULTIMATE_CONFIGS[this.getPlayerLoadoutSlot(playerId, 'ultimate') as keyof typeof ULTIMATE_CONFIGS],
+      }, mode);
+
+      const currentCommitted = this.getPlayerCommittedLoadout(playerId);
+      const sanitizedCommitted = sanitizeCommittedLoadoutForMode(currentCommitted, mode);
+      const slotChanged = this.getPlayerLoadoutSlot(playerId, 'weapon1') !== snapshot.weapon1
+        || this.getPlayerLoadoutSlot(playerId, 'weapon2') !== snapshot.weapon2
+        || this.getPlayerLoadoutSlot(playerId, 'utility') !== snapshot.utility
+        || this.getPlayerLoadoutSlot(playerId, 'ultimate') !== snapshot.ultimate;
+      const committedChanged = !isCommittedLoadoutEqual(currentCommitted, sanitizedCommitted);
+
+      if (slotChanged) {
+        this.hostSetPlayerLoadoutSlot(playerId, 'weapon1', snapshot.weapon1);
+        this.hostSetPlayerLoadoutSlot(playerId, 'weapon2', snapshot.weapon2);
+        this.hostSetPlayerLoadoutSlot(playerId, 'utility', snapshot.utility);
+        this.hostSetPlayerLoadoutSlot(playerId, 'ultimate', snapshot.ultimate);
+      }
+
+      if (slotChanged || committedChanged) {
+        this.hostSetPlayerReady(playerId, false);
+        this.hostSetPlayerCommittedLoadout(playerId, null);
+      }
+    }
+  }
+
+  hostSetPlayerLoadoutSlot(playerId: string, slot: LoadoutSlot, itemId: string): void {
+    if (!isHost()) return;
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return;
+    const key = { weapon1: KEY_LOADOUT_W1, weapon2: KEY_LOADOUT_W2, utility: KEY_LOADOUT_UT, ultimate: KEY_LOADOUT_UL }[slot];
+    state.setState(key, itemId, true);
+  }
+
+  hostSetPlayerReady(playerId: string, ready: boolean): void {
+    if (!isHost()) return;
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return;
+    state.setState(KEY_READY, ready, true);
+  }
+
+  hostSetPlayerCommittedLoadout(playerId: string, snapshot: LoadoutCommitSnapshot | null): void {
+    if (!isHost()) return;
+    const state = this.playerStateMap.get(playerId);
+    if (!state) return;
+    state.setState(KEY_LOADOUT_COMMITTED, snapshot, true);
   }
 
   getPlayerTeam(playerId: string): TeamId | null {
@@ -596,6 +655,7 @@ export class NetworkBridge {
     if (state.nukes.length > 0)        payload.n  = state.nukes;
     if (state.airstrikes.length > 0)   payload.ak = state.airstrikes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
+    if (state.tunnels.length > 0)      payload.tn = state.tunnels;
     if (state.train)                   payload.t = state.train;
     if (state.captureTheBeer)          payload.cb = state.captureTheBeer;
     setState(KEY_GAME_STATE, payload, false);
@@ -624,6 +684,7 @@ export class NetworkBridge {
       nukes:         (raw.n  as SyncedNukeStrike[]       | undefined) ?? [],
       airstrikes:    (raw.ak as SyncedAirstrikeStrike[] | undefined) ?? [],
       meteors:       (raw.mt as SyncedMeteorStrike[]    | undefined) ?? [],
+      tunnels:       (raw.tn as SyncedTunnel[]          | undefined) ?? [],
       train:         (raw.t as SyncedTrainState      | undefined) ?? null,
       captureTheBeer: (raw.cb as SyncedCaptureTheBeerState | undefined) ?? null,
     };

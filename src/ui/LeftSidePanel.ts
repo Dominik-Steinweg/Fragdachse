@@ -12,7 +12,7 @@ import { ArenaHUD } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { HelpOverlay } from './HelpOverlay';
-import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
@@ -79,11 +79,10 @@ type LoadoutCarouselItem = {
 };
 
 // Item-Arrays nach Slot gefiltert
-const SLOT_ITEMS: Record<LoadoutSlot, LoadoutCarouselItem[]> = {
+const STATIC_SLOT_ITEMS: Record<Exclude<LoadoutSlot, 'ultimate'>, LoadoutCarouselItem[]> = {
   weapon1:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon1')),
   weapon2:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon2')),
   utility:  Object.values(UTILITY_CONFIGS).filter(u => (u.allowedSlots as readonly string[]).includes('utility')),
-  ultimate: Object.values(ULTIMATE_CONFIGS),
 };
 
 const SLOT_LABELS: Record<LoadoutSlot, string> = {
@@ -300,7 +299,10 @@ export class LeftSidePanel {
 
       // Initialwert anzeigen und in Bridge speichern
       this.updateCarouselDisplay(slot);
-      this.bridge.setLocalLoadoutSlot(slot, SLOT_ITEMS[slot][0].id);
+      const initialItems = this.getSlotItems(slot);
+      if (initialItems.length > 0) {
+        this.bridge.setLocalLoadoutSlot(slot, initialItems[0].id);
+      }
     });
 
     // ── Trennlinie 3 (unter Loadout) ──
@@ -438,6 +440,7 @@ export class LeftSidePanel {
       this.localNameText?.setColor(toCssColor(color));
     }
     this.modeNameText?.setText(getGameModeLabel(mode));
+    this.syncAllLoadoutSelections();
     this.updateModeSelectorState();
     this.updateTeamSelectorState(mode, teamId);
   }
@@ -650,15 +653,65 @@ export class LeftSidePanel {
 
   private stepCarousel(slot: LoadoutSlot, delta: -1 | 1): void {
     if (!this.loadoutEnabled) return;
-    const items = SLOT_ITEMS[slot];
+    const items = this.getSlotItems(slot);
+    if (items.length === 0) return;
+    this.syncLoadoutSelectionFromBridge(slot);
     this.loadoutIndices[slot] = (this.loadoutIndices[slot] + delta + items.length) % items.length;
     this.updateCarouselDisplay(slot);
     this.bridge.setLocalLoadoutSlot(slot, items[this.loadoutIndices[slot]].id);
   }
 
   private updateCarouselDisplay(slot: LoadoutSlot): void {
-    const item = SLOT_ITEMS[slot][this.loadoutIndices[slot]];
+    const items = this.getSlotItems(slot);
+    if (items.length === 0) {
+      this.loadoutNameTexts[slot]?.setText('-');
+      this.loadoutIndices[slot] = 0;
+      return;
+    }
+    const nextIndex = Phaser.Math.Clamp(this.loadoutIndices[slot], 0, items.length - 1);
+    this.loadoutIndices[slot] = nextIndex;
+    const item = items[nextIndex];
     this.loadoutNameTexts[slot]?.setText(item.displayName ?? item.id);
+  }
+
+  private getSlotItems(slot: LoadoutSlot): LoadoutCarouselItem[] {
+    if (slot === 'ultimate') {
+      return getAvailableUltimateConfigs(this.bridge.getGameMode());
+    }
+    return STATIC_SLOT_ITEMS[slot];
+  }
+
+  private syncAllLoadoutSelections(): void {
+    this.syncLoadoutSelectionFromBridge('weapon1');
+    this.syncLoadoutSelectionFromBridge('weapon2');
+    this.syncLoadoutSelectionFromBridge('utility');
+    this.syncLoadoutSelectionFromBridge('ultimate');
+  }
+
+  private syncLoadoutSelectionFromBridge(slot: LoadoutSlot): void {
+    const items = this.getSlotItems(slot);
+    if (items.length === 0) {
+      this.loadoutIndices[slot] = 0;
+      this.loadoutNameTexts[slot]?.setText('-');
+      return;
+    }
+
+    const localId = this.bridge.getLocalPlayerId();
+    const selectedId = this.bridge.getPlayerLoadoutSlot(localId, slot);
+    const nextIndex = items.findIndex((item) => item.id === selectedId);
+    if (nextIndex >= 0) {
+      if (this.loadoutIndices[slot] !== nextIndex) {
+        this.loadoutIndices[slot] = nextIndex;
+      }
+      this.updateCarouselDisplay(slot);
+      return;
+    }
+
+    this.loadoutIndices[slot] = 0;
+    this.updateCarouselDisplay(slot);
+    if (selectedId !== items[0].id) {
+      this.bridge.setLocalLoadoutSlot(slot, items[0].id);
+    }
   }
 
   // ── Namens-Edit DOM-Popup ──────────────────────────────────────────────────

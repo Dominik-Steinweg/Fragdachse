@@ -20,6 +20,7 @@ import type {
   PlaceableUtilityConfig,
   StinkCloudUtilityConfig,
   TaserUtilityConfig,
+  TunnelUltimateConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
@@ -30,6 +31,7 @@ import type {
 } from './LoadoutConfig';
 import { COLORS, RAGE_MAX, getTopDownMuzzleOrigin } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
+import { sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 
 export interface LoadoutSelection {
@@ -90,6 +92,7 @@ export class LoadoutManager {
   private decoySystem: import('../systems/DecoySystem').DecoySystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
   private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
+  private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
@@ -112,10 +115,11 @@ export class LoadoutManager {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   assignDefaultLoadout(playerId: string, selection?: LoadoutSelection): void {
-    const w1Cfg  = selection?.weapon1  ?? WEAPON_CONFIGS.GLOCK;
-    const w2Cfg  = selection?.weapon2  ?? WEAPON_CONFIGS.P90;
-    const utCfg  = selection?.utility  ?? UTILITY_CONFIGS.HE_GRENADE;
-    const ultCfg = selection?.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
+    const sanitized = sanitizeLoadoutSelectionForMode(selection, this.bridge.getGameMode());
+    const w1Cfg = sanitized.weapon1;
+    const w2Cfg = sanitized.weapon2;
+    const utCfg = sanitized.utility;
+    const ultCfg = sanitized.ultimate;
     this.loadouts.set(playerId, {
       weapon1:  this.createWeapon(w1Cfg),
       weapon2:  this.createWeapon(w2Cfg),
@@ -146,10 +150,11 @@ export class LoadoutManager {
    * ohne unveraenderte Spieler jedes Frame neu zu initialisieren.
    */
   syncSelectedLoadout(playerId: string, selection?: LoadoutSelection): void {
-    const nextWeapon1 = selection?.weapon1 ?? WEAPON_CONFIGS.GLOCK;
-    const nextWeapon2 = selection?.weapon2 ?? WEAPON_CONFIGS.P90;
-    const nextUtility = selection?.utility ?? UTILITY_CONFIGS.HE_GRENADE;
-    const nextUltimate = selection?.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
+    const sanitized = sanitizeLoadoutSelectionForMode(selection, this.bridge.getGameMode());
+    const nextWeapon1 = sanitized.weapon1;
+    const nextWeapon2 = sanitized.weapon2;
+    const nextUtility = sanitized.utility;
+    const nextUltimate = sanitized.ultimate;
     const current = this.loadouts.get(playerId);
     const currentUltimate = this.ultimateStates.get(playerId)?.config;
 
@@ -274,6 +279,10 @@ export class LoadoutManager {
 
   setPlaceableRockHandler(handler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null): void {
     this.placeableRockHandler = handler;
+  }
+
+  setTunnelPlacementHandler(handler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null): void {
+    this.tunnelPlacementHandler = handler;
   }
 
   fireAutomatedWeapon(
@@ -431,6 +440,16 @@ export class LoadoutManager {
           const rage = this.resourceSystem.getRage(playerId);
           if (rage < cfg.rageCost) return { ok: false, reason: 'resource', resourceKind: 'rage' };
           const ok = this.airstrikeHandler?.(playerId, targetX, targetY, cfg) ?? false;
+          if (!ok) return { ok: false, reason: 'blocked' };
+          this.resourceSystem.addRage(playerId, -cfg.rageCost);
+          return this.okResult;
+        }
+
+        if (cfg.type === 'tunnel') {
+          const rage = this.resourceSystem.getRage(playerId);
+          if (rage < cfg.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
+          if (params?.tunnelAction !== 'commit') return { ok: false, reason: 'blocked' };
+          const ok = this.tunnelPlacementHandler?.(cfg, playerId, x, y, targetX, targetY, player.color, params) ?? false;
           if (!ok) return { ok: false, reason: 'blocked' };
           this.resourceSystem.addRage(playerId, -cfg.rageCost);
           return this.okResult;

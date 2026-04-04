@@ -78,6 +78,7 @@ export class HostUpdateCoordinator {
     if (!countdownActive) {
       this.ctx.loadoutManager?.update(delta);
       this.ctx.powerUpSystem?.update(delta);
+      this.ctx.tunnelSystem?.update(now);
     }
 
     this.ctx.hostPhysics.update(countdownActive);
@@ -473,6 +474,7 @@ export class HostUpdateCoordinator {
       nukes,
       airstrikes,
       meteors,
+      tunnels: this.ctx.tunnelSystem?.getSnapshot() ?? [],
       train,
       captureTheBeer,
     });

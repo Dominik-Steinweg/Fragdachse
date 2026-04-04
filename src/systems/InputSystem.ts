@@ -16,6 +16,7 @@ import type {
   PlacementModeUtilityActivationConfig,
   ScopeModeConfig,
   TargetedClickUtilityActivationConfig,
+  TunnelUltimateConfig,
   UltimateConfig,
   UtilityConfig,
   WeaponConfig,
@@ -55,11 +56,14 @@ export class InputSystem {
   private utilityChargeStartedAt: number | null = null;
   private utilityTargetingActive = false;
   private utilityPlacementActive = false;
+  private ultimatePlacementActive = false;
   private ultimateHoldActive = false;
   private ultimateChargeStartedAt: number | null = null;
   private ultimateTargetingActive = false;   // Zielmodus für Airstrike-Ultimate
   private getUtilityPlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
+  private getUltimatePlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
   private placementPreviewState: PlacementPreviewNetState | null = null;
+  private tunnelPlacementAnchor: { x: number; y: number; gridX: number; gridY: number } | null = null;
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
 
@@ -169,6 +173,7 @@ export class InputSystem {
     if (isStunned || burrowPhase === 'windup' || burrowPhase === 'underground' || burrowPhase === 'trapped') {
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
+      this.cancelUltimatePlacement();
       this.ultimateTargetingActive = false;
     }
   }
@@ -178,6 +183,7 @@ export class InputSystem {
     if (!enabled) {
       this.predictedUtilityCooldownUntil = 0;
       this.cancelUtilityInteraction();
+      this.cancelUltimatePlacement();
       this.prevLeftPointerDown = false;
       this.prevRightPointerDown = false;
     }
@@ -215,8 +221,13 @@ export class InputSystem {
     return this.ultimateTargetingActive;
   }
 
+  isUltimatePlacementActive(): boolean {
+    return this.ultimatePlacementActive;
+  }
+
   cancelLocalUltimateChargePreview(): void {
     this.cancelUltimateCharge();
+    this.cancelUltimatePlacement();
     this.ultimateTargetingActive = false;
   }
 
@@ -227,6 +238,19 @@ export class InputSystem {
 
   setupUtilityPlacementPreviewProvider(cb: () => UtilityPlacementPreviewState | undefined): void {
     this.getUtilityPlacementPreviewProvider = cb;
+  }
+
+  getUltimatePlacementPreviewState(): UtilityPlacementPreviewState | undefined {
+    if (!this.ultimatePlacementActive) return undefined;
+    return this.getUltimatePlacementPreviewProvider?.();
+  }
+
+  getUltimatePlacementAnchor(): { x: number; y: number; gridX: number; gridY: number } | null {
+    return this.tunnelPlacementAnchor;
+  }
+
+  setupUltimatePlacementPreviewProvider(cb: () => UtilityPlacementPreviewState | undefined): void {
+    this.getUltimatePlacementPreviewProvider = cb;
   }
 
   getUltimateChargePreviewState(): UltimateChargePreviewState | undefined {
@@ -386,11 +410,12 @@ export class InputSystem {
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     this.currentAimAngle = angle;
     const ultimateCharging = this.ultimateHoldActive;
-    const weaponsBlocked = this.localBurrowPhase !== 'idle' || ultimateCharging || this.utilityPlacementActive;
+    const weaponsBlocked = this.localBurrowPhase !== 'idle' || ultimateCharging || this.utilityPlacementActive || this.ultimatePlacementActive;
     const utilityBlocked = this.localBurrowPhase === 'windup'
       || this.localBurrowPhase === 'underground'
       || this.localBurrowPhase === 'trapped'
-      || ultimateCharging;
+      || ultimateCharging
+      || this.ultimatePlacementActive;
     const ultimateCfg = this.getLocalUltimateConfig?.();
 
     if (this.utilityTargetingActive) {
@@ -469,6 +494,49 @@ export class InputSystem {
           this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY);
         }
         this.cancelUtilityPlacement();
+        return;
+      }
+
+      return;
+    }
+
+    if (this.ultimatePlacementActive) {
+      const preview = this.getUltimatePlacementPreviewState();
+      this.syncPlacementPreviewState(preview);
+
+      if (!preview) {
+        this.cancelUltimatePlacement();
+        return;
+      }
+
+      if (pointer.rightButtonDown() || Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+        this.cancelUltimatePlacement();
+        return;
+      }
+
+      if (Phaser.Input.Keyboard.JustDown(this.keyE) || leftInputStarted) {
+        if (preview.isValid) {
+          if (!this.tunnelPlacementAnchor) {
+            this.tunnelPlacementAnchor = {
+              x: preview.targetX,
+              y: preview.targetY,
+              gridX: preview.gridX,
+              gridY: preview.gridY,
+            };
+            this.syncPlacementPreviewState(this.getUltimatePlacementPreviewState());
+            return;
+          }
+
+          this.onLoadoutUse?.('ultimate', preview.angle, preview.targetX, preview.targetY, {
+            inputStarted: true,
+            tunnelAction: 'commit',
+            tunnelStartX: this.tunnelPlacementAnchor.x,
+            tunnelStartY: this.tunnelPlacementAnchor.y,
+            tunnelStartGridX: this.tunnelPlacementAnchor.gridX,
+            tunnelStartGridY: this.tunnelPlacementAnchor.gridY,
+          });
+        }
+        this.cancelUltimatePlacement();
         return;
       }
 
@@ -558,6 +626,7 @@ export class InputSystem {
 
     const gaussCfg     = ultimateCfg?.type === 'gauss'     ? ultimateCfg as GaussUltimateConfig     : undefined;
     const airstrikeCfg = ultimateCfg?.type === 'airstrike' ? ultimateCfg as AirstrikeUltimateConfig : undefined;
+    const tunnelCfg    = ultimateCfg?.type === 'tunnel'    ? ultimateCfg as TunnelUltimateConfig    : undefined;
     if (!utilityBlocked && gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       this.beginUltimateCharge(now, gaussCfg, angle, clampedTarget.x, clampedTarget.y);
     } else if (!utilityBlocked && airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
@@ -568,6 +637,19 @@ export class InputSystem {
         this.bridge.sendDecoyStealthBreakRequest();
       } else {
         // Keine Rage: Feedback an Host senden (zeigt "zu wenig Rage"-Meldung)
+        this.onLoadoutUse?.('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
+      }
+    } else if (!utilityBlocked && tunnelCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      const rage = this.getLocalRage?.() ?? 0;
+      if (rage >= tunnelCfg.rageRequired) {
+        this.cancelUtilityInteraction();
+        this.cancelUltimateCharge();
+        this.ultimateTargetingActive = false;
+        this.ultimatePlacementActive = true;
+        this.tunnelPlacementAnchor = null;
+        this.bridge.sendDecoyStealthBreakRequest();
+        this.syncPlacementPreviewState(this.getUltimatePlacementPreviewState());
+      } else {
         this.onLoadoutUse?.('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
       }
     } else if (!utilityBlocked && !gaussCfg && !airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
@@ -598,6 +680,11 @@ export class InputSystem {
   private getAirstrikeUltimateConfig(): AirstrikeUltimateConfig | undefined {
     const cfg = this.getLocalUltimateConfig?.();
     return cfg?.type === 'airstrike' ? cfg : undefined;
+  }
+
+  private getTunnelUltimateConfig(): TunnelUltimateConfig | undefined {
+    const cfg = this.getLocalUltimateConfig?.();
+    return cfg?.type === 'tunnel' ? cfg : undefined;
   }
 
   private getChargeableUtilityConfig(): (UtilityConfig & { activation: ChargeableActivation }) | undefined {
@@ -726,6 +813,12 @@ export class InputSystem {
     this.placementPreviewState = null;
   }
 
+  private cancelUltimatePlacement(): void {
+    this.ultimatePlacementActive = false;
+    this.tunnelPlacementAnchor = null;
+    this.placementPreviewState = null;
+  }
+
   private cancelUtilityInteraction(): void {
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
@@ -753,6 +846,11 @@ export class InputSystem {
       y: preview.targetY,
       isValid: preview.isValid,
       frame: preview.frame,
+      stage: preview.stage,
+      anchorGridX: preview.anchorGridX,
+      anchorGridY: preview.anchorGridY,
+      anchorX: preview.anchorX,
+      anchorY: preview.anchorY,
     };
   }
 

@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -192,6 +192,10 @@ export interface PlacementModeUtilityActivationConfig {
   readonly type: 'placement_mode';
 }
 
+export interface PlacementModeUltimateActivationConfig {
+  readonly type: 'placement_mode';
+}
+
 export type UtilityActivationConfig =
   | InstantUtilityActivationConfig
   | ChargedThrowUtilityActivationConfig
@@ -221,6 +225,14 @@ export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig
   readonly targetRange: number;
   readonly muzzleOffset: number;
   readonly deathCloudRadius: number;
+}
+
+export interface PlaceableTunnelPlacementConfig {
+  readonly kind: 'tunnel';
+  readonly range: number;
+  readonly entranceRadius: number;
+  readonly previewAlpha: number;
+  readonly ownerTintStrength: number;
 }
 
 interface BaseUtilityConfig {
@@ -372,6 +384,7 @@ interface BaseUltimateConfig {
   readonly displayName: string;
   readonly cooldown: number;          // ms (0 = rage-gated, kein Zeitcooldown)
   readonly rageRequired: number;      // Mindest-Rage zum Aktivieren
+  readonly allowedModes?: readonly GameMode[];
 }
 
 export interface BuffUltimateConfig extends BaseUltimateConfig {
@@ -416,7 +429,36 @@ export interface AirstrikeUltimateConfig extends BaseUltimateConfig {
   readonly trainDamageMult: number;
 }
 
-export type UltimateConfig = BuffUltimateConfig | GaussUltimateConfig | AirstrikeUltimateConfig;
+export interface TunnelUltimateConfig extends BaseUltimateConfig {
+  readonly type: 'tunnel';
+  readonly activation: PlacementModeUltimateActivationConfig;
+  readonly rageCost: number;
+  readonly placement: PlaceableTunnelPlacementConfig;
+  readonly travelSpeed: number;
+  readonly travelMinDurationMs: number;
+  readonly travelMaxDurationMs: number;
+  readonly buildLabel: string;
+}
+
+export type UltimateConfig = BuffUltimateConfig | GaussUltimateConfig | AirstrikeUltimateConfig | TunnelUltimateConfig;
+
+const CAPTURE_THE_BEER_ONLY = ['capture_the_beer'] as const satisfies readonly GameMode[];
+
+export function isUltimateAllowedInMode(config: UltimateConfig, mode: GameMode): boolean {
+  if (!config.allowedModes || config.allowedModes.length === 0) return true;
+  return config.allowedModes.includes(mode);
+}
+
+export function sanitizeUltimateForMode(config: UltimateConfig | undefined, mode: GameMode): UltimateConfig {
+  if (config && isUltimateAllowedInMode(config, mode)) return config;
+  return isUltimateAllowedInMode(DEFAULT_LOADOUT.ultimate, mode)
+    ? DEFAULT_LOADOUT.ultimate
+    : ULTIMATE_CONFIGS.ARMAGEDDON;
+}
+
+export function getAvailableUltimateConfigs(mode: GameMode): UltimateConfig[] {
+  return Object.values(ULTIMATE_CONFIGS).filter((config) => isUltimateAllowedInMode(config, mode));
+}
 
 // ── Item-Registrierung ────────────────────────────────────────────────────────
 
@@ -1555,7 +1597,29 @@ export const ULTIMATE_CONFIGS = {
     speedMultiplier:    1.5,
     damageMultiplier:   1.5,
     rageDrainDuration:  5000,
-  } as BuffUltimateConfig,  
+  } as BuffUltimateConfig,
+
+  DACHS_TUNNEL: {
+    type:               'tunnel',
+    id:                 'DACHS_TUNNEL',
+    displayName:        'Dachstunnel',
+    cooldown:           0,
+    rageRequired:       200,
+    rageCost:           200,
+    allowedModes:       CAPTURE_THE_BEER_ONLY,
+    activation:         { type: 'placement_mode' } as PlacementModeUltimateActivationConfig,
+    placement: {
+      kind:               'tunnel',
+      range:              760,
+      entranceRadius:     22,
+      previewAlpha:       0.38,
+      ownerTintStrength:  0.45,
+    } as PlaceableTunnelPlacementConfig,
+    travelSpeed:         2400,
+    travelMinDurationMs: 220,
+    travelMaxDurationMs: 720,
+    buildLabel:          'Dachstunnel',
+  } as TunnelUltimateConfig,
 } as const;
 
 // ── Standard-Loadout für alle Spieler beim Spawn ──────────────────────────────

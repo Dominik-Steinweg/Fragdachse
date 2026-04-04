@@ -31,6 +31,7 @@ import {
   applyArenaMetricsForMode,
 } from '../config';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
 import {
   beginAutomaticRoomSearch,
@@ -46,6 +47,7 @@ import {
 } from '../utils/roomQuality';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isTeamGameMode, usesDynamicCamera } from '../gameModes';
+import { TunnelRenderer } from './arena/TunnelRenderer';
 
 import {
   type ArenaContext,
@@ -100,6 +102,7 @@ export class ArenaScene extends Phaser.Scene {
   private localPlayerState!: LocalPlayerState;
   private rockVisualHelper!: RockVisualHelper;
   private placementPreview!: PlacementPreviewRenderer;
+  private tunnelRenderer!: TunnelRenderer;
   private gaussWarning!: GaussWarningRenderer;
   private hostUpdate!: HostUpdateCoordinator;
   private clientUpdate!: ClientUpdateCoordinator;
@@ -232,7 +235,7 @@ export class ArenaScene extends Phaser.Scene {
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
-      teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
     };
 
     playerManager.setSpawnContextProvider((playerId) => {
@@ -302,6 +305,7 @@ export class ArenaScene extends Phaser.Scene {
     this.localPlayerState = new LocalPlayerState();
     this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow);
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
+    this.tunnelRenderer    = new TunnelRenderer(this);
     this.gaussWarning      = new GaussWarningRenderer(this);
 
     // ── Coordinators ──────────────────────────────────────────────────────
@@ -324,6 +328,7 @@ export class ArenaScene extends Phaser.Scene {
       return cooldownOk && adrenalineOk;
     });
     inputSystem.setupUtilityPlacementPreviewProvider(() => this.getLocalPlacementPreview());
+    inputSystem.setupUltimatePlacementPreviewProvider(() => this.getLocalUltimatePlacementPreview());
     inputSystem.setupTranslocatorRecallCheck(() => {
       const cfg = this.clientUpdate.getLocalUtilityConfig();
       if (!cfg || cfg.type !== 'translocator') return false;
@@ -394,9 +399,12 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       const localSprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
-      const awaitResult = slot === 'utility'
+      const awaitResult = (slot === 'utility'
         && inputSystem.isUtilityPlacementActive()
-        && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode';
+        && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode')
+        || (slot === 'ultimate'
+          && inputSystem.isUltimatePlacementActive()
+          && params?.tunnelAction === 'commit');
       const awaitFailureResult = inputStarted && (slot === 'weapon2' || slot === 'ultimate');
       const loadoutPromise = bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, Date.now(), awaitResult || awaitFailureResult);
       if (awaitFailureResult) {
@@ -567,12 +575,15 @@ export class ArenaScene extends Phaser.Scene {
     const utilityTargeting    = this.ctx.inputSystem.getUtilityTargetingPreviewState();
     const airstrikeTargeting  = this.ctx.inputSystem.getAirstrikeTargetingPreviewState();
     const utilityPlacement    = this.getLocalPlacementPreview();
+    const ultimatePlacement   = this.getLocalUltimatePlacementPreview();
+    const activePlacement     = ultimatePlacement ?? utilityPlacement;
     const ultimatePreview     = this.ctx.inputSystem.getUltimateChargePreviewState();
     const showAim = inArena
       && this.localPlayerState.alive
       && !this.localPlayerState.burrowed
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
-      && !this.ctx.inputSystem.isUtilityPlacementActive();
+      && !this.ctx.inputSystem.isUtilityPlacementActive()
+      && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
     this.ctx.aimSystem?.setScopeProgress(scopeProgress);
     const targetingForReticle = utilityTargeting ?? airstrikeTargeting;
@@ -596,9 +607,13 @@ export class ArenaScene extends Phaser.Scene {
     this.gaussWarning.update(inArena);
     this.placementPreview.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.syncAirstrikeTargetingHint(inArena, airstrikeTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
-    this.placementPreview.syncPlaceableUtilityHint(inArena, utilityPlacement !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
-    this.placementPreview.renderPlacementPreview(inArena, utilityPlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
+    this.placementPreview.syncPlaceableUtilityHint(inArena, activePlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
+    this.placementPreview.renderPlacementPreview(inArena, activePlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.renderRemotePlacementPreviews(inArena);
+    const tunnelSnapshot = bridge.isHost()
+      ? (this.ctx.tunnelSystem?.getSnapshot() ?? [])
+      : (bridge.getLatestGameState()?.tunnels ?? []);
+    this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
     this.syncWorldShadows(inArena);
   }
 
@@ -621,6 +636,7 @@ export class ArenaScene extends Phaser.Scene {
         this.ctx.resourceSystem?.removePlayer(id);
         this.ctx.burrowSystem?.removePlayer(id);
         this.ctx.loadoutManager?.removePlayer(id);
+        this.ctx.tunnelSystem?.removePlayer(id);
       }
       this.ctx.effectSystem.clearBurrowState(id);
       this.clientUpdate.removeBurrowPhase(id);
@@ -704,14 +720,38 @@ export class ArenaScene extends Phaser.Scene {
     return this.ctx.placementSystem.getPlacementPreview(cfg as PlaceableUtilityConfig, sprite.x, sprite.y, pointer.x, pointer.y);
   }
 
+  private getLocalUltimatePlacementPreview() {
+    const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+    const cfg = this.clientUpdate.getLocalUltimateConfig();
+    if (!sprite || !this.ctx.placementSystem || !this.ctx.inputSystem.isUltimatePlacementActive()) return undefined;
+    if (cfg.type !== 'tunnel') return undefined;
+    const pointer = this.getPointerWorldPoint();
+    return this.ctx.placementSystem.getTunnelPlacementPreview(
+      cfg,
+      sprite.x,
+      sprite.y,
+      pointer.x,
+      pointer.y,
+      this.ctx.inputSystem.getUltimatePlacementAnchor(),
+    );
+  }
+
   private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
     const localId = bridge.getLocalPlayerId();
-    return {
-      weapon1:  bridge.getPlayerLoadoutSlot(localId, 'weapon1')  ?? DEFAULT_LOADOUT.weapon1.id,
-      weapon2:  bridge.getPlayerLoadoutSlot(localId, 'weapon2')  ?? DEFAULT_LOADOUT.weapon2.id,
-      utility:  bridge.getPlayerLoadoutSlot(localId, 'utility')  ?? DEFAULT_LOADOUT.utility.id,
-      ultimate: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id,
-    };
+    return resolveLoadoutSelectionIds({
+      weapon1:  (bridge.getPlayerLoadoutSlot(localId, 'weapon1')  ?? DEFAULT_LOADOUT.weapon1.id) in WEAPON_CONFIGS
+        ? WEAPON_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id) as keyof typeof WEAPON_CONFIGS]
+        : DEFAULT_LOADOUT.weapon1,
+      weapon2:  (bridge.getPlayerLoadoutSlot(localId, 'weapon2')  ?? DEFAULT_LOADOUT.weapon2.id) in WEAPON_CONFIGS
+        ? WEAPON_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? DEFAULT_LOADOUT.weapon2.id) as keyof typeof WEAPON_CONFIGS]
+        : DEFAULT_LOADOUT.weapon2,
+      utility:  (bridge.getPlayerLoadoutSlot(localId, 'utility')  ?? DEFAULT_LOADOUT.utility.id) in UTILITY_CONFIGS
+        ? UTILITY_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'utility') ?? DEFAULT_LOADOUT.utility.id) as keyof typeof UTILITY_CONFIGS]
+        : DEFAULT_LOADOUT.utility,
+      ultimate: (bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) in ULTIMATE_CONFIGS
+        ? ULTIMATE_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) as keyof typeof ULTIMATE_CONFIGS]
+        : DEFAULT_LOADOUT.ultimate,
+    }, bridge.getGameMode());
   }
 
   private getEnemyHoverNameTarget(): { name: string; x: number; y: number } | null {

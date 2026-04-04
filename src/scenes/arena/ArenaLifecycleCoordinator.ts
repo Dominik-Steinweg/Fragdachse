@@ -10,6 +10,7 @@ import { ShieldBuffSystem }   from '../../systems/ShieldBuffSystem';
 import { TurretSystem }      from '../../systems/TurretSystem';
 import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
+import { TunnelSystem } from '../../systems/TunnelSystem';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
 import { PowerUpSystem }     from '../../powerups/PowerUpSystem';
@@ -22,6 +23,7 @@ import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleport
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
+import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y } from '../../config';
 import { PLAYER_SPEED } from '../../config';
@@ -34,7 +36,7 @@ import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaLayout, LoadoutCommitSnapshot, RoomQualitySnapshot } from '../../types';
+import type { ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
 import type { RoundResult }           from '../../network/NetworkBridge';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isTeamGameMode } from '../../gameModes';
@@ -393,6 +395,22 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor) => {
         return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor);
       });
+      this.ctx.tunnelSystem = new TunnelSystem(
+        this.ctx.playerManager,
+        this.ctx.combatSystem,
+        this.ctx.placementSystem,
+        this.ctx.burrowSystem,
+        this.ctx.hostPhysics,
+      );
+      this.ctx.tunnelSystem.setTunnelEnterCallback((playerId, x, y) => {
+        this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
+      });
+      this.ctx.burrowSystem.setTunnelTransitEndedCallback((playerId) => {
+        this.ctx.tunnelSystem?.notifyTransitEnded(playerId);
+      });
+      this.ctx.loadoutManager.setTunnelPlacementHandler((cfg, playerId, x, y, targetX, targetY, playerColor, params) => {
+        return this.placeTunnel(cfg, playerId, x, y, targetX, targetY, playerColor, params);
+      });
       this.ctx.loadoutManager.setActionBlockedChecker((playerId, slot) => {
         if (!this.ctx.combatSystem.isAlive(playerId)) return true;
         if (slot === 'weapon1' || slot === 'weapon2') {
@@ -558,6 +576,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.turretSystem    = null;
     this.ctx.resourceSystem?.setPowerUpSystem(null);
     this.ctx.resourceSystem  = null;
+    this.ctx.burrowSystem?.setTunnelTransitEndedCallback(null);
     this.ctx.burrowSystem    = null;
     this.ctx.combatSystem.setDetonationSystem(null);
     this.ctx.detonationSystem?.reset();
@@ -568,6 +587,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.setShieldBuffSystem(null);
     this.ctx.loadoutManager?.setDecoySystem(null);
     this.ctx.loadoutManager?.setPlaceableRockHandler(null);
+    this.ctx.loadoutManager?.setTunnelPlacementHandler(null);
     this.ctx.loadoutManager?.setActionBlockedChecker(null);
     this.ctx.loadoutManager?.resetAllUltimateStates();
     this.ctx.loadoutManager = null;
@@ -595,6 +615,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setProjectileImpactCallback(null);
     this.ctx.projectileManager.setBfgLaserCallback(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
+    this.ctx.tunnelSystem?.clear();
+    this.ctx.tunnelSystem = null;
 
     this.renderers.powerUp.clear();
     this.renderers.nuke.clear();
@@ -783,6 +805,30 @@ export class ArenaLifecycleCoordinator {
     return true;
   }
 
+  private placeTunnel(
+    cfg: import('../../loadout/LoadoutConfig').TunnelUltimateConfig,
+    playerId: string,
+    originX: number,
+    originY: number,
+    targetX: number,
+    targetY: number,
+    playerColor: number,
+    params?: LoadoutUseParams,
+  ): boolean {
+    if (params?.tunnelStartGridX === undefined || params.tunnelStartGridY === undefined) return false;
+    return this.ctx.tunnelSystem?.tryPlaceTunnel(
+      cfg,
+      playerId,
+      playerColor,
+      originX,
+      originY,
+      params.tunnelStartGridX,
+      params.tunnelStartGridY,
+      targetX,
+      targetY,
+    ) ?? false;
+  }
+
   private spawnImpactCloudFromProjectile(proj: import('../../types').TrackedProjectile, x: number, y: number): void {
     if (!proj.impactCloud) return;
     const ownerColor = proj.ownerColor ?? bridge.getPlayerColor(proj.ownerId) ?? proj.color;
@@ -812,12 +858,12 @@ export class ArenaLifecycleCoordinator {
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) return this.resolveLoadoutSelection(playerId);
-    return {
+    return sanitizeLoadoutSelectionForMode({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
       weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],
       utility:  UTILITY_CONFIGS[committed.utility  as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    };
+    }, bridge.getGameMode());
   }
 
   private resolveLoadoutSelection(playerId: string): LoadoutSelection {
@@ -825,11 +871,11 @@ export class ArenaLifecycleCoordinator {
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
     const ulId = bridge.getPlayerLoadoutSlot(playerId, 'ultimate');
-    return {
+    return sanitizeLoadoutSelectionForMode({
       weapon1:  w1Id ? WEAPON_CONFIGS[w1Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId  as keyof typeof UTILITY_CONFIGS]   : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    };
+    }, bridge.getGameMode());
   }
 }

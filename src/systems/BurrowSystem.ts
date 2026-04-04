@@ -23,6 +23,7 @@ interface BurrowStateData {
   phaseEndsAt: number;
   drainElapsedMs: number;
   stuckDamageAccum: number;
+  isTunnelTransit?: boolean;
 }
 
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
@@ -34,6 +35,7 @@ export class BurrowSystem {
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private stinkCloudSystem: StinkCloudSystemType | null = null;
   private onBurrowStartCb: ((playerId: string) => void) | null = null;
+  private onTunnelTransitEndedCb: ((playerId: string) => void) | null = null;
 
   constructor(
     private resources:    ResourceSystem,
@@ -61,6 +63,10 @@ export class BurrowSystem {
     this.onBurrowStartCb = cb;
   }
 
+  setTunnelTransitEndedCallback(cb: ((playerId: string) => void) | null): void {
+    this.onTunnelTransitEndedCb = cb;
+  }
+
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
   initPlayer(id: string): void {
@@ -75,6 +81,10 @@ export class BurrowSystem {
 
   getPhase(id: string): BurrowPhase {
     return this.states.get(id)?.phase ?? 'idle';
+  }
+
+  isTunnelTransit(id: string): boolean {
+    return this.states.get(id)?.isTunnelTransit === true;
   }
 
   isBurrowed(id: string): boolean {
@@ -168,6 +178,7 @@ export class BurrowSystem {
   }
 
   private updateUndergroundState(id: string, state: BurrowStateData, delta: number): void {
+    if (state.isTunnelTransit) return;
     state.drainElapsedMs += delta;
     while (state.drainElapsedMs >= BURROW_DRAIN_INTERVAL_MS) {
       state.drainElapsedMs -= BURROW_DRAIN_INTERVAL_MS;
@@ -228,6 +239,12 @@ export class BurrowSystem {
     const state = this.states.get(id);
     if (!state || state.phase !== 'underground') return;
 
+    if (state.isTunnelTransit) {
+      if (this.isOverlappingStatic(id)) return;
+      this.finalizeTunnelTransit(id);
+      return;
+    }
+
     if (this.isOverlappingStatic(id)) {
       if (reason === 'depleted') {
         this.states.set(id, {
@@ -253,6 +270,38 @@ export class BurrowSystem {
     });
     this.bridge.broadcastBurrowVisual(id, 'recovery');
     this.applyShockwave(id);
+  }
+
+  startTunnelTransit(id: string): void {
+    if (!this.combat.isAlive(id)) return;
+    this.states.set(id, {
+      phase: 'underground',
+      phaseEndsAt: 0,
+      drainElapsedMs: 0,
+      stuckDamageAccum: 0,
+      isTunnelTransit: true,
+    });
+    this.hostPhysics.setPlayerBurrowed(id, true);
+    this.bridge.broadcastBurrowVisual(id, 'underground');
+  }
+
+  completeTunnelTransit(id: string): void {
+    const state = this.states.get(id);
+    if (!state?.isTunnelTransit) return;
+    this.finalizeTunnelTransit(id);
+  }
+
+  private finalizeTunnelTransit(id: string): void {
+    this.hostPhysics.setPlayerBurrowed(id, false);
+    this.states.set(id, {
+      phase: 'recovery',
+      phaseEndsAt: Date.now() + BURROW_POPOUT_WEAPON_LOCK_MS,
+      drainElapsedMs: 0,
+      stuckDamageAccum: 0,
+      isTunnelTransit: false,
+    });
+    this.bridge.broadcastBurrowVisual(id, 'recovery');
+    this.onTunnelTransitEndedCb?.(id);
   }
 
   private resetState(id: string, broadcastIdle: boolean): void {

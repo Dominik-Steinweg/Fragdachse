@@ -31,6 +31,11 @@ interface ExternalImpulse {
   durationMs: number;
 }
 
+interface ForcedMovement {
+  vx: number;
+  vy: number;
+}
+
 export class HostPhysicsSystem {
   private scene:         Phaser.Scene;
   private playerManager: PlayerManager;
@@ -59,6 +64,7 @@ export class HostPhysicsSystem {
 
   // Rückstoß-Impulse (Zeit-basiertes Quad-Ease-Out Decay über mehrere Frames)
   private pendingRecoils = new Map<string, ExternalImpulse[]>();
+  private forcedMovement = new Map<string, ForcedMovement>();
 
   constructor(
     scene:         Phaser.Scene,
@@ -88,6 +94,14 @@ export class HostPhysicsSystem {
     const impulses = this.pendingRecoils.get(playerId) ?? [];
     impulses.push({ vx, vy, startMs: Date.now(), durationMs });
     this.pendingRecoils.set(playerId, impulses);
+  }
+
+  setForcedMovement(playerId: string, vx: number, vy: number): void {
+    this.forcedMovement.set(playerId, { vx, vy });
+  }
+
+  clearForcedMovement(playerId: string): void {
+    this.forcedMovement.delete(playerId);
   }
 
   applyRadialImpulse(
@@ -227,6 +241,7 @@ export class HostPhysicsSystem {
       this.dashStates.clear();
       this.dashBurstPlayers.clear();
       this.pendingRecoils.clear();
+      this.forcedMovement.clear();
     }
     this.rockGroup  = rockGroup;
     this.trunkGroup = trunkGroup;
@@ -247,6 +262,7 @@ export class HostPhysicsSystem {
     this.dashStates.delete(id);
     this.dashBurstPlayers.delete(id);
     this.pendingRecoils.delete(id);
+    this.forcedMovement.delete(id);
   }
 
   // ── Frame-Update ─────────────────────────────────────────────────────────
@@ -286,9 +302,15 @@ export class HostPhysicsSystem {
       if (!this.combatSystem.isAlive(player.id)) continue;
 
       const impulse = this.consumeImpulseVelocity(player.id, now);
+      const forcedMovement = this.forcedMovement.get(player.id);
 
       if (movementLocked) {
         player.body.setVelocity(impulse.vx, impulse.vy);
+        continue;
+      }
+
+      if (forcedMovement) {
+        player.body.setVelocity(forcedMovement.vx + impulse.vx, forcedMovement.vy + impulse.vy);
         continue;
       }
 

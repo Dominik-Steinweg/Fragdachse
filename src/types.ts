@@ -16,7 +16,7 @@ export interface PlayerInput {
   placementPreview?: PlacementPreviewNetState | null;
 }
 
-export type PlaceableKind = 'rock' | 'turret';
+export type PlaceableKind = 'rock' | 'turret' | 'tunnel';
 
 export interface PlacementPreviewNetState {
   active: boolean;
@@ -27,6 +27,11 @@ export interface PlacementPreviewNetState {
   y: number;
   isValid: boolean;
   frame: number;
+  stage?: 1 | 2;
+  anchorGridX?: number;
+  anchorGridY?: number;
+  anchorX?: number;
+  anchorY?: number;
 }
 
 /** Waffen-Slots mit Spread/Crosshair-Relevanz. */
@@ -394,6 +399,11 @@ export interface LoadoutUseParams {
   inputStarted?: boolean;
   scopeProgress?: number;  // 0–1, für fire-on-release Scope-Waffen (beim Loslassen gesetzt)
   scopeHolding?: boolean;  // true = RMB gehalten aber noch kein Schuss (nur holdSpeedFactor aktiv)
+  tunnelAction?: 'commit';
+  tunnelStartX?: number;
+  tunnelStartY?: number;
+  tunnelStartGridX?: number;
+  tunnelStartGridY?: number;
 }
 
 export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid';
@@ -447,6 +457,12 @@ export interface UtilityPlacementPreviewState {
   frame: number;
   range: number;
   kind: PlaceableKind;
+  stage?: 1 | 2;
+  anchorX?: number;
+  anchorY?: number;
+  anchorGridX?: number;
+  anchorGridY?: number;
+  sourceSlot?: 'utility' | 'ultimate';
 }
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
@@ -772,6 +788,20 @@ export interface SyncedPlaceableRock {
   expiresAt: number;
   warningStartsAt: number;
   angle: number;
+}
+
+export interface SyncedTunnelEndpoint {
+  gridX: number;
+  gridY: number;
+  x: number;
+  y: number;
+}
+
+export interface SyncedTunnel {
+  ownerId: string;
+  ownerColor: number;
+  entranceA: SyncedTunnelEndpoint;
+  entranceB: SyncedTunnelEndpoint;
 }
 
 /** Konfiguration des Zug-Events – einmalig vom Host veröffentlicht (reliable) */
