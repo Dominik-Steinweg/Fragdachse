@@ -74,6 +74,7 @@ function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): numbe
     case 'holy_grenade':
       return Math.max(baseRadius, CELL_SIZE * 3.5);
     case 'energy_ball':
+    case 'hydra':
     case 'spore':
       return Math.max(baseRadius, CELL_SIZE * 3);
     case 'flame':

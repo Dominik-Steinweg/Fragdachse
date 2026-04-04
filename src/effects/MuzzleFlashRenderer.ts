@@ -186,6 +186,7 @@ export class MuzzleFlashRenderer {
   ): MuzzleFlashPreset | null {
     if (style === 'grenade' || style === 'holy_grenade' || style === 'translocator_puck') return null;
     if (style === 'energy_ball') return energyBallVariant === 'plasma' ? 'plasma' : 'energy';
+    if (style === 'hydra') return 'energy';
     if (style === 'rocket') return 'rocket';
     if (style === 'flame') return 'flame';
     if (style === 'bfg') return 'energy';

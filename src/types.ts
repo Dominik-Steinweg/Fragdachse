@@ -127,7 +127,7 @@ export interface SyncedDecoy {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'spore' | 'flame' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'gauss' | 'negev';
@@ -228,6 +228,7 @@ export interface SyncedProjectile {
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
   shotAudioKey?: ShotAudioKey;
   shotAudioVolume?: number;
+  suppressSpawnFx?: boolean;
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
@@ -502,6 +503,13 @@ export interface ProjectileSpawnConfig {
   sourceSlot?: LoadoutSlot;
   shotAudioKey?: ShotAudioKey;
   shotAudioVolume?: number;
+
+  // Hydra-Splitting (optional)
+  splitCount?: number;
+  splitSpread?: number;
+  initialBounceCount?: number;
+  remainingRangePx?: number;
+  suppressSpawnFx?: boolean;
 }
 
 export interface DamageGrenadeEffect {
@@ -690,6 +698,17 @@ export interface TrackedProjectile {
   sourceSlot?: LoadoutSlot;
   shotAudioKey?: ShotAudioKey;
   shotAudioVolume?: number;
+
+  // Hydra-Splitting
+  splitCount?: number;
+  splitSpread?: number;
+  remainingRangePx?: number;
+  suppressSpawnFx?: boolean;
+  pendingHydraSplit?: {
+    x: number;
+    y: number;
+    angles: number[];
+  };
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;

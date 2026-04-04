@@ -212,6 +212,7 @@ export function getProjectileShadowConfig(style?: ProjectileStyle): ShadowCaster
     case 'bullet':
     case 'ball':
     case 'energy_ball':
+    case 'hydra':
     case 'spore':
     case 'flame':
     case 'bfg':

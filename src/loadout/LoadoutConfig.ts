@@ -115,6 +115,10 @@ export interface WeaponConfig {
   readonly pelletCount?:       number; // Anzahl gleichzeitig abgefeuerter Projektile
   readonly pelletSpreadAngle?: number; // Halbwinkel der Auffächerung in Grad ([-y, +y])
 
+  // Hydra-Splitting (optional)
+  readonly splitCount?:        number; // Anzahl der beim Bounce neu erzeugten Projektile
+  readonly splitSpread?:       number; // Winkelabstand in Grad zwischen benachbarten Split-Bahnen
+
   // Visuelles Override
   readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
   readonly projectileStyle?: ProjectileStyle; // 'bullet' (eckig, Standard) | 'ball' (rund)
@@ -609,8 +613,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
-    // Soll auf energy_ball basieren, aber es soll eine eigene Variante mit eigenerem Renderer für die Hydra-Projektile erzeugt werden
-    projectileStyle:  'energy_ball' satisfies ProjectileStyle,   
+    projectileStyle:      'hydra' satisfies ProjectileStyle,
   } as WeaponConfig,
 
   XBOW: {

@@ -9,6 +9,7 @@ import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
 import type { GaussRenderer }   from '../effects/GaussRenderer';
 import type { GrenadeRenderer } from '../effects/GrenadeRenderer';
+import type { HydraRenderer } from '../effects/HydraRenderer';
 import type { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import type { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
 import type { RocketRenderer }  from '../effects/RocketRenderer';
@@ -72,6 +73,9 @@ export class ProjectileManager {
 
   // ── Energy-Ball-Renderer (ASMD Secondary) ───────────────────────────────
   private energyBallRenderer: EnergyBallRenderer | null = null;
+
+  // ── Hydra-Renderer (split-bounce energy projectile) ─────────────────────
+  private hydraRenderer: HydraRenderer | null = null;
 
   // ── Gauss-Renderer (elektrische Overlay-Visuals) ───────────────────────
   private gaussRenderer: GaussRenderer | null = null;
@@ -191,6 +195,11 @@ export class ProjectileManager {
     this.energyBallRenderer = renderer;
   }
 
+  /** Injiziert den HydraRenderer fuer Hydra-Projektile. */
+  setHydraRenderer(renderer: HydraRenderer | null): void {
+    this.hydraRenderer = renderer;
+  }
+
   /** Injiziert den GaussRenderer fuer elektrische Projektil-Overlays. */
   setGaussRenderer(renderer: GaussRenderer | null): void {
     this.gaussRenderer = renderer;
@@ -276,6 +285,7 @@ export class ProjectileManager {
 
     const isBall   = cfg.projectileStyle === 'ball';
     const isEnergyBall = cfg.projectileStyle === 'energy_ball';
+    const isHydra = cfg.projectileStyle === 'hydra';
     const isSpore = cfg.projectileStyle === 'spore';
     const isBullet = cfg.projectileStyle === 'bullet';
     const isFlame  = cfg.projectileStyle === 'flame';
@@ -288,7 +298,7 @@ export class ProjectileManager {
     const isTranslocatorPuck = cfg.projectileStyle === 'translocator_puck';
 
     // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
-    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isSpore)
+    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isHydra || isSpore)
       ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
       : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
     sprite.setDepth(DEPTH.PROJECTILES);
@@ -352,6 +362,12 @@ export class ProjectileManager {
       this.energyBallRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.energyBallVariant);
     }
 
+    if (isHydra && this.hydraRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.hydraRenderer.createVisual(id, x, y, cfg.size, cfg.color);
+    }
+
     if (isGrenadeVisual && this.grenadeRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
@@ -409,7 +425,7 @@ export class ProjectileManager {
       body,
       lastX:          x,
       lastY:          y,
-      bounceCount:    0,
+      bounceCount:    cfg.initialBounceCount ?? 0,
       createdAt:      Date.now(),
       ownerId,
       color:          cfg.color,
@@ -442,6 +458,10 @@ export class ProjectileManager {
       sourceSlot:      cfg.sourceSlot,
       shotAudioKey:    cfg.shotAudioKey,
       shotAudioVolume: cfg.shotAudioVolume,
+      splitCount:      cfg.splitCount,
+      splitSpread:     cfg.splitSpread,
+      remainingRangePx: cfg.remainingRangePx,
+      suppressSpawnFx: cfg.suppressSpawnFx,
       // Flammenwerfer-Felder
       isFlame:         cfg.isFlame,
       hitboxGrowRate:  cfg.hitboxGrowRate,
@@ -662,18 +682,20 @@ export class ProjectileManager {
       this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.ownerColor ?? cfg.color);
     }
 
-    const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
-    this.muzzleFlashRenderer?.playProjectileFlash(
-      muzzleOrigin.x,
-      muzzleOrigin.y,
-      Math.cos(angle) * cfg.speed,
-      Math.sin(angle) * cfg.speed,
-      cfg.projectileStyle,
-      cfg.bulletVisualPreset,
-      cfg.energyBallVariant,
-      cfg.ownerColor ?? cfg.color,
-    );
-    this.shotAudioSystem?.playShot(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId, cfg.shotAudioVolume);
+    if (!cfg.suppressSpawnFx) {
+      const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
+      this.muzzleFlashRenderer?.playProjectileFlash(
+        muzzleOrigin.x,
+        muzzleOrigin.y,
+        Math.cos(angle) * cfg.speed,
+        Math.sin(angle) * cfg.speed,
+        cfg.projectileStyle,
+        cfg.bulletVisualPreset,
+        cfg.energyBallVariant,
+        cfg.ownerColor ?? cfg.color,
+      );
+      this.shotAudioSystem?.playShot(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId, cfg.shotAudioVolume);
+    }
 
     this.projectiles.push(tracked);
     return id;
@@ -757,8 +779,16 @@ export class ProjectileManager {
 
     const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
       if (hitBody !== body) return;
-      tracked.bounceCount++;
       applyBounceFriction();
+      const impact = this.getProjectileBodyCenter(tracked);
+      if (tracked.projectileStyle === 'hydra') {
+        if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
+        tracked.bounceCount = tracked.maxBounces + 1;
+        body.reset(impact.x, impact.y);
+        this.queueDestroyProjectile(tracked);
+        return;
+      }
+      tracked.bounceCount++;
       // Funken an Arena-Wand: Velocity ist nach Bounce bereits reflektiert
       if (isBullet || isAwp || isGauss) {
         playImpact(
@@ -790,9 +820,9 @@ export class ProjectileManager {
           return;
         }
         tracked.bounceProcessedThisStep = true;
-        tracked.bounceCount++;
         applyBounceFriction();
         tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
+        const impact = this.resolveObstacleImpactPoint(tracked, rockGO as Phaser.GameObjects.GameObject);
         // Funken bei Fels-Aufprall
         if (isBullet || isAwp || isGauss) {
           playImpact(
@@ -801,10 +831,20 @@ export class ProjectileManager {
             tracked.color,
           );
         }
-        if (!applyRockDamage || !rockObjects || !onHit) return;
-        const rockMult = tracked.rockDamageMult ?? 1;
-        if (rockMult === 0) return;
-        if (idx !== -1) onHit(idx, tracked.damage * rockMult, tracked.ownerId);
+        if (applyRockDamage && rockObjects && onHit) {
+          const rockMult = tracked.rockDamageMult ?? 1;
+          if (rockMult !== 0 && idx !== -1) {
+            onHit(idx, tracked.damage * rockMult, tracked.ownerId);
+          }
+        }
+        if (tracked.projectileStyle === 'hydra') {
+          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
+          tracked.bounceCount = tracked.maxBounces + 1;
+          body.reset(impact.x, impact.y);
+          this.queueDestroyProjectile(tracked);
+          return;
+        }
+        tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
           body.setVelocity(0, 0);
@@ -815,7 +855,7 @@ export class ProjectileManager {
     }
 
     if (this.trunkGroup) {
-      const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+      const trunkCollider = this.scene.physics.add.collider(sprite, this.trunkGroup, (_proj, trunkGO) => {
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
             body.velocity.x = tracked.velocityAfterFirstBounce.x;
@@ -824,9 +864,9 @@ export class ProjectileManager {
           return;
         }
         tracked.bounceProcessedThisStep = true;
-        tracked.bounceCount++;
         applyBounceFriction();
         tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
+        const impact = this.resolveObstacleImpactPoint(tracked, trunkGO as Phaser.GameObjects.GameObject);
         // Funken bei Baumstamm-Aufprall
         if (isBullet || isAwp || isGauss) {
           playImpact(
@@ -835,6 +875,14 @@ export class ProjectileManager {
             tracked.color,
           );
         }
+        if (tracked.projectileStyle === 'hydra') {
+          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
+          tracked.bounceCount = tracked.maxBounces + 1;
+          body.reset(impact.x, impact.y);
+          this.queueDestroyProjectile(tracked);
+          return;
+        }
+        tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
           body.setVelocity(0, 0);
@@ -846,7 +894,7 @@ export class ProjectileManager {
 
     if (this.trainGroup) {
       const onTrainHit = this.onTrainHit;
-      const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+      const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, (_proj, trainGO) => {
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
             body.velocity.x = tracked.velocityAfterFirstBounce.x;
@@ -855,6 +903,7 @@ export class ProjectileManager {
           return;
         }
         tracked.bounceProcessedThisStep = true;
+        const impact = this.resolveObstacleImpactPoint(tracked, trainGO as Phaser.GameObjects.GameObject);
         // Translocator prallt am Zug ab ohne Schaden
         if (!isTranslocatorPuck) {
           const trainMult = tracked.trainDamageMult ?? 1;
@@ -870,9 +919,16 @@ export class ProjectileManager {
             tracked.color,
           );
         }
-        tracked.bounceCount++;
         applyBounceFriction();
         tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
+        if (tracked.projectileStyle === 'hydra') {
+          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
+          tracked.bounceCount = tracked.maxBounces + 1;
+          body.reset(impact.x, impact.y);
+          this.queueDestroyProjectile(tracked);
+          return;
+        }
+        tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
           body.setVelocity(0, 0);
@@ -1051,6 +1107,148 @@ export class ProjectileManager {
     return bestHit;
   }
 
+  private getProjectileBodyCenter(proj: TrackedProjectile): { x: number; y: number } {
+    return {
+      x: proj.body.x + proj.body.halfWidth,
+      y: proj.body.y + proj.body.halfHeight,
+    };
+  }
+
+  private resolveObstacleImpactPoint(
+    proj: TrackedProjectile,
+    obstacle?: Phaser.GameObjects.GameObject | null,
+  ): { x: number; y: number } {
+    const fallback = this.getProjectileBodyCenter(proj);
+    if (!obstacle || !('getBounds' in obstacle) || typeof obstacle.getBounds !== 'function') {
+      return fallback;
+    }
+
+    const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
+    const hit = this.findNearestRectangleHit(line, obstacle.getBounds());
+    return hit ? { x: hit.x, y: hit.y } : fallback;
+  }
+
+  private getHydraSplitAngles(baseAngle: number, splitCount: number, splitSpreadDeg: number): number[] {
+    if (splitCount <= 0) return [];
+
+    const half = Math.floor(splitCount / 2);
+    const offsets: number[] = [];
+    if (splitCount % 2 === 1) {
+      for (let index = -half; index <= half; index++) {
+        offsets.push(index * splitSpreadDeg);
+      }
+    } else {
+      for (let index = -half; index <= -1; index++) {
+        offsets.push(index * splitSpreadDeg);
+      }
+      for (let index = 1; index <= half; index++) {
+        offsets.push(index * splitSpreadDeg);
+      }
+    }
+
+    return offsets.map((offsetDeg) => baseAngle + Phaser.Math.DegToRad(offsetDeg));
+  }
+
+  private getRemainingRangeAfterImpact(proj: TrackedProjectile, impactX: number, impactY: number): number {
+    const baseRange = proj.remainingRangePx ?? (Math.max(proj.initialSpeed ?? proj.body.velocity.length(), 0) * proj.lifetime) / 1000;
+    const impactDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, impactX, impactY);
+    return Math.max(0, baseRange - impactDistance);
+  }
+
+  private trySplitHydraProjectile(
+    proj: TrackedProjectile,
+    impactX: number,
+    impactY: number,
+    outgoingVx: number,
+    outgoingVy: number,
+  ): boolean {
+    if (proj.projectileStyle !== 'hydra') return false;
+
+    const splitCount = Math.max(0, Math.floor(proj.splitCount ?? 0));
+    if (splitCount <= 0) return false;
+
+    const nextBounceCount = proj.bounceCount + 1;
+    if (nextBounceCount > proj.maxBounces) return false;
+
+    const outgoingSpeed = Math.hypot(outgoingVx, outgoingVy);
+    if (outgoingSpeed <= 0.001) return false;
+
+    const remainingRangePx = this.getRemainingRangeAfterImpact(proj, impactX, impactY);
+    if (remainingRangePx <= 0.5) return false;
+
+    const splitSpread = proj.splitSpread ?? 0;
+    const childAngles = this.getHydraSplitAngles(Math.atan2(outgoingVy, outgoingVx), splitCount, splitSpread);
+    if (childAngles.length === 0) return false;
+
+    const childSize = Math.max(4, proj.sprite.displayWidth / splitCount);
+    const childDamage = Math.max(1, proj.damage / splitCount);
+    const childAdrenalinGain = Math.max(0, proj.adrenalinGain / splitCount);
+    const childLifetime = (remainingRangePx / outgoingSpeed) * 1000;
+
+    proj.pendingHydraSplit = {
+      x: impactX,
+      y: impactY,
+      angles: childAngles,
+    };
+    this.queueDestroyProjectile(proj);
+
+    for (const childAngle of childAngles) {
+      this.spawnProjectile(impactX, impactY, childAngle, proj.ownerId, {
+        speed: outgoingSpeed,
+        size: childSize,
+        damage: childDamage,
+        color: proj.color,
+        allowTeamDamage: proj.allowTeamDamage,
+        ownerColor: proj.ownerColor,
+        lifetime: childLifetime,
+        maxBounces: proj.maxBounces,
+        isGrenade: proj.isGrenade,
+        adrenalinGain: childAdrenalinGain,
+        weaponName: proj.weaponName,
+        explosion: proj.explosion,
+        impactCloud: proj.impactCloud,
+        homing: proj.homing,
+        smokeTrailColor: proj.smokeTrailColor,
+        fuseTime: proj.fuseTime,
+        grenadeEffect: proj.grenadeEffect,
+        projectileStyle: proj.projectileStyle,
+        bulletVisualPreset: proj.bulletVisualPreset,
+        grenadeVisualPreset: proj.grenadeVisualPreset,
+        energyBallVariant: proj.energyBallVariant,
+        tracerConfig: proj.tracerConfig,
+        detonable: proj.detonable,
+        detonator: proj.detonator,
+        rockDamageMult: proj.rockDamageMult,
+        trainDamageMult: proj.trainDamageMult,
+        isFlame: proj.isFlame,
+        hitboxGrowRate: proj.hitboxGrowRate,
+        hitboxMaxSize: proj.hitboxMaxSize,
+        velocityDecay: proj.velocityDecay,
+        burnDurationMs: proj.burnDurationMs,
+        burnDamagePerTick: proj.burnDamagePerTick,
+        burnTickIntervalMs: proj.burnTickIntervalMs,
+        isBfg: proj.isBfg,
+        bfgLaserRadius: proj.bfgLaserRadius,
+        bfgLaserDamage: proj.bfgLaserDamage,
+        bfgLaserInterval: proj.bfgLaserInterval,
+        frictionDelayMs: proj.frictionDelayMs,
+        airFrictionDecayPerSec: proj.airFrictionDecayPerSec,
+        bounceFrictionMultiplier: proj.bounceFrictionMultiplier,
+        stopSpeedThreshold: proj.stopSpeedThreshold,
+        sourceSlot: proj.sourceSlot,
+        shotAudioKey: proj.shotAudioKey,
+        shotAudioVolume: proj.shotAudioVolume,
+        splitCount: proj.splitCount,
+        splitSpread: proj.splitSpread,
+        initialBounceCount: nextBounceCount,
+        remainingRangePx,
+        suppressSpawnFx: true,
+      });
+    }
+
+    return true;
+  }
+
   /**
    * Markiert ein Projektil zur sofortigen Entfernung aus Host-Logik und Phaser-Kollision.
    * Das eigentliche Cleanup erfolgt gesammelt im nächsten hostUpdate().
@@ -1063,6 +1261,9 @@ export class ProjectileManager {
   }
 
   private destroyTrackedProjectile(proj: TrackedProjectile): void {
+    const destroyX = proj.pendingHydraSplit?.x ?? proj.sprite.x;
+    const destroyY = proj.pendingHydraSplit?.y ?? proj.sprite.y;
+    const destroyScale = proj.sprite.displayWidth / 16;
     this.scene.physics.world.off('worldbounds', proj.boundsListener);
     for (const c of proj.colliders) c.destroy();
     proj.sprite.destroy();
@@ -1072,11 +1273,19 @@ export class ProjectileManager {
     this.bfgRenderer?.destroyVisual(proj.id);
     this.gaussRenderer?.destroyVisual(proj.id);
     if (proj.projectileStyle === 'energy_ball') {
-      this.energyBallRenderer?.playImpact(proj.sprite.x, proj.sprite.y, proj.color, proj.energyBallVariant, proj.sprite.displayWidth / 16);
+      this.energyBallRenderer?.playImpact(destroyX, destroyY, proj.color, proj.energyBallVariant, destroyScale);
+    }
+    if (proj.projectileStyle === 'hydra') {
+      if (proj.pendingHydraSplit) {
+        this.hydraRenderer?.playSplitImpact(destroyX, destroyY, proj.color, proj.pendingHydraSplit.angles, destroyScale);
+      } else {
+        this.hydraRenderer?.playImpact(destroyX, destroyY, proj.color, Math.max(destroyScale, 0.95));
+      }
     }
     if (proj.projectileStyle === 'spore') {
-      this.sporeRenderer?.playImpact(proj.sprite.x, proj.sprite.y, proj.color, Math.max(proj.sprite.displayWidth / 16, 0.9));
+      this.sporeRenderer?.playImpact(destroyX, destroyY, proj.color, Math.max(destroyScale, 0.9));
     }
+    this.hydraRenderer?.destroyVisual(proj.id);
     this.energyBallRenderer?.destroyVisual(proj.id);
     this.grenadeRenderer?.destroyVisual(proj.id);
     this.holyGrenadeRenderer?.destroyVisual(proj.id);
@@ -1270,6 +1479,7 @@ export class ProjectileManager {
     this.bfgRenderer?.destroyAll();
     this.gaussRenderer?.destroyAll();
     this.energyBallRenderer?.destroyAll();
+    this.hydraRenderer?.destroyAll();
     this.grenadeRenderer?.destroyAll();
     this.holyGrenadeRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
@@ -1352,6 +1562,13 @@ export class ProjectileManager {
 
         return true;
       } else {
+        if (proj.remainingRangePx !== undefined) {
+          const traveledDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
+          if (traveledDistance > 0.01) {
+            proj.remainingRangePx = Math.max(0, proj.remainingRangePx - traveledDistance);
+          }
+        }
+
         // Normales Projektil: Lifetime oder Max-Bounces
         if (age > proj.lifetime && proj.explosion) {
           explodedProjectiles.push({
@@ -1378,7 +1595,8 @@ export class ProjectileManager {
           }
         }
 
-        const dead = age > proj.lifetime || proj.bounceCount > proj.maxBounces;
+        const rangeDepleted = proj.remainingRangePx !== undefined && proj.remainingRangePx <= 0.5;
+        const dead = age > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces;
         if (dead) {
           this.destroyTrackedProjectile(proj);
         } else if (proj.isFlame) {
@@ -1549,6 +1767,32 @@ export class ProjectileManager {
       }
     }
 
+    const hydraR = this.hydraRenderer;
+    if (hydraR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'hydra') {
+          if (!hydraR.has(proj.id)) {
+            hydraR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          }
+          hydraR.updateVisual(
+            proj.id,
+            proj.sprite.x,
+            proj.sprite.y,
+            proj.sprite.displayWidth,
+            proj.body.velocity.x,
+            proj.body.velocity.y,
+            proj.color,
+          );
+        }
+      }
+      const activeHydraIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'hydra').map(p => p.id),
+      );
+      for (const id of hydraR.getActiveIds()) {
+        if (!activeHydraIds.has(id)) hydraR.destroyVisual(id);
+      }
+    }
+
     const holyGrenadeR = this.holyGrenadeRenderer;
     if (holyGrenadeR) {
       for (const proj of this.projectiles) {
@@ -1693,6 +1937,7 @@ export class ProjectileManager {
       tracer: p.tracerConfig,
       shotAudioKey: p.shotAudioKey,
       shotAudioVolume: p.shotAudioVolume,
+      suppressSpawnFx: p.suppressSpawnFx,
     }));
 
     return { synced, explodedProjectiles, explodedGrenades, countdownEvents };
@@ -1712,9 +1957,16 @@ export class ProjectileManager {
     const rockets   = this.rocketRenderer;
     const spores = this.sporeRenderer;
     const energyBalls = this.energyBallRenderer;
+    const hydras = this.hydraRenderer;
     const grenades = this.grenadeRenderer;
     const holyGrenades = this.holyGrenadeRenderer;
     const tlPucks = this.translocatorPuckRenderer;
+    const incomingHydras = data.filter((proj) => proj.style === 'hydra');
+    const newIncomingHydraIds = new Set(
+      incomingHydras
+        .filter((proj) => !this.clientProjStates.has(proj.id))
+        .map((proj) => proj.id),
+    );
 
     // Verwaiste Visuals und States entfernen
     for (const [id, sprite] of this.clientVisuals) {
@@ -1772,6 +2024,27 @@ export class ProjectileManager {
         }
       }
     }
+    if (hydras) {
+      for (const id of hydras.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          const state = this.clientProjStates.get(id);
+          if (state?.style === 'hydra') {
+            const splitChildren = incomingHydras
+              .filter((proj) => newIncomingHydraIds.has(proj.id) && proj.suppressSpawnFx)
+              .filter((proj) => proj.color === state.color)
+              .filter((proj) => Phaser.Math.Distance.Between(state.serverX, state.serverY, proj.x, proj.y) <= Math.max(state.size * 1.5, 22))
+              .map((proj) => Math.atan2(proj.vy, proj.vx));
+            if (splitChildren.length > 0) {
+              hydras.playSplitImpact(state.serverX, state.serverY, state.color, splitChildren, Math.max(state.size / 16, 0.95));
+            } else {
+              hydras.playImpact(state.serverX, state.serverY, state.color, Math.max(state.size / 16, 0.95));
+            }
+          }
+          hydras.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
     if (grenades) {
       for (const id of grenades.getActiveIds()) {
         if (!activeIds.has(id)) {
@@ -1817,6 +2090,7 @@ export class ProjectileManager {
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
       const isEnergyBallP = proj.style === 'energy_ball';
+      const isHydraP = proj.style === 'hydra';
       const isSporeP = proj.style === 'spore';
       const isBfgP   = proj.style === 'bfg';
       const isHolyGrenadeP = proj.style === 'holy_grenade';
@@ -1852,7 +2126,7 @@ export class ProjectileManager {
         isFlame,
       });
 
-      if (!prev) {
+      if (!prev && !proj.suppressSpawnFx) {
         const ownerPos = this.ownerPositionProvider?.(proj.ownerId) ?? null;
         const flashOrigin = ownerPos
           ? getTopDownMuzzleOriginFromVector(ownerPos.x, ownerPos.y, proj.vx, proj.vy)
@@ -1890,6 +2164,11 @@ export class ProjectileManager {
           energyBalls.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color, proj.energyBallVariant);
         }
         energyBalls.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color, proj.energyBallVariant);
+      } else if (isHydraP && hydras) {
+        if (!hydras.has(proj.id)) {
+          hydras.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
+        }
+        hydras.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
       } else if (isSporeP && spores) {
         if (!spores.has(proj.id)) {
           spores.createVisual(proj.id, proj.x, proj.y, proj.size, proj.color);
@@ -1942,7 +2221,7 @@ export class ProjectileManager {
       } else {
         const existing = this.clientVisuals.get(proj.id);
         if (!existing) {
-          const isBall = proj.style === 'ball';
+          const isBall = proj.style === 'ball' || proj.style === 'hydra';
           const sprite: Phaser.GameObjects.Shape = isBall
             ? this.scene.add.circle(proj.x, proj.y, proj.size / 2, proj.color)
             : this.scene.add.rectangle(proj.x, proj.y, proj.size, proj.size, proj.color);
@@ -1992,6 +2271,8 @@ export class ProjectileManager {
         this.holyGrenadeRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'energy_ball' && this.energyBallRenderer?.has(id)) {
         this.energyBallRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color, state.energyBallVariant);
+      } else if (state.style === 'hydra' && this.hydraRenderer?.has(id)) {
+        this.hydraRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color);
       } else if (state.style === 'spore' && this.sporeRenderer?.has(id)) {
         this.sporeRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY, state.color);
       } else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) {

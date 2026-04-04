@@ -7,6 +7,7 @@ import { FlameRenderer }       from '../../effects/FlameRenderer';
 import { BfgRenderer }         from '../../effects/BfgRenderer';
 import { EnergyBallRenderer }  from '../../effects/EnergyBallRenderer';
 import { GaussRenderer }       from '../../effects/GaussRenderer';
+import { HydraRenderer }       from '../../effects/HydraRenderer';
 import { EnergyShieldRenderer } from '../../effects/EnergyShieldRenderer';
 import { TeslaDomeRenderer }   from '../../effects/TeslaDomeRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
@@ -37,6 +38,7 @@ export interface RendererBundle {
   flame:               FlameRenderer;
   bfg:                 BfgRenderer;
   energyBall:          EnergyBallRenderer;
+  hydra:               HydraRenderer;
   gauss:               GaussRenderer;
   energyShield:        EnergyShieldRenderer;
   teslaDome:           TeslaDomeRenderer;
@@ -84,6 +86,9 @@ export function createRendererBundle(
   const energyBall = new EnergyBallRenderer(scene);
   energyBall.generateTextures();
 
+  const hydra = new HydraRenderer(scene);
+  hydra.generateTextures();
+
   const gauss = new GaussRenderer(scene);
   gauss.generateTextures();
 
@@ -129,7 +134,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, bite, zeusTaser, flame, bfg, energyBall, gauss, energyShield, teslaDome, holyGrenade,
+    bullet, asmdPrimary, bite, zeusTaser, flame, bfg, energyBall, hydra, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, powerUp, shadow,
     train: null,
@@ -147,6 +152,7 @@ export function wireRenderersToProjManager(
   pm.setFlameRenderer(bundle.flame);
   pm.setBfgRenderer(bundle.bfg);
   pm.setEnergyBallRenderer(bundle.energyBall);
+  pm.setHydraRenderer(bundle.hydra);
   pm.setGaussRenderer(bundle.gauss);
   pm.setHolyGrenadeRenderer(bundle.holyGrenade);
   pm.setRocketRenderer(bundle.rocket);
