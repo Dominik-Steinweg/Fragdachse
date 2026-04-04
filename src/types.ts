@@ -507,6 +507,7 @@ export interface ProjectileSpawnConfig {
   // Hydra-Splitting (optional)
   splitCount?: number;
   splitSpread?: number;
+  splitFactor?: number;
   initialBounceCount?: number;
   remainingRangePx?: number;
   suppressSpawnFx?: boolean;
@@ -702,6 +703,7 @@ export interface TrackedProjectile {
   // Hydra-Splitting
   splitCount?: number;
   splitSpread?: number;
+  splitFactor?: number;
   remainingRangePx?: number;
   suppressSpawnFx?: boolean;
   pendingHydraSplit?: {

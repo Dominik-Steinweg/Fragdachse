@@ -460,6 +460,7 @@ export class ProjectileManager {
       shotAudioVolume: cfg.shotAudioVolume,
       splitCount:      cfg.splitCount,
       splitSpread:     cfg.splitSpread,
+      splitFactor:     cfg.splitFactor,
       remainingRangePx: cfg.remainingRangePx,
       suppressSpawnFx: cfg.suppressSpawnFx,
       // Flammenwerfer-Felder
@@ -1180,9 +1181,10 @@ export class ProjectileManager {
     const childAngles = this.getHydraSplitAngles(Math.atan2(outgoingVy, outgoingVx), splitCount, splitSpread);
     if (childAngles.length === 0) return false;
 
-    const childSize = Math.max(4, proj.sprite.displayWidth / splitCount);
-    const childDamage = Math.max(1, proj.damage / splitCount);
-    const childAdrenalinGain = Math.max(0, proj.adrenalinGain / splitCount);
+    const splitFactor = proj.splitFactor ?? 1;
+    const childSize = Math.max(4, (proj.sprite.displayWidth / splitCount) * splitFactor);
+    const childDamage = Math.max(1, (proj.damage / splitCount) * splitFactor);
+    const childAdrenalinGain = Math.max(0, (proj.adrenalinGain / splitCount) * splitFactor);
     const childLifetime = (remainingRangePx / outgoingSpeed) * 1000;
 
     proj.pendingHydraSplit = {
@@ -1240,6 +1242,7 @@ export class ProjectileManager {
         shotAudioVolume: proj.shotAudioVolume,
         splitCount: proj.splitCount,
         splitSpread: proj.splitSpread,
+        splitFactor: proj.splitFactor,
         initialBounceCount: nextBounceCount,
         remainingRangePx,
         suppressSpawnFx: true,

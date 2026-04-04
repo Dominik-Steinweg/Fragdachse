@@ -13,15 +13,17 @@ import {
 const TEX_HYDRA_CORE = '__hydra_core';
 const TEX_HYDRA_GLOW = '__hydra_glow';
 const TEX_HYDRA_MEMBRANE = '__hydra_membrane';
+const TEX_HYDRA_CLUSTER = '__hydra_cluster';
 const TEX_HYDRA_SPARK = '__hydra_spark';
 const TEX_HYDRA_WISP = '__hydra_wisp';
 
 interface HydraVisual {
   glow: Phaser.GameObjects.Image;
   membrane: Phaser.GameObjects.Image;
-  halo: Phaser.GameObjects.Image;
+  cluster: Phaser.GameObjects.Image;
   coreEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   shellEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  moteEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   wakeEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   lastTrailX: number;
   lastTrailY: number;
@@ -37,60 +39,102 @@ export class HydraRenderer {
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_HYDRA_CORE, 20, [
       [0, 'rgba(255,255,255,1.0)'],
-      [0.22, 'rgba(236,250,255,0.98)'],
-      [0.5, 'rgba(170,234,255,0.82)'],
-      [0.78, 'rgba(57,133,175,0.24)'],
-      [1, 'rgba(5,18,35,0.0)'],
+      [0.18, 'rgba(255,255,255,0.98)'],
+      [0.46, 'rgba(244,244,244,0.82)'],
+      [0.72, 'rgba(168,168,168,0.24)'],
+      [1, 'rgba(10,10,10,0.0)'],
     ]);
 
     fillRadialGradientTexture(this.scene.textures, TEX_HYDRA_GLOW, 60, [
-      [0, 'rgba(214,248,255,0.66)'],
-      [0.28, 'rgba(138,223,255,0.38)'],
-      [0.6, 'rgba(57,133,175,0.15)'],
+      [0, 'rgba(255,255,255,0.68)'],
+      [0.26, 'rgba(255,255,255,0.34)'],
+      [0.58, 'rgba(190,190,190,0.12)'],
       [1, 'rgba(0,0,0,0.0)'],
     ]);
 
     fillRadialGradientTexture(this.scene.textures, TEX_HYDRA_SPARK, 10, [
       [0, 'rgba(255,255,255,1.0)'],
-      [0.36, 'rgba(214,247,255,0.86)'],
-      [0.68, 'rgba(107,194,234,0.36)'],
-      [1, 'rgba(14,28,52,0.0)'],
+      [0.34, 'rgba(245,245,245,0.86)'],
+      [0.66, 'rgba(180,180,180,0.36)'],
+      [1, 'rgba(24,24,24,0.0)'],
     ]);
 
-    fillRadialGradientTexture(this.scene.textures, TEX_HYDRA_WISP, 30, [
-      [0, 'rgba(206,247,255,0.34)'],
-      [0.4, 'rgba(115,210,242,0.2)'],
-      [0.78, 'rgba(52,103,150,0.08)'],
-      [1, 'rgba(0,0,0,0.0)'],
-    ]);
+    ensureCanvasTexture(this.scene.textures, TEX_HYDRA_WISP, 44, 20, (ctx) => {
+      const gradient = ctx.createLinearGradient(2, 10, 42, 10);
+      gradient.addColorStop(0, 'rgba(255,255,255,0.0)');
+      gradient.addColorStop(0.18, 'rgba(255,255,255,0.12)');
+      gradient.addColorStop(0.56, 'rgba(255,255,255,0.34)');
+      gradient.addColorStop(0.82, 'rgba(255,255,255,0.2)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0.0)');
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(2, 10);
+      ctx.quadraticCurveTo(13, 4, 28, 6);
+      ctx.quadraticCurveTo(40, 8, 42, 10);
+      ctx.quadraticCurveTo(40, 12, 28, 14);
+      ctx.quadraticCurveTo(13, 16, 2, 10);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    ensureCanvasTexture(this.scene.textures, TEX_HYDRA_CLUSTER, 34, 34, (ctx) => {
+      const nodes = [
+        { x: 16.5, y: 16.5, r: 6.6, a: 0.92 },
+        { x: 11.8, y: 14.6, r: 4.8, a: 0.72 },
+        { x: 22.3, y: 13.2, r: 4.4, a: 0.68 },
+        { x: 13.7, y: 22.1, r: 4.1, a: 0.64 },
+        { x: 21.6, y: 21.2, r: 3.8, a: 0.58 },
+      ];
+
+      for (const node of nodes) {
+        const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.r);
+        gradient.addColorStop(0, `rgba(255,255,255,${node.a})`);
+        gradient.addColorStop(0.48, `rgba(245,245,245,${node.a * 0.72})`);
+        gradient.addColorStop(1, 'rgba(120,120,120,0.0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(8, 15);
+      ctx.bezierCurveTo(13, 7, 22, 8, 26, 15);
+      ctx.bezierCurveTo(28, 20, 21, 27, 14, 25);
+      ctx.stroke();
+    });
 
     ensureCanvasTexture(this.scene.textures, TEX_HYDRA_MEMBRANE, 34, 34, (ctx) => {
       const cx = 17;
       const cy = 17;
-      ctx.strokeStyle = 'rgba(255,255,255,0.82)';
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+      ctx.lineWidth = 1.15;
       ctx.beginPath();
-      ctx.arc(cx, cy, 7.8, Math.PI * 0.12, Math.PI * 1.95);
+      ctx.moveTo(7, 17);
+      ctx.bezierCurveTo(8, 10, 13, 6.4, 18, 7.2);
+      ctx.bezierCurveTo(24.5, 8.1, 28.4, 13.4, 27.3, 19.1);
+      ctx.bezierCurveTo(26.2, 25.1, 19.8, 27.7, 13.9, 25.6);
+      ctx.bezierCurveTo(9.6, 24.1, 6.1, 20.4, 7, 17);
       ctx.stroke();
 
-      ctx.strokeStyle = 'rgba(184,236,255,0.54)';
-      ctx.lineWidth = 1.1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.42)';
+      ctx.lineWidth = 0.95;
       ctx.beginPath();
-      ctx.arc(cx, cy, 10.8, Math.PI * 0.68, Math.PI * 2.22);
+      ctx.moveTo(10.8, 11.6);
+      ctx.quadraticCurveTo(cx, 5.5, 23.9, 11.4);
+      ctx.quadraticCurveTo(28.4, 17.1, 22.7, 23.2);
+      ctx.quadraticCurveTo(16.4, 28.3, 10.4, 22.6);
       ctx.stroke();
 
-      ctx.strokeStyle = 'rgba(98,188,227,0.34)';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 5.4, Math.PI * 1.08, Math.PI * 2.8);
-      ctx.stroke();
-
-      ctx.fillStyle = 'rgba(255,255,255,0.26)';
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
       for (const node of [
-        { x: 10, y: 13, r: 1.4 },
-        { x: 22, y: 12, r: 1.2 },
-        { x: 20, y: 23, r: 1.3 },
-        { x: 14, y: 22, r: 1.1 },
+        { x: 9.8, y: 13.4, r: 1.2 },
+        { x: 23.4, y: 11.9, r: 1.1 },
+        { x: 21.5, y: 23.1, r: 1.15 },
+        { x: 13.1, y: 23.6, r: 1.0 },
       ]) {
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
@@ -105,59 +149,74 @@ export class HydraRenderer {
     const glow = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_HYDRA_GLOW),
       DEPTH.PROJECTILES - 0.25,
-      0.84,
-      mixColors(color, 0xbcefff, 0.3),
-    );
-
-    const halo = configureAdditiveImage(
-      this.scene.add.image(x, y, TEX_HYDRA_GLOW),
-      DEPTH.PROJECTILES + 0.15,
-      0.42,
-      mixColors(color, 0xffffff, 0.18),
+      0.52,
+      mixColors(color, 0xffffff, 0.04),
     );
 
     const membrane = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_HYDRA_MEMBRANE),
       DEPTH.PROJECTILES + 0.7,
-      0.94,
-      mixColors(color, 0xffffff, 0.12),
+      0.82,
+      mixColors(color, 0xffffff, 0.06),
+    );
+
+    const cluster = configureAdditiveImage(
+      this.scene.add.image(x, y, TEX_HYDRA_CLUSTER),
+      DEPTH.PROJECTILES + 0.55,
+      0.9,
+      mixColors(color, 0xffffff, 0.04),
     );
 
     const coreEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_CORE, {
-      lifespan: { min: 110, max: 220 },
-      frequency: 14,
-      quantity: 2,
-      speedX: { min: -18, max: 18 },
-      speedY: { min: -18, max: 18 },
-      scale: { start: 0.64, end: 0.1 },
+      lifespan: { min: 120, max: 240 },
+      frequency: 12,
+      quantity: 3,
+      speedX: { min: -20, max: 20 },
+      speedY: { min: -20, max: 20 },
+      scale: { start: 0.72, end: 0.08 },
       alpha: { start: 0.98, end: 0 },
-      tint: [0xffffff, mixColors(color, 0xd8f8ff, 0.18), mixColors(color, 0x1f4e7d, 0.2)],
+      tint: [0xffffff, color, mixColors(color, 0xffffff, 0.16)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, DEPTH.PROJECTILES + 1.1);
 
     const shellEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_SPARK, {
-      lifespan: { min: 170, max: 320 },
-      frequency: 22,
-      quantity: 1,
-      speedX: { min: -34, max: 34 },
-      speedY: { min: -34, max: 34 },
-      scale: { start: 0.82, end: 0.08 },
-      alpha: { start: 0.78, end: 0 },
-      tint: [0xffffff, mixColors(color, 0xe8fbff, 0.12), mixColors(color, 0x0a1e36, 0.28)],
+      lifespan: { min: 180, max: 360 },
+      frequency: 16,
+      quantity: 2,
+      speedX: { min: -44, max: 44 },
+      speedY: { min: -44, max: 44 },
+      scale: { start: 0.94, end: 0.06 },
+      alpha: { start: 0.86, end: 0 },
+      tint: [0xffffff, color, mixColors(color, 0x080f19, 0.2)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, DEPTH.PROJECTILES + 0.85);
 
+    const moteEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_SPARK, {
+      lifespan: { min: 220, max: 420 },
+      frequency: 20,
+      quantity: 1,
+      speedX: { min: -16, max: 16 },
+      speedY: { min: -16, max: 16 },
+      scale: { start: 0.46, end: 0.04 },
+      alpha: { start: 0.62, end: 0 },
+      tint: [mixColors(color, 0xffffff, 0.1), color, mixColors(color, 0x050a14, 0.3)],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: true,
+    }, DEPTH.PROJECTILES + 0.95);
+
     const wakeEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_WISP, {
       lifespan: { min: 220, max: 420 },
-      frequency: 24,
+      frequency: 18,
       quantity: 1,
-      speedX: { min: -22, max: 22 },
-      speedY: { min: -22, max: 22 },
-      scale: { start: 0.82, end: 0.14 },
-      alpha: { start: 0.5, end: 0 },
-      tint: [mixColors(color, 0xffffff, 0.08), color, mixColors(color, 0x10253f, 0.3)],
+      speedX: { min: -12, max: 12 },
+      speedY: { min: -12, max: 12 },
+      scaleX: { start: 0.6, end: 0.12 },
+      scaleY: { start: 0.32, end: 0.08 },
+      rotate: { min: -8, max: 8 },
+      alpha: { start: 0.12, end: 0 },
+      tint: [mixColors(color, 0xffffff, 0.04), color, mixColors(color, 0x07101b, 0.18)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, DEPTH.PROJECTILES - 0.05);
@@ -165,9 +224,10 @@ export class HydraRenderer {
     this.visuals.set(id, {
       glow,
       membrane,
-      halo,
+      cluster,
       coreEmitter,
       shellEmitter,
+      moteEmitter,
       wakeEmitter,
       lastTrailX: x,
       lastTrailY: y,
@@ -186,42 +246,50 @@ export class HydraRenderer {
     const ny = vy / speed;
     const pulse = Math.sin(this.scene.time.now * 0.018 + id * 0.43);
     const wobble = Math.cos(this.scene.time.now * 0.011 + id * 0.27);
+    const drift = Math.sin(this.scene.time.now * 0.014 + id * 0.63);
     const heading = Math.atan2(vy, vx);
-    const spread = Math.max(size * 0.52, 6);
-    const wakeX = x - nx * Math.max(size * 0.9, 9);
-    const wakeY = y - ny * Math.max(size * 0.9, 9);
+    const spread = Math.max(size * 0.54, 6.5);
+    const wakeDistance = Math.max(size * 1.95, 20);
+    const wakeX = x - nx * wakeDistance + -ny * drift * Math.max(size * 0.08, 1.4);
+    const wakeY = y - ny * wakeDistance + nx * drift * Math.max(size * 0.08, 1.4);
 
     visual.glow.setPosition(x, y);
-    visual.glow.setScale(Math.max(size / 11, 0.95) * (1.06 + pulse * 0.08));
-    visual.glow.setAlpha(0.72 + pulse * 0.08);
-    visual.glow.setTint(mixColors(color, 0xcaf6ff, 0.24));
+    visual.glow.setScale(Math.max(size / 13.8, 0.78) * (1.04 + pulse * 0.06));
+    visual.glow.setAlpha(0.42 + pulse * 0.04);
+    visual.glow.setTint(mixColors(color, 0xffffff, 0.03));
 
-    visual.halo.setPosition(x, y);
-    visual.halo.setScale(Math.max(size / 14, 0.8) * (1.18 + wobble * 0.1));
-    visual.halo.setAlpha(0.34 + pulse * 0.05);
-    visual.halo.setTint(mixColors(color, 0xffffff, 0.1));
+    visual.cluster.setPosition(x, y);
+    visual.cluster.setRotation(-heading * 0.45 + wobble * 0.22);
+    visual.cluster.setScale(Math.max(size / 14.6, 0.74) * (1.02 + pulse * 0.04));
+    visual.cluster.setAlpha(0.9);
+    visual.cluster.setTint(mixColors(color, 0xffffff, 0.02));
 
     visual.membrane.setPosition(x, y);
-    visual.membrane.setRotation(heading + pulse * 0.18);
-    visual.membrane.setScale(Math.max(size / 14.5, 0.72), Math.max(size / 15.5, 0.68) * (1 + wobble * 0.05));
-    visual.membrane.setAlpha(0.86 + pulse * 0.05);
-    visual.membrane.setTint(mixColors(color, 0xffffff, 0.12));
+    visual.membrane.setRotation(heading + pulse * 0.26);
+    visual.membrane.setScale(Math.max(size / 14.1, 0.76), Math.max(size / 17.2, 0.64) * (1 + wobble * 0.06));
+    visual.membrane.setAlpha(0.62 + pulse * 0.06);
+    visual.membrane.setTint(mixColors(color, 0xffffff, 0.04));
 
     visual.coreEmitter.setPosition(x, y);
-    setCircleEmitZone(visual.coreEmitter, spread * 0.32, 2, true);
-    visual.coreEmitter.setParticleScale(Math.max(size / 20, 0.34), 0.08);
+    setCircleEmitZone(visual.coreEmitter, spread * 0.28, 3, true);
+    visual.coreEmitter.setParticleScale(Math.max(size / 18, 0.42), 0.08);
 
     visual.shellEmitter.setPosition(x, y);
-    setCircleEmitZone(visual.shellEmitter, spread * 0.82, 1, true);
-    visual.shellEmitter.setParticleScale(Math.max(size / 22, 0.3), 0.08);
+    setCircleEmitZone(visual.shellEmitter, spread * 0.88, 2, true);
+    visual.shellEmitter.setParticleScale(Math.max(size / 21, 0.3), 0.05);
+
+    visual.moteEmitter.setPosition(x + -ny * drift * 3, y + nx * drift * 3);
+    setCircleEmitZone(visual.moteEmitter, spread * 0.46, 2, true);
+    visual.moteEmitter.setParticleScale(Math.max(size / 30, 0.18), 0.04);
 
     visual.wakeEmitter.setPosition(wakeX, wakeY);
-    setCircleEmitZone(visual.wakeEmitter, spread * 0.58, 1, true);
-    visual.wakeEmitter.setParticleScale(Math.max(size / 24, 0.24), 0.12);
+    visual.wakeEmitter.setAngle(Phaser.Math.RadToDeg(heading) + 180);
+    setCircleEmitZone(visual.wakeEmitter, Math.max(size * 0.08, 1.6), 1, true);
+    visual.wakeEmitter.setParticleScale(Math.max(size / 22, 0.26), 0.08);
 
     const now = this.scene.time.now;
     const distance = Phaser.Math.Distance.Between(visual.lastTrailX, visual.lastTrailY, wakeX, wakeY);
-    if (distance >= Math.max(size * 0.55, 7) || now - visual.lastTrailAt >= 26) {
+    if (distance >= Math.max(size * 0.7, 8) || now - visual.lastTrailAt >= 34) {
       this.spawnTrailWisp(wakeX, wakeY, size, heading + Math.PI, color);
       visual.lastTrailX = wakeX;
       visual.lastTrailY = wakeY;
@@ -235,9 +303,10 @@ export class HydraRenderer {
 
     destroyEmitter(visual.coreEmitter);
     destroyEmitter(visual.shellEmitter);
+    destroyEmitter(visual.moteEmitter);
     destroyEmitter(visual.wakeEmitter);
     visual.glow.destroy();
-    visual.halo.destroy();
+    visual.cluster.destroy();
     visual.membrane.destroy();
     this.visuals.delete(id);
   }
@@ -266,16 +335,23 @@ export class HydraRenderer {
     const glow = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_HYDRA_GLOW),
       DEPTH.PROJECTILES + 1.4,
-      0.82,
-      mixColors(color, 0xe4fbff, 0.24),
-    ).setScale(Math.max(1.1, scale * 1.65));
+      0.62,
+      mixColors(color, 0xffffff, 0.05),
+    ).setScale(Math.max(0.9, scale * 1.15));
+
+    const cluster = configureAdditiveImage(
+      this.scene.add.image(x, y, TEX_HYDRA_CLUSTER),
+      DEPTH.PROJECTILES + 1.52,
+      0.9,
+      mixColors(color, 0xffffff, 0.03),
+    ).setScale(Math.max(0.88, scale * 1.02));
 
     const membrane = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_HYDRA_MEMBRANE),
       DEPTH.PROJECTILES + 1.6,
-      0.94,
-      mixColors(color, 0xffffff, 0.14),
-    ).setScale(Math.max(0.9, scale * 1.08));
+      0.74,
+      mixColors(color, 0xffffff, 0.08),
+    ).setScale(Math.max(0.82, scale * 0.96));
 
     const burst = createEmitter(this.scene, x, y, TEX_HYDRA_SPARK, {
       lifespan: { min: 180, max: 360 },
@@ -284,7 +360,7 @@ export class HydraRenderer {
       angle: { min: 0, max: 360 },
       scale: { start: 0.92, end: 0.06 },
       alpha: { start: 0.96, end: 0 },
-      tint: [0xffffff, mixColors(color, 0xe8fbff, 0.12), mixColors(color, 0x0d1d35, 0.24)],
+      tint: [0xffffff, color, mixColors(color, 0x0d1d35, 0.22)],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH.PROJECTILES + 1.75);
@@ -293,9 +369,9 @@ export class HydraRenderer {
     this.scene.tweens.add({
       targets: glow,
       alpha: 0,
-      scaleX: glow.scaleX * 1.7,
-      scaleY: glow.scaleY * 1.7,
-      duration: 240,
+      scaleX: glow.scaleX * 1.45,
+      scaleY: glow.scaleY * 1.45,
+      duration: 200,
       ease: 'Quad.easeOut',
       onComplete: () => glow.destroy(),
     });
@@ -309,6 +385,16 @@ export class HydraRenderer {
       ease: 'Cubic.easeOut',
       onComplete: () => membrane.destroy(),
     });
+    this.scene.tweens.add({
+      targets: cluster,
+      alpha: 0,
+      scaleX: cluster.scaleX * 1.4,
+      scaleY: cluster.scaleY * 1.28,
+      rotation: 0.9,
+      duration: 220,
+      ease: 'Cubic.easeOut',
+      onComplete: () => cluster.destroy(),
+    });
     this.scene.time.delayedCall(420, () => destroyEmitter(burst));
   }
 
@@ -321,7 +407,7 @@ export class HydraRenderer {
       this.scene.add.image(x, y, TEX_HYDRA_GLOW),
       DEPTH.PROJECTILES + 1.5,
       0.92,
-      mixColors(color, 0xffffff, 0.18),
+      color,
     ).setScale(Math.max(1.2, scale * 1.15));
 
     this.scene.tweens.add({
@@ -345,7 +431,7 @@ export class HydraRenderer {
         },
         scale: { start: 0.86, end: 0.05 },
         alpha: { start: 0.98, end: 0 },
-        tint: [0xffffff, mixColors(color, 0xe8fbff, 0.08), mixColors(color, 0x0b1d33, 0.22)],
+        tint: [0xffffff, color, mixColors(color, 0x0b1d33, 0.18)],
         blendMode: Phaser.BlendModes.ADD,
         emitting: false,
       }, DEPTH.PROJECTILES + 1.85);
@@ -355,9 +441,9 @@ export class HydraRenderer {
       const wisp = this.scene.add.image(x, y, TEX_HYDRA_WISP)
         .setDepth(DEPTH.PROJECTILES + 0.9)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setAlpha(0.55)
-        .setTint(mixColors(color, 0xcff8ff, 0.14))
-        .setScale(Math.max(scale * 0.75, 0.65), Math.max(scale * 0.32, 0.24))
+        .setAlpha(0.58)
+        .setTint(color)
+        .setScale(Math.max(scale * 0.9, 0.72), Math.max(scale * 0.3, 0.24))
         .setRotation(angle);
       this.trailWisps.add(wisp);
       this.scene.tweens.add({
@@ -381,20 +467,20 @@ export class HydraRenderer {
     const wisp = this.scene.add.image(x, y, TEX_HYDRA_WISP)
       .setDepth(DEPTH.PROJECTILES - 0.2)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.36)
-      .setTint(mixColors(color, 0xc9f7ff, 0.12))
-      .setScale(Math.max(size / 18, 0.56), Math.max(size / 28, 0.24))
-      .setRotation(rotation + Phaser.Math.FloatBetween(-0.22, 0.22));
+      .setAlpha(0.4)
+      .setTint(mixColors(color, 0xffffff, 0.04))
+      .setScale(Math.max(size / 20, 0.48), Math.max(size / 36, 0.12))
+      .setRotation(rotation + Phaser.Math.FloatBetween(-0.3, 0.3));
 
     this.trailWisps.add(wisp);
     this.scene.tweens.add({
       targets: wisp,
       alpha: 0,
-      scaleX: wisp.scaleX * 1.85,
-      scaleY: wisp.scaleY * 1.3,
-      x: x + Phaser.Math.Between(-9, 9),
-      y: y + Phaser.Math.Between(-9, 9),
-      duration: 300,
+      scaleX: wisp.scaleX * 1.45,
+      scaleY: wisp.scaleY * 1.08,
+      x: x + Phaser.Math.Between(-6, 6),
+      y: y + Phaser.Math.Between(-6, 6),
+      duration: 1000,
       ease: 'Quad.easeOut',
       onComplete: () => {
         this.trailWisps.delete(wisp);

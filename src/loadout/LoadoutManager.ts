@@ -1175,6 +1175,7 @@ export class LoadoutManager {
       weaponName:      config.displayName,
       splitCount:      config.splitCount,
       splitSpread:     config.splitSpread,
+      splitFactor:     config.splitFactor,
       remainingRangePx: effectiveRange,
       explosion:       fireConfig.impactExplosion,
       impactCloud:     fireConfig.impactCloud,

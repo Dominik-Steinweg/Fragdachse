@@ -118,6 +118,7 @@ export interface WeaponConfig {
   // Hydra-Splitting (optional)
   readonly splitCount?:        number; // Anzahl der beim Bounce neu erzeugten Projektile
   readonly splitSpread?:       number; // Winkelabstand in Grad zwischen benachbarten Split-Bahnen
+  readonly splitFactor?:       number; // Multiplikator nach der Grundteilung beim Split (1 = unverändert, 1.5 = stärkere Kinder)
 
   // Visuelles Override
   readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
@@ -592,24 +593,25 @@ export const WEAPON_CONFIGS = {
   HYDRA: {
     id:                   'HYDRA',
     displayName:          'Hydra Gun',
-    cooldown:             600,
-    damage:               16,          // Direkttreffer-Schaden
+    cooldown:             900,
+    damage:               10,          // Direkttreffer-Schaden
     range:                1000,         
     fire: {
       type:                 'projectile',
-      projectileSpeed:      350,
+      projectileSpeed:      300,
       projectileSize:       16,
       projectileMaxBounces: 3,
     },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
-    adrenalinGain:        16,
+    adrenalinGain:        12,
     spreadStanding:       0,
     spreadMoving:         0,
     spreadPerShot:        0,
     maxDynamicSpread:     0,
     splitCount:           2, // Anzahl der zusätzlichen Projektile, die beim Aufprall abgespalten werden
     splitSpread:          5, // zusätzlicher Spread der abgespaltenen Projektile in Grad (z.B. 5 = ±5°)
+    splitFactor:          1.25,
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
