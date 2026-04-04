@@ -614,6 +614,7 @@ export class ArenaScene extends Phaser.Scene {
       ? (this.ctx.tunnelSystem?.getSnapshot() ?? [])
       : (bridge.getLatestGameState()?.tunnels ?? []);
     this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
+    this.tunnelRenderer.update(this.time.now);
     this.syncWorldShadows(inArena);
   }
 

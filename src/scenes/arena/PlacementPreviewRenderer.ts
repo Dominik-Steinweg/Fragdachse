@@ -4,6 +4,14 @@ import type { PlaceableRockUtilityConfig, PlaceableTurretUtilityConfig, Placeabl
 import { GAME_WIDTH, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, PLAYER_COLORS } from '../../config';
 import type { ArenaContext }             from './ArenaContext';
 import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
+import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
+
+interface TunnelPreviewVisualState {
+  keyBase: string;
+  line: Phaser.GameObjects.Graphics;
+  anchor: TunnelEndpointVisual | null;
+  target: TunnelEndpointVisual | null;
+}
 
 /**
  * Manages all placement-preview GameObjects and hint containers.
@@ -15,8 +23,8 @@ import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../
 export class PlacementPreviewRenderer {
   private localPlacementPreviewImage: Phaser.GameObjects.Image | null = null;
   private readonly remotePlacementPreviewImages = new Map<string, Phaser.GameObjects.Image>();
-  private readonly localTunnelPreviewGraphics: Phaser.GameObjects.Graphics;
-  private readonly remoteTunnelPreviewGraphics = new Map<string, Phaser.GameObjects.Graphics>();
+  private readonly localTunnelPreview: TunnelPreviewVisualState;
+  private readonly remoteTunnelPreviews = new Map<string, TunnelPreviewVisualState>();
 
   private readonly rangeGraphics:   Phaser.GameObjects.Graphics;
   private readonly invalidGraphics: Phaser.GameObjects.Graphics;
@@ -33,7 +41,7 @@ export class PlacementPreviewRenderer {
   ) {
     this.rangeGraphics   = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
     this.invalidGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 1);
-    this.localTunnelPreviewGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
+    this.localTunnelPreview = this.createTunnelPreviewState('local');
 
     this.errorText = scene.add.text(
       GAME_WIDTH * 0.5,
@@ -57,37 +65,36 @@ export class PlacementPreviewRenderer {
   renderPlacementPreview(inArena: boolean, preview: UtilityPlacementPreviewState | undefined, localPlayerAlive: boolean, localPlayerBurrowed: boolean): void {
     this.rangeGraphics.clear();
     this.invalidGraphics.clear();
-    this.localTunnelPreviewGraphics.clear();
+    this.localTunnelPreview.line.clear();
 
     if (!inArena || !preview || !localPlayerAlive || localPlayerBurrowed) {
       this.localPlacementPreviewImage?.setVisible(false);
-      this.localTunnelPreviewGraphics.setVisible(false);
+      this.hideTunnelPreview(this.localTunnelPreview);
       return;
     }
 
     const localPlayer = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
     if (!localPlayer) {
       this.localPlacementPreviewImage?.setVisible(false);
-      this.localTunnelPreviewGraphics.setVisible(false);
+      this.hideTunnelPreview(this.localTunnelPreview);
       return;
     }
 
     const ownerColor = bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0];
     if (preview.kind === 'tunnel') {
       this.localPlacementPreviewImage?.setVisible(false);
-      this.drawTunnelPreview(this.localTunnelPreviewGraphics, preview, ownerColor, this.getPlacementPreviewAlpha(preview.kind), true);
-      this.localTunnelPreviewGraphics.setVisible(true);
+      this.drawTunnelPreview(this.localTunnelPreview, preview, ownerColor, this.getPlacementPreviewAlpha(preview.kind), true);
     } else {
-      this.localTunnelPreviewGraphics.setVisible(false);
-    const image = this.ensurePlacementPreviewImage(undefined, preview.kind);
-    image
-      .setPosition(preview.targetX, preview.targetY)
-      .setTint(ownerColor)
-      .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
-      .setVisible(true);
-    if (preview.kind === 'rock') {
-      image.setFrame(preview.frame);
-    }
+      this.hideTunnelPreview(this.localTunnelPreview);
+      const image = this.ensurePlacementPreviewImage(undefined, preview.kind);
+      image
+        .setPosition(preview.targetX, preview.targetY)
+        .setTint(ownerColor)
+        .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
+        .setVisible(true);
+      if (preview.kind === 'rock') {
+        image.setFrame(preview.frame);
+      }
     }
 
     this.rangeGraphics.lineStyle(2, ownerColor, 0.5);
@@ -109,9 +116,8 @@ export class PlacementPreviewRenderer {
       for (const preview of this.remotePlacementPreviewImages.values()) {
         preview.setVisible(false);
       }
-      for (const preview of this.remoteTunnelPreviewGraphics.values()) {
-        preview.clear();
-        preview.setVisible(false);
+      for (const preview of this.remoteTunnelPreviews.values()) {
+        this.hideTunnelPreview(preview);
       }
       return;
     }
@@ -125,8 +131,8 @@ export class PlacementPreviewRenderer {
       const ownerColor = bridge.getPlayerColor(playerId) ?? COLORS.GREY_3;
       if (preview.kind === 'tunnel') {
         this.remotePlacementPreviewImages.get(playerId)?.setVisible(false);
-        const graphics = this.ensureRemoteTunnelPreview(playerId);
-        this.drawTunnelPreview(graphics, {
+        const tunnelPreview = this.ensureRemoteTunnelPreview(playerId);
+        this.drawTunnelPreview(tunnelPreview, {
           angle: 0,
           targetX: preview.x,
           targetY: preview.y,
@@ -142,7 +148,6 @@ export class PlacementPreviewRenderer {
           anchorGridX: preview.anchorGridX,
           anchorGridY: preview.anchorGridY,
         }, ownerColor, 0.38, false);
-        graphics.setVisible(true);
       } else {
         const image = this.ensurePlacementPreviewImage(playerId, preview.kind);
         image
@@ -153,7 +158,10 @@ export class PlacementPreviewRenderer {
         if (preview.kind === 'rock') {
           image.setFrame(preview.frame);
         }
-        this.remoteTunnelPreviewGraphics.get(playerId)?.setVisible(false);
+        const tunnelPreview = this.remoteTunnelPreviews.get(playerId);
+        if (tunnelPreview) {
+          this.hideTunnelPreview(tunnelPreview);
+        }
       }
     }
 
@@ -161,10 +169,9 @@ export class PlacementPreviewRenderer {
       if (activeIds.has(playerId)) continue;
       image.setVisible(false);
     }
-    for (const [playerId, graphics] of this.remoteTunnelPreviewGraphics) {
+    for (const [playerId, tunnelPreview] of this.remoteTunnelPreviews) {
       if (activeIds.has(playerId)) continue;
-      graphics.clear();
-      graphics.setVisible(false);
+      this.hideTunnelPreview(tunnelPreview);
     }
   }
 
@@ -214,8 +221,7 @@ export class PlacementPreviewRenderer {
     this.rangeGraphics.clear();
     this.invalidGraphics.clear();
     this.localPlacementPreviewImage?.setVisible(false);
-    this.localTunnelPreviewGraphics.clear();
-    this.localTunnelPreviewGraphics.setVisible(false);
+    this.destroyTunnelPreview(this.localTunnelPreview);
     this.placeableUtilityHint.setVisible(false);
     this.airstrikeTargetingHint.setVisible(false);
     this.errorText.setVisible(false);
@@ -223,10 +229,10 @@ export class PlacementPreviewRenderer {
       preview.destroy();
     }
     this.remotePlacementPreviewImages.clear();
-    for (const preview of this.remoteTunnelPreviewGraphics.values()) {
-      preview.destroy();
+    for (const preview of this.remoteTunnelPreviews.values()) {
+      this.destroyTunnelPreview(preview);
     }
-    this.remoteTunnelPreviewGraphics.clear();
+    this.remoteTunnelPreviews.clear();
   }
 
   private ensurePlacementPreviewImage(
@@ -272,47 +278,117 @@ export class PlacementPreviewRenderer {
     return kind === 'turret' ? 'placeable_turret' : 'rocks';
   }
 
-  private ensureRemoteTunnelPreview(playerId: string): Phaser.GameObjects.Graphics {
-    const existing = this.remoteTunnelPreviewGraphics.get(playerId);
+  private ensureRemoteTunnelPreview(playerId: string): TunnelPreviewVisualState {
+    const existing = this.remoteTunnelPreviews.get(playerId);
     if (existing) {
-      existing.clear();
       return existing;
     }
-    const created = this.scene.add.graphics().setDepth(DEPTH.OVERLAY - 3).setVisible(false);
-    this.remoteTunnelPreviewGraphics.set(playerId, created);
+    const created = this.createTunnelPreviewState(`remote:${playerId}`);
+    this.remoteTunnelPreviews.set(playerId, created);
     return created;
   }
 
   private drawTunnelPreview(
-    graphics: Phaser.GameObjects.Graphics,
+    previewVisual: TunnelPreviewVisualState,
     preview: UtilityPlacementPreviewState,
     ownerColor: number,
     alpha: number,
     isLocal: boolean,
   ): void {
+    const graphics = previewVisual.line;
     graphics.clear();
+    graphics.setVisible(true);
     const fillAlpha = preview.isValid ? alpha : 0.2;
     const lineAlpha = preview.isValid ? 0.65 : 0.28;
+    const particleIntensity = preview.isValid ? (isLocal ? 0.75 : 0.6) : 0.35;
+
+    const target = this.ensureTunnelEndpointVisual(previewVisual, 'target', ownerColor, `${previewVisual.keyBase}:target`);
+    target.sync({
+      x: preview.targetX,
+      y: preview.targetY,
+      ownerColor,
+      alpha: fillAlpha,
+      particleIntensity,
+      sizePx: TUNNEL_HOLE_DIAMETER,
+    }, this.scene.time.now);
 
     if (preview.anchorX !== undefined && preview.anchorY !== undefined) {
-      graphics.lineStyle(4, ownerColor, lineAlpha * (isLocal ? 1 : 0.7));
+      const anchor = this.ensureTunnelEndpointVisual(previewVisual, 'anchor', ownerColor, `${previewVisual.keyBase}:anchor`);
+      anchor.sync({
+        x: preview.anchorX,
+        y: preview.anchorY,
+        ownerColor,
+        alpha: fillAlpha * 0.9,
+        particleIntensity: particleIntensity * 0.9,
+        sizePx: TUNNEL_HOLE_DIAMETER,
+      }, this.scene.time.now);
+
+      graphics.lineStyle(5, 0x160d08, lineAlpha * 0.22);
       graphics.beginPath();
       graphics.moveTo(preview.anchorX, preview.anchorY);
       graphics.lineTo(preview.targetX, preview.targetY);
       graphics.strokePath();
-      this.drawTunnelHole(graphics, preview.anchorX, preview.anchorY, fillAlpha * 0.85);
+
+      graphics.lineStyle(2, 0x6a4321, lineAlpha * (isLocal ? 0.62 : 0.48));
+      graphics.beginPath();
+      graphics.moveTo(preview.anchorX, preview.anchorY);
+      graphics.lineTo(preview.targetX, preview.targetY);
+      graphics.strokePath();
+    } else if (previewVisual.anchor) {
+      previewVisual.anchor.setVisible(false);
     }
 
-    this.drawTunnelHole(graphics, preview.targetX, preview.targetY, fillAlpha);
+    if (preview.anchorX === undefined || preview.anchorY === undefined) {
+      previewVisual.anchor?.setVisible(false);
+    }
   }
 
-  private drawTunnelHole(graphics: Phaser.GameObjects.Graphics, x: number, y: number, alpha: number): void {
-    graphics.fillStyle(0x2d1709, alpha);
-    graphics.fillCircle(x, y, CELL_SIZE * 0.38);
-    graphics.fillStyle(0x4f2c15, alpha * 0.95);
-    graphics.fillEllipse(x - 3, y - 2, CELL_SIZE * 0.56, CELL_SIZE * 0.42);
-    graphics.lineStyle(2, 0x1a0f08, Math.min(1, alpha + 0.18));
-    graphics.strokeEllipse(x - 3, y - 2, CELL_SIZE * 0.56, CELL_SIZE * 0.42);
+  private createTunnelPreviewState(keyBase: string): TunnelPreviewVisualState {
+    return {
+      keyBase,
+      line: this.scene.add.graphics().setDepth(TUNNEL_VISUAL_DEPTH + 0.025).setVisible(false),
+      anchor: null,
+      target: null,
+    };
+  }
+
+  private hideTunnelPreview(preview: TunnelPreviewVisualState): void {
+    preview.line.clear();
+    preview.line.setVisible(false);
+    preview.anchor?.setVisible(false);
+    preview.target?.setVisible(false);
+  }
+
+  private destroyTunnelPreview(preview: TunnelPreviewVisualState): void {
+    preview.line.destroy();
+    preview.anchor?.destroy();
+    preview.target?.destroy();
+    preview.anchor = null;
+    preview.target = null;
+  }
+
+  private ensureTunnelEndpointVisual(
+    preview: TunnelPreviewVisualState,
+    slot: 'anchor' | 'target',
+    ownerColor: number,
+    key: string,
+  ): TunnelEndpointVisual {
+    const existing = preview[slot];
+    if (existing) {
+      existing.setVisible(true);
+      return existing;
+    }
+
+    const created = new TunnelEndpointVisual(this.scene, key, {
+      x: 0,
+      y: 0,
+      ownerColor,
+      alpha: 0,
+      particleIntensity: 0.5,
+      sizePx: TUNNEL_HOLE_DIAMETER,
+    }, TUNNEL_VISUAL_DEPTH + 0.01);
+    preview[slot] = created;
+    return created;
   }
 
   private createUtilityTargetingHint(): Phaser.GameObjects.Container {

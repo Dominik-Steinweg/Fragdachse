@@ -1,48 +1,88 @@
 import Phaser from 'phaser';
-import { CELL_SIZE, DEPTH } from '../../config';
 import type { SyncedTunnel } from '../../types';
+import { TunnelEndpointVisual } from './TunnelEndpointVisual';
+
+interface TunnelEndpointRecord {
+  key: string;
+  visual: TunnelEndpointVisual;
+  ownerColor: number;
+  x: number;
+  y: number;
+}
 
 export class TunnelRenderer {
-  private readonly graphics: Phaser.GameObjects.Graphics;
-  private snapshot: readonly SyncedTunnel[] = [];
+  private readonly visuals = new Map<string, TunnelEndpointRecord>();
 
-  constructor(private readonly scene: Phaser.Scene) {
-    this.graphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 4);
-  }
+  constructor(private readonly scene: Phaser.Scene) {}
 
   sync(snapshot: readonly SyncedTunnel[]): void {
-    this.snapshot = snapshot;
-    this.redraw();
-  }
+    const nextKeys = new Set<string>();
 
-  clear(): void {
-    this.snapshot = [];
-    this.graphics.clear();
-  }
+    for (const tunnel of snapshot) {
+      this.syncEndpoint(`${tunnel.ownerId}:A`, tunnel.entranceA.x, tunnel.entranceA.y, tunnel.ownerColor);
+      this.syncEndpoint(`${tunnel.ownerId}:B`, tunnel.entranceB.x, tunnel.entranceB.y, tunnel.ownerColor);
+      nextKeys.add(`${tunnel.ownerId}:A`);
+      nextKeys.add(`${tunnel.ownerId}:B`);
+    }
 
-  destroy(): void {
-    this.graphics.destroy();
-  }
-
-  private redraw(): void {
-    this.graphics.clear();
-    for (const tunnel of this.snapshot) {
-      this.drawTunnel(tunnel.entranceA, tunnel.ownerColor);
-      this.drawTunnel(tunnel.entranceB, tunnel.ownerColor);
+    for (const key of [...this.visuals.keys()]) {
+      if (nextKeys.has(key)) continue;
+      this.destroyVisual(key);
     }
   }
 
-  private drawTunnel(endpoint: SyncedTunnel['entranceA'], ownerColor: number): void {
-    this.graphics.fillStyle(0x24140a, 0.92);
-    this.graphics.fillCircle(endpoint.x, endpoint.y, CELL_SIZE * 0.4);
+  update(now: number): void {
+    for (const visual of this.visuals.values()) {
+      visual.visual.sync({
+        x: visual.x,
+        y: visual.y,
+        ownerColor: visual.ownerColor,
+        alpha: 1,
+        particleIntensity: 1,
+      }, now);
+    }
+  }
 
-    this.graphics.fillStyle(0x4a2a14, 0.95);
-    this.graphics.fillEllipse(endpoint.x - 2, endpoint.y - 1, CELL_SIZE * 0.62, CELL_SIZE * 0.46);
+  clear(): void {
+    for (const key of [...this.visuals.keys()]) {
+      this.destroyVisual(key);
+    }
+  }
 
-    this.graphics.lineStyle(2, 0x140d08, 0.95);
-    this.graphics.strokeEllipse(endpoint.x - 2, endpoint.y - 1, CELL_SIZE * 0.62, CELL_SIZE * 0.46);
+  destroy(): void {
+    this.clear();
+  }
 
-    this.graphics.lineStyle(2, ownerColor, 0.18);
-    this.graphics.strokeCircle(endpoint.x, endpoint.y, CELL_SIZE * 0.46);
+  private syncEndpoint(key: string, x: number, y: number, ownerColor: number): void {
+    const existing = this.visuals.get(key);
+    if (existing) {
+      existing.x = x;
+      existing.y = y;
+      existing.ownerColor = ownerColor;
+      return;
+    }
+
+    const visual = new TunnelEndpointVisual(this.scene, key, {
+      x,
+      y,
+      ownerColor,
+      alpha: 1,
+      particleIntensity: 1,
+    });
+
+    this.visuals.set(key, {
+      key,
+      visual,
+      ownerColor,
+      x,
+      y,
+    });
+  }
+
+  private destroyVisual(key: string): void {
+    const visual = this.visuals.get(key);
+    if (!visual) return;
+    visual.visual.destroy();
+    this.visuals.delete(key);
   }
 }

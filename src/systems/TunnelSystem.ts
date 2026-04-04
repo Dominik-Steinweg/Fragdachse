@@ -25,14 +25,21 @@ interface TunnelTransitState {
   velocityY: number;
 }
 
+interface TunnelReentryGate {
+  blockedUntil: number;
+  exitX: number;
+  exitY: number;
+}
+
 type TunnelEnterCallback = (playerId: string, x: number, y: number) => void;
 
 const REENTRY_BLOCK_MS = 380;
+const REENTRY_RELEASE_DISTANCE = PLAYER_SIZE * 1.4;
 
 export class TunnelSystem {
   private readonly tunnels = new Map<string, ActiveTunnel>();
   private readonly activeTransitByPlayer = new Map<string, TunnelTransitState>();
-  private readonly reentryBlockedUntil = new Map<string, number>();
+  private readonly reentryBlockedUntil = new Map<string, TunnelReentryGate>();
   private onTunnelEnter: TunnelEnterCallback | null = null;
 
   constructor(
@@ -107,8 +114,17 @@ export class TunnelSystem {
   }
 
   notifyTransitEnded(playerId: string): void {
+    const player = this.playerManager.getPlayer(playerId);
     this.clearTransit(playerId);
-    this.reentryBlockedUntil.set(playerId, Date.now() + REENTRY_BLOCK_MS);
+    if (!player) {
+      this.reentryBlockedUntil.delete(playerId);
+      return;
+    }
+    this.reentryBlockedUntil.set(playerId, {
+      blockedUntil: Date.now() + REENTRY_BLOCK_MS,
+      exitX: player.sprite.x,
+      exitY: player.sprite.y,
+    });
   }
 
   private updateTransits(now: number): void {
@@ -143,7 +159,12 @@ export class TunnelSystem {
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.combatSystem.isAlive(player.id)) continue;
       if (this.activeTransitByPlayer.has(player.id)) continue;
-      if ((this.reentryBlockedUntil.get(player.id) ?? 0) > now) continue;
+      const reentryGate = this.reentryBlockedUntil.get(player.id);
+      if (reentryGate) {
+        if (now < reentryGate.blockedUntil) continue;
+        if (!this.hasMovedAwayFromExit(player.sprite.x, player.sprite.y, reentryGate)) continue;
+        this.reentryBlockedUntil.delete(player.id);
+      }
       if (this.burrowSystem.getPhase(player.id) !== 'idle') continue;
 
       for (const tunnel of this.tunnels.values()) {
@@ -189,6 +210,10 @@ export class TunnelSystem {
   private clearTransit(playerId: string): void {
     this.activeTransitByPlayer.delete(playerId);
     this.hostPhysics.clearForcedMovement(playerId);
+  }
+
+  private hasMovedAwayFromExit(x: number, y: number, gate: TunnelReentryGate): boolean {
+    return Phaser.Math.Distance.Between(x, y, gate.exitX, gate.exitY) >= REENTRY_RELEASE_DISTANCE;
   }
 
   private toEndpoint(gridX: number, gridY: number): SyncedTunnelEndpoint {
