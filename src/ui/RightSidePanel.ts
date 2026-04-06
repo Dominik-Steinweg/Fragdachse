@@ -105,6 +105,7 @@ export class RightSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
   private timerText!:      Phaser.GameObjects.Text;
+  private arenaOverlayVisible = false;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
   // ── Killfeed ──────────────────────────────────────────────────────────────
@@ -165,6 +166,8 @@ export class RightSidePanel {
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.pendingDelay?.remove();
+    this.arenaOverlayVisible = false;
+    this.gameContainer.y = -GAME_HEIGHT;
 
     this.scene.tweens.add({
       targets:  this.lobbyContainer,
@@ -172,22 +175,14 @@ export class RightSidePanel {
       duration: 350,
       ease:     'Power2.easeIn',
     });
-
-    this.pendingDelay = this.scene.time.delayedCall(100, () => {
-      this.scene.tweens.add({
-        targets:  this.gameContainer,
-        y:        0,
-        duration: 500,
-        ease:     'Back.easeOut',
-      });
-      this.pendingDelay = null;
-    });
+    this.pendingDelay = null;
   }
 
   transitionToLobby(): void {
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.pendingDelay?.remove();
+    this.arenaOverlayVisible = false;
 
     this.scene.tweens.add({
       targets:  this.gameContainer,
@@ -205,6 +200,32 @@ export class RightSidePanel {
         onComplete: () => { this.pendingDelay = null; },
       });
     });
+  }
+
+  setArenaOverlayVisible(visible: boolean, immediate = false): void {
+    const targetY = visible ? 0 : -GAME_HEIGHT;
+    if (!immediate && this.arenaOverlayVisible === visible) {
+      return;
+    }
+
+    this.scene.tweens.killTweensOf(this.gameContainer);
+    this.arenaOverlayVisible = visible;
+
+    if (immediate) {
+      this.gameContainer.y = targetY;
+      return;
+    }
+
+    this.scene.tweens.add({
+      targets: this.gameContainer,
+      y: targetY,
+      duration: visible ? 220 : 180,
+      ease: visible ? 'Back.easeOut' : 'Power2.easeIn',
+    });
+  }
+
+  isArenaOverlayVisible(): boolean {
+    return this.arenaOverlayVisible;
   }
 
   // ── Daten-Updates ──────────────────────────────────────────────────────────
@@ -412,6 +433,10 @@ export class RightSidePanel {
   private buildGameContainer(): void {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
     this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
+    this.gameContainer.add(
+      this.scene.add.rectangle(SIDEBAR_CENTER_X, GAME_HEIGHT / 2, ARENA_OFFSET_X, GAME_HEIGHT, 0x000000, 0.18)
+        .setScrollFactor(0),
+    );
 
     // ── Timer ─────────────────────────────────────────────────────────────────
     const timerBg = this.scene.add.rectangle(

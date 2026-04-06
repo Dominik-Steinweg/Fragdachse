@@ -104,6 +104,7 @@ export class LeftSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
   private arenaHUD!:       ArenaHUD;
+  private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
   private editBtn:         Phaser.GameObjects.Text | null = null;
   private modeNameText:    Phaser.GameObjects.Text | null = null;
@@ -147,6 +148,10 @@ export class LeftSidePanel {
     // ── gameContainer (ArenaHUD, initial off-screen oben) ─────────────────────
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
     this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
+    this.gameContainer.add(
+      this.scene.add.rectangle(CENTER_X, GAME_HEIGHT / 2, 240, GAME_HEIGHT, 0x000000, 0.18)
+        .setScrollFactor(0),
+    );
     this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer);
 
     // ── lobbyContainer (Namens- und Farbsektion, initial on-screen) ───────────
@@ -364,6 +369,8 @@ export class LeftSidePanel {
 
     // Populate ArenaHUD with player info and loadout names
     this.initArenaHUD();
+    this.arenaOverlayVisible = false;
+    this.gameContainer.y = -GAME_HEIGHT;
 
     this.scene.tweens.add({
       targets:  this.lobbyContainer,
@@ -371,16 +378,7 @@ export class LeftSidePanel {
       duration: 350,
       ease:     'Power2.easeIn',
     });
-
-    this.pendingDelay = this.scene.time.delayedCall(100, () => {
-      this.scene.tweens.add({
-        targets:  this.gameContainer,
-        y:        0,
-        duration: 500,
-        ease:     'Back.easeOut',
-      });
-      this.pendingDelay = null;
-    });
+    this.pendingDelay = null;
   }
 
   transitionToLobby(): void {
@@ -389,6 +387,7 @@ export class LeftSidePanel {
     this.pendingDelay?.remove();
 
     this.arenaHUD.reset();
+    this.arenaOverlayVisible = false;
     this.badgerPreview?.sprite.setVisible(true);
 
     this.scene.tweens.add({
@@ -412,6 +411,32 @@ export class LeftSidePanel {
         },
       });
     });
+  }
+
+  setArenaOverlayVisible(visible: boolean, immediate = false): void {
+    const targetY = visible ? 0 : -GAME_HEIGHT;
+    if (!immediate && this.arenaOverlayVisible === visible) {
+      return;
+    }
+
+    this.scene.tweens.killTweensOf(this.gameContainer);
+    this.arenaOverlayVisible = visible;
+
+    if (immediate) {
+      this.gameContainer.y = targetY;
+      return;
+    }
+
+    this.scene.tweens.add({
+      targets: this.gameContainer,
+      y: targetY,
+      duration: visible ? 220 : 180,
+      ease: visible ? 'Back.easeOut' : 'Power2.easeIn',
+    });
+  }
+
+  isArenaOverlayVisible(): boolean {
+    return this.arenaOverlayVisible;
   }
 
   // ── Daten-Updates (von ArenaScene.update() aufgerufen) ────────────────────

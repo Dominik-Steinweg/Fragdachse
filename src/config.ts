@@ -1,18 +1,59 @@
-import type { GameMode, RoomQualityRetryMode, RoomQualityStartPolicy, TeamId } from './types';
-import { CAPTURE_THE_BEER_MODE, usesExpandedArena } from './gameModes';
+import type { GameMode, GamePhase, RoomQualityRetryMode, RoomQualityStartPolicy, TeamId } from './types';
+import { CAPTURE_THE_BEER_MODE } from './gameModes';
 
 // ---- Display ----
 export const GAME_WIDTH = 1920;
 export const GAME_HEIGHT = 1080;
 
 export const DEFAULT_ARENA_WIDTH = 1440;
+export const FULL_ARENA_WIDTH = GAME_WIDTH;
 export const CAPTURE_THE_BEER_ARENA_WIDTH = DEFAULT_ARENA_WIDTH * 3;
 export const MAX_ARENA_WIDTH = CAPTURE_THE_BEER_ARENA_WIDTH;
+export const DEFAULT_ARENA_OFFSET_X = (GAME_WIDTH - DEFAULT_ARENA_WIDTH) / 2; // 240
+export const DEFAULT_ARENA_VIEWPORT_WIDTH = GAME_WIDTH - DEFAULT_ARENA_OFFSET_X * 2;
+export const LOBBY_ARENA_OFFSET_X = DEFAULT_ARENA_OFFSET_X;
+export const LOBBY_ARENA_VIEWPORT_WIDTH = DEFAULT_ARENA_VIEWPORT_WIDTH;
+export const MAX_ARENA_RENDER_WIDTH = DEFAULT_ARENA_OFFSET_X + MAX_ARENA_WIDTH;
+
+export interface ArenaMetricsProfile {
+  arenaWidth: number;
+  arenaOffsetX: number;
+  arenaViewportWidth: number;
+  usesDynamicCamera: boolean;
+  showStaticArenaFrames: boolean;
+}
+
+const DEFAULT_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
+  arenaWidth: DEFAULT_ARENA_WIDTH,
+  arenaOffsetX: DEFAULT_ARENA_OFFSET_X,
+  arenaViewportWidth: DEFAULT_ARENA_VIEWPORT_WIDTH,
+  usesDynamicCamera: false,
+  showStaticArenaFrames: true,
+};
+
+const FULL_WIDTH_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
+  arenaWidth: FULL_ARENA_WIDTH,
+  arenaOffsetX: 0,
+  arenaViewportWidth: GAME_WIDTH,
+  usesDynamicCamera: false,
+  showStaticArenaFrames: false,
+};
+
+const CAPTURE_THE_BEER_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
+  arenaWidth: CAPTURE_THE_BEER_ARENA_WIDTH,
+  arenaOffsetX: DEFAULT_ARENA_OFFSET_X,
+  arenaViewportWidth: DEFAULT_ARENA_VIEWPORT_WIDTH,
+  usesDynamicCamera: true,
+  showStaticArenaFrames: true,
+};
+
+export let ACTIVE_ARENA_METRICS_PROFILE: ArenaMetricsProfile = DEFAULT_ARENA_METRICS_PROFILE;
 export let ARENA_WIDTH = DEFAULT_ARENA_WIDTH;
 export const ARENA_HEIGHT = 1056;
-export const ARENA_OFFSET_X = (GAME_WIDTH - DEFAULT_ARENA_WIDTH) / 2; // 240
+export let ARENA_OFFSET_X = DEFAULT_ARENA_OFFSET_X;
 export const ARENA_OFFSET_Y = 12;
-export const ARENA_VIEWPORT_WIDTH = GAME_WIDTH - ARENA_OFFSET_X * 2;
+export let ARENA_VIEWPORT_WIDTH = DEFAULT_ARENA_VIEWPORT_WIDTH;
+export let ARENA_STATIC_FRAMES_VISIBLE = DEFAULT_ARENA_METRICS_PROFILE.showStaticArenaFrames;
 export let ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
 export const ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
 
@@ -167,7 +208,7 @@ export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
 export const HP_MAX           = 100;
 export const ARMOR_MAX        = 100;
 export const ARMOR_COLOR      = COLORS.GOLD_2;
-export const RESPAWN_DELAY_MS = 1000;
+export const RESPAWN_DELAY_MS = 2000;
 export const HITSCAN_FAVOR_THE_SHOOTER_MS = 120;
 export const HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET = 36;
 
@@ -393,8 +434,18 @@ export function isCaptureTheBeerBaseCell(gx: number, gy: number): boolean {
     || isGridCellInArenaRegion(getCaptureTheBeerBaseRegion('red'), gx, gy);
 }
 
-export function applyArenaMetricsForMode(mode: GameMode): void {
-  ARENA_WIDTH = usesExpandedArena(mode) ? CAPTURE_THE_BEER_ARENA_WIDTH : DEFAULT_ARENA_WIDTH;
+export function getArenaMetricsProfile(mode: GameMode, phase: GamePhase): ArenaMetricsProfile {
+  if (phase !== 'ARENA') return DEFAULT_ARENA_METRICS_PROFILE;
+  if (mode === CAPTURE_THE_BEER_MODE) return CAPTURE_THE_BEER_ARENA_METRICS_PROFILE;
+  return FULL_WIDTH_ARENA_METRICS_PROFILE;
+}
+
+export function applyArenaMetricsForMode(mode: GameMode, phase: GamePhase): void {
+  ACTIVE_ARENA_METRICS_PROFILE = getArenaMetricsProfile(mode, phase);
+  ARENA_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaWidth;
+  ARENA_OFFSET_X = ACTIVE_ARENA_METRICS_PROFILE.arenaOffsetX;
+  ARENA_VIEWPORT_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaViewportWidth;
+  ARENA_STATIC_FRAMES_VISIBLE = ACTIVE_ARENA_METRICS_PROFILE.showStaticArenaFrames;
   ARENA_MAX_X = ARENA_OFFSET_X + ARENA_WIDTH;
   SHOT_AUDIO_REMOTE_MAX_DISTANCE = ARENA_WIDTH;
   SHOT_AUDIO_PAN_RANGE = ARENA_WIDTH * 0.5;

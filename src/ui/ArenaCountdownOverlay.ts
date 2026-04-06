@@ -24,7 +24,6 @@ const TWEEN_DURATION_MS = 1100;
 const GO_FLOAT_DISTANCE_PX = 40;
 const GO_TEXT_DURATION_MS = 420;
 const GO_FONT_SIZE_PX = 184;
-const REVEAL_TARGET_RADIUS_PX = Math.max(ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT) * 1.2;
 
 type OverlayMode = 'hidden' | 'countdown' | 'death' | 'respawn-reveal';
 
@@ -276,7 +275,7 @@ export class ArenaCountdownOverlay {
 
     this.scene.tweens.add({
       targets: this,
-      revealRadius: REVEAL_TARGET_RADIUS_PX,
+      revealRadius: Math.max(ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT) * 1.2,
       veilAlpha: 0,
       duration: REVEAL_DURATION_MS,
       ease: 'Quad.easeOut',

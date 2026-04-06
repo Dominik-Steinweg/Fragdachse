@@ -88,8 +88,11 @@ function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): numbe
 
 export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
+  private arenaBuilder!: ArenaBuilder;
   private arenaClipMaskShape: Phaser.GameObjects.Graphics | null = null;
   private arenaClipMask: Phaser.Display.Masks.GeometryMask | null = null;
+  private lastArenaMaskOffsetX = Number.NaN;
+  private lastArenaMaskViewportWidth = Number.NaN;
   private utilityChargeIndicator: UtilityChargeIndicator | null = null;
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
@@ -114,6 +117,8 @@ export class ArenaScene extends Phaser.Scene {
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private lastCameraScrollX = 0;
+  private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
+  private arenaPanelsHeld = false;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -139,7 +144,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   create(): void {
-    applyArenaMetricsForMode(bridge.getGameMode());
+    applyArenaMetricsForMode(bridge.getGameMode(), bridge.getGamePhase());
 
     this.anims.create({
       key:       'player_death',
@@ -157,8 +162,8 @@ export class ArenaScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
 
     // ── Static arena (never destroyed) ────────────────────────────────────
-    const builder = new ArenaBuilder(this);
-    builder.buildStatic();
+    this.arenaBuilder = new ArenaBuilder(this);
+    this.arenaBuilder.buildStatic();
     this.ensureArenaClipMask();
 
 
@@ -463,6 +468,7 @@ export class ArenaScene extends Phaser.Scene {
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
 
     this.lifecycle.initialize();
+    this.registerArenaPanelHotkeys();
     bridge.setupPingMeasurement();
     this.time.addEvent({ delay: 2000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
@@ -477,6 +483,12 @@ export class ArenaScene extends Phaser.Scene {
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
     this.syncMainCamera(delta, inGame && !terminated);
+
+    this.arenaPanelsHeld = !!(inGame && !terminated && this.arenaPanelTabKey?.isDown);
+
+    if (!inGame && this.arenaPanelsHeld) {
+      this.arenaPanelsHeld = false;
+    }
 
     if (inGame) {
       this.ctx.inputSystem.setInputEnabled(!countdownActive);
@@ -556,6 +568,8 @@ export class ArenaScene extends Phaser.Scene {
         ArenaBuilder.updateCanopyTransparency(this.ctx.arenaResult.canopyObjects, localSprite);
       }
     }
+
+    this.syncArenaPanelOverlayState(inGame && !terminated);
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
@@ -791,21 +805,56 @@ export class ArenaScene extends Phaser.Scene {
     return { name: nearest.name, x: nearest.x, y: nearest.y };
   }
 
+  private registerArenaPanelHotkeys(): void {
+    const keyboard = this.input.keyboard;
+    if (!keyboard) return;
+
+    this.arenaPanelTabKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true);
+  }
+
+  private syncArenaPanelOverlay(visible: boolean, immediate = false): void {
+    if (!this.ctx) return;
+    this.ctx.leftPanel.setArenaOverlayVisible(visible, immediate);
+    this.ctx.rightPanel.setArenaOverlayVisible(visible, immediate);
+  }
+
+  private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.lifecycle?.isMatchTerminated()): void {
+    if (!this.ctx) return;
+    const shouldShow = inArena && (this.arenaPanelsHeld || !this.localPlayerState.alive);
+    this.syncArenaPanelOverlay(shouldShow);
+  }
+
   private ensureArenaClipMask(): void {
-    if (this.arenaClipMaskShape && this.arenaClipMask) return;
-    const maskShape = this.add.graphics();
-    maskShape.setScrollFactor(0);
-    maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT);
-    maskShape.setVisible(false);
-    this.arenaClipMaskShape = maskShape;
-    this.arenaClipMask = maskShape.createGeometryMask();
-    this.renderers?.shadow.setArenaMask(this.arenaClipMask);
-    this.renderers?.beer.setArenaMask(this.arenaClipMask);
+    if (!this.arenaClipMaskShape || !this.arenaClipMask) {
+      const maskShape = this.add.graphics();
+      maskShape.setScrollFactor(0);
+      maskShape.setVisible(false);
+      this.arenaClipMaskShape = maskShape;
+      this.arenaClipMask = maskShape.createGeometryMask();
+      this.renderers?.shadow.setArenaMask(this.arenaClipMask);
+      this.renderers?.beer.setArenaMask(this.arenaClipMask);
+    }
+
+    this.redrawArenaClipMask();
+  }
+
+  private redrawArenaClipMask(): void {
+    if (!this.arenaClipMaskShape) return;
+    if (this.lastArenaMaskOffsetX === ARENA_OFFSET_X && this.lastArenaMaskViewportWidth === ARENA_VIEWPORT_WIDTH) {
+      return;
+    }
+
+    this.arenaClipMaskShape.clear();
+    this.arenaClipMaskShape.fillStyle(0xffffff, 1);
+    this.arenaClipMaskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT);
+    this.lastArenaMaskOffsetX = ARENA_OFFSET_X;
+    this.lastArenaMaskViewportWidth = ARENA_VIEWPORT_WIDTH;
   }
 
   private syncArenaMetrics(): void {
-    applyArenaMetricsForMode(bridge.getGameMode());
+    applyArenaMetricsForMode(bridge.getGameMode(), bridge.getGamePhase());
+    this.arenaBuilder?.syncStaticBackdrop();
+    this.redrawArenaClipMask();
     this.physics.world.setBounds(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
     this.cameras.main.setBounds(0, 0, Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X), this.scale.height);
     this.ctx?.combatSystem.syncArenaBounds();

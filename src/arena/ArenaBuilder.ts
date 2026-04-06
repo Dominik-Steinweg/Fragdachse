@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT,
-  ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_WIDTH,
+  ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_RENDER_WIDTH,
+  ARENA_STATIC_FRAMES_VISIBLE,
   DEPTH, COLORS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
   CAPTURE_THE_BEER_BASE_TINT_ALPHA,
@@ -37,6 +38,9 @@ export interface ArenaBuilderResult {
 
 export class ArenaBuilder {
   private scene: Phaser.Scene;
+  private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
+  private rightSidebar: Phaser.GameObjects.Rectangle | null = null;
+  private grass: Phaser.GameObjects.TileSprite | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -47,9 +51,28 @@ export class ArenaBuilder {
   /** Zeichnet Sidebars, Gras und setzt die Physics-Bounds.
    *  Wird einmalig in ArenaScene.create() aufgerufen, nie zerstört. */
   buildStatic(): void {
-    this.drawSidebars();
-    this.drawGrass();
+    this.ensureSidebars();
+    this.ensureGrass();
+    this.syncStaticBackdrop();
     this.setPhysicsBounds();
+  }
+
+  syncStaticBackdrop(): void {
+    const showFrames = ARENA_STATIC_FRAMES_VISIBLE && ARENA_OFFSET_X > 0;
+
+    if (this.leftSidebar) {
+      this.leftSidebar
+        .setPosition(ARENA_OFFSET_X * 0.5, GAME_HEIGHT * 0.5)
+        .setSize(ARENA_OFFSET_X, GAME_HEIGHT)
+        .setVisible(showFrames);
+    }
+
+    if (this.rightSidebar) {
+      this.rightSidebar
+        .setPosition(GAME_WIDTH - ARENA_OFFSET_X * 0.5, GAME_HEIGHT * 0.5)
+        .setSize(ARENA_OFFSET_X, GAME_HEIGHT)
+        .setVisible(showFrames);
+    }
   }
 
   // ── Dynamische Teile (einmal pro Runde) ────────────────────────────────────
@@ -445,29 +468,35 @@ export class ArenaBuilder {
 
   // ── Statische Interna ──────────────────────────────────────────────────────
 
-  private drawSidebars(): void {
-    this.scene.add
-      .rectangle(ARENA_OFFSET_X / 2, GAME_HEIGHT / 2, ARENA_OFFSET_X, GAME_HEIGHT, COLORS.GREY_10)
-      .setScrollFactor(0)
-      .setDepth(DEPTH.LOCAL_UI - 1);
-    this.scene.add
-      .rectangle(
-        GAME_WIDTH - ARENA_OFFSET_X / 2,
-        GAME_HEIGHT / 2,
-        ARENA_OFFSET_X,
-        GAME_HEIGHT,
-        COLORS.GREY_9,
-      )
-      .setScrollFactor(0)
-      .setDepth(DEPTH.LOCAL_UI - 1);
+  private ensureSidebars(): void {
+    if (!this.leftSidebar) {
+      this.leftSidebar = this.scene.add
+        .rectangle(ARENA_OFFSET_X * 0.5, GAME_HEIGHT * 0.5, ARENA_OFFSET_X, GAME_HEIGHT, COLORS.GREY_10)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.LOCAL_UI - 1);
+    }
+
+    if (!this.rightSidebar) {
+      this.rightSidebar = this.scene.add
+        .rectangle(
+          GAME_WIDTH - ARENA_OFFSET_X * 0.5,
+          GAME_HEIGHT * 0.5,
+          ARENA_OFFSET_X,
+          GAME_HEIGHT,
+          COLORS.GREY_9,
+        )
+        .setScrollFactor(0)
+        .setDepth(DEPTH.LOCAL_UI - 1);
+    }
   }
 
-  private drawGrass(): void {
-    this.scene.add
+  private ensureGrass(): void {
+    if (this.grass) return;
+    this.grass = this.scene.add
       .tileSprite(
-        ARENA_OFFSET_X + MAX_ARENA_WIDTH / 2,
+        MAX_ARENA_RENDER_WIDTH * 0.5,
         ARENA_OFFSET_Y + ARENA_HEIGHT / 2,
-        MAX_ARENA_WIDTH,
+        MAX_ARENA_RENDER_WIDTH,
         ARENA_HEIGHT,
         'bg_grass',
       )

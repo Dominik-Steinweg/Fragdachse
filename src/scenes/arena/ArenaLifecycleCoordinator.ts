@@ -25,7 +25,7 @@ import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../..
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, applyArenaMetricsForMode } from '../../config';
 import { PLAYER_SPEED } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
@@ -149,6 +149,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyOverlay.lockButton();
     bridge.setMatchHostId();
     bridge.resetAllFrags();
+    applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
     const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     const layout = ArenaGenerator.generate(Date.now());
     bridge.publishArenaLayout(layout);
