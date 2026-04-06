@@ -329,6 +329,7 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
+    inputSystem.setupLocalAdrenalineProvider(() => this.clientUpdate.getLocalAdrenaline());
     inputSystem.setupWeapon2ConfigProvider(() => this.clientUpdate.getLocalWeaponConfig('weapon2'));
     inputSystem.setupCanStartScopeCheck(() => {
       const wepConfig = this.clientUpdate.getLocalWeaponConfig('weapon2');
@@ -353,6 +354,9 @@ export class ArenaScene extends Phaser.Scene {
       const frac          = config && config.cooldown > 0 ? Math.min(1, remaining / config.cooldown) : 0.8;
       const displayName   = config?.displayName ?? 'Utility';
       this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
+    };
+    inputSystem.onBurrowPressedWithoutAdrenaline = () => {
+      this.ctx.centerHUD.showAdrenalineLow();
     };
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
@@ -385,6 +389,7 @@ export class ArenaScene extends Phaser.Scene {
 
       if (slot === 'weapon2' && result.reason === 'resource' && result.resourceKind === 'adrenaline') {
         this.playerStatusRing?.notifyAdrenalineInsufficientShot();
+        this.ctx.centerHUD.showAdrenalineLow();
       }
 
       if (!inputStarted) return;

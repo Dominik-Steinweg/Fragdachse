@@ -23,6 +23,18 @@ const TIMER_BG_H          = 44;
 const TIMER_COLOR_NORMAL  = '#e0e0e0';
 const TIMER_COLOR_WARNING = '#ff4444';
 
+const ANNOUNCEMENT_Y          = GAME_HEIGHT / 2;
+const ANNOUNCEMENT_MAX_TEXT_W = 560;
+const ANNOUNCEMENT_MIN_W      = 240;
+const ANNOUNCEMENT_MIN_H      = 48;
+const ANNOUNCEMENT_PAD_X      = 20;
+const ANNOUNCEMENT_PAD_Y      = 14;
+const ANNOUNCEMENT_HOLD_MS    = 800;
+const ANNOUNCEMENT_FADE_MS    = 200;
+const ANNOUNCEMENT_DEBOUNCE_MS = 600;
+const ANNOUNCEMENT_TEXT_COLOR = '#e0e0e0';
+const ANNOUNCEMENT_WARN_COLOR = TIMER_COLOR_WARNING;
+
 const TRAIN_SEP_Y      = 56;
 const TRAIN_TEXT_Y     = 72;
 const TRAIN_BAR_Y      = 90;
@@ -63,6 +75,11 @@ const COL_BORDER      = COLORS.GREY_6;
 
 const LABEL_FONT = {
   fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
+};
+const ANNOUNCEMENT_FONT = {
+  fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: ANNOUNCEMENT_TEXT_COLOR,
+  align: 'center' as const,
+  wordWrap: { width: ANNOUNCEMENT_MAX_TEXT_W },
 };
 
 function ensureBarBgTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
@@ -120,6 +137,11 @@ export class CenterHUD {
   private container!: Phaser.GameObjects.Container;
 
   private timerText!: Phaser.GameObjects.Text;
+  private announcementContainer!: Phaser.GameObjects.Container;
+  private announcementBg!: Phaser.GameObjects.Rectangle;
+  private announcementText!: Phaser.GameObjects.Text;
+  private announcementTween: Phaser.Tweens.Tween | null = null;
+  private lastAdrenalineAnnouncementAt = -Number.MAX_VALUE;
 
   private trainText!: Phaser.GameObjects.Text;
   private trainPanelBg!: Phaser.GameObjects.Rectangle;
@@ -169,6 +191,7 @@ export class CenterHUD {
     }
 
     this.buildTimer();
+    this.buildAnnouncementOverlay();
     this.buildTrainWidget();
     this.buildBottomStack();
   }
@@ -180,6 +203,19 @@ export class CenterHUD {
       fontSize: '32px', fontFamily: 'monospace', color: TIMER_COLOR_NORMAL, fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     this.container.add([timerBg, this.timerText]);
+  }
+
+  private buildAnnouncementOverlay(): void {
+    this.announcementBg = this.scene.add.rectangle(CENTER_X, ANNOUNCEMENT_Y, ANNOUNCEMENT_MIN_W, ANNOUNCEMENT_MIN_H, PANEL_BG_COL, PANEL_BG_ALPHA)
+      .setScrollFactor(0)
+      .setVisible(false);
+    this.announcementText = this.scene.add.text(CENTER_X, ANNOUNCEMENT_Y, '', ANNOUNCEMENT_FONT)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setVisible(false);
+    this.announcementContainer = this.scene.add.container(0, 0, [this.announcementBg, this.announcementText]);
+    this.announcementContainer.setScrollFactor(0).setVisible(false).setAlpha(1);
+    this.container.add(this.announcementContainer);
   }
 
   private buildTrainWidget(): void {
@@ -322,6 +358,7 @@ export class CenterHUD {
 
   transitionToLobby(): void {
     this.container.setVisible(false);
+    this.hideAnnouncement();
     this.hideTrainWidget();
     this.hideLowerSection(this.utilitySection);
     this.hideLowerSection(this.ultimateSection);
@@ -476,7 +513,54 @@ export class CenterHUD {
     this.utilityRevealUntil = Math.max(this.utilityRevealUntil, this.scene.time.now + STACK_REVEAL_MS);
   }
 
+  showAnnouncement(text: string, color: string | number = ANNOUNCEMENT_TEXT_COLOR): void {
+    this.announcementTween?.destroy();
+    this.announcementTween = null;
+    this.announcementText.setText(text);
+    this.announcementText.setColor(typeof color === 'number' ? toCssColor(color) : color);
+
+    const width = Math.max(
+      ANNOUNCEMENT_MIN_W,
+      Math.min(ANNOUNCEMENT_MAX_TEXT_W + ANNOUNCEMENT_PAD_X * 2, this.announcementText.width + ANNOUNCEMENT_PAD_X * 2),
+    );
+    const height = Math.max(ANNOUNCEMENT_MIN_H, this.announcementText.height + ANNOUNCEMENT_PAD_Y * 2);
+    this.announcementBg.setSize(width, height);
+
+    this.announcementContainer.setAlpha(1).setVisible(true);
+    this.announcementBg.setVisible(true);
+    this.announcementText.setVisible(true);
+
+    this.announcementTween = this.scene.tweens.add({
+      targets: this.announcementContainer,
+      alpha: 0,
+      delay: ANNOUNCEMENT_HOLD_MS,
+      duration: ANNOUNCEMENT_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => this.hideAnnouncement(),
+    });
+  }
+
+  showAdrenalineLow(): void {
+    const now = this.scene.time.now;
+    if (now - this.lastAdrenalineAnnouncementAt < ANNOUNCEMENT_DEBOUNCE_MS) return;
+    this.lastAdrenalineAnnouncementAt = now;
+    this.showAnnouncement('Adrenalin niedrig', ANNOUNCEMENT_WARN_COLOR);
+  }
+
+  showFraggedBy(killerName: string, weapon: string, color: number): void {
+    this.showAnnouncement(`Fragged by ${killerName} (${weapon})`, color);
+  }
+
+  showYouFragged(victimName: string, color: number): void {
+    this.showAnnouncement(`You Fragged ${victimName}`, color);
+  }
+
+  showBeerCaptured(playerName: string, color: number): void {
+    this.showAnnouncement(`${playerName} captured the Beer!`, color);
+  }
+
   destroy(): void {
+    this.hideAnnouncement();
     this.trainBarEffect.destroy();
     this.stopSectionAttention(this.utilitySection);
     this.stopSectionAttention(this.ultimateSection);
@@ -635,5 +719,13 @@ export class CenterHUD {
     this.trainBarFgImg.setVisible(false);
     this.trainBarBorder.setVisible(false);
     this.trainBarEffect.stop();
+  }
+
+  private hideAnnouncement(): void {
+    this.announcementTween?.destroy();
+    this.announcementTween = null;
+    this.announcementContainer.setVisible(false).setAlpha(1);
+    this.announcementBg.setVisible(false);
+    this.announcementText.setVisible(false);
   }
 }

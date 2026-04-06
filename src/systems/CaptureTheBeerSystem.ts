@@ -235,12 +235,15 @@ export class CaptureTheBeerSystem {
 
       const ownBeer = this.getBeer(carrierTeam);
       if (ownBeer.state !== 'home') continue;
+      const scorerProfile = bridge.getConnectedPlayers().find((player) => player.id === beer.holderId);
 
       this.state.scores[carrierTeam] += 1;
       this.emitFx({
         kind: 'score',
         beerTeamId: beer.teamId,
         scoreTeamId: carrierTeam,
+        scorerName: scorerProfile?.name ?? 'Unknown',
+        scorerColor: scorerProfile?.colorHex ?? 0xe0e0e0,
         x: beer.x,
         y: beer.y,
       });

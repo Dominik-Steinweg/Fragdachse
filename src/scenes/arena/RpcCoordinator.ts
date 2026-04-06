@@ -84,6 +84,9 @@ export class RpcCoordinator {
   private registerCaptureTheBeerFxHandler(): void {
     bridge.registerCaptureTheBeerFxHandler((event) => {
       this.renderers.beer.playFx(event);
+      if (event.kind === 'score') {
+        this.ctx.centerHUD.showBeerCaptured(event.scorerName, event.scorerColor);
+      }
     });
   }
 
@@ -168,6 +171,15 @@ export class RpcCoordinator {
         event.weapon,
         event.victimName, event.victimColor,
       );
+
+      const localId = bridge.getLocalPlayerId();
+      if (event.victimId === localId) {
+        this.ctx.centerHUD.showFraggedBy(event.killerName, event.weapon, event.killerColor);
+        return;
+      }
+      if (event.killerId === localId) {
+        this.ctx.centerHUD.showYouFragged(event.victimName, event.victimColor);
+      }
     });
   }
 

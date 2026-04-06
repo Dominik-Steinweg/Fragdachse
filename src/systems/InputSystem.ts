@@ -3,6 +3,7 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
+  BURROW_MIN_ADRENALINE,
   clampPointToArena,
 } from '../config';
 import { quantizeAngle } from '../utils/angle';
@@ -50,8 +51,10 @@ export class InputSystem {
   private getLocalUtilityCooldownUntil: (() => number) | null = null;
   private getLocalUltimateConfig: (() => UltimateConfig | undefined) | null = null;
   private getLocalRage: (() => number) | null = null;
+  private getLocalAdrenaline: (() => number) | null = null;
   private predictedUtilityCooldownUntil = 0;
   public onUtilityPressedDuringCooldown: (() => void) | null = null;
+  public onBurrowPressedWithoutAdrenaline: (() => void) | null = null;
   private utilityHoldActive = false;
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
@@ -132,6 +135,10 @@ export class InputSystem {
 
   setupLocalRageProvider(cb: () => number): void {
     this.getLocalRage = cb;
+  }
+
+  setupLocalAdrenalineProvider(cb: () => number): void {
+    this.getLocalAdrenaline = cb;
   }
 
   setupWeapon2ConfigProvider(cb: () => WeaponConfig | undefined): void {
@@ -384,6 +391,10 @@ export class InputSystem {
     // ── 4. Burrow-Toggle (Flanke) ───────────────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
       if (this.localBurrowPhase === 'idle') {
+        if ((this.getLocalAdrenaline?.() ?? 0) < BURROW_MIN_ADRENALINE) {
+          this.onBurrowPressedWithoutAdrenaline?.();
+          return;
+        }
         this.bridge.sendBurrowRequest(true);
       } else if (this.localBurrowPhase === 'underground' || this.localBurrowPhase === 'trapped') {
         this.bridge.sendBurrowRequest(false);

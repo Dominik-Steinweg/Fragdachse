@@ -326,6 +326,8 @@ export interface CaptureTheBeerScoreFxEvent {
   kind: 'score';
   beerTeamId: TeamId;
   scoreTeamId: TeamId;
+  scorerName: string;
+  scorerColor: number;
   x: number;
   y: number;
 }

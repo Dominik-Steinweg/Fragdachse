@@ -953,7 +953,7 @@ export class NetworkBridge {
         bt: event.beerTeamId,
         x: event.x,
         y: event.y,
-        ...(event.kind === 'score' ? { st: event.scoreTeamId } : {}),
+        ...(event.kind === 'score' ? { st: event.scoreTeamId, sn: event.scorerName, sc: event.scorerColor } : {}),
       });
       return;
     }
@@ -979,6 +979,8 @@ export class NetworkBridge {
         x?: number;
         y?: number;
         st?: TeamId;
+        sn?: string;
+        sc?: number;
         sx?: number;
         sy?: number;
         tx?: number;
@@ -1002,6 +1004,8 @@ export class NetworkBridge {
           kind: 'score',
           beerTeamId: payload.bt,
           scoreTeamId: payload.st ?? payload.bt,
+          scorerName: payload.sn ?? 'Unknown',
+          scorerColor: payload.sc ?? 0xe0e0e0,
           x: payload.x ?? 0,
           y: payload.y ?? 0,
         });
