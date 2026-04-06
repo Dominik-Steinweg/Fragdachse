@@ -52,6 +52,7 @@ export class InputSystem {
   private getLocalRage: (() => number) | null = null;
   private predictedUtilityCooldownUntil = 0;
   public onUtilityPressedDuringCooldown: (() => void) | null = null;
+  public onUltimatePressedWithoutRage: (() => void) | null = null;
   private utilityHoldActive = false;
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
@@ -67,6 +68,7 @@ export class InputSystem {
   private tunnelPlacementAnchor: { x: number; y: number; gridX: number; gridY: number } | null = null;
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
+  private suppressWeapon1UntilLeftRelease = false;
 
   // Scope-Mechanik (für Waffen mit scopeConfig, z.B. AWP)
   private scopeStartedAt: number | null = null;  // Timestamp des RMB-Press
@@ -412,11 +414,15 @@ export class InputSystem {
     const rightInputStarted = rightPointerDown && !this.prevRightPointerDown;
     this.prevLeftPointerDown = leftPointerDown;
     this.prevRightPointerDown = rightPointerDown;
+    if (!leftPointerDown) {
+      this.suppressWeapon1UntilLeftRelease = false;
+    }
     const clampedTarget = clampPointToArena(px, py);
     const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
     this.currentAimAngle = angle;
     const ultimateCharging = this.ultimateHoldActive;
     const weaponsBlocked = this.localBurrowPhase !== 'idle' || ultimateCharging || this.utilityPlacementActive || this.ultimatePlacementActive;
+    const primaryWeaponSuppressed = this.suppressWeapon1UntilLeftRelease && leftPointerDown;
     const utilityBlocked = this.localBurrowPhase === 'windup'
       || this.localBurrowPhase === 'underground'
       || this.localBurrowPhase === 'trapped'
@@ -438,7 +444,8 @@ export class InputSystem {
           return;
         }
 
-        if (pointer.leftButtonDown()) {
+        if (leftInputStarted) {
+          this.consumeLeftClickForModeConfirmation();
           this.predictedUtilityCooldownUntil = now + targetedCfg.cooldown;
           this.onLoadoutUse('utility', targetAngle, target.x, target.y);
           this.cancelUtilityTargeting();
@@ -472,6 +479,7 @@ export class InputSystem {
         }
 
         if (leftInputStarted) {
+          this.consumeLeftClickForModeConfirmation();
           this.onLoadoutUse?.('ultimate', targetAngle, target.x, target.y, { inputStarted: true });
           // Nach dem Schuss im Zielmodus bleiben: Rage-Check erfolgt nächsten Frame
           return;
@@ -495,7 +503,10 @@ export class InputSystem {
         return;
       }
 
-      if (Phaser.Input.Keyboard.JustDown(this.keyE) || pointer.leftButtonDown()) {
+      if (Phaser.Input.Keyboard.JustDown(this.keyE) || leftInputStarted) {
+        if (leftInputStarted) {
+          this.consumeLeftClickForModeConfirmation();
+        }
         if (preview.isValid) {
           this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY);
         }
@@ -521,6 +532,9 @@ export class InputSystem {
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyE) || leftInputStarted) {
+        if (leftInputStarted) {
+          this.consumeLeftClickForModeConfirmation();
+        }
         if (preview.isValid) {
           if (!this.tunnelPlacementAnchor) {
             this.tunnelPlacementAnchor = {
@@ -552,7 +566,7 @@ export class InputSystem {
     // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
-    if (!weaponsBlocked && leftPointerDown) {
+    if (!weaponsBlocked && !primaryWeaponSuppressed && leftPointerDown) {
       this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y, { inputStarted: leftInputStarted });
     } else if (!weaponsBlocked) {
       // RMB → weapon2: Scope-Waffen (z.B. AWP) nutzen fire-on-release Mechanik,
@@ -645,6 +659,7 @@ export class InputSystem {
         this.ultimateTargetingActive = true;
         this.bridge.sendDecoyStealthBreakRequest();
       } else {
+        this.notifyUltimatePressedWithoutRage();
         // Keine Rage: Feedback an Host senden (zeigt "zu wenig Rage"-Meldung)
         this.onLoadoutUse?.('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
       }
@@ -659,9 +674,14 @@ export class InputSystem {
         this.bridge.sendDecoyStealthBreakRequest();
         this.syncPlacementPreviewState(this.getUltimatePlacementPreviewState());
       } else {
+        this.notifyUltimatePressedWithoutRage();
         this.onLoadoutUse?.('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
       }
     } else if (!utilityBlocked && !gaussCfg && !airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      const rage = this.getLocalRage?.() ?? 0;
+      if (ultimateCfg && rage < ultimateCfg.rageRequired) {
+        this.notifyUltimatePressedWithoutRage();
+      }
       this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
     }
 
@@ -813,6 +833,10 @@ export class InputSystem {
     return now < eligibleAt;
   }
 
+  private consumeLeftClickForModeConfirmation(): void {
+    this.suppressWeapon1UntilLeftRelease = true;
+  }
+
   private cancelUtilityTargeting(): void {
     this.utilityTargetingActive = false;
   }
@@ -874,6 +898,7 @@ export class InputSystem {
     const cfg = this.getGaussUltimateConfig();
     if (!cfg) return;
     if (rage < cfg.rageRequired) {
+      this.notifyUltimatePressedWithoutRage();
       this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press', inputStarted: true });
       return;
     }
@@ -937,5 +962,9 @@ export class InputSystem {
   private cancelUltimateCharge(): void {
     this.ultimateHoldActive = false;
     this.ultimateChargeStartedAt = null;
+  }
+
+  private notifyUltimatePressedWithoutRage(): void {
+    this.onUltimatePressedWithoutRage?.();
   }
 }

@@ -371,6 +371,10 @@ export class ArenaScene extends Phaser.Scene {
         this.playerStatusRing?.notifyAdrenalineInsufficientShot();
       }
 
+      if (slot === 'ultimate' && reason === 'resource' && resourceKind === 'rage') {
+        this.ctx.centerHUD.flashUltimateInsufficientRage();
+      }
+
       playLocalFailureSound(slot);
     };
     inputSystem.setupWeapon2ConfigProvider(() => this.clientUpdate.getLocalWeaponConfig('weapon2'));
@@ -405,6 +409,9 @@ export class ArenaScene extends Phaser.Scene {
       const frac          = config && config.cooldown > 0 ? Math.min(1, remaining / config.cooldown) : 0.8;
       const displayName   = config?.displayName ?? 'Utility';
       this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
+    };
+    inputSystem.onUltimatePressedWithoutRage = () => {
+      this.ctx.centerHUD.flashUltimateInsufficientRage();
     };
     const handleLocalLoadoutFailure = (
       slot: LoadoutSlot,
@@ -925,7 +932,8 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const maxScrollX = Math.max(0, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH));
-    const targetScrollX = Phaser.Math.Clamp(localSprite.x - GAME_WIDTH * 0.5, 0, maxScrollX);
+    const focusScreenX = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5;
+    const targetScrollX = Phaser.Math.Clamp(localSprite.x - focusScreenX, 0, maxScrollX);
     const followLerp = 1 - Math.exp(-delta / 120);
     camera.scrollX = Phaser.Math.Linear(camera.scrollX, targetScrollX, followLerp);
     this.lastCameraScrollX = camera.scrollX;

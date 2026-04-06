@@ -5,7 +5,7 @@
  * den unteren Stack für Power-Ups, Utility und Ultimate.
  */
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, RAGE_MAX, toCssColor } from '../config';
+import { ARMOR_COLOR, ARMOR_MAX, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, RAGE_MAX, toCssColor } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
 import {
   rgbStr,
@@ -56,13 +56,16 @@ const STACK_PANEL_H    = STACK_TOTAL_H + 4;
 const STACK_MARGIN     = 20;
 const STACK_GAP        = 8;
 const STACK_REVEAL_MS  = 500;
+const ULTIMATE_REVEAL_MS = 850;
 const STACK_BAR_LEFT   = -STACK_BAR_W / 2;
 const STACK_FADE_MS    = 100;
 const STACK_CORE_TEX   = '_center_core';
 
+const ARM_BAR_TEX      = '_center_arm_fg';
 const UTIL_BAR_TEX     = '_center_util_fg';
 const ULT_BAR_TEX      = '_center_ult_fg';
 const STACK_BAR_BG_TEX = '_center_stack_bg';
+const ARM_PAL: LivingBarPalette = { dark: COLORS.GOLD_3, mid: ARMOR_COLOR, light: COLORS.GOLD_1 };
 const UTIL_PAL: LivingBarPalette = { dark: 0x8a4018, mid: 0xd97030, light: 0xf0a048 };
 const ULT_PAL: LivingBarPalette = { dark: COLORS.RED_3, mid: COLORS.RED_2, light: COLORS.RED_1 };
 
@@ -148,6 +151,7 @@ export class CenterHUD {
   private trainBarBorder!: Phaser.GameObjects.Rectangle;
 
   private utilitySection!: LowerBarSection;
+  private armorSection!: LowerBarSection;
   private ultimateSection!: LowerBarSection;
   private puContainerRef: Phaser.GameObjects.Container | null = null;
 
@@ -157,6 +161,7 @@ export class CenterHUD {
   private lastTrainBarWidth = -1;
   private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
   private utilityRevealUntil = 0;
+  private ultimateRevealUntil = 0;
   private utilityHeldLastFrame = false;
   private utilityAttentionActive = false;
   private ultimateReadyActive = false;
@@ -182,6 +187,9 @@ export class CenterHUD {
     }
     if (!this.scene.textures.exists(UTIL_BAR_TEX)) {
       createGradientTexture(this.scene, UTIL_BAR_TEX, UTIL_PAL, STACK_BAR_W, STACK_BAR_H);
+    }
+    if (!this.scene.textures.exists(ARM_BAR_TEX)) {
+      createGradientTexture(this.scene, ARM_BAR_TEX, ARM_PAL, STACK_BAR_W, STACK_BAR_H);
     }
     if (!this.scene.textures.exists(ULT_BAR_TEX)) {
       createGradientTexture(this.scene, ULT_BAR_TEX, ULT_PAL, STACK_BAR_W, STACK_BAR_H);
@@ -258,6 +266,7 @@ export class CenterHUD {
   }
 
   private buildBottomStack(): void {
+    this.armorSection = this.createLowerSection(ARM_BAR_TEX, ARM_PAL);
     this.utilitySection = this.createLowerSection(UTIL_BAR_TEX, UTIL_PAL);
     this.ultimateSection = this.createLowerSection(ULT_BAR_TEX, ULT_PAL);
   }
@@ -357,11 +366,14 @@ export class CenterHUD {
     this.container.setVisible(false);
     this.hideAnnouncement();
     this.hideTrainWidget();
+    this.hideLowerSection(this.armorSection);
     this.hideLowerSection(this.utilitySection);
     this.hideLowerSection(this.ultimateSection);
+    this.stopSectionAttention(this.armorSection);
     this.stopSectionAttention(this.utilitySection);
     this.stopSectionAttention(this.ultimateSection);
     this.utilityRevealUntil = 0;
+    this.ultimateRevealUntil = 0;
     this.utilityHeldLastFrame = false;
     this.utilityAttentionActive = false;
     this.ultimateReadyActive = false;
@@ -469,7 +481,8 @@ export class CenterHUD {
       || now < this.utilityRevealUntil
       || (data.isUtilityOverridden ?? false);
     const isUltimateReady = data.isUltimateActive || data.rage >= data.ultimateRequiredRage;
-    const showUltimate = isUltimateReady;
+    const showUltimate = isUltimateReady || now < this.ultimateRevealUntil;
+    const showArmor = data.armor > 0;
 
     let nextBottom = GAME_HEIGHT - STACK_MARGIN;
 
@@ -481,7 +494,7 @@ export class CenterHUD {
         CENTER_X,
         nextBottom - STACK_TOTAL_H,
       );
-      this.setUltimateReadyVisual(true);
+      this.setUltimateReadyVisual(isUltimateReady);
       nextBottom = this.ultimateSection.container.y - STACK_GAP;
     } else {
       this.setUltimateReadyVisual(false);
@@ -503,11 +516,28 @@ export class CenterHUD {
       this.hideLowerSection(this.utilitySection);
     }
 
+    if (showArmor) {
+      this.showLowerSection(
+        this.armorSection,
+        `Armor: ${Math.round(data.armor)}/${ARMOR_MAX}`,
+        Phaser.Math.Clamp(data.armor / ARMOR_MAX, 0, 1),
+        CENTER_X,
+        nextBottom - STACK_TOTAL_H,
+      );
+      nextBottom = this.armorSection.container.y - STACK_GAP;
+    } else {
+      this.hideLowerSection(this.armorSection);
+    }
+
     this.layoutPowerUps(nextBottom);
   }
 
   flashUtilityCooldown(_frac: number, _displayName: string): void {
     this.utilityRevealUntil = Math.max(this.utilityRevealUntil, this.scene.time.now + STACK_REVEAL_MS);
+  }
+
+  flashUltimateInsufficientRage(): void {
+    this.ultimateRevealUntil = Math.max(this.ultimateRevealUntil, this.scene.time.now + ULTIMATE_REVEAL_MS);
   }
 
   showAnnouncement(text: string, color: string | number = ANNOUNCEMENT_TEXT_COLOR): void {
@@ -552,10 +582,14 @@ export class CenterHUD {
   destroy(): void {
     this.hideAnnouncement();
     this.trainBarEffect.destroy();
+    this.stopSectionAttention(this.armorSection);
     this.stopSectionAttention(this.utilitySection);
     this.stopSectionAttention(this.ultimateSection);
+    this.armorSection.effect.destroy();
     this.utilitySection.effect.destroy();
     this.ultimateSection.effect.destroy();
+    this.armorSection.coreEmitter.destroy();
+    this.armorSection.outerEmitter.destroy();
     this.utilitySection.coreEmitter.destroy();
     this.utilitySection.outerEmitter.destroy();
     this.ultimateSection.coreEmitter.destroy();

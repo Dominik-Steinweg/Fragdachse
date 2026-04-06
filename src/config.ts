@@ -41,10 +41,10 @@ const FULL_WIDTH_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
 
 const CAPTURE_THE_BEER_ARENA_METRICS_PROFILE: ArenaMetricsProfile = {
   arenaWidth: CAPTURE_THE_BEER_ARENA_WIDTH,
-  arenaOffsetX: DEFAULT_ARENA_OFFSET_X,
-  arenaViewportWidth: DEFAULT_ARENA_VIEWPORT_WIDTH,
+  arenaOffsetX: 0,
+  arenaViewportWidth: GAME_WIDTH,
   usesDynamicCamera: true,
-  showStaticArenaFrames: true,
+  showStaticArenaFrames: false,
 };
 
 export let ACTIVE_ARENA_METRICS_PROFILE: ArenaMetricsProfile = DEFAULT_ARENA_METRICS_PROFILE;
