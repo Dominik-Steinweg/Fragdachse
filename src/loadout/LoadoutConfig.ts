@@ -55,6 +55,12 @@ export interface TeslaDomeWeaponFireConfig {
   readonly visualBoltThicknessMax: number;
   readonly visualJitter: number;
   readonly visualBranchChance: number;
+  readonly visualCoreParticleFrequency: number;
+  readonly visualFieldParticleFrequency: number;
+  readonly visualRimParticleFrequency: number;
+  readonly visualImpactBurstScale: number;
+  readonly visualWhiteness: number;
+  readonly visualPulseSpeed: number;
 }
 
 export interface EnergyShieldWeaponFireConfig {
@@ -1123,14 +1129,20 @@ export const WEAPON_CONFIGS = {
       movementSlowFactor:       0.3,
       requireLineOfSight:       true,
       targetTypes:              ['players', 'train', 'turrets'] satisfies readonly TeslaDomeTargetType[],
-      visualIndicatorAlpha:     0.12,
-      visualFieldAlpha:         0.24,
+      visualIndicatorAlpha:     0.08,
+      visualFieldAlpha:         0.16,
       visualIdleArcCount:       4,
       visualIdleArcLength:      72,
-      visualBoltThicknessMin:   1.5,
-      visualBoltThicknessMax:   4.5,
-      visualJitter:             18,
-      visualBranchChance:       0.38,
+      visualBoltThicknessMin:   0.9,
+      visualBoltThicknessMax:   2.4,
+      visualJitter:             11,
+      visualBranchChance:       0.24,
+      visualCoreParticleFrequency: 9,
+      visualFieldParticleFrequency: 5,
+      visualRimParticleFrequency: 4,
+      visualImpactBurstScale:   0.95,
+      visualWhiteness:          0.62,
+      visualPulseSpeed:         0.0034,
     } satisfies TeslaDomeWeaponFireConfig,
     allowedSlots:         ['weapon2'],
     adrenalinCost:        0,
