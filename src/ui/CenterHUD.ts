@@ -42,11 +42,13 @@ const STACK_BAR_H      = 14;
 const STACK_LABEL_H    = 20;
 const STACK_TOTAL_H    = STACK_LABEL_H + STACK_BAR_H;
 const STACK_PANEL_W    = STACK_BAR_W + 20;
-const STACK_PANEL_H    = STACK_TOTAL_H + 12;
+const STACK_PANEL_H    = STACK_TOTAL_H + 4;
 const STACK_MARGIN     = 20;
 const STACK_GAP        = 8;
 const STACK_REVEAL_MS  = 500;
 const STACK_BAR_LEFT   = -STACK_BAR_W / 2;
+const STACK_FADE_MS    = 100;
+const STACK_CORE_TEX   = '_center_core';
 
 const UTIL_BAR_TEX     = '_center_util_fg';
 const ULT_BAR_TEX      = '_center_ult_fg';
@@ -85,11 +87,33 @@ interface LowerBarSection {
   fg: Phaser.GameObjects.Image;
   border: Phaser.GameObjects.Rectangle;
   effect: LivingBarEffect;
+  energyZone: Phaser.Geom.Rectangle;
+  coreEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  energized: boolean;
   glow: Phaser.FX.Glow | null;
   glowTween: Phaser.Tweens.Tween | null;
   labelTween: Phaser.Tweens.Tween | null;
+  hideTween: Phaser.Tweens.Tween | null;
   lastWidth: number;
   lastLabel: string | null;
+}
+
+function ensureRadialTexture(
+  scene: Phaser.Scene,
+  key: string,
+  size: number,
+  colorStops: [number, string][],
+): void {
+  if (scene.textures.exists(key)) return;
+  const ct = scene.textures.createCanvas(key, size, size)!;
+  const ctx = ct.context;
+  const half = size / 2;
+  const grad = ctx.createRadialGradient(half, half, 0, half, half, half);
+  for (const [stop, color] of colorStops) grad.addColorStop(stop, color);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  ct.refresh();
 }
 
 export class CenterHUD {
@@ -128,6 +152,12 @@ export class CenterHUD {
     ensureLivingBarTextures(this.scene);
     ensureBarBgTexture(this.scene, TRAIN_BAR_BG_TEX, TRAIN_BAR_W, TRAIN_BAR_H);
     ensureBarBgTexture(this.scene, STACK_BAR_BG_TEX, STACK_BAR_W, STACK_BAR_H);
+    ensureRadialTexture(this.scene, STACK_CORE_TEX, 14, [
+      [0, 'rgba(255,255,255,1.0)'],
+      [0.3, 'rgba(255,255,255,0.7)'],
+      [0.6, 'rgba(255,255,255,0.2)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
     if (!this.scene.textures.exists(TRAIN_BAR_TEX)) {
       createGradientTexture(this.scene, TRAIN_BAR_TEX, TRAIN_PAL, TRAIN_BAR_W, TRAIN_BAR_H);
     }
@@ -205,7 +235,7 @@ export class CenterHUD {
 
   private createLowerSection(textureKey: string, palette: LivingBarPalette): LowerBarSection {
     const section = this.scene.add.container(CENTER_X, 0);
-    section.setVisible(false);
+    section.setVisible(false).setAlpha(1);
 
     const panelBg = this.scene.add.rectangle(0, STACK_TOTAL_H / 2, STACK_PANEL_W, STACK_PANEL_H, PANEL_BG_COL, PANEL_BG_ALPHA)
       .setScrollFactor(0);
@@ -225,6 +255,36 @@ export class CenterHUD {
       .setStrokeStyle(1, COL_BORDER, 1)
       .setFillStyle(0, 0);
 
+    const energyZone = new Phaser.Geom.Rectangle(STACK_BAR_LEFT + 2, STACK_LABEL_H + 1, STACK_BAR_W - 4, STACK_BAR_H - 2);
+    const zoneData = { type: 'random', source: energyZone } as Phaser.Types.GameObjects.Particles.EmitZoneData;
+    const coreEmitter = this.scene.add.particles(0, 0, STACK_CORE_TEX, {
+      lifespan:  { min: 200, max: 500 },
+      frequency: 30,
+      quantity:  2,
+      speedX:    { min: -8, max: 8 },
+      speedY:    { min: -3, max: 3 },
+      scale:     { start: 0.6, end: 0.1 },
+      alpha:     { start: 0.9, end: 0 },
+      tint:      [palette.light, 0xffffff, 0xffffff],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting:  false,
+    }).setScrollFactor(0);
+    coreEmitter.addEmitZone(zoneData);
+
+    const outerEmitter = this.scene.add.particles(0, 0, '_living_blob', {
+      lifespan:  { min: 400, max: 800 },
+      frequency: 50,
+      quantity:  1,
+      speedX:    { min: -5, max: 5 },
+      speedY:    { min: -2, max: 2 },
+      scale:     { start: 0.7, end: 0.15 },
+      alpha:     { start: 0.5, end: 0 },
+      tint:      [palette.mid, palette.light, palette.dark],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting:  false,
+    }).setScrollFactor(0);
+    outerEmitter.addEmitZone(zoneData);
+
     section.add([panelBg, label, bg, fg]);
     const effect = new LivingBarEffect(
       this.scene,
@@ -236,7 +296,7 @@ export class CenterHUD {
       palette,
       { glowTarget: fg, scrollFactor: 0 },
     );
-    section.add(border);
+    section.add([coreEmitter, outerEmitter, border]);
     this.container.add(section);
 
     return {
@@ -247,9 +307,14 @@ export class CenterHUD {
       fg,
       border,
       effect,
+      energyZone,
+      coreEmitter,
+      outerEmitter,
+      energized: false,
       glow: null,
       glowTween: null,
       labelTween: null,
+      hideTween: null,
       lastWidth: -1,
       lastLabel: null,
     };
@@ -370,6 +435,7 @@ export class CenterHUD {
     }
 
     const showUtility = utilityHeld
+      || data.utilityCooldownFrac > 0.001
       || now < this.utilityRevealUntil
       || (data.isUtilityOverridden ?? false);
     const isUltimateReady = data.isUltimateActive || data.rage >= data.ultimateRequiredRage;
@@ -420,12 +486,20 @@ export class CenterHUD {
     this.stopSectionAttention(this.ultimateSection);
     this.utilitySection.effect.destroy();
     this.ultimateSection.effect.destroy();
+    this.utilitySection.coreEmitter.destroy();
+    this.utilitySection.outerEmitter.destroy();
+    this.ultimateSection.coreEmitter.destroy();
+    this.ultimateSection.outerEmitter.destroy();
     this.container.destroy(true);
   }
 
   private showLowerSection(section: LowerBarSection, label: string, frac: number, x: number, y: number): void {
     const fillW = Math.max(0, Math.round(STACK_BAR_W * Phaser.Math.Clamp(frac, 0, 1)));
-    section.container.setPosition(x, y).setVisible(true);
+    if (section.hideTween) {
+      section.hideTween.destroy();
+      section.hideTween = null;
+    }
+    section.container.setPosition(x, y).setVisible(true).setAlpha(1);
     section.panelBg.setVisible(true);
     section.bg.setVisible(true);
     section.fg.setVisible(true);
@@ -435,18 +509,42 @@ export class CenterHUD {
       section.lastLabel = label;
     }
     section.label.setVisible(true);
-    section.effect.start();
     if (section.lastWidth !== fillW) {
       section.fg.setCrop(0, 0, fillW, STACK_BAR_H);
       section.effect.setFilledWidth(fillW);
+      section.energyZone.width = fillW > 6 ? fillW - 4 : 0;
       section.lastWidth = fillW;
+    }
+    if (fillW <= 6) {
+      section.coreEmitter.stop();
+      section.outerEmitter.stop();
+      if (!section.energized) section.effect.stop();
+    } else {
+      if (section.energized) {
+        if (!section.coreEmitter.emitting) section.coreEmitter.start();
+        if (!section.outerEmitter.emitting) section.outerEmitter.start();
+      } else {
+        section.effect.start();
+      }
     }
   }
 
   private hideLowerSection(section: LowerBarSection): void {
-    section.container.setVisible(false);
-    section.effect.stop();
-    section.lastWidth = -1;
+    if (!section.container.visible || section.hideTween) return;
+    section.hideTween = this.scene.tweens.add({
+      targets: section.container,
+      alpha: 0,
+      duration: STACK_FADE_MS,
+      ease: 'Linear',
+      onComplete: () => {
+        section.hideTween = null;
+        section.container.setVisible(false).setAlpha(1);
+        section.effect.stop();
+        section.coreEmitter.stop();
+        section.outerEmitter.stop();
+        section.lastWidth = -1;
+      },
+    });
   }
 
   private layoutPowerUps(nextBottom: number): void {
@@ -458,6 +556,7 @@ export class CenterHUD {
   private setUtilityAttention(enabled: boolean): void {
     if (enabled === this.utilityAttentionActive) return;
     this.utilityAttentionActive = enabled;
+    this.setSectionEnergized(this.utilitySection, enabled);
     if (enabled) {
       this.utilitySection.glow = this.utilitySection.fg.postFX.addGlow(UTIL_PAL.light, 3, 0, false, 0.4, 8);
       this.utilitySection.glowTween = this.scene.tweens.add({
@@ -485,6 +584,7 @@ export class CenterHUD {
   private setUltimateReadyVisual(enabled: boolean): void {
     if (enabled === this.ultimateReadyActive) return;
     this.ultimateReadyActive = enabled;
+    this.setSectionEnergized(this.ultimateSection, enabled);
     if (enabled) {
       this.ultimateSection.glow = this.ultimateSection.fg.postFX.addGlow(0xff3300, 4, 0, false, 0.3, 10);
       this.ultimateSection.glowTween = this.scene.tweens.add({
@@ -514,6 +614,24 @@ export class CenterHUD {
       section.fg.postFX.remove(section.glow);
       section.glow = null;
     }
+  }
+
+  private setSectionEnergized(section: LowerBarSection, energized: boolean): void {
+    if (section.energized === energized) return;
+    section.energized = energized;
+    const hasFill = section.lastWidth > 6;
+    if (energized) {
+      section.effect.stop();
+      if (hasFill) {
+        section.coreEmitter.start();
+        section.outerEmitter.start();
+      }
+      return;
+    }
+
+    section.coreEmitter.stop();
+    section.outerEmitter.stop();
+    if (section.container.visible && hasFill) section.effect.start();
   }
 
   private hideTrainBar(): void {

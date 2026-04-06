@@ -247,6 +247,8 @@ export class ArenaHUD {
   private puEntries = new Map<string, BarBundle>();
   /** Ordered list of currently shown defIds (for layout). */
   private puOrder: string[] = [];
+  private puFadeTween: Phaser.Tweens.Tween | null = null;
+  private pendingPuEntries: ActivePowerUpInfo[] | null = null;
 
   constructor(
     private scene: Phaser.Scene,
@@ -357,7 +359,7 @@ export class ArenaHUD {
 
     let panelBg: Phaser.GameObjects.Rectangle | undefined;
     if (opts?.panel) {
-      panelBg = s.add.rectangle(BAR_X + BAR_W / 2, labelY + 17, BAR_W + 20, 46, 0x000000, 0.35)
+      panelBg = s.add.rectangle(BAR_X + BAR_W / 2, labelY + 17, BAR_W + 20, 38, 0x000000, 0.35)
         .setScrollFactor(0);
       c.add(panelBg);
     }
@@ -580,7 +582,10 @@ export class ArenaHUD {
       b.energized = true; // force re-apply
       this.setBarEnergized(b, false);
     }
+    this.puFadeTween?.destroy();
+    this.puFadeTween = null;
     this.puContainer.setVisible(false);
+    this.puContainer.setAlpha(1);
     if (this.nameScrollTween) {
       this.nameScrollTween.destroy();
       this.nameScrollTween = null;
@@ -602,6 +607,7 @@ export class ArenaHUD {
     if (this.nameScrollTween) this.nameScrollTween.destroy();
     this.nameMask.destroy();
     this.adrBurstEmitter?.destroy();
+    this.puFadeTween?.destroy();
     this.clearPowerUpEntries();
   }
 
@@ -927,6 +933,50 @@ export class ArenaHUD {
     this.puOrder = [];
   }
 
+  private rebuildPowerUpEntries(activePowerUps: ActivePowerUpInfo[]): void {
+    this.clearPowerUpEntries();
+
+    let yOff = 0;
+    for (const pu of activePowerUps) {
+      const def = POWERUP_DEFS[pu.defId];
+      if (!def) continue;
+
+      const palette = paletteFromColor(def.color);
+      const texKey  = this.ensurePuTexture(pu.defId, palette);
+      const labelY  = yOff;
+      const barY    = yOff + 20;
+
+      const bundle = this.createBar(
+        labelY,
+        barY,
+        `Power-Up: ${def.displayName}`,
+        palette,
+        texKey,
+        pu.defId === 'SHIELD_OVERCHARGE' ? { value: true, panel: true } : { panel: true },
+        this.puContainer,
+      );
+      this.setBarEnergized(bundle, true);
+
+      this.puEntries.set(pu.defId, bundle);
+      this.puOrder.push(pu.defId);
+      yOff = barY + BAR_H + 12;
+    }
+
+    const n = this.puOrder.length;
+    if (n > 0) {
+      const totalH = (n - 1) * 46 + 34;
+      this.puContainer.setData('stackHeight', totalH);
+      this.puContainer.setY(GAME_HEIGHT - 20 - totalH);
+      this.puContainer.setAlpha(1);
+      this.puContainer.setVisible(true);
+      return;
+    }
+
+    this.puContainer.setData('stackHeight', 0);
+    this.puContainer.setVisible(false);
+    this.puContainer.setAlpha(1);
+  }
+
   /** Ensure the gradient texture for a power-up palette exists, create lazily. */
   private ensurePuTexture(defId: string, palette: BarPalette): string {
     const key = `_hud_pu_${defId}`;
@@ -937,7 +987,8 @@ export class ArenaHUD {
   }
 
   private updatePowerUpSection(activePowerUps: ActivePowerUpInfo[]): void {
-    const activeIds = new Set(activePowerUps.map(p => p.defId));
+    const visiblePowerUps = activePowerUps.filter((powerUp) => powerUp.remainingFrac > 0.001);
+    const activeIds = new Set(visiblePowerUps.map(p => p.defId));
 
     // Check if the set of active IDs changed
     let setChanged = activeIds.size !== this.puOrder.length;
@@ -948,53 +999,31 @@ export class ArenaHUD {
     }
 
     if (setChanged) {
-      // Destroy old entries and rebuild
-      this.clearPowerUpEntries();
-
-      let yOff = 0; // lokale Y-Position innerhalb puContainer (kein Offset nötig)
-      for (const pu of activePowerUps) {
-        const def = POWERUP_DEFS[pu.defId];
-        if (!def) continue;
-
-        const palette = paletteFromColor(def.color);
-        const texKey  = this.ensurePuTexture(pu.defId, palette);
-        const labelY  = yOff;
-        const barY    = yOff + 20;
-
-        const bundle = this.createBar(
-          labelY,
-          barY,
-          `Power-Up: ${def.displayName}`,
-          palette,
-          texKey,
-          pu.defId === 'SHIELD_OVERCHARGE' ? { value: true, panel: true } : { panel: true },
-          this.puContainer,
-        );
-        // Power-up bars are always energized
-        this.setBarEnergized(bundle, true);
-
-        this.puEntries.set(pu.defId, bundle);
-        this.puOrder.push(pu.defId);
-
-        yOff = barY + BAR_H + 12;
+      this.pendingPuEntries = visiblePowerUps;
+      if (!this.puFadeTween && this.puOrder.length > 0 && this.puContainer.visible) {
+        this.puFadeTween = this.scene.tweens.add({
+          targets: this.puContainer,
+          alpha: 0,
+          duration: 100,
+          ease: 'Linear',
+          onComplete: () => {
+            this.puFadeTween = null;
+            const nextEntries = this.pendingPuEntries ?? [];
+            this.pendingPuEntries = null;
+            this.rebuildPowerUpEntries(nextEntries);
+          },
+        });
+        return;
       }
 
-      // Container nur zeigen wenn Power-Ups aktiv; y dynamisch so, dass Unterkante am Bildschirmrand liegt
-      const n = this.puOrder.length;
-      if (n > 0) {
-        // Gesamthöhe: (n-1) Einträge à 46px + letzter Eintrag (20+14=34px)
-        const totalH = (n - 1) * 46 + 34;
-        this.puContainer.setData('stackHeight', totalH);
-        this.puContainer.setY(GAME_HEIGHT - 20 - totalH);
-        this.puContainer.setVisible(true);
-      } else {
-        this.puContainer.setData('stackHeight', 0);
-        this.puContainer.setVisible(false);
-      }
+      this.pendingPuEntries = null;
+      this.puFadeTween?.destroy();
+      this.puFadeTween = null;
+      this.rebuildPowerUpEntries(visiblePowerUps);
     }
 
     // Update fractions
-    for (const pu of activePowerUps) {
+    for (const pu of visiblePowerUps) {
       const bundle = this.puEntries.get(pu.defId);
       if (!bundle) continue;
       const frac = Math.max(0, Math.min(1, pu.remainingFrac));
