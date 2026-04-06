@@ -183,6 +183,7 @@ export class ClientUpdateCoordinator {
         isUltimateActive:        localState.isRaging,
         ultimateRequiredRage:    localUltimateConfig.rageRequired,
         ultimateThresholds,
+        ultimateDisplayName:     localUltimateConfig.displayName,
         weapon1CooldownFrac:     this.getClientWeaponCooldownFrac('weapon1'),
         weapon2CooldownFrac:     this.getClientWeaponCooldownFrac('weapon2'),
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
@@ -193,10 +194,14 @@ export class ClientUpdateCoordinator {
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
         weapon2AdrenalineCost:   this.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
       });
-      this.ctx.leftPanel.updateArenaHUD(hudData);
-      this.ctx.playerStatusRing?.update(hudData);
       this.localPlayerState.alive    = localState.alive;
       this.localPlayerState.burrowed = localState.isBurrowed;
+      this.ctx.leftPanel.updateArenaHUD(hudData);
+      this.ctx.centerHUD.updateBottomStatus(
+        hudData,
+        this.ctx.inputSystem.isUtilityHudDisplayActive(),
+      );
+      this.ctx.playerStatusRing?.update(hudData);
     }
 
     if (state.projectiles.some(p => p.style === 'bfg')) {

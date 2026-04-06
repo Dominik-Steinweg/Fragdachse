@@ -852,6 +852,7 @@ export class ArenaLifecycleCoordinator {
     const hudData = buildInitialLocalArenaHudData({
       ultimateRequiredRage: config.rageRequired,
       ultimateThresholds:   this.clientUpdate.getLocalUltimateThresholds(),
+      ultimateDisplayName:  config.displayName,
       utilityDisplayName:   this.clientUpdate.getLocalUtilityConfig().displayName,
       weapon2AdrenalineCost: this.clientUpdate.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
     });

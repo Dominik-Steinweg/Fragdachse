@@ -13,6 +13,7 @@ interface BuildLocalArenaHudDataParams {
   isUltimateActive: boolean;
   ultimateRequiredRage: number;
   ultimateThresholds: number[];
+  ultimateDisplayName?: string;
   weapon1CooldownFrac: number;
   weapon2CooldownFrac: number;
   utilityCooldownFrac: number;
@@ -27,6 +28,7 @@ interface BuildLocalArenaHudDataParams {
 interface BuildInitialLocalArenaHudDataParams {
   ultimateRequiredRage: number;
   ultimateThresholds: number[];
+  ultimateDisplayName?: string;
   utilityDisplayName?: string;
   weapon2AdrenalineCost?: number;
 }
@@ -40,6 +42,7 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     isUltimateActive: params.isUltimateActive,
     ultimateRequiredRage: params.ultimateRequiredRage,
     ultimateThresholds: params.ultimateThresholds,
+    ultimateDisplayName: params.ultimateDisplayName,
     weapon1CooldownFrac: params.weapon1CooldownFrac,
     weapon2CooldownFrac: params.weapon2CooldownFrac,
     utilityCooldownFrac: params.utilityCooldownFrac,
@@ -63,6 +66,7 @@ export function buildInitialLocalArenaHudData(
     isUltimateActive: false,
     ultimateRequiredRage: params.ultimateRequiredRage,
     ultimateThresholds: params.ultimateThresholds,
+    ultimateDisplayName: params.ultimateDisplayName,
     weapon1CooldownFrac: 0,
     weapon2CooldownFrac: 0,
     utilityCooldownFrac: 0,

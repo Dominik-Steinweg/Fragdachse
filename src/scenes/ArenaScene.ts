@@ -224,6 +224,8 @@ export class ArenaScene extends Phaser.Scene {
     this.playerStatusRing = new PlayerStatusRing(
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      () => this.localPlayerState?.alive ?? false,
+      () => this.localPlayerState?.burrowed ?? false,
     );
     this.enemyHoverNameLabel = new EnemyHoverNameLabel(this);
 
@@ -833,7 +835,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.lifecycle?.isMatchTerminated()): void {
     if (!this.ctx) return;
-    const shouldShow = inArena && (this.arenaPanelsHeld || !this.localPlayerState.alive);
+    const shouldShow = inArena && (bridge.isArenaCountdownActive() || this.arenaPanelsHeld || !this.localPlayerState.alive);
     this.syncArenaPanelOverlay(shouldShow);
   }
 

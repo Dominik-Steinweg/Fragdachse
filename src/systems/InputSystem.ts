@@ -206,6 +206,11 @@ export class InputSystem {
     return this.utilityHoldActive;
   }
 
+  isUtilityHudDisplayActive(): boolean {
+    if (!this.inputEnabled) return false;
+    return !!this.keyE?.isDown || this.utilityHoldActive || this.utilityTargetingActive || this.utilityPlacementActive;
+  }
+
   isUtilityChargePreviewActive(): boolean {
     return this.utilityHoldActive;
   }

@@ -143,6 +143,7 @@ function makeRadialTexture(scene: Phaser.Scene, key: string, size: number, color
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface BarBundle {
+  panelBg?:     Phaser.GameObjects.Rectangle;
   label:        Phaser.GameObjects.Text;
   bgImg:        Phaser.GameObjects.Image;
   trail?:       Phaser.GameObjects.Rectangle;
@@ -180,6 +181,7 @@ export interface ArenaHUDData {
   isUltimateActive:         boolean;
   ultimateRequiredRage:     number;
   ultimateThresholds:       number[];
+  ultimateDisplayName?:     string;
   weapon1CooldownFrac:      number;
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
@@ -347,11 +349,18 @@ export class ArenaHUD {
     labelText: string,
     palette:   BarPalette,
     texKey:    string,
-    opts?:     { trail?: boolean; value?: boolean; highlight?: boolean; trailColor?: number },
+    opts?:     { trail?: boolean; value?: boolean; highlight?: boolean; trailColor?: number; panel?: boolean },
     targetContainer?: Phaser.GameObjects.Container,
   ): BarBundle {
     const c = targetContainer ?? this.container;
     const s = this.scene;
+
+    let panelBg: Phaser.GameObjects.Rectangle | undefined;
+    if (opts?.panel) {
+      panelBg = s.add.rectangle(BAR_X + BAR_W / 2, labelY + 17, BAR_W + 20, 46, 0x000000, 0.35)
+        .setScrollFactor(0);
+      c.add(panelBg);
+    }
 
     const label = s.add.text(BAR_X, labelY, labelText, LABEL_FONT).setScrollFactor(0);
     c.add(label);
@@ -438,6 +447,7 @@ export class ArenaHUD {
     }
 
     return {
+      panelBg,
       label,
       bgImg,
       trail,
@@ -901,6 +911,7 @@ export class ArenaHUD {
     b.idleEffect.destroy();
     b.coreEmitter.destroy();
     b.outerEmitter.destroy();
+    b.panelBg?.destroy();
     b.label.destroy();
     b.bgImg.destroy();
     b.fgImg.destroy();
@@ -956,7 +967,7 @@ export class ArenaHUD {
           `Power-Up: ${def.displayName}`,
           palette,
           texKey,
-          pu.defId === 'SHIELD_OVERCHARGE' ? { value: true } : undefined,
+          pu.defId === 'SHIELD_OVERCHARGE' ? { value: true, panel: true } : { panel: true },
           this.puContainer,
         );
         // Power-up bars are always energized
@@ -973,9 +984,11 @@ export class ArenaHUD {
       if (n > 0) {
         // Gesamthöhe: (n-1) Einträge à 46px + letzter Eintrag (20+14=34px)
         const totalH = (n - 1) * 46 + 34;
+        this.puContainer.setData('stackHeight', totalH);
         this.puContainer.setY(GAME_HEIGHT - 20 - totalH);
         this.puContainer.setVisible(true);
       } else {
+        this.puContainer.setData('stackHeight', 0);
         this.puContainer.setVisible(false);
       }
     }

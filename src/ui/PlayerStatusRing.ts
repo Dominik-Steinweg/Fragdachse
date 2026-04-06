@@ -174,6 +174,8 @@ export class PlayerStatusRing {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly getLocalSprite: () => Phaser.GameObjects.Image | undefined,
+    private readonly isLocalAlive: () => boolean = () => true,
+    private readonly isLocalBurrowed: () => boolean = () => false,
   ) {
     ensureLivingBarTextures(scene);
 
@@ -332,7 +334,13 @@ export class PlayerStatusRing {
 
   private render(now: number): void {
     const sprite = this.getLocalSprite();
-    if (!this.active || !this.latestData || !sprite || !sprite.active || !sprite.visible) {
+    if (!this.active || !this.latestData || !sprite || !sprite.active || !this.isLocalAlive()) {
+      this.container.setVisible(false);
+      this.stopLivingEmitters();
+      return;
+    }
+
+    if (!sprite.visible && !this.isLocalBurrowed()) {
       this.container.setVisible(false);
       this.stopLivingEmitters();
       return;

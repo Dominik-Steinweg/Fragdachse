@@ -364,6 +364,7 @@ export class HostUpdateCoordinator {
         isUltimateActive:        this.ctx.loadoutManager?.isUltimateActive(localId) ?? false,
         ultimateRequiredRage:    ultCfg?.rageRequired ?? 300,
         ultimateThresholds,
+        ultimateDisplayName:     ultCfg?.displayName,
         weapon1CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon1', now) ?? 0,
         weapon2CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
@@ -374,10 +375,14 @@ export class HostUpdateCoordinator {
         shieldBuff,
         weapon2AdrenalineCost:   weapon2Cfg?.adrenalinCost ?? 0,
       });
-      this.ctx.leftPanel.updateArenaHUD(hudData);
-      this.ctx.playerStatusRing?.update(hudData);
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
       this.localPlayerState.burrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
+      this.ctx.leftPanel.updateArenaHUD(hudData);
+      this.ctx.centerHUD.updateBottomStatus(
+        hudData,
+        this.ctx.inputSystem.isUtilityHudDisplayActive(),
+      );
+      this.ctx.playerStatusRing?.update(hudData);
     }
 
     this.ctx.stinkCloudSystem.clientUpdate(delta);
@@ -844,7 +849,7 @@ export class HostUpdateCoordinator {
   }
 
   private getFallbackUltimateConfig() {
-    return { rageRequired: 300 };
+    return { displayName: 'Ultimate', rageRequired: 300 };
   }
 
   private getDefaultAimState(isMoving: boolean): PlayerAimNetState {
