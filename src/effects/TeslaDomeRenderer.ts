@@ -359,7 +359,7 @@ export class TeslaDomeRenderer {
       speed: { min: 10, max: 22 },
       angle: { min: 0, max: 360 },
       scale: { start: 0.42, end: 0.04 },
-      alpha: { start: 0.2, end: 0 },
+      alpha: { start: 0.09, end: 0 },
       tint: [0xffffff, accentColor, dome.color],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
@@ -515,8 +515,15 @@ export class TeslaDomeRenderer {
     visual.fieldEmitter.setParticleTint([accentColor, coreColor, mixColors(accentColor, 0x6fdcff, 0.18)]);
 
     visual.rimEmitter.setPosition(visual.currentX, visual.currentY);
-    visual.rimEmitter.clearEmitZones();
-    visual.rimEmitter.addEmitZone(edgeZone(radius * 0.992, Phaser.Math.Clamp(Math.round(radius / 2.2), 74, 120)));
+    const rimZoneRadius = radius * 0.992;
+    if (visual.rimEmitter.emitZones.length > 0) {
+      // Radius des bestehenden Kreises aktualisieren ohne den Zyklus-Counter zurückzusetzen.
+      // clearEmitZones() + addEmitZone() würde den EdgeZone-Zähler auf Punkt 0 (= rechts, Winkel 0°)
+      // zurücksetzen, sodass alle Partikel am rechten Rand clustern.
+      (visual.rimEmitter.emitZones[0] as any).source.radius = rimZoneRadius;
+    } else {
+      visual.rimEmitter.addEmitZone(edgeZone(rimZoneRadius, Phaser.Math.Clamp(Math.round(radius / 2.2), 74, 120)));
+    }
     visual.rimEmitter.setParticleScale(Math.max(radius / 260, 0.28), 0.05);
     visual.rimEmitter.setAlpha(Phaser.Math.Clamp(alphaScale * (0.28 + pulse * 0.02), 0, 1));
     visual.rimEmitter.setParticleTint([0xffffff, accentColor, coreColor]);
@@ -572,7 +579,7 @@ export class TeslaDomeRenderer {
     if (time - visual.lastIdleBurstAt < IDLE_BURST_INTERVAL_MS) return;
 
     const sampleBursts = 4;
-    const particlesPerBurst = Phaser.Math.Clamp(Math.round(visual.currentRadius / 34), 6, 10);
+    const particlesPerBurst = Phaser.Math.Clamp(Math.round(visual.currentRadius / 68), 2, 4);
     visual.idleEmitter.setParticleTint([mixColors(accentColor, 0xffffff, 0.14), accentColor, coreColor]);
     visual.idleEmitter.setParticleSpeed(6, 16);
 
