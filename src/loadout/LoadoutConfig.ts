@@ -746,7 +746,7 @@ export const WEAPON_CONFIGS = {
     id:                   'AK47',
     displayName:          'AK-47',
     cooldown:             140,
-    damage:               9,
+    damage:               12,
     range:                1000,        
     fire: {
       type:                 'projectile',

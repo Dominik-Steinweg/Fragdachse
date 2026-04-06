@@ -393,7 +393,7 @@ export class PlacementPreviewRenderer {
 
   private createUtilityTargetingHint(): Phaser.GameObjects.Container {
     const x = GAME_WIDTH * 0.5;
-    const y = ARENA_OFFSET_Y + 54;
+    const y = ARENA_OFFSET_Y + 136;
     const panel = this.scene.add.rectangle(0, 0, 500, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, COLORS.RED_2, 0.9);
     const title = this.scene.add.text(0, -11, 'ATOMBOMBE: ZIELMODUS', {
@@ -421,7 +421,7 @@ export class PlacementPreviewRenderer {
 
   private createAirstrikeTargetingHint(): Phaser.GameObjects.Container {
     const x = GAME_WIDTH * 0.5;
-    const y = ARENA_OFFSET_Y + 54;
+    const y = ARENA_OFFSET_Y + 136;
     const panel = this.scene.add.rectangle(0, 0, 560, 64, COLORS.GREY_10, 0.72);
     panel.setStrokeStyle(2, 0xff6600, 0.9);
     const title = this.scene.add.text(0, -11, 'LUFTANGRIFF: ZIELMODUS', {

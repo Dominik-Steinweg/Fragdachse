@@ -16,7 +16,7 @@ import {
 const CENTER_X       = GAME_WIDTH / 2;
 const PANEL_WIDTH    = 200;
 const PANEL_BG_COL   = 0x000000;
-const PANEL_BG_ALPHA = 0.35;
+const PANEL_BG_ALPHA = 0.25;
 
 const TIMER_Y             = 28;
 const TIMER_BG_H          = 44;
@@ -188,10 +188,6 @@ export class CenterHUD {
       .setVisible(false);
     this.container.add(this.trainPanelBg);
 
-    this.container.add(
-      this.scene.add.rectangle(CENTER_X, TRAIN_SEP_Y, PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
-        .setScrollFactor(0),
-    );
 
     this.trainText = this.scene.add.text(CENTER_X, TRAIN_TEXT_Y, '', {
       fontSize: '16px', fontFamily: 'monospace', color: '#c0a060', align: 'center',
