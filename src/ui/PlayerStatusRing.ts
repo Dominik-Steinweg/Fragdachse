@@ -52,14 +52,15 @@ const HP_TRAIL_DELAY_MS = 220;
 const HP_TRAIL_DURATION_MS = 420;
 const FLASH_MS = 180;
 const BURST_MS = 320;
-const WARNING_MS = 380;
-const WARNING_DEBOUNCE_MS = 220;
+const WARNING_MS = 540;
+const WARNING_PUNCH_MS = 140;
 const LIVING_EMITTER_IDLE_FREQUENCY = 20;
 const LIVING_EMITTER_ACTIVE_FREQUENCY = 5;
 const LIVING_EMITTER_DEPTH = DEPTH.LOCAL_UI;
 
 const PAL_HP: SegmentPalette = { dark: COLORS.GREEN_3, mid: 0x00cc44, light: COLORS.GREEN_1, spark: 0xffffff };
 const PAL_ADR: SegmentPalette = { dark: COLORS.BLUE_3, mid: COLORS.BLUE_2, light: COLORS.BLUE_1, spark: 0xffffff };
+const PAL_ADR_LOW: SegmentPalette = { dark: 0x5e1720, mid: COLORS.RED_3, light: 0xff9a8a, spark: 0xffffff };
 const PAL_RAGE: SegmentPalette = { dark: COLORS.RED_3, mid: COLORS.RED_2, light: COLORS.RED_1, spark: 0xffffff };
 const PAL_ARMOR: SegmentPalette = { dark: COLORS.GOLD_3, mid: ARMOR_COLOR, light: COLORS.GOLD_1, spark: COLORS.GREY_1 };
 
@@ -169,7 +170,7 @@ export class PlayerStatusRing {
   private hpFlashUntil = 0;
   private adrBurstUntil = 0;
   private adrenalineWarningUntil = 0;
-  private lastAdrenalineWarningAt = -Infinity;
+  private adrenalineWarningPunchUntil = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -217,9 +218,8 @@ export class PlayerStatusRing {
 
   notifyAdrenalineInsufficientShot(): void {
     const now = this.scene.time.now;
-    if (now - this.lastAdrenalineWarningAt < WARNING_DEBOUNCE_MS) return;
-    this.lastAdrenalineWarningAt = now;
     this.adrenalineWarningUntil = now + WARNING_MS;
+    this.adrenalineWarningPunchUntil = now + WARNING_PUNCH_MS;
   }
 
   update(data: LocalArenaHudData): void {
@@ -346,12 +346,17 @@ export class PlayerStatusRing {
       return;
     }
 
-    const warningFrac = clamp01((this.adrenalineWarningUntil - now) / WARNING_MS);
+    const warningHoldFrac = clamp01((this.adrenalineWarningUntil - now) / WARNING_MS);
+    const warningPunchFrac = clamp01((this.adrenalineWarningPunchUntil - now) / WARNING_PUNCH_MS);
+    const warningFrac = Math.max(warningHoldFrac, warningPunchFrac);
+    const warningPulse = warningFrac > 0
+      ? 0.72 + 0.28 * Math.sin(now * 0.045) + warningPunchFrac * 0.45
+      : 0;
     const wobbleX = warningFrac > 0
-      ? Math.sin(now * 0.08) * 1.4 * warningFrac
+      ? (Math.sin(now * 0.24) * 2.8 + Math.sin(now * 0.63) * 1.2) * (warningFrac + warningPunchFrac * 0.85)
       : 0;
     const wobbleY = warningFrac > 0
-      ? Math.cos(now * 0.06) * 0.5 * warningFrac
+      ? (Math.cos(now * 0.19) * 1.2 + Math.cos(now * 0.51) * 0.7) * (warningFrac + warningPunchFrac * 0.7)
       : 0;
 
     this.container.setVisible(true);
@@ -369,8 +374,8 @@ export class PlayerStatusRing {
 
     this.drawSegmentShadows();
     this.drawBaseSegments();
-    this.drawAdrenalineWarning(warningFrac);
-    this.drawEffectGlows(now);
+    this.drawAdrenalineWarning(warningFrac, warningPulse, warningPunchFrac);
+    this.drawEffectGlows(now, warningFrac, warningPulse, warningPunchFrac);
     this.drawFilledSegments(now);
     this.drawSparks(now);
 
@@ -409,16 +414,19 @@ export class PlayerStatusRing {
     this.drawSegmentLayer(this.baseGraphics, segment, 1, RING_INNER_RADIUS + 0.8, RING_INNER_RADIUS + RING_THICKNESS * 0.52, COLORS.GREY_10, 0.18);
   }
 
-  private drawAdrenalineWarning(warningFrac: number): void {
+  private drawAdrenalineWarning(warningFrac: number, warningPulse: number, warningPunchFrac: number): void {
     if (warningFrac <= 0.01) return;
-    this.drawSegmentLayer(this.warningGraphics, SEGMENTS[0], 1, RING_INNER_RADIUS - 0.6, RING_OUTER_RADIUS + 1.6, COLORS.RED_4, 0.12 + warningFrac * 0.14);
-    this.drawSegmentLayer(this.warningGraphics, SEGMENTS[0], 1, RING_INNER_RADIUS + 1.2, RING_OUTER_RADIUS - 0.8, COLORS.RED_2, 0.06 + warningFrac * 0.08);
+    const pulseAlpha = 0.92 + warningPulse * 0.3 + warningPunchFrac * 0.45;
+    this.drawSegmentLayer(this.warningGraphics, SEGMENTS[0], 1, RING_INNER_RADIUS - 2.4, RING_OUTER_RADIUS + 4.2, COLORS.RED_4, (0.22 + warningFrac * 0.26) * pulseAlpha);
+    this.drawSegmentLayer(this.warningGraphics, SEGMENTS[0], 1, RING_INNER_RADIUS - 1.0, RING_OUTER_RADIUS + 2.4, COLORS.RED_3, (0.26 + warningFrac * 0.26) * pulseAlpha);
+    this.drawSegmentLayer(this.warningGraphics, SEGMENTS[0], 1, RING_INNER_RADIUS + 0.8, RING_OUTER_RADIUS - 0.2, COLORS.RED_1, (0.16 + warningFrac * 0.18 + warningPunchFrac * 0.12) * pulseAlpha);
   }
 
-  private drawEffectGlows(now: number): void {
+  private drawEffectGlows(now: number, warningFrac: number, warningPulse: number, warningPunchFrac: number): void {
     const ragePulse = 0.45 + 0.55 * Math.sin(now * 0.008);
     const boostPulse = 0.45 + 0.55 * Math.sin(now * 0.01);
     const hpFlash = clamp01((this.hpFlashUntil - now) / FLASH_MS);
+    const adrenalineInsufficient = this.isAdrenalineInsufficientForWeapon2();
 
     if (hpFlash > 0.01) {
       this.drawSegmentLayer(this.glowGraphics, SEGMENTS[1], this.hpTrailFrac, RING_INNER_RADIUS - 1.2, RING_OUTER_RADIUS + 1.8, COLORS.RED_2, 0.16 + hpFlash * 0.22);
@@ -426,6 +434,30 @@ export class PlayerStatusRing {
 
     if (this.adrenalineBoostActive) {
       this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], Math.max(this.adrFrac, 0.12), RING_INNER_RADIUS - 0.8, RING_OUTER_RADIUS + 1.8, PAL_ADR.light, 0.18 + boostPulse * 0.18);
+    }
+
+    if (adrenalineInsufficient) {
+      this.drawSegmentLayer(
+        this.glowGraphics,
+        SEGMENTS[0],
+        Math.max(this.adrFrac, 0.1),
+        RING_INNER_RADIUS - 1.3,
+        RING_OUTER_RADIUS + 2.1,
+        PAL_ADR_LOW.mid,
+        0.16 + warningFrac * 0.14,
+      );
+    }
+
+    if (warningFrac > 0.01) {
+      this.drawSegmentLayer(
+        this.glowGraphics,
+        SEGMENTS[0],
+        1,
+        RING_INNER_RADIUS - 2.6,
+        RING_OUTER_RADIUS + 4.4,
+        COLORS.RED_1,
+        (0.22 + warningFrac * 0.24 + warningPunchFrac * 0.16) * (0.82 + warningPulse * 0.32),
+      );
     }
 
     if (this.rageReady) {
@@ -443,6 +475,14 @@ export class PlayerStatusRing {
 
   private drawFilledSegments(now: number): void {
     const hpFlash = clamp01((this.hpFlashUntil - now) / FLASH_MS);
+    const adrenalineInsufficient = this.isAdrenalineInsufficientForWeapon2();
+    const adrenalinePalette = adrenalineInsufficient ? PAL_ADR_LOW : PAL_ADR;
+    const adrenalineMainAlpha = adrenalineInsufficient
+      ? (this.adrenalineBoostActive ? 0.9 : 0.84)
+      : (this.adrenalineBoostActive ? 0.88 : 0.76);
+    const adrenalineHighlightAlpha = adrenalineInsufficient
+      ? (this.adrenalineBoostActive ? 0.76 : 0.66)
+      : (this.adrenalineBoostActive ? 0.72 : 0.56);
 
     if (this.hpTrailFrac > this.hpFrac + 0.002) {
       this.drawSegmentLayer(this.fillGraphics, SEGMENTS[1], this.hpTrailFrac, RING_INNER_RADIUS, RING_OUTER_RADIUS, COLORS.RED_2, 0.28);
@@ -450,7 +490,11 @@ export class PlayerStatusRing {
     }
 
     this.drawResourceSegment(SEGMENTS[1], this.hpFrac, PAL_HP, 0.78, 0.58 + hpFlash * 0.22);
-    this.drawResourceSegment(SEGMENTS[0], this.adrFrac, PAL_ADR, this.adrenalineBoostActive ? 0.88 : 0.76, this.adrenalineBoostActive ? 0.72 : 0.56);
+    this.drawResourceSegment(SEGMENTS[0], this.adrFrac, adrenalinePalette, adrenalineMainAlpha, adrenalineHighlightAlpha);
+    if (adrenalineInsufficient) {
+      this.drawSegmentLayer(this.fillGraphics, SEGMENTS[0], this.adrFrac, RING_INNER_RADIUS - 0.1, RING_OUTER_RADIUS + 0.2, COLORS.RED_3, 0.3);
+      this.drawSegmentLayer(this.fillGraphics, SEGMENTS[0], this.adrFrac, RING_INNER_RADIUS + 1.0, RING_INNER_RADIUS + RING_THICKNESS * 0.58, COLORS.RED_1, 0.16);
+    }
     this.drawResourceSegment(SEGMENTS[2], this.rageFrac, PAL_RAGE, this.ultimateActive ? 0.92 : 0.8, this.rageReady ? 0.74 : 0.58);
 
     this.drawSegmentLayer(this.fillGraphics, SEGMENTS[1], this.armorFrac, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, PAL_ARMOR.mid, 0.88);
@@ -467,6 +511,12 @@ export class PlayerStatusRing {
     this.drawSegmentLayer(this.fillGraphics, segment, fraction, RING_INNER_RADIUS, RING_OUTER_RADIUS, palette.mid, mainAlpha);
     this.drawSegmentLayer(this.fillGraphics, segment, fraction, RING_INNER_RADIUS + 0.9, RING_INNER_RADIUS + RING_THICKNESS * 0.55, palette.light, highlightAlpha);
     this.drawSegmentLayer(this.fillGraphics, segment, fraction, RING_OUTER_RADIUS - 1.4, RING_OUTER_RADIUS, palette.dark, 0.24);
+  }
+
+  private isAdrenalineInsufficientForWeapon2(): boolean {
+    const data = this.latestData;
+    if (!data) return false;
+    return data.weapon2AdrenalineCost > 0 && data.adrenaline < data.weapon2AdrenalineCost;
   }
 
   private syncLivingEmitters(alpha: number, now: number): void {

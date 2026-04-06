@@ -329,7 +329,50 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
-    inputSystem.setupLocalAdrenalineProvider(() => this.clientUpdate.getLocalAdrenaline());
+    const playLocalFailureSound = (slot: LoadoutSlot): void => {
+      if (slot === 'weapon1' || slot === 'weapon2') {
+        const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
+        shotAudioSystem.playFailure(shotAudio?.failureKey, shotAudio?.failureVolume ?? 1);
+        return;
+      }
+
+      if (slot === 'ultimate') {
+        const ultimate = this.clientUpdate.getLocalUltimateConfig();
+        if (ultimate.type === 'gauss') {
+          shotAudioSystem.playFailure(ultimate.shotAudio?.failureKey, ultimate.shotAudio?.failureVolume ?? 1);
+        }
+      }
+    };
+    const isWeapon2AdrenalineInsufficient = (assumeRecentLocalShot = false): boolean => {
+      const weapon2Config = this.clientUpdate.getLocalWeaponConfig('weapon2');
+      const adrenalineCost = weapon2Config.adrenalinCost ?? 0;
+      if (adrenalineCost <= 0) return false;
+
+      const localAdrenaline = this.clientUpdate.getLocalAdrenaline();
+      if (localAdrenaline < adrenalineCost) return true;
+      if (!assumeRecentLocalShot) return false;
+
+      return localAdrenaline < adrenalineCost * 2;
+    };
+    const handleLocalFailureFeedback = (
+      slot: LoadoutSlot,
+      reason: 'cooldown' | 'resource',
+      inputStarted: boolean,
+      resourceKind?: LoadoutUseResult['resourceKind'],
+      assumeRecentLocalWeapon2Shot = false,
+    ): void => {
+      if (!inputStarted) return;
+
+      if (
+        slot === 'weapon2'
+        && ((reason === 'resource' && resourceKind === 'adrenaline')
+          || (reason === 'cooldown' && isWeapon2AdrenalineInsufficient(assumeRecentLocalWeapon2Shot)))
+      ) {
+        this.playerStatusRing?.notifyAdrenalineInsufficientShot();
+      }
+
+      playLocalFailureSound(slot);
+    };
     inputSystem.setupWeapon2ConfigProvider(() => this.clientUpdate.getLocalWeaponConfig('weapon2'));
     inputSystem.setupCanStartScopeCheck(() => {
       const wepConfig = this.clientUpdate.getLocalWeaponConfig('weapon2');
@@ -337,7 +380,15 @@ export class ArenaScene extends Phaser.Scene {
       const cooldownOk = lastFired === 0 || Date.now() - lastFired >= wepConfig.cooldown;
       const adrenalineOk = wepConfig.adrenalinCost === 0
         || this.clientUpdate.getLocalAdrenaline() >= wepConfig.adrenalinCost;
-      return cooldownOk && adrenalineOk;
+      if (!cooldownOk) {
+        handleLocalFailureFeedback('weapon2', 'cooldown', true, undefined, true);
+        return false;
+      }
+      if (!adrenalineOk) {
+        handleLocalFailureFeedback('weapon2', 'resource', true, 'adrenaline');
+        return false;
+      }
+      return true;
     });
     inputSystem.setupUtilityPlacementPreviewProvider(() => this.getLocalPlacementPreview());
     inputSystem.setupUltimatePlacementPreviewProvider(() => this.getLocalUltimatePlacementPreview());
@@ -355,23 +406,6 @@ export class ArenaScene extends Phaser.Scene {
       const displayName   = config?.displayName ?? 'Utility';
       this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
     };
-    inputSystem.onBurrowPressedWithoutAdrenaline = () => {
-      this.ctx.centerHUD.showAdrenalineLow();
-    };
-    const playLocalFailureSound = (slot: LoadoutSlot): void => {
-      if (slot === 'weapon1' || slot === 'weapon2') {
-        const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
-        shotAudioSystem.playFailure(shotAudio?.failureKey, shotAudio?.failureVolume ?? 1);
-        return;
-      }
-
-      if (slot === 'ultimate') {
-        const ultimate = this.clientUpdate.getLocalUltimateConfig();
-        if (ultimate.type === 'gauss') {
-          shotAudioSystem.playFailure(ultimate.shotAudio?.failureKey, ultimate.shotAudio?.failureVolume ?? 1);
-        }
-      }
-    };
     const handleLocalLoadoutFailure = (
       slot: LoadoutSlot,
       result: LoadoutUseResult | null,
@@ -387,14 +421,8 @@ export class ArenaScene extends Phaser.Scene {
         this.clientUpdate.rollbackRejectedLoadoutFire(slot);
       }
 
-      if (slot === 'weapon2' && result.reason === 'resource' && result.resourceKind === 'adrenaline') {
-        this.playerStatusRing?.notifyAdrenalineInsufficientShot();
-        this.ctx.centerHUD.showAdrenalineLow();
-      }
-
-      if (!inputStarted) return;
       if (result.reason === 'cooldown' || result.reason === 'resource') {
-        playLocalFailureSound(slot);
+        handleLocalFailureFeedback(slot, result.reason, inputStarted, result.resourceKind);
       }
     };
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
@@ -414,7 +442,7 @@ export class ArenaScene extends Phaser.Scene {
         const lastFired = this.clientUpdate.weaponLastFiredRecord()[slot];
         const wepConfig = this.clientUpdate.getLocalWeaponConfig(slot);
         if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
-          if (inputStarted) playLocalFailureSound(slot);
+          handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
           return;
         }
         shotId = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);

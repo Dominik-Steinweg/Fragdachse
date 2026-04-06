@@ -31,9 +31,7 @@ const ANNOUNCEMENT_PAD_X      = 20;
 const ANNOUNCEMENT_PAD_Y      = 14;
 const ANNOUNCEMENT_HOLD_MS    = 800;
 const ANNOUNCEMENT_FADE_MS    = 200;
-const ANNOUNCEMENT_DEBOUNCE_MS = 600;
 const ANNOUNCEMENT_TEXT_COLOR = '#e0e0e0';
-const ANNOUNCEMENT_WARN_COLOR = TIMER_COLOR_WARNING;
 
 const TRAIN_SEP_Y      = 56;
 const TRAIN_TEXT_Y     = 72;
@@ -141,7 +139,6 @@ export class CenterHUD {
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
   private announcementTween: Phaser.Tweens.Tween | null = null;
-  private lastAdrenalineAnnouncementAt = -Number.MAX_VALUE;
 
   private trainText!: Phaser.GameObjects.Text;
   private trainPanelBg!: Phaser.GameObjects.Rectangle;
@@ -538,13 +535,6 @@ export class CenterHUD {
       ease: 'Quad.easeOut',
       onComplete: () => this.hideAnnouncement(),
     });
-  }
-
-  showAdrenalineLow(): void {
-    const now = this.scene.time.now;
-    if (now - this.lastAdrenalineAnnouncementAt < ANNOUNCEMENT_DEBOUNCE_MS) return;
-    this.lastAdrenalineAnnouncementAt = now;
-    this.showAnnouncement('Adrenalin niedrig', ANNOUNCEMENT_WARN_COLOR);
   }
 
   showFraggedBy(killerName: string, weapon: string, color: number): void {
