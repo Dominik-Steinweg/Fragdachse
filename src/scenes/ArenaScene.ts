@@ -20,6 +20,7 @@ import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
+import { CenterHUD }             from '../ui/CenterHUD';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
@@ -199,6 +200,9 @@ export class ArenaScene extends Phaser.Scene {
     leftPanel.build();
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
+    const centerHUD  = new CenterHUD(this);
+    centerHUD.build();
+    centerHUD.setPuContainer(leftPanel.getPuContainer());
 
     const aimSystem = new AimSystem(
       this,
@@ -233,7 +237,7 @@ export class ArenaScene extends Phaser.Scene {
       playerManager, projectileManager, combatSystem, effectSystem,
       decoySystem,
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
-      leftPanel, rightPanel, aimSystem, arenaCountdown,
+      leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
       arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null, captureTheBeerSystem: null,
@@ -339,6 +343,15 @@ export class ArenaScene extends Phaser.Scene {
       if (!cfg || cfg.type !== 'translocator') return false;
       return this.ctx.translocatorSystem?.getActivePuckId(bridge.getLocalPlayerId()) !== undefined;
     });
+    inputSystem.onUtilityPressedDuringCooldown = () => {
+      const localId       = bridge.getLocalPlayerId();
+      const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId);
+      const remaining     = Math.max(0, cooldownUntil - bridge.getSynchronizedNow());
+      const config        = this.clientUpdate.getLocalUtilityConfig();
+      const frac          = config && config.cooldown > 0 ? Math.min(1, remaining / config.cooldown) : 0.8;
+      const displayName   = config?.displayName ?? 'Utility';
+      this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
+    };
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
         const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
@@ -515,7 +528,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (inGame && !terminated) {
       const secs = bridge.computeSecondsLeft();
-      this.ctx.rightPanel.updateTimer(secs);
+      this.ctx.centerHUD.updateTimer(secs);
 
       // Train widget
       const trainEvent = bridge.getTrainEvent();
@@ -524,10 +537,10 @@ export class ArenaScene extends Phaser.Scene {
           const latestState = bridge.getLatestGameState();
           const trainState  = latestState?.train ?? null;
           if (trainState?.alive) {
-            this.ctx.rightPanel.updateTrainHP(trainState.hp, trainState.maxHp);
+            this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
           } else if (bridge.getSynchronizedNow() < trainEvent.spawnAt) {
             const arrivalTimerSecs = Math.max(0, Math.ceil((bridge.getRoundEndTime() - trainEvent.spawnAt) / 1000));
-            this.ctx.rightPanel.setTrainArrival(arrivalTimerSecs);
+            this.ctx.centerHUD.setTrainArrival(arrivalTimerSecs);
           }
         }
       }

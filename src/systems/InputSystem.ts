@@ -51,6 +51,7 @@ export class InputSystem {
   private getLocalUltimateConfig: (() => UltimateConfig | undefined) | null = null;
   private getLocalRage: (() => number) | null = null;
   private predictedUtilityCooldownUntil = 0;
+  public onUtilityPressedDuringCooldown: (() => void) | null = null;
   private utilityHoldActive = false;
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
@@ -584,6 +585,9 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (this.getEffectiveUtilityCooldownUntil() > now) {
+        this.onUtilityPressedDuringCooldown?.();
+      }
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y);

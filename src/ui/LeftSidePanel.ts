@@ -10,7 +10,7 @@ import Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import { ArenaHUD } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
-import { GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { HelpOverlay } from './HelpOverlay';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
@@ -100,9 +100,15 @@ interface SwatchEntry {
   color:  number;
 }
 
+// ── Power-Up-Container (center-bottom, nicht animiert) ─────────────────────
+// x=840 → Balken (BAR_X=14, BAR_W=212) erscheinen zentriert auf x=960
+// y wird dynamisch von ArenaHUD gesetzt (abhängig von Anzahl aktiver Power-Ups)
+const PU_CONTAINER_X = GAME_WIDTH / 2 - 120; // 840
+
 export class LeftSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
+  private puContainer!:    Phaser.GameObjects.Container;
   private arenaHUD!:       ArenaHUD;
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
@@ -152,7 +158,13 @@ export class LeftSidePanel {
       this.scene.add.rectangle(CENTER_X, GAME_HEIGHT / 2, 240, GAME_HEIGHT, 0x000000, 0.18)
         .setScrollFactor(0),
     );
-    this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer);
+
+    // Power-Up-Container: feste Position mittig unten, unabhängig vom Tween
+    this.puContainer = this.scene.add.container(PU_CONTAINER_X, 0);
+    this.puContainer.setDepth(DEPTH.OVERLAY - 1);
+    this.puContainer.setVisible(false);
+
+    this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer, this.puContainer);
 
     // ── lobbyContainer (Namens- und Farbsektion, initial on-screen) ───────────
     const objects: Phaser.GameObjects.GameObject[] = [];
@@ -355,6 +367,8 @@ export class LeftSidePanel {
     this.refreshColorIndicator();
   }
 
+  getPuContainer(): Phaser.GameObjects.Container { return this.puContainer; }
+
   // ── Transitions ────────────────────────────────────────────────────────────
 
   transitionToGame(): void {
@@ -389,6 +403,7 @@ export class LeftSidePanel {
     this.arenaHUD.reset();
     this.arenaOverlayVisible = false;
     this.badgerPreview?.sprite.setVisible(true);
+    this.puContainer.setVisible(false);
 
     this.scene.tweens.add({
       targets:  this.gameContainer,

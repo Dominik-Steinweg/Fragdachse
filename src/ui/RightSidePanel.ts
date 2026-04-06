@@ -18,19 +18,6 @@ const SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_OFFSET_X + 8;  // 1688
 const SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;                   // 1912
 const PANEL_WIDTH      = 200;
 
-// Timer
-const TIMER_Y             = 28;
-const TIMER_BG_H          = 44;
-const TIMER_COLOR_NORMAL  = '#e0e0e0';
-const TIMER_COLOR_WARNING = '#ff4444';
-
-// Zug-Widget (zwischen Timer und Killfeed)
-const TRAIN_WIDGET_SEP_Y  = 56;   // Trennlinie unter Timer
-const TRAIN_WIDGET_TEXT_Y = 72;   // Ankunfts-/Status-Text
-const TRAIN_BAR_Y         = 90;   // HP-Balken Mittellinie
-const TRAIN_BAR_H         = 12;   // Balkenhöhe
-const TRAIN_WIDGET_BOT_Y  = 104;  // Unterkante des Widgets
-
 // Killfeed: Namen links/rechts, Waffe zentriert
 const KILLFEED_MAX     = 5;
 const KILLFEED_TOP_Y   = 116;   // Y des ersten (neuesten) Eintrags (nach Train-Widget verschoben)
@@ -104,7 +91,6 @@ interface TeamHeaderRow {
 export class RightSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
-  private timerText!:      Phaser.GameObjects.Text;
   private arenaOverlayVisible = false;
   private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
@@ -128,16 +114,6 @@ export class RightSidePanel {
     frags: Phaser.GameObjects.Text;
   }[] = [];  private lbPingRows: Phaser.GameObjects.Text[] = [];
   private lbTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
-  // ── Zug-Widget ────────────────────────────────────────────────────────────
-  private trainText!:      Phaser.GameObjects.Text;
-  private trainBarBg!:     Phaser.GameObjects.Rectangle;
-  private trainBarFill!:   Phaser.GameObjects.Rectangle;
-  private trainWidgetVisible = false;
-  private lastTimerText: string | null = null;
-  private lastTimerColor: string | null = null;
-  private lastTrainText: string | null = null;
-  private lastTrainBarWidth = -1;
-  private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
   private leaderboardCache: (LeaderboardEntryView | null)[] = Array.from({ length: 12 }, () => null);
   private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
   private readonly cssColorCache = new Map<number, string>();
@@ -230,21 +206,8 @@ export class RightSidePanel {
 
   // ── Daten-Updates ──────────────────────────────────────────────────────────
 
-  /** Aktualisiert die Timer-Anzeige. secs = verbleibende Sekunden. */
-  updateTimer(secs: number): void {
-    const mm = Math.floor(secs / 60);
-    const ss = secs % 60;
-    const nextText = `${mm}:${ss.toString().padStart(2, '0')}`;
-    const nextColor = secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
-    if (nextText !== this.lastTimerText) {
-      this.timerText.setText(nextText);
-      this.lastTimerText = nextText;
-    }
-    if (nextColor !== this.lastTimerColor) {
-      this.timerText.setColor(nextColor);
-      this.lastTimerColor = nextColor;
-    }
-  }
+  /** @deprecated Timer wird jetzt vom CenterHUD verwaltet. */
+  updateTimer(_secs: number): void { /* no-op */ }
 
   /**
    * Fügt einen Kill oben in den Killfeed ein.
@@ -345,83 +308,16 @@ export class RightSidePanel {
     }
   }
 
-  // ── Zug-Widget-Updates ────────────────────────────────────────────────────
+  // ── Zug-Widget-Updates (no-op – jetzt im CenterHUD) ────────────────────────
 
-  /**
-   * Zeigt feste Ankunftszeit des Zugs (vor Spawn).
-   * arrivalTimerSecs = der Rundenzeit-Wert (Sekunden), bei dem der Zug einfährt.
-   * Wird einmal gesetzt und bleibt statisch – kein Countdown.
-   */
-  setTrainArrival(arrivalTimerSecs: number): void {
-    const mm = Math.floor(arrivalTimerSecs / 60);
-    const ss = arrivalTimerSecs % 60;
-    const timeStr = `${mm}:${ss.toString().padStart(2, '0')}`;
-    const nextText = `RB 54 um ${timeStr}`;
-    if (this.lastTrainText !== nextText) {
-      this.trainText.setText(nextText);
-      this.lastTrainText = nextText;
-    }
-    if (this.lastTrainMode !== 'arrival') {
-      this.trainText.setVisible(true);
-      this.trainBarBg.setVisible(false);
-      this.trainBarFill.setVisible(false);
-      this.lastTrainMode = 'arrival';
-      this.lastTrainBarWidth = -1;
-    }
-    this.trainWidgetVisible = true;
-  }
-
-  /** Aktualisiert den HP-Balken des Zugs während er aktiv ist. */
-  updateTrainHP(hp: number, maxHp: number): void {
-    const ratio = Math.max(0, hp / maxHp);
-    const barMaxW = PANEL_WIDTH - 16;
-    const nextText = 'RB 54';
-    const nextWidth = barMaxW * ratio;
-    if (this.lastTrainText !== nextText) {
-      this.trainText.setText(nextText);
-      this.lastTrainText = nextText;
-    }
-    if (this.lastTrainMode !== 'hp') {
-      this.trainText.setVisible(true);
-      this.trainBarBg.setVisible(true);
-      this.trainBarFill.setVisible(true);
-      this.lastTrainMode = 'hp';
-    }
-    if (this.lastTrainBarWidth !== nextWidth) {
-      this.trainBarFill.setSize(nextWidth, TRAIN_BAR_H);
-      this.lastTrainBarWidth = nextWidth;
-    }
-    this.trainWidgetVisible = true;
-  }
-
-  /** Zeigt "Zug fällt aus"-Meldung nach Zerstörung. */
-  showTrainDestroyed(): void {
-    const nextText = 'RB 54 fällt\nheute leider aus';
-    if (this.lastTrainText !== nextText) {
-      this.trainText.setText(nextText);
-      this.lastTrainText = nextText;
-    }
-    if (this.lastTrainMode !== 'destroyed') {
-      this.trainText.setVisible(true);
-      this.trainBarBg.setVisible(false);
-      this.trainBarFill.setVisible(false);
-      this.lastTrainMode = 'destroyed';
-      this.lastTrainBarWidth = -1;
-    }
-    this.trainWidgetVisible = true;
-  }
-
-  /** Blendet das Zug-Widget vollständig aus (z.B. nach Match-Ende). */
-  hideTrainWidget(): void {
-    if (this.lastTrainMode !== 'hidden') {
-      this.trainText.setVisible(false);
-      this.trainBarBg.setVisible(false);
-      this.trainBarFill.setVisible(false);
-      this.lastTrainMode = 'hidden';
-      this.lastTrainBarWidth = -1;
-    }
-    this.trainWidgetVisible = false;
-  }
+  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
+  setTrainArrival(_arrivalTimerSecs: number): void { /* no-op */ }
+  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
+  updateTrainHP(_hp: number, _maxHp: number): void { /* no-op */ }
+  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
+  showTrainDestroyed(): void { /* no-op */ }
+  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
+  hideTrainWidget(): void { /* no-op */ }
 
   destroy(): void {
     this.lobbyContainer.destroy(true);
@@ -437,49 +333,6 @@ export class RightSidePanel {
       this.scene.add.rectangle(SIDEBAR_CENTER_X, GAME_HEIGHT / 2, ARENA_OFFSET_X, GAME_HEIGHT, 0x000000, 0.18)
         .setScrollFactor(0),
     );
-
-    // ── Timer ─────────────────────────────────────────────────────────────────
-    const timerBg = this.scene.add.rectangle(
-      SIDEBAR_CENTER_X, TIMER_Y, PANEL_WIDTH, TIMER_BG_H, 0x000000, 0.2,
-    ).setScrollFactor(0);
-
-    this.timerText = this.scene.add.text(SIDEBAR_CENTER_X, TIMER_Y, '2:00', {
-      fontSize:   '32px',
-      fontFamily: 'monospace',
-      color:      TIMER_COLOR_NORMAL,
-      fontStyle:  'bold',
-    }).setOrigin(0.5).setScrollFactor(0);
-
-    this.gameContainer.add([timerBg, this.timerText]);
-
-    // ── Zug-Widget ────────────────────────────────────────────────────────────
-    this.gameContainer.add(
-      this.scene.add.rectangle(SIDEBAR_CENTER_X, TRAIN_WIDGET_SEP_Y, PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
-        .setScrollFactor(0),
-    );
-
-    this.trainText = this.scene.add.text(SIDEBAR_CENTER_X, TRAIN_WIDGET_TEXT_Y, '', {
-      fontSize:   '11px',
-      fontFamily: 'monospace',
-      color:      '#c0a060',
-      align:      'center',
-      wordWrap:   { width: PANEL_WIDTH - 8 },
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
-
-    // HP-Balken Hintergrund
-    this.trainBarBg = this.scene.add.rectangle(
-      SIDEBAR_CENTER_X, TRAIN_BAR_Y, PANEL_WIDTH - 16, TRAIN_BAR_H, 0x331a00,
-    ).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
-
-    // HP-Balken Füllung (Breite wird dynamisch angepasst)
-    // Origin (0, 0.5) → X muss die linke Kante des Hintergrund-Balkens sein:
-    //   SIDEBAR_CENTER_X - (PANEL_WIDTH - 16) / 2
-    const barLeftX = SIDEBAR_CENTER_X - (PANEL_WIDTH - 16) / 2;
-    this.trainBarFill = this.scene.add.rectangle(
-      barLeftX, TRAIN_BAR_Y, PANEL_WIDTH - 16, TRAIN_BAR_H, 0xcf573c,
-    ).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
-
-    this.gameContainer.add([this.trainText, this.trainBarBg, this.trainBarFill]);
 
     // ── Trennlinie vor Killfeed ───────────────────────────────────────────────
     this.gameContainer.add(

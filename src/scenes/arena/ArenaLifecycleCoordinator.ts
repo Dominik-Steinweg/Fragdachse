@@ -223,6 +223,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.leftPanel.transitionToLobby();
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
     this.ctx.rightPanel.transitionToLobby();
+    this.ctx.centerHUD.transitionToLobby();
     this.hostUpdate.setActive(false);
 
     if (bridge.isHost()) {
@@ -637,7 +638,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.translocatorTeleport = null;
     this.ctx.projectileManager.setTrainGroup(null);
     this.ctx.projectileManager.setTrainHitCallback(null);
-    this.ctx.rightPanel.hideTrainWidget();
+    this.ctx.centerHUD.hideTrainWidget();
     this.clientUpdate.clientUtilityOverride = null;
   }
 
@@ -674,6 +675,7 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.leftPanel.transitionToGame();
     this.ctx.rightPanel.transitionToGame();
+    this.ctx.centerHUD.transitionToGame();
     this.syncHostLoadoutsFromCommittedSelections();
     this.resetLocalArenaHudState();
     this.localPlayerState.overlayTrackedAlive = null;
@@ -711,6 +713,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.leftPanel.transitionToLobby();
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
     this.ctx.rightPanel.transitionToLobby();
+    this.ctx.centerHUD.transitionToLobby();
     this.ctx.rightPanel.showRoundResults(bridge.getRoundResults());
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();

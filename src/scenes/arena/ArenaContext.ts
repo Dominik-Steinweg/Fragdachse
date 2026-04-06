@@ -9,6 +9,7 @@ import type { HostPhysicsSystem }   from '../../systems/HostPhysicsSystem';
 import type { InputSystem }         from '../../systems/InputSystem';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
 import type { RightSidePanel }      from '../../ui/RightSidePanel';
+import type { CenterHUD }           from '../../ui/CenterHUD';
 import type { AimSystem }           from '../../ui/AimSystem';
 import type { ArenaCountdownOverlay } from '../../ui/ArenaCountdownOverlay';
 import type { LocalArenaHudData }   from '../../ui/LocalArenaHudData';
@@ -62,6 +63,7 @@ export interface ArenaContext {
   readonly inputSystem:       InputSystem;
   readonly leftPanel:         LeftSidePanel;
   readonly rightPanel:        RightSidePanel;
+  readonly centerHUD:         CenterHUD;
   readonly aimSystem:         AimSystem | null;
   readonly arenaCountdown:    ArenaCountdownOverlay | null;
   readonly playerStatusRing:  PlayerStatusRingLike | null;

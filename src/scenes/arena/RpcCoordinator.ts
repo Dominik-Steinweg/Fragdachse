@@ -174,7 +174,7 @@ export class RpcCoordinator {
   private registerTrainDestroyedHandler(): void {
     bridge.registerTrainDestroyedHandler(() => {
       this.lifecycle?.onTrainDestroyed();
-      this.ctx.rightPanel.showTrainDestroyed();
+      this.ctx.centerHUD.showTrainDestroyed();
     });
   }
 

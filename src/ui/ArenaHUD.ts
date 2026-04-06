@@ -19,7 +19,7 @@ import Phaser from 'phaser';
 import {
   ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, ADRENALINE_MAX, RAGE_MAX,
-  COLORS, toCssColor,
+  COLORS, toCssColor, GAME_HEIGHT,
 } from '../config';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { ShieldBuffHudState } from '../types';
@@ -241,8 +241,6 @@ export class ArenaHUD {
   private w2RedOverlay!: Phaser.GameObjects.Rectangle;
 
   // Power-Up section
-  private puDivider!:   Phaser.GameObjects.Rectangle;
-  private puNoneLabel!: Phaser.GameObjects.Text;
   /** Currently visible power-up bar entries (keyed by defId), using full BarBundle. */
   private puEntries = new Map<string, BarBundle>();
   /** Ordered list of currently shown defIds (for layout). */
@@ -251,6 +249,7 @@ export class ArenaHUD {
   constructor(
     private scene: Phaser.Scene,
     private container: Phaser.GameObjects.Container,
+    private puContainer: Phaser.GameObjects.Container,
   ) {
     this.ensureTextures();
     this.build();
@@ -337,11 +336,7 @@ export class ArenaHUD {
     }).setScrollFactor(0);
     c.add(this.adrBurstEmitter);
 
-    // Power-Up section
-    this.puDivider = this.divider(DIV3_Y);
-    c.add(this.puDivider);
-    this.puNoneLabel = this.scene.add.text(BAR_X, PU_SECTION_Y, 'Power-Up: keins', LABEL_FONT).setScrollFactor(0);
-    c.add(this.puNoneLabel);
+    // Power-Up section: dynamisch befüllt via updatePowerUpSection(), startet leer
   }
 
   // ── Bar factory ───────────────────────────────────────────────────────────
@@ -353,8 +348,9 @@ export class ArenaHUD {
     palette:   BarPalette,
     texKey:    string,
     opts?:     { trail?: boolean; value?: boolean; highlight?: boolean; trailColor?: number },
+    targetContainer?: Phaser.GameObjects.Container,
   ): BarBundle {
-    const c = this.container;
+    const c = targetContainer ?? this.container;
     const s = this.scene;
 
     const label = s.add.text(BAR_X, labelY, labelText, LABEL_FONT).setScrollFactor(0);
@@ -574,7 +570,7 @@ export class ArenaHUD {
       b.energized = true; // force re-apply
       this.setBarEnergized(b, false);
     }
-    this.puNoneLabel.setVisible(true);
+    this.puContainer.setVisible(false);
     if (this.nameScrollTween) {
       this.nameScrollTween.destroy();
       this.nameScrollTween = null;
@@ -944,7 +940,7 @@ export class ArenaHUD {
       // Destroy old entries and rebuild
       this.clearPowerUpEntries();
 
-      let yOff = PU_SECTION_Y;
+      let yOff = 0; // lokale Y-Position innerhalb puContainer (kein Offset nötig)
       for (const pu of activePowerUps) {
         const def = POWERUP_DEFS[pu.defId];
         if (!def) continue;
@@ -961,6 +957,7 @@ export class ArenaHUD {
           palette,
           texKey,
           pu.defId === 'SHIELD_OVERCHARGE' ? { value: true } : undefined,
+          this.puContainer,
         );
         // Power-up bars are always energized
         this.setBarEnergized(bundle, true);
@@ -970,10 +967,18 @@ export class ArenaHUD {
 
         yOff = barY + BAR_H + 12;
       }
-    }
 
-    // Show/hide "keins" label
-    this.puNoneLabel.setVisible(this.puOrder.length === 0);
+      // Container nur zeigen wenn Power-Ups aktiv; y dynamisch so, dass Unterkante am Bildschirmrand liegt
+      const n = this.puOrder.length;
+      if (n > 0) {
+        // Gesamthöhe: (n-1) Einträge à 46px + letzter Eintrag (20+14=34px)
+        const totalH = (n - 1) * 46 + 34;
+        this.puContainer.setY(GAME_HEIGHT - 20 - totalH);
+        this.puContainer.setVisible(true);
+      } else {
+        this.puContainer.setVisible(false);
+      }
+    }
 
     // Update fractions
     for (const pu of activePowerUps) {
