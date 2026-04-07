@@ -10,6 +10,10 @@ export const SHOT_AUDIO_ASSETS = {
   shot_glock: './assets/sounds/glock.wav',
   shot_plasma: './assets/sounds/plasma.wav',
   shot_shotgun: './assets/sounds/shotgun.wav',
+  shot_bite: './assets/sounds/bite.wav',
+  shot_zeus: './assets/sounds/zeus.wav',
+  shot_hydra: './assets/sounds/hydra.wav',
+  shot_awp: './assets/sounds/awp.wav',
 } as const;
 
 export type ShotAudioAssetKey = keyof typeof SHOT_AUDIO_ASSETS;

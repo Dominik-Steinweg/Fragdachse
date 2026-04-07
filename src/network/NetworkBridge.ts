@@ -1033,6 +1033,7 @@ export class NetworkBridge {
       hp: swing.hitPlayer,
       hx: swing.impactX,
       hy: swing.impactY,
+      sa: swing.shotAudioKey,
     });
   }
 
@@ -1041,7 +1042,7 @@ export class NetworkBridge {
     this.registerAllRpcHandler('msfx', async (data: unknown): Promise<unknown> => {
       const meleeSwingHandler = this.meleeSwingHandler;
       if (!meleeSwingHandler) return undefined;
-      const { sid, x, y, a, ad, r, c, id, vp, hp, hx, hy } = data as {
+      const { sid, x, y, a, ad, r, c, id, vp, hp, hx, hy, sa } = data as {
         sid: number; x: number; y: number;
         a: number; ad: number; r: number;
         c: number; id: string;
@@ -1049,8 +1050,9 @@ export class NetworkBridge {
         hp?: boolean;
         hx?: number;
         hy?: number;
+        sa?: string;
       };
-      meleeSwingHandler({ swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id, visualPreset: vp, hitPlayer: hp, impactX: hx, impactY: hy });
+      meleeSwingHandler({ swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id, visualPreset: vp, hitPlayer: hp, impactX: hx, impactY: hy, shotAudioKey: sa });
       return undefined;
     });
   }

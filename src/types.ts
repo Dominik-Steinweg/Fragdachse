@@ -296,6 +296,7 @@ export interface SyncedMeleeSwing {
   hitPlayer?: boolean;
   impactX?: number;
   impactY?: number;
+  shotAudioKey?: ShotAudioKey;
 }
 
 /** RPC Payload Interface für Teleport-Effekte (Host → Clients). */

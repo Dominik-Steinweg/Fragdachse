@@ -920,6 +920,7 @@ export class LoadoutManager {
             taserCfg.rockDamageMult ?? 1,
             taserCfg.trainDamageMult ?? 1,
             taserCfg.visualPreset,
+            taserCfg.shotAudio?.successKey,
           ) ?? false;
         } else if (cfg.type === 'decoy') {
           didUse = this.decoySystem?.activate(cfg as DecoyUtilityConfig, playerId, angle, playerColor, now) ?? false;
@@ -1275,6 +1276,7 @@ export class LoadoutManager {
       config.rockDamageMult  ?? 1,
       config.trainDamageMult ?? 1,
       fireConfig.visualPreset,
+      config.shotAudio?.successKey,
     ) ?? false;
   }
 

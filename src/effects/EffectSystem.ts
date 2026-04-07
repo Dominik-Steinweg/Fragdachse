@@ -1326,6 +1326,8 @@ export class EffectSystem {
     if (this.processedMeleeSwingKeys.has(key)) return;
     this.processedMeleeSwingKeys.set(key, now + 500);
 
+    this.shotAudioSystem?.playShot(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
+
     if (swing.visualPreset === 'bite' && this.biteRenderer) {
       this.biteRenderer.playSwing(
         swing.x,

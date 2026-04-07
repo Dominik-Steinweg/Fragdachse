@@ -857,6 +857,7 @@ export class CombatSystem {
     rockDamageMult  = 1,
     trainDamageMult = 1,
     visualPreset: MeleeVisualPreset = 'default',
+    shotAudioKey?: string,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -957,7 +958,7 @@ export class CombatSystem {
     this.applyMeleeObjectDamage(x, y, angle, range, halfArcRad, damage, rockDamageMult, trainDamageMult, shooterId);
 
     // Swing-VFX für alle Clients in die Replikations-Queue einreihen
-    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY });
+    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, shotAudioKey });
     return true;
   }
 

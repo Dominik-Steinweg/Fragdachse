@@ -331,6 +331,7 @@ export interface TaserUtilityConfig extends BaseUtilityConfig {
   readonly range: number;
   readonly hitArcDegrees: number;
   readonly visualPreset: MeleeVisualPreset;
+  readonly shotAudio?: LoadoutShotAudioConfig;
 }
 
 export interface DecoyUtilityConfig extends BaseUtilityConfig {
@@ -567,6 +568,10 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
     trainDamageMult:      1.5, // 150% Schaden am Zug
+    shotAudio: {
+      successKey: 'shot_bite',
+      failureKey: 'shot_dry_trigger',
+    },    
   } as WeaponConfig,
 
   TASER: {
@@ -592,6 +597,10 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     trainDamageMult: 1.0, // 100% Schaden am Zug
     rockDamageMult:  0,   // macht keinen Schaden an Felsen    
+    shotAudio: {
+      successKey: 'shot_zeus',
+      failureKey: 'shot_dry_trigger',
+    },        
   } as WeaponConfig,
 
   /**
@@ -664,6 +673,10 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
     projectileStyle:      'hydra' satisfies ProjectileStyle,
+    shotAudio: {
+      successKey: 'shot_hydra',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   XBOW: {
@@ -1491,6 +1504,10 @@ export const UTILITY_CONFIGS = {
     maxBounces:      0,
     trainDamageMult: 1.0,
     rockDamageMult:  0,
+    shotAudio: {
+      successKey: 'shot_zeus',
+      failureKey: 'shot_dry_trigger',
+    },            
   } as TaserUtilityConfig,
 
   DECOY: {
