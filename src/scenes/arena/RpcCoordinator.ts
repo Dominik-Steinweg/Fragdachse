@@ -6,12 +6,19 @@ import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
 import type { ExplosionVisualStyle } from '../../types';
 
-function resolveExplosionAudioKey(visualStyle?: ExplosionVisualStyle): string | undefined {
+// SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
+// distance 0.  Explosions are world events, not remote-player gunshots, so we compensate
+// with a per-type scale so they can reach full volume when close to the listener.
+// scale = 1 / SHOT_AUDIO_REMOTE_CLOSE_VOLUME ≈ 1.72 lets a close explosion hit 1.0
+// (Phaser clamps finalVolume to [0, 1] anyway, so there is no clipping risk).
+const EXPLOSION_CLOSE_BOOST = 1 / 0.58; // ≈ 1.72
+
+function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: string; scale: number } | undefined {
   switch (visualStyle) {
-    case 'holy':   return 'sfx_explosion_holy';
-    case 'energy': return 'sfx_explosion_asmd_secondary';
-    case 'nuke':   return 'sfx_nuke_explosion';
-    default:       return 'sfx_explosion_he';
+    case 'holy':   return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };
+    case 'energy': return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
+    case 'nuke':   return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
+    default:       return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
   }
 }
 
@@ -106,8 +113,8 @@ export class RpcCoordinator {
   private registerExplosionEffectHandler(): void {
     bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle) => {
       this.ctx.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
-      const audioKey = resolveExplosionAudioKey(visualStyle);
-      if (audioKey) this.ctx.gameAudioSystem.playSound(audioKey, x, y);
+      const audio = resolveExplosionAudio(visualStyle);
+      if (audio) this.ctx.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
     });
   }
 

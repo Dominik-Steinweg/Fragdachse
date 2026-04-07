@@ -25,6 +25,7 @@ export class ClientUpdateCoordinator {
   private readonly prevAliveStates      = new Map<string, boolean>();
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly prevBurrowPhases     = new Map<string, BurrowPhase>();
+  private readonly burrowLoopHandles    = new Map<string, string>();
   private readonly prevStealthStates    = new Map<string, boolean>();
   private readonly dashPhase2StartTimes = new Map<string, number>();
   private readonly dashTrailTimers      = new Map<string, number>();
@@ -32,6 +33,7 @@ export class ClientUpdateCoordinator {
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = { weapon1: 0, weapon2: 0 };
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
+  private moveLoopHandle: string | null = null;
 
   /** Client-side prediction for utility override (BFG / Holy Hand Grenade pickup). */
   clientUtilityOverride: UtilityConfig | null = null;
@@ -172,6 +174,16 @@ export class ClientUpdateCoordinator {
     if (localState) {
       this.ctx.aimSystem?.setAuthoritativeState(localState.aim);
       this.ctx.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase);
+
+      // Movement loop for local player
+      const isMovingLocal = localState.aim.isMoving;
+      if (isMovingLocal && localState.alive && !localState.isBurrowed && !this.moveLoopHandle) {
+        this.moveLoopHandle = this.ctx.gameAudioSystem.startLoop('sfx_player_move') ?? null;
+      } else if ((!isMovingLocal || !localState.alive || localState.isBurrowed) && this.moveLoopHandle) {
+        this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle);
+        this.moveLoopHandle = null;
+      }
+
       const localUtilityConfig  = this.getLocalUtilityConfig();
       const localUltimateConfig = this.getLocalUltimateConfig();
       const ultimateThresholds  = this.getLocalUltimateThresholds();
@@ -263,8 +275,23 @@ export class ClientUpdateCoordinator {
     this.ctx.leftPanel.flashSlot('utility');
   }
 
-  /** Update burrow phase for a player (called from RpcCoordinator). */
+  /** Update burrow phase for a player (called from RpcCoordinator).
+   *  Also handles the sfx_burrowed loop so the transition is not missed
+   *  when the RPC pre-updates prevBurrowPhases before applyBurrowVisual runs. */
   setBurrowPhase(playerId: string, phase: BurrowPhase): void {
+    const previousPhase = this.prevBurrowPhases.get(playerId) ?? 'idle';
+
+    if (phase === 'underground' && previousPhase !== 'underground') {
+      const player = this.ctx.playerManager.getPlayer(playerId);
+      if (player) {
+        const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, playerId);
+        if (handle) this.burrowLoopHandles.set(playerId, handle);
+      }
+    } else if (phase !== 'underground' && previousPhase === 'underground') {
+      const handle = this.burrowLoopHandles.get(playerId);
+      if (handle) { this.ctx.gameAudioSystem.stopLoop(handle); this.burrowLoopHandles.delete(playerId); }
+    }
+
     this.prevBurrowPhases.set(playerId, phase);
   }
 
@@ -341,6 +368,8 @@ export class ClientUpdateCoordinator {
     this.prevAliveStates.clear();
     this.prevDashPhases.clear();
     this.prevBurrowPhases.clear();
+    for (const h of this.burrowLoopHandles.values()) this.ctx.gameAudioSystem.stopLoop(h);
+    this.burrowLoopHandles.clear();
     this.prevStealthStates.clear();
     this.dashPhase2StartTimes.clear();
     this.dashTrailTimers.clear();
@@ -348,6 +377,7 @@ export class ClientUpdateCoordinator {
     this.predictedHitscanCooldownUntil = { weapon1: 0, weapon2: 0 };
     this.nextPredictedHitscanShotId = 1;
     this.pickupCooldownUntil = 0;
+    if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.clientUtilityOverride = null;
   }
 
@@ -374,6 +404,18 @@ export class ClientUpdateCoordinator {
     const shouldAnimate = previousPhase !== phase
       && ((phase === 'windup' && previousPhase === 'idle')
         || (phase === 'recovery' && (previousPhase === 'underground' || previousPhase === 'trapped')));
+
+    // Burrow loop: start when entering underground, stop when leaving
+    if (phase === 'underground' && previousPhase !== 'underground') {
+      const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, player.id);
+      if (handle) this.burrowLoopHandles.set(player.id, handle);
+    } else if (phase !== 'underground' && previousPhase === 'underground') {
+      const handle = this.burrowLoopHandles.get(player.id);
+      if (handle) { this.ctx.gameAudioSystem.stopLoop(handle); this.burrowLoopHandles.delete(player.id); }
+    } else if (phase === 'underground') {
+      const handle = this.burrowLoopHandles.get(player.id);
+      if (handle) this.ctx.gameAudioSystem.updateLoopPosition(handle, player.sprite.x, player.sprite.y, player.id);
+    }
 
     if (shouldAnimate) {
       this.ctx.effectSystem.playBurrowPhaseEffect(player.sprite.x, player.sprite.y, phase);

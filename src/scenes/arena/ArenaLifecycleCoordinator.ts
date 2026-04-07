@@ -356,8 +356,6 @@ export class ArenaLifecycleCoordinator {
       this.ctx.burrowSystem.setGroups(this.ctx.arenaResult.rockGroup, this.ctx.arenaResult.trunkGroup);
       this.ctx.burrowSystem.setBurrowStartCallback((playerId) => {
         this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
-        const player = this.ctx.playerManager.getPlayer(playerId);
-        if (player) this.ctx.gameAudioSystem.playSound('sfx_burrowed', player.sprite.x, player.sprite.y, playerId);
       });
 
       this.ctx.loadoutManager = new LoadoutManager(

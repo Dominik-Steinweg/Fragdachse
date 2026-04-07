@@ -1656,8 +1656,8 @@ export const ULTIMATE_CONFIGS = {
     id:                 'AIRSTRIKE',
     displayName:        'Luftangriff',
     cooldown:           0,        // rage-gated, kein Zeitcooldown
-    rageRequired:       1,      // Mindest-Rage zum Betreten des Zielmodus
-    rageCost:           1,      // Rage-Kosten pro Einschlag
+    rageRequired:       200,      // Mindest-Rage zum Betreten des Zielmodus
+    rageCost:           200,      // Rage-Kosten pro Einschlag
     delayMs:            2000,     // 2 Sek. Verzögerung vor Explosion
     radius:             150,      // px – AoE-Radius (größer als Armageddon-Meteor)
     maxDamage:          350,      // Schaden im Zentrum

@@ -107,7 +107,16 @@ export class TrainRenderer {
     this.gfx.clear();
     if (!state || !state.alive) {
       this.lastAlive = false;
+      if (this.moveLoopHandle) {
+        this.audioSystem?.stopLoop(this.moveLoopHandle);
+        this.moveLoopHandle = null;
+      }
       return;
+    }
+    if (!this.lastAlive) {
+      this.moveLoopHandle = this.audioSystem?.startLoop('sfx_train_move', state.x, state.y) ?? null;
+    } else if (this.moveLoopHandle) {
+      this.audioSystem?.updateLoopPosition(this.moveLoopHandle, state.x, state.y);
     }
     this.targetY = state.y;
     this.displayY = state.y;

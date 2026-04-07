@@ -120,7 +120,7 @@ export interface DropTable {
 export const DROP_TABLES: Record<string, DropTable> = {
   ENEMY_KILL: {
     chanceToDrop: 1.0,
-    items: { HEALTH_PACK: 0, ADRENALINE: 0, DOUBLE_DAMAGE: 0, NUKE: 0, HOLY_HAND_GRENADE: 1, BFG: 0 },
+    items: { HEALTH_PACK: 0, ADRENALINE: 100, DOUBLE_DAMAGE: 0, NUKE: 0, HOLY_HAND_GRENADE: 0, BFG: 0 },
   },
   ROCK_DESTROY: {
     chanceToDrop: 0.1,

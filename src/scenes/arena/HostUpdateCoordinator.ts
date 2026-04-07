@@ -32,7 +32,10 @@ export class HostUpdateCoordinator {
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly dashTrailTimers      = new Map<string, number>();
   private readonly prevBurrowPhases     = new Map<string, import('../../types').BurrowPhase>();
+  private readonly burrowLoopHandles    = new Map<string, string>();
   private readonly prevStealthStates    = new Map<string, boolean>();
+  private readonly prevAliveStates      = new Map<string, boolean>();
+  private moveLoopHandle: string | null = null;
   private trainSpawned = false;
 
   constructor(
@@ -57,7 +60,11 @@ export class HostUpdateCoordinator {
     this.prevDashPhases.clear();
     this.dashTrailTimers.clear();
     this.prevBurrowPhases.clear();
+    for (const h of this.burrowLoopHandles.values()) this.ctx.gameAudioSystem.stopLoop(h);
+    this.burrowLoopHandles.clear();
     this.prevStealthStates.clear();
+    this.prevAliveStates.clear();
+    if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.trainSpawned = false;
   }
 
@@ -285,7 +292,12 @@ export class HostUpdateCoordinator {
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       const hp    = this.ctx.combatSystem.getHP(player.id);
       const armor = this.ctx.combatSystem.getArmor(player.id);
-      const alive = this.ctx.combatSystem.isAlive(player.id);
+      const alive    = this.ctx.combatSystem.isAlive(player.id);
+      const wasAlive = this.prevAliveStates.get(player.id) ?? false;
+      if (alive && !wasAlive) {
+        this.ctx.gameAudioSystem.playSound('sfx_player_spawn', player.sprite.x, player.sprite.y, player.id);
+      }
+      this.prevAliveStates.set(player.id, alive);
       player.updateHP(hp);
       player.updateArmor(armor);
       player.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(player.id));
@@ -300,6 +312,10 @@ export class HostUpdateCoordinator {
       this.prevStealthStates.set(player.id, isStealthed);
       player.syncBar();
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
+      if (dashPhase === 1 && (this.prevDashPhases.get(player.id) ?? 0) === 0) {
+        this.ctx.gameAudioSystem.playSound('sfx_dash', player.sprite.x, player.sprite.y, player.id);
+      }
+      this.prevDashPhases.set(player.id, dashPhase);
       if (dashPhase === 0) this.dashTrailTimers.delete(player.id);
       this.applyDashVisual(player, player.id, dashPhase, false);
     }
@@ -339,6 +355,17 @@ export class HostUpdateCoordinator {
     const localPlayer = this.ctx.playerManager.getPlayer(localId);
     if (localPlayer) {
       const isMovingLocal = isVelocityMoving(localPlayer.body.velocity.x, localPlayer.body.velocity.y);
+
+      // Movement loop for local player
+      const localAlive = this.ctx.combatSystem.isAlive(localId);
+      const localBurrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
+      if (isMovingLocal && localAlive && !localBurrowed && !this.moveLoopHandle) {
+        this.moveLoopHandle = this.ctx.gameAudioSystem.startLoop('sfx_player_move') ?? null;
+      } else if ((!isMovingLocal || !localAlive || localBurrowed) && this.moveLoopHandle) {
+        this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle);
+        this.moveLoopHandle = null;
+      }
+
       const aimLocal      = this.ctx.loadoutManager?.getAimNetState(localId, isMovingLocal)
                           ?? this.getDefaultAimState(isMovingLocal);
       this.ctx.aimSystem?.setAuthoritativeState(aimLocal);
@@ -811,6 +838,18 @@ export class HostUpdateCoordinator {
     const shouldAnimate = previousPhase !== phase
       && ((phase === 'windup' && previousPhase === 'idle')
         || (phase === 'recovery' && (previousPhase === 'underground' || previousPhase === 'trapped')));
+
+    // Burrow loop: start when entering underground, stop when leaving
+    if (phase === 'underground' && previousPhase !== 'underground') {
+      const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.sprite.x, player.sprite.y, player.id);
+      if (handle) this.burrowLoopHandles.set(player.id, handle);
+    } else if (phase !== 'underground' && previousPhase === 'underground') {
+      const handle = this.burrowLoopHandles.get(player.id);
+      if (handle) { this.ctx.gameAudioSystem.stopLoop(handle); this.burrowLoopHandles.delete(player.id); }
+    } else if (phase === 'underground') {
+      const handle = this.burrowLoopHandles.get(player.id);
+      if (handle) this.ctx.gameAudioSystem.updateLoopPosition(handle, player.sprite.x, player.sprite.y, player.id);
+    }
 
     if (shouldAnimate) {
       this.ctx.effectSystem.playBurrowPhaseEffect(player.sprite.x, player.sprite.y, phase);
