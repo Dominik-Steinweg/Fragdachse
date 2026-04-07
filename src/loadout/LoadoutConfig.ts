@@ -1479,6 +1479,10 @@ export const UTILITY_CONFIGS = {
     projectileStyle:      'translocator_puck' as ProjectileStyle,
     projectileColor:      COLORS.GREY_3,
     skipCooldownPublish:  true,      // Cooldown wird vom TranslocatorSystem gesetzt (beim Teleport), nicht beim Wurf.
+    shotAudio: {
+      successKey: 'shot_throw',
+      failureKey: 'shot_dry_trigger',
+    },      
   } as TranslocatorUtilityConfig,
 
   FELSBAU: {
