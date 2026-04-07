@@ -101,7 +101,7 @@ export class ClientUpdateCoordinator {
         this.applyBurrowVisual(player, ps.burrowPhase);
       }
 
-      this.ctx.projectileManager.clientSyncVisuals(state.projectiles);
+      this.ctx.projectileManager.clientSyncVisuals(state.projectiles, bridge.getLocalPlayerId());
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
       this.ctx.smokeSystem.syncVisuals(state.smokes);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
@@ -226,6 +226,24 @@ export class ClientUpdateCoordinator {
 
     this.ctx.aimSystem?.notifyShot(slot);
     const shotId = this.playPredictedLocalHitscanTracer(slot, angle);
+    if (shotId === undefined && !bridge.isHost()) {
+      // Projektil-Waffen: Audio sofort lokal abspielen (Prediction),
+      // da spawnProjectile nur auf dem Host läuft und Network-Jitter sonst
+      // unregelmäßige Abstände verursacht.
+      // Melee wird hier NICHT behandelt – der Swing-RPC übernimmt das Audio.
+      const config = this.getLocalWeaponConfig(slot);
+      const fireType = config.fire.type;
+      if (fireType === 'projectile' || fireType === 'flamethrower') {
+        const localId    = bridge.getLocalPlayerId();
+        const localState = bridge.getLatestGameState()?.players[localId];
+        const isDashing  = (localState?.dashPhase ?? 0) === 1;
+        const adrenaline = localState?.adrenaline ?? 0;
+        const hasAdrenaline = (config.adrenalinCost ?? 0) <= adrenaline;
+        if (!isDashing && hasAdrenaline) {
+          this.ctx.effectSystem.playLocalShotAudio(config.shotAudio?.successKey, config.shotAudio?.successVolume);
+        }
+      }
+    }
     this.weaponLastFired[slot] = now;
     this.ctx.leftPanel.flashSlot(slot);
     return shotId;

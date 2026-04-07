@@ -46,7 +46,8 @@
       "Bash(python -c \"import json; d=json.load\\(open\\(''C:/Fragdachse/public/assets/player/dachs_death_ani3.json''\\)\\); print\\(len\\(d[''frames'']\\), ''frames''\\); print\\(''last:'', list\\(d[''frames''].keys\\(\\)\\)[-1]\\)\")",
       "Bash(node -e \"const d=require\\(''./public/assets/player/dachs_death_ani3.json''\\); const keys=Object.keys\\(d.frames\\); console.log\\(''count:'', keys.length\\); console.log\\(''last:'', keys[keys.length-1]\\);\")",
       "Bash(grep -n \"slot === ''utility''\" /c/Fragdachse/src/scenes/ArenaScene.ts)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/assets/sounds/ak-47.wav)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/assets/sounds/ak-47.wav)",
+      "Bash(grep -n \"^\\\\s*public\\\\|^\\\\s*[a-zA-Z].*\\(.*\\).*{$\\\\|setShotAudio\\\\|playShot\\\\|playPredicted\" C:/Fragdachse/src/effects/EffectSystem.ts)"
     ]
   }
 }

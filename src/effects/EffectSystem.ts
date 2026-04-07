@@ -86,6 +86,10 @@ export class EffectSystem {
     this.shotAudioSystem = system;
   }
 
+  playLocalShotAudio(key: string | undefined, volumeScale?: number): void {
+    this.shotAudioSystem?.playShot(key, 0, 0, this.bridge.getLocalPlayerId(), volumeScale);
+  }
+
   destroy(): void {
     this.damageVignetteTop?.destroy();
     this.damageVignetteBottom?.destroy();

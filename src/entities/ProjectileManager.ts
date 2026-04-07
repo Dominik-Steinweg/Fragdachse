@@ -1952,7 +1952,7 @@ export class ProjectileManager {
    * Client: Empfängt neue Server-Snapshots und speichert den State für Extrapolation.
    * Erstellt/entfernt visuelle Sprites. Positionsupdate passiert in clientExtrapolate().
    */
-  clientSyncVisuals(data: SyncedProjectile[]): void {
+  clientSyncVisuals(data: SyncedProjectile[], localPlayerId?: string): void {
     const now       = performance.now();
     const activeIds = new Set(data.map(d => d.id));
     const renderer  = this.bulletRenderer;
@@ -2149,7 +2149,10 @@ export class ProjectileManager {
           proj.energyBallVariant,
           proj.ownerColor ?? proj.color,
         );
-        this.shotAudioSystem?.playShot(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId, proj.shotAudioVolume);
+        // Kein Audio für eigene Projektile – Prediction in ClientUpdateCoordinator hat es schon abgespielt.
+        if (proj.ownerId !== localPlayerId) {
+          this.shotAudioSystem?.playShot(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId, proj.shotAudioVolume);
+        }
       }
 
       if (isBfgP && bfgR) {

@@ -1330,6 +1330,8 @@ export class LoadoutManager {
       burnDamagePerTick: fireConfig.burnDamagePerTick,
       burnTickIntervalMs: fireConfig.burnTickIntervalMs,
       sourceSlot,
+      shotAudioKey:    config.shotAudio?.successKey,
+      shotAudioVolume: config.shotAudio?.successVolume,
     });
 
     return true;

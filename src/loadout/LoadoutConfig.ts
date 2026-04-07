@@ -759,6 +759,10 @@ export const WEAPON_CONFIGS = {
       fadeMs:     140,
       maxLength:  95,
     } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_p90',
+      failureKey: 'shot_dry_trigger',
+    },    
   } as WeaponConfig,
 
   AK47: {
@@ -1087,6 +1091,10 @@ export const WEAPON_CONFIGS = {
       unscopedSpreadDeg:   50,    // sehr ungenau ohne Scope
       unscopeSpeedMs:      250,   // schnelles Entscopen nach Schuss
     },
+    shotAudio: {
+      successKey: 'shot_awp',
+      failureKey: 'shot_dry_trigger',
+    },          
   } as WeaponConfig,
 
   /**
@@ -1125,6 +1133,10 @@ export const WEAPON_CONFIGS = {
     projectileColor:      0xff6600,    // feste Flammenfarbe (nicht Spielerfarbe)
     rockDamageMult:       0,           // Flammen machen keinen Schaden an Felsen
     trainDamageMult:      1,        // 100% Schaden am Zug
+    shotAudio: {
+      successKey: 'shot_flame',
+      failureKey: 'shot_dry_trigger',
+    },      
   } as WeaponConfig,
 
   TESLA_DOME: {
