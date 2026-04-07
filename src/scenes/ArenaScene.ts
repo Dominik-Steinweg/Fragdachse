@@ -455,6 +455,14 @@ export class ArenaScene extends Phaser.Scene {
         shotId = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);
       }
       if (slot === 'utility') {
+        const utilityCooldownUntil = bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId());
+        if (utilityCooldownUntil > Date.now()) {
+          if (inputStarted) {
+            const utilityShotAudio = this.clientUpdate.getLocalUtilityConfig()?.shotAudio;
+            shotAudioSystem.playFailure(utilityShotAudio?.failureKey, utilityShotAudio?.failureVolume ?? 1);
+          }
+          return;
+        }
         this.clientUpdate.notifyUtilityFired();
       }
 

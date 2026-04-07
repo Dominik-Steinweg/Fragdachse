@@ -2149,8 +2149,11 @@ export class ProjectileManager {
           proj.energyBallVariant,
           proj.ownerColor ?? proj.color,
         );
-        // Kein Audio für eigene Projektile – Prediction in ClientUpdateCoordinator hat es schon abgespielt.
-        if (proj.ownerId !== localPlayerId) {
+        // Kein Audio für eigene Waffen-Projektile – Prediction in ClientUpdateCoordinator hat es schon abgespielt.
+        // Granaten haben keine Prediction, daher hier immer abspielen.
+        // Utility-Projektile haben keine Prediction → Audio immer abspielen.
+        const isUtilityProjectile = proj.style === 'grenade' || proj.style === 'holy_grenade' || proj.style === 'bfg';
+        if (proj.ownerId !== localPlayerId || isUtilityProjectile) {
           this.shotAudioSystem?.playShot(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId, proj.shotAudioVolume);
         }
       }

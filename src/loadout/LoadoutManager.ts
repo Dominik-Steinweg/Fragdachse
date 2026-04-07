@@ -984,6 +984,8 @@ export class LoadoutManager {
       airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
       bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
       stopSpeedThreshold: cfg.stopSpeedThreshold,
+      shotAudioKey:    cfg.shotAudio?.successKey,
+      shotAudioVolume: cfg.shotAudio?.successVolume,
     });
 
     return true;
@@ -1012,6 +1014,8 @@ export class LoadoutManager {
       bfgLaserRadius:   cfg.laserRadius,
       bfgLaserDamage:   cfg.laserDamage,
       bfgLaserInterval: cfg.laserInterval,
+      shotAudioKey:     cfg.shotAudio?.successKey,
+      shotAudioVolume:  cfg.shotAudio?.successVolume,
     });
 
     return true;

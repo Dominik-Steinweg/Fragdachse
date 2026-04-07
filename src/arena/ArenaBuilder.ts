@@ -92,7 +92,7 @@ export class ArenaBuilder {
 
     // Spatial Index für Autotiling
     const rockGrid = new RockGridIndex(layout.rocks);
-    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupied(gx, gy);
+    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
 
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
     const trackObjects = this.buildTracks(layout.tracks ?? []);
@@ -209,7 +209,7 @@ export class ArenaBuilder {
     const { gridX, gridY } = rocks[id];
     const isOccupied = (gx: number, gy: number) => gx === gridX && gy === gridY
       ? true
-      : rockGrid.isOccupied(gx, gy);
+      : rockGrid.isOccupiedWithBorder(gx, gy);
     const frame = AutoTiler.getFrame(AutoTiler.computeMask(gridX, gridY, isOccupied), ROCK_AUTOTILE);
     const img = ArenaBuilder.createRockVisual(scene, ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2, ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2, frame);
     rockObjects[id] = img;
@@ -223,7 +223,7 @@ export class ArenaBuilder {
       const neighbor = rockObjects[neighborId];
       if (!neighbor?.active) continue;
       const cell = rocks[neighborId];
-      const neighborFrame = AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, (gx, gy) => rockGrid.isOccupied(gx, gy)), ROCK_AUTOTILE);
+      const neighborFrame = AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, (gx, gy) => rockGrid.isOccupiedWithBorder(gx, gy)), ROCK_AUTOTILE);
       neighbor.setFrame(neighborFrame);
     }
 
@@ -247,7 +247,7 @@ export class ArenaBuilder {
     rockGrid.remove(gridX, gridY);
 
     // Nachbar-Tiles neu berechnen
-    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupied(gx, gy);
+    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
     const neighborIds = rockGrid.getNeighborIndices(gridX, gridY);
     for (const nid of neighborIds) {
       const img = rockObjects[nid];
@@ -417,7 +417,7 @@ export class ArenaBuilder {
     if (dirtCells.length === 0) return [];
 
     const dirtGrid = new RockGridIndex(dirtCells);
-    const isOccupied = (gx: number, gy: number) => dirtGrid.isOccupied(gx, gy);
+    const isOccupied = (gx: number, gy: number) => dirtGrid.isOccupiedWithBorder(gx, gy);
     const result: Phaser.GameObjects.Image[] = [];
 
     for (const { gridX, gridY } of dirtCells) {

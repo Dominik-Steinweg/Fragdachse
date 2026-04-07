@@ -26,6 +26,15 @@ export class RockGridIndex {
     return this.grid[gy * GRID_COLS + gx] !== -1;
   }
 
+  /**
+   * Wie isOccupied, aber Zellen außerhalb der Arena-Grenzen gelten als belegt.
+   * Für Autotiling: Rand-Tiles erhalten eine geschlossene Kante nach außen.
+   */
+  isOccupiedWithBorder(gx: number, gy: number): boolean {
+    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return true;
+    return this.grid[gy * GRID_COLS + gx] !== -1;
+  }
+
   /** Rock-Index an Grid-Position, oder -1 wenn leer. */
   getIndex(gx: number, gy: number): number {
     if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return -1;

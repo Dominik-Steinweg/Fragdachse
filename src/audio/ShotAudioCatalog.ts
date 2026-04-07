@@ -16,6 +16,13 @@ export const SHOT_AUDIO_ASSETS = {
   shot_awp: './assets/sounds/awp.wav',
   shot_p90: './assets/sounds/p90.wav',
   shot_flame: './assets/sounds/flame.wav',
+  shot_rocketlauncher: './assets/sounds/rocketlauncher.wav',  
+  shot_minirocketlauncher: './assets/sounds/minirocketlauncher.wav',  
+  shot_spore: './assets/sounds/spore.wav',    
+  shot_negev: './assets/sounds/negev.wav',      
+  shot_throw: './assets/sounds/throw.wav',     
+  shot_bfg: './assets/sounds/bfg.wav',       
+  shot_hallelujah: './assets/sounds/hallelujah.wav',       
 } as const;
 
 export type ShotAudioAssetKey = keyof typeof SHOT_AUDIO_ASSETS;

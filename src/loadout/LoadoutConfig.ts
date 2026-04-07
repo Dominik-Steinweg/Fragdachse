@@ -254,6 +254,7 @@ interface BaseUtilityConfig {
   readonly allowTeamDamage?: boolean;
 
   readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die dieses Utility eingesetzt werden darf
+  readonly shotAudio?: LoadoutShotAudioConfig;
 
   // Erweiterte Flugphysik (Friction / Decay)
   readonly frictionDelayMs?: number;        // ms Flugzeit bevor der Speed reduziert wird
@@ -331,7 +332,6 @@ export interface TaserUtilityConfig extends BaseUtilityConfig {
   readonly range: number;
   readonly hitArcDegrees: number;
   readonly visualPreset: MeleeVisualPreset;
-  readonly shotAudio?: LoadoutShotAudioConfig;
 }
 
 export interface DecoyUtilityConfig extends BaseUtilityConfig {
@@ -934,6 +934,10 @@ export const WEAPON_CONFIGS = {
     shotRecoilForce:      520,
     shotRecoilDuration:   170,
     shotScreenShake:      { duration: 120, intensity: 0.004 },
+    shotAudio: {
+      successKey: 'shot_rocketlauncher',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   MINI_ROCKET_LAUNCHER: {
@@ -987,6 +991,10 @@ export const WEAPON_CONFIGS = {
     shotRecoilForce:      180,
     shotRecoilDuration:   110,
     shotScreenShake:      { duration: 70, intensity: 0.0015 },
+    shotAudio: {
+      successKey: 'shot_minirocketlauncher',
+      failureKey: 'shot_dry_trigger',
+    },    
   } as WeaponConfig,
 
   SPOREN: {
@@ -1036,6 +1044,10 @@ export const WEAPON_CONFIGS = {
     showCrosshair:        false,
     rockDamageMult:       1,
     trainDamageMult:      1,
+    shotAudio: {
+      successKey: 'shot_spore',
+      failureKey: 'shot_dry_trigger',
+    },        
   } as WeaponConfig,
 
   /**
@@ -1265,6 +1277,10 @@ export const WEAPON_CONFIGS = {
       // maxLength:  80,   // nur letzten 80 px sichtbar (Schnellfeuer-Trail, kein Spawn-Schweif)
       // colorCore/colorGlow nicht gesetzt → Spielerfarbe wird verwendet
     } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_negev',
+      failureKey: 'shot_dry_trigger',
+    },         
   } as WeaponConfig,
 
 } as const;
@@ -1291,6 +1307,10 @@ export const UTILITY_CONFIGS = {
     airFrictionDecayPerSec:    0.3,
     bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,
+    shotAudio: {
+      successKey: 'shot_throw',
+      failureKey: 'shot_dry_trigger',
+    },         
   } as UtilityConfig,
 
   SMOKE_GRENADE: {
@@ -1316,6 +1336,10 @@ export const UTILITY_CONFIGS = {
     airFrictionDecayPerSec:    0.3,
     bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,    
+    shotAudio: {
+      successKey: 'shot_throw',
+      failureKey: 'shot_dry_trigger',
+    },     
   } as UtilityConfig,
 
   MOLOTOV_GRENADE: {
@@ -1344,6 +1368,10 @@ export const UTILITY_CONFIGS = {
     airFrictionDecayPerSec:    0.3,
     bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,    
+    shotAudio: {
+      successKey: 'shot_throw',
+      failureKey: 'shot_dry_trigger',
+    },     
   } as UtilityConfig,
 
   HOLY_HAND_GRENADE: {
@@ -1370,6 +1398,10 @@ export const UTILITY_CONFIGS = {
     airFrictionDecayPerSec:    0.3,
     bounceFrictionMultiplier:  0.7,
     stopSpeedThreshold:        20,    
+    shotAudio: {
+      successKey: 'shot_hallelujah',
+      failureKey: 'shot_dry_trigger',
+    },     
   } as UtilityConfig,
 
   BFG: {
@@ -1389,6 +1421,10 @@ export const UTILITY_CONFIGS = {
     laserInterval:       100,           // alle 100ms Laser-Salve
     allowedSlots:        [],            // NICHT im Loadout-Menü wählbar
     skipCooldownPublish: true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
+    shotAudio: {
+      successKey: 'shot_bfg',
+      failureKey: 'shot_dry_trigger',
+    },       
   } as UtilityConfig,
 
   NUKE: {
@@ -1616,8 +1652,8 @@ export const ULTIMATE_CONFIGS = {
     id:                 'AIRSTRIKE',
     displayName:        'Luftangriff',
     cooldown:           0,        // rage-gated, kein Zeitcooldown
-    rageRequired:       200,      // Mindest-Rage zum Betreten des Zielmodus
-    rageCost:           200,      // Rage-Kosten pro Einschlag
+    rageRequired:       1,      // Mindest-Rage zum Betreten des Zielmodus
+    rageCost:           1,      // Rage-Kosten pro Einschlag
     delayMs:            2000,     // 2 Sek. Verzögerung vor Explosion
     radius:             150,      // px – AoE-Radius (größer als Armageddon-Meteor)
     maxDamage:          350,      // Schaden im Zentrum
