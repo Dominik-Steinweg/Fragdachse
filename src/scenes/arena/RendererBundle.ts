@@ -28,6 +28,7 @@ import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { ProjectileManager } from '../../entities/ProjectileManager';
 import type { PlayerManager }     from '../../entities/PlayerManager';
 import type { EffectSystem }      from '../../effects/EffectSystem';
+import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 
 /** All visual renderers grouped together. Round-scoped renderers start as null. */
 export interface RendererBundle {
@@ -180,4 +181,12 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setZeusTaserRenderer(bundle.zeusTaser);
   bundle.nuke.setEffectSystem(effectSystem);
   bundle.airstrike.setEffectSystem(effectSystem);
+}
+
+/** Wire GameAudioSystem to renderers that play sounds. */
+export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: GameAudioSystem): void {
+  bundle.teslaDome.setAudioSystem(audioSystem);
+  bundle.energyShield.setAudioSystem(audioSystem);
+  bundle.nuke.setAudioSystem(audioSystem);
+  bundle.meteor.setAudioSystem(audioSystem);
 }

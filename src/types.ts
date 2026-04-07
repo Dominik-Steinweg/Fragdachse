@@ -378,6 +378,9 @@ export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 /** Audio-Key eines data-driven Schuss-/Dry-Trigger-Sounds. */
 export type ShotAudioKey = string;
 
+/** Allgemeiner Audio-Key fuer das GameAudioSystem. */
+export type AudioKey = string;
+
 /** Audio-Metadaten fuer schussbezogene Loadout-Aktionen. */
 export interface LoadoutShotAudioConfig {
   readonly successKey: ShotAudioKey;

@@ -6,6 +6,7 @@ import {
   clampPointToArena,
 } from '../config';
 import { quantizeAngle } from '../utils/angle';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
@@ -69,6 +70,10 @@ export class InputSystem {
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
   private suppressWeapon1UntilLeftRelease = false;
+
+  // Audio
+  private audioSystem: GameAudioSystem | null = null;
+  private chargeLoopHandle: string | null = null;
 
   // Scope-Mechanik (für Waffen mit scopeConfig, z.B. AWP)
   private scopeStartedAt: number | null = null;  // Timestamp des RMB-Press
@@ -681,6 +686,8 @@ export class InputSystem {
       const rage = this.getLocalRage?.() ?? 0;
       if (ultimateCfg && rage < ultimateCfg.rageRequired) {
         this.notifyUltimatePressedWithoutRage();
+      } else if (ultimateCfg && ultimateCfg.type === 'buff') {
+        this.audioSystem?.playLocalSound('sfx_honey_badger_rage');
       }
       this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
     }
@@ -782,6 +789,12 @@ export class InputSystem {
 
     this.utilityChargeStartedAt = eligibleAt;
     this.utilityChargeEligibleAt = null;
+
+    // BFG charge sound (charged_gate utilities)
+    const utCfg = this.getChargeableUtilityConfig();
+    if (utCfg?.activation.type === 'charged_gate') {
+      this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_bfg_charge') ?? null;
+    }
   }
 
   private releaseChargedUtility(angle: number, targetX: number, targetY: number, now: number): void {
@@ -862,6 +875,10 @@ export class InputSystem {
     this.utilityHoldActive = false;
     this.utilityChargeEligibleAt = null;
     this.utilityChargeStartedAt = null;
+    if (this.chargeLoopHandle) {
+      this.audioSystem?.stopLoop(this.chargeLoopHandle);
+      this.chargeLoopHandle = null;
+    }
   }
 
   private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {
@@ -905,6 +922,7 @@ export class InputSystem {
     this.cancelUtilityInteraction();
     this.ultimateHoldActive = true;
     this.ultimateChargeStartedAt = now;
+    this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_gauss_charge') ?? null;
     this.bridge.sendDecoyStealthBreakRequest();
     this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press', inputStarted: true });
   }
@@ -962,9 +980,17 @@ export class InputSystem {
   private cancelUltimateCharge(): void {
     this.ultimateHoldActive = false;
     this.ultimateChargeStartedAt = null;
+    if (this.chargeLoopHandle) {
+      this.audioSystem?.stopLoop(this.chargeLoopHandle);
+      this.chargeLoopHandle = null;
+    }
   }
 
   private notifyUltimatePressedWithoutRage(): void {
     this.onUltimatePressedWithoutRage?.();
+  }
+
+  setAudioSystem(system: GameAudioSystem): void {
+    this.audioSystem = system;
   }
 }

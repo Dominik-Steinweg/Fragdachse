@@ -4,6 +4,16 @@ import type { RendererBundle }      from './RendererBundle';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
+import type { ExplosionVisualStyle } from '../../types';
+
+function resolveExplosionAudioKey(visualStyle?: ExplosionVisualStyle): string | undefined {
+  switch (visualStyle) {
+    case 'holy':   return 'sfx_explosion_holy';
+    case 'energy': return 'sfx_explosion_asmd_secondary';
+    case 'nuke':   return 'sfx_nuke_explosion';
+    default:       return 'sfx_explosion_he';
+  }
+}
 
 /**
  * Registers all bridge RPC handlers in one place.
@@ -68,6 +78,8 @@ export class RpcCoordinator {
     bridge.registerDecoyStealthBreakHandler((playerId) => {
       if (!bridge.isHost()) return;
       if (bridge.getGamePhase() !== 'ARENA') return;
+      const player = this.ctx.playerManager.getPlayer(playerId);
+      if (player) this.ctx.gameAudioSystem.playSound('sfx_decoy_reveal', player.sprite.x, player.sprite.y, playerId);
       this.ctx.decoySystem.breakStealth(playerId, Date.now());
     });
   }
@@ -86,6 +98,7 @@ export class RpcCoordinator {
       this.renderers.beer.playFx(event);
       if (event.kind === 'score') {
         this.ctx.centerHUD.showBeerCaptured(event.scorerName, event.scorerColor);
+        this.ctx.gameAudioSystem.playLocalSound('sfx_ctb_score');
       }
     });
   }
@@ -93,6 +106,8 @@ export class RpcCoordinator {
   private registerExplosionEffectHandler(): void {
     bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle) => {
       this.ctx.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
+      const audioKey = resolveExplosionAudioKey(visualStyle);
+      if (audioKey) this.ctx.gameAudioSystem.playSound(audioKey, x, y);
     });
   }
 
@@ -141,6 +156,9 @@ export class RpcCoordinator {
   private registerTranslocatorFlashHandler(): void {
     bridge.registerTranslocatorFlashHandler((x, y, color, type) => {
       this.renderers.translocatorTeleport?.playFlash(x, y, color, type);
+      if (type === 'end') {
+        this.ctx.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);
+      }
     });
   }
 
@@ -187,6 +205,7 @@ export class RpcCoordinator {
     bridge.registerTrainDestroyedHandler(() => {
       this.lifecycle?.onTrainDestroyed();
       this.ctx.centerHUD.showTrainDestroyed();
+      this.ctx.gameAudioSystem.playLocalSound('sfx_train_explode');
     });
   }
 
@@ -194,6 +213,7 @@ export class RpcCoordinator {
     bridge.registerPickupPowerUpHandler((uid, playerId) => {
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (!player) return;
+      this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.sprite.x, player.sprite.y, playerId);
       this.ctx.powerUpSystem?.tryPickup(playerId, uid, player.sprite.x, player.sprite.y);
     });
   }

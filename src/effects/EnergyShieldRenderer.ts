@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedEnergyShield } from '../types';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import {
   configureAdditiveImage,
   createEmitter,
@@ -58,8 +59,13 @@ const SHIELD_SMOOTH_TIME_MS = 46;
 export class EnergyShieldRenderer {
   private readonly visuals = new Map<string, ShieldVisual>();
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
+  private audioSystem: GameAudioSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setAudioSystem(system: GameAudioSystem): void {
+    this.audioSystem = system;
+  }
 
   setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
     this.ownerPositionProvider = provider;
@@ -115,6 +121,7 @@ export class EnergyShieldRenderer {
       if (!visual) {
         visual = this.createVisual(shield);
         this.visuals.set(shield.ownerId, visual);
+        this.audioSystem?.playSound('sfx_shield_activate', shield.x, shield.y, shield.ownerId);
       }
       visual.targetX           = shield.x;
       visual.targetY           = shield.y;

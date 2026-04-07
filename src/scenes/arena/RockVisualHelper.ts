@@ -103,8 +103,10 @@ export class RockVisualHelper {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
       if (rock.kind === 'turret') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
+        this.ctx.gameAudioSystem.playSound('sfx_place_fliegenpilz', world.x, world.y, rock.ownerId);
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
+        this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
       }
       if (rock.ownerId === bridge.getLocalPlayerId()) {
         const shakeCfg = rock.kind === 'turret'

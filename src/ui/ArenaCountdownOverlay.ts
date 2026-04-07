@@ -10,6 +10,7 @@ import {
   COLORS,
   toCssColor,
 } from '../config';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 
 const VEIL_CELL_SIZE = 8;
 const VEIL_EDGE_BAND_PX = 96;
@@ -41,6 +42,7 @@ export class ArenaCountdownOverlay {
   private goTriggeredForUnlock = false;
   private deathVeilHoldUntilMs = 0;
   private deathVeilClosing = false;
+  private audioSystem: GameAudioSystem | null = null;
   private readonly baseX = GAME_WIDTH / 2;
   private readonly baseY = GAME_HEIGHT / 2;
   private lastRenderedRadius: number | null = null;
@@ -71,6 +73,10 @@ export class ArenaCountdownOverlay {
       .setDepth(DEPTH.OVERLAY)
       .setScrollFactor(0)
       .setVisible(false);
+  }
+
+  setAudioSystem(system: GameAudioSystem | null): void {
+    this.audioSystem = system;
   }
 
   syncTo(unlockAtMs: number): void {
@@ -155,6 +161,9 @@ export class ArenaCountdownOverlay {
       if (secondsLeft === this.lastShownNumber) return;
       this.lastShownNumber = secondsLeft;
 
+      const countdownKey = secondsLeft <= 3 ? `sfx_countdown_${secondsLeft}` : undefined;
+      if (countdownKey) this.audioSystem?.playLocalSound(countdownKey);
+
       this.showCountText(String(secondsLeft), '220px', COLORS.GOLD_1, COLORS.GREY_8, 24, 0.92);
       return;
     }
@@ -162,6 +171,7 @@ export class ArenaCountdownOverlay {
     if (!this.goTriggeredForUnlock) {
       this.goTriggeredForUnlock = true;
       this.lastShownNumber = 0;
+      this.audioSystem?.playLocalSound('sfx_countdown_go');
       this.playReveal(true);
     }
 

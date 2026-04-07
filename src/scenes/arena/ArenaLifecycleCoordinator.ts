@@ -93,6 +93,11 @@ export class ArenaLifecycleCoordinator {
     bridge.setLocalReady(false);
     this.lastPhase = bridge.getGamePhase();
 
+    // Start lobby music on initial load
+    if (this.lastPhase === 'LOBBY') {
+      this.ctx.gameAudioSystem.playMusic('music_lobby');
+    }
+
     // If the scene was created after the host already transitioned to ARENA,
     // detectPhaseChange() will never see LOBBY→ARENA. Schedule the transition
     // on the next frame so all create()-time setup (RPC, callbacks) completes first.
@@ -280,6 +285,7 @@ export class ArenaLifecycleCoordinator {
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
+      this.ctx.gameAudioSystem.playSound('sfx_player_death', x, y);
     });
     this.ctx.projectileManager.setProjectileImpactCallback((proj, x, y) => {
       this.spawnImpactCloudFromProjectile(proj, x, y);
@@ -350,6 +356,8 @@ export class ArenaLifecycleCoordinator {
       this.ctx.burrowSystem.setGroups(this.ctx.arenaResult.rockGroup, this.ctx.arenaResult.trunkGroup);
       this.ctx.burrowSystem.setBurrowStartCallback((playerId) => {
         this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
+        const player = this.ctx.playerManager.getPlayer(playerId);
+        if (player) this.ctx.gameAudioSystem.playSound('sfx_burrowed', player.sprite.x, player.sprite.y, playerId);
       });
 
       this.ctx.loadoutManager = new LoadoutManager(
@@ -387,6 +395,8 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setUtilityUsedCallback((playerId, utilityType) => {
         if (utilityType === 'decoy') {
           this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
+          const player = this.ctx.playerManager.getPlayer(playerId);
+          if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
         }
       });
       this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY) => {
@@ -406,6 +416,7 @@ export class ArenaLifecycleCoordinator {
       );
       this.ctx.tunnelSystem.setTunnelEnterCallback((playerId, x, y) => {
         this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
+        this.ctx.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);
       });
       this.ctx.burrowSystem.setTunnelTransitEndedCallback((playerId) => {
         this.ctx.tunnelSystem?.notifyTransitEnded(playerId);
@@ -466,6 +477,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setAirstrikeHandler((playerId, targetX, targetY, cfg) => {
         const player = this.ctx.playerManager.getPlayer(playerId);
         if (!player || !this.ctx.combatSystem.isAlive(playerId)) return false;
+        this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);
         return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
       });
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);
@@ -535,6 +547,7 @@ export class ArenaLifecycleCoordinator {
 
     // Round-scoped renderers (all clients)
     this.renderers.train = new TrainRenderer(this.scene);
+    this.renderers.train.setAudioSystem(this.ctx.gameAudioSystem);
     this.renderers.translocatorTeleport = new TranslocatorTeleportRenderer(this.scene);
     this.renderers.shadow.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
@@ -683,6 +696,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
     this.hostUpdate.setActive(true);
+    this.ctx.gameAudioSystem.playMusic('music_arena');
   }
 
   private get localPlayerState() { return this.hostUpdate['localPlayerState']; }
@@ -697,6 +711,7 @@ export class ArenaLifecycleCoordinator {
     this.clientUpdate.clientUtilityOverride = null;
     this.ctx.arenaCountdown?.clear();
     this.resetLocalArenaHudState();
+    this.ctx.gameAudioSystem.playMusic('music_lobby');
 
     for (const p of [...this.ctx.playerManager.getAllPlayers()]) {
       if (bridge.isHost()) {
@@ -820,7 +835,7 @@ export class ArenaLifecycleCoordinator {
     params?: LoadoutUseParams,
   ): boolean {
     if (params?.tunnelStartGridX === undefined || params.tunnelStartGridY === undefined) return false;
-    return this.ctx.tunnelSystem?.tryPlaceTunnel(
+    const placed = this.ctx.tunnelSystem?.tryPlaceTunnel(
       cfg,
       playerId,
       playerColor,
@@ -831,6 +846,10 @@ export class ArenaLifecycleCoordinator {
       targetX,
       targetY,
     ) ?? false;
+    if (placed) {
+      this.ctx.gameAudioSystem.playSound('sfx_place_dachstunnel', originX, originY, playerId);
+    }
+    return placed;
   }
 
   private spawnImpactCloudFromProjectile(proj: import('../../types').TrackedProjectile, x: number, y: number): void {

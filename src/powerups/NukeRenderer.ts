@@ -3,6 +3,7 @@ import type { SyncedNukeStrike } from '../types';
 import { DEPTH, COLORS } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';
 import type { EffectSystem } from '../effects/EffectSystem';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 
 const TEX_NUKE_ICON = 'powerup_nuk';
 const TEX_NUKE_WARN = '__nuke_warning_particle';
@@ -22,12 +23,17 @@ interface NukeVisual {
 export class NukeRenderer {
   private visuals = new Map<number, NukeVisual>();
   private effectSystem: EffectSystem | null = null;
+  private audioSystem: GameAudioSystem | null = null;
 
   constructor(private scene: Phaser.Scene) {}
 
   /** EffectSystem injizieren für gemeinsame Countdown-Text-Logik. */
   setEffectSystem(effectSystem: EffectSystem): void {
     this.effectSystem = effectSystem;
+  }
+
+  setAudioSystem(system: GameAudioSystem): void {
+    this.audioSystem = system;
   }
 
   generateTextures(): void {
@@ -91,6 +97,7 @@ export class NukeRenderer {
       if (!visual) {
         visual = this.createVisual(nuke);
         this.visuals.set(nuke.id, visual);
+        this.audioSystem?.playSound('sfx_nuke_countdown', nuke.x, nuke.y);
       }
 
       visual.radius.setPosition(nuke.x, nuke.y).setRadius(nuke.radius);

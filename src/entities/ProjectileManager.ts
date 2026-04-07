@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant, ProjectileStyle } from '../types';
-import type { ShotAudioSystem } from '../audio/ShotAudioSystem';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
@@ -101,7 +101,7 @@ export class ProjectileManager {
 
   // ── MuzzleFlash-Renderer (lokales Schuss-Feedback, kein Netzstate) ───────
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
-  private shotAudioSystem: ShotAudioSystem | null = null;
+  private audioSystem: GameAudioSystem | null = null;
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
@@ -240,8 +240,8 @@ export class ProjectileManager {
     this.muzzleFlashRenderer = renderer;
   }
 
-  setShotAudioSystem(system: ShotAudioSystem | null): void {
-    this.shotAudioSystem = system;
+  setAudioSystem(system: GameAudioSystem | null): void {
+    this.audioSystem = system;
   }
 
   setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
@@ -695,7 +695,7 @@ export class ProjectileManager {
         cfg.energyBallVariant,
         cfg.ownerColor ?? cfg.color,
       );
-      this.shotAudioSystem?.playShot(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId, cfg.shotAudioVolume);
+      this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId, cfg.shotAudioVolume);
     }
 
     this.projectiles.push(tracked);
@@ -2154,7 +2154,7 @@ export class ProjectileManager {
         // Utility-Projektile haben keine Prediction → Audio immer abspielen.
         const isUtilityProjectile = proj.style === 'grenade' || proj.style === 'holy_grenade' || proj.style === 'bfg';
         if (proj.ownerId !== localPlayerId || isUtilityProjectile) {
-          this.shotAudioSystem?.playShot(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId, proj.shotAudioVolume);
+          this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId, proj.shotAudioVolume);
         }
       }
 

@@ -69,6 +69,7 @@ export class ClientUpdateCoordinator {
         const wasAlive = this.prevAliveStates.get(id) ?? false;
         if (ps.alive && !wasAlive) {
           player.sprite.setPosition(ps.x, ps.y);
+          this.ctx.gameAudioSystem.playSound('sfx_player_spawn', ps.x, ps.y, id);
         }
         this.prevAliveStates.set(id, ps.alive);
 
@@ -90,6 +91,9 @@ export class ClientUpdateCoordinator {
         this.prevStealthStates.set(id, isStealthed);
 
         const curPhase = ps.dashPhase ?? 0;
+        if (curPhase === 1 && (this.prevDashPhases.get(id) ?? 0) === 0) {
+          this.ctx.gameAudioSystem.playSound('sfx_dash', player.sprite.x, player.sprite.y, id);
+        }
         if (curPhase === 2 && (this.prevDashPhases.get(id) ?? 0) !== 2) {
           this.dashPhase2StartTimes.set(id, this.scene.time.now);
         }

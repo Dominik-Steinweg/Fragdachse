@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { SyncedMeteorStrike } from '../types';
 import { DEPTH, DEPTH_FX } from '../config';
 import { circleZone } from './EffectUtils';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
 const TEX_METEOR_CORE  = '__meteor_core';
@@ -48,9 +49,14 @@ export class MeteorRenderer {
   private visuals = new Map<number, MeteorWarningVisual>();
   /** IDs die beim letzten sync() aktiv waren – zum Erkennen des Einschlags */
   private previousIds = new Set<number>();
+  private audioSystem: GameAudioSystem | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  setAudioSystem(system: GameAudioSystem): void {
+    this.audioSystem = system;
   }
 
   // ── Texturen ──────────────────────────────────────────────────────────────
@@ -142,6 +148,7 @@ export class MeteorRenderer {
       // Wenn der Meteor gerade verschwunden ist → Einschlag (nicht bei bereits explodierten)
       if (this.previousIds.has(id)) {
         this.playImpactEffect(visual);
+        this.audioSystem?.playSound('sfx_explosion_armageddon', visual.warningCircle.x, visual.warningCircle.y);
       }
 
       this.destroyWarningVisual(visual);

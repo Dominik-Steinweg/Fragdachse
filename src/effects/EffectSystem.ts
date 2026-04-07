@@ -5,7 +5,7 @@ import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, D
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { BiteRenderer } from './BiteRenderer';
-import type { ShotAudioSystem } from '../audio/ShotAudioSystem';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
@@ -51,7 +51,7 @@ export class EffectSystem {
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private biteRenderer: BiteRenderer | null = null;
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
-  private shotAudioSystem: ShotAudioSystem | null = null;
+  private audioSystem: GameAudioSystem | null = null;
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
   private damageVignetteBottom: Phaser.GameObjects.Image | null = null;
@@ -82,12 +82,12 @@ export class EffectSystem {
     this.zeusTaserRenderer = renderer;
   }
 
-  setShotAudioSystem(system: ShotAudioSystem | null): void {
-    this.shotAudioSystem = system;
+  setAudioSystem(system: GameAudioSystem | null): void {
+    this.audioSystem = system;
   }
 
   playLocalShotAudio(key: string | undefined, volumeScale?: number): void {
-    this.shotAudioSystem?.playShot(key, 0, 0, this.bridge.getLocalPlayerId(), volumeScale);
+    this.audioSystem?.playLocalSound(key, volumeScale);
   }
 
   destroy(): void {
@@ -258,8 +258,10 @@ export class EffectSystem {
       if (effect.type === 'hit') {
         if (effect.shooterId === this.bridge.getLocalPlayerId()) {
           onLocalConfirmedHit?.();
+          this.audioSystem?.playLocalSound('sfx_hit_feedback');
         }
         this.playHitEffect(effect);
+        this.audioSystem?.playSound('sfx_player_hit', effect.x, effect.y);
         if (effect.targetId === this.bridge.getLocalPlayerId()) {
           this.playDamageVignette(effect);
         }
@@ -1180,14 +1182,14 @@ export class EffectSystem {
     shotAudioVolume?: number,
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
-    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId(), shotAudioVolume);
+    this.audioSystem?.playSound(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId(), shotAudioVolume);
     this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, impactKind, visualPreset);
   }
 
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
     const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, shotAudioVolume } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
-    this.shotAudioSystem?.playShot(shotAudioKey, startX, startY, shooterId, shotAudioVolume);
+    this.audioSystem?.playSound(shotAudioKey, startX, startY, shooterId, shotAudioVolume);
     this.playHitscanTracer(startX, startY, endX, endY, color, thickness, impactKind ?? 'environment', visualPreset);
   }
 
@@ -1330,7 +1332,7 @@ export class EffectSystem {
     if (this.processedMeleeSwingKeys.has(key)) return;
     this.processedMeleeSwingKeys.set(key, now + 500);
 
-    this.shotAudioSystem?.playShot(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
+    this.audioSystem?.playSound(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
 
     if (swing.visualPreset === 'bite' && this.biteRenderer) {
       this.biteRenderer.playSwing(

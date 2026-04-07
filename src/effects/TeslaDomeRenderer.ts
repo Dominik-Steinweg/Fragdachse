@@ -3,6 +3,7 @@ import { DEPTH } from '../config';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { SyncedTeslaDome, TeslaDomeTargetType } from '../types';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import {
   configureAdditiveImage,
   createEmitter,
@@ -75,8 +76,13 @@ const ACTIVE_SURGE_INTERVAL_MS = 70;
 export class TeslaDomeRenderer {
   private readonly visuals = new Map<string, TeslaDomeVisual>();
   private readonly configs = new Map<string, WeaponConfig & { fire: TeslaDomeWeaponFireConfig }>();
+  private audioSystem: GameAudioSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setAudioSystem(system: GameAudioSystem): void {
+    this.audioSystem = system;
+  }
 
   generateTextures(): void {
     const textures = this.scene.textures;
@@ -197,6 +203,7 @@ export class TeslaDomeRenderer {
       if (!visual) {
         visual = this.createVisual(dome, this.configs.get(dome.ownerId));
         this.visuals.set(dome.ownerId, visual);
+        this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);
       }
 
       visual.targetX = dome.x;

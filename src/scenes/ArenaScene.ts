@@ -11,8 +11,8 @@ import { EffectSystem }          from '../effects/EffectSystem';
 import { SmokeSystem }           from '../effects/SmokeSystem';
 import { FireSystem }            from '../effects/FireSystem';
 import { StinkCloudSystem }      from '../effects/StinkCloudSystem';
-import { preloadShotAudio }      from '../audio/ShotAudioCatalog';
-import { ShotAudioSystem }       from '../audio/ShotAudioSystem';
+import { preloadAllAudio }        from '../audio/AudioCatalog';
+import { GameAudioSystem }        from '../audio/GameAudioSystem';
 import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ScopeOverlay } from '../ui/ScopeOverlay';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
@@ -64,6 +64,7 @@ import {
   createRendererBundle,
   wireRenderersToProjManager,
   wireRenderersToEffectSystem,
+  wireRenderersToAudioSystem,
 } from './arena';
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
@@ -126,7 +127,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
-    preloadShotAudio(this.load);
+    preloadAllAudio(this.load);
     this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
@@ -177,7 +178,7 @@ export class ArenaScene extends Phaser.Scene {
     const combatSystem     = new CombatSystem(playerManager, projectileManager, bridge);
     const decoySystem      = new DecoySystem(this, playerManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
-    const shotAudioSystem  = new ShotAudioSystem(
+    const gameAudioSystem  = new GameAudioSystem(
       this,
       () => bridge.getLocalPlayerId(),
       () => {
@@ -192,8 +193,8 @@ export class ArenaScene extends Phaser.Scene {
     const inputSystem      = new InputSystem(
       this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
     );
-    projectileManager.setShotAudioSystem(shotAudioSystem);
-    effectSystem.setShotAudioSystem(shotAudioSystem);
+    projectileManager.setAudioSystem(gameAudioSystem);
+    effectSystem.setAudioSystem(gameAudioSystem);
 
     // ── UI (scene-lifetime) ────────────────────────────────────────────────
     const leftPanel  = new LeftSidePanel(this, bridge);
@@ -233,10 +234,12 @@ export class ArenaScene extends Phaser.Scene {
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
     );
+    arenaCountdown.setAudioSystem(gameAudioSystem);
 
     // ── Assemble ArenaContext ──────────────────────────────────────────────
     this.ctx = {
       playerManager, projectileManager, combatSystem, effectSystem,
+      gameAudioSystem,
       decoySystem,
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
@@ -291,6 +294,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers = createRendererBundle(this, this.arenaClipMask);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     wireRenderersToEffectSystem(this.renderers, effectSystem);
+    wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
 
     // Homing providers (closed over ctx, read at call-time → safe after teardown)
     projectileManager.setHomingTargetProvider((_config, ownerId) => {
@@ -325,6 +329,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Input setup ───────────────────────────────────────────────────────
     inputSystem.setup();
+    inputSystem.setAudioSystem(gameAudioSystem);
     inputSystem.setupUtilityConfigProvider(() => this.clientUpdate.getLocalUtilityConfig());
     inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
@@ -332,14 +337,14 @@ export class ArenaScene extends Phaser.Scene {
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
         const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
-        shotAudioSystem.playFailure(shotAudio?.failureKey, shotAudio?.failureVolume ?? 1);
+        gameAudioSystem.playLocalSound(shotAudio?.failureKey, shotAudio?.failureVolume ?? 1);
         return;
       }
 
       if (slot === 'ultimate') {
         const ultimate = this.clientUpdate.getLocalUltimateConfig();
         if (ultimate.type === 'gauss') {
-          shotAudioSystem.playFailure(ultimate.shotAudio?.failureKey, ultimate.shotAudio?.failureVolume ?? 1);
+          gameAudioSystem.playLocalSound(ultimate.shotAudio?.failureKey, ultimate.shotAudio?.failureVolume ?? 1);
         }
       }
     };
@@ -459,7 +464,7 @@ export class ArenaScene extends Phaser.Scene {
         if (utilityCooldownUntil > Date.now()) {
           if (inputStarted) {
             const utilityShotAudio = this.clientUpdate.getLocalUtilityConfig()?.shotAudio;
-            shotAudioSystem.playFailure(utilityShotAudio?.failureKey, utilityShotAudio?.failureVolume ?? 1);
+            gameAudioSystem.playLocalSound(utilityShotAudio?.failureKey, utilityShotAudio?.failureVolume ?? 1);
           }
           return;
         }

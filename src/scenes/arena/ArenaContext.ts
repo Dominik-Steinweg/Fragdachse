@@ -2,6 +2,7 @@ import type { PlayerManager }       from '../../entities/PlayerManager';
 import type { ProjectileManager }   from '../../entities/ProjectileManager';
 import type { CombatSystem }        from '../../systems/CombatSystem';
 import type { EffectSystem }        from '../../effects/EffectSystem';
+import type { GameAudioSystem }     from '../../audio/GameAudioSystem';
 import type { SmokeSystem }         from '../../effects/SmokeSystem';
 import type { FireSystem }          from '../../effects/FireSystem';
 import type { StinkCloudSystem }    from '../../effects/StinkCloudSystem';
@@ -55,6 +56,7 @@ export interface ArenaContext {
   readonly projectileManager: ProjectileManager;
   readonly combatSystem:      CombatSystem;
   readonly effectSystem:      EffectSystem;
+  readonly gameAudioSystem:   GameAudioSystem;
   readonly smokeSystem:       SmokeSystem;
   readonly fireSystem:        FireSystem;
   readonly stinkCloudSystem:  StinkCloudSystem;

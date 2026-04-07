@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH, COLORS } from '../config';
 import type { SyncedTrainState } from '../types';
 import { TRAIN } from './TrainConfig';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 
 /**
  * Client- und Host-seitiger Renderer für den fahrenden Zug RB 54.
@@ -26,9 +27,16 @@ export class TrainRenderer {
   private lastHp    = 0;
   private lastMaxHp = 0;
 
+  private audioSystem: GameAudioSystem | null = null;
+  private moveLoopHandle: string | null = null;
+
   constructor(scene: Phaser.Scene) {
     this.gfx = scene.add.graphics();
     this.gfx.setDepth(DEPTH.TRAIN);
+  }
+
+  setAudioSystem(system: GameAudioSystem): void {
+    this.audioSystem = system;
   }
 
   /**
@@ -37,11 +45,16 @@ export class TrainRenderer {
   setTarget(state: SyncedTrainState | null): void {
     if (!state || !state.alive) {
       this.lastAlive = false;
+      if (this.moveLoopHandle) {
+        this.audioSystem?.stopLoop(this.moveLoopHandle);
+        this.moveLoopHandle = null;
+      }
       return;
     }
     if (!this.lastAlive) {
       // Erster Frame oder Respawn → Snap statt Lerp
       this.displayY = state.y;
+      this.moveLoopHandle = this.audioSystem?.startLoop('sfx_train_move', state.x, state.y) ?? null;
     }
     this.targetY  = state.y;
     this.lastDir  = state.dir;
@@ -49,6 +62,9 @@ export class TrainRenderer {
     this.lastHp   = state.hp;
     this.lastMaxHp = state.maxHp;
     this.lastAlive = true;
+    if (this.moveLoopHandle) {
+      this.audioSystem?.updateLoopPosition(this.moveLoopHandle, state.x, state.y);
+    }
   }
 
   getShadowState(): SyncedTrainState | null {

@@ -60,6 +60,8 @@ export const ARENA_MAX_Y = ARENA_OFFSET_Y + ARENA_HEIGHT;
 // ---- Audio ----
 export const SOUND_ENABLED = true;
 export const SOUND_MASTER_VOLUME = 0.25;
+export const SOUND_SFX_VOLUME = 1.0;
+export const SOUND_MUSIC_VOLUME = 0.5;
 export let SHOT_AUDIO_REMOTE_MAX_DISTANCE = ARENA_WIDTH;
 export let SHOT_AUDIO_PAN_RANGE = ARENA_WIDTH * 0.5;
 export const SHOT_AUDIO_REMOTE_CLOSE_VOLUME = 0.58;
