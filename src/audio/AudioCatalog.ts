@@ -2,36 +2,36 @@ import type Phaser from 'phaser';
 
 // ── Shot Sounds (bestehend) ─────────────────────────────────────────────────
 const SHOT_ASSETS = {
-  shot_ak47:              './assets/sounds/ak-47.wav', //done
-  shot_asmd_primary:      './assets/sounds/asmd-prim.wav', //done
-  shot_asmd_secondary:    './assets/sounds/asmd-sec.wav',//done
-  shot_crossbow:          './assets/sounds/crossbow.flac',//done
-  shot_dry_trigger:       './assets/sounds/dry-trigger.wav',//done
-  shot_gauss:             './assets/sounds/Gauss.wav',//done
-  shot_glock:             './assets/sounds/glock.wav',//done
-  shot_plasma:            './assets/sounds/plasma.wav',//done
-  shot_shotgun:           './assets/sounds/shotgun.wav',//done
-  shot_bite:              './assets/sounds/bite.wav',//done
-  shot_zeus:              './assets/sounds/zeus.wav',//done
-  shot_hydra:             './assets/sounds/hydra.wav',//done
-  shot_awp:               './assets/sounds/awp.wav',//done
-  shot_p90:               './assets/sounds/p90.wav',//done
-  shot_flame:             './assets/sounds/flame.wav',//done
-  shot_rocketlauncher:    './assets/sounds/rocketlauncher.wav',//done
-  shot_minirocketlauncher:'./assets/sounds/minirocketlauncher.wav',//done
-  shot_spore:             './assets/sounds/spore.wav',//done
-  shot_negev:             './assets/sounds/negev.wav',//done
-  shot_throw:             './assets/sounds/throw.wav',//done
-  shot_bfg:               './assets/sounds/bfg.wav',//done
-  shot_hallelujah:        './assets/sounds/hallelujah.wav',//done
+  shot_ak47:              './assets/sounds/ak-47.ogg', //done
+  shot_asmd_primary:      './assets/sounds/asmd-prim.ogg', //done
+  shot_asmd_secondary:    './assets/sounds/asmd-sec.ogg',//done
+  shot_crossbow:          './assets/sounds/crossbow.ogg',//done
+  shot_dry_trigger:       './assets/sounds/dry-trigger.ogg',//done
+  shot_gauss:             './assets/sounds/Gauss.ogg',//done
+  shot_glock:             './assets/sounds/glock.ogg',//done
+  shot_plasma:            './assets/sounds/plasma.ogg',//done
+  shot_shotgun:           './assets/sounds/shotgun.ogg',//done
+  shot_bite:              './assets/sounds/bite.ogg',//done
+  shot_zeus:              './assets/sounds/zeus.ogg',//done
+  shot_hydra:             './assets/sounds/hydra.ogg',//done
+  shot_awp:               './assets/sounds/awp.ogg',//done
+  shot_p90:               './assets/sounds/p90.ogg',//done
+  shot_flame:             './assets/sounds/flame.ogg',//done
+  shot_rocketlauncher:    './assets/sounds/rocketlauncher.ogg',//done
+  shot_minirocketlauncher:'./assets/sounds/minirocketlauncher.ogg',//done
+  shot_spore:             './assets/sounds/spore.ogg',//done
+  shot_negev:             './assets/sounds/negev.ogg',//done
+  shot_throw:             './assets/sounds/throw.ogg',//done
+  shot_bfg:               './assets/sounds/bfg.ogg',//done
+  shot_hallelujah:        './assets/sounds/hallelujah.ogg',//done
 } as const;
 
 // ── Explosions ──────────────────────────────────────────────────────────────
 const EXPLOSION_ASSETS = {
-  sfx_explosion_he:             './assets/sounds/sfx_explosion_he.wav',//done
+  sfx_explosion_he:             './assets/sounds/sfx_explosion_he.ogg',//done
   sfx_explosion_smoke:          './assets/sounds/sfx_explosion_smoke.wav',
-  sfx_explosion_holy:           './assets/sounds/sfx_explosion_holy.wav',//done
-  sfx_explosion_rocket:         './assets/sounds/sfx_explosion_rocket.wav',//done
+  sfx_explosion_holy:           './assets/sounds/sfx_explosion_holy.ogg',//done
+  sfx_explosion_rocket:         './assets/sounds/sfx_explosion_rocket.ogg',//done
   sfx_explosion_asmd_secondary: './assets/sounds/sfx_explosion_asmd_secondary.wav',
   sfx_explosion_armageddon:     './assets/sounds/sfx_explosion_armageddon.wav',
 } as const;
@@ -45,10 +45,10 @@ const LOADOUT_ASSETS = {
   sfx_bfg_charge:           './assets/sounds/sfx_bfg_charge.wav',
   sfx_bfg_fly:              './assets/sounds/sfx_bfg_fly.wav',
   sfx_bfg_laser:            './assets/sounds/sfx_bfg_laser.wav',
-  sfx_nuke_countdown:       './assets/sounds/sfx_nuke_countdown.wav', //done
-  sfx_nuke_explosion:       './assets/sounds/sfx_nuke_explosion.wav', //done
-  sfx_airstrike_countdown:  './assets/sounds/sfx_airstrike_countdown.wav', //done
-  sfx_airstrike_explosion:  './assets/sounds/sfx_airstrike_explosion.wav', //done
+  sfx_nuke_countdown:       './assets/sounds/sfx_nuke_countdown.ogg', //done
+  sfx_nuke_explosion:       './assets/sounds/sfx_nuke_explosion.ogg', //done
+  sfx_airstrike_countdown:  './assets/sounds/sfx_airstrike_countdown.ogg', //done
+  sfx_airstrike_explosion:  './assets/sounds/sfx_airstrike_explosion.ogg', //done
   sfx_translocator_teleport:'./assets/sounds/sfx_translocator_teleport.wav',
   sfx_place_rock:           './assets/sounds/sfx_place_rock.wav',
   sfx_place_fliegenpilz:    './assets/sounds/sfx_place_fliegenpilz.wav',
@@ -71,20 +71,20 @@ const POWERUP_ASSETS = {
 
 // ── General SFX ─────────────────────────────────────────────────────────────
 const GENERAL_ASSETS = {
-  sfx_player_move:     './assets/sounds/sfx_player_move.wav', //done
-  sfx_dash:            './assets/sounds/sfx_dash.wav', //done
-  sfx_burrowed:        './assets/sounds/sfx_burrowed.wav',//done
+  sfx_player_move:     './assets/sounds/sfx_player_move.ogg', //done
+  sfx_dash:            './assets/sounds/sfx_dash.ogg', //done
+  sfx_burrowed:        './assets/sounds/sfx_burrowed.ogg',//done
   sfx_player_hit:      './assets/sounds/sfx_player_hit.wav',
   sfx_environment_hit: './assets/sounds/sfx_environment_hit.wav',
   sfx_hit_feedback:    './assets/sounds/sfx_hit_feedback.wav',
-  sfx_player_death:    './assets/sounds/sfx_player_death.wav',
-  sfx_player_spawn:    './assets/sounds/sfx_player_spawn.wav',//done
+  sfx_player_death:    './assets/sounds/sfx_player_death.ogg',
+  sfx_player_spawn:    './assets/sounds/sfx_player_spawn.ogg',//done
   sfx_ctb_score:       './assets/sounds/sfx_ctb_score.wav',
-  sfx_countdown_3:     './assets/sounds/sfx_countdown_3.wav', //done
-  sfx_countdown_2:     './assets/sounds/sfx_countdown_2.wav',//done
-  sfx_countdown_1:     './assets/sounds/sfx_countdown_1.wav',//done
-  sfx_countdown_go:    './assets/sounds/sfx_countdown_go.wav',//done
-  sfx_train_move:      './assets/sounds/sfx_train_move.wav',//done
+  sfx_countdown_3:     './assets/sounds/sfx_countdown_3.ogg', //done
+  sfx_countdown_2:     './assets/sounds/sfx_countdown_2.ogg',//done
+  sfx_countdown_1:     './assets/sounds/sfx_countdown_1.ogg',//done
+  sfx_countdown_go:    './assets/sounds/sfx_countdown_go.ogg',//done
+  sfx_train_move:      './assets/sounds/sfx_train_move.ogg',//done
   sfx_train_explode:   './assets/sounds/sfx_train_explode.wav',
 } as const;
 
