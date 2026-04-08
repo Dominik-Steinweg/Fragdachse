@@ -518,7 +518,7 @@ export const WEAPON_CONFIGS = {
     id:                   'ASMD_PRIM',
     displayName:          'ASMD Primär',
     cooldown:             700,
-    damage:               8,
+    damage:               7,
     range:                650,
     fire: {
       type:                 'hitscan',
@@ -856,17 +856,17 @@ export const WEAPON_CONFIGS = {
   ASMD_SEC: {
     id:                   'ASMD_SEC',
     displayName:          'ASMD Sekundär',
-    cooldown:             700,
+    cooldown:             500,
     damage:               15,          // Direkttreffer-Schaden
     range:                500,         
     fire: {
       type:                 'projectile',
-      projectileSpeed:      350,
+      projectileSpeed:      400,
       projectileSize:       16,
       projectileMaxBounces: 0,
     },
     allowedSlots:         ['weapon2'],
-    adrenalinCost:        20,
+    adrenalinCost:        15,
     adrenalinGain:        0,
     spreadStanding:       0,
     spreadMoving:         0,
@@ -880,9 +880,9 @@ export const WEAPON_CONFIGS = {
     // Detonations-Tag: wird durch ASMD_PRIM (und spätere Detonatoren mit diesem Tag) gezündet
     detonable: {
       tag:            'asmd_ball',
-      aoeDamage:      50,
+      aoeDamage:      60,
       aoeRadius:      80,
-      damageFalloff:  { minDamage: 10 } satisfies RadialDamageFalloffConfig,
+      damageFalloff:  { minDamage: 20 } satisfies RadialDamageFalloffConfig,
       knockback:      950,
       selfKnockbackMult: 0.75,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
@@ -918,7 +918,7 @@ export const WEAPON_CONFIGS = {
       } satisfies ProjectileExplosionConfig,
     },
     allowedSlots:         ['weapon2'],
-    adrenalinCost:        25,
+    adrenalinCost:        30,
     adrenalinGain:        0,
     spreadStanding:       0,
     spreadMoving:         0,
@@ -1353,7 +1353,7 @@ export const UTILITY_CONFIGS = {
     fuseTime:           1000,
     maxBounces:         3,
     fireRadius:         160,
-    fireDamagePerTick:  8,
+    fireDamagePerTick:  4,
     fireTickInterval:   250,
     fireLingerDuration: 4000,
     fireBurnDurationMs:     2000,  // Burn-Stack hält 1,5 s pro Tick
@@ -1384,7 +1384,7 @@ export const UTILITY_CONFIGS = {
     projectileSpeed: 900,
     projectileSize:  14,
     fuseTime:        3000,          // 3 Sekunden Zünder
-    maxBounces:      999,             // bleibt liegen
+    maxBounces:      10,             // bleibt liegen
     aoeRadius:       400,           // riesiger Radius
     aoeDamage:       250,           // massiver Schaden
     damageFalloff:   { minDamage: 50 } satisfies RadialDamageFalloffConfig,
@@ -1454,7 +1454,7 @@ export const UTILITY_CONFIGS = {
     maxBounces:          0,
     cloudRadius:         180,           // px – Schadensradius
     cloudDuration:       4000,          // ms – Dauer der Gaswolke
-    cloudDamagePerTick:  5,             // HP Schaden pro Tick
+    cloudDamagePerTick:  3,             // HP Schaden pro Tick
     cloudTickInterval:   250,           // ms zwischen Damage-Ticks (= 20 DPS)
     rockDamageMult:      0.1,           // 10% Schaden an Felsen
     trainDamageMult:     0.5,           // 50% Schaden am Zug

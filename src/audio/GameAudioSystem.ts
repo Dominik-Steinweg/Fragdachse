@@ -35,7 +35,10 @@ export class GameAudioSystem {
     private readonly scene: Phaser.Scene,
     private readonly getLocalPlayerId: () => string,
     private readonly getListenerPosition: () => ListenerPosition | null,
-  ) {}
+  ) {
+    // Prevent deferred playback bursts after tab blur / refocus.
+    this.scene.sound.pauseOnBlur = false;
+  }
 
   // ── One-Shot SFX (spatial) ────────────────────────────────────────────────
 
