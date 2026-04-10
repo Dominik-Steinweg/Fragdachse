@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   CELL_SIZE, GRID_COLS, GRID_ROWS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,

@@ -526,8 +526,8 @@ export function isPointInsideArena(x: number, y: number): boolean {
 
 export function clampPointToArena(x: number, y: number): MuzzleOrigin {
   return {
-    x: Phaser.Math.Clamp(x, ARENA_OFFSET_X, ARENA_MAX_X),
-    y: Phaser.Math.Clamp(y, ARENA_OFFSET_Y, ARENA_MAX_Y),
+    x: Math.min(ARENA_MAX_X, Math.max(ARENA_OFFSET_X, x)),
+    y: Math.min(ARENA_MAX_Y, Math.max(ARENA_OFFSET_Y, y)),
   };
 }
 

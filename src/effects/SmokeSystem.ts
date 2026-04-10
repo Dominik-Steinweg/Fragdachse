@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
 import { circleZone } from './EffectUtils';
 import type { SmokeGrenadeEffect, SyncedSmokeCloud } from '../types';

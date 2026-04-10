@@ -1179,7 +1179,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
   ): boolean {
-    const cursorRange = Phaser.Math.Distance.Between(x, y, targetX, targetY);
+    const cursorRange = Math.hypot(targetX - x, targetY - y);
     const effectiveRange = fireConfig.limitRangeToCursor
       ? Math.min(config.range, cursorRange)
       : config.range;

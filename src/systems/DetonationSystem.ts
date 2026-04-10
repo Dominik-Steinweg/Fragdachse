@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { DetonableConfig, DetonatorConfig } from '../types';
 

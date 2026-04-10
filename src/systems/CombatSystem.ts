@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
@@ -99,7 +99,7 @@ export class CombatSystem {
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
   private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchCircle     = new Phaser.Geom.Circle();
-  private readonly scratchPoints:    Phaser.Geom.Point[] = [];
+  private readonly scratchPoints:    Phaser.Math.Vector2[] = [];
   private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
   private meleeSwingIdCounter = 0;
   private effectSeedCounter = 1;
@@ -1282,7 +1282,7 @@ export class CombatSystem {
 
   private pickNearestIntersection(
     line: Phaser.Geom.Line,
-    points: Phaser.Geom.Point[],
+    points: Phaser.Types.Math.Vector2Like[],
   ): { distance: number; x: number; y: number } | null {
     let bestHit: { distance: number; x: number; y: number } | null = null;
 

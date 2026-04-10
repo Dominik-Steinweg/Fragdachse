@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH, NET_SMOOTH_TIME_MS } from '../config';
 import { circleZone, edgeZone, ensureCanvasTexture } from './EffectUtils';
 import type { SyncedStinkCloud } from '../types';

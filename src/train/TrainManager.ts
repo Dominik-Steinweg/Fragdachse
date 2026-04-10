@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   ARENA_OFFSET_Y, ARENA_HEIGHT, PLAYER_SIZE,
 } from '../config';

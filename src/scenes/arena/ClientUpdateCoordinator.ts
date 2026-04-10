@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
 import { dequantizeAngle } from '../../utils/angle';
 import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } from '../../config';
@@ -438,7 +439,7 @@ export class ClientUpdateCoordinator {
     const py = player.sprite.y;
 
     for (const pu of powerups) {
-      const dist = Phaser.Math.Distance.Between(px, py, pu.x, pu.y);
+      const dist = Math.hypot(pu.x - px, pu.y - py);
       if (dist <= PICKUP_RADIUS * 2) {
         if (bridge.isHost()) {
           this.ctx.powerUpSystem?.tryPickup(localId, pu.uid, px, py);

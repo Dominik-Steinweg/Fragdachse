@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { SyncedTunnel } from '../../types';
 import { TunnelEndpointVisual } from './TunnelEndpointVisual';
 

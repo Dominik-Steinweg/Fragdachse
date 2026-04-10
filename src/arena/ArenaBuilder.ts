@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT,
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_RENDER_WIDTH,

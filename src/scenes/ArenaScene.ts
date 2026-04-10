@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
 import { PlayerManager }         from '../entities/PlayerManager';
@@ -893,30 +893,15 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private ensureArenaClipMask(): void {
-    if (!this.arenaClipMaskShape || !this.arenaClipMask) {
-      const maskShape = this.add.graphics();
-      maskShape.setScrollFactor(0);
-      maskShape.setVisible(false);
-      this.arenaClipMaskShape = maskShape;
-      this.arenaClipMask = maskShape.createGeometryMask();
-      this.renderers?.shadow.setArenaMask(this.arenaClipMask);
-      this.renderers?.beer.setArenaMask(this.arenaClipMask);
-    }
-
-    this.redrawArenaClipMask();
+    // GeometryMask is Canvas-only in Phaser 4. Keep the world on WebGL and
+    // rely on arena bounds, object clamping and visibility checks instead.
+    this.arenaClipMask = null;
+    this.renderers?.shadow.setArenaMask(null);
+    this.renderers?.beer.setArenaMask(null);
   }
 
   private redrawArenaClipMask(): void {
-    if (!this.arenaClipMaskShape) return;
-    if (this.lastArenaMaskOffsetX === ARENA_OFFSET_X && this.lastArenaMaskViewportWidth === ARENA_VIEWPORT_WIDTH) {
-      return;
-    }
-
-    this.arenaClipMaskShape.clear();
-    this.arenaClipMaskShape.fillStyle(0xffffff, 1);
-    this.arenaClipMaskShape.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT);
-    this.lastArenaMaskOffsetX = ARENA_OFFSET_X;
-    this.lastArenaMaskViewportWidth = ARENA_VIEWPORT_WIDTH;
+    // No-op under Phaser 4 WebGL.
   }
 
   private syncArenaMetrics(): void {

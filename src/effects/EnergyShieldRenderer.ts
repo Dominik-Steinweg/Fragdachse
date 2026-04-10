@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedEnergyShield } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';

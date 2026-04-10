@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { SyncedNukeStrike } from '../types';
 import { DEPTH, COLORS } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';

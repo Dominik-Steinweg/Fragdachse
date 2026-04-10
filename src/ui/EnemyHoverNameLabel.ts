@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { COLORS, DEPTH, PLAYER_SIZE, toCssColor } from '../config';
 import { sanitizePlayerName } from '../utils/playerName';
 

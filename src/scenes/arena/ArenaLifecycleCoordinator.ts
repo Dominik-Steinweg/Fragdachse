@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
 import { ArenaGenerator }    from '../../arena/ArenaGenerator';

@@ -7,7 +7,7 @@
  *
  * Gleiche Public API wie LeftSidePanel: build(), transitionToGame(), transitionToLobby().
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, COLORS, toCssColor } from '../config';
 import type { TeamId } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';

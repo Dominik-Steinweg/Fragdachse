@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant, ProjectileStyle } from '../types';
@@ -57,7 +57,7 @@ export class ProjectileManager {
   private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile
   private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals (ball-Stil)
   private nextId        = 0;
-  private readonly scratchPoints: Phaser.Geom.Point[] = [];
+  private readonly scratchPoints: Phaser.Math.Vector2[] = [];
 
   // ── Client-Extrapolation ──────────────────────────────────────────────────
   private clientProjStates = new Map<number, ClientProjectileState>();

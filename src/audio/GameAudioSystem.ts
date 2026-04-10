@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   SHOT_AUDIO_PAN_RANGE,
   SHOT_AUDIO_REMOTE_CLOSE_VOLUME,

@@ -1,4 +1,5 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
+import { addInternalGlow, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
@@ -24,7 +25,7 @@ export class DecoyEntity {
   private currentMaxHp = 1;
   private currentArmor = 0;
   private currentMaxArmor = 1;
-  private glowFx: Phaser.FX.Glow | null = null;
+  private glowFx: GlowHandle | null = null;
   private anomalyTween: Phaser.Tweens.Tween | null = null;
   private anomalyState = { alpha: 0.92, outerStrength: 4.2 };
 
@@ -60,8 +61,8 @@ export class DecoyEntity {
       }
     }
 
-    this.sprite.preFX?.setPadding(20);
-    this.glowFx = this.sprite.preFX?.addGlow(colorHex, 4, 0, false, 0.08, 16) ?? null;
+    setInternalFxPadding(this.sprite, 20);
+    this.glowFx = addInternalGlow(this.sprite, colorHex, 4, 0, false, 0.08, 16);
 
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
     this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);

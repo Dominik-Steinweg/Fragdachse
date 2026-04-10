@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import { bridge }                from '../../network/bridge';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS }       from '../../loadout/LoadoutConfig';
 import type { PlaceableRockUtilityConfig, PlaceableTurretUtilityConfig, PlaceableUtilityConfig, TunnelUltimateConfig } from '../../loadout/LoadoutConfig';

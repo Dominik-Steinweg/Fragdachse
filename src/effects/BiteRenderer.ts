@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH_TRACE, isPointInsideArena } from '../config';
 import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
 

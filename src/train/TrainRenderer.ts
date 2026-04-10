@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH, COLORS } from '../config';
 import type { SyncedTrainState } from '../types';
 import { TRAIN } from './TrainConfig';

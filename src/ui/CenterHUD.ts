@@ -4,14 +4,15 @@
  * Enthält Timer (oben mittig), RB54-Widget (direkt darunter) und
  * den unteren Stack für Power-Ups, Utility und Ultimate.
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { ARMOR_COLOR, ARMOR_MAX, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, RAGE_MAX, toCssColor } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
 import {
   rgbStr,
   type LivingBarPalette,
-  ensureLivingBarTextures, createGradientTexture, LivingBarEffect,
+  ensureLivingBarTextures, createGradientTexture, LivingBarEffect, randomEmitZoneData,
 } from './LivingBarEffect';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 const CENTER_X       = GAME_WIDTH / 2;
 const PANEL_WIDTH    = 200;
@@ -109,7 +110,7 @@ interface LowerBarSection {
   coreEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   energized: boolean;
-  glow: Phaser.FX.Glow | null;
+  glow: GlowHandle | null;
   glowTween: Phaser.Tweens.Tween | null;
   labelTween: Phaser.Tweens.Tween | null;
   hideTween: Phaser.Tweens.Tween | null;
@@ -294,7 +295,7 @@ export class CenterHUD {
       .setFillStyle(0, 0);
 
     const energyZone = new Phaser.Geom.Rectangle(STACK_BAR_LEFT + 2, STACK_LABEL_H + 1, STACK_BAR_W - 4, STACK_BAR_H - 2);
-    const zoneData = { type: 'random', source: energyZone } as Phaser.Types.GameObjects.Particles.EmitZoneData;
+    const zoneData = randomEmitZoneData(energyZone as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource);
     const coreEmitter = this.scene.add.particles(0, 0, STACK_CORE_TEX, {
       lifespan:  { min: 200, max: 500 },
       frequency: 30,
@@ -662,15 +663,17 @@ export class CenterHUD {
     this.utilityAttentionActive = enabled;
     this.setSectionEnergized(this.utilitySection, enabled);
     if (enabled) {
-      this.utilitySection.glow = this.utilitySection.fg.postFX.addGlow(UTIL_PAL.light, 3, 0, false, 0.4, 8);
-      this.utilitySection.glowTween = this.scene.tweens.add({
-        targets: this.utilitySection.glow,
-        outerStrength: 8,
-        duration: 400,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+      this.utilitySection.glow = addExternalGlow(this.utilitySection.fg, UTIL_PAL.light, 3, 0, false, 0.4, 8);
+      if (this.utilitySection.glow) {
+        this.utilitySection.glowTween = this.scene.tweens.add({
+          targets: this.utilitySection.glow,
+          outerStrength: 8,
+          duration: 400,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
       this.utilitySection.labelTween = this.scene.tweens.add({
         targets: this.utilitySection.label,
         scaleX: 1.06,
@@ -690,15 +693,17 @@ export class CenterHUD {
     this.ultimateReadyActive = enabled;
     this.setSectionEnergized(this.ultimateSection, enabled);
     if (enabled) {
-      this.ultimateSection.glow = this.ultimateSection.fg.postFX.addGlow(0xff3300, 4, 0, false, 0.3, 10);
-      this.ultimateSection.glowTween = this.scene.tweens.add({
-        targets: this.ultimateSection.glow,
-        outerStrength: 8,
-        duration: 800,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+      this.ultimateSection.glow = addExternalGlow(this.ultimateSection.fg, 0xff3300, 4, 0, false, 0.3, 10);
+      if (this.ultimateSection.glow) {
+        this.ultimateSection.glowTween = this.scene.tweens.add({
+          targets: this.ultimateSection.glow,
+          outerStrength: 8,
+          duration: 800,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
       return;
     }
     this.stopSectionAttention(this.ultimateSection);
@@ -715,7 +720,7 @@ export class CenterHUD {
       section.glowTween = null;
     }
     if (section.glow) {
-      section.fg.postFX.remove(section.glow);
+      removeExternalFx(section.fg, section.glow);
       section.glow = null;
     }
   }

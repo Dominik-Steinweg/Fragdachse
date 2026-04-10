@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { bridge } from '../network/bridge';
 import type { PlayerManager } from '../entities/PlayerManager';
 import {

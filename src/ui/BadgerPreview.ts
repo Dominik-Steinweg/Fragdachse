@@ -5,15 +5,16 @@
  * Shows the 'badger' texture with a pulsing preFX glow in the given color.
  * Optionally tracks the mouse pointer for rotation.
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { PLAYER_SIZE } from '../config';
+import { addInternalGlow, type GlowHandle } from '../utils/phaserFx';
 
 const ROTATION_OFFSET = Math.PI / 2;
 
 export class BadgerPreview {
   readonly sprite: Phaser.GameObjects.Image;
 
-  private glowFx: Phaser.FX.Glow | null = null;
+  private glowFx: GlowHandle | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
   private colorHex: number;
 
@@ -29,7 +30,7 @@ export class BadgerPreview {
     this.sprite = scene.add.image(x, y, 'badger');
     this.sprite.setDisplaySize(displaySize, displaySize);
 
-    this.glowFx = this.sprite.preFX?.addGlow(color, 4, 0, false, 0.1, 16) ?? null;
+    this.glowFx = addInternalGlow(this.sprite, color, 4, 0, false, 0.1, 16);
     if (this.glowFx) {
       this.glowTween = scene.tweens.add({
         targets:       this.glowFx,

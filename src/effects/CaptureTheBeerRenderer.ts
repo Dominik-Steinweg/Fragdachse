@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   ARENA_MAX_X,
   ARENA_MAX_Y,

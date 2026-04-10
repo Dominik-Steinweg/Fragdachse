@@ -1,7 +1,8 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { BurrowPhase, PlayerProfile } from '../types';
 import { PlayerBurnRenderer } from '../effects/PlayerBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
+import { addInternalGlow, addInternalShine, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
@@ -32,7 +33,7 @@ export class PlayerEntity {
   private targetRotation = 0;
 
   // Glow-Aura für Spielerfarbe
-  private glowFx: Phaser.FX.Glow | null = null;
+  private glowFx: GlowHandle | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
   private stealthTween: Phaser.Tweens.Tween | null = null;
   private stealthScanTween: Phaser.Tweens.Tween | null = null;
@@ -79,8 +80,8 @@ export class PlayerEntity {
 
     // Leuchtende Spielerfarb-Aura (vgl. PowerUpRenderer)
     // setPadding nötig, damit der Glow nicht an den Sprite-Grenzen abgeschnitten wird
-    this.sprite.preFX?.setPadding(20);
-    this.glowFx = this.sprite.preFX?.addGlow(profile.colorHex, 4, 0, false, 0.1, 16) ?? null;
+    setInternalFxPadding(this.sprite, 20);
+    this.glowFx = addInternalGlow(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16);
     this.startDefaultGlowTween();
 
     // Spawn-Animation beim ersten Erscheinen
@@ -315,7 +316,12 @@ export class PlayerEntity {
     this.sprite.setAlpha(0);
 
     // Shine-Sweep (Phaser 3.90 preFX): Materialisierungs-Schimmer
-    const shineFx = this.sprite.preFX?.addShine(2.2, 0.5, 4);
+    const shineFx = addInternalShine(this.sprite, 2.2, 0.5, 4);
+    if (shineFx) {
+      scene.time.delayedCall(520, () => {
+        removeInternalFx(this.sprite, shineFx);
+      });
+    }
 
     // Glow-Flash: aufgepumpt starten, dann auf Normal abklingen
     this.glowTween?.stop();
@@ -327,7 +333,6 @@ export class PlayerEntity {
         duration:      480,
         ease:          'Quad.easeOut',
         onComplete:    () => {
-          if (shineFx) this.sprite.preFX?.remove(shineFx);
           this.startDefaultGlowTween();
         },
       });

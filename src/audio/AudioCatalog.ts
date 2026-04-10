@@ -1,5 +1,54 @@
 import type Phaser from 'phaser';
 
+const SHIPPED_AUDIO_FILES = new Set([
+  'airstrike2s.wav',
+  'ak-47.ogg',
+  'asmd-prim.ogg',
+  'asmd-sec.ogg',
+  'awp.ogg',
+  'bfg.ogg',
+  'bite.ogg',
+  'crossbow.ogg',
+  'dry-trigger.ogg',
+  'flame.ogg',
+  'Gauss.ogg',
+  'glock.ogg',
+  'hallelujah.ogg',
+  'hydra.ogg',
+  'minirocketlauncher.ogg',
+  'negev.ogg',
+  'p90.ogg',
+  'plasma.ogg',
+  'rocketlauncher.ogg',
+  'sfx_airstrike_countdown.ogg',
+  'sfx_airstrike_explosion.ogg',
+  'sfx_burrowed.ogg',
+  'sfx_countdown_1.ogg',
+  'sfx_countdown_2.ogg',
+  'sfx_countdown_3.ogg',
+  'sfx_countdown_go.ogg',
+  'sfx_dash.ogg',
+  'sfx_explosion_he.ogg',
+  'sfx_explosion_holy.ogg',
+  'sfx_explosion_rocket.ogg',
+  'sfx_nuke_countdown.ogg',
+  'sfx_nuke_explosion.ogg',
+  'sfx_player_death.ogg',
+  'sfx_player_move.ogg',
+  'sfx_player_spawn.ogg',
+  'sfx_train_move.ogg',
+  'shotgun.ogg',
+  'spore.ogg',
+  'throw.ogg',
+  'zeus.mp3',
+  'zeus.ogg',
+]);
+
+function isShippedAudioAsset(assetPath: string): boolean {
+  const fileName = assetPath.split('/').pop();
+  return fileName !== undefined && SHIPPED_AUDIO_FILES.has(fileName);
+}
+
 // ── Shot Sounds (bestehend) ─────────────────────────────────────────────────
 const SHOT_ASSETS = {
   shot_ak47:              './assets/sounds/ak-47.ogg', //done
@@ -116,6 +165,7 @@ export type ShotAudioAssetKey = keyof typeof SHOT_ASSETS;
  */
 export function preloadAllAudio(loader: Phaser.Loader.LoaderPlugin): void {
   for (const [key, assetPath] of Object.entries(AUDIO_ASSETS)) {
+    if (!isShippedAudioAsset(assetPath)) continue;
     loader.audio(key, assetPath);
   }
 }

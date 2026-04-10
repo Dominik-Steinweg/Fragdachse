@@ -3,7 +3,7 @@
  * Verwaltet das semi-transparente Lobby-UI innerhalb der ArenaScene.
  * Sichtbar wenn gamePhase === 'LOBBY' ODER lokaler Spieler isReady === false.
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import {

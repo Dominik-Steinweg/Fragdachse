@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { bridge }         from './network/bridge';
 import { NetworkBridge }  from './network/NetworkBridge';
 import { ArenaScene }     from './scenes/ArenaScene';

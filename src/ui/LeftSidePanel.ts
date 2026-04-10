@@ -6,7 +6,7 @@
  *
  * Reusability-Template: gleiche Public-API wie RightSidePanel.
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import { ArenaHUD } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';

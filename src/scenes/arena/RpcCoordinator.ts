@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import type { ArenaContext }        from './ArenaContext';
 import type { RendererBundle }      from './RendererBundle';

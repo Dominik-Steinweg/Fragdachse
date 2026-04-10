@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { bridge } from '../network/bridge';
 import { ProjectileManager } from '../entities/ProjectileManager';
 import { PlayerManager } from '../entities/PlayerManager';

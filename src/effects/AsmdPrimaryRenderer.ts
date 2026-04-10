@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE, clipPointToArenaRay, isPointInsideArena } from '../config';
 import type { HitscanImpactKind } from '../types';
 import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';

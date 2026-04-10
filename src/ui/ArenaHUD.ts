@@ -15,7 +15,7 @@
  *  7. Weapon 2 cooldown (metallic)
  *  8. Utility cooldown (gold) – wobble on special override
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, ADRENALINE_MAX, RAGE_MAX,
@@ -28,6 +28,7 @@ import {
   rgbStr, createGradientTexture, rectZone,
   ensureLivingBarTextures, LivingBarEffect,
 } from './LivingBarEffect';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 // ── Layout ──────────────────────────────────────────────────────────────────
 const PANEL_W   = 240;
@@ -205,11 +206,10 @@ export class ArenaHUD {
 
   // Name
   private nameText!:        Phaser.GameObjects.Text;
-  private nameMask!:        Phaser.GameObjects.Graphics;
   private nameScrollTween:  Phaser.Tweens.Tween | null = null;
 
   // Ultimate glow
-  private ultGlow:          Phaser.FX.Glow | null = null;
+  private ultGlow:          GlowHandle | null = null;
   private ultPulseTween:    Phaser.Tweens.Tween | null = null;
   private wasUltReady       = false;
   private ultThresholdMarks: Phaser.GameObjects.Rectangle[] = [];
@@ -222,14 +222,14 @@ export class ArenaHUD {
   private adrBurstEmitter:  Phaser.GameObjects.Particles.ParticleEmitter | null = null;
 
   // Adrenaline syringe state
-  private adrSyringeGlow:   Phaser.FX.Glow | null = null;
+  private adrSyringeGlow:   GlowHandle | null = null;
   private adrSyringeTween:  Phaser.Tweens.Tween | null = null;
   private wasSyringeActive  = false;
   private lastHpText: string | null = null;
   private lastArmorText: string | null = null;
 
   // Utility override
-  private utilWobbleGlow:     Phaser.FX.Glow | null = null;
+  private utilWobbleGlow:     GlowHandle | null = null;
   private utilWobbleTween:    Phaser.Tweens.Tween | null = null;
   private utilLabelPulseTween: Phaser.Tweens.Tween | null = null;
   private wasUtilityOverridden = false;
@@ -299,13 +299,9 @@ export class ArenaHUD {
     this.nameText = this.scene.add.text(BAR_X, NAME_Y, '', NAME_FONT).setScrollFactor(0);
     c.add(this.nameText);
 
-    // Geometry mask for name overflow clipping.
-    // IMPORTANT: create the graphics without adding to the scene display list
-    // so it doesn't render as a visible white rectangle.
-    this.nameMask = new Phaser.GameObjects.Graphics(this.scene);
-    this.nameMask.fillStyle(0xffffff);
-    this.nameMask.fillRect(0, 0, PANEL_W, NAME_H + NAME_Y + 4);
-    this.nameText.setMask(this.nameMask.createGeometryMask());
+    // Phaser 4 keeps GeometryMask on Canvas only; crop is sufficient here
+    // because we only need simple clipping for the marquee text.
+    this.nameText.setCrop(0, 0, BAR_W, NAME_H);
 
     // Dividers
     c.add(this.divider(DIV1_Y));
@@ -480,6 +476,7 @@ export class ArenaHUD {
   setPlayerInfo(name: string, color: number): void {
     this.nameText.setText(name);
     this.nameText.setColor(toCssColor(color));
+    this.nameText.setCrop(0, 0, BAR_W, NAME_H);
     this.setupNameScroll();
   }
 
@@ -605,7 +602,6 @@ export class ArenaHUD {
       b.idleEffect.destroy();
     }
     if (this.nameScrollTween) this.nameScrollTween.destroy();
-    this.nameMask.destroy();
     this.adrBurstEmitter?.destroy();
     this.puFadeTween?.destroy();
     this.clearPowerUpEntries();
@@ -758,7 +754,8 @@ export class ArenaHUD {
 
   private startAdrSyringe(): void {
     if (this.adrSyringeGlow) return;
-    this.adrSyringeGlow = this.adr.fgImg.postFX.addGlow(PAL_ADR.light, 2, 0, false, 0.2, 8);
+    this.adrSyringeGlow = addExternalGlow(this.adr.fgImg, PAL_ADR.light, 2, 0, false, 0.2, 8);
+    if (!this.adrSyringeGlow) return;
     this.adrSyringeTween = this.scene.tweens.add({
       targets: this.adrSyringeGlow,
       outerStrength: 6,
@@ -775,7 +772,7 @@ export class ArenaHUD {
       this.adrSyringeTween = null;
     }
     if (this.adrSyringeGlow) {
-      this.adr.fgImg.postFX.remove(this.adrSyringeGlow);
+      removeExternalFx(this.adr.fgImg, this.adrSyringeGlow);
       this.adrSyringeGlow = null;
     }
   }
@@ -829,7 +826,8 @@ export class ArenaHUD {
 
   private addUltGlow(): void {
     if (this.ultGlow) return;
-    this.ultGlow = this.ult.fgImg.postFX.addGlow(0xff3300, 4, 0, false, 0.3, 10);
+    this.ultGlow = addExternalGlow(this.ult.fgImg, 0xff3300, 4, 0, false, 0.3, 10);
+    if (!this.ultGlow) return;
     this.ultPulseTween = this.scene.tweens.add({
       targets: this.ultGlow,
       outerStrength: 8,
@@ -842,7 +840,7 @@ export class ArenaHUD {
 
   private removeUltGlow(): void {
     if (this.ultPulseTween) { this.ultPulseTween.destroy(); this.ultPulseTween = null; }
-    if (this.ultGlow) { this.ult.fgImg.postFX.remove(this.ultGlow); this.ultGlow = null; }
+    if (this.ultGlow) { removeExternalFx(this.ult.fgImg, this.ultGlow); this.ultGlow = null; }
   }
 
   // ── Cooldown bars ─────────────────────────────────────────────────────────
@@ -883,15 +881,17 @@ export class ArenaHUD {
 
   private startUtilWobble(): void {
     if (this.utilWobbleGlow) return;
-    this.utilWobbleGlow = this.util.fgImg.postFX.addGlow(PAL_UTIL.light, 3, 0, false, 0.4, 8);
-    this.utilWobbleTween = this.scene.tweens.add({
-      targets: this.utilWobbleGlow,
-      outerStrength: 8,
-      duration: 400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    this.utilWobbleGlow = addExternalGlow(this.util.fgImg, PAL_UTIL.light, 3, 0, false, 0.4, 8);
+    if (this.utilWobbleGlow) {
+      this.utilWobbleTween = this.scene.tweens.add({
+        targets: this.utilWobbleGlow,
+        outerStrength: 8,
+        duration: 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
     this.utilLabelPulseTween = this.scene.tweens.add({
       targets: this.util.label,
       scaleX: 1.06,
@@ -905,7 +905,7 @@ export class ArenaHUD {
 
   private removeUtilWobble(): void {
     if (this.utilWobbleTween) { this.utilWobbleTween.destroy(); this.utilWobbleTween = null; }
-    if (this.utilWobbleGlow) { this.util.fgImg.postFX.remove(this.utilWobbleGlow); this.utilWobbleGlow = null; }
+    if (this.utilWobbleGlow) { removeExternalFx(this.util.fgImg, this.utilWobbleGlow); this.utilWobbleGlow = null; }
     if (this.utilLabelPulseTween) { this.utilLabelPulseTween.destroy(); this.utilLabelPulseTween = null; }
     this.util.label.setScale(1);
   }

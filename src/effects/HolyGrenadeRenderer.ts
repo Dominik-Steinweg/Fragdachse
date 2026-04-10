@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 
 const TEX_HOLY_GRENADE_BODY = '__holy_grenade_body';

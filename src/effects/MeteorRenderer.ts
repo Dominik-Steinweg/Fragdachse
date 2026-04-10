@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { SyncedMeteorStrike } from '../types';
 import { DEPTH, DEPTH_FX } from '../config';
 import { circleZone } from './EffectUtils';

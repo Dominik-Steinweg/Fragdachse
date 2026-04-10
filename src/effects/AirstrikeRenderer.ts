@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { SyncedAirstrikeStrike } from '../types';
 import { DEPTH }                      from '../config';
 import { circleZone }                 from './EffectUtils';

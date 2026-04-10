@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 
 const TEX_ROCKET_BODY = '__rocket_body';

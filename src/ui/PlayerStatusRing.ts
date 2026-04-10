@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   ADRENALINE_MAX,
   ARMOR_COLOR,
@@ -70,6 +70,8 @@ const SEGMENTS: readonly SegmentConfig[] = [
   { key: 'rage',       fillStartAngle: 248, fillEndAngle: 352, palette: PAL_RAGE },
 ];
 
+type RingPoint = Phaser.Math.Vector2;
+
 function clamp01(value: number): number {
   return Phaser.Math.Clamp(value, 0, 1);
 }
@@ -78,13 +80,13 @@ function degToRadFromTop(angle: number): number {
   return Phaser.Math.DegToRad(angle - 90);
 }
 
-function polarPoint(angle: number, radius: number): Phaser.Geom.Point {
+function polarPoint(angle: number, radius: RingPoint['x']): RingPoint {
   const rad = degToRadFromTop(angle);
-  return new Phaser.Geom.Point(Math.cos(rad) * radius, Math.sin(rad) * radius);
+  return new Phaser.Math.Vector2(Math.cos(rad) * radius, Math.sin(rad) * radius);
 }
 
-function buildArcPolygon(startAngle: number, endAngle: number, innerRadius: number, outerRadius: number): Phaser.Geom.Point[] {
-  const points: Phaser.Geom.Point[] = [];
+function buildArcPolygon(startAngle: number, endAngle: number, innerRadius: number, outerRadius: number): RingPoint[] {
+  const points: RingPoint[] = [];
   for (let index = 0; index <= POLY_STEPS; index += 1) {
     const angle = Phaser.Math.Linear(startAngle, endAngle, index / POLY_STEPS);
     points.push(polarPoint(angle, outerRadius));
@@ -96,7 +98,7 @@ function buildArcPolygon(startAngle: number, endAngle: number, innerRadius: numb
   return points;
 }
 
-function fillPolygon(graphics: Phaser.GameObjects.Graphics, points: Phaser.Geom.Point[], color: number, alpha: number): void {
+function fillPolygon(graphics: Phaser.GameObjects.Graphics, points: readonly RingPoint[], color: number, alpha: number): void {
   graphics.fillStyle(color, alpha);
   graphics.beginPath();
   graphics.moveTo(points[0].x, points[0].y);
@@ -119,7 +121,7 @@ class ArcRingRandomSource {
   }
 
   getRandomPoint(point: Phaser.Types.Math.Vector2Like): Phaser.Types.Math.Vector2Like {
-    const target = point as Phaser.Geom.Point;
+    const target = point;
     if (!this.section) {
       target.x = 0;
       target.y = 0;

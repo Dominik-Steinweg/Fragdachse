@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { SyncedTeslaDome, SyncedTeslaDomeTarget } from '../types';

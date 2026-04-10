@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
 import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
 

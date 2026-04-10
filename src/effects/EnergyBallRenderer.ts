@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { COLORS, DEPTH, isPointInsideArena } from '../config';
 import type { EnergyBallVariant } from '../types';
 import {

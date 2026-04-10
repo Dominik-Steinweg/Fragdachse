@@ -5,7 +5,8 @@
  * optional pulsing PostFX glow.  Used by ArenaHUD, UtilityChargeIndicator,
  * and the lobby colour indicator.
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -93,8 +94,14 @@ export function rectZone(x: number, y: number, w: number, h: number): {
   const rect = new Phaser.Geom.Rectangle(x, y, w, h);
   return {
     zone: rect,
-    data: { type: 'random', source: rect } as Phaser.Types.GameObjects.Particles.EmitZoneData,
+    data: randomEmitZoneData(rect as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource),
   };
+}
+
+export function randomEmitZoneData(
+  source: Phaser.Types.GameObjects.Particles.RandomZoneSource,
+): Phaser.Types.GameObjects.Particles.EmitZoneData {
+  return { type: 'random', source } as unknown as Phaser.Types.GameObjects.Particles.EmitZoneData;
 }
 
 // ── LivingBarEffect class ───────────────────────────────────────────────────
@@ -113,7 +120,7 @@ export class LivingBarEffect {
   readonly idleOuter: Phaser.GameObjects.Particles.ParticleEmitter;
   readonly emitZone:  Phaser.Geom.Rectangle;
 
-  breathGlow:  Phaser.FX.Glow | null = null;
+  breathGlow:  GlowHandle | null = null;
   breathTween: Phaser.Tweens.Tween | null = null;
 
   private active = true;
@@ -132,7 +139,7 @@ export class LivingBarEffect {
 
     // Shared emit zone
     this.emitZone = new Phaser.Geom.Rectangle(x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
-    const zoneData = { type: 'random', source: this.emitZone } as Phaser.Types.GameObjects.Particles.EmitZoneData;
+    const zoneData = randomEmitZoneData(this.emitZone as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource);
 
     // Scale particle sizes relative to bar height (reference = 14px)
     const sf = Math.max(0.3, h / 14);
@@ -171,15 +178,17 @@ export class LivingBarEffect {
 
     // PostFX breathing glow
     if (this.glowTarget) {
-      this.breathGlow = this.glowTarget.postFX.addGlow(palette.mid, 0, 0, false, 0.1, 6);
-      this.breathTween = scene.tweens.add({
-        targets: this.breathGlow,
-        outerStrength: 2.5 * intensity,
-        duration: 2000,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+      this.breathGlow = addExternalGlow(this.glowTarget, palette.mid, 0, 0, false, 0.1, 6);
+      if (this.breathGlow) {
+        this.breathTween = scene.tweens.add({
+          targets: this.breathGlow,
+          outerStrength: 2.5 * intensity,
+          duration: 2000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
     }
   }
 
@@ -220,7 +229,8 @@ export class LivingBarEffect {
 
   private ensureGlow(): void {
     if (!this.glowTarget || this.breathGlow || this.emitZone.width <= 2) return;
-    this.breathGlow = this.glowTarget.postFX.addGlow(this.palette.mid, 0, 0, false, 0.1, 6);
+    this.breathGlow = addExternalGlow(this.glowTarget, this.palette.mid, 0, 0, false, 0.1, 6);
+    if (!this.breathGlow) return;
     this.breathTween = this.scene.tweens.add({
       targets: this.breathGlow,
       outerStrength: 2.5,
@@ -237,7 +247,7 @@ export class LivingBarEffect {
       this.breathTween = null;
     }
     if (this.breathGlow && this.glowTarget) {
-      this.glowTarget.postFX.remove(this.breathGlow);
+      removeExternalFx(this.glowTarget, this.breathGlow);
       this.breathGlow = null;
     }
   }

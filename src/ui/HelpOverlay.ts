@@ -3,7 +3,7 @@
  * Wird über den „?"-Button in der Lobby geöffnet.
  * Schließt sich automatisch bei Klick oder Tastendruck.
  */
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS, toCssColor,

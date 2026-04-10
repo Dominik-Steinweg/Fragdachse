@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { DecoyUtilityConfig } from '../loadout/LoadoutConfig';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedDeathEffect, SyncedHitEffect } from '../types';

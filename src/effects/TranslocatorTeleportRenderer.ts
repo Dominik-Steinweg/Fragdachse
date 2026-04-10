@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
 
 export class TranslocatorTeleportRenderer {

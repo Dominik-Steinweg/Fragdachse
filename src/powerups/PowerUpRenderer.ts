@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { SyncedPowerUp, SyncedPowerUpPedestal } from '../types';
 import { DEPTH } from '../config';
 import {
@@ -9,6 +9,7 @@ import {
   fillRadialGradientTexture,
   setCircleEmitZone,
 } from '../effects/EffectUtils';
+import { addInternalGlow } from '../utils/phaserFx';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE } from './PowerUpConfig';
 
 const TEX_POWERUP_PEDESTAL_OUTER_GLOW = '__powerup_pedestal_outer_glow';
@@ -95,7 +96,7 @@ export class PowerUpRenderer {
       container.addAt(itemAura, 0);
 
       // ── preFX-Glow: Pixel-Aura, outerStrength pulsiert ───────────────────
-      const glow = graphic.preFX?.addGlow(glowColor, 2, 0, false, 0.1, 14);
+      const glow = addInternalGlow(graphic, glowColor, 2, 0, false, 0.1, 14);
       if (glow) {
         const glowTween = this.scene.tweens.add({
           targets:       glow,

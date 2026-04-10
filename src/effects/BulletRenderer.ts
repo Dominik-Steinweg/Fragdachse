@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH, isPointInsideArena } from '../config';
 import type { BulletVisualPreset } from '../types';
 import { configureAdditiveImage, ensureCanvasTexture } from './EffectUtils';

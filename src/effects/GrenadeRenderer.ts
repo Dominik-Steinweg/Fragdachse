@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { GrenadeVisualPreset } from '../types';
 import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';

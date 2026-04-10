@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlaceableTurretUtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { SyncedPlaceableRock } from '../types';

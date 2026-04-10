@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
 import { createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';

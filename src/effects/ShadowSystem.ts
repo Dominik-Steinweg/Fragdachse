@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
@@ -48,11 +48,11 @@ export class ShadowSystem {
   private readonly layers = new Map<string, ShadowLayerBucket>();
 
   // Reusable point buffers — mutated in-place each draw call to avoid
-  // allocating hundreds of Phaser.Geom.Point objects per frame.
-  private readonly stadiumPts: Array<{ x: number; y: number }> =
-    Array.from({ length: (STADIUM_ARC_N + 1) * 2 }, () => ({ x: 0, y: 0 }));
-  private readonly cellPts: Array<{ x: number; y: number }> =
-    Array.from({ length: 6 }, () => ({ x: 0, y: 0 }));
+  // allocating hundreds of Vector2 objects per frame.
+  private readonly stadiumPts: Phaser.Math.Vector2[] =
+    Array.from({ length: (STADIUM_ARC_N + 1) * 2 }, () => new Phaser.Math.Vector2());
+  private readonly cellPts: Phaser.Math.Vector2[] =
+    Array.from({ length: 6 }, () => new Phaser.Math.Vector2());
 
   constructor(
     private readonly scene: Phaser.Scene,

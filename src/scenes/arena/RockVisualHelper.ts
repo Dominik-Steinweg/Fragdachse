@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { ArenaBuilder }     from '../../arena/ArenaBuilder';
 import { UTILITY_CONFIGS }  from '../../loadout/LoadoutConfig';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig, PlaceableRockUtilityConfig } from '../../loadout/LoadoutConfig';
@@ -9,6 +9,7 @@ import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../../
 import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
+import { addInternalGlow } from '../../utils/phaserFx';
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
@@ -205,7 +206,7 @@ export class RockVisualHelper {
       const image = this.scene.add.image(world.x, world.y, 'placeable_turret')
         .setDisplaySize(CELL_SIZE, CELL_SIZE)
         .setDepth(DEPTH.ROCKS + 0.2);
-      image.preFX?.addGlow(rock.ownerColor, 5, 0, false, 0.12, 10);
+      addInternalGlow(image, rock.ownerColor, 5, 0, false, 0.12, 10);
 
       const rangeCircle = this.scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
       if (this.arenaClipMask) {
