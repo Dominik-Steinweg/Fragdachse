@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import type { BurrowPhase, PlayerProfile } from '../types';
 import { PlayerBurnRenderer } from '../effects/PlayerBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
-import { addInternalGlow, addInternalShine, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
@@ -35,6 +35,10 @@ export class PlayerEntity {
   // Glow-Aura für Spielerfarbe
   private glowFx: GlowHandle | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
+  private spawnShine: Phaser.GameObjects.Image | null = null;
+  private spawnShineTween: Phaser.Tweens.Tween | null = null;
+  private spawnShineProgress = 0;
+  private spawnShineAlpha = 0;
   private stealthTween: Phaser.Tweens.Tween | null = null;
   private stealthScanTween: Phaser.Tweens.Tween | null = null;
   private stealthShell: Phaser.GameObjects.Image | null = null;
@@ -83,6 +87,13 @@ export class PlayerEntity {
     setInternalFxPadding(this.sprite, 20);
     this.glowFx = addInternalGlow(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16);
     this.startDefaultGlowTween();
+
+    this.spawnShine = scene.add.image(x, y, 'badger');
+    this.spawnShine.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+    this.spawnShine.setDepth(DEPTH.PLAYERS + 0.05);
+    this.spawnShine.setTint(0xfff1bf);
+    this.spawnShine.setBlendMode(Phaser.BlendModes.ADD);
+    this.spawnShine.setVisible(false);
 
     // Spawn-Animation beim ersten Erscheinen
     this.playSpawnEffect();
@@ -182,6 +193,7 @@ export class PlayerEntity {
     this.sprite.setPosition(x, y);
     this.body.reset(x, y);
     this.syncBar();
+    this.syncSpawnShine();
   }
 
   /**
@@ -208,6 +220,7 @@ export class PlayerEntity {
   /** Sprite-Rotation direkt setzen (lokaler Spieler, jeden Frame). */
   setRotation(aimAngle: number): void {
     this.sprite.rotation = aimAngle + PlayerEntity.ROTATION_OFFSET;
+    this.syncSpawnShine();
   }
 
   /** Ziel-Rotation für client-seitige Interpolation (Remote-Spieler). */
@@ -220,6 +233,7 @@ export class PlayerEntity {
     const current = this.sprite.rotation - PlayerEntity.ROTATION_OFFSET;
     const diff = Phaser.Math.Angle.Wrap(this.targetRotation - current);
     this.sprite.rotation = (current + diff * factor) + PlayerEntity.ROTATION_OFFSET;
+    this.syncSpawnShine();
   }
 
   /**
@@ -235,6 +249,7 @@ export class PlayerEntity {
     this.armorBarBg.setPosition(x, armorY);
     this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
     this.syncAttachedEffects();
+    this.syncSpawnShine();
   }
 
   /** HP-Wert aktualisieren und Balken neu zeichnen. */
@@ -315,13 +330,24 @@ export class PlayerEntity {
     this.sprite.setScale(0);
     this.sprite.setAlpha(0);
 
-    // Shine-Sweep (Phaser 3.90 preFX): Materialisierungs-Schimmer
-    const shineFx = addInternalShine(this.sprite, 2.2, 0.5, 4);
-    if (shineFx) {
-      scene.time.delayedCall(520, () => {
-        removeInternalFx(this.sprite, shineFx);
-      });
-    }
+    this.stopSpawnShine();
+    this.spawnShineProgress = 0;
+    this.spawnShineAlpha = 0.04;
+    this.syncSpawnShine();
+    this.spawnShineTween = scene.tweens.add({
+      targets:  this,
+      spawnShineProgress: 1,
+      duration: 520,
+      ease:     'Sine.easeInOut',
+      onUpdate: () => {
+        const pulse = Math.sin(this.spawnShineProgress * Math.PI);
+        this.spawnShineAlpha = 0.03 + pulse * 0.21;
+        this.syncSpawnShine();
+      },
+      onComplete: () => {
+        this.stopSpawnShine();
+      },
+    });
 
     // Glow-Flash: aufgepumpt starten, dann auf Normal abklingen
     this.glowTween?.stop();
@@ -366,6 +392,7 @@ export class PlayerEntity {
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite). */
   setDashScale(scale: number): void {
     this.sprite.setScale(scale);
+    this.syncSpawnShine();
   }
 
   getBurrowPhase(): BurrowPhase {
@@ -501,8 +528,50 @@ export class PlayerEntity {
       this.glowFx.innerStrength = 0;
     }
     this.applyDisplayVisibility();
+    this.syncSpawnShine();
     this.syncStealthOverlay();
     this.syncAttachedEffects();
+  }
+
+  private syncSpawnShine(): void {
+    if (!this.spawnShine) return;
+
+    const visible = this.sprite.visible && this.spawnShineAlpha > 0.001;
+    if (!visible) {
+      this.spawnShine.setVisible(false);
+      return;
+    }
+
+    const frameWidth = this.spawnShine.frame.cutWidth;
+    const frameHeight = this.spawnShine.frame.cutHeight;
+    const cropWidth = Math.max(6, Math.round(frameWidth * 0.26));
+    const sweepWidth = frameWidth + cropWidth * 2;
+    const sweepX = Math.round(sweepWidth * Phaser.Math.Clamp(this.spawnShineProgress, 0, 1) - cropWidth);
+    const cropX = Phaser.Math.Clamp(sweepX, 0, frameWidth);
+    const cropRight = Phaser.Math.Clamp(sweepX + cropWidth, 0, frameWidth);
+    const visibleWidth = Math.max(0, cropRight - cropX);
+
+    if (visibleWidth <= 0) {
+      this.spawnShine.setVisible(false);
+      return;
+    }
+
+    this.spawnShine
+      .setVisible(true)
+      .setPosition(this.sprite.x, this.sprite.y)
+      .setRotation(this.sprite.rotation)
+      .setScale((this.sprite.scaleX || 1) * 1.04, (this.sprite.scaleY || 1) * 1.02)
+      .setAlpha(this.spawnShineAlpha)
+      .setCrop(cropX, 0, visibleWidth, frameHeight);
+  }
+
+  private stopSpawnShine(): void {
+    this.spawnShineTween?.stop();
+    this.spawnShineTween = null;
+    this.spawnShineProgress = 0;
+    this.spawnShineAlpha = 0;
+    this.spawnShine?.setVisible(false);
+    this.spawnShine?.setCrop();
   }
 
   private playWindUpTween(): void {
@@ -643,6 +712,7 @@ export class PlayerEntity {
   destroy(): void {
     this.stopBurrowTween(true);
     this.glowTween?.stop();
+    this.stopSpawnShine();
     this.stealthTween?.stop();
     this.stealthScanTween?.stop();
     this.stealthAmbientParticles?.destroy();
@@ -652,7 +722,10 @@ export class PlayerEntity {
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();
     this.armorBarFg.destroy();
+    removeInternalFx(this.sprite, this.glowFx);
+    this.glowFx = null;
     this.sprite.destroy();
+    this.spawnShine?.destroy();
     this.stealthShell?.destroy();
     this.stealthScan?.destroy();
     this.deathSprite?.destroy();

@@ -67,6 +67,8 @@ interface SmokeCloudVisual {
   innerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   zoneRadius:   number;
   birthTime:    number;
+  lastDensity:  number;
+  lastRScale:   number;
 }
 
 export class SmokeSystem {
@@ -217,8 +219,10 @@ export class SmokeSystem {
       blobs,
       edgeEmitter,
       innerEmitter,
-      zoneRadius: cloud.radius,
-      birthTime: this.scene.time.now,
+      zoneRadius:  cloud.radius,
+      birthTime:   this.scene.time.now,
+      lastDensity: -1,
+      lastRScale:  -1,
     };
   }
 
@@ -253,23 +257,30 @@ export class SmokeSystem {
     /* ── edge emitter ── */
     visual.edgeEmitter.setPosition(cloud.x, cloud.y);
     visual.edgeEmitter.setAlpha(Phaser.Math.Linear(0.08, 0.32, alpha));
-    visual.edgeEmitter.setFrequency(
-      Math.floor(Phaser.Math.Linear(100, 38, density)),
-      Math.ceil(Phaser.Math.Linear(1, 3, density)),
-    );
-    visual.edgeEmitter.setParticleScale(
-      Phaser.Math.Linear(0.2, 0.4, density) * rScale,
-      Phaser.Math.Linear(0.9, 1.7, density) * rScale,
-    );
 
     /* ── inner emitter ── */
     visual.innerEmitter.setPosition(cloud.x, cloud.y);
     visual.innerEmitter.setAlpha(Phaser.Math.Linear(0.04, 0.22, alpha * density));
-    visual.innerEmitter.setFrequency(Math.floor(Phaser.Math.Linear(120, 55, density)), 1);
-    visual.innerEmitter.setParticleScale(
-      Phaser.Math.Linear(0.3, 0.5, density) * rScale,
-      Phaser.Math.Linear(0.6, 1.0, density) * rScale,
-    );
+
+    /* ── frequency / scale only when density or rScale changed ── */
+    if (density !== visual.lastDensity || rScale !== visual.lastRScale) {
+      visual.lastDensity = density;
+      visual.lastRScale  = rScale;
+
+      visual.edgeEmitter.setFrequency(
+        Math.floor(Phaser.Math.Linear(100, 38, density)),
+        Math.ceil(Phaser.Math.Linear(1, 3, density)),
+      );
+      visual.edgeEmitter.setParticleScale(
+        Phaser.Math.Linear(0.2, 0.4, density) * rScale,
+        Phaser.Math.Linear(0.9, 1.7, density) * rScale,
+      );
+      visual.innerEmitter.setFrequency(Math.floor(Phaser.Math.Linear(120, 55, density)), 1);
+      visual.innerEmitter.setParticleScale(
+        Phaser.Math.Linear(0.3, 0.5, density) * rScale,
+        Phaser.Math.Linear(0.6, 1.0, density) * rScale,
+      );
+    }
 
     /* ── emit-zone resize when radius changed significantly ── */
     const target = Math.max(radius * 0.78, 10);

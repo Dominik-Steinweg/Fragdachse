@@ -7,7 +7,7 @@
  */
 import * as Phaser from 'phaser';
 import { PLAYER_SIZE } from '../config';
-import { addInternalGlow, type GlowHandle } from '../utils/phaserFx';
+import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 
 const ROTATION_OFFSET = Math.PI / 2;
 
@@ -30,6 +30,7 @@ export class BadgerPreview {
     this.sprite = scene.add.image(x, y, 'badger');
     this.sprite.setDisplaySize(displaySize, displaySize);
 
+    setInternalFxPadding(this.sprite, 20);
     this.glowFx = addInternalGlow(this.sprite, color, 4, 0, false, 0.1, 16);
     if (this.glowFx) {
       this.glowTween = scene.tweens.add({
@@ -69,6 +70,8 @@ export class BadgerPreview {
 
   destroy(): void {
     this.glowTween?.stop();
+    removeInternalFx(this.sprite, this.glowFx);
+    this.glowFx = null;
     this.sprite.destroy();
   }
 }

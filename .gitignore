@@ -50,6 +50,10 @@ ToDo/
 # Claude
 .claude/
 
+# Local Copilot/Phaser skills
+.github/skills/
+scripts/sync-phaser-skills.mjs
+
 #Google-Drive
 fragdachse_drive/
 

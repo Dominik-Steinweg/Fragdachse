@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { addInternalGlow, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
@@ -181,6 +181,8 @@ export class DecoyEntity {
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();
     this.armorBarFg.destroy();
+    removeInternalFx(this.sprite, this.glowFx);
+    this.glowFx = null;
     this.sprite.destroy();
   }
 }
