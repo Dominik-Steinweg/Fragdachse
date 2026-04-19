@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
+import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { ProjectileManager }     from '../entities/ProjectileManager';
 import { InputSystem }           from '../systems/InputSystem';
@@ -128,14 +129,13 @@ export class ArenaScene extends Phaser.Scene {
 
   preload(): void {
     preloadAllAudio(this.load);
-    this.load.image('bg_grass',   './assets/sprites/32x32grass01.png');
+    this.load.image('gras_bg_dm', './assets/sprites/gras_bg_dm.png');
+    this.load.image('gras_bg_ctb', './assets/sprites/gras_bg_ctb.png');
+    this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
-    this.load.image('decal01', './assets/sprites/decals/decal01.png');
-    this.load.image('decal02', './assets/sprites/decals/decal02.png');
-    this.load.image('decal03', './assets/sprites/decals/decal03.png');
-    this.load.image('decal04', './assets/sprites/decals/decal04.png');
+    preloadArenaDecalAssets(this.load);
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
@@ -169,7 +169,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Static arena (never destroyed) ────────────────────────────────────
     this.arenaBuilder = new ArenaBuilder(this);
-    this.arenaBuilder.buildStatic();
+    this.arenaBuilder.buildStatic(bridge.getGameMode(), bridge.getGamePhase());
     this.ensureArenaClipMask();
 
 
@@ -910,7 +910,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private syncArenaMetrics(): void {
     applyArenaMetricsForMode(bridge.getGameMode(), bridge.getGamePhase());
-    this.arenaBuilder?.syncStaticBackdrop();
+    this.arenaBuilder?.syncStaticBackdrop(bridge.getGameMode(), bridge.getGamePhase());
     this.redrawArenaClipMask();
     this.physics.world.setBounds(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
     this.cameras.main.setBounds(0, 0, Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X), this.scale.height);

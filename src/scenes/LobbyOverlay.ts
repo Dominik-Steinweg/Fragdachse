@@ -7,13 +7,12 @@ import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import {
-  GAME_WIDTH, GAME_HEIGHT, LOBBY_ARENA_VIEWPORT_WIDTH, ARENA_HEIGHT, LOBBY_ARENA_OFFSET_X, ARENA_OFFSET_Y,
+  GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
 import { isTeamGameMode } from '../gameModes';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
-const BG_COLOR      = COLORS.GREY_9;
 const PANEL_COLOR   = COLORS.GREY_6;
 const READY_COLOR   = COLORS.GREEN_3;
 const UNREADY_COLOR = COLORS.RED_3;
@@ -97,18 +96,6 @@ export class LobbyOverlay {
     }
 
     const objects: Phaser.GameObjects.GameObject[] = [];
-
-    // ── Halbtransparenter Hintergrund ─────────────────────────────────────
-    objects.push(
-      this.scene.add.rectangle(
-        LOBBY_ARENA_OFFSET_X + LOBBY_ARENA_VIEWPORT_WIDTH / 2,
-        ARENA_OFFSET_Y + ARENA_HEIGHT / 2,
-        LOBBY_ARENA_VIEWPORT_WIDTH,
-        ARENA_HEIGHT,
-        BG_COLOR,
-        0.10,
-      ).setScrollFactor(0),
-    );
 
     // ── Panel ─────────────────────────────────────────────────────────────
     objects.push(

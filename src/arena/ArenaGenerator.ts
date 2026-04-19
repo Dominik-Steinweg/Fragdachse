@@ -1,5 +1,5 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseCell, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent } from './DecalConfig';
+import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
 import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 
@@ -390,7 +390,7 @@ export class ArenaGenerator {
 
   private static pickWeightedDecalKey(
     rng: () => number,
-    entries: ReadonlyArray<{ key: DecalCell['textureKey']; frequencyPercent: number }>,
+    entries: ReadonlyArray<{ fileName: string; frequencyPercent: number }>,
   ): DecalCell['textureKey'] | null {
     const weightedEntries = entries.filter((entry) => clampDecalPercent(entry.frequencyPercent) > 0);
     if (weightedEntries.length === 0) return null;
@@ -402,10 +402,10 @@ export class ArenaGenerator {
     let roll = rng() * total;
     for (const entry of weightedEntries) {
       roll -= clampDecalPercent(entry.frequencyPercent);
-      if (roll <= 0) return entry.key;
+      if (roll <= 0) return getDecalTextureKey(entry.fileName);
     }
 
-    return weightedEntries[weightedEntries.length - 1].key;
+    return getDecalTextureKey(weightedEntries[weightedEntries.length - 1].fileName);
   }
 
   private static rollPercent(rng: () => number, percent: number): boolean {

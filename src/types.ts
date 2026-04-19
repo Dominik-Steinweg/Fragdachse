@@ -763,7 +763,7 @@ export interface DirtCell { gridX: number; gridY: number; }
 
 export type DecalTerrainLayer = 'dirt' | 'grass';
 
-export type DecalKey = 'decal01' | 'decal02' | 'decal03' | 'decal04';
+export type DecalKey = string;
 
 /** Eine Decal-Gitterzelle mit bereits deterministisch ausgewählter Variante und Offset. */
 export interface DecalCell {

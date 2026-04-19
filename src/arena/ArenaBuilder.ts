@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT,
-  ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, MAX_ARENA_RENDER_WIDTH,
+  ARENA_WIDTH, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_STATIC_FRAMES_VISIBLE,
   DEPTH, COLORS,
   CELL_SIZE, TRUNK_RADIUS, CANOPY_RADIUS, CANOPY_ALPHA_PLAYER, ROCK_HP_MAX, ROCK_TINT_STEPS,
@@ -11,7 +11,8 @@ import {
   getCaptureTheBeerBaseWorldBounds,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
-import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell } from '../types';
+import { CAPTURE_THE_BEER_MODE } from '../gameModes';
+import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, GameMode, GamePhase } from '../types';
 import { DECAL_SIZE } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
@@ -43,7 +44,8 @@ export class ArenaBuilder {
   private scene: Phaser.Scene;
   private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
   private rightSidebar: Phaser.GameObjects.Rectangle | null = null;
-  private grass: Phaser.GameObjects.TileSprite | null = null;
+  private arenaBackground: Phaser.GameObjects.Image | null = null;
+  private lobbyBackground: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -53,15 +55,17 @@ export class ArenaBuilder {
 
   /** Zeichnet Sidebars, Gras und setzt die Physics-Bounds.
    *  Wird einmalig in ArenaScene.create() aufgerufen, nie zerstört. */
-  buildStatic(): void {
+  buildStatic(mode: GameMode, phase: GamePhase): void {
     this.ensureSidebars();
-    this.ensureGrass();
-    this.syncStaticBackdrop();
+    this.ensureArenaBackground();
+    this.ensureLobbyBackground();
+    this.syncStaticBackdrop(mode, phase);
     this.setPhysicsBounds();
   }
 
-  syncStaticBackdrop(): void {
-    const showFrames = ARENA_STATIC_FRAMES_VISIBLE && ARENA_OFFSET_X > 0;
+  syncStaticBackdrop(mode: GameMode, phase: GamePhase): void {
+    const inArena = phase === 'ARENA';
+    const showFrames = inArena && ARENA_STATIC_FRAMES_VISIBLE && ARENA_OFFSET_X > 0;
 
     if (this.leftSidebar) {
       this.leftSidebar
@@ -75,6 +79,21 @@ export class ArenaBuilder {
         .setPosition(GAME_WIDTH - ARENA_OFFSET_X * 0.5, GAME_HEIGHT * 0.5)
         .setSize(ARENA_OFFSET_X, GAME_HEIGHT)
         .setVisible(showFrames);
+    }
+
+    if (this.arenaBackground) {
+      this.arenaBackground
+        .setTexture(this.getArenaBackgroundTextureKey(mode))
+        .setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
+        .setDisplaySize(ARENA_WIDTH, ARENA_HEIGHT)
+        .setVisible(inArena);
+    }
+
+    if (this.lobbyBackground) {
+      this.lobbyBackground
+        .setPosition(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5)
+        .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
+        .setVisible(!inArena);
     }
   }
 
@@ -527,17 +546,23 @@ export class ArenaBuilder {
     }
   }
 
-  private ensureGrass(): void {
-    if (this.grass) return;
-    this.grass = this.scene.add
-      .tileSprite(
-        MAX_ARENA_RENDER_WIDTH * 0.5,
-        ARENA_OFFSET_Y + ARENA_HEIGHT / 2,
-        MAX_ARENA_RENDER_WIDTH,
-        ARENA_HEIGHT,
-        'bg_grass',
-      )
+  private ensureArenaBackground(): void {
+    if (this.arenaBackground) return;
+    this.arenaBackground = this.scene.add
+      .image(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5, 'gras_bg_dm')
       .setDepth(DEPTH.GRASS);
+  }
+
+  private ensureLobbyBackground(): void {
+    if (this.lobbyBackground) return;
+    this.lobbyBackground = this.scene.add
+      .image(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, 'lobby_bg')
+      .setScrollFactor(0)
+      .setDepth(DEPTH.GRASS);
+  }
+
+  private getArenaBackgroundTextureKey(mode: GameMode): string {
+    return mode === CAPTURE_THE_BEER_MODE ? 'gras_bg_ctb' : 'gras_bg_dm';
   }
 
   private setPhysicsBounds(): void {
