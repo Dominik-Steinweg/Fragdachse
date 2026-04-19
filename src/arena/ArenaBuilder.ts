@@ -206,10 +206,7 @@ export class ArenaBuilder {
     ownerColor?: number,
     ownerTintStrength = 0,
   ): void {
-    if (hp <= 0) {
-      ArenaBuilder.destroyRockAndRetile(rockObjects, rockGroup, rockGrid, rocks, id);
-      return;
-    }
+    if (hp <= 0) return;
     const img = rockObjects[id];
     if (!img?.active) return;
 

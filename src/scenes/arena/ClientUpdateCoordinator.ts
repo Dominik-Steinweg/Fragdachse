@@ -118,13 +118,12 @@ export class ClientUpdateCoordinator {
       // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
 
       if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
-        let staticShadowTopologyChanged = false;
         for (const rs of state.rocks) {
+          if (rs.hp <= 0) {
+            this.rockVisualHelper.handleDestroyedRock(rs.id, 'damage');
+            continue;
+          }
           this.rockVisualHelper.updateRockVisualById(rs.id, rs.hp);
-          if (rs.hp <= 0) staticShadowTopologyChanged = true;
-        }
-        if (staticShadowTopologyChanged) {
-          this.rockVisualHelper.rebuildStaticShadows();
         }
       }
 
@@ -138,7 +137,10 @@ export class ClientUpdateCoordinator {
           this.rockVisualHelper.updateRockVisualById(rock.id, rock.hp);
         }
         for (const rock of placementChanges.removed) {
-          this.rockVisualHelper.removePlaceableRockVisual(rock, bridge.getSynchronizedNow() >= rock.expiresAt);
+          this.rockVisualHelper.removePlaceableRockVisual(
+            rock,
+            rock.kind === 'rock' || bridge.getSynchronizedNow() >= rock.expiresAt,
+          );
         }
       }
 

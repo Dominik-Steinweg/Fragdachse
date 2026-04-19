@@ -23,6 +23,7 @@ import { NukeRenderer }        from '../../powerups/NukeRenderer';
 import { PowerUpRenderer }     from '../../powerups/PowerUpRenderer';
 import { MeteorRenderer }      from '../../effects/MeteorRenderer';
 import { AirstrikeRenderer }   from '../../effects/AirstrikeRenderer';
+import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { ProjectileManager } from '../../entities/ProjectileManager';
@@ -54,6 +55,7 @@ export interface RendererBundle {
   nuke:                NukeRenderer;
   airstrike:           AirstrikeRenderer;
   meteor:              MeteorRenderer;
+  rockDestruction:     RockDestructionRenderer;
   powerUp:             PowerUpRenderer;
   shadow:              ShadowSystem;
   // Round-scoped: created in buildArena(), destroyed in tearDownArena()
@@ -131,13 +133,16 @@ export function createRendererBundle(
   const meteor = new MeteorRenderer(scene);
   meteor.generateTextures();
 
+  const rockDestruction = new RockDestructionRenderer(scene);
+  rockDestruction.generateTextures();
+
   const powerUp = new PowerUpRenderer(scene);
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
     bullet, asmdPrimary, bite, zeusTaser, flame, bfg, energyBall, hydra, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, meteor, powerUp, shadow,
+    nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,
     translocatorTeleport: null,
   };

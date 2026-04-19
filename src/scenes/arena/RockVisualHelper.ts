@@ -6,6 +6,7 @@ import { WEAPON_CONFIGS }   from '../../loadout/LoadoutConfig';
 import { bridge }           from '../../network/bridge';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH } from '../../config';
 import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../../effects/EffectUtils';
+import type { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
@@ -32,6 +33,7 @@ export class RockVisualHelper {
     private readonly ctx: ArenaContext,
     private readonly arenaClipMask: Phaser.Display.Masks.GeometryMask | null,
     private readonly shadowSystem: ShadowSystem | null,
+    private readonly rockDestructionRenderer: RockDestructionRenderer,
   ) {
     this.ensureTurretTextures();
   }
@@ -120,10 +122,13 @@ export class RockVisualHelper {
 
   removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
+    const currentVisual = this.ctx.arenaResult.rockObjects[rock.id];
     if (playDust) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
       if (rock.kind === 'turret') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
+      } else if (currentVisual?.active) {
+        this.rockDestructionRenderer.playDestruction({ source: currentVisual });
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
       }
@@ -195,6 +200,18 @@ export class RockVisualHelper {
       return;
     }
 
+    if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
+    const rockImage = this.ctx.arenaResult.rockObjects[rockId];
+    if (!rockImage?.active) return;
+
+    this.rockDestructionRenderer.playDestruction({ source: rockImage });
+    ArenaBuilder.destroyRockAndRetile(
+      this.ctx.arenaResult.rockObjects,
+      this.ctx.arenaResult.rockGroup,
+      this.ctx.arenaResult.rockGrid,
+      this.ctx.currentLayout.rocks,
+      rockId,
+    );
     this.refreshStaticShadows();
     this.ctx.powerUpSystem?.onRockDestroyed(rockId);
   }
