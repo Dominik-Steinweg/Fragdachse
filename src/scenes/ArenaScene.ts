@@ -132,6 +132,10 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
+    this.load.image('decal01', './assets/sprites/decals/decal01.png');
+    this.load.image('decal02', './assets/sprites/decals/decal02.png');
+    this.load.image('decal03', './assets/sprites/decals/decal03.png');
+    this.load.image('decal04', './assets/sprites/decals/decal04.png');
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');

@@ -74,6 +74,7 @@ export const DEPTH = {
   DIRT: 2,
   TRACKS: 3,
   BASES: 4,
+  DECALS: 5,
   ROCKS: 9,
   PLAYERS: 10,
   TRAIN: 11,  

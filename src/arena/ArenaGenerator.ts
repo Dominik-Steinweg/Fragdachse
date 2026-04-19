@@ -1,5 +1,6 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseCell, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import type { ArenaLayout, RockCell, TreeCell, TrackCell, DirtCell } from '../types';
+import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent } from './DecalConfig';
+import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 
 /**
@@ -167,8 +168,9 @@ export class ArenaGenerator {
       }
 
       const powerUpPedestals = ArenaGenerator.generatePowerUpPedestals(rng, blocked, trackCols);
+      const decals = ArenaGenerator.generateDecals(rng, rocks, trees, tracks, dirtSet, powerUpPedestals);
 
-      return { seed: seed + attempt, rocks, trees, tracks, dirt, powerUpPedestals };
+      return { seed: seed + attempt, rocks, trees, tracks, dirt, decals, powerUpPedestals };
     }
 
     throw new Error(
@@ -243,6 +245,60 @@ export class ArenaGenerator {
     }
 
     return pedestals;
+  }
+
+  private static generateDecals(
+    rng: () => number,
+    rocks: readonly RockCell[],
+    trees: readonly TreeCell[],
+    tracks: readonly TrackCell[],
+    dirtSet: ReadonlySet<number>,
+    powerUpPedestals: ArenaLayout['powerUpPedestals'],
+  ): DecalCell[] {
+    const blockedCells = new Set<number>();
+    for (const { gridX, gridY } of rocks) {
+      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+    }
+    for (const { gridX, gridY } of trees) {
+      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+    }
+    for (const { gridX, gridY } of tracks) {
+      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+      if (gridX + 1 < GRID_COLS) {
+        blockedCells.add(ArenaGenerator.cellKey(gridX + 1, gridY));
+      }
+    }
+    for (const { gridX, gridY } of powerUpPedestals) {
+      blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+    }
+
+    const decals: DecalCell[] = [];
+    for (let gy = 0; gy < GRID_ROWS; gy++) {
+      for (let gx = 0; gx < GRID_COLS; gx++) {
+        const key = ArenaGenerator.cellKey(gx, gy);
+        if (blockedCells.has(key) || isCaptureTheBeerBaseCell(gx, gy)) continue;
+
+        const terrain: DecalTerrainLayer = dirtSet.has(key) ? 'dirt' : 'grass';
+        const layerConfig = ARENA_DECAL_CONFIG[terrain];
+        if (!ArenaGenerator.rollPercent(rng, layerConfig.coveragePercent)) continue;
+
+        const textureKey = ArenaGenerator.pickWeightedDecalKey(rng, layerConfig.variants);
+        if (!textureKey) continue;
+
+        const maxOffsetX = clampDecalOffsetPx(layerConfig.maxOffsetX);
+        const maxOffsetY = clampDecalOffsetPx(layerConfig.maxOffsetY);
+        decals.push({
+          gridX: gx,
+          gridY: gy,
+          textureKey,
+          offsetX: ArenaGenerator.randomOffset(rng, maxOffsetX),
+          offsetY: ArenaGenerator.randomOffset(rng, maxOffsetY),
+          terrain,
+        });
+      }
+    }
+
+    return decals;
   }
 
   private static pickDistributedPedestalCells(
@@ -330,6 +386,39 @@ export class ArenaGenerator {
     }
 
     return entries[entries.length - 1].defId;
+  }
+
+  private static pickWeightedDecalKey(
+    rng: () => number,
+    entries: ReadonlyArray<{ key: DecalCell['textureKey']; frequencyPercent: number }>,
+  ): DecalCell['textureKey'] | null {
+    const weightedEntries = entries.filter((entry) => clampDecalPercent(entry.frequencyPercent) > 0);
+    if (weightedEntries.length === 0) return null;
+
+    const total = weightedEntries.reduce(
+      (sum, entry) => sum + clampDecalPercent(entry.frequencyPercent),
+      0,
+    );
+    let roll = rng() * total;
+    for (const entry of weightedEntries) {
+      roll -= clampDecalPercent(entry.frequencyPercent);
+      if (roll <= 0) return entry.key;
+    }
+
+    return weightedEntries[weightedEntries.length - 1].key;
+  }
+
+  private static rollPercent(rng: () => number, percent: number): boolean {
+    return rng() * 100 < clampDecalPercent(percent);
+  }
+
+  private static randomOffset(rng: () => number, maxOffset: number): number {
+    if (maxOffset <= 0) return 0;
+    return Math.floor(rng() * (maxOffset * 2 + 1)) - maxOffset;
+  }
+
+  private static cellKey(gx: number, gy: number): number {
+    return gy * GRID_COLS + gx;
   }
 
   /**

@@ -761,6 +761,20 @@ export interface TrackCell { gridX: number; gridY: number; }
 /** Eine Dirt-Gitterzelle (rein visuell, keine Kollision) */
 export interface DirtCell { gridX: number; gridY: number; }
 
+export type DecalTerrainLayer = 'dirt' | 'grass';
+
+export type DecalKey = 'decal01' | 'decal02' | 'decal03' | 'decal04';
+
+/** Eine Decal-Gitterzelle mit bereits deterministisch ausgewählter Variante und Offset. */
+export interface DecalCell {
+  gridX: number;
+  gridY: number;
+  textureKey: DecalKey;
+  offsetX: number;
+  offsetY: number;
+  terrain: DecalTerrainLayer;
+}
+
 /** Ein fester Power-Up-Podest-Slot der gesamten Runde. */
 export interface PowerUpPedestalCell {
   id: number;
@@ -776,6 +790,7 @@ export interface ArenaLayout {
   trees:  TreeCell[];
   tracks: TrackCell[];
   dirt:   DirtCell[];
+  decals: DecalCell[];
   powerUpPedestals: PowerUpPedestalCell[];
 }
 

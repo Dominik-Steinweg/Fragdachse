@@ -11,7 +11,8 @@ import {
   getCaptureTheBeerBaseWorldBounds,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
-import type { ArenaLayout, RockCell, TrackCell, DirtCell } from '../types';
+import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell } from '../types';
+import { DECAL_SIZE } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { RockGridIndex } from './RockGridIndex';
 
@@ -34,6 +35,8 @@ export interface ArenaBuilderResult {
   trackObjects: Phaser.GameObjects.TileSprite[];
   /** Dirt-Sprites (rein visuell, keine Kollision, keine HP) */
   dirtObjects: Phaser.GameObjects.Image[];
+  /** Decal-Sprites (rein visuell, keine Kollision, keine HP) */
+  decalObjects: Phaser.GameObjects.Image[];
 }
 
 export class ArenaBuilder {
@@ -100,6 +103,9 @@ export class ArenaBuilder {
     // Dirt (rein visuell, keine Physik)
     const dirtObjects = this.buildDirt(layout.dirt ?? []);
 
+    // Decals (rein visuell, oberhalb von Gleisen/Dirt, unter Felsen)
+    const decalObjects = this.buildDecals(layout.decals ?? []);
+
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
       const { gridX, gridY } = layout.rocks[i];
@@ -141,6 +147,7 @@ export class ArenaBuilder {
       canopyObjects,
       trackObjects,
       dirtObjects,
+      decalObjects,
     };
   }
 
@@ -319,6 +326,12 @@ export class ArenaBuilder {
       if (img.active) img.destroy();
     }
     result.dirtObjects.length = 0;
+
+    // Decals
+    for (const img of result.decalObjects) {
+      if (img.active) img.destroy();
+    }
+    result.decalObjects.length = 0;
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────
@@ -383,6 +396,17 @@ export class ArenaBuilder {
     return img;
   }
 
+  private createDecalVisual(
+    worldX: number,
+    worldY: number,
+    textureKey: DecalCell['textureKey'],
+  ): Phaser.GameObjects.Image {
+    const img = this.scene.add.image(worldX, worldY, textureKey);
+    img.setDisplaySize(DECAL_SIZE, DECAL_SIZE);
+    img.setDepth(DEPTH.DECALS);
+    return img;
+  }
+
   private buildCaptureTheBeerBaseZones(): Phaser.GameObjects.Rectangle[] {
     if (!isCaptureTheBeerBaseModeActive()) return [];
 
@@ -427,6 +451,19 @@ export class ArenaBuilder {
       const frame  = AutoTiler.getFrame(mask, DIRT_AUTOTILE);
       result.push(this.createDirtVisual(worldX, worldY, frame));
     }
+    return result;
+  }
+
+  private buildDecals(decals: DecalCell[]): Phaser.GameObjects.Image[] {
+    if (decals.length === 0) return [];
+
+    const result: Phaser.GameObjects.Image[] = [];
+    for (const { gridX, gridY, textureKey, offsetX, offsetY } of decals) {
+      const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
+      const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
+      result.push(this.createDecalVisual(worldX, worldY, textureKey));
+    }
+
     return result;
   }
 
