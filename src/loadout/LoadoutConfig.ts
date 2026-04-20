@@ -399,6 +399,8 @@ export interface BuffUltimateConfig extends BaseUltimateConfig {
   readonly duration: number;          // ms wie lange der Effekt anhält
   readonly speedMultiplier: number;   // z.B. 1.3 = 30% schneller
   readonly damageMultiplier: number;  // z.B. 2.0 = doppelter Schaden
+  readonly armorPerTick: number;      // fixer Armor-Zuwachs pro Tick
+  readonly armorTickIntervalMs: number; // Tick-Abstand für Armor-Regeneration
   readonly rageDrainDuration: number; // ms über die Rage von max→0 sinkt
   readonly armageddon?: ArmageddonMeteorConfig;
 }
@@ -585,7 +587,7 @@ export const WEAPON_CONFIGS = {
       hitArcDegrees:        70,
       visualPreset:         'zeus_taser' satisfies MeleeVisualPreset,
    },
-    allowedSlots:         ['weapon1'],
+    allowedSlots:         [],
     adrenalinCost:        0,
     adrenalinGain:        100,
     spreadStanding:       0,
@@ -609,7 +611,7 @@ export const WEAPON_CONFIGS = {
   PLASMA: {
     id:                   'PLASMA',
     displayName:          'Plasma Gun',
-    cooldown:             110,
+    cooldown:             120,
     damage:               3,          // Direkttreffer-Schaden
     range:                500,         
     fire: {
@@ -650,8 +652,8 @@ export const WEAPON_CONFIGS = {
   HYDRA: {
     id:                   'HYDRA',
     displayName:          'Hydra Gun',
-    cooldown:             900,
-    damage:               10,          // Direkttreffer-Schaden
+    cooldown:             800,
+    damage:               16,          // Direkttreffer-Schaden
     range:                1000,         
     fire: {
       type:                 'projectile',
@@ -668,7 +670,7 @@ export const WEAPON_CONFIGS = {
     maxDynamicSpread:     0,
     splitCount:           2, // Anzahl der zusätzlichen Projektile, die beim Aufprall abgespalten werden
     splitSpread:          5, // zusätzlicher Spread der abgespaltenen Projektile in Grad (z.B. 5 = ±5°)
-    splitFactor:          1.25,
+    splitFactor:          1.5,
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
@@ -844,7 +846,6 @@ export const WEAPON_CONFIGS = {
     shotAudio: {
       successKey: 'shot_shotgun',
       failureKey: 'shot_dry_trigger',
-      successVolume: 0.3,
     },
   } as WeaponConfig,
 
@@ -948,13 +949,13 @@ export const WEAPON_CONFIGS = {
     range:                700,
     fire: {
       type:                 'projectile',
-      projectileSpeed:      700,
+      projectileSpeed:      550,
       projectileSize:       8,
       projectileMaxBounces: 0,
       limitRangeToCursor:   false,
       impactExplosion: {
         radius:          65,
-        maxDamage:       4,
+        maxDamage:       3,
         minDamage:       1,
         knockback:       320,
         selfDamageMult:  1,
@@ -975,7 +976,7 @@ export const WEAPON_CONFIGS = {
       } satisfies ProjectileHomingConfig,
     },
     allowedSlots:         ['weapon2'],
-    adrenalinCost:        6,
+    adrenalinCost:        8,
     adrenalinGain:        0,
     spreadStanding:       5,
     spreadMoving:         9,
@@ -1244,8 +1245,8 @@ export const WEAPON_CONFIGS = {
     id:                   'NEGEV',
     displayName:          'Negev',
     cooldown:             60,
-    damage:               4,
-    range:                650,        
+    damage:               5,
+    range:                850,        
     fire: {
       type:                 'projectile',
       projectileSpeed:      1200,
@@ -1599,6 +1600,8 @@ export const ULTIMATE_CONFIGS = {
     duration:           7000,
     speedMultiplier:    1.0,
     damageMultiplier:   1.0,
+    armorPerTick:       0,
+    armorTickIntervalMs: 200,
     rageDrainDuration:  7000,
     armageddon: {
       meteorSpawnRadius:  350,    // px um den Spieler
@@ -1674,10 +1677,12 @@ export const ULTIMATE_CONFIGS = {
     displayName:        'Honigdachs-Wut',
     cooldown:           0,          // rage-gated, kein Zeitcooldown
     rageRequired:       300,
-    duration:           5000,
+    duration:           6000,
     speedMultiplier:    1.5,
     damageMultiplier:   1.5,
-    rageDrainDuration:  5000,
+    armorPerTick:       5,
+    armorTickIntervalMs: 300,
+    rageDrainDuration:  6000,
   } as BuffUltimateConfig,
 
   DACHS_TUNNEL: {

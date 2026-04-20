@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
+import { TEX_BLOOD_DROPLET, TEX_BLOOD_STAIN, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { BiteRenderer } from './BiteRenderer';
@@ -16,9 +17,6 @@ const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
 const TEX_EXPLOSION_SPARK = '__explosion_spark';
 const TEX_EXPLOSION_EMBER = '__explosion_ember';
-const TEX_BLOOD_DROPLET = '__blood_droplet';
-const TEX_BLOOD_STREAK = '__blood_streak';
-const TEX_BLOOD_STAIN = '__blood_stain';
 const TEX_DAMAGE_VIGNETTE_TOP    = '__damage_vignette_top';
 const TEX_DAMAGE_VIGNETTE_BOTTOM = '__damage_vignette_bottom';
 const TEX_DAMAGE_VIGNETTE_LEFT   = '__damage_vignette_left';
@@ -86,8 +84,8 @@ export class EffectSystem {
     this.audioSystem = system;
   }
 
-  playLocalShotAudio(key: string | undefined, volumeScale?: number): void {
-    this.audioSystem?.playLocalSound(key, volumeScale);
+  playLocalShotAudio(key: string | undefined): void {
+    this.audioSystem?.playLocalSound(key);
   }
 
   destroy(): void {
@@ -160,49 +158,7 @@ export class EffectSystem {
       }
     }
 
-    ensureCanvasTexture(this.scene.textures, TEX_BLOOD_DROPLET, 14, 14, (ctx) => {
-      const gradient = ctx.createRadialGradient(7, 7, 1, 7, 7, 7);
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.65, 'rgba(255,255,255,0.78)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(7, 7, 6.2, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    ensureCanvasTexture(this.scene.textures, TEX_BLOOD_STREAK, 36, 16, (ctx) => {
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.beginPath();
-      ctx.ellipse(20, 8, 12, 3.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = 'rgba(255,255,255,0.68)';
-      ctx.beginPath();
-      ctx.ellipse(11, 8, 8, 2.7, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = 'rgba(255,255,255,0.46)';
-      ctx.beginPath();
-      ctx.ellipse(5, 8, 4, 1.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    ensureCanvasTexture(this.scene.textures, TEX_BLOOD_STAIN, 42, 42, (ctx) => {
-      const circles: Array<{ x: number; y: number; r: number; alpha: number }> = [
-        { x: 18, y: 16, r: 8, alpha: 0.9 },
-        { x: 24, y: 20, r: 10, alpha: 0.75 },
-        { x: 14, y: 24, r: 7, alpha: 0.58 },
-        { x: 28, y: 27, r: 6, alpha: 0.52 },
-      ];
-
-      for (const circle of circles) {
-        ctx.fillStyle = `rgba(255,255,255,${circle.alpha})`;
-        ctx.beginPath();
-        ctx.arc(circle.x, circle.y, circle.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
+    ensureBloodHitTextures(this.scene);
 
     ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_TOP, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
       const depth = GAME_HEIGHT * 0.32;
@@ -1179,17 +1135,16 @@ export class EffectSystem {
     impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
     shotAudioKey?: string,
-    shotAudioVolume?: number,
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
-    this.audioSystem?.playSound(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId(), shotAudioVolume);
+    this.audioSystem?.playSound(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId());
     this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, impactKind, visualPreset);
   }
 
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
-    const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, shotAudioVolume } = trace;
+    const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
-    this.audioSystem?.playSound(shotAudioKey, startX, startY, shooterId, shotAudioVolume);
+    this.audioSystem?.playSound(shotAudioKey, startX, startY, shooterId);
     this.playHitscanTracer(startX, startY, endX, endY, color, thickness, impactKind ?? 'environment', visualPreset);
   }
 
@@ -1380,29 +1335,16 @@ export class EffectSystem {
     tint: number,
     rotation: number,
   ): void {
-    const stain = this.scene.add.image(x, y, TEX_BLOOD_STAIN)
-      .setDepth(DEPTH_BLOOD_STAIN)
-      .setTint(tint)
-      .setAlpha(0)
-      .setScale(scale * 0.82)
-      .setRotation(rotation);
-
-    this.scene.tweens.add({
-      targets: stain,
+    spawnBloodStain(this.scene, {
+      x,
+      y,
+      scale,
       alpha,
-      scaleX: scale,
-      scaleY: scale,
-      duration: 80,
-      ease: 'Quad.easeOut',
-    });
-
-    this.scene.tweens.add({
-      targets: stain,
-      alpha: 0,
-      delay: BLOOD_HIT_VFX.stainDelayMs,
-      duration: fadeMs,
-      ease: 'Sine.easeIn',
-      onComplete: () => stain.destroy(),
+      fadeMs,
+      tint,
+      rotation,
+      depth: DEPTH_BLOOD_STAIN,
+      stainDelayMs: BLOOD_HIT_VFX.stainDelayMs,
     });
   }
 

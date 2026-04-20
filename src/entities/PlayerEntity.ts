@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import type { BurrowPhase, PlayerProfile } from '../types';
+import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { PlayerBurnRenderer } from '../effects/PlayerBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
@@ -46,6 +47,7 @@ export class PlayerEntity {
   private stealthAmbientParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private stealthTrailParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private burnRenderer: PlayerBurnRenderer | null = null;
+  private rageRenderer: HoneyBadgerRageRenderer | null = null;
   private burnStacks = 0;
 
   // Sterbeanimation
@@ -427,7 +429,29 @@ export class PlayerEntity {
 
   /** Ultimate-Rage-Tint setzen (Spieler leuchtet rot). */
   setRageTint(active: boolean): void {
+    if (this.isRagingVisual === active) {
+      this.resolveVisual();
+      return;
+    }
+
     this.isRagingVisual = active;
+
+    if (active) {
+      this.glowTween?.stop();
+      this.glowTween = null;
+      if (!this.rageRenderer) {
+        this.rageRenderer = new HoneyBadgerRageRenderer(this.sprite.scene, this.sprite, this.glowFx);
+      }
+    } else {
+      this.rageRenderer?.destroy();
+      this.rageRenderer = null;
+      if (this.glowFx) {
+        this.glowFx.color = this.colorHex;
+        this.glowFx.innerStrength = 0;
+      }
+      this.startDefaultGlowTween();
+    }
+
     this.resolveVisual();
   }
 
@@ -516,15 +540,13 @@ export class PlayerEntity {
    */
   private resolveVisual(): void {
     const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
-    if (this.isRagingVisual) {
-      this.sprite.setAlpha(alpha);
-      if (this.glowFx) this.glowFx.color = 0xff3333;
-    } else {
-      this.sprite.setAlpha(alpha);
-      if (this.glowFx) this.glowFx.color = this.colorHex;
-    }
+    this.sprite.setAlpha(alpha);
     if (this.glowFx && this.isDecoyStealthed) {
       this.glowFx.outerStrength = this.stealthGlowStrength;
+      this.glowFx.innerStrength = 0;
+      this.glowFx.color = this.colorHex;
+    } else if (this.glowFx && !this.isRagingVisual) {
+      this.glowFx.color = this.colorHex;
       this.glowFx.innerStrength = 0;
     }
     this.applyDisplayVisibility();
@@ -693,7 +715,7 @@ export class PlayerEntity {
   }
 
   private startDefaultGlowTween(): void {
-    if (!this.glowFx) return;
+    if (!this.glowFx || this.isRagingVisual || this.isDecoyStealthed) return;
     this.glowTween?.stop();
     this.glowTween = this.sprite.scene.tweens.add({
       targets:       this.glowFx,
@@ -707,6 +729,7 @@ export class PlayerEntity {
 
   private syncAttachedEffects(): void {
     this.burnRenderer?.sync(this.sprite.x, this.sprite.y, PLAYER_SIZE, this.burnStacks, this.sprite.visible);
+    this.rageRenderer?.sync(this.sprite.x, this.sprite.y, PLAYER_SIZE, this.sprite.visible);
   }
 
   destroy(): void {
@@ -718,6 +741,7 @@ export class PlayerEntity {
     this.stealthAmbientParticles?.destroy();
     this.stealthTrailParticles?.destroy();
     this.burnRenderer?.destroy();
+    this.rageRenderer?.destroy();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();

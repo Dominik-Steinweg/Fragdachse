@@ -63,10 +63,11 @@ interface UltimateState {
   consumedRage: number;
   durationMs: number;
   drainDurationMs: number;
+  nextArmorTickAt: number;
   gaussChargeStartedAt: number | null;
 }
 
-type CombatResolverType = Pick<CombatSystem, 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
+type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
 type PhysicsSystemType  = { addRecoil(id: string, vx: number, vy: number, durationMs?: number): void };
 
 /**
@@ -133,6 +134,7 @@ export class LoadoutManager {
       consumedRage: 0,
       durationMs: 0,
       drainDurationMs: 0,
+      nextArmorTickAt: 0,
       gaussChargeStartedAt: null,
     });
     // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
@@ -204,6 +206,7 @@ export class LoadoutManager {
     state.consumedRage = 0;
     state.durationMs = 0;
     state.drainDurationMs = 0;
+    state.nextArmorTickAt = 0;
     state.gaussChargeStartedAt = null;
   }
 
@@ -423,6 +426,7 @@ export class LoadoutManager {
             consumedRage,
             durationMs,
             drainDurationMs,
+            nextArmorTickAt: now + cfg.armorTickIntervalMs,
             gaussChargeStartedAt: null,
           });
 
@@ -489,6 +493,7 @@ export class LoadoutManager {
       if (state.config.type !== 'buff') continue;
 
       const elapsed  = now - state.startTime;
+      const endTime = state.startTime + state.durationMs;
       const fraction = Math.min(1, elapsed / state.drainDurationMs);
       const targetRage  = state.consumedRage * (1 - fraction);
       const currentRage = this.resourceSystem.getRage(playerId);
@@ -497,11 +502,19 @@ export class LoadoutManager {
         this.resourceSystem.addRage(playerId, -drain);
       }
 
+      if (state.config.armorPerTick > 0 && state.config.armorTickIntervalMs > 0 && this.combatSystem) {
+        while (state.nextArmorTickAt > 0 && state.nextArmorTickAt <= now && state.nextArmorTickAt <= endTime) {
+          this.combatSystem.addArmor(playerId, state.config.armorPerTick);
+          state.nextArmorTickAt += state.config.armorTickIntervalMs;
+        }
+      }
+
       if (elapsed >= state.durationMs) {
         state.active = false;
         state.consumedRage = 0;
         state.durationMs = 0;
         state.drainDurationMs = 0;
+        state.nextArmorTickAt = 0;
         // Armageddon: Meteor-Spawning stoppen (In-Flight-Meteore schlagen noch ein)
         if (state.config.armageddon && this.armageddonSystem) {
           this.armageddonSystem.deactivate(playerId);
@@ -630,6 +643,7 @@ export class LoadoutManager {
       consumedRage: 0,
       durationMs: 0,
       drainDurationMs: 0,
+      nextArmorTickAt: 0,
       gaussChargeStartedAt: null,
     };
     currentState.config = cfg;
@@ -683,7 +697,6 @@ export class LoadoutManager {
       rockDamageMult:    cfg.rockDamageMult,
       trainDamageMult:   cfg.trainDamageMult,
       shotAudioKey:      cfg.shotAudio?.successKey,
-      shotAudioVolume:   cfg.shotAudio?.successVolume,
     });
 
     this.physicsSystem?.addRecoil(
@@ -985,7 +998,6 @@ export class LoadoutManager {
       bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
       stopSpeedThreshold: cfg.stopSpeedThreshold,
       shotAudioKey:    cfg.shotAudio?.successKey,
-      shotAudioVolume: cfg.shotAudio?.successVolume,
     });
 
     return true;
@@ -1015,7 +1027,6 @@ export class LoadoutManager {
       bfgLaserDamage:   cfg.laserDamage,
       bfgLaserInterval: cfg.laserInterval,
       shotAudioKey:     cfg.shotAudio?.successKey,
-      shotAudioVolume:  cfg.shotAudio?.successVolume,
     });
 
     return true;
@@ -1214,7 +1225,6 @@ export class LoadoutManager {
       trainDamageMult: config.trainDamageMult,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
-      shotAudioVolume: config.shotAudio?.successVolume,
     });
 
     return true;
@@ -1246,7 +1256,6 @@ export class LoadoutManager {
       config.displayName,
       fireConfig.visualPreset,
       config.shotAudio?.successKey,
-      config.shotAudio?.successVolume,
       sourceSlot,
       shotId,
       config.detonator,  // DetonatorConfig weitergeben (optional)
@@ -1335,7 +1344,6 @@ export class LoadoutManager {
       burnTickIntervalMs: fireConfig.burnTickIntervalMs,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
-      shotAudioVolume: config.shotAudio?.successVolume,
     });
 
     return true;

@@ -51,6 +51,7 @@ const CONTROLS: [string, string][] = [
   ['E  (halten)',    'Utility'],
   ['Q',              'Ultimate  (füllt sich durch Schaden)'],
   ['SHIFT',          'Einbuddeln  (kostet Adrenalin)'],
+  ['O',              'Optionen'],
 ];
 
 export class HelpOverlay {

@@ -457,7 +457,6 @@ export class ProjectileManager {
       trainDamageMult: cfg.trainDamageMult,
       sourceSlot:      cfg.sourceSlot,
       shotAudioKey:    cfg.shotAudioKey,
-      shotAudioVolume: cfg.shotAudioVolume,
       splitCount:      cfg.splitCount,
       splitSpread:     cfg.splitSpread,
       splitFactor:     cfg.splitFactor,
@@ -695,7 +694,7 @@ export class ProjectileManager {
         cfg.energyBallVariant,
         cfg.ownerColor ?? cfg.color,
       );
-      this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId, cfg.shotAudioVolume);
+      this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
     }
 
     this.projectiles.push(tracked);
@@ -1239,7 +1238,6 @@ export class ProjectileManager {
         stopSpeedThreshold: proj.stopSpeedThreshold,
         sourceSlot: proj.sourceSlot,
         shotAudioKey: proj.shotAudioKey,
-        shotAudioVolume: proj.shotAudioVolume,
         splitCount: proj.splitCount,
         splitSpread: proj.splitSpread,
         splitFactor: proj.splitFactor,
@@ -1939,7 +1937,6 @@ export class ProjectileManager {
       energyBallVariant: p.energyBallVariant,
       tracer: p.tracerConfig,
       shotAudioKey: p.shotAudioKey,
-      shotAudioVolume: p.shotAudioVolume,
       suppressSpawnFx: p.suppressSpawnFx,
     }));
 
@@ -2154,7 +2151,7 @@ export class ProjectileManager {
         // Utility-Projektile haben keine Prediction → Audio immer abspielen.
         const isUtilityProjectile = proj.style === 'grenade' || proj.style === 'holy_grenade' || proj.style === 'bfg';
         if (proj.ownerId !== localPlayerId || isUtilityProjectile) {
-          this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId, proj.shotAudioVolume);
+          this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
         }
       }
 

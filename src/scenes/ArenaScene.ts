@@ -47,6 +47,7 @@ import {
   restartRoomForAutomaticRoomSearch,
   restartRoomForQualityRetry,
 } from '../utils/roomQuality';
+import { getStoredMasterVolume } from '../utils/localPreferences';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
@@ -122,6 +123,7 @@ export class ArenaScene extends Phaser.Scene {
   private lastCameraScrollX = 0;
   private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelsHeld = false;
+  private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -189,6 +191,7 @@ export class ArenaScene extends Phaser.Scene {
         const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
         return sprite ? { x: sprite.x, y: sprite.y } : null;
       },
+      getStoredMasterVolume(),
     );
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);
@@ -201,7 +204,7 @@ export class ArenaScene extends Phaser.Scene {
     effectSystem.setAudioSystem(gameAudioSystem);
 
     // ── UI (scene-lifetime) ────────────────────────────────────────────────
-    const leftPanel  = new LeftSidePanel(this, bridge);
+    const leftPanel  = new LeftSidePanel(this, bridge, gameAudioSystem);
     leftPanel.build();
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
@@ -341,14 +344,14 @@ export class ArenaScene extends Phaser.Scene {
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
         const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
-        gameAudioSystem.playLocalSound(shotAudio?.failureKey, shotAudio?.failureVolume ?? 1);
+        gameAudioSystem.playLocalSound(shotAudio?.failureKey);
         return;
       }
 
       if (slot === 'ultimate') {
         const ultimate = this.clientUpdate.getLocalUltimateConfig();
         if (ultimate.type === 'gauss') {
-          gameAudioSystem.playLocalSound(ultimate.shotAudio?.failureKey, ultimate.shotAudio?.failureVolume ?? 1);
+          gameAudioSystem.playLocalSound(ultimate.shotAudio?.failureKey);
         }
       }
     };
@@ -468,7 +471,7 @@ export class ArenaScene extends Phaser.Scene {
         if (utilityCooldownUntil > Date.now()) {
           if (inputStarted) {
             const utilityShotAudio = this.clientUpdate.getLocalUtilityConfig()?.shotAudio;
-            gameAudioSystem.playLocalSound(utilityShotAudio?.failureKey, utilityShotAudio?.failureVolume ?? 1);
+            gameAudioSystem.playLocalSound(utilityShotAudio?.failureKey);
           }
           return;
         }
@@ -882,6 +885,28 @@ export class ArenaScene extends Phaser.Scene {
     if (!keyboard) return;
 
     this.arenaPanelTabKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true);
+    if (this.optionsHotkeyHandler) {
+      keyboard.off('keydown-O', this.optionsHotkeyHandler);
+      this.optionsHotkeyHandler = null;
+    }
+
+    this.optionsHotkeyHandler = (event: KeyboardEvent) => {
+      if (event.repeat || !this.ctx) return;
+
+      const phase = bridge.getGamePhase();
+      if ((phase !== 'LOBBY' && phase !== 'ARENA') || this.lifecycle.isMatchTerminated()) return;
+      if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
+      if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
+
+      this.ctx.leftPanel.toggleOptionsOverlay();
+    };
+
+    keyboard.on('keydown-O', this.optionsHotkeyHandler);
+    this.events.once('shutdown', () => {
+      if (!this.optionsHotkeyHandler) return;
+      keyboard.off('keydown-O', this.optionsHotkeyHandler);
+      this.optionsHotkeyHandler = null;
+    });
   }
 
   private syncArenaPanelOverlay(visible: boolean, immediate = false): void {

@@ -461,7 +461,7 @@ export function applyArenaMetricsForMode(mode: GameMode, phase: GamePhase): void
 }
 
 // ---- Felsen HP ----
-export const ROCK_HP_MAX         = 200;
+export const ROCK_HP_MAX         = 100;
 export const ROCK_TINT_STEPS     = 20;     // Anzahl visueller Abstufungen (0xffffff → 0x666666)
 
 // ---- Baumstumpf & Baumkrone ----

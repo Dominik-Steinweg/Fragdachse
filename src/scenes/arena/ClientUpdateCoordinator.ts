@@ -259,7 +259,7 @@ export class ClientUpdateCoordinator {
         const adrenaline = localState?.adrenaline ?? 0;
         const hasAdrenaline = (config.adrenalinCost ?? 0) <= adrenaline;
         if (!isDashing && hasAdrenaline) {
-          this.ctx.effectSystem.playLocalShotAudio(config.shotAudio?.successKey, config.shotAudio?.successVolume);
+          this.ctx.effectSystem.playLocalShotAudio(config.shotAudio?.successKey);
         }
       }
     }
@@ -495,7 +495,6 @@ export class ClientUpdateCoordinator {
       trace.hitPlayerId ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       config.fire.visualPreset,
       config.shotAudio?.successKey,
-      config.shotAudio?.successVolume,
     );
 
     return shotId;

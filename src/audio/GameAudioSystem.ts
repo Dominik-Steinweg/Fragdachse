@@ -11,10 +11,19 @@ import {
   SOUND_SFX_VOLUME,
 } from '../config';
 import type { AudioKey } from '../types';
+import { getSoundVolume } from './AudioCatalog';
 
 interface ListenerPosition {
   x: number;
   y: number;
+}
+
+interface ActiveLoop {
+  sound: Phaser.Sound.BaseSound;
+  soundKey: string;
+  volumeScale: number;
+  spatialVolume: number;
+  pan: number;
 }
 
 /**
@@ -22,22 +31,38 @@ interface ListenerPosition {
  * Loop-Sounds und Musik. Ersetzt das bisherige ShotAudioSystem.
  *
  * Volume-Kanaele:
- * - SFX:   SOUND_MASTER_VOLUME × SOUND_SFX_VOLUME × per-sound scale
- * - Music: SOUND_MASTER_VOLUME × SOUND_MUSIC_VOLUME × per-sound scale
+ * - SFX:   SOUND_MASTER_VOLUME × SOUND_SFX_VOLUME × perSoundVolume × volumeScale × spatial
+ * - Music: SOUND_MASTER_VOLUME × SOUND_MUSIC_VOLUME × perSoundVolume
+ *
+ * `perSoundVolume` stammt aus AudioCatalog.SOUND_VOLUMES und erlaubt eine
+ * Feinjustierung einzelner Sounds ohne erneutes Abmischen der Audiodateien.
  */
 export class GameAudioSystem {
   private loopCounter = 0;
-  private readonly activeLoops = new Map<string, Phaser.Sound.BaseSound>();
+  private readonly activeLoops = new Map<string, ActiveLoop>();
   private currentMusic: Phaser.Sound.BaseSound | null = null;
   private currentMusicKey: string | null = null;
+  private masterVolume: number;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly getLocalPlayerId: () => string,
     private readonly getListenerPosition: () => ListenerPosition | null,
+    initialMasterVolume = SOUND_MASTER_VOLUME,
   ) {
+    this.masterVolume = Phaser.Math.Clamp(initialMasterVolume, 0, 1);
     // Prevent deferred playback bursts after tab blur / refocus.
     this.scene.sound.pauseOnBlur = false;
+  }
+
+  setMasterVolume(volume: number): void {
+    this.masterVolume = Phaser.Math.Clamp(volume, 0, 1);
+    this.refreshActiveLoopVolumes();
+    this.refreshMusicVolume();
+  }
+
+  getMasterVolume(): number {
+    return this.masterVolume;
   }
 
   // ── One-Shot SFX (spatial) ────────────────────────────────────────────────
@@ -61,7 +86,8 @@ export class GameAudioSystem {
     const { volume, pan } = isLocal
       ? { volume: 1, pan: 0 }
       : this.resolveSpatialPlayback(emitterX, emitterY);
-    const finalVolume = SOUND_MASTER_VOLUME * SOUND_SFX_VOLUME * volumeScale * volume;
+    const perSoundVolume = getSoundVolume(soundKey);
+    const finalVolume = this.masterVolume * SOUND_SFX_VOLUME * perSoundVolume * volumeScale * volume;
 
     if (finalVolume <= 0.001) return;
 
@@ -79,7 +105,8 @@ export class GameAudioSystem {
   playLocalSound(soundKey: AudioKey | undefined, volumeScale = 1): void {
     if (!SOUND_ENABLED || !soundKey || !this.scene.cache.audio.exists(soundKey)) return;
 
-    const finalVolume = SOUND_MASTER_VOLUME * SOUND_SFX_VOLUME * volumeScale;
+    const perSoundVolume = getSoundVolume(soundKey);
+    const finalVolume = this.masterVolume * SOUND_SFX_VOLUME * perSoundVolume * volumeScale;
     if (finalVolume <= 0.001) return;
 
     this.scene.sound.play(soundKey, {
@@ -118,7 +145,8 @@ export class GameAudioSystem {
       pan = 0;
     }
 
-    const finalVolume = SOUND_MASTER_VOLUME * SOUND_SFX_VOLUME * volumeScale * volume;
+    const perSoundVolume = getSoundVolume(soundKey);
+    const finalVolume = this.masterVolume * SOUND_SFX_VOLUME * perSoundVolume * volumeScale * volume;
     if (finalVolume <= 0.001) return null;
 
     const handle = `loop_${++this.loopCounter}`;
@@ -128,7 +156,7 @@ export class GameAudioSystem {
       loop: true,
     });
     sound.play();
-    this.activeLoops.set(handle, sound);
+    this.activeLoops.set(handle, { sound, soundKey, volumeScale, spatialVolume: volume, pan });
     return handle;
   }
 
@@ -137,10 +165,10 @@ export class GameAudioSystem {
    */
   stopLoop(handle: string | null): void {
     if (!handle) return;
-    const sound = this.activeLoops.get(handle);
-    if (!sound) return;
-    sound.stop();
-    sound.destroy();
+    const entry = this.activeLoops.get(handle);
+    if (!entry) return;
+    entry.sound.stop();
+    entry.sound.destroy();
     this.activeLoops.delete(handle);
   }
 
@@ -150,18 +178,21 @@ export class GameAudioSystem {
    */
   updateLoopPosition(handle: string | null, emitterX: number, emitterY: number, emitterId?: string): void {
     if (!handle) return;
-    const sound = this.activeLoops.get(handle);
-    if (!sound || !('volume' in sound)) return;
+    const entry = this.activeLoops.get(handle);
+    if (!entry || !('volume' in entry.sound)) return;
 
     const isLocal = emitterId !== undefined && emitterId === this.getLocalPlayerId();
     const { volume, pan } = isLocal
       ? { volume: 1, pan: 0 }
       : this.resolveSpatialPlayback(emitterX, emitterY);
-    const finalVolume = SOUND_MASTER_VOLUME * SOUND_SFX_VOLUME * volume;
+    const perSoundVolume = getSoundVolume(entry.soundKey);
+    const finalVolume = this.masterVolume * SOUND_SFX_VOLUME * perSoundVolume * entry.volumeScale * volume;
+    entry.spatialVolume = volume;
+    entry.pan = pan;
 
     // Phaser WebAudioSound / HTML5AudioSound both support these properties
-    (sound as Phaser.Sound.WebAudioSound).setVolume(Phaser.Math.Clamp(finalVolume, 0, 1));
-    (sound as Phaser.Sound.WebAudioSound).setPan(Phaser.Math.Clamp(pan, -1, 1));
+    (entry.sound as Phaser.Sound.WebAudioSound).setVolume(Phaser.Math.Clamp(finalVolume, 0, 1));
+    (entry.sound as Phaser.Sound.WebAudioSound).setPan(Phaser.Math.Clamp(pan, -1, 1));
   }
 
   // ── Music ─────────────────────────────────────────────────────────────────
@@ -178,7 +209,8 @@ export class GameAudioSystem {
 
     if (!this.scene.cache.audio.exists(soundKey)) return;
 
-    const finalVolume = SOUND_MASTER_VOLUME * SOUND_MUSIC_VOLUME;
+    const perSoundVolume = getSoundVolume(soundKey);
+    const finalVolume = this.masterVolume * SOUND_MUSIC_VOLUME * perSoundVolume;
     if (finalVolume <= 0.001) return;
 
     this.currentMusicKey = soundKey;
@@ -240,5 +272,21 @@ export class GameAudioSystem {
     const volume = Phaser.Math.Linear(SHOT_AUDIO_REMOTE_CLOSE_VOLUME, SHOT_AUDIO_REMOTE_FAR_VOLUME, falloffT);
     const pan = Phaser.Math.Clamp((emitterX - listener.x) / Math.max(1, SHOT_AUDIO_PAN_RANGE), -1, 1);
     return { volume, pan };
+  }
+
+  private refreshActiveLoopVolumes(): void {
+    for (const entry of this.activeLoops.values()) {
+      const perSoundVolume = getSoundVolume(entry.soundKey);
+      const finalVolume = this.masterVolume * SOUND_SFX_VOLUME * perSoundVolume * entry.volumeScale * entry.spatialVolume;
+      (entry.sound as Phaser.Sound.WebAudioSound).setVolume(Phaser.Math.Clamp(finalVolume, 0, 1));
+      (entry.sound as Phaser.Sound.WebAudioSound).setPan(Phaser.Math.Clamp(entry.pan, -1, 1));
+    }
+  }
+
+  private refreshMusicVolume(): void {
+    if (!this.currentMusicKey || !this.currentMusic) return;
+    const perSoundVolume = getSoundVolume(this.currentMusicKey);
+    const finalVolume = this.masterVolume * SOUND_MUSIC_VOLUME * perSoundVolume;
+    (this.currentMusic as Phaser.Sound.WebAudioSound).setVolume(Phaser.Math.Clamp(finalVolume, 0, 1));
   }
 }

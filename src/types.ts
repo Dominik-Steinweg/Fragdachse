@@ -232,7 +232,6 @@ export interface SyncedProjectile {
   energyBallVariant?: EnergyBallVariant;
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
   shotAudioKey?: ShotAudioKey;
-  shotAudioVolume?: number;
   suppressSpawnFx?: boolean;
 }
 
@@ -251,7 +250,6 @@ export interface SyncedHitscanTrace {
   shooterId?: string;
   shotId?:    number;
   shotAudioKey?: ShotAudioKey;
-  shotAudioVolume?: number;
 }
 
 export interface SyncedHitEffect {
@@ -385,8 +383,6 @@ export type AudioKey = string;
 export interface LoadoutShotAudioConfig {
   readonly successKey: ShotAudioKey;
   readonly failureKey?: ShotAudioKey;
-  readonly successVolume?: number;
-  readonly failureVolume?: number;
 }
 
 /** Vollstaendiger, verbindlicher Lobby-Snapshot eines Spieler-Loadouts. */
@@ -524,7 +520,6 @@ export interface ProjectileSpawnConfig {
   stopSpeedThreshold?: number;        // Speed, ab der das Projektil auf 0 gestoppt wird
   sourceSlot?: LoadoutSlot;
   shotAudioKey?: ShotAudioKey;
-  shotAudioVolume?: number;
 
   // Hydra-Splitting (optional)
   splitCount?: number;
@@ -720,7 +715,6 @@ export interface TrackedProjectile {
   frictionActivated?: boolean;  // true sobald Phaser-Damping aktiviert wurde
   sourceSlot?: LoadoutSlot;
   shotAudioKey?: ShotAudioKey;
-  shotAudioVolume?: number;
 
   // Hydra-Splitting
   splitCount?: number;

@@ -133,6 +133,7 @@ const GENERAL_ASSETS = {
   sfx_countdown_2:     './assets/sounds/sfx_countdown_2.ogg',//done
   sfx_countdown_1:     './assets/sounds/sfx_countdown_1.ogg',//done
   sfx_countdown_go:    './assets/sounds/sfx_countdown_go.ogg',//done
+  sfx_options_preview: './assets/sounds/sfx_countdown_go.ogg',
   sfx_train_move:      './assets/sounds/sfx_train_move.ogg',//done
   sfx_train_explode:   './assets/sounds/sfx_train_explode.wav',
 } as const;
@@ -154,6 +155,113 @@ export const AUDIO_ASSETS = {
 } as const;
 
 export type AudioAssetKey = keyof typeof AUDIO_ASSETS;
+
+// ── Per-Sound Volume Registry ───────────────────────────────────────────────
+/**
+ * Pro-Sound Lautstaerke-Faktor (0..1). Wird multiplikativ zusaetzlich zu
+ * MASTER/SFX/MUSIC und etwaigem call-site `volumeScale` angewendet.
+ *
+ * So laesst sich jeder einzelne Sound feinjustieren, ohne die Audiodatei neu
+ * abmischen zu muessen. Default fuer alle bisher hinterlegten Sounds ist 0.5,
+ * d.h. halb so laut wie bisher.
+ */
+export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
+  // Shot Sounds
+  shot_ak47:               0.5,
+  shot_asmd_primary:       0.5,
+  shot_asmd_secondary:     0.5,
+  shot_crossbow:           0.5,
+  shot_dry_trigger:        0.5,
+  shot_gauss:              0.5,
+  shot_glock:              0.5,
+  shot_plasma:             0.5,
+  shot_shotgun:            0.15, // Shotgun-Pellet-Burst ist generell lauter als andere Schuss-Sounds
+
+  shot_bite:               0.5,
+  shot_zeus:               0.5,
+  shot_hydra:              0.5,
+  shot_awp:                0.5,
+  shot_p90:                0.5,
+  shot_flame:              0.5,
+  shot_rocketlauncher:     0.5,
+  shot_minirocketlauncher: 0.5,
+  shot_spore:              0.5,
+  shot_negev:              0.5,
+  shot_throw:              0.5,
+  shot_bfg:                0.5,
+  shot_hallelujah:         0.5,
+
+  // Explosions
+  sfx_explosion_he:             0.5,
+  sfx_explosion_smoke:          0.5,
+  sfx_explosion_holy:           0.5,
+  sfx_explosion_rocket:         0.5,
+  sfx_explosion_asmd_secondary: 0.5,
+  sfx_explosion_armageddon:     0.5,
+
+  // Loadout Activations
+  sfx_tesla_activate:        0.5,
+  sfx_tesla_active_targets:  0.5,
+  sfx_shield_activate:       0.5,
+  sfx_shield_active:         0.5,
+  sfx_bfg_charge:            0.5,
+  sfx_bfg_fly:               0.5,
+  sfx_bfg_laser:             0.5,
+  sfx_nuke_countdown:        0.5,
+  sfx_nuke_explosion:        0.5,
+  sfx_airstrike_countdown:   0.5,
+  sfx_airstrike_explosion:   0.5,
+  sfx_translocator_teleport: 0.5,
+  sfx_place_rock:            0.5,
+  sfx_place_fliegenpilz:     0.5,
+  sfx_place_decoy:           0.5,
+  sfx_decoy_reveal:          0.5,
+  sfx_gauss_charge:          0.5,
+  sfx_honey_badger_rage:     0.5,
+  sfx_place_dachstunnel:     0.5,
+  sfx_use_dachstunnel:       0.5,
+
+  // Power-Ups
+  sfx_adrenaline_active:    0.5,
+  sfx_pickup_hp:            0.5,
+  sfx_pickup_armor:         0.5,
+  sfx_pickup_powerup:       0.5,
+  sfx_double_damage_active: 0.5,
+
+  // General SFX
+  sfx_player_move:     0.5,
+  sfx_dash:            0.5,
+  sfx_burrowed:        0.5,
+  sfx_player_hit:      0.5,
+  sfx_environment_hit: 0.5,
+  sfx_hit_feedback:    0.5,
+  sfx_player_death:    0.5,
+  sfx_player_spawn:    0.5,
+  sfx_ctb_score:       0.5,
+  sfx_countdown_3:     0.5,
+  sfx_countdown_2:     0.5,
+  sfx_countdown_1:     0.5,
+  sfx_countdown_go:    0.5,
+  sfx_options_preview: 0.5,
+  sfx_train_move:      0.5,
+  sfx_train_explode:   0.5,
+
+  // Music
+  music_lobby: 0.5,
+  music_arena: 0.5,
+};
+
+/**
+ * Liefert den pro-Sound Lautstaerke-Faktor fuer einen Key.
+ * Unbekannte Keys (z.B. dynamisch generierte) erhalten den Fallback 0.5,
+ * sodass neu hinzugefuegte Sounds automatisch auf dem halbierten Niveau
+ * starten und danach feinjustiert werden koennen.
+ */
+export function getSoundVolume(key: string | undefined): number {
+  if (!key) return 0;
+  const registered = (SOUND_VOLUMES as Record<string, number | undefined>)[key];
+  return registered ?? 0.5;
+}
 
 /** Backward-compatible re-exports */
 export const SHOT_AUDIO_ASSETS = SHOT_ASSETS;

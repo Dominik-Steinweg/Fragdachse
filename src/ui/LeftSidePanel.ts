@@ -8,16 +8,19 @@
  */
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
+import { GameAudioSystem } from '../audio/GameAudioSystem';
 import { ArenaHUD } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { HelpOverlay } from './HelpOverlay';
+import { OptionsOverlay } from './OptionsOverlay';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, isTeamGameMode } from '../gameModes';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
+import { getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
 
 // ── Layout-Konstanten (innerhalb des 240px-Sidebars) ─────────────────────────
 const CENTER_X     = 120;  // Mitte des 240px Sidebars
@@ -57,9 +60,11 @@ const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
 const DIVIDER3_Y  = 536;  // Trennlinie unter Loadout
-const HELP_BTN_Y  = 566;  // Hilfe-Button Y-Position
-const HELP_BTN_W  = 160;  // Breite
-const HELP_BTN_H  = 34;   // Höhe
+const MENU_BTN_Y  = 566;
+const MENU_BTN_W  = 92;
+const MENU_BTN_H  = 34;
+const OPTIONS_BTN_X = 70;
+const HELP_BTN_X = 170;
 const ARROW_X_LEFT      = 15;
 const ARROW_X_RIGHT     = 195;   // "[ > ]" (~42px) endet bei ≈237 – bleibt im 240px-Sidebar
 const ITEM_NAME_X       = 120;   // zentriert in 240px Sidebar
@@ -142,10 +147,12 @@ export class LeftSidePanel {
   private loadoutEnabled    = true;
   private lobbyFieldsLocked = false;
   private helpOverlay:      HelpOverlay | null = null;
+  private optionsOverlay:   OptionsOverlay | null = null;
 
   constructor(
     private scene:  Phaser.Scene,
     private bridge: NetworkBridge,
+    private audioSystem: GameAudioSystem,
   ) {}
 
   // ── Aufbau ─────────────────────────────────────────────────────────────────
@@ -279,6 +286,8 @@ export class LeftSidePanel {
       this.scene.add.text(20, CAROUSEL_START_Y, 'Loadout:', LABEL_FONT).setScrollFactor(0),
     );
 
+    this.applyStoredPlayerNamePreference();
+
     const slots: LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
     slots.forEach((slot, i) => {
       const arrowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + i * CAROUSEL_ROW_STEP;
@@ -314,11 +323,17 @@ export class LeftSidePanel {
         }).setOrigin(0.5, 0).setScrollFactor(0),
       );
 
-      // Initialwert anzeigen und in Bridge speichern
-      this.updateCarouselDisplay(slot);
       const initialItems = this.getSlotItems(slot);
+      const initialSelectionId = this.resolveInitialLoadoutId(slot);
+      if (initialSelectionId) {
+        const initialIndex = initialItems.findIndex((item) => item.id === initialSelectionId);
+        this.loadoutIndices[slot] = initialIndex >= 0 ? initialIndex : 0;
+      }
+
+      // Initialwert anzeigen und in Bridge/Preferences speichern
+      this.updateCarouselDisplay(slot);
       if (initialItems.length > 0) {
-        this.bridge.setLocalLoadoutSlot(slot, initialItems[0].id);
+        this.applyLocalLoadoutSelection(slot, initialItems[this.loadoutIndices[slot]].id);
       }
     });
 
@@ -333,7 +348,22 @@ export class LeftSidePanel {
     objects.push(divider3);
 
     // ── Hilfe-Button ──
-    const helpBtn = this.scene.add.rectangle(CENTER_X, HELP_BTN_Y, HELP_BTN_W, HELP_BTN_H, COLORS.GREY_7)
+    const optionsBtn = this.scene.add.rectangle(OPTIONS_BTN_X, MENU_BTN_Y, MENU_BTN_W, MENU_BTN_H, COLORS.GREY_7)
+      .setStrokeStyle(2, COLORS.GOLD_1)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.optionsOverlay?.show())
+      .on('pointerover', () => optionsBtn.setAlpha(0.7))
+      .on('pointerout',  () => optionsBtn.setAlpha(1))
+      .setScrollFactor(0);
+    objects.push(optionsBtn);
+    objects.push(
+      this.scene.add.text(OPTIONS_BTN_X, MENU_BTN_Y, 'OPTIONEN', {
+        fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold',
+        color: toCssColor(COLORS.GOLD_1),
+      }).setOrigin(0.5).setScrollFactor(0),
+    );
+
+    const helpBtn = this.scene.add.rectangle(HELP_BTN_X, MENU_BTN_Y, MENU_BTN_W, MENU_BTN_H, COLORS.GREY_7)
       .setStrokeStyle(2, COLORS.GOLD_1)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.helpOverlay?.show())
@@ -342,7 +372,7 @@ export class LeftSidePanel {
       .setScrollFactor(0);
     objects.push(helpBtn);
     objects.push(
-      this.scene.add.text(CENTER_X, HELP_BTN_Y, 'HILFE', {
+      this.scene.add.text(HELP_BTN_X, MENU_BTN_Y, 'HILFE', {
         fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold',
         color: toCssColor(COLORS.GOLD_1),
       }).setOrigin(0.5).setScrollFactor(0),
@@ -363,17 +393,41 @@ export class LeftSidePanel {
     // ── Hilfe-Overlay (world-space, über allem) ───────────────────────────────
     this.helpOverlay = new HelpOverlay(this.scene);
     this.helpOverlay.build();
+    this.optionsOverlay = new OptionsOverlay(this.scene, this.audioSystem);
+    this.optionsOverlay.build();
     this.setLobbyFieldsLocked(false);
     this.refreshColorIndicator();
   }
 
   getPuContainer(): Phaser.GameObjects.Container { return this.puContainer; }
 
+  toggleOptionsOverlay(): void {
+    this.optionsOverlay?.toggle();
+  }
+
+  hideOptionsOverlay(): void {
+    this.optionsOverlay?.hide();
+  }
+
+  isOptionsOverlayOpen(): boolean {
+    return this.optionsOverlay?.isOpen() ?? false;
+  }
+
+  isHelpOverlayOpen(): boolean {
+    return this.helpOverlay?.isOpen() ?? false;
+  }
+
+  isHotkeyInputBlocked(): boolean {
+    return this.nameEditOpen || this.pickerOpen;
+  }
+
   // ── Transitions ────────────────────────────────────────────────────────────
 
   transitionToGame(): void {
     this.closeColorPicker();
     this.closeNameEditPopup();
+    this.helpOverlay?.hide();
+    this.optionsOverlay?.hide();
     this.nameEditEnabled = false;
     this.loadoutEnabled  = false;
     this.badgerPreview?.sprite.setVisible(false);
@@ -396,6 +450,8 @@ export class LeftSidePanel {
   }
 
   transitionToLobby(): void {
+    this.helpOverlay?.hide();
+    this.optionsOverlay?.hide();
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.pendingDelay?.remove();
@@ -545,6 +601,7 @@ export class LeftSidePanel {
     this.badgerPreview?.destroy();
     this.destroyPickerEffects();
     this.helpOverlay?.destroy();
+    this.optionsOverlay?.destroy();
     this.arenaHUD.destroy();
     this.lobbyContainer.destroy(true);
     this.gameContainer.destroy(true);
@@ -698,7 +755,7 @@ export class LeftSidePanel {
     this.syncLoadoutSelectionFromBridge(slot);
     this.loadoutIndices[slot] = (this.loadoutIndices[slot] + delta + items.length) % items.length;
     this.updateCarouselDisplay(slot);
-    this.bridge.setLocalLoadoutSlot(slot, items[this.loadoutIndices[slot]].id);
+    this.applyLocalLoadoutSelection(slot, items[this.loadoutIndices[slot]].id);
   }
 
   private updateCarouselDisplay(slot: LoadoutSlot): void {
@@ -742,6 +799,7 @@ export class LeftSidePanel {
     if (nextIndex >= 0) {
       if (this.loadoutIndices[slot] !== nextIndex) {
         this.loadoutIndices[slot] = nextIndex;
+        setStoredLoadoutSlot(slot, items[nextIndex].id);
       }
       this.updateCarouselDisplay(slot);
       return;
@@ -750,7 +808,7 @@ export class LeftSidePanel {
     this.loadoutIndices[slot] = 0;
     this.updateCarouselDisplay(slot);
     if (selectedId !== items[0].id) {
-      this.bridge.setLocalLoadoutSlot(slot, items[0].id);
+      this.applyLocalLoadoutSelection(slot, items[0].id);
     }
   }
 
@@ -864,6 +922,7 @@ export class LeftSidePanel {
         return;
       }
       this.bridge.setLocalName(input);
+      setStoredPlayerName(input);
       closePopup();
     };
 
@@ -1033,5 +1092,31 @@ export class LeftSidePanel {
     // Weapon 2 adrenaline cost → tick marks on adrenaline bar
     const w2Cfg = w2Id ? WEAPON_CONFIGS[w2Id as keyof typeof WEAPON_CONFIGS] : undefined;
     this.arenaHUD.setAdrenalinTickCost(w2Cfg?.adrenalinCost ?? 0);
+  }
+
+  private applyStoredPlayerNamePreference(): void {
+    const storedName = getStoredPlayerName();
+    if (!storedName) return;
+    this.bridge.setLocalName(storedName);
+    this.localNameText?.setText(storedName);
+  }
+
+  private resolveInitialLoadoutId(slot: LoadoutSlot): string | null {
+    const items = this.getSlotItems(slot);
+    if (items.length === 0) return null;
+
+    const localPlayerId = this.bridge.getLocalPlayerId();
+    const currentBridgeId = this.bridge.getPlayerLoadoutSlot(localPlayerId, slot);
+    if (currentBridgeId && items.some((item) => item.id === currentBridgeId)) return currentBridgeId;
+
+    const storedId = getStoredLoadoutSlot(slot);
+    if (storedId && items.some((item) => item.id === storedId)) return storedId;
+
+    return items[0].id;
+  }
+
+  private applyLocalLoadoutSelection(slot: LoadoutSlot, itemId: string): void {
+    this.bridge.setLocalLoadoutSlot(slot, itemId);
+    setStoredLoadoutSlot(slot, itemId);
   }
 }
