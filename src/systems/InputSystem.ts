@@ -191,7 +191,14 @@ export class InputSystem {
     if (!enabled) {
       this.predictedUtilityCooldownUntil = 0;
       this.cancelUtilityInteraction();
+      this.cancelUltimateCharge();
       this.cancelUltimatePlacement();
+      this.ultimateTargetingActive = false;
+      this.scopeStartedAt = null;
+      this.scopeProgress = 0;
+      this.tunnelPlacementAnchor = null;
+      this.placementPreviewState = null;
+      this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
       this.prevRightPointerDown = false;
     }

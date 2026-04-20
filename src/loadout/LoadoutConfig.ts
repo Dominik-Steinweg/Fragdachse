@@ -882,8 +882,8 @@ export const WEAPON_CONFIGS = {
     detonable: {
       tag:            'asmd_ball',
       aoeDamage:      60,
-      aoeRadius:      80,
-      damageFalloff:  { minDamage: 20 } satisfies RadialDamageFalloffConfig,
+      aoeRadius:      100,
+      damageFalloff:  { minDamage: 30 } satisfies RadialDamageFalloffConfig,
       knockback:      950,
       selfKnockbackMult: 0.75,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden

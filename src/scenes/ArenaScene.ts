@@ -557,6 +557,7 @@ export class ArenaScene extends Phaser.Scene {
     const inGame          = phase === 'ARENA';
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
+    const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
     this.syncMainCamera(delta, inGame && !terminated);
 
     this.arenaPanelsHeld = !!(inGame && !terminated && this.arenaPanelTabKey?.isDown);
@@ -566,7 +567,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (inGame) {
-      this.ctx.inputSystem.setInputEnabled(!countdownActive);
+      this.ctx.inputSystem.setInputEnabled(!countdownActive && !optionsOpen);
       this.ctx.inputSystem.update();
     } else {
       this.ctx.inputSystem.setInputEnabled(false);
@@ -668,6 +669,7 @@ export class ArenaScene extends Phaser.Scene {
     const activePlacement     = ultimatePlacement ?? utilityPlacement;
     const ultimatePreview     = this.ctx.inputSystem.getUltimateChargePreviewState();
     const showAim = inArena
+      && !optionsOpen
       && this.localPlayerState.alive
       && !this.localPlayerState.burrowed
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
@@ -676,7 +678,13 @@ export class ArenaScene extends Phaser.Scene {
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
     this.ctx.aimSystem?.setScopeProgress(scopeProgress);
     const targetingForReticle = utilityTargeting ?? airstrikeTargeting;
-    this.ctx.aimSystem?.update(showAim || targetingForReticle !== undefined, inArena, delta, targetingForReticle, ultimatePreview);
+    this.ctx.aimSystem?.update(
+      (showAim || targetingForReticle !== undefined) && !optionsOpen,
+      inArena && !optionsOpen,
+      delta,
+      optionsOpen ? undefined : targetingForReticle,
+      optionsOpen ? undefined : ultimatePreview,
+    );
 
     // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
     if (this.scopeOverlay) {

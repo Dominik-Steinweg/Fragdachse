@@ -120,12 +120,12 @@ export class AimSystem {
 
   update(
     showAim: boolean,
-    inArena: boolean,
+    hideSystemCursor: boolean,
     delta: number,
     utilityTargeting?: UtilityTargetingPreviewState,
     ultimatePreview?: UltimateChargePreviewState,
   ): void {
-    this.scene.input.setDefaultCursor(inArena ? 'none' : 'default');
+    this.scene.input.setDefaultCursor(hideSystemCursor ? 'none' : 'default');
 
     if (showAim && !this.prevShowAim) {
       this.prevX = null;
