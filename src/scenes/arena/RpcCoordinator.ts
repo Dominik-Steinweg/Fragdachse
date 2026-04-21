@@ -16,10 +16,12 @@ const EXPLOSION_CLOSE_BOOST = 1 / 0.58; // ≈ 1.72
 
 function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: string; scale: number } | undefined {
   switch (visualStyle) {
-    case 'holy':   return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };
-    case 'energy': return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
-    case 'nuke':   return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
-    default:       return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
+    case 'holy':        return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };
+    case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
+    case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
+    case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };
+    case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };
+    default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
   }
 }
 

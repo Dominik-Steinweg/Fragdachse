@@ -150,7 +150,7 @@ export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite';
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'nuke';
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'nuke' | 'rocket' | 'mini_rocket';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {

@@ -6,6 +6,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   'asmd-prim.ogg',
   'asmd-sec.ogg',
   'awp.ogg',
+  'badger01.mp3',
   'bfg.ogg',
   'bite.ogg',
   'crossbow.ogg',
@@ -42,6 +43,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   'throw.ogg',
   'zeus.mp3',
   'zeus.ogg',
+  'music_arena.wav',
 ]);
 
 function isShippedAudioAsset(assetPath: string): boolean {
@@ -77,10 +79,12 @@ const SHOT_ASSETS = {
 
 // ── Explosions ──────────────────────────────────────────────────────────────
 const EXPLOSION_ASSETS = {
-  sfx_explosion_he:             './assets/sounds/sfx_explosion_he.ogg',//done
+  sfx_explosion_he:             './assets/sounds/sfx_explosion_rocket.ogg',//done (he + rocket getauscht)
   sfx_explosion_smoke:          './assets/sounds/sfx_explosion_smoke.wav',
   sfx_explosion_holy:           './assets/sounds/sfx_explosion_holy.ogg',//done
-  sfx_explosion_rocket:         './assets/sounds/sfx_explosion_rocket.ogg',//done
+  sfx_explosion_rocket:         './assets/sounds/sfx_explosion_he.ogg',//done
+  // Platzhalter: teilt die Audiodatei mit sfx_explosion_rocket, bis ein eigener Mini-Rocket-Sound geliefert wird.
+  sfx_explosion_mini_rocket:    './assets/sounds/sfx_explosion_he.ogg',
   sfx_explosion_asmd_secondary: './assets/sounds/sfx_explosion_asmd_secondary.wav',
   sfx_explosion_armageddon:     './assets/sounds/sfx_explosion_armageddon.wav',
 } as const;
@@ -140,7 +144,7 @@ const GENERAL_ASSETS = {
 
 // ── Music ───────────────────────────────────────────────────────────────────
 const MUSIC_ASSETS = {
-  music_lobby: './assets/sounds/music_lobby.wav',
+  music_lobby: './assets/sounds/badger01.mp3', 
   music_arena: './assets/sounds/music_arena.wav',
 } as const;
 
@@ -167,37 +171,37 @@ export type AudioAssetKey = keyof typeof AUDIO_ASSETS;
  */
 export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   // Shot Sounds
-  shot_ak47:               0.5,
-  shot_asmd_primary:       0.5,
-  shot_asmd_secondary:     0.5,
-  shot_crossbow:           0.5,
-  shot_dry_trigger:        0.5,
+  shot_ak47:               0.4,
+  shot_asmd_primary:       0.4,
+  shot_asmd_secondary:     0.4,
+  shot_crossbow:           0.1,
+  shot_dry_trigger:        0.3,
   shot_gauss:              0.5,
-  shot_glock:              0.5,
-  shot_plasma:             0.5,
-  shot_shotgun:            0.15, // Shotgun-Pellet-Burst ist generell lauter als andere Schuss-Sounds
-
-  shot_bite:               0.5,
+  shot_glock:              0.15,
+  shot_plasma:             0.2,
+  shot_shotgun:            0.06, 
+  shot_bite:               0.4,
   shot_zeus:               0.5,
-  shot_hydra:              0.5,
-  shot_awp:                0.5,
-  shot_p90:                0.5,
-  shot_flame:              0.5,
+  shot_hydra:              0.3,
+  shot_awp:                0.4,
+  shot_p90:                0.3,
+  shot_flame:              0.2,
   shot_rocketlauncher:     0.5,
-  shot_minirocketlauncher: 0.5,
+  shot_minirocketlauncher: 0.3,
   shot_spore:              0.5,
-  shot_negev:              0.5,
+  shot_negev:              0.2,
   shot_throw:              0.5,
   shot_bfg:                0.5,
-  shot_hallelujah:         0.5,
+  shot_hallelujah:         0.8,
 
   // Explosions
   sfx_explosion_he:             0.5,
   sfx_explosion_smoke:          0.5,
-  sfx_explosion_holy:           0.5,
+  sfx_explosion_holy:           0.8,
   sfx_explosion_rocket:         0.5,
+  sfx_explosion_mini_rocket:    0.15,
   sfx_explosion_asmd_secondary: 0.5,
-  sfx_explosion_armageddon:     0.5,
+  sfx_explosion_armageddon:     0.2,
 
   // Loadout Activations
   sfx_tesla_activate:        0.5,
@@ -208,7 +212,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_bfg_fly:               0.5,
   sfx_bfg_laser:             0.5,
   sfx_nuke_countdown:        0.5,
-  sfx_nuke_explosion:        0.5,
+  sfx_nuke_explosion:        0.9,
   sfx_airstrike_countdown:   0.5,
   sfx_airstrike_explosion:   0.5,
   sfx_translocator_teleport: 0.5,
@@ -235,20 +239,20 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_player_hit:      0.5,
   sfx_environment_hit: 0.5,
   sfx_hit_feedback:    0.5,
-  sfx_player_death:    0.5,
-  sfx_player_spawn:    0.5,
+  sfx_player_death:    0.9,
+  sfx_player_spawn:    0.7,
   sfx_ctb_score:       0.5,
   sfx_countdown_3:     0.5,
   sfx_countdown_2:     0.5,
   sfx_countdown_1:     0.5,
   sfx_countdown_go:    0.5,
   sfx_options_preview: 0.5,
-  sfx_train_move:      0.5,
-  sfx_train_explode:   0.5,
+  sfx_train_move:      0.8,
+  sfx_train_explode:   0.1,
 
-  // Music
-  music_lobby: 0.5,
-  music_arena: 0.5,
+  // Music  (Endwert je nach Lied anpassen; Kette: masterVolume × SOUND_MUSIC_VOLUME × dieser Wert)
+  music_lobby: 0.2,
+  music_arena: 0.2,
 };
 
 /**

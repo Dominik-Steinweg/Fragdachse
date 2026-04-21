@@ -916,6 +916,7 @@ export const WEAPON_CONFIGS = {
         rockDamageMult:  1,
         trainDamageMult: 1.15,
         color:           0xff8a3d,
+        visualStyle:     'rocket',
       } satisfies ProjectileExplosionConfig,
     },
     allowedSlots:         ['weapon2'],
@@ -962,6 +963,7 @@ export const WEAPON_CONFIGS = {
         rockDamageMult:  1,
         trainDamageMult: 1,
         color:           0xffb36b,
+        visualStyle:     'mini_rocket',
       } satisfies ProjectileExplosionConfig,
       homing: {
         acquireDelayMs:        100,
