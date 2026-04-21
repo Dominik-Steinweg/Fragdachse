@@ -136,8 +136,11 @@ export class ArenaGenerator {
       };
       // 1. Felsen-Positionen + 1-Zellen-Rand drumherum
       for (const { gridX, gridY } of rocks) addWithMargin(gridX, gridY);
-      // 2. Gleis-Positionen + 1-Zellen-Rand drumherum
-      for (const { gridX, gridY } of tracks) addWithMargin(gridX, gridY);
+      // 2. Gleis-Positionen + 1-Zellen-Rand drumherum (beide Gleisspalten: col und col+1)
+      for (const { gridX, gridY } of tracks) {
+        addWithMargin(gridX, gridY);
+        addWithMargin(gridX + 1, gridY);
+      }
       // 3. Zufällige Flecken – nur an Nachbarzellen von bestehendem Dirt (zusammenhängend)
       //    Mehrere Passes, damit das Netz organisch wächst.
       const passes = 3;

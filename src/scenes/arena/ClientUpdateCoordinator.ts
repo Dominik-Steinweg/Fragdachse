@@ -84,7 +84,7 @@ export class ClientUpdateCoordinator {
         player.updateArmor(ps.armor);
         player.updateBurnStacks(ps.burnStacks ?? 0);
         player.setVisible(ps.alive);
-        player.setRageTint(ps.isRaging);
+        player.setRageTint(ps.isRaging && ps.activeUltimateId === 'HONEY_BADGER_RAGE');
         const isStealthed = ps.isDecoyStealthed ?? false;
         const wasStealthed = this.prevStealthStates.get(id) ?? false;
         if (isStealthed !== wasStealthed) {

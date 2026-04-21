@@ -64,10 +64,11 @@ interface UltimateState {
   durationMs: number;
   drainDurationMs: number;
   nextArmorTickAt: number;
+  nextAuraTickAt: number;
   gaussChargeStartedAt: number | null;
 }
 
-type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
+type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
 type PhysicsSystemType  = { addRecoil(id: string, vx: number, vy: number, durationMs?: number): void };
 
 /**
@@ -135,6 +136,7 @@ export class LoadoutManager {
       durationMs: 0,
       drainDurationMs: 0,
       nextArmorTickAt: 0,
+      nextAuraTickAt: 0,
       gaussChargeStartedAt: null,
     });
     // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
@@ -207,6 +209,7 @@ export class LoadoutManager {
     state.durationMs = 0;
     state.drainDurationMs = 0;
     state.nextArmorTickAt = 0;
+    state.nextAuraTickAt = 0;
     state.gaussChargeStartedAt = null;
   }
 
@@ -427,6 +430,7 @@ export class LoadoutManager {
             durationMs,
             drainDurationMs,
             nextArmorTickAt: now + cfg.armorTickIntervalMs,
+            nextAuraTickAt: cfg.aura && cfg.aura.tickIntervalMs > 0 ? now + cfg.aura.tickIntervalMs : 0,
             gaussChargeStartedAt: null,
           });
 
@@ -509,12 +513,36 @@ export class LoadoutManager {
         }
       }
 
+      const aura = state.config.aura;
+      const auraOwner = aura ? this.playerManager.getPlayer(playerId) : null;
+      if (aura && aura.damagePerTick > 0 && aura.tickIntervalMs > 0 && aura.radius > 0 && this.combatSystem) {
+        while (state.nextAuraTickAt > 0 && state.nextAuraTickAt <= now && state.nextAuraTickAt <= endTime) {
+          if (auraOwner) {
+            this.combatSystem.applyAoeDamage(
+              auraOwner.sprite.x,
+              auraOwner.sprite.y,
+              aura.radius,
+              aura.damagePerTick,
+              playerId,
+              false,
+              {
+                category: 'damage_over_time',
+                weaponName: state.config.displayName,
+                sourceSlot: 'ultimate',
+              },
+            );
+          }
+          state.nextAuraTickAt += aura.tickIntervalMs;
+        }
+      }
+
       if (elapsed >= state.durationMs) {
         state.active = false;
         state.consumedRage = 0;
         state.durationMs = 0;
         state.drainDurationMs = 0;
         state.nextArmorTickAt = 0;
+        state.nextAuraTickAt = 0;
         // Armageddon: Meteor-Spawning stoppen (In-Flight-Meteore schlagen noch ein)
         if (state.config.armageddon && this.armageddonSystem) {
           this.armageddonSystem.deactivate(playerId);
@@ -585,6 +613,11 @@ export class LoadoutManager {
     return this.ultimateStates.get(playerId)?.active ?? false;
   }
 
+  getActiveUltimateId(playerId: string): string | null {
+    const state = this.ultimateStates.get(playerId);
+    return state?.active ? state.config.id : null;
+  }
+
   getEquippedUltimateConfig(playerId: string): UltimateConfig | undefined {
     return this.loadouts.get(playerId)?.ultimate.config;
   }
@@ -644,6 +677,7 @@ export class LoadoutManager {
       durationMs: 0,
       drainDurationMs: 0,
       nextArmorTickAt: 0,
+      nextAuraTickAt: 0,
       gaussChargeStartedAt: null,
     };
     currentState.config = cfg;

@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { BLOOD_HIT_VFX, DEPTH } from '../config';
+import { ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import type { GlowHandle } from '../utils/phaserFx';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
 import { circleZone, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
@@ -17,6 +18,17 @@ const DEPTH_RAGE_AURA_CORE = DEPTH.PLAYERS + 0.07;
 const DEPTH_RAGE_BLOOD = DEPTH.PLAYERS + 0.11;
 const DEPTH_RAGE_SPLASH = DEPTH.PLAYERS + 0.15;
 const DEPTH_RAGE_STAIN = DEPTH.PLAYERS - 0.05;
+const OUTER_AURA_TEXTURE_RADIUS = 88;
+const CORE_AURA_TEXTURE_RADIUS = 56;
+const RING_AURA_TEXTURE_RADIUS = 74;
+
+function getRageAuraConfig() {
+  return ULTIMATE_CONFIGS.HONEY_BADGER_RAGE.aura ?? {
+    radius: 108,
+    damagePerTick: 20,
+    tickIntervalMs: 200,
+  };
+}
 
 function ensureRageTextures(textures: Phaser.Textures.TextureManager): void {
   fillRadialGradientTexture(textures, TEX_RAGE_AURA_OUTER, 176, [
@@ -112,38 +124,45 @@ export class HoneyBadgerRageRenderer {
 
     this.setActive(true);
 
+    const aura = getRageAuraConfig();
     const now = this.scene.time.now;
     const pulse = (Math.sin(now * 0.015) + 1) * 0.5;
     const throb = (Math.sin(now * 0.023 + 0.8) + 1) * 0.5;
-    const baseScale = Math.max(bodySize / 48, 0.5);
+    const auraRadius = Math.max(aura.radius, bodySize * 0.7);
     const outerTint = mixColors(RAGE_DEEP_COLOR, RAGE_CORE_COLOR, 0.22 + pulse * 0.16);
     const coreTint = mixColors(RAGE_CORE_COLOR, RAGE_HOT_COLOR, 0.28 + throb * 0.32);
+    const outerScale = auraRadius / OUTER_AURA_TEXTURE_RADIUS;
+    const coreScale = auraRadius / CORE_AURA_TEXTURE_RADIUS;
+    const ringScale = auraRadius / RING_AURA_TEXTURE_RADIUS;
+    const bloodZoneRadius = Math.max(Math.min(auraRadius * 0.38, auraRadius - 10), bodySize * 0.26);
+    const bloodTickInterval = Math.max(1, aura.tickIntervalMs);
+    const bloodParticleScale = Phaser.Math.Clamp(auraRadius / 120, 0.92, 1.52);
 
     this.outerAura
       .setPosition(x, y)
-      .setScale(baseScale * (1.95 + pulse * 0.34))
+      .setScale(outerScale * (1.08 + pulse * 0.08))
       .setAlpha(0.22 + pulse * 0.12)
       .setTint(outerTint);
 
     this.coreAura
       .setPosition(x, y)
-      .setScale(baseScale * (1.22 + throb * 0.24))
+      .setScale(coreScale * (0.62 + throb * 0.12))
       .setAlpha(0.3 + throb * 0.18)
       .setTint(coreTint);
 
     this.ringAura
       .setPosition(x, y)
-      .setScale(baseScale * (1.46 + pulse * 0.26))
+      .setScale(ringScale)
       .setRotation(now * 0.00115)
       .setAlpha(0.14 + throb * 0.12)
       .setTint(mixColors(RAGE_CORE_COLOR, RAGE_HOT_COLOR, 0.18 + pulse * 0.22));
 
     this.bloodEmitter.setPosition(x, y);
     this.bloodEmitter.clearEmitZones();
-    this.bloodEmitter.addEmitZone(circleZone(Math.max(bodySize * (0.34 + pulse * 0.07), 8), 1));
-    this.bloodEmitter.setParticleScale(0.92 + pulse * 0.34, 0.1);
+    this.bloodEmitter.addEmitZone(circleZone(bloodZoneRadius, 1));
+    this.bloodEmitter.setParticleScale(bloodParticleScale + pulse * 0.14, 0.1);
     this.bloodEmitter.setAlpha(0.7 + throb * 0.16);
-    this.bloodEmitter.setFrequency(34);
+    this.bloodEmitter.setFrequency(bloodTickInterval);
 
     if (this.glowFx) {
       this.glowFx.color = mixColors(RAGE_CORE_COLOR, RAGE_HOT_COLOR, 0.24 + throb * 0.28);
@@ -151,9 +170,13 @@ export class HoneyBadgerRageRenderer {
       this.glowFx.innerStrength = 0.65 + throb * 0.9;
     }
 
-    if (now >= this.nextBurstAt) {
-      this.playBloodBurst(x, y, bodySize);
-      this.nextBurstAt = now + Phaser.Math.Between(150, 210);
+    if (this.nextBurstAt <= 0) {
+      this.nextBurstAt = now + bloodTickInterval;
+    }
+
+    while (now >= this.nextBurstAt) {
+      this.playBloodBurst(x, y, bodySize, auraRadius);
+      this.nextBurstAt += bloodTickInterval;
     }
   }
 
@@ -191,21 +214,28 @@ export class HoneyBadgerRageRenderer {
       return;
     }
 
+    this.nextBurstAt = 0;
     this.bloodEmitter.stop();
   }
 
-  private playBloodBurst(x: number, y: number, bodySize: number): void {
-    const streakCount = Phaser.Math.Between(3, 5);
-    const dropletCount = Phaser.Math.Between(3, 5);
+  private playBloodBurst(x: number, y: number, bodySize: number, auraRadius: number): void {
+    const streakCount = Phaser.Math.Clamp(Math.round(auraRadius / 34), 3, 6);
+    const dropletCount = Phaser.Math.Clamp(Math.round(auraRadius / 36), 3, 6);
     const clusterAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     const clusterSpread = Phaser.Math.DegToRad(42);
-    const startRadius = bodySize * Phaser.Math.FloatBetween(0.16, 0.3);
+    const startRadius = Phaser.Math.FloatBetween(
+      Math.max(bodySize * 0.18, auraRadius * 0.16),
+      Math.max(bodySize * 0.3, auraRadius * 0.3),
+    );
 
     for (let index = 0; index < streakCount; index++) {
       const angle = clusterAngle + Phaser.Math.FloatBetween(-clusterSpread, clusterSpread);
       const startX = x + Math.cos(angle) * startRadius + Phaser.Math.FloatBetween(-5, 5);
       const startY = y + Math.sin(angle) * startRadius + Phaser.Math.FloatBetween(-5, 5);
-      const travel = Phaser.Math.FloatBetween(bodySize * 1.35, bodySize * 2.45);
+      const travel = Phaser.Math.FloatBetween(
+        Math.max(bodySize * 1.1, auraRadius * 0.65),
+        Math.max(bodySize * 1.9, auraRadius * 1.02),
+      );
       const endX = startX + Math.cos(angle) * travel + Phaser.Math.FloatBetween(-8, 8);
       const endY = startY + Math.sin(angle) * travel + Phaser.Math.FloatBetween(-8, 8);
       const tint = this.pickBloodTint();
@@ -251,7 +281,10 @@ export class HoneyBadgerRageRenderer {
       const angle = clusterAngle + Phaser.Math.FloatBetween(-clusterSpread * 1.35, clusterSpread * 1.35);
       const startX = x + Math.cos(angle) * (startRadius * 0.68) + Phaser.Math.FloatBetween(-3, 3);
       const startY = y + Math.sin(angle) * (startRadius * 0.68) + Phaser.Math.FloatBetween(-3, 3);
-      const travel = Phaser.Math.FloatBetween(bodySize * 0.95, bodySize * 1.85);
+      const travel = Phaser.Math.FloatBetween(
+        Math.max(bodySize * 0.85, auraRadius * 0.44),
+        Math.max(bodySize * 1.45, auraRadius * 0.76),
+      );
       const droplet = this.scene.add.image(startX, startY, TEX_BLOOD_DROPLET)
         .setDepth(DEPTH_RAGE_SPLASH + 0.01)
         .setTint(this.pickBloodTint())

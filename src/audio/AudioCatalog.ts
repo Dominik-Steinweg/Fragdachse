@@ -248,7 +248,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_countdown_go:    0.5,
   sfx_options_preview: 0.5,
   sfx_train_move:      0.8,
-  sfx_train_explode:   0.1,
+  sfx_train_explode:   0.03,
 
   // Music  (Endwert je nach Lied anpassen; Kette: masterVolume × SOUND_MUSIC_VOLUME × dieser Wert)
   music_lobby: 0.2,

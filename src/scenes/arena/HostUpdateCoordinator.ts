@@ -438,6 +438,7 @@ export class HostUpdateCoordinator {
       const isStunned  = this.ctx.burrowSystem?.isStunned(player.id)  ?? false;
       const burrowPhase = this.ctx.burrowSystem?.getPhase(player.id) ?? 'idle';
       const isRaging   = this.ctx.loadoutManager?.isUltimateActive(player.id) ?? false;
+      const activeUltimateId = this.ctx.loadoutManager?.getActiveUltimateId(player.id) ?? undefined;
       const burnStacks = this.ctx.combatSystem.getBurnStackCount(player.id);
       const isChargingUltimate = this.ctx.loadoutManager?.isUltimateCharging(player.id) ?? false;
       const ultimateChargeFraction = this.ctx.loadoutManager?.getUltimateChargeFraction(player.id, now) ?? 0;
@@ -474,6 +475,7 @@ export class HostUpdateCoordinator {
         isStunned,
         burrowPhase,
         isRaging,
+        activeUltimateId,
         burnStacks,
         isChargingUltimate,
         ultimateChargeFraction,

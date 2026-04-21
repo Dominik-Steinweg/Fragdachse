@@ -66,6 +66,7 @@ export interface PlayerNetState {
   isStunned:  boolean;
   burrowPhase: BurrowPhase;
   isRaging:   boolean;  // Ultimate aktiv
+  activeUltimateId?: string;
   burnStacks: number;
   isChargingUltimate?: boolean;
   ultimateChargeFraction?: number;

@@ -386,6 +386,12 @@ export interface ArmageddonMeteorConfig {
   readonly trainDamageMult?: number;    // Schadensfaktor gegen den Zug (Default 1.0)
 }
 
+export interface BuffAuraConfig {
+  readonly radius: number;
+  readonly damagePerTick: number;
+  readonly tickIntervalMs: number;
+}
+
 interface BaseUltimateConfig {
   readonly id: string;
   readonly displayName: string;
@@ -403,6 +409,7 @@ export interface BuffUltimateConfig extends BaseUltimateConfig {
   readonly armorTickIntervalMs: number; // Tick-Abstand für Armor-Regeneration
   readonly rageDrainDuration: number; // ms über die Rage von max→0 sinkt
   readonly armageddon?: ArmageddonMeteorConfig;
+  readonly aura?: BuffAuraConfig;
 }
 
 export interface GaussUltimateConfig extends BaseUltimateConfig {
@@ -1685,6 +1692,11 @@ export const ULTIMATE_CONFIGS = {
     armorPerTick:       5,
     armorTickIntervalMs: 300,
     rageDrainDuration:  6000,
+    aura: {
+      radius:          128,
+      damagePerTick:   20,
+      tickIntervalMs:  500,
+    },
   } as BuffUltimateConfig,
 
   DACHS_TUNNEL: {
