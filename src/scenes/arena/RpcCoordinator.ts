@@ -21,6 +21,7 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
     case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
     case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };
     case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };
+    case 'train':       return undefined; // sound handled separately via playLocalSound('sfx_train_explode')
     default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
   }
 }

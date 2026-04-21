@@ -37,13 +37,15 @@ const SHIPPED_AUDIO_FILES = new Set([
   'sfx_player_death.ogg',
   'sfx_player_move.ogg',
   'sfx_player_spawn.ogg',
+  'sfx_player_hit.ogg',
+  'sfx_hit_feedback.ogg',
+  'sfx_environment_hit.ogg',
   'sfx_train_move.ogg',
   'shotgun.ogg',
   'spore.ogg',
   'throw.ogg',
   'zeus.mp3',
   'zeus.ogg',
-  'music_arena.wav',
 ]);
 
 function isShippedAudioAsset(assetPath: string): boolean {
@@ -127,10 +129,10 @@ const GENERAL_ASSETS = {
   sfx_player_move:     './assets/sounds/sfx_player_move.ogg', //done
   sfx_dash:            './assets/sounds/sfx_dash.ogg', //done
   sfx_burrowed:        './assets/sounds/sfx_burrowed.ogg',//done
-  sfx_player_hit:      './assets/sounds/sfx_player_hit.wav',
-  sfx_environment_hit: './assets/sounds/sfx_environment_hit.wav',
-  sfx_hit_feedback:    './assets/sounds/sfx_hit_feedback.wav',
-  sfx_player_death:    './assets/sounds/sfx_player_death.ogg',
+  sfx_player_hit:      './assets/sounds/sfx_player_hit.ogg', //done
+  sfx_environment_hit: './assets/sounds/sfx_environment_hit.ogg',
+  sfx_hit_feedback:    './assets/sounds/sfx_hit_feedback.ogg', //done
+  sfx_player_death:    './assets/sounds/sfx_player_death.ogg',//done
   sfx_player_spawn:    './assets/sounds/sfx_player_spawn.ogg',//done
   sfx_ctb_score:       './assets/sounds/sfx_ctb_score.wav',
   sfx_countdown_3:     './assets/sounds/sfx_countdown_3.ogg', //done
@@ -139,7 +141,7 @@ const GENERAL_ASSETS = {
   sfx_countdown_go:    './assets/sounds/sfx_countdown_go.ogg',//done
   sfx_options_preview: './assets/sounds/sfx_countdown_go.ogg',
   sfx_train_move:      './assets/sounds/sfx_train_move.ogg',//done
-  sfx_train_explode:   './assets/sounds/sfx_train_explode.wav',
+  sfx_train_explode:   './assets/sounds/sfx_nuke_explosion.ogg',
 } as const;
 
 // ── Music ───────────────────────────────────────────────────────────────────
@@ -201,7 +203,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_rocket:         0.5,
   sfx_explosion_mini_rocket:    0.15,
   sfx_explosion_asmd_secondary: 0.5,
-  sfx_explosion_armageddon:     0.2,
+  sfx_explosion_armageddon:     0.1,
 
   // Loadout Activations
   sfx_tesla_activate:        0.5,
@@ -236,7 +238,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_player_move:     0.5,
   sfx_dash:            0.5,
   sfx_burrowed:        0.5,
-  sfx_player_hit:      0.5,
+  sfx_player_hit:      0.3,
   sfx_environment_hit: 0.5,
   sfx_hit_feedback:    0.5,
   sfx_player_death:    0.9,
@@ -248,7 +250,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_countdown_go:    0.5,
   sfx_options_preview: 0.5,
   sfx_train_move:      0.8,
-  sfx_train_explode:   0.03,
+  sfx_train_explode:   0.2,
 
   // Music  (Endwert je nach Lied anpassen; Kette: masterVolume × SOUND_MUSIC_VOLUME × dieser Wert)
   music_lobby: 0.2,

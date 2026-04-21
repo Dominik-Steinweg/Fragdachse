@@ -1156,6 +1156,9 @@ export class EffectSystem {
     impactKind: HitscanImpactKind = 'environment',
   ): void {
     if (impactKind === 'none' || !isPointInsideArena(x, y)) return;
+    if (impactKind === 'environment') {
+      this.audioSystem?.playSound('sfx_environment_hit', x, y);
+    }
     const baseColor = this.mixColor(playerColor, 0xffffff, 0.3);
     const haloRadius = Math.max(thickness * 2.4, 7);
     const halo = this.scene.add.circle(x, y, haloRadius, baseColor, 0.24);

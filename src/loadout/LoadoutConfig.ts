@@ -660,7 +660,7 @@ export const WEAPON_CONFIGS = {
     id:                   'HYDRA',
     displayName:          'Hydra Gun',
     cooldown:             800,
-    damage:               16,          // Direkttreffer-Schaden
+    damage:               12,          // Direkttreffer-Schaden
     range:                1000,         
     fire: {
       type:                 'projectile',
@@ -778,7 +778,7 @@ export const WEAPON_CONFIGS = {
     id:                   'AK47',
     displayName:          'AK-47',
     cooldown:             140,
-    damage:               12,
+    damage:               10,
     range:                1000,        
     fire: {
       type:                 'projectile',
@@ -910,7 +910,7 @@ export const WEAPON_CONFIGS = {
     range:                900,
     fire: {
       type:                 'projectile',
-      projectileSpeed:      700,
+      projectileSpeed:      600,
       projectileSize:       10,
       projectileMaxBounces: 0,
       limitRangeToCursor:   true,

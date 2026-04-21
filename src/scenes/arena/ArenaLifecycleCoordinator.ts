@@ -777,9 +777,9 @@ export class ArenaLifecycleCoordinator {
         }
       }
       for (const seg of result.segmentPositions) {
-        bridge.broadcastExplosionEffect(seg.x, seg.y, 80);
+        bridge.broadcastExplosionEffect(seg.x, seg.y, 80, undefined, 'train');
       }
-      bridge.broadcastExplosionEffect(result.centerX, result.centerY, 160);
+      bridge.broadcastExplosionEffect(result.centerX, result.centerY, 160, undefined, 'train');
 
       const arenaTop    = ARENA_OFFSET_Y;
       const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
