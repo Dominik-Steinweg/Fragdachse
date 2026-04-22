@@ -47,7 +47,7 @@ import {
   restartRoomForAutomaticRoomSearch,
   restartRoomForQualityRetry,
 } from '../utils/roomQuality';
-import { getStoredMasterVolume } from '../utils/localPreferences';
+import { getStoredEffectsVolume, getStoredMasterVolume, getStoredMusicVolume } from '../utils/localPreferences';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
@@ -192,6 +192,8 @@ export class ArenaScene extends Phaser.Scene {
         return sprite ? { x: sprite.x, y: sprite.y } : null;
       },
       getStoredMasterVolume(),
+      getStoredEffectsVolume(),
+      getStoredMusicVolume(),
     );
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);

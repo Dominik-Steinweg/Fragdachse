@@ -85,8 +85,7 @@ const EXPLOSION_ASSETS = {
   sfx_explosion_smoke:          './assets/sounds/sfx_explosion_smoke.wav',
   sfx_explosion_holy:           './assets/sounds/sfx_explosion_holy.ogg',//done
   sfx_explosion_rocket:         './assets/sounds/sfx_explosion_he.ogg',//done
-  // Platzhalter: teilt die Audiodatei mit sfx_explosion_rocket, bis ein eigener Mini-Rocket-Sound geliefert wird.
-  sfx_explosion_mini_rocket:    './assets/sounds/sfx_explosion_he.ogg',
+  sfx_explosion_mini_rocket:    './assets/sounds/sfx_explosion_he.ogg', // platzhalter, bis ein eigener Sound geliefert wird
   sfx_explosion_asmd_secondary: './assets/sounds/sfx_explosion_asmd_secondary.wav',
   sfx_explosion_armageddon:     './assets/sounds/sfx_explosion_armageddon.wav',
 } as const;
@@ -130,7 +129,7 @@ const GENERAL_ASSETS = {
   sfx_dash:            './assets/sounds/sfx_dash.ogg', //done
   sfx_burrowed:        './assets/sounds/sfx_burrowed.ogg',//done
   sfx_player_hit:      './assets/sounds/sfx_player_hit.ogg', //done
-  sfx_environment_hit: './assets/sounds/sfx_environment_hit.ogg',
+  sfx_environment_hit: './assets/sounds/sfx_environment_hit.ogg', // funktioniert noch nicht, noch nicht verdrahtet?!
   sfx_hit_feedback:    './assets/sounds/sfx_hit_feedback.ogg', //done
   sfx_player_death:    './assets/sounds/sfx_player_death.ogg',//done
   sfx_player_spawn:    './assets/sounds/sfx_player_spawn.ogg',//done
@@ -141,7 +140,7 @@ const GENERAL_ASSETS = {
   sfx_countdown_go:    './assets/sounds/sfx_countdown_go.ogg',//done
   sfx_options_preview: './assets/sounds/sfx_countdown_go.ogg',
   sfx_train_move:      './assets/sounds/sfx_train_move.ogg',//done
-  sfx_train_explode:   './assets/sounds/sfx_nuke_explosion.ogg',
+  sfx_train_explode:   './assets/sounds/sfx_nuke_explosion.ogg',  // platzhalter, bis ein eigener Sound geliefert wird
 } as const;
 
 // ── Music ───────────────────────────────────────────────────────────────────
@@ -149,6 +148,8 @@ const MUSIC_ASSETS = {
   music_lobby: './assets/sounds/badger01.mp3', 
   music_arena: './assets/sounds/music_arena.wav',
 } as const;
+
+export type MusicAssetKey = keyof typeof MUSIC_ASSETS;
 
 // ── Combined Catalog ────────────────────────────────────────────────────────
 export const AUDIO_ASSETS = {
@@ -161,6 +162,10 @@ export const AUDIO_ASSETS = {
 } as const;
 
 export type AudioAssetKey = keyof typeof AUDIO_ASSETS;
+
+export function isMusicAudioKey(key: string | undefined): key is MusicAssetKey {
+  return key === 'music_lobby' || key === 'music_arena';
+}
 
 // ── Per-Sound Volume Registry ───────────────────────────────────────────────
 /**
@@ -239,7 +244,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_dash:            0.5,
   sfx_burrowed:        0.5,
   sfx_player_hit:      0.3,
-  sfx_environment_hit: 0.5,
+  sfx_environment_hit: 0.9,
   sfx_hit_feedback:    0.5,
   sfx_player_death:    0.9,
   sfx_player_spawn:    0.7,
@@ -253,8 +258,8 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_train_explode:   0.2,
 
   // Music  (Endwert je nach Lied anpassen; Kette: masterVolume × SOUND_MUSIC_VOLUME × dieser Wert)
-  music_lobby: 0.2,
-  music_arena: 0.2,
+  music_lobby: 0.8,
+  music_arena: 0.8,
 };
 
 /**

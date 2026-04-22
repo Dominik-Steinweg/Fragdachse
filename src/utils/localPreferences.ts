@@ -1,14 +1,16 @@
-import { SOUND_MASTER_VOLUME } from '../config';
+import { SOUND_MASTER_VOLUME, SOUND_MUSIC_VOLUME, SOUND_SFX_VOLUME } from '../config';
 import type { LoadoutSlot } from '../types';
 import { sanitizePlayerName } from './playerName';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 1;
+const LOCAL_PREFERENCES_VERSION = 2;
 
-interface LocalPreferencesV1 {
-  version: 1;
+interface LocalPreferencesV2 {
+  version: 2;
   audio: {
     masterVolume: number;
+    effectsVolume: number;
+    musicVolume: number;
   };
   profile: {
     playerName: string | null;
@@ -16,10 +18,12 @@ interface LocalPreferencesV1 {
   loadout: Partial<Record<LoadoutSlot, string>>;
 }
 
-const DEFAULT_PREFERENCES: LocalPreferencesV1 = {
+const DEFAULT_PREFERENCES: LocalPreferencesV2 = {
   version: LOCAL_PREFERENCES_VERSION,
   audio: {
     masterVolume: SOUND_MASTER_VOLUME,
+    effectsVolume: SOUND_SFX_VOLUME,
+    musicVolume: SOUND_MUSIC_VOLUME,
   },
   profile: {
     playerName: null,
@@ -35,15 +39,15 @@ function getLocalStorage(): Storage | null {
   }
 }
 
-function clampMasterVolume(value: number): number {
+function clampAudioVolume(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function parsePreferences(raw: string | null): LocalPreferencesV1 {
+function parsePreferences(raw: string | null): LocalPreferencesV2 {
   if (!raw) return { ...DEFAULT_PREFERENCES, audio: { ...DEFAULT_PREFERENCES.audio }, profile: { ...DEFAULT_PREFERENCES.profile }, loadout: {} };
 
   try {
-    const parsed = JSON.parse(raw) as Partial<LocalPreferencesV1>;
+    const parsed = JSON.parse(raw) as Partial<LocalPreferencesV2>;
     const loadout = parsed.loadout && typeof parsed.loadout === 'object'
       ? parsed.loadout
       : {};
@@ -51,12 +55,18 @@ function parsePreferences(raw: string | null): LocalPreferencesV1 {
       ? sanitizePlayerName(parsed.profile.playerName) || null
       : null;
     const masterVolume = typeof parsed.audio?.masterVolume === 'number'
-      ? clampMasterVolume(parsed.audio.masterVolume)
+      ? clampAudioVolume(parsed.audio.masterVolume)
       : SOUND_MASTER_VOLUME;
+    const effectsVolume = typeof parsed.audio?.effectsVolume === 'number'
+      ? clampAudioVolume(parsed.audio.effectsVolume)
+      : SOUND_SFX_VOLUME;
+    const musicVolume = typeof parsed.audio?.musicVolume === 'number'
+      ? clampAudioVolume(parsed.audio.musicVolume)
+      : SOUND_MUSIC_VOLUME;
 
     return {
       version: LOCAL_PREFERENCES_VERSION,
-      audio: { masterVolume },
+      audio: { masterVolume, effectsVolume, musicVolume },
       profile: { playerName },
       loadout: {
         weapon1: typeof loadout.weapon1 === 'string' ? loadout.weapon1 : undefined,
@@ -70,15 +80,15 @@ function parsePreferences(raw: string | null): LocalPreferencesV1 {
   }
 }
 
-function readPreferences(): LocalPreferencesV1 {
+function readPreferences(): LocalPreferencesV2 {
   return parsePreferences(getLocalStorage()?.getItem(LOCAL_PREFERENCES_KEY) ?? null);
 }
 
-function writePreferences(next: LocalPreferencesV1): void {
+function writePreferences(next: LocalPreferencesV2): void {
   getLocalStorage()?.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify(next));
 }
 
-function updatePreferences(mutator: (current: LocalPreferencesV1) => LocalPreferencesV1): void {
+function updatePreferences(mutator: (current: LocalPreferencesV2) => LocalPreferencesV2): void {
   writePreferences(mutator(readPreferences()));
 }
 
@@ -87,12 +97,42 @@ export function getStoredMasterVolume(): number {
 }
 
 export function setStoredMasterVolume(volume: number): void {
-  const nextVolume = clampMasterVolume(volume);
+  const nextVolume = clampAudioVolume(volume);
   updatePreferences((current) => ({
     ...current,
     audio: {
       ...current.audio,
       masterVolume: nextVolume,
+    },
+  }));
+}
+
+export function getStoredEffectsVolume(): number {
+  return readPreferences().audio.effectsVolume;
+}
+
+export function setStoredEffectsVolume(volume: number): void {
+  const nextVolume = clampAudioVolume(volume);
+  updatePreferences((current) => ({
+    ...current,
+    audio: {
+      ...current.audio,
+      effectsVolume: nextVolume,
+    },
+  }));
+}
+
+export function getStoredMusicVolume(): number {
+  return readPreferences().audio.musicVolume;
+}
+
+export function setStoredMusicVolume(volume: number): void {
+  const nextVolume = clampAudioVolume(volume);
+  updatePreferences((current) => ({
+    ...current,
+    audio: {
+      ...current.audio,
+      musicVolume: nextVolume,
     },
   }));
 }
