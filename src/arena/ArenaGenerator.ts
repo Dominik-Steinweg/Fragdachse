@@ -171,7 +171,14 @@ export class ArenaGenerator {
       }
 
       const powerUpPedestals = ArenaGenerator.generatePowerUpPedestals(rng, blocked, trackCols);
-      const decals = ArenaGenerator.generateDecals(rng, rocks, trees, tracks, dirtSet, powerUpPedestals);
+      const decals = ArenaGenerator.generateDecals(
+        ArenaGenerator.makeDecalPrng(seed + attempt),
+        rocks,
+        trees,
+        tracks,
+        dirtSet,
+        powerUpPedestals,
+      );
 
       return { seed: seed + attempt, rocks, trees, tracks, dirt, decals, powerUpPedestals };
     }
@@ -179,6 +186,32 @@ export class ArenaGenerator {
     throw new Error(
       `ArenaGenerator: Konnte nach 100 Versuchen kein konnektives Layout generieren (seed=${seed})`,
     );
+  }
+
+  static stripVisualOnlyFields(layout: ArenaLayout): ArenaLayout {
+    const { decals: _decals, ...networkLayout } = layout;
+    return networkLayout;
+  }
+
+  static hydrateVisualOnlyFields(layout: ArenaLayout): ArenaLayout {
+    if (layout.decals !== undefined) return layout;
+
+    const dirtSet = new Set<number>();
+    for (const { gridX, gridY } of layout.dirt) {
+      dirtSet.add(ArenaGenerator.cellKey(gridX, gridY));
+    }
+
+    return {
+      ...layout,
+      decals: ArenaGenerator.generateDecals(
+        ArenaGenerator.makeDecalPrng(layout.seed),
+        layout.rocks,
+        layout.trees,
+        layout.tracks,
+        dirtSet,
+        layout.powerUpPedestals,
+      ),
+    };
   }
 
   /**
@@ -495,5 +528,9 @@ export class ArenaGenerator {
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+  }
+
+  private static makeDecalPrng(seed: number): () => number {
+    return ArenaGenerator.makePrng((seed ^ 0x9e3779b9) >>> 0);
   }
 }

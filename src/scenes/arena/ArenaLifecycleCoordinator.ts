@@ -158,7 +158,7 @@ export class ArenaLifecycleCoordinator {
     applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
     const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     const layout = ArenaGenerator.generate(Date.now());
-    bridge.publishArenaLayout(layout);
+    bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
     bridge.setArenaStartTime(arenaStartTime);
     bridge.setRoundEndTime(arenaStartTime + ARENA_DURATION_SEC * 1000);
     bridge.setGamePhase('ARENA');
@@ -243,9 +243,10 @@ export class ArenaLifecycleCoordinator {
 
   // ── Arena build / teardown ────────────────────────────────────────────────
 
-  buildArena(layout: ArenaLayout): void {
+  buildArena(networkLayout: ArenaLayout): void {
     this.tearDownArena();
 
+    const layout = ArenaGenerator.hydrateVisualOnlyFields(networkLayout);
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
@@ -670,6 +671,7 @@ export class ArenaLifecycleCoordinator {
     }
     this.layoutRetryCount = 0;
 
+    applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
     this.buildArena(layout);
     this.arenaBuilt = true;
 

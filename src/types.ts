@@ -778,14 +778,14 @@ export interface PowerUpPedestalCell {
   gridY: number;
 }
 
-/** Vollständiger Arena-Layout-Deskriptor – wird vom Host generiert und via reliable-State verteilt */
+/** Vollständiger Arena-Layout-Deskriptor – visuelle Decals können im Netzwerkpayload ausgelassen und lokal rekonstruiert werden. */
 export interface ArenaLayout {
   seed:   number;
   rocks:  RockCell[];
   trees:  TreeCell[];
   tracks: TrackCell[];
   dirt:   DirtCell[];
-  decals: DecalCell[];
+  decals?: DecalCell[];
   powerUpPedestals: PowerUpPedestalCell[];
 }
 
