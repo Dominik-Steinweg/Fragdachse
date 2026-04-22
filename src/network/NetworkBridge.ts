@@ -87,6 +87,7 @@ export interface RoundResult {
 }
 
 export interface GameState {
+  roundStartTime: number;
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectile[];
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
@@ -640,6 +641,7 @@ export class NetworkBridge {
    */
   publishGameState(state: GameState): void {
     const payload: Record<string, unknown> = { p: state.players, _s: ++this.publishSeq };
+    payload.rt = state.roundStartTime;
     if (state.projectiles.length > 0)  payload.j = state.projectiles;
     if (state.rocks.length > 0)        payload.r = state.rocks;
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
@@ -667,7 +669,16 @@ export class NetworkBridge {
     const seq = raw._s as number | undefined;
     if (seq !== undefined && seq === this.lastSeenSeq) return this.cachedGameState;
     if (seq !== undefined) this.lastSeenSeq = seq;
+
+    const roundStartTime = (raw.rt as number | undefined) ?? 0;
+    const expectedRoundStartTime = this.getArenaStartTime();
+    if (this.getGamePhase() === 'ARENA' && expectedRoundStartTime > 0 && roundStartTime !== expectedRoundStartTime) {
+      this.cachedGameState = undefined;
+      return undefined;
+    }
+
     const state: GameState = {
+      roundStartTime,
       players:       raw.p as Record<string, PlayerNetState>,
       projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
       rocks:         (raw.r as RockNetState[]       | undefined) ?? [],

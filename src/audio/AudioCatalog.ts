@@ -6,7 +6,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   'asmd-prim.ogg',
   'asmd-sec.ogg',
   'awp.ogg',
-  'badger01.mp3',
+  'badger02.ogg',
   'bfg.ogg',
   'bite.ogg',
   'crossbow.ogg',
@@ -145,7 +145,7 @@ const GENERAL_ASSETS = {
 
 // ── Music ───────────────────────────────────────────────────────────────────
 const MUSIC_ASSETS = {
-  music_lobby: './assets/sounds/badger01.mp3', 
+  music_lobby: './assets/sounds/badger02.ogg', 
   music_arena: './assets/sounds/music_arena.wav',
 } as const;
 

@@ -493,6 +493,7 @@ export class HostUpdateCoordinator {
     }
 
     bridge.publishGameState({
+      roundStartTime: bridge.getArenaStartTime(),
       players,
       projectiles,
       rocks,
