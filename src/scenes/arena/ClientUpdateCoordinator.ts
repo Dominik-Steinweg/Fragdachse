@@ -14,6 +14,7 @@ import type { RockVisualHelper } from './RockVisualHelper';
 import type { BurrowPhase, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
+import { ROCK_HP_MAX } from '../../config';
 
 /**
  * Runs every frame on non-host clients.
@@ -23,6 +24,7 @@ import type { PlayerEntity } from '../../entities/PlayerEntity';
  */
 export class ClientUpdateCoordinator {
   private lastGameStateVersion = -1;
+  private readonly damagedStaticRockIds = new Set<number>();
   private readonly prevAliveStates      = new Map<string, boolean>();
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly prevBurrowPhases     = new Map<string, BurrowPhase>();
@@ -118,12 +120,27 @@ export class ClientUpdateCoordinator {
       // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
 
       if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
+        const nextDamagedStaticRockIds = new Set<number>();
         for (const rs of state.rocks) {
+          if (!this.ctx.placementSystem?.getRuntimeRock(rs.id)) {
+            nextDamagedStaticRockIds.add(rs.id);
+          }
           if (rs.hp <= 0) {
             this.rockVisualHelper.handleDestroyedRock(rs.id, 'damage');
             continue;
           }
           this.rockVisualHelper.updateRockVisualById(rs.id, rs.hp);
+        }
+
+        for (const rockId of this.damagedStaticRockIds) {
+          if (!nextDamagedStaticRockIds.has(rockId)) {
+            this.rockVisualHelper.updateRockVisualById(rockId, ROCK_HP_MAX);
+          }
+        }
+
+        this.damagedStaticRockIds.clear();
+        for (const rockId of nextDamagedStaticRockIds) {
+          this.damagedStaticRockIds.add(rockId);
         }
       }
 
@@ -368,6 +385,7 @@ export class ClientUpdateCoordinator {
 
   resetPerRound(): void {
     this.lastGameStateVersion = -1;
+    this.damagedStaticRockIds.clear();
     this.prevAliveStates.clear();
     this.prevDashPhases.clear();
     this.prevBurrowPhases.clear();
