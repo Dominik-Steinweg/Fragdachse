@@ -13,10 +13,14 @@ import {
 import { isTeamGameMode } from '../gameModes';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
-const PANEL_COLOR   = COLORS.GREY_6;
-const READY_COLOR   = COLORS.GREEN_3;
-const UNREADY_COLOR = COLORS.RED_3;
+const PANEL_COLOR   = COLORS.GREY_8;
+const READY_COLOR   = COLORS.GREEN_4;
+const UNREADY_COLOR = COLORS.RED_4;
 const TEXT_COLOR    = toCssColor(COLORS.GREY_2);
+const ACCENT_COLOR  = toCssColor(COLORS.BROWN_1);
+const BTN_COPY_COLOR  = COLORS.BLUE_5;
+const BTN_RETRY_COLOR = COLORS.BROWN_5;
+const BTN_AUTO_COLOR  = COLORS.GREEN_5;
 
 const PANEL_W  = 800;
 const PANEL_H  = 600;
@@ -98,18 +102,18 @@ export class LobbyOverlay {
 
     // ── Panel ─────────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, PANEL_COLOR, 0.8)
-        .setStrokeStyle(2, COLORS.GOLD_1).setScrollFactor(0),
+      this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, PANEL_COLOR, 0.95)
+        .setStrokeStyle(3, COLORS.BROWN_4).setScrollFactor(0),
     );
 
     // ── Status-Text ───────────────────────────────────────────────────────
-    this.statusText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 30, 'Warte auf Mitspieler…', {
-      fontSize: '20px', fontFamily: 'monospace', color: TEXT_COLOR,
+    this.statusText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 20, 'Warte auf Mitspieler…', {
+      fontSize: '20px', fontFamily: 'monospace', color: ACCENT_COLOR, fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.statusText);
 
-    this.roomQualityText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 48, 'Ping-Check wird vorbereitet…', {
-      fontSize: '16px', fontFamily: 'monospace', color: TEXT_COLOR,
+    this.roomQualityText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 46, 'Ping-Check wird vorbereitet…', {
+      fontSize: '15px', fontFamily: 'monospace', color: TEXT_COLOR,
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.roomQualityText);
 
@@ -124,12 +128,13 @@ export class LobbyOverlay {
 
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 72, PANEL_W - 40, 2, COLORS.GOLD_1)
+      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 72, PANEL_W - 40, 2, COLORS.BROWN_4)
         .setScrollFactor(0),
     );
 
     // ── Bereit-Button ─────────────────────────────────────────────────────
     this.readyBtn = this.scene.add.rectangle(READY_BTN_X, READY_BTN_Y, READY_BTN_W, READY_BTN_H, UNREADY_COLOR)
+      .setStrokeStyle(2, COLORS.RED_2)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onReadyToggled(); })
       .on('pointerover',  () => { if (!this.btnLocked) this.readyBtn.setAlpha(0.8); })
@@ -142,12 +147,13 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.readyBtnLabel);
 
-    this.hostActionsLabel = this.scene.add.text(GAME_WIDTH / 2, HOST_LABEL_Y, 'Host-Funktionen', {
-      fontSize: '16px', fontFamily: 'monospace', color: TEXT_COLOR, fontStyle: 'bold',
+    this.hostActionsLabel = this.scene.add.text(GAME_WIDTH / 2, HOST_LABEL_Y, '— Host-Funktionen —', {
+      fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.hostActionsLabel);
 
-    this.copyBtn = this.scene.add.rectangle(COPY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.BLUE_4)
+    this.copyBtn = this.scene.add.rectangle(COPY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, BTN_COPY_COLOR)
+      .setStrokeStyle(1, COLORS.BLUE_3)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onCopyRoomLink(); })
       .on('pointerover',  () => { if (!this.btnLocked) this.copyBtn.setAlpha(0.8); })
@@ -156,11 +162,12 @@ export class LobbyOverlay {
     objects.push(this.copyBtn);
 
     this.copyBtnLabel = this.scene.add.text(COPY_BTN_X, ACTION_BTN_Y, 'LINK KOPIEREN', {
-      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.copyBtnLabel);
 
-    this.retryBtn = this.scene.add.rectangle(RETRY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.GOLD_4)
+    this.retryBtn = this.scene.add.rectangle(RETRY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, BTN_RETRY_COLOR)
+      .setStrokeStyle(1, COLORS.GOLD_3)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onRetryRoom(); })
       .on('pointerover',  () => { if (!this.btnLocked) this.retryBtn.setAlpha(0.8); })
@@ -169,11 +176,12 @@ export class LobbyOverlay {
     objects.push(this.retryBtn);
 
     this.retryBtnLabel = this.scene.add.text(RETRY_BTN_X, ACTION_BTN_Y, 'NEUER RAUM', {
-      fontSize: '18px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.retryBtnLabel);
 
-    this.autoBtn = this.scene.add.rectangle(AUTO_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, COLORS.GREEN_4)
+    this.autoBtn = this.scene.add.rectangle(AUTO_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, BTN_AUTO_COLOR)
+      .setStrokeStyle(1, COLORS.GREEN_3)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onStartAutomaticRoomSearch(); })
       .on('pointerover',  () => { if (!this.btnLocked) this.autoBtn.setAlpha(0.8); })
@@ -182,7 +190,7 @@ export class LobbyOverlay {
     objects.push(this.autoBtn);
 
     this.autoBtnLabel = this.scene.add.text(AUTO_BTN_X, ACTION_BTN_Y, 'AUTO-SUCHE', {
-      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.autoBtnLabel);
 
@@ -256,7 +264,8 @@ export class LobbyOverlay {
   /** Button-Zustand nach isReady-Toggle anpassen. */
   setReadyButtonState(isReady: boolean): void {
     this.btnLocked = false;
-    this.readyBtn.setFillStyle(isReady ? READY_COLOR : UNREADY_COLOR).setAlpha(1);
+    this.readyBtn.setFillStyle(isReady ? READY_COLOR : UNREADY_COLOR)
+      .setStrokeStyle(2, isReady ? COLORS.GREEN_2 : COLORS.RED_2).setAlpha(1);
     this.readyBtnLabel.setText(isReady ? 'NICHT BEREIT' : 'BEREIT');
     this.readyBtn.setInteractive({ useHandCursor: true });
     this.updateRoomActionButtons();
@@ -276,10 +285,10 @@ export class LobbyOverlay {
   showHostDisconnectedMessage(): void {
     this.statusText
       .setText('Host hat das Spiel verlassen.')
-      .setStyle({ color: '#ff4444' });
+      .setStyle({ color: toCssColor(COLORS.RED_2) });
     this.roomQualityText
       .setText('Ping-Check nicht verfuegbar.')
-      .setStyle({ color: '#ff4444' });
+      .setStyle({ color: toCssColor(COLORS.RED_2) });
     this.btnLocked = true;
     this.readyBtn.disableInteractive().setAlpha(0.4);
     this.readyBtnLabel.setText('BEENDET');
@@ -293,7 +302,7 @@ export class LobbyOverlay {
     const y   = LIST_Y + idx * ROW_H;
 
     const bg = this.scene.add.rectangle(GAME_WIDTH / 2, y, PANEL_W - 40, ROW_H - 6, COLORS.GREY_7)
-      .setOrigin(0.5, 0).setScrollFactor(0);
+      .setOrigin(0.5, 0).setStrokeStyle(1, COLORS.GREY_6).setScrollFactor(0);
     const name = this.scene.add.text(LIST_X + 40, y + 10, profile.name, {
       fontSize: '22px', fontFamily: 'monospace',
       color: `#${profile.colorHex.toString(16).padStart(6, '0')}`,
@@ -376,11 +385,11 @@ export class LobbyOverlay {
 
   private updateStatus(playerCount: number): void {
     if (playerCount < 2) {
-      this.statusText.setText('Warte auf Mitspieler…').setStyle({ color: TEXT_COLOR });
+      this.statusText.setText('Warte auf Mitspieler…').setStyle({ color: ACCENT_COLOR });
     } else {
       const readyCount = [...this.playerRows.keys()]
         .filter(id => this.bridge.getPlayerReady(id)).length;
-      this.statusText.setText(`${readyCount} / ${playerCount} bereit`).setStyle({ color: TEXT_COLOR });
+      this.statusText.setText(`${readyCount} / ${playerCount} bereit`).setStyle({ color: ACCENT_COLOR });
     }
 
     const roomSummary = this.formatRoomQualityText();
