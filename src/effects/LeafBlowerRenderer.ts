@@ -223,12 +223,12 @@ export class LeafBlowerRenderer {
     setEmitterTintArray(visual.dustEmitter, [terrainBase, dustBright, dustDark, dustDeep, terrainBase]);
     setCircleEmitZone(visual.dustEmitter, Math.max(sourceRadius * 1.1, 2.6), 1, true);
 
-    visual.leafEmitter.setPosition(x + dirX * sourceRadius * 0.1, y + dirY * sourceRadius * 0.1);
-    visual.leafEmitter.setAngle(angleDeg + Phaser.Math.Linear(-18, 18, (pulse + 1) * 0.5));
-    visual.leafEmitter.setParticleSpeed(Math.max(speed * 0.4, 82), Math.max(speed * 0.92, 176));
+    visual.leafEmitter.setPosition(x - dirX * sourceRadius * 1.15, y - dirY * sourceRadius * 1.15);
+    visual.leafEmitter.setAngle(angleDeg + 180);
+    visual.leafEmitter.setParticleSpeed(Math.max(speed * 0.08, 18), Math.max(speed * 0.28, 48));
     visual.leafEmitter.setParticleScale(Math.max(size / 102, 0.11), 0.04);
     setEmitterTintArray(visual.leafEmitter, [terrainBase, leafMain, leafAlt, mixColors(terrainBase, 0x597637, 0.16)]);
-    setCircleEmitZone(visual.leafEmitter, Math.max(debrisRadius * 1.2, 3.2), 1, true);
+    setCircleEmitZone(visual.leafEmitter, Math.max(debrisRadius * 1.45, 4.4), 1, true);
   }
 
   destroyVisual(id: number): void {
