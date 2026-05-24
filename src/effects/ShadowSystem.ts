@@ -16,6 +16,20 @@ import {
   WORLD_SHADOW_CONFIG,
 } from './ShadowConfig';
 
+interface ShadowWorldBounds {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+}
+
+interface StaticShadowLayoutBuildOptions {
+  readonly offsetX?: number;
+  readonly offsetY?: number;
+  readonly runtimeRocks?: readonly SyncedPlaceableRock[];
+  readonly rockVisibilityPredicate?: (index: number) => boolean;
+}
+
 interface ShadowLayerBucket {
   readonly staticGraphics: Phaser.GameObjects.Graphics;
   readonly dynamicGraphics: Phaser.GameObjects.Graphics;
@@ -46,6 +60,7 @@ const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: num
 
 export class ShadowSystem {
   private readonly layers = new Map<string, ShadowLayerBucket>();
+  private worldBoundsOverride: ShadowWorldBounds | null = null;
 
   // Reusable point buffers — mutated in-place each draw call to avoid
   // allocating hundreds of Vector2 objects per frame.
@@ -67,37 +82,68 @@ export class ShadowSystem {
     }
   }
 
+  setWorldBoundsOverride(bounds: ShadowWorldBounds | null): void {
+    this.worldBoundsOverride = bounds;
+  }
+
+  setVisible(visible: boolean): void {
+    for (const bucket of this.layers.values()) {
+      bucket.staticGraphics.setVisible(visible);
+      bucket.dynamicGraphics.setVisible(visible);
+    }
+  }
+
+  rebuildStaticLayoutShadows(
+    layout: ArenaLayout | null,
+    options: StaticShadowLayoutBuildOptions = {},
+  ): void {
+    this.clearStatic();
+    if (!layout) return;
+
+    const runtimeById = new Map<number, SyncedPlaceableRock>();
+    for (const rock of options.runtimeRocks ?? []) {
+      runtimeById.set(rock.id, rock);
+    }
+
+    const offsetX = options.offsetX ?? ARENA_OFFSET_X;
+    const offsetY = options.offsetY ?? ARENA_OFFSET_Y;
+    const rockVisibilityPredicate = options.rockVisibilityPredicate ?? (() => true);
+
+    for (let id = 0; id < layout.rocks.length; id += 1) {
+      if (!rockVisibilityPredicate(id)) continue;
+
+      const cell = layout.rocks[id];
+      const runtime = runtimeById.get(id);
+      const preset = runtime?.kind === 'turret' ? SHADOW_CASTERS.turret : SHADOW_CASTERS.rock;
+      const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+      this.drawFootprint(this.getLayer(preset.layerDepth).staticGraphics, worldX, worldY, preset);
+    }
+
+    for (const tree of layout.trees) {
+      const worldX = offsetX + tree.gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = offsetY + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
+      this.drawFootprint(this.getLayer(SHADOW_CASTERS.trunk.layerDepth).staticGraphics, worldX, worldY, SHADOW_CASTERS.trunk);
+      this.drawFootprint(this.getLayer(SHADOW_CASTERS.canopy.layerDepth).staticGraphics, worldX, worldY, SHADOW_CASTERS.canopy);
+    }
+  }
+
   rebuildArenaStaticShadows(
     layout: ArenaLayout | null,
     arenaResult: ArenaBuilderResult | null,
     runtimeRocks: readonly SyncedPlaceableRock[] = [],
   ): void {
-    this.clearStatic();
-    if (!layout || !arenaResult) return;
-
-    const runtimeById = new Map<number, SyncedPlaceableRock>();
-    for (const rock of runtimeRocks) {
-      runtimeById.set(rock.id, rock);
+    if (!layout || !arenaResult) {
+      this.clearStatic();
+      return;
     }
 
-    for (let id = 0; id < layout.rocks.length; id += 1) {
-      const rockObject = arenaResult.rockObjects[id];
-      if (!rockObject?.active) continue;
-
-      const cell = layout.rocks[id];
-      const runtime = runtimeById.get(id);
-      const preset = runtime?.kind === 'turret' ? SHADOW_CASTERS.turret : SHADOW_CASTERS.rock;
-      const worldX = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      this.drawFootprint(this.getLayer(preset.layerDepth).staticGraphics, worldX, worldY, preset);
-    }
-
-    for (const tree of layout.trees) {
-      const worldX = ARENA_OFFSET_X + tree.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = ARENA_OFFSET_Y + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
-      this.drawFootprint(this.getLayer(SHADOW_CASTERS.trunk.layerDepth).staticGraphics, worldX, worldY, SHADOW_CASTERS.trunk);
-      this.drawFootprint(this.getLayer(SHADOW_CASTERS.canopy.layerDepth).staticGraphics, worldX, worldY, SHADOW_CASTERS.canopy);
-    }
+    this.rebuildStaticLayoutShadows(layout, {
+      offsetX: ARENA_OFFSET_X,
+      offsetY: ARENA_OFFSET_Y,
+      runtimeRocks,
+      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockObjects[index]?.active),
+    });
   }
 
   syncDynamicShadows(
@@ -392,7 +438,7 @@ export class ShadowSystem {
   }
 
   private isVisibleInArena(x: number, y: number, margin: number): boolean {
-    const bounds = WORLD_SHADOW_CONFIG.arenaBounds;
+    const bounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
     return x + margin >= bounds.minX
       && x - margin <= bounds.maxX
       && y + margin >= bounds.minY

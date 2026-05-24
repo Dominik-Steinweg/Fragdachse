@@ -24,21 +24,22 @@ import { getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setSto
 
 // ── Layout-Konstanten (innerhalb des 240px-Sidebars) ─────────────────────────
 const CENTER_X     = 120;  // Mitte des 240px Sidebars
-const NAME_LABEL_Y = 60;
-const NAME_VALUE_Y = 80;
-const EDIT_BTN_Y   = 114;
-const MODE_LABEL_Y = 132;
-const MODE_ROW_Y   = 150;
-const DIVIDER1_Y   = 176;  // Trennlinie zwischen Name-/Modus-Sektion und Dachs
-const BADGER_Y     = 222;  // Dachs-Sprite-Mitte
-const DIVIDER2_Y   = 286;  // Trennlinie zwischen Dachs und Loadout
+const LOBBY_TOP_OFFSET_Y = 246;
+const NAME_LABEL_Y = 60 + LOBBY_TOP_OFFSET_Y;
+const NAME_VALUE_Y = 80 + LOBBY_TOP_OFFSET_Y;
+const EDIT_BTN_Y   = 114 + LOBBY_TOP_OFFSET_Y;
+const MODE_LABEL_Y = 132 + LOBBY_TOP_OFFSET_Y;
+const MODE_ROW_Y   = 150 + LOBBY_TOP_OFFSET_Y;
+const DIVIDER1_Y   = 176 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Name-/Modus-Sektion und Dachs
+const BADGER_Y     = 222 + LOBBY_TOP_OFFSET_Y;  // Dachs-Sprite-Mitte
+const DIVIDER2_Y   = 286 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Dachs und Loadout
 const BADGER_SIZE        = 48;   // Anzeigegröße
 const BADGER_CLICK_SIZE  = 56;   // Klickbare Fläche
 const TEAM_SELECT_Y      = BADGER_Y + BADGER_SIZE / 2 + 6;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_WORLD_X  = 12;
-const PICKER_WORLD_Y  = 238;
+const PICKER_WORLD_Y  = 238 + LOBBY_TOP_OFFSET_Y;
 const PICKER_W        = 188;
 const PICKER_H        = 148;
 const PICKER_PADDING  = 10;
@@ -53,14 +54,14 @@ const NAME_FONT  = { fontSize: '26px', fontFamily: 'monospace', color: toCssColo
 const EDIT_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_1) };
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = 312;   // Y des "Loadout:"-Labels
+const CAROUSEL_START_Y  = 312 + LOBBY_TOP_OFFSET_Y;   // Y des "Loadout:"-Labels
 const CAROUSEL_ROW_STEP = 52;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
 const CAROUSEL_GROUP_DY = 20;    // Offset erste Karussell-Zeile unter "Loadout:"
 const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const DIVIDER3_Y  = 536;  // Trennlinie unter Loadout
-const MENU_BTN_Y  = 566;
+const DIVIDER3_Y  = 536 + LOBBY_TOP_OFFSET_Y;  // Trennlinie unter Loadout
+const MENU_BTN_Y  = 566 + LOBBY_TOP_OFFSET_Y;
 const MENU_BTN_W  = 92;
 const MENU_BTN_H  = 34;
 const OPTIONS_BTN_X = 70;

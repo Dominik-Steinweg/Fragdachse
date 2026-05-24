@@ -1,6 +1,11 @@
 import { GRID_COLS, GRID_ROWS } from '../config';
 import type { RockCell } from '../types';
 
+export interface RockGridIndexDimensions {
+  cols: number;
+  rows: number;
+}
+
 /**
  * RockGridIndex – Leichtgewichtiger Spatial Index für das Felsen-Grid.
  *
@@ -11,19 +16,24 @@ import type { RockCell } from '../types';
 export class RockGridIndex {
   /** Flat Grid: grid[gy * GRID_COLS + gx] = Rock-Index oder -1 */
   private grid: Int16Array;
+  private cols: number;
+  private rows: number;
 
-  constructor(rocks: readonly RockCell[]) {
-    this.grid = new Int16Array(GRID_ROWS * GRID_COLS).fill(-1);
+  constructor(rocks: readonly RockCell[], dimensions?: RockGridIndexDimensions) {
+    this.cols = dimensions?.cols ?? GRID_COLS;
+    this.rows = dimensions?.rows ?? GRID_ROWS;
+    this.grid = new Int16Array(this.rows * this.cols).fill(-1);
     for (let i = 0; i < rocks.length; i++) {
       const { gridX, gridY } = rocks[i];
-      this.grid[gridY * GRID_COLS + gridX] = i;
+      if (gridX < 0 || gridX >= this.cols || gridY < 0 || gridY >= this.rows) continue;
+      this.grid[gridY * this.cols + gridX] = i;
     }
   }
 
   /** Ist die Gitterzelle von einem Felsen belegt? */
   isOccupied(gx: number, gy: number): boolean {
-    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return false;
-    return this.grid[gy * GRID_COLS + gx] !== -1;
+    if (gx < 0 || gx >= this.cols || gy < 0 || gy >= this.rows) return false;
+    return this.grid[gy * this.cols + gx] !== -1;
   }
 
   /**
@@ -31,26 +41,26 @@ export class RockGridIndex {
    * Für Autotiling: Rand-Tiles erhalten eine geschlossene Kante nach außen.
    */
   isOccupiedWithBorder(gx: number, gy: number): boolean {
-    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return true;
-    return this.grid[gy * GRID_COLS + gx] !== -1;
+    if (gx < 0 || gx >= this.cols || gy < 0 || gy >= this.rows) return true;
+    return this.grid[gy * this.cols + gx] !== -1;
   }
 
   /** Rock-Index an Grid-Position, oder -1 wenn leer. */
   getIndex(gx: number, gy: number): number {
-    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return -1;
-    return this.grid[gy * GRID_COLS + gx];
+    if (gx < 0 || gx >= this.cols || gy < 0 || gy >= this.rows) return -1;
+    return this.grid[gy * this.cols + gx];
   }
 
   /** Markiert eine Zelle als leer (nach Zerstörung). */
   remove(gx: number, gy: number): void {
-    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return;
-    this.grid[gy * GRID_COLS + gx] = -1;
+    if (gx < 0 || gx >= this.cols || gy < 0 || gy >= this.rows) return;
+    this.grid[gy * this.cols + gx] = -1;
   }
 
   /** Belegt oder überschreibt eine Zelle mit einem Rock-Index. */
   set(gx: number, gy: number, rockId: number): void {
-    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return;
-    this.grid[gy * GRID_COLS + gx] = rockId;
+    if (gx < 0 || gx >= this.cols || gy < 0 || gy >= this.rows) return;
+    this.grid[gy * this.cols + gx] = rockId;
   }
 
   /** Gibt Rock-Indizes aller belegten Nachbarzellen zurück (bis zu 8). */

@@ -22,7 +22,6 @@ const PANEL_W  = 800;
 const PANEL_H  = 600;
 const PANEL_X  = GAME_WIDTH  / 2 - PANEL_W / 2;
 const PANEL_Y  = GAME_HEIGHT / 2 - PANEL_H / 2;
-const LOGO_Y   = 120;
 const READY_BTN_W = 180;
 const READY_BTN_H = 52;
 const READY_BTN_Y = PANEL_Y + PANEL_H - 116;
@@ -101,13 +100,6 @@ export class LobbyOverlay {
     objects.push(
       this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, PANEL_COLOR, 0.8)
         .setStrokeStyle(2, COLORS.GOLD_1).setScrollFactor(0),
-    );
-
-    // ── Titel ─────────────────────────────────────────────────────────────
-    objects.push(
-      this.scene.add.image(GAME_WIDTH / 2, LOGO_Y, 'lobby_logo')
-        .setOrigin(0.5)
-        .setScrollFactor(0),
     );
 
     // ── Status-Text ───────────────────────────────────────────────────────

@@ -2,6 +2,8 @@ import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
+import { MENU_ARENA_PREVIEW_CONFIG } from '../arena/MenuArenaPreviewConfig';
+import { MenuArenaPreviewRenderer } from '../arena/MenuArenaPreviewRenderer';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { ProjectileManager }     from '../entities/ProjectileManager';
 import { InputSystem }           from '../systems/InputSystem';
@@ -102,6 +104,7 @@ export class ArenaScene extends Phaser.Scene {
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
+  private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
 
   // ── Coordinators ──────────────────────────────────────────────────────────
   private ctx!: ArenaContext;
@@ -172,6 +175,13 @@ export class ArenaScene extends Phaser.Scene {
     // ── Static arena (never destroyed) ────────────────────────────────────
     this.arenaBuilder = new ArenaBuilder(this);
     this.arenaBuilder.buildStatic(bridge.getGameMode(), bridge.getGamePhase());
+    this.menuArenaPreview = new MenuArenaPreviewRenderer(this, MENU_ARENA_PREVIEW_CONFIG);
+    this.menuArenaPreview.build();
+    this.menuArenaPreview.setVisible(bridge.getGamePhase() === 'LOBBY');
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.menuArenaPreview?.destroy();
+      this.menuArenaPreview = null;
+    });
     this.ensureArenaClipMask();
 
 
@@ -567,6 +577,8 @@ export class ArenaScene extends Phaser.Scene {
     if (!inGame && this.arenaPanelsHeld) {
       this.arenaPanelsHeld = false;
     }
+
+    this.menuArenaPreview?.setVisible(phase === 'LOBBY');
 
     if (inGame) {
       this.ctx.inputSystem.setInputEnabled(!countdownActive && !optionsOpen);

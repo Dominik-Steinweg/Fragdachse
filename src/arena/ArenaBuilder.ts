@@ -15,6 +15,7 @@ import { CAPTURE_THE_BEER_MODE } from '../gameModes';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, GameMode, GamePhase } from '../types';
 import { DECAL_SIZE } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
+import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { RockGridIndex } from './RockGridIndex';
 
 export interface ArenaBuilderResult {
@@ -356,14 +357,11 @@ export class ArenaBuilder {
    * Erstellt einen Felsen-Sprite aus dem Autotile-Spritesheet.
    */
   private createRockVisual(worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
-    return ArenaBuilder.createRockVisual(this.scene, worldX, worldY, frame);
+    return ArenaVisualFactory.createRock(this.scene, worldX, worldY, frame);
   }
 
   private static createRockVisual(scene: Phaser.Scene, worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
-    const img = scene.add.image(worldX, worldY, 'rocks', frame);
-    img.setDisplaySize(CELL_SIZE, CELL_SIZE);
-    img.setDepth(DEPTH.ROCKS);
-    return img;
+    return ArenaVisualFactory.createRock(scene, worldX, worldY, frame);
   }
 
   private static mixTint(baseColor: number, ownerColor?: number, strength = 0): number {
@@ -386,20 +384,14 @@ export class ArenaBuilder {
    * Kann später durch `this.scene.add.image(...)` ersetzt werden.
    */
   private createTrunkVisual(worldX: number, worldY: number): Phaser.GameObjects.Arc {
-    const circle = this.scene.add.circle(worldX, worldY, TRUNK_RADIUS, COLORS.BROWN_4);
-    circle.setDepth(DEPTH.ROCKS);
-    return circle;
+    return ArenaVisualFactory.createTrunk(this.scene, worldX, worldY);
   }
 
   /**
    * Erstellt die Baumkronen-Grafik als Image-Sprite (192×192 px = CANOPY_RADIUS * 2).
    */
   private createCanopyVisual(worldX: number, worldY: number): Phaser.GameObjects.Image {
-    const img = this.scene.add.image(worldX, worldY, 'bg_canopy');
-    img.setDisplaySize(CANOPY_RADIUS * 2, CANOPY_RADIUS * 2);
-    img.setAngle(Phaser.Math.Between(0, 359));
-    img.setDepth(DEPTH.CANOPY);
-    return img;
+    return ArenaVisualFactory.createCanopy(this.scene, worldX, worldY);
   }
 
   /**
@@ -454,33 +446,11 @@ export class ArenaBuilder {
    * Baut Dirt-Sprites mit Autotiling (rein visuell, keine Physik/Kollision).
    */
   private buildDirt(dirtCells: DirtCell[]): Phaser.GameObjects.Image[] {
-    if (dirtCells.length === 0) return [];
-
-    const dirtGrid = new RockGridIndex(dirtCells);
-    const isOccupied = (gx: number, gy: number) => dirtGrid.isOccupiedWithBorder(gx, gy);
-    const result: Phaser.GameObjects.Image[] = [];
-
-    for (const { gridX, gridY } of dirtCells) {
-      const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2;
-      const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
-      const frame  = AutoTiler.getFrame(mask, DIRT_AUTOTILE);
-      result.push(this.createDirtVisual(worldX, worldY, frame));
-    }
-    return result;
+    return ArenaVisualFactory.createDirt(this.scene, dirtCells);
   }
 
   private buildDecals(decals: DecalCell[]): Phaser.GameObjects.Image[] {
-    if (decals.length === 0) return [];
-
-    const result: Phaser.GameObjects.Image[] = [];
-    for (const { gridX, gridY, textureKey, offsetX, offsetY } of decals) {
-      const worldX = ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
-      const worldY = ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
-      result.push(this.createDecalVisual(worldX, worldY, textureKey));
-    }
-
-    return result;
+    return ArenaVisualFactory.createDecals(this.scene, decals);
   }
 
   // ── Gleise ────────────────────────────────────────────────────────────────
@@ -490,17 +460,7 @@ export class ArenaBuilder {
    * Gleise sind rein visuell (keine Physik-Gruppe), da sie begehbar sind.
    */
   private buildTracks(tracks: TrackCell[]): Phaser.GameObjects.TileSprite[] {
-    // Spalten → maximale Zeilenzahl ermitteln
-    const colRows = new Map<number, number>();
-    for (const { gridX, gridY } of tracks) {
-      const current = colRows.get(gridX) ?? 0;
-      colRows.set(gridX, Math.max(current, gridY + 1));
-    }
-    const result: Phaser.GameObjects.TileSprite[] = [];
-    for (const [col, rowCount] of colRows) {
-      result.push(this.createTrackColumnVisual(col, rowCount));
-    }
-    return result;
+    return ArenaVisualFactory.createTracks(this.scene, tracks);
   }
 
   /**
