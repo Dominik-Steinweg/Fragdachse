@@ -56,6 +56,14 @@ export interface MenuArenaPreviewConfig {
   layout: ArenaLayout;
 }
 
+interface RockClusterAnchor {
+  gridX: number;
+  gridY: number;
+  radiusX: number;
+  radiusY: number;
+  lobeCount?: number;
+}
+
 function points<T extends RockCell | TreeCell | DirtCell | TrackCell>(
   coords: ReadonlyArray<readonly [number, number]>,
 ): T[] {
@@ -84,6 +92,10 @@ function rockColumn(fromY: number, toY: number, gridX: number): RockCell[] {
     result.push({ gridX, gridY });
   }
   return result;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
 }
 
 function cellKey(gridX: number, gridY: number): number {
@@ -239,6 +251,92 @@ function surround(cells: ReadonlyArray<RockCell | TrackCell>, margin = 1, maxCol
   });
 }
 
+function ellipseCells(centerX: number, centerY: number, radiusX: number, radiusY: number): RockCell[] {
+  const result: RockCell[] = [];
+  const minX = Math.max(0, Math.floor(centerX - radiusX - 1));
+  const maxX = Math.min(MENU_GRID_COLS - 1, Math.ceil(centerX + radiusX + 1));
+  const minY = Math.max(0, Math.floor(centerY - radiusY - 1));
+  const maxY = Math.min(GRID_ROWS - 1, Math.ceil(centerY + radiusY + 1));
+
+  for (let gridY = minY; gridY <= maxY; gridY += 1) {
+    for (let gridX = minX; gridX <= maxX; gridX += 1) {
+      const dx = (gridX - centerX) / Math.max(radiusX, 0.75);
+      const dy = (gridY - centerY) / Math.max(radiusY, 0.75);
+      if (dx * dx + dy * dy <= 1.05) {
+        result.push({ gridX, gridY });
+      }
+    }
+  }
+
+  return result;
+}
+
+function createOrganicRockCluster(anchor: RockClusterAnchor, seed: number): RockCell[] {
+  const rng = createPreviewRng(seed);
+  const lobes: RockClusterAnchor[] = [anchor];
+  const extraLobes = anchor.lobeCount ?? (anchor.radiusX + anchor.radiusY >= 5.5 ? 3 : 2);
+
+  for (let index = 1; index < extraLobes; index += 1) {
+    const angle = rng() * Math.PI * 2;
+    const distance = 0.35 + rng() * 0.75;
+    lobes.push({
+      gridX: anchor.gridX + Math.cos(angle) * Math.max(anchor.radiusX - 0.5, 1) * distance,
+      gridY: anchor.gridY + Math.sin(angle) * Math.max(anchor.radiusY - 0.35, 0.9) * distance,
+      radiusX: Math.max(1, anchor.radiusX * (0.45 + rng() * 0.4)),
+      radiusY: Math.max(1, anchor.radiusY * (0.45 + rng() * 0.4)),
+    });
+  }
+
+  const rawCluster = mergeUnique<RockCell>(...lobes.map((lobe) => ellipseCells(lobe.gridX, lobe.gridY, lobe.radiusX, lobe.radiusY)));
+  const rawSet = new Set<string>(rawCluster.map((cell) => `${cell.gridX}:${cell.gridY}`));
+
+  return rawCluster.filter((cell) => {
+    const orthogonalNeighbors = [
+      `${cell.gridX - 1}:${cell.gridY}`,
+      `${cell.gridX + 1}:${cell.gridY}`,
+      `${cell.gridX}:${cell.gridY - 1}`,
+      `${cell.gridX}:${cell.gridY + 1}`,
+    ].filter((key) => rawSet.has(key)).length;
+    if (orthogonalNeighbors >= 3) return true;
+    if (orthogonalNeighbors <= 1) return false;
+    return rng() > 0.18;
+  });
+}
+
+function createOrganicRockClusters(anchors: readonly RockClusterAnchor[], seed: number): RockCell[] {
+  return mergeUnique<RockCell>(
+    ...anchors.map((anchor, index) => createOrganicRockCluster(anchor, seed + index * 97)),
+  );
+}
+
+function createOrganicTopDirtBand(seed: number, titleStartX: number, titleWidth: number): DirtCell[] {
+  const rng = createPreviewRng(seed);
+  const result: DirtCell[] = [];
+  let depth = 5;
+  const titleCenterX = titleStartX + titleWidth * 0.5;
+
+  for (let gridX = 0; gridX < MENU_GRID_COLS; gridX += 1) {
+    const drift = rng();
+    if (drift < 0.28) depth -= 1;
+    else if (drift > 0.72) depth += 1;
+    depth = clampInt(depth, 4, 7);
+
+    const distanceToTitle = Math.abs(gridX - titleCenterX);
+    const withinTitleBand = gridX >= titleStartX - 3 && gridX <= titleStartX + titleWidth + 2;
+    const titleSag = withinTitleBand
+      ? clampInt(2.8 - distanceToTitle / 5 + (rng() - 0.5) * 1.2, 0, 3)
+      : 0;
+    const edgeWeight = gridX < 5 || gridX > MENU_GRID_COLS - 6 ? 1 : 0;
+    const columnDepth = clampInt(depth + titleSag + edgeWeight, 4, 9);
+
+    for (let gridY = 0; gridY <= columnDepth; gridY += 1) {
+      result.push({ gridX, gridY });
+    }
+  }
+
+  return result;
+}
+
 function createPreviewRng(seed: number): () => number {
   let value = seed >>> 0;
   return () => {
@@ -347,21 +445,27 @@ const leftOverlayBorderRocks = mergeUnique<RockCell>(
   rockColumn(8, 27, 8),
 );
 
-const ambientRocks = points<RockCell>([
-  [13, 8], [14, 8], [15, 8], [14, 9], [15, 9], [16, 9],
-  [17, 28], [18, 28], [19, 28], [18, 29], [19, 29], [20, 29],
-  [43, 6], [44, 6], [45, 6], [44, 7], [45, 7], [46, 7],
-  [47, 12], [48, 12], [49, 12], [48, 13], [49, 13], [50, 13],
-  [44, 19], [45, 19], [46, 19], [45, 20], [46, 20], [47, 20],
-  [52, 25], [53, 25], [54, 25], [53, 26], [54, 26], [55, 26],
-  [56, 9], [57, 9], [58, 9], [57, 10],
-  [56, 30], [57, 30], [58, 30],
-  [3, 29], [4, 29], [5, 29], [4, 30],
-  [8, 24], [9, 24], [10, 24], [9, 25],
-]);
+const ambientRockAnchors: readonly RockClusterAnchor[] = [
+  { gridX: 13.8, gridY: 10.4, radiusX: 2.8, radiusY: 1.8 },
+  { gridX: 18.2, gridY: 28.8, radiusX: 3.2, radiusY: 2.1 },
+  { gridX: 48.3, gridY: 12.9, radiusX: 3.4, radiusY: 2.2, lobeCount: 4 },
+  { gridX: 45.2, gridY: 19.7, radiusX: 3.1, radiusY: 2.1 },
+  { gridX: 53.7, gridY: 25.9, radiusX: 3.6, radiusY: 2.3, lobeCount: 4 },
+  { gridX: 56.8, gridY: 10.8, radiusX: 2.4, radiusY: 1.7 },
+  { gridX: 56.4, gridY: 29.7, radiusX: 2.8, radiusY: 1.6 },
+  { gridX: 4.3, gridY: 29.8, radiusX: 2.9, radiusY: 1.9 },
+  { gridX: 9.1, gridY: 24.4, radiusX: 3.1, radiusY: 2.2 },
+  { gridX: 36.4, gridY: 30.6, radiusX: 2.8, radiusY: 1.7 },
+  { gridX: 41.8, gridY: 6.8, radiusX: 2.5, radiusY: 1.5 },
+  { gridX: 59.0, gridY: 6.4, radiusX: 2.2, radiusY: 1.4 },
+  { gridX: 2.4, gridY: 12.5, radiusX: 2.2, radiusY: 1.5 },
+  { gridX: 58.2, gridY: 16.8, radiusX: 2.6, radiusY: 1.8 },
+];
+
+const ambientRocks = createOrganicRockClusters(ambientRockAnchors, MENU_PREVIEW_SEED + 101);
 
 const trees = points<TreeCell>([
-  [2, 29], [6, 23], [12, 18], [15, 31], [44, 4], [51, 17], [56, 23], [58, 31],
+  [1, 4], [7, 5], [2, 29], [6, 23], [12, 18], [15, 31], [44, 4], [54, 5], [51, 17], [56, 23], [58, 31],
 ]);
 
 const overlayClearZones: readonly GridRect[] = [
@@ -420,24 +524,20 @@ const titleFrameBlendDirt = points<DirtCell>([
   [10, 9], [11, 9],
   [11, 10],
 ]);
+const topDirtBand = createOrganicTopDirtBand(MENU_PREVIEW_SEED + 211, TITLE_START_X, textWidth(TITLE_TEXT, TITLE_GAP));
+const rockBorderDirt = surround([...finalRocks, ...trackFootprint], 1, MENU_GRID_COLS, GRID_ROWS);
 const dirt = excludeRectCells(
   mergeUnique<DirtCell>(
-    line(0, MENU_GRID_COLS - 1, 0),
-    line(0, MENU_GRID_COLS - 1, 1),
-    line(0, MENU_GRID_COLS - 1, 2),
-    line(0, MENU_GRID_COLS - 1, 3),
-    line(0, MENU_GRID_COLS - 1, 4),
-    line(0, MENU_GRID_COLS - 1, 5),
-    line(0, MENU_GRID_COLS - 1, 6),
+    topDirtBand,
     titleFrameBlendDirt,
-    surround([...finalRocks, ...trackFootprint], 1, MENU_GRID_COLS, GRID_ROWS),
     line(44, 59, 30),
     line(43, 59, 31),
     line(46, 59, 32),
   ),
   dirtQuietZones,
 );
-const decals = generatePreviewDecals(finalRocks, finalTrees, tracks, dirt, decalQuietZones);
+const finalDirt = mergeUnique<DirtCell>(dirt, rockBorderDirt);
+const decals = generatePreviewDecals(finalRocks, finalTrees, tracks, finalDirt, decalQuietZones);
 
 export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
   view: {
@@ -474,7 +574,7 @@ export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
     rocks: finalRocks,
     trees: finalTrees,
     tracks,
-    dirt,
+    dirt: finalDirt,
     decals,
     powerUpPedestals: [],
   },
