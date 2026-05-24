@@ -1,26 +1,19 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors, setCircleEmitZone, setEmitterTintArray } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors, setCircleEmitZone, setEmitterTintArray } from './EffectUtils';
 import type { TerrainColorSampler } from '../arena/ArenaTerrainColorSampler';
 
-const TEX_AIR = '__leaf_blower_air';
-const TEX_CORE = '__leaf_blower_core';
 const TEX_DUST = '__leaf_blower_dust';
 const TEX_LEAF = '__leaf_blower_leaf';
-const TERRAIN_SAMPLE_INTERVAL_MS = 200;
-const AIR_PARTICLE_LINGER_MS = 100;
+const TERRAIN_SAMPLE_INTERVAL_MS = 600;
 const DUST_PARTICLE_LINGER_MS = 260;
-const LEAF_PARTICLE_LINGER_MS = 920;
-const CORE_MARKER_FADE_MS = 140;
+const LEAF_PARTICLE_LINGER_MS = 1220;
 const LEAF_BLOWER_VISUAL_SIZE_SCALE = 2.7;
 const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
 
-const DEPTH_STREAM = DEPTH.FIRE - 0.05;
 const DEPTH_DEBRIS = DEPTH.FIRE + 0.05;
 
 interface LeafBlowerVisual {
-  coreMarker: Phaser.GameObjects.Image;
-  airflowEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   dustEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   leafEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   sampledColor: number;
@@ -29,17 +22,8 @@ interface LeafBlowerVisual {
 
 function ensureLeafBlowerTextures(scene: Phaser.Scene): void {
   const textures = scene.textures;
-  refreshLeafTexture(textures, TEX_CORE);
   refreshLeafTexture(textures, TEX_DUST);
-  refreshLeafTexture(textures, TEX_AIR);
   refreshLeafTexture(textures, TEX_LEAF);
-
-  fillRadialGradientTexture(textures, TEX_CORE, 28, [
-    [0, 'rgba(255,255,255,0.34)'],
-    [0.18, 'rgba(255,255,255,0.2)'],
-    [0.46, 'rgba(255,255,255,0.08)'],
-    [1, 'rgba(225,239,224,0)'],
-  ]);
 
   ensureCanvasTexture(textures, TEX_DUST, 28, 28, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
@@ -61,23 +45,6 @@ function ensureLeafBlowerTextures(scene: Phaser.Scene): void {
       ctx.arc(px, py, radius, 0, Math.PI * 2);
       ctx.fill();
     }
-  });
-
-  ensureCanvasTexture(textures, TEX_AIR, 96, 28, (ctx) => {
-    const gradient = ctx.createLinearGradient(0, 14, 96, 14);
-    gradient.addColorStop(0, 'rgba(255,255,255,0)');
-    gradient.addColorStop(0.18, 'rgba(232,245,235,0.04)');
-    gradient.addColorStop(0.5, 'rgba(232,245,235,0.18)');
-    gradient.addColorStop(0.78, 'rgba(214,236,219,0.58)');
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(10, 14);
-    ctx.quadraticCurveTo(28, 6, 76, 11);
-    ctx.quadraticCurveTo(58, 14, 76, 17);
-    ctx.quadraticCurveTo(28, 22, 10, 14);
-    ctx.closePath();
-    ctx.fill();
   });
 
   ensureCanvasTexture(textures, TEX_LEAF, 24, 18, (ctx) => {
@@ -128,25 +95,6 @@ export class LeafBlowerRenderer {
 
     const visualSize = getVisualSize(size);
 
-    const coreMarker = this.scene.add.image(x, y, TEX_CORE)
-      .setDepth(DEPTH_DEBRIS + 0.1)
-      .setBlendMode(Phaser.BlendModes.NORMAL)
-      .setAlpha(0.22)
-      .setTint(0xb7c8a7);
-
-    const airflowEmitter = createEmitter(this.scene, x, y, TEX_AIR, {
-      lifespan: { min: 52, max: 82 },
-      frequency: 18,
-      quantity: 20,
-      angle: 0,
-      speed: { min: 72, max: 138 },
-      scale: { start: 0.12 + visualSize * 0.0022, end: 0.01 },
-      alpha: { start: 0.08, end: 0 },
-      blendMode: Phaser.BlendModes.ADD,
-      rotate: { min: -4, max: 4 },
-      emitting: true,
-    }, DEPTH_STREAM);
-
     const dustEmitter = createEmitter(this.scene, x, y, TEX_DUST, {
       lifespan: { min: 130, max: 220 },
       frequency: 5,
@@ -157,15 +105,15 @@ export class LeafBlowerRenderer {
       alpha: { start: 0.72, end: 0 },
       blendMode: Phaser.BlendModes.NORMAL,
       emitting: true,
-    }, DEPTH_STREAM - 0.05);
+    }, DEPTH.FIRE - 0.1);
 
     const leafEmitter = createEmitter(this.scene, x, y, TEX_LEAF, {
-      lifespan: { min: 160, max: 860 },
-      frequency: 20,
-      quantity: 20,
+      lifespan: { min: 360, max: 860 },
+      frequency: 40,
+      quantity: 5,
       angle: 0,
-      speed: { min: 34, max: 162 },
-      scale: { start: 0.16 + visualSize * 0.0028, end: 0.01 },
+      speed: { min: 34, max: 62 },
+      scale: { start: 0.16 + visualSize * 0.016, end: 0.01 },
       alpha: { start: 0.96, end: 0 },
       rotate: { min: 0, max: 360 },
       gravityY: 0,
@@ -174,8 +122,6 @@ export class LeafBlowerRenderer {
     }, DEPTH_DEBRIS);
 
     this.visuals.set(id, {
-      coreMarker,
-      airflowEmitter,
       dustEmitter,
       leafEmitter,
       sampledColor: 0xb7c8a7,
@@ -195,8 +141,6 @@ export class LeafBlowerRenderer {
     const dirY = vy / speed;
     const heading = Math.atan2(vy, vx);
     const angleDeg = Phaser.Math.RadToDeg(heading);
-    const pulse = Math.sin(this.scene.time.now * 0.015 + id * 0.37);
-    const intensity = Phaser.Math.Clamp(speed / 420, 0.2, 1.2);
     const now = this.scene.time.now;
     if (this.terrainColorSampler && now - visual.lastTerrainSampleAt >= TERRAIN_SAMPLE_INTERVAL_MS) {
       visual.sampledColor = this.terrainColorSampler(x, y);
@@ -206,25 +150,11 @@ export class LeafBlowerRenderer {
     const sourceRadius = Math.max(visualSize * 0.06, 1.25);
     const debrisRadius = Math.max(visualSize * 0.12, 2.4);
     const terrainBase = visual.sampledColor;
-    const streamTint = mixColors(terrainBase, 0xe6f7e8, 0.54);
     const dustBright = mixColors(terrainBase, 0xe6e0d0, 0.08);
     const dustDark = mixColors(terrainBase, 0x645846, 0.1);
     const dustDeep = mixColors(terrainBase, 0x4f4638, 0.14);
     const leafMain = mixColors(terrainBase, 0x6f9340, 0.22);
     const leafAlt = mixColors(terrainBase, 0x9e7c45, 0.12);
-    const coreTint = mixColors(terrainBase, dustBright, 0.28);
-
-    visual.coreMarker.setPosition(x, y);
-    visual.coreMarker.setScale(Math.max(visualSize / 100, 0.1) * (1 + pulse * 0.05));
-    visual.coreMarker.setAlpha(0.04 + intensity * 0.02);
-    visual.coreMarker.setTint(coreTint);
-
-    visual.airflowEmitter.setPosition(x, y);
-    visual.airflowEmitter.setAngle(angleDeg);
-    visual.airflowEmitter.setParticleSpeed(Math.max(speed * 0.28, 90), Math.max(speed * 0.72, 170));
-    visual.airflowEmitter.setParticleScale(Math.max(visualSize / 112, 0.08), 0.01);
-    setEmitterTintArray(visual.airflowEmitter, [0xfafffa, streamTint, coreTint]);
-    setCircleEmitZone(visual.airflowEmitter, sourceRadius, 1, true);
 
     visual.dustEmitter.setPosition(x - dirX * sourceRadius * 0.45, y - dirY * sourceRadius * 0.45);
     visual.dustEmitter.setAngle(angleDeg + 180);
@@ -248,26 +178,11 @@ export class LeafBlowerRenderer {
     this.visuals.delete(id);
 
     if (immediate) {
-      visual.coreMarker.destroy();
-      destroyEmitter(visual.airflowEmitter);
       destroyEmitter(visual.dustEmitter);
       destroyEmitter(visual.leafEmitter);
       return;
     }
 
-    this.scene.tweens.add({
-      targets: visual.coreMarker,
-      alpha: 0,
-      scaleX: visual.coreMarker.scaleX * 0.82,
-      scaleY: visual.coreMarker.scaleY * 0.82,
-      duration: CORE_MARKER_FADE_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        visual.coreMarker.destroy();
-      },
-    });
-
-    stopEmitterWithLinger(this.scene, visual.airflowEmitter, AIR_PARTICLE_LINGER_MS);
     stopEmitterWithLinger(this.scene, visual.dustEmitter, DUST_PARTICLE_LINGER_MS);
     stopEmitterWithLinger(this.scene, visual.leafEmitter, LEAF_PARTICLE_LINGER_MS);
   }
