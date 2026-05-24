@@ -4,7 +4,7 @@ import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors, setCircl
 import type { TerrainColorSampler } from '../arena/ArenaTerrainColorSampler';
 
 const TEX_LEAF = '__leaf_blower_leaf';
-const TERRAIN_SAMPLE_INTERVAL_MS = 30;
+const TERRAIN_SAMPLE_INTERVAL_MS = 300;
 const LEAF_PARTICLE_LINGER_MS = 1220;
 const LEAF_BLOWER_VISUAL_SIZE_SCALE = 2.7;
 const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
