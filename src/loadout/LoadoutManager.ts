@@ -681,10 +681,25 @@ export class LoadoutManager {
       gaussChargeStartedAt: null,
     };
     currentState.config = cfg;
+    const clearGaussCharge = (): void => {
+      if (currentState.gaussChargeStartedAt === null && state) {
+        this.ultimateStates.set(playerId, currentState);
+        return;
+      }
+      if (currentState.gaussChargeStartedAt === null) return;
+      currentState.gaussChargeStartedAt = null;
+      this.ultimateStates.set(playerId, currentState);
+    };
 
     if (action === 'press') {
-      if (currentState.gaussChargeStartedAt !== null) return { ok: false, reason: 'blocked' };
-      if (this.resourceSystem.getRage(playerId) < cfg.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
+      if (currentState.gaussChargeStartedAt !== null) {
+        clearGaussCharge();
+        return { ok: false, reason: 'blocked' };
+      }
+      if (this.resourceSystem.getRage(playerId) < cfg.rageRequired) {
+        clearGaussCharge();
+        return { ok: false, reason: 'resource', resourceKind: 'rage' };
+      }
       currentState.gaussChargeStartedAt = now;
       this.ultimateStates.set(playerId, currentState);
       return this.okResult;
@@ -702,6 +717,7 @@ export class LoadoutManager {
       return this.okResult;
     }
 
+    clearGaussCharge();
     return { ok: false, reason: 'blocked' };
   }
 

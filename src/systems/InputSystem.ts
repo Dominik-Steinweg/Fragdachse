@@ -923,7 +923,6 @@ export class InputSystem {
     if (!cfg) return;
     if (rage < cfg.rageRequired) {
       this.notifyUltimatePressedWithoutRage();
-      this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press', inputStarted: true });
       return;
     }
     this.cancelUtilityInteraction();
