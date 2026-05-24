@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder }      from '../../arena/ArenaBuilder';
 import { ArenaGenerator }    from '../../arena/ArenaGenerator';
+import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
 import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
 import { ResourceSystem }    from '../../systems/ResourceSystem';
@@ -254,6 +255,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
+    this.renderers.leafBlower.setTerrainColorSampler(
+      createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult),
+    );
     if (bridge.isHost()) {
       this.ctx.captureTheBeerSystem?.setFxHandler((event) => {
         bridge.broadcastCaptureTheBeerFx(event);
@@ -284,6 +288,9 @@ export class ArenaLifecycleCoordinator {
       const projectile = this.ctx.projectileManager.getProjectileById(projectileId);
       if (!projectile) return;
       this.spawnImpactCloudFromProjectile(projectile, x, y);
+    });
+    this.ctx.combatSystem.setPlayerImpulseCallback((playerId, vx, vy, durationMs) => {
+      this.ctx.hostPhysics.addRecoil(playerId, vx, vy, durationMs);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
@@ -618,6 +625,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setRockDamageCallback(null);
     this.ctx.combatSystem.setTrainDamageCallback(null);
     this.ctx.combatSystem.setProjectileImpactCallback(null);
+    this.ctx.combatSystem.setPlayerImpulseCallback(null);
     this.ctx.combatSystem.setKillCallback(() => { /* noop */ });
     this.ctx.hostPhysics.setBurrowSystem(null);
     this.ctx.hostPhysics.setLoadoutManager(null);
@@ -630,6 +638,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setProjectileImpactCallback(null);
     this.ctx.projectileManager.setBfgLaserCallback(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
+    this.renderers.leafBlower.setTerrainColorSampler(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;
 

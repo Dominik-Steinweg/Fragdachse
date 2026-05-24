@@ -14,7 +14,10 @@ type BurrowSystemType   = {
   isDashBlocked(id: string): boolean;
   getMovementSpeedFactor(id: string): number;
 };
-type LoadoutManagerType = { getSpeedMultiplier(id: string): number };
+type LoadoutManagerType = {
+  getSpeedMultiplier(id: string): number;
+  getHeldSelfPushVelocity(id: string): { vx: number; vy: number } | null;
+};
 
 interface DashState {
   phase:   1 | 2;
@@ -397,6 +400,12 @@ export class HostPhysicsSystem {
       } else {
         baseVx = 0;
         baseVy = 0;
+      }
+
+      const selfPush = this.loadoutManager?.getHeldSelfPushVelocity(player.id);
+      if (selfPush) {
+        baseVx += selfPush.vx;
+        baseVy += selfPush.vy;
       }
 
       player.body.setVelocity(baseVx + impulse.vx, baseVy + impulse.vy);

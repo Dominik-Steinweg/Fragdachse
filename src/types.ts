@@ -133,7 +133,7 @@ export interface SyncedDecoy {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'gauss' | 'negev';
@@ -231,6 +231,7 @@ export interface SyncedProjectile {
   bulletVisualPreset?: BulletVisualPreset;
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
+  velocityDecay?: number;
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
   shotAudioKey?: ShotAudioKey;
   suppressSpawnFx?: boolean;
@@ -508,6 +509,11 @@ export interface ProjectileSpawnConfig {
   burnDamagePerTick?: number;
   burnTickIntervalMs?: number;
 
+  // Laubblaeser (optional)
+  leafBlowerMinKnockback?: number;
+  leafBlowerMaxKnockback?: number;
+  leafBlowerSelfPush?:     number;
+
   // BFG (optional)
   isBfg?:            boolean;   // true = BFG-Projektil (durchschlagend, Laser-Sub-Attacke)
   bfgLaserRadius?:   number;    // Laser-Reichweite in px
@@ -691,6 +697,11 @@ export interface TrackedProjectile {
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
   burnTickIntervalMs?: number;
+
+  // Laubblaeser (optional)
+  leafBlowerMinKnockback?: number;
+  leafBlowerMaxKnockback?: number;
+  leafBlowerSelfPush?:     number;
 
   // Granaten-Countdown (Host-intern)
   lastCountdownEmitted?: number | null;  // letzter emittierter Countdown-Wert (Dedup)

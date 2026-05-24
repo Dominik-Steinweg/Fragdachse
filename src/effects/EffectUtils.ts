@@ -107,6 +107,23 @@ export function destroyEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmi
   emitter.destroy();
 }
 
+/**
+ * Correctly updates a particle emitter's tint to a new array of colors.
+ *
+ * setParticleTint() only calls EmitterOp.onChange() which updates `current` but not
+ * `propertyValue` or the emit method. For array tints, randomStaticValueEmit() reads
+ * from `propertyValue`, so onChange() with an array causes staticValueEmit() to return
+ * the array object — which JavaScript coerces to 0 (black) when used as a color.
+ * Calling loadConfig() properly resets propertyValue, method, and onEmit.
+ */
+export function setEmitterTintArray(
+  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
+  colors: number[],
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (emitter as any).ops?.tint?.loadConfig({ tint: colors });
+}
+
 export function createSeededRandom(seed: number): () => number {
   let state = (seed >>> 0) || 0x6d2b79f5;
 

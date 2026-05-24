@@ -5,6 +5,7 @@ import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, Synced
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
+import type { LeafBlowerRenderer } from '../effects/LeafBlowerRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
 import type { GaussRenderer }   from '../effects/GaussRenderer';
@@ -33,8 +34,8 @@ interface ClientProjectileState {
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   ownerColor?: number;
-  // Flammenwerfer-Decay: velocity nimmt exponentiell ab
-  isFlame: boolean;
+  isDecaying: boolean;
+  velocityDecay: number;
 }
 
 interface HomingTargetCandidate {
@@ -67,6 +68,9 @@ export class ProjectileManager {
 
   // ── Flame-Renderer (Flammenwerfer-Partikel) ───────────────────────────────
   private flameRenderer: FlameRenderer | null = null;
+
+  // ── Leaf-Blower-Renderer (Luftstrom + Blätter) ────────────────────────────
+  private leafBlowerRenderer: LeafBlowerRenderer | null = null;
 
   // ── BFG-Renderer (BFG-Partikel) ─────────────────────────────────────────
   private bfgRenderer: BfgRenderer | null = null;
@@ -185,6 +189,11 @@ export class ProjectileManager {
     this.flameRenderer = renderer;
   }
 
+  /** Injiziert den LeafBlowerRenderer fuer Luftstrom-Projektile. */
+  setLeafBlowerRenderer(renderer: LeafBlowerRenderer | null): void {
+    this.leafBlowerRenderer = renderer;
+  }
+
   /** Injiziert den BfgRenderer für BFG-Projektil-Darstellung. */
   setBfgRenderer(renderer: BfgRenderer | null): void {
     this.bfgRenderer = renderer;
@@ -289,6 +298,7 @@ export class ProjectileManager {
     const isSpore = cfg.projectileStyle === 'spore';
     const isBullet = cfg.projectileStyle === 'bullet';
     const isFlame  = cfg.projectileStyle === 'flame';
+    const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
     const isBfg    = cfg.projectileStyle === 'bfg';
     const isAwp    = cfg.projectileStyle === 'awp';
     const isGauss  = cfg.projectileStyle === 'gauss';
@@ -387,7 +397,7 @@ export class ProjectileManager {
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
-    if (isFlame) {
+    if (isFlame || isLeafBlower) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
     }
@@ -410,7 +420,7 @@ export class ProjectileManager {
     // Anti-Tunneling: Body in Flugrichtung verlängern (proportional zur
     // Geschwindigkeitskomponente je Achse). Verhindert, dass kleine Projektile
     // an Nahtstellen zwischen benachbarten 32×32-Fels-Bodies durchrutschen.
-    if (!isFlame && !isBfg && !cfg.isGrenade && cfg.size < MIN_BODY_LEN) {
+    if (!isFlame && !isLeafBlower && !isBfg && !cfg.isGrenade && cfg.size < MIN_BODY_LEN) {
       const vx = Math.abs(Math.cos(angle));
       const vy = Math.abs(Math.sin(angle));
       const bodyW = Math.max(cfg.size, vx * MIN_BODY_LEN);
@@ -470,6 +480,9 @@ export class ProjectileManager {
       burnDurationMs:    cfg.burnDurationMs,
       burnDamagePerTick: cfg.burnDamagePerTick,
       burnTickIntervalMs: cfg.burnTickIntervalMs,
+      leafBlowerMinKnockback: cfg.leafBlowerMinKnockback,
+      leafBlowerMaxKnockback: cfg.leafBlowerMaxKnockback,
+      leafBlowerSelfPush: cfg.leafBlowerSelfPush,
       initialSpeed:    cfg.speed,
       // Granaten-Countdown
       lastCountdownEmitted: null,
@@ -479,7 +492,7 @@ export class ProjectileManager {
       bfgLaserDamage:   cfg.bfgLaserDamage,
       bfgLaserInterval: cfg.bfgLaserInterval,
       // Anti-Tunneling
-      originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isBfg && !isGauss && !cfg.isGrenade
+      originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isLeafBlower && !isBfg && !isGauss && !cfg.isGrenade
         ? cfg.size : undefined,
 
       // Erweiterte Flugphysik
@@ -637,6 +650,17 @@ export class ProjectileManager {
       this.scene.physics.world.on('worldbounds', boundsListener);
 
       this.setupFlameColliders(sprite, body, tracked);
+    } else if (isLeafBlower) {
+      body.setCollideWorldBounds(true);
+      body.onWorldBounds = true;
+      const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
+        if (hitBody !== body) return;
+        this.queueDestroyProjectile(tracked);
+      };
+      tracked.boundsListener = boundsListener;
+      this.scene.physics.world.on('worldbounds', boundsListener);
+
+      this.setupLeafBlowerColliders(sprite, body, tracked);
     } else if (!cfg.isGrenade || cfg.maxBounces > 0) {
       // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
       this.setupBouncePhysics(sprite, body, tracked, !cfg.isGrenade);
@@ -731,6 +755,39 @@ export class ProjectileManager {
         if (tracked.pendingDestroy) return;
         const trainMult = tracked.trainDamageMult ?? 1;
         if (trainMult !== 0) onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+        this.queueDestroyProjectile(tracked);
+      });
+      tracked.colliders.push(c);
+    }
+  }
+
+  private setupLeafBlowerColliders(
+    sprite:  Phaser.GameObjects.Shape,
+    body:    Phaser.Physics.Arcade.Body,
+    tracked: TrackedProjectile,
+  ): void {
+    body.setBounce(0, 0);
+
+    if (this.rockGroup) {
+      const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
+        this.queueDestroyProjectile(tracked);
+      });
+      tracked.colliders.push(c);
+    }
+    if (this.trunkGroup) {
+      const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+        this.queueDestroyProjectile(tracked);
+      });
+      tracked.colliders.push(c);
+    }
+    if (this.trainGroup) {
+      const onTrainHit = this.onTrainHit;
+      const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
+        if (tracked.pendingDestroy) return;
+        const trainMult = tracked.trainDamageMult ?? 1;
+        if (trainMult !== 0 && tracked.damage > 0) {
+          onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+        }
         this.queueDestroyProjectile(tracked);
       });
       tracked.colliders.push(c);
@@ -1228,6 +1285,9 @@ export class ProjectileManager {
         burnDurationMs: proj.burnDurationMs,
         burnDamagePerTick: proj.burnDamagePerTick,
         burnTickIntervalMs: proj.burnTickIntervalMs,
+        leafBlowerMinKnockback: proj.leafBlowerMinKnockback,
+        leafBlowerMaxKnockback: proj.leafBlowerMaxKnockback,
+        leafBlowerSelfPush: proj.leafBlowerSelfPush,
         isBfg: proj.isBfg,
         bfgLaserRadius: proj.bfgLaserRadius,
         bfgLaserDamage: proj.bfgLaserDamage,
@@ -1271,6 +1331,7 @@ export class ProjectileManager {
     this.bulletRenderer?.destroyVisual(proj.id);
     this.tracerRenderer?.destroyTracer(proj.id);
     this.flameRenderer?.destroyVisual(proj.id);
+    this.leafBlowerRenderer?.destroyVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
     this.gaussRenderer?.destroyVisual(proj.id);
     if (proj.projectileStyle === 'energy_ball') {
@@ -1477,6 +1538,7 @@ export class ProjectileManager {
     this.bulletRenderer?.destroyAll();
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
+    this.leafBlowerRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
     this.gaussRenderer?.destroyAll();
     this.energyBallRenderer?.destroyAll();
@@ -1600,8 +1662,7 @@ export class ProjectileManager {
         const dead = age > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces;
         if (dead) {
           this.destroyTrackedProjectile(proj);
-        } else if (proj.isFlame) {
-          // Flammen-Hitbox: wachsen + verlangsamen
+        } else if (proj.isFlame || proj.projectileStyle === 'leaf_blower') {
           this.updateFlameHitbox(proj, deltaMs / 1000);
         } else if (proj.isBfg) {
           // BFG: Laser-Salven in regelmäßigen Intervallen abfeuern
@@ -1692,6 +1753,31 @@ export class ProjectileManager {
       );
       for (const id of flames.getActiveIds()) {
         if (!activeFlameIds.has(id)) flames.destroyVisual(id);
+      }
+    }
+
+    const leafBlowers = this.leafBlowerRenderer;
+    if (leafBlowers) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle === 'leaf_blower') {
+          if (!leafBlowers.has(proj.id)) {
+            leafBlowers.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+          }
+          leafBlowers.updateVisual(
+            proj.id,
+            proj.sprite.x,
+            proj.sprite.y,
+            proj.sprite.displayWidth,
+            proj.body.velocity.x,
+            proj.body.velocity.y,
+          );
+        }
+      }
+      const activeLeafBlowerIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'leaf_blower').map(p => p.id),
+      );
+      for (const id of leafBlowers.getActiveIds()) {
+        if (!activeLeafBlowerIds.has(id)) leafBlowers.destroyVisual(id);
       }
     }
 
@@ -1935,6 +2021,7 @@ export class ProjectileManager {
       bulletVisualPreset: p.bulletVisualPreset,
       grenadeVisualPreset: p.grenadeVisualPreset,
       energyBallVariant: p.energyBallVariant,
+      velocityDecay: p.velocityDecay,
       tracer: p.tracerConfig,
       shotAudioKey: p.shotAudioKey,
       suppressSpawnFx: p.suppressSpawnFx,
@@ -1954,6 +2041,7 @@ export class ProjectileManager {
     const activeIds = new Set(data.map(d => d.id));
     const renderer  = this.bulletRenderer;
     const flames    = this.flameRenderer;
+    const leafBlowers = this.leafBlowerRenderer;
     const rockets   = this.rocketRenderer;
     const spores = this.sporeRenderer;
     const energyBalls = this.energyBallRenderer;
@@ -1988,6 +2076,14 @@ export class ProjectileManager {
       for (const id of flames.getActiveIds()) {
         if (!activeIds.has(id)) {
           flames.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (leafBlowers) {
+      for (const id of leafBlowers.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          leafBlowers.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -2089,6 +2185,7 @@ export class ProjectileManager {
     for (const proj of data) {
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
+      const isLeafBlower = proj.style === 'leaf_blower';
       const isEnergyBallP = proj.style === 'energy_ball';
       const isHydraP = proj.style === 'hydra';
       const isSporeP = proj.style === 'spore';
@@ -2123,7 +2220,8 @@ export class ProjectileManager {
         grenadeVisualPreset: proj.grenadeVisualPreset,
         energyBallVariant: proj.energyBallVariant,
         ownerColor: proj.ownerColor,
-        isFlame,
+        isDecaying: isFlame || isLeafBlower,
+        velocityDecay: proj.velocityDecay ?? 1,
       });
 
       if (!prev && !proj.suppressSpawnFx) {
@@ -2203,6 +2301,11 @@ export class ProjectileManager {
           );
         }
         rockets.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
+      } else if (isLeafBlower && leafBlowers) {
+        if (!leafBlowers.has(proj.id)) {
+          leafBlowers.createVisual(proj.id, proj.x, proj.y, proj.size);
+        }
+        leafBlowers.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isFlame && flames) {
         if (!flames.has(proj.id)) {
           flames.createVisual(proj.id, proj.x, proj.y, proj.size);
@@ -2259,6 +2362,7 @@ export class ProjectileManager {
     const now      = performance.now();
     const renderer = this.bulletRenderer;
     const flames   = this.flameRenderer;
+    const leafBlowers = this.leafBlowerRenderer;
 
     for (const [id, state] of this.clientProjStates) {
       const extrapolated = this.extrapolateClientProjectileState(state, now);
@@ -2285,6 +2389,8 @@ export class ProjectileManager {
         this.translocatorPuckRenderer.updateVisual(id, ex, ey, state.ownerColor ?? state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
         this.rocketRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
+      } else if (state.style === 'leaf_blower' && leafBlowers?.has(id)) {
+        leafBlowers.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'flame' && flames && flames.has(id)) {
         flames.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if ((state.style === 'awp' || state.style === 'gauss') && renderer && renderer.has(id)) {
@@ -2311,8 +2417,8 @@ export class ProjectileManager {
     const dt = (now - state.receivedAt) / 1000;
     if (dt <= 0) return null;
 
-    if (state.isFlame) {
-      const decay = 0.82;
+    if (state.isDecaying) {
+      const decay = Phaser.Math.Clamp(state.velocityDecay, 0.001, 1);
       const lnDecay = Math.log(decay);
       const integralFactor = (1 - Math.pow(decay, dt)) / (-lnDecay);
       const decayFactor = Math.pow(decay, dt);

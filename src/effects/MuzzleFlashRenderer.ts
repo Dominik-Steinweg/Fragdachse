@@ -189,6 +189,7 @@ export class MuzzleFlashRenderer {
     if (style === 'hydra') return 'energy';
     if (style === 'rocket') return 'rocket';
     if (style === 'flame') return 'flame';
+    if (style === 'leaf_blower') return null;
     if (style === 'bfg') return 'energy';
     if (style === 'gauss') return 'gauss';
     if (style === 'awp') return 'awp';

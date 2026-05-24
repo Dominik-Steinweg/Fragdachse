@@ -4,6 +4,7 @@ import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
 import { BiteRenderer } from '../../effects/BiteRenderer';
 import { ZeusTaserRenderer } from '../../effects/ZeusTaserRenderer';
 import { FlameRenderer }       from '../../effects/FlameRenderer';
+import { LeafBlowerRenderer }  from '../../effects/LeafBlowerRenderer';
 import { BfgRenderer }         from '../../effects/BfgRenderer';
 import { EnergyBallRenderer }  from '../../effects/EnergyBallRenderer';
 import { GaussRenderer }       from '../../effects/GaussRenderer';
@@ -38,6 +39,7 @@ export interface RendererBundle {
   bite:                BiteRenderer;
   zeusTaser:           ZeusTaserRenderer;
   flame:               FlameRenderer;
+  leafBlower:          LeafBlowerRenderer;
   bfg:                 BfgRenderer;
   energyBall:          EnergyBallRenderer;
   hydra:               HydraRenderer;
@@ -82,6 +84,9 @@ export function createRendererBundle(
 
   const flame = new FlameRenderer(scene);
   flame.generateTextures();
+
+  const leafBlower = new LeafBlowerRenderer(scene);
+  leafBlower.generateTextures();
 
   const bfg = new BfgRenderer(scene);
   bfg.generateTextures();
@@ -140,7 +145,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, bite, zeusTaser, flame, bfg, energyBall, hydra, gauss, energyShield, teslaDome, holyGrenade,
+    bullet, asmdPrimary, bite, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,
@@ -156,6 +161,7 @@ export function wireRenderersToProjManager(
 ): void {
   pm.setBulletRenderer(bundle.bullet);
   pm.setFlameRenderer(bundle.flame);
+  pm.setLeafBlowerRenderer(bundle.leafBlower);
   pm.setBfgRenderer(bundle.bfg);
   pm.setEnergyBallRenderer(bundle.energyBall);
   pm.setHydraRenderer(bundle.hydra);

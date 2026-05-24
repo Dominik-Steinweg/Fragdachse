@@ -38,6 +38,18 @@ export interface FlamethrowerWeaponFireConfig {
   readonly burnTickIntervalMs: number;
 }
 
+export interface LeafBlowerWeaponFireConfig {
+  readonly type: 'leaf_blower';
+  readonly projectileSpeed: number;     // px/s – Anfangsgeschwindigkeit der Luft-Hitbox
+  readonly hitboxStartSize: number;     // px – Startgröße der Hitbox
+  readonly hitboxEndSize: number;       // px – Maximalgröße nach Wachstum
+  readonly hitboxGrowRate: number;      // px/s – Wachstumsrate der Hitbox
+  readonly velocityDecay: number;       // Geschwindigkeits-Faktor pro Sekunde (0-1)
+  readonly minKnockback: number;        // px/s – spätester, schwächster Push
+  readonly maxKnockback: number;        // px/s – stärkster Nahbereichs-Push
+  readonly selfPush: number;            // px/s – additiver Rückschub für den Schützen während Dauerfeuer
+}
+
 export interface TeslaDomeWeaponFireConfig {
   readonly type: 'tesla_dome';
   readonly radius: number;
@@ -88,6 +100,7 @@ export type WeaponFireConfig =
   | HitscanWeaponFireConfig
   | MeleeWeaponFireConfig
   | FlamethrowerWeaponFireConfig
+  | LeafBlowerWeaponFireConfig
   | TeslaDomeWeaponFireConfig
   | EnergyShieldWeaponFireConfig;
 
@@ -1159,6 +1172,44 @@ export const WEAPON_CONFIGS = {
       successKey: 'shot_flame',
       failureKey: 'shot_dry_trigger',
     },      
+  } as WeaponConfig,
+
+  LAUBBLAESER: {
+    id:                   'LAUBBLAESER',
+    displayName:          'Laubblaeser',
+    cooldown:             90,
+    damage:               1,
+    range:                350,
+    fire: {
+      type:               'leaf_blower',
+      projectileSpeed:    420,
+      hitboxStartSize:    24,
+      hitboxEndSize:      180,
+      hitboxGrowRate:     96,
+      velocityDecay:      0.8,
+      minKnockback:       120,
+      maxKnockback:       500,
+      selfPush:           80,
+    } satisfies LeafBlowerWeaponFireConfig,
+    allowedSlots:         ['weapon1'],
+    adrenalinCost:        0,
+    adrenalinGain:        10,
+    spreadStanding:       6,
+    spreadMoving:         10,
+    spreadPerShot:        0.2,
+    maxDynamicSpread:     6,
+    spreadRecoveryDelay:  260,
+    spreadRecoveryRate:   4,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'leaf_blower' as ProjectileStyle,
+    projectileColor:      0xb8caa3,
+    rockDamageMult:       0,
+    trainDamageMult:      0,
+    showCrosshair:        false,
+    shotAudio: {
+      successKey: 'shot_flame',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   TESLA_DOME: {

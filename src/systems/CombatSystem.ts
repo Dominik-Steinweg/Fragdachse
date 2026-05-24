@@ -129,6 +129,7 @@ export class CombatSystem {
   private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
   private onProjectileImpact: ((projectileId: number, x: number, y: number) => void) | null = null;
+  private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -186,6 +187,10 @@ export class CombatSystem {
 
   setProjectileImpactCallback(cb: ((projectileId: number, x: number, y: number) => void) | null): void {
     this.onProjectileImpact = cb;
+  }
+
+  setPlayerImpulseCallback(cb: ((playerId: string, vx: number, vy: number, durationMs: number) => void) | null): void {
+    this.onPlayerImpulse = cb;
   }
 
   /** Setzt den Kill-Callback (Host-only). */
@@ -1399,6 +1404,7 @@ export class CombatSystem {
     allowDamage = true,
   ): void {
     const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    const leafBlowerImpulse = projectile ? this.createLeafBlowerImpulse(projectile, playerId) : null;
     const visualContext: DamageVisualContext | undefined = projectile
       ? {
           sourceX: projectile.sprite.x,
@@ -1417,6 +1423,9 @@ export class CombatSystem {
     }
     if (allowDamage) {
       this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
+      if (leafBlowerImpulse && this.isAlive(playerId)) {
+        this.onPlayerImpulse?.(playerId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs);
+      }
     }
 
     // Adrenalin-Belohnung für den Schützen
@@ -1455,6 +1464,40 @@ export class CombatSystem {
     if (adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
     }
+  }
+
+  private createLeafBlowerImpulse(
+    projectile: TrackedProjectile,
+    playerId: string,
+  ): { vx: number; vy: number; durationMs: number } | null {
+    const minKnockback = projectile.leafBlowerMinKnockback;
+    const maxKnockback = projectile.leafBlowerMaxKnockback;
+    if (minKnockback === undefined || maxKnockback === undefined || maxKnockback <= 0) return null;
+
+    const startSize = projectile.body.width;
+    const maxSize = projectile.hitboxMaxSize ?? startSize;
+    const spread = Math.max(maxSize - startSize, 0.0001);
+    const progress = Phaser.Math.Clamp((projectile.sprite.displayWidth - startSize) / spread, 0, 1);
+    const magnitude = Phaser.Math.Linear(maxKnockback, minKnockback, progress);
+    if (magnitude <= 0) return null;
+
+    const player = this.playerManager.getPlayer(playerId);
+    const fallbackDx = (player?.sprite.x ?? projectile.sprite.x) - projectile.sprite.x;
+    const fallbackDy = (player?.sprite.y ?? projectile.sprite.y) - projectile.sprite.y;
+    const velocityLen = Math.hypot(projectile.body.velocity.x, projectile.body.velocity.y);
+    const fallbackLen = Math.hypot(fallbackDx, fallbackDy);
+    const dirX = velocityLen > 0.001
+      ? projectile.body.velocity.x / velocityLen
+      : (fallbackLen > 0.001 ? fallbackDx / fallbackLen : 0);
+    const dirY = velocityLen > 0.001
+      ? projectile.body.velocity.y / velocityLen
+      : (fallbackLen > 0.001 ? fallbackDy / fallbackLen : -1);
+
+    return {
+      vx: dirX * magnitude,
+      vy: dirY * magnitude,
+      durationMs: 220,
+    };
   }
 
   private handleDeath(playerId: string, x: number, y: number, seed: number): void {

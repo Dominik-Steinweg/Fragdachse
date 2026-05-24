@@ -16,6 +16,7 @@ import type {
   DecoyUtilityConfig,
   EnergyShieldWeaponFireConfig,
   GaussUltimateConfig,
+  LeafBlowerWeaponFireConfig,
   NukeUtilityConfig,
   PlaceableUtilityConfig,
   StinkCloudUtilityConfig,
@@ -98,7 +99,7 @@ export class LoadoutManager {
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
-  private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number }>();
+  private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
   private static readonly HOLD_EXPIRE_MS = 100;
 
   private readonly okResult: LoadoutUseResult = { ok: true };
@@ -385,7 +386,7 @@ export class LoadoutManager {
 
     // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
     if (slot === 'weapon1' || slot === 'weapon2') {
-      this.heldFireSlots.set(playerId, { slot, lastAt: now });
+      this.heldFireSlots.set(playerId, { slot, lastAt: now, angle });
       this.decoySystem?.breakStealth(playerId, now);
     }
 
@@ -579,6 +580,22 @@ export class LoadoutManager {
     }
 
     return ultimateMult * gaussSlowMult;
+  }
+
+  getHeldSelfPushVelocity(playerId: string): { vx: number; vy: number } | null {
+    const held = this.heldFireSlots.get(playerId);
+    if (!held || Date.now() - held.lastAt >= LoadoutManager.HOLD_EXPIRE_MS) return null;
+
+    const cfg = this.loadouts.get(playerId)?.[held.slot].config;
+    if (!cfg || cfg.fire.type !== 'leaf_blower') return null;
+
+    const selfPush = cfg.fire.selfPush;
+    if (selfPush <= 0) return null;
+
+    return {
+      vx: -Math.cos(held.angle) * selfPush,
+      vy: -Math.sin(held.angle) * selfPush,
+    };
   }
 
   getDamageMultiplier(playerId: string): number {
@@ -1175,6 +1192,9 @@ export class LoadoutManager {
       case 'flamethrower':
         return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
 
+      case 'leaf_blower':
+        return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
+
       case 'tesla_dome':
       case 'energy_shield':
         return false;
@@ -1353,23 +1373,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
   ): boolean {
-    // Lifetime berechnen: Bei velocityDecay < 1 verlangsamt sich die Hitbox exponentiell.
-    // Zurückgelegte Strecke = speed / -ln(decay) * (1 - decay^t)
-    // → t = ln(1 - range * -ln(decay) / speed) / ln(decay)
-    const decay = fireConfig.velocityDecay;
-    let lifetime: number;
-    if (decay >= 1 || decay <= 0) {
-      lifetime = (config.range / fireConfig.projectileSpeed) * 1000;
-    } else {
-      const lnDecay   = Math.log(decay);
-      const maxDist   = fireConfig.projectileSpeed / -lnDecay;
-      const distRatio = config.range / maxDist;
-      if (distRatio >= 1) {
-        lifetime = 3000; // Range nie erreichbar → Cap
-      } else {
-        lifetime = Math.log(1 - distRatio) / lnDecay * 1000;
-      }
-    }
+    const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
@@ -1397,6 +1401,60 @@ export class LoadoutManager {
     });
 
     return true;
+  }
+
+  private fireLeafBlowerWeapon(
+    config:      WeaponConfig,
+    fireConfig:  LeafBlowerWeaponFireConfig,
+    x:           number,
+    y:           number,
+    angle:       number,
+    playerId:    string,
+    playerColor: number,
+    sourceSlot?: LoadoutSlot,
+  ): boolean {
+    const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
+
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed:           fireConfig.projectileSpeed,
+      size:            fireConfig.hitboxStartSize,
+      damage:          config.damage,
+      color:           config.projectileColor ?? playerColor,
+      ownerColor:      playerColor,
+      lifetime,
+      maxBounces:      999999,
+      isGrenade:       false,
+      adrenalinGain:   config.adrenalinGain,
+      weaponName:      config.displayName,
+      projectileStyle: 'leaf_blower',
+      rockDamageMult:  config.rockDamageMult,
+      trainDamageMult: config.trainDamageMult,
+      hitboxGrowRate:  fireConfig.hitboxGrowRate,
+      hitboxMaxSize:   fireConfig.hitboxEndSize,
+      velocityDecay:   fireConfig.velocityDecay,
+      leafBlowerMinKnockback: fireConfig.minKnockback,
+      leafBlowerMaxKnockback: fireConfig.maxKnockback,
+      leafBlowerSelfPush: fireConfig.selfPush,
+      sourceSlot,
+      shotAudioKey:    config.shotAudio?.successKey,
+    });
+
+    return true;
+  }
+
+  private calculateDecayLifetime(range: number, projectileSpeed: number, decay: number): number {
+    if (decay >= 1 || decay <= 0) {
+      return (range / projectileSpeed) * 1000;
+    }
+
+    const lnDecay   = Math.log(decay);
+    const maxDist   = projectileSpeed / -lnDecay;
+    const distRatio = range / maxDist;
+    if (distRatio >= 1) {
+      return 3000;
+    }
+
+    return Math.log(1 - distRatio) / lnDecay * 1000;
   }
 
   private getEquippedEnergyShieldFireConfig(playerId: string): EnergyShieldWeaponFireConfig | null {
