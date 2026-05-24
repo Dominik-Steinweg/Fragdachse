@@ -20,6 +20,9 @@ import type { TracerRenderer }  from '../effects/TracerRenderer';
 /** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
 const MIN_BODY_LEN = 10;
 
+/** Leaf-Blower-Hinderniskörper kleiner als die Treffer-/Visualfläche halten. */
+const LEAF_BLOWER_OBSTACLE_BODY_SCALE = 0.6;
+
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
   serverX: number;
@@ -427,6 +430,12 @@ export class ProjectileManager {
       const bodyH = Math.max(cfg.size, vy * MIN_BODY_LEN);
       body.setSize(bodyW, bodyH);
       body.setOffset((cfg.size - bodyW) / 2, (cfg.size - bodyH) / 2);
+    }
+
+    if (isLeafBlower) {
+      const obstacleBodySize = Math.max(cfg.size * LEAF_BLOWER_OBSTACLE_BODY_SCALE, 10);
+      body.setSize(obstacleBodySize, obstacleBodySize);
+      body.setOffset((cfg.size - obstacleBodySize) / 2, (cfg.size - obstacleBodySize) / 2);
     }
 
     const tracked: TrackedProjectile = {
