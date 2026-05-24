@@ -438,11 +438,18 @@ function generatePreviewDecals(
 const TITLE_TEXT = 'FRAGDACHSE';
 const TITLE_GAP = 1;
 const TITLE_START_X = Math.floor((MENU_GRID_COLS - textWidth(TITLE_TEXT, TITLE_GAP)) * 0.5);
+const RIGHT_OVERLAY_BORDER_X = MENU_GRID_COLS - 9;
+const RIGHT_OVERLAY_INFO_MIN_X = MENU_GRID_COLS - 8;
 const titleRocks = textRocks(TITLE_TEXT, TITLE_START_X, 1, TITLE_GAP);
 const leftOverlayBorderRocks = mergeUnique<RockCell>(
   rockRow(0, 8, 8),
   rockRow(0, 8, 27),
   rockColumn(8, 27, 8),
+);
+const rightOverlayBorderRocks = mergeUnique<RockCell>(
+  rockRow(RIGHT_OVERLAY_BORDER_X, MENU_GRID_COLS - 1, 8),
+  rockRow(RIGHT_OVERLAY_BORDER_X, MENU_GRID_COLS - 1, 27),
+  rockColumn(8, 27, RIGHT_OVERLAY_BORDER_X),
 );
 
 const ambientRockAnchors: readonly RockClusterAnchor[] = [
@@ -465,12 +472,13 @@ const ambientRockAnchors: readonly RockClusterAnchor[] = [
 const ambientRocks = createOrganicRockClusters(ambientRockAnchors, MENU_PREVIEW_SEED + 101);
 
 const trees = points<TreeCell>([
-  [1, 4], [7, 5], [2, 29], [6, 23], [12, 18], [15, 31], [44, 4], [54, 5], [51, 17], [56, 23], [58, 31],
+  [1, 4],  [2, 29],  [12, 18], [15, 31], [57, 4], [47, 17], [50, 25], [51, 31], [57, 29],
 ]);
 
 const overlayClearZones: readonly GridRect[] = [
   { minX: 0, maxX: 7, minY: 9, maxY: 26 },
   { minX: 16, maxX: 42, minY: 7, maxY: 26 },
+  { minX: RIGHT_OVERLAY_INFO_MIN_X, maxX: MENU_GRID_COLS - 1, minY: 9, maxY: 26 },
 ];
 
 const titleTreeClearZone: GridRect = {
@@ -494,12 +502,21 @@ const leftOverlayInfoQuietZone: GridRect = {
   maxY: 26,
 };
 
+const rightOverlayInfoQuietZone: GridRect = {
+  minX: RIGHT_OVERLAY_INFO_MIN_X,
+  maxX: MENU_GRID_COLS - 1,
+  minY: 9,
+  maxY: 26,
+};
+
 const decalQuietZones: readonly GridRect[] = [
   leftOverlayInfoQuietZone,
+  rightOverlayInfoQuietZone,
   overlayClearZones[1],
 ];
 
 const dirtQuietZones: readonly GridRect[] = [
+  rightOverlayInfoQuietZone,
   overlayClearZones[1],
 ];
 
@@ -510,12 +527,25 @@ const leftOverlayBorderReserveZone: GridRect = {
   maxY: 27,
 };
 
+const rightOverlayBorderReserveZone: GridRect = {
+  minX: RIGHT_OVERLAY_BORDER_X - 1,
+  maxX: MENU_GRID_COLS - 1,
+  minY: 8,
+  maxY: 27,
+};
+
 const tracks: TrackCell[] = [];
 const trackFootprint = expandTrackFootprint(tracks);
 const finalRocks = mergeUnique<RockCell>(
   titleRocks,
   leftOverlayBorderRocks,
-  excludeRectCells(ambientRocks, [...overlayClearZones, titleRockGapZone, leftOverlayBorderReserveZone]),
+  rightOverlayBorderRocks,
+  excludeRectCells(ambientRocks, [
+    ...overlayClearZones,
+    titleRockGapZone,
+    leftOverlayBorderReserveZone,
+    rightOverlayBorderReserveZone,
+  ]),
 ).filter((cell) => !trackFootprint.some((trackCell) => trackCell.gridX === cell.gridX && trackCell.gridY === cell.gridY));
 const finalTrees = excludeRectCells(trees, [...overlayClearZones, titleTreeClearZone]);
 const titleFrameBlendDirt = points<DirtCell>([

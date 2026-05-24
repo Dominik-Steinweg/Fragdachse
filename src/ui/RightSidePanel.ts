@@ -17,6 +17,8 @@ const SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_OFFSET_X / 2;  // 1800
 const SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_OFFSET_X + 8;  // 1688
 const SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;                   // 1912
 const PANEL_WIDTH      = 200;
+const LOBBY_TOP_OFFSET_Y = 246;
+const RESULTS_EXTRA_OFFSET_Y = 32;
 
 // Killfeed: Namen links/rechts, Waffe zentriert
 const KILLFEED_MAX     = 5;
@@ -36,12 +38,14 @@ const LB_FRAGS_X     = SIDEBAR_LEFT_X + 152; // 1840 – Frags rechts-bündig
 const LB_PING_X      = SIDEBAR_RIGHT_X;       // 1912 – Ping rechts-bündig
 
 // Lobby-Endstand
-const RESULTS_HEADER_Y   = 28;
-const RESULTS_SEP_Y      = 50;
-const RESULTS_START_Y    = 68;
-const RESULTS_ENTRY_H    = 24;
-const RESULTS_FONT       = '14px';
-const RESULTS_HEADER_FONT = '13px';
+const RESULTS_HEADER_Y   = 60 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_SEP_Y      = 94 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_LABEL_Y    = 118 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_START_Y    = 140 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_ENTRY_H    = 26;
+const RESULTS_FONT       = '18px';
+const RESULTS_HEADER_FONT = '20px';
+const RESULTS_LABEL_FONT = '14px';
 
 const COLOR_DIM       = '#607080';
 const COLOR_HEADER    = '#8fa8b8';
@@ -121,6 +125,8 @@ export class RightSidePanel {
   // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
   private resultsHeader!: Phaser.GameObjects.Text;
   private resultsSep!:    Phaser.GameObjects.Rectangle;
+  private resultsFragsLabel!: Phaser.GameObjects.Text;
+  private resultsEmptyState!: Phaser.GameObjects.Text;
   private resultsRows: {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
@@ -276,7 +282,7 @@ export class RightSidePanel {
 
   /**
    * Zeigt den Endstand der letzten Runde im Lobby-Panel.
-   * null oder alle Frags = 0 → Bereich bleibt leer.
+    * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
    */
   showRoundResults(results: RoundResult[] | null): void {
     if (results && results.some((result) => result.teamId === 'blue' || result.teamId === 'red')) {
@@ -285,15 +291,17 @@ export class RightSidePanel {
     }
 
     const sorted  = results ? [...results].sort((a, b) => b.frags - a.frags) : null;
-    const hasData = !!sorted && sorted.some(r => r.frags > 0);
+    const hasData = !!sorted && sorted.length > 0;
 
     this.resultsTeamHeaders?.blue.label.setVisible(false);
     this.resultsTeamHeaders?.blue.score.setVisible(false);
     this.resultsTeamHeaders?.red.label.setVisible(false);
     this.resultsTeamHeaders?.red.score.setVisible(false);
 
-    this.resultsHeader.setVisible(hasData);
-    this.resultsSep.setVisible(hasData);
+    this.resultsHeader.setVisible(true);
+    this.resultsSep.setVisible(true);
+    this.resultsFragsLabel.setVisible(hasData);
+    this.resultsEmptyState.setVisible(!hasData);
 
     for (let i = 0; i < this.resultsRows.length; i++) {
       const row   = this.resultsRows[i];
@@ -461,15 +469,29 @@ export class RightSidePanel {
     this.resultsHeader = this.scene.add.text(SIDEBAR_CENTER_X, RESULTS_HEADER_Y, 'LETZTE RUNDE', {
       fontSize:   RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
-      color:      COLOR_HEADER,
+      color:      toCssColor(COLORS.GREY_2),
       fontStyle:  'bold',
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
+    }).setOrigin(0.5, 0.5).setScrollFactor(0);
 
     this.resultsSep = this.scene.add.rectangle(
       SIDEBAR_CENTER_X, RESULTS_SEP_Y, PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
-    ).setScrollFactor(0).setVisible(false) as Phaser.GameObjects.Rectangle;
+    ).setScrollFactor(0) as Phaser.GameObjects.Rectangle;
 
-    this.lobbyContainer.add([this.resultsHeader, this.resultsSep]);
+    this.resultsFragsLabel = this.scene.add.text(SIDEBAR_RIGHT_X, RESULTS_LABEL_Y, 'F R A G S', {
+      fontSize: RESULTS_LABEL_FONT,
+      fontFamily: 'monospace',
+      color: COLOR_HEADER,
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+
+    this.resultsEmptyState = this.scene.add.text(SIDEBAR_CENTER_X, RESULTS_START_Y, 'Noch keine Daten', {
+      fontSize: RESULTS_FONT,
+      fontFamily: 'monospace',
+      color: COLOR_DIM,
+      align: 'center',
+    }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
+
+    this.lobbyContainer.add([this.resultsHeader, this.resultsSep, this.resultsFragsLabel, this.resultsEmptyState]);
 
     const blueLabel = this.scene.add.text(SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
       fontSize: RESULTS_HEADER_FONT,
@@ -641,8 +663,10 @@ export class RightSidePanel {
     const blueScore = this.resolveGroupedTeamScore(blueEntries);
     const redScore = this.resolveGroupedTeamScore(redEntries);
 
-    this.resultsHeader.setVisible(hasData);
-    this.resultsSep.setVisible(hasData);
+    this.resultsHeader.setVisible(true);
+    this.resultsSep.setVisible(true);
+    this.resultsFragsLabel.setVisible(hasData);
+    this.resultsEmptyState.setVisible(!hasData);
     this.resultsTeamHeaders?.blue.label.setVisible(hasData).setPosition(SIDEBAR_LEFT_X, RESULTS_START_Y);
     this.resultsTeamHeaders?.blue.score.setVisible(hasData).setText(String(blueScore)).setPosition(SIDEBAR_RIGHT_X, RESULTS_START_Y);
     this.resultsTeamHeaders?.red.label.setVisible(hasData).setPosition(SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);

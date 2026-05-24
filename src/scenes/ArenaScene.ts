@@ -593,6 +593,7 @@ export class ArenaScene extends Phaser.Scene {
       this.updateRoomQuality(this.time.now, players);
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.refreshPlayerList(players);
+      this.ctx.rightPanel.showRoundResults(bridge.getRoundResults());
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       if (localProfile) this.ctx.leftPanel.updateLocalName(localProfile.name);
       this.ctx.leftPanel.refreshColorIndicator();
