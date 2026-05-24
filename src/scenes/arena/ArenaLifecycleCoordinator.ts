@@ -761,6 +761,13 @@ export class ArenaLifecycleCoordinator {
       });
     });
 
+    this.ctx.trainManager.setIsPlayerBurrowedCallback((playerId) => {
+      return this.ctx.burrowSystem?.isBurrowed(playerId) ?? false;
+    });
+    this.ctx.trainManager.setOnBurrowDamageDealtCallback((_playerId, x, y) => {
+      bridge.broadcastTrainBurrowSparks(x, y);
+    });
+
     this.ctx.trainManager.setDestroyCallback((result) => {
       if (result.lastHitterId) {
         bridge.addPlayerFrags(result.lastHitterId, TRAIN.KILL_FRAGS);

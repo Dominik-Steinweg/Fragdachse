@@ -43,4 +43,10 @@ export const TRAIN = {
    * Verhindert, dass ein echter Spieler einen Frag bekommt.
    */
   TRAIN_KILLER_ID: '__train__',
+
+  /** Schaden pro Tick wenn ein Dachs unter dem Zug buddelt */
+  BURROW_DAMAGE_PER_TICK:         40,
+
+  /** Millisekunden zwischen zwei Buddel-Schaden-Ticks */
+  BURROW_DAMAGE_TICK_INTERVAL_MS: 100,
 } as const;

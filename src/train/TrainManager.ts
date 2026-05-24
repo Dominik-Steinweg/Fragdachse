@@ -58,6 +58,11 @@ export class TrainManager {
   private canHitPlayer: ((playerId: string) => boolean)      | null = null;
   private onDestroyed: ((r: TrainDestroyResult) => void)     | null = null;
   private onExited:    (() => void)                          | null = null;
+  private isPlayerBurrowed:    ((playerId: string) => boolean)                              | null = null;
+  private onBurrowDamageDealt: ((playerId: string, x: number, y: number) => void)          | null = null;
+
+  /** Akkumulierter Delta-ms pro Spieler für den Buddel-Schaden-Tick */
+  private burrowDamageTimers = new Map<string, number>();
 
   constructor(
     private scene:         Phaser.Scene,
@@ -77,6 +82,8 @@ export class TrainManager {
   setCanHitPlayerCallback(cb: (playerId: string) => boolean): void { this.canHitPlayer = cb; }
   setDestroyCallback(cb: (r: TrainDestroyResult) => void):  void { this.onDestroyed  = cb; }
   setExitedCallback(cb: () => void):                        void { this.onExited     = cb; }
+  setIsPlayerBurrowedCallback(cb: (playerId: string) => boolean): void { this.isPlayerBurrowed = cb; }
+  setOnBurrowDamageDealtCallback(cb: (playerId: string, x: number, y: number) => void): void { this.onBurrowDamageDealt = cb; }
 
   // ── Zugriff auf Physics-Gruppe ───────────────────────────────────────────
 
@@ -103,6 +110,7 @@ export class TrainManager {
     this.destroyed = false;
     this.lastHitter = null;
     this.locoY     = this.initialLocoY();
+    this.burrowDamageTimers.clear();
     this.updateSegmentPositions();
     this.group.refresh();
     for (const s of this.segObjects) {
@@ -135,6 +143,7 @@ export class TrainManager {
     this.updateSegmentPositions();
     this.group.refresh();
     this.checkPlayerOverlaps();
+    this.checkBurrowDamage(delta);
 
     if (this.hasFullyExited()) {
       this.active = false;
@@ -278,6 +287,7 @@ export class TrainManager {
     this.destroyed = false;
     this.lastHitter = null;
     this.locoY     = this.initialLocoY();
+    this.burrowDamageTimers.clear();
     // Hitboxen repositionieren und deaktivieren
     this.updateSegmentPositions();
     for (const s of this.segObjects) {
@@ -297,6 +307,7 @@ export class TrainManager {
     this.destroyed  = false;
     this.lastHitter = null;
     this.locoY      = this.initialLocoY();
+    this.burrowDamageTimers.clear();
     this.updateSegmentPositions();
     for (const s of this.segObjects) {
       (s.body as Phaser.Physics.Arcade.StaticBody).enable = false;
@@ -345,6 +356,49 @@ export class TrainManager {
           break; // einen Kill pro Spieler pro Frame reicht
         }
       }
+    }
+  }
+
+  /** Tick-Schaden für eingegrabene Spieler die sich unter dem Zug befinden. */
+  private checkBurrowDamage(delta: number): void {
+    if (!this.isPlayerBurrowed) return;
+    const halfW   = TRAIN.HITBOX_WIDTH / 2;
+    const heights = this.segHeights();
+    const ys      = this.segCenterYs();
+    const pr      = PLAYER_SIZE / 2;
+
+    const activeIds = new Set<string>();
+
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!player.sprite.active) continue;
+      if (!this.isPlayerBurrowed(player.id)) continue;
+
+      const px = player.sprite.x;
+      const py = player.sprite.y;
+      let underTrain = false;
+      for (let i = 0; i < ys.length; i++) {
+        if (
+          Math.abs(px - this.trackX) < halfW + pr &&
+          Math.abs(py - ys[i])       < heights[i] / 2 + pr
+        ) {
+          underTrain = true;
+          break;
+        }
+      }
+      if (!underTrain) continue;
+
+      activeIds.add(player.id);
+      let elapsed = (this.burrowDamageTimers.get(player.id) ?? 0) + delta;
+      while (elapsed >= TRAIN.BURROW_DAMAGE_TICK_INTERVAL_MS) {
+        elapsed -= TRAIN.BURROW_DAMAGE_TICK_INTERVAL_MS;
+        this.applyDamage(TRAIN.BURROW_DAMAGE_PER_TICK, player.id);
+        this.onBurrowDamageDealt?.(player.id, px, py);
+      }
+      this.burrowDamageTimers.set(player.id, elapsed);
+    }
+
+    for (const id of this.burrowDamageTimers.keys()) {
+      if (!activeIds.has(id)) this.burrowDamageTimers.delete(id);
     }
   }
 

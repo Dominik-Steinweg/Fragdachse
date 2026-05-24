@@ -449,6 +449,26 @@ export class EffectSystem {
     this.scene.time.delayedCall(540, () => dustBurst.destroy());
   }
 
+  // ── Funken-Effekt: Dachs buddelt unter dem Zug ───────────────────────────
+
+  playTrainBurrowSparks(x: number, y: number): void {
+    this.ensureTextures();
+    const sparks = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+      lifespan:  { min: 150, max: 320 },
+      speed:     { min: 60,  max: 180 },
+      angle:     { min: 0,   max: 360 },
+      scale:     { start: 0.9, end: 0 },
+      alpha:     { start: 1,   end: 0 },
+      tint:      [0xffd700, 0xff8c00, 0xffa500, 0xffff00],
+      blendMode: Phaser.BlendModes.ADD,
+      frequency: -1,
+      quantity:  7,
+    });
+    sparks.setDepth(DEPTH_FX + 0.35);
+    sparks.explode(7, x, y);
+    this.scene.time.delayedCall(400, () => { if (sparks.active) sparks.destroy(); });
+  }
+
   playStealthTransitionEffect(x: number, y: number, revealing: boolean, color: number = COLORS.GREY_2): void {
     this.ensureTextures();
     const particleCount = revealing ? 28 : 22;

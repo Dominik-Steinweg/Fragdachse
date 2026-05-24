@@ -141,6 +141,7 @@ type HitscanTracerHandler = (
 type DashHandler = (playerId: string, dx: number, dy: number) => void;
 type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
 type ShockwaveEffectHandler = (x: number, y: number) => void;
+type TrainBurrowSparksHandler = (x: number, y: number) => void;
 type BurrowVisualHandler = (playerId: string, phase: BurrowPhase) => void;
 type ColorRequestHandler = (requestedColor: number, requesterId: string) => void;
 type ColorAcceptedHandler = (requesterId: string, color: number) => void;
@@ -186,6 +187,7 @@ export class NetworkBridge {
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
+  private trainBurrowSparksHandler: TrainBurrowSparksHandler | null = null;
   private burrowVisualHandler: BurrowVisualHandler | null = null;
   private colorRequestHandler: ColorRequestHandler | null = null;
   private colorAcceptedHandler: ColorAcceptedHandler | null = null;
@@ -1105,6 +1107,21 @@ export class NetworkBridge {
 
   broadcastShockwaveEffect(x: number, y: number): void {
     this.broadcastRpc('shockfx', { x, y });
+  }
+
+  broadcastTrainBurrowSparks(x: number, y: number): void {
+    this.broadcastRpc('tbsparks', { x, y });
+  }
+
+  registerTrainBurrowSparksHandler(cb: (x: number, y: number) => void): void {
+    this.trainBurrowSparksHandler = cb;
+    this.registerAllRpcHandler('tbsparks', async (data: unknown): Promise<unknown> => {
+      const handler = this.trainBurrowSparksHandler;
+      if (!handler) return undefined;
+      const { x, y } = data as { x: number; y: number };
+      handler(x, y);
+      return undefined;
+    });
   }
 
   registerShockwaveEffectHandler(cb: (x: number, y: number) => void): void {

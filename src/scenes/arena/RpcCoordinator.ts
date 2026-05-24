@@ -59,6 +59,7 @@ export class RpcCoordinator {
     this.registerBfgLaserBatchHandler();
     this.registerBurrowVisualHandler();
     this.registerShockwaveEffectHandler();
+    this.registerTrainBurrowSparksHandler();
     this.registerShotFxHandler();
     this.registerTranslocatorFlashHandler();
     this.registerColorHandlers();
@@ -153,6 +154,12 @@ export class RpcCoordinator {
   private registerShockwaveEffectHandler(): void {
     bridge.registerShockwaveEffectHandler((x, y) => {
       this.ctx.effectSystem.playShockwaveEffect(x, y);
+    });
+  }
+
+  private registerTrainBurrowSparksHandler(): void {
+    bridge.registerTrainBurrowSparksHandler((x, y) => {
+      this.ctx.effectSystem.playTrainBurrowSparks(x, y);
     });
   }
 
