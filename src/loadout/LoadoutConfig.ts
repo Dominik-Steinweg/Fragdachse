@@ -1182,11 +1182,11 @@ export const WEAPON_CONFIGS = {
     range:                350,
     fire: {
       type:               'leaf_blower',
-      projectileSpeed:    320,
+      projectileSpeed:    480,
       hitboxStartSize:    12,
       hitboxEndSize:      64,
       hitboxGrowRate:     30,
-      velocityDecay:      0.6,
+      velocityDecay:      0.5,
       minKnockback:       120,
       maxKnockback:       500,
       selfPush:           80,

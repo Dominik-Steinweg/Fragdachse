@@ -3,10 +3,8 @@ import { DEPTH } from '../config';
 import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors, setCircleEmitZone, setEmitterTintArray } from './EffectUtils';
 import type { TerrainColorSampler } from '../arena/ArenaTerrainColorSampler';
 
-const TEX_DUST = '__leaf_blower_dust';
 const TEX_LEAF = '__leaf_blower_leaf';
-const TERRAIN_SAMPLE_INTERVAL_MS = 600;
-const DUST_PARTICLE_LINGER_MS = 260;
+const TERRAIN_SAMPLE_INTERVAL_MS = 30;
 const LEAF_PARTICLE_LINGER_MS = 1220;
 const LEAF_BLOWER_VISUAL_SIZE_SCALE = 2.7;
 const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
@@ -14,7 +12,6 @@ const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
 const DEPTH_DEBRIS = DEPTH.FIRE + 0.05;
 
 interface LeafBlowerVisual {
-  dustEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   leafEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   sampledColor: number;
   lastTerrainSampleAt: number;
@@ -22,30 +19,7 @@ interface LeafBlowerVisual {
 
 function ensureLeafBlowerTextures(scene: Phaser.Scene): void {
   const textures = scene.textures;
-  refreshLeafTexture(textures, TEX_DUST);
   refreshLeafTexture(textures, TEX_LEAF);
-
-  ensureCanvasTexture(textures, TEX_DUST, 28, 28, (ctx) => {
-    ctx.fillStyle = 'rgba(255,255,255,0.96)';
-    ctx.beginPath();
-    ctx.ellipse(14, 14, 4.4, 3.2, -0.35, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.82)';
-    ctx.beginPath();
-    ctx.ellipse(9, 10, 1.8, 1.4, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(18, 17, 1.7, 1.2, -0.45, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    for (const [px, py, radius] of [[6, 18, 0.95], [12, 6, 0.8], [20, 9, 0.85], [22, 20, 0.72], [8, 8, 0.62], [15, 22, 0.68], [4, 12, 0.58]] as const) {
-      ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  });
 
   ensureCanvasTexture(textures, TEX_LEAF, 24, 18, (ctx) => {
     ctx.translate(12, 9);
@@ -95,18 +69,6 @@ export class LeafBlowerRenderer {
 
     const visualSize = getVisualSize(size);
 
-    const dustEmitter = createEmitter(this.scene, x, y, TEX_DUST, {
-      lifespan: { min: 130, max: 220 },
-      frequency: 5,
-      quantity: 40,
-      angle: 0,
-      speed: { min: 12, max: 44 },
-      scale: { start: 0.13 + visualSize * 0.0024, end: 0.03 },
-      alpha: { start: 0.72, end: 0 },
-      blendMode: Phaser.BlendModes.NORMAL,
-      emitting: true,
-    }, DEPTH.FIRE - 0.1);
-
     const leafEmitter = createEmitter(this.scene, x, y, TEX_LEAF, {
       lifespan: { min: 360, max: 860 },
       frequency: 40,
@@ -122,7 +84,6 @@ export class LeafBlowerRenderer {
     }, DEPTH_DEBRIS);
 
     this.visuals.set(id, {
-      dustEmitter,
       leafEmitter,
       sampledColor: 0xb7c8a7,
       lastTerrainSampleAt: -9999,
@@ -150,18 +111,8 @@ export class LeafBlowerRenderer {
     const sourceRadius = Math.max(visualSize * 0.06, 1.25);
     const debrisRadius = Math.max(visualSize * 0.12, 2.4);
     const terrainBase = visual.sampledColor;
-    const dustBright = mixColors(terrainBase, 0xe6e0d0, 0.08);
-    const dustDark = mixColors(terrainBase, 0x645846, 0.1);
-    const dustDeep = mixColors(terrainBase, 0x4f4638, 0.14);
     const leafMain = mixColors(terrainBase, 0x6f9340, 0.22);
     const leafAlt = mixColors(terrainBase, 0x9e7c45, 0.12);
-
-    visual.dustEmitter.setPosition(x - dirX * sourceRadius * 0.45, y - dirY * sourceRadius * 0.45);
-    visual.dustEmitter.setAngle(angleDeg + 180);
-    visual.dustEmitter.setParticleSpeed(Math.max(size * 0.1, 8), Math.max(speed * 0.24, 38));
-    visual.dustEmitter.setParticleScale(Math.max(visualSize / 92, 0.1), 0.024);
-    setEmitterTintArray(visual.dustEmitter, [terrainBase, dustBright, dustDark, dustDeep, terrainBase]);
-    setCircleEmitZone(visual.dustEmitter, Math.max(sourceRadius * 1.1, 2.6), 1, true);
 
     visual.leafEmitter.setPosition(x - dirX * sourceRadius * 1.15, y - dirY * sourceRadius * 1.15);
     visual.leafEmitter.setAngle(angleDeg + 180);
@@ -178,12 +129,10 @@ export class LeafBlowerRenderer {
     this.visuals.delete(id);
 
     if (immediate) {
-      destroyEmitter(visual.dustEmitter);
       destroyEmitter(visual.leafEmitter);
       return;
     }
 
-    stopEmitterWithLinger(this.scene, visual.dustEmitter, DUST_PARTICLE_LINGER_MS);
     stopEmitterWithLinger(this.scene, visual.leafEmitter, LEAF_PARTICLE_LINGER_MS);
   }
 
