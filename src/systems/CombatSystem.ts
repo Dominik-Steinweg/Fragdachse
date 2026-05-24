@@ -129,7 +129,7 @@ export class CombatSystem {
   private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
   private onProjectileImpact: ((projectileId: number, x: number, y: number) => void) | null = null;
-  private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number) => void) | null = null;
+  private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -189,7 +189,7 @@ export class CombatSystem {
     this.onProjectileImpact = cb;
   }
 
-  setPlayerImpulseCallback(cb: ((playerId: string, vx: number, vy: number, durationMs: number) => void) | null): void {
+  setPlayerImpulseCallback(cb: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null): void {
     this.onPlayerImpulse = cb;
   }
 
@@ -1424,7 +1424,7 @@ export class CombatSystem {
     if (allowDamage) {
       this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
       if (leafBlowerImpulse && this.isAlive(playerId)) {
-        this.onPlayerImpulse?.(playerId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs);
+        this.onPlayerImpulse?.(playerId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
       }
     }
 

@@ -49,4 +49,7 @@ export const TRAIN = {
 
   /** Millisekunden zwischen zwei Buddel-Schaden-Ticks */
   BURROW_DAMAGE_TICK_INTERVAL_MS: 100,
+
+  /** Zusätzliche Gnadenfrist für Knockback-Frags nach Ende des aktiven Impulses */
+  PLAYER_PUSH_KILL_CREDIT_GRACE_MS: 160,
 } as const;

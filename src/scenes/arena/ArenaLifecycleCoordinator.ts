@@ -289,8 +289,8 @@ export class ArenaLifecycleCoordinator {
       if (!projectile) return;
       this.spawnImpactCloudFromProjectile(projectile, x, y);
     });
-    this.ctx.combatSystem.setPlayerImpulseCallback((playerId, vx, vy, durationMs) => {
-      this.ctx.hostPhysics.addRecoil(playerId, vx, vy, durationMs);
+    this.ctx.combatSystem.setPlayerImpulseCallback((playerId, vx, vy, durationMs, sourcePlayerId) => {
+      this.ctx.hostPhysics.addRecoil(playerId, vx, vy, durationMs, sourcePlayerId);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
@@ -764,7 +764,10 @@ export class ArenaLifecycleCoordinator {
       return !this.ctx.burrowSystem?.isBurrowed(playerId);
     });
     this.ctx.trainManager.setPlayerHitCallback((playerId, sourceX, sourceY) => {
-      this.ctx.combatSystem.applyDamage(playerId, 9999, true, TRAIN.TRAIN_KILLER_ID, 'Zug RB 54', {
+      const recentPusherId = this.ctx.hostPhysics.getRecentImpulseSource(playerId);
+      const attackerId = recentPusherId ?? TRAIN.TRAIN_KILLER_ID;
+      const weaponName = recentPusherId ? 'in den Zug geschubst' : 'Zug RB 54';
+      this.ctx.combatSystem.applyDamage(playerId, 9999, true, attackerId, weaponName, {
         sourceX,
         sourceY,
       });

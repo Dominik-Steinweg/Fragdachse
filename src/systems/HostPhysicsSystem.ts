@@ -6,6 +6,7 @@ import {
   PLAYER_SPEED, PLAYER_SIZE,
   DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START,
 } from '../config';
+import { TRAIN } from '../train/TrainConfig';
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = {
@@ -32,6 +33,12 @@ interface ExternalImpulse {
   vy: number;
   startMs: number;
   durationMs: number;
+  sourcePlayerId?: string;
+}
+
+interface RecentImpulseSource {
+  sourcePlayerId: string;
+  expiresAt: number;
 }
 
 interface ForcedMovement {
@@ -67,6 +74,7 @@ export class HostPhysicsSystem {
 
   // Rückstoß-Impulse (Zeit-basiertes Quad-Ease-Out Decay über mehrere Frames)
   private pendingRecoils = new Map<string, ExternalImpulse[]>();
+  private recentImpulseSources = new Map<string, RecentImpulseSource>();
   private forcedMovement = new Map<string, ForcedMovement>();
 
   constructor(
@@ -93,10 +101,28 @@ export class HostPhysicsSystem {
    * Wird in HostPhysicsSystem.update() additiv zur regulären Velocity addiert.
    * Amplitude zum Zeitpunkt t: force * (1 - t/duration)²
    */
-  addRecoil(playerId: string, vx: number, vy: number, durationMs = 180): void {
+  addRecoil(playerId: string, vx: number, vy: number, durationMs = 180, sourcePlayerId?: string): void {
+    const startMs = Date.now();
     const impulses = this.pendingRecoils.get(playerId) ?? [];
-    impulses.push({ vx, vy, startMs: Date.now(), durationMs });
+    impulses.push({ vx, vy, startMs, durationMs, sourcePlayerId });
     this.pendingRecoils.set(playerId, impulses);
+    if (sourcePlayerId) {
+      this.recentImpulseSources.set(playerId, {
+        sourcePlayerId,
+        expiresAt: startMs + durationMs + TRAIN.PLAYER_PUSH_KILL_CREDIT_GRACE_MS,
+      });
+    }
+  }
+
+  getRecentImpulseSource(playerId: string, now = Date.now()): string | null {
+    const recent = this.recentImpulseSources.get(playerId);
+    if (!recent) return null;
+    if (now > recent.expiresAt) {
+      this.recentImpulseSources.delete(playerId);
+      return null;
+    }
+    if (recent.sourcePlayerId === playerId) return null;
+    return recent.sourcePlayerId;
   }
 
   setForcedMovement(playerId: string, vx: number, vy: number): void {
@@ -132,7 +158,7 @@ export class HostPhysicsSystem {
 
       const nx = dist > 0.001 ? dx / dist : 0;
       const ny = dist > 0.001 ? dy / dist : -1;
-      this.addRecoil(player.id, nx * impulse, ny * impulse, durationMs);
+      this.addRecoil(player.id, nx * impulse, ny * impulse, durationMs, ownerId);
     }
   }
 
@@ -244,6 +270,7 @@ export class HostPhysicsSystem {
       this.dashStates.clear();
       this.dashBurstPlayers.clear();
       this.pendingRecoils.clear();
+      this.recentImpulseSources.clear();
       this.forcedMovement.clear();
     }
     this.rockGroup  = rockGroup;
@@ -265,6 +292,7 @@ export class HostPhysicsSystem {
     this.dashStates.delete(id);
     this.dashBurstPlayers.delete(id);
     this.pendingRecoils.delete(id);
+    this.recentImpulseSources.delete(id);
     this.forcedMovement.delete(id);
   }
 
