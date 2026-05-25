@@ -10,6 +10,15 @@ type FilterListLike = {
     quality?: number,
     distance?: number,
   ) => unknown;
+  addBlur?: (
+    quality?: number,
+    x?: number,
+    y?: number,
+    strength?: number,
+    color?: number,
+    steps?: number,
+  ) => unknown;
+  addMask?: (mask?: string | object, invert?: boolean) => unknown;
   remove?: (filter: unknown, forceDestroy?: boolean) => unknown;
 };
 
@@ -211,6 +220,31 @@ export function removeInternalFx(target: object, fx: FxHandle | null | undefined
   }
 
   fx.destroy?.();
+}
+
+export interface BlurHandle extends FxHandle {
+  strength: number;
+  x: number;
+  y: number;
+  steps: number;
+}
+
+export function addInternalBlur(
+  target: object,
+  quality: number,
+  x: number,
+  y: number,
+  strength: number,
+  color: number,
+  steps: number,
+): BlurHandle | null {
+  ensureFilters(target);
+  return (getInternalFilters(target)?.addBlur?.(quality, x, y, strength, color, steps) ?? null) as BlurHandle | null;
+}
+
+export function addInternalMask(target: object, maskKey: string): FxHandle | null {
+  ensureFilters(target);
+  return (getInternalFilters(target)?.addMask?.(maskKey) ?? null) as FxHandle | null;
 }
 
 export function removeExternalFx(target: object, fx: FxHandle | null | undefined): void {
