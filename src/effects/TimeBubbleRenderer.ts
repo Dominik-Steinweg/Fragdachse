@@ -44,7 +44,7 @@ function withAlpha(color: string, alpha: number): string {
 
 function drawFeatheredRibbon(ctx: CanvasRenderingContext2D, center: number, ribbon: FeatheredRibbon): void {
   const arcLength = ((ribbon.rx + ribbon.ry) * 0.5) * Math.abs(ribbon.end - ribbon.start);
-  const sampleCount = Math.max(20, Math.ceil(arcLength / 12));
+  const sampleCount = Math.max(24, Math.ceil(arcLength / 9));
 
   ctx.save();
   ctx.translate(center, center);
@@ -56,11 +56,11 @@ function drawFeatheredRibbon(ctx: CanvasRenderingContext2D, center: number, ribb
     const x = Math.cos(angle) * ribbon.rx;
     const y = Math.sin(angle) * ribbon.ry;
     const tangentFade = Math.sin(progress * Math.PI) ** 1.8;
-    const radius = ribbon.thickness * (1.5 + tangentFade * 1.15);
+    const radius = ribbon.thickness * (1.8 + tangentFade * 1.25);
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius + ribbon.blur);
-    gradient.addColorStop(0, withAlpha(ribbon.colors[1], ribbon.opacity * tangentFade * 0.42));
-    gradient.addColorStop(0.26, withAlpha(ribbon.colors[1], ribbon.opacity * tangentFade * 0.24));
-    gradient.addColorStop(0.58, withAlpha(ribbon.colors[2], ribbon.opacity * tangentFade * 0.1));
+    gradient.addColorStop(0, withAlpha(ribbon.colors[1], ribbon.opacity * tangentFade * 0.34));
+    gradient.addColorStop(0.32, withAlpha(ribbon.colors[1], ribbon.opacity * tangentFade * 0.18));
+    gradient.addColorStop(0.68, withAlpha(ribbon.colors[2], ribbon.opacity * tangentFade * 0.08));
     gradient.addColorStop(1, ribbon.colors[0]);
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -113,11 +113,12 @@ export class TimeBubbleRenderer {
       }
 
       const filaments: FeatheredRibbon[] = [
-        { thickness: 8.2, blur: 16, opacity: 0.62, rx: 126, ry: 76, rotation: -0.36, start: 3.9, end: 5.5, colors: ['rgba(255,180,230,0.0)', 'rgba(255,180,230,1)', 'rgba(112,240,255,1)'] },
-        { thickness: 7, blur: 15, opacity: 0.52, rx: 108, ry: 132, rotation: 0.48, start: 0.42, end: 1.78, colors: ['rgba(255,255,150,0.0)', 'rgba(255,255,150,1)', 'rgba(102,255,214,1)'] },
-        { thickness: 6.4, blur: 14, opacity: 0.48, rx: 142, ry: 98, rotation: 0.98, start: 2.12, end: 3.32, colors: ['rgba(150,132,255,0.0)', 'rgba(150,132,255,1)', 'rgba(255,160,214,1)'] },
-        { thickness: 5.8, blur: 13, opacity: 0.44, rx: 116, ry: 88, rotation: -1.04, start: 4.72, end: 5.84, colors: ['rgba(112,236,255,0.0)', 'rgba(112,236,255,1)', 'rgba(255,240,166,1)'] },
-        { thickness: 5.2, blur: 12, opacity: 0.4, rx: 92, ry: 122, rotation: 0.08, start: 2.72, end: 3.84, colors: ['rgba(255,174,226,0.0)', 'rgba(255,174,226,1)', 'rgba(172,255,214,1)'] },
+        { thickness: 8.2, blur: 18, opacity: 0.58, rx: 126, ry: 76, rotation: -0.36, start: 3.9, end: 5.5, colors: ['rgba(255,180,230,0.0)', 'rgba(255,180,230,1)', 'rgba(112,240,255,1)'] },
+        { thickness: 7, blur: 17, opacity: 0.48, rx: 108, ry: 132, rotation: 0.48, start: 0.42, end: 1.78, colors: ['rgba(255,255,150,0.0)', 'rgba(255,255,150,1)', 'rgba(102,255,214,1)'] },
+        { thickness: 6.4, blur: 16, opacity: 0.44, rx: 142, ry: 98, rotation: 0.98, start: 2.12, end: 3.32, colors: ['rgba(150,132,255,0.0)', 'rgba(150,132,255,1)', 'rgba(255,160,214,1)'] },
+        { thickness: 5.8, blur: 15, opacity: 0.4, rx: 116, ry: 88, rotation: -1.04, start: 4.72, end: 5.84, colors: ['rgba(112,236,255,0.0)', 'rgba(112,236,255,1)', 'rgba(255,240,166,1)'] },
+        { thickness: 5.2, blur: 14, opacity: 0.38, rx: 92, ry: 122, rotation: 0.08, start: 2.72, end: 3.84, colors: ['rgba(255,174,226,0.0)', 'rgba(255,174,226,1)', 'rgba(172,255,214,1)'] },
+        { thickness: 4.8, blur: 14, opacity: 0.34, rx: 138, ry: 108, rotation: 0.62, start: 5.34, end: 6.18, colors: ['rgba(164,236,255,0.0)', 'rgba(164,236,255,1)', 'rgba(255,196,232,1)'] },
       ];
 
       for (const filament of filaments) {
@@ -139,12 +140,13 @@ export class TimeBubbleRenderer {
       ctx.globalCompositeOperation = 'screen';
 
       const ribbons: FeatheredRibbon[] = [
-        { thickness: 6.2, blur: 18, opacity: 0.54, rx: 118, ry: 74, rotation: -0.36, start: -0.82, end: 1.18, colors: ['rgba(255,255,255,0.0)', 'rgba(255,255,255,1)', 'rgba(255,198,236,1)'] },
-        { thickness: 6.8, blur: 20, opacity: 0.56, rx: 102, ry: 126, rotation: 0.28, start: 0.18, end: 2.18, colors: ['rgba(161,240,255,0.0)', 'rgba(161,240,255,1)', 'rgba(255,255,190,1)'] },
-        { thickness: 5.8, blur: 18, opacity: 0.5, rx: 126, ry: 94, rotation: 0.92, start: 2.64, end: 4.46, colors: ['rgba(255,196,228,0.0)', 'rgba(255,196,228,1)', 'rgba(196,255,216,1)'] },
-        { thickness: 5.4, blur: 16, opacity: 0.44, rx: 86, ry: 114, rotation: -0.96, start: 1.98, end: 3.42, colors: ['rgba(176,150,255,0.0)', 'rgba(176,150,255,1)', 'rgba(110,236,255,1)'] },
-        { thickness: 4.8, blur: 15, opacity: 0.38, rx: 134, ry: 82, rotation: 0.42, start: 4.98, end: 5.98, colors: ['rgba(255,220,164,0.0)', 'rgba(255,220,164,1)', 'rgba(255,164,226,1)'] },
-        { thickness: 4.6, blur: 14, opacity: 0.36, rx: 94, ry: 136, rotation: -0.18, start: -0.18, end: 0.92, colors: ['rgba(146,250,255,0.0)', 'rgba(146,250,255,1)', 'rgba(186,164,255,1)'] },
+        { thickness: 6.2, blur: 20, opacity: 0.48, rx: 118, ry: 74, rotation: -0.36, start: -0.82, end: 1.18, colors: ['rgba(255,255,255,0.0)', 'rgba(255,255,255,1)', 'rgba(255,198,236,1)'] },
+        { thickness: 6.8, blur: 22, opacity: 0.5, rx: 102, ry: 126, rotation: 0.28, start: 0.18, end: 2.18, colors: ['rgba(161,240,255,0.0)', 'rgba(161,240,255,1)', 'rgba(255,255,190,1)'] },
+        { thickness: 5.8, blur: 20, opacity: 0.44, rx: 126, ry: 94, rotation: 0.92, start: 2.64, end: 4.46, colors: ['rgba(255,196,228,0.0)', 'rgba(255,196,228,1)', 'rgba(196,255,216,1)'] },
+        { thickness: 5.4, blur: 18, opacity: 0.4, rx: 86, ry: 114, rotation: -0.96, start: 1.98, end: 3.42, colors: ['rgba(176,150,255,0.0)', 'rgba(176,150,255,1)', 'rgba(110,236,255,1)'] },
+        { thickness: 4.8, blur: 17, opacity: 0.34, rx: 134, ry: 82, rotation: 0.42, start: 4.98, end: 5.98, colors: ['rgba(255,220,164,0.0)', 'rgba(255,220,164,1)', 'rgba(255,164,226,1)'] },
+        { thickness: 6.6, blur: 36, opacity: 0.32, rx: 94, ry: 136, rotation: -0.18, start: -0.18, end: 0.92, colors: ['rgba(146,250,255,0.0)', 'rgba(146,250,255,1)', 'rgba(186,164,255,1)'] },
+        { thickness: 8.4, blur: 40, opacity: 0.3, rx: 122, ry: 108, rotation: 1.12, start: 3.84, end: 4.72, colors: ['rgba(255,188,226,0.0)', 'rgba(255,188,226,1)', 'rgba(148,244,255,1)'] },
       ];
 
       for (const ribbon of ribbons) {
