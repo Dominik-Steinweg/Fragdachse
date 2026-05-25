@@ -37,6 +37,7 @@ interface ClientProjectileState {
   grenadeVisualPreset?: GrenadeVisualPreset;
   energyBallVariant?: EnergyBallVariant;
   ownerColor?: number;
+  projectileVisualScale?: number;
   isDecaying: boolean;
   velocityDecay: number;
 }
@@ -365,6 +366,7 @@ export class ProjectileManager {
         cfg.color,
         cfg.ownerColor ?? cfg.color,
         cfg.smokeTrailColor ?? cfg.color,
+        cfg.projectileVisualScale,
       );
     }
 
@@ -471,6 +473,7 @@ export class ProjectileManager {
       explosion:      cfg.explosion,
       impactCloud:    cfg.impactCloud,
       homing:         cfg.homing,
+      projectileVisualScale: cfg.projectileVisualScale,
       smokeTrailColor: cfg.smokeTrailColor,
       lockedTargetId: null,
       fuseTime:        cfg.fuseTime,
@@ -1297,6 +1300,7 @@ export class ProjectileManager {
         explosion: proj.explosion,
         impactCloud: proj.impactCloud,
         homing: proj.homing,
+        projectileVisualScale: proj.projectileVisualScale,
         smokeTrailColor: proj.smokeTrailColor,
         fuseTime: proj.fuseTime,
         grenadeEffect: proj.grenadeEffect,
@@ -2089,6 +2093,7 @@ export class ProjectileManager {
       color:  p.color,
       allowTeamDamage: p.allowTeamDamage,
       ownerColor: p.ownerColor,
+      projectileVisualScale: p.projectileVisualScale,
       smokeTrailColor: p.smokeTrailColor,
       style:  p.projectileStyle,
       bulletVisualPreset: p.bulletVisualPreset,
@@ -2293,6 +2298,7 @@ export class ProjectileManager {
         grenadeVisualPreset: proj.grenadeVisualPreset,
         energyBallVariant: proj.energyBallVariant,
         ownerColor: proj.ownerColor,
+        projectileVisualScale: proj.projectileVisualScale,
         isDecaying: isFlame || isLeafBlower,
         velocityDecay: proj.velocityDecay ?? 1,
       });
@@ -2371,6 +2377,7 @@ export class ProjectileManager {
             proj.color,
             proj.ownerColor ?? proj.color,
             proj.smokeTrailColor ?? proj.color,
+            proj.projectileVisualScale,
           );
         }
         rockets.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);

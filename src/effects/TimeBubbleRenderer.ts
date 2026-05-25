@@ -38,6 +38,15 @@ interface SoftBlob {
   alpha: number;
 }
 
+interface RadiusRing {
+  radius: number;
+  innerFade: number;
+  outerFeather: number;
+  opacity: number;
+  innerColor: string;
+  edgeColor: string;
+}
+
 function withAlpha(color: string, alpha: number): string {
   return color.replace(/,1\)$/u, `,${alpha.toFixed(3)})`);
 }
@@ -90,6 +99,28 @@ function drawSoftBlob(ctx: CanvasRenderingContext2D, blob: SoftBlob): void {
   ctx.restore();
 }
 
+function drawRadiusRing(ctx: CanvasRenderingContext2D, center: number, ring: RadiusRing): void {
+  const outerRadius = ring.radius + ring.outerFeather;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, outerRadius);
+  const innerFadeStart = Math.max(0, (ring.radius - ring.innerFade) / outerRadius);
+  const innerBandStart = Math.max(innerFadeStart, (ring.radius - ring.innerFade * 0.34) / outerRadius);
+  const edgeHold = Math.min(0.996, ring.radius / outerRadius);
+  const outerDrop = Math.min(0.999, (ring.radius + ring.outerFeather * 0.18) / outerRadius);
+
+  gradient.addColorStop(0, withAlpha(ring.innerColor, 0));
+  gradient.addColorStop(innerFadeStart, withAlpha(ring.innerColor, 0));
+  gradient.addColorStop(innerBandStart, withAlpha(ring.innerColor, ring.opacity * 0.14));
+  gradient.addColorStop(Math.max(innerBandStart, edgeHold - 0.016), withAlpha(ring.innerColor, ring.opacity * 0.62));
+  gradient.addColorStop(edgeHold, withAlpha(ring.edgeColor, ring.opacity));
+  gradient.addColorStop(outerDrop, withAlpha(ring.edgeColor, ring.opacity * 0.94));
+  gradient.addColorStop(1, withAlpha(ring.edgeColor, 0));
+
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(center, center, outerRadius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export class TimeBubbleRenderer {
   private readonly visuals = new Map<number, TimeBubbleVisual>();
 
@@ -127,6 +158,15 @@ export class TimeBubbleRenderer {
       for (const filament of filaments) {
         drawFeatheredRibbon(ctx, center, filament);
       }
+
+      drawRadiusRing(ctx, center, {
+        radius: 146,
+        innerFade: 34,
+        outerFeather: 5,
+        opacity: 0.24,
+        innerColor: 'rgba(168,246,255,1)',
+        edgeColor: 'rgba(255,248,206,1)',
+      });
 
       const halo = ctx.createRadialGradient(center - 36, center - 40, 24, center, center, 156);
       halo.addColorStop(0, 'rgba(255,224,246,0.12)');

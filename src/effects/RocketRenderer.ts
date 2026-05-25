@@ -16,6 +16,7 @@ interface RocketVisual {
   exhaustEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   accentColor: number;
   smokeColor: number;
+  visualScale: number;
   lastSmokeX: number;
   lastSmokeY: number;
   lastSmokeAt: number;
@@ -143,6 +144,7 @@ export class RocketRenderer {
     color: number,
     accentColor: number,
     smokeColor: number,
+    visualScale: number = 1,
   ): void {
     if (this.rockets.has(id)) return;
 
@@ -187,6 +189,7 @@ export class RocketRenderer {
       exhaustEmitter,
       accentColor,
       smokeColor,
+      visualScale,
       lastSmokeX: x,
       lastSmokeY: y,
       lastSmokeAt: this.scene.time.now,
@@ -194,12 +197,12 @@ export class RocketRenderer {
     this.updateVisual(id, x, y, size, 1, 0);
   }
 
-  private spawnSmokePuff(x: number, y: number, size: number, smokeColor: number): void {
+  private spawnSmokePuff(x: number, y: number, visualSize: number, smokeColor: number): void {
     const puff = this.scene.add.image(x, y, TEX_ROCKET_SMOKE)
       .setDepth(DEPTH.FIRE)
       .setTint(smokeColor)
       .setAlpha(0.95)
-      .setScale(Math.max(size / 28, 0.28));
+      .setScale(Math.max(visualSize / 28, 0.28));
 
     this.smokePuffs.add(puff);
 
@@ -228,31 +231,36 @@ export class RocketRenderer {
     const speed = Math.max(1, Math.sqrt(vx * vx + vy * vy));
     const nx = vx / speed;
     const ny = vy / speed;
-    const tailX = x - nx * (size * 0.9);
-    const tailY = y - ny * (size * 0.9);
+    const visualSize = size * visual.visualScale;
+    const bodyScale = Math.max(size / 10, 0.8) * visual.visualScale;
+    const glowScale = Math.max(size / 12, 0.8) * visual.visualScale;
+    const engineScaleX = Math.max(size / 12, 0.7) * visual.visualScale;
+    const engineScaleY = Math.max(size / 13, 0.6) * visual.visualScale;
+    const tailX = x - nx * (visualSize * 0.9);
+    const tailY = y - ny * (visualSize * 0.9);
 
     visual.body.setPosition(x, y);
     visual.body.setRotation(angle);
-    visual.body.setScale(Math.max(size / 10, 0.8), Math.max(size / 10, 0.8));
+    visual.body.setScale(bodyScale, bodyScale);
 
     visual.accent.setPosition(x, y);
     visual.accent.setRotation(angle);
-    visual.accent.setScale(Math.max(size / 10, 0.8), Math.max(size / 10, 0.8));
+    visual.accent.setScale(bodyScale, bodyScale);
 
     visual.glow.setPosition(x, y);
     visual.glow.setRotation(angle);
-    visual.glow.setScale(Math.max(size / 12, 0.8));
+    visual.glow.setScale(glowScale);
 
-    const engineOffset = size * 0.9;
+    const engineOffset = visualSize * 0.9;
     visual.engine.setPosition(x - nx * engineOffset, y - ny * engineOffset);
     visual.engine.setRotation(angle + Math.PI);
-    visual.engine.setScale(Math.max(size / 12, 0.7), Math.max(size / 13, 0.6));
+    visual.engine.setScale(engineScaleX, engineScaleY);
     visual.engine.setAlpha(0.72 + Math.min(speed / 1200, 0.22));
 
     const distSinceSmoke = Phaser.Math.Distance.Between(visual.lastSmokeX, visual.lastSmokeY, tailX, tailY);
     const now = this.scene.time.now;
-    if (distSinceSmoke >= Math.max(size * 0.55, 5) || now - visual.lastSmokeAt >= 22) {
-      this.spawnSmokePuff(tailX, tailY, size, visual.smokeColor);
+    if (distSinceSmoke >= Math.max(visualSize * 0.55, 5) || now - visual.lastSmokeAt >= 22) {
+      this.spawnSmokePuff(tailX, tailY, visualSize, visual.smokeColor);
       visual.lastSmokeX = tailX;
       visual.lastSmokeY = tailY;
       visual.lastSmokeAt = now;

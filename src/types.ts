@@ -226,6 +226,7 @@ export interface SyncedProjectile {
   color:   number;  // hex
   allowTeamDamage?: boolean;
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
+  projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   smokeTrailColor?: number; // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
   style?:  ProjectileStyle;   // fehlendes Feld = 'bullet' (Rückwärtskompatibilität)
   bulletVisualPreset?: BulletVisualPreset;
@@ -477,6 +478,7 @@ export interface ProjectileSpawnConfig {
   color:           number;        // hex
   allowTeamDamage?: boolean;
   ownerColor?:     number;        // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
+  projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   lifetime:        number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
   maxBounces:      number;        // 0 für Granaten
   isGrenade:       boolean;
@@ -692,6 +694,7 @@ export interface TrackedProjectile {
   explosion?:      ProjectileExplosionConfig;
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
+  projectileVisualScale?: number;
   smokeTrailColor?: number;
   lockedTargetId?: string | null;
   lockedTargetType?: HomingTargetType;

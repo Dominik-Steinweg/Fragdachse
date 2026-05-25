@@ -142,6 +142,7 @@ export interface WeaponConfig {
   // Visuelles Override
   readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
   readonly projectileStyle?: ProjectileStyle; // 'bullet' (eckig, Standard) | 'ball' (rund)
+  readonly projectileVisualScale?: number;   // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   readonly bulletVisualPreset?: BulletVisualPreset;
   readonly energyBallVariant?: EnergyBallVariant;
   readonly rocketSmokeTrailColor?: number;   // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
@@ -1019,6 +1020,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
     projectileStyle:      'rocket' as ProjectileStyle,
+    projectileVisualScale: 0.5,
     projectileColor:      0xf0c98a,
     rocketSmokeTrailColor: COLORS.GREY_2,    
     trainDamageMult:      1,
@@ -1458,9 +1460,9 @@ export const UTILITY_CONFIGS = {
     maxBounces:          3,
     bubbleRadius:        120,
     bubbleDuration:      5000,
-    projectileSlowFactor: 0.10,
-    playerSlowFactor:    0.5,
-    trainSlowFactor:     0.5,
+    projectileSlowFactor: 0.05,
+    playerSlowFactor:    0.1,
+    trainSlowFactor:     0.1,
     bubbleColor:         0x8edcff,
     bubbleDistortion:    0.75,
     allowedSlots:        ['utility'],

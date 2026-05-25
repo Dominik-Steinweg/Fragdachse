@@ -193,12 +193,14 @@ export class HostPhysicsSystem {
   }
 
   private applyTimeBubbleFactor(
+    playerId: string,
     x: number,
     y: number,
     vx: number,
     vy: number,
     now: number,
   ): { vx: number; vy: number } {
+    if (this.burrowSystem?.isBurrowed(playerId)) return { vx, vy };
     const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
     if (factor >= 0.999) return { vx, vy };
     return { vx: vx * factor, vy: vy * factor };
@@ -351,13 +353,14 @@ export class HostPhysicsSystem {
       const forcedMovement = this.forcedMovement.get(player.id);
 
       if (movementLocked) {
-        const slowed = this.applyTimeBubbleFactor(player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
+        const slowed = this.applyTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
         player.body.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
 
       if (forcedMovement) {
         const slowed = this.applyTimeBubbleFactor(
+          player.id,
           player.sprite.x,
           player.sprite.y,
           forcedMovement.vx + impulse.vx,
@@ -370,7 +373,7 @@ export class HostPhysicsSystem {
 
       // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
       if (this.burrowSystem?.isStunned(player.id)) {
-        const slowed = this.applyTimeBubbleFactor(player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
+        const slowed = this.applyTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
         player.body.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
@@ -431,6 +434,7 @@ export class HostPhysicsSystem {
           baseVx = dirX * dash.vNorm * speedFactor;
           baseVy = dirY * dash.vNorm * speedFactor;
           const slowed = this.applyTimeBubbleFactor(
+            player.id,
             player.sprite.x,
             player.sprite.y,
             baseVx + impulse.vx,
@@ -468,6 +472,7 @@ export class HostPhysicsSystem {
       }
 
       const slowed = this.applyTimeBubbleFactor(
+        player.id,
         player.sprite.x,
         player.sprite.y,
         baseVx + impulse.vx,

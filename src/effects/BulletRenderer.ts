@@ -177,7 +177,7 @@ const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
   ak47: {
     bodyTextureKey: BODY_TEXTURE_KEYS.ak47,
     accentTextureKey: ACCENT_TEXTURE_KEYS.ak47,
-    scaleBoost:      1.15,
+    scaleBoost:      0.5,
     trailLengthMult: 6.9,
     trailAlpha:      0.74,
     trailScaleYMult: 1.1,
