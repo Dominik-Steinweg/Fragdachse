@@ -2,18 +2,10 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedTimeBubble } from '../types';
 import { ensureCanvasTexture, mixColors } from './EffectUtils';
-import { addExternalGlow, addInternalBlur, addInternalMask, removeExternalFx, type BlurHandle, type GlowHandle } from '../utils/phaserFx';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 const TEX_TIME_BUBBLE_MEMBRANE = '__time_bubble_membrane';
 const TEX_TIME_BUBBLE_INTERFERENCE = '__time_bubble_interference';
-const TEX_TIME_BUBBLE_CIRCLE_MASK = '__time_bubble_circle_mask';
-const BLUR_DEPTH_OFFSET = 0.35;
-const BLUR_QUALITY = 2;
-const BLUR_SAMPLE_X = 3;
-const BLUR_SAMPLE_Y = 3;
-const BLUR_BASE_STRENGTH = 5;
-const BLUR_DISTORTION_BONUS = 14;
-const BLUR_STEPS = 6;
 
 interface TimeBubbleVisual {
   membrane: Phaser.GameObjects.Image;
@@ -22,8 +14,6 @@ interface TimeBubbleVisual {
   shellGlow: GlowHandle | null;
   snapshot: SyncedTimeBubble;
   seed: number;
-  blurRt: Phaser.GameObjects.RenderTexture;
-  blurFx: BlurHandle | null;
 }
 
 interface FeatheredRibbon {
@@ -129,6 +119,9 @@ export class TimeBubbleRenderer {
         { thickness: 5.8, blur: 15, opacity: 0.4, rx: 116, ry: 88, rotation: -1.04, start: 4.72, end: 5.84, colors: ['rgba(112,236,255,0.0)', 'rgba(112,236,255,1)', 'rgba(255,240,166,1)'] },
         { thickness: 5.2, blur: 14, opacity: 0.38, rx: 92, ry: 122, rotation: 0.08, start: 2.72, end: 3.84, colors: ['rgba(255,174,226,0.0)', 'rgba(255,174,226,1)', 'rgba(172,255,214,1)'] },
         { thickness: 4.8, blur: 14, opacity: 0.34, rx: 138, ry: 108, rotation: 0.62, start: 5.34, end: 6.18, colors: ['rgba(164,236,255,0.0)', 'rgba(164,236,255,1)', 'rgba(255,196,232,1)'] },
+          { thickness: 4.4, blur: 13, opacity: 0.28, rx: 76, ry: 58, rotation: 0.34, start: 0.94, end: 2.18, colors: ['rgba(255,206,238,0.0)', 'rgba(255,206,238,1)', 'rgba(146,244,255,1)'] },
+          { thickness: 3.9, blur: 12, opacity: 0.24, rx: 62, ry: 84, rotation: -0.58, start: 3.28, end: 4.46, colors: ['rgba(188,170,255,0.0)', 'rgba(188,170,255,1)', 'rgba(255,236,172,1)'] },
+          { thickness: 3.6, blur: 11, opacity: 0.2, rx: 54, ry: 46, rotation: 1.12, start: 4.86, end: 5.86, colors: ['rgba(164,244,255,0.0)', 'rgba(164,244,255,1)', 'rgba(255,182,226,1)'] },
       ];
 
       for (const filament of filaments) {
@@ -144,14 +137,6 @@ export class TimeBubbleRenderer {
       ctx.fillRect(0, 0, 320, 320);
     });
 
-    ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_CIRCLE_MASK, 256, 256, (ctx) => {
-      ctx.clearRect(0, 0, 256, 256);
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(128, 128, 128, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
     ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_INTERFERENCE, 320, 320, (ctx) => {
       const center = 160;
       ctx.clearRect(0, 0, 320, 320);
@@ -165,6 +150,9 @@ export class TimeBubbleRenderer {
         { thickness: 4.8, blur: 17, opacity: 0.34, rx: 134, ry: 82, rotation: 0.42, start: 4.98, end: 5.98, colors: ['rgba(255,220,164,0.0)', 'rgba(255,220,164,1)', 'rgba(255,164,226,1)'] },
         { thickness: 6.6, blur: 36, opacity: 0.32, rx: 94, ry: 136, rotation: -0.18, start: -0.18, end: 0.92, colors: ['rgba(146,250,255,0.0)', 'rgba(146,250,255,1)', 'rgba(186,164,255,1)'] },
         { thickness: 8.4, blur: 40, opacity: 0.3, rx: 122, ry: 108, rotation: 1.12, start: 3.84, end: 4.72, colors: ['rgba(255,188,226,0.0)', 'rgba(255,188,226,1)', 'rgba(148,244,255,1)'] },
+          { thickness: 7.9, blur: 28, opacity: 0.14, rx: 98, ry: 52, rotation: -0.24, start: 0.76, end: 2.42, colors: ['rgba(255,232,255,0.0)', 'rgba(255,232,255,1)', 'rgba(186,244,255,1)'] },
+          { thickness: 7.4, blur: 36, opacity: 0.1, rx: 58, ry: 78, rotation: 0.74, start: 2.82, end: 4.04, colors: ['rgba(202,186,255,0.0)', 'rgba(202,186,255,1)', 'rgba(255,226,170,1)'] },
+          { thickness: 6.8, blur: 35, opacity: 0.08, rx: 48, ry: 60, rotation: -1.12, start: 4.88, end: 5.9, colors: ['rgba(255,206,232,0.0)', 'rgba(255,206,232,1)', 'rgba(146,236,255,1)'] },
       ];
 
       for (const ribbon of ribbons) {
@@ -193,7 +181,6 @@ export class TimeBubbleRenderer {
   update(_deltaMs: number): void {
     const now = this.scene.time.now;
     for (const visual of this.visuals.values()) {
-      this.updateBlurRt(visual);
       this.updateVisual(visual, now);
     }
   }
@@ -205,16 +192,6 @@ export class TimeBubbleRenderer {
   }
 
   private createVisual(snapshot: SyncedTimeBubble): TimeBubbleVisual {
-    const rtSize = Math.ceil(snapshot.radius * 2);
-    const blurRt = this.scene.add.renderTexture(snapshot.x, snapshot.y, rtSize, rtSize)
-      .setOrigin(0.5, 0.5)
-      .setDepth(DEPTH.FIRE + BLUR_DEPTH_OFFSET)
-      .setRenderMode('all');
-    blurRt.camera.scrollX = snapshot.x - snapshot.radius;
-    blurRt.camera.scrollY = snapshot.y - snapshot.radius;
-    const blurFx = addInternalBlur(blurRt, BLUR_QUALITY, BLUR_SAMPLE_X, BLUR_SAMPLE_Y, BLUR_BASE_STRENGTH, 0xffffff, BLUR_STEPS);
-    addInternalMask(blurRt, TEX_TIME_BUBBLE_CIRCLE_MASK);
-
     const membrane = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_MEMBRANE)
       .setDepth(DEPTH.FIRE + 0.42)
       .setBlendMode(Phaser.BlendModes.SCREEN);
@@ -235,21 +212,7 @@ export class TimeBubbleRenderer {
       shellGlow,
       snapshot,
       seed: snapshot.id * 0.731,
-      blurRt,
-      blurFx,
     };
-  }
-
-  private updateBlurRt(visual: TimeBubbleVisual): void {
-    const bubble = visual.snapshot;
-    const blurDepthCutoff = DEPTH.FIRE + BLUR_DEPTH_OFFSET;
-    const allObjects = this.scene.children.list as Phaser.GameObjects.GameObject[];
-    const drawTargets = allObjects.filter((go) => (go as unknown as { depth: number }).depth < blurDepthCutoff);
-    visual.blurRt.clear().draw(drawTargets);
-    visual.blurRt.setAlpha(bubble.alpha);
-    if (visual.blurFx) {
-      visual.blurFx.strength = BLUR_BASE_STRENGTH + bubble.distortion * BLUR_DISTORTION_BONUS;
-    }
   }
 
   private updateVisual(visual: TimeBubbleVisual, now: number): void {
@@ -296,7 +259,6 @@ export class TimeBubbleRenderer {
     const visual = this.visuals.get(id);
     if (!visual) return;
 
-    visual.blurRt.destroy();
     removeExternalFx(visual.membrane, visual.shellGlow);
     visual.membrane.destroy();
     visual.interferenceA.destroy();
