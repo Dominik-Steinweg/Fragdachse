@@ -11,6 +11,7 @@ import { GaussRenderer }       from '../../effects/GaussRenderer';
 import { HydraRenderer }       from '../../effects/HydraRenderer';
 import { EnergyShieldRenderer } from '../../effects/EnergyShieldRenderer';
 import { TeslaDomeRenderer }   from '../../effects/TeslaDomeRenderer';
+import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
 import { SporeRenderer }       from '../../effects/SporeRenderer';
@@ -46,6 +47,7 @@ export interface RendererBundle {
   gauss:               GaussRenderer;
   energyShield:        EnergyShieldRenderer;
   teslaDome:           TeslaDomeRenderer;
+  timeBubble:          TimeBubbleRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
   spore:               SporeRenderer;
@@ -106,6 +108,9 @@ export function createRendererBundle(
   const teslaDome = new TeslaDomeRenderer(scene);
   teslaDome.generateTextures();
 
+  const timeBubble = new TimeBubbleRenderer(scene);
+  timeBubble.generateTextures();
+
   const holyGrenade = new HolyGrenadeRenderer(scene);
   holyGrenade.generateTextures();
 
@@ -145,7 +150,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, bite, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, holyGrenade,
+    bullet, asmdPrimary, bite, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, timeBubble, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,

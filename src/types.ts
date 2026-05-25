@@ -139,7 +139,7 @@ export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spo
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'gauss' | 'negev';
 
 /** Data-driven Preset fuer klassische geworfene Granaten. */
-export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov';
+export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov' | 'time_bubble';
 
 /** Visuelles Preset fuer Hitscan-Strahlen. */
 export type HitscanVisualPreset = 'default' | 'asmd_primary';
@@ -571,7 +571,18 @@ export interface FireGrenadeEffect {
   burnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
 }
 
-export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect;
+export interface TimeBubbleGrenadeEffect {
+  type: 'time_bubble';
+  radius: number;
+  duration: number;
+  projectileSlowFactor: number;
+  playerSlowFactor: number;
+  trainSlowFactor: number;
+  color?: number;
+  distortion?: number;
+}
+
+export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect | TimeBubbleGrenadeEffect;
 
 /**
  * Markiert ein Projektil als detonierbar durch spezifische Auslöser-Tags.
@@ -642,6 +653,17 @@ export interface SyncedStinkCloud {
   alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
   ownerColor: number; // Spielerfarbe für Fairness-Kreis
   visualVariant?: 'stink' | 'spore';
+}
+
+export interface SyncedTimeBubble {
+  id:         number;
+  ownerId:    string;
+  x:          number;
+  y:          number;
+  radius:     number;
+  alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
+  color:      number;
+  distortion: number; // 0-1, visuelle Intensitaet fuer Interferenz/Post-FX
 }
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
@@ -725,6 +747,9 @@ export interface TrackedProjectile {
   bounceFrictionMultiplier?: number;
   stopSpeedThreshold?: number;
   frictionActivated?: boolean;  // true sobald Phaser-Damping aktiviert wurde
+  simulatedAgeMs?: number;
+  appliedAirFrictionDecay?: number;
+  timeBubbleFactor?: number;
   sourceSlot?: LoadoutSlot;
   shotAudioKey?: ShotAudioKey;
 

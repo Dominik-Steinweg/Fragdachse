@@ -268,6 +268,7 @@ export class ArenaScene extends Phaser.Scene {
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
+      timeBubbleSystem: null,
       teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
     };
 
@@ -639,6 +640,7 @@ export class ArenaScene extends Phaser.Scene {
         if (state) {
           this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
           this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
+          this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
           this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
           this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
           this.renderers.train?.setTarget(state.train ?? null);
@@ -674,6 +676,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
+    this.renderers.timeBubble.update(delta);
     this.renderers.teslaDome.update(delta);
     this.renderers.energyShield.update(delta);
 

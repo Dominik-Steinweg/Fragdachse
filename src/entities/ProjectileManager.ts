@@ -110,6 +110,7 @@ export class ProjectileManager {
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
+  private timeBubbleFactorProvider: ((x: number, y: number, now: number) => number) | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
@@ -258,6 +259,10 @@ export class ProjectileManager {
 
   setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
     this.ownerPositionProvider = provider;
+  }
+
+  setTimeBubbleFactorProvider(provider: ((x: number, y: number, now: number) => number) | null): void {
+    this.timeBubbleFactorProvider = provider;
   }
 
   /** Registriert den Callback für BFG-Laser-Salven (Host-only). */
@@ -420,6 +425,11 @@ export class ProjectileManager {
       Math.sin(angle) * cfg.speed,
     );
 
+    const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(x, y, Date.now()) ?? 1;
+    if (initialTimeBubbleFactor < 0.999) {
+      body.setVelocity(body.velocity.x * initialTimeBubbleFactor, body.velocity.y * initialTimeBubbleFactor);
+    }
+
     // Anti-Tunneling: Body in Flugrichtung verlängern (proportional zur
     // Geschwindigkeitskomponente je Achse). Verhindert, dass kleine Projektile
     // an Nahtstellen zwischen benachbarten 32×32-Fels-Bodies durchrutschen.
@@ -510,6 +520,9 @@ export class ProjectileManager {
       bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
       stopSpeedThreshold: cfg.stopSpeedThreshold,
       frictionActivated: false,
+      simulatedAgeMs: 0,
+      appliedAirFrictionDecay: undefined,
+      timeBubbleFactor: initialTimeBubbleFactor,
     };
 
     // Phaser-Damping für Air-Friction vorbereiten
@@ -517,8 +530,10 @@ export class ProjectileManager {
       body.useDamping = true;
       // Drag erst nach frictionDelayMs aktivieren; bis dahin kein Luftwiderstand (Faktor 1)
       if (!cfg.frictionDelayMs || cfg.frictionDelayMs <= 0) {
-        body.setDrag(cfg.airFrictionDecayPerSec, cfg.airFrictionDecayPerSec);
+        const effectiveDecay = this.getEffectiveAirFrictionDecay(cfg.airFrictionDecayPerSec, initialTimeBubbleFactor);
+        body.setDrag(effectiveDecay, effectiveDecay);
         tracked.frictionActivated = true;
+        tracked.appliedAirFrictionDecay = effectiveDecay;
       } else {
         body.setDrag(1, 1);
       }
@@ -1383,14 +1398,44 @@ export class ProjectileManager {
     this.projectileImpactCallback?.(proj, x, y);
   }
 
-  private updateHomingProjectile(proj: TrackedProjectile, now: number): void {
+  private getEffectiveAirFrictionDecay(baseDecay: number, timeFactor: number): number {
+    const clampedDecay = Phaser.Math.Clamp(baseDecay, 0.0001, 1);
+    const clampedFactor = Phaser.Math.Clamp(timeFactor, 0.0001, 1);
+    return Math.pow(clampedDecay, clampedFactor);
+  }
+
+  private syncTimeBubbleDrag(proj: TrackedProjectile): void {
+    if (!proj.frictionActivated || proj.airFrictionDecayPerSec === undefined) return;
+    const timeFactor = proj.timeBubbleFactor ?? 1;
+    const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
+    if (proj.appliedAirFrictionDecay !== undefined && Math.abs(proj.appliedAirFrictionDecay - effectiveDecay) <= 0.0001) return;
+    proj.body.setDrag(effectiveDecay, effectiveDecay);
+    proj.appliedAirFrictionDecay = effectiveDecay;
+  }
+
+  private syncTimeBubbleFactor(proj: TrackedProjectile, now: number): void {
+    const nextFactor = this.timeBubbleFactorProvider?.(proj.sprite.x, proj.sprite.y, now) ?? 1;
+    const prevFactor = proj.timeBubbleFactor ?? 1;
+    if (Math.abs(nextFactor - prevFactor) <= 0.0001) return;
+    if (prevFactor <= 0.0001) {
+      proj.timeBubbleFactor = nextFactor;
+      return;
+    }
+
+    const ratio = nextFactor / prevFactor;
+    proj.body.setVelocity(proj.body.velocity.x * ratio, proj.body.velocity.y * ratio);
+    proj.timeBubbleFactor = nextFactor;
+    this.syncTimeBubbleDrag(proj);
+  }
+
+  private updateHomingProjectile(proj: TrackedProjectile, simulatedAgeMs: number): void {
     const homing = proj.homing;
     if (!homing || !this.homingTargetProvider) return;
-    if (now - proj.createdAt < homing.acquireDelayMs) return;
+    if (simulatedAgeMs < homing.acquireDelayMs) return;
 
     const lastSearchAt = proj.lastHomingSearchAt ?? 0;
-    if (lastSearchAt > 0 && now - lastSearchAt < homing.retargetIntervalMs) return;
-    proj.lastHomingSearchAt = now;
+    if (lastSearchAt > 0 && simulatedAgeMs - lastSearchAt < homing.retargetIntervalMs) return;
+    proj.lastHomingSearchAt = simulatedAgeMs;
 
     const target = this.selectHomingTarget(proj, homing);
     if (!target) {
@@ -1585,11 +1630,16 @@ export class ProjectileManager {
         return false;
       }
 
-      const age = now - proj.createdAt;
+      this.syncTimeBubbleFactor(proj, now);
+      const timeFactor = proj.timeBubbleFactor ?? 1;
+      const simulatedDeltaMs = Math.max(0, deltaMs * timeFactor);
+      proj.simulatedAgeMs = (proj.simulatedAgeMs ?? 0) + simulatedDeltaMs;
+      const realAge = now - proj.createdAt;
+      const simulatedAge = proj.simulatedAgeMs;
 
       if (proj.isGrenade) {
         // Granate explodiert nach fuseTime ODER wenn Abprall-Limit erreicht
-        const fuseExpired = age >= proj.fuseTime!;
+        const fuseExpired = realAge >= proj.fuseTime!;
         const bouncedOut  = proj.maxBounces > 0 && proj.bounceCount >= proj.maxBounces;
         if ((fuseExpired || bouncedOut) && proj.grenadeEffect) {
           explodedGrenades.push({
@@ -1607,7 +1657,7 @@ export class ProjectileManager {
         // Countdown-Emission für Granaten mit langer Zündzeit (≥ 1500ms)
         const fuseTime = proj.fuseTime ?? 0;
         if (fuseTime >= 1500) {
-          const remainingSeconds = Math.max(0, Math.ceil((fuseTime - age) / 1000));
+          const remainingSeconds = Math.max(0, Math.ceil((fuseTime - realAge) / 1000));
           if (remainingSeconds > 0 && proj.lastCountdownEmitted !== remainingSeconds) {
             proj.lastCountdownEmitted = remainingSeconds;
             countdownEvents.push({ x: proj.sprite.x, y: proj.sprite.y, value: remainingSeconds });
@@ -1616,15 +1666,19 @@ export class ProjectileManager {
 
         // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
         if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
-          if (proj.frictionDelayMs === undefined || age >= proj.frictionDelayMs) {
-            proj.body.setDrag(proj.airFrictionDecayPerSec, proj.airFrictionDecayPerSec);
+          if (proj.frictionDelayMs === undefined || simulatedAge >= proj.frictionDelayMs) {
+            const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
+            proj.body.setDrag(effectiveDecay, effectiveDecay);
             proj.frictionActivated = true;
+            proj.appliedAirFrictionDecay = effectiveDecay;
           }
         }
+        this.syncTimeBubbleDrag(proj);
         // Stop-Threshold: unter Mindestgeschwindigkeit komplett anhalten
         if (proj.frictionActivated && proj.stopSpeedThreshold !== undefined) {
           const speedSq = proj.body.velocity.lengthSq();
-          if (speedSq > 0 && speedSq < proj.stopSpeedThreshold * proj.stopSpeedThreshold) {
+          const effectiveThreshold = proj.stopSpeedThreshold * timeFactor;
+          if (speedSq > 0 && speedSq < effectiveThreshold * effectiveThreshold) {
             proj.body.setVelocity(0, 0);
           }
         }
@@ -1642,7 +1696,7 @@ export class ProjectileManager {
         }
 
         // Normales Projektil: Lifetime oder Max-Bounces
-        if (age > proj.lifetime && proj.explosion) {
+        if (simulatedAge > proj.lifetime && proj.explosion) {
           explodedProjectiles.push({
             x: proj.sprite.x,
             y: proj.sprite.y,
@@ -1653,7 +1707,7 @@ export class ProjectileManager {
           return false;
         }
 
-        if (age > proj.lifetime && proj.impactCloud) {
+        if (simulatedAge > proj.lifetime && proj.impactCloud) {
           this.emitProjectileImpact(proj, proj.sprite.x, proj.sprite.y);
           this.destroyTrackedProjectile(proj);
           return false;
@@ -1668,34 +1722,37 @@ export class ProjectileManager {
         }
 
         const rangeDepleted = proj.remainingRangePx !== undefined && proj.remainingRangePx <= 0.5;
-        const dead = age > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces;
+        const dead = simulatedAge > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces;
         if (dead) {
           this.destroyTrackedProjectile(proj);
         } else if (proj.isFlame || proj.projectileStyle === 'leaf_blower') {
-          this.updateFlameHitbox(proj, deltaMs / 1000);
+          this.updateFlameHitbox(proj, simulatedDeltaMs / 1000);
         } else if (proj.isBfg) {
           // BFG: Laser-Salven in regelmäßigen Intervallen abfeuern
-          const bfgNow = Date.now();
           const interval = proj.bfgLaserInterval ?? 100;
-          if (!proj.lastBfgLaserAt || bfgNow - proj.lastBfgLaserAt >= interval) {
-            proj.lastBfgLaserAt = bfgNow;
+          if (!proj.lastBfgLaserAt || simulatedAge - proj.lastBfgLaserAt >= interval) {
+            proj.lastBfgLaserAt = simulatedAge;
             this.bfgLaserCallback?.(proj);
           }
         } else if (proj.homing) {
-          this.updateHomingProjectile(proj, now);
+          this.updateHomingProjectile(proj, simulatedAge);
         }
 
         // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
         if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
-          if (proj.frictionDelayMs === undefined || age >= proj.frictionDelayMs) {
-            proj.body.setDrag(proj.airFrictionDecayPerSec, proj.airFrictionDecayPerSec);
+          if (proj.frictionDelayMs === undefined || simulatedAge >= proj.frictionDelayMs) {
+            const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
+            proj.body.setDrag(effectiveDecay, effectiveDecay);
             proj.frictionActivated = true;
+            proj.appliedAirFrictionDecay = effectiveDecay;
           }
         }
+        this.syncTimeBubbleDrag(proj);
         // Stop-Threshold: unter Mindestgeschwindigkeit komplett anhalten
         if (proj.frictionActivated && proj.stopSpeedThreshold !== undefined) {
           const speedSq = proj.body.velocity.lengthSq();
-          if (speedSq > 0 && speedSq < proj.stopSpeedThreshold * proj.stopSpeedThreshold) {
+          const effectiveThreshold = proj.stopSpeedThreshold * timeFactor;
+          if (speedSq > 0 && speedSq < effectiveThreshold * effectiveThreshold) {
             proj.body.setVelocity(0, 0);
           }
         }

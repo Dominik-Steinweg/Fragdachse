@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { CombatSystem }  from './CombatSystem';
+import type { TimeBubbleSystem } from './TimeBubbleSystem';
 import {
   PLAYER_SPEED, PLAYER_SIZE,
   DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START,
@@ -64,6 +65,7 @@ export class HostPhysicsSystem {
   // Optionale Referenzen
   private burrowSystem:   BurrowSystemType   | null = null;
   private loadoutManager: LoadoutManagerType | null = null;
+  private timeBubbleSystem: TimeBubbleSystem | null = null;
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
@@ -93,6 +95,7 @@ export class HostPhysicsSystem {
 
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void  { this.loadoutManager = lm; }
+  setTimeBubbleSystem(system: TimeBubbleSystem | null): void { this.timeBubbleSystem = system; }
 
   // ── Rückstoß ─────────────────────────────────────────────────────────────
 
@@ -187,6 +190,18 @@ export class HostPhysicsSystem {
     }
 
     return { vx: totalVx, vy: totalVy };
+  }
+
+  private applyTimeBubbleFactor(
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    now: number,
+  ): { vx: number; vy: number } {
+    const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
+    if (factor >= 0.999) return { vx, vy };
+    return { vx: vx * factor, vy: vy * factor };
   }
 
   // ── Dash-Abfragen ─────────────────────────────────────────────────────────
@@ -336,18 +351,27 @@ export class HostPhysicsSystem {
       const forcedMovement = this.forcedMovement.get(player.id);
 
       if (movementLocked) {
-        player.body.setVelocity(impulse.vx, impulse.vy);
+        const slowed = this.applyTimeBubbleFactor(player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
+        player.body.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
 
       if (forcedMovement) {
-        player.body.setVelocity(forcedMovement.vx + impulse.vx, forcedMovement.vy + impulse.vy);
+        const slowed = this.applyTimeBubbleFactor(
+          player.sprite.x,
+          player.sprite.y,
+          forcedMovement.vx + impulse.vx,
+          forcedMovement.vy + impulse.vy,
+          now,
+        );
+        player.body.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
 
       // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
       if (this.burrowSystem?.isStunned(player.id)) {
-        player.body.setVelocity(impulse.vx, impulse.vy);
+        const slowed = this.applyTimeBubbleFactor(player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
+        player.body.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
 
@@ -406,7 +430,14 @@ export class HostPhysicsSystem {
         if (!done) {
           baseVx = dirX * dash.vNorm * speedFactor;
           baseVy = dirY * dash.vNorm * speedFactor;
-          player.body.setVelocity(baseVx + impulse.vx, baseVy + impulse.vy);
+          const slowed = this.applyTimeBubbleFactor(
+            player.sprite.x,
+            player.sprite.y,
+            baseVx + impulse.vx,
+            baseVy + impulse.vy,
+            now,
+          );
+          player.body.setVelocity(slowed.vx, slowed.vy);
           continue;
         }
         // done → fällt durch zur normalen Bewegung
@@ -436,7 +467,14 @@ export class HostPhysicsSystem {
         baseVy += selfPush.vy;
       }
 
-      player.body.setVelocity(baseVx + impulse.vx, baseVy + impulse.vy);
+      const slowed = this.applyTimeBubbleFactor(
+        player.sprite.x,
+        player.sprite.y,
+        baseVx + impulse.vx,
+        baseVy + impulse.vy,
+        now,
+      );
+      player.body.setVelocity(slowed.vx, slowed.vy);
     }
   }
 }

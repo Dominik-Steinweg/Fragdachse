@@ -186,7 +186,7 @@ export interface ScopeModeConfig {
   readonly unscopeSpeedMs: number;       // ms zum Entscopen nach Schuss / Loslassen, z.B. 250
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser' | 'decoy';
+export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'time_bubble' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser' | 'decoy';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -319,6 +319,17 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly fireBurnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
 }
 
+export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'time_bubble';
+  readonly bubbleRadius: number;
+  readonly bubbleDuration: number;
+  readonly projectileSlowFactor: number;
+  readonly playerSlowFactor: number;
+  readonly trainSlowFactor: number;
+  readonly bubbleColor?: number;
+  readonly bubbleDistortion?: number;
+}
+
 export interface BfgUtilityConfig extends BaseUtilityConfig {
   readonly type: 'bfg';
   readonly directDamage: number;    // HP-Schaden bei Direkttreffer
@@ -378,7 +389,7 @@ export interface PlaceableTurretUtilityConfig extends BaseUtilityConfig {
 
 export type PlaceableUtilityConfig = PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
 
-export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | DecoyUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
+export type UtilityConfig = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | TimeBubbleUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | DecoyUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',
@@ -1434,6 +1445,37 @@ export const UTILITY_CONFIGS = {
       failureKey: 'shot_dry_trigger',
     },     
   } as UtilityConfig,
+
+  TIME_BUBBLE: {
+    id:                  'TIME_BUBBLE',
+    displayName:         'Time-Bubble',
+    type:                'time_bubble',
+    cooldown:            5000,
+    activation:          STANDARD_GRENADE_CHARGE,
+    projectileSpeed:     760,
+    projectileSize:      12,
+    fuseTime:            750,
+    maxBounces:          3,
+    bubbleRadius:        120,
+    bubbleDuration:      5000,
+    projectileSlowFactor: 0.10,
+    playerSlowFactor:    0.5,
+    trainSlowFactor:     0.5,
+    bubbleColor:         0x8edcff,
+    bubbleDistortion:    0.75,
+    allowedSlots:        ['utility'],
+    projectileStyle:     'grenade' as ProjectileStyle,
+    grenadeVisualPreset: 'time_bubble' as GrenadeVisualPreset,
+    projectileColor:     0x8edcff,
+    frictionDelayMs:           300,
+    airFrictionDecayPerSec:    0.3,
+    bounceFrictionMultiplier:  0.7,
+    stopSpeedThreshold:        20,
+    shotAudio: {
+      successKey: 'shot_throw',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as TimeBubbleUtilityConfig,
 
   HOLY_HAND_GRENADE: {
     id:              'HOLY_HAND_GRENADE',

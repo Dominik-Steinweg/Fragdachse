@@ -14,6 +14,7 @@ import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
+import { TimeBubbleSystem }  from '../../systems/TimeBubbleSystem';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
 import { PowerUpSystem }     from '../../powerups/PowerUpSystem';
 import { DetonationSystem }  from '../../systems/DetonationSystem';
@@ -307,6 +308,7 @@ export class ArenaLifecycleCoordinator {
     if (bridge.isHost()) {
       this.ctx.resourceSystem = new ResourceSystem();
       this.ctx.shieldBuffSystem = new ShieldBuffSystem();
+      this.ctx.timeBubbleSystem = new TimeBubbleSystem();
       this.ctx.teslaDomeSystem = new TeslaDomeSystem(
         this.ctx.playerManager,
         this.ctx.combatSystem,
@@ -494,9 +496,13 @@ export class ArenaLifecycleCoordinator {
       this.ctx.projectileManager.setBfgLaserCallback((proj) => {
         this.hostUpdate.resolveBfgLasers(proj);
       });
+      this.ctx.projectileManager.setTimeBubbleFactorProvider((x, y, now) => {
+        return this.ctx.timeBubbleSystem?.getProjectileMovementFactorAt(x, y, now) ?? 1;
+      });
 
       this.ctx.hostPhysics.setBurrowSystem(this.ctx.burrowSystem);
       this.ctx.hostPhysics.setLoadoutManager(this.ctx.loadoutManager);
+      this.ctx.hostPhysics.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
 
       this.ctx.combatSystem.setKillCallback((killerId, victimId, weapon, x, y) => {
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
@@ -573,7 +579,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.smokeSystem.destroyAll();
     this.ctx.fireSystem.destroyAll();
     this.ctx.stinkCloudSystem.destroyAll();
+    this.ctx.timeBubbleSystem?.destroyAll();
     this.ctx.decoySystem.clearAll();
+    this.renderers.timeBubble.destroyAll();
     this.renderers.teslaDome.destroyAll();
     this.renderers.energyShield.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
@@ -594,6 +602,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.powerUpSystem  = null;
     this.ctx.shieldBuffSystem = null;
     this.ctx.energyShieldSystem = null;
+    this.ctx.timeBubbleSystem = null;
     this.ctx.teslaDomeSystem = null;
     this.ctx.turretSystem    = null;
     this.ctx.resourceSystem?.setPowerUpSystem(null);
@@ -629,6 +638,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setKillCallback(() => { /* noop */ });
     this.ctx.hostPhysics.setBurrowSystem(null);
     this.ctx.hostPhysics.setLoadoutManager(null);
+    this.ctx.hostPhysics.setTimeBubbleSystem(null);
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);
@@ -637,6 +647,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
     this.ctx.projectileManager.setProjectileImpactCallback(null);
     this.ctx.projectileManager.setBfgLaserCallback(null);
+    this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
     this.renderers.leafBlower.setTerrainColorSampler(null);
     this.ctx.tunnelSystem?.clear();
@@ -752,6 +763,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishTrainEvent({ trackX, direction, spawnAt });
 
     this.ctx.trainManager = new TrainManager(this.scene, this.ctx.playerManager, trackX, direction);
+    this.ctx.trainManager.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
     this.ctx.translocatorSystem?.setTrainManager(this.ctx.trainManager);
     this.hostUpdate.setTrainSpawned(false);
 

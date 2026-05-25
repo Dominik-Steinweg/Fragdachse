@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -104,6 +104,7 @@ export interface GameState {
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
   captureTheBeer: SyncedCaptureTheBeerState | null;
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
+  timeBubbles:  SyncedTimeBubble[];
   teslaDomes:   SyncedTeslaDome[];
   energyShields: SyncedEnergyShield[];
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
@@ -651,6 +652,7 @@ export class NetworkBridge {
     if (state.smokes.length > 0)       payload.s = state.smokes;
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
+    if (state.timeBubbles.length > 0)  payload.tb = state.timeBubbles;
     if (state.teslaDomes.length > 0)   payload.td = state.teslaDomes;
     if (state.energyShields.length > 0) payload.es = state.energyShields;
     if (state.powerups.length > 0)     payload.u = state.powerups;
@@ -689,6 +691,7 @@ export class NetworkBridge {
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
+      timeBubbles:   (raw.tb as SyncedTimeBubble[]   | undefined) ?? [],
       teslaDomes:    (raw.td as SyncedTeslaDome[]    | undefined) ?? [],
       energyShields: (raw.es as SyncedEnergyShield[] | undefined) ?? [],
       powerups:      (raw.u as SyncedPowerUp[]       | undefined) ?? [],

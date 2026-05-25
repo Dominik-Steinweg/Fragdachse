@@ -173,6 +173,8 @@ export class HostUpdateCoordinator {
         bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius, undefined, g.effect.visualStyle);
       } else if (g.effect.type === 'fire') {
         this.ctx.fireSystem.hostCreateZone(g.x, g.y, g.effect, g.ownerId);
+      } else if (g.effect.type === 'time_bubble') {
+        this.ctx.timeBubbleSystem?.hostCreateBubble(g.ownerId, g.x, g.y, g.effect);
       } else {
         this.ctx.smokeSystem.hostCreateCloud(g.x, g.y, g.effect);
       }
@@ -197,6 +199,7 @@ export class HostUpdateCoordinator {
             color:    profile?.colorHex ?? 0xffffff,
           };
         });
+    const timeBubbles = countdownActive ? [] : (this.ctx.timeBubbleSystem?.hostUpdate(Date.now()) ?? []);
 
     if (!countdownActive) {
       const turretCfg    = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
@@ -206,6 +209,7 @@ export class HostUpdateCoordinator {
 
     const teslaDomes = countdownActive ? [] : (this.ctx.teslaDomeSystem?.hostUpdate(Date.now()) ?? []);
     const energyShields = countdownActive ? [] : (this.ctx.energyShieldSystem?.hostUpdate(Date.now()) ?? []);
+    this.renderers.timeBubble.syncVisuals(timeBubbles);
     this.renderers.teslaDome.syncVisuals(teslaDomes);
     this.renderers.energyShield.syncVisuals(energyShields);
 
@@ -502,6 +506,7 @@ export class HostUpdateCoordinator {
       smokes,
       fires,
       stinkClouds,
+      timeBubbles,
       teslaDomes,
       energyShields,
       powerups,

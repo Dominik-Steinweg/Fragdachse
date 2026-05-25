@@ -21,6 +21,7 @@ import type {
   PlaceableUtilityConfig,
   StinkCloudUtilityConfig,
   TaserUtilityConfig,
+  TimeBubbleUtilityConfig,
   TunnelUltimateConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -1057,7 +1058,7 @@ export class LoadoutManager {
       adrenalinGain: 0,
       weaponName:    cfg.displayName,
       fuseTime:      cfg.fuseTime,
-      grenadeEffect: this.buildGrenadeEffect(cfg),
+      grenadeEffect: this.buildGrenadeEffect(cfg, playerColor),
       projectileStyle: cfg.projectileStyle,
       grenadeVisualPreset: cfg.grenadeVisualPreset,
       frictionDelayMs: cfg.frictionDelayMs,
@@ -1122,7 +1123,7 @@ export class LoadoutManager {
     return true;
   }
 
-  private buildGrenadeEffect(cfg: UtilityConfig): GrenadeEffectConfig {
+  private buildGrenadeEffect(cfg: UtilityConfig, playerColor?: number): GrenadeEffectConfig {
     if (cfg.type === 'explosive') {
       return {
         type:   'damage',
@@ -1160,6 +1161,19 @@ export class LoadoutManager {
         lingerDuration:    cfg.smokeLingerDuration,
         dissipateDuration: cfg.smokeDissipateDuration,
         maxAlpha:          cfg.smokeMaxAlpha,
+      };
+    }
+
+    if (cfg.type === 'time_bubble') {
+      return {
+        type:               'time_bubble',
+        radius:             cfg.bubbleRadius,
+        duration:           cfg.bubbleDuration,
+        projectileSlowFactor: cfg.projectileSlowFactor,
+        playerSlowFactor:   cfg.playerSlowFactor,
+        trainSlowFactor:    cfg.trainSlowFactor,
+        color:              cfg.bubbleColor ?? cfg.projectileColor ?? playerColor,
+        distortion:         cfg.bubbleDistortion,
       };
     }
 

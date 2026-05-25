@@ -4,6 +4,7 @@ import {
 } from '../config';
 import type { SyncedTrainState } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
+import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import { TRAIN } from './TrainConfig';
 
 // ── Öffentliche Ergebnis-Typen ────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export class TrainManager {
   private onExited:    (() => void)                          | null = null;
   private isPlayerBurrowed:    ((playerId: string) => boolean)                              | null = null;
   private onBurrowDamageDealt: ((playerId: string, x: number, y: number) => void)          | null = null;
+  private timeBubbleSystem: TimeBubbleSystem | null = null;
 
   /** Akkumulierter Delta-ms pro Spieler für den Buddel-Schaden-Tick */
   private burrowDamageTimers = new Map<string, number>();
@@ -84,6 +86,7 @@ export class TrainManager {
   setExitedCallback(cb: () => void):                        void { this.onExited     = cb; }
   setIsPlayerBurrowedCallback(cb: (playerId: string) => boolean): void { this.isPlayerBurrowed = cb; }
   setOnBurrowDamageDealtCallback(cb: (playerId: string, x: number, y: number) => void): void { this.onBurrowDamageDealt = cb; }
+  setTimeBubbleSystem(system: TimeBubbleSystem | null): void { this.timeBubbleSystem = system; }
 
   // ── Zugriff auf Physics-Gruppe ───────────────────────────────────────────
 
@@ -139,7 +142,8 @@ export class TrainManager {
   update(delta: number): void {
     if (!this.active || this.destroyed) return;
 
-    this.locoY += this.direction * TRAIN.SPEED * (delta / 1000);
+    const speedFactor = this.getTimeBubbleSpeedFactor();
+    this.locoY += this.direction * TRAIN.SPEED * speedFactor * (delta / 1000);
     this.updateSegmentPositions();
     this.group.refresh();
     this.checkPlayerOverlaps();
@@ -153,6 +157,17 @@ export class TrainManager {
       }
       this.onExited?.();
     }
+  }
+
+  private getTimeBubbleSpeedFactor(now = Date.now()): number {
+    if (!this.timeBubbleSystem) return 1;
+    return this.timeBubbleSystem.getTrainMovementFactorAt(
+      this.trackX,
+      this.segCenterYs(),
+      this.segHeights(),
+      TRAIN.HITBOX_WIDTH,
+      now,
+    );
   }
 
   /**

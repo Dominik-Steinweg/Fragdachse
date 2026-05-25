@@ -10,18 +10,21 @@ const BODY_KEYS: Record<GrenadeVisualPreset, string> = {
   he:      '__grenade_body_he',
   smoke:   '__grenade_body_smoke',
   molotov: '__grenade_body_molotov',
+  time_bubble: '__grenade_body_time_bubble',
 };
 
 const DETAIL_KEYS: Record<GrenadeVisualPreset, string> = {
   he:      '__grenade_detail_he',
   smoke:   '__grenade_detail_smoke',
   molotov: '__grenade_detail_molotov',
+  time_bubble: '__grenade_detail_time_bubble',
 };
 
 const SPARK_KEYS: Record<GrenadeVisualPreset, string> = {
   he:      '__grenade_spark_he',
   smoke:   '__grenade_spark_smoke',
   molotov: '__grenade_spark_molotov',
+  time_bubble: '__grenade_spark_time_bubble',
 };
 
 interface GrenadePresetConfig {
@@ -90,6 +93,19 @@ const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
     trailSpeed:      26,
     trailTints:      [0xffffff, 0xffee50, 0xff8018],
   },
+  time_bubble: {
+    bodyScale:       0.72,
+    glowAlpha:       0.84,
+    glowScale:       2.1,
+    detailAlpha:     0.94,
+    trailAlpha:      0.42,
+    trailFrequency:  22,
+    trailLifespan:   { min: 120, max: 240 },
+    trailScaleStart: 0.32,
+    trailScaleEnd:   0.04,
+    trailSpeed:      16,
+    trailTints:      [0xffffff, 0xbef6ff, 0x6ccfff],
+  },
 };
 
 export class GrenadeRenderer {
@@ -125,6 +141,7 @@ export class GrenadeRenderer {
     this.generateHeTextures(textures);
     this.generateSmokeTextures(textures);
     this.generateMolotovTextures(textures);
+    this.generateTimeBubbleTextures(textures);
   }
 
   createVisual(
@@ -445,6 +462,46 @@ export class GrenadeRenderer {
       g.addColorStop(0.34, 'rgba(255,200,56,0.80)');
       g.addColorStop(0.68, 'rgba(255,96,10,0.38)');
       g.addColorStop(1,    'rgba(200,48,0,0.0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 12, 12);
+    });
+  }
+
+  private generateTimeBubbleTextures(textures: Phaser.Textures.TextureManager): void {
+    ensureCanvasTexture(textures, BODY_KEYS.time_bubble, 34, 34, (ctx) => {
+      const g = ctx.createRadialGradient(12, 11, 1, 17, 17, 14);
+      g.addColorStop(0, 'rgba(255,255,255,1.0)');
+      g.addColorStop(0.26, 'rgba(196,245,255,0.96)');
+      g.addColorStop(0.58, 'rgba(104,210,255,0.88)');
+      g.addColorStop(0.84, 'rgba(48,128,220,0.66)');
+      g.addColorStop(1, 'rgba(20,52,108,0.0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(17, 17, 12, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ensureCanvasTexture(textures, DETAIL_KEYS.time_bubble, 34, 34, (ctx) => {
+      ctx.strokeStyle = 'rgba(255,255,255,0.58)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(17, 17, 9.5, 0.5, Math.PI * 1.56);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(17, 17, 6, -1.1, Math.PI * 0.82);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.68)';
+      ctx.beginPath();
+      ctx.arc(13, 12, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ensureCanvasTexture(textures, SPARK_KEYS.time_bubble, 12, 12, (ctx) => {
+      const g = ctx.createRadialGradient(6, 6, 0, 6, 6, 6);
+      g.addColorStop(0, 'rgba(255,255,255,1.0)');
+      g.addColorStop(0.34, 'rgba(186,244,255,0.82)');
+      g.addColorStop(0.7, 'rgba(88,204,255,0.28)');
+      g.addColorStop(1, 'rgba(24,88,164,0.0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 12, 12);
     });

@@ -33,6 +33,7 @@ import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import type { TunnelSystem } from '../../systems/TunnelSystem';
 import type { TrainManager }        from '../../train/TrainManager';
 import type { DecoySystem }         from '../../systems/DecoySystem';
+import type { TimeBubbleSystem }    from '../../systems/TimeBubbleSystem';
 import type { ArenaLayout }         from '../../types';
 
 interface PlayerStatusRingLike {
@@ -87,6 +88,7 @@ export interface ArenaContext {
   airstrikeSystem:   AirstrikeSystem   | null;
   shieldBuffSystem:  ShieldBuffSystem  | null;
   energyShieldSystem: EnergyShieldSystem | null;
+  timeBubbleSystem:  TimeBubbleSystem  | null;
   teslaDomeSystem:   TeslaDomeSystem   | null;
   turretSystem:      TurretSystem      | null;
   translocatorSystem: TranslocatorSystem | null;
