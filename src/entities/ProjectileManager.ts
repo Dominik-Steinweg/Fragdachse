@@ -1254,6 +1254,13 @@ export class ProjectileManager {
     const outgoingSpeed = Math.hypot(outgoingVx, outgoingVy);
     if (outgoingSpeed <= 0.001) return false;
 
+    const spawnTimeBubbleFactor = Phaser.Math.Clamp(
+      this.timeBubbleFactorProvider?.(impactX, impactY, Date.now()) ?? (proj.timeBubbleFactor ?? 1),
+      0.0001,
+      1,
+    );
+    const childBaseSpeed = outgoingSpeed / spawnTimeBubbleFactor;
+
     const remainingRangePx = this.getRemainingRangeAfterImpact(proj, impactX, impactY);
     if (remainingRangePx <= 0.5) return false;
 
@@ -1265,7 +1272,7 @@ export class ProjectileManager {
     const childSize = Math.max(4, (proj.sprite.displayWidth / splitCount) * splitFactor);
     const childDamage = Math.max(1, (proj.damage / splitCount) * splitFactor);
     const childAdrenalinGain = Math.max(0, (proj.adrenalinGain / splitCount) * splitFactor);
-    const childLifetime = (remainingRangePx / outgoingSpeed) * 1000;
+    const childLifetime = (remainingRangePx / childBaseSpeed) * 1000;
 
     proj.pendingHydraSplit = {
       x: impactX,
@@ -1276,7 +1283,7 @@ export class ProjectileManager {
 
     for (const childAngle of childAngles) {
       this.spawnProjectile(impactX, impactY, childAngle, proj.ownerId, {
-        speed: outgoingSpeed,
+        speed: childBaseSpeed,
         size: childSize,
         damage: childDamage,
         color: proj.color,
