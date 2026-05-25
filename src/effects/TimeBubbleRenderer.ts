@@ -1,24 +1,93 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedTimeBubble } from '../types';
-import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
-import { addExternalGlow, addInternalGlow, removeExternalFx, removeInternalFx, type GlowHandle } from '../utils/phaserFx';
+import { ensureCanvasTexture, mixColors } from './EffectUtils';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
-const TEX_TIME_BUBBLE_FILL = '__time_bubble_fill';
-const TEX_TIME_BUBBLE_SHELL = '__time_bubble_shell';
-const TEX_TIME_BUBBLE_RIPPLE = '__time_bubble_ripple';
-const TEX_TIME_BUBBLE_RIM = '__time_bubble_rim';
+const TEX_TIME_BUBBLE_MEMBRANE = '__time_bubble_membrane';
+const TEX_TIME_BUBBLE_INTERFERENCE = '__time_bubble_interference';
 
 interface TimeBubbleVisual {
-  fill: Phaser.GameObjects.Image;
-  shell: Phaser.GameObjects.Image;
-  rippleA: Phaser.GameObjects.Image;
-  rippleB: Phaser.GameObjects.Image;
-  rim: Phaser.GameObjects.Image;
-  outerGlow: GlowHandle | null;
-  rimGlow: GlowHandle | null;
+  membrane: Phaser.GameObjects.Image;
+  interferenceA: Phaser.GameObjects.Image;
+  interferenceB: Phaser.GameObjects.Image;
+  shellGlow: GlowHandle | null;
   snapshot: SyncedTimeBubble;
   seed: number;
+}
+
+interface FeatheredRibbon {
+  rx: number;
+  ry: number;
+  rotation: number;
+  start: number;
+  end: number;
+  thickness: number;
+  blur: number;
+  opacity: number;
+  colors: readonly [string, string, string];
+}
+
+interface SoftBlob {
+  x: number;
+  y: number;
+  radiusX: number;
+  radiusY: number;
+  rotation: number;
+  color: string;
+  alpha: number;
+}
+
+function withAlpha(color: string, alpha: number): string {
+  return color.replace(/,1\)$/u, `,${alpha.toFixed(3)})`);
+}
+
+function drawFeatheredRibbon(ctx: CanvasRenderingContext2D, center: number, ribbon: FeatheredRibbon): void {
+  const arcLength = ((ribbon.rx + ribbon.ry) * 0.5) * Math.abs(ribbon.end - ribbon.start);
+  const sampleCount = Math.max(20, Math.ceil(arcLength / 12));
+
+  ctx.save();
+  ctx.translate(center, center);
+  ctx.rotate(ribbon.rotation);
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const progress = sampleCount === 1 ? 0 : index / (sampleCount - 1);
+    const angle = Phaser.Math.Linear(ribbon.start, ribbon.end, progress);
+    const x = Math.cos(angle) * ribbon.rx;
+    const y = Math.sin(angle) * ribbon.ry;
+    const tangentFade = Math.sin(progress * Math.PI) ** 1.8;
+    const radius = ribbon.thickness * (1.5 + tangentFade * 1.15);
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius + ribbon.blur);
+    gradient.addColorStop(0, withAlpha(ribbon.colors[1], ribbon.opacity * tangentFade * 0.42));
+    gradient.addColorStop(0.26, withAlpha(ribbon.colors[1], ribbon.opacity * tangentFade * 0.24));
+    gradient.addColorStop(0.58, withAlpha(ribbon.colors[2], ribbon.opacity * tangentFade * 0.1));
+    gradient.addColorStop(1, ribbon.colors[0]);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius + ribbon.blur, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawSoftBlob(ctx: CanvasRenderingContext2D, blob: SoftBlob): void {
+  ctx.save();
+  ctx.translate(blob.x, blob.y);
+  ctx.rotate(blob.rotation);
+  ctx.scale(blob.radiusX / Math.max(1, blob.radiusY), 1);
+
+  const radius = Math.max(blob.radiusX, blob.radiusY);
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+  gradient.addColorStop(0, withAlpha(blob.color, blob.alpha));
+  gradient.addColorStop(0.34, withAlpha(blob.color, blob.alpha * 0.38));
+  gradient.addColorStop(0.68, withAlpha(blob.color, blob.alpha * 0.12));
+  gradient.addColorStop(1, withAlpha(blob.color, 0));
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 export class TimeBubbleRenderer {
@@ -27,55 +96,60 @@ export class TimeBubbleRenderer {
   constructor(private readonly scene: Phaser.Scene) {}
 
   generateTextures(): void {
-    fillRadialGradientTexture(this.scene.textures, TEX_TIME_BUBBLE_FILL, 256, [
-      [0, 'rgba(255,255,255,0.24)'],
-      [0.34, 'rgba(180,244,255,0.18)'],
-      [0.74, 'rgba(86,196,255,0.08)'],
-      [1, 'rgba(40,120,180,0.0)'],
-    ]);
+    ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_MEMBRANE, 320, 320, (ctx) => {
+      const center = 160;
+      ctx.clearRect(0, 0, 320, 320);
+      ctx.globalCompositeOperation = 'screen';
 
-    ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_SHELL, 256, 256, (ctx) => {
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.lineWidth = 10;
-      ctx.beginPath();
-      ctx.arc(128, 128, 112, 0, Math.PI * 2);
-      ctx.stroke();
+      const membraneBlobs: SoftBlob[] = [
+        { x: center - 34, y: center - 26, radiusX: 96, radiusY: 68, rotation: -0.34, color: 'rgba(255,128,210,1)', alpha: 0.12 },
+        { x: center + 20, y: center + 12, radiusX: 86, radiusY: 112, rotation: 0.58, color: 'rgba(112,236,255,1)', alpha: 0.11 },
+        { x: center + 10, y: center - 30, radiusX: 74, radiusY: 54, rotation: 0.16, color: 'rgba(246,255,148,1)', alpha: 0.08 },
+        { x: center - 8, y: center + 34, radiusX: 72, radiusY: 48, rotation: -0.72, color: 'rgba(156,132,255,1)', alpha: 0.09 },
+      ];
 
-      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-      ctx.lineWidth = 18;
-      ctx.beginPath();
-      ctx.arc(128, 128, 100, 0.15, Math.PI * 1.72);
-      ctx.stroke();
-    });
-
-    ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_RIPPLE, 256, 256, (ctx) => {
-      ctx.strokeStyle = 'rgba(255,255,255,0.32)';
-      ctx.lineWidth = 4;
-      for (let index = 0; index < 5; index++) {
-        const radius = 30 + index * 22;
-        ctx.beginPath();
-        ctx.arc(128, 128, radius, index * 0.35, index * 0.35 + Math.PI * 1.36);
-        ctx.stroke();
+      for (const blob of membraneBlobs) {
+        drawSoftBlob(ctx, blob);
       }
 
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-      ctx.lineWidth = 2;
-      for (let index = 0; index < 7; index++) {
-        const radius = 22 + index * 16;
-        ctx.beginPath();
-        ctx.arc(128, 128, radius, index * 0.52, index * 0.52 + Math.PI * 0.82);
-        ctx.stroke();
+      const filaments: FeatheredRibbon[] = [
+        { thickness: 8.2, blur: 16, opacity: 0.62, rx: 126, ry: 76, rotation: -0.36, start: 3.9, end: 5.5, colors: ['rgba(255,180,230,0.0)', 'rgba(255,180,230,1)', 'rgba(112,240,255,1)'] },
+        { thickness: 7, blur: 15, opacity: 0.52, rx: 108, ry: 132, rotation: 0.48, start: 0.42, end: 1.78, colors: ['rgba(255,255,150,0.0)', 'rgba(255,255,150,1)', 'rgba(102,255,214,1)'] },
+        { thickness: 6.4, blur: 14, opacity: 0.48, rx: 142, ry: 98, rotation: 0.98, start: 2.12, end: 3.32, colors: ['rgba(150,132,255,0.0)', 'rgba(150,132,255,1)', 'rgba(255,160,214,1)'] },
+        { thickness: 5.8, blur: 13, opacity: 0.44, rx: 116, ry: 88, rotation: -1.04, start: 4.72, end: 5.84, colors: ['rgba(112,236,255,0.0)', 'rgba(112,236,255,1)', 'rgba(255,240,166,1)'] },
+        { thickness: 5.2, blur: 12, opacity: 0.4, rx: 92, ry: 122, rotation: 0.08, start: 2.72, end: 3.84, colors: ['rgba(255,174,226,0.0)', 'rgba(255,174,226,1)', 'rgba(172,255,214,1)'] },
+      ];
+
+      for (const filament of filaments) {
+        drawFeatheredRibbon(ctx, center, filament);
       }
+
+      const halo = ctx.createRadialGradient(center - 36, center - 40, 24, center, center, 156);
+      halo.addColorStop(0, 'rgba(255,224,246,0.12)');
+      halo.addColorStop(0.26, 'rgba(152,236,255,0.07)');
+      halo.addColorStop(0.52, 'rgba(244,255,166,0.03)');
+      halo.addColorStop(1, 'rgba(255,255,255,0.0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(0, 0, 320, 320);
     });
 
-    ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_RIM, 256, 256, (ctx) => {
-      const gradient = ctx.createRadialGradient(128, 128, 86, 128, 128, 122);
-      gradient.addColorStop(0, 'rgba(255,255,255,0)');
-      gradient.addColorStop(0.78, 'rgba(255,255,255,0)');
-      gradient.addColorStop(0.9, 'rgba(255,255,255,0.46)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 256, 256);
+    ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_INTERFERENCE, 320, 320, (ctx) => {
+      const center = 160;
+      ctx.clearRect(0, 0, 320, 320);
+      ctx.globalCompositeOperation = 'screen';
+
+      const ribbons: FeatheredRibbon[] = [
+        { thickness: 6.2, blur: 18, opacity: 0.54, rx: 118, ry: 74, rotation: -0.36, start: -0.82, end: 1.18, colors: ['rgba(255,255,255,0.0)', 'rgba(255,255,255,1)', 'rgba(255,198,236,1)'] },
+        { thickness: 6.8, blur: 20, opacity: 0.56, rx: 102, ry: 126, rotation: 0.28, start: 0.18, end: 2.18, colors: ['rgba(161,240,255,0.0)', 'rgba(161,240,255,1)', 'rgba(255,255,190,1)'] },
+        { thickness: 5.8, blur: 18, opacity: 0.5, rx: 126, ry: 94, rotation: 0.92, start: 2.64, end: 4.46, colors: ['rgba(255,196,228,0.0)', 'rgba(255,196,228,1)', 'rgba(196,255,216,1)'] },
+        { thickness: 5.4, blur: 16, opacity: 0.44, rx: 86, ry: 114, rotation: -0.96, start: 1.98, end: 3.42, colors: ['rgba(176,150,255,0.0)', 'rgba(176,150,255,1)', 'rgba(110,236,255,1)'] },
+        { thickness: 4.8, blur: 15, opacity: 0.38, rx: 134, ry: 82, rotation: 0.42, start: 4.98, end: 5.98, colors: ['rgba(255,220,164,0.0)', 'rgba(255,220,164,1)', 'rgba(255,164,226,1)'] },
+        { thickness: 4.6, blur: 14, opacity: 0.36, rx: 94, ry: 136, rotation: -0.18, start: -0.18, end: 0.92, colors: ['rgba(146,250,255,0.0)', 'rgba(146,250,255,1)', 'rgba(186,164,255,1)'] },
+      ];
+
+      for (const ribbon of ribbons) {
+        drawFeatheredRibbon(ctx, center, ribbon);
+      }
     });
   }
 
@@ -110,34 +184,24 @@ export class TimeBubbleRenderer {
   }
 
   private createVisual(snapshot: SyncedTimeBubble): TimeBubbleVisual {
-    const fill = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_FILL)
-      .setDepth(DEPTH.FIRE + 0.3)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const shell = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_SHELL)
-      .setDepth(DEPTH.FIRE + 0.45)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const rippleA = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_RIPPLE)
+    const membrane = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_MEMBRANE)
+      .setDepth(DEPTH.FIRE + 0.42)
+      .setBlendMode(Phaser.BlendModes.SCREEN);
+    const interferenceA = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_INTERFERENCE)
+      .setDepth(DEPTH.FIRE + 0.48)
+      .setBlendMode(Phaser.BlendModes.SCREEN);
+    const interferenceB = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_INTERFERENCE)
       .setDepth(DEPTH.FIRE + 0.5)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const rippleB = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_RIPPLE)
-      .setDepth(DEPTH.FIRE + 0.52)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setFlipX(true);
-    const rim = this.scene.add.image(snapshot.x, snapshot.y, TEX_TIME_BUBBLE_RIM)
-      .setDepth(DEPTH.FIRE + 0.6)
-      .setBlendMode(Phaser.BlendModes.ADD);
 
-    const outerGlow = addExternalGlow(fill, snapshot.color, 2.2, 0.35, false, 0.2, 10);
-    const rimGlow = addInternalGlow(rim, 0xffffff, 1.4, 0.25, false, 0.2, 6);
+    const shellGlow = addExternalGlow(membrane, mixColors(snapshot.color, 0xffffff, 0.58), 3.1, 0.22, false, 0.28, 14);
 
     return {
-      fill,
-      shell,
-      rippleA,
-      rippleB,
-      rim,
-      outerGlow,
-      rimGlow,
+      membrane,
+      interferenceA,
+      interferenceB,
+      shellGlow,
       snapshot,
       seed: snapshot.id * 0.731,
     };
@@ -145,52 +209,41 @@ export class TimeBubbleRenderer {
 
   private updateVisual(visual: TimeBubbleVisual, now: number): void {
     const bubble = visual.snapshot;
-    const baseScale = Math.max(0.2, bubble.radius / 128);
+    const baseScale = Math.max(0.24, bubble.radius / 160);
     const time = now * 0.001;
     const pulse = 0.5 + 0.5 * Math.sin(time * (1.8 + bubble.distortion * 1.2) + visual.seed);
     const counterPulse = 0.5 + 0.5 * Math.cos(time * (1.35 + bubble.distortion) + visual.seed * 1.7);
-    const shellScale = baseScale * (1 + (pulse - 0.5) * 0.05);
-    const rippleScaleA = baseScale * (1.02 + pulse * 0.06);
-    const rippleScaleB = baseScale * (0.98 + counterPulse * 0.08);
+    const shimmer = 0.5 + 0.5 * Math.sin(time * (0.92 + bubble.distortion * 0.4) + visual.seed * 2.3);
+    const membraneScale = baseScale * (1 + (pulse - 0.5) * 0.035);
+    const interferenceScaleA = baseScale * (1.01 + pulse * 0.05);
+    const interferenceScaleB = baseScale * (0.98 + counterPulse * 0.07);
+    const accentColor = mixColors(bubble.color, 0xffffff, 0.28);
+    const coolAccent = mixColors(0x58f0ff, accentColor, 0.14);
+    const warmAccent = mixColors(0xff5abf, accentColor, 0.1);
 
-    visual.fill
+    visual.membrane
       .setPosition(bubble.x, bubble.y)
-      .setScale(baseScale * (1 + pulse * 0.04))
-      .setAlpha(bubble.alpha * (0.12 + pulse * 0.06))
-      .setTint(bubble.color);
-    visual.shell
+      .setScale(membraneScale)
+      .setRotation(time * (0.09 + bubble.distortion * 0.12) + visual.seed)
+      .setAlpha(bubble.alpha * (0.34 + pulse * 0.14))
+      .setTint(accentColor);
+    visual.interferenceA
       .setPosition(bubble.x, bubble.y)
-      .setScale(shellScale)
-      .setRotation(time * (0.12 + bubble.distortion * 0.18) + visual.seed)
-      .setAlpha(bubble.alpha * (0.18 + pulse * 0.10))
-      .setTint(bubble.color);
-    visual.rippleA
+      .setScale(interferenceScaleA)
+      .setRotation(-time * (0.24 + bubble.distortion * 0.28) - visual.seed * 0.7)
+      .setAlpha(bubble.alpha * (0.72 + shimmer * 0.24))
+      .setTint(coolAccent);
+    visual.interferenceB
       .setPosition(bubble.x, bubble.y)
-      .setScale(rippleScaleA)
-      .setRotation(-time * (0.28 + bubble.distortion * 0.34) - visual.seed * 0.7)
-      .setAlpha(bubble.alpha * (0.16 + counterPulse * 0.08))
-      .setTint(bubble.color);
-    visual.rippleB
-      .setPosition(bubble.x, bubble.y)
-      .setScale(rippleScaleB)
-      .setRotation(time * (0.36 + bubble.distortion * 0.26) + visual.seed * 1.2)
-      .setAlpha(bubble.alpha * (0.10 + pulse * 0.07))
-      .setTint(0xe8fbff);
-    visual.rim
-      .setPosition(bubble.x, bubble.y)
-      .setScale(baseScale * 1.04)
-      .setRotation(time * 0.08)
-      .setAlpha(bubble.alpha * (0.26 + pulse * 0.12))
-      .setTint(0xffffff);
+      .setScale(interferenceScaleB)
+      .setRotation(time * (0.34 + bubble.distortion * 0.22) + visual.seed * 1.2)
+      .setAlpha(bubble.alpha * (0.68 + counterPulse * 0.22))
+      .setTint(warmAccent);
 
-    if (visual.outerGlow) {
-      visual.outerGlow.color = bubble.color;
-      visual.outerGlow.outerStrength = 2.2 + bubble.distortion * 1.8 + pulse * 0.9;
-      visual.outerGlow.innerStrength = 0.3 + counterPulse * 0.16;
-    }
-    if (visual.rimGlow) {
-      visual.rimGlow.outerStrength = 1.2 + bubble.distortion * 0.9 + pulse * 0.7;
-      visual.rimGlow.innerStrength = 0.18 + counterPulse * 0.14;
+    if (visual.shellGlow) {
+      visual.shellGlow.color = mixColors(0xf4ff95, accentColor, 0.08);
+      visual.shellGlow.outerStrength = 0.56 + bubble.distortion * 0.24 + pulse * 0.18;
+      visual.shellGlow.innerStrength = 0.04 + counterPulse * 0.03;
     }
   }
 
@@ -198,13 +251,10 @@ export class TimeBubbleRenderer {
     const visual = this.visuals.get(id);
     if (!visual) return;
 
-    removeExternalFx(visual.fill, visual.outerGlow);
-    removeInternalFx(visual.rim, visual.rimGlow);
-    visual.fill.destroy();
-    visual.shell.destroy();
-    visual.rippleA.destroy();
-    visual.rippleB.destroy();
-    visual.rim.destroy();
+    removeExternalFx(visual.membrane, visual.shellGlow);
+    visual.membrane.destroy();
+    visual.interferenceA.destroy();
+    visual.interferenceB.destroy();
     this.visuals.delete(id);
   }
 }
