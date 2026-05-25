@@ -1,5 +1,5 @@
 /**
- * RightSidePanel – verwaltet den rechten Seitenbereich (x=1680..1920) für beide Spielphasen.
+ * RightSidePanel – verwaltet den rechten Seitenbereich für beide Spielphasen.
  *
  * Zwei Phaser-Container werden überlagert und via Y-Tween animiert:
  *  - lobbyContainer: Endstand der letzten Runde (Lobby-Phase), startet bei y=0
@@ -13,29 +13,37 @@ import type { TeamId } from '../types';
 import type { RoundResult } from '../network/NetworkBridge';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
-const SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_OFFSET_X / 2;  // 1800
-const SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_OFFSET_X + 8;  // 1688
-const SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;                   // 1912
-const PANEL_WIDTH      = 200;
+const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_OFFSET_X / 2;
+const LOBBY_SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_OFFSET_X + 8;
+const LOBBY_SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;
+const LOBBY_PANEL_WIDTH      = 200;
+const ARENA_SIDEBAR_WIDTH    = Math.round(ARENA_OFFSET_X * 1.5);
+const ARENA_SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_SIDEBAR_WIDTH / 2;
+const ARENA_SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_SIDEBAR_WIDTH + 8;
+const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
+const ARENA_PANEL_WIDTH      = Math.round(LOBBY_PANEL_WIDTH * 1.5);
 const LOBBY_TOP_OFFSET_Y = 246;
 const RESULTS_EXTRA_OFFSET_Y = 32;
 
 // Killfeed: Namen links/rechts, Waffe zentriert
 const KILLFEED_MAX     = 5;
 const KILLFEED_TOP_Y   = 116;   // Y des ersten (neuesten) Eintrags (nach Train-Widget verschoben)
-const KILLFEED_ENTRY_H = 22;
-const KILLFEED_FONT    = '13px';
+const KILLFEED_ENTRY_H = 28;
+const KILLFEED_FONT    = '17px';
 const KILLFEED_NAME_MAXLEN = 8; // Zeichen – wird mit … abgeschnitten
 
 // Leaderboard (Arena)
 const LB_SEP_Y      = KILLFEED_TOP_Y + KILLFEED_MAX * KILLFEED_ENTRY_H + 10; // 186
-const LB_HEADER_Y   = LB_SEP_Y + 14;    // 200
-const LB_START_Y    = LB_HEADER_Y + 26; // 226
-const LB_ENTRY_H    = 22;
-const LB_FONT        = '14px';
-const LB_HEADER_FONT = '13px';
-const LB_FRAGS_X     = SIDEBAR_LEFT_X + 152; // 1840 – Frags rechts-bündig
-const LB_PING_X      = SIDEBAR_RIGHT_X;       // 1912 – Ping rechts-bündig
+const LB_HEADER_Y   = LB_SEP_Y + 18;
+const LB_START_Y    = LB_HEADER_Y + 30;
+const LB_ENTRY_H    = 28;
+const LB_FONT        = '18px';
+const LB_HEADER_FONT = '16px';
+const LB_PING_FONT   = '14px';
+const LB_TEAM_ROWS_OFFSET = 24;
+const LB_TEAM_SECTION_GAP = 16;
+const LB_FRAGS_X     = ARENA_SIDEBAR_RIGHT_X - 72;
+const LB_PING_X      = ARENA_SIDEBAR_RIGHT_X;
 
 // Lobby-Endstand
 const RESULTS_HEADER_Y   = 60 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
@@ -48,6 +56,8 @@ const RESULTS_HEADER_FONT = '20px';
 const RESULTS_LABEL_FONT = '14px';
 
 const COLOR_DIM       = '#607080';
+const COLOR_KILLFEED_WEAPON = toCssColor(COLORS.GOLD_1);
+const COLOR_ARENA_FRAGS = toCssColor(COLORS.GREY_2);
 const COLOR_HEADER    = '#8fa8b8';
 const COLOR_SEPARATOR = 0x334455;
 
@@ -338,13 +348,13 @@ export class RightSidePanel {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
     this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
     this.gameContainer.add(
-      this.scene.add.rectangle(SIDEBAR_CENTER_X, GAME_HEIGHT / 2, ARENA_OFFSET_X, GAME_HEIGHT, 0x000000, 0.18)
+      this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, GAME_HEIGHT / 2, ARENA_SIDEBAR_WIDTH, GAME_HEIGHT, 0x000000, 0.18)
         .setScrollFactor(0),
     );
 
     // ── Trennlinie vor Killfeed ───────────────────────────────────────────────
     this.gameContainer.add(
-      this.scene.add.rectangle(SIDEBAR_CENTER_X, KILLFEED_TOP_Y - 10, PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
+      this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, KILLFEED_TOP_Y - 10, ARENA_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
         .setScrollFactor(0),
     );
 
@@ -355,21 +365,21 @@ export class RightSidePanel {
       const y = KILLFEED_TOP_Y + i * KILLFEED_ENTRY_H;
 
       // Spielername links-bündig
-      const killer = this.scene.add.text(SIDEBAR_LEFT_X, y, '', {
+      const killer = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, y, '', {
         fontSize:   KILLFEED_FONT,
         fontFamily: 'monospace',
         color:      '#ffffff',
       }).setOrigin(0, 0.5).setScrollFactor(0);
 
       // Waffe mittig (zwischen den Spielernamen)
-      const weapon = this.scene.add.text(SIDEBAR_CENTER_X, y, '', {
+      const weapon = this.scene.add.text(ARENA_SIDEBAR_CENTER_X, y, '', {
         fontSize:   KILLFEED_FONT,
         fontFamily: 'monospace',
-        color:      COLOR_DIM,
+        color:      COLOR_KILLFEED_WEAPON,
       }).setOrigin(0.5, 0.5).setScrollFactor(0);
 
       // Spielername rechts-bündig
-      const victim = this.scene.add.text(SIDEBAR_RIGHT_X, y, '', {
+      const victim = this.scene.add.text(ARENA_SIDEBAR_RIGHT_X, y, '', {
         fontSize:   KILLFEED_FONT,
         fontFamily: 'monospace',
         color:      '#ffffff',
@@ -381,7 +391,7 @@ export class RightSidePanel {
 
     // ── Trennlinie vor Leaderboard ────────────────────────────────────────────
     this.gameContainer.add(
-      this.scene.add.rectangle(SIDEBAR_CENTER_X, LB_SEP_Y, PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
+      this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, LB_SEP_Y, ARENA_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.7)
         .setScrollFactor(0),
     );
 
@@ -403,7 +413,7 @@ export class RightSidePanel {
       }).setOrigin(1, 0.5).setScrollFactor(0),
     );
 
-    const blueLabel = this.scene.add.text(SIDEBAR_LEFT_X, LB_START_Y, 'TEAM BLAU', {
+    const blueLabel = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, LB_START_Y, 'TEAM BLAU', {
       fontSize: LB_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
@@ -415,7 +425,7 @@ export class RightSidePanel {
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    const redLabel = this.scene.add.text(SIDEBAR_LEFT_X, LB_START_Y, 'TEAM ROT', {
+    const redLabel = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, LB_START_Y, 'TEAM ROT', {
       fontSize: LB_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
@@ -437,7 +447,7 @@ export class RightSidePanel {
     for (let i = 0; i < 12; i++) {
       const y = LB_START_Y + i * LB_ENTRY_H;
 
-      const nameText = this.scene.add.text(SIDEBAR_LEFT_X, y, '', {
+      const nameText = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, y, '', {
         fontSize:   LB_FONT,
         fontFamily: 'monospace',
         color:      '#ffffff',
@@ -446,11 +456,11 @@ export class RightSidePanel {
       const fragsText = this.scene.add.text(LB_FRAGS_X, y, '', {
         fontSize:   LB_FONT,
         fontFamily: 'monospace',
-        color:      COLOR_DIM,
+        color:      COLOR_ARENA_FRAGS,
       }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
       const pingText = this.scene.add.text(LB_PING_X, y, '', {
-        fontSize:   '11px',
+        fontSize:   LB_PING_FONT,
         fontFamily: 'monospace',
         color:      toCssColor(COLORS.GREEN_2),
       }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
@@ -466,25 +476,24 @@ export class RightSidePanel {
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
 
     // ── Endstand-Header ───────────────────────────────────────────────────────
-    this.resultsHeader = this.scene.add.text(SIDEBAR_CENTER_X, RESULTS_HEADER_Y, 'LETZTE RUNDE', {
+    this.resultsHeader = this.scene.add.text(LOBBY_SIDEBAR_CENTER_X, RESULTS_HEADER_Y, 'LETZTE RUNDE', {
       fontSize:   RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color:      toCssColor(COLORS.GREY_2),
       fontStyle:  'bold',
     }).setOrigin(0.5, 0.5).setScrollFactor(0);
 
-    this.resultsSep = this.scene.add.rectangle(
-      SIDEBAR_CENTER_X, RESULTS_SEP_Y, PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
+    this.resultsSep = this.scene.add.rectangle(LOBBY_SIDEBAR_CENTER_X, RESULTS_SEP_Y, LOBBY_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
     ).setScrollFactor(0) as Phaser.GameObjects.Rectangle;
 
-    this.resultsFragsLabel = this.scene.add.text(SIDEBAR_RIGHT_X, RESULTS_LABEL_Y, 'F R A G S', {
+    this.resultsFragsLabel = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, RESULTS_LABEL_Y, 'F R A G S', {
       fontSize: RESULTS_LABEL_FONT,
       fontFamily: 'monospace',
       color: COLOR_HEADER,
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
-    this.resultsEmptyState = this.scene.add.text(SIDEBAR_CENTER_X, RESULTS_START_Y, 'Noch keine Daten', {
+    this.resultsEmptyState = this.scene.add.text(LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y, 'Noch keine Daten', {
       fontSize: RESULTS_FONT,
       fontFamily: 'monospace',
       color: COLOR_DIM,
@@ -493,25 +502,25 @@ export class RightSidePanel {
 
     this.lobbyContainer.add([this.resultsHeader, this.resultsSep, this.resultsFragsLabel, this.resultsEmptyState]);
 
-    const blueLabel = this.scene.add.text(SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
+    const blueLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
       fontSize: RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    const blueScore = this.scene.add.text(SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
+    const blueScore = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
       fontSize: RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    const redLabel = this.scene.add.text(SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM ROT', {
+    const redLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM ROT', {
       fontSize: RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
       fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    const redScore = this.scene.add.text(SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
+    const redScore = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
       fontSize: RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
@@ -527,13 +536,13 @@ export class RightSidePanel {
     for (let i = 0; i < 12; i++) {
       const y = RESULTS_START_Y + i * RESULTS_ENTRY_H;
 
-      const nameText = this.scene.add.text(SIDEBAR_LEFT_X, y, '', {
+      const nameText = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, y, '', {
         fontSize:   RESULTS_FONT,
         fontFamily: 'monospace',
         color:      '#ffffff',
       }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
 
-      const fragsText = this.scene.add.text(SIDEBAR_RIGHT_X, y, '', {
+      const fragsText = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, y, '', {
         fontSize:   RESULTS_FONT,
         fontFamily: 'monospace',
         color:      COLOR_DIM,
@@ -615,16 +624,19 @@ export class RightSidePanel {
     const redEntries = entries.filter((entry) => entry.teamId === 'red').sort((a, b) => b.frags - a.frags);
     const blueScore = this.resolveGroupedTeamScore(blueEntries);
     const redScore = this.resolveGroupedTeamScore(redEntries);
+    const blueRowsStartY = LB_START_Y + LB_TEAM_ROWS_OFFSET;
+    const redHeaderY = blueRowsStartY + blueEntries.length * LB_ENTRY_H + LB_TEAM_SECTION_GAP;
+    const redRowsStartY = redHeaderY + LB_TEAM_ROWS_OFFSET;
 
-    this.lbTeamHeaders?.blue.label.setVisible(true).setPosition(SIDEBAR_LEFT_X, LB_START_Y);
+    this.lbTeamHeaders?.blue.label.setVisible(true).setPosition(ARENA_SIDEBAR_LEFT_X, LB_START_Y);
     this.lbTeamHeaders?.blue.score.setVisible(true).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
 
     let rowIndex = 0;
-    rowIndex = this.renderGroupedLeaderboardTeamRows(blueEntries, rowIndex, LB_START_Y + 20);
+    rowIndex = this.renderGroupedLeaderboardTeamRows(blueEntries, rowIndex, blueRowsStartY);
 
-    this.lbTeamHeaders?.red.label.setVisible(true).setPosition(SIDEBAR_LEFT_X, LB_START_Y + 20 + blueEntries.length * LB_ENTRY_H + 12);
-    this.lbTeamHeaders?.red.score.setVisible(true).setText(String(redScore)).setPosition(LB_FRAGS_X, LB_START_Y + 20 + blueEntries.length * LB_ENTRY_H + 12);
-    rowIndex = this.renderGroupedLeaderboardTeamRows(redEntries, rowIndex, LB_START_Y + 32 + blueEntries.length * LB_ENTRY_H + 12);
+    this.lbTeamHeaders?.red.label.setVisible(true).setPosition(ARENA_SIDEBAR_LEFT_X, redHeaderY);
+    this.lbTeamHeaders?.red.score.setVisible(true).setText(String(redScore)).setPosition(LB_FRAGS_X, redHeaderY);
+    rowIndex = this.renderGroupedLeaderboardTeamRows(redEntries, rowIndex, redRowsStartY);
 
     for (let i = rowIndex; i < this.lbRows.length; i++) {
       this.lbRows[i].name.setVisible(false);
@@ -641,7 +653,7 @@ export class RightSidePanel {
       const pingText = this.lbPingRows[rowIndex];
       const entry = entries[i];
       const y = startY + i * LB_ENTRY_H;
-      row.name.setPosition(SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
+      row.name.setPosition(ARENA_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
       row.frags.setPosition(LB_FRAGS_X, y).setText(String(entry.frags)).setVisible(true);
       pingText.setPosition(LB_PING_X, y).setText(`${entry.ping}ms`).setColor(pingColor(entry.ping)).setVisible(true);
       this.leaderboardCache[rowIndex] = {
@@ -667,10 +679,10 @@ export class RightSidePanel {
     this.resultsSep.setVisible(true);
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
-    this.resultsTeamHeaders?.blue.label.setVisible(hasData).setPosition(SIDEBAR_LEFT_X, RESULTS_START_Y);
-    this.resultsTeamHeaders?.blue.score.setVisible(hasData).setText(String(blueScore)).setPosition(SIDEBAR_RIGHT_X, RESULTS_START_Y);
-    this.resultsTeamHeaders?.red.label.setVisible(hasData).setPosition(SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
-    this.resultsTeamHeaders?.red.score.setVisible(hasData).setText(String(redScore)).setPosition(SIDEBAR_RIGHT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    this.resultsTeamHeaders?.blue.label.setVisible(hasData).setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y);
+    this.resultsTeamHeaders?.blue.score.setVisible(hasData).setText(String(blueScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y);
+    this.resultsTeamHeaders?.red.label.setVisible(hasData).setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    this.resultsTeamHeaders?.red.score.setVisible(hasData).setText(String(redScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
 
     let rowIndex = 0;
     rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, RESULTS_START_Y + 18);
@@ -687,8 +699,8 @@ export class RightSidePanel {
       const row = this.resultsRows[rowIndex];
       const entry = entries[i];
       const y = startY + i * RESULTS_ENTRY_H;
-      row.name.setPosition(SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
-      row.frags.setPosition(SIDEBAR_RIGHT_X, y).setText(String(entry.frags)).setVisible(true);
+      row.name.setPosition(LOBBY_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
+      row.frags.setPosition(LOBBY_SIDEBAR_RIGHT_X, y).setText(String(entry.frags)).setVisible(true);
     }
     return rowIndex;
   }

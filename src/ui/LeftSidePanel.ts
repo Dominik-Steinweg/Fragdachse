@@ -10,6 +10,7 @@ import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import { GameAudioSystem } from '../audio/GameAudioSystem';
 import { ArenaHUD } from './ArenaHUD';
+import { configureArenaHudLayout } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { HelpOverlay } from './HelpOverlay';
@@ -22,8 +23,11 @@ import { getGameModeLabel, isTeamGameMode } from '../gameModes';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
 import { getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
 
-// ── Layout-Konstanten (innerhalb des 240px-Sidebars) ─────────────────────────
-const CENTER_X     = 120;  // Mitte des 240px Sidebars
+// ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
+const LOBBY_PANEL_W = 240;
+const ARENA_PANEL_W = Math.round(LOBBY_PANEL_W * 1.5);
+const CENTER_X     = LOBBY_PANEL_W / 2;
+const ARENA_CENTER_X = ARENA_PANEL_W / 2;
 const LOBBY_TOP_OFFSET_Y = 246;
 const NAME_LABEL_Y = 60 + LOBBY_TOP_OFFSET_Y;
 const NAME_VALUE_Y = 80 + LOBBY_TOP_OFFSET_Y;
@@ -163,7 +167,7 @@ export class LeftSidePanel {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
     this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
     this.gameContainer.add(
-      this.scene.add.rectangle(CENTER_X, GAME_HEIGHT / 2, 240, GAME_HEIGHT, 0x000000, 0.18)
+      this.scene.add.rectangle(ARENA_CENTER_X, GAME_HEIGHT / 2, ARENA_PANEL_W, GAME_HEIGHT, 0x000000, 0.18)
         .setScrollFactor(0),
     );
 
@@ -172,6 +176,7 @@ export class LeftSidePanel {
     this.puContainer.setDepth(DEPTH.OVERLAY - 1);
     this.puContainer.setVisible(false);
 
+    configureArenaHudLayout(ARENA_PANEL_W);
     this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer, this.puContainer);
 
     // ── lobbyContainer (Namens- und Farbsektion, initial on-screen) ───────────

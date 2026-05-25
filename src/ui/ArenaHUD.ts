@@ -31,15 +31,16 @@ import {
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 // ── Layout ──────────────────────────────────────────────────────────────────
-const PANEL_W   = 240;
+const DEFAULT_PANEL_W = 240;
+let panelWidth = DEFAULT_PANEL_W;
 const PAD       = 14;
 const BAR_X     = PAD;
-const BAR_W     = PANEL_W - PAD * 2; // 212
+let barWidth    = panelWidth - PAD * 2;
 const BAR_H     = 14;
 
 // Vertical rhythm
 const NAME_Y    = 16;
-const NAME_H    = 28;
+const NAME_H    = 36;
 const DIV1_Y    = 52;
 
 const HP_LBL_Y  = 62;
@@ -67,9 +68,9 @@ const DIV3_Y        = 400;
 const PU_SECTION_Y  = 410; // Y start for the power-up section
 
 // Fonts
-const LABEL_FONT  = { fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
-const NAME_FONT   = { fontSize: '26px', fontFamily: 'monospace', fontStyle: 'bold' as const, color: '#ffffff' };
-const VALUE_FONT  = { fontSize: '12px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1) };
+const LABEL_FONT  = { fontSize: '18px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
+const NAME_FONT   = { fontSize: '32px', fontFamily: 'monospace', fontStyle: 'bold' as const, color: '#ffffff' };
+const VALUE_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1) };
 
 // ── Colour definitions per bar ──────────────────────────────────────────────
 interface BarPalette {
@@ -96,6 +97,11 @@ const COL_DIVIDER  = COLORS.GREY_7;
 const TEX_PARTICLE   = '_hud_particle';
 const TEX_CORE       = '_hud_core';
 
+export function configureArenaHudLayout(nextPanelWidth = DEFAULT_PANEL_W): void {
+  panelWidth = nextPanelWidth;
+  barWidth = panelWidth - PAD * 2;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Derive a full BarPalette from a single base colour by shifting brightness. */
@@ -115,17 +121,17 @@ function paletteFromColor(base: number): BarPalette {
 }
 
 function makeBgTexture(scene: Phaser.Scene, key: string): void {
-  if (scene.textures.exists(key)) return;
-  const ct = scene.textures.createCanvas(key, BAR_W, BAR_H)!;
+  if (scene.textures.exists(key)) scene.textures.remove(key);
+  const ct = scene.textures.createCanvas(key, barWidth, BAR_H)!;
   const ctx = ct.context;
   const grad = ctx.createLinearGradient(0, 0, 0, BAR_H);
   grad.addColorStop(0, rgbStr(COL_BAR_BG2));
   grad.addColorStop(1, rgbStr(COL_BAR_BG));
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, BAR_W, BAR_H);
+  ctx.fillRect(0, 0, barWidth, BAR_H);
   // Inner shadow line at top
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fillRect(0, 0, BAR_W, 1);
+  ctx.fillRect(0, 0, barWidth, 1);
   ct.refresh();
 }
 
@@ -267,12 +273,12 @@ export class ArenaHUD {
     ensureLivingBarTextures(s);
 
     // Bar gradient textures
-    createGradientTexture(s, '_hud_hp',   PAL_HP,   BAR_W, BAR_H);
-    createGradientTexture(s, '_hud_arm',  PAL_ARM,  BAR_W, BAR_H);
-    createGradientTexture(s, '_hud_adr',  PAL_ADR,  BAR_W, BAR_H);
-    createGradientTexture(s, '_hud_ult',  PAL_ULT,  BAR_W, BAR_H);
-    createGradientTexture(s, '_hud_wpn',  PAL_WPN,  BAR_W, BAR_H);
-    createGradientTexture(s, '_hud_util', PAL_UTIL, BAR_W, BAR_H);
+    createGradientTexture(s, '_hud_hp',   PAL_HP,   barWidth, BAR_H);
+    createGradientTexture(s, '_hud_arm',  PAL_ARM,  barWidth, BAR_H);
+    createGradientTexture(s, '_hud_adr',  PAL_ADR,  barWidth, BAR_H);
+    createGradientTexture(s, '_hud_ult',  PAL_ULT,  barWidth, BAR_H);
+    createGradientTexture(s, '_hud_wpn',  PAL_WPN,  barWidth, BAR_H);
+    createGradientTexture(s, '_hud_util', PAL_UTIL, barWidth, BAR_H);
 
     // Adrenaline burst particle (16x16 radial glow)
     makeRadialTexture(s, TEX_PARTICLE, 16, [
@@ -301,7 +307,7 @@ export class ArenaHUD {
 
     // Phaser 4 keeps GeometryMask on Canvas only; crop is sufficient here
     // because we only need simple clipping for the marquee text.
-    this.nameText.setCrop(0, 0, BAR_W, NAME_H);
+    this.nameText.setCrop(0, 0, barWidth, NAME_H);
 
     // Dividers
     c.add(this.divider(DIV1_Y));
@@ -318,7 +324,7 @@ export class ArenaHUD {
     this.syncUltimateThresholdMarks([]);
 
     // Red overlay on weapon 2 bar — shown when adrenaline is insufficient
-    this.w2RedOverlay = this.scene.add.rectangle(BAR_X, W2_BAR_Y, BAR_W, BAR_H, COLORS.RED_3)
+    this.w2RedOverlay = this.scene.add.rectangle(BAR_X, W2_BAR_Y, barWidth, BAR_H, COLORS.RED_3)
       .setOrigin(0, 0).setScrollFactor(0).setAlpha(0);
     c.add(this.w2RedOverlay);
 
@@ -355,7 +361,7 @@ export class ArenaHUD {
 
     let panelBg: Phaser.GameObjects.Rectangle | undefined;
     if (opts?.panel) {
-      panelBg = s.add.rectangle(BAR_X + BAR_W / 2, labelY + 17, BAR_W + 20, 38, 0x000000, 0.35)
+      panelBg = s.add.rectangle(BAR_X + barWidth / 2, labelY + 17, barWidth + 20, 38, 0x000000, 0.35)
         .setScrollFactor(0);
       c.add(panelBg);
     }
@@ -371,7 +377,7 @@ export class ArenaHUD {
     // HP trail
     let trail: Phaser.GameObjects.Rectangle | undefined;
     if (opts?.trail) {
-      trail = s.add.rectangle(BAR_X, barY, BAR_W, BAR_H, opts.trailColor ?? COL_HP_TRAIL)
+      trail = s.add.rectangle(BAR_X, barY, barWidth, BAR_H, opts.trailColor ?? COL_HP_TRAIL)
         .setOrigin(0, 0).setScrollFactor(0);
       c.add(trail);
     }
@@ -379,16 +385,16 @@ export class ArenaHUD {
     // Foreground gradient (cropped)
     const fgImg = s.add.image(BAR_X, barY, texKey)
       .setOrigin(0, 0).setScrollFactor(0);
-    fgImg.setCrop(0, 0, BAR_W, BAR_H);
+    fgImg.setCrop(0, 0, barWidth, BAR_H);
     c.add(fgImg);
 
     // Idle breathing effect (shared LivingBarEffect)
     const idlePal: LivingBarPalette = { dark: palette.dark, mid: palette.mid, light: palette.light };
-    const idleEffect = new LivingBarEffect(s, c, BAR_X, barY, BAR_W, BAR_H, idlePal,
+    const idleEffect = new LivingBarEffect(s, c, BAR_X, barY, barWidth, BAR_H, idlePal,
       { glowTarget: fgImg, scrollFactor: 0 });
 
     // Energized particles: small, fast, dense sparkle (BFG core style)
-    const { zone: energyZone, data: energyZoneData } = rectZone(BAR_X + 2, barY + 1, BAR_W - 4, BAR_H - 2);
+    const { zone: energyZone, data: energyZoneData } = rectZone(BAR_X + 2, barY + 1, barWidth - 4, BAR_H - 2);
 
     const coreEmitter = s.add.particles(0, 0, TEX_CORE, {
       lifespan:  { min: 200, max: 500 },
@@ -421,7 +427,7 @@ export class ArenaHUD {
     c.add(outerEmitter);
 
     // Border
-    const border = s.add.rectangle(BAR_X, barY, BAR_W, BAR_H)
+    const border = s.add.rectangle(BAR_X, barY, barWidth, BAR_H)
       .setOrigin(0, 0).setScrollFactor(0)
       .setStrokeStyle(1, COL_BORDER)
       .setFillStyle(0x000000, 0);
@@ -430,7 +436,7 @@ export class ArenaHUD {
     // Value text
     let valueText: Phaser.GameObjects.Text | undefined;
     if (opts?.value) {
-      valueText = s.add.text(BAR_X + BAR_W, labelY, '', VALUE_FONT)
+      valueText = s.add.text(BAR_X + barWidth, labelY, '', VALUE_FONT)
         .setOrigin(1, 0).setScrollFactor(0);
       c.add(valueText);
     }
@@ -438,7 +444,7 @@ export class ArenaHUD {
     // Fire highlight
     let highlight: Phaser.GameObjects.Rectangle | undefined;
     if (opts?.highlight) {
-      highlight = s.add.rectangle(BAR_X - 4, barY - 4, BAR_W + 8, BAR_H + 8, palette.mid, 0)
+      highlight = s.add.rectangle(BAR_X - 4, barY - 4, barWidth + 8, BAR_H + 8, palette.mid, 0)
         .setOrigin(0, 0).setScrollFactor(0);
       c.add(highlight);
       c.sendToBack(highlight);
@@ -461,13 +467,13 @@ export class ArenaHUD {
       texKey,
       prevFrac: 1,
       currentFrac: 1,
-      renderedWidth: BAR_W,
+      renderedWidth: barWidth,
       energized: false,
     };
   }
 
   private divider(y: number): Phaser.GameObjects.Rectangle {
-    return this.scene.add.rectangle(BAR_X, y, BAR_W, 1, COL_DIVIDER, 0.5)
+    return this.scene.add.rectangle(BAR_X, y, barWidth, 1, COL_DIVIDER, 0.5)
       .setOrigin(0, 0).setScrollFactor(0);
   }
 
@@ -476,7 +482,7 @@ export class ArenaHUD {
   setPlayerInfo(name: string, color: number): void {
     this.nameText.setText(name);
     this.nameText.setColor(toCssColor(color));
-    this.nameText.setCrop(0, 0, BAR_W, NAME_H);
+    this.nameText.setCrop(0, 0, barWidth, NAME_H);
     this.setupNameScroll();
   }
 
@@ -540,7 +546,7 @@ export class ArenaHUD {
     const steps = Math.floor(ADRENALINE_MAX / cost);
     for (let i = 1; i <= steps; i++) {
       const frac = (i * cost) / ADRENALINE_MAX;
-      const x = BAR_X + Math.round(BAR_W * frac);
+      const x = BAR_X + Math.round(barWidth * frac);
       const mark = this.scene.add.rectangle(x, ADR_BAR_Y + 2, 1, BAR_H - 4, 0xffffff, 0.3)
         .setOrigin(0.5, 0).setScrollFactor(0);
       this.container.add(mark);
@@ -575,7 +581,7 @@ export class ArenaHUD {
     this.weapon2AdrCost = 0;
     // Reset all bars to idle breathing mode
     for (const b of [this.hp, this.armor, this.adr, this.ult, this.w1, this.w2, this.util]) {
-      b.renderedWidth = Math.max(0, Math.round(BAR_W * b.currentFrac));
+      b.renderedWidth = Math.max(0, Math.round(barWidth * b.currentFrac));
       b.energized = true; // force re-apply
       this.setBarEnergized(b, false);
     }
@@ -617,7 +623,7 @@ export class ArenaHUD {
     this.nameText.x = BAR_X;
 
     const textWidth = this.nameText.width;
-    const maxWidth = BAR_W;
+    const maxWidth = barWidth;
     if (textWidth <= maxWidth) return;
 
     const overflow = textWidth - maxWidth;
@@ -674,7 +680,7 @@ export class ArenaHUD {
       setTrailDelay(this.scene.time.delayedCall(400, () => {
         this.scene.tweens.add({
           targets: bundle.trail,
-          width: BAR_W * frac,
+          width: barWidth * frac,
           duration: 600,
           ease: 'Power2',
         });
@@ -683,7 +689,7 @@ export class ArenaHUD {
       this.flashBorder(bundle, COLORS.RED_2);
       this.shakeBar(bundle);
     } else if (frac > prev + 0.005) {
-      if (bundle.trail) bundle.trail.width = BAR_W * frac;
+      if (bundle.trail) bundle.trail.width = barWidth * frac;
       this.flashBar(bundle);
     }
 
@@ -721,7 +727,7 @@ export class ArenaHUD {
 
   private emitAdrBurst(frac: number): void {
     if (!this.adrBurstEmitter) return;
-    const px = BAR_X + BAR_W * frac;
+    const px = BAR_X + barWidth * frac;
     const py = ADR_BAR_Y + BAR_H / 2;
     this.adrBurstEmitter.setPosition(px, py);
     this.adrBurstEmitter.explode(16);
@@ -820,7 +826,7 @@ export class ArenaHUD {
       const frac = Phaser.Math.Clamp(value / RAGE_MAX, 0, 1);
       const mark = this.ultThresholdMarks[index];
       mark.setVisible(true);
-      mark.x = BAR_X + BAR_W * frac;
+      mark.x = BAR_X + barWidth * frac;
     });
   }
 
@@ -981,7 +987,7 @@ export class ArenaHUD {
   private ensurePuTexture(defId: string, palette: BarPalette): string {
     const key = `_hud_pu_${defId}`;
     if (!this.scene.textures.exists(key)) {
-      createGradientTexture(this.scene, key, palette, BAR_W, BAR_H);
+      createGradientTexture(this.scene, key, palette, barWidth, BAR_H);
     }
     return key;
   }
@@ -1062,7 +1068,7 @@ export class ArenaHUD {
 
   /** Set the visible fill fraction and constrain particles to the filled area. */
   private setBarFrac(bundle: BarBundle, frac: number): void {
-    const w = Math.max(0, Math.round(BAR_W * frac));
+    const w = Math.max(0, Math.round(barWidth * frac));
     if (bundle.renderedWidth === w && Math.abs(bundle.currentFrac - frac) < 0.0001) return;
 
     bundle.fgImg.setCrop(0, 0, w, BAR_H);
