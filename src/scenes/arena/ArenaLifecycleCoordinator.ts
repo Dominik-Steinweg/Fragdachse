@@ -47,6 +47,7 @@ import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { BaseManager } from '../../entities/BaseManager';
 import { EnemyManager } from '../../entities/EnemyManager';
+import { emitArenaMapGridChanged } from './ArenaEvents';
 
 /**
  * Manages the arena round lifecycle.
@@ -278,6 +279,20 @@ export class ArenaLifecycleCoordinator {
           cellSize: CELL_SIZE,
           arenaOffsetX: ARENA_OFFSET_X,
           arenaOffsetY: ARENA_OFFSET_Y,
+        }, {
+          eventBus: this.scene.game.events,
+          obstacleCellProvider: () => {
+            const staticRockCells = layout.rocks.flatMap((rock, index) => {
+              const isActive = this.ctx.arenaResult?.rockObjects[index]?.active ?? false;
+              return isActive ? [{ gridX: rock.gridX, gridY: rock.gridY }] : [];
+            });
+            const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? []).map((rock) => ({
+              gridX: rock.gridX,
+              gridY: rock.gridY,
+            }));
+
+            return [...staticRockCells, ...runtimeRockCells];
+          },
         })
         : null;
       this.ctx.enemyManager?.hostSpawnInitialDummy(layout);
@@ -712,6 +727,7 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.trainManager?.destroy();
     this.ctx.trainManager = null;
+    this.ctx.enemyFlowFieldService?.destroy();
     this.ctx.enemyFlowFieldService = null;
     this.renderers.train?.destroy();
     this.renderers.train = null;
@@ -902,6 +918,13 @@ export class ArenaLifecycleCoordinator {
     const rock = this.ctx.placementSystem?.tryPlaceRock(cfg, playerId, playerColor, originX, originY, targetX, targetY, now);
     if (!rock) return false;
     this.rockVisualHelper.materializePlaceableRock(rock, true);
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_added',
+      source: rock.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+      obstacleId: rock.id,
+      gridX: rock.gridX,
+      gridY: rock.gridY,
+    });
     return true;
   }
 

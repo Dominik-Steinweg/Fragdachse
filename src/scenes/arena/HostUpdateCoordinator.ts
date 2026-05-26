@@ -15,6 +15,7 @@ import type { RockVisualHelper }  from './RockVisualHelper';
 import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
 import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, TeamId, TrackedProjectile } from '../../types';
+import { emitArenaMapGridChanged } from './ArenaEvents';
 
 /**
  * Runs every frame on the host.
@@ -72,6 +73,8 @@ export class HostUpdateCoordinator {
     if (!this.active) return;
     const countdownActive = bridge.isArenaCountdownActive();
     const now = Date.now();
+
+    this.ctx.enemyFlowFieldService?.update(now);
 
     if (!countdownActive && this.ctx.resourceSystem && this.ctx.burrowSystem) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -429,6 +432,13 @@ export class HostUpdateCoordinator {
         this.rockVisualHelper.spawnTurretDeathCloud(expiredRock);
       }
       this.rockVisualHelper.removePlaceableRockVisual(expiredRock, true);
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeable_expired',
+        source: expiredRock.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+        obstacleId: expiredRock.id,
+        gridX: expiredRock.gridX,
+        gridY: expiredRock.gridY,
+      });
     }
 
     const players: Record<string, PlayerNetState> = {};

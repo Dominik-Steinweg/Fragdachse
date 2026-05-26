@@ -396,6 +396,8 @@ export const COOP_DEFENSE_FLOW_FIELD_ROCK_COST = 100;
 export const COOP_DEFENSE_FLOW_FIELD_TRUNK_COST = 999999;
 /** Basis-Footprints bleiben blockiert, nutzen aber dieselbe Kostenklasse wie Rocks. */
 export const COOP_DEFENSE_FLOW_FIELD_BASE_COST = COOP_DEFENSE_FLOW_FIELD_ROCK_COST;
+/** Host prueft hoechstens alle 100 ms, ob das Flow Field wegen Arena-Mutationen neu gebaut werden muss. */
+export const COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS = 100;
 
 export interface ArenaGridRegion {
   minGridX: number;

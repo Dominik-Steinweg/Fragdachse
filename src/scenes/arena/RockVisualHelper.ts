@@ -11,6 +11,7 @@ import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
 import { addInternalGlow, setInternalFxPadding } from '../../utils/phaserFx';
+import { emitArenaMapGridChanged } from './ArenaEvents';
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
@@ -197,6 +198,13 @@ export class RockVisualHelper {
       }
       this.ctx.placementSystem?.removeRock(rockId);
       this.removePlaceableRockVisual(runtimeRock, true);
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeable_removed',
+        source: runtimeRock.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+        obstacleId: runtimeRock.id,
+        gridX: runtimeRock.gridX,
+        gridY: runtimeRock.gridY,
+      });
       return;
     }
 
@@ -214,6 +222,14 @@ export class RockVisualHelper {
     );
     this.refreshStaticShadows();
     this.ctx.powerUpSystem?.onRockDestroyed(rockId);
+    const rockCell = this.ctx.currentLayout.rocks[rockId];
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'static_rock_destroyed',
+      source: 'static_rock',
+      obstacleId: rockId,
+      gridX: rockCell?.gridX,
+      gridY: rockCell?.gridY,
+    });
   }
 
   createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {

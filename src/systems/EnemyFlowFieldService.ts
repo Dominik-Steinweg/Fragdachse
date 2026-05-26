@@ -4,9 +4,15 @@ import {
   COOP_DEFENSE_FLOW_FIELD_BASE_COST,
   COOP_DEFENSE_FLOW_FIELD_DIRT_COST,
   COOP_DEFENSE_FLOW_FIELD_GROUND_COST,
+  COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS,
   COOP_DEFENSE_FLOW_FIELD_ROCK_COST,
   COOP_DEFENSE_FLOW_FIELD_TRUNK_COST,
 } from '../config';
+import {
+  ARENA_MAP_GRID_CHANGED_EVENT,
+  type ArenaEventBus,
+  type ArenaMapGridChangedEvent,
+} from '../scenes/arena/ArenaEvents';
 
 export interface EnemyFlowFieldMetrics {
   readonly cols: number;
@@ -61,6 +67,11 @@ interface EnemyFlowFieldCellRule {
   readonly matches: (cellKey: number, context: EnemyFlowFieldBuildContext) => boolean;
 }
 
+export interface EnemyFlowFieldServiceOptions {
+  readonly eventBus?: ArenaEventBus;
+  readonly obstacleCellProvider?: () => ReadonlyArray<EnemyFlowFieldGridCell>;
+}
+
 const CELL_DEFINITIONS = {
   ground: { code: 0, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
   rock: { code: 1, cost: COOP_DEFENSE_FLOW_FIELD_ROCK_COST, isTraversable: false, isDestructible: true },
@@ -96,16 +107,28 @@ export class EnemyFlowFieldService {
   private readonly metrics: EnemyFlowFieldMetrics;
   private readonly layout: ArenaLayout;
   private readonly baseSpecs: readonly BaseSpec[];
+  private readonly eventBus: ArenaEventBus | null;
+  private readonly obstacleCellProvider: (() => ReadonlyArray<EnemyFlowFieldGridCell>) | null;
   private readonly costs: Uint32Array;
   private readonly kindCodes: Uint8Array;
   private readonly traversable: Uint8Array;
   private readonly destructible: Uint8Array;
   private readonly goalMask: Uint8Array;
   private readonly goalCells: EnemyFlowFieldGoalCell[];
-  private readonly summary: EnemyFlowFieldSummary;
+  private readonly summary: {
+    cols: number;
+    rows: number;
+    totalCells: number;
+    traversableCells: number;
+    blockedCells: number;
+    goalCells: number;
+    countsByKind: Record<EnemyFlowFieldCellKind, number>;
+  };
   private readonly integrationField: Float32Array;
   private readonly vectorField: Float32Array; // 2 floats (x, y) per cell
   private debugOverlayCallback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null = null;
+  private isGridDirty = false;
+  private lastDirtyCheckAt = 0;
 
   static readonly INTEGRATION_INFINITY = 999999;
   static readonly NEIGHBOR_DIRECTIONS = [
@@ -117,10 +140,13 @@ export class EnemyFlowFieldService {
     layout: ArenaLayout,
     baseSpecs: readonly BaseSpec[],
     metrics: EnemyFlowFieldMetrics,
+    options: EnemyFlowFieldServiceOptions = {},
   ) {
     this.layout = layout;
     this.baseSpecs = [...baseSpecs];
     this.metrics = { ...metrics };
+    this.eventBus = options.eventBus ?? null;
+    this.obstacleCellProvider = options.obstacleCellProvider ?? null;
 
     const totalCells = this.metrics.cols * this.metrics.rows;
     this.costs = new Uint32Array(totalCells);
@@ -130,44 +156,20 @@ export class EnemyFlowFieldService {
     this.goalMask = new Uint8Array(totalCells);
     this.integrationField = new Float32Array(totalCells);
     this.vectorField = new Float32Array(totalCells * 2);
-
-    const buildContext = this.createBuildContext(layout, this.baseSpecs);
-    const countsByKind = this.createEmptyCounts();
-
-    let traversableCells = 0;
-    for (let gridY = 0; gridY < this.metrics.rows; gridY++) {
-      for (let gridX = 0; gridX < this.metrics.cols; gridX++) {
-        const index = this.toIndex(gridX, gridY);
-        const cellKey = index;
-        const kind = this.resolveKind(cellKey, buildContext);
-        const definition = CELL_DEFINITIONS[kind];
-
-        this.costs[index] = definition.cost;
-        this.kindCodes[index] = definition.code;
-        this.traversable[index] = definition.isTraversable ? 1 : 0;
-        this.destructible[index] = definition.isDestructible ? 1 : 0;
-        countsByKind[kind]++;
-        if (definition.isTraversable) traversableCells++;
-      }
-    }
-
-    this.goalCells = this.computeGoalCells();
-    for (const goalCell of this.goalCells) {
-      this.goalMask[this.toIndex(goalCell.gridX, goalCell.gridY)] = 1;
-    }
-
-    this.computeIntegrationField();
-    this.computeVectorField();
-
+    this.goalCells = [];
     this.summary = {
       cols: this.metrics.cols,
       rows: this.metrics.rows,
       totalCells,
-      traversableCells,
-      blockedCells: totalCells - traversableCells,
-      goalCells: this.goalCells.length,
-      countsByKind,
+      traversableCells: 0,
+      blockedCells: totalCells,
+      goalCells: 0,
+      countsByKind: this.createEmptyCounts(),
     };
+
+    this.recomputeFields();
+    this.lastDirtyCheckAt = Date.now();
+    this.eventBus?.on(ARENA_MAP_GRID_CHANGED_EVENT, this.handleArenaMapGridChanged, this);
   }
 
   getCols(): number {
@@ -239,7 +241,30 @@ export class EnemyFlowFieldService {
   }
 
   rebuild(): EnemyFlowFieldService {
-    return new EnemyFlowFieldService(this.layout, this.baseSpecs, this.metrics);
+    return new EnemyFlowFieldService(this.layout, this.baseSpecs, this.metrics, {
+      eventBus: this.eventBus ?? undefined,
+      obstacleCellProvider: this.obstacleCellProvider ?? undefined,
+    });
+  }
+
+  update(now: number): boolean {
+    if (now - this.lastDirtyCheckAt < COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS) {
+      return false;
+    }
+
+    this.lastDirtyCheckAt = now;
+    if (!this.isGridDirty) {
+      return false;
+    }
+
+    this.recomputeFields();
+    this.isGridDirty = false;
+    return true;
+  }
+
+  destroy(): void {
+    this.eventBus?.off(ARENA_MAP_GRID_CHANGED_EVENT, this.handleArenaMapGridChanged, this);
+    this.debugOverlayCallback = null;
   }
 
   getIntegrationValueAt(gridX: number, gridY: number): number {
@@ -267,18 +292,69 @@ export class EnemyFlowFieldService {
     }
   }
 
+  private handleArenaMapGridChanged(_event: ArenaMapGridChangedEvent): void {
+    this.isGridDirty = true;
+  }
+
+  private recomputeFields(): void {
+    const buildContext = this.createBuildContext(this.layout, this.baseSpecs);
+    const countsByKind = this.createEmptyCounts();
+
+    let traversableCells = 0;
+    for (let gridY = 0; gridY < this.metrics.rows; gridY++) {
+      for (let gridX = 0; gridX < this.metrics.cols; gridX++) {
+        const index = this.toIndex(gridX, gridY);
+        const kind = this.resolveKind(index, buildContext);
+        const definition = CELL_DEFINITIONS[kind];
+
+        this.costs[index] = definition.cost;
+        this.kindCodes[index] = definition.code;
+        this.traversable[index] = definition.isTraversable ? 1 : 0;
+        this.destructible[index] = definition.isDestructible ? 1 : 0;
+        countsByKind[kind] += 1;
+        if (definition.isTraversable) traversableCells += 1;
+      }
+    }
+
+    this.goalMask.fill(0);
+    this.goalCells.length = 0;
+    this.goalCells.push(...this.computeGoalCells());
+    for (const goalCell of this.goalCells) {
+      this.goalMask[this.toIndex(goalCell.gridX, goalCell.gridY)] = 1;
+    }
+
+    this.computeIntegrationField();
+    this.computeVectorField();
+
+    this.summary.traversableCells = traversableCells;
+    this.summary.blockedCells = this.summary.totalCells - traversableCells;
+    this.summary.goalCells = this.goalCells.length;
+    this.summary.countsByKind = countsByKind;
+
+    if (this.debugOverlayCallback) {
+      this.debugOverlayCallback(new EnemyFlowFieldDebugRendererImpl(this));
+    }
+  }
+
   private createBuildContext(
     layout: ArenaLayout,
     baseSpecs: readonly BaseSpec[],
   ): EnemyFlowFieldBuildContext {
     return {
       dirtCells: this.buildLookup(layout.dirt.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
-      rockCells: this.buildLookup(layout.rocks.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
+      rockCells: this.buildLookup(this.getCurrentObstacleCells(layout)),
       trunkCells: this.buildLookup(layout.trees.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
       trackCells: this.buildTrackLookup(layout.tracks),
       pedestalCells: this.buildPedestalLookup(layout.powerUpPedestals),
       baseCells: this.buildBaseLookup(baseSpecs),
     };
+  }
+
+  private getCurrentObstacleCells(layout: ArenaLayout): ReadonlyArray<EnemyFlowFieldGridCell> {
+    if (this.obstacleCellProvider) {
+      return this.obstacleCellProvider();
+    }
+    return layout.rocks.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }));
   }
 
   private buildLookup(cells: ReadonlyArray<{ gridX: number; gridY: number }>): SourceCellLookup {

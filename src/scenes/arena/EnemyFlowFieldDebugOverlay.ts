@@ -16,7 +16,11 @@ export class EnemyFlowFieldDebugOverlay {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly flowFieldService: EnemyFlowFieldService,
-  ) {}
+  ) {
+    this.flowFieldService.registerDebugOverlayCallback(() => {
+      this.refresh();
+    });
+  }
 
   toggle(): void {
     if (this.isVisible) {
@@ -107,6 +111,11 @@ export class EnemyFlowFieldDebugOverlay {
     }
   }
 
+  refresh(): void {
+    if (!this.isVisible) return;
+    this.redraw();
+  }
+
   private distanceToColor(normalized: number): number {
     // Gradient: blue (0) → cyan → green → yellow → red (1)
     // Simple RGB interpolation via bit-shifting
@@ -138,6 +147,7 @@ export class EnemyFlowFieldDebugOverlay {
   }
 
   destroy(): void {
+    this.flowFieldService.registerDebugOverlayCallback(null);
     if (this.graphics) {
       this.graphics.destroy();
       this.graphics = null;
