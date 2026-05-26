@@ -42,7 +42,8 @@ import type { LobbyOverlay }          from '../LobbyOverlay';
 import type { ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
 import type { RoundResult }           from '../../network/NetworkBridge';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
-import { CAPTURE_THE_BEER_MODE, isTeamGameMode } from '../../gameModes';
+import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
+import { BaseManager } from '../../entities/BaseManager';
 
 /**
  * Manages the arena round lifecycle.
@@ -256,6 +257,13 @@ export class ArenaLifecycleCoordinator {
     this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
+
+    // Coop-Defense: BaseManager besitzt die Basis-Entities (Visual + Physik + HP + Sync).
+    // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry –
+    // HP-Werte fließen über GameState.bases (Host → Client).
+    this.ctx.baseManager = isCoopDefenseMode(bridge.getGameMode())
+      ? new BaseManager(this.scene)
+      : null;
     this.renderers.leafBlower.setTerrainColorSampler(
       createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult),
     );
@@ -272,11 +280,13 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.rockObjects,
       this.ctx.arenaResult.trunkGroup,
     );
+    this.ctx.projectileManager.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
     this.ctx.decoySystem.setObstacleGroups(
       this.ctx.arenaResult.rockGroup,
       this.ctx.arenaResult.trunkGroup,
     );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
+    this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, damage, attackerId);
@@ -304,6 +314,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.rockGroup,
       this.ctx.arenaResult.trunkGroup,
     );
+    this.ctx.hostPhysics.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
 
     if (bridge.isHost()) {
       this.ctx.resourceSystem = new ResourceSystem();
@@ -364,7 +375,11 @@ export class ArenaLifecycleCoordinator {
         this.ctx.hostPhysics,
         bridge,
       );
-      this.ctx.burrowSystem.setGroups(this.ctx.arenaResult.rockGroup, this.ctx.arenaResult.trunkGroup);
+      this.ctx.burrowSystem.setGroups(
+        this.ctx.arenaResult.rockGroup,
+        this.ctx.arenaResult.trunkGroup,
+        this.ctx.baseManager?.getBaseGroup() ?? null,
+      );
       this.ctx.burrowSystem.setBurrowStartCallback((playerId) => {
         this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
       });
@@ -594,6 +609,8 @@ export class ArenaLifecycleCoordinator {
     }
     this.ctx.captureTheBeerSystem?.destroy();
     this.ctx.captureTheBeerSystem = null;
+    this.ctx.baseManager?.destroy();
+    this.ctx.baseManager = null;
     this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
@@ -630,6 +647,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPowerUpSystem(null);
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setArenaObstacles(null, null);
+    this.ctx.combatSystem.setBaseObstacles(null);
     this.ctx.combatSystem.setTrainSegments(null);
     this.ctx.combatSystem.setRockDamageCallback(null);
     this.ctx.combatSystem.setTrainDamageCallback(null);
@@ -644,11 +662,13 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.setCooldownStarter(null);
     this.ctx.decoySystem.setObstacleGroups(null, null);
     this.ctx.projectileManager.setRockGroup(null, null, null);
+    this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
     this.ctx.projectileManager.setProjectileImpactCallback(null);
     this.ctx.projectileManager.setBfgLaserCallback(null);
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
+    this.ctx.hostPhysics.setBaseGroup(null);
     this.renderers.leafBlower.setTerrainColorSampler(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;

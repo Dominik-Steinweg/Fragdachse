@@ -516,6 +516,7 @@ export class HostUpdateCoordinator {
       meteors,
       tunnels: this.ctx.tunnelSystem?.getSnapshot() ?? [],
       train,
+      bases: this.ctx.baseManager?.getNetSnapshot() ?? [],
       captureTheBeer,
     });
 

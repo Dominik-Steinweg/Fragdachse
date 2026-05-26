@@ -56,10 +56,12 @@ export class HostPhysicsSystem {
   // Obstacle-Gruppen – werden nach Arena-Aufbau injiziert
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
+  private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
 
   // Pro-Spieler Collider-Tracking
   private rockCollidersSetup  = new Set<string>();
   private trunkCollidersSetup = new Set<string>();
+  private baseCollidersSetup  = new Set<string>();
   private playerColliders     = new Map<string, Phaser.Physics.Arcade.Collider[]>();
 
   // Optionale Referenzen
@@ -283,6 +285,7 @@ export class HostPhysicsSystem {
       this.playerColliders.clear();
       this.rockCollidersSetup.clear();
       this.trunkCollidersSetup.clear();
+      this.baseCollidersSetup.clear();
       this.burrowedPlayers.clear();
       this.dashStates.clear();
       this.dashBurstPlayers.clear();
@@ -292,6 +295,17 @@ export class HostPhysicsSystem {
     }
     this.rockGroup  = rockGroup;
     this.trunkGroup = trunkGroup;
+  }
+
+  /**
+   * Setzt die Coop-Defense-Basis-Gruppe für Spieler-Kollisionen.
+   * Spieler können nicht durch Basen laufen (analog zu Felsen). Wird beim
+   * Teardown (null) zurückgesetzt; die Collider werden durch den rockGroup=null-
+   * Pfad in setRockGroup() bereits abgeräumt.
+   */
+  setBaseGroup(baseGroup: Phaser.Physics.Arcade.StaticGroup | null): void {
+    this.baseGroup = baseGroup;
+    if (baseGroup === null) this.baseCollidersSetup.clear();
   }
 
   /**
@@ -305,6 +319,7 @@ export class HostPhysicsSystem {
     }
     this.rockCollidersSetup.delete(id);
     this.trunkCollidersSetup.delete(id);
+    this.baseCollidersSetup.delete(id);
     this.burrowedPlayers.delete(id);
     this.dashStates.delete(id);
     this.dashBurstPlayers.delete(id);
@@ -344,6 +359,16 @@ export class HostPhysicsSystem {
         existing.push(c);
         this.playerColliders.set(player.id, existing);
         this.trunkCollidersSetup.add(player.id);
+      }
+
+      // Lazy: Collider mit Coop-Defense-Basen anlegen
+      if (this.baseGroup && !this.baseCollidersSetup.has(player.id)) {
+        const existing = this.playerColliders.get(player.id) ?? [];
+        const c = this.scene.physics.add.collider(player.sprite, this.baseGroup);
+        if (this.burrowedPlayers.has(player.id)) c.active = false;
+        existing.push(c);
+        this.playerColliders.set(player.id, existing);
+        this.baseCollidersSetup.add(player.id);
       }
 
       // Tote Spieler überspringen (body.enable = false durch CombatSystem)

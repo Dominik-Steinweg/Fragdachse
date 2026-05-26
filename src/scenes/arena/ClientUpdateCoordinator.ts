@@ -166,6 +166,8 @@ export class ClientUpdateCoordinator {
         trainState?.alive ? { x: trainState.x, y: trainState.y, dir: trainState.dir } : null,
       );
 
+      this.ctx.baseManager?.applySnapshot(state.bases ?? []);
+
       this.checkLocalPickup(state.powerups ?? []);
     }
 

@@ -866,6 +866,17 @@ export interface TrainEventConfig {
   spawnAt:   number;   // Spielzeit in ms ab Match-Start (wann spawnt der Zug)
 }
 
+/**
+ * Per-Frame Zustand einer Coop-Defense-Basis (Host → Clients, unreliable).
+ * Delta-Kompression über GameState: Nur Basen mit reduzierten HP werden gesendet;
+ * fehlende Einträge = volle HP (analog zu rocks).
+ */
+export interface SyncedBaseState {
+  id:     string;
+  hp:     number;
+  maxHp:  number;
+}
+
 /** Per-Frame Zug-Zustand (Host → Clients, unreliable) */
 export interface SyncedTrainState {
   alive:    boolean;  // false = zerstört oder noch nicht gespawnt

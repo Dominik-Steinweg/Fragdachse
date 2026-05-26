@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -102,6 +102,7 @@ export interface GameState {
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   tunnels:      SyncedTunnel[];
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
+  bases:        SyncedBaseState[];        // Coop-Defense-Basen (Delta: nur beschädigte; leer = alle voll)
   captureTheBeer: SyncedCaptureTheBeerState | null;
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
   timeBubbles:  SyncedTimeBubble[];
@@ -677,6 +678,7 @@ export class NetworkBridge {
     if (state.meteors.length > 0)      payload.mt = state.meteors;
     if (state.tunnels.length > 0)      payload.tn = state.tunnels;
     if (state.train)                   payload.t = state.train;
+    if (state.bases.length > 0)        payload.b = state.bases;
     if (state.captureTheBeer)          payload.cb = state.captureTheBeer;
     setState(KEY_GAME_STATE, payload, false);
   }
@@ -716,6 +718,7 @@ export class NetworkBridge {
       meteors:       (raw.mt as SyncedMeteorStrike[]    | undefined) ?? [],
       tunnels:       (raw.tn as SyncedTunnel[]          | undefined) ?? [],
       train:         (raw.t as SyncedTrainState      | undefined) ?? null,
+      bases:         (raw.b as SyncedBaseState[]     | undefined) ?? [],
       captureTheBeer: (raw.cb as SyncedCaptureTheBeerState | undefined) ?? null,
     };
     this.cachedGameState = state;

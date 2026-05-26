@@ -1,5 +1,5 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import { isReservedBaseCell, usesCenteredTrackSpawn } from './BaseRegistry';
+import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, usesCenteredTrackSpawn } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
 import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
@@ -70,7 +70,7 @@ export class ArenaGenerator {
       const rocks: RockCell[] = [];
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         for (let gx = 0; gx < GRID_COLS; gx++) {
-          if (map[gy][gx] && !trackCols.has(gx) && !isReservedBaseCell(gx, gy)) {
+          if (map[gy][gx] && !trackCols.has(gx) && !isReservedBaseObstacleCell(gx, gy)) {
             blocked[gy][gx] = true;
             rocks.push({ gridX: gx, gridY: gy });
           }
@@ -97,7 +97,7 @@ export class ArenaGenerator {
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
-          !isReservedBaseCell(gx, gy) &&
+          !isReservedBaseObstacleCell(gx, gy) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -129,7 +129,7 @@ export class ArenaGenerator {
             const nx = gx + dx;
             const ny = gy + dy;
             if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
-              if (isReservedBaseCell(nx, ny)) continue;
+              if (isReservedBaseSurfaceCell(nx, ny)) continue;
               dirtSet.add(ny * GRID_COLS + nx);
             }
           }
@@ -156,7 +156,7 @@ export class ArenaGenerator {
               const nx = gx + dx;
               const ny = gy + dy;
               if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-              if (isReservedBaseCell(nx, ny)) continue;
+              if (isReservedBaseSurfaceCell(nx, ny)) continue;
               const nk = ny * GRID_COLS + nx;
               if (!dirtSet.has(nk)) frontier.push(nk);
             }
@@ -266,7 +266,7 @@ export class ArenaGenerator {
       for (let gx = margin; gx < GRID_COLS - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (isReservedBaseCell(gx, gy)) continue;
+        if (isReservedBaseObstacleCell(gx, gy)) continue;
         if (middleThirdRegion && !isGridCellInArenaRegion(middleThirdRegion, gx, gy)) continue;
         candidates.push({ gx, gy });
       }
@@ -313,7 +313,7 @@ export class ArenaGenerator {
     for (let gy = 0; gy < GRID_ROWS; gy++) {
       for (let gx = 0; gx < GRID_COLS; gx++) {
         const key = ArenaGenerator.cellKey(gx, gy);
-        if (blockedCells.has(key) || isReservedBaseCell(gx, gy)) continue;
+        if (blockedCells.has(key) || isReservedBaseSurfaceCell(gx, gy)) continue;
 
         const terrain: DecalTerrainLayer = dirtSet.has(key) ? 'dirt' : 'grass';
         const layerConfig = ARENA_DECAL_CONFIG[terrain];

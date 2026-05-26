@@ -121,6 +121,12 @@ export class CombatSystem {
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
   private decoySystem:      DecoySystem | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
+  /**
+   * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
+   * Schuss-Schaden wird hier nie appliziert (Spieler-Schaden auf Basen ist in 1.3 verboten);
+   * Basen wirken aber als physische Wände, hinter denen Spieler nicht getroffen werden.
+   */
+  private baseObstacles: readonly Phaser.GameObjects.Rectangle[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
   /** Client-seitiger Fallback: vorberechnete Zug-Bounds aus SyncedTrainState */
   private clientTrainBounds: Phaser.Geom.Rectangle | null = null;
@@ -157,6 +163,16 @@ export class CombatSystem {
   ): void {
     this.rockObjects = rockObjects;
     this.trunkObjects = trunkObjects;
+  }
+
+  /**
+   * Coop-Defense-Basen als Hitscan-/LoS-/Melee-Blocker registrieren. null
+   * deaktiviert die Blocker (Lobby-Teardown).
+   */
+  setBaseObstacles(
+    baseObstacles: readonly Phaser.GameObjects.Rectangle[] | null,
+  ): void {
+    this.baseObstacles = baseObstacles;
   }
 
   setTrainSegments(segments: readonly Phaser.GameObjects.Rectangle[] | null): void {
@@ -685,6 +701,16 @@ export class CombatSystem {
       }
     }
 
+    if (this.baseObstacles) {
+      for (const base of this.baseObstacles) {
+        if (!base.active) continue;
+        const hit = this.findNearestRectangleHit(line, base.getBounds());
+        if (hit && (bestDistance === null || hit.distance < bestDistance)) {
+          bestDistance = hit.distance;
+        }
+      }
+    }
+
     const trainBounds = this.computeTrainBounds();
     if (trainBounds) {
       const hit = this.findNearestRectangleHit(line, trainBounds);
@@ -1098,6 +1124,14 @@ export class CombatSystem {
       }
     }
 
+    if (this.baseObstacles) {
+      for (const base of this.baseObstacles) {
+        if (!base.active) continue;
+        const hit = this.findNearestRectangleHit(line, base.getBounds());
+        if (hit && hit.distance < targetDist - 2) return false;
+      }
+    }
+
     return true;
   }
 
@@ -1135,6 +1169,13 @@ export class CombatSystem {
       for (const trunk of this.trunkObjects) {
         if (!trunk.active) continue;
         const hit = this.findNearestCircleHit(this.meleeLine, trunk.x, trunk.y, trunk.radius);
+        if (hit && hit.distance < maxDist) return true;
+      }
+    }
+    if (this.baseObstacles) {
+      for (const base of this.baseObstacles) {
+        if (!base.active) continue;
+        const hit = this.findNearestRectangleHit(this.meleeLine, base.getBounds());
         if (hit && hit.distance < maxDist) return true;
       }
     }
@@ -1196,6 +1237,14 @@ export class CombatSystem {
       for (const trunk of this.trunkObjects) {
         if (!trunk.active) continue;
         const hit = this.findNearestCircleHit(line, trunk.x, trunk.y, trunk.radius);
+        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+      }
+    }
+
+    if (this.baseObstacles) {
+      for (const base of this.baseObstacles) {
+        if (!base.active) continue;
+        const hit = this.findNearestRectangleHit(line, base.getBounds());
         if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
       }
     }

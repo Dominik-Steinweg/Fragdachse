@@ -33,6 +33,12 @@ export class BurrowSystem {
 
   private rockGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
+  /**
+   * Coop-Defense-Basis-Gruppe. Burrow-Auftauchen wird hier genauso blockiert
+   * wie auf Felsen/Trunks (Spieler bleibt unterirdisch bzw. wird beim Depleted
+   * in den 'trapped'-Zustand versetzt).
+   */
+  private baseGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private stinkCloudSystem: StinkCloudSystemType | null = null;
   private onBurrowStartCb: ((playerId: string) => void) | null = null;
   private onTunnelTransitEndedCb: ((playerId: string) => void) | null = null;
@@ -50,9 +56,11 @@ export class BurrowSystem {
   setGroups(
     rock:  Phaser.Physics.Arcade.StaticGroup | null,
     trunk: Phaser.Physics.Arcade.StaticGroup | null,
+    base:  Phaser.Physics.Arcade.StaticGroup | null = null,
   ): void {
     this.rockGroup  = rock;
     this.trunkGroup = trunk;
+    this.baseGroup  = base;
   }
 
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void {
@@ -345,6 +353,17 @@ export class BurrowSystem {
         const dx    = player.sprite.x - trunk.x;
         const dy    = player.sprite.y - trunk.y;
         if (Math.sqrt(dx * dx + dy * dy) < TRUNK_RADIUS + PLAYER_SIZE / 2) {
+          return true;
+        }
+      }
+    }
+
+    // Coop-Defense-Basis-Overlap (Rechteck-Bounds, analog zu Felsen)
+    if (this.baseGroup) {
+      for (const child of this.baseGroup.getChildren()) {
+        if (!child.active) continue;
+        const base = child as Phaser.GameObjects.Rectangle;
+        if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, base.getBounds())) {
           return true;
         }
       }

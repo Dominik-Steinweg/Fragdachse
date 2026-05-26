@@ -97,6 +97,31 @@ export function getBaseWorldBounds(region: ArenaGridRegion): {
   };
 }
 
+/**
+ * Räumlicher Schutz-Radius um eine Coop-Basis (Chebyshev-Distanz in Zellen),
+ * innerhalb dessen KEINE bewegungs-blockierenden Elemente platziert werden:
+ *   - Felsen
+ *   - Bäume
+ *   - Power-Up-Podeste
+ *
+ * Dirt und Decals sind rein visuell und blockieren die Bewegung nicht; sie
+ * dürfen weiterhin im Schutz-Radius erscheinen (siehe `isReservedBaseSurfaceCell`).
+ */
+export const COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS = 5;
+
+function isCoopDefenseBaseWithinDistance(gx: number, gy: number, distance: number): boolean {
+  if (!isCoopDefenseBasesActive()) return false;
+  for (const base of getCoopDefenseBases()) {
+    if (
+      gx >= base.region.minGridX - distance
+      && gx <= base.region.maxGridX + distance
+      && gy >= base.region.minGridY - distance
+      && gy <= base.region.maxGridY + distance
+    ) return true;
+  }
+  return false;
+}
+
 /** True wenn (gx, gy) im exakten Footprint einer Coop-Basis liegt. */
 export function isCoopDefenseBaseCell(gx: number, gy: number): boolean {
   if (!isCoopDefenseBasesActive()) return false;
@@ -108,31 +133,43 @@ export function isCoopDefenseBaseCell(gx: number, gy: number): boolean {
 
 /**
  * True wenn (gx, gy) im Basis-Footprint ODER im 1-Zellen-Rand drumherum liegt.
- * Wird vom Generator genutzt, um Hindernisse rund um die Basis zu räumen, damit
- * Spieler die Basis betreten/verlassen können, ohne sich durch Felsen kämpfen
- * zu müssen.
+ * Wird vom Spawn-System genutzt (Spieler dürfen weder auf der Basis noch
+ * direkt daneben spawnen, um Kollisionsspawns zu vermeiden).
  */
 export function isCoopDefenseBaseOrBorderCell(gx: number, gy: number): boolean {
-  if (!isCoopDefenseBasesActive()) return false;
-  for (const base of getCoopDefenseBases()) {
-    if (
-      gx >= base.region.minGridX - 1
-      && gx <= base.region.maxGridX + 1
-      && gy >= base.region.minGridY - 1
-      && gy <= base.region.maxGridY + 1
-    ) return true;
-  }
+  return isCoopDefenseBaseWithinDistance(gx, gy, 1);
+}
+
+/**
+ * True wenn (gx, gy) innerhalb des Hindernis-Schutz-Radius einer Coop-Basis
+ * liegt (= Basis + 5 Zellen in alle Richtungen). Verwendet vom Generator,
+ * um Felsen / Bäume / Power-Up-Podeste in dieser Zone fernzuhalten.
+ */
+export function isCoopDefenseBaseObstacleClearanceCell(gx: number, gy: number): boolean {
+  return isCoopDefenseBaseWithinDistance(gx, gy, COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS);
+}
+
+/**
+ * Aggregator: vom Generator zu reservierende Zelle für **bewegungs-blockierende**
+ * Elemente (Felsen, Bäume, Power-Up-Podeste).
+ * - CTB: exakte Basis-Zelle (CTB-Basen sind volle Spielfeldhälften – kein Buffer nötig).
+ * - Coop: Basis + 5-Zellen-Schutz-Radius.
+ */
+export function isReservedBaseObstacleCell(gx: number, gy: number): boolean {
+  if (isCaptureTheBeerBaseCell(gx, gy)) return true;
+  if (isCoopDefenseBaseObstacleClearanceCell(gx, gy)) return true;
   return false;
 }
 
 /**
- * Aggregator-Prädikat: True für jede vom Generator zu reservierende Zelle.
- * Vereint exakte CTB-Basen und Coop-Basen-mit-Rand. Single source of truth
- * für ArenaGenerator – damit dort keine modus-spezifischen Zweige stehen.
+ * Aggregator: vom Generator zu reservierende Zelle für **rein visuelle**
+ * Oberflächen-Elemente (Dirt, Decals).
+ * - CTB: exakte Basis-Zelle.
+ * - Coop: exakte Basis-Zelle (Dirt/Decals dürfen bis an die Basis heranreichen).
  */
-export function isReservedBaseCell(gx: number, gy: number): boolean {
+export function isReservedBaseSurfaceCell(gx: number, gy: number): boolean {
   if (isCaptureTheBeerBaseCell(gx, gy)) return true;
-  if (isCoopDefenseBaseOrBorderCell(gx, gy)) return true;
+  if (isCoopDefenseBaseCell(gx, gy)) return true;
   return false;
 }
 

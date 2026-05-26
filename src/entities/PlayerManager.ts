@@ -20,10 +20,14 @@ import {
   getCaptureTheBeerTeamSpawnRegion,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
-import { getCoopDefenseBases } from '../arena/BaseRegistry';
+import { getBaseWorldBounds, getCoopDefenseBases } from '../arena/BaseRegistry';
 
 const PREFERRED_OPPONENT_DISTANCE_PX = CELL_SIZE * 10;
 const MIN_OPPONENT_DISTANCE_PX = CELL_SIZE * 2;
+/** Coop-Defense: Bonus-Reichweite, innerhalb derer ein Spawn als „nah an der Basis" gilt. */
+const COOP_BASE_NEAR_SPAWN_RANGE_PX = CELL_SIZE * 10;
+/** Stärke des Spawn-Bonus pro Pixel-Abstand-Defizit (überwiegt den Opponent-Distance-Bonus). */
+const COOP_BASE_NEAR_SPAWN_WEIGHT = 4.0;
 const EFFECT_SAFE_BUFFER_PX = Math.round(CELL_SIZE * 0.5);
 const WARNING_SAFE_BUFFER_PX = CELL_SIZE;
 const TURRET_SAFE_BUFFER_PX = CELL_SIZE;
@@ -177,12 +181,12 @@ export class PlayerManager {
 
     if (isCaptureTheBeerBaseModeActive() && requestingPlayerId) {
       const teamId = this.teamResolver?.(requestingPlayerId) ?? null;
-      const blockedForBaseSpawn = this.buildBlockedCells(requestingPlayerId, spawnContext, false);
+      const blockedForBaseSpawn = this.buildBlockedCells(requestingPlayerId);
       const baseSpawn = this.tryGetCaptureTheBeerSpawn(teamId, blockedForBaseSpawn);
       if (baseSpawn) return baseSpawn;
     }
 
-    const blocked = this.buildBlockedCells(requestingPlayerId, spawnContext, true);
+    const blocked = this.buildBlockedCells(requestingPlayerId);
     const free = this.collectFreeCells(blocked);
 
     if (free.length === 0) {
@@ -229,8 +233,6 @@ export class PlayerManager {
 
   private buildBlockedCells(
     requestingPlayerId: string | null,
-    spawnContext: SpawnContextSnapshot,
-    respectRelevantOpponentFilter: boolean,
   ): Set<string> {
     const blocked = new Set<string>();
 
@@ -261,11 +263,14 @@ export class PlayerManager {
       }
     }
 
-    // Aktuell belegte Spieler-Zellen ausschließen
+    // Aktuell belegte Spieler-Zellen ausschließen.
+    // WICHTIG: Diese Sperre ist team-unabhängig – auch Teamkameraden blockieren
+    // ihre Zelle, sonst können im Coop (alle gleiches Team) zwei Spieler
+    // dieselbe Spawn-Zelle wählen. Team-Filterung gehört nur ins Scoring
+    // (Distanz zu Gegnern in evaluateSpawnCandidate), nicht in die Hartsperre.
     for (const p of this.players.values()) {
       if (!p.sprite.active) continue;
       if (requestingPlayerId && p.id === requestingPlayerId) continue;
-      if (respectRelevantOpponentFilter && spawnContext.isRelevantOpponent && !spawnContext.isRelevantOpponent(p.id)) continue;
       const gx = Math.floor((p.sprite.x - ARENA_OFFSET_X) / CELL_SIZE);
       const gy = Math.floor((p.sprite.y - ARENA_OFFSET_Y) / CELL_SIZE);
       blocked.add(`${gx}_${gy}`);
@@ -390,6 +395,23 @@ export class PlayerManager {
     score += Math.min(nearestOpponentDistance, PREFERRED_OPPONENT_DISTANCE_PX) * 2.5;
     score += Math.min(projectileDanger.nearestDistance, PROJECTILE_SOFT_RADIUS_PX * 2) * 0.8;
     score += Math.min(edgeDistance, EDGE_SOFT_DISTANCE_PX) * 0.7;
+
+    // Coop-Defense: Bonus für Spawn-Punkte, die nah an einer verteidigten Basis liegen.
+    // Auf Modi ohne Coop-Basen ist dies ein No-Op (leere Liste).
+    const coopBases = getCoopDefenseBases();
+    if (coopBases.length > 0) {
+      let closestBaseDist = Number.POSITIVE_INFINITY;
+      for (const base of coopBases) {
+        const bounds = getBaseWorldBounds(base.region);
+        const bx = bounds.x + bounds.width / 2;
+        const by = bounds.y + bounds.height / 2;
+        const d = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, bx, by);
+        if (d < closestBaseDist) closestBaseDist = d;
+      }
+      if (closestBaseDist < COOP_BASE_NEAR_SPAWN_RANGE_PX) {
+        score += (COOP_BASE_NEAR_SPAWN_RANGE_PX - closestBaseDist) * COOP_BASE_NEAR_SPAWN_WEIGHT;
+      }
+    }
 
     if (edgeDistance < EDGE_SOFT_DISTANCE_PX) {
       score -= (EDGE_SOFT_DISTANCE_PX - edgeDistance) * 2.2;

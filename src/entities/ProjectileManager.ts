@@ -128,6 +128,12 @@ export class ProjectileManager {
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private rockObjects: (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
+  /**
+   * Coop-Defense-Basis-Gruppe. Wird vom ProjectileManager wie trunkGroup
+   * behandelt: physische Kollision/Impact, kein Schaden. Basen können erst
+   * ab Phase 1.5 (Gegner) Schaden nehmen.
+   */
+  private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
 
   // ── Zug-Kollision ─────────────────────────────────────────────────────────
@@ -152,6 +158,16 @@ export class ProjectileManager {
     this.rockGroup   = group;
     this.rockObjects = objects;
     this.trunkGroup  = trunkGroup;
+  }
+
+  /**
+   * Setzt die Coop-Defense-Basis-Gruppe.
+   * Geschosse reagieren physisch (Impact, Explosion, Bounce) wie bei Felsen,
+   * applizieren aber KEINEN Schaden (Spieler-Schaden auf Basen ist in 1.3
+   * verboten; Gegner-Schaden kommt in 1.5).
+   */
+  setBaseGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void {
+    this.baseGroup = group;
   }
 
   /**
@@ -617,6 +633,13 @@ export class ProjectileManager {
         });
         tracked.colliders.push(c);
       }
+      if (this.baseGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
+          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
+          this.queueDestroyProjectile(tracked);
+        });
+        tracked.colliders.push(c);
+      }
       if (this.trainGroup) {
         const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
@@ -648,6 +671,12 @@ export class ProjectileManager {
       }
       if (this.trunkGroup) {
         const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+          this.queueProjectileExplosion(tracked);
+        });
+        tracked.colliders.push(c);
+      }
+      if (this.baseGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
           this.queueProjectileExplosion(tracked);
         });
         tracked.colliders.push(c);
@@ -717,6 +746,12 @@ export class ProjectileManager {
         });
         tracked.colliders.push(c);
       }
+      if (this.baseGroup) {
+        const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
+          body.setVelocity(0, 0);
+        });
+        tracked.colliders.push(c);
+      }
       if (this.trainGroup) {
         const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
@@ -775,6 +810,10 @@ export class ProjectileManager {
       const c = this.scene.physics.add.collider(sprite, this.trunkGroup);
       tracked.colliders.push(c);
     }
+    if (this.baseGroup) {
+      const c = this.scene.physics.add.collider(sprite, this.baseGroup);
+      tracked.colliders.push(c);
+    }
     if (this.trainGroup) {
       // Zug: Flamme verursacht genau einmal Schaden und verschwindet sofort.
       const onTrainHit = this.onTrainHit;
@@ -803,6 +842,12 @@ export class ProjectileManager {
     }
     if (this.trunkGroup) {
       const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+        this.queueDestroyProjectile(tracked);
+      });
+      tracked.colliders.push(c);
+    }
+    if (this.baseGroup) {
+      const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
         this.queueDestroyProjectile(tracked);
       });
       tracked.colliders.push(c);
@@ -974,6 +1019,42 @@ export class ProjectileManager {
         }
       });
       tracked.colliders.push(trunkCollider);
+    }
+
+    if (this.baseGroup) {
+      const baseCollider = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
+        if (tracked.bounceProcessedThisStep) {
+          if (tracked.velocityAfterFirstBounce) {
+            body.velocity.x = tracked.velocityAfterFirstBounce.x;
+            body.velocity.y = tracked.velocityAfterFirstBounce.y;
+          }
+          return;
+        }
+        tracked.bounceProcessedThisStep = true;
+        applyBounceFriction();
+        tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
+        const impact = this.resolveObstacleImpactPoint(tracked, baseGO as Phaser.GameObjects.GameObject);
+        if (isBullet || isAwp || isGauss) {
+          playImpact(
+            body.x + body.halfWidth, body.y + body.halfHeight,
+            body.velocity.x, body.velocity.y,
+            tracked.color,
+          );
+        }
+        if (tracked.projectileStyle === 'hydra') {
+          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
+          tracked.bounceCount = tracked.maxBounces + 1;
+          body.reset(impact.x, impact.y);
+          this.queueDestroyProjectile(tracked);
+          return;
+        }
+        tracked.bounceCount++;
+        if (tracked.bounceCount > tracked.maxBounces) {
+          body.setVelocity(0, 0);
+          body.enable = false;
+        }
+      });
+      tracked.colliders.push(baseCollider);
     }
 
     if (this.trainGroup) {
