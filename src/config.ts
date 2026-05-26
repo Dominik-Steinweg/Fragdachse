@@ -388,6 +388,8 @@ export const COOP_DEFENSE_BASE_HP_BAR_FILL = 0x00cc44;
 // ---- Coop-Defense Pathfinding ----
 /** Standardkosten fuer begehbaren Boden im hostseitigen Cost Field. */
 export const COOP_DEFENSE_FLOW_FIELD_GROUND_COST = 1;
+/** Dirt bleibt begehbar, ist aber leicht unattraktiver als Gras. */
+export const COOP_DEFENSE_FLOW_FIELD_DIRT_COST = 2;
 /** Zerstoerbare Hindernisse bleiben semantisch separat, sind aber aktuell blockiert. */
 export const COOP_DEFENSE_FLOW_FIELD_ROCK_COST = 100;
 /** Unzerstoerbare, unpassierbare Hindernisse. */

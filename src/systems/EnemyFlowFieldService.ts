@@ -2,6 +2,7 @@ import type { ArenaLayout, PowerUpPedestalCell } from '../types';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import {
   COOP_DEFENSE_FLOW_FIELD_BASE_COST,
+  COOP_DEFENSE_FLOW_FIELD_DIRT_COST,
   COOP_DEFENSE_FLOW_FIELD_GROUND_COST,
   COOP_DEFENSE_FLOW_FIELD_ROCK_COST,
   COOP_DEFENSE_FLOW_FIELD_TRUNK_COST,
@@ -40,6 +41,7 @@ export interface EnemyFlowFieldVector {
 type SourceCellLookup = ReadonlySet<number>;
 
 interface EnemyFlowFieldBuildContext {
+  readonly dirtCells: SourceCellLookup;
   readonly rockCells: SourceCellLookup;
   readonly trunkCells: SourceCellLookup;
   readonly trackCells: SourceCellLookup;
@@ -63,10 +65,11 @@ const CELL_DEFINITIONS = {
   ground: { code: 0, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
   rock: { code: 1, cost: COOP_DEFENSE_FLOW_FIELD_ROCK_COST, isTraversable: false, isDestructible: true },
   trunk: { code: 2, cost: COOP_DEFENSE_FLOW_FIELD_TRUNK_COST, isTraversable: false, isDestructible: false },
-  track: { code: 3, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
-  pedestal: { code: 4, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
-  base: { code: 5, cost: COOP_DEFENSE_FLOW_FIELD_BASE_COST, isTraversable: false, isDestructible: false },
-  outOfBounds: { code: 6, cost: COOP_DEFENSE_FLOW_FIELD_TRUNK_COST, isTraversable: false, isDestructible: false },
+  dirt: { code: 3, cost: COOP_DEFENSE_FLOW_FIELD_DIRT_COST, isTraversable: true, isDestructible: false },
+  track: { code: 4, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
+  pedestal: { code: 5, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
+  base: { code: 6, cost: COOP_DEFENSE_FLOW_FIELD_BASE_COST, isTraversable: false, isDestructible: false },
+  outOfBounds: { code: 7, cost: COOP_DEFENSE_FLOW_FIELD_TRUNK_COST, isTraversable: false, isDestructible: false },
 } as const satisfies Record<string, EnemyFlowFieldCellDefinition>;
 
 const CELL_KINDS_BY_CODE = Object.entries(CELL_DEFINITIONS).reduce<Record<number, EnemyFlowFieldCellKind>>(
@@ -83,6 +86,7 @@ const CELL_RULES: readonly EnemyFlowFieldCellRule[] = [
   { kind: 'trunk', matches: (cellKey, context) => context.trunkCells.has(cellKey) },
   { kind: 'track', matches: (cellKey, context) => context.trackCells.has(cellKey) },
   { kind: 'pedestal', matches: (cellKey, context) => context.pedestalCells.has(cellKey) },
+  { kind: 'dirt', matches: (cellKey, context) => context.dirtCells.has(cellKey) },
   { kind: 'ground', matches: () => true },
 ] as const;
 
@@ -268,6 +272,7 @@ export class EnemyFlowFieldService {
     baseSpecs: readonly BaseSpec[],
   ): EnemyFlowFieldBuildContext {
     return {
+      dirtCells: this.buildLookup(layout.dirt.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
       rockCells: this.buildLookup(layout.rocks.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
       trunkCells: this.buildLookup(layout.trees.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }))),
       trackCells: this.buildTrackLookup(layout.tracks),
@@ -321,6 +326,7 @@ export class EnemyFlowFieldService {
       ground: 0,
       rock: 0,
       trunk: 0,
+      dirt: 0,
       track: 0,
       pedestal: 0,
       base: 0,
