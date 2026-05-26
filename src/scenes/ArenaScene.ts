@@ -53,6 +53,7 @@ import { getStoredEffectsVolume, getStoredMasterVolume, getStoredMusicVolume } f
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
+import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 
 import {
   type ArenaContext,
@@ -127,6 +128,7 @@ export class ArenaScene extends Phaser.Scene {
   private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelsHeld = false;
   private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -355,6 +357,18 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
+
+        // ── Debug Hotkeys ─────────────────────────────────────────────────────
+        inputSystem.setupDebugHotkeys((type) => {
+          if (type === 'flowfield_debug' && bridge.isHost() && this.ctx.enemyFlowFieldService) {
+            if (!this.flowFieldDebugOverlay) {
+              console.log('[ArenaScene] Creating EnemyFlowFieldDebugOverlay');
+              this.flowFieldDebugOverlay = new EnemyFlowFieldDebugOverlay(this, this.ctx.enemyFlowFieldService);
+            }
+            console.log('[ArenaScene] Toggling flow field overlay');
+            this.flowFieldDebugOverlay.toggle();
+          }
+        });
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
         const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;

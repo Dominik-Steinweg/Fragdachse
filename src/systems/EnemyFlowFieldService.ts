@@ -32,6 +32,11 @@ export interface EnemyFlowFieldSummary {
   readonly countsByKind: Readonly<Record<EnemyFlowFieldCellKind, number>>;
 }
 
+export interface EnemyFlowFieldVector {
+  readonly x: number;
+  readonly y: number;
+}
+
 type SourceCellLookup = ReadonlySet<number>;
 
 interface EnemyFlowFieldBuildContext {
@@ -94,6 +99,15 @@ export class EnemyFlowFieldService {
   private readonly goalMask: Uint8Array;
   private readonly goalCells: EnemyFlowFieldGoalCell[];
   private readonly summary: EnemyFlowFieldSummary;
+  private readonly integrationField: Float32Array;
+  private readonly vectorField: Float32Array; // 2 floats (x, y) per cell
+  private debugOverlayCallback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null = null;
+
+  static readonly INTEGRATION_INFINITY = 999999;
+  static readonly NEIGHBOR_DIRECTIONS = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],      // cardinal
+    [1, 1], [-1, -1], [1, -1], [-1, 1],    // diagonal
+  ] as const;
 
   constructor(
     layout: ArenaLayout,
@@ -110,6 +124,8 @@ export class EnemyFlowFieldService {
     this.traversable = new Uint8Array(totalCells);
     this.destructible = new Uint8Array(totalCells);
     this.goalMask = new Uint8Array(totalCells);
+    this.integrationField = new Float32Array(totalCells);
+    this.vectorField = new Float32Array(totalCells * 2);
 
     const buildContext = this.createBuildContext(layout, this.baseSpecs);
     const countsByKind = this.createEmptyCounts();
@@ -135,6 +151,9 @@ export class EnemyFlowFieldService {
     for (const goalCell of this.goalCells) {
       this.goalMask[this.toIndex(goalCell.gridX, goalCell.gridY)] = 1;
     }
+
+    this.computeIntegrationField();
+    this.computeVectorField();
 
     this.summary = {
       cols: this.metrics.cols,
@@ -217,6 +236,31 @@ export class EnemyFlowFieldService {
 
   rebuild(): EnemyFlowFieldService {
     return new EnemyFlowFieldService(this.layout, this.baseSpecs, this.metrics);
+  }
+
+  getIntegrationValueAt(gridX: number, gridY: number): number {
+    if (!this.isInBounds(gridX, gridY)) return EnemyFlowFieldService.INTEGRATION_INFINITY;
+    return this.integrationField[this.toIndex(gridX, gridY)];
+  }
+
+  getVectorAt(gridX: number, gridY: number): EnemyFlowFieldVector {
+    if (!this.isInBounds(gridX, gridY)) return { x: 0, y: 0 };
+    const index = this.toIndex(gridX, gridY);
+    const vIndex = index * 2;
+    return {
+      x: this.vectorField[vIndex],
+      y: this.vectorField[vIndex + 1],
+    };
+  }
+
+  registerDebugOverlayCallback(
+    callback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null,
+  ): void {
+    this.debugOverlayCallback = callback;
+    if (callback) {
+      const renderer = new EnemyFlowFieldDebugRendererImpl(this);
+      callback(renderer);
+    }
   }
 
   private createBuildContext(
@@ -330,5 +374,101 @@ export class EnemyFlowFieldService {
 
   private toIndex(gridX: number, gridY: number): number {
     return gridY * this.metrics.cols + gridX;
+  }
+
+  private computeIntegrationField(): void {
+    const totalCells = this.metrics.cols * this.metrics.rows;
+    this.integrationField.fill(EnemyFlowFieldService.INTEGRATION_INFINITY);
+
+    const queue: number[] = [];
+    for (const goalCell of this.goalCells) {
+      const index = this.toIndex(goalCell.gridX, goalCell.gridY);
+      this.integrationField[index] = 0;
+      queue.push(index);
+    }
+
+    let queueIdx = 0;
+    while (queueIdx < queue.length) {
+      const currentIndex = queue[queueIdx++];
+      const currentValue = this.integrationField[currentIndex];
+      const currentGx = currentIndex % this.metrics.cols;
+      const currentGy = Math.floor(currentIndex / this.metrics.cols);
+
+      for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
+        const neighborGx = currentGx + dx;
+        const neighborGy = currentGy + dy;
+
+        if (!this.isInBounds(neighborGx, neighborGy)) continue;
+        if (!this.isTraversableAt(neighborGx, neighborGy)) continue;
+
+        const neighborIndex = this.toIndex(neighborGx, neighborGy);
+        const neighborCost = this.costs[neighborIndex];
+        const diagonalFactor = Math.abs(dx) + Math.abs(dy) === 2 ? Math.sqrt(2) : 1;
+        const newValue = currentValue + neighborCost * diagonalFactor;
+
+        if (newValue < this.integrationField[neighborIndex]) {
+          this.integrationField[neighborIndex] = newValue;
+          queue.push(neighborIndex);
+        }
+      }
+    }
+  }
+
+  private computeVectorField(): void {
+    for (let gridY = 0; gridY < this.metrics.rows; gridY++) {
+      for (let gridX = 0; gridX < this.metrics.cols; gridX++) {
+        const index = this.toIndex(gridX, gridY);
+        const vIndex = index * 2;
+
+        if (!this.isTraversableAt(gridX, gridY)) {
+          this.vectorField[vIndex] = 0;
+          this.vectorField[vIndex + 1] = 0;
+          continue;
+        }
+
+        let bestNeighborGx = gridX;
+        let bestNeighborGy = gridY;
+        let bestValue = this.integrationField[index];
+
+        for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
+          const neighborGx = gridX + dx;
+          const neighborGy = gridY + dy;
+
+          if (!this.isInBounds(neighborGx, neighborGy)) continue;
+          if (!this.isTraversableAt(neighborGx, neighborGy)) continue;
+
+          const neighborValue = this.integrationField[this.toIndex(neighborGx, neighborGy)];
+          if (neighborValue < bestValue) {
+            bestValue = neighborValue;
+            bestNeighborGx = neighborGx;
+            bestNeighborGy = neighborGy;
+          }
+        }
+
+        const dirX = bestNeighborGx - gridX;
+        const dirY = bestNeighborGy - gridY;
+        const length = Math.sqrt(dirX * dirX + dirY * dirY);
+
+        if (length > 0) {
+          this.vectorField[vIndex] = dirX / length;
+          this.vectorField[vIndex + 1] = dirY / length;
+        } else {
+          this.vectorField[vIndex] = 0;
+          this.vectorField[vIndex + 1] = 0;
+        }
+      }
+    }
+  }
+}
+
+export interface EnemyFlowFieldDebugRenderer {
+  getService(): EnemyFlowFieldService;
+}
+
+export class EnemyFlowFieldDebugRendererImpl implements EnemyFlowFieldDebugRenderer {
+  constructor(private readonly service: EnemyFlowFieldService) {}
+
+  getService(): EnemyFlowFieldService {
+    return this.service;
   }
 }

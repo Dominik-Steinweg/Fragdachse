@@ -41,9 +41,13 @@ export class InputSystem {
   private keyShift!: Phaser.Input.Keyboard.Key;
   private keyE!:     Phaser.Input.Keyboard.Key;
   private keyQ!:     Phaser.Input.Keyboard.Key;
+  private keyB!:     Phaser.Input.Keyboard.Key;
 
   // Lokaler Dash-Cooldown (nur für HUD-Visualisierung, kein Gameplay-Impact)
   private dashCooldownUntil = 0;  // ms-Timestamp
+
+  // Debug Hotkey Callback
+  private onDebugHotkey: ((type: 'flowfield_debug') => void) | null = null;
 
   // Loadout-Callback (gesetzt von ArenaScene)
   private onLoadoutUse: ((slot: LoadoutSlot, angle: number, targetX: number, targetY: number, params?: LoadoutUseParams) => void) | null = null;
@@ -110,9 +114,18 @@ export class InputSystem {
     this.keyShift = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.keyE     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E, false);
     this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
+    this.keyB     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B, false);
 
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
+  }
+
+  /**
+   * Register callback for debug hotkeys (e.g., B for flow field debug overlay).
+   */
+  setupDebugHotkeys(cb: (type: 'flowfield_debug') => void): void {
+    this.onDebugHotkey = cb;
+    console.log('[InputSystem] Debug hotkeys registered');
   }
 
   /**
@@ -357,8 +370,26 @@ export class InputSystem {
     };
   }
 
+  /**
+   * Handle debug hotkeys (B key for flow field debug).
+   * This is called from update() each frame.
+   */
+  private updateDebugHotkeys(): void {
+    if (!this.onDebugHotkey) return;
+
+    // B key: toggle flow field debug overlay
+    if (this.keyB.isDown) {
+      console.log('[InputSystem] B key pressed - triggering flowfield_debug');
+      this.onDebugHotkey('flowfield_debug');
+      this.keyB.isDown = false; // Reset to avoid repeated triggers
+    }
+  }
+
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
   update(): void {
+    // Process debug hotkeys first (regardless of input enabled state)
+    this.updateDebugHotkeys();
+
     // ── 1. Bewegungs-Input (immer gesendet) ────────────────────────────────
     let dx = 0, dy = 0;
     if (this.inputEnabled) {
