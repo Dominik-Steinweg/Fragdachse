@@ -458,6 +458,32 @@ export class EnemyFlowFieldService {
     return gridY * this.metrics.cols + gridX;
   }
 
+  private isReachableNeighbor(
+    fromGridX: number,
+    fromGridY: number,
+    neighborGridX: number,
+    neighborGridY: number,
+  ): boolean {
+    if (!this.isInBounds(neighborGridX, neighborGridY)) return false;
+    if (!this.isTraversableAt(neighborGridX, neighborGridY)) return false;
+
+    const deltaX = neighborGridX - fromGridX;
+    const deltaY = neighborGridY - fromGridY;
+    const isDiagonalMove = Math.abs(deltaX) === 1 && Math.abs(deltaY) === 1;
+
+    if (!isDiagonalMove) {
+      return true;
+    }
+
+    const horizontalNeighborX = fromGridX + deltaX;
+    const horizontalNeighborY = fromGridY;
+    const verticalNeighborX = fromGridX;
+    const verticalNeighborY = fromGridY + deltaY;
+
+    return this.isTraversableAt(horizontalNeighborX, horizontalNeighborY)
+      && this.isTraversableAt(verticalNeighborX, verticalNeighborY);
+  }
+
   private computeIntegrationField(): void {
     const totalCells = this.metrics.cols * this.metrics.rows;
     this.integrationField.fill(EnemyFlowFieldService.INTEGRATION_INFINITY);
@@ -480,8 +506,7 @@ export class EnemyFlowFieldService {
         const neighborGx = currentGx + dx;
         const neighborGy = currentGy + dy;
 
-        if (!this.isInBounds(neighborGx, neighborGy)) continue;
-        if (!this.isTraversableAt(neighborGx, neighborGy)) continue;
+        if (!this.isReachableNeighbor(currentGx, currentGy, neighborGx, neighborGy)) continue;
 
         const neighborIndex = this.toIndex(neighborGx, neighborGy);
         const neighborCost = this.costs[neighborIndex];
@@ -516,8 +541,7 @@ export class EnemyFlowFieldService {
           const neighborGx = gridX + dx;
           const neighborGy = gridY + dy;
 
-          if (!this.isInBounds(neighborGx, neighborGy)) continue;
-          if (!this.isTraversableAt(neighborGx, neighborGy)) continue;
+          if (!this.isReachableNeighbor(gridX, gridY, neighborGx, neighborGy)) continue;
 
           const neighborValue = this.integrationField[this.toIndex(neighborGx, neighborGy)];
           if (neighborValue < bestValue) {

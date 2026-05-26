@@ -1594,7 +1594,7 @@ export const UTILITY_CONFIGS = {
     id:                  'FELSBAU',
     displayName:         'Felsbau',
     type:                'placeable_rock',
-    cooldown:            1000,
+    cooldown:            100,
     activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
     projectileSpeed:     0,
     projectileSize:      0,
