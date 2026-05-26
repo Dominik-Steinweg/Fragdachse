@@ -308,6 +308,18 @@ export class ArenaScene extends Phaser.Scene {
             ownerId: projectile.ownerId,
             radius: resolveSpawnProjectileDangerRadius(projectile),
           })),
+        // Coop-Defense: Lebende Gegner mit ihrer effektiven Angriffsreichweite
+        // veröffentlichen, damit der Spawn nicht in deren Wirkungskreis fällt.
+        enemyThreats: (this.ctx.enemyManager?.getAllEnemies() ?? [])
+          .filter((enemy) => enemy.sprite.active && combatSystem.isAlive(enemy.id))
+          .map((enemy) => ({
+            x: enemy.sprite.x,
+            y: enemy.sprite.y,
+            attackRange: enemy.getWeapon()?.config.range ?? 0,
+          })),
+        // Coop-Defense: IDs der noch verteidigten Basen → Leftmost-Spawn-Bias
+        // ignoriert zerstörte Basen automatisch.
+        livingCoopBaseIds: this.ctx.baseManager?.getActiveBaseIds(),
         isRelevantOpponent: (otherPlayerId) => playerId === null
           ? combatSystem.isAlive(otherPlayerId)
           : combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),

@@ -28,6 +28,15 @@ const MIN_OPPONENT_DISTANCE_PX = CELL_SIZE * 2;
 const COOP_BASE_NEAR_SPAWN_RANGE_PX = CELL_SIZE * 10;
 /** Stärke des Spawn-Bonus pro Pixel-Abstand-Defizit (überwiegt den Opponent-Distance-Bonus). */
 const COOP_BASE_NEAR_SPAWN_WEIGHT = 4.0;
+/**
+ * Coop-Defense: Sicherheitsabstand zur Angriffsreichweite eines Gegners.
+ * Liegt der Spawn-Kandidat näher als (Reichweite + dieser Puffer) am Gegner,
+ * wird er als "hartes" Risiko bewertet und nur als allerletzte Wahl genutzt –
+ * der Spieler weicht dann lieber etwas weiter von der Basis weg.
+ */
+const COOP_ENEMY_ATTACK_HARD_BUFFER_PX = CELL_SIZE * 2;
+/** Soft-Buffer darüber hinaus: noch unbequem nah, aber zulässig wenn nichts besseres existiert. */
+const COOP_ENEMY_ATTACK_SOFT_BUFFER_PX = CELL_SIZE * 4;
 const EFFECT_SAFE_BUFFER_PX = Math.round(CELL_SIZE * 0.5);
 const WARNING_SAFE_BUFFER_PX = CELL_SIZE;
 const TURRET_SAFE_BUFFER_PX = CELL_SIZE;
@@ -49,6 +58,13 @@ interface SpawnProjectileSnapshot {
   radius: number;
 }
 
+interface SpawnEnemyThreatSnapshot {
+  x: number;
+  y: number;
+  /** Effektive Angriffsreichweite des Gegners in Pixel (0 = harmlos). */
+  attackRange: number;
+}
+
 interface SpawnContextSnapshot {
   readonly fires: readonly SyncedFireZone[];
   readonly stinkClouds: readonly SyncedStinkCloud[];
@@ -57,6 +73,10 @@ interface SpawnContextSnapshot {
   readonly meteors: readonly SyncedMeteorStrike[];
   readonly turrets: readonly SpawnTurretSnapshot[];
   readonly projectiles: readonly SpawnProjectileSnapshot[];
+  /** Coop-Defense: aktive Feindbedrohungen mit Reichweite (leer in anderen Modi). */
+  readonly enemyThreats?: readonly SpawnEnemyThreatSnapshot[];
+  /** Coop-Defense: IDs der noch lebenden Basen (für Leftmost-Spawn-Bias). */
+  readonly livingCoopBaseIds?: ReadonlySet<string>;
   readonly isRelevantOpponent?: (playerId: string) => boolean;
   readonly hasLineOfSight?: (sx: number, sy: number, ex: number, ey: number) => boolean;
 }
@@ -77,6 +97,8 @@ interface SpawnEvaluation {
   softDangerHits: number;
   hardTurretHits: number;
   softTurretHits: number;
+  hardEnemyHits: number;
+  softEnemyHits: number;
   projectilePenalty: number;
   score: number;
 }
@@ -202,6 +224,8 @@ export class PlayerManager {
         && evaluation.softDangerHits === 0
         && evaluation.hardTurretHits === 0
         && evaluation.softTurretHits === 0
+        && evaluation.hardEnemyHits === 0
+        && evaluation.softEnemyHits === 0
         && this.meetsOpponentThreshold(evaluation, threshold)
       ));
       const strictChoice = this.pickCandidate(strictMatches);
@@ -210,6 +234,7 @@ export class PlayerManager {
       const softenedMatches = evaluations.filter((evaluation) => (
         evaluation.hardDangerHits === 0
         && evaluation.hardTurretHits === 0
+        && evaluation.hardEnemyHits === 0
         && this.meetsOpponentThreshold(evaluation, threshold)
       ));
       const softenedChoice = this.pickCandidate(softenedMatches);
@@ -219,6 +244,7 @@ export class PlayerManager {
     const safeChoice = this.pickCandidate(evaluations.filter((evaluation) => (
       evaluation.hardDangerHits === 0
       && evaluation.hardTurretHits === 0
+      && evaluation.hardEnemyHits === 0
       && this.meetsOpponentThreshold(evaluation, MIN_OPPONENT_DISTANCE_PX)
     )));
     if (safeChoice) return safeChoice;
@@ -383,6 +409,7 @@ export class PlayerManager {
 
     const turretDanger = this.countTurretDanger(candidate, requestingPlayerId, spawnContext);
     const projectileDanger = this.measureProjectileDanger(candidate, requestingPlayerId, spawnContext.projectiles);
+    const enemyDanger = this.countEnemyAttackDanger(candidate, spawnContext.enemyThreats ?? []);
 
     const edgeDistance = Math.min(
       candidate.x,
@@ -396,20 +423,28 @@ export class PlayerManager {
     score += Math.min(projectileDanger.nearestDistance, PROJECTILE_SOFT_RADIUS_PX * 2) * 0.8;
     score += Math.min(edgeDistance, EDGE_SOFT_DISTANCE_PX) * 0.7;
 
-    // Coop-Defense: Bonus für Spawn-Punkte, die nah an einer verteidigten Basis liegen.
+    // Coop-Defense: Bonus für Spawn-Punkte nah an der **am weitesten links liegenden,
+    // noch lebenden** Basis. Zerstörte Basen werden ignoriert; ist die linke Basis
+    // gefallen, springt der Bias automatisch zur nächst-linken überlebenden Basis.
     // Auf Modi ohne Coop-Basen ist dies ein No-Op (leere Liste).
     const coopBases = getCoopDefenseBases();
     if (coopBases.length > 0) {
-      let closestBaseDist = Number.POSITIVE_INFINITY;
-      for (const base of coopBases) {
-        const bounds = getBaseWorldBounds(base.region);
+      const livingIds = spawnContext.livingCoopBaseIds;
+      const livingBases = livingIds
+        ? coopBases.filter((base) => livingIds.has(base.id))
+        : coopBases; // Fallback: kein Living-Filter geliefert → alle akzeptieren.
+      if (livingBases.length > 0) {
+        let leftmost = livingBases[0];
+        for (const base of livingBases) {
+          if (base.region.minGridX < leftmost.region.minGridX) leftmost = base;
+        }
+        const bounds = getBaseWorldBounds(leftmost.region);
         const bx = bounds.x + bounds.width / 2;
         const by = bounds.y + bounds.height / 2;
-        const d = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, bx, by);
-        if (d < closestBaseDist) closestBaseDist = d;
-      }
-      if (closestBaseDist < COOP_BASE_NEAR_SPAWN_RANGE_PX) {
-        score += (COOP_BASE_NEAR_SPAWN_RANGE_PX - closestBaseDist) * COOP_BASE_NEAR_SPAWN_WEIGHT;
+        const distance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, bx, by);
+        if (distance < COOP_BASE_NEAR_SPAWN_RANGE_PX) {
+          score += (COOP_BASE_NEAR_SPAWN_RANGE_PX - distance) * COOP_BASE_NEAR_SPAWN_WEIGHT;
+        }
       }
     }
 
@@ -422,6 +457,8 @@ export class PlayerManager {
     score -= (fireDanger.hardHits + stinkDanger.hardHits + teslaDanger.hardHits + nukeDanger.hardHits + meteorDanger.hardHits) * 2600;
     score -= turretDanger.softHits * 320;
     score -= turretDanger.hardHits * 2800;
+    score -= enemyDanger.softHits * 340;
+    score -= enemyDanger.hardHits * 3000;
 
     return {
       candidate,
@@ -432,9 +469,40 @@ export class PlayerManager {
       softDangerHits: fireDanger.softHits + stinkDanger.softHits + teslaDanger.softHits + nukeDanger.softHits + meteorDanger.softHits,
       hardTurretHits: turretDanger.hardHits,
       softTurretHits: turretDanger.softHits,
+      hardEnemyHits: enemyDanger.hardHits,
+      softEnemyHits: enemyDanger.softHits,
       projectilePenalty: projectileDanger.penalty,
       score,
     };
+  }
+
+  /**
+   * Coop-Defense: zählt Treffer in Angriffsreichweite eines Gegners.
+   *  - hardHits: Kandidat liegt innerhalb (Reichweite + harter Sicherheitspuffer).
+   *  - softHits: zusätzlich noch innerhalb des weicheren Puffers.
+   * Treibt im Coop-Modus dafür, dass Spieler beim Spawn lieber etwas weiter
+   * von der Basis zurücktreten, statt direkt vor einem heranrückenden Gegner
+   * zu landen.
+   */
+  private countEnemyAttackDanger(
+    candidate: SpawnCandidate,
+    enemies: readonly SpawnEnemyThreatSnapshot[],
+  ): { hardHits: number; softHits: number } {
+    let hardHits = 0;
+    let softHits = 0;
+    for (const enemy of enemies) {
+      if (enemy.attackRange <= 0) continue;
+      const distance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, enemy.x, enemy.y);
+      const hardLimit = enemy.attackRange + COOP_ENEMY_ATTACK_HARD_BUFFER_PX;
+      if (distance <= hardLimit) {
+        hardHits += 1;
+        continue;
+      }
+      if (distance <= hardLimit + COOP_ENEMY_ATTACK_SOFT_BUFFER_PX) {
+        softHits += 1;
+      }
+    }
+    return { hardHits, softHits };
   }
 
   private countZoneDanger(
