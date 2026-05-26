@@ -14,6 +14,7 @@ import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
 import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
+import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { TimeBubbleSystem }  from '../../systems/TimeBubbleSystem';
@@ -345,6 +346,7 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+    this.ctx.combatSystem.setBaseManager(this.ctx.baseManager);
     this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
@@ -501,6 +503,16 @@ export class ArenaLifecycleCoordinator {
         const weapon    = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
         this.ctx.loadoutManager?.fireAutomatedWeapon(weapon, x, y, angle, targetX, targetY, ownerId, color);
       });
+      if (this.ctx.enemyManager && this.ctx.baseManager) {
+        this.ctx.coopDefenseEnemyAttackSystem = new CoopDefenseEnemyAttackSystem(
+          this.ctx.enemyManager,
+          this.ctx.playerManager,
+          this.ctx.baseManager,
+          this.ctx.combatSystem,
+          this.ctx.loadoutManager,
+          () => this.ctx.arenaResult?.rockObjects ?? null,
+        );
+      }
       this.ctx.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor) => {
         return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor);
       });
@@ -725,6 +737,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setArenaObstacles(null, null);
     this.ctx.combatSystem.setBaseObstacles(null);
+    this.ctx.combatSystem.setBaseManager(null);
     this.ctx.combatSystem.setEnemyManager(null);
     this.ctx.combatSystem.setTrainSegments(null);
     this.ctx.combatSystem.setRockDamageCallback(null);
@@ -737,6 +750,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setLoadoutManager(null);
     this.ctx.hostPhysics.setTimeBubbleSystem(null);
     this.ctx.hostPhysics.setEnemyManager(null);
+    this.ctx.coopDefenseEnemyAttackSystem = null;
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);

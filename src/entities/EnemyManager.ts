@@ -31,9 +31,9 @@ export class EnemyManager {
     this.enemies.set(enemy.id, enemy);
   }
 
-  hostUpdateMovement(flowFieldService: EnemyFlowFieldService | null, movementLocked: boolean): void {
+  hostUpdateMovement(flowFieldService: EnemyFlowFieldService | null, movementLocked: boolean, now: number): void {
     for (const enemy of this.enemies.values()) {
-      if (movementLocked || !flowFieldService) {
+      if (movementLocked || !flowFieldService || enemy.isAttackMovementPaused(now)) {
         enemy.stopMovement();
         continue;
       }

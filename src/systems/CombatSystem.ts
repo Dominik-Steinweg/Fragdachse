@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
@@ -125,6 +126,7 @@ export class CombatSystem {
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
   private decoySystem:      DecoySystem | null = null;
   private enemyManager:     EnemyManager | null = null;
+  private baseManager:      BaseManager | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
@@ -164,6 +166,7 @@ export class CombatSystem {
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void { this.stinkCloudSystem = sc; }
   setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
+  setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -1144,6 +1147,25 @@ export class CombatSystem {
       }
     }
 
+    if (this.enemyManager?.hasEnemy(shooterId)) {
+      const baseHit = this.applyMeleeBaseDamage(
+        x,
+        y,
+        angle,
+        range,
+        halfArcRad,
+        damage,
+        shooterId,
+        weaponName,
+        sourceSlot,
+      );
+      if (baseHit.hit && baseHit.distance < nearestHitDistance) {
+        nearestHitDistance = baseHit.distance;
+        impactX = baseHit.impactX;
+        impactY = baseHit.impactY;
+      }
+    }
+
     // Melee-Objektschaden: Felsen und Zug im Trefferbogen prüfen
     this.applyMeleeObjectDamage(x, y, angle, range, halfArcRad, damage, rockDamageMult, trainDamageMult, shooterId);
 
@@ -1194,6 +1216,60 @@ export class CombatSystem {
         break; // Nur einmal pro Swing den Zug treffen
       }
     }
+  }
+
+  private applyMeleeBaseDamage(
+    x: number,
+    y: number,
+    angle: number,
+    range: number,
+    halfArcRad: number,
+    damage: number,
+    shooterId: string,
+    weaponName: string,
+    sourceSlot?: WeaponSlot,
+  ): { hit: boolean; distance: number; impactX?: number; impactY?: number } {
+    let hit = false;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    let impactX: number | undefined;
+    let impactY: number | undefined;
+
+    for (const base of this.baseManager?.getBases() ?? []) {
+      if (base.getHp() <= 0) continue;
+
+      const bounds = base.getPhysicsBody().getBounds();
+      const targetX = Phaser.Math.Clamp(x, bounds.left, bounds.right);
+      const targetY = Phaser.Math.Clamp(y, bounds.top, bounds.bottom);
+      const dx = targetX - x;
+      const dy = targetY - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > range) continue;
+
+      let angleDiff = Math.atan2(dy, dx) - angle;
+      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+      if (Math.abs(angleDiff) > halfArcRad) continue;
+
+      this.meleeLine.setTo(x, y, targetX, targetY);
+      if (this.isMeleePathBlocked(Math.max(0, dist - 0.5))) continue;
+
+      const loadoutMult = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = damage * loadoutMult * powerUpMult;
+      this.baseManager?.applyDamage(base.id, actualDamage);
+      hit = true;
+
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        impactX = targetX;
+        impactY = targetY;
+      }
+    }
+
+    return { hit, distance: nearestDistance, impactX, impactY };
   }
 
   traceHitscan(options: HitscanTraceOptions): HitscanTraceResult {

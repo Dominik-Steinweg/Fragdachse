@@ -1,15 +1,19 @@
 import * as Phaser from 'phaser';
+import { GenericWeapon } from '../loadout/GenericWeapon';
+import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import type { BaseWeapon } from '../loadout/BaseWeapon';
 import {
   COLORS,
-  COOP_DEFENSE_ENEMY_CONFIGS,
-  COOP_DEFENSE_ENEMY_SIZE,
-  type CoopDefenseEnemyConfig,
-  type CoopDefenseEnemyKind,
   DEPTH,
   HP_BAR_HEIGHT,
   HP_BAR_OFFSET_Y,
   HP_BAR_WIDTH,
 } from '../config';
+import {
+  COOP_DEFENSE_ENEMY_CONFIGS,
+  type CoopDefenseEnemyConfig,
+  type CoopDefenseEnemyKind,
+} from './EnemyCatalog';
 import type { SyncedEnemyState } from '../types';
 
 export class EnemyEntity {
@@ -19,6 +23,7 @@ export class EnemyEntity {
 
   private readonly authoritative: boolean;
   private readonly config: CoopDefenseEnemyConfig;
+  private readonly weapon: BaseWeapon | null;
   private readonly hpBarBg: Phaser.GameObjects.Rectangle;
   private readonly hpBarFg: Phaser.GameObjects.Rectangle;
   private currentHp = 0;
@@ -26,6 +31,8 @@ export class EnemyEntity {
   private targetY: number;
   private desiredVelocityX = 0;
   private desiredVelocityY = 0;
+  private attackPauseUntil = 0;
+  private nextAttackScanAt = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -39,6 +46,7 @@ export class EnemyEntity {
     this.kind = kind;
     this.authoritative = authoritative;
     this.config = COOP_DEFENSE_ENEMY_CONFIGS[kind];
+    this.weapon = authoritative ? this.createWeapon() : null;
     this.currentHp = this.config.maxHp;
     this.targetX = x;
     this.targetY = y;
@@ -129,6 +137,49 @@ export class EnemyEntity {
     return this.config.moveSpeed;
   }
 
+  getWeapon(): BaseWeapon | null {
+    return this.weapon;
+  }
+
+  isWeaponReady(now: number): boolean {
+    return this.weapon !== null && !this.weapon.isOnCooldown(now);
+  }
+
+  recordWeaponUse(now: number): void {
+    if (!this.weapon) return;
+    this.weapon.recordUse(now);
+    this.weapon.addSpread();
+  }
+
+  decayWeaponSpread(delta: number, now: number): void {
+    this.weapon?.decaySpread(delta, now);
+  }
+
+  getAttackScanIntervalMs(): number {
+    return this.config.attackScanIntervalMs;
+  }
+
+  canScanForAttack(now: number): boolean {
+    return this.authoritative && now >= this.nextAttackScanAt;
+  }
+
+  scheduleNextAttackScan(now: number): void {
+    this.nextAttackScanAt = now + this.config.attackScanIntervalMs;
+  }
+
+  pauseAttackMovement(now: number): void {
+    this.attackPauseUntil = Math.max(this.attackPauseUntil, now + this.config.attackStopDurationMs);
+    this.stopMovement();
+  }
+
+  isAttackMovementPaused(now: number): boolean {
+    return this.authoritative && now < this.attackPauseUntil;
+  }
+
+  faceAngle(angle: number): void {
+    this.sprite.setRotation(angle);
+  }
+
   syncBar(): void {
     const x = this.sprite.x;
     const y = this.sprite.y + HP_BAR_OFFSET_Y;
@@ -150,5 +201,14 @@ export class EnemyEntity {
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();
     this.sprite.destroy();
+  }
+
+  private createWeapon(): BaseWeapon {
+    const weaponConfig = WEAPON_CONFIGS[this.config.weaponId as keyof typeof WEAPON_CONFIGS];
+    if (!weaponConfig) {
+      throw new Error(`Missing weapon config for coop-defense enemy weapon: ${this.config.weaponId}`);
+    }
+
+    return new GenericWeapon(weaponConfig);
   }
 }

@@ -28,6 +28,7 @@ import type { EnergyShieldSystem }  from '../../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }    from '../../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
 import type { TurretSystem }        from '../../systems/TurretSystem';
+import type { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
@@ -97,6 +98,7 @@ export interface ArenaContext {
   timeBubbleSystem:  TimeBubbleSystem  | null;
   teslaDomeSystem:   TeslaDomeSystem   | null;
   turretSystem:      TurretSystem      | null;
+  coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
   coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;
