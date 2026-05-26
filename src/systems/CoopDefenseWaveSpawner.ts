@@ -4,6 +4,7 @@ import type { EnemyManager } from '../entities/EnemyManager';
 import {
   COOP_DEFENSE_ENEMY_CONFIGS,
   type CoopDefenseEnemyKind,
+  type ResolvedCoopDefenseEnemyConfigs,
 } from '../entities/EnemyCatalog';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 
@@ -23,13 +24,14 @@ export class CoopDefenseWaveSpawner {
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly flowFieldService: EnemyFlowFieldService,
+    private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs,
   ) {}
 
   hostUpdate(deltaMs: number, countdownActive: boolean): void {
     if (countdownActive) return;
 
     for (const kind of ENEMY_KINDS) {
-      const { intervalMs, countPerWave } = COOP_DEFENSE_ENEMY_CONFIGS[kind].spawnConfig;
+      const { intervalMs, countPerWave } = this.resolvedConfigs[kind].spawnConfig;
       let acc = (this.accumulators.get(kind) ?? 0) + deltaMs;
       while (acc >= intervalMs) {
         acc -= intervalMs;

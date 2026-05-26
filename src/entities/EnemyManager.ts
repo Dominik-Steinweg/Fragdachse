@@ -3,21 +3,27 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import type { SyncedEnemyState } from '../types';
 import { EnemyEntity } from './EnemyEntity';
-import type { CoopDefenseEnemyKind } from './EnemyCatalog';
+import {
+  resolveCoopDefenseEnemyConfigs,
+  type CoopDefenseEnemyKind,
+  type ResolvedCoopDefenseEnemyConfigs,
+} from './EnemyCatalog';
 
 export class EnemyManager {
   private readonly scene: Phaser.Scene;
+  private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs;
   private readonly enemies = new Map<string, EnemyEntity>();
   private nextEnemyIdSeq = 1;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
+    this.resolvedConfigs = resolvedConfigs;
   }
 
   hostSpawnDummyAt(gridX: number, gridY: number, kind: CoopDefenseEnemyKind = 'zombie-badger'): EnemyEntity {
     const { x, y } = this.gridToWorld(gridX, gridY);
     const id = this.generateEnemyId(kind);
-    const enemy = new EnemyEntity(this.scene, id, x, y, true, kind);
+    const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind]);
     this.enemies.set(id, enemy);
     return enemy;
   }
@@ -103,11 +109,11 @@ export class EnemyManager {
     for (const remote of snapshot) {
       let enemy = this.enemies.get(remote.id);
       if (!enemy) {
-        enemy = new EnemyEntity(this.scene, remote.id, remote.x, remote.y, false, remote.kind);
+        enemy = new EnemyEntity(this.scene, remote.id, remote.x, remote.y, false, remote.kind, this.resolvedConfigs[remote.kind]);
         enemy.faceAngle(remote.rot);
         this.enemies.set(remote.id, enemy);
       }
-      enemy.setHp(remote.hp);
+      enemy.setHp(remote.hp, remote.maxHp);
       enemy.setTargetPosition(remote.x, remote.y);
       enemy.setTargetRotation(remote.rot);
     }

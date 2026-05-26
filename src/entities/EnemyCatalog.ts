@@ -7,6 +7,13 @@ export interface CoopDefenseEnemySpawnConfig {
   readonly countPerWave: number;
 }
 
+export interface CoopDefenseEnemyPlayerScaling {
+  readonly maxHpFactorPerAdditionalPlayer?: number;
+  readonly moveSpeedFactorPerAdditionalPlayer?: number;
+  readonly intervalMsFactorPerAdditionalPlayer?: number;
+  readonly countPerWaveFactorPerAdditionalPlayer?: number;
+}
+
 export interface CoopDefenseEnemyConfig {
   readonly maxHp: number;
   readonly size: number;
@@ -17,11 +24,16 @@ export interface CoopDefenseEnemyConfig {
   readonly imageKey: string;
   readonly color?: number;
   readonly spawnConfig: CoopDefenseEnemySpawnConfig;
+  readonly playerScaling?: CoopDefenseEnemyPlayerScaling;
 }
+
+export type ResolvedCoopDefenseEnemyConfig = Omit<CoopDefenseEnemyConfig, 'playerScaling'>;
+
+export type ResolvedCoopDefenseEnemyConfigs = Record<CoopDefenseEnemyKind, ResolvedCoopDefenseEnemyConfig>;
 
 export const COOP_DEFENSE_ENEMY_CONFIGS = {
   'zombie-badger': {
-    maxHp: 40,
+    maxHp: 20,
     size: 28,
     moveSpeed: 92,
     weaponId: 'BITE',
@@ -33,11 +45,17 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
       intervalMs: 2000,
       countPerWave: 1,
     },
+    playerScaling: {
+      maxHpFactorPerAdditionalPlayer: 0.5,
+      moveSpeedFactorPerAdditionalPlayer: 0,
+      intervalMsFactorPerAdditionalPlayer: 0,
+      countPerWaveFactorPerAdditionalPlayer: 0,
+    },
   },
   'rabid-badger': {
-    maxHp: 20,
+    maxHp: 10,
     size: 22,
-    moveSpeed: 170,
+    moveSpeed: 180,
     weaponId: 'BITE',
     attackScanIntervalMs: 200,
     attackStopDurationMs: 100,
@@ -47,5 +65,77 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
       intervalMs: 20000,
       countPerWave: 3,
     },
+    playerScaling: {
+      maxHpFactorPerAdditionalPlayer: 0,
+      moveSpeedFactorPerAdditionalPlayer: 0,
+      intervalMsFactorPerAdditionalPlayer: -1,
+      countPerWaveFactorPerAdditionalPlayer: 1 / 3,
+    },
   },
 } as const satisfies Record<CoopDefenseEnemyKind, CoopDefenseEnemyConfig>;
+
+export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): ResolvedCoopDefenseEnemyConfigs {
+  const normalizedHumanPlayerCount = Math.max(1, Math.floor(humanPlayerCount));
+
+  return Object.fromEntries(
+    (Object.entries(COOP_DEFENSE_ENEMY_CONFIGS) as [CoopDefenseEnemyKind, CoopDefenseEnemyConfig][]).map(([kind, config]) => [
+      kind,
+      {
+        maxHp: resolvePositiveInteger(
+          config.maxHp,
+          config.playerScaling?.maxHpFactorPerAdditionalPlayer,
+          normalizedHumanPlayerCount,
+        ),
+        size: config.size,
+        moveSpeed: resolvePositiveNumber(
+          config.moveSpeed,
+          config.playerScaling?.moveSpeedFactorPerAdditionalPlayer,
+          normalizedHumanPlayerCount,
+        ),
+        weaponId: config.weaponId,
+        attackScanIntervalMs: config.attackScanIntervalMs,
+        attackStopDurationMs: config.attackStopDurationMs,
+        imageKey: config.imageKey,
+        color: config.color,
+        spawnConfig: {
+          intervalMs: resolvePositiveNumber(
+            config.spawnConfig.intervalMs,
+            config.playerScaling?.intervalMsFactorPerAdditionalPlayer,
+            normalizedHumanPlayerCount,
+          ),
+          countPerWave: resolveNonNegativeInteger(
+            config.spawnConfig.countPerWave,
+            config.playerScaling?.countPerWaveFactorPerAdditionalPlayer,
+            normalizedHumanPlayerCount,
+          ),
+        },
+      },
+    ]),
+  ) as ResolvedCoopDefenseEnemyConfigs;
+}
+
+function resolvePositiveInteger(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
+  return Math.max(1, Math.round(scaleByHumanPlayers(baseValue, factor, humanPlayerCount)));
+}
+
+function resolveNonNegativeInteger(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
+  return Math.max(0, Math.round(scaleByHumanPlayers(baseValue, factor, humanPlayerCount)));
+}
+
+function resolvePositiveNumber(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
+  return Math.max(1, scaleByHumanPlayers(baseValue, factor, humanPlayerCount));
+}
+
+function scaleByHumanPlayers(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
+  const extraPlayers = Math.max(0, humanPlayerCount - 1);
+  const normalizedFactor = factor ?? 0;
+  if (extraPlayers === 0 || normalizedFactor === 0) {
+    return baseValue;
+  }
+
+  if (normalizedFactor > 0) {
+    return baseValue * (1 + normalizedFactor * extraPlayers);
+  }
+
+  return baseValue / (1 + Math.abs(normalizedFactor) * extraPlayers);
+}

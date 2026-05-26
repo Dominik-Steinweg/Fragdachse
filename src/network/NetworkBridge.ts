@@ -92,6 +92,7 @@ export type RoundOutcome = 'victory' | 'defeat';
 export interface RoundState {
   status: 'active' | RoundOutcome;
   roundStartTime: number;
+  coopDefenseHumanPlayerCount?: number;
   endedAt?: number;
 }
 

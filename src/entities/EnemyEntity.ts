@@ -10,9 +10,8 @@ import {
   HP_BAR_WIDTH,
 } from '../config';
 import {
-  COOP_DEFENSE_ENEMY_CONFIGS,
-  type CoopDefenseEnemyConfig,
   type CoopDefenseEnemyKind,
+  type ResolvedCoopDefenseEnemyConfig,
 } from './EnemyCatalog';
 import type { SyncedEnemyState } from '../types';
 
@@ -25,10 +24,11 @@ export class EnemyEntity {
   readonly kind: CoopDefenseEnemyKind;
 
   private readonly authoritative: boolean;
-  private readonly config: CoopDefenseEnemyConfig;
+  private readonly config: ResolvedCoopDefenseEnemyConfig;
   private readonly weapon: BaseWeapon | null;
   private readonly hpBarBg: Phaser.GameObjects.Rectangle;
   private readonly hpBarFg: Phaser.GameObjects.Rectangle;
+  private maxHp = 1;
   private currentHp = 0;
   private targetX: number;
   private targetY: number;
@@ -45,14 +45,16 @@ export class EnemyEntity {
     x: number,
     y: number,
     authoritative: boolean,
-    kind: CoopDefenseEnemyKind = 'zombie-badger',
+    kind: CoopDefenseEnemyKind,
+    config: ResolvedCoopDefenseEnemyConfig,
   ) {
     this.id = id;
     this.kind = kind;
     this.authoritative = authoritative;
-    this.config = COOP_DEFENSE_ENEMY_CONFIGS[kind];
+    this.config = config;
     this.weapon = authoritative ? this.createWeapon() : null;
-    this.currentHp = this.config.maxHp;
+    this.maxHp = this.config.maxHp;
+    this.currentHp = this.maxHp;
     this.targetX = x;
     this.targetY = y;
 
@@ -134,10 +136,10 @@ export class EnemyEntity {
     this.targetAimAngle = aimAngle;
   }
 
-  setHp(hp: number): void {
-    const maxHp = this.getMaxHp();
-    this.currentHp = Phaser.Math.Clamp(hp, 0, maxHp);
-    const ratio = maxHp > 0 ? this.currentHp / maxHp : 0;
+  setHp(hp: number, maxHp: number = this.maxHp): void {
+    this.maxHp = Math.max(1, maxHp);
+    this.currentHp = Phaser.Math.Clamp(hp, 0, this.maxHp);
+    const ratio = this.maxHp > 0 ? this.currentHp / this.maxHp : 0;
     this.hpBarFg.width = HP_BAR_WIDTH * ratio;
     const color = ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4;
     this.hpBarFg.setFillStyle(color);
@@ -148,7 +150,7 @@ export class EnemyEntity {
   }
 
   getMaxHp(): number {
-    return this.config.maxHp;
+    return this.maxHp;
   }
 
   getMoveSpeed(): number {
