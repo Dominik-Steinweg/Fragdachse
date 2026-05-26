@@ -1,34 +1,25 @@
 import * as Phaser from 'phaser';
-import { getCoopDefenseBases } from '../arena/BaseRegistry';
-import {
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
-  CELL_SIZE,
-  COOP_DEFENSE_ENEMY_TEST_SPAWN_GRID_X,
-  GRID_COLS,
-  GRID_ROWS,
-  isGridCellInArenaRegion,
-} from '../config';
+import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
-import type { ArenaLayout, SyncedEnemyState } from '../types';
+import type { SyncedEnemyState } from '../types';
 import { EnemyEntity } from './EnemyEntity';
-
-const DUMMY_ENEMY_ID = 'coop-defense-dummy-1';
+import type { CoopDefenseEnemyKind } from './EnemyCatalog';
 
 export class EnemyManager {
   private readonly scene: Phaser.Scene;
   private readonly enemies = new Map<string, EnemyEntity>();
+  private nextEnemyIdSeq = 1;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
 
-  hostSpawnInitialDummy(layout: ArenaLayout): void {
-    if (this.enemies.size > 0) return;
-
-    const spawn = this.resolveInitialSpawn(layout);
-    const enemy = new EnemyEntity(this.scene, DUMMY_ENEMY_ID, spawn.x, spawn.y, true, 'dummy');
-    this.enemies.set(enemy.id, enemy);
+  hostSpawnDummyAt(gridX: number, gridY: number, kind: CoopDefenseEnemyKind = 'dummy'): EnemyEntity {
+    const { x, y } = this.gridToWorld(gridX, gridY);
+    const id = this.generateEnemyId(kind);
+    const enemy = new EnemyEntity(this.scene, id, x, y, true, kind);
+    this.enemies.set(id, enemy);
+    return enemy;
   }
 
   hostUpdateMovement(flowFieldService: EnemyFlowFieldService | null, movementLocked: boolean, now: number): void {
@@ -131,62 +122,11 @@ export class EnemyManager {
       enemy.destroy();
     }
     this.enemies.clear();
+    this.nextEnemyIdSeq = 1;
   }
 
-  private resolveInitialSpawn(layout: ArenaLayout): { x: number; y: number } {
-    const blocked = this.buildBlockedCells(layout);
-    const preferredGridX = Math.max(1, Math.min(COOP_DEFENSE_ENEMY_TEST_SPAWN_GRID_X, GRID_COLS - 2));
-    const maxGridX = Math.max(preferredGridX, Math.min(GRID_COLS - 1, preferredGridX + Math.max(4, Math.floor(GRID_COLS * 0.1))));
-
-    for (let gridX = preferredGridX; gridX <= maxGridX; gridX++) {
-      for (const gridY of this.buildRowSearchOrder()) {
-        if (blocked.has(this.key(gridX, gridY))) continue;
-        return this.gridToWorld(gridX, gridY);
-      }
-    }
-
-    return this.gridToWorld(preferredGridX, Math.floor(GRID_ROWS * 0.5));
-  }
-
-  private buildBlockedCells(layout: ArenaLayout): Set<string> {
-    const blocked = new Set<string>();
-
-    for (const rock of layout.rocks) {
-      blocked.add(this.key(rock.gridX, rock.gridY));
-    }
-    for (const tree of layout.trees) {
-      blocked.add(this.key(tree.gridX, tree.gridY));
-    }
-    for (const track of layout.tracks) {
-      blocked.add(this.key(track.gridX, track.gridY));
-      blocked.add(this.key(track.gridX + 1, track.gridY));
-    }
-    for (const pedestal of layout.powerUpPedestals) {
-      blocked.add(this.key(pedestal.gridX, pedestal.gridY));
-    }
-    for (const base of getCoopDefenseBases()) {
-      for (let gridX = base.region.minGridX; gridX <= base.region.maxGridX; gridX++) {
-        for (let gridY = base.region.minGridY; gridY <= base.region.maxGridY; gridY++) {
-          if (!isGridCellInArenaRegion(base.region, gridX, gridY)) continue;
-          blocked.add(this.key(gridX, gridY));
-        }
-      }
-    }
-
-    return blocked;
-  }
-
-  private buildRowSearchOrder(): number[] {
-    const rows: number[] = [];
-    const center = Math.floor(GRID_ROWS * 0.5);
-    rows.push(center);
-    for (let offset = 1; offset < GRID_ROWS; offset++) {
-      const up = center - offset;
-      const down = center + offset;
-      if (up >= 0) rows.push(up);
-      if (down < GRID_ROWS) rows.push(down);
-    }
-    return rows;
+  private generateEnemyId(kind: CoopDefenseEnemyKind): string {
+    return `coop-${kind}-${this.nextEnemyIdSeq++}`;
   }
 
   private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
@@ -194,9 +134,5 @@ export class EnemyManager {
       x: ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE * 0.5,
       y: ARENA_OFFSET_Y + gridY * CELL_SIZE + CELL_SIZE * 0.5,
     };
-  }
-
-  private key(gridX: number, gridY: number): string {
-    return `${gridX}:${gridY}`;
   }
 }

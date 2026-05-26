@@ -74,6 +74,7 @@ export class HostUpdateCoordinator {
     const countdownActive = bridge.isArenaCountdownActive();
     const now = Date.now();
 
+    this.ctx.coopDefenseWaveSpawner?.hostUpdate(delta, countdownActive);
     this.ctx.enemyFlowFieldService?.update(now);
     this.ctx.enemyManager?.hostUpdateMovement(this.ctx.enemyFlowFieldService, countdownActive, now);
     if (!countdownActive) {

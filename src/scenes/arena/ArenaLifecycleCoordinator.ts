@@ -16,6 +16,7 @@ import { TunnelSystem } from '../../systems/TunnelSystem';
 import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
+import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { TimeBubbleSystem }  from '../../systems/TimeBubbleSystem';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
@@ -321,7 +322,12 @@ export class ArenaLifecycleCoordinator {
           },
         })
         : null;
-      this.ctx.enemyManager?.hostSpawnInitialDummy(layout);
+      if (this.ctx.enemyManager && this.ctx.enemyFlowFieldService) {
+        this.ctx.coopDefenseWaveSpawner = new CoopDefenseWaveSpawner(
+          this.ctx.enemyManager,
+          this.ctx.enemyFlowFieldService,
+        );
+      }
     }
     this.renderers.leafBlower.setTerrainColorSampler(
       createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult),
@@ -751,6 +757,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setTimeBubbleSystem(null);
     this.ctx.hostPhysics.setEnemyManager(null);
     this.ctx.coopDefenseEnemyAttackSystem = null;
+    this.ctx.coopDefenseWaveSpawner = null;
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);

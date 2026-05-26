@@ -30,6 +30,7 @@ import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
 import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
+import type { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import type { BaseManager }          from '../../entities/BaseManager';
@@ -100,6 +101,7 @@ export interface ArenaContext {
   turretSystem:      TurretSystem      | null;
   coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
   coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
+  coopDefenseWaveSpawner: CoopDefenseWaveSpawner | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;
   trainManager:      TrainManager      | null;

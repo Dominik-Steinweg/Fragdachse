@@ -372,8 +372,6 @@ export const COOP_DEFENSE_BASE_HEIGHT_CELLS = 4;
 export let COOP_DEFENSE_BASES_ACTIVE = false;
 /** Initial-HP einer Coop-Basis (Phase 1.3). */
 export const COOP_DEFENSE_BASE_HP_MAX = 1000;
-/** Bevorzugte Test-Spawn-Spalte fuer den ersten Dummy-Gegner. */
-export const COOP_DEFENSE_ENEMY_TEST_SPAWN_GRID_X = 2;
 /** HP-Bar Höhe für Coop-Basen (~2× Spieler-HP-Bar). */
 export const COOP_DEFENSE_BASE_HP_BAR_HEIGHT = 10;
 /** Vertikaler Abstand der HP-Bar zur Unterkante der Basis (px). */
