@@ -13,6 +13,7 @@ import { TurretSystem }      from '../../systems/TurretSystem';
 import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
+import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { TimeBubbleSystem }  from '../../systems/TimeBubbleSystem';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
@@ -27,8 +28,9 @@ import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } fr
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
+import { getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, applyArenaMetricsForMode } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../../config';
 import { PLAYER_SPEED } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
@@ -269,6 +271,15 @@ export class ArenaLifecycleCoordinator {
       ? new EnemyManager(this.scene)
       : null;
     if (bridge.isHost()) {
+      this.ctx.enemyFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
+        ? new EnemyFlowFieldService(layout, getCoopDefenseBases(), {
+          cols: GRID_COLS,
+          rows: GRID_ROWS,
+          cellSize: CELL_SIZE,
+          arenaOffsetX: ARENA_OFFSET_X,
+          arenaOffsetY: ARENA_OFFSET_Y,
+        })
+        : null;
       this.ctx.enemyManager?.hostSpawnInitialDummy(layout);
     }
     this.renderers.leafBlower.setTerrainColorSampler(
@@ -701,6 +712,7 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.trainManager?.destroy();
     this.ctx.trainManager = null;
+    this.ctx.enemyFlowFieldService = null;
     this.renderers.train?.destroy();
     this.renderers.train = null;
     this.renderers.beer.clear();

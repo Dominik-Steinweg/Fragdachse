@@ -270,6 +270,7 @@ export class ArenaScene extends Phaser.Scene {
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
       teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      enemyFlowFieldService: null,
     };
 
     playerManager.setSpawnContextProvider((playerId) => {

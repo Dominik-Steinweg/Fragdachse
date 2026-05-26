@@ -385,6 +385,16 @@ export const COOP_DEFENSE_BASE_HP_BAR_GAP = 12;
 /** Füll-Farbe der Coop-Basis HP-Bar (gleiches Grün wie Verbündete). */
 export const COOP_DEFENSE_BASE_HP_BAR_FILL = 0x00cc44;
 
+// ---- Coop-Defense Pathfinding ----
+/** Standardkosten fuer begehbaren Boden im hostseitigen Cost Field. */
+export const COOP_DEFENSE_FLOW_FIELD_GROUND_COST = 1;
+/** Zerstoerbare Hindernisse bleiben semantisch separat, sind aber aktuell blockiert. */
+export const COOP_DEFENSE_FLOW_FIELD_ROCK_COST = 100;
+/** Unzerstoerbare, unpassierbare Hindernisse. */
+export const COOP_DEFENSE_FLOW_FIELD_TRUNK_COST = 999999;
+/** Basis-Footprints bleiben blockiert, nutzen aber dieselbe Kostenklasse wie Rocks. */
+export const COOP_DEFENSE_FLOW_FIELD_BASE_COST = COOP_DEFENSE_FLOW_FIELD_ROCK_COST;
+
 export interface ArenaGridRegion {
   minGridX: number;
   maxGridX: number;

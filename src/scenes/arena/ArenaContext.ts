@@ -36,6 +36,7 @@ import type { TunnelSystem } from '../../systems/TunnelSystem';
 import type { TrainManager }        from '../../train/TrainManager';
 import type { DecoySystem }         from '../../systems/DecoySystem';
 import type { TimeBubbleSystem }    from '../../systems/TimeBubbleSystem';
+import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { ArenaLayout }         from '../../types';
 
 interface PlayerStatusRingLike {
@@ -98,4 +99,5 @@ export interface ArenaContext {
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;
   trainManager:      TrainManager      | null;
+  enemyFlowFieldService: EnemyFlowFieldService | null;
 }
