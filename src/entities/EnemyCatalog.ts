@@ -1,6 +1,6 @@
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 
-export type CoopDefenseEnemyKind = 'zombie-badger' | 'rabid-badger';
+export type CoopDefenseEnemyKind = 'zombie-badger' | 'demon-badger' | 'rabid-badger';
 
 export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
 
@@ -38,7 +38,7 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
   'zombie-badger': {
     maxHp: 20,
     size: 28,
-    moveSpeed: 92,
+    moveSpeed: 70,
     movementTarget: 'bases',
     weaponId: 'BITE',
     attackScanIntervalMs: 200,
@@ -52,10 +52,31 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
     playerScaling: {
       maxHpFactorPerAdditionalPlayer: 0.5,
       moveSpeedFactorPerAdditionalPlayer: 0,
-      intervalMsFactorPerAdditionalPlayer: 0,
+      intervalMsFactorPerAdditionalPlayer: -0.5,
       countPerWaveFactorPerAdditionalPlayer: 0,
     },
   },
+  'demon-badger': {
+    maxHp: 15,
+    size: 24,
+    moveSpeed: 140,
+    movementTarget: 'bases',
+    weaponId: 'BITE',
+    attackScanIntervalMs: 200,
+    attackStopDurationMs: 200,
+    imageKey: 'badger',
+    color: 0xffaa44,
+    spawnConfig: {
+      intervalMs: 10000,
+      countPerWave: 2,
+    },
+    playerScaling: {
+      maxHpFactorPerAdditionalPlayer: 0.5,
+      moveSpeedFactorPerAdditionalPlayer: 0,
+      intervalMsFactorPerAdditionalPlayer: 0,
+      countPerWaveFactorPerAdditionalPlayer: 0.5,
+    },
+  },  
   'rabid-badger': {
     maxHp: 10,
     size: 22,
