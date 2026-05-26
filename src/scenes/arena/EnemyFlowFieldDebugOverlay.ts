@@ -11,23 +11,32 @@ import { DEPTH } from '../../config';
  */
 export class EnemyFlowFieldDebugOverlay {
   private graphics: Phaser.GameObjects.Graphics | null = null;
+  private flowFieldService: EnemyFlowFieldService | null = null;
   private isVisible = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly flowFieldService: EnemyFlowFieldService,
+    flowFieldService: EnemyFlowFieldService,
   ) {
+    this.setFlowFieldService(flowFieldService);
+  }
+
+  showForService(flowFieldService: EnemyFlowFieldService): void {
+    this.setFlowFieldService(flowFieldService);
+    this.show();
+  }
+
+  private setFlowFieldService(flowFieldService: EnemyFlowFieldService): void {
+    if (this.flowFieldService === flowFieldService) {
+      this.refresh();
+      return;
+    }
+
+    this.flowFieldService?.registerDebugOverlayCallback(null);
+    this.flowFieldService = flowFieldService;
     this.flowFieldService.registerDebugOverlayCallback(() => {
       this.refresh();
     });
-  }
-
-  toggle(): void {
-    if (this.isVisible) {
-      this.hide();
-    } else {
-      this.show();
-    }
   }
 
   private show(): void {
@@ -48,26 +57,27 @@ export class EnemyFlowFieldDebugOverlay {
   }
 
   private redraw(): void {
-    if (!this.graphics) return;
+    if (!this.graphics || !this.flowFieldService) return;
     this.graphics.clear();
 
-    const cellSize = this.flowFieldService.getCellSize();
-    const cols = this.flowFieldService.getCols();
-    const rows = this.flowFieldService.getRows();
+    const flowFieldService = this.flowFieldService;
+    const cellSize = flowFieldService.getCellSize();
+    const cols = flowFieldService.getCols();
+    const rows = flowFieldService.getRows();
     const arrowScale = cellSize * 0.3;
     const arrowHeadLength = 4;
 
     for (let gridY = 0; gridY < rows; gridY++) {
       for (let gridX = 0; gridX < cols; gridX++) {
-        const vector = this.flowFieldService.getVectorAt(gridX, gridY);
-        const integrationValue = this.flowFieldService.getIntegrationValueAt(gridX, gridY);
+        const vector = flowFieldService.getVectorAt(gridX, gridY);
+        const integrationValue = flowFieldService.getIntegrationValueAt(gridX, gridY);
 
         // Skip non-traversable cells
-        if (!this.flowFieldService.isTraversableAt(gridX, gridY)) {
+        if (!flowFieldService.isTraversableAt(gridX, gridY)) {
           continue;
         }
 
-        const worldPos = this.flowFieldService.gridToWorld(gridX, gridY);
+        const worldPos = flowFieldService.gridToWorld(gridX, gridY);
         if (!worldPos) continue;
 
         // Color by distance: blue (close) → cyan → green → yellow → red (far)
@@ -100,8 +110,8 @@ export class EnemyFlowFieldDebugOverlay {
     }
 
     // Draw goal cells with a special marker
-    for (const goalCell of this.flowFieldService.getGoalCells()) {
-      const worldPos = this.flowFieldService.gridToWorld(goalCell.gridX, goalCell.gridY);
+    for (const goalCell of flowFieldService.getGoalCells()) {
+      const worldPos = flowFieldService.gridToWorld(goalCell.gridX, goalCell.gridY);
       if (!worldPos) continue;
 
       this.graphics.lineStyle(2, 0x00ff00, 1); // Bright green for goals
@@ -147,11 +157,12 @@ export class EnemyFlowFieldDebugOverlay {
   }
 
   destroy(): void {
-    this.flowFieldService.registerDebugOverlayCallback(null);
+    this.flowFieldService?.registerDebugOverlayCallback(null);
     if (this.graphics) {
       this.graphics.destroy();
       this.graphics = null;
     }
+    this.flowFieldService = null;
     this.isVisible = false;
   }
 }

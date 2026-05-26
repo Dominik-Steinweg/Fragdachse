@@ -2,6 +2,8 @@ import type { WeaponConfig } from '../loadout/LoadoutConfig';
 
 export type CoopDefenseEnemyKind = 'zombie-badger' | 'rabid-badger';
 
+export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
+
 export interface CoopDefenseEnemySpawnConfig {
   readonly intervalMs: number;
   readonly countPerWave: number;
@@ -18,6 +20,7 @@ export interface CoopDefenseEnemyConfig {
   readonly maxHp: number;
   readonly size: number;
   readonly moveSpeed: number;
+  readonly movementTarget: CoopDefenseEnemyMovementTarget;
   readonly weaponId: WeaponConfig['id'];
   readonly attackScanIntervalMs: number;
   readonly attackStopDurationMs: number;
@@ -36,6 +39,7 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
     maxHp: 20,
     size: 28,
     moveSpeed: 92,
+    movementTarget: 'bases',
     weaponId: 'BITE',
     attackScanIntervalMs: 200,
     attackStopDurationMs: 200,
@@ -56,6 +60,7 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
     maxHp: 10,
     size: 22,
     moveSpeed: 180,
+    movementTarget: 'players',
     weaponId: 'BITE',
     attackScanIntervalMs: 200,
     attackStopDurationMs: 100,
@@ -92,6 +97,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
           config.playerScaling?.moveSpeedFactorPerAdditionalPlayer,
           normalizedHumanPlayerCount,
         ),
+        movementTarget: config.movementTarget,
         weaponId: config.weaponId,
         attackScanIntervalMs: config.attackScanIntervalMs,
         attackStopDurationMs: config.attackStopDurationMs,

@@ -29,6 +29,7 @@ export interface EnemyFlowFieldGridCell {
 }
 
 export type EnemyFlowFieldGoalCell = EnemyFlowFieldGridCell;
+export type EnemyFlowFieldGoalMode = 'bases' | 'dynamic-fallback-bases';
 
 export interface EnemyFlowFieldSummary {
   readonly cols: number;
@@ -71,6 +72,8 @@ interface EnemyFlowFieldCellRule {
 export interface EnemyFlowFieldServiceOptions {
   readonly eventBus?: ArenaEventBus;
   readonly obstacleCellProvider?: () => ReadonlyArray<EnemyFlowFieldGridCell>;
+  readonly goalMode?: EnemyFlowFieldGoalMode;
+  readonly dynamicGoalCells?: ReadonlyArray<EnemyFlowFieldGoalCell>;
 }
 
 const CELL_DEFINITIONS = {
@@ -108,7 +111,9 @@ export class EnemyFlowFieldService {
   private readonly metrics: EnemyFlowFieldMetrics;
   private readonly layout: ArenaLayout;
   private readonly baseSpecs: readonly BaseSpec[];
+  private readonly goalMode: EnemyFlowFieldGoalMode;
   private activeBaseIds: Set<string>;
+  private dynamicGoalCells: EnemyFlowFieldGoalCell[];
   private readonly eventBus: ArenaEventBus | null;
   private readonly obstacleCellProvider: (() => ReadonlyArray<EnemyFlowFieldGridCell>) | null;
   private readonly costs: Uint32Array;
@@ -146,7 +151,9 @@ export class EnemyFlowFieldService {
   ) {
     this.layout = layout;
     this.baseSpecs = [...baseSpecs];
+    this.goalMode = options.goalMode ?? 'bases';
     this.activeBaseIds = new Set(this.baseSpecs.map((spec) => spec.id));
+    this.dynamicGoalCells = this.normalizeGoalCells(options.dynamicGoalCells ?? []);
     this.metrics = { ...metrics };
     this.eventBus = options.eventBus ?? null;
     this.obstacleCellProvider = options.obstacleCellProvider ?? null;
@@ -265,7 +272,28 @@ export class EnemyFlowFieldService {
     return new EnemyFlowFieldService(this.layout, this.baseSpecs, this.metrics, {
       eventBus: this.eventBus ?? undefined,
       obstacleCellProvider: this.obstacleCellProvider ?? undefined,
+      goalMode: this.goalMode,
+      dynamicGoalCells: this.dynamicGoalCells,
     });
+  }
+
+  setDynamicGoalCells(cells: ReadonlyArray<EnemyFlowFieldGoalCell>): void {
+    const next = this.normalizeGoalCells(cells);
+    if (next.length === this.dynamicGoalCells.length) {
+      let identical = true;
+      for (let index = 0; index < next.length; index += 1) {
+        const current = this.dynamicGoalCells[index];
+        const candidate = next[index];
+        if (current.gridX !== candidate.gridX || current.gridY !== candidate.gridY) {
+          identical = false;
+          break;
+        }
+      }
+      if (identical) return;
+    }
+
+    this.dynamicGoalCells = next;
+    this.isGridDirty = true;
   }
 
   update(now: number): boolean {
@@ -438,6 +466,14 @@ export class EnemyFlowFieldService {
   }
 
   private computeGoalCells(): EnemyFlowFieldGoalCell[] {
+    if (this.goalMode === 'dynamic-fallback-bases' && this.dynamicGoalCells.length > 0) {
+      return [...this.dynamicGoalCells];
+    }
+
+    return this.computeBaseGoalCells();
+  }
+
+  private computeBaseGoalCells(): EnemyFlowFieldGoalCell[] {
     const goalSet = new Set<number>();
     const directions: ReadonlyArray<readonly [number, number]> = [
       [1, 0],
@@ -459,6 +495,21 @@ export class EnemyFlowFieldService {
     }
 
     return [...goalSet]
+      .sort((left, right) => left - right)
+      .map((index) => ({
+        gridX: index % this.metrics.cols,
+        gridY: Math.floor(index / this.metrics.cols),
+      }));
+  }
+
+  private normalizeGoalCells(cells: ReadonlyArray<EnemyFlowFieldGoalCell>): EnemyFlowFieldGoalCell[] {
+    const uniqueGoalIndexes = new Set<number>();
+    for (const cell of cells) {
+      if (!this.isGoalCandidateAt(cell.gridX, cell.gridY)) continue;
+      uniqueGoalIndexes.add(this.toIndex(cell.gridX, cell.gridY));
+    }
+
+    return [...uniqueGoalIndexes]
       .sort((left, right) => left - right)
       .map((index) => ({
         gridX: index % this.metrics.cols,

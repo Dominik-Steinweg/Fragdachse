@@ -28,8 +28,18 @@ export class EnemyManager {
     return enemy;
   }
 
-  hostUpdateMovement(flowFieldService: EnemyFlowFieldService | null, movementLocked: boolean, now: number): void {
+  hostUpdateMovement(
+    baseFlowFieldService: EnemyFlowFieldService | null,
+    playerFlowFieldService: EnemyFlowFieldService | null,
+    movementLocked: boolean,
+    now: number,
+  ): void {
     for (const enemy of this.enemies.values()) {
+      const config = this.resolvedConfigs[enemy.kind];
+      const flowFieldService = config.movementTarget === 'players'
+        ? playerFlowFieldService ?? baseFlowFieldService
+        : baseFlowFieldService;
+
       if (movementLocked || !flowFieldService || enemy.isAttackMovementPaused(now)) {
         enemy.stopMovement();
         continue;

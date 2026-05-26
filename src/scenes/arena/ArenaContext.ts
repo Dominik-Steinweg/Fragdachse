@@ -106,4 +106,5 @@ export interface ArenaContext {
   tunnelSystem:      TunnelSystem      | null;
   trainManager:      TrainManager      | null;
   enemyFlowFieldService: EnemyFlowFieldService | null;
+  enemyPlayerFlowFieldService: EnemyFlowFieldService | null;
 }

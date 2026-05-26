@@ -312,27 +312,37 @@ export class ArenaLifecycleCoordinator {
       ? new CoopDefenseRoundStateSystem(this.ctx.baseManager, () => bridge.computeSecondsLeft())
       : null;
     if (bridge.isHost()) {
-      this.ctx.enemyFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
-        ? new EnemyFlowFieldService(layout, getCoopDefenseBases(), {
-          cols: GRID_COLS,
-          rows: GRID_ROWS,
-          cellSize: CELL_SIZE,
-          arenaOffsetX: ARENA_OFFSET_X,
-          arenaOffsetY: ARENA_OFFSET_Y,
-        }, {
-          eventBus: this.scene.game.events,
-          obstacleCellProvider: () => {
-            const staticRockCells = layout.rocks.flatMap((rock, index) => {
-              const isActive = this.ctx.arenaResult?.rockObjects[index]?.active ?? false;
-              return isActive ? [{ gridX: rock.gridX, gridY: rock.gridY }] : [];
-            });
-            const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? []).map((rock) => ({
-              gridX: rock.gridX,
-              gridY: rock.gridY,
-            }));
+      const obstacleCellProvider = () => {
+        const staticRockCells = layout.rocks.flatMap((rock, index) => {
+          const isActive = this.ctx.arenaResult?.rockObjects[index]?.active ?? false;
+          return isActive ? [{ gridX: rock.gridX, gridY: rock.gridY }] : [];
+        });
+        const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? []).map((rock) => ({
+          gridX: rock.gridX,
+          gridY: rock.gridY,
+        }));
 
-            return [...staticRockCells, ...runtimeRockCells];
-          },
+        return [...staticRockCells, ...runtimeRockCells];
+      };
+      const flowFieldMetrics = {
+        cols: GRID_COLS,
+        rows: GRID_ROWS,
+        cellSize: CELL_SIZE,
+        arenaOffsetX: ARENA_OFFSET_X,
+        arenaOffsetY: ARENA_OFFSET_Y,
+      };
+
+      this.ctx.enemyFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
+        ? new EnemyFlowFieldService(layout, getCoopDefenseBases(), flowFieldMetrics, {
+          eventBus: this.scene.game.events,
+          obstacleCellProvider,
+        })
+        : null;
+      this.ctx.enemyPlayerFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
+        ? new EnemyFlowFieldService(layout, getCoopDefenseBases(), flowFieldMetrics, {
+          eventBus: this.scene.game.events,
+          obstacleCellProvider,
+          goalMode: 'dynamic-fallback-bases',
         })
         : null;
       if (this.ctx.enemyManager && this.ctx.enemyFlowFieldService && coopDefenseEnemyConfigs) {
@@ -347,9 +357,12 @@ export class ArenaLifecycleCoordinator {
       // Gegner zur nächstgelegenen aktiven Basis laufen.
       const baseManager = this.ctx.baseManager;
       const flowFieldService = this.ctx.enemyFlowFieldService;
-      if (baseManager && flowFieldService) {
+      const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
+      if (baseManager && flowFieldService && playerFlowFieldService) {
         baseManager.setOnBaseDestroyed(() => {
-          flowFieldService.setActiveBaseIds(baseManager.getActiveBaseIds());
+          const activeBaseIds = baseManager.getActiveBaseIds();
+          flowFieldService.setActiveBaseIds(activeBaseIds);
+          playerFlowFieldService.setActiveBaseIds(activeBaseIds);
         });
       }
     }
@@ -812,6 +825,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.trainManager = null;
     this.ctx.enemyFlowFieldService?.destroy();
     this.ctx.enemyFlowFieldService = null;
+    this.ctx.enemyPlayerFlowFieldService?.destroy();
+    this.ctx.enemyPlayerFlowFieldService = null;
     this.renderers.train?.destroy();
     this.renderers.train = null;
     this.renderers.beer.clear();

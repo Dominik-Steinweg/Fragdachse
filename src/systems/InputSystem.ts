@@ -28,6 +28,8 @@ type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUti
 type TargetedActivation = TargetedClickUtilityActivationConfig;
 type PlacementActivation = PlacementModeUtilityActivationConfig;
 
+type DebugHotkeyType = 'flowfield_bases' | 'flowfield_players';
+
 export class InputSystem {
   private scene:           Phaser.Scene;
   private bridge:          NetworkBridge;
@@ -42,12 +44,13 @@ export class InputSystem {
   private keyE!:     Phaser.Input.Keyboard.Key;
   private keyQ!:     Phaser.Input.Keyboard.Key;
   private keyB!:     Phaser.Input.Keyboard.Key;
+  private keyN!:     Phaser.Input.Keyboard.Key;
 
   // Lokaler Dash-Cooldown (nur für HUD-Visualisierung, kein Gameplay-Impact)
   private dashCooldownUntil = 0;  // ms-Timestamp
 
   // Debug Hotkey Callback
-  private onDebugHotkey: ((type: 'flowfield_debug') => void) | null = null;
+  private onDebugHotkey: ((type: DebugHotkeyType) => void) | null = null;
 
   // Loadout-Callback (gesetzt von ArenaScene)
   private onLoadoutUse: ((slot: LoadoutSlot, angle: number, targetX: number, targetY: number, params?: LoadoutUseParams) => void) | null = null;
@@ -115,15 +118,16 @@ export class InputSystem {
     this.keyE     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E, false);
     this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
     this.keyB     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B, false);
+    this.keyN     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N, false);
 
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
   }
 
   /**
-   * Register callback for debug hotkeys (e.g., B for flow field debug overlay).
+   * Register callback for debug hotkeys (e.g., B/N for flow field debug overlays).
    */
-  setupDebugHotkeys(cb: (type: 'flowfield_debug') => void): void {
+  setupDebugHotkeys(cb: (type: DebugHotkeyType) => void): void {
     this.onDebugHotkey = cb;
     console.log('[InputSystem] Debug hotkeys registered');
   }
@@ -371,17 +375,24 @@ export class InputSystem {
   }
 
   /**
-   * Handle debug hotkeys (B key for flow field debug).
+   * Handle debug hotkeys (B/N for flow field debug).
    * This is called from update() each frame.
    */
   private updateDebugHotkeys(): void {
     if (!this.onDebugHotkey) return;
 
-    // B key: toggle flow field debug overlay
+    // B key: show base flow field vectors
     if (this.keyB.isDown) {
-      console.log('[InputSystem] B key pressed - triggering flowfield_debug');
-      this.onDebugHotkey('flowfield_debug');
+      console.log('[InputSystem] B key pressed - triggering flowfield_bases');
+      this.onDebugHotkey('flowfield_bases');
       this.keyB.isDown = false; // Reset to avoid repeated triggers
+    }
+
+    // N key: show player flow field vectors
+    if (this.keyN.isDown) {
+      console.log('[InputSystem] N key pressed - triggering flowfield_players');
+      this.onDebugHotkey('flowfield_players');
+      this.keyN.isDown = false; // Reset to avoid repeated triggers
     }
   }
 

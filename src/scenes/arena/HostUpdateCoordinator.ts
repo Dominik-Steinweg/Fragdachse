@@ -75,8 +75,13 @@ export class HostUpdateCoordinator {
     const now = Date.now();
 
     this.ctx.coopDefenseWaveSpawner?.hostUpdate(delta, countdownActive);
-    this.ctx.enemyFlowFieldService?.update(now);
-    this.ctx.enemyManager?.hostUpdateMovement(this.ctx.enemyFlowFieldService, countdownActive, now);
+    this.updateEnemyFlowFields(now);
+    this.ctx.enemyManager?.hostUpdateMovement(
+      this.ctx.enemyFlowFieldService,
+      this.ctx.enemyPlayerFlowFieldService,
+      countdownActive,
+      now,
+    );
     if (!countdownActive) {
       this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
     }
@@ -900,6 +905,27 @@ export class HostUpdateCoordinator {
         return;
       }
     }
+  }
+
+  private updateEnemyFlowFields(now: number): void {
+    this.ctx.enemyFlowFieldService?.update(now);
+
+    const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
+    if (!playerFlowFieldService) return;
+
+    const playerGoalCells: { gridX: number; gridY: number }[] = [];
+    for (const player of this.ctx.playerManager.getAllPlayers()) {
+      if (!player.sprite.active) continue;
+      if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+      if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
+
+      const goalCell = playerFlowFieldService.worldToGrid(player.sprite.x, player.sprite.y);
+      if (!goalCell) continue;
+      playerGoalCells.push(goalCell);
+    }
+
+    playerFlowFieldService.setDynamicGoalCells(playerGoalCells);
+    playerFlowFieldService.update(now);
   }
 
   private getLocalUtilityCooldownFrac(): number {

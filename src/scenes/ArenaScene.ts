@@ -275,6 +275,7 @@ export class ArenaScene extends Phaser.Scene {
       timeBubbleSystem: null,
       teslaDomeSystem: null, turretSystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
+      enemyPlayerFlowFieldService: null,
     };
 
     playerManager.setSpawnContextProvider((playerId) => {
@@ -378,17 +379,23 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
 
-        // ── Debug Hotkeys ─────────────────────────────────────────────────────
-        inputSystem.setupDebugHotkeys((type) => {
-          if (type === 'flowfield_debug' && bridge.isHost() && this.ctx.enemyFlowFieldService) {
-            if (!this.flowFieldDebugOverlay) {
-              console.log('[ArenaScene] Creating EnemyFlowFieldDebugOverlay');
-              this.flowFieldDebugOverlay = new EnemyFlowFieldDebugOverlay(this, this.ctx.enemyFlowFieldService);
-            }
-            console.log('[ArenaScene] Toggling flow field overlay');
-            this.flowFieldDebugOverlay.toggle();
-          }
-        });
+    // ── Debug Hotkeys ─────────────────────────────────────────────────────
+    inputSystem.setupDebugHotkeys((type) => {
+      if (!bridge.isHost()) return;
+
+      const service = type === 'flowfield_players'
+        ? this.ctx.enemyPlayerFlowFieldService
+        : this.ctx.enemyFlowFieldService;
+      if (!service) return;
+
+      if (!this.flowFieldDebugOverlay) {
+        console.log('[ArenaScene] Creating EnemyFlowFieldDebugOverlay');
+        this.flowFieldDebugOverlay = new EnemyFlowFieldDebugOverlay(this, service);
+      }
+
+      console.log(`[ArenaScene] Showing ${type} overlay`);
+      this.flowFieldDebugOverlay.showForService(service);
+    });
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
         const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
