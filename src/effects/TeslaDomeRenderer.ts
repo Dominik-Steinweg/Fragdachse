@@ -779,6 +779,7 @@ export class TeslaDomeRenderer {
     const strength = Math.max(0.7, scale);
     switch (type) {
       case 'players':
+      case 'enemies':
         return {
           burstCount: Math.round(10 * strength),
           burstSpeedMin: 90,
@@ -813,6 +814,7 @@ export class TeslaDomeRenderer {
   private getTargetIntensity(type: TeslaDomeTargetType): number {
     switch (type) {
       case 'players':
+      case 'enemies':
         return 1.18;
       case 'turrets':
         return 1.02;

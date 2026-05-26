@@ -87,7 +87,7 @@ export interface ShieldBuffHudState {
   damageBonusPct: number;
 }
 
-export type TeslaDomeTargetType = 'players' | 'train' | 'rocks' | 'turrets';
+export type TeslaDomeTargetType = 'players' | 'enemies' | 'train' | 'rocks' | 'turrets';
 
 export interface SyncedTeslaDomeTarget {
   x: number;
@@ -199,7 +199,7 @@ export interface ImpactCloudConfig {
   readonly visualVariant?: 'stink' | 'spore';
 }
 
-export type HomingTargetType = 'players' | 'train' | 'projectiles';
+export type HomingTargetType = 'players' | 'enemies' | 'train' | 'projectiles';
 
 /** Data-driven Zielsuche/Lenkung für Projektilwaffen. */
 export interface ProjectileHomingConfig {

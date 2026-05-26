@@ -331,10 +331,10 @@ export class NetworkBridge {
 
   setGameMode(mode: GameMode): void {
     if (!isHost()) return;
-    if (isTeamGameMode(mode)) {
-      this.hostAssignMissingTeams();
-    }
     setState(KEY_GAME_MODE, mode, true);
+    if (isTeamGameMode(mode)) {
+      this.hostAssignMissingTeams(mode);
+    }
     this.hostReconcileLoadoutsForMode(mode);
     this.connectedPlayersCacheDirty = true;
   }
@@ -459,10 +459,10 @@ export class NetworkBridge {
     this.connectedPlayersCacheDirty = true;
   }
 
-  hostAssignMissingTeams(): void {
+  hostAssignMissingTeams(mode: GameMode = this.getGameMode()): void {
     if (!isHost()) return;
     const playerIds = [...this.connectedPlayers.keys()];
-    if (isCoopDefenseMode(this.getGameMode())) {
+    if (isCoopDefenseMode(mode)) {
       // Coop: ALLE Spieler werden auf Blau gesetzt, auch wenn sie aus einem vorherigen Team-Modus
       // bereits eine (ggf. rote) Zuweisung hatten.
       let changed = false;

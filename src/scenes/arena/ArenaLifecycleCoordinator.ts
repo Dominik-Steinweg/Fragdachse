@@ -408,6 +408,11 @@ export class ArenaLifecycleCoordinator {
         () => this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
         (id, angle) => this.ctx.placementSystem?.updateAngle(id, angle),
       );
+      this.ctx.turretSystem.setEnemyTargetProvider(
+        () => (this.ctx.enemyManager?.getAllEnemies() ?? [])
+          .filter(enemy => enemy.sprite.active)
+          .map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })),
+      );
       this.ctx.teslaDomeSystem.setRockCallbacks(
         () => (this.ctx.arenaResult?.rockObjects ?? [])
           .flatMap((rock, index) => (rock && rock.active)
@@ -425,6 +430,11 @@ export class ArenaLifecycleCoordinator {
             ownerId: r.ownerId,
           })),
         (id, damage, ownerId) => this.hostUpdate.applyTeslaTurretDamage(id, damage, ownerId),
+      );
+      this.ctx.teslaDomeSystem.setEnemyTargetProvider(
+        () => (this.ctx.enemyManager?.getAllEnemies() ?? [])
+          .filter(enemy => enemy.sprite.active)
+          .map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })),
       );
       this.ctx.teslaDomeSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
       this.ctx.teslaDomeSystem.setTrainCallbacks(
@@ -599,10 +609,12 @@ export class ArenaLifecycleCoordinator {
           }
           return;
         }
-        bridge.incrementPlayerFrags(killerId);
         const allPlayers    = bridge.getConnectedPlayers();
         const killerProfile = allPlayers.find(p => p.id === killerId);
         const victimProfile  = allPlayers.find(p => p.id === victimId);
+        if (victimProfile) {
+          bridge.incrementPlayerFrags(killerId);
+        }
         if (killerProfile && victimProfile) {
           bridge.broadcastKillEvent({
             killerId,

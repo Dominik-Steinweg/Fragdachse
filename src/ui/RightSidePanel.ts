@@ -9,6 +9,8 @@
  */
 import * as Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, COLORS, toCssColor } from '../config';
+import { getTeamLabel } from '../gameModes';
+import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
 
@@ -637,15 +639,24 @@ export class RightSidePanel {
     const blueRowsStartY = LB_START_Y + LB_TEAM_ROWS_OFFSET;
     const redHeaderY = blueRowsStartY + blueEntries.length * LB_ENTRY_H + LB_TEAM_SECTION_GAP;
     const redRowsStartY = redHeaderY + LB_TEAM_ROWS_OFFSET;
+    const mode = bridge.getGameMode();
+    const showBlueHeader = blueEntries.length > 0;
+    const showRedHeader = redEntries.length > 0;
 
-    this.lbTeamHeaders?.blue.label.setVisible(true).setPosition(ARENA_SIDEBAR_LEFT_X, LB_START_Y);
-    this.lbTeamHeaders?.blue.score.setVisible(true).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
+    this.lbTeamHeaders?.blue.label
+      .setVisible(showBlueHeader)
+      .setText(getTeamLabel('blue', mode).toUpperCase())
+      .setPosition(ARENA_SIDEBAR_LEFT_X, LB_START_Y);
+    this.lbTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
 
     let rowIndex = 0;
     rowIndex = this.renderGroupedLeaderboardTeamRows(blueEntries, rowIndex, blueRowsStartY);
 
-    this.lbTeamHeaders?.red.label.setVisible(true).setPosition(ARENA_SIDEBAR_LEFT_X, redHeaderY);
-    this.lbTeamHeaders?.red.score.setVisible(true).setText(String(redScore)).setPosition(LB_FRAGS_X, redHeaderY);
+    this.lbTeamHeaders?.red.label
+      .setVisible(showRedHeader)
+      .setText(getTeamLabel('red', mode).toUpperCase())
+      .setPosition(ARENA_SIDEBAR_LEFT_X, redHeaderY);
+    this.lbTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(LB_FRAGS_X, redHeaderY);
     rowIndex = this.renderGroupedLeaderboardTeamRows(redEntries, rowIndex, redRowsStartY);
 
     for (let i = rowIndex; i < this.lbRows.length; i++) {
@@ -684,16 +695,25 @@ export class RightSidePanel {
     const hasData = blueEntries.length > 0 || redEntries.length > 0;
     const blueScore = this.resolveGroupedTeamScore(blueEntries);
     const redScore = this.resolveGroupedTeamScore(redEntries);
+    const mode = bridge.getGameMode();
+    const showBlueHeader = blueEntries.length > 0;
+    const showRedHeader = redEntries.length > 0;
 
     this.resultsHeader.setVisible(true);
     this.resultsSep.setVisible(true);
     this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
-    this.resultsTeamHeaders?.blue.label.setVisible(hasData).setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y);
-    this.resultsTeamHeaders?.blue.score.setVisible(hasData).setText(String(blueScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y);
-    this.resultsTeamHeaders?.red.label.setVisible(hasData).setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
-    this.resultsTeamHeaders?.red.score.setVisible(hasData).setText(String(redScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    this.resultsTeamHeaders?.blue.label
+      .setVisible(showBlueHeader)
+      .setText(getTeamLabel('blue', mode).toUpperCase())
+      .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y);
+    this.resultsTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y);
+    this.resultsTeamHeaders?.red.label
+      .setVisible(showRedHeader)
+      .setText(getTeamLabel('red', mode).toUpperCase())
+      .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    this.resultsTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
 
     let rowIndex = 0;
     rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, RESULTS_START_Y + 18);

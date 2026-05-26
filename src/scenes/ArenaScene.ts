@@ -332,6 +332,12 @@ export class ArenaScene extends Phaser.Scene {
         if (!combatSystem.canDamageTarget(ownerId, player.id)) continue;
         targets.push({ id: player.id, type: 'players' as const, x: player.sprite.x, y: player.sprite.y });
       }
+      for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+        if (!enemy.sprite.active) continue;
+        if (!combatSystem.isAlive(enemy.id)) continue;
+        if (!combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
+        targets.push({ id: enemy.id, type: 'enemies' as const, x: enemy.sprite.x, y: enemy.sprite.y });
+      }
       return targets;
     });
     projectileManager.setHomingLineOfSightChecker((sx, sy, ex, ey) => {
@@ -587,6 +593,11 @@ export class ArenaScene extends Phaser.Scene {
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
     const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
+
+    if (phase === 'LOBBY') {
+      this.clearDebugModes();
+    }
+
     this.syncMainCamera(delta, inGame && !terminated);
 
     this.arenaPanelsHeld = !!(inGame && !terminated && this.arenaPanelTabKey?.isDown);
@@ -961,6 +972,11 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.ctx) return;
     this.ctx.leftPanel.setArenaOverlayVisible(visible, immediate);
     this.ctx.rightPanel.setArenaOverlayVisible(visible, immediate);
+  }
+
+  private clearDebugModes(): void {
+    this.flowFieldDebugOverlay?.destroy();
+    this.flowFieldDebugOverlay = null;
   }
 
   private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.lifecycle?.isMatchTerminated()): void {

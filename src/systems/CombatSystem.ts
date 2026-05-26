@@ -1833,6 +1833,9 @@ export class CombatSystem {
 
       const killerId = this.lastAttacker.get(targetId);
       if (killerId && killerId !== targetId) {
+        if (this.bridge.getPlayerProfile(killerId)) {
+          this.bridge.incrementPlayerFrags(killerId);
+        }
         const weapon = this.lastWeapon.get(targetId) ?? weaponName ?? 'Waffe';
         this.onKillCb?.(killerId, targetId, weapon, x, y);
       }

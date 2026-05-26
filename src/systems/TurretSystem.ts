@@ -8,6 +8,7 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
 type TurretProvider = () => readonly SyncedPlaceableRock[];
 type TurretAngleUpdater = (id: number, angle: number) => void;
+type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
 type TurretFireHandler = (
   ownerId: string,
   color: number,
@@ -22,6 +23,7 @@ export class TurretSystem {
   private lineOfSightChecker: LineOfSightChecker | null = null;
   private turretProvider: TurretProvider | null = null;
   private turretAngleUpdater: TurretAngleUpdater | null = null;
+  private enemyTargetProvider: EnemyTargetProvider | null = null;
   private fireHandler: TurretFireHandler | null = null;
   private nextFireAt = new Map<number, number>();
 
@@ -37,6 +39,10 @@ export class TurretSystem {
   setTurretProvider(provider: TurretProvider | null, angleUpdater: TurretAngleUpdater | null): void {
     this.turretProvider = provider;
     this.turretAngleUpdater = angleUpdater;
+  }
+
+  setEnemyTargetProvider(provider: EnemyTargetProvider | null): void {
+    this.enemyTargetProvider = provider;
   }
 
   setFireHandler(handler: TurretFireHandler | null): void {
@@ -99,6 +105,18 @@ export class TurretSystem {
 
       bestDistance = distance;
       bestTarget = { x: player.sprite.x, y: player.sprite.y };
+    }
+
+    for (const enemy of this.enemyTargetProvider?.() ?? []) {
+      if (!this.combatSystem.isAlive(enemy.id)) continue;
+      if (!this.combatSystem.canDamageTarget(turret.ownerId, enemy.id)) continue;
+
+      const distance = Phaser.Math.Distance.Between(turretX, turretY, enemy.x, enemy.y);
+      if (distance > range || distance >= bestDistance) continue;
+      if (this.lineOfSightChecker && !this.lineOfSightChecker(turretX, turretY, enemy.x, enemy.y, turret.id)) continue;
+
+      bestDistance = distance;
+      bestTarget = { x: enemy.x, y: enemy.y };
     }
 
     return bestTarget;

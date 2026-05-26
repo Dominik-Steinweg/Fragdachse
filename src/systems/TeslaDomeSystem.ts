@@ -30,6 +30,12 @@ interface TeslaTurretTarget {
   ownerId: string;
 }
 
+interface TeslaEnemyTarget {
+  id: string;
+  x: number;
+  y: number;
+}
+
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
 type RockTargetProvider = () => readonly TeslaRockTarget[];
 type RockDamageHandler = (index: number, damage: number, ownerId: string) => void;
@@ -37,6 +43,7 @@ type TrainTargetProvider = () => readonly { x: number; y: number }[];
 type TrainDamageHandler = (damage: number, ownerId: string) => void;
 type TurretTargetProvider = () => readonly TeslaTurretTarget[];
 type TurretDamageHandler = (id: number, damage: number, ownerId: string) => void;
+type EnemyTargetProvider = () => readonly TeslaEnemyTarget[];
 
 export class TeslaDomeSystem {
   private readonly activeDomes = new Map<string, ActiveTeslaDome>();
@@ -48,6 +55,7 @@ export class TeslaDomeSystem {
   private trainDamageHandler: TrainDamageHandler | null = null;
   private turretTargetProvider: TurretTargetProvider | null = null;
   private turretDamageHandler: TurretDamageHandler | null = null;
+  private enemyTargetProvider: EnemyTargetProvider | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
 
   private static readonly HOLD_GRACE_MS = 500;
@@ -75,6 +83,10 @@ export class TeslaDomeSystem {
   setTurretCallbacks(provider: TurretTargetProvider | null, damageHandler: TurretDamageHandler | null): void {
     this.turretTargetProvider = provider;
     this.turretDamageHandler = damageHandler;
+  }
+
+  setEnemyTargetProvider(provider: EnemyTargetProvider | null): void {
+    this.enemyTargetProvider = provider;
   }
 
   setEnergyShieldSystem(system: EnergyShieldSystem | null): void {
@@ -219,6 +231,16 @@ export class TeslaDomeSystem {
       }
     }
 
+    if (fire.targetTypes.includes('enemies') && this.enemyTargetProvider) {
+      for (const enemy of this.enemyTargetProvider()) {
+        if (!this.combatSystem.canDamageTarget(dome.ownerId, enemy.id)) continue;
+        const dist = Phaser.Math.Distance.Between(dome.x, dome.y, enemy.x, enemy.y);
+        if (dist > radius) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, enemy.x, enemy.y)) continue;
+        targets.push({ x: enemy.x, y: enemy.y, type: 'enemies' });
+      }
+    }
+
     if (fire.targetTypes.includes('train') && this.trainTargetProvider) {
       for (const segment of this.trainTargetProvider()) {
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, segment.x, segment.y);
@@ -235,6 +257,7 @@ export class TeslaDomeSystem {
   private applyTickDamage(dome: ActiveTeslaDome, targets: SyncedTeslaDomeTarget[]): void {
     const damage = dome.config.fire.damagePerTick;
     const playerTargets = targets.filter(target => target.type === 'players');
+    const enemyTargets = targets.filter(target => target.type === 'enemies');
     const rockTargets = targets.filter(target => target.type === 'rocks');
     const hasTrainTarget = targets.some(target => target.type === 'train');
 
@@ -255,6 +278,16 @@ export class TeslaDomeSystem {
           continue;
         }
         this.combatSystem.applyDamage(player.id, damage, false, dome.ownerId, dome.config.displayName, {
+          sourceX: dome.x,
+          sourceY: dome.y,
+        });
+      }
+    }
+
+    if (enemyTargets.length > 0 && this.enemyTargetProvider) {
+      for (const enemy of this.enemyTargetProvider()) {
+        if (!enemyTargets.some(target => target.x === enemy.x && target.y === enemy.y)) continue;
+        this.combatSystem.applyDamage(enemy.id, damage, false, dome.ownerId, dome.config.displayName, {
           sourceX: dome.x,
           sourceY: dome.y,
         });
