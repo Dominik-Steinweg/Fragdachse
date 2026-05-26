@@ -877,6 +877,15 @@ export interface SyncedBaseState {
   maxHp:  number;
 }
 
+/** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
+export interface SyncedEnemyState {
+  id:     string;
+  x:      number;
+  y:      number;
+  hp:     number;
+  maxHp:  number;
+}
+
 /** Per-Frame Zug-Zustand (Host → Clients, unreliable) */
 export interface SyncedTrainState {
   alive:    boolean;  // false = zerstört oder noch nicht gespawnt

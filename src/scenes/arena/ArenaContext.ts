@@ -31,6 +31,7 @@ import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import type { BaseManager }          from '../../entities/BaseManager';
+import type { EnemyManager }         from '../../entities/EnemyManager';
 import type { TunnelSystem } from '../../systems/TunnelSystem';
 import type { TrainManager }        from '../../train/TrainManager';
 import type { DecoySystem }         from '../../systems/DecoySystem';
@@ -79,6 +80,7 @@ export interface ArenaContext {
   rockRegistry:      RockRegistry       | null;
   captureTheBeerSystem: CaptureTheBeerSystem | null;
   baseManager: BaseManager | null;
+  enemyManager: EnemyManager | null;
 
   // Host-only round systems (null on clients and null outside a round)
   resourceSystem:    ResourceSystem    | null;

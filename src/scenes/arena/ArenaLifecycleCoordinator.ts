@@ -44,6 +44,7 @@ import type { RoundResult }           from '../../network/NetworkBridge';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { BaseManager } from '../../entities/BaseManager';
+import { EnemyManager } from '../../entities/EnemyManager';
 
 /**
  * Manages the arena round lifecycle.
@@ -264,6 +265,12 @@ export class ArenaLifecycleCoordinator {
     this.ctx.baseManager = isCoopDefenseMode(bridge.getGameMode())
       ? new BaseManager(this.scene)
       : null;
+    this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode())
+      ? new EnemyManager(this.scene)
+      : null;
+    if (bridge.isHost()) {
+      this.ctx.enemyManager?.hostSpawnInitialDummy(layout);
+    }
     this.renderers.leafBlower.setTerrainColorSampler(
       createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult),
     );
@@ -611,6 +618,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.captureTheBeerSystem = null;
     this.ctx.baseManager?.destroy();
     this.ctx.baseManager = null;
+    this.ctx.enemyManager?.destroy();
+    this.ctx.enemyManager = null;
     this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;

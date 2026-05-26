@@ -167,6 +167,7 @@ export class ClientUpdateCoordinator {
       );
 
       this.ctx.baseManager?.applySnapshot(state.bases ?? []);
+      this.ctx.enemyManager?.applySnapshot(state.enemies ?? []);
 
       this.checkLocalPickup(state.powerups ?? []);
     }
@@ -180,6 +181,8 @@ export class ClientUpdateCoordinator {
         player.setDashScale(1.0);
       }
     }
+
+    this.ctx.enemyManager?.updateClientInterpolation(lerpFactor);
 
     this.ctx.decoySystem.updateVisuals(lerpFactor);
 

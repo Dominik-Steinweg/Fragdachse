@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemyState, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -90,6 +90,7 @@ export interface GameState {
   roundStartTime: number;
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectile[];
+  enemies:      SyncedEnemyState[];
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
   placeableRocks: SyncedPlaceableRock[];
   decoys:       SyncedDecoy[];
@@ -662,6 +663,7 @@ export class NetworkBridge {
     const payload: Record<string, unknown> = { p: state.players, _s: ++this.publishSeq };
     payload.rt = state.roundStartTime;
     if (state.projectiles.length > 0)  payload.j = state.projectiles;
+    if (state.enemies.length > 0)      payload.e = state.enemies;
     if (state.rocks.length > 0)        payload.r = state.rocks;
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
     if (state.decoys.length > 0)       payload.dc = state.decoys;
@@ -702,6 +704,7 @@ export class NetworkBridge {
       roundStartTime,
       players:       raw.p as Record<string, PlayerNetState>,
       projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
+      enemies:       (raw.e as SyncedEnemyState[]  | undefined) ?? [],
       rocks:         (raw.r as RockNetState[]       | undefined) ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
