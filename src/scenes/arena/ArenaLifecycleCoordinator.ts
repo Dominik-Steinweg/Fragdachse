@@ -829,6 +829,7 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.trainManager = new TrainManager(this.scene, this.ctx.playerManager, trackX, direction);
     this.ctx.trainManager.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
+    this.ctx.trainManager.setEnemyManager(this.ctx.enemyManager);
     this.ctx.translocatorSystem?.setTrainManager(this.ctx.trainManager);
     this.hostUpdate.setTrainSpawned(false);
 
@@ -845,6 +846,15 @@ export class ArenaLifecycleCoordinator {
       const attackerId = recentPusherId ?? TRAIN.TRAIN_KILLER_ID;
       const weaponName = recentPusherId ? 'in den Zug geschubst' : 'Zug RB 54';
       this.ctx.combatSystem.applyDamage(playerId, 9999, true, attackerId, weaponName, {
+        sourceX,
+        sourceY,
+      });
+    });
+    this.ctx.trainManager.setEnemyHitCallback((enemyId, sourceX, sourceY) => {
+      const recentPusherId = this.ctx.hostPhysics.getRecentImpulseSource(enemyId);
+      const attackerId = recentPusherId ?? TRAIN.TRAIN_KILLER_ID;
+      const weaponName = recentPusherId ? 'in den Zug geschubst' : 'Zug RB 54';
+      this.ctx.combatSystem.applyDamage(enemyId, 9999, true, attackerId, weaponName, {
         sourceX,
         sourceY,
       });

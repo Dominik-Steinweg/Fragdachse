@@ -3,6 +3,7 @@ import {
   ARENA_OFFSET_Y, ARENA_HEIGHT, PLAYER_SIZE,
 } from '../config';
 import type { SyncedTrainState } from '../types';
+import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import { TRAIN } from './TrainConfig';
@@ -56,12 +57,14 @@ export class TrainManager {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   private onPlayerHit: ((playerId: string, sourceX: number, sourceY: number) => void) | null = null;
+  private onEnemyHit: ((enemyId: string, sourceX: number, sourceY: number) => void) | null = null;
   private canHitPlayer: ((playerId: string) => boolean)      | null = null;
   private onDestroyed: ((r: TrainDestroyResult) => void)     | null = null;
   private onExited:    (() => void)                          | null = null;
   private isPlayerBurrowed:    ((playerId: string) => boolean)                              | null = null;
   private onBurrowDamageDealt: ((playerId: string, x: number, y: number) => void)          | null = null;
   private timeBubbleSystem: TimeBubbleSystem | null = null;
+  private enemyManager: EnemyManager | null = null;
 
   /** Akkumulierter Delta-ms pro Spieler für den Buddel-Schaden-Tick */
   private burrowDamageTimers = new Map<string, number>();
@@ -81,12 +84,14 @@ export class TrainManager {
   // ── Callback-Injection ───────────────────────────────────────────────────
 
   setPlayerHitCallback(cb: (playerId: string, sourceX: number, sourceY: number) => void): void { this.onPlayerHit = cb; }
+  setEnemyHitCallback(cb: (enemyId: string, sourceX: number, sourceY: number) => void): void { this.onEnemyHit = cb; }
   setCanHitPlayerCallback(cb: (playerId: string) => boolean): void { this.canHitPlayer = cb; }
   setDestroyCallback(cb: (r: TrainDestroyResult) => void):  void { this.onDestroyed  = cb; }
   setExitedCallback(cb: () => void):                        void { this.onExited     = cb; }
   setIsPlayerBurrowedCallback(cb: (playerId: string) => boolean): void { this.isPlayerBurrowed = cb; }
   setOnBurrowDamageDealtCallback(cb: (playerId: string, x: number, y: number) => void): void { this.onBurrowDamageDealt = cb; }
   setTimeBubbleSystem(system: TimeBubbleSystem | null): void { this.timeBubbleSystem = system; }
+  setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
 
   // ── Zugriff auf Physics-Gruppe ───────────────────────────────────────────
 
@@ -147,6 +152,7 @@ export class TrainManager {
     this.updateSegmentPositions();
     this.group.refresh();
     this.checkPlayerOverlaps();
+    this.checkEnemyOverlaps();
     this.checkBurrowDamage(delta);
 
     if (this.hasFullyExited()) {
@@ -414,6 +420,34 @@ export class TrainManager {
 
     for (const id of this.burrowDamageTimers.keys()) {
       if (!activeIds.has(id)) this.burrowDamageTimers.delete(id);
+    }
+  }
+
+  /** AABB-Overlap-Check zwischen allen Segmenten und allen aktiven Gegnern. */
+  private checkEnemyOverlaps(): void {
+    if (!this.onEnemyHit || !this.enemyManager) return;
+
+    const halfW = TRAIN.HITBOX_WIDTH / 2;
+    const heights = this.segHeights();
+    const ys = this.segCenterYs();
+
+    for (const enemy of this.enemyManager.getAllEnemies()) {
+      if (!enemy.sprite.active) continue;
+
+      const px = enemy.sprite.x;
+      const py = enemy.sprite.y;
+      const pr = Math.max(enemy.body.halfWidth, enemy.body.halfHeight);
+
+      for (let i = 0; i < ys.length; i++) {
+        const halfH = heights[i] / 2;
+        if (
+          Math.abs(px - this.trackX) < halfW + pr &&
+          Math.abs(py - ys[i]) < halfH + pr
+        ) {
+          this.onEnemyHit(enemy.id, this.trackX, ys[i]);
+          break;
+        }
+      }
     }
   }
 
