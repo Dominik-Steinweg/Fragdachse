@@ -1,4 +1,5 @@
-import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseCell, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
+import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
+import { isReservedBaseCell, usesCenteredTrackSpawn } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
 import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
@@ -69,7 +70,7 @@ export class ArenaGenerator {
       const rocks: RockCell[] = [];
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         for (let gx = 0; gx < GRID_COLS; gx++) {
-          if (map[gy][gx] && !trackCols.has(gx) && !isCaptureTheBeerBaseCell(gx, gy)) {
+          if (map[gy][gx] && !trackCols.has(gx) && !isReservedBaseCell(gx, gy)) {
             blocked[gy][gx] = true;
             rocks.push({ gridX: gx, gridY: gy });
           }
@@ -96,7 +97,7 @@ export class ArenaGenerator {
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
-          !isCaptureTheBeerBaseCell(gx, gy) &&
+          !isReservedBaseCell(gx, gy) &&
           gx >= treeMargin && gx < GRID_COLS - treeMargin &&
           gy >= treeMargin && gy < GRID_ROWS - treeMargin,
       );
@@ -128,7 +129,7 @@ export class ArenaGenerator {
             const nx = gx + dx;
             const ny = gy + dy;
             if (nx >= 0 && nx < GRID_COLS && ny >= 0 && ny < GRID_ROWS) {
-              if (isCaptureTheBeerBaseCell(nx, ny)) continue;
+              if (isReservedBaseCell(nx, ny)) continue;
               dirtSet.add(ny * GRID_COLS + nx);
             }
           }
@@ -155,7 +156,7 @@ export class ArenaGenerator {
               const nx = gx + dx;
               const ny = gy + dy;
               if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
-              if (isCaptureTheBeerBaseCell(nx, ny)) continue;
+              if (isReservedBaseCell(nx, ny)) continue;
               const nk = ny * GRID_COLS + nx;
               if (!dirtSet.has(nk)) frontier.push(nk);
             }
@@ -224,8 +225,8 @@ export class ArenaGenerator {
     const trackCols = new Set<number>();
     const tracks: TrackCell[] = [];
 
-    if (isCaptureTheBeerBaseModeActive()) {
-      // CTB: Gleise exakt in die Mitte der Arena setzen (2 Spalten zentriert)
+    if (usesCenteredTrackSpawn()) {
+      // CTB & Coop-Defense: Gleise exakt in die Mitte der Arena setzen (2 Spalten zentriert)
       const col = Math.floor((GRID_COLS - 2) / 2);
       trackCols.add(col);
       trackCols.add(col + 1);
@@ -265,7 +266,7 @@ export class ArenaGenerator {
       for (let gx = margin; gx < GRID_COLS - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (isCaptureTheBeerBaseCell(gx, gy)) continue;
+        if (isReservedBaseCell(gx, gy)) continue;
         if (middleThirdRegion && !isGridCellInArenaRegion(middleThirdRegion, gx, gy)) continue;
         candidates.push({ gx, gy });
       }
@@ -312,7 +313,7 @@ export class ArenaGenerator {
     for (let gy = 0; gy < GRID_ROWS; gy++) {
       for (let gx = 0; gx < GRID_COLS; gx++) {
         const key = ArenaGenerator.cellKey(gx, gy);
-        if (blockedCells.has(key) || isCaptureTheBeerBaseCell(gx, gy)) continue;
+        if (blockedCells.has(key) || isReservedBaseCell(gx, gy)) continue;
 
         const terrain: DecalTerrainLayer = dirtSet.has(key) ? 'dirt' : 'grass';
         const layerConfig = ARENA_DECAL_CONFIG[terrain];

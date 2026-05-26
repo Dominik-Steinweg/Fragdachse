@@ -1,5 +1,5 @@
 import type { GameMode, GamePhase, RoomQualityRetryMode, RoomQualityStartPolicy, TeamId } from './types';
-import { CAPTURE_THE_BEER_MODE } from './gameModes';
+import { CAPTURE_THE_BEER_MODE, COOP_DEFENSE_MODE } from './gameModes';
 
 // ---- Display ----
 export const GAME_WIDTH = 1920;
@@ -364,6 +364,13 @@ export const CAPTURE_THE_BEER_BASE_WIDTH_CELLS = 8;
 export const CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS = CAPTURE_THE_BEER_BASE_WIDTH_CELLS * 2;
 export let CAPTURE_THE_BEER_BASES_ACTIVE = false;
 
+// ---- Coop-Defense Basen ----
+/** Grid-Footprint einer Coop-Basis (Standard: 2 breit × 4 hoch). */
+export const COOP_DEFENSE_BASE_WIDTH_CELLS = 2;
+export const COOP_DEFENSE_BASE_HEIGHT_CELLS = 4;
+/** Wird beim Wechsel in den Coop-Modus von applyArenaMetricsForMode() gesetzt. */
+export let COOP_DEFENSE_BASES_ACTIVE = false;
+
 export interface ArenaGridRegion {
   minGridX: number;
   maxGridX: number;
@@ -437,6 +444,10 @@ export function isCaptureTheBeerBaseCell(gx: number, gy: number): boolean {
     || isGridCellInArenaRegion(getCaptureTheBeerBaseRegion('red'), gx, gy);
 }
 
+export function isCoopDefenseBasesActive(): boolean {
+  return COOP_DEFENSE_BASES_ACTIVE;
+}
+
 export function getArenaMetricsProfile(mode: GameMode, phase: GamePhase): ArenaMetricsProfile {
   if (phase !== 'ARENA') return DEFAULT_ARENA_METRICS_PROFILE;
   if (mode === CAPTURE_THE_BEER_MODE) return CAPTURE_THE_BEER_ARENA_METRICS_PROFILE;
@@ -456,6 +467,7 @@ export function applyArenaMetricsForMode(mode: GameMode, phase: GamePhase): void
   TRACK_SPAWN_MIN_COL = Math.floor(GRID_COLS * 0.25);
   TRACK_SPAWN_MAX_COL = Math.floor(GRID_COLS * 0.75);
   CAPTURE_THE_BEER_BASES_ACTIVE = mode === CAPTURE_THE_BEER_MODE;
+  COOP_DEFENSE_BASES_ACTIVE = mode === COOP_DEFENSE_MODE;
   TREE_COUNT = mode === CAPTURE_THE_BEER_MODE ? CAPTURE_THE_BEER_TREE_COUNT : DEFAULT_TREE_COUNT;
   ARENA_DURATION_SEC = mode === CAPTURE_THE_BEER_MODE ? CAPTURE_THE_BEER_ARENA_DURATION_SEC : DEFAULT_ARENA_DURATION_SEC;
 }
@@ -573,6 +585,9 @@ export const TEAM_RED_COLOR = COLORS.RED_3;
 export const CAPTURE_THE_BEER_BASE_TINT_ALPHA = 0.80;
 export const CAPTURE_THE_BEER_BLUE_BASE_TINT = TEAM_BLUE_COLOR;
 export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;
+/** Coop-Basis verwendet bewusst denselben Tint-Stil wie CTB, aber neutralfarbig (Gold). */
+export const COOP_DEFENSE_BASE_TINT = COLORS.GOLD_3;
+export const COOP_DEFENSE_BASE_TINT_ALPHA = CAPTURE_THE_BEER_BASE_TINT_ALPHA;
 
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;

@@ -8,9 +8,12 @@ import {
   CAPTURE_THE_BEER_BASE_TINT_ALPHA,
   CAPTURE_THE_BEER_BLUE_BASE_TINT,
   CAPTURE_THE_BEER_RED_BASE_TINT,
+  COOP_DEFENSE_BASE_TINT,
+  COOP_DEFENSE_BASE_TINT_ALPHA,
   getCaptureTheBeerBaseWorldBounds,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
+import { getBaseWorldBounds, getCoopDefenseBases, type BaseSpec } from './BaseRegistry';
 import { CAPTURE_THE_BEER_MODE } from '../gameModes';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, GameMode, GamePhase } from '../types';
 import { DECAL_SIZE } from './DecalConfig';
@@ -18,9 +21,22 @@ import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { RockGridIndex } from './RockGridIndex';
 
+/**
+ * Visualisierung einer Coop-Defense-Basis (round-scoped).
+ * Wird in Phase 1.3 um HP-Felder, Sprite-Damage-Stages und Kollisions-Body
+ * erweitert. Index in {@link ArenaBuilderResult.coopDefenseBaseVisuals} ist
+ * stabil und korrespondiert mit der Reihenfolge von {@link getCoopDefenseBases}.
+ */
+export interface CoopDefenseBaseVisual {
+  readonly spec: BaseSpec;
+  readonly tint: Phaser.GameObjects.Rectangle;
+}
+
 export interface ArenaBuilderResult {
-  /** Team-Basis-Tintflächen (round-scoped) */
+  /** CTB-Basis-Tintflächen (round-scoped) */
   baseZoneObjects: Phaser.GameObjects.Rectangle[];
+  /** Coop-Defense-Basen (round-scoped). Parallel zu getCoopDefenseBases(). */
+  coopDefenseBaseVisuals: CoopDefenseBaseVisual[];
   /** StaticGroup mit Felsen-Sprites (für Kollision + HP-Tracking) */
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
   /** Paralleles Array zu layout.rocks – null-Slots = bereits zerstört */
@@ -107,6 +123,7 @@ export class ArenaBuilder {
    */
   buildDynamic(layout: ArenaLayout): ArenaBuilderResult {
     const baseZoneObjects = this.buildCaptureTheBeerBaseZones();
+    const coopDefenseBaseVisuals = this.buildCoopDefenseBaseVisuals();
     const rockGroup    = this.scene.physics.add.staticGroup();
     const trunkGroup   = this.scene.physics.add.staticGroup();
     const rockObjects:  (Phaser.GameObjects.Image | null)[] = [];
@@ -159,6 +176,7 @@ export class ArenaBuilder {
 
     return {
       baseZoneObjects,
+      coopDefenseBaseVisuals,
       rockGroup,
       rockObjects,
       rockGrid,
@@ -312,6 +330,11 @@ export class ArenaBuilder {
     }
     result.baseZoneObjects.length = 0;
 
+    for (const base of result.coopDefenseBaseVisuals) {
+      if (base.tint.active) base.tint.destroy();
+    }
+    result.coopDefenseBaseVisuals.length = 0;
+
     // Felsen
     for (const img of result.rockObjects) {
       if (img?.active) img.destroy();
@@ -419,14 +442,36 @@ export class ArenaBuilder {
     if (!isCaptureTheBeerBaseModeActive()) return [];
 
     return [
-      this.createBaseZoneVisual(getCaptureTheBeerBaseWorldBounds('blue'), CAPTURE_THE_BEER_BLUE_BASE_TINT),
-      this.createBaseZoneVisual(getCaptureTheBeerBaseWorldBounds('red'), CAPTURE_THE_BEER_RED_BASE_TINT),
+      this.createBaseZoneVisual(
+        getCaptureTheBeerBaseWorldBounds('blue'),
+        CAPTURE_THE_BEER_BLUE_BASE_TINT,
+        CAPTURE_THE_BEER_BASE_TINT_ALPHA,
+      ),
+      this.createBaseZoneVisual(
+        getCaptureTheBeerBaseWorldBounds('red'),
+        CAPTURE_THE_BEER_RED_BASE_TINT,
+        CAPTURE_THE_BEER_BASE_TINT_ALPHA,
+      ),
     ];
+  }
+
+  private buildCoopDefenseBaseVisuals(): CoopDefenseBaseVisual[] {
+    const specs = getCoopDefenseBases();
+    if (specs.length === 0) return [];
+    return specs.map((spec) => ({
+      spec,
+      tint: this.createBaseZoneVisual(
+        getBaseWorldBounds(spec.region),
+        COOP_DEFENSE_BASE_TINT,
+        COOP_DEFENSE_BASE_TINT_ALPHA,
+      ),
+    }));
   }
 
   private createBaseZoneVisual(
     bounds: { x: number; y: number; width: number; height: number },
     color: number,
+    alpha: number,
   ): Phaser.GameObjects.Rectangle {
     const rect = this.scene.add.rectangle(
       bounds.x + bounds.width / 2,
@@ -434,7 +479,7 @@ export class ArenaBuilder {
       bounds.width,
       bounds.height,
       color,
-      CAPTURE_THE_BEER_BASE_TINT_ALPHA,
+      alpha,
     );
     rect.setDepth(DEPTH.BASES);
     return rect;

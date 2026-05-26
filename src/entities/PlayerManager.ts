@@ -20,6 +20,7 @@ import {
   getCaptureTheBeerTeamSpawnRegion,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
+import { getCoopDefenseBases } from '../arena/BaseRegistry';
 
 const PREFERRED_OPPONENT_DISTANCE_PX = CELL_SIZE * 10;
 const MIN_OPPONENT_DISTANCE_PX = CELL_SIZE * 2;
@@ -243,6 +244,20 @@ export class PlayerManager {
       }
       for (const pedestal of this.layout.powerUpPedestals) {
         blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
+      }
+    }
+
+    // Coop-Defense: Spieler dürfen nicht auf der Basis oder am Rand spawnen –
+    // die Basis ist Verteidigungsobjekt, kein Spawn-Bereich.
+    for (const base of getCoopDefenseBases()) {
+      const minX = Math.max(0, base.region.minGridX - 1);
+      const maxX = Math.min(GRID_COLS - 1, base.region.maxGridX + 1);
+      const minY = Math.max(0, base.region.minGridY - 1);
+      const maxY = Math.min(GRID_ROWS - 1, base.region.maxGridY + 1);
+      for (let gy = minY; gy <= maxY; gy++) {
+        for (let gx = minX; gx <= maxX; gx++) {
+          blocked.add(`${gx}_${gy}`);
+        }
       }
     }
 
