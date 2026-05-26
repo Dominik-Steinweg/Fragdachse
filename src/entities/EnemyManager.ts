@@ -9,6 +9,7 @@ import {
   GRID_ROWS,
   isGridCellInArenaRegion,
 } from '../config';
+import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import type { ArenaLayout, SyncedEnemyState } from '../types';
 import { EnemyEntity } from './EnemyEntity';
 
@@ -26,8 +27,38 @@ export class EnemyManager {
     if (this.enemies.size > 0) return;
 
     const spawn = this.resolveInitialSpawn(layout);
-    const enemy = new EnemyEntity(this.scene, DUMMY_ENEMY_ID, spawn.x, spawn.y, true);
+    const enemy = new EnemyEntity(this.scene, DUMMY_ENEMY_ID, spawn.x, spawn.y, true, 'dummy');
     this.enemies.set(enemy.id, enemy);
+  }
+
+  hostUpdateMovement(flowFieldService: EnemyFlowFieldService | null, movementLocked: boolean): void {
+    for (const enemy of this.enemies.values()) {
+      if (movementLocked || !flowFieldService) {
+        enemy.stopMovement();
+        continue;
+      }
+
+      const gridCell = flowFieldService.worldToGrid(enemy.sprite.x, enemy.sprite.y);
+      if (!gridCell) {
+        enemy.stopMovement();
+        continue;
+      }
+
+      const integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
+      if (integrationValue <= 0 || integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
+        enemy.stopMovement();
+        continue;
+      }
+
+      const vector = flowFieldService.getVectorAt(gridCell.gridX, gridCell.gridY);
+      if (vector.x === 0 && vector.y === 0) {
+        enemy.stopMovement();
+        continue;
+      }
+
+      const speed = enemy.getMoveSpeed();
+      enemy.setDesiredVelocity(vector.x * speed, vector.y * speed);
+    }
   }
 
   getNetSnapshot(): SyncedEnemyState[] {

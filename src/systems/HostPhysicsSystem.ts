@@ -590,7 +590,14 @@ export class HostPhysicsSystem {
       }
 
       const impulse = this.consumeImpulseVelocity(enemy.id, now);
-      const slowed = this.applyWorldMovementFactor(enemy.sprite.x, enemy.sprite.y, impulse.vx, impulse.vy, now);
+      const desiredVelocity = enemy.getDesiredVelocity();
+      const slowed = this.applyWorldMovementFactor(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        desiredVelocity.vx + impulse.vx,
+        desiredVelocity.vy + impulse.vy,
+        now,
+      );
       enemy.body.setVelocity(slowed.vx, slowed.vy);
       enemy.syncBar();
     }

@@ -1,8 +1,10 @@
 import * as Phaser from 'phaser';
 import {
   COLORS,
-  COOP_DEFENSE_ENEMY_HP_MAX,
+  COOP_DEFENSE_ENEMY_CONFIGS,
   COOP_DEFENSE_ENEMY_SIZE,
+  type CoopDefenseEnemyConfig,
+  type CoopDefenseEnemyKind,
   DEPTH,
   HP_BAR_HEIGHT,
   HP_BAR_OFFSET_Y,
@@ -13,21 +15,35 @@ import type { SyncedEnemyState } from '../types';
 export class EnemyEntity {
   readonly id: string;
   readonly sprite: Phaser.GameObjects.Arc;
+  readonly kind: CoopDefenseEnemyKind;
 
   private readonly authoritative: boolean;
+  private readonly config: CoopDefenseEnemyConfig;
   private readonly hpBarBg: Phaser.GameObjects.Rectangle;
   private readonly hpBarFg: Phaser.GameObjects.Rectangle;
-  private currentHp = COOP_DEFENSE_ENEMY_HP_MAX;
+  private currentHp = 0;
   private targetX: number;
   private targetY: number;
+  private desiredVelocityX = 0;
+  private desiredVelocityY = 0;
 
-  constructor(scene: Phaser.Scene, id: string, x: number, y: number, authoritative: boolean) {
+  constructor(
+    scene: Phaser.Scene,
+    id: string,
+    x: number,
+    y: number,
+    authoritative: boolean,
+    kind: CoopDefenseEnemyKind = 'dummy',
+  ) {
     this.id = id;
+    this.kind = kind;
     this.authoritative = authoritative;
+    this.config = COOP_DEFENSE_ENEMY_CONFIGS[kind];
+    this.currentHp = this.config.maxHp;
     this.targetX = x;
     this.targetY = y;
 
-    this.sprite = scene.add.circle(x, y, COOP_DEFENSE_ENEMY_SIZE * 0.5, COLORS.RED_2);
+    this.sprite = scene.add.circle(x, y, this.config.size * 0.5, COLORS.RED_2);
     this.sprite.setDepth(DEPTH.PLAYERS - 0.05);
     this.sprite.setStrokeStyle(2, 0x4a0000, 0.9);
 
@@ -40,7 +56,7 @@ export class EnemyEntity {
     if (authoritative) {
       scene.physics.add.existing(this.sprite);
       const body = this.body;
-      body.setCircle(COOP_DEFENSE_ENEMY_SIZE * 0.5);
+      body.setCircle(this.config.size * 0.5);
       body.setCollideWorldBounds(true);
       body.setBounce(0, 0);
       body.allowGravity = false;
@@ -68,6 +84,23 @@ export class EnemyEntity {
     this.targetY = y;
   }
 
+  setDesiredVelocity(vx: number, vy: number): void {
+    if (!this.authoritative) return;
+    this.desiredVelocityX = vx;
+    this.desiredVelocityY = vy;
+  }
+
+  getDesiredVelocity(): { vx: number; vy: number } {
+    return { vx: this.desiredVelocityX, vy: this.desiredVelocityY };
+  }
+
+  stopMovement(): void {
+    this.setDesiredVelocity(0, 0);
+    if (this.authoritative) {
+      this.body.setVelocity(0, 0);
+    }
+  }
+
   lerpStep(factor: number): void {
     if (this.authoritative) return;
     this.sprite.x = Phaser.Math.Linear(this.sprite.x, this.targetX, factor);
@@ -76,8 +109,9 @@ export class EnemyEntity {
   }
 
   setHp(hp: number): void {
-    this.currentHp = Phaser.Math.Clamp(hp, 0, COOP_DEFENSE_ENEMY_HP_MAX);
-    const ratio = this.currentHp / COOP_DEFENSE_ENEMY_HP_MAX;
+    const maxHp = this.getMaxHp();
+    this.currentHp = Phaser.Math.Clamp(hp, 0, maxHp);
+    const ratio = maxHp > 0 ? this.currentHp / maxHp : 0;
     this.hpBarFg.width = HP_BAR_WIDTH * ratio;
     const color = ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4;
     this.hpBarFg.setFillStyle(color);
@@ -85,6 +119,14 @@ export class EnemyEntity {
 
   getHp(): number {
     return this.currentHp;
+  }
+
+  getMaxHp(): number {
+    return this.config.maxHp;
+  }
+
+  getMoveSpeed(): number {
+    return this.config.moveSpeed;
   }
 
   syncBar(): void {
@@ -100,7 +142,7 @@ export class EnemyEntity {
       x: this.sprite.x,
       y: this.sprite.y,
       hp: this.currentHp,
-      maxHp: COOP_DEFENSE_ENEMY_HP_MAX,
+      maxHp: this.getMaxHp(),
     };
   }
 

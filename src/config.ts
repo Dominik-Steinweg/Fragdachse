@@ -372,10 +372,28 @@ export const COOP_DEFENSE_BASE_HEIGHT_CELLS = 4;
 export let COOP_DEFENSE_BASES_ACTIVE = false;
 /** Initial-HP einer Coop-Basis (Phase 1.3). */
 export const COOP_DEFENSE_BASE_HP_MAX = 1000;
-/** Initial-HP eines Coop-Defense-Gegners (Phase 2.1). */
-export const COOP_DEFENSE_ENEMY_HP_MAX = 100;
+export type CoopDefenseEnemyKind = 'dummy';
+
+export interface CoopDefenseEnemyConfig {
+  readonly maxHp: number;
+  readonly size: number;
+  readonly moveSpeed: number;
+}
+
+export const COOP_DEFENSE_ENEMY_CONFIGS = {
+  dummy: {
+    maxHp: 100,
+    size: 28,
+    moveSpeed: 92,
+  },
+} as const satisfies Record<CoopDefenseEnemyKind, CoopDefenseEnemyConfig>;
+
+/** Initial-HP des aktuellen Dummy-Gegners (Phase 2.1). */
+export const COOP_DEFENSE_ENEMY_HP_MAX = COOP_DEFENSE_ENEMY_CONFIGS.dummy.maxHp;
 /** Platzhalter-Groesse des Dummy-Gegners (px). */
-export const COOP_DEFENSE_ENEMY_SIZE = 28;
+export const COOP_DEFENSE_ENEMY_SIZE = COOP_DEFENSE_ENEMY_CONFIGS.dummy.size;
+/** Basisgeschwindigkeit des aktuellen Dummy-Gegners (px/s). */
+export const COOP_DEFENSE_ENEMY_MOVE_SPEED = COOP_DEFENSE_ENEMY_CONFIGS.dummy.moveSpeed;
 /** Bevorzugte Test-Spawn-Spalte fuer den ersten Dummy-Gegner. */
 export const COOP_DEFENSE_ENEMY_TEST_SPAWN_GRID_X = 2;
 /** HP-Bar Höhe für Coop-Basen (~2× Spieler-HP-Bar). */

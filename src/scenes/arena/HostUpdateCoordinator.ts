@@ -75,6 +75,7 @@ export class HostUpdateCoordinator {
     const now = Date.now();
 
     this.ctx.enemyFlowFieldService?.update(now);
+    this.ctx.enemyManager?.hostUpdateMovement(this.ctx.enemyFlowFieldService, countdownActive);
 
     if (!countdownActive && this.ctx.resourceSystem && this.ctx.burrowSystem) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
