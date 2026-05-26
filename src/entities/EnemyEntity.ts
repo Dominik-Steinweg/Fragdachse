@@ -104,8 +104,8 @@ export class EnemyEntity {
 
   stopMovement(): void {
     this.setDesiredVelocity(0, 0);
-    if (this.authoritative) {
-      this.body.setVelocity(0, 0);
+    if (this.authoritative && this.sprite.body) {
+      (this.sprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     }
   }
 

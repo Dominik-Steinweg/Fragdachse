@@ -26,6 +26,7 @@ export class CoopDefenseEnemyAttackSystem {
 
   hostUpdate(delta: number, now: number): void {
     for (const enemy of this.enemyManager.getAllEnemies()) {
+      if (!enemy.sprite.active) continue;
       enemy.decayWeaponSpread(delta, now);
 
       const weapon = enemy.getWeapon();
