@@ -6,6 +6,7 @@ import {
   COOP_DEFENSE_FLOW_FIELD_GROUND_COST,
   COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS,
   COOP_DEFENSE_FLOW_FIELD_ROCK_COST,
+  COOP_DEFENSE_FLOW_FIELD_TRACK_COST,
   COOP_DEFENSE_FLOW_FIELD_TRUNK_COST,
 } from '../config';
 import {
@@ -77,7 +78,7 @@ const CELL_DEFINITIONS = {
   rock: { code: 1, cost: COOP_DEFENSE_FLOW_FIELD_ROCK_COST, isTraversable: false, isDestructible: true },
   trunk: { code: 2, cost: COOP_DEFENSE_FLOW_FIELD_TRUNK_COST, isTraversable: false, isDestructible: false },
   dirt: { code: 3, cost: COOP_DEFENSE_FLOW_FIELD_DIRT_COST, isTraversable: true, isDestructible: false },
-  track: { code: 4, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
+  track: { code: 4, cost: COOP_DEFENSE_FLOW_FIELD_TRACK_COST, isTraversable: true, isDestructible: false },
   pedestal: { code: 5, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
   base: { code: 6, cost: COOP_DEFENSE_FLOW_FIELD_BASE_COST, isTraversable: false, isDestructible: false },
   outOfBounds: { code: 7, cost: COOP_DEFENSE_FLOW_FIELD_TRUNK_COST, isTraversable: false, isDestructible: false },
@@ -432,7 +433,7 @@ export class EnemyFlowFieldService {
           for (const [dx, dy] of directions) {
             const neighborX = gridX + dx;
             const neighborY = gridY + dy;
-            if (!this.isTraversableAt(neighborX, neighborY)) continue;
+            if (!this.isGoalCandidateAt(neighborX, neighborY)) continue;
             goalSet.add(this.toIndex(neighborX, neighborY));
           }
         }
@@ -458,6 +459,16 @@ export class EnemyFlowFieldService {
     return gridY * this.metrics.cols + gridX;
   }
 
+  private isFlowPassableAt(gridX: number, gridY: number): boolean {
+    if (!this.isInBounds(gridX, gridY)) return false;
+    return this.costs[this.toIndex(gridX, gridY)] < COOP_DEFENSE_FLOW_FIELD_TRUNK_COST;
+  }
+
+  private isGoalCandidateAt(gridX: number, gridY: number): boolean {
+    if (!this.isFlowPassableAt(gridX, gridY)) return false;
+    return this.kindCodes[this.toIndex(gridX, gridY)] !== CELL_DEFINITIONS.base.code;
+  }
+
   private isReachableNeighbor(
     fromGridX: number,
     fromGridY: number,
@@ -465,7 +476,7 @@ export class EnemyFlowFieldService {
     neighborGridY: number,
   ): boolean {
     if (!this.isInBounds(neighborGridX, neighborGridY)) return false;
-    if (!this.isTraversableAt(neighborGridX, neighborGridY)) return false;
+    if (!this.isFlowPassableAt(neighborGridX, neighborGridY)) return false;
 
     const deltaX = neighborGridX - fromGridX;
     const deltaY = neighborGridY - fromGridY;
@@ -527,7 +538,7 @@ export class EnemyFlowFieldService {
         const index = this.toIndex(gridX, gridY);
         const vIndex = index * 2;
 
-        if (!this.isTraversableAt(gridX, gridY)) {
+        if (!this.isFlowPassableAt(gridX, gridY)) {
           this.vectorField[vIndex] = 0;
           this.vectorField[vIndex + 1] = 0;
           continue;

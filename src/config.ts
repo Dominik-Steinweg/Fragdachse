@@ -390,6 +390,8 @@ export const COOP_DEFENSE_BASE_HP_BAR_FILL = 0x00cc44;
 export const COOP_DEFENSE_FLOW_FIELD_GROUND_COST = 1;
 /** Dirt bleibt begehbar, ist aber leicht unattraktiver als Gras. */
 export const COOP_DEFENSE_FLOW_FIELD_DIRT_COST = 2;
+/** Gleise bleiben passierbar, sollen aber deutlicher gemieden werden als Gras oder Dirt. */
+export const COOP_DEFENSE_FLOW_FIELD_TRACK_COST = 4;
 /** Zerstoerbare Hindernisse bleiben semantisch separat, sind aber aktuell blockiert. */
 export const COOP_DEFENSE_FLOW_FIELD_ROCK_COST = 100;
 /** Unzerstoerbare, unpassierbare Hindernisse. */
