@@ -14,6 +14,7 @@ import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
 import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
+import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { TimeBubbleSystem }  from '../../systems/TimeBubbleSystem';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
@@ -42,7 +43,7 @@ import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
 import type { ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
-import type { RoundResult }           from '../../network/NetworkBridge';
+import type { RoundOutcome, RoundResult, RoundState } from '../../network/NetworkBridge';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { BaseManager } from '../../entities/BaseManager';
@@ -168,6 +169,10 @@ export class ArenaLifecycleCoordinator {
     bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
     bridge.setArenaStartTime(arenaStartTime);
     bridge.setRoundEndTime(arenaStartTime + ARENA_DURATION_SEC * 1000);
+    const roundState: RoundState | null = isCoopDefenseMode(bridge.getGameMode())
+      ? { status: 'active', roundStartTime: arenaStartTime }
+      : null;
+    bridge.publishRoundState(roundState);
     bridge.setGamePhase('ARENA');
   }
 
@@ -209,6 +214,23 @@ export class ArenaLifecycleCoordinator {
       };
     });
     bridge.publishRoundResults(results);
+  }
+
+  hostCompleteRound(roundOutcome: RoundOutcome | null = null): void {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
+
+    if (roundOutcome) {
+      bridge.publishRoundState({
+        status: roundOutcome,
+        roundStartTime: bridge.getArenaStartTime(),
+        endedAt: Date.now(),
+      });
+    } else {
+      bridge.publishRoundState(null);
+    }
+
+    this.hostSaveRoundResults();
+    bridge.setGamePhase('LOBBY');
   }
 
   terminateMatch(): void {
@@ -270,6 +292,9 @@ export class ArenaLifecycleCoordinator {
       : null;
     this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode())
       ? new EnemyManager(this.scene)
+      : null;
+    this.ctx.coopDefenseRoundStateSystem = bridge.isHost() && this.ctx.baseManager && isCoopDefenseMode(bridge.getGameMode())
+      ? new CoopDefenseRoundStateSystem(this.ctx.baseManager, () => bridge.computeSecondsLeft())
       : null;
     if (bridge.isHost()) {
       this.ctx.enemyFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
@@ -588,8 +613,8 @@ export class ArenaLifecycleCoordinator {
             victimName:  victimProfile.name,
             victimColor: victimProfile.colorHex,
           });
+          this.ctx.powerUpSystem?.onPlayerKilled(x, y);
         }
-        this.ctx.powerUpSystem?.onPlayerKilled(x, y);
       });
 
       this.ctx.rockRegistry = new RockRegistry(layout);
@@ -715,6 +740,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.leafBlower.setTerrainColorSampler(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;
+    this.ctx.coopDefenseRoundStateSystem = null;
 
     this.renderers.powerUp.clear();
     this.renderers.nuke.clear();
@@ -815,7 +841,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
     this.ctx.rightPanel.transitionToLobby();
     this.ctx.centerHUD.transitionToLobby();
-    this.ctx.rightPanel.showRoundResults(bridge.getRoundResults());
+    this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
   }

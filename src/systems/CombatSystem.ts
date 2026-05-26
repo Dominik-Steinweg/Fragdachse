@@ -1788,6 +1788,11 @@ export class CombatSystem {
     if (amount <= 0) return;
     if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
 
+    if (attackerId && attackerId !== targetId) {
+      this.lastAttacker.set(targetId, attackerId);
+      if (weaponName) this.lastWeapon.set(targetId, weaponName);
+    }
+
     const x = enemy.sprite.x;
     const y = enemy.sprite.y;
     const previousHp = enemy.getHp();
@@ -1825,9 +1830,16 @@ export class CombatSystem {
         rotation: 0,
         seed: this.nextEffectSeed(),
       });
-    }
 
-    void weaponName;
+      const killerId = this.lastAttacker.get(targetId);
+      if (killerId && killerId !== targetId) {
+        const weapon = this.lastWeapon.get(targetId) ?? weaponName ?? 'Waffe';
+        this.onKillCb?.(killerId, targetId, weapon, x, y);
+      }
+
+      this.lastAttacker.delete(targetId);
+      this.lastWeapon.delete(targetId);
+    }
   }
 
   private handleDeath(playerId: string, x: number, y: number, seed: number): void {

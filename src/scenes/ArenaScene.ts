@@ -51,7 +51,7 @@ import {
 } from '../utils/roomQuality';
 import { getStoredEffectsVolume, getStoredMasterVolume, getStoredMusicVolume } from '../utils/localPreferences';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
-import { isTeamGameMode, usesDynamicCamera } from '../gameModes';
+import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 
@@ -126,6 +126,7 @@ export class ArenaScene extends Phaser.Scene {
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private lastCameraScrollX = 0;
   private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
+  private coopDefenseDebugDamageKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelsHeld = false;
   private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
@@ -271,7 +272,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefenseRoundStateSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
     };
 
@@ -609,7 +610,7 @@ export class ArenaScene extends Phaser.Scene {
       this.updateRoomQuality(this.time.now, players);
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.refreshPlayerList(players);
-      this.ctx.rightPanel.showRoundResults(bridge.getRoundResults());
+      this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       if (localProfile) this.ctx.leftPanel.updateLocalName(localProfile.name);
       this.ctx.leftPanel.refreshColorIndicator();
@@ -640,12 +641,17 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       if (bridge.isHost()) {
+        if (isCoopDefenseMode(bridge.getGameMode()) && this.coopDefenseDebugDamageKey && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)) {
+          this.ctx.coopDefenseRoundStateSystem?.applyDebugBaseDamage(50);
+        }
         this.lifecycle.spawnReadyPlayers();
         if (countdownActive) this.lifecycle.syncHostLoadoutsFromCommittedSelections();
         this.hostUpdate.runHostUpdate(delta);
-        if (!countdownActive && secs <= 0) {
-          this.lifecycle.hostSaveRoundResults();
-          bridge.setGamePhase('LOBBY');
+        const coopRoundOutcome = this.ctx.coopDefenseRoundStateSystem?.update() ?? null;
+        if (coopRoundOutcome) {
+          this.lifecycle.hostCompleteRound(coopRoundOutcome);
+        } else if (!countdownActive && secs <= 0) {
+          this.lifecycle.hostCompleteRound();
         }
       } else {
         this.clientUpdate.runClientUpdate(delta);
@@ -926,6 +932,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!keyboard) return;
 
     this.arenaPanelTabKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true);
+    this.coopDefenseDebugDamageKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K, true);
     if (this.optionsHotkeyHandler) {
       keyboard.off('keydown-O', this.optionsHotkeyHandler);
       this.optionsHotkeyHandler = null;

@@ -10,7 +10,7 @@
 import * as Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, COLORS, toCssColor } from '../config';
 import type { TeamId } from '../types';
-import type { RoundResult } from '../network/NetworkBridge';
+import type { RoundResult, RoundState } from '../network/NetworkBridge';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_OFFSET_X / 2;
@@ -54,6 +54,7 @@ const RESULTS_ENTRY_H    = 26;
 const RESULTS_FONT       = '18px';
 const RESULTS_HEADER_FONT = '20px';
 const RESULTS_LABEL_FONT = '14px';
+const RESULTS_OUTCOME_FONT = '18px';
 
 const COLOR_DIM       = '#607080';
 const COLOR_KILLFEED_WEAPON = toCssColor(COLORS.GOLD_1);
@@ -135,6 +136,7 @@ export class RightSidePanel {
   // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
   private resultsHeader!: Phaser.GameObjects.Text;
   private resultsSep!:    Phaser.GameObjects.Rectangle;
+  private resultsOutcome!: Phaser.GameObjects.Text;
   private resultsFragsLabel!: Phaser.GameObjects.Text;
   private resultsEmptyState!: Phaser.GameObjects.Text;
   private resultsRows: {
@@ -294,9 +296,9 @@ export class RightSidePanel {
    * Zeigt den Endstand der letzten Runde im Lobby-Panel.
     * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
    */
-  showRoundResults(results: RoundResult[] | null): void {
+  showRoundResults(results: RoundResult[] | null, roundState: RoundState | null = null): void {
     if (results && results.some((result) => result.teamId === 'blue' || result.teamId === 'red')) {
-      this.renderGroupedRoundResults(results);
+      this.renderGroupedRoundResults(results, roundState);
       return;
     }
 
@@ -310,6 +312,7 @@ export class RightSidePanel {
 
     this.resultsHeader.setVisible(true);
     this.resultsSep.setVisible(true);
+  this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
 
@@ -486,6 +489,13 @@ export class RightSidePanel {
     this.resultsSep = this.scene.add.rectangle(LOBBY_SIDEBAR_CENTER_X, RESULTS_SEP_Y, LOBBY_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
     ).setScrollFactor(0) as Phaser.GameObjects.Rectangle;
 
+    this.resultsOutcome = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_LABEL_Y, '', {
+      fontSize: RESULTS_OUTCOME_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.GREEN_2),
+      fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+
     this.resultsFragsLabel = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, RESULTS_LABEL_Y, 'F R A G S', {
       fontSize: RESULTS_LABEL_FONT,
       fontFamily: 'monospace',
@@ -500,7 +510,7 @@ export class RightSidePanel {
       align: 'center',
     }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
 
-    this.lobbyContainer.add([this.resultsHeader, this.resultsSep, this.resultsFragsLabel, this.resultsEmptyState]);
+    this.lobbyContainer.add([this.resultsHeader, this.resultsSep, this.resultsOutcome, this.resultsFragsLabel, this.resultsEmptyState]);
 
     const blueLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
       fontSize: RESULTS_HEADER_FONT,
@@ -668,7 +678,7 @@ export class RightSidePanel {
     return rowIndex;
   }
 
-  private renderGroupedRoundResults(results: RoundResult[]): void {
+  private renderGroupedRoundResults(results: RoundResult[], roundState: RoundState | null): void {
     const blueEntries = results.filter((result) => result.teamId === 'blue').sort((a, b) => b.frags - a.frags);
     const redEntries = results.filter((result) => result.teamId === 'red').sort((a, b) => b.frags - a.frags);
     const hasData = blueEntries.length > 0 || redEntries.length > 0;
@@ -677,6 +687,7 @@ export class RightSidePanel {
 
     this.resultsHeader.setVisible(true);
     this.resultsSep.setVisible(true);
+    this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
     this.resultsTeamHeaders?.blue.label.setVisible(hasData).setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y);
@@ -709,5 +720,18 @@ export class RightSidePanel {
     const scoredEntry = entries.find((entry) => entry.teamScore !== undefined);
     if (scoredEntry?.teamScore !== undefined) return scoredEntry.teamScore;
     return entries.reduce((sum, entry) => sum + entry.frags, 0);
+  }
+
+  private renderRoundOutcome(hasData: boolean, roundState: RoundState | null): void {
+    if (!hasData || !roundState || roundState.status === 'active') {
+      this.resultsOutcome.setVisible(false);
+      return;
+    }
+
+    const isVictory = roundState.status === 'victory';
+    this.resultsOutcome
+      .setText(isVictory ? 'SIEG' : 'NIEDERLAGE')
+      .setColor(toCssColor(isVictory ? COLORS.GREEN_2 : COLORS.RED_2))
+      .setVisible(true);
   }
 }

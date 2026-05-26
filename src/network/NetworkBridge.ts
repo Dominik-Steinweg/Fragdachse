@@ -51,6 +51,7 @@ const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive
 const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
+const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
@@ -84,6 +85,14 @@ export interface RoundResult {
   frags:    number;
   teamId:   TeamId | null;
   teamScore?: number;
+}
+
+export type RoundOutcome = 'victory' | 'defeat';
+
+export interface RoundState {
+  status: 'active' | RoundOutcome;
+  roundStartTime: number;
+  endedAt?: number;
 }
 
 export interface GameState {
@@ -1499,6 +1508,17 @@ export class NetworkBridge {
   /** Liest den gespeicherten Endstand (null = noch keine Runde gespielt). */
   getRoundResults(): RoundResult[] | null {
     return (getState(KEY_ROUND_RESULTS) as RoundResult[] | undefined) ?? null;
+  }
+
+  /** Host-only: speichert den aktuellen bzw. finalen Rundenstatus. */
+  publishRoundState(state: RoundState | null): void {
+    if (!isHost()) return;
+    setState(KEY_ROUND_STATE, state, true);
+  }
+
+  /** Liest den aktuellen bzw. letzten finalen Rundenstatus. */
+  getRoundState(): RoundState | null {
+    return (getState(KEY_ROUND_STATE) as RoundState | null | undefined) ?? null;
   }
 
   // ── Kill-Ereignis-RPC: Host → Alle ────────────────────────────────────────
