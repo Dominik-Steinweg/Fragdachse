@@ -36,6 +36,39 @@ export class EnemyManager {
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
+  getEnemy(id: string): EnemyEntity | undefined {
+    return this.enemies.get(id);
+  }
+
+  getAllEnemies(): EnemyEntity[] {
+    return [...this.enemies.values()];
+  }
+
+  hasEnemy(id: string): boolean {
+    return this.enemies.has(id);
+  }
+
+  applyDamage(id: string, damage: number): { died: boolean; remainingHp: number } | null {
+    const enemy = this.enemies.get(id);
+    if (!enemy || damage <= 0) return null;
+
+    const remainingHp = Math.max(0, enemy.getHp() - damage);
+    enemy.setHp(remainingHp);
+    if (remainingHp > 0) {
+      return { died: false, remainingHp };
+    }
+
+    enemy.destroy();
+    this.enemies.delete(id);
+    return { died: true, remainingHp: 0 };
+  }
+
+  syncHostVisuals(): void {
+    for (const enemy of this.enemies.values()) {
+      enemy.syncBar();
+    }
+  }
+
   applySnapshot(snapshot: readonly SyncedEnemyState[]): void {
     const activeIds = new Set(snapshot.map((enemy) => enemy.id));
 

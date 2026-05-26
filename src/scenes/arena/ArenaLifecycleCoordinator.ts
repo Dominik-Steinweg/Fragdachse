@@ -294,6 +294,7 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+    this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, damage, attackerId);
@@ -310,6 +311,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerImpulseCallback((playerId, vx, vy, durationMs, sourcePlayerId) => {
       this.ctx.hostPhysics.addRecoil(playerId, vx, vy, durationMs, sourcePlayerId);
     });
+    this.ctx.combatSystem.setEnemyImpulseCallback((enemyId, vx, vy, durationMs, sourcePlayerId) => {
+      this.ctx.hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId);
+    });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
       this.ctx.gameAudioSystem.playSound('sfx_player_death', x, y);
@@ -322,6 +326,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.trunkGroup,
     );
     this.ctx.hostPhysics.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
+    this.ctx.hostPhysics.setEnemyManager(this.ctx.enemyManager);
 
     if (bridge.isHost()) {
       this.ctx.resourceSystem = new ResourceSystem();
@@ -657,15 +662,18 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setArenaObstacles(null, null);
     this.ctx.combatSystem.setBaseObstacles(null);
+    this.ctx.combatSystem.setEnemyManager(null);
     this.ctx.combatSystem.setTrainSegments(null);
     this.ctx.combatSystem.setRockDamageCallback(null);
     this.ctx.combatSystem.setTrainDamageCallback(null);
     this.ctx.combatSystem.setProjectileImpactCallback(null);
     this.ctx.combatSystem.setPlayerImpulseCallback(null);
+    this.ctx.combatSystem.setEnemyImpulseCallback(null);
     this.ctx.combatSystem.setKillCallback(() => { /* noop */ });
     this.ctx.hostPhysics.setBurrowSystem(null);
     this.ctx.hostPhysics.setLoadoutManager(null);
     this.ctx.hostPhysics.setTimeBubbleSystem(null);
+    this.ctx.hostPhysics.setEnemyManager(null);
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);

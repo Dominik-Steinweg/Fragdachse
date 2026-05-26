@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { CombatSystem }  from './CombatSystem';
@@ -63,11 +64,16 @@ export class HostPhysicsSystem {
   private trunkCollidersSetup = new Set<string>();
   private baseCollidersSetup  = new Set<string>();
   private playerColliders     = new Map<string, Phaser.Physics.Arcade.Collider[]>();
+  private enemyRockCollidersSetup  = new Set<string>();
+  private enemyTrunkCollidersSetup = new Set<string>();
+  private enemyBaseCollidersSetup  = new Set<string>();
+  private enemyColliders           = new Map<string, Phaser.Physics.Arcade.Collider[]>();
 
   // Optionale Referenzen
   private burrowSystem:   BurrowSystemType   | null = null;
   private loadoutManager: LoadoutManagerType | null = null;
   private timeBubbleSystem: TimeBubbleSystem | null = null;
+  private enemyManager: EnemyManager | null = null;
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
@@ -98,6 +104,7 @@ export class HostPhysicsSystem {
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void  { this.loadoutManager = lm; }
   setTimeBubbleSystem(system: TimeBubbleSystem | null): void { this.timeBubbleSystem = system; }
+  setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
 
   // ── Rückstoß ─────────────────────────────────────────────────────────────
 
@@ -165,6 +172,21 @@ export class HostPhysicsSystem {
       const ny = dist > 0.001 ? dy / dist : -1;
       this.addRecoil(player.id, nx * impulse, ny * impulse, durationMs, ownerId);
     }
+
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      const dx = enemy.sprite.x - x;
+      const dy = enemy.sprite.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > radius) continue;
+
+      const t = Phaser.Math.Clamp(dist / radius, 0, 1);
+      const impulse = force * (1 - t);
+      if (impulse <= 0) continue;
+
+      const nx = dist > 0.001 ? dx / dist : 0;
+      const ny = dist > 0.001 ? dy / dist : -1;
+      this.addRecoil(enemy.id, nx * impulse, ny * impulse, durationMs, ownerId);
+    }
   }
 
   private consumeImpulseVelocity(playerId: string, now: number): { vx: number; vy: number } {
@@ -203,6 +225,18 @@ export class HostPhysicsSystem {
     now: number,
   ): { vx: number; vy: number } {
     if (this.burrowSystem?.isBurrowed(playerId)) return { vx, vy };
+    const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
+    if (factor >= 0.999) return { vx, vy };
+    return { vx: vx * factor, vy: vy * factor };
+  }
+
+  private applyWorldMovementFactor(
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    now: number,
+  ): { vx: number; vy: number } {
     const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
     if (factor >= 0.999) return { vx, vy };
     return { vx: vx * factor, vy: vy * factor };
@@ -282,10 +316,17 @@ export class HostPhysicsSystem {
       for (const colliders of this.playerColliders.values()) {
         for (const c of colliders) c.destroy();
       }
+      for (const colliders of this.enemyColliders.values()) {
+        for (const c of colliders) c.destroy();
+      }
       this.playerColliders.clear();
+      this.enemyColliders.clear();
       this.rockCollidersSetup.clear();
       this.trunkCollidersSetup.clear();
       this.baseCollidersSetup.clear();
+      this.enemyRockCollidersSetup.clear();
+      this.enemyTrunkCollidersSetup.clear();
+      this.enemyBaseCollidersSetup.clear();
       this.burrowedPlayers.clear();
       this.dashStates.clear();
       this.dashBurstPlayers.clear();
@@ -328,6 +369,20 @@ export class HostPhysicsSystem {
     this.forcedMovement.delete(id);
   }
 
+  removeEnemy(id: string): void {
+    const colliders = this.enemyColliders.get(id);
+    if (colliders) {
+      for (const c of colliders) c.destroy();
+      this.enemyColliders.delete(id);
+    }
+    this.enemyRockCollidersSetup.delete(id);
+    this.enemyTrunkCollidersSetup.delete(id);
+    this.enemyBaseCollidersSetup.delete(id);
+    this.pendingRecoils.delete(id);
+    this.recentImpulseSources.delete(id);
+    this.forcedMovement.delete(id);
+  }
+
   // ── Frame-Update ─────────────────────────────────────────────────────────
 
   /**
@@ -338,6 +393,11 @@ export class HostPhysicsSystem {
     if (!this.bridge.isHost()) return;
 
     const now = Date.now();
+
+    for (const enemyId of [...this.enemyColliders.keys()]) {
+      if (this.enemyManager?.hasEnemy(enemyId)) continue;
+      this.removeEnemy(enemyId);
+    }
 
     for (const player of this.playerManager.getAllPlayers()) {
       // Lazy: Collider mit Felsen anlegen
@@ -505,6 +565,34 @@ export class HostPhysicsSystem {
         now,
       );
       player.body.setVelocity(slowed.vx, slowed.vy);
+    }
+
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (this.rockGroup && !this.enemyRockCollidersSetup.has(enemy.id)) {
+        const existing = this.enemyColliders.get(enemy.id) ?? [];
+        existing.push(this.scene.physics.add.collider(enemy.sprite, this.rockGroup));
+        this.enemyColliders.set(enemy.id, existing);
+        this.enemyRockCollidersSetup.add(enemy.id);
+      }
+
+      if (this.trunkGroup && !this.enemyTrunkCollidersSetup.has(enemy.id)) {
+        const existing = this.enemyColliders.get(enemy.id) ?? [];
+        existing.push(this.scene.physics.add.collider(enemy.sprite, this.trunkGroup));
+        this.enemyColliders.set(enemy.id, existing);
+        this.enemyTrunkCollidersSetup.add(enemy.id);
+      }
+
+      if (this.baseGroup && !this.enemyBaseCollidersSetup.has(enemy.id)) {
+        const existing = this.enemyColliders.get(enemy.id) ?? [];
+        existing.push(this.scene.physics.add.collider(enemy.sprite, this.baseGroup));
+        this.enemyColliders.set(enemy.id, existing);
+        this.enemyBaseCollidersSetup.add(enemy.id);
+      }
+
+      const impulse = this.consumeImpulseVelocity(enemy.id, now);
+      const slowed = this.applyWorldMovementFactor(enemy.sprite.x, enemy.sprite.y, impulse.vx, impulse.vy, now);
+      enemy.body.setVelocity(slowed.vx, slowed.vy);
+      enemy.syncBar();
     }
   }
 }

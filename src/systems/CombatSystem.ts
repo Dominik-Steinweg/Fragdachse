@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
@@ -10,6 +11,7 @@ import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, RadialDamageF
 import {
   ARENA_HEIGHT,
   ARMOR_MAX,
+  COLORS,
   HP_MAX, RESPAWN_DELAY_MS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,
@@ -66,6 +68,7 @@ export interface HitscanTraceResult {
   readonly endY: number;
   readonly distance: number;
   readonly hitPlayerId: string | null;
+  readonly hitEnemyId: string | null;
   readonly hitDecoyId: number | null;
   readonly hitObstacle: boolean;
 }
@@ -81,12 +84,13 @@ export interface HitscanTraceOptions {
 }
 
 interface HitscanSpriteTarget {
-  sprite: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Arc;
   body: { velocity: { x: number; y: number } } | null;
 }
 
 type SweptProjectileHit =
   | { kind: 'player'; playerId: string; distance: number; x: number; y: number }
+  | { kind: 'enemy'; enemyId: string; distance: number; x: number; y: number }
   | { kind: 'decoy'; decoyId: number; distance: number; x: number; y: number };
 
 export class CombatSystem {
@@ -120,6 +124,7 @@ export class CombatSystem {
   private powerUpSystem:    PowerUpSystemType   | null  = null;
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null = null;
   private decoySystem:      DecoySystem | null = null;
+  private enemyManager:     EnemyManager | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
@@ -136,6 +141,7 @@ export class CombatSystem {
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
   private onProjectileImpact: ((projectileId: number, x: number, y: number) => void) | null = null;
   private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
+  private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -157,6 +163,7 @@ export class CombatSystem {
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void { this.stinkCloudSystem = sc; }
   setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
+  setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -209,6 +216,10 @@ export class CombatSystem {
     this.onPlayerImpulse = cb;
   }
 
+  setEnemyImpulseCallback(cb: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null): void {
+    this.onEnemyImpulse = cb;
+  }
+
   /** Setzt den Kill-Callback (Host-only). */
   setKillCallback(cb: (killerId: string, victimId: string, weapon: string, x: number, y: number) => void): void {
     this.onKillCb = cb;
@@ -245,7 +256,7 @@ export class CombatSystem {
 
   getHP(id: string):    number  { return this.hp.get(id)    ?? HP_MAX; }
   getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
-  isAlive(id: string):  boolean { return this.alive.get(id) ?? false;  }
+  isAlive(id: string):  boolean { return (this.alive.get(id) ?? false) || this.enemyManager?.hasEnemy(id) === true; }
   isBurrowed(id: string): boolean { return this.burrowSystem?.isBurrowed(id) ?? false; }
   getBurnStackCount(id: string): number {
     const attackerStates = this.burnStates.get(id);
@@ -274,6 +285,11 @@ export class CombatSystem {
     visualContext?:  DamageVisualContext,
     options?:        DamageApplicationOptions,
   ): void {
+    if (this.enemyManager?.hasEnemy(targetId)) {
+      this.applyEnemyDamage(targetId, amount, attackerId, weaponName, visualContext, options);
+      return;
+    }
+
     if (!this.isAlive(targetId)) return;
     if (amount <= 0) return;
     if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
@@ -427,6 +443,15 @@ export class CombatSystem {
       if (this.shouldBlockWithShield(player.id, category, roundedDamage, x, y)) continue;
       this.applyDamage(player.id, roundedDamage, false, ownerId, options?.weaponName ?? 'Granate', { sourceX: x, sourceY: y }, options);
     }
+
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
+      if (dist > radius) continue;
+
+      const roundedDamage = Math.round(computeRadialDamage(dist, radius, damage, options?.damageFalloff));
+      if (roundedDamage <= 0) continue;
+      this.applyDamage(enemy.id, roundedDamage, false, ownerId, options?.weaponName ?? 'Granate', { sourceX: x, sourceY: y }, options);
+    }
   }
 
   applyExplosionDamage(
@@ -454,6 +479,17 @@ export class CombatSystem {
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
       void sourceSlot;
       this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
+        allowTeamDamage: effect.allowTeamDamage,
+      });
+    }
+
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
+      if (dist > effect.radius) continue;
+
+      const roundedDamage = Math.round(computeProjectileExplosionDamage(dist, effect));
+      if (roundedDamage <= 0) continue;
+      this.applyDamage(enemy.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
       });
     }
@@ -569,6 +605,57 @@ export class CombatSystem {
 
       if (projectileConsumed) continue;
 
+      for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+        if (proj.ownerId === enemy.id) continue;
+
+        if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemy.sprite.getBounds())) {
+          const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
+            ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
+            : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
+          const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
+          const actualDamage = proj.damage * loadoutMult * powerUpMult;
+
+          if (proj.isBfg || proj.projectileStyle === 'gauss') {
+            if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
+            const enemyKey = `enemy_${enemy.id}`;
+            if (proj.projectileStyle === 'gauss') {
+              if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
+              if (proj.gaussHitPlayers.has(enemyKey)) continue;
+              proj.gaussHitPlayers.add(enemyKey);
+            } else {
+              if (proj.bfgHitPlayers.has(enemyKey)) continue;
+              proj.bfgHitPlayers.add(enemyKey);
+            }
+            this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, {
+              sourceX: proj.sprite.x,
+              sourceY: proj.sprite.y,
+              dirX: proj.body.velocity.x,
+              dirY: proj.body.velocity.y,
+            }, {
+              allowTeamDamage: proj.allowTeamDamage,
+            });
+            continue;
+          }
+
+          if (proj.isFlame) {
+            this.applyBurnStack(
+              enemy.id,
+              proj.ownerId,
+              proj.burnDurationMs ?? 0,
+              proj.burnDamagePerTick ?? 0,
+              proj.burnTickIntervalMs ?? 0,
+              proj.weaponName,
+            );
+          }
+
+          this.handleEnemyHit(proj.id, enemy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+          projectileConsumed = true;
+          break;
+        }
+      }
+
+      if (projectileConsumed) continue;
+
       for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
         if (proj.ownerId === decoy.ownerId) continue;
 
@@ -637,6 +724,18 @@ export class CombatSystem {
       }
     }
 
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (proj.ownerId === enemy.id) continue;
+
+      const enemyRadius = Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5 + projectileRadius;
+      const hit = this.findNearestCircleHit(line, enemy.sprite.x, enemy.sprite.y, enemyRadius);
+      if (!hit) continue;
+      if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
+      if (!bestHit || hit.distance < bestHit.distance) {
+        bestHit = { kind: 'enemy', enemyId: enemy.id, distance: hit.distance, x: hit.x, y: hit.y };
+      }
+    }
+
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
       if (proj.ownerId === decoy.ownerId) continue;
 
@@ -671,6 +770,11 @@ export class CombatSystem {
       }
 
       this.handleHit(proj.id, bestHit.playerId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName, canDealDamage);
+      return true;
+    }
+
+    if (bestHit.kind === 'enemy') {
+      this.handleEnemyHit(proj.id, bestHit.enemyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
       return true;
     }
 
@@ -760,7 +864,7 @@ export class CombatSystem {
       endY: Math.round(trace.endY),
       color: playerColor,
       thickness: traceThickness,
-      impactKind: trace.hitPlayerId ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
+      impactKind: (trace.hitPlayerId || trace.hitEnemyId) ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       visualPreset,
       shooterId,
       shotId,
@@ -790,6 +894,22 @@ export class CombatSystem {
       });
 
       if (canDealDamage && adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
+    } else if (trace.hitEnemyId) {
+      const loadoutMult  = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = damage * loadoutMult * powerUpMult;
+      this.applyDamage(trace.hitEnemyId, actualDamage, false, shooterId, weaponName, {
+        sourceX: startX,
+        sourceY: startY,
+        dirX: Math.cos(angle),
+        dirY: Math.sin(angle),
+      });
+
+      if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     } else if (trace.hitDecoyId !== null) {
@@ -941,6 +1061,47 @@ export class CombatSystem {
       }
     }
 
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (enemy.id === shooterId) continue;
+
+      const enemyRadius = Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5;
+      const dx   = enemy.sprite.x - x;
+      const dy   = enemy.sprite.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > range + enemyRadius) continue;
+
+      let angleDiff = Math.atan2(dy, dx) - angle;
+      while (angleDiff >  Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+      if (Math.abs(angleDiff) > halfArcRad) continue;
+
+      this.meleeLine.setTo(x, y, enemy.sprite.x, enemy.sprite.y);
+      if (this.isMeleePathBlocked(dist - enemyRadius)) continue;
+
+      const loadoutMult  = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = damage * loadoutMult * powerUpMult;
+      this.applyDamage(enemy.id, actualDamage, false, shooterId, weaponName, {
+        sourceX: x,
+        sourceY: y,
+        dirX: Math.cos(angle),
+        dirY: Math.sin(angle),
+      });
+      hitPlayer = true;
+      if (dist < nearestHitDistance) {
+        nearestHitDistance = dist;
+        impactX = enemy.sprite.x;
+        impactY = enemy.sprite.y;
+      }
+
+      if (adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
+    }
+
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
       if (decoy.ownerId === shooterId) continue;
 
@@ -1049,6 +1210,7 @@ export class CombatSystem {
     if (obstacleHit) closestDistance = obstacleHit.distance;
 
     let hitPlayerId: string | null = null;
+    let hitEnemyId: string | null = null;
     let hitDecoyId: number | null = null;
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isHitscanTargetCandidate(player.id, shooterId)) continue;
@@ -1063,6 +1225,24 @@ export class CombatSystem {
 
       closestDistance = hitDistance;
       hitPlayerId = player.id;
+      hitEnemyId = null;
+      hitDecoyId = null;
+    }
+
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (enemy.id === shooterId) continue;
+
+      const hitDistance = this.getHitscanTargetHitDistance(
+        this.hitscanLine,
+        { sprite: enemy.sprite, body: enemy.sprite.body as Phaser.Physics.Arcade.Body | null },
+        traceThickness,
+        applyFavorTheShooter,
+      );
+      if (hitDistance === null || hitDistance > closestDistance) continue;
+
+      closestDistance = hitDistance;
+      hitPlayerId = null;
+      hitEnemyId = enemy.id;
       hitDecoyId = null;
     }
 
@@ -1079,6 +1259,7 @@ export class CombatSystem {
 
       closestDistance = hitDistance;
       hitPlayerId = null;
+      hitEnemyId = null;
       hitDecoyId = decoy.id;
     }
 
@@ -1087,6 +1268,7 @@ export class CombatSystem {
       endY: startY + dirY * closestDistance,
       distance: closestDistance,
       hitPlayerId,
+      hitEnemyId,
       hitDecoyId,
       hitObstacle: obstacleHit !== null && closestDistance >= obstacleHit.distance,
     };
@@ -1216,7 +1398,7 @@ export class CombatSystem {
       return this.getFavorTheShooterHitDistance(line, target, traceThickness);
     }
 
-    const baseRadius = PLAYER_SIZE * 0.5 + traceThickness * 0.5;
+    const baseRadius = Math.max(target.sprite.displayWidth, target.sprite.displayHeight) * 0.5 + traceThickness * 0.5;
     return this.findNearestCircleHit(line, target.sprite.x, target.sprite.y, baseRadius)?.distance ?? null;
   }
 
@@ -1263,7 +1445,7 @@ export class CombatSystem {
     target: HitscanSpriteTarget,
     traceThickness: number,
   ): number | null {
-    const baseRadius = PLAYER_SIZE * 0.5 + traceThickness * 0.5;
+    const baseRadius = Math.max(target.sprite.displayWidth, target.sprite.displayHeight) * 0.5 + traceThickness * 0.5;
     const currentHit = this.findNearestCircleHit(line, target.sprite.x, target.sprite.y, baseRadius);
 
     const velocity = target.body?.velocity ?? { x: 0, y: 0 };
@@ -1418,9 +1600,13 @@ export class CombatSystem {
 
     if (Math.hypot(dirX, dirY) <= 0.0001 && attackerId) {
       const attacker = this.playerManager.getPlayer(attackerId);
+      const enemyAttacker = this.enemyManager?.getEnemy(attackerId);
       if (attacker) {
         dirX = targetX - attacker.sprite.x;
         dirY = targetY - attacker.sprite.y;
+      } else if (enemyAttacker) {
+        dirX = targetX - enemyAttacker.sprite.x;
+        dirY = targetY - enemyAttacker.sprite.y;
       }
     }
 
@@ -1483,6 +1669,43 @@ export class CombatSystem {
     }
   }
 
+  private handleEnemyHit(
+    projectileId: number,
+    enemyId: string,
+    damage: number,
+    shooterId: string,
+    adrenalinGain: number,
+    weaponName: string,
+  ): void {
+    const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    const leafBlowerImpulse = projectile ? this.createLeafBlowerImpulse(projectile, enemyId) : null;
+    const visualContext = projectile
+      ? {
+          sourceX: projectile.sprite.x,
+          sourceY: projectile.sprite.y,
+          dirX: projectile.body.velocity.x,
+          dirY: projectile.body.velocity.y,
+        }
+      : undefined;
+    if (projectile?.impactCloud) {
+      this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
+    }
+    if (projectile?.explosion) {
+      this.projectileManager.triggerProjectileExplosion(projectileId);
+    } else {
+      this.projectileManager.destroyProjectile(projectileId);
+    }
+
+    this.applyDamage(enemyId, damage, false, shooterId, weaponName, visualContext);
+    if (leafBlowerImpulse && this.enemyManager?.hasEnemy(enemyId)) {
+      this.onEnemyImpulse?.(enemyId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
+    }
+
+    if (adrenalinGain > 0) {
+      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+    }
+  }
+
   private handleDecoyHit(
     projectileId: number,
     decoyId: number,
@@ -1517,7 +1740,7 @@ export class CombatSystem {
 
   private createLeafBlowerImpulse(
     projectile: TrackedProjectile,
-    playerId: string,
+    targetId: string,
   ): { vx: number; vy: number; durationMs: number } | null {
     const minKnockback = projectile.leafBlowerMinKnockback;
     const maxKnockback = projectile.leafBlowerMaxKnockback;
@@ -1530,9 +1753,12 @@ export class CombatSystem {
     const magnitude = Phaser.Math.Linear(maxKnockback, minKnockback, progress);
     if (magnitude <= 0) return null;
 
-    const player = this.playerManager.getPlayer(playerId);
-    const fallbackDx = (player?.sprite.x ?? projectile.sprite.x) - projectile.sprite.x;
-    const fallbackDy = (player?.sprite.y ?? projectile.sprite.y) - projectile.sprite.y;
+    const player = this.playerManager.getPlayer(targetId);
+    const enemy = this.enemyManager?.getEnemy(targetId);
+    const targetX = player?.sprite.x ?? enemy?.sprite.x ?? projectile.sprite.x;
+    const targetY = player?.sprite.y ?? enemy?.sprite.y ?? projectile.sprite.y;
+    const fallbackDx = targetX - projectile.sprite.x;
+    const fallbackDy = targetY - projectile.sprite.y;
     const velocityLen = Math.hypot(projectile.body.velocity.x, projectile.body.velocity.y);
     const fallbackLen = Math.hypot(fallbackDx, fallbackDy);
     const dirX = velocityLen > 0.001
@@ -1547,6 +1773,61 @@ export class CombatSystem {
       vy: dirY * magnitude,
       durationMs: 220,
     };
+  }
+
+  private applyEnemyDamage(
+    targetId: string,
+    amount: number,
+    attackerId?: string,
+    weaponName?: string,
+    visualContext?: DamageVisualContext,
+    options?: DamageApplicationOptions,
+  ): void {
+    const enemy = this.enemyManager?.getEnemy(targetId);
+    if (!enemy) return;
+    if (amount <= 0) return;
+    if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
+
+    const x = enemy.sprite.x;
+    const y = enemy.sprite.y;
+    const previousHp = enemy.getHp();
+    const result = this.enemyManager?.applyDamage(targetId, amount);
+    if (!result) return;
+
+    const hpLost = previousHp - result.remainingHp;
+    if (hpLost <= 0) return;
+
+    const hitSeed = this.nextEffectSeed();
+    const direction = this.resolveDamageDirection(targetId, attackerId, visualContext, hitSeed, x, y);
+    this.bridge.broadcastEffect({
+      type: 'hit',
+      x,
+      y,
+      targetId,
+      shooterId: attackerId,
+      targetColor: COLORS.RED_2,
+      totalDamage: hpLost,
+      hpLost,
+      armorLost: 0,
+      isKill: result.died,
+      dirX: direction.dirX,
+      dirY: direction.dirY,
+      seed: hitSeed,
+    });
+
+    if (result.died) {
+      this.bridge.broadcastEffect({
+        type: 'death',
+        x,
+        y,
+        targetId,
+        targetColor: COLORS.RED_2,
+        rotation: 0,
+        seed: this.nextEffectSeed(),
+      });
+    }
+
+    void weaponName;
   }
 
   private handleDeath(playerId: string, x: number, y: number, seed: number): void {
