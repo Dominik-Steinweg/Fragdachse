@@ -10,7 +10,7 @@ import {
   GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
-import { isTeamGameMode } from '../gameModes';
+import { hasTeamSelection } from '../gameModes';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const PANEL_COLOR   = COLORS.GREY_8;
@@ -323,7 +323,7 @@ export class LobbyOverlay {
 
   private repositionRows(connectedPlayers: PlayerProfile[]): void {
     const mode = this.bridge.getGameMode();
-    if (!isTeamGameMode(mode)) {
+    if (!hasTeamSelection(mode)) {
       this.teamHeaders?.blue.setVisible(false);
       this.teamHeaders?.red.setVisible(false);
       let idx = 0;

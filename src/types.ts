@@ -311,7 +311,7 @@ export interface SyncedTranslocatorFlash {
 /** Globale Spielphase – nur vom Host per setState gesetzt */
 export type GamePhase = 'LOBBY' | 'ARENA';
 
-export type GameMode = 'deathmatch' | 'team_deathmatch' | 'capture_the_beer';
+export type GameMode = 'deathmatch' | 'team_deathmatch' | 'capture_the_beer' | 'coop_defense';
 
 export type TeamId = 'blue' | 'red';
 

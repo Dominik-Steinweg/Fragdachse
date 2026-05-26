@@ -15,7 +15,7 @@ import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
-import { isTeamGameMode } from '../gameModes';
+import { isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 export type { HostRoomQualityProbeResult } from './NetworkPingController';
@@ -397,7 +397,7 @@ export class NetworkBridge {
   }
 
   getEffectivePlayerColor(playerId: string): number | undefined {
-    if (isTeamGameMode(this.getGameMode())) {
+    if (usesTeamColors(this.getGameMode())) {
       const teamId = this.getPlayerTeam(playerId);
       if (teamId) return this.getTeamColor(teamId);
     }
@@ -426,6 +426,7 @@ export class NetworkBridge {
   }
 
   canPlayerChangeTeam(playerId: string): boolean {
+    if (isCoopDefenseMode(this.getGameMode())) return false;
     return !this.getPlayerReady(playerId);
   }
 
@@ -442,13 +443,27 @@ export class NetworkBridge {
   hostEnsureTeamAssignment(playerId: string): void {
     if (!isHost()) return;
     if (this.getPlayerTeam(playerId)) return;
-    this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, this.pickBalancedTeam(), true);
+    const teamId: TeamId = isCoopDefenseMode(this.getGameMode()) ? 'blue' : this.pickBalancedTeam();
+    this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, teamId, true);
     this.connectedPlayersCacheDirty = true;
   }
 
   hostAssignMissingTeams(): void {
     if (!isHost()) return;
     const playerIds = [...this.connectedPlayers.keys()];
+    if (isCoopDefenseMode(this.getGameMode())) {
+      // Coop: ALLE Spieler werden auf Blau gesetzt, auch wenn sie aus einem vorherigen Team-Modus
+      // bereits eine (ggf. rote) Zuweisung hatten.
+      let changed = false;
+      for (const playerId of playerIds) {
+        if (this.getPlayerTeam(playerId) !== 'blue') {
+          this.playerStateMap.get(playerId)?.setState(KEY_PLAYER_TEAM, 'blue' as TeamId, true);
+          changed = true;
+        }
+      }
+      if (changed) this.connectedPlayersCacheDirty = true;
+      return;
+    }
     const unassigned = playerIds.filter((playerId) => !this.getPlayerTeam(playerId));
     if (unassigned.length === 0) return;
     unassigned.sort(() => Math.random() - 0.5);

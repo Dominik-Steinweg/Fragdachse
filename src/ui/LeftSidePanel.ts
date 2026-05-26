@@ -19,7 +19,7 @@ import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimate
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
-import { getGameModeLabel, isTeamGameMode } from '../gameModes';
+import { getGameModeLabel, hasTeamSelection, usesTeamColors } from '../gameModes';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
 import { getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
 
@@ -74,7 +74,7 @@ const ARROW_X_LEFT      = 15;
 const ARROW_X_RIGHT     = 195;   // "[ > ]" (~42px) endet bei ≈237 – bleibt im 240px-Sidebar
 const ITEM_NAME_X       = 120;   // zentriert in 240px Sidebar
 
-const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'capture_the_beer'];
+const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense'];
 const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
 
 function getTeamLabel(teamId: TeamId | null): string {
@@ -561,7 +561,7 @@ export class LeftSidePanel {
 
   /** Aktualisiert den Picker live, solange er offen ist (jeden Lobby-Frame). */
   refreshColorPickerIfOpen(): void {
-    if (isTeamGameMode(this.bridge.getGameMode())) {
+    if (usesTeamColors(this.bridge.getGameMode())) {
       this.closeColorPicker();
       return;
     }
@@ -740,7 +740,7 @@ export class LeftSidePanel {
   }
 
   private requestColor(color: number): void {
-    if (isTeamGameMode(this.bridge.getGameMode())) return;
+    if (usesTeamColors(this.bridge.getGameMode())) return;
     if (this.lobbyFieldsLocked) return;
     if (this.requestPending) return;
     const ownColor = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
@@ -955,12 +955,12 @@ export class LeftSidePanel {
 
   private updateColorEditState(): void {
     const mode = this.bridge.getGameMode();
-    const enabled = !this.lobbyFieldsLocked && !isTeamGameMode(mode);
+    const enabled = !this.lobbyFieldsLocked && !usesTeamColors(mode);
     this.badgerClickZone.setAlpha(enabled ? 1 : 0);
     if (enabled) this.badgerClickZone.setInteractive({ useHandCursor: true });
     else this.badgerClickZone.disableInteractive();
 
-    this.colorEditText?.setVisible(!isTeamGameMode(mode) && !this.lobbyFieldsLocked);
+    this.colorEditText?.setVisible(!usesTeamColors(mode) && !this.lobbyFieldsLocked);
     if (!this.colorEditText) return;
     this.colorEditText.setText('[ Farbe aendern ]');
     if (enabled) this.colorEditText.setInteractive({ useHandCursor: true });
@@ -992,7 +992,7 @@ export class LeftSidePanel {
   }
 
   private stepTeam(delta: -1 | 1): void {
-    if (!isTeamGameMode(this.bridge.getGameMode())) return;
+    if (!hasTeamSelection(this.bridge.getGameMode())) return;
     if (this.lobbyFieldsLocked) return;
     const localId = this.bridge.getLocalPlayerId();
     if (!this.bridge.canPlayerChangeTeam(localId)) return;
@@ -1020,16 +1020,16 @@ export class LeftSidePanel {
   }
 
   private updateTeamSelectorState(mode: GameMode, teamId: TeamId | null): void {
-    const isTeamMode = isTeamGameMode(mode);
-    const canChangeTeam = isTeamMode && !this.lobbyFieldsLocked && this.bridge.canPlayerChangeTeam(this.bridge.getLocalPlayerId());
+    const showTeamSelect = hasTeamSelection(mode);
+    const canChangeTeam = showTeamSelect && !this.lobbyFieldsLocked && this.bridge.canPlayerChangeTeam(this.bridge.getLocalPlayerId());
     const alpha = canChangeTeam ? 1 : 0.35;
 
-    if (isTeamMode) {
+    if (usesTeamColors(mode)) {
       this.closeColorPicker();
     }
 
-    this.teamArrowButtons?.left.setVisible(isTeamMode).setAlpha(alpha);
-    this.teamArrowButtons?.right.setVisible(isTeamMode).setAlpha(alpha);
+    this.teamArrowButtons?.left.setVisible(showTeamSelect).setAlpha(alpha);
+    this.teamArrowButtons?.right.setVisible(showTeamSelect).setAlpha(alpha);
     if (canChangeTeam) {
       this.teamArrowButtons?.left.setInteractive({ useHandCursor: true });
       this.teamArrowButtons?.right.setInteractive({ useHandCursor: true });
@@ -1039,7 +1039,7 @@ export class LeftSidePanel {
     }
 
     if (!this.colorEditText) return;
-    if (isTeamMode) {
+    if (showTeamSelect) {
       this.colorEditText.setVisible(true);
       this.colorEditText.setText(getTeamLabel(teamId));
       this.colorEditText.disableInteractive();
