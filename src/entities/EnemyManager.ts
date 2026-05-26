@@ -14,7 +14,7 @@ export class EnemyManager {
     this.scene = scene;
   }
 
-  hostSpawnDummyAt(gridX: number, gridY: number, kind: CoopDefenseEnemyKind = 'dummy'): EnemyEntity {
+  hostSpawnDummyAt(gridX: number, gridY: number, kind: CoopDefenseEnemyKind = 'zombie-badger'): EnemyEntity {
     const { x, y } = this.gridToWorld(gridX, gridY);
     const id = this.generateEnemyId(kind);
     const enemy = new EnemyEntity(this.scene, id, x, y, true, kind);
@@ -103,11 +103,13 @@ export class EnemyManager {
     for (const remote of snapshot) {
       let enemy = this.enemies.get(remote.id);
       if (!enemy) {
-        enemy = new EnemyEntity(this.scene, remote.id, remote.x, remote.y, false);
+        enemy = new EnemyEntity(this.scene, remote.id, remote.x, remote.y, false, remote.kind);
+        enemy.faceAngle(remote.rot);
         this.enemies.set(remote.id, enemy);
       }
       enemy.setHp(remote.hp);
       enemy.setTargetPosition(remote.x, remote.y);
+      enemy.setTargetRotation(remote.rot);
     }
   }
 

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { SyncedBaseState } from '../types';
-import { getCoopDefenseBases } from '../arena/BaseRegistry';
+import { getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
 import { BaseEntity } from './BaseEntity';
 
 /**
@@ -17,39 +17,68 @@ import { BaseEntity } from './BaseEntity';
  *   - Clients: applySnapshot() konsumiert per-Tick die HP-Werte vom Host.
  *
  * Skalierung:
- *   - Anzahl der Basen entsteht aus getCoopDefenseBases() (BaseRegistry). Keine
- *     Annahme über eine bestimmte Anzahl. Lookup by id O(1) via Map.
+ *   - Anzahl/Form/HP der Basen entsteht aus `getCoopDefenseBases()` (BaseRegistry,
+ *     gespeist aus `src/config/coopDefenseBases.ts`). Keine Annahme über eine
+ *     bestimmte Anzahl. Lookup by id O(1) via Map.
+ *
+ * Zerstörung:
+ *   - Beim ersten HP→0-Übergang einer Basis ruft die `BaseEntity` ihren Callback,
+ *     den der Manager an `onBaseDestroyed` weiterleitet (Verdrahtung im
+ *     ArenaLifecycleCoordinator: rebuild des Flow-Fields → Gegner steuern die
+ *     nächstgelegene verbleibende Basis an).
  */
 export class BaseManager {
   private readonly group: Phaser.Physics.Arcade.StaticGroup;
   private readonly entities: BaseEntity[] = [];
   private readonly byId = new Map<string, BaseEntity>();
+  private onBaseDestroyed: ((spec: BaseSpec) => void) | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.group = scene.physics.add.staticGroup();
     for (const spec of getCoopDefenseBases()) {
       const entity = new BaseEntity(scene, spec);
+      entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);
-      this.group.add(entity.getPhysicsBody());
+      for (const body of entity.getCellBodies()) {
+        this.group.add(body);
+      }
     }
   }
 
-  /** StaticGroup für Player/Projektil-Collider-Injection (HostPhysicsSystem, ProjectileManager). */
+  /** Registriert den Zerstörungs-Callback (vom ArenaLifecycleCoordinator). */
+  setOnBaseDestroyed(callback: ((spec: BaseSpec) => void) | null): void {
+    this.onBaseDestroyed = callback;
+  }
+
+  /** StaticGroup für Player/Projektil-Collider-Injection. */
   getBaseGroup(): Phaser.Physics.Arcade.StaticGroup {
     return this.group;
   }
 
   /**
-   * Liefert die Tint-Rechtecke als Hitscan-/LoS-Hindernisse (CombatSystem).
-   * `null`-Filterung wird vom Consumer übernommen (analog zu rockObjects).
+   * Liefert die Per-Zell-Rectangles aller noch lebenden Basen als
+   * Hitscan-/LoS-Hindernisse (CombatSystem). Flach gemerged über alle Basen.
    */
   getObstacleRectangles(): readonly Phaser.GameObjects.Rectangle[] {
-    return this.entities.map((e) => e.getPhysicsBody());
+    const result: Phaser.GameObjects.Rectangle[] = [];
+    for (const entity of this.entities) {
+      if (entity.isDestroyed()) continue;
+      for (const body of entity.getCellBodies()) result.push(body);
+    }
+    return result;
   }
 
   getBases(): readonly BaseEntity[] {
     return this.entities;
+  }
+
+  getActiveBaseIds(): ReadonlySet<string> {
+    const result = new Set<string>();
+    for (const entity of this.entities) {
+      if (!entity.isDestroyed()) result.add(entity.id);
+    }
+    return result;
   }
 
   getBase(id: string): BaseEntity | undefined {
@@ -57,11 +86,16 @@ export class BaseManager {
   }
 
   /**
-   * Host-only: Schaden auf eine Basis anwenden. In 1.3 ohne Aufrufer
-   * (Spieler dürfen die Basis nicht beschädigen); für 1.5 (Gegner) vorbereitet.
+   * Host-only: Schaden auf eine Basis anwenden. Bei Übergang auf HP ≤ 0
+   * triggert die Entity ihren Destroy-Callback, der via `setOnBaseDestroyed`
+   * an den Konsumenten weitergereicht wird.
    */
   applyDamage(baseId: string, damage: number): void {
     this.byId.get(baseId)?.applyDamage(damage);
+  }
+
+  private handleBaseDestroyed(entity: BaseEntity): void {
+    this.onBaseDestroyed?.(entity.spec);
   }
 
   /**

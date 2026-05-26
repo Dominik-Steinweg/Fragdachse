@@ -17,8 +17,11 @@ import {
 import type { SyncedEnemyState } from '../types';
 
 export class EnemyEntity {
+  // Bild zeigt nach Norden – Offset um Aim-Angle (0 = rechts) korrekt darzustellen.
+  private static readonly ROTATION_OFFSET = Math.PI / 2;
+
   readonly id: string;
-  readonly sprite: Phaser.GameObjects.Arc;
+  readonly sprite: Phaser.GameObjects.Image;
   readonly kind: CoopDefenseEnemyKind;
 
   private readonly authoritative: boolean;
@@ -33,6 +36,8 @@ export class EnemyEntity {
   private desiredVelocityY = 0;
   private attackPauseUntil = 0;
   private nextAttackScanAt = 0;
+  private currentAimAngle = 0;
+  private targetAimAngle = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -40,7 +45,7 @@ export class EnemyEntity {
     x: number,
     y: number,
     authoritative: boolean,
-    kind: CoopDefenseEnemyKind = 'dummy',
+    kind: CoopDefenseEnemyKind = 'zombie-badger',
   ) {
     this.id = id;
     this.kind = kind;
@@ -51,10 +56,12 @@ export class EnemyEntity {
     this.targetX = x;
     this.targetY = y;
 
-    this.sprite = scene.add.circle(x, y, this.config.size * 0.5, COLORS.RED_2);
+    this.sprite = scene.add.image(x, y, this.config.imageKey);
+    this.sprite.setDisplaySize(this.config.size, this.config.size);
     this.sprite.setDepth(DEPTH.PLAYERS - 0.05);
-    this.sprite.setStrokeStyle(2, 0x4a0000, 0.9);
-
+    if (this.config.color !== undefined) {
+      this.sprite.setTint(this.config.color);
+    }
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
     this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
     this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, COLORS.RED_2);
@@ -70,6 +77,7 @@ export class EnemyEntity {
       body.allowGravity = false;
     }
 
+    this.faceAngle(0);
     this.syncBar();
   }
 
@@ -96,6 +104,9 @@ export class EnemyEntity {
     if (!this.authoritative) return;
     this.desiredVelocityX = vx;
     this.desiredVelocityY = vy;
+    if ((vx !== 0 || vy !== 0) && !this.isAttackMovementPaused(Date.now())) {
+      this.faceAngle(Math.atan2(vy, vx));
+    }
   }
 
   getDesiredVelocity(): { vx: number; vy: number } {
@@ -113,7 +124,14 @@ export class EnemyEntity {
     if (this.authoritative) return;
     this.sprite.x = Phaser.Math.Linear(this.sprite.x, this.targetX, factor);
     this.sprite.y = Phaser.Math.Linear(this.sprite.y, this.targetY, factor);
+    const diff = Phaser.Math.Angle.Wrap(this.targetAimAngle - this.currentAimAngle);
+    this.currentAimAngle = this.currentAimAngle + diff * factor;
+    this.sprite.setRotation(this.currentAimAngle + EnemyEntity.ROTATION_OFFSET);
     this.syncBar();
+  }
+
+  setTargetRotation(aimAngle: number): void {
+    this.targetAimAngle = aimAngle;
   }
 
   setHp(hp: number): void {
@@ -177,7 +195,13 @@ export class EnemyEntity {
   }
 
   faceAngle(angle: number): void {
-    this.sprite.setRotation(angle);
+    this.currentAimAngle = angle;
+    this.targetAimAngle = angle;
+    this.sprite.setRotation(angle + EnemyEntity.ROTATION_OFFSET);
+  }
+
+  getAimAngle(): number {
+    return this.currentAimAngle;
   }
 
   syncBar(): void {
@@ -190,8 +214,10 @@ export class EnemyEntity {
   getNetSnapshot(): SyncedEnemyState {
     return {
       id: this.id,
+      kind: this.kind,
       x: this.sprite.x,
       y: this.sprite.y,
+      rot: this.currentAimAngle,
       hp: this.currentHp,
       maxHp: this.getMaxHp(),
     };

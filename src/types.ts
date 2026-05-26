@@ -880,8 +880,10 @@ export interface SyncedBaseState {
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
   id:     string;
+  kind:   import('./entities/EnemyCatalog').CoopDefenseEnemyKind;
   x:      number;
   y:      number;
+  rot:    number;
   hp:     number;
   maxHp:  number;
 }

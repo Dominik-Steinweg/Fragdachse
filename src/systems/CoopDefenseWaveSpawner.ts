@@ -1,18 +1,22 @@
 import * as Phaser from 'phaser';
 import { GRID_COLS, GRID_ROWS } from '../config';
 import type { EnemyManager } from '../entities/EnemyManager';
-import type { CoopDefenseEnemyKind } from '../entities/EnemyCatalog';
+import {
+  COOP_DEFENSE_ENEMY_CONFIGS,
+  type CoopDefenseEnemyKind,
+} from '../entities/EnemyCatalog';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 
-const SPAWN_INTERVAL_MS = 5000;
-const SPAWNS_PER_TICK = 2;
-const SPAWN_KIND: CoopDefenseEnemyKind = 'dummy';
+const ENEMY_KINDS = Object.keys(COOP_DEFENSE_ENEMY_CONFIGS) as CoopDefenseEnemyKind[];
+
 const LEFT_SPAWN_GRID_X_MAX = Math.max(2, Math.floor(GRID_COLS * 0.15));
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_WAVE_DISTANCE_CELLS = 2;
 
 export class CoopDefenseWaveSpawner {
-  private accumulatorMs = 0;
+  private readonly accumulators = new Map<CoopDefenseEnemyKind, number>(
+    ENEMY_KINDS.map((kind) => [kind, 0]),
+  );
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
 
@@ -24,20 +28,26 @@ export class CoopDefenseWaveSpawner {
   hostUpdate(deltaMs: number, countdownActive: boolean): void {
     if (countdownActive) return;
 
-    this.accumulatorMs += deltaMs;
-    while (this.accumulatorMs >= SPAWN_INTERVAL_MS) {
-      this.accumulatorMs -= SPAWN_INTERVAL_MS;
-      this.runWave();
+    for (const kind of ENEMY_KINDS) {
+      const { intervalMs, countPerWave } = COOP_DEFENSE_ENEMY_CONFIGS[kind].spawnConfig;
+      let acc = (this.accumulators.get(kind) ?? 0) + deltaMs;
+      while (acc >= intervalMs) {
+        acc -= intervalMs;
+        this.runWave(kind, countPerWave);
+      }
+      this.accumulators.set(kind, acc);
     }
   }
 
   reset(): void {
-    this.accumulatorMs = 0;
+    for (const kind of ENEMY_KINDS) {
+      this.accumulators.set(kind, 0);
+    }
     this.recentCells.length = 0;
     this.exhaustionWarned = false;
   }
 
-  private runWave(): void {
+  private runWave(kind: CoopDefenseEnemyKind, count: number): void {
     const candidatesAll = this.collectCandidates();
     if (candidatesAll.length === 0) {
       this.warnExhausted();
@@ -50,18 +60,19 @@ export class CoopDefenseWaveSpawner {
       candidates = candidatesAll;
     }
 
-    for (let i = 0; i < SPAWNS_PER_TICK; i++) {
+    for (let i = 0; i < count; i++) {
       if (candidates.length === 0) {
         this.warnExhausted();
         return;
       }
 
       const pick = Phaser.Math.RND.pick(candidates) as { gridX: number; gridY: number };
-      this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, SPAWN_KIND);
+      this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind);
       this.pushRecent(this.key(pick.gridX, pick.gridY));
 
-      candidates = candidates.filter((cell) =>
-        Math.abs(cell.gridX - pick.gridX) > MIN_INTRA_WAVE_DISTANCE_CELLS
+      candidates = candidates.filter(
+        (cell) =>
+          Math.abs(cell.gridX - pick.gridX) > MIN_INTRA_WAVE_DISTANCE_CELLS
           || Math.abs(cell.gridY - pick.gridY) > MIN_INTRA_WAVE_DISTANCE_CELLS,
       );
     }

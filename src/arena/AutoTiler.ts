@@ -233,3 +233,8 @@ export const ROCK_AUTOTILE: AutoTileConfig = {
 export const DIRT_AUTOTILE: AutoTileConfig = {
   bitmaskToFrame: BLOB47_TABLE,
 };
+
+/** AutoTile-Konfiguration für das Base-47-Blob-Tileset (gleiche Tile-Anordnung wie Rocks). */
+export const BASE_AUTOTILE: AutoTileConfig = {
+  bitmaskToFrame: BLOB47_TABLE,
+};

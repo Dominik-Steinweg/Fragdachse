@@ -81,10 +81,11 @@ export class CoopDefenseEnemyAttackSystem {
     for (const base of this.baseManager.getBases()) {
       if (base.getHp() <= 0) continue;
 
-      const bounds = base.getPhysicsBody().getBounds();
-      const targetX = Phaser.Math.Clamp(enemy.sprite.x, bounds.left, bounds.right);
-      const targetY = Phaser.Math.Clamp(enemy.sprite.y, bounds.top, bounds.bottom);
-      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, targetX, targetY);
+      const surface = base.getNearestSurfacePoint(enemy.sprite.x, enemy.sprite.y);
+      if (!surface) continue;
+      const targetX = surface.x;
+      const targetY = surface.y;
+      const distance = surface.distance;
       if (distance > range) continue;
       if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, targetX, targetY)) continue;
 

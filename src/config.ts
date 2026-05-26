@@ -365,13 +365,10 @@ export const CAPTURE_THE_BEER_TEAM_ZONE_WIDTH_CELLS = CAPTURE_THE_BEER_BASE_WIDT
 export let CAPTURE_THE_BEER_BASES_ACTIVE = false;
 
 // ---- Coop-Defense Basen ----
-/** Grid-Footprint einer Coop-Basis (Standard: 2 breit × 4 hoch). */
-export const COOP_DEFENSE_BASE_WIDTH_CELLS = 2;
-export const COOP_DEFENSE_BASE_HEIGHT_CELLS = 4;
+// Anzahl, Position, Form und HP pro Basis werden in
+// `src/config/coopDefenseBases.ts` definiert und vom `BaseRegistry` aufgelöst.
 /** Wird beim Wechsel in den Coop-Modus von applyArenaMetricsForMode() gesetzt. */
 export let COOP_DEFENSE_BASES_ACTIVE = false;
-/** Initial-HP einer Coop-Basis (Phase 1.3). */
-export const COOP_DEFENSE_BASE_HP_MAX = 1000;
 /** HP-Bar Höhe für Coop-Basen (~2× Spieler-HP-Bar). */
 export const COOP_DEFENSE_BASE_HP_BAR_HEIGHT = 10;
 /** Vertikaler Abstand der HP-Bar zur Unterkante der Basis (px). */
@@ -609,9 +606,7 @@ export const TEAM_RED_COLOR = COLORS.RED_3;
 export const CAPTURE_THE_BEER_BASE_TINT_ALPHA = 0.80;
 export const CAPTURE_THE_BEER_BLUE_BASE_TINT = TEAM_BLUE_COLOR;
 export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;
-/** Coop-Basis verwendet bewusst denselben Tint-Stil wie CTB, aber neutralfarbig (Gold). */
-export const COOP_DEFENSE_BASE_TINT = COLORS.GREEN_2;
-export const COOP_DEFENSE_BASE_TINT_ALPHA = CAPTURE_THE_BEER_BASE_TINT_ALPHA;
+// (Coop-Basis-Tint entfällt – Basen werden nun als 47-Blob-Sprites gerendert.)
 
 // ---- Szenen / Match ----
 export const MAX_PLAYERS        = 12;

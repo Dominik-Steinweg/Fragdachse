@@ -1237,12 +1237,13 @@ export class CombatSystem {
     for (const base of this.baseManager?.getBases() ?? []) {
       if (base.getHp() <= 0) continue;
 
-      const bounds = base.getPhysicsBody().getBounds();
-      const targetX = Phaser.Math.Clamp(x, bounds.left, bounds.right);
-      const targetY = Phaser.Math.Clamp(y, bounds.top, bounds.bottom);
+      const surface = base.getNearestSurfacePoint(x, y);
+      if (!surface) continue;
+      const targetX = surface.x;
+      const targetY = surface.y;
       const dx = targetX - x;
       const dy = targetY - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = surface.distance;
 
       if (dist > range) continue;
 

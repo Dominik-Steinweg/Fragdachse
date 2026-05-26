@@ -108,6 +108,7 @@ export class EnemyFlowFieldService {
   private readonly metrics: EnemyFlowFieldMetrics;
   private readonly layout: ArenaLayout;
   private readonly baseSpecs: readonly BaseSpec[];
+  private activeBaseIds: Set<string>;
   private readonly eventBus: ArenaEventBus | null;
   private readonly obstacleCellProvider: (() => ReadonlyArray<EnemyFlowFieldGridCell>) | null;
   private readonly costs: Uint32Array;
@@ -145,6 +146,7 @@ export class EnemyFlowFieldService {
   ) {
     this.layout = layout;
     this.baseSpecs = [...baseSpecs];
+    this.activeBaseIds = new Set(this.baseSpecs.map((spec) => spec.id));
     this.metrics = { ...metrics };
     this.eventBus = options.eventBus ?? null;
     this.obstacleCellProvider = options.obstacleCellProvider ?? null;
@@ -241,6 +243,24 @@ export class EnemyFlowFieldService {
     };
   }
 
+  /**
+   * Aktualisiert die Liste der aktiven (= noch nicht zerstörten) Basen.
+   * Wird vom `BaseManager`-Destroy-Callback gerufen; der nächste Rebuild
+   * berechnet Goal-Cells & Integration-Field ausschließlich über aktive Basen.
+   */
+  setActiveBaseIds(ids: ReadonlySet<string>): void {
+    const next = new Set(ids);
+    if (next.size === this.activeBaseIds.size) {
+      let identical = true;
+      for (const id of next) {
+        if (!this.activeBaseIds.has(id)) { identical = false; break; }
+      }
+      if (identical) return;
+    }
+    this.activeBaseIds = next;
+    this.isGridDirty = true;
+  }
+
   rebuild(): EnemyFlowFieldService {
     return new EnemyFlowFieldService(this.layout, this.baseSpecs, this.metrics, {
       eventBus: this.eventBus ?? undefined,
@@ -298,7 +318,8 @@ export class EnemyFlowFieldService {
   }
 
   private recomputeFields(): void {
-    const buildContext = this.createBuildContext(this.layout, this.baseSpecs);
+    const activeSpecs = this.baseSpecs.filter((spec) => this.activeBaseIds.has(spec.id));
+    const buildContext = this.createBuildContext(this.layout, activeSpecs);
     const countsByKind = this.createEmptyCounts();
 
     let traversableCells = 0;
@@ -388,11 +409,9 @@ export class EnemyFlowFieldService {
   private buildBaseLookup(baseSpecs: readonly BaseSpec[]): SourceCellLookup {
     const lookup = new Set<number>();
     for (const baseSpec of baseSpecs) {
-      for (let gridY = baseSpec.region.minGridY; gridY <= baseSpec.region.maxGridY; gridY++) {
-        for (let gridX = baseSpec.region.minGridX; gridX <= baseSpec.region.maxGridX; gridX++) {
-          if (!this.isInBounds(gridX, gridY)) continue;
-          lookup.add(this.toIndex(gridX, gridY));
-        }
+      for (const cell of baseSpec.cells) {
+        if (!this.isInBounds(cell.gridX, cell.gridY)) continue;
+        lookup.add(this.toIndex(cell.gridX, cell.gridY));
       }
     }
     return lookup;
@@ -428,14 +447,13 @@ export class EnemyFlowFieldService {
     ];
 
     for (const baseSpec of this.baseSpecs) {
-      for (let gridY = baseSpec.region.minGridY; gridY <= baseSpec.region.maxGridY; gridY++) {
-        for (let gridX = baseSpec.region.minGridX; gridX <= baseSpec.region.maxGridX; gridX++) {
-          for (const [dx, dy] of directions) {
-            const neighborX = gridX + dx;
-            const neighborY = gridY + dy;
-            if (!this.isGoalCandidateAt(neighborX, neighborY)) continue;
-            goalSet.add(this.toIndex(neighborX, neighborY));
-          }
+      if (!this.activeBaseIds.has(baseSpec.id)) continue;
+      for (const cell of baseSpec.cells) {
+        for (const [dx, dy] of directions) {
+          const neighborX = cell.gridX + dx;
+          const neighborY = cell.gridY + dy;
+          if (!this.isGoalCandidateAt(neighborX, neighborY)) continue;
+          goalSet.add(this.toIndex(neighborX, neighborY));
         }
       }
     }

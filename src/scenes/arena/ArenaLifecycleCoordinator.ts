@@ -328,6 +328,16 @@ export class ArenaLifecycleCoordinator {
           this.ctx.enemyFlowFieldService,
         );
       }
+      // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
+      // Goal-Cells werden nur noch aus den verbleibenden Basen aufgebaut, so dass
+      // Gegner zur nächstgelegenen aktiven Basis laufen.
+      const baseManager = this.ctx.baseManager;
+      const flowFieldService = this.ctx.enemyFlowFieldService;
+      if (baseManager && flowFieldService) {
+        baseManager.setOnBaseDestroyed(() => {
+          flowFieldService.setActiveBaseIds(baseManager.getActiveBaseIds());
+        });
+      }
     }
     this.renderers.leafBlower.setTerrainColorSampler(
       createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult),
