@@ -1,11 +1,21 @@
 import type { CoopDefenseUpgradeProfile } from '../types';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
+  canLevelDownCoopDefenseUpgrade,
+  canLevelUpCoopDefenseUpgrade,
   COOP_DEFENSE_HP_UPGRADE_ID,
   getAvailableCoopDefenseUpgradePoints,
+  getCoopDefenseUpgradeCategories,
   getCoopDefenseUpgradeDefinition,
   getCoopDefenseUpgradeState,
   getSpentCoopDefenseUpgradePoints,
+  sanitizeCoopDefenseUpgradeProfile,
+  type CoopDefenseLoadoutUnlockDefinition,
+  type CoopDefenseUpgradeCategoryDefinition,
+  type CoopDefenseUpgradeCategoryId,
+  type CoopDefenseUpgradeDefinition,
+  type CoopDefenseUpgradeKind,
+  type CoopDefenseUpgradeRequirementDefinition,
 } from './coopDefenseUpgrades';
 
 const XP_STEP = 25;
@@ -23,6 +33,41 @@ export interface CoopDefenseProgressSnapshot {
   hpUpgradeUnlocked: boolean;
   hpUpgradeLevel: number;
   hpUpgradeMaxLevel: number;
+  upgradeCategories: readonly CoopDefenseUpgradeCategorySnapshot[];
+}
+
+export interface CoopDefenseUpgradeRequirementSnapshot {
+  upgradeId: string;
+  label: string;
+  minLevel: number;
+  currentLevel: number;
+  satisfied: boolean;
+}
+
+export interface CoopDefenseUpgradeNodeSnapshot {
+  id: string;
+  code: string | null;
+  label: string;
+  description: string;
+  categoryId: CoopDefenseUpgradeCategoryId;
+  kind: CoopDefenseUpgradeKind;
+  unlocked: boolean;
+  level: number;
+  startingLevel: number;
+  maxLevel: number;
+  refundable: boolean;
+  costPerLevel: number;
+  canLevelUp: boolean;
+  canLevelDown: boolean;
+  requires: readonly CoopDefenseUpgradeRequirementSnapshot[];
+  loadoutUnlock: CoopDefenseLoadoutUnlockDefinition | null;
+}
+
+export interface CoopDefenseUpgradeCategorySnapshot {
+  id: CoopDefenseUpgradeCategoryId;
+  label: string;
+  description: string;
+  upgrades: readonly CoopDefenseUpgradeNodeSnapshot[];
 }
 
 function sanitizeXp(value: number): number {
@@ -48,14 +93,16 @@ export function getCoopDefenseProgressSnapshot(
   profile: CoopDefenseUpgradeProfile = buildDefaultCoopDefenseUpgradeProfile(),
 ): CoopDefenseProgressSnapshot {
   const safeXp = sanitizeXp(totalXp);
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile);
   const level = getCoopDefenseLevelForXp(safeXp);
   const currentLevelStartXp = getCoopDefenseXpThresholdForLevel(level);
   const nextLevelXp = getCoopDefenseXpThresholdForLevel(level + 1);
   const xpSpan = Math.max(1, nextLevelXp - currentLevelStartXp);
-  const spentUpgradePoints = getSpentCoopDefenseUpgradePoints(profile);
-  const availableUpgradePoints = getAvailableCoopDefenseUpgradePoints(level, profile);
-  const hpUpgradeState = getCoopDefenseUpgradeState(profile, COOP_DEFENSE_HP_UPGRADE_ID);
+  const spentUpgradePoints = getSpentCoopDefenseUpgradePoints(safeProfile);
+  const availableUpgradePoints = getAvailableCoopDefenseUpgradePoints(level, safeProfile);
+  const hpUpgradeState = getCoopDefenseUpgradeState(safeProfile, COOP_DEFENSE_HP_UPGRADE_ID);
   const hpUpgradeMaxLevel = getCoopDefenseUpgradeDefinition(COOP_DEFENSE_HP_UPGRADE_ID)?.maxLevel ?? hpUpgradeState.level;
+  const upgradeCategories = buildUpgradeCategorySnapshots(safeProfile, level);
 
   return {
     totalXp: safeXp,
@@ -70,5 +117,62 @@ export function getCoopDefenseProgressSnapshot(
     hpUpgradeUnlocked: hpUpgradeState.unlocked,
     hpUpgradeLevel: hpUpgradeState.level,
     hpUpgradeMaxLevel,
+    upgradeCategories,
+  };
+}
+
+function buildUpgradeCategorySnapshots(
+  profile: CoopDefenseUpgradeProfile,
+  playerLevel: number,
+): readonly CoopDefenseUpgradeCategorySnapshot[] {
+  return getCoopDefenseUpgradeCategories().map((category) => ({
+    id: category.id,
+    label: category.label,
+    description: category.description,
+    upgrades: category.upgrades.map((definition) => buildUpgradeNodeSnapshot(profile, playerLevel, category, definition)),
+  }));
+}
+
+function buildUpgradeNodeSnapshot(
+  profile: CoopDefenseUpgradeProfile,
+  playerLevel: number,
+  category: CoopDefenseUpgradeCategoryDefinition,
+  definition: CoopDefenseUpgradeDefinition,
+): CoopDefenseUpgradeNodeSnapshot {
+  const state = getCoopDefenseUpgradeState(profile, definition.id);
+
+  return {
+    id: definition.id,
+    code: definition.code ?? null,
+    label: definition.label,
+    description: definition.description,
+    categoryId: category.id,
+    kind: definition.kind,
+    unlocked: state.unlocked,
+    level: state.level,
+    startingLevel: definition.startingLevel,
+    maxLevel: definition.maxLevel,
+    refundable: definition.refundable,
+    costPerLevel: definition.costPerLevel,
+    canLevelUp: canLevelUpCoopDefenseUpgrade(profile, definition.id, playerLevel),
+    canLevelDown: canLevelDownCoopDefenseUpgrade(profile, definition.id),
+    requires: definition.requires.map((requirement) => buildRequirementSnapshot(profile, requirement)),
+    loadoutUnlock: definition.loadoutUnlock ?? null,
+  };
+}
+
+function buildRequirementSnapshot(
+  profile: CoopDefenseUpgradeProfile,
+  requirement: CoopDefenseUpgradeRequirementDefinition,
+): CoopDefenseUpgradeRequirementSnapshot {
+  const state = getCoopDefenseUpgradeState(profile, requirement.upgradeId);
+  const definition = getCoopDefenseUpgradeDefinition(requirement.upgradeId);
+
+  return {
+    upgradeId: requirement.upgradeId,
+    label: definition?.label ?? requirement.upgradeId,
+    minLevel: requirement.minLevel,
+    currentLevel: state.level,
+    satisfied: state.level >= requirement.minLevel,
   };
 }

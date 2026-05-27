@@ -1,15 +1,1076 @@
 {
-  "upgrades": [
+  "categories": [
     {
-      "id": "hp",
-      "label": "HP",
-      "maxLevel": 3,
-      "defaultUnlocked": true,
-      "effects": [
+      "id": "general",
+      "label": "Allgemein",
+      "description": "Allgemeine Coop-Defense-Upgrades fuer den Dachs.",
+      "sortOrder": 10,
+      "upgrades": [
         {
-          "stat": "maxHp",
-          "mode": "add_per_level",
-          "value": 20
+          "id": "hp",
+          "code": "A1",
+          "label": "HP Bonus",
+          "description": "+20 HP je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 10,
+          "effects": [
+            {
+              "stat": "player.maxHp",
+              "mode": "add_per_level",
+              "value": 20
+            }
+          ]
+        },
+        {
+          "id": "max_adrenaline",
+          "code": "A2",
+          "label": "Mehr Max. Adrenalin",
+          "description": "+10 maximales Adrenalin je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 20,
+          "effects": [
+            {
+              "stat": "player.maxAdrenaline",
+              "mode": "add_per_level",
+              "value": 10
+            }
+          ]
+        },
+        {
+          "id": "adrenaline_regeneration",
+          "code": "A3",
+          "label": "Adrenalin-Regeneration",
+          "description": "+5% Adrenalin-Regeneration je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 30,
+          "effects": [
+            {
+              "stat": "player.adrenalineRegenRate",
+              "mode": "add_percent_per_level",
+              "value": 0.05
+            }
+          ]
+        },
+        {
+          "id": "burrow_speed",
+          "code": "A4",
+          "label": "Burrow-Speed",
+          "description": "+10% Geschwindigkeit im eingebuddelten Zustand je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 40,
+          "effects": [
+            {
+              "stat": "player.burrowSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "weapon1",
+      "label": "Waffe 1",
+      "description": "Slot-weite und waffenspezifische Upgrades fuer Waffe 1.",
+      "sortOrder": 20,
+      "upgrades": [
+        {
+          "id": "weapon1_adrenaline_gain",
+          "code": "B1",
+          "label": "Adrenalin-Gain",
+          "description": "+10% Adrenalin je Treffer fuer Waffe 1 pro Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 10,
+          "effects": [
+            {
+              "stat": "weapon1.adrenalinGain",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "weapon1_fire_rate",
+          "code": "B2",
+          "label": "Feuerrate",
+          "description": "+5% Feuerrate aller Waffe-1-Waffen pro Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 20,
+          "effects": [
+            {
+              "stat": "weapon1.fireRate",
+              "mode": "add_percent_per_level",
+              "value": 0.05
+            }
+          ]
+        },
+        {
+          "id": "weapon1_damage",
+          "code": "B3",
+          "label": "Schaden",
+          "description": "+10% Schaden aller Waffe-1-Waffen pro Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 30,
+          "effects": [
+            {
+              "stat": "weapon1.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "unlock_glock",
+          "code": "B-W1",
+          "label": "Glock",
+          "description": "Basis-Freischaltung fuer die Glock im Waffe-1-Slot.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 100,
+          "loadoutUnlock": {
+            "slot": "weapon1",
+            "itemId": "GLOCK"
+          }
+        },
+        {
+          "id": "glock_bounce",
+          "code": "B-W1-1",
+          "label": "Upgrade Glock: Abpraller",
+          "description": "+1 Abpraller fuer die Glock je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 110,
+          "requires": [
+            {
+              "upgradeId": "unlock_glock",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.GLOCK.projectileMaxBounces",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "glock_projectile_speed",
+          "code": "B-W1-2",
+          "label": "Upgrade Glock: Geschossgeschwindigkeit",
+          "description": "+20% Projektilgeschwindigkeit fuer die Glock.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 120,
+          "requires": [
+            {
+              "upgradeId": "unlock_glock",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.GLOCK.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.2
+            }
+          ]
+        },
+        {
+          "id": "unlock_plasma",
+          "code": "B-W2",
+          "label": "Plasma",
+          "description": "Schaltet die Plasma Gun fuer Waffe 1 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 130,
+          "loadoutUnlock": {
+            "slot": "weapon1",
+            "itemId": "PLASMA"
+          }
+        },
+        {
+          "id": "plasma_homing_turn",
+          "code": "B-W2-1",
+          "label": "Upgrade Plasma: Homing",
+          "description": "+25% maxTurnDegreesPerStep fuer Plasma je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 140,
+          "requires": [
+            {
+              "upgradeId": "unlock_plasma",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.PLASMA.homing.maxTurnDegreesPerStep",
+              "mode": "add_percent_per_level",
+              "value": 0.25
+            }
+          ]
+        },
+        {
+          "id": "unlock_asmd_primary",
+          "code": "B-W3",
+          "label": "ASMD Primaer",
+          "description": "Schaltet ASMD Primaer fuer Waffe 1 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "loadoutUnlock": {
+            "slot": "weapon1",
+            "itemId": "ASMD_PRIM"
+          }
+        },
+        {
+          "id": "unlock_bite",
+          "code": "B-W4",
+          "label": "Dachsbiss",
+          "description": "Schaltet Dachsbiss fuer Waffe 1 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 160,
+          "loadoutUnlock": {
+            "slot": "weapon1",
+            "itemId": "BITE"
+          }
+        },
+        {
+          "id": "unlock_hydra",
+          "code": "B-W5",
+          "label": "Hydra Gun",
+          "description": "Schaltet Hydra Gun fuer Waffe 1 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 170,
+          "loadoutUnlock": {
+            "slot": "weapon1",
+            "itemId": "HYDRA"
+          }
+        },
+        {
+          "id": "unlock_xbow",
+          "code": "B-W6",
+          "label": "XXX-BOW",
+          "description": "Schaltet XXX-BOW fuer Waffe 1 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 180,
+          "loadoutUnlock": {
+            "slot": "weapon1",
+            "itemId": "XBOW"
+          }
+        },
+        {
+          "id": "unlock_laubblaeser",
+          "code": "B-W7",
+          "label": "Laubblaeser",
+          "description": "Schaltet Laubblaeser fuer Waffe 1 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 190,
+          "loadoutUnlock": {
+            "slot": "weapon1",
+            "itemId": "LAUBBLAESER"
+          }
+        }
+      ]
+    },
+    {
+      "id": "weapon2",
+      "label": "Waffe 2",
+      "description": "Slot-weite und waffenspezifische Upgrades fuer Waffe 2.",
+      "sortOrder": 30,
+      "upgrades": [
+        {
+          "id": "weapon2_adrenaline_cost",
+          "code": "C1",
+          "label": "Adrenalin-Verbrauch",
+          "description": "-5% Adrenalin-Verbrauch aller Waffe-2-Waffen pro Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 10,
+          "effects": [
+            {
+              "stat": "weapon2.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.05
+            }
+          ]
+        },
+        {
+          "id": "weapon2_fire_rate",
+          "code": "C2",
+          "label": "Feuerrate",
+          "description": "+5% Feuerrate aller Waffe-2-Waffen pro Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 20,
+          "effects": [
+            {
+              "stat": "weapon2.fireRate",
+              "mode": "add_percent_per_level",
+              "value": 0.05
+            }
+          ]
+        },
+        {
+          "id": "weapon2_damage",
+          "code": "C3",
+          "label": "Schaden",
+          "description": "+10% Schaden aller Waffe-2-Waffen pro Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 30,
+          "effects": [
+            {
+              "stat": "weapon2.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "unlock_p90",
+          "code": "C-W1",
+          "label": "P90",
+          "description": "Basis-Freischaltung fuer die P90 im Waffe-2-Slot.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 100,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "P90"
+          }
+        },
+        {
+          "id": "p90_range",
+          "code": "C-W1-1",
+          "label": "Upgrade P90: Reichweite",
+          "description": "+10% Reichweite fuer die P90 je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 110,
+          "requires": [
+            {
+              "upgradeId": "unlock_p90",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.P90.range",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "p90_accuracy",
+          "code": "C-W1-2",
+          "label": "Upgrade P90: Genauigkeit",
+          "description": "Reduziert alle Spread-Werte der P90 um 50%.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 120,
+          "requires": [
+            {
+              "upgradeId": "unlock_p90",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.P90.spread",
+              "mode": "add_percent_per_level",
+              "value": -0.5
+            }
+          ]
+        },
+        {
+          "id": "unlock_rocket_launcher",
+          "code": "C-W2",
+          "label": "Rocket Launcher",
+          "description": "Schaltet den Rocket Launcher fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 130,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "ROCKET_LAUNCHER"
+          }
+        },
+        {
+          "id": "rocket_launcher_explosion_radius",
+          "code": "C-W2-1",
+          "label": "Upgrade Rocket Launcher: Explosionsradius",
+          "description": "+10% Explosionsradius fuer den Rocket Launcher je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 5,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 140,
+          "requires": [
+            {
+              "upgradeId": "unlock_rocket_launcher",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.impactExplosion.radius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "rocket_launcher_cooldown",
+          "code": "C-W2-2",
+          "label": "Upgrade Rocket Launcher: Cooldown",
+          "description": "-10% Cooldown fuer den Rocket Launcher je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "requires": [
+            {
+              "upgradeId": "unlock_rocket_launcher",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.cooldown",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
+        },
+        {
+          "id": "unlock_ak47",
+          "code": "C-W3",
+          "label": "AK-47",
+          "description": "Schaltet die AK-47 fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 160,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "AK47"
+          }
+        },
+        {
+          "id": "unlock_shotgun",
+          "code": "C-W4",
+          "label": "Schrotflinte",
+          "description": "Schaltet die Schrotflinte fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 170,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "SHOTGUN"
+          }
+        },
+        {
+          "id": "unlock_asmd_secondary",
+          "code": "C-W5",
+          "label": "ASMD Sekundaer",
+          "description": "Schaltet ASMD Sekundaer fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 180,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "ASMD_SEC"
+          }
+        },
+        {
+          "id": "unlock_mini_rocket_launcher",
+          "code": "C-W6",
+          "label": "Mini-Raketen",
+          "description": "Schaltet Mini-Raketen fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 190,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "MINI_ROCKET_LAUNCHER"
+          }
+        },
+        {
+          "id": "unlock_awp",
+          "code": "C-W7",
+          "label": "AWP",
+          "description": "Schaltet die AWP fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 200,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "AWP"
+          }
+        },
+        {
+          "id": "unlock_flamethrower",
+          "code": "C-W8",
+          "label": "Flammenwerfer",
+          "description": "Schaltet den Flammenwerfer fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 210,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "FLAMETHROWER"
+          }
+        },
+        {
+          "id": "unlock_negev",
+          "code": "C-W9",
+          "label": "Negev",
+          "description": "Schaltet die Negev fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 220,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "NEGEV"
+          }
+        },
+        {
+          "id": "unlock_tesla_dome",
+          "code": "C-W10",
+          "label": "Tesla-Kuppel",
+          "description": "Schaltet die Tesla-Kuppel fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 230,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "TESLA_DOME"
+          }
+        },
+        {
+          "id": "unlock_energy_shield",
+          "code": "C-W11",
+          "label": "Energie-Schild",
+          "description": "Schaltet den Energie-Schild fuer Waffe 2 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 240,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "ENERGY_SHIELD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "utility",
+      "label": "Utility",
+      "description": "Globale und utility-spezifische Coop-Defense-Upgrades.",
+      "sortOrder": 40,
+      "upgrades": [
+        {
+          "id": "utility_cooldown_reduction",
+          "code": "D1",
+          "label": "Cooldown-Reduktion",
+          "description": "-5% Cooldown fuer alle Utilitys pro Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 10,
+          "effects": [
+            {
+              "stat": "utility.cooldown",
+              "mode": "add_percent_per_level",
+              "value": -0.05
+            }
+          ]
+        },
+        {
+          "id": "unlock_he_grenade",
+          "code": "D-U1",
+          "label": "HE-Granate",
+          "description": "Basis-Freischaltung fuer die HE-Granate im Utility-Slot.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 100,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "HE_GRENADE"
+          }
+        },
+        {
+          "id": "he_grenade_radius",
+          "code": "D-U1-1",
+          "label": "Upgrade HE-Granate: Explosionsradius",
+          "description": "+10% Explosionsradius fuer die HE-Granate je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 5,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 110,
+          "requires": [
+            {
+              "upgradeId": "unlock_he_grenade",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.HE_GRENADE.aoeRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "unlock_time_bubble",
+          "code": "D-U2",
+          "label": "Time-Bubble",
+          "description": "Schaltet die Time-Bubble fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 120,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "TIME_BUBBLE"
+          }
+        },
+        {
+          "id": "time_bubble_radius",
+          "code": "D-U2-1",
+          "label": "Upgrade Time-Bubble: Radius",
+          "description": "+10% Radius fuer die Time-Bubble je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 130,
+          "requires": [
+            {
+              "upgradeId": "unlock_time_bubble",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.TIME_BUBBLE.bubbleRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "unlock_smoke_grenade",
+          "code": "D-U3",
+          "label": "Smoke-Granate",
+          "description": "Schaltet die Smoke-Granate fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 140,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "SMOKE_GRENADE"
+          }
+        },
+        {
+          "id": "unlock_molotov_grenade",
+          "code": "D-U4",
+          "label": "Molotov",
+          "description": "Schaltet den Molotov fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "MOLOTOV_GRENADE"
+          }
+        },
+        {
+          "id": "unlock_stinkdruesen",
+          "code": "D-U5",
+          "label": "Stinkdruesen",
+          "description": "Schaltet Stinkdruesen fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 160,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "STINKDRUESEN"
+          }
+        },
+        {
+          "id": "unlock_translocator",
+          "code": "D-U6",
+          "label": "Translocator",
+          "description": "Schaltet den Translocator fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 170,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "TRANSLOCATOR"
+          }
+        },
+        {
+          "id": "unlock_felsbau",
+          "code": "D-U7",
+          "label": "Felsbau",
+          "description": "Schaltet Felsbau fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 180,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "FELSBAU"
+          }
+        },
+        {
+          "id": "unlock_fliegenpilz",
+          "code": "D-U8",
+          "label": "Fliegenpilz",
+          "description": "Schaltet Fliegenpilz fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 190,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "FLIEGENPILZ"
+          }
+        },
+        {
+          "id": "unlock_zeus_taser",
+          "code": "D-U9",
+          "label": "Zeus",
+          "description": "Schaltet Zeus fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 200,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "ZEUS_TASER"
+          }
+        },
+        {
+          "id": "unlock_decoy",
+          "code": "D-U10",
+          "label": "Decoy",
+          "description": "Schaltet Decoy fuer den Utility-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 210,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "DECOY"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ultimate",
+      "label": "Ultimate",
+      "description": "Globale und ultimate-spezifische Coop-Defense-Upgrades.",
+      "sortOrder": 50,
+      "upgrades": [
+        {
+          "id": "ultimate_max_rage",
+          "code": "E1",
+          "label": "Max. Rage",
+          "description": "+20% maximale Rage je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 10,
+          "effects": [
+            {
+              "stat": "ultimate.maxRage",
+              "mode": "add_percent_per_level",
+              "value": 0.2
+            }
+          ]
+        },
+        {
+          "id": "ultimate_rage_gain",
+          "code": "E2",
+          "label": "Rage",
+          "description": "+10% Rage pro Schadenspunkt je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 20,
+          "effects": [
+            {
+              "stat": "ultimate.rageGainPerDamage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "unlock_armageddon",
+          "code": "E-U1",
+          "label": "Armageddon",
+          "description": "Basis-Freischaltung fuer Armageddon im Ultimate-Slot.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 100,
+          "loadoutUnlock": {
+            "slot": "ultimate",
+            "itemId": "ARMAGEDDON"
+          }
+        },
+        {
+          "id": "armageddon_damage",
+          "code": "E-U1-1",
+          "label": "Upgrade Armageddon: Schaden",
+          "description": "+10% Schaden fuer Armageddon je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 110,
+          "requires": [
+            {
+              "upgradeId": "unlock_armageddon",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.ARMAGEDDON.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "armageddon_duration",
+          "code": "E-U1-2",
+          "label": "Upgrade Armageddon: Dauer",
+          "description": "+10% Dauer fuer Armageddon je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 120,
+          "requires": [
+            {
+              "upgradeId": "unlock_armageddon",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.ARMAGEDDON.duration",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "unlock_gauss_rifle",
+          "code": "E-U2",
+          "label": "Gauss-Gewehr",
+          "description": "Schaltet das Gauss-Gewehr fuer den Ultimate-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 130,
+          "loadoutUnlock": {
+            "slot": "ultimate",
+            "itemId": "GAUSS_RIFLE"
+          }
+        },
+        {
+          "id": "unlock_airstrike",
+          "code": "E-U3",
+          "label": "Luftangriff",
+          "description": "Schaltet den Luftangriff fuer den Ultimate-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 140,
+          "loadoutUnlock": {
+            "slot": "ultimate",
+            "itemId": "AIRSTRIKE"
+          }
+        },
+        {
+          "id": "unlock_honey_badger_rage",
+          "code": "E-U4",
+          "label": "Honigdachs-Wut",
+          "description": "Schaltet Honigdachs-Wut fuer den Ultimate-Slot frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "loadoutUnlock": {
+            "slot": "ultimate",
+            "itemId": "HONEY_BADGER_RAGE"
+          }
         }
       ]
     }
