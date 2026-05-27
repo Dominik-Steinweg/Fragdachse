@@ -62,7 +62,7 @@ import {
   setStoredCoopDefenseTotalXp,
 } from '../utils/localPreferences';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
-import { COOP_DEFENSE_HP_UPGRADE_ID, levelDownCoopDefenseUpgrade, levelUpCoopDefenseUpgrade } from '../utils/coopDefenseUpgrades';
+import { levelDownCoopDefenseUpgrade, levelUpCoopDefenseUpgrade } from '../utils/coopDefenseUpgrades';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
@@ -281,8 +281,8 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseUpgradesOverlay = new CoopDefenseUpgradesOverlay(
       this,
       () => this.coopDefenseProgress,
-      () => this.levelUpCoopDefenseHpUpgrade(),
-      () => this.levelDownCoopDefenseHpUpgrade(),
+      (upgradeId) => this.levelUpCoopDefenseUpgrade(upgradeId),
+      (upgradeId) => this.levelDownCoopDefenseUpgrade(upgradeId),
     );
     this.coopDefenseUpgradesOverlay.build();
 
@@ -893,9 +893,9 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseUpgradesOverlay?.show();
   }
 
-  private levelUpCoopDefenseHpUpgrade(): boolean {
+  private levelUpCoopDefenseUpgrade(upgradeId: string): boolean {
     const stored = getStoredCoopDefenseProgress();
-    const nextProfile = levelUpCoopDefenseUpgrade(stored.profile, COOP_DEFENSE_HP_UPGRADE_ID, this.coopDefenseProgress.level);
+    const nextProfile = levelUpCoopDefenseUpgrade(stored.profile, upgradeId, this.coopDefenseProgress.level);
     if (!nextProfile) return false;
 
     bridge.setLocalReady(false);
@@ -906,9 +906,9 @@ export class ArenaScene extends Phaser.Scene {
     return true;
   }
 
-  private levelDownCoopDefenseHpUpgrade(): boolean {
+  private levelDownCoopDefenseUpgrade(upgradeId: string): boolean {
     const stored = getStoredCoopDefenseProgress();
-    const nextProfile = levelDownCoopDefenseUpgrade(stored.profile, COOP_DEFENSE_HP_UPGRADE_ID);
+    const nextProfile = levelDownCoopDefenseUpgrade(stored.profile, upgradeId);
     if (!nextProfile) return false;
 
     bridge.setLocalReady(false);
