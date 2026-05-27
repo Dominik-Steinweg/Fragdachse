@@ -18,7 +18,7 @@ import { BaseEntity } from './BaseEntity';
  *
  * Skalierung:
  *   - Anzahl/Form/HP der Basen entsteht aus `getCoopDefenseBases()` (BaseRegistry,
- *     gespeist aus `src/config/coopDefenseBases.ts`). Keine Annahme über eine
+ *     gespeist aus der datengetriebenen Coop-Defense-Map-Konfiguration). Keine Annahme über eine
  *     bestimmte Anzahl. Lookup by id O(1) via Map.
  *
  * Zerstörung:
@@ -33,9 +33,9 @@ export class BaseManager {
   private readonly byId = new Map<string, BaseEntity>();
   private onBaseDestroyed: ((spec: BaseSpec) => void) | null = null;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, baseSpecs: readonly BaseSpec[] = getCoopDefenseBases()) {
     this.group = scene.physics.add.staticGroup();
-    for (const spec of getCoopDefenseBases()) {
+    for (const spec of baseSpecs) {
       const entity = new BaseEntity(scene, spec);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);

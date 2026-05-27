@@ -366,7 +366,7 @@ export let CAPTURE_THE_BEER_BASES_ACTIVE = false;
 
 // ---- Coop-Defense Basen ----
 // Anzahl, Position, Form und HP pro Basis werden in
-// `src/config/coopDefenseBases.ts` definiert und vom `BaseRegistry` aufgelöst.
+// `src/config/coopDefenseMaps.json` definiert und vom `BaseRegistry` aufgelöst.
 /** Wird beim Wechsel in den Coop-Modus von applyArenaMetricsForMode() gesetzt. */
 export let COOP_DEFENSE_BASES_ACTIVE = false;
 /** HP-Bar Höhe für Coop-Basen (~2× Spieler-HP-Bar). */

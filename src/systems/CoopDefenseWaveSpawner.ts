@@ -1,52 +1,55 @@
 import * as Phaser from 'phaser';
 import { GRID_COLS, GRID_ROWS } from '../config';
+import type { ResolvedCoopDefenseMapWaveConfig } from '../config/coopDefenseMaps';
 import type { EnemyManager } from '../entities/EnemyManager';
-import {
-  COOP_DEFENSE_ENEMY_CONFIGS,
-  type CoopDefenseEnemyKind,
-  type ResolvedCoopDefenseEnemyConfigs,
-} from '../entities/EnemyCatalog';
+import type { CoopDefenseEnemyKind } from '../entities/EnemyCatalog';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
-
-const ENEMY_KINDS = Object.keys(COOP_DEFENSE_ENEMY_CONFIGS) as CoopDefenseEnemyKind[];
 
 const LEFT_SPAWN_GRID_X_MAX = Math.max(2, Math.floor(GRID_COLS * 0.15));
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_WAVE_DISTANCE_CELLS = 2;
 
 export class CoopDefenseWaveSpawner {
-  private readonly accumulators = new Map<CoopDefenseEnemyKind, number>(
-    ENEMY_KINDS.map((kind) => [kind, 0]),
-  );
+  private readonly accumulators: number[];
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
+  private elapsedMs = 0;
 
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly flowFieldService: EnemyFlowFieldService,
-    private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs,
-  ) {}
+    private readonly waveConfigs: readonly ResolvedCoopDefenseMapWaveConfig[],
+  ) {
+    this.accumulators = waveConfigs.map(() => 0);
+  }
 
   hostUpdate(deltaMs: number, countdownActive: boolean): void {
     if (countdownActive) return;
 
-    for (const kind of ENEMY_KINDS) {
-      const { intervalMs, countPerWave } = this.resolvedConfigs[kind].spawnConfig;
-      let acc = (this.accumulators.get(kind) ?? 0) + deltaMs;
+    const previousElapsedMs = this.elapsedMs;
+    this.elapsedMs += deltaMs;
+
+    for (const [index, waveConfig] of this.waveConfigs.entries()) {
+      const { intervalMs } = waveConfig;
+      const activeDeltaMs = this.getActiveDeltaMs(previousElapsedMs, this.elapsedMs, waveConfig.startAtMs);
+      if (activeDeltaMs <= 0) continue;
+
+      let acc = this.accumulators[index] + activeDeltaMs;
       while (acc >= intervalMs) {
         acc -= intervalMs;
-        this.runWave(kind, countPerWave);
+        this.runWave(waveConfig.enemyKind, waveConfig.countPerWave);
       }
-      this.accumulators.set(kind, acc);
+      this.accumulators[index] = acc;
     }
   }
 
   reset(): void {
-    for (const kind of ENEMY_KINDS) {
-      this.accumulators.set(kind, 0);
+    for (let index = 0; index < this.accumulators.length; index++) {
+      this.accumulators[index] = 0;
     }
     this.recentCells.length = 0;
     this.exhaustionWarned = false;
+    this.elapsedMs = 0;
   }
 
   private runWave(kind: CoopDefenseEnemyKind, count: number): void {
@@ -112,6 +115,12 @@ export class CoopDefenseWaveSpawner {
     if (this.exhaustionWarned) return;
     this.exhaustionWarned = true;
     console.warn('[CoopDefenseWaveSpawner] Keine freien Spawn-Zellen mehr im linken Arena-Bereich.');
+  }
+
+  private getActiveDeltaMs(previousElapsedMs: number, nextElapsedMs: number, startAtMs: number): number {
+    if (nextElapsedMs <= startAtMs) return 0;
+    const activeStartMs = Math.max(previousElapsedMs, startAtMs);
+    return Math.max(0, nextElapsedMs - activeStartMs);
   }
 
   private key(gridX: number, gridY: number): string {

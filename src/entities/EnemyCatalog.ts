@@ -4,14 +4,12 @@ export type CoopDefenseEnemyKind = 'zombie-badger' | 'demon-badger' | 'rabid-bad
 
 export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
 
-export interface CoopDefenseEnemySpawnConfig {
-  readonly intervalMs: number;
-  readonly countPerWave: number;
-}
-
 export interface CoopDefenseEnemyPlayerScaling {
   readonly maxHpFactorPerAdditionalPlayer?: number;
   readonly moveSpeedFactorPerAdditionalPlayer?: number;
+}
+
+export interface CoopDefenseEnemySpawnScaling {
   readonly intervalMsFactorPerAdditionalPlayer?: number;
   readonly countPerWaveFactorPerAdditionalPlayer?: number;
 }
@@ -26,8 +24,8 @@ export interface CoopDefenseEnemyConfig {
   readonly attackStopDurationMs: number;
   readonly imageKey: string;
   readonly color?: number;
-  readonly spawnConfig: CoopDefenseEnemySpawnConfig;
   readonly playerScaling?: CoopDefenseEnemyPlayerScaling;
+  readonly spawnScaling?: CoopDefenseEnemySpawnScaling;
 }
 
 export type ResolvedCoopDefenseEnemyConfig = Omit<CoopDefenseEnemyConfig, 'playerScaling'>;
@@ -45,13 +43,11 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
     attackStopDurationMs: 200,
     imageKey: 'badger',
     color: 0xe07830,
-    spawnConfig: {
-      intervalMs: 2000,
-      countPerWave: 1,
-    },
     playerScaling: {
       maxHpFactorPerAdditionalPlayer: 0.5,
       moveSpeedFactorPerAdditionalPlayer: 0,
+    },
+    spawnScaling: {
       intervalMsFactorPerAdditionalPlayer: -0.5,
       countPerWaveFactorPerAdditionalPlayer: 0,
     },
@@ -66,15 +62,13 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
     attackStopDurationMs: 200,
     imageKey: 'badger',
     color: 0xffaa44,
-    spawnConfig: {
-      intervalMs: 10000,
-      countPerWave: 2,
-    },
     playerScaling: {
-      maxHpFactorPerAdditionalPlayer: 0.5,
+      maxHpFactorPerAdditionalPlayer: 0,
       moveSpeedFactorPerAdditionalPlayer: 0,
+    },
+    spawnScaling: {
       intervalMsFactorPerAdditionalPlayer: 0,
-      countPerWaveFactorPerAdditionalPlayer: 0.5,
+      countPerWaveFactorPerAdditionalPlayer: 1,
     },
   },  
   'rabid-badger': {
@@ -87,15 +81,13 @@ export const COOP_DEFENSE_ENEMY_CONFIGS = {
     attackStopDurationMs: 100,
     imageKey: 'badger',
     color: 0xcc2020,
-    spawnConfig: {
-      intervalMs: 20000,
-      countPerWave: 3,
-    },
     playerScaling: {
       maxHpFactorPerAdditionalPlayer: 0,
       moveSpeedFactorPerAdditionalPlayer: 0,
+    },
+    spawnScaling: {
       intervalMsFactorPerAdditionalPlayer: -1,
-      countPerWaveFactorPerAdditionalPlayer: 1 / 3,
+      countPerWaveFactorPerAdditionalPlayer: 0,
     },
   },
 } as const satisfies Record<CoopDefenseEnemyKind, CoopDefenseEnemyConfig>;
@@ -124,21 +116,31 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         attackStopDurationMs: config.attackStopDurationMs,
         imageKey: config.imageKey,
         color: config.color,
-        spawnConfig: {
-          intervalMs: resolvePositiveNumber(
-            config.spawnConfig.intervalMs,
-            config.playerScaling?.intervalMsFactorPerAdditionalPlayer,
-            normalizedHumanPlayerCount,
-          ),
-          countPerWave: resolveNonNegativeInteger(
-            config.spawnConfig.countPerWave,
-            config.playerScaling?.countPerWaveFactorPerAdditionalPlayer,
-            normalizedHumanPlayerCount,
-          ),
-        },
       },
     ]),
   ) as ResolvedCoopDefenseEnemyConfigs;
+}
+
+export function resolveCoopDefenseEnemyWaveConfig(
+  kind: CoopDefenseEnemyKind,
+  baseWaveConfig: { intervalMs: number; countPerWave: number },
+  humanPlayerCount: number,
+): { intervalMs: number; countPerWave: number } {
+  const normalizedHumanPlayerCount = Math.max(1, Math.floor(humanPlayerCount));
+  const config = COOP_DEFENSE_ENEMY_CONFIGS[kind];
+
+  return {
+    intervalMs: resolvePositiveNumber(
+      baseWaveConfig.intervalMs,
+      config.spawnScaling?.intervalMsFactorPerAdditionalPlayer,
+      normalizedHumanPlayerCount,
+    ),
+    countPerWave: resolveNonNegativeInteger(
+      baseWaveConfig.countPerWave,
+      config.spawnScaling?.countPerWaveFactorPerAdditionalPlayer,
+      normalizedHumanPlayerCount,
+    ),
+  };
 }
 
 function resolvePositiveInteger(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {

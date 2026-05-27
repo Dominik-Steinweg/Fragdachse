@@ -32,7 +32,7 @@ export function usesDynamicCamera(mode: GameMode): boolean {
 export function getGameModeLabel(mode: GameMode): string {
   if (mode === 'team_deathmatch') return 'Team Deathmatch';
   if (mode === CAPTURE_THE_BEER_MODE) return 'Capture the Beer';
-  if (mode === COOP_DEFENSE_MODE) return 'Coop Defense';
+  if (mode === COOP_DEFENSE_MODE) return 'Dachs vs. Zombies';
   return 'Deathmatch';
 }
 

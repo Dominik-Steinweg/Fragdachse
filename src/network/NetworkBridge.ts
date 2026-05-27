@@ -18,6 +18,7 @@ import { sanitizePlayerName } from '../utils/playerName';
 import { isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -31,6 +32,7 @@ const KEY_READY        = 'isr';   // per-player boolean: isReady
 const KEY_NAME         = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
+const KEY_COOP_MAP_ID  = 'cmd';   // global: string (ausgewaehlte Coop-Defense-Map)
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
@@ -332,12 +334,30 @@ export class NetworkBridge {
 
   setGameMode(mode: GameMode): void {
     if (!isHost()) return;
+    if (this.getGameMode() === mode) return;
     setState(KEY_GAME_MODE, mode, true);
     if (isTeamGameMode(mode)) {
       this.hostAssignMissingTeams(mode);
     }
     this.hostReconcileLoadoutsForMode(mode);
+    this.hostInvalidateLobbyReadyStateForAllPlayers();
     this.connectedPlayersCacheDirty = true;
+  }
+
+  getCoopDefenseMapId(): string {
+    const stateValue = getState(KEY_COOP_MAP_ID) as string | undefined;
+    if (typeof stateValue !== 'string' || stateValue.length === 0) {
+      return DEFAULT_COOP_DEFENSE_MAP_ID;
+    }
+    return getCoopDefenseMapConfig(stateValue).mapId;
+  }
+
+  setCoopDefenseMapId(mapId: string): void {
+    if (!isHost()) return;
+    const normalizedMapId = getCoopDefenseMapConfig(mapId).mapId;
+    if (this.getCoopDefenseMapId() === normalizedMapId) return;
+    setState(KEY_COOP_MAP_ID, normalizedMapId, true);
+    this.hostInvalidateLobbyReadyStateForAllPlayers();
   }
 
   hostReconcileLoadoutsForMode(mode: GameMode): void {
@@ -393,6 +413,14 @@ export class NetworkBridge {
     const state = this.playerStateMap.get(playerId);
     if (!state) return;
     state.setState(KEY_LOADOUT_COMMITTED, snapshot, true);
+  }
+
+  private hostInvalidateLobbyReadyStateForAllPlayers(): void {
+    if (!isHost()) return;
+    for (const playerId of this.connectedPlayers.keys()) {
+      this.hostSetPlayerReady(playerId, false);
+      this.hostSetPlayerCommittedLoadout(playerId, null);
+    }
   }
 
   getPlayerTeam(playerId: string): TeamId | null {

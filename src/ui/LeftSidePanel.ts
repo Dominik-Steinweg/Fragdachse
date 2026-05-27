@@ -19,7 +19,8 @@ import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimate
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
-import { getGameModeLabel, hasTeamSelection, usesTeamColors } from '../gameModes';
+import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
+import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
 import { getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
 
@@ -34,16 +35,18 @@ const NAME_VALUE_Y = 80 + LOBBY_TOP_OFFSET_Y;
 const EDIT_BTN_Y   = 114 + LOBBY_TOP_OFFSET_Y;
 const MODE_LABEL_Y = 132 + LOBBY_TOP_OFFSET_Y;
 const MODE_ROW_Y   = 150 + LOBBY_TOP_OFFSET_Y;
-const DIVIDER1_Y   = 176 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Name-/Modus-Sektion und Dachs
-const BADGER_Y     = 222 + LOBBY_TOP_OFFSET_Y;  // Dachs-Sprite-Mitte
-const DIVIDER2_Y   = 286 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Dachs und Loadout
+const MAP_LABEL_Y  = 174 + LOBBY_TOP_OFFSET_Y;
+const MAP_ROW_Y    = 192 + LOBBY_TOP_OFFSET_Y;
+const DIVIDER1_Y   = 218 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Name-/Modus-/Map-Sektion und Dachs
+const BADGER_Y     = 264 + LOBBY_TOP_OFFSET_Y;  // Dachs-Sprite-Mitte
+const DIVIDER2_Y   = 328 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Dachs und Loadout
 const BADGER_SIZE        = 48;   // Anzeigegröße
 const BADGER_CLICK_SIZE  = 56;   // Klickbare Fläche
 const TEAM_SELECT_Y      = BADGER_Y + BADGER_SIZE / 2 + 6;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_WORLD_X  = 12;
-const PICKER_WORLD_Y  = 238 + LOBBY_TOP_OFFSET_Y;
+const PICKER_WORLD_Y  = 280 + LOBBY_TOP_OFFSET_Y;
 const PICKER_W        = 188;
 const PICKER_H        = 148;
 const PICKER_PADDING  = 10;
@@ -58,20 +61,20 @@ const NAME_FONT  = { fontSize: '26px', fontFamily: 'monospace', color: toCssColo
 const EDIT_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_1) };
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = 312 + LOBBY_TOP_OFFSET_Y;   // Y des "Loadout:"-Labels
+const CAROUSEL_START_Y  = 354 + LOBBY_TOP_OFFSET_Y;   // Y des "Loadout:"-Labels
 const CAROUSEL_ROW_STEP = 52;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
 const CAROUSEL_GROUP_DY = 20;    // Offset erste Karussell-Zeile unter "Loadout:"
 const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const DIVIDER3_Y  = 536 + LOBBY_TOP_OFFSET_Y;  // Trennlinie unter Loadout
-const MENU_BTN_Y  = 566 + LOBBY_TOP_OFFSET_Y;
+const DIVIDER3_Y  = 578 + LOBBY_TOP_OFFSET_Y;  // Trennlinie unter Loadout
+const MENU_BTN_Y  = 608 + LOBBY_TOP_OFFSET_Y;
 const MENU_BTN_W  = 92;
 const MENU_BTN_H  = 34;
 const OPTIONS_BTN_X = 70;
 const HELP_BTN_X = 170;
-const ARROW_X_LEFT      = 15;
-const ARROW_X_RIGHT     = 195;   // "[ > ]" (~42px) endet bei ≈237 – bleibt im 240px-Sidebar
+const ARROW_X_LEFT      = 9;
+const ARROW_X_RIGHT     = 189;   // leicht nach links versetzt, bleibt mit sauberem Rand im 240px-Sidebar
 const ITEM_NAME_X       = 120;   // zentriert in 240px Sidebar
 
 const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense'];
@@ -125,6 +128,9 @@ export class LeftSidePanel {
   private editBtn:         Phaser.GameObjects.Text | null = null;
   private modeNameText:    Phaser.GameObjects.Text | null = null;
   private modeArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
+  private mapLabelText:    Phaser.GameObjects.Text | null = null;
+  private mapNameText:     Phaser.GameObjects.Text | null = null;
+  private mapArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
   private colorEditText:   Phaser.GameObjects.Text | null = null;
   private teamArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
   private nameEditEnabled  = true;
@@ -231,6 +237,35 @@ export class LeftSidePanel {
       .on('pointerout', () => modeRightBtn.setAlpha(1.0));
     objects.push(modeRightBtn);
     this.modeArrowButtons = { left: modeLeftBtn, right: modeRightBtn };
+
+    const mapLabelText = this.scene.add.text(CENTER_X, MAP_LABEL_Y, 'Map:', LABEL_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    this.mapLabelText = mapLabelText;
+    objects.push(mapLabelText);
+
+    const mapLeftBtn = this.scene.add.text(ARROW_X_LEFT, MAP_ROW_Y, '[ < ]', EDIT_FONT)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.stepCoopDefenseMap(-1))
+      .on('pointerover', () => mapLeftBtn.setAlpha(0.7))
+      .on('pointerout', () => mapLeftBtn.setAlpha(1.0));
+    objects.push(mapLeftBtn);
+
+    const mapNameText = this.scene.add.text(ITEM_NAME_X, MAP_ROW_Y, '', {
+      fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setScrollFactor(0);
+    this.mapNameText = mapNameText;
+    objects.push(mapNameText);
+
+    const mapRightBtn = this.scene.add.text(ARROW_X_RIGHT, MAP_ROW_Y, '[ > ]', EDIT_FONT)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.stepCoopDefenseMap(+1))
+      .on('pointerover', () => mapRightBtn.setAlpha(0.7))
+      .on('pointerout', () => mapRightBtn.setAlpha(1.0));
+    objects.push(mapRightBtn);
+    this.mapArrowButtons = { left: mapLeftBtn, right: mapRightBtn };
 
     // ── Trennlinie ──
     const divider = this.scene.add.graphics();
@@ -542,8 +577,12 @@ export class LeftSidePanel {
       this.localNameText?.setColor(toCssColor(color));
     }
     this.modeNameText?.setText(getGameModeLabel(mode));
+    this.mapNameText?.setText(isCoopDefenseMode(mode)
+      ? getCoopDefenseMapConfig(this.bridge.getCoopDefenseMapId()).displayName
+      : '---');
     this.syncAllLoadoutSelections();
     this.updateModeSelectorState();
+    this.updateMapSelectorState(mode);
     this.updateTeamSelectorState(mode, teamId);
   }
 
@@ -598,6 +637,7 @@ export class LeftSidePanel {
     this.updateColorEditState();
     this.updateLoadoutArrowVisibility();
     this.updateModeSelectorState();
+    this.updateMapSelectorState(this.bridge.getGameMode());
     this.updateTeamSelectorState(this.bridge.getGameMode(), this.bridge.getPlayerTeam(this.bridge.getLocalPlayerId()));
   }
 
@@ -991,6 +1031,17 @@ export class LeftSidePanel {
     this.refreshColorIndicator();
   }
 
+  private stepCoopDefenseMap(delta: -1 | 1): void {
+    const mode = this.bridge.getGameMode();
+    if (this.lobbyFieldsLocked || !this.bridge.isHost() || !isCoopDefenseMode(mode)) return;
+    const currentMapId = this.bridge.getCoopDefenseMapId();
+    const currentIndex = COOP_DEFENSE_MAP_CONFIGS.findIndex((mapConfig) => mapConfig.mapId === currentMapId);
+    const normalizedIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (normalizedIndex + delta + COOP_DEFENSE_MAP_CONFIGS.length) % COOP_DEFENSE_MAP_CONFIGS.length;
+    this.bridge.setCoopDefenseMapId(COOP_DEFENSE_MAP_CONFIGS[nextIndex].mapId);
+    this.refreshColorIndicator();
+  }
+
   private stepTeam(delta: -1 | 1): void {
     if (!hasTeamSelection(this.bridge.getGameMode())) return;
     if (this.lobbyFieldsLocked) return;
@@ -1016,6 +1067,26 @@ export class LeftSidePanel {
     } else {
       this.modeArrowButtons?.left.disableInteractive();
       this.modeArrowButtons?.right.disableInteractive();
+    }
+  }
+
+  private updateMapSelectorState(mode: GameMode): void {
+    const isHost = this.bridge.isHost();
+    const showMapSelector = isCoopDefenseMode(mode);
+    const enabled = showMapSelector && !this.lobbyFieldsLocked && isHost;
+    const alpha = enabled ? 1 : 0.35;
+
+    this.mapLabelText?.setVisible(showMapSelector);
+    this.mapArrowButtons?.left.setVisible(showMapSelector && isHost).setAlpha(alpha);
+    this.mapArrowButtons?.right.setVisible(showMapSelector && isHost).setAlpha(alpha);
+    this.mapNameText?.setVisible(showMapSelector).setAlpha(1);
+
+    if (enabled) {
+      this.mapArrowButtons?.left.setInteractive({ useHandCursor: true });
+      this.mapArrowButtons?.right.setInteractive({ useHandCursor: true });
+    } else {
+      this.mapArrowButtons?.left.disableInteractive();
+      this.mapArrowButtons?.right.disableInteractive();
     }
   }
 

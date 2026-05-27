@@ -10,13 +10,15 @@ import {
   isGridCellInArenaRegion,
   type ArenaGridRegion,
 } from '../config';
+import { bridge } from '../network/bridge';
 import {
-  COOP_DEFENSE_BASES,
+  getCoopDefenseMapConfig,
   type CoopBaseAnchor,
   type CoopBaseCellOffset,
   type CoopBaseConfig,
   type CoopBaseShape,
-} from '../config/coopDefenseBases';
+  type CoopDefenseMapConfig,
+} from '../config/coopDefenseMaps';
 
 /**
  * Beschreibt eine einzelne Basis: Identität + Grid-Footprint + HP-Soll.
@@ -27,7 +29,7 @@ import {
  *  - `region` ist die abgeleitete achsenparallele Bounding-Box. Wird für
  *             HP-Bar-Positionierung, Pixel-Bounds und die konservativen
  *             Clearance-/Border-Tests des Generators verwendet.
- *  - `hpMax`  stammt aus der Konfigurationsdatei (`coopDefenseBases.ts`).
+ *  - `hpMax`  stammt aus der datengetriebenen Coop-Defense-Map-Konfiguration.
  */
 export interface BaseSpec {
   readonly id: string;
@@ -129,9 +131,13 @@ function resolveBaseSpec(config: CoopBaseConfig): BaseSpec {
 // ── Öffentliche API ────────────────────────────────────────────────────────
 
 /** Aktive Coop-Basen für die laufende Runde. Leeres Array außerhalb des Coop-Modus. */
-export function getCoopDefenseBases(): readonly BaseSpec[] {
+export function getCoopDefenseBases(mapConfig: CoopDefenseMapConfig = resolveActiveCoopDefenseMapConfig()): readonly BaseSpec[] {
   if (!isCoopDefenseBasesActive()) return [];
-  return COOP_DEFENSE_BASES.map(resolveBaseSpec);
+  return mapConfig.bases.map(resolveBaseSpec);
+}
+
+function resolveActiveCoopDefenseMapConfig(): CoopDefenseMapConfig {
+  return getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
 }
 
 /** Pixel-Bounds einer Basis-Region (Bounding-Box) anhand der aktiven Arena-Metriken. */

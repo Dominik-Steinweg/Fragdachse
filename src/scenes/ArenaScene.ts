@@ -638,6 +638,10 @@ export class ArenaScene extends Phaser.Scene {
     if (!terminated && phase === 'LOBBY') {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       const players = bridge.getConnectedPlayers();
+      const localReady = bridge.getPlayerReady(bridge.getLocalPlayerId());
+      if (localReady !== this.lifecycle.getIsLocalReady()) {
+        this.lifecycle.setIsLocalReady(localReady);
+      }
       this.updateRoomQuality(this.time.now, players);
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.refreshPlayerList(players);

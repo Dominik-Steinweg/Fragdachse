@@ -32,6 +32,7 @@ import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../..
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
 import { getCoopDefenseBases } from '../../arena/BaseRegistry';
+import { getCoopDefenseMapConfig, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../../config';
 import { PLAYER_SPEED } from '../../config';
@@ -168,10 +169,14 @@ export class ArenaLifecycleCoordinator {
     bridge.resetAllFrags();
     applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
     const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
+    const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
+      ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
+      : null;
+    const roundDurationSec = coopDefenseMapConfig?.roundDurationSec ?? ARENA_DURATION_SEC;
     const layout = ArenaGenerator.generate(Date.now());
     bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
     bridge.setArenaStartTime(arenaStartTime);
-    bridge.setRoundEndTime(arenaStartTime + ARENA_DURATION_SEC * 1000);
+    bridge.setRoundEndTime(arenaStartTime + roundDurationSec * 1000);
     const roundState: RoundState | null = isCoopDefenseMode(bridge.getGameMode())
       ? {
         status: 'active',
@@ -285,12 +290,19 @@ export class ArenaLifecycleCoordinator {
     this.tearDownArena();
 
     const layout = ArenaGenerator.hydrateVisualOnlyFields(networkLayout);
+    const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
+      ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
+      : null;
     const coopDefenseHumanPlayerCount = isCoopDefenseMode(bridge.getGameMode())
       ? Math.max(1, Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1))
       : 1;
     const coopDefenseEnemyConfigs = isCoopDefenseMode(bridge.getGameMode())
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
+    const coopDefenseBases = coopDefenseMapConfig ? getCoopDefenseBases(coopDefenseMapConfig) : [];
+    const coopDefenseWaveConfigs = coopDefenseMapConfig
+      ? resolveCoopDefenseMapWaveConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
+      : [];
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
@@ -303,7 +315,7 @@ export class ArenaLifecycleCoordinator {
     // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry –
     // HP-Werte fließen über GameState.bases (Host → Client).
     this.ctx.baseManager = isCoopDefenseMode(bridge.getGameMode())
-      ? new BaseManager(this.scene)
+      ? new BaseManager(this.scene, coopDefenseBases)
       : null;
     this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
@@ -333,23 +345,23 @@ export class ArenaLifecycleCoordinator {
       };
 
       this.ctx.enemyFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
-        ? new EnemyFlowFieldService(layout, getCoopDefenseBases(), flowFieldMetrics, {
+        ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
           eventBus: this.scene.game.events,
           obstacleCellProvider,
         })
         : null;
       this.ctx.enemyPlayerFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
-        ? new EnemyFlowFieldService(layout, getCoopDefenseBases(), flowFieldMetrics, {
+        ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
           eventBus: this.scene.game.events,
           obstacleCellProvider,
           goalMode: 'dynamic-fallback-bases',
         })
         : null;
-      if (this.ctx.enemyManager && this.ctx.enemyFlowFieldService && coopDefenseEnemyConfigs) {
+      if (this.ctx.enemyManager && this.ctx.enemyFlowFieldService && coopDefenseWaveConfigs.length > 0) {
         this.ctx.coopDefenseWaveSpawner = new CoopDefenseWaveSpawner(
           this.ctx.enemyManager,
           this.ctx.enemyFlowFieldService,
-          coopDefenseEnemyConfigs,
+          coopDefenseWaveConfigs,
         );
       }
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
