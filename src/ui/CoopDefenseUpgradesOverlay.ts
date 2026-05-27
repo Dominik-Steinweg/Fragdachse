@@ -23,6 +23,7 @@ const BAR_H = 18;
 const BAR_X = CX - BAR_W / 2;
 const BAR_Y = SUBTITLE_Y + 48;
 const POINTS_Y = BAR_Y + 38;
+const POINTS_TEXT_OFFSET_Y = 8;
 const FOOTER_Y = CY + PANEL_H / 2 - 28;
 const UPGRADE_AREA_W = PANEL_W - 60;
 const UPGRADE_AREA_TOP = POINTS_Y + 34;
@@ -36,15 +37,17 @@ const LANE_INNER_PADDING_X = 10;
 const LANE_INNER_TOP = 56;
 const LANE_INNER_BOTTOM = 14;
 const LANE_BODY_H = UPGRADE_AREA_H - LANE_INNER_TOP - LANE_INNER_BOTTOM;
-const NODE_H = 68;
-const NODE_GAP_Y = 12;
-const NODE_GAP_X = 8;
-const NODE_INNER_PADDING = 3;
-const NODE_LABEL_FONT_SIZE = 13;
-const NODE_META_FONT_SIZE = 11;
+const NODE_H = 16;
+const NODE_GAP_Y = 4;
+const NODE_GAP_X = 6;
+const NODE_INNER_PADDING = 2;
+const NODE_LABEL_FONT_SIZE = 10;
 const TOOLTIP_OFFSET_X = 18;
 const TOOLTIP_OFFSET_Y = 18;
 const TOOLTIP_MAX_W = 320;
+const BASE_UNLOCK_NODE_FILL = COLORS.GREY_5;
+const BASE_UNLOCK_NODE_STROKE = COLORS.GREY_2;
+const BASE_UNLOCK_NODE_ACTIVE = COLORS.GREY_1;
 
 const DIM_COLOR = COLORS.GREY_10;
 const DIM_ALPHA = 0.78;
@@ -212,7 +215,7 @@ export class CoopDefenseUpgradesOverlay {
     }).setOrigin(0.5, 0).setScrollFactor(0);
     objects.push(this.progressLabelText);
 
-    this.pointsText = this.scene.add.text(CX, POINTS_Y, '0 Upgrade-Punkte verfuegbar', {
+    this.pointsText = this.scene.add.text(CX, POINTS_Y + POINTS_TEXT_OFFSET_Y, '0 Upgrade-Punkte verfuegbar', {
       fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.pointsText);
@@ -516,15 +519,21 @@ export class CoopDefenseUpgradesOverlay {
 
     for (const layoutNode of layout.nodes) {
       const nodeGroup = this.scene.add.container(0, 0).setScrollFactor(0);
+      const isBaseUnlock = layoutNode.node.kind === 'unlock'
+        && layoutNode.node.startingLevel > 0
+        && !layoutNode.node.refundable;
       const interactionEnabled = layoutNode.node.canLevelUp || layoutNode.node.canLevelDown;
       const isLocked = !layoutNode.node.unlocked && layoutNode.node.level <= 0;
       const progressFraction = layoutNode.node.maxLevel > 0
         ? Phaser.Math.Clamp(layoutNode.node.level / layoutNode.node.maxLevel, 0, 1)
         : 0;
-      const baseAlpha = isLocked ? 0.34 : layoutNode.node.level > 0 ? 0.92 : 0.68;
+      const nodeBaseColor = isBaseUnlock ? BASE_UNLOCK_NODE_FILL : layout.visuals.nodeBase;
+      const nodeStrokeColor = isBaseUnlock ? BASE_UNLOCK_NODE_STROKE : layout.visuals.nodeStroke;
+      const nodeActiveColor = isBaseUnlock ? BASE_UNLOCK_NODE_ACTIVE : layout.visuals.nodeActive;
+      const baseAlpha = isLocked ? 0.28 : layoutNode.node.level > 0 ? 0.96 : 0.72;
 
-      const baseRect = this.scene.add.rectangle(layoutNode.x, layoutNode.y, layout.nodeWidth, NODE_H, layout.visuals.nodeBase, baseAlpha)
-        .setStrokeStyle(2, interactionEnabled ? layout.visuals.nodeStroke : COLORS.GREY_5)
+      const baseRect = this.scene.add.rectangle(layoutNode.x, layoutNode.y, layout.nodeWidth, NODE_H, nodeBaseColor, baseAlpha)
+        .setStrokeStyle(1, interactionEnabled || isBaseUnlock ? nodeStrokeColor : COLORS.GREY_5)
         .setScrollFactor(0);
       nodeGroup.add(baseRect);
 
@@ -534,37 +543,29 @@ export class CoopDefenseUpgradesOverlay {
         layoutNode.y,
         Math.max(0.001, fillWidth),
         NODE_H - NODE_INNER_PADDING * 2,
-        layout.visuals.nodeActive,
+        nodeActiveColor,
         layoutNode.node.level > 0 ? 0.94 : 0,
       )
         .setOrigin(0, 0.5)
         .setScrollFactor(0);
       nodeGroup.add(activeFill);
 
-      const label = this.scene.add.text(layoutNode.x, layoutNode.y - 9, layoutNode.node.label, {
+      const label = this.scene.add.text(layoutNode.x, layoutNode.y, layoutNode.node.label, {
         fontSize: `${NODE_LABEL_FONT_SIZE}px`,
         fontFamily: 'monospace',
         fontStyle: 'bold',
-        color: toCssColor(isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
+        color: toCssColor(isBaseUnlock ? COLORS.GREY_10 : isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
         align: 'center',
         wordWrap: { width: layout.nodeWidth - 14, useAdvancedWrap: true },
       }).setOrigin(0.5).setScrollFactor(0);
       nodeGroup.add(label);
-
-      const levelColor = layoutNode.node.level > 0 ? COLORS.GREY_9 : isLocked ? COLORS.GREY_5 : COLORS.GREY_2;
-      const metaText = this.scene.add.text(layoutNode.x, layoutNode.y + NODE_H / 2 - 11, `${layoutNode.node.level}/${layoutNode.node.maxLevel}`, {
-        fontSize: `${NODE_META_FONT_SIZE}px`,
-        fontFamily: 'monospace',
-        color: toCssColor(levelColor),
-      }).setOrigin(0.5, 1).setScrollFactor(0);
-      nodeGroup.add(metaText);
 
       const hitArea = this.scene.add.rectangle(layoutNode.x, layoutNode.y, layout.nodeWidth, NODE_H, 0x000000, 0.001)
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: interactionEnabled })
         .on('pointerover', (pointer: Phaser.Input.Pointer) => {
           baseRect.setAlpha(Math.min(1, baseAlpha + 0.12));
-          this.showTooltip(layoutNode.node.description, pointer);
+          this.showTooltip(layoutNode.node, pointer);
         })
         .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
         .on('pointerout', () => {
@@ -584,10 +585,10 @@ export class CoopDefenseUpgradesOverlay {
     this.refresh();
   }
 
-  private showTooltip(description: string, pointer: Phaser.Input.Pointer): void {
+  private showTooltip(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
     if (!this.tooltipContainer || !this.tooltipBackground || !this.tooltipText) return;
 
-    this.tooltipText.setText(description);
+    this.tooltipText.setText(this.buildTooltipText(node));
     const width = this.tooltipText.width + 18;
     const height = this.tooltipText.height + 16;
 
@@ -614,5 +615,21 @@ export class CoopDefenseUpgradesOverlay {
     this.tooltipContainer?.setVisible(false);
     this.tooltipBackground?.setVisible(false);
     this.tooltipText?.setVisible(false);
+  }
+
+  private buildTooltipText(node: CoopDefenseUpgradeNodeSnapshot): string {
+    const lines = [
+      node.label,
+      `Stufe ${node.level}/${node.maxLevel}`,
+    ];
+
+    if (node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable) {
+      lines.push('Basis-Freischaltung');
+    } else if (!node.refundable) {
+      lines.push('Nicht ruecknehmbar');
+    }
+
+    lines.push(node.description);
+    return lines.join('\n');
   }
 }
