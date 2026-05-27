@@ -19,6 +19,7 @@ import { isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes'
 import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -52,6 +53,7 @@ const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
 const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
+const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
@@ -1485,6 +1487,21 @@ export class NetworkBridge {
     for (const ps of this.playerStateMap.values()) {
       ps.setState(KEY_FRAGS, 0);
     }
+  }
+
+  setLocalCoopDefenseTotalXp(totalXp: number): void {
+    const nextTotalXp = Math.max(0, Math.floor(totalXp));
+    myPlayer().setState(KEY_COOP_XP, nextTotalXp, true);
+  }
+
+  getPlayerCoopDefenseTotalXp(playerId: string): number {
+    const rawXp = this.playerStateMap.get(playerId)?.getState(KEY_COOP_XP) as number | undefined;
+    if (typeof rawXp !== 'number' || !Number.isFinite(rawXp)) return 0;
+    return Math.max(0, Math.floor(rawXp));
+  }
+
+  getPlayerCoopDefenseLevel(playerId: string): number {
+    return getCoopDefenseLevelForXp(this.getPlayerCoopDefenseTotalXp(playerId));
   }
 
   // ── Ping-Messung: Client → Host → Alle ────────────────────────────────────

@@ -1151,6 +1151,7 @@ export class ArenaScene extends Phaser.Scene {
     const stored = getStoredCoopDefenseProgress();
     this.coopDefenseProgress = getCoopDefenseProgressSnapshot(stored.totalXp);
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
+    bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
   }
 
   private processCoopDefenseRoundXp(): void {

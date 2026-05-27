@@ -10,7 +10,7 @@ import {
   GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
-import { hasTeamSelection } from '../gameModes';
+import { hasTeamSelection, isCoopDefenseMode } from '../gameModes';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
@@ -35,12 +35,13 @@ const ACTION_BTN_W = 160;
 const ACTION_BTN_H = 46;
 const ACTION_BTN_Y = PANEL_Y + PANEL_H - 34;
 const ACTION_BTN_GAP = 18;
-const COOP_PROGRESS_PANEL_W = 360;
-const COOP_PROGRESS_PANEL_H = 78;
-const COOP_PROGRESS_PANEL_Y = READY_BTN_Y - 86;
+const COOP_PROGRESS_PANEL_W = 440;
+const COOP_PROGRESS_PANEL_H = 108;
+const COOP_PROGRESS_PANEL_Y = PANEL_Y + PANEL_H + 76;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
 const LIST_Y   = PANEL_Y + 76;
+const ROW_LEVEL_X = PANEL_X + PANEL_W - 150;
 const ROW_PING_X = PANEL_X + PANEL_W - 28; // 1332 – Ping rechts-bündig in Spielerzeile
 const TEAM_HEADER_ROW_H = 20;
 const TEAM_SECTION_GAP = 10;
@@ -62,6 +63,7 @@ type PlayerRow = {
   name:  Phaser.GameObjects.Text;
   badge: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
+  level: Phaser.GameObjects.Text;
   ping:  Phaser.GameObjects.Text;
 };
 
@@ -80,7 +82,8 @@ export class LobbyOverlay {
   private retryBtnLabel!: Phaser.GameObjects.Text;
   private autoBtn!:       Phaser.GameObjects.Rectangle;
   private autoBtnLabel!:  Phaser.GameObjects.Text;
-  private coopProgressPanel: Phaser.GameObjects.Container | null = null;
+  private levelHeaderText: Phaser.GameObjects.Text | null = null;
+  private coopProgressContainer: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressTotalXpText: Phaser.GameObjects.Text | null = null;
   private coopProgressNextLevelText: Phaser.GameObjects.Text | null = null;
@@ -105,6 +108,12 @@ export class LobbyOverlay {
       this.container = null;
       this.playerRows.clear();
     }
+    this.coopProgressContainer?.destroy(true);
+    this.coopProgressContainer = null;
+    this.levelHeaderText = null;
+    this.coopProgressLevelText = null;
+    this.coopProgressTotalXpText = null;
+    this.coopProgressNextLevelText = null;
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -133,6 +142,10 @@ export class LobbyOverlay {
     }).setScrollFactor(0).setVisible(false);
     this.teamHeaders = { blue: blueHeader, red: redHeader };
     objects.push(blueHeader, redHeader);
+    this.levelHeaderText = this.scene.add.text(ROW_LEVEL_X, LIST_Y, 'LVL', {
+      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
+    objects.push(this.levelHeaderText);
 
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
@@ -202,44 +215,46 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.autoBtnLabel);
 
-    const coopProgressBg = this.scene.add.rectangle(READY_BTN_X, COOP_PROGRESS_PANEL_Y, COOP_PROGRESS_PANEL_W, COOP_PROGRESS_PANEL_H, COLORS.GREY_7, 0.94)
+    const coopProgressBg = this.scene.add.rectangle(READY_BTN_X, COOP_PROGRESS_PANEL_Y, COOP_PROGRESS_PANEL_W, COOP_PROGRESS_PANEL_H, COLORS.GREY_7, 0.96)
       .setStrokeStyle(1, COLORS.BROWN_4)
       .setScrollFactor(0);
-    const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 22, 'Dachs vs. Zombies Fortschritt', {
+    const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 34, 'Dachs vs. Zombies Fortschritt', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 2, 'Level 1', {
+    this.coopProgressLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 8, 'Level 1', {
       fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     this.coopProgressTotalXpText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 18, '0 XP gesamt', {
       fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2),
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressNextLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 36, '25 XP bis Level 2', {
+    this.coopProgressNextLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 42, '25 XP bis Level 2', {
       fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressPanel = this.scene.add.container(0, 0, [
+    this.coopProgressContainer = this.scene.add.container(0, 0, [
       coopProgressBg,
       coopProgressTitle,
       this.coopProgressLevelText,
       this.coopProgressTotalXpText,
       this.coopProgressNextLevelText,
-    ]).setVisible(false);
-    objects.push(this.coopProgressPanel);
+    ]).setDepth(DEPTH.OVERLAY + 0.5).setVisible(false);
 
     // ── Container mit korrektem Depth erstellen ───────────────────────────
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
     this.container.setVisible(this.visible);
+    this.coopProgressContainer.setVisible(this.visible && false);
     this.updateRoomActionButtons();
   }
 
   show(): void {
     this.visible = true;
     this.container?.setVisible(true);
+    this.coopProgressContainer?.setVisible(this.coopProgressContainer.visible);
   }
 
   hide(): void {
     this.visible = false;
     this.container?.setVisible(false);
+    this.coopProgressContainer?.setVisible(false);
   }
 
   isVisible(): boolean {
@@ -255,7 +270,7 @@ export class LobbyOverlay {
     // Reihen für abgemeldete Spieler entfernen
     for (const [id, row] of this.playerRows) {
       if (!currentIds.has(id)) {
-        row.bg.destroy(); row.name.destroy(); row.badge.destroy(); row.label.destroy(); row.ping.destroy();
+        row.bg.destroy(); row.name.destroy(); row.badge.destroy(); row.label.destroy(); row.level.destroy(); row.ping.destroy();
         this.playerRows.delete(id);
       }
     }
@@ -274,7 +289,9 @@ export class LobbyOverlay {
 
     this.repositionRows(connectedPlayers);
     this.refreshBadges();
+    this.refreshCoopDefenseLevels();
     this.refreshPings();
+    this.updateCoopDefenseLevelVisibility();
     this.updateStatus(connectedPlayers.length);
   }
 
@@ -294,14 +311,14 @@ export class LobbyOverlay {
   }
 
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
-    if (!this.coopProgressPanel || !this.coopProgressLevelText || !this.coopProgressTotalXpText || !this.coopProgressNextLevelText) return;
+    if (!this.coopProgressContainer || !this.coopProgressLevelText || !this.coopProgressTotalXpText || !this.coopProgressNextLevelText) return;
 
     if (!progress) {
-      this.coopProgressPanel.setVisible(false);
+      this.coopProgressContainer.setVisible(false);
       return;
     }
 
-    this.coopProgressPanel.setVisible(true);
+    this.coopProgressContainer.setVisible(this.visible);
     this.coopProgressLevelText.setText(`Level ${progress.level}`);
     this.coopProgressTotalXpText.setText(`${progress.totalXp} XP gesamt`);
     this.coopProgressNextLevelText.setText(`${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}`);
@@ -358,13 +375,16 @@ export class LobbyOverlay {
     const label = this.scene.add.text(LIST_X + 8, y + (ROW_H - 6) / 2, '✗', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1),  fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
+    const level = this.scene.add.text(ROW_LEVEL_X, y + (ROW_H - 6) / 2, '-', {
+      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
 
     const ping = this.scene.add.text(ROW_PING_X, y + (ROW_H - 6) / 2, '', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
     }).setOrigin(1, 0.5).setScrollFactor(0);
 
-    this.container!.add([bg, name, badge, label, ping]);
-    this.playerRows.set(profile.id, { bg, name, badge, label, ping });
+    this.container!.add([bg, name, badge, label, level, ping]);
+    this.playerRows.set(profile.id, { bg, name, badge, label, level, ping });
   }
 
   private repositionRows(connectedPlayers: PlayerProfile[]): void {
@@ -412,6 +432,7 @@ export class LobbyOverlay {
     row.name.setPosition(LIST_X + 40, y + 10);
     row.badge.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
     row.label.setPosition(LIST_X + 8, y + (ROW_H - 6) / 2);
+    row.level.setPosition(ROW_LEVEL_X, y + (ROW_H - 6) / 2);
     row.ping.setPosition(ROW_PING_X, y + (ROW_H - 6) / 2);
   }
 
@@ -422,6 +443,22 @@ export class LobbyOverlay {
       row.label.setText(ready ? '✓' : '✗');
     }
   }
+
+  private refreshCoopDefenseLevels(): void {
+    const showLevels = isCoopDefenseMode(this.bridge.getGameMode());
+    for (const [id, row] of this.playerRows) {
+      row.level.setText(showLevels ? `Lv ${this.bridge.getPlayerCoopDefenseLevel(id)}` : '-');
+    }
+  }
+
+  private updateCoopDefenseLevelVisibility(): void {
+    const showLevels = isCoopDefenseMode(this.bridge.getGameMode());
+    this.levelHeaderText?.setVisible(showLevels);
+    for (const row of this.playerRows.values()) {
+      row.level.setVisible(showLevels);
+    }
+  }
+
   private refreshPings(): void {
     for (const [id, row] of this.playerRows) {
       const ms = this.bridge.getPlayerPing(id);
