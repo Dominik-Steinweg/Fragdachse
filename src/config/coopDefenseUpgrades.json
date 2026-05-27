@@ -4,7 +4,14 @@
       "id": "hp",
       "label": "HP",
       "maxLevel": 3,
-      "defaultUnlocked": true
+      "defaultUnlocked": true,
+      "effects": [
+        {
+          "stat": "maxHp",
+          "mode": "add_per_level",
+          "value": 20
+        }
+      ]
     }
   ]
 }

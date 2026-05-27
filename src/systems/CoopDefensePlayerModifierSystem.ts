@@ -1,17 +1,19 @@
-import { COOP_DEFENSE_HP_UPGRADE_BONUS_PER_LEVEL, HP_MAX } from '../config';
+import { HP_MAX } from '../config';
 import type { CoopDefenseUpgradeProfile, LoadoutCommitSnapshot } from '../types';
 import {
   cloneCoopDefenseUpgradeProfile,
-  COOP_DEFENSE_HP_UPGRADE_ID,
-  getCoopDefenseUpgradeState,
+  COOP_DEFENSE_PLAYER_STAT_MAX_HP,
+  getCoopDefenseNumericStatTotals,
   sanitizeCoopDefenseUpgradeProfile,
 } from '../utils/coopDefenseUpgrades';
 
 export interface CoopDefensePlayerRuntimeModifiers {
+  numericStats: Readonly<Record<string, number>>;
   maxHp: number;
 }
 
 const DEFAULT_RUNTIME_MODIFIERS: CoopDefensePlayerRuntimeModifiers = {
+  numericStats: Object.freeze({}),
   maxHp: HP_MAX,
 };
 
@@ -57,6 +59,10 @@ export class CoopDefensePlayerModifierSystem {
     return this.runtimeModifiers.get(playerId) ?? DEFAULT_RUNTIME_MODIFIERS;
   }
 
+  getNumericStat(playerId: string, stat: string): number {
+    return this.getModifiers(playerId).numericStats[stat] ?? 0;
+  }
+
   getMaxHp(playerId: string): number {
     return this.getModifiers(playerId).maxHp;
   }
@@ -67,9 +73,10 @@ export class CoopDefensePlayerModifierSystem {
   }
 
   private resolveRuntimeModifiers(profile: CoopDefenseUpgradeProfile): CoopDefensePlayerRuntimeModifiers {
-    const hpUpgradeLevel = getCoopDefenseUpgradeState(profile, COOP_DEFENSE_HP_UPGRADE_ID).level;
+    const numericStats = getCoopDefenseNumericStatTotals(profile);
     return {
-      maxHp: HP_MAX + hpUpgradeLevel * COOP_DEFENSE_HP_UPGRADE_BONUS_PER_LEVEL,
+      numericStats,
+      maxHp: HP_MAX + (numericStats[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0),
     };
   }
 }

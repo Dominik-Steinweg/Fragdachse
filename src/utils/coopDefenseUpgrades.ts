@@ -1,11 +1,20 @@
 import rawCoopDefenseUpgrades from '../config/coopDefenseUpgrades.json';
 import type { CoopDefenseUpgradeProfile, CoopDefenseUpgradeState } from '../types';
 
+export type CoopDefenseUpgradeEffectMode = 'add_per_level';
+
+export interface CoopDefenseUpgradeEffectDefinition {
+  stat: string;
+  mode: CoopDefenseUpgradeEffectMode;
+  value: number;
+}
+
 export interface CoopDefenseUpgradeDefinition {
   id: string;
   label: string;
   maxLevel: number;
   defaultUnlocked: boolean;
+  effects: readonly CoopDefenseUpgradeEffectDefinition[];
 }
 
 interface CoopDefenseUpgradeRegistryFile {
@@ -13,6 +22,7 @@ interface CoopDefenseUpgradeRegistryFile {
 }
 
 export const COOP_DEFENSE_HP_UPGRADE_ID = 'hp';
+export const COOP_DEFENSE_PLAYER_STAT_MAX_HP = 'maxHp';
 
 const COOP_DEFENSE_UPGRADE_REGISTRY = normalizeUpgradeRegistry(
   rawCoopDefenseUpgrades as CoopDefenseUpgradeRegistryFile,
@@ -33,6 +43,11 @@ function sanitizeLevelValue(value: unknown): number {
   return Math.max(0, Math.floor(value));
 }
 
+function sanitizeEffectValue(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return value;
+}
+
 function cloneUpgradeState(state: CoopDefenseUpgradeState): CoopDefenseUpgradeState {
   return {
     unlocked: state.unlocked,
@@ -42,6 +57,24 @@ function cloneUpgradeState(state: CoopDefenseUpgradeState): CoopDefenseUpgradeSt
 
 export function getCoopDefenseUpgradeDefinition(upgradeId: string): CoopDefenseUpgradeDefinition | null {
   return COOP_DEFENSE_UPGRADE_DEFINITIONS[upgradeId] ?? null;
+}
+
+export function getCoopDefenseNumericStatTotals(
+  profile: CoopDefenseUpgradeProfile,
+): Readonly<Record<string, number>> {
+  const totals: Record<string, number> = {};
+
+  for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
+    const level = getCoopDefenseUpgradeState(profile, definition.id).level;
+    if (level <= 0) continue;
+
+    for (const effect of definition.effects) {
+      if (effect.mode !== 'add_per_level') continue;
+      totals[effect.stat] = (totals[effect.stat] ?? 0) + effect.value * level;
+    }
+  }
+
+  return totals;
 }
 
 export function buildDefaultCoopDefenseUpgradeProfile(): CoopDefenseUpgradeProfile {
@@ -231,5 +264,25 @@ function normalizeUpgradeDefinition(definition: CoopDefenseUpgradeDefinition): C
     label: definition.label,
     maxLevel: Math.max(1, Math.floor(definition.maxLevel)),
     defaultUnlocked: definition.defaultUnlocked,
+    effects: normalizeUpgradeEffects(definition.effects),
   };
+}
+
+function normalizeUpgradeEffects(
+  effects: readonly CoopDefenseUpgradeEffectDefinition[] | undefined,
+): readonly CoopDefenseUpgradeEffectDefinition[] {
+  if (!Array.isArray(effects)) return [];
+
+  return effects.flatMap((effect) => {
+    if (!effect || typeof effect !== 'object') return [];
+    const stat = typeof effect.stat === 'string' ? effect.stat.trim() : '';
+    const mode = effect.mode;
+    if (!stat || mode !== 'add_per_level') return [];
+
+    return [{
+      stat,
+      mode,
+      value: sanitizeEffectValue(effect.value),
+    } satisfies CoopDefenseUpgradeEffectDefinition];
+  });
 }

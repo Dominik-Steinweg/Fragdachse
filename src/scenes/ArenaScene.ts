@@ -997,9 +997,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
     const localId = bridge.getLocalPlayerId();
-    const coopDefenseProfile = isCoopDefenseMode(bridge.getGameMode())
-      ? getStoredCoopDefenseProgress().profile
-      : null;
+    const coopDefenseProfile = getStoredCoopDefenseProgress().profile;
     return resolveLoadoutSelectionIds({
       weapon1:  (bridge.getPlayerLoadoutSlot(localId, 'weapon1')  ?? DEFAULT_LOADOUT.weapon1.id) in WEAPON_CONFIGS
         ? WEAPON_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id) as keyof typeof WEAPON_CONFIGS]

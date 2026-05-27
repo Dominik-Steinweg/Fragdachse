@@ -1,4 +1,5 @@
 import type { CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
+import { isCoopDefenseMode } from '../gameModes';
 import { isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import {
   DEFAULT_LOADOUT,
@@ -37,12 +38,15 @@ export function resolveLoadoutSelectionIds(
   coopDefenseProfile: CoopDefenseUpgradeProfile | null = null,
 ): LoadoutCommitSnapshot {
   const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
+  const committedCoopDefenseProfile = isCoopDefenseMode(mode) && coopDefenseProfile
+    ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile)
+    : null;
   return {
     weapon1: sanitized.weapon1.id,
     weapon2: sanitized.weapon2.id,
     utility: sanitized.utility.id,
     ultimate: sanitized.ultimate.id,
-    coopDefenseProfile: coopDefenseProfile ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile) : null,
+    coopDefenseProfile: committedCoopDefenseProfile,
   };
 }
 
