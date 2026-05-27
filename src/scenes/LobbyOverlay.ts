@@ -11,6 +11,7 @@ import {
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
 import { hasTeamSelection } from '../gameModes';
+import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const PANEL_COLOR   = COLORS.GREY_8;
@@ -34,6 +35,9 @@ const ACTION_BTN_W = 160;
 const ACTION_BTN_H = 46;
 const ACTION_BTN_Y = PANEL_Y + PANEL_H - 34;
 const ACTION_BTN_GAP = 18;
+const COOP_PROGRESS_PANEL_W = 360;
+const COOP_PROGRESS_PANEL_H = 78;
+const COOP_PROGRESS_PANEL_Y = READY_BTN_Y - 86;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
 const LIST_Y   = PANEL_Y + 76;
@@ -76,6 +80,10 @@ export class LobbyOverlay {
   private retryBtnLabel!: Phaser.GameObjects.Text;
   private autoBtn!:       Phaser.GameObjects.Rectangle;
   private autoBtnLabel!:  Phaser.GameObjects.Text;
+  private coopProgressPanel: Phaser.GameObjects.Container | null = null;
+  private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
+  private coopProgressTotalXpText: Phaser.GameObjects.Text | null = null;
+  private coopProgressNextLevelText: Phaser.GameObjects.Text | null = null;
   private visible         = false;
   private btnLocked       = false;
   private roomQuality: RoomQualitySnapshot | null = null;
@@ -194,6 +202,30 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.autoBtnLabel);
 
+    const coopProgressBg = this.scene.add.rectangle(READY_BTN_X, COOP_PROGRESS_PANEL_Y, COOP_PROGRESS_PANEL_W, COOP_PROGRESS_PANEL_H, COLORS.GREY_7, 0.94)
+      .setStrokeStyle(1, COLORS.BROWN_4)
+      .setScrollFactor(0);
+    const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 22, 'Dachs vs. Zombies Fortschritt', {
+      fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    this.coopProgressLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 2, 'Level 1', {
+      fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    this.coopProgressTotalXpText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 18, '0 XP gesamt', {
+      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2),
+    }).setOrigin(0.5).setScrollFactor(0);
+    this.coopProgressNextLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 36, '25 XP bis Level 2', {
+      fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+    }).setOrigin(0.5).setScrollFactor(0);
+    this.coopProgressPanel = this.scene.add.container(0, 0, [
+      coopProgressBg,
+      coopProgressTitle,
+      this.coopProgressLevelText,
+      this.coopProgressTotalXpText,
+      this.coopProgressNextLevelText,
+    ]).setVisible(false);
+    objects.push(this.coopProgressPanel);
+
     // ── Container mit korrektem Depth erstellen ───────────────────────────
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
     this.container.setVisible(this.visible);
@@ -259,6 +291,20 @@ export class LobbyOverlay {
       if (!this.copyBtnLabel.scene) return;
       this.copyBtnLabel.setText('LINK KOPIEREN');
     });
+  }
+
+  setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
+    if (!this.coopProgressPanel || !this.coopProgressLevelText || !this.coopProgressTotalXpText || !this.coopProgressNextLevelText) return;
+
+    if (!progress) {
+      this.coopProgressPanel.setVisible(false);
+      return;
+    }
+
+    this.coopProgressPanel.setVisible(true);
+    this.coopProgressLevelText.setText(`Level ${progress.level}`);
+    this.coopProgressTotalXpText.setText(`${progress.totalXp} XP gesamt`);
+    this.coopProgressNextLevelText.setText(`${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}`);
   }
 
   /** Button-Zustand nach isReady-Toggle anpassen. */
