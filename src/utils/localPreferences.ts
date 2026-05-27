@@ -1,9 +1,14 @@
 import { SOUND_MASTER_VOLUME, SOUND_MUSIC_VOLUME, SOUND_SFX_VOLUME } from '../config';
-import type { LoadoutSlot } from '../types';
+import type { CoopDefenseUpgradeProfile, LoadoutSlot } from '../types';
+import {
+  buildDefaultCoopDefenseUpgradeProfile,
+  cloneCoopDefenseUpgradeProfile,
+  sanitizeCoopDefenseUpgradeProfile,
+} from './coopDefenseUpgrades';
 import { sanitizePlayerName } from './playerName';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 3;
+const LOCAL_PREFERENCES_VERSION = 4;
 
 interface LocalPreferencesV2 {
   version: 2;
@@ -21,6 +26,7 @@ interface LocalPreferencesV2 {
 export interface CoopDefenseProgressPreferences {
   totalXp: number;
   lastProcessedRoundEndedAt: number | null;
+  profile: CoopDefenseUpgradeProfile;
 }
 
 interface LocalPreferencesV3 {
@@ -39,20 +45,39 @@ interface LocalPreferencesV3 {
   };
 }
 
-type LocalPreferences = LocalPreferencesV3;
+interface LocalPreferencesV4 {
+  version: 4;
+  audio: {
+    masterVolume: number;
+    effectsVolume: number;
+    musicVolume: number;
+  };
+  profile: {
+    playerName: string | null;
+  };
+  loadout: Partial<Record<LoadoutSlot, string>>;
+  progression: {
+    coopDefense: CoopDefenseProgressPreferences;
+  };
+}
+
+type LocalPreferences = LocalPreferencesV4;
 
 interface ParsedLocalPreferences {
   audio?: Partial<LocalPreferences['audio']>;
   profile?: Partial<LocalPreferences['profile']>;
   loadout?: Partial<Record<LoadoutSlot, unknown>>;
   progression?: {
-    coopDefense?: Partial<CoopDefenseProgressPreferences>;
+    coopDefense?: Partial<CoopDefenseProgressPreferences> & {
+      profile?: unknown;
+    };
   };
 }
 
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
+  profile: buildDefaultCoopDefenseUpgradeProfile(),
 };
 
 const DEFAULT_PREFERENCES: LocalPreferences = {
@@ -127,6 +152,7 @@ function parsePreferences(raw: string | null): LocalPreferences {
       : SOUND_MUSIC_VOLUME;
     const totalXp = sanitizeStoredXp(parsed.progression?.coopDefense?.totalXp);
     const lastProcessedRoundEndedAt = sanitizeStoredRoundEndedAt(parsed.progression?.coopDefense?.lastProcessedRoundEndedAt);
+    const storedProfile = sanitizeCoopDefenseUpgradeProfile(parsed.progression?.coopDefense?.profile);
 
     return {
       version: LOCAL_PREFERENCES_VERSION,
@@ -142,6 +168,7 @@ function parsePreferences(raw: string | null): LocalPreferences {
         coopDefense: {
           totalXp,
           lastProcessedRoundEndedAt,
+          profile: storedProfile,
         },
       },
     };
@@ -252,7 +279,26 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
   return {
     totalXp: progress.totalXp,
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
+    profile: cloneCoopDefenseUpgradeProfile(progress.profile),
   };
+}
+
+export function getStoredCoopDefenseUpgradeProfile(): CoopDefenseUpgradeProfile {
+  return cloneCoopDefenseUpgradeProfile(readPreferences().progression.coopDefense.profile);
+}
+
+export function setStoredCoopDefenseUpgradeProfile(profile: CoopDefenseUpgradeProfile): void {
+  const nextProfile = sanitizeCoopDefenseUpgradeProfile(profile);
+  updatePreferences((current) => ({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        profile: nextProfile,
+      },
+    },
+  }));
 }
 
 export function setStoredCoopDefenseTotalXp(totalXp: number): void {

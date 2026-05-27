@@ -36,7 +36,7 @@ const ACTION_BTN_H = 46;
 const ACTION_BTN_Y = PANEL_Y + PANEL_H - 34;
 const ACTION_BTN_GAP = 18;
 const COOP_PROGRESS_PANEL_W = 440;
-const COOP_PROGRESS_PANEL_H = 108;
+const COOP_PROGRESS_PANEL_H = 150;
 const COOP_PROGRESS_PANEL_Y = PANEL_Y + PANEL_H + 76;
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
@@ -87,6 +87,8 @@ export class LobbyOverlay {
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressTotalXpText: Phaser.GameObjects.Text | null = null;
   private coopProgressNextLevelText: Phaser.GameObjects.Text | null = null;
+  private coopProgressUpgradesBtn: Phaser.GameObjects.Rectangle | null = null;
+  private coopProgressUpgradesBtnLabel: Phaser.GameObjects.Text | null = null;
   private visible         = false;
   private btnLocked       = false;
   private roomQuality: RoomQualitySnapshot | null = null;
@@ -99,6 +101,7 @@ export class LobbyOverlay {
     private onCopyRoomLink: () => void,
     private onRetryRoom: () => void,
     private onStartAutomaticRoomSearch: () => void,
+    private onOpenCoopDefenseUpgrades: () => void,
   ) {}
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
@@ -114,6 +117,8 @@ export class LobbyOverlay {
     this.coopProgressLevelText = null;
     this.coopProgressTotalXpText = null;
     this.coopProgressNextLevelText = null;
+    this.coopProgressUpgradesBtn = null;
+    this.coopProgressUpgradesBtnLabel = null;
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -218,17 +223,27 @@ export class LobbyOverlay {
     const coopProgressBg = this.scene.add.rectangle(READY_BTN_X, COOP_PROGRESS_PANEL_Y, COOP_PROGRESS_PANEL_W, COOP_PROGRESS_PANEL_H, COLORS.GREY_7, 0.96)
       .setStrokeStyle(1, COLORS.BROWN_4)
       .setScrollFactor(0);
-    const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 34, 'Dachs vs. Zombies Fortschritt', {
+    const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 48, 'Dachs vs. Zombies Fortschritt', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 8, 'Level 1', {
+    this.coopProgressLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 20, 'Level 1', {
       fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressTotalXpText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 18, '0 XP gesamt', {
+    this.coopProgressTotalXpText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 6, '0 XP gesamt', {
       fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2),
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressNextLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 42, '25 XP bis Level 2', {
+    this.coopProgressNextLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 28, '25 XP bis Level 2', {
       fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+    }).setOrigin(0.5).setScrollFactor(0);
+    this.coopProgressUpgradesBtn = this.scene.add.rectangle(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 56, 140, 30, COLORS.BLUE_5)
+      .setStrokeStyle(1, COLORS.BLUE_3)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.onOpenCoopDefenseUpgrades())
+      .on('pointerover', () => this.coopProgressUpgradesBtn?.setAlpha(0.8))
+      .on('pointerout', () => this.coopProgressUpgradesBtn?.setAlpha(1))
+      .setScrollFactor(0);
+    this.coopProgressUpgradesBtnLabel = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 56, 'UPGRADES', {
+      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     this.coopProgressContainer = this.scene.add.container(0, 0, [
       coopProgressBg,
@@ -236,6 +251,8 @@ export class LobbyOverlay {
       this.coopProgressLevelText,
       this.coopProgressTotalXpText,
       this.coopProgressNextLevelText,
+      this.coopProgressUpgradesBtn,
+      this.coopProgressUpgradesBtnLabel,
     ]).setDepth(DEPTH.OVERLAY + 0.5).setVisible(false);
 
     // ── Container mit korrektem Depth erstellen ───────────────────────────

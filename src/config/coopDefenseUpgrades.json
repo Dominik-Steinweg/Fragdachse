@@ -1,0 +1,10 @@
+{
+  "upgrades": [
+    {
+      "id": "hp",
+      "label": "HP",
+      "maxLevel": 3,
+      "defaultUnlocked": true
+    }
+  ]
+}

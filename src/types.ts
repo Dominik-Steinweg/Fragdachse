@@ -382,6 +382,17 @@ export type ShotAudioKey = string;
 /** Allgemeiner Audio-Key fuer das GameAudioSystem. */
 export type AudioKey = string;
 
+/** Persistenter Upgrade-Knoten fuer Coop-Defense-Progression. */
+export interface CoopDefenseUpgradeState {
+  unlocked: boolean;
+  level: number;
+}
+
+/** Persistentes lokales Upgrade-Profil fuer Coop-Defense. */
+export interface CoopDefenseUpgradeProfile {
+  upgrades: Record<string, CoopDefenseUpgradeState>;
+}
+
 /** Audio-Metadaten fuer schussbezogene Loadout-Aktionen. */
 export interface LoadoutShotAudioConfig {
   readonly successKey: ShotAudioKey;

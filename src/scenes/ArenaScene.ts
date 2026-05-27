@@ -22,6 +22,7 @@ import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
+import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
@@ -57,9 +58,11 @@ import {
   getStoredMasterVolume,
   getStoredMusicVolume,
   markStoredCoopDefenseRoundProcessed,
+  setStoredCoopDefenseUpgradeProfile,
   setStoredCoopDefenseTotalXp,
 } from '../utils/localPreferences';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
+import { COOP_DEFENSE_HP_UPGRADE_ID, levelDownCoopDefenseUpgrade, levelUpCoopDefenseUpgrade } from '../utils/coopDefenseUpgrades';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
@@ -142,6 +145,7 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseXpDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
   private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
+  private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
   private coopDefenseProgress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
 
@@ -274,6 +278,13 @@ export class ArenaScene extends Phaser.Scene {
         this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       },
     );
+    this.coopDefenseUpgradesOverlay = new CoopDefenseUpgradesOverlay(
+      this,
+      () => this.coopDefenseProgress,
+      () => this.levelUpCoopDefenseHpUpgrade(),
+      () => this.levelDownCoopDefenseHpUpgrade(),
+    );
+    this.coopDefenseUpgradesOverlay.build();
 
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
@@ -585,6 +596,7 @@ export class ArenaScene extends Phaser.Scene {
       () => { void this.onCopyRoomLink(); },
       () => this.onRetryRoom(),
       () => this.onStartAutomaticRoomSearch(),
+      () => this.openCoopDefenseUpgradesOverlay(),
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
@@ -641,9 +653,11 @@ export class ArenaScene extends Phaser.Scene {
       this.clearDebugModes();
       if (!isCoopDefenseMode(bridge.getGameMode())) {
         this.coopDefenseXpDebugOverlay?.hide();
+        this.coopDefenseUpgradesOverlay?.hide();
       }
     } else {
       this.coopDefenseXpDebugOverlay?.hide();
+      this.coopDefenseUpgradesOverlay?.hide();
     }
 
     this.syncMainCamera(delta, inGame && !terminated);
@@ -684,10 +698,12 @@ export class ArenaScene extends Phaser.Scene {
       if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
     } else if (!terminated && this.lobbyOverlay.isVisible()) {
       this.coopDefenseXpDebugOverlay?.hide();
+      this.coopDefenseUpgradesOverlay?.hide();
       this.lobbyOverlay.setCoopDefenseProgress(null);
       this.lobbyOverlay.hide();
     } else {
       this.coopDefenseXpDebugOverlay?.hide();
+      this.coopDefenseUpgradesOverlay?.hide();
       this.lobbyOverlay.setCoopDefenseProgress(null);
     }
 
@@ -867,6 +883,42 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.setIsLocalReady(nowReady);
   }
 
+  private openCoopDefenseUpgradesOverlay(): void {
+    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
+
+    this.coopDefenseXpDebugOverlay?.hide();
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    this.refreshStoredCoopDefenseProgress();
+    this.coopDefenseUpgradesOverlay?.show();
+  }
+
+  private levelUpCoopDefenseHpUpgrade(): boolean {
+    const stored = getStoredCoopDefenseProgress();
+    const nextProfile = levelUpCoopDefenseUpgrade(stored.profile, COOP_DEFENSE_HP_UPGRADE_ID, this.coopDefenseProgress.level);
+    if (!nextProfile) return false;
+
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    setStoredCoopDefenseUpgradeProfile(nextProfile);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    return true;
+  }
+
+  private levelDownCoopDefenseHpUpgrade(): boolean {
+    const stored = getStoredCoopDefenseProgress();
+    const nextProfile = levelDownCoopDefenseUpgrade(stored.profile, COOP_DEFENSE_HP_UPGRADE_ID);
+    if (!nextProfile) return false;
+
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    setStoredCoopDefenseUpgradeProfile(nextProfile);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    return true;
+  }
+
   private async onCopyRoomLink(): Promise<void> {
     const copied = await copyCurrentRoomShareUrl();
     if (copied) this.lobbyOverlay.showCopySuccess();
@@ -1015,6 +1067,7 @@ export class ArenaScene extends Phaser.Scene {
       if ((phase !== 'LOBBY' && phase !== 'ARENA') || this.lifecycle.isMatchTerminated()) return;
       if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
       if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
+      if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
       if (this.coopDefenseXpDebugOverlay?.isOpen()) return;
 
       this.ctx.leftPanel.toggleOptionsOverlay();
@@ -1035,6 +1088,7 @@ export class ArenaScene extends Phaser.Scene {
       if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
       if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
       if (this.ctx.leftPanel.isOptionsOverlayOpen()) return;
+      if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
 
       this.coopDefenseXpDebugOverlay?.toggle();
     };
@@ -1050,6 +1104,8 @@ export class ArenaScene extends Phaser.Scene {
       }
       this.coopDefenseXpDebugOverlay?.destroy();
       this.coopDefenseXpDebugOverlay = null;
+      this.coopDefenseUpgradesOverlay?.destroy();
+      this.coopDefenseUpgradesOverlay = null;
     });
   }
 
@@ -1149,9 +1205,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private refreshStoredCoopDefenseProgress(): void {
     const stored = getStoredCoopDefenseProgress();
-    this.coopDefenseProgress = getCoopDefenseProgressSnapshot(stored.totalXp);
+    this.coopDefenseProgress = getCoopDefenseProgressSnapshot(stored.totalXp, stored.profile);
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
+    this.coopDefenseUpgradesOverlay?.refresh();
   }
 
   private processCoopDefenseRoundXp(): void {
