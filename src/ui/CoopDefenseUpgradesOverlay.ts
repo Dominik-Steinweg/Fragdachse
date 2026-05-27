@@ -39,9 +39,10 @@ const LANE_INNER_BOTTOM = 14;
 const LANE_BODY_H = UPGRADE_AREA_H - LANE_INNER_TOP - LANE_INNER_BOTTOM;
 const NODE_H = 16;
 const NODE_GAP_Y = 4;
-const NODE_GAP_X = 6;
+const NODE_GAP_X = 10;
 const NODE_INNER_PADDING = 2;
 const NODE_LABEL_FONT_SIZE = 10;
+const ROOT_GROUP_GAP_ROWS = 1;
 const TOOLTIP_OFFSET_X = 18;
 const TOOLTIP_OFFSET_Y = 18;
 const TOOLTIP_MAX_W = 320;
@@ -76,10 +77,13 @@ type LaneLayout = {
   category: CoopDefenseUpgradeCategorySnapshot;
   visuals: CategoryVisuals;
   nodeWidth: number;
-  laneLeft: number;
-  bodyTop: number;
   nodes: LaneLayoutNode[];
   nodesById: Map<string, LaneLayoutNode>;
+};
+
+type LaneTree = {
+  roots: CoopDefenseUpgradeNodeSnapshot[];
+  childrenByParentId: Map<string, CoopDefenseUpgradeNodeSnapshot[]>;
 };
 
 const CATEGORY_VISUALS: Record<CoopDefenseUpgradeCategorySnapshot['id'], CategoryVisuals> = {
@@ -388,100 +392,210 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private buildLaneLayouts(categories: readonly CoopDefenseUpgradeCategorySnapshot[]): LaneLayout[] {
-    const maxRows = Math.max(1, Math.floor((LANE_BODY_H + NODE_GAP_Y) / (NODE_H + NODE_GAP_Y)));
-    const categoriesWithBuckets = categories.map((category) => {
-      const depths = this.computeNodeDepths(category.upgrades);
-      const buckets = new Map<number, CoopDefenseUpgradeNodeSnapshot[]>();
-
-      for (const node of category.upgrades) {
-        const bucket = depths.get(node.id) ?? 0;
-        const list = buckets.get(bucket) ?? [];
-        list.push(node);
-        buckets.set(bucket, list);
-      }
-
-      const orderedBuckets = [...buckets.entries()]
-        .sort((left, right) => left[0] - right[0])
-        .map(([, nodes]) => nodes);
-      const totalColumns = orderedBuckets.reduce((sum, nodes) => sum + Math.max(1, Math.ceil(nodes.length / maxRows)), 0);
-
+    const categoriesWithTrees = categories.map((category) => {
+      const tree = this.buildLaneTree(category.upgrades);
       return {
         category,
-        orderedBuckets,
-        totalColumns,
+        tree,
+        totalColumns: this.getTreeMaxDepth(tree),
       };
     });
 
-    const maxColumns = Math.max(1, ...categoriesWithBuckets.map((entry) => entry.totalColumns));
+    const maxColumns = Math.max(1, ...categoriesWithTrees.map((entry) => entry.totalColumns));
     const laneInnerW = LANE_W - LANE_INNER_PADDING_X * 2;
     const computedNodeWidth = Math.max(
-      84,
+      74,
       Math.floor((laneInnerW - NODE_GAP_X * Math.max(0, maxColumns - 1)) / maxColumns),
     );
 
-    return categoriesWithBuckets.map(({ category, orderedBuckets }, laneIndex) => {
+    return categoriesWithTrees.map(({ category, tree }, laneIndex) => {
       const laneLeft = UPGRADE_AREA_X + laneIndex * LANE_W;
       const bodyTop = UPGRADE_AREA_TOP + LANE_INNER_TOP;
       const nodesById = new Map<string, LaneLayoutNode>();
       const nodes: LaneLayoutNode[] = [];
-      let columnIndex = 0;
 
-      for (const bucketNodes of orderedBuckets) {
-        const requiredColumns = Math.max(1, Math.ceil(bucketNodes.length / maxRows));
-        for (let localColumn = 0; localColumn < requiredColumns; localColumn += 1) {
-          const sliceStart = localColumn * maxRows;
-          const slice = bucketNodes.slice(sliceStart, sliceStart + maxRows);
-          const columnCount = slice.length;
-          const usedHeight = columnCount * NODE_H + Math.max(0, columnCount - 1) * NODE_GAP_Y;
-          const startY = bodyTop + Math.max(0, (LANE_BODY_H - usedHeight) / 2) + NODE_H / 2;
-          const x = laneLeft + LANE_INNER_PADDING_X + computedNodeWidth / 2 + columnIndex * (computedNodeWidth + NODE_GAP_X);
+      const rowUnit = NODE_H + NODE_GAP_Y;
+      const totalRows = this.getTreeTotalRows(tree);
+      const usedHeight = totalRows > 0 ? totalRows * rowUnit - NODE_GAP_Y : 0;
+      const startY = bodyTop + Math.max(0, (LANE_BODY_H - usedHeight) / 2) + NODE_H / 2;
+      const rowCache = new Map<string, number>();
+      let rowCursor = 0;
 
-          slice.forEach((node, index) => {
-            const layoutNode = {
-              node,
-              x,
-              y: startY + index * (NODE_H + NODE_GAP_Y),
-            };
-            nodes.push(layoutNode);
-            nodesById.set(node.id, layoutNode);
-          });
-          columnIndex += 1;
-        }
+      for (const root of tree.roots) {
+        this.placeTreeNode({
+          node: root,
+          columnIndex: 0,
+          rowStart: rowCursor,
+          startY,
+          rowUnit,
+          laneLeft,
+          nodeWidth: computedNodeWidth,
+          nodes,
+          nodesById,
+          childrenByParentId: tree.childrenByParentId,
+          rowCache,
+        });
+        rowCursor += this.measureTreeRows(root.id, tree.childrenByParentId, rowCache) + ROOT_GROUP_GAP_ROWS;
       }
 
       return {
         category,
         visuals: CATEGORY_VISUALS[category.id],
         nodeWidth: computedNodeWidth,
-        laneLeft,
-        bodyTop,
         nodes,
         nodesById,
       };
     });
   }
 
-  private computeNodeDepths(upgrades: readonly CoopDefenseUpgradeNodeSnapshot[]): Map<string, number> {
-    const nodesById = new Map(upgrades.map((node) => [node.id, node]));
-    const cache = new Map<string, number>();
+  private buildLaneTree(upgrades: readonly CoopDefenseUpgradeNodeSnapshot[]): LaneTree {
+    const childrenByParentId = new Map<string, CoopDefenseUpgradeNodeSnapshot[]>();
+    const rootNodes: CoopDefenseUpgradeNodeSnapshot[] = [];
 
-    const visit = (nodeId: string): number => {
-      const cached = cache.get(nodeId);
-      if (cached != null) return cached;
-
-      const node = nodesById.get(nodeId);
-      if (!node || node.requires.length === 0) {
-        cache.set(nodeId, 0);
-        return 0;
+    for (const node of upgrades) {
+      if (node.requires.length === 0) {
+        rootNodes.push(node);
+        continue;
       }
 
-      const depth = 1 + Math.max(...node.requires.map((requirement) => visit(requirement.upgradeId)));
-      cache.set(nodeId, depth);
-      return depth;
+      const primaryParentId = node.requires[0]?.upgradeId;
+      if (!primaryParentId) {
+        rootNodes.push(node);
+        continue;
+      }
+
+      const siblings = childrenByParentId.get(primaryParentId) ?? [];
+      siblings.push(node);
+      childrenByParentId.set(primaryParentId, siblings);
+    }
+
+    const visited = new Set<string>();
+    const markVisited = (node: CoopDefenseUpgradeNodeSnapshot): void => {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
+      const children = childrenByParentId.get(node.id) ?? [];
+      for (const child of children) markVisited(child);
     };
 
-    for (const node of upgrades) visit(node.id);
-    return cache;
+    for (const root of rootNodes) markVisited(root);
+    for (const node of upgrades) {
+      if (!visited.has(node.id)) rootNodes.push(node);
+    }
+
+    return {
+      roots: rootNodes,
+      childrenByParentId,
+    };
+  }
+
+  private getTreeTotalRows(tree: LaneTree): number {
+    const rowCache = new Map<string, number>();
+    let totalRows = 0;
+
+    tree.roots.forEach((root, index) => {
+      totalRows += this.measureTreeRows(root.id, tree.childrenByParentId, rowCache);
+      if (index < tree.roots.length - 1) totalRows += ROOT_GROUP_GAP_ROWS;
+    });
+
+    return totalRows;
+  }
+
+  private getTreeMaxDepth(tree: LaneTree): number {
+    const depthCache = new Map<string, number>();
+    let maxDepth = 1;
+
+    for (const root of tree.roots) {
+      maxDepth = Math.max(maxDepth, this.measureTreeDepth(root.id, tree.childrenByParentId, depthCache));
+    }
+
+    return maxDepth;
+  }
+
+  private measureTreeRows(
+    nodeId: string,
+    childrenByParentId: ReadonlyMap<string, CoopDefenseUpgradeNodeSnapshot[]>,
+    rowCache: Map<string, number>,
+  ): number {
+    const cached = rowCache.get(nodeId);
+    if (cached != null) return cached;
+
+    const children = childrenByParentId.get(nodeId) ?? [];
+    const rows = children.length === 0
+      ? 1
+      : Math.max(1, children.reduce((sum, child) => sum + this.measureTreeRows(child.id, childrenByParentId, rowCache), 0));
+    rowCache.set(nodeId, rows);
+    return rows;
+  }
+
+  private measureTreeDepth(
+    nodeId: string,
+    childrenByParentId: ReadonlyMap<string, CoopDefenseUpgradeNodeSnapshot[]>,
+    depthCache: Map<string, number>,
+  ): number {
+    const cached = depthCache.get(nodeId);
+    if (cached != null) return cached;
+
+    const children = childrenByParentId.get(nodeId) ?? [];
+    const depth = children.length === 0
+      ? 1
+      : 1 + Math.max(...children.map((child) => this.measureTreeDepth(child.id, childrenByParentId, depthCache)));
+    depthCache.set(nodeId, depth);
+    return depth;
+  }
+
+  private placeTreeNode(params: {
+    node: CoopDefenseUpgradeNodeSnapshot;
+    columnIndex: number;
+    rowStart: number;
+    startY: number;
+    rowUnit: number;
+    laneLeft: number;
+    nodeWidth: number;
+    nodes: LaneLayoutNode[];
+    nodesById: Map<string, LaneLayoutNode>;
+    childrenByParentId: ReadonlyMap<string, CoopDefenseUpgradeNodeSnapshot[]>;
+    rowCache: Map<string, number>;
+  }): void {
+    const {
+      node,
+      columnIndex,
+      rowStart,
+      startY,
+      rowUnit,
+      laneLeft,
+      nodeWidth,
+      nodes,
+      nodesById,
+      childrenByParentId,
+      rowCache,
+    } = params;
+
+    const subtreeRows = this.measureTreeRows(node.id, childrenByParentId, rowCache);
+    const x = laneLeft + LANE_INNER_PADDING_X + nodeWidth / 2 + columnIndex * (nodeWidth + NODE_GAP_X);
+    const y = startY + (rowStart + (subtreeRows - 1) / 2) * rowUnit;
+    const layoutNode = { node, x, y };
+
+    nodes.push(layoutNode);
+    nodesById.set(node.id, layoutNode);
+
+    const children = childrenByParentId.get(node.id) ?? [];
+    let childRowStart = rowStart;
+    for (const child of children) {
+      this.placeTreeNode({
+        node: child,
+        columnIndex: columnIndex + 1,
+        rowStart: childRowStart,
+        startY,
+        rowUnit,
+        laneLeft,
+        nodeWidth,
+        nodes,
+        nodesById,
+        childrenByParentId,
+        rowCache,
+      });
+      childRowStart += this.measureTreeRows(child.id, childrenByParentId, rowCache);
+    }
   }
 
   private renderLaneConnections(layout: LaneLayout): void {
