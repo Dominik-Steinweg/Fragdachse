@@ -20,6 +20,7 @@ import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedL
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
+import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
@@ -571,6 +572,7 @@ export class NetworkBridge {
       weapon2: raw.weapon2,
       utility: raw.utility,
       ultimate: raw.ultimate,
+      coopDefenseProfile: raw.coopDefenseProfile == null ? null : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile),
     };
   }
 
@@ -584,11 +586,20 @@ export class NetworkBridge {
     return this.getPlayerCommittedLoadout(playerId) !== null;
   }
 
+  hasCommittedCoopDefenseProfile(playerId: string): boolean {
+    return this.getPlayerCommittedLoadout(playerId)?.coopDefenseProfile !== null;
+  }
+
   /** Gibt zurück ob ALLE aktuell verbundenen Spieler bereit sind (min. 2). */
   areAllPlayersReady(): boolean {
     const ids = [...this.connectedPlayers.keys()];
     if (ids.length < 2) return false;
-    return ids.every(id => this.getPlayerReady(id) && this.hasCommittedLoadout(id));
+    const requiresCoopDefenseProfile = isCoopDefenseMode(this.getGameMode());
+    return ids.every((id) => (
+      this.getPlayerReady(id)
+      && this.hasCommittedLoadout(id)
+      && (!requiresCoopDefenseProfile || this.hasCommittedCoopDefenseProfile(id))
+    ));
   }
 
   // ── Spielphase: Host → Alle (global, reliable) ────────────────────────────

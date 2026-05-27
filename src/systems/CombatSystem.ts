@@ -96,6 +96,7 @@ type SweptProjectileHit =
 
 export class CombatSystem {
   private hp:            Map<string, number>                           = new Map();
+  private maxHp:         Map<string, number>                           = new Map();
   private armor:         Map<string, number>                           = new Map();
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
@@ -144,6 +145,7 @@ export class CombatSystem {
   private onProjectileImpact: ((projectileId: number, x: number, y: number) => void) | null = null;
   private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
+  private playerMaxHpResolver: ((playerId: string) => number) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -167,6 +169,7 @@ export class CombatSystem {
   setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
+  setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -235,7 +238,9 @@ export class CombatSystem {
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
   initPlayer(id: string): void {
-    this.hp.set(id, HP_MAX);
+    const maxHp = this.resolvePlayerMaxHp(id);
+    this.maxHp.set(id, maxHp);
+    this.hp.set(id, maxHp);
     this.armor.set(id, 0);
     this.alive.set(id, true);
     this.clearBurnForPlayer(id);
@@ -247,6 +252,7 @@ export class CombatSystem {
     this.clearBurnForPlayer(id);
     this.clearBurnByAttacker(id);
     this.hp.delete(id);
+    this.maxHp.delete(id);
     this.armor.delete(id);
     this.alive.delete(id);
     this.lastAttacker.delete(id);
@@ -257,7 +263,8 @@ export class CombatSystem {
 
   // ── Abfragen ───────────────────────────────────────────────────────────────
 
-  getHP(id: string):    number  { return this.hp.get(id)    ?? HP_MAX; }
+  getHP(id: string):    number  { return this.hp.get(id)    ?? this.getMaxHp(id); }
+  getMaxHp(id: string): number  { return this.maxHp.get(id) ?? this.resolvePlayerMaxHp(id); }
   getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
   isAlive(id: string):  boolean { return (this.alive.get(id) ?? false) || this.enemyManager?.hasEnemy(id) === true; }
   isBurrowed(id: string): boolean { return this.burrowSystem?.isBurrowed(id) ?? false; }
@@ -313,7 +320,7 @@ export class CombatSystem {
     const absorbedByArmor = Math.min(currentArmor, amount);
     const overflowDamage = Math.max(0, amount - absorbedByArmor);
     const newArmor = Math.max(0, currentArmor - absorbedByArmor);
-    const currentHp = this.hp.get(targetId) ?? HP_MAX;
+    const currentHp = this.hp.get(targetId) ?? this.getMaxHp(targetId);
     const newHp = Math.max(0, currentHp - overflowDamage);
     const armorLost = currentArmor - newArmor;
     const hpLost = currentHp - newHp;
@@ -1953,7 +1960,7 @@ export class CombatSystem {
   /** Heilt den Spieler vollständig auf HP_MAX (nur wenn lebendig). */
   healToFull(playerId: string): void {
     if (!this.isAlive(playerId)) return;
-    this.hp.set(playerId, HP_MAX);
+    this.hp.set(playerId, this.getMaxHp(playerId));
   }
 
   addArmor(playerId: string, amount: number): number {
@@ -1964,7 +1971,7 @@ export class CombatSystem {
   }
 
   private respawn(playerId: string): void {
-    this.hp.set(playerId, HP_MAX);
+    this.hp.set(playerId, this.getMaxHp(playerId));
     this.armor.set(playerId, 0);
     this.alive.set(playerId, true);
     this.clearBurnForPlayer(playerId);
@@ -1980,6 +1987,11 @@ export class CombatSystem {
     player.body.enable = true;
     const spawn = this.playerManager.getSpawnPoint(playerId);
     player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
+  }
+
+  private resolvePlayerMaxHp(playerId: string): number {
+    const resolved = this.playerMaxHpResolver?.(playerId) ?? HP_MAX;
+    return Math.max(1, Math.floor(resolved));
   }
 
   private clearBurnForPlayer(playerId: string): void {

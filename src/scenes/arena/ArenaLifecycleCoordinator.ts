@@ -15,6 +15,7 @@ import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
 import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
+import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
@@ -34,7 +35,7 @@ import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
 import { getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../../config';
 import { PLAYER_SPEED } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
@@ -324,6 +325,11 @@ export class ArenaLifecycleCoordinator {
       ? new CoopDefenseRoundStateSystem(this.ctx.baseManager, () => bridge.computeSecondsLeft())
       : null;
     if (bridge.isHost()) {
+      this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(bridge.getGameMode())
+        ? new CoopDefensePlayerModifierSystem()
+        : null;
+      this.syncHostCoopDefensePlayerModifiersFromCommittedSelections();
+
       const obstacleCellProvider = () => {
         const staticRockCells = layout.rocks.flatMap((rock, index) => {
           const isActive = this.ctx.arenaResult?.rockObjects[index]?.active ?? false;
@@ -403,6 +409,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
     this.ctx.combatSystem.setBaseManager(this.ctx.baseManager);
     this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
+    this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
+      return this.ctx.coopDefensePlayerModifierSystem?.getMaxHp(playerId) ?? HP_MAX;
+    });
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, damage, attackerId);
@@ -755,7 +764,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.baseManager = null;
     this.ctx.enemyManager?.destroy();
     this.ctx.enemyManager = null;
+    this.ctx.coopDefensePlayerModifierSystem?.clear();
+    this.ctx.coopDefensePlayerModifierSystem = null;
     this.ctx.combatSystem.setDeathCallback(null);
+    this.ctx.combatSystem.setPlayerMaxHpResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     this.ctx.placementSystem = null;
@@ -1101,6 +1113,14 @@ export class ArenaLifecycleCoordinator {
     });
     this.ctx.leftPanel.updateArenaHUD(hudData);
     this.ctx.playerStatusRing?.update(hudData);
+  }
+
+  private syncHostCoopDefensePlayerModifiersFromCommittedSelections(): void {
+    if (!bridge.isHost() || !this.ctx.coopDefensePlayerModifierSystem) return;
+
+    this.ctx.coopDefensePlayerModifierSystem.syncPlayers(
+      bridge.getConnectedPlayers().map((profile) => [profile.id, bridge.getPlayerCommittedLoadout(profile.id)] as const),
+    );
   }
 
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {

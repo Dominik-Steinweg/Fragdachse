@@ -2,12 +2,13 @@ import * as Phaser from 'phaser';
 import type { DecoyUtilityConfig } from '../loadout/LoadoutConfig';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedDeathEffect, SyncedHitEffect } from '../types';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, ARMOR_MAX, COLORS, HP_MAX } from '../config';
+import { ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, ARMOR_MAX, COLORS } from '../config';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { DecoyEntity } from '../entities/DecoyEntity';
 
 type CombatStateReader = {
   getHP(playerId: string): number;
+  getMaxHp(playerId: string): number;
   getArmor(playerId: string): number;
   isAlive(playerId: string): boolean;
 };
@@ -108,8 +109,9 @@ export class DecoySystem {
     entity.setRotation(angle);
 
     const hp = this.combatStateReader.getHP(playerId);
+  const maxHp = this.combatStateReader.getMaxHp(playerId);
     const armor = this.combatStateReader.getArmor(playerId);
-    entity.updateVitals(hp, HP_MAX, armor, ARMOR_MAX);
+  entity.updateVitals(hp, maxHp, armor, ARMOR_MAX);
 
     const speed = this.resolveRunSpeed?.(playerId) ?? 0;
     entity.body?.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
@@ -121,7 +123,7 @@ export class DecoySystem {
       expiresAt: now + cfg.decoyLifetimeMs,
       hp,
       armor,
-      maxHp: HP_MAX,
+      maxHp,
       maxArmor: ARMOR_MAX,
       color: playerColor,
       rotation: angle,

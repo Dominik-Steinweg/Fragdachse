@@ -18,7 +18,7 @@
 import * as Phaser from 'phaser';
 import {
   ARMOR_COLOR, ARMOR_MAX,
-  HP_MAX, ADRENALINE_MAX, RAGE_MAX,
+  ADRENALINE_MAX, RAGE_MAX,
   COLORS, toCssColor, GAME_HEIGHT,
 } from '../config';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
@@ -182,6 +182,7 @@ export interface ActivePowerUpInfo {
 /** Data pushed every frame from ArenaScene. */
 export interface ArenaHUDData {
   hp:                       number;
+  maxHp:                    number;
   armor:                    number;
   adrenaline:               number;
   rage:                     number;
@@ -495,7 +496,7 @@ export class ArenaHUD {
   }
 
   update(data: ArenaHUDData): void {
-    this.updateHP(data.hp);
+    this.updateHP(data.hp, data.maxHp);
     this.updateArmor(data.armor);
     this.updateAdrenaline(data.adrenaline, data.adrenalineSyringeActive ?? false);
     this.updateUltimate(data.rage, data.ultimateRequiredRage, data.ultimateThresholds, data.isUltimateActive);
@@ -641,11 +642,12 @@ export class ArenaHUD {
 
   // ── HP ────────────────────────────────────────────────────────────────────
 
-  private updateHP(hp: number): void {
-    this.updateTrackedValueBar(this.hp, hp, HP_MAX, this.hpTrailDelay, timer => {
+  private updateHP(hp: number, maxHp: number): void {
+    const safeMaxHp = Math.max(1, maxHp);
+    this.updateTrackedValueBar(this.hp, hp, safeMaxHp, this.hpTrailDelay, timer => {
       this.hpTrailDelay = timer;
     });
-    const nextText = `${Math.round(hp)}/${HP_MAX}`;
+    const nextText = `${Math.round(hp)}/${Math.round(safeMaxHp)}`;
     if (nextText !== this.lastHpText) {
       this.hp.valueText?.setText(nextText);
       this.lastHpText = nextText;

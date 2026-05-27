@@ -82,7 +82,7 @@ export class ClientUpdateCoordinator {
         if (id !== localId) {
           player.setTargetRotation(dequantizeAngle(ps.rot));
         }
-        player.updateHP(ps.hp);
+        player.updateHP(ps.hp, ps.maxHp);
         player.updateArmor(ps.armor);
         player.updateBurnStacks(ps.burnStacks ?? 0);
         player.setVisible(ps.alive);
@@ -218,6 +218,7 @@ export class ClientUpdateCoordinator {
         || localUtilityConfig.displayName;
       const hudData = buildLocalArenaHudData({
         hp:                      localState.hp,
+        maxHp:                   localState.maxHp,
         armor:                   localState.armor,
         adrenaline:              localState.adrenaline,
         rage:                    localState.rage,

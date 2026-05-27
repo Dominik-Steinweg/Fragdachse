@@ -58,6 +58,7 @@ export interface PlayerNetState {
   y:          number;
   rot:        number;   // Blickrichtung quantisiert als uint8 (0-255 → 0-2π)
   hp:         number;
+  maxHp:      number;
   armor:      number;
   alive:      boolean;
   adrenaline: number;   // 0–ADRENALINE_MAX
@@ -405,6 +406,7 @@ export interface LoadoutCommitSnapshot {
   weapon2: string;
   utility: string;
   ultimate: string;
+  coopDefenseProfile: CoopDefenseUpgradeProfile | null;
 }
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */

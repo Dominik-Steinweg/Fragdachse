@@ -209,6 +209,7 @@ export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
 
 // ---- Combat ----
 export const HP_MAX           = 100;
+export const COOP_DEFENSE_HP_UPGRADE_BONUS_PER_LEVEL = 20;
 export const ARMOR_MAX        = 100;
 export const ARMOR_COLOR      = COLORS.GOLD_2;
 export const RESPAWN_DELAY_MS = 2000;

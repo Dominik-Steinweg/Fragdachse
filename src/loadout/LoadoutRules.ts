@@ -1,4 +1,5 @@
-import type { GameMode, LoadoutCommitSnapshot } from '../types';
+import type { CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
+import { isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import {
   DEFAULT_LOADOUT,
   sanitizeUltimateForMode,
@@ -30,13 +31,18 @@ export function sanitizeLoadoutSelectionForMode(
   };
 }
 
-export function resolveLoadoutSelectionIds(selection: LoadoutSelection | undefined, mode: GameMode): LoadoutCommitSnapshot {
+export function resolveLoadoutSelectionIds(
+  selection: LoadoutSelection | undefined,
+  mode: GameMode,
+  coopDefenseProfile: CoopDefenseUpgradeProfile | null = null,
+): LoadoutCommitSnapshot {
   const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
   return {
     weapon1: sanitized.weapon1.id,
     weapon2: sanitized.weapon2.id,
     utility: sanitized.utility.id,
     ultimate: sanitized.ultimate.id,
+    coopDefenseProfile: coopDefenseProfile ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile) : null,
   };
 }
 
@@ -51,7 +57,7 @@ export function sanitizeCommittedLoadoutForMode(
     utility: UTILITY_CONFIGS[snapshot.utility as keyof typeof UTILITY_CONFIGS],
     ultimate: ULTIMATE_CONFIGS[snapshot.ultimate as keyof typeof ULTIMATE_CONFIGS],
   };
-  return resolveLoadoutSelectionIds(selection, mode);
+  return resolveLoadoutSelectionIds(selection, mode, snapshot.coopDefenseProfile);
 }
 
 export function isCommittedLoadoutEqual(
@@ -63,5 +69,6 @@ export function isCommittedLoadoutEqual(
   return left.weapon1 === right.weapon1
     && left.weapon2 === right.weapon2
     && left.utility === right.utility
-    && left.ultimate === right.ultimate;
+    && left.ultimate === right.ultimate
+    && isCoopDefenseUpgradeProfileEqual(left.coopDefenseProfile, right.coopDefenseProfile);
 }

@@ -22,6 +22,7 @@ export class PlayerEntity {
   private armorBarBg: Phaser.GameObjects.Rectangle;
   private armorBarFg: Phaser.GameObjects.Rectangle;
   private currentHp = HP_MAX;
+  private maxHp = HP_MAX;
   private currentArmor = 0;
   private worldBarsVisible = true;
 
@@ -255,9 +256,10 @@ export class PlayerEntity {
   }
 
   /** HP-Wert aktualisieren und Balken neu zeichnen. */
-  updateHP(hp: number): void {
-    this.currentHp = Math.max(0, Math.min(HP_MAX, hp));
-    const ratio    = this.currentHp / HP_MAX;
+  updateHP(hp: number, maxHp: number = this.maxHp): void {
+    this.maxHp = Math.max(1, maxHp);
+    this.currentHp = Math.max(0, Math.min(this.maxHp, hp));
+    const ratio = this.currentHp / this.maxHp;
     this.hpBarFg.width = HP_BAR_WIDTH * ratio;
     const color = this.isEnemy
       ? (ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4)

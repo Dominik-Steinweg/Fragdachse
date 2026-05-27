@@ -5,7 +5,6 @@ import {
   ARMOR_MAX,
   COLORS,
   DEPTH,
-  HP_MAX,
   PLAYER_SIZE,
   RAGE_MAX,
 } from '../config';
@@ -227,7 +226,7 @@ export class PlayerStatusRing {
   update(data: LocalArenaHudData): void {
     this.latestData = data;
 
-    const nextHpFrac = clamp01(data.hp / HP_MAX);
+    const nextHpFrac = clamp01(data.hp / Math.max(1, data.maxHp));
     const nextAdrFrac = clamp01(data.adrenaline / ADRENALINE_MAX);
     const nextRageFrac = clamp01(data.rage / RAGE_MAX);
     const nextArmorFrac = clamp01(data.armor / ARMOR_MAX);

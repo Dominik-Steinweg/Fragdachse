@@ -306,7 +306,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
     };
@@ -997,6 +997,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
     const localId = bridge.getLocalPlayerId();
+    const coopDefenseProfile = isCoopDefenseMode(bridge.getGameMode())
+      ? getStoredCoopDefenseProgress().profile
+      : null;
     return resolveLoadoutSelectionIds({
       weapon1:  (bridge.getPlayerLoadoutSlot(localId, 'weapon1')  ?? DEFAULT_LOADOUT.weapon1.id) in WEAPON_CONFIGS
         ? WEAPON_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id) as keyof typeof WEAPON_CONFIGS]
@@ -1010,7 +1013,7 @@ export class ArenaScene extends Phaser.Scene {
       ultimate: (bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) in ULTIMATE_CONFIGS
         ? ULTIMATE_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) as keyof typeof ULTIMATE_CONFIGS]
         : DEFAULT_LOADOUT.ultimate,
-    }, bridge.getGameMode());
+    }, bridge.getGameMode(), coopDefenseProfile);
   }
 
   private getEnemyHoverNameTarget(): { name: string; x: number; y: number } | null {

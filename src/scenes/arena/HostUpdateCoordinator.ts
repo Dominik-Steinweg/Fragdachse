@@ -308,6 +308,7 @@ export class HostUpdateCoordinator {
     // Host-local visuals each frame
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       const hp    = this.ctx.combatSystem.getHP(player.id);
+      const maxHp = this.ctx.combatSystem.getMaxHp(player.id);
       const armor = this.ctx.combatSystem.getArmor(player.id);
       const alive    = this.ctx.combatSystem.isAlive(player.id);
       const wasAlive = this.prevAliveStates.get(player.id) ?? false;
@@ -315,7 +316,7 @@ export class HostUpdateCoordinator {
         this.ctx.gameAudioSystem.playSound('sfx_player_spawn', player.sprite.x, player.sprite.y, player.id);
       }
       this.prevAliveStates.set(player.id, alive);
-      player.updateHP(hp);
+      player.updateHP(hp, maxHp);
       player.updateArmor(armor);
       player.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(player.id));
       player.setVisible(alive);
@@ -402,6 +403,7 @@ export class HostUpdateCoordinator {
       const ultimateThresholds = this.ctx.loadoutManager?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
       const hudData = buildLocalArenaHudData({
         hp:                      this.ctx.combatSystem.getHP(localId),
+        maxHp:                   this.ctx.combatSystem.getMaxHp(localId),
         armor:                   this.ctx.combatSystem.getArmor(localId),
         adrenaline:              this.ctx.resourceSystem?.getAdrenaline(localId) ?? 0,
         rage:                    this.ctx.resourceSystem?.getRage(localId) ?? 0,
@@ -454,6 +456,7 @@ export class HostUpdateCoordinator {
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       const hp         = this.ctx.combatSystem.getHP(player.id);
+      const maxHp      = this.ctx.combatSystem.getMaxHp(player.id);
       const armor      = this.ctx.combatSystem.getArmor(player.id);
       const alive      = this.ctx.combatSystem.isAlive(player.id);
       const adrenaline = this.ctx.resourceSystem?.getAdrenaline(player.id) ?? 0;
@@ -491,6 +494,7 @@ export class HostUpdateCoordinator {
         y: Math.round(player.sprite.y),
         rot: playerInput?.aim ?? 0,
         hp,
+        maxHp,
         armor,
         alive,
         adrenaline: Math.round(adrenaline),

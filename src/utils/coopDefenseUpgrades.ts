@@ -65,6 +65,31 @@ export function cloneCoopDefenseUpgradeProfile(profile: CoopDefenseUpgradeProfil
   return { upgrades };
 }
 
+export function isCoopDefenseUpgradeProfileEqual(
+  left: CoopDefenseUpgradeProfile | null | undefined,
+  right: CoopDefenseUpgradeProfile | null | undefined,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return false;
+
+  const normalizedLeft = sanitizeCoopDefenseUpgradeProfile(left);
+  const normalizedRight = sanitizeCoopDefenseUpgradeProfile(right);
+  const upgradeIds = new Set([
+    ...Object.keys(normalizedLeft.upgrades),
+    ...Object.keys(normalizedRight.upgrades),
+  ]);
+
+  for (const upgradeId of upgradeIds) {
+    const leftState = getCoopDefenseUpgradeState(normalizedLeft, upgradeId);
+    const rightState = getCoopDefenseUpgradeState(normalizedRight, upgradeId);
+    if (leftState.unlocked !== rightState.unlocked || leftState.level !== rightState.level) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function sanitizeCoopDefenseUpgradeProfile(raw: unknown): CoopDefenseUpgradeProfile {
   const defaults = buildDefaultCoopDefenseUpgradeProfile();
   const input = raw && typeof raw === 'object' && 'upgrades' in raw

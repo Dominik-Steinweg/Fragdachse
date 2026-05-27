@@ -7,6 +7,7 @@ export interface LocalArenaHudData extends ArenaHUDData {
 
 interface BuildLocalArenaHudDataParams {
   hp: number;
+  maxHp: number;
   armor: number;
   adrenaline: number;
   rage: number;
@@ -36,6 +37,7 @@ interface BuildInitialLocalArenaHudDataParams {
 export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): LocalArenaHudData {
   return {
     hp: params.hp,
+    maxHp: params.maxHp,
     armor: params.armor,
     adrenaline: params.adrenaline,
     rage: params.rage,
@@ -60,6 +62,7 @@ export function buildInitialLocalArenaHudData(
 ): LocalArenaHudData {
   return buildLocalArenaHudData({
     hp: HP_MAX,
+    maxHp: HP_MAX,
     armor: 0,
     adrenaline: 0,
     rage: 0,
