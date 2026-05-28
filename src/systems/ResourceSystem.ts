@@ -18,11 +18,19 @@ export class ResourceSystem {
   private rage:              Map<string, number> = new Map();
   private regenPausedUntil:  Map<string, number> = new Map(); // ms-Timestamp
   private powerUpSystem:     PowerUpSystemType | null = null;
+  private adrenalineMaxResolver: ((id: string) => number) | null = null;
+  private adrenalineRegenRateResolver: ((id: string) => number) | null = null;
+  private rageMaxResolver: ((id: string) => number) | null = null;
+  private rageGainMultiplierResolver: ((id: string) => number) | null = null;
 
   setPowerUpSystem(ps: PowerUpSystemType | null): void { this.powerUpSystem = ps; }
+  setAdrenalineMaxResolver(resolver: ((id: string) => number) | null): void { this.adrenalineMaxResolver = resolver; }
+  setAdrenalineRegenRateResolver(resolver: ((id: string) => number) | null): void { this.adrenalineRegenRateResolver = resolver; }
+  setRageMaxResolver(resolver: ((id: string) => number) | null): void { this.rageMaxResolver = resolver; }
+  setRageGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.rageGainMultiplierResolver = resolver; }
 
   initPlayer(id: string): void {
-    this.adrenaline.set(id, ADRENALINE_START);
+    this.adrenaline.set(id, Math.min(this.getMaxAdrenaline(id), ADRENALINE_START));
     this.rage.set(id, 0);
     this.regenPausedUntil.set(id, 0);
   }
@@ -37,12 +45,20 @@ export class ResourceSystem {
     return this.adrenaline.get(id) ?? 0;
   }
 
+  getMaxAdrenaline(id: string): number {
+    return Math.max(0, this.adrenalineMaxResolver?.(id) ?? ADRENALINE_MAX);
+  }
+
   getRage(id: string): number {
     return this.rage.get(id) ?? 0;
   }
 
+  getMaxRage(id: string): number {
+    return Math.max(0, this.rageMaxResolver?.(id) ?? RAGE_MAX);
+  }
+
   setRage(id: string, value: number): void {
-    this.rage.set(id, Math.max(0, Math.min(RAGE_MAX, value)));
+    this.rage.set(id, Math.max(0, Math.min(this.getMaxRage(id), value)));
   }
 
   /**
@@ -50,7 +66,7 @@ export class ResourceSystem {
    * Pausiert die Regeneration NICHT – wird als Belohnung für Treffer genutzt.
    */
   addAdrenaline(id: string, amount: number): void {
-    const cur = Math.min(ADRENALINE_MAX, (this.adrenaline.get(id) ?? 0) + amount);
+    const cur = Math.min(this.getMaxAdrenaline(id), (this.adrenaline.get(id) ?? 0) + amount);
     this.adrenaline.set(id, cur);
   }
 
@@ -72,7 +88,10 @@ export class ResourceSystem {
    * Wird aufgerufen wenn der Spieler Schaden erleidet.
    */
   addRage(id: string, amount: number): void {
-    const cur = Math.min(RAGE_MAX, (this.rage.get(id) ?? 0) + amount);
+    const adjustedAmount = amount > 0
+      ? amount * Math.max(0, this.rageGainMultiplierResolver?.(id) ?? 1)
+      : amount;
+    const cur = Math.min(this.getMaxRage(id), (this.rage.get(id) ?? 0) + adjustedAmount);
     this.rage.set(id, cur);
   }
 
@@ -83,15 +102,16 @@ export class ResourceSystem {
   regenTick(id: string, delta: number): void {
     if (Date.now() < (this.regenPausedUntil.get(id) ?? 0)) return;
     const regenMult = this.powerUpSystem?.getRegenMultiplier(id) ?? 1;
+    const regenRate = this.adrenalineRegenRateResolver?.(id) ?? ADRENALINE_REGEN_PER_SEC;
     const cur = Math.min(
-      ADRENALINE_MAX,
-      (this.adrenaline.get(id) ?? 0) + ADRENALINE_REGEN_PER_SEC * regenMult * delta / 1000,
+      this.getMaxAdrenaline(id),
+      (this.adrenaline.get(id) ?? 0) + regenRate * regenMult * delta / 1000,
     );
     this.adrenaline.set(id, cur);
   }
 
   /** Setzt Adrenalin direkt (z. B. bei Respawn). */
   setAdrenaline(id: string, val: number): void {
-    this.adrenaline.set(id, Math.max(0, Math.min(ADRENALINE_MAX, val)));
+    this.adrenaline.set(id, Math.max(0, Math.min(this.getMaxAdrenaline(id), val)));
   }
 }

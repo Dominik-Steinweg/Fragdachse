@@ -1,0 +1,254 @@
+import type { LoadoutSlot } from '../types';
+import type { ResolvedLoadoutSelection } from './LoadoutRules';
+import type { UltimateConfig, UtilityConfig, WeaponConfig } from './LoadoutConfig';
+
+export interface CoopDefenseEffectTotalsSource {
+  additive: Readonly<Record<string, number>>;
+  percentage: Readonly<Record<string, number>>;
+}
+
+type ConfigKind = 'weapon' | 'utility' | 'ultimate';
+type ModifierOperation = 'scale' | 'inverse_scale' | 'add';
+
+interface PathTarget {
+  path: readonly string[];
+  operation: ModifierOperation;
+}
+
+interface ConfigStatDescriptor {
+  kind: ConfigKind;
+  slot?: LoadoutSlot;
+  itemId?: string;
+  targets: readonly PathTarget[];
+}
+
+const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = Object.freeze({
+  'weapon1.adrenalinGain': {
+    kind: 'weapon',
+    slot: 'weapon1',
+    targets: [{ path: ['adrenalinGain'], operation: 'scale' }],
+  },
+  'weapon1.fireRate': {
+    kind: 'weapon',
+    slot: 'weapon1',
+    targets: [{ path: ['cooldown'], operation: 'inverse_scale' }],
+  },
+  'weapon1.damage': {
+    kind: 'weapon',
+    slot: 'weapon1',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
+  'weapon2.adrenalinCost': {
+    kind: 'weapon',
+    slot: 'weapon2',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+  },
+  'weapon2.fireRate': {
+    kind: 'weapon',
+    slot: 'weapon2',
+    targets: [{ path: ['cooldown'], operation: 'inverse_scale' }],
+  },
+  'weapon2.damage': {
+    kind: 'weapon',
+    slot: 'weapon2',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
+  'weapon.GLOCK.projectileMaxBounces': {
+    kind: 'weapon',
+    itemId: 'GLOCK',
+    targets: [{ path: ['fire', 'projectileMaxBounces'], operation: 'add' }],
+  },
+  'weapon.GLOCK.projectileSpeed': {
+    kind: 'weapon',
+    itemId: 'GLOCK',
+    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
+  'weapon.PLASMA.homing.maxTurnDegreesPerStep': {
+    kind: 'weapon',
+    itemId: 'PLASMA',
+    targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], operation: 'scale' }],
+  },
+  'weapon.P90.range': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['range'], operation: 'scale' }],
+  },
+  'weapon.P90.spread': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [
+      { path: ['spreadStanding'], operation: 'scale' },
+      { path: ['spreadMoving'], operation: 'scale' },
+      { path: ['spreadPerShot'], operation: 'scale' },
+      { path: ['maxDynamicSpread'], operation: 'scale' },
+    ],
+  },
+  'weapon.ROCKET_LAUNCHER.impactExplosion.radius': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['fire', 'impactExplosion', 'radius'], operation: 'scale' }],
+  },
+  'weapon.ROCKET_LAUNCHER.cooldown': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
+  'utility.cooldown': {
+    kind: 'utility',
+    slot: 'utility',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
+  'utility.HE_GRENADE.aoeRadius': {
+    kind: 'utility',
+    itemId: 'HE_GRENADE',
+    targets: [{ path: ['aoeRadius'], operation: 'scale' }],
+  },
+  'utility.TIME_BUBBLE.bubbleRadius': {
+    kind: 'utility',
+    itemId: 'TIME_BUBBLE',
+    targets: [{ path: ['bubbleRadius'], operation: 'scale' }],
+  },
+  'ultimate.ARMAGEDDON.damage': {
+    kind: 'ultimate',
+    itemId: 'ARMAGEDDON',
+    targets: [{ path: ['armageddon', 'meteorDamage'], operation: 'scale' }],
+  },
+  'ultimate.ARMAGEDDON.duration': {
+    kind: 'ultimate',
+    itemId: 'ARMAGEDDON',
+    targets: [
+      { path: ['duration'], operation: 'scale' },
+      { path: ['rageDrainDuration'], operation: 'scale' },
+      { path: ['armageddon', 'meteorsPerSecond'], operation: 'scale' },
+    ],
+  },
+});
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cloneValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => cloneValue(entry)) as T;
+  }
+  if (isObjectRecord(value)) {
+    const clone: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      clone[key] = cloneValue(entry);
+    }
+    return clone as T;
+  }
+  return value;
+}
+
+function getNumberAtPath(root: unknown, path: readonly string[]): number | null {
+  let current: unknown = root;
+  for (const segment of path) {
+    if (!isObjectRecord(current) || !(segment in current)) return null;
+    current = current[segment];
+  }
+  return typeof current === 'number' && Number.isFinite(current) ? current : null;
+}
+
+function setNumberAtPath(root: Record<string, unknown>, path: readonly string[], value: number): boolean {
+  let current: Record<string, unknown> = root;
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const segment = path[index];
+    const next = current[segment];
+    if (!isObjectRecord(next)) return false;
+    current = next;
+  }
+  const leaf = path[path.length - 1];
+  if (!(leaf in current) || typeof current[leaf] !== 'number') return false;
+  current[leaf] = value;
+  return true;
+}
+
+function applyOperation(baseValue: number, additive: number, percentage: number, operation: ModifierOperation): number {
+  const safeMultiplier = Math.max(0.0001, 1 + percentage);
+  switch (operation) {
+    case 'add':
+      return Math.max(0, baseValue + additive);
+    case 'inverse_scale':
+      return Math.max(0, (baseValue + additive) / safeMultiplier);
+    case 'scale':
+    default:
+      return Math.max(0, (baseValue + additive) * safeMultiplier);
+  }
+}
+
+function shouldApplyDescriptor(
+  descriptor: ConfigStatDescriptor,
+  kind: ConfigKind,
+  slot: LoadoutSlot,
+  configId: string,
+): boolean {
+  if (descriptor.kind !== kind) return false;
+  if (descriptor.slot && descriptor.slot !== slot) return false;
+  if (descriptor.itemId && descriptor.itemId !== configId) return false;
+  return true;
+}
+
+function applyConfiguredStats<T extends { id: string }>(
+  config: T,
+  kind: ConfigKind,
+  slot: LoadoutSlot,
+  totals: CoopDefenseEffectTotalsSource,
+): T {
+  let nextConfig: Record<string, unknown> | null = null;
+
+  for (const [stat, descriptor] of Object.entries(CONFIG_STAT_DESCRIPTORS)) {
+    if (!shouldApplyDescriptor(descriptor, kind, slot, config.id)) continue;
+
+    const additive = totals.additive[stat] ?? 0;
+    const percentage = totals.percentage[stat] ?? 0;
+    if (additive === 0 && percentage === 0) continue;
+
+    const targetConfig: Record<string, unknown> = nextConfig ?? cloneValue(config as Record<string, unknown>);
+    let changed = false;
+    for (const target of descriptor.targets) {
+      const baseValue = getNumberAtPath(targetConfig, target.path);
+      if (baseValue === null) continue;
+      const nextValue = applyOperation(baseValue, additive, percentage, target.operation);
+      changed = setNumberAtPath(targetConfig, target.path, nextValue) || changed;
+    }
+    if (changed) nextConfig = targetConfig;
+  }
+
+  return (nextConfig ?? config) as T;
+}
+
+export function applyCoopDefenseModifiersToWeaponConfig(
+  config: WeaponConfig,
+  slot: 'weapon1' | 'weapon2',
+  totals: CoopDefenseEffectTotalsSource,
+): WeaponConfig {
+  return applyConfiguredStats(config, 'weapon', slot, totals);
+}
+
+export function applyCoopDefenseModifiersToUtilityConfig(
+  config: UtilityConfig,
+  totals: CoopDefenseEffectTotalsSource,
+): UtilityConfig {
+  return applyConfiguredStats(config, 'utility', 'utility', totals);
+}
+
+export function applyCoopDefenseModifiersToUltimateConfig(
+  config: UltimateConfig,
+  totals: CoopDefenseEffectTotalsSource,
+): UltimateConfig {
+  return applyConfiguredStats(config, 'ultimate', 'ultimate', totals);
+}
+
+export function applyCoopDefenseModifiersToLoadoutSelection(
+  selection: ResolvedLoadoutSelection,
+  totals: CoopDefenseEffectTotalsSource,
+): ResolvedLoadoutSelection {
+  return {
+    weapon1: applyCoopDefenseModifiersToWeaponConfig(selection.weapon1, 'weapon1', totals),
+    weapon2: applyCoopDefenseModifiersToWeaponConfig(selection.weapon2, 'weapon2', totals),
+    utility: applyCoopDefenseModifiersToUtilityConfig(selection.utility, totals),
+    ultimate: applyCoopDefenseModifiersToUltimateConfig(selection.ultimate, totals),
+  };
+}

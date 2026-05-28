@@ -30,6 +30,7 @@ type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
 
 export class BurrowSystem {
   private states = new Map<string, BurrowStateData>();
+  private undergroundSpeedResolver: ((playerId: string) => number) | null = null;
 
   private rockGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -73,6 +74,10 @@ export class BurrowSystem {
 
   setTunnelTransitEndedCallback(cb: ((playerId: string) => void) | null): void {
     this.onTunnelTransitEndedCb = cb;
+  }
+
+  setUndergroundSpeedResolver(resolver: ((playerId: string) => number) | null): void {
+    this.undergroundSpeedResolver = resolver;
   }
 
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
@@ -124,7 +129,7 @@ export class BurrowSystem {
         return BURROW_WINDUP_SPEED_FACTOR;
       case 'underground':
       case 'trapped':
-        return BURROW_UNDERGROUND_SPEED_FACTOR;
+        return this.undergroundSpeedResolver?.(id) ?? BURROW_UNDERGROUND_SPEED_FACTOR;
       default:
         return 1;
     }

@@ -31,7 +31,8 @@ import type {
   UtilityConfig,
   WeaponConfig,
 } from './LoadoutConfig';
-import { COLORS, RAGE_MAX, getTopDownMuzzleOrigin } from '../config';
+import { applyCoopDefenseModifiersToUtilityConfig } from './CoopDefenseLoadoutModifiers';
+import { COLORS, getTopDownMuzzleOrigin } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
 import { sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
@@ -98,6 +99,7 @@ export class LoadoutManager {
   private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
+  private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
@@ -247,6 +249,10 @@ export class LoadoutManager {
     this.utilityUsedCallback = cb;
   }
 
+  setUtilityConfigModifierSource(source: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null): void {
+    this.utilityConfigModifierSource = source;
+  }
+
   /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
   setArmageddonSystem(sys: ArmageddonSystem | null): void {
     this.armageddonSystem = sys;
@@ -326,10 +332,12 @@ export class LoadoutManager {
     }
 
     // Neues Utility einsetzen
-    loadout.utility = new GenericUtility(config);
+    const modifierSource = this.utilityConfigModifierSource?.(playerId);
+    const effectiveConfig = modifierSource ? applyCoopDefenseModifiersToUtilityConfig(config, modifierSource) : config;
+    loadout.utility = new GenericUtility(effectiveConfig);
     this.utilityAmmo.set(playerId, ammo);
     this.bridge.publishUtilityCooldownUntil(playerId, 0); // sofort einsatzbereit
-    this.bridge.publishUtilityOverrideName(playerId, config.displayName);
+    this.bridge.publishUtilityOverrideName(playerId, effectiveConfig.displayName);
   }
 
   /**
@@ -420,7 +428,7 @@ export class LoadoutManager {
           if (ultState?.active) return { ok: false, reason: 'blocked' };
           const rage = this.resourceSystem.getRage(playerId);
           if (rage < cfg.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
-          const consumedRage = Math.min(rage, RAGE_MAX);
+          const consumedRage = Math.min(rage, this.resourceSystem.getMaxRage(playerId));
           const scale = consumedRage / cfg.rageRequired;
           const durationMs = Math.max(1, Math.round(cfg.duration * scale));
           const drainDurationMs = Math.max(1, Math.round(cfg.rageDrainDuration * scale));
@@ -641,7 +649,7 @@ export class LoadoutManager {
   }
 
   getUltimateRequiredRage(playerId: string): number {
-    return this.loadouts.get(playerId)?.ultimate.config.rageRequired ?? RAGE_MAX;
+    return this.loadouts.get(playerId)?.ultimate.config.rageRequired ?? this.resourceSystem.getMaxRage(playerId);
   }
 
   isUltimateCharging(playerId: string): boolean {
@@ -667,7 +675,8 @@ export class LoadoutManager {
     if (!config) return [];
     if (config.type === 'gauss') {
       const thresholds: number[] = [];
-      for (let value = config.rageCost; value < RAGE_MAX; value += config.rageCost) {
+      const maxRage = this.resourceSystem.getMaxRage(playerId);
+      for (let value = config.rageCost; value < maxRage; value += config.rageCost) {
         thresholds.push(value);
       }
       return thresholds;

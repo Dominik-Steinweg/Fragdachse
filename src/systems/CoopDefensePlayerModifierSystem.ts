@@ -3,17 +3,19 @@ import type { CoopDefenseUpgradeProfile, LoadoutCommitSnapshot } from '../types'
 import {
   cloneCoopDefenseUpgradeProfile,
   COOP_DEFENSE_PLAYER_STAT_MAX_HP,
-  getCoopDefenseNumericStatTotals,
+  getCoopDefenseResolvedEffectTotals,
   sanitizeCoopDefenseUpgradeProfile,
 } from '../utils/coopDefenseUpgrades';
 
 export interface CoopDefensePlayerRuntimeModifiers {
-  numericStats: Readonly<Record<string, number>>;
+  additiveStats: Readonly<Record<string, number>>;
+  percentageStats: Readonly<Record<string, number>>;
   maxHp: number;
 }
 
 const DEFAULT_RUNTIME_MODIFIERS: CoopDefensePlayerRuntimeModifiers = {
-  numericStats: Object.freeze({}),
+  additiveStats: Object.freeze({}),
+  percentageStats: Object.freeze({}),
   maxHp: HP_MAX,
 };
 
@@ -60,7 +62,17 @@ export class CoopDefensePlayerModifierSystem {
   }
 
   getNumericStat(playerId: string, stat: string): number {
-    return this.getModifiers(playerId).numericStats[stat] ?? 0;
+    return this.getModifiers(playerId).additiveStats[stat] ?? 0;
+  }
+
+  getPercentageStat(playerId: string, stat: string): number {
+    return this.getModifiers(playerId).percentageStats[stat] ?? 0;
+  }
+
+  getResolvedStat(playerId: string, stat: string, baseValue: number): number {
+    const additive = this.getNumericStat(playerId, stat);
+    const percentage = this.getPercentageStat(playerId, stat);
+    return Math.max(0, (baseValue + additive) * (1 + percentage));
   }
 
   getMaxHp(playerId: string): number {
@@ -73,10 +85,11 @@ export class CoopDefensePlayerModifierSystem {
   }
 
   private resolveRuntimeModifiers(profile: CoopDefenseUpgradeProfile): CoopDefensePlayerRuntimeModifiers {
-    const numericStats = getCoopDefenseNumericStatTotals(profile);
+    const totals = getCoopDefenseResolvedEffectTotals(profile);
     return {
-      numericStats,
-      maxHp: HP_MAX + (numericStats[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0),
+      additiveStats: totals.additive,
+      percentageStats: totals.percentage,
+      maxHp: HP_MAX + (totals.additive[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0),
     };
   }
 }

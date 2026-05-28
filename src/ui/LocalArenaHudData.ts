@@ -1,4 +1,4 @@
-import { HP_MAX } from '../config';
+import { ADRENALINE_MAX, HP_MAX, RAGE_MAX } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
 
 export interface LocalArenaHudData extends ArenaHUDData {
@@ -10,7 +10,9 @@ interface BuildLocalArenaHudDataParams {
   maxHp: number;
   armor: number;
   adrenaline: number;
+  maxAdrenaline: number;
   rage: number;
+  maxRage: number;
   isUltimateActive: boolean;
   ultimateRequiredRage: number;
   ultimateThresholds: number[];
@@ -27,6 +29,8 @@ interface BuildLocalArenaHudDataParams {
 }
 
 interface BuildInitialLocalArenaHudDataParams {
+  maxAdrenaline?: number;
+  maxRage?: number;
   ultimateRequiredRage: number;
   ultimateThresholds: number[];
   ultimateDisplayName?: string;
@@ -40,7 +44,9 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     maxHp: params.maxHp,
     armor: params.armor,
     adrenaline: params.adrenaline,
+    maxAdrenaline: params.maxAdrenaline,
     rage: params.rage,
+    maxRage: params.maxRage,
     isUltimateActive: params.isUltimateActive,
     ultimateRequiredRage: params.ultimateRequiredRage,
     ultimateThresholds: params.ultimateThresholds,
@@ -65,7 +71,9 @@ export function buildInitialLocalArenaHudData(
     maxHp: HP_MAX,
     armor: 0,
     adrenaline: 0,
+    maxAdrenaline: params.maxAdrenaline ?? ADRENALINE_MAX,
     rage: 0,
+    maxRage: params.maxRage ?? RAGE_MAX,
     isUltimateActive: false,
     ultimateRequiredRage: params.ultimateRequiredRage,
     ultimateThresholds: params.ultimateThresholds,

@@ -1,12 +1,10 @@
 import * as Phaser from 'phaser';
 import {
-  ADRENALINE_MAX,
   ARMOR_COLOR,
   ARMOR_MAX,
   COLORS,
   DEPTH,
   PLAYER_SIZE,
-  RAGE_MAX,
 } from '../config';
 import { ensureLivingBarTextures } from './LivingBarEffect';
 import type { LocalArenaHudData } from './LocalArenaHudData';
@@ -227,8 +225,8 @@ export class PlayerStatusRing {
     this.latestData = data;
 
     const nextHpFrac = clamp01(data.hp / Math.max(1, data.maxHp));
-    const nextAdrFrac = clamp01(data.adrenaline / ADRENALINE_MAX);
-    const nextRageFrac = clamp01(data.rage / RAGE_MAX);
+    const nextAdrFrac = clamp01(data.adrenaline / Math.max(1, data.maxAdrenaline));
+    const nextRageFrac = clamp01(data.rage / Math.max(1, data.maxRage));
     const nextArmorFrac = clamp01(data.armor / ARMOR_MAX);
     const now = this.scene.time.now;
 

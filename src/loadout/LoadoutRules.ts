@@ -1,6 +1,7 @@
 import type { CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
 import { isCoopDefenseMode } from '../gameModes';
-import { isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { getCoopDefenseResolvedEffectTotals, isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { applyCoopDefenseModifiersToLoadoutSelection } from './CoopDefenseLoadoutModifiers';
 import {
   DEFAULT_LOADOUT,
   sanitizeUltimateForMode,
@@ -30,6 +31,19 @@ export function sanitizeLoadoutSelectionForMode(
     utility: selection?.utility ?? DEFAULT_LOADOUT.utility,
     ultimate: sanitizeUltimateForMode(selection?.ultimate, mode),
   };
+}
+
+export function resolveEffectiveLoadoutSelection(
+  selection: LoadoutSelection | undefined,
+  mode: GameMode,
+  coopDefenseProfile: CoopDefenseUpgradeProfile | null = null,
+): ResolvedLoadoutSelection {
+  const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
+  if (!isCoopDefenseMode(mode) || !coopDefenseProfile) return sanitized;
+  return applyCoopDefenseModifiersToLoadoutSelection(
+    sanitized,
+    getCoopDefenseResolvedEffectTotals(sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile)),
+  );
 }
 
 export function resolveLoadoutSelectionIds(

@@ -5,7 +5,7 @@
  * den unteren Stack für Power-Ups, Utility und Ultimate.
  */
 import * as Phaser from 'phaser';
-import { ARMOR_COLOR, ARMOR_MAX, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, RAGE_MAX, toCssColor } from '../config';
+import { ARMOR_COLOR, ARMOR_MAX, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
 import {
   rgbStr,
@@ -491,7 +491,7 @@ export class CenterHUD {
       this.showLowerSection(
         this.ultimateSection,
         `Ultimate: ${data.ultimateDisplayName ?? 'Ultimate'}`,
-        Phaser.Math.Clamp(data.rage / RAGE_MAX, 0, 1),
+        Phaser.Math.Clamp(data.rage / Math.max(1, data.maxRage), 0, 1),
         CENTER_X,
         nextBottom - STACK_TOTAL_H,
       );

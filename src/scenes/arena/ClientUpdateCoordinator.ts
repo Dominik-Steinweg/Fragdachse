@@ -4,7 +4,8 @@ import { dequantizeAngle } from '../../utils/angle';
 import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
-import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
+import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
+import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
@@ -15,6 +16,8 @@ import type { BurrowPhase, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
+import { getStoredCoopDefenseProgress } from '../../utils/localPreferences';
+import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
 
 /**
  * Runs every frame on non-host clients.
@@ -221,7 +224,9 @@ export class ClientUpdateCoordinator {
         maxHp:                   localState.maxHp,
         armor:                   localState.armor,
         adrenaline:              localState.adrenaline,
+        maxAdrenaline:           this.getLocalMaxAdrenaline(),
         rage:                    localState.rage,
+        maxRage:                 this.getLocalMaxRage(),
         isUltimateActive:        localState.isRaging,
         ultimateRequiredRage:    localUltimateConfig.rageRequired,
         ultimateThresholds,
@@ -341,7 +346,9 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const equipped = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
     if (equipped) return equipped;
-    if (this.clientUtilityOverride) return this.clientUtilityOverride;
+    if (this.clientUtilityOverride) {
+      return applyCoopDefenseModifiersToUtilityConfig(this.clientUtilityOverride, this.getLocalEffectTotals());
+    }
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
   }
@@ -361,12 +368,21 @@ export class ClientUpdateCoordinator {
     const config = this.getLocalUltimateConfig();
     if (config.type === 'gauss') {
       const thresholds: number[] = [];
-      for (let value = config.rageCost; value < 300 /* RAGE_MAX */; value += config.rageCost) {
+      const maxRage = this.getLocalMaxRage();
+      for (let value = config.rageCost; value < maxRage; value += config.rageCost) {
         thresholds.push(value);
       }
       return thresholds;
     }
     return [config.rageRequired];
+  }
+
+  getLocalMaxAdrenaline(): number {
+    return this.getResolvedLocalPlayerStat('player.maxAdrenaline', 100);
+  }
+
+  getLocalMaxRage(): number {
+    return this.getResolvedLocalPlayerStat('ultimate.maxRage', 600);
   }
 
   getLocalRage(): number {
@@ -387,6 +403,23 @@ export class ClientUpdateCoordinator {
     const config = this.getLocalUtilityConfig();
     if (config.cooldown <= 0) return 0;
     return Math.min(1, remaining / config.cooldown);
+  }
+
+  private getResolvedLocalPlayerStat(stat: string, baseValue: number): number {
+    const totals = this.getLocalEffectTotals();
+    return Math.max(0, (baseValue + (totals.additive[stat] ?? 0)) * (1 + (totals.percentage[stat] ?? 0)));
+  }
+
+  private getLocalEffectTotals() {
+    const profile = this.getLocalCoopDefenseProfile();
+    return profile
+      ? getCoopDefenseResolvedEffectTotals(profile)
+      : { additive: {}, percentage: {} };
+  }
+
+  private getLocalCoopDefenseProfile() {
+    const localId = bridge.getLocalPlayerId();
+    return bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile ?? getStoredCoopDefenseProgress().profile;
   }
 
   resetPerRound(): void {
@@ -536,12 +569,12 @@ export class ClientUpdateCoordinator {
   private resolveCommittedLoadoutSelection(playerId: string) {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) return this.resolveLoadoutSelection(playerId);
-    return sanitizeLoadoutSelectionForMode({
+    return resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
       weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],
       utility:  UTILITY_CONFIGS[committed.utility as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, bridge.getGameMode());
+    }, bridge.getGameMode(), committed.coopDefenseProfile);
   }
 
   private resolveLoadoutSelection(playerId: string) {
@@ -549,11 +582,11 @@ export class ClientUpdateCoordinator {
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
     const ulId = bridge.getPlayerLoadoutSlot(playerId, 'ultimate');
-    return sanitizeLoadoutSelectionForMode({
+    return resolveEffectiveLoadoutSelection({
       weapon1:  w1Id ? WEAPON_CONFIGS[w1Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, bridge.getGameMode());
+    }, bridge.getGameMode(), playerId === bridge.getLocalPlayerId() ? getStoredCoopDefenseProgress().profile : null);
   }
 }

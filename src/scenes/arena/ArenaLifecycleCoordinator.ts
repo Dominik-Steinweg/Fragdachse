@@ -19,6 +19,8 @@ import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayer
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
+import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
+import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import { TimeBubbleSystem }  from '../../systems/TimeBubbleSystem';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
 import { PowerUpSystem }     from '../../powerups/PowerUpSystem';
@@ -31,7 +33,6 @@ import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleport
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
-import { sanitizeLoadoutSelectionForMode } from '../../loadout/LoadoutRules';
 import { getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
@@ -447,6 +448,18 @@ export class ArenaLifecycleCoordinator {
 
     if (bridge.isHost()) {
       this.ctx.resourceSystem = new ResourceSystem();
+      this.ctx.resourceSystem.setAdrenalineMaxResolver((playerId) => {
+        return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.maxAdrenaline', 100) ?? 100;
+      });
+      this.ctx.resourceSystem.setAdrenalineRegenRateResolver((playerId) => {
+        return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.adrenalineRegenRate', 10) ?? 10;
+      });
+      this.ctx.resourceSystem.setRageMaxResolver((playerId) => {
+        return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'ultimate.maxRage', 600) ?? 600;
+      });
+      this.ctx.resourceSystem.setRageGainMultiplierResolver((playerId) => {
+        return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'ultimate.rageGainPerDamage') ?? 0);
+      });
       this.ctx.shieldBuffSystem = new ShieldBuffSystem();
       this.ctx.timeBubbleSystem = new TimeBubbleSystem();
       this.ctx.teslaDomeSystem = new TeslaDomeSystem(
@@ -514,6 +527,9 @@ export class ArenaLifecycleCoordinator {
         this.ctx.hostPhysics,
         bridge,
       );
+      this.ctx.burrowSystem.setUndergroundSpeedResolver((playerId) => {
+        return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.burrowSpeed', 1.3) ?? 1.3;
+      });
       this.ctx.burrowSystem.setGroups(
         this.ctx.arenaResult.rockGroup,
         this.ctx.arenaResult.trunkGroup,
@@ -529,6 +545,12 @@ export class ArenaLifecycleCoordinator {
         this.ctx.resourceSystem,
         bridge,
       );
+      this.ctx.loadoutManager.setUtilityConfigModifierSource((playerId) => {
+        const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
+        return modifiers
+          ? { additive: modifiers.additiveStats, percentage: modifiers.percentageStats }
+          : null;
+      });
       this.ctx.decoySystem.setCombatStateReader(this.ctx.combatSystem);
       this.ctx.decoySystem.setRunSpeedResolver((playerId) => {
         return PLAYER_SPEED * (this.ctx.loadoutManager?.getSpeedMultiplier(playerId) ?? 1);
@@ -1105,6 +1127,8 @@ export class ArenaLifecycleCoordinator {
   private resetLocalArenaHudState(): void {
     const config = this.clientUpdate.getLocalUltimateConfig();
     const hudData = buildInitialLocalArenaHudData({
+      maxAdrenaline: this.clientUpdate.getLocalMaxAdrenaline(),
+      maxRage: this.clientUpdate.getLocalMaxRage(),
       ultimateRequiredRage: config.rageRequired,
       ultimateThresholds:   this.clientUpdate.getLocalUltimateThresholds(),
       ultimateDisplayName:  config.displayName,
@@ -1126,12 +1150,12 @@ export class ArenaLifecycleCoordinator {
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) return this.resolveLoadoutSelection(playerId);
-    return sanitizeLoadoutSelectionForMode({
+    return resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
       weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],
       utility:  UTILITY_CONFIGS[committed.utility  as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, bridge.getGameMode());
+    }, bridge.getGameMode(), committed.coopDefenseProfile);
   }
 
   private resolveLoadoutSelection(playerId: string): LoadoutSelection {
@@ -1139,7 +1163,7 @@ export class ArenaLifecycleCoordinator {
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
     const ulId = bridge.getPlayerLoadoutSlot(playerId, 'ultimate');
-    return sanitizeLoadoutSelectionForMode({
+    return resolveEffectiveLoadoutSelection({
       weapon1:  w1Id ? WEAPON_CONFIGS[w1Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId  as keyof typeof UTILITY_CONFIGS]   : undefined,
