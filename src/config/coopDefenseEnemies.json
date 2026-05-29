@@ -10,8 +10,7 @@
       "weaponId": "BITE",
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
-      "imageKey": "badger",
-      "color": 14710832,
+      "imageKey": "zombie",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.5,
         "moveSpeedFactorPerAdditionalPlayer": 0
