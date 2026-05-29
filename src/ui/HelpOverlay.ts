@@ -8,6 +8,7 @@ import {
   GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS, toCssColor,
 } from '../config';
+import { ensureModalPanelTexture } from './uiTextures';
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const PANEL_W = 660;
@@ -80,9 +81,10 @@ export class HelpOverlay {
     objects.push(this.dimRect);
 
     // ── Panel ─────────────────────────────────────────────────────────────
-    const panel = this.scene.add.rectangle(CX, CY, PANEL_W, PANEL_H, PANEL_BG, PANEL_ALPHA)
-      .setStrokeStyle(2, ACCENT)
-      .setScrollFactor(0);
+    const panel = this.scene.add.image(
+      CX, CY,
+      ensureModalPanelTexture(this.scene, '_help_panel', PANEL_W, PANEL_H, PANEL_BG, ACCENT),
+    ).setScrollFactor(0);
     objects.push(panel);
 
     // ── Titel ─────────────────────────────────────────────────────────────

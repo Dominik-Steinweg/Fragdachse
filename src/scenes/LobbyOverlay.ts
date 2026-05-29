@@ -12,16 +12,24 @@ import {
 } from '../config';
 import { getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode } from '../gameModes';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
+import {
+  ensureModalPanelTexture,
+  ensureGlossyButtonTexture,
+  ensureFlatPanelTexture,
+  ensureTintedSectionTexture,
+} from '../ui/uiTextures';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
+const ACCENT = COLORS.GOLD_1;
 const PANEL_COLOR   = COLORS.GREY_8;
 const READY_COLOR   = COLORS.GREEN_4;
 const UNREADY_COLOR = COLORS.RED_4;
 const TEXT_COLOR    = toCssColor(COLORS.GREY_2);
 const ACCENT_COLOR  = toCssColor(COLORS.BROWN_1);
-const BTN_COPY_COLOR  = COLORS.BLUE_5;
-const BTN_RETRY_COLOR = COLORS.BROWN_5;
-const BTN_AUTO_COLOR  = COLORS.GREEN_5;
+const BTN_COPY_COLOR  = COLORS.BLUE_4;
+const BTN_RETRY_COLOR = COLORS.BROWN_4;
+const BTN_AUTO_COLOR  = COLORS.GREEN_4;
+const BTN_UPGRADES_COLOR = COLORS.BLUE_4;
 
 const PANEL_W  = 800;
 const PANEL_H  = 600;
@@ -51,6 +59,10 @@ const COPY_BTN_X = GAME_WIDTH / 2 - (ACTION_BTN_W + ACTION_BTN_GAP);
 const RETRY_BTN_X = GAME_WIDTH / 2;
 const AUTO_BTN_X = GAME_WIDTH / 2 + (ACTION_BTN_W + ACTION_BTN_GAP);
 
+function btnTexKey(color: number, w: number, h: number): string {
+  return `_lobby_btn_${color.toString(16)}_${Math.round(w)}x${Math.round(h)}`;
+}
+
 function pingColor(ms: number): string {
   if (ms <= 50)  return toCssColor(COLORS.GREEN_2);
   if (ms <= 100) return toCssColor(COLORS.GOLD_1);
@@ -59,7 +71,7 @@ function pingColor(ms: number): string {
 }
 
 type PlayerRow = {
-  bg:    Phaser.GameObjects.Rectangle;
+  bg:    Phaser.GameObjects.Image;
   name:  Phaser.GameObjects.Text;
   badge: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
@@ -74,20 +86,20 @@ export class LobbyOverlay {
   private statusText!:    Phaser.GameObjects.Text;
   private roomQualityText!: Phaser.GameObjects.Text;
   private hostActionsLabel!: Phaser.GameObjects.Text;
-  private readyBtn!:      Phaser.GameObjects.Rectangle;
+  private readyBtn!:      Phaser.GameObjects.Image;
   private readyBtnLabel!: Phaser.GameObjects.Text;
-  private copyBtn!:       Phaser.GameObjects.Rectangle;
+  private copyBtn!:       Phaser.GameObjects.Image;
   private copyBtnLabel!:  Phaser.GameObjects.Text;
-  private retryBtn!:      Phaser.GameObjects.Rectangle;
+  private retryBtn!:      Phaser.GameObjects.Image;
   private retryBtnLabel!: Phaser.GameObjects.Text;
-  private autoBtn!:       Phaser.GameObjects.Rectangle;
+  private autoBtn!:       Phaser.GameObjects.Image;
   private autoBtnLabel!:  Phaser.GameObjects.Text;
   private levelHeaderText: Phaser.GameObjects.Text | null = null;
   private coopProgressContainer: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressTotalXpText: Phaser.GameObjects.Text | null = null;
   private coopProgressNextLevelText: Phaser.GameObjects.Text | null = null;
-  private coopProgressUpgradesBtn: Phaser.GameObjects.Rectangle | null = null;
+  private coopProgressUpgradesBtn: Phaser.GameObjects.Image | null = null;
   private coopProgressUpgradesBtnLabel: Phaser.GameObjects.Text | null = null;
   private visible         = false;
   private btnLocked       = false;
@@ -124,8 +136,10 @@ export class LobbyOverlay {
 
     // ── Panel ─────────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, PANEL_W, PANEL_H, PANEL_COLOR, 0.95)
-        .setStrokeStyle(3, COLORS.BROWN_4).setScrollFactor(0),
+      this.scene.add.image(
+        GAME_WIDTH / 2, GAME_HEIGHT / 2,
+        ensureModalPanelTexture(this.scene, '_lobby_panel', PANEL_W, PANEL_H, PANEL_COLOR, ACCENT),
+      ).setScrollFactor(0),
     );
 
     // ── Status-Text ───────────────────────────────────────────────────────
@@ -154,16 +168,18 @@ export class LobbyOverlay {
 
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 72, PANEL_W - 40, 2, COLORS.BROWN_4)
+      this.scene.add.rectangle(GAME_WIDTH / 2, PANEL_Y + 72, PANEL_W - 40, 1, COLORS.GREY_5, 0.6)
         .setScrollFactor(0),
     );
 
     // ── Bereit-Button ─────────────────────────────────────────────────────
-    this.readyBtn = this.scene.add.rectangle(READY_BTN_X, READY_BTN_Y, READY_BTN_W, READY_BTN_H, UNREADY_COLOR)
-      .setStrokeStyle(2, COLORS.RED_2)
+    this.readyBtn = this.scene.add.image(
+      READY_BTN_X, READY_BTN_Y,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(UNREADY_COLOR, READY_BTN_W, READY_BTN_H), READY_BTN_W, READY_BTN_H, UNREADY_COLOR, COLORS.RED_2),
+    )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onReadyToggled(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.readyBtn.setAlpha(0.8); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.readyBtn.setAlpha(0.85); })
       .on('pointerout',   () => this.readyBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.readyBtn);
@@ -178,11 +194,13 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.hostActionsLabel);
 
-    this.copyBtn = this.scene.add.rectangle(COPY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, BTN_COPY_COLOR)
-      .setStrokeStyle(1, COLORS.BLUE_3)
+    this.copyBtn = this.scene.add.image(
+      COPY_BTN_X, ACTION_BTN_Y,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_COPY_COLOR, ACTION_BTN_W, ACTION_BTN_H), ACTION_BTN_W, ACTION_BTN_H, BTN_COPY_COLOR),
+    )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onCopyRoomLink(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.copyBtn.setAlpha(0.8); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.copyBtn.setAlpha(0.85); })
       .on('pointerout',   () => this.copyBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.copyBtn);
@@ -192,11 +210,13 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.copyBtnLabel);
 
-    this.retryBtn = this.scene.add.rectangle(RETRY_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, BTN_RETRY_COLOR)
-      .setStrokeStyle(1, COLORS.GOLD_3)
+    this.retryBtn = this.scene.add.image(
+      RETRY_BTN_X, ACTION_BTN_Y,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_RETRY_COLOR, ACTION_BTN_W, ACTION_BTN_H), ACTION_BTN_W, ACTION_BTN_H, BTN_RETRY_COLOR),
+    )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onRetryRoom(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.retryBtn.setAlpha(0.8); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.retryBtn.setAlpha(0.85); })
       .on('pointerout',   () => this.retryBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.retryBtn);
@@ -206,11 +226,13 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.retryBtnLabel);
 
-    this.autoBtn = this.scene.add.rectangle(AUTO_BTN_X, ACTION_BTN_Y, ACTION_BTN_W, ACTION_BTN_H, BTN_AUTO_COLOR)
-      .setStrokeStyle(1, COLORS.GREEN_3)
+    this.autoBtn = this.scene.add.image(
+      AUTO_BTN_X, ACTION_BTN_Y,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_AUTO_COLOR, ACTION_BTN_W, ACTION_BTN_H), ACTION_BTN_W, ACTION_BTN_H, BTN_AUTO_COLOR),
+    )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onStartAutomaticRoomSearch(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.autoBtn.setAlpha(0.8); })
+      .on('pointerover',  () => { if (!this.btnLocked) this.autoBtn.setAlpha(0.85); })
       .on('pointerout',   () => this.autoBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.autoBtn);
@@ -220,9 +242,10 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.autoBtnLabel);
 
-    const coopProgressBg = this.scene.add.rectangle(READY_BTN_X, COOP_PROGRESS_PANEL_Y, COOP_PROGRESS_PANEL_W, COOP_PROGRESS_PANEL_H, COLORS.GREY_7, 0.96)
-      .setStrokeStyle(1, COLORS.BROWN_4)
-      .setScrollFactor(0);
+    const coopProgressBg = this.scene.add.image(
+      READY_BTN_X, COOP_PROGRESS_PANEL_Y,
+      ensureTintedSectionTexture(this.scene, '_lobby_coop_panel', COOP_PROGRESS_PANEL_W, COOP_PROGRESS_PANEL_H, COLORS.GOLD_3, COLORS.GREY_8),
+    ).setScrollFactor(0);
     const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 48, 'Dachs vs. Zombies Fortschritt', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
@@ -235,11 +258,13 @@ export class LobbyOverlay {
     this.coopProgressNextLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 28, '25 XP bis Level 2', {
       fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressUpgradesBtn = this.scene.add.rectangle(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 56, 140, 30, COLORS.BLUE_5)
-      .setStrokeStyle(1, COLORS.BLUE_3)
+    this.coopProgressUpgradesBtn = this.scene.add.image(
+      READY_BTN_X, COOP_PROGRESS_PANEL_Y + 56,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_UPGRADES_COLOR, 140, 30), 140, 30, BTN_UPGRADES_COLOR),
+    )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.onOpenCoopDefenseUpgrades())
-      .on('pointerover', () => this.coopProgressUpgradesBtn?.setAlpha(0.8))
+      .on('pointerover', () => this.coopProgressUpgradesBtn?.setAlpha(0.85))
       .on('pointerout', () => this.coopProgressUpgradesBtn?.setAlpha(1))
       .setScrollFactor(0);
     this.coopProgressUpgradesBtnLabel = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 56, 'UPGRADES', {
@@ -344,8 +369,10 @@ export class LobbyOverlay {
   /** Button-Zustand nach isReady-Toggle anpassen. */
   setReadyButtonState(isReady: boolean): void {
     this.btnLocked = false;
-    this.readyBtn.setFillStyle(isReady ? READY_COLOR : UNREADY_COLOR)
-      .setStrokeStyle(2, isReady ? COLORS.GREEN_2 : COLORS.RED_2).setAlpha(1);
+    const readyTex = isReady
+      ? ensureGlossyButtonTexture(this.scene, btnTexKey(READY_COLOR, READY_BTN_W, READY_BTN_H), READY_BTN_W, READY_BTN_H, READY_COLOR, COLORS.GREEN_2)
+      : ensureGlossyButtonTexture(this.scene, btnTexKey(UNREADY_COLOR, READY_BTN_W, READY_BTN_H), READY_BTN_W, READY_BTN_H, UNREADY_COLOR, COLORS.RED_2);
+    this.readyBtn.setTexture(readyTex).setAlpha(1);
     this.readyBtnLabel.setText(isReady ? 'NICHT BEREIT' : 'BEREIT');
     this.readyBtn.setInteractive({ useHandCursor: true });
     this.updateRoomActionButtons();
@@ -381,8 +408,10 @@ export class LobbyOverlay {
     const idx = this.playerRows.size;
     const y   = LIST_Y + idx * ROW_H;
 
-    const bg = this.scene.add.rectangle(GAME_WIDTH / 2, y, PANEL_W - 40, ROW_H - 6, COLORS.GREY_7)
-      .setOrigin(0.5, 0).setStrokeStyle(1, COLORS.GREY_6).setScrollFactor(0);
+    const bg = this.scene.add.image(
+      GAME_WIDTH / 2, y,
+      ensureFlatPanelTexture(this.scene, '_lobby_row', PANEL_W - 40, ROW_H - 6, COLORS.GREY_7, COLORS.GREY_5, { radius: 8, fillAlpha: 0.85 }),
+    ).setOrigin(0.5, 0).setScrollFactor(0);
     const name = this.scene.add.text(LIST_X + 40, y + 10, profile.name, {
       fontSize: '22px', fontFamily: 'monospace',
       color: `#${profile.colorHex.toString(16).padStart(6, '0')}`,

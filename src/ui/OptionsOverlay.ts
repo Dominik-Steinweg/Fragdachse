@@ -10,6 +10,7 @@ import type { AudioAssetKey } from '../audio/AudioCatalog';
 import { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { LivingBarPalette } from './LivingBarEffect';
 import { LivingBarEffect } from './LivingBarEffect';
+import { ensureModalPanelTexture } from './uiTextures';
 import { setStoredEffectsVolume, setStoredMasterVolume, setStoredMusicVolume } from '../utils/localPreferences';
 
 const PANEL_W = 680;
@@ -156,9 +157,10 @@ export class OptionsOverlay {
       .setScrollFactor(0);
     objects.push(this.dimRect);
 
-    const panel = this.scene.add.rectangle(CX, CY, PANEL_W, PANEL_H, PANEL_BG, PANEL_ALPHA)
-      .setStrokeStyle(2, ACCENT)
-      .setScrollFactor(0);
+    const panel = this.scene.add.image(
+      CX, CY,
+      ensureModalPanelTexture(this.scene, '_options_panel', PANEL_W, PANEL_H, PANEL_BG, ACCENT),
+    ).setScrollFactor(0);
     objects.push(panel);
 
     objects.push(
