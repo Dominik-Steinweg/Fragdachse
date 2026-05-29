@@ -59,11 +59,13 @@ const BAR_W = PANEL_W - 140;
 const BAR_H = 18;
 const BAR_X = CX - BAR_W / 2;
 const BAR_Y = SUBTITLE_Y + 48;
-const POINTS_Y = BAR_Y + 38;
-const POINTS_TEXT_OFFSET_Y = 8;
+const PROGRESS_LABEL_Y = BAR_Y + 22;
+const HEADER_DIVIDER_Y = PROGRESS_LABEL_Y + 30;
+const HEADER_DIVIDER_W = 360;
+const POINTS_Y = HEADER_DIVIDER_Y + 32;
 const FOOTER_Y = CY + PANEL_H / 2 - 28;
 
-const TAB_TOP = POINTS_Y + 28;
+const TAB_TOP = POINTS_Y + 48;
 const TAB_H = 36;
 const TAB_GAP = 12;
 const TAB_MAX_W = 240;
@@ -203,6 +205,8 @@ export class CoopDefenseUpgradesOverlay {
   private nodeEffects: LivingBarEffect[] = [];
   private nodeGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
   private decorationTweens: Phaser.Tweens.Tween[] = [];
+  private tabGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
+  private tabTweens: Phaser.Tweens.Tween[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -240,6 +244,21 @@ export class CoopDefenseUpgradesOverlay {
       .setInteractive();
     objects.push(panel);
 
+    // Grosser roter Schliessen-Button oben rechts.
+    const closeX = CX + PANEL_W / 2 - 42;
+    const closeY = CY - PANEL_H / 2 + 42;
+    const closeBg = this.scene.add.image(closeX, closeY, this.ensureCloseButtonTexture())
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    const closeGlyph = this.scene.add.text(closeX, closeY, '✕', {
+      fontSize: '30px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+    }).setOrigin(0.5).setScrollFactor(0);
+    closeBg.on('pointerover', () => closeBg.setAlpha(0.82));
+    closeBg.on('pointerout', () => closeBg.setAlpha(1));
+    closeBg.on('pointerdown', () => this.hide());
+    objects.push(closeBg);
+    objects.push(closeGlyph);
+
     objects.push(
       this.scene.add.text(CX, TITLE_Y, 'UPGRADES', {
         fontSize: '28px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(ACCENT),
@@ -272,12 +291,18 @@ export class CoopDefenseUpgradesOverlay {
     this.progressFill.setCrop(0, 0, BAR_W, BAR_H);
     objects.push(this.progressFill);
 
-    this.progressLabelText = this.scene.add.text(CX, BAR_Y + 22, '0 / 25 XP bis zum naechsten Level', {
-      fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+    this.progressLabelText = this.scene.add.text(CX, PROGRESS_LABEL_Y, '500 XP bis Level 26', {
+      fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
     }).setOrigin(0.5, 0).setScrollFactor(0);
     objects.push(this.progressLabelText);
 
-    this.pointsText = this.scene.add.text(CX, POINTS_Y + POINTS_TEXT_OFFSET_Y, '0 Upgrade-Punkte verfuegbar', {
+    // Schlichte Trennlinie zwischen Level-Fortschritt und Upgrade-Punkten.
+    objects.push(
+      this.scene.add.rectangle(CX, HEADER_DIVIDER_Y, HEADER_DIVIDER_W, 1, COLORS.GREY_5, 0.6)
+        .setScrollFactor(0),
+    );
+
+    this.pointsText = this.scene.add.text(CX, POINTS_Y, '0 Upgrade-Punkte verfuegbar', {
       fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.pointsText);
@@ -366,7 +391,8 @@ export class CoopDefenseUpgradesOverlay {
     const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
     this.progressFill.setCrop(0, 0, fillW, BAR_H);
     this.xpBarEffect?.setFilledWidth(fillW);
-    this.progressLabelText.setText(`${progress.xpIntoLevel} / ${levelXpSpan} XP bis zum naechsten Level`);
+    const remainingXp = Math.max(0, levelXpSpan - progress.xpIntoLevel);
+    this.progressLabelText.setText(`${remainingXp} XP bis Level ${progress.level + 1}`);
 
     const categoryCount = progress.upgradeCategories.length;
     if (categoryCount > 0) {
@@ -416,6 +442,7 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     this.clearNodeDecorations();
+    this.clearTabDecorations();
     this.xpBarEffect?.stop();
 
     this.scene.tweens.add({
@@ -443,6 +470,7 @@ export class CoopDefenseUpgradesOverlay {
       this.keyHandler = null;
     }
     this.clearNodeDecorations();
+    this.clearTabDecorations();
     this.xpBarEffect?.destroy();
     this.xpBarEffect = null;
     this.container?.destroy(true);
@@ -460,8 +488,18 @@ export class CoopDefenseUpgradesOverlay {
     this.renderActiveCategory(progress);
   }
 
+  private clearTabDecorations(): void {
+    for (const tween of this.tabTweens) tween.destroy();
+    this.tabTweens = [];
+    for (const { target, glow } of this.tabGlows) {
+      if (target.active) removeExternalFx(target, glow);
+    }
+    this.tabGlows = [];
+  }
+
   private renderTabs(progress: CoopDefenseProgressSnapshot): void {
     if (!this.tabsContainer) return;
+    this.clearTabDecorations();
     this.tabsContainer.removeAll(true);
 
     const categories = progress.upgradeCategories;
@@ -483,6 +521,22 @@ export class CoopDefenseUpgradesOverlay {
         .setAlpha(restAlpha)
         .setInteractive({ useHandCursor: !isActive });
       this.tabsContainer!.add(bg);
+
+      if (isActive) {
+        // Leichter, atmender Glow am aktiven Tab in Kategorie-Farbe.
+        const glow = addExternalGlow(bg, visuals.connector, 0.7, 0, false, 0.1, 6);
+        if (glow) {
+          this.tabGlows.push({ target: bg, glow });
+          this.tabTweens.push(this.scene.tweens.add({
+            targets: glow,
+            outerStrength: 1.7,
+            duration: 1800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          }));
+        }
+      }
 
       const label = this.scene.add.text(centerX, TAB_TOP + TAB_H / 2, category.label, {
         fontSize: '15px',
@@ -517,15 +571,16 @@ export class CoopDefenseUpgradesOverlay {
         highlightAlpha: 0.26,
       });
     }
+    // Passiv: dunkel, aber mit angedeuteter Kategorie-Farbe.
     return this.ensureRoundedTexture({
-      key: `_ccdtab_${w}_off`,
+      key: `_ccdtab_${w}_${visuals.nodeBase.toString(16)}_off`,
       w,
       h: TAB_H,
       radius: 10,
-      topColor: lerpColor(COLORS.GREY_7, 0xffffff, 0.05),
-      bottomColor: COLORS.GREY_9,
+      topColor: lerpColor(COLORS.GREY_7, visuals.nodeBase, 0.22),
+      bottomColor: lerpColor(COLORS.GREY_9, visuals.nodeBase, 0.14),
       fillAlpha: 0.85,
-      strokeColor: COLORS.GREY_5,
+      strokeColor: lerpColor(COLORS.GREY_5, visuals.nodeStroke, 0.35),
       strokeAlpha: 0.7,
       strokeWidth: 1.5,
       highlightAlpha: 0.06,
@@ -799,7 +854,7 @@ export class CoopDefenseUpgradesOverlay {
     const chain = this.scene.tweens.chain({
       targets: dot,
       loop: -1,
-      loopDelay: 250,
+      loopDelay: 0,
       tweens,
       onLoop: () => dot.setPosition(points[0].x, points[0].y),
     });
@@ -862,7 +917,7 @@ export class CoopDefenseUpgradesOverlay {
           innerW,
           fillHeight,
           fillPalette,
-          { scrollFactor: 0, intensity: 0.55 },
+          { scrollFactor: 0, intensity: 0.32 },
         );
         effect.setFilledWidth(innerW);
         this.nodeEffects.push(effect);
@@ -1068,6 +1123,22 @@ export class CoopDefenseUpgradesOverlay {
       strokeAlpha: 0.5,
       strokeWidth: 2,
       highlightAlpha: 0.05,
+    });
+  }
+
+  private ensureCloseButtonTexture(): string {
+    return this.ensureRoundedTexture({
+      key: '_ccd_close',
+      w: 46,
+      h: 46,
+      radius: 12,
+      topColor: lerpColor(COLORS.RED_3, 0xffffff, 0.18),
+      bottomColor: lerpColor(COLORS.RED_4, 0x000000, 0.32),
+      fillAlpha: 0.97,
+      strokeColor: lerpColor(COLORS.RED_2, 0xffffff, 0.15),
+      strokeAlpha: 0.95,
+      strokeWidth: 2,
+      highlightAlpha: 0.26,
     });
   }
 
