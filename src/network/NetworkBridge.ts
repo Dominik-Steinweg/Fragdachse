@@ -31,6 +31,7 @@ export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
 const ALL_RPC_CHANNEL  = 'rpc_all';
+const OUTBOUND_RPC_BACKOFF_MS = 5000;
 
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
 const KEY_INPUT        = 'inp';
@@ -297,6 +298,8 @@ export class NetworkBridge {
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
+  private outboundRpcBlockedUntilMs = 0;
+  private lastOutboundRpcWarningAtMs = 0;
 
   constructor() {
     this.pingController = new NetworkPingController({
@@ -1865,21 +1868,57 @@ export class NetworkBridge {
   }
 
   private sendHostRpc(type: string, payload: unknown): void {
+    if (this.isOutboundRpcBlocked()) return;
     this.ensureRpcDispatchersRegistered();
-    RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST).catch(console.error);
+    RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST).catch((error: unknown) => {
+      this.handleOutboundRpcError(type, error);
+    });
   }
 
   private callHostRpc(type: string, payload: unknown, timeoutMs: number): Promise<unknown> {
+    if (this.isOutboundRpcBlocked()) {
+      return Promise.reject(new Error(`RPC temporarily unavailable: ${type}`));
+    }
     this.ensureRpcDispatchersRegistered();
+    const rpcPromise = RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST).catch((error: unknown) => {
+      this.handleOutboundRpcError(type, error);
+      throw error;
+    });
     return Promise.race([
-      RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST),
+      rpcPromise,
       new Promise((_, reject) => window.setTimeout(() => reject(new Error(`RPC timeout: ${type}`)), timeoutMs)),
     ]);
   }
 
   private broadcastRpc(type: string, payload: unknown): void {
+    if (this.isOutboundRpcBlocked()) return;
     this.ensureRpcDispatchersRegistered();
-    RPC.call(ALL_RPC_CHANNEL, { type, payload }, RPC.Mode.ALL).catch(console.error);
+    RPC.call(ALL_RPC_CHANNEL, { type, payload }, RPC.Mode.ALL).catch((error: unknown) => {
+      this.handleOutboundRpcError(type, error);
+    });
+  }
+
+  private isOutboundRpcBlocked(): boolean {
+    return Date.now() < this.outboundRpcBlockedUntilMs;
+  }
+
+  private handleOutboundRpcError(type: string, error: unknown): void {
+    if (this.isExpectedRpcTransportClose(error)) {
+      const now = Date.now();
+      this.outboundRpcBlockedUntilMs = Math.max(this.outboundRpcBlockedUntilMs, now + OUTBOUND_RPC_BACKOFF_MS);
+      if (now - this.lastOutboundRpcWarningAtMs >= OUTBOUND_RPC_BACKOFF_MS) {
+        this.lastOutboundRpcWarningAtMs = now;
+        console.warn(`[NetworkBridge] Suppressing outbound RPCs for ${OUTBOUND_RPC_BACKOFF_MS}ms after transport closed while sending '${type}'.`);
+      }
+      return;
+    }
+    console.error(error);
+  }
+
+  private isExpectedRpcTransportClose(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    return /websocket is already in closing or closed state/i.test(message)
+      || /socket.*closing|socket.*closed/i.test(message);
   }
 
   private registerHostRpcHandler(

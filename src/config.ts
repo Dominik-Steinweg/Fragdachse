@@ -622,8 +622,8 @@ export const NET_TICK_RATE_HZ     = 20;
 export const NET_TICK_INTERVAL_MS = 1000 / NET_TICK_RATE_HZ;  // 50 ms
 /** Zeitbasierte Glättung für Client-Interpolation (ms). ~1.5× Tick-Intervall. */
 export const NET_SMOOTH_TIME_MS   = 80;
-/** Ein kompletter Enemy-Resync pro Sekunde korrigiert verlorene Delta-Frames. */
-export const ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
+/** Ein kompletter Enemy-Resync alle zwei Sekunden korrigiert verlorene Delta-Frames und reduziert Peak-Payloads. */
+export const ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ * 2;
 /** Positionsänderungen unterhalb dieses Deltas bleiben bis zum nächsten Dirty-Frame lokal. */
 export const ENEMY_NET_POSITION_DELTA_PX = 4;
 /** Kleine Rotationsänderungen werden erst gesammelt und dann als Delta gesendet. */
