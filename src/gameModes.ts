@@ -3,6 +3,13 @@ import type { GameMode, TeamId } from './types';
 export const CAPTURE_THE_BEER_MODE: GameMode = 'capture_the_beer';
 export const COOP_DEFENSE_MODE: GameMode = 'coop_defense';
 
+const MIN_PLAYERS_BY_MODE: Record<GameMode, number> = {
+  deathmatch: 2,
+  team_deathmatch: 2,
+  capture_the_beer: 2,
+  [COOP_DEFENSE_MODE]: 1,
+};
+
 export function isTeamGameMode(mode: GameMode): boolean {
   return mode === 'team_deathmatch' || mode === CAPTURE_THE_BEER_MODE || mode === COOP_DEFENSE_MODE;
 }
@@ -27,6 +34,10 @@ export function usesExpandedArena(mode: GameMode): boolean {
 
 export function usesDynamicCamera(mode: GameMode): boolean {
   return mode === CAPTURE_THE_BEER_MODE;
+}
+
+export function getMinPlayersForMode(mode: GameMode): number {
+  return MIN_PLAYERS_BY_MODE[mode];
 }
 
 export function getGameModeLabel(mode: GameMode): string {

@@ -15,7 +15,7 @@ import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
-import { isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
+import { getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
@@ -590,11 +590,12 @@ export class NetworkBridge {
     return this.getPlayerCommittedLoadout(playerId)?.coopDefenseProfile !== null;
   }
 
-  /** Gibt zurück ob ALLE aktuell verbundenen Spieler bereit sind (min. 2). */
+  /** Gibt zurück ob ALLE aktuell verbundenen Spieler bereit sind (modusabhängige Mindestspielerzahl). */
   areAllPlayersReady(): boolean {
+    const mode = this.getGameMode();
     const ids = [...this.connectedPlayers.keys()];
-    if (ids.length < 2) return false;
-    const requiresCoopDefenseProfile = isCoopDefenseMode(this.getGameMode());
+    if (ids.length < getMinPlayersForMode(mode)) return false;
+    const requiresCoopDefenseProfile = isCoopDefenseMode(mode);
     return ids.every((id) => (
       this.getPlayerReady(id)
       && this.hasCommittedLoadout(id)

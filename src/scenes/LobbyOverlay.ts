@@ -10,7 +10,7 @@ import {
   GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
 } from '../config';
-import { hasTeamSelection, isCoopDefenseMode } from '../gameModes';
+import { getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode } from '../gameModes';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ export class LobbyOverlay {
     );
 
     // ── Status-Text ───────────────────────────────────────────────────────
-    this.statusText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 20, 'Warte auf Mitspieler…', {
+    this.statusText = this.scene.add.text(GAME_WIDTH / 2, PANEL_Y + 20, this.getWaitingStatusText(0), {
       fontSize: '20px', fontFamily: 'monospace', color: ACCENT_COLOR, fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.statusText);
@@ -483,9 +483,16 @@ export class LobbyOverlay {
     }
   }
 
+  private getWaitingStatusText(playerCount: number): string {
+    const minPlayers = getMinPlayersForMode(this.bridge.getGameMode());
+    if (minPlayers <= 1) return `${playerCount} / ${minPlayers} Spieler bereit zum Start`;
+    return `Warte auf Mitspieler… (${playerCount} / ${minPlayers})`;
+  }
+
   private updateStatus(playerCount: number): void {
-    if (playerCount < 2) {
-      this.statusText.setText('Warte auf Mitspieler…').setStyle({ color: ACCENT_COLOR });
+    const minPlayers = getMinPlayersForMode(this.bridge.getGameMode());
+    if (playerCount < minPlayers) {
+      this.statusText.setText(this.getWaitingStatusText(playerCount)).setStyle({ color: ACCENT_COLOR });
     } else {
       const readyCount = [...this.playerRows.keys()]
         .filter(id => this.bridge.getPlayerReady(id)).length;
