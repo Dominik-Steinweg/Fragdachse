@@ -63,6 +63,10 @@ const PROGRESS_LABEL_Y = BAR_Y + 22;
 const HEADER_DIVIDER_Y = PROGRESS_LABEL_Y + 30;
 const HEADER_DIVIDER_W = 360;
 const POINTS_Y = HEADER_DIVIDER_Y + 32;
+const POINTS_CHIP_W = 320;
+const POINTS_CHIP_H = 40;
+const RESPEC_W = 180;
+const RESPEC_H = 38;
 const FOOTER_Y = CY + PANEL_H / 2 - 28;
 
 const TAB_TOP = POINTS_Y + 48;
@@ -185,6 +189,10 @@ export class CoopDefenseUpgradesOverlay {
   private levelText: Phaser.GameObjects.Text | null = null;
   private xpText: Phaser.GameObjects.Text | null = null;
   private pointsText: Phaser.GameObjects.Text | null = null;
+  private pointsChip: Phaser.GameObjects.Image | null = null;
+  private respecButton: Phaser.GameObjects.Image | null = null;
+  private respecLabel: Phaser.GameObjects.Text | null = null;
+  private respecEnabled = false;
   private progressFill: Phaser.GameObjects.Image | null = null;
   private xpBarEffect: LivingBarEffect | null = null;
   private progressLabelText: Phaser.GameObjects.Text | null = null;
@@ -213,6 +221,7 @@ export class CoopDefenseUpgradesOverlay {
     private readonly getProgress: () => CoopDefenseProgressSnapshot,
     private readonly onLevelUpUpgrade: (upgradeId: string) => boolean,
     private readonly onLevelDownUpgrade: (upgradeId: string) => boolean,
+    private readonly onFullRespec: () => boolean,
   ) {}
 
   build(): void {
@@ -222,6 +231,9 @@ export class CoopDefenseUpgradesOverlay {
     this.levelText = null;
     this.xpText = null;
     this.pointsText = null;
+    this.pointsChip = null;
+    this.respecButton = null;
+    this.respecLabel = null;
     this.progressFill = null;
     this.progressLabelText = null;
     this.contentBg = null;
@@ -283,7 +295,12 @@ export class CoopDefenseUpgradesOverlay {
 
     // Modern XP bar: gradient image cropped to fill width + living particle/glow effect.
     ensureLivingBarTextures(this.scene);
-    const xpPalette = paletteFromColor(COLORS.GREEN_3);
+    // Knalligere, hellere XP-Leiste (kein gedecktes Gruen).
+    const xpPalette: LivingBarPalette = {
+      dark: COLORS.GREEN_4,
+      mid: COLORS.GREEN_2,
+      light: COLORS.GREEN_1,
+    };
     createGradientTexture(this.scene, XP_BAR_TEX_KEY, xpPalette, BAR_W, BAR_H);
     this.progressFill = this.scene.add.image(BAR_X, BAR_Y, XP_BAR_TEX_KEY)
       .setOrigin(0, 0.5)
@@ -302,10 +319,39 @@ export class CoopDefenseUpgradesOverlay {
         .setScrollFactor(0),
     );
 
-    this.pointsText = this.scene.add.text(CX, POINTS_Y, '0 Upgrade-Punkte verfuegbar', {
-      fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
+    // Eingefasster, flacher "Status"-Chip fuer verfuegbare Upgrade-Punkte.
+    // Bewusst matt/flach gehalten, damit er nicht wie ein drueckbarer Button wirkt.
+    const pointsChipX = CX - 90;
+    this.pointsChip = this.scene.add.image(pointsChipX, POINTS_Y, this.ensurePointsChipTexture(true))
+      .setScrollFactor(0);
+    objects.push(this.pointsChip);
+
+    this.pointsText = this.scene.add.text(pointsChipX, POINTS_Y, '0 Upgrade-Punkte verfuegbar', {
+      fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.pointsText);
+
+    // "Full Respec"-Button rechts, ungefaehr auf Hoehe der Punkte-Anzeige.
+    const respecX = BAR_X + BAR_W - RESPEC_W / 2;
+    this.respecButton = this.scene.add.image(respecX, POINTS_Y, this.ensureRespecButtonTexture())
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    this.respecButton.on('pointerover', () => {
+      if (this.respecEnabled) this.respecButton?.setAlpha(0.85);
+    });
+    this.respecButton.on('pointerout', () => {
+      if (this.respecEnabled) this.respecButton?.setAlpha(1);
+    });
+    this.respecButton.on('pointerdown', () => {
+      if (!this.respecEnabled) return;
+      if (this.onFullRespec()) this.refresh();
+    });
+    objects.push(this.respecButton);
+
+    this.respecLabel = this.scene.add.text(respecX, POINTS_Y, 'FULL RESPEC', {
+      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(this.respecLabel);
 
     this.tabsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.tabsContainer);
@@ -361,7 +407,7 @@ export class CoopDefenseUpgradesOverlay {
       BAR_W,
       BAR_H,
       xpPalette,
-      { glowTarget: this.progressFill, scrollFactor: 0, intensity: 1.0 },
+      { glowTarget: this.progressFill, scrollFactor: 0, intensity: 1.35 },
     );
 
     this.refresh();
@@ -387,7 +433,20 @@ export class CoopDefenseUpgradesOverlay {
 
     this.levelText.setText(`Level ${progress.level}`);
     this.xpText.setText(`${progress.totalXp} XP gesamt`);
+
+    const hasPoints = progress.availableUpgradePoints > 0;
     this.pointsText.setText(`${progress.availableUpgradePoints} Upgrade-Punkte verfuegbar`);
+    this.pointsText.setColor(toCssColor(hasPoints ? COLORS.BLUE_1 : COLORS.GREY_4));
+    this.pointsChip?.setTexture(this.ensurePointsChipTexture(hasPoints));
+
+    // Respec nur moeglich, wenn irgendein zuruecknehmbares Upgrade ueber Startlevel ist.
+    this.respecEnabled = progress.upgradeCategories.some((category) =>
+      category.upgrades.some((upgrade) => upgrade.refundable && upgrade.level > upgrade.startingLevel),
+    );
+    if (this.respecButton) this.respecButton.setAlpha(this.respecEnabled ? 1 : 0.4);
+    if (this.respecLabel) {
+      this.respecLabel.setColor(toCssColor(this.respecEnabled ? COLORS.GREY_10 : COLORS.GREY_5));
+    }
     const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
     this.progressFill.setCrop(0, 0, fillW, BAR_H);
     this.xpBarEffect?.setFilledWidth(fillW);
@@ -1142,6 +1201,54 @@ export class CoopDefenseUpgradesOverlay {
       strokeAlpha: 0.95,
       strokeWidth: 2,
       highlightAlpha: 0.26,
+    });
+  }
+
+  private ensurePointsChipTexture(active: boolean): string {
+    // Flach, ohne Glanz-Highlight -> klar als Status-Anzeige (kein Button) lesbar.
+    if (active) {
+      return this.ensureRoundedTexture({
+        key: '_ccd_points_on',
+        w: POINTS_CHIP_W,
+        h: POINTS_CHIP_H,
+        radius: 10,
+        topColor: lerpColor(COLORS.GREY_8, COLORS.BLUE_3, 0.30),
+        bottomColor: lerpColor(COLORS.GREY_9, COLORS.BLUE_4, 0.16),
+        fillAlpha: 0.55,
+        strokeColor: lerpColor(COLORS.BLUE_2, COLORS.GREY_4, 0.25),
+        strokeAlpha: 0.6,
+        strokeWidth: 1.5,
+        highlightAlpha: 0,
+      });
+    }
+    return this.ensureRoundedTexture({
+      key: '_ccd_points_off',
+      w: POINTS_CHIP_W,
+      h: POINTS_CHIP_H,
+      radius: 10,
+      topColor: COLORS.GREY_8,
+      bottomColor: COLORS.GREY_9,
+      fillAlpha: 0.45,
+      strokeColor: COLORS.GREY_6,
+      strokeAlpha: 0.5,
+      strokeWidth: 1.5,
+      highlightAlpha: 0,
+    });
+  }
+
+  private ensureRespecButtonTexture(): string {
+    return this.ensureRoundedTexture({
+      key: '_ccd_respec',
+      w: RESPEC_W,
+      h: RESPEC_H,
+      radius: 11,
+      topColor: lerpColor(COLORS.RED_3, 0xffffff, 0.16),
+      bottomColor: lerpColor(COLORS.RED_4, 0x000000, 0.30),
+      fillAlpha: 0.97,
+      strokeColor: lerpColor(COLORS.RED_2, 0xffffff, 0.12),
+      strokeAlpha: 0.9,
+      strokeWidth: 2,
+      highlightAlpha: 0.24,
     });
   }
 

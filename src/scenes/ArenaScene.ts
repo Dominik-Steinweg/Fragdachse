@@ -64,6 +64,7 @@ import {
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
+  buildDefaultCoopDefenseUpgradeProfile,
   levelDownCoopDefenseUpgrade,
   levelUpCoopDefenseUpgrade,
 } from '../utils/coopDefenseUpgrades';
@@ -307,6 +308,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.coopDefenseProgress,
       (upgradeId) => this.levelUpCoopDefenseUpgrade(upgradeId),
       (upgradeId) => this.levelDownCoopDefenseUpgrade(upgradeId),
+      () => this.fullRespecCoopDefenseUpgrades(),
     );
     this.coopDefenseUpgradesOverlay.build();
 
@@ -938,6 +940,17 @@ export class ArenaScene extends Phaser.Scene {
     const stored = getStoredCoopDefenseProgress();
     const nextProfile = levelDownCoopDefenseUpgrade(stored.profile, upgradeId);
     if (!nextProfile) return false;
+
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    setStoredCoopDefenseUpgradeProfile(nextProfile);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    return true;
+  }
+
+  private fullRespecCoopDefenseUpgrades(): boolean {
+    const nextProfile = buildDefaultCoopDefenseUpgradeProfile();
 
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
