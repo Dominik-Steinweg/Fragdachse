@@ -1,9 +1,28 @@
 import * as Phaser from 'phaser';
+import { BLOOD_HIT_VFX } from '../config';
 import { ensureCanvasTexture } from './EffectUtils';
 
 export const TEX_BLOOD_DROPLET = '__blood_droplet';
 export const TEX_BLOOD_STREAK = '__blood_streak';
 export const TEX_BLOOD_STAIN = '__blood_stain';
+
+const activeBloodStains: Phaser.GameObjects.Image[] = [];
+
+function pruneDestroyedBloodStains(): void {
+  for (let index = activeBloodStains.length - 1; index >= 0; index -= 1) {
+    const stain = activeBloodStains[index];
+    if (!stain?.active) {
+      activeBloodStains.splice(index, 1);
+    }
+  }
+}
+
+function unregisterBloodStain(stain: Phaser.GameObjects.Image): void {
+  const index = activeBloodStains.indexOf(stain);
+  if (index >= 0) {
+    activeBloodStains.splice(index, 1);
+  }
+}
 
 function resolveTextures(target: Phaser.Scene | Phaser.Textures.TextureManager): Phaser.Textures.TextureManager {
   return 'textures' in target ? target.textures : target;
@@ -70,12 +89,21 @@ export interface BloodStainSpawnConfig {
 }
 
 export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConfig): Phaser.GameObjects.Image {
+  pruneDestroyedBloodStains();
+  while (activeBloodStains.length >= BLOOD_HIT_VFX.maxActiveStains) {
+    const oldest = activeBloodStains.shift();
+    oldest?.destroy();
+  }
+
   const stain = scene.add.image(config.x, config.y, TEX_BLOOD_STAIN)
     .setDepth(config.depth)
     .setTint(config.tint)
     .setAlpha(0)
     .setScale(config.scale * 0.82)
     .setRotation(config.rotation);
+
+  activeBloodStains.push(stain);
+  stain.once(Phaser.GameObjects.Events.DESTROY, () => unregisterBloodStain(stain));
 
   scene.tweens.add({
     targets: stain,

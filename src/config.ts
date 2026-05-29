@@ -219,6 +219,7 @@ export const BLOOD_HIT_VFX = {
   spawnPushPx: PLAYER_SIZE * 0.18,
   lateralJitterPx: 8,
   killshotMultiplier: 2.5,
+  maxActiveStains: 500,
   palette: [0x3c070b, 0x5b0d12, 0x76171b, 0x8d2429] as const,
   coreSplashScale: 1.30,
   coreSplashAlpha: 0.88,
