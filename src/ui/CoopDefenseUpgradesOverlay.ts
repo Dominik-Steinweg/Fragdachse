@@ -38,13 +38,14 @@ const CONTENT_X = CX - CONTENT_W / 2;
 const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP;
 const CONTENT_Y = CONTENT_TOP + CONTENT_H / 2;
 
-const NODE_W = 150;
-const NODE_H = 54;
+const NODE_W = 48;
+const NODE_H = 48;
+const ICON_SIZE = 32;
 const NODE_GAP_X = 18;
-const NODE_GAP_Y = 30;
-const ROW_GAP = 30;
-const NODE_INNER_PADDING = 3;
-const NODE_LABEL_FONT_SIZE = 12;
+const NODE_GAP_Y = 26;
+const ROW_GAP = 26;
+const NODE_INNER_PADDING = 2;
+const NODE_LABEL_FONT_SIZE = 9;
 
 const COLUMN_UNIT = NODE_W + NODE_GAP_X;
 const ROW_UNIT = NODE_H + NODE_GAP_Y;
@@ -52,6 +53,7 @@ const ROW_UNIT = NODE_H + NODE_GAP_Y;
 const TOOLTIP_OFFSET_X = 18;
 const TOOLTIP_OFFSET_Y = 18;
 const TOOLTIP_MAX_W = 320;
+const TOOLTIP_PADDING = 12;
 
 const BASE_UNLOCK_NODE_FILL = COLORS.GREY_5;
 const BASE_UNLOCK_NODE_STROKE = COLORS.GREY_2;
@@ -150,7 +152,9 @@ export class CoopDefenseUpgradesOverlay {
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
   private tooltipContainer: Phaser.GameObjects.Container | null = null;
   private tooltipBackground: Phaser.GameObjects.Rectangle | null = null;
-  private tooltipText: Phaser.GameObjects.Text | null = null;
+  private tooltipTitleText: Phaser.GameObjects.Text | null = null;
+  private tooltipDivider: Phaser.GameObjects.Rectangle | null = null;
+  private tooltipBodyText: Phaser.GameObjects.Text | null = null;
   private visible = false;
   private activeCategoryIndex = 0;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
@@ -176,7 +180,9 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer = null;
     this.tooltipContainer = null;
     this.tooltipBackground = null;
-    this.tooltipText = null;
+    this.tooltipTitleText = null;
+    this.tooltipDivider = null;
+    this.tooltipBodyText = null;
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -238,15 +244,27 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.upgradesContainer);
 
-    this.tooltipBackground = this.scene.add.rectangle(0, 0, 10, 10, COLORS.GREY_9, 0.96)
+    this.tooltipBackground = this.scene.add.rectangle(0, 0, 10, 10, COLORS.GREY_9, 0.97)
       .setOrigin(0, 0)
-      .setStrokeStyle(1, COLORS.GREY_4)
+      .setStrokeStyle(1, ACCENT)
       .setVisible(false)
       .setScrollFactor(0);
-    this.tooltipText = this.scene.add.text(0, 0, '', {
+    this.tooltipTitleText = this.scene.add.text(0, 0, '', {
+      fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(ACCENT), wordWrap: { width: TOOLTIP_MAX_W },
+    }).setOrigin(0, 0).setVisible(false).setScrollFactor(0);
+    this.tooltipDivider = this.scene.add.rectangle(0, 0, 10, 1, COLORS.GREY_4, 0.9)
+      .setOrigin(0, 0)
+      .setVisible(false)
+      .setScrollFactor(0);
+    this.tooltipBodyText = this.scene.add.text(0, 0, '', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), wordWrap: { width: TOOLTIP_MAX_W },
     }).setOrigin(0, 0).setVisible(false).setScrollFactor(0);
-    this.tooltipContainer = this.scene.add.container(0, 0, [this.tooltipBackground, this.tooltipText])
+    this.tooltipContainer = this.scene.add.container(0, 0, [
+      this.tooltipBackground,
+      this.tooltipTitleText,
+      this.tooltipDivider,
+      this.tooltipBodyText,
+    ])
       .setDepth(DEPTH.OVERLAY + 2)
       .setVisible(false);
     objects.push(this.tooltipContainer);
@@ -628,53 +646,56 @@ export class CoopDefenseUpgradesOverlay {
     const nodeActiveColor = isBaseUnlock ? BASE_UNLOCK_NODE_ACTIVE : visuals.nodeActive;
     const baseAlpha = isLocked ? 0.28 : node.level > 0 ? 0.96 : 0.72;
 
-    const iconKey = node.loadoutUnlock ? node.loadoutUnlock.itemId : `UPGRADE_${node.id.toUpperCase()}`;
-    const hasIcon = this.scene.textures.exists(iconKey);
+    const iconKey = this.getNodeTextureKey(node);
+    const hasIcon = iconKey != null && this.scene.textures.exists(iconKey);
 
     const baseRect = this.scene.add.rectangle(x, y, NODE_W, NODE_H, nodeBaseColor, baseAlpha)
       .setStrokeStyle(1, interactionEnabled || isBaseUnlock ? nodeStrokeColor : COLORS.GREY_5)
       .setScrollFactor(0);
     nodeGroup.add(baseRect);
 
-    if (hasIcon) {
-      const iconImg = this.scene.add.image(x - NODE_W / 2 + 24, y, iconKey)
-        .setScrollFactor(0)
-        .setAlpha(isLocked ? 0.35 : 1.0);
-      nodeGroup.add(iconImg);
-    }
-
-    const fillWidth = Math.max(0, (NODE_W - NODE_INNER_PADDING * 2) * progressFraction);
+    // Fortschritts-Fuellung steigt von unten hoch und scheint hinter dem transparenten Icon durch.
+    const fillHeight = Math.max(0, (NODE_H - NODE_INNER_PADDING * 2) * progressFraction);
     const activeFill = this.scene.add.rectangle(
-      x - NODE_W / 2 + NODE_INNER_PADDING,
-      y,
-      Math.max(0.001, fillWidth),
-      NODE_H - NODE_INNER_PADDING * 2,
+      x,
+      y + NODE_H / 2 - NODE_INNER_PADDING,
+      NODE_W - NODE_INNER_PADDING * 2,
+      Math.max(0.001, fillHeight),
       nodeActiveColor,
-      node.level > 0 ? 0.94 : 0,
+      node.level > 0 ? 0.55 : 0,
     )
-      .setOrigin(0, 0.5)
+      .setOrigin(0.5, 1)
       .setScrollFactor(0);
     nodeGroup.add(activeFill);
 
-    const labelWidth = hasIcon ? NODE_W - 52 : NODE_W - 16;
-    const labelX = hasIcon ? x - NODE_W / 2 + 46 : x;
-
-    const label = this.scene.add.text(labelX, y - (node.maxLevel > 1 ? 7 : 0), node.label, {
-      fontSize: `${NODE_LABEL_FONT_SIZE}px`,
-      fontFamily: 'monospace',
-      fontStyle: 'bold',
-      color: toCssColor(isBaseUnlock ? COLORS.GREY_10 : isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
-      align: hasIcon ? 'left' : 'center',
-      wordWrap: { width: labelWidth, useAdvancedWrap: true },
-    }).setOrigin(hasIcon ? 0 : 0.5, 0.5).setScrollFactor(0);
-    nodeGroup.add(label);
+    if (hasIcon && iconKey) {
+      const icon = this.scene.add.image(x, y, iconKey)
+        .setDisplaySize(ICON_SIZE, ICON_SIZE)
+        .setScrollFactor(0)
+        .setAlpha(isLocked ? 0.4 : 1);
+      nodeGroup.add(icon);
+    } else {
+      const fallback = this.scene.add.text(x, y, node.label, {
+        fontSize: `${NODE_LABEL_FONT_SIZE}px`,
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
+        align: 'center',
+        wordWrap: { width: NODE_W - 6, useAdvancedWrap: true },
+      }).setOrigin(0.5).setScrollFactor(0);
+      nodeGroup.add(fallback);
+    }
 
     if (node.maxLevel > 1) {
-      const levelText = this.scene.add.text(labelX, y + NODE_H / 2 - 9, `${node.level}/${node.maxLevel}`, {
+      const levelText = this.scene.add.text(x + NODE_W / 2 - 2, y + NODE_H / 2 - 1, `${node.level}/${node.maxLevel}`, {
         fontSize: '11px',
         fontFamily: 'monospace',
-        color: toCssColor(isLocked ? COLORS.GREY_5 : COLORS.GREY_2),
-      }).setOrigin(hasIcon ? 0 : 0.5, 0.5).setScrollFactor(0);
+        fontStyle: 'bold',
+        color: toCssColor(isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
+      })
+        .setOrigin(1, 1)
+        .setScrollFactor(0)
+        .setStroke(toCssColor(COLORS.GREY_10), 3);
       nodeGroup.add(levelText);
     }
 
@@ -702,18 +723,42 @@ export class CoopDefenseUpgradesOverlay {
     this.refresh();
   }
 
-  private showTooltip(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
-    if (!this.tooltipContainer || !this.tooltipBackground || !this.tooltipText) return;
+  private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
+    if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
+    if (node.kind === 'upgrade') return `UPGRADE_${node.id.toUpperCase()}`;
+    return null;
+  }
 
-    this.tooltipText.setText(this.buildTooltipText(node));
-    const width = this.tooltipText.width + 18;
-    const height = this.tooltipText.height + 16;
+  private showTooltip(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
+    if (
+      !this.tooltipContainer
+      || !this.tooltipBackground
+      || !this.tooltipTitleText
+      || !this.tooltipDivider
+      || !this.tooltipBodyText
+    ) return;
+
+    this.tooltipTitleText.setText(node.label);
+    this.tooltipBodyText.setText(this.buildTooltipBody(node));
+
+    const contentWidth = Math.max(this.tooltipTitleText.width, this.tooltipBodyText.width);
+    const width = contentWidth + TOOLTIP_PADDING * 2;
+
+    const titleY = TOOLTIP_PADDING;
+    const dividerY = titleY + this.tooltipTitleText.height + 6;
+    const bodyY = dividerY + 7;
+    const height = bodyY + this.tooltipBodyText.height + TOOLTIP_PADDING;
 
     this.tooltipBackground.setSize(width, height);
-    this.tooltipText.setPosition(9, 8);
+    this.tooltipTitleText.setPosition(TOOLTIP_PADDING, titleY);
+    this.tooltipDivider.setPosition(TOOLTIP_PADDING, dividerY).setSize(contentWidth, 1);
+    this.tooltipBodyText.setPosition(TOOLTIP_PADDING, bodyY);
+
     this.tooltipContainer.setVisible(true);
     this.tooltipBackground.setVisible(true);
-    this.tooltipText.setVisible(true);
+    this.tooltipTitleText.setVisible(true);
+    this.tooltipDivider.setVisible(true);
+    this.tooltipBodyText.setVisible(true);
     this.updateTooltipPosition(pointer);
   }
 
@@ -731,14 +776,13 @@ export class CoopDefenseUpgradesOverlay {
   private hideTooltip(): void {
     this.tooltipContainer?.setVisible(false);
     this.tooltipBackground?.setVisible(false);
-    this.tooltipText?.setVisible(false);
+    this.tooltipTitleText?.setVisible(false);
+    this.tooltipDivider?.setVisible(false);
+    this.tooltipBodyText?.setVisible(false);
   }
 
-  private buildTooltipText(node: CoopDefenseUpgradeNodeSnapshot): string {
-    const lines = [
-      node.label,
-      `Stufe ${node.level}/${node.maxLevel}`,
-    ];
+  private buildTooltipBody(node: CoopDefenseUpgradeNodeSnapshot): string {
+    const lines = [`Stufe ${node.level}/${node.maxLevel}`];
 
     if (node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable) {
       lines.push('Basis-Freischaltung');
