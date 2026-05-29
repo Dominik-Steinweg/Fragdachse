@@ -695,7 +695,7 @@ export class RightSidePanel {
       .setPosition(ARENA_SIDEBAR_LEFT_X, LB_START_Y);
     this.lbTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
     this.leaderboardSharedXpValue
-      .setVisible(this.isDefenseModeWithXp(sharedXp) && (showBlueHeader || showRedHeader))
+      .setVisible(this.isDefenseXpMode() && this.hasSharedXpData(entries) && (showBlueHeader || showRedHeader))
       .setText(String(sharedXp))
       .setPosition(LB_XP_X, LB_START_Y);
 
@@ -756,7 +756,7 @@ export class RightSidePanel {
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
     this.resultsSharedXpValue
-      .setVisible(this.isDefenseModeWithXp(sharedXp) && hasData)
+      .setVisible(this.isDefenseXpMode() && this.hasSharedXpData(results) && hasData)
       .setText(String(sharedXp))
       .setPosition(RESULTS_XP_X, RESULTS_START_Y);
     this.resultsTeamHeaders?.blue.label
@@ -803,7 +803,7 @@ export class RightSidePanel {
 
   private syncArenaLabels(entries: LeaderboardEntry[]): void {
     const sharedXp = this.resolveSharedXp(entries);
-    const showDefenseXp = this.isDefenseModeWithXp(sharedXp);
+    const showDefenseXp = this.isDefenseXpMode() && this.hasSharedXpData(entries);
     this.leaderboardScoreLabel.setText('F R A G S').setPosition(LB_FRAGS_X, LB_HEADER_Y);
     this.leaderboardXpLabel.setVisible(showDefenseXp);
     this.leaderboardSharedXpValue
@@ -814,7 +814,7 @@ export class RightSidePanel {
 
   private syncLobbyLabels(results: RoundResult[] | null): void {
     const sharedXp = this.resolveSharedXp(results ?? []);
-    const showDefenseXp = this.isDefenseModeWithXp(sharedXp);
+    const showDefenseXp = this.isDefenseXpMode() && this.hasSharedXpData(results ?? []);
     this.resultsFragsLabel.setText('F R A G S').setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y);
     this.resultsXpLabel.setVisible(showDefenseXp);
     this.resultsSharedXpValue
@@ -835,8 +835,8 @@ export class RightSidePanel {
     return Math.max(0, Math.floor(entries.find((entry) => typeof entry.sharedXp === 'number')?.sharedXp ?? 0));
   }
 
-  private isDefenseModeWithXp(sharedXp: number): boolean {
-    return this.isDefenseXpMode() && sharedXp >= 0;
+  private hasSharedXpData(entries: Array<{ sharedXp?: number }>): boolean {
+    return entries.some((entry) => typeof entry.sharedXp === 'number');
   }
 
   private sortLeaderboardEntriesForDisplay(entries: LeaderboardEntry[]): LeaderboardEntry[] {

@@ -17,6 +17,8 @@ import { HelpOverlay } from './HelpOverlay';
 import { OptionsOverlay } from './OptionsOverlay';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
+import { ensureGlossyButtonTexture } from './uiTextures';
+import { attachHoverEffect } from './uiHover';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
@@ -205,7 +207,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.openNameEdit())
-      .on('pointerover',  () => editBtn.setAlpha(0.7))
+      .on('pointerover',  () => editBtn.setAlpha(0.85))
       .on('pointerout',   () => editBtn.setAlpha(1.0));
     this.editBtn = editBtn;
     objects.push(editBtn);
@@ -220,7 +222,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.stepGameMode(-1))
-      .on('pointerover', () => modeLeftBtn.setAlpha(0.7))
+      .on('pointerover', () => modeLeftBtn.setAlpha(0.85))
       .on('pointerout', () => modeLeftBtn.setAlpha(1.0));
     objects.push(modeLeftBtn);
 
@@ -234,7 +236,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.stepGameMode(+1))
-      .on('pointerover', () => modeRightBtn.setAlpha(0.7))
+      .on('pointerover', () => modeRightBtn.setAlpha(0.85))
       .on('pointerout', () => modeRightBtn.setAlpha(1.0));
     objects.push(modeRightBtn);
     this.modeArrowButtons = { left: modeLeftBtn, right: modeRightBtn };
@@ -249,7 +251,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.stepCoopDefenseMap(-1))
-      .on('pointerover', () => mapLeftBtn.setAlpha(0.7))
+      .on('pointerover', () => mapLeftBtn.setAlpha(0.85))
       .on('pointerout', () => mapLeftBtn.setAlpha(1.0));
     objects.push(mapLeftBtn);
 
@@ -263,7 +265,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.stepCoopDefenseMap(+1))
-      .on('pointerover', () => mapRightBtn.setAlpha(0.7))
+      .on('pointerover', () => mapRightBtn.setAlpha(0.85))
       .on('pointerout', () => mapRightBtn.setAlpha(1.0));
     objects.push(mapRightBtn);
     this.mapArrowButtons = { left: mapLeftBtn, right: mapRightBtn };
@@ -298,7 +300,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.stepTeam(-1))
-      .on('pointerover', () => teamLeftBtn.setAlpha(0.7))
+      .on('pointerover', () => teamLeftBtn.setAlpha(0.85))
       .on('pointerout', () => teamLeftBtn.setAlpha(1.0));
     teamLeftBtn.setVisible(false);
     objects.push(teamLeftBtn);
@@ -307,7 +309,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.stepTeam(+1))
-      .on('pointerover', () => teamRightBtn.setAlpha(0.7))
+      .on('pointerover', () => teamRightBtn.setAlpha(0.85))
       .on('pointerout', () => teamRightBtn.setAlpha(1.0));
     teamRightBtn.setVisible(false);
     objects.push(teamRightBtn);
@@ -339,7 +341,7 @@ export class LeftSidePanel {
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.stepCarousel(slot, -1))
-        .on('pointerover',  () => leftBtn.setAlpha(0.7))
+        .on('pointerover',  () => leftBtn.setAlpha(0.85))
         .on('pointerout',   () => leftBtn.setAlpha(1.0));
       objects.push(leftBtn);
 
@@ -353,7 +355,7 @@ export class LeftSidePanel {
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.stepCarousel(slot, +1))
-        .on('pointerover',  () => rightBtn.setAlpha(0.7))
+        .on('pointerover',  () => rightBtn.setAlpha(0.85))
         .on('pointerout',   () => rightBtn.setAlpha(1.0));
       objects.push(rightBtn);
       this.loadoutArrowButtons[slot] = { left: leftBtn, right: rightBtn };
@@ -390,35 +392,32 @@ export class LeftSidePanel {
     objects.push(divider3);
 
     // ── Hilfe-Button ──
-    const optionsBtn = this.scene.add.rectangle(OPTIONS_BTN_X, MENU_BTN_Y, MENU_BTN_W, MENU_BTN_H, COLORS.GREY_7)
-      .setStrokeStyle(2, COLORS.GOLD_1)
+    const menuBtnTex = ensureGlossyButtonTexture(
+      this.scene, `_lsp_menu_btn_${MENU_BTN_W}x${MENU_BTN_H}`, MENU_BTN_W, MENU_BTN_H, COLORS.GREY_6, COLORS.GOLD_1,
+    );
+    const optionsBtn = this.scene.add.image(OPTIONS_BTN_X, MENU_BTN_Y, menuBtnTex)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.optionsOverlay?.show())
-      .on('pointerover', () => optionsBtn.setAlpha(0.7))
-      .on('pointerout',  () => optionsBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(optionsBtn);
-    objects.push(
-      this.scene.add.text(OPTIONS_BTN_X, MENU_BTN_Y, 'OPTIONEN', {
-        fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold',
-        color: toCssColor(COLORS.GOLD_1),
-      }).setOrigin(0.5).setScrollFactor(0),
-    );
+    const optionsLabel = this.scene.add.text(OPTIONS_BTN_X, MENU_BTN_Y, 'OPTIONEN', {
+      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold',
+      color: toCssColor(COLORS.GOLD_1),
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(optionsLabel);
+    attachHoverEffect(this.scene, optionsBtn, optionsLabel);
 
-    const helpBtn = this.scene.add.rectangle(HELP_BTN_X, MENU_BTN_Y, MENU_BTN_W, MENU_BTN_H, COLORS.GREY_7)
-      .setStrokeStyle(2, COLORS.GOLD_1)
+    const helpBtn = this.scene.add.image(HELP_BTN_X, MENU_BTN_Y, menuBtnTex)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.helpOverlay?.show())
-      .on('pointerover', () => helpBtn.setAlpha(0.7))
-      .on('pointerout',  () => helpBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(helpBtn);
-    objects.push(
-      this.scene.add.text(HELP_BTN_X, MENU_BTN_Y, 'HILFE', {
-        fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold',
-        color: toCssColor(COLORS.GOLD_1),
-      }).setOrigin(0.5).setScrollFactor(0),
-    );
+    const helpLabel = this.scene.add.text(HELP_BTN_X, MENU_BTN_Y, 'HILFE', {
+      fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold',
+      color: toCssColor(COLORS.GOLD_1),
+    }).setOrigin(0.5).setScrollFactor(0);
+    objects.push(helpLabel);
+    attachHoverEffect(this.scene, helpBtn, helpLabel);
 
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);

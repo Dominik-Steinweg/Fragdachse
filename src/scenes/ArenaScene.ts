@@ -65,9 +65,11 @@ import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
   buildDefaultCoopDefenseUpgradeProfile,
+  cloneCoopDefenseUpgradeProfile,
   levelDownCoopDefenseUpgrade,
   levelUpCoopDefenseUpgrade,
 } from '../utils/coopDefenseUpgrades';
+import type { CoopDefenseUpgradeProfile } from '../types';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
@@ -152,6 +154,8 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
   private coopDefenseProgress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
+  // Profil-Stand beim Oeffnen des Upgrade-Overlays – fuer "Abbruch" (Wiederherstellen).
+  private coopDefenseUpgradeProfileSnapshot: CoopDefenseUpgradeProfile | null = null;
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
 
@@ -309,6 +313,8 @@ export class ArenaScene extends Phaser.Scene {
       (upgradeId) => this.levelUpCoopDefenseUpgrade(upgradeId),
       (upgradeId) => this.levelDownCoopDefenseUpgrade(upgradeId),
       () => this.fullRespecCoopDefenseUpgrades(),
+      () => this.cancelCoopDefenseUpgradeChanges(),
+      () => this.applyCoopDefenseUpgradeChanges(),
     );
     this.coopDefenseUpgradesOverlay.build();
 
@@ -920,7 +926,25 @@ export class ArenaScene extends Phaser.Scene {
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
     this.refreshStoredCoopDefenseProgress();
+    this.coopDefenseUpgradeProfileSnapshot = cloneCoopDefenseUpgradeProfile(getStoredCoopDefenseProgress().profile);
     this.coopDefenseUpgradesOverlay?.show();
+  }
+
+  private cancelCoopDefenseUpgradeChanges(): void {
+    const snapshot = this.coopDefenseUpgradeProfileSnapshot;
+    this.coopDefenseUpgradeProfileSnapshot = null;
+    if (!snapshot) return;
+
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    setStoredCoopDefenseUpgradeProfile(snapshot);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+  }
+
+  private applyCoopDefenseUpgradeChanges(): void {
+    // Aenderungen wurden bereits live uebernommen; Snapshot verwerfen.
+    this.coopDefenseUpgradeProfileSnapshot = null;
   }
 
   private levelUpCoopDefenseUpgrade(upgradeId: string): boolean {

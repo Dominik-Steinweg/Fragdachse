@@ -20,6 +20,7 @@ import {
   type LivingBarPalette,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import { attachHoverEffect } from './uiHover';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
 
@@ -67,7 +68,12 @@ const POINTS_CHIP_W = 320;
 const POINTS_CHIP_H = 40;
 const RESPEC_W = 180;
 const RESPEC_H = 38;
-const FOOTER_Y = CY + PANEL_H / 2 - 28;
+// Untere Button-Leiste (Abbruch / Uebernehmen) + Hinweiszeile darunter.
+const ACTION_BTN_W = 220;
+const ACTION_BTN_H = 50;
+const ACTION_BTN_GAP = 40;
+const ACTION_BTN_Y = CY + PANEL_H / 2 - 60;
+const FOOTER_Y = CY + PANEL_H / 2 - 22;
 
 const TAB_TOP = POINTS_Y + 48;
 const TAB_H = 36;
@@ -75,7 +81,7 @@ const TAB_GAP = 12;
 const TAB_MAX_W = 240;
 
 const CONTENT_TOP = TAB_TOP + TAB_H + 26;
-const CONTENT_BOTTOM = FOOTER_Y - 22;
+const CONTENT_BOTTOM = ACTION_BTN_Y - ACTION_BTN_H / 2 - 16;
 const CONTENT_W = PANEL_W - 80;
 const CONTENT_X = CX - CONTENT_W / 2;
 const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP;
@@ -222,6 +228,8 @@ export class CoopDefenseUpgradesOverlay {
     private readonly onLevelUpUpgrade: (upgradeId: string) => boolean,
     private readonly onLevelDownUpgrade: (upgradeId: string) => boolean,
     private readonly onFullRespec: () => boolean,
+    private readonly onCancel: () => void,
+    private readonly onApply: () => void,
   ) {}
 
   build(): void {
@@ -256,20 +264,31 @@ export class CoopDefenseUpgradesOverlay {
       .setInteractive();
     objects.push(panel);
 
-    // Grosser roter Schliessen-Button oben rechts.
-    const closeX = CX + PANEL_W / 2 - 42;
-    const closeY = CY - PANEL_H / 2 + 42;
-    const closeBg = this.scene.add.image(closeX, closeY, this.ensureCloseButtonTexture())
+    // Untere Button-Leiste: Abbruch (verwirft) + Uebernehmen (bestaetigt).
+    const cancelX = CX - ACTION_BTN_GAP / 2 - ACTION_BTN_W / 2;
+    const applyX = CX + ACTION_BTN_GAP / 2 + ACTION_BTN_W / 2;
+
+    const cancelBtn = this.scene.add.image(cancelX, ACTION_BTN_Y, this.ensureActionButtonTexture('cancel'))
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    const closeGlyph = this.scene.add.text(closeX, closeY, '✕', {
-      fontSize: '30px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+    const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, 'ABBRUCH', {
+      fontSize: '20px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0);
-    closeBg.on('pointerover', () => closeBg.setAlpha(0.82));
-    closeBg.on('pointerout', () => closeBg.setAlpha(1));
-    closeBg.on('pointerdown', () => this.hide());
-    objects.push(closeBg);
-    objects.push(closeGlyph);
+    cancelBtn.on('pointerdown', () => this.closeWithCancel());
+    attachHoverEffect(this.scene, cancelBtn, cancelLabel);
+    objects.push(cancelBtn);
+    objects.push(cancelLabel);
+
+    const applyBtn = this.scene.add.image(applyX, ACTION_BTN_Y, this.ensureActionButtonTexture('apply'))
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, 'ÜBERNEHMEN', {
+      fontSize: '20px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+    }).setOrigin(0.5).setScrollFactor(0);
+    applyBtn.on('pointerdown', () => this.closeWithApply());
+    attachHoverEffect(this.scene, applyBtn, applyLabel);
+    objects.push(applyBtn);
+    objects.push(applyLabel);
 
     objects.push(
       this.scene.add.text(CX, TITLE_Y, 'UPGRADES', {
@@ -321,7 +340,7 @@ export class CoopDefenseUpgradesOverlay {
 
     // Eingefasster, flacher "Status"-Chip fuer verfuegbare Upgrade-Punkte.
     // Bewusst matt/flach gehalten, damit er nicht wie ein drueckbarer Button wirkt.
-    const pointsChipX = CX - 90;
+    const pointsChipX = CX;
     this.pointsChip = this.scene.add.image(pointsChipX, POINTS_Y, this.ensurePointsChipTexture(true))
       .setScrollFactor(0);
     objects.push(this.pointsChip);
@@ -336,12 +355,6 @@ export class CoopDefenseUpgradesOverlay {
     this.respecButton = this.scene.add.image(respecX, POINTS_Y, this.ensureRespecButtonTexture())
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    this.respecButton.on('pointerover', () => {
-      if (this.respecEnabled) this.respecButton?.setAlpha(0.85);
-    });
-    this.respecButton.on('pointerout', () => {
-      if (this.respecEnabled) this.respecButton?.setAlpha(1);
-    });
     this.respecButton.on('pointerdown', () => {
       if (!this.respecEnabled) return;
       if (this.onFullRespec()) this.refresh();
@@ -349,9 +362,10 @@ export class CoopDefenseUpgradesOverlay {
     objects.push(this.respecButton);
 
     this.respecLabel = this.scene.add.text(respecX, POINTS_Y, 'FULL RESPEC', {
-      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_5),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.respecLabel);
+    attachHoverEffect(this.scene, this.respecButton, this.respecLabel, { isEnabled: () => this.respecEnabled });
 
     this.tabsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.tabsContainer);
@@ -389,7 +403,7 @@ export class CoopDefenseUpgradesOverlay {
     objects.push(this.tooltipContainer);
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ ESC / Klick ausserhalb zum Schliessen | Linksklick skillt | Rechtsklick nimmt zurueck ]', {
+      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurueck]', {
         fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -445,7 +459,7 @@ export class CoopDefenseUpgradesOverlay {
     );
     if (this.respecButton) this.respecButton.setAlpha(this.respecEnabled ? 1 : 0.4);
     if (this.respecLabel) {
-      this.respecLabel.setColor(toCssColor(this.respecEnabled ? COLORS.GREY_10 : COLORS.GREY_5));
+      this.respecLabel.setColor(toCssColor(this.respecEnabled ? COLORS.RED_1 : COLORS.RED_3));
     }
     const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
     this.progressFill.setCrop(0, 0, fillW, BAR_H);
@@ -477,16 +491,24 @@ export class CoopDefenseUpgradesOverlay {
       ease: 'Sine.easeOut',
     });
 
-    this.dismissDelay = this.scene.time.delayedCall(120, () => {
-      this.dismissDelay = null;
-      if (!this.visible) return;
-      this.dimRect?.setInteractive().once('pointerdown', () => this.hide());
-    });
+    // Klick ausserhalb (auf den abdunkelnden Hintergrund) wird abgefangen, aber
+    // schliesst NICHT mehr – Schliessen ausschliesslich ueber Abbruch/Uebernehmen.
+    this.dimRect?.setInteractive();
+  }
 
-    this.keyHandler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') this.hide();
-    };
-    this.scene.input.keyboard?.on('keydown', this.keyHandler);
+  /** Verwirft alle Aenderungen seit dem Oeffnen und schliesst. */
+  private closeWithCancel(): void {
+    if (!this.visible) return;
+    this.onCancel();
+    this.refresh();
+    this.hide();
+  }
+
+  /** Uebernimmt die Aenderungen und schliesst. */
+  private closeWithApply(): void {
+    if (!this.visible) return;
+    this.onApply();
+    this.hide();
   }
 
   hide(): void {
@@ -495,10 +517,6 @@ export class CoopDefenseUpgradesOverlay {
     this.dismissDelay?.destroy();
     this.dismissDelay = null;
     this.dimRect?.disableInteractive().removeAllListeners();
-    if (this.keyHandler) {
-      this.scene.input.keyboard?.off('keydown', this.keyHandler);
-      this.keyHandler = null;
-    }
 
     this.clearNodeDecorations();
     this.clearTabDecorations();
@@ -578,7 +596,7 @@ export class CoopDefenseUpgradesOverlay {
       const bg = this.scene.add.image(centerX, TAB_TOP + TAB_H / 2, tabTexKey)
         .setScrollFactor(0)
         .setAlpha(restAlpha)
-        .setInteractive({ useHandCursor: !isActive });
+        .setInteractive({ useHandCursor: true });
       this.tabsContainer!.add(bg);
 
       if (isActive) {
@@ -606,11 +624,9 @@ export class CoopDefenseUpgradesOverlay {
       }).setOrigin(0.5).setScrollFactor(0);
       this.tabsContainer!.add(label);
 
-      if (!isActive) {
-        bg.on('pointerover', () => bg.setAlpha(0.92));
-        bg.on('pointerout', () => bg.setAlpha(restAlpha));
-        bg.on('pointerdown', () => this.setActiveCategory(index));
-      }
+      // Einheitlicher Hover-Effekt fuer alle Tabs (auch der aktive).
+      attachHoverEffect(this.scene, bg, label);
+      bg.on('pointerdown', () => this.setActiveCategory(index));
     });
   }
 
@@ -927,7 +943,9 @@ export class CoopDefenseUpgradesOverlay {
     if (!this.upgradesContainer) return;
 
     const { node, x, y } = placedNode;
-    const nodeGroup = this.scene.add.container(0, 0).setScrollFactor(0);
+    // Knoten als eigenes Container-Element am Zentrum (x,y) -> alle Kinder in
+    // lokalen Koordinaten, damit der Hover-Scale-Effekt sauber um die Mitte greift.
+    const nodeGroup = this.scene.add.container(x, y).setScrollFactor(0);
 
     const isBaseUnlock = node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable;
     const interactionEnabled = node.canLevelUp || node.canLevelDown;
@@ -946,7 +964,7 @@ export class CoopDefenseUpgradesOverlay {
 
     // Modern glassy rounded-rect base (generated texture, glow-capable Image).
     const baseTexKey = this.ensureNodeBaseTexture(nodeBaseColor, nodeStrokeColor);
-    const baseRect = this.scene.add.image(x, y, baseTexKey)
+    const baseRect = this.scene.add.image(0, 0, baseTexKey)
       .setScrollFactor(0)
       .setAlpha(baseAlpha);
     nodeGroup.add(baseRect);
@@ -957,7 +975,7 @@ export class CoopDefenseUpgradesOverlay {
     if (isActive) {
       const fillHeight = Math.max(1, innerH * progressFraction);
       const fillTexKey = this.ensureNodeFillTexture(nodeActiveColor);
-      const activeFill = this.scene.add.image(x, y + NODE_H / 2 - NODE_INNER_PADDING, fillTexKey)
+      const activeFill = this.scene.add.image(0, NODE_H / 2 - NODE_INNER_PADDING, fillTexKey)
         .setOrigin(0.5, 1)
         .setScrollFactor(0)
         .setAlpha(0.62);
@@ -969,12 +987,12 @@ export class CoopDefenseUpgradesOverlay {
       // kein lebendiger Effekt, kein Leuchten.
       if (!isBaseUnlock) {
         // "Living" breathing effect on the upgrade-level fill (similar to the XP bar).
-        const fillTopY = y + NODE_H / 2 - NODE_INNER_PADDING - fillHeight;
+        const fillTopY = NODE_H / 2 - NODE_INNER_PADDING - fillHeight;
         const fillPalette = paletteFromColor(nodeActiveColor);
         const effect = new LivingBarEffect(
           this.scene,
           nodeGroup,
-          x - innerW / 2,
+          -innerW / 2,
           fillTopY,
           innerW,
           fillHeight,
@@ -1002,13 +1020,13 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     if (hasIcon && iconKey) {
-      const icon = this.scene.add.image(x, y, iconKey)
+      const icon = this.scene.add.image(0, 0, iconKey)
         .setDisplaySize(ICON_SIZE, ICON_SIZE)
         .setScrollFactor(0)
         .setAlpha(isLocked ? 0.4 : 1);
       nodeGroup.add(icon);
     } else {
-      const fallback = this.scene.add.text(x, y, node.label, {
+      const fallback = this.scene.add.text(0, 0, node.label, {
         fontSize: `${NODE_LABEL_FONT_SIZE}px`,
         fontFamily: 'monospace',
         fontStyle: 'bold',
@@ -1020,7 +1038,7 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     if (node.maxLevel > 1) {
-      const levelText = this.scene.add.text(x + NODE_W / 2 - 2, y + NODE_H / 2 - 1, `${node.level}/${node.maxLevel}`, {
+      const levelText = this.scene.add.text(NODE_W / 2 - 2, NODE_H / 2 - 1, `${node.level}/${node.maxLevel}`, {
         fontSize: '11px',
         fontFamily: 'monospace',
         fontStyle: 'bold',
@@ -1032,16 +1050,23 @@ export class CoopDefenseUpgradesOverlay {
       nodeGroup.add(levelText);
     }
 
-    const hitArea = this.scene.add.rectangle(x, y, NODE_W, NODE_H, 0x000000, 0.001)
+    const hitArea = this.scene.add.rectangle(0, 0, NODE_W, NODE_H, 0x000000, 0.001)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: interactionEnabled })
       .on('pointerover', (pointer: Phaser.Input.Pointer) => {
         baseRect.setAlpha(Math.min(1, baseAlpha + 0.12));
+        // Einheitlicher Hover-Effekt: ganzer Knoten waechst leicht.
+        this.scene.tweens.add({
+          targets: nodeGroup, scaleX: 1.06, scaleY: 1.06, duration: 90, ease: 'Sine.easeOut',
+        });
         this.showTooltip(node, pointer);
       })
       .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
       .on('pointerout', () => {
         baseRect.setAlpha(baseAlpha);
+        this.scene.tweens.add({
+          targets: nodeGroup, scaleX: 1, scaleY: 1, duration: 120, ease: 'Sine.easeOut',
+        });
         this.hideTooltip();
       })
       .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.handleUpgradePointerDown(node, pointer));
@@ -1188,17 +1213,32 @@ export class CoopDefenseUpgradesOverlay {
     });
   }
 
-  private ensureCloseButtonTexture(): string {
+  private ensureActionButtonTexture(kind: 'cancel' | 'apply'): string {
+    if (kind === 'cancel') {
+      return this.ensureRoundedTexture({
+        key: '_ccd_cancel',
+        w: ACTION_BTN_W,
+        h: ACTION_BTN_H,
+        radius: 12,
+        topColor: lerpColor(COLORS.RED_3, 0xffffff, 0.16),
+        bottomColor: lerpColor(COLORS.RED_4, 0x000000, 0.30),
+        fillAlpha: 0.97,
+        strokeColor: lerpColor(COLORS.RED_2, 0xffffff, 0.14),
+        strokeAlpha: 0.92,
+        strokeWidth: 2,
+        highlightAlpha: 0.24,
+      });
+    }
     return this.ensureRoundedTexture({
-      key: '_ccd_close',
-      w: 46,
-      h: 46,
+      key: '_ccd_apply',
+      w: ACTION_BTN_W,
+      h: ACTION_BTN_H,
       radius: 12,
-      topColor: lerpColor(COLORS.RED_3, 0xffffff, 0.18),
-      bottomColor: lerpColor(COLORS.RED_4, 0x000000, 0.32),
+      topColor: lerpColor(COLORS.GREEN_3, 0xffffff, 0.18),
+      bottomColor: lerpColor(COLORS.GREEN_4, 0x000000, 0.30),
       fillAlpha: 0.97,
-      strokeColor: lerpColor(COLORS.RED_2, 0xffffff, 0.15),
-      strokeAlpha: 0.95,
+      strokeColor: lerpColor(COLORS.GREEN_2, 0xffffff, 0.14),
+      strokeAlpha: 0.92,
       strokeWidth: 2,
       highlightAlpha: 0.26,
     });

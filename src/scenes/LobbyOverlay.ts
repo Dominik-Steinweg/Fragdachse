@@ -18,6 +18,13 @@ import {
   ensureFlatPanelTexture,
   ensureTintedSectionTexture,
 } from '../ui/uiTextures';
+import {
+  LivingBarEffect,
+  createGradientTexture,
+  ensureLivingBarTextures,
+  type LivingBarPalette,
+} from '../ui/LivingBarEffect';
+import { attachHoverEffect } from '../ui/uiHover';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const ACCENT = COLORS.GOLD_1;
@@ -29,7 +36,7 @@ const ACCENT_COLOR  = toCssColor(COLORS.BROWN_1);
 const BTN_COPY_COLOR  = COLORS.BLUE_4;
 const BTN_RETRY_COLOR = COLORS.BROWN_4;
 const BTN_AUTO_COLOR  = COLORS.GREEN_4;
-const BTN_UPGRADES_COLOR = COLORS.BLUE_4;
+const BTN_UPGRADES_COLOR = COLORS.GOLD_4;
 
 const PANEL_W  = 800;
 const PANEL_H  = 600;
@@ -43,9 +50,15 @@ const ACTION_BTN_W = 160;
 const ACTION_BTN_H = 46;
 const ACTION_BTN_Y = PANEL_Y + PANEL_H - 34;
 const ACTION_BTN_GAP = 18;
-const COOP_PROGRESS_PANEL_W = 440;
-const COOP_PROGRESS_PANEL_H = 150;
-const COOP_PROGRESS_PANEL_Y = PANEL_Y + PANEL_H + 76;
+const COOP_PROGRESS_PANEL_W = 520;
+const COOP_PROGRESS_PANEL_H = 184;
+const COOP_PROGRESS_PANEL_Y = PANEL_Y + PANEL_H + 114;
+const COOP_UPGRADE_BTN_W = READY_BTN_W*0.8;
+const COOP_UPGRADE_BTN_H = READY_BTN_H*0.8;
+const COOP_UPGRADE_BTN_DY = 30;
+const COOP_BAR_W = 160;
+const COOP_BAR_H = 10;
+const COOP_BAR_TEX_KEY = '_lobby_coop_xpbar';
 const ROW_H    = 48;
 const LIST_X   = PANEL_X + 32;
 const LIST_Y   = PANEL_Y + 76;
@@ -94,13 +107,14 @@ export class LobbyOverlay {
   private retryBtnLabel!: Phaser.GameObjects.Text;
   private autoBtn!:       Phaser.GameObjects.Image;
   private autoBtnLabel!:  Phaser.GameObjects.Text;
-  private levelHeaderText: Phaser.GameObjects.Text | null = null;
   private coopProgressContainer: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
-  private coopProgressTotalXpText: Phaser.GameObjects.Text | null = null;
-  private coopProgressNextLevelText: Phaser.GameObjects.Text | null = null;
+  private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
+  private coopBarEffect: LivingBarEffect | null = null;
   private coopProgressUpgradesBtn: Phaser.GameObjects.Image | null = null;
   private coopProgressUpgradesBtnLabel: Phaser.GameObjects.Text | null = null;
+  private coopProgressPointsText: Phaser.GameObjects.Text | null = null;
+  private upgradeBtnEffect: LivingBarEffect | null = null;
   private visible         = false;
   private btnLocked       = false;
   private roomQuality: RoomQualitySnapshot | null = null;
@@ -123,14 +137,18 @@ export class LobbyOverlay {
       this.container = null;
       this.playerRows.clear();
     }
+    this.upgradeBtnEffect?.destroy();
+    this.upgradeBtnEffect = null;
+    this.coopBarEffect?.destroy();
+    this.coopBarEffect = null;
     this.coopProgressContainer?.destroy(true);
     this.coopProgressContainer = null;
-    this.levelHeaderText = null;
     this.coopProgressLevelText = null;
-    this.coopProgressTotalXpText = null;
-    this.coopProgressNextLevelText = null;
+    this.coopProgressBarFill = null;
+    this.coopBarEffect = null;
     this.coopProgressUpgradesBtn = null;
     this.coopProgressUpgradesBtnLabel = null;
+    this.coopProgressPointsText = null;
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -161,10 +179,6 @@ export class LobbyOverlay {
     }).setScrollFactor(0).setVisible(false);
     this.teamHeaders = { blue: blueHeader, red: redHeader };
     objects.push(blueHeader, redHeader);
-    this.levelHeaderText = this.scene.add.text(ROW_LEVEL_X, LIST_Y, 'LVL', {
-      fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
-    }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
-    objects.push(this.levelHeaderText);
 
     // ── Trennlinie oben ───────────────────────────────────────────────────
     objects.push(
@@ -179,8 +193,6 @@ export class LobbyOverlay {
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onReadyToggled(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.readyBtn.setAlpha(0.85); })
-      .on('pointerout',   () => this.readyBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.readyBtn);
 
@@ -188,6 +200,7 @@ export class LobbyOverlay {
       fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.readyBtnLabel);
+    this.attachHoverEffect(this.readyBtn, this.readyBtnLabel);
 
     this.hostActionsLabel = this.scene.add.text(GAME_WIDTH / 2, HOST_LABEL_Y, '— Host-Funktionen —', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4), fontStyle: 'bold',
@@ -200,8 +213,6 @@ export class LobbyOverlay {
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onCopyRoomLink(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.copyBtn.setAlpha(0.85); })
-      .on('pointerout',   () => this.copyBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.copyBtn);
 
@@ -209,6 +220,7 @@ export class LobbyOverlay {
       fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.copyBtnLabel);
+    this.attachHoverEffect(this.copyBtn, this.copyBtnLabel);
 
     this.retryBtn = this.scene.add.image(
       RETRY_BTN_X, ACTION_BTN_Y,
@@ -216,8 +228,6 @@ export class LobbyOverlay {
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onRetryRoom(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.retryBtn.setAlpha(0.85); })
-      .on('pointerout',   () => this.retryBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.retryBtn);
 
@@ -225,6 +235,7 @@ export class LobbyOverlay {
       fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.retryBtnLabel);
+    this.attachHoverEffect(this.retryBtn, this.retryBtnLabel);
 
     this.autoBtn = this.scene.add.image(
       AUTO_BTN_X, ACTION_BTN_Y,
@@ -232,8 +243,6 @@ export class LobbyOverlay {
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { if (!this.btnLocked) this.onStartAutomaticRoomSearch(); })
-      .on('pointerover',  () => { if (!this.btnLocked) this.autoBtn.setAlpha(0.85); })
-      .on('pointerout',   () => this.autoBtn.setAlpha(1))
       .setScrollFactor(0);
     objects.push(this.autoBtn);
 
@@ -241,44 +250,91 @@ export class LobbyOverlay {
       fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.autoBtnLabel);
+    this.attachHoverEffect(this.autoBtn, this.autoBtnLabel);
 
     const coopProgressBg = this.scene.add.image(
       READY_BTN_X, COOP_PROGRESS_PANEL_Y,
       ensureTintedSectionTexture(this.scene, '_lobby_coop_panel', COOP_PROGRESS_PANEL_W, COOP_PROGRESS_PANEL_H, COLORS.GOLD_3, COLORS.GREY_8),
     ).setScrollFactor(0);
-    const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 48, 'Dachs vs. Zombies Fortschritt', {
-      fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
+    const coopProgressTitle = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 68, 'Dachs vs. Zombies Fortschritt', {
+      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 20, 'Level 1', {
-      fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
+    this.coopProgressLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y - 40, 'Level 1', {
+      fontSize: '24px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressTotalXpText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 6, '0 XP gesamt', {
-      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2),
-    }).setOrigin(0.5).setScrollFactor(0);
-    this.coopProgressNextLevelText = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 28, '25 XP bis Level 2', {
-      fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
-    }).setOrigin(0.5).setScrollFactor(0);
+
+    // Kleiner Fortschrittsbalken zum naechsten Level (Pendant zur grossen XP-Leiste im Upgrade-Panel).
+    const coopBarY = COOP_PROGRESS_PANEL_Y - 8;
+    const coopBarX = READY_BTN_X - COOP_BAR_W / 2;
+    const coopBarBg = this.scene.add.rectangle(READY_BTN_X, coopBarY, COOP_BAR_W, COOP_BAR_H, COLORS.GREY_9, 0.95)
+      .setStrokeStyle(1, COLORS.GREY_5)
+      .setScrollFactor(0);
+    ensureLivingBarTextures(this.scene);
+    const coopBarPalette: LivingBarPalette = { dark: COLORS.GREEN_4, mid: COLORS.GREEN_2, light: COLORS.GREEN_1 };
+    createGradientTexture(this.scene, COOP_BAR_TEX_KEY, coopBarPalette, COOP_BAR_W, COOP_BAR_H);
+    this.coopProgressBarFill = this.scene.add.image(coopBarX, coopBarY, COOP_BAR_TEX_KEY)
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0);
+    this.coopProgressBarFill.setCrop(0, 0, COOP_BAR_W, COOP_BAR_H);
+
+    const upgradeBtnY = COOP_PROGRESS_PANEL_Y + COOP_UPGRADE_BTN_DY;
     this.coopProgressUpgradesBtn = this.scene.add.image(
-      READY_BTN_X, COOP_PROGRESS_PANEL_Y + 56,
-      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_UPGRADES_COLOR, 140, 30), 140, 30, BTN_UPGRADES_COLOR),
+      READY_BTN_X, upgradeBtnY,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_UPGRADES_COLOR, COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H), COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H, BTN_UPGRADES_COLOR),
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.onOpenCoopDefenseUpgrades())
-      .on('pointerover', () => this.coopProgressUpgradesBtn?.setAlpha(0.85))
-      .on('pointerout', () => this.coopProgressUpgradesBtn?.setAlpha(1))
       .setScrollFactor(0);
-    this.coopProgressUpgradesBtnLabel = this.scene.add.text(READY_BTN_X, COOP_PROGRESS_PANEL_Y + 56, 'UPGRADES', {
-      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
+    this.coopProgressUpgradesBtnLabel = this.scene.add.text(READY_BTN_X, upgradeBtnY, 'UPGRADES', {
+      fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_3), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0);
+    this.attachHoverEffect(this.coopProgressUpgradesBtn, this.coopProgressUpgradesBtnLabel);
+    this.coopProgressPointsText = this.scene.add.text(READY_BTN_X, upgradeBtnY + COOP_UPGRADE_BTN_H / 2 + 18, '', {
+      fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     this.coopProgressContainer = this.scene.add.container(0, 0, [
       coopProgressBg,
       coopProgressTitle,
       this.coopProgressLevelText,
-      this.coopProgressTotalXpText,
-      this.coopProgressNextLevelText,
+      coopBarBg,
+      this.coopProgressBarFill,
       this.coopProgressUpgradesBtn,
       this.coopProgressUpgradesBtnLabel,
+      this.coopProgressPointsText,
     ]).setDepth(DEPTH.OVERLAY + 0.5).setVisible(false);
+
+    // Living-Bar-Effekt auf dem Upgrade-Button: macht auf freie Punkte aufmerksam.
+    const upgradePalette: LivingBarPalette = {
+      dark: COLORS.GOLD_3,
+      mid: COLORS.GOLD_1,
+      light: COLORS.GOLD_1,
+    };
+    this.upgradeBtnEffect = new LivingBarEffect(
+      this.scene,
+      this.coopProgressContainer,
+      READY_BTN_X - COOP_UPGRADE_BTN_W / 2,
+      upgradeBtnY - COOP_UPGRADE_BTN_H / 2,
+      COOP_UPGRADE_BTN_W,
+      COOP_UPGRADE_BTN_H,
+      upgradePalette,
+      { glowTarget: this.coopProgressUpgradesBtn, scrollFactor: 0, intensity: 0.8 },
+    );
+    // Effekt-Partikel ueber dem Button, aber unter dem Label halten.
+    this.coopProgressContainer.bringToTop(this.coopProgressUpgradesBtnLabel);
+    this.upgradeBtnEffect.stop();
+
+    // Living-Bar-Effekt auf dem LVL-Fortschrittsbalken (wie die grosse XP-Leiste).
+    this.coopBarEffect = new LivingBarEffect(
+      this.scene,
+      this.coopProgressContainer,
+      coopBarX,
+      coopBarY - COOP_BAR_H / 2,
+      COOP_BAR_W,
+      COOP_BAR_H,
+      coopBarPalette,
+      { glowTarget: this.coopProgressBarFill, scrollFactor: 0, intensity: 1.2 },
+    );
+    this.coopBarEffect.stop();
 
     // ── Container mit korrektem Depth erstellen ───────────────────────────
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
@@ -297,6 +353,8 @@ export class LobbyOverlay {
     this.visible = false;
     this.container?.setVisible(false);
     this.coopProgressContainer?.setVisible(false);
+    this.upgradeBtnEffect?.stop();
+    this.coopBarEffect?.stop();
   }
 
   isVisible(): boolean {
@@ -353,17 +411,38 @@ export class LobbyOverlay {
   }
 
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
-    if (!this.coopProgressContainer || !this.coopProgressLevelText || !this.coopProgressTotalXpText || !this.coopProgressNextLevelText) return;
+    if (!this.coopProgressContainer || !this.coopProgressLevelText) return;
 
     if (!progress) {
       this.coopProgressContainer.setVisible(false);
+      this.upgradeBtnEffect?.stop();
       return;
     }
 
     this.coopProgressContainer.setVisible(this.visible);
     this.coopProgressLevelText.setText(`Level ${progress.level}`);
-    this.coopProgressTotalXpText.setText(`${progress.totalXp} XP gesamt`);
-    this.coopProgressNextLevelText.setText(`${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}`);
+
+    const fillW = Math.max(0.001, COOP_BAR_W * progress.levelProgressFraction);
+    this.coopProgressBarFill?.setCrop(0, 0, fillW, COOP_BAR_H);
+    this.coopBarEffect?.setFilledWidth(fillW);
+    if (this.visible) this.coopBarEffect?.start();
+    else this.coopBarEffect?.stop();
+
+    const freePoints = progress.availableUpgradePoints;
+    if (this.coopProgressPointsText) {
+      this.coopProgressPointsText.setText(
+        freePoints > 0 ? `${freePoints} Upgrade-Punkte verfuegbar` : 'Alle Punkte verteilt',
+      );
+      this.coopProgressPointsText.setColor(toCssColor(freePoints > 0 ? COLORS.GOLD_1 : COLORS.GREY_4));
+    }
+
+    // Aktiver Living-Bar-Effekt nur, wenn der Spieler noch freie Punkte hat.
+    if (freePoints > 0 && this.visible) {
+      this.upgradeBtnEffect?.setFilledWidth(COOP_UPGRADE_BTN_W);
+      this.upgradeBtnEffect?.start();
+    } else {
+      this.upgradeBtnEffect?.stop();
+    }
   }
 
   /** Button-Zustand nach isReady-Toggle anpassen. */
@@ -403,6 +482,10 @@ export class LobbyOverlay {
   }
 
   // ── Interne Hilfsmethoden ─────────────────────────────────────────────────
+
+  private attachHoverEffect(btn: Phaser.GameObjects.Image, label: Phaser.GameObjects.Text): void {
+    attachHoverEffect(this.scene, btn, label);
+  }
 
   private addPlayerRow(profile: PlayerProfile): void {
     const idx = this.playerRows.size;
@@ -493,13 +576,12 @@ export class LobbyOverlay {
   private refreshCoopDefenseLevels(): void {
     const showLevels = isCoopDefenseMode(this.bridge.getGameMode());
     for (const [id, row] of this.playerRows) {
-      row.level.setText(showLevels ? `Lv ${this.bridge.getPlayerCoopDefenseLevel(id)}` : '-');
+      row.level.setText(showLevels ? `LVL ${this.bridge.getPlayerCoopDefenseLevel(id)}` : '-');
     }
   }
 
   private updateCoopDefenseLevelVisibility(): void {
     const showLevels = isCoopDefenseMode(this.bridge.getGameMode());
-    this.levelHeaderText?.setVisible(showLevels);
     for (const row of this.playerRows.values()) {
       row.level.setVisible(showLevels);
     }
