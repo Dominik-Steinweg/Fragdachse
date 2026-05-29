@@ -248,6 +248,15 @@ export function isCoopDefenseLoadoutItemUnlocked(
   return getCoopDefenseUpgradeState(profile, upgradeId).level > 0;
 }
 
+// Strikt: ein Item ist im Defense-Mode nur auswählbar, wenn seine loadoutUnlock-Freischaltung erfüllt ist.
+export function isCoopDefenseLoadoutItemSelectable(
+  profile: CoopDefenseUpgradeProfile,
+  slot: LoadoutSlot,
+  itemId: string,
+): boolean {
+  return isCoopDefenseLoadoutItemUnlocked(profile, slot, itemId);
+}
+
 export function getCoopDefenseResolvedEffectTotals(
   profile: CoopDefenseUpgradeProfile,
 ): CoopDefenseResolvedEffectTotals {

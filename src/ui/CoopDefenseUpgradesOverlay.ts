@@ -25,27 +25,34 @@ const BAR_Y = SUBTITLE_Y + 48;
 const POINTS_Y = BAR_Y + 38;
 const POINTS_TEXT_OFFSET_Y = 8;
 const FOOTER_Y = CY + PANEL_H / 2 - 28;
-const UPGRADE_AREA_W = PANEL_W - 60;
-const UPGRADE_AREA_TOP = POINTS_Y + 34;
-const UPGRADE_AREA_BOTTOM = FOOTER_Y - 44;
-const UPGRADE_AREA_H = UPGRADE_AREA_BOTTOM - UPGRADE_AREA_TOP;
-const UPGRADE_AREA_Y = UPGRADE_AREA_TOP + UPGRADE_AREA_H / 2;
-const UPGRADE_AREA_X = CX - UPGRADE_AREA_W / 2;
-const UPGRADE_LANE_COUNT = 5;
-const LANE_W = UPGRADE_AREA_W / UPGRADE_LANE_COUNT;
-const LANE_INNER_PADDING_X = 10;
-const LANE_INNER_TOP = 56;
-const LANE_INNER_BOTTOM = 14;
-const LANE_BODY_H = UPGRADE_AREA_H - LANE_INNER_TOP - LANE_INNER_BOTTOM;
-const NODE_H = 16;
-const NODE_GAP_Y = 4;
-const NODE_GAP_X = 10;
-const NODE_INNER_PADDING = 2;
-const NODE_LABEL_FONT_SIZE = 10;
-const ROOT_GROUP_GAP_ROWS = 1;
+
+const TAB_TOP = POINTS_Y + 28;
+const TAB_H = 36;
+const TAB_GAP = 12;
+const TAB_MAX_W = 240;
+
+const CONTENT_TOP = TAB_TOP + TAB_H + 26;
+const CONTENT_BOTTOM = FOOTER_Y - 22;
+const CONTENT_W = PANEL_W - 80;
+const CONTENT_X = CX - CONTENT_W / 2;
+const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP;
+const CONTENT_Y = CONTENT_TOP + CONTENT_H / 2;
+
+const NODE_W = 150;
+const NODE_H = 54;
+const NODE_GAP_X = 18;
+const NODE_GAP_Y = 30;
+const ROW_GAP = 30;
+const NODE_INNER_PADDING = 3;
+const NODE_LABEL_FONT_SIZE = 12;
+
+const COLUMN_UNIT = NODE_W + NODE_GAP_X;
+const ROW_UNIT = NODE_H + NODE_GAP_Y;
+
 const TOOLTIP_OFFSET_X = 18;
 const TOOLTIP_OFFSET_Y = 18;
 const TOOLTIP_MAX_W = 320;
+
 const BASE_UNLOCK_NODE_FILL = COLORS.GREY_5;
 const BASE_UNLOCK_NODE_STROKE = COLORS.GREY_2;
 const BASE_UNLOCK_NODE_ACTIVE = COLORS.GREY_1;
@@ -67,21 +74,13 @@ type CategoryVisuals = {
   connector: number;
 };
 
-type LaneLayoutNode = {
+type PlacedNode = {
   node: CoopDefenseUpgradeNodeSnapshot;
   x: number;
   y: number;
 };
 
-type LaneLayout = {
-  category: CoopDefenseUpgradeCategorySnapshot;
-  visuals: CategoryVisuals;
-  nodeWidth: number;
-  nodes: LaneLayoutNode[];
-  nodesById: Map<string, LaneLayoutNode>;
-};
-
-type LaneTree = {
+type CategoryTree = {
   roots: CoopDefenseUpgradeNodeSnapshot[];
   childrenByParentId: Map<string, CoopDefenseUpgradeNodeSnapshot[]>;
 };
@@ -147,11 +146,13 @@ export class CoopDefenseUpgradesOverlay {
   private pointsText: Phaser.GameObjects.Text | null = null;
   private progressFill: Phaser.GameObjects.Rectangle | null = null;
   private progressLabelText: Phaser.GameObjects.Text | null = null;
+  private tabsContainer: Phaser.GameObjects.Container | null = null;
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
   private tooltipContainer: Phaser.GameObjects.Container | null = null;
   private tooltipBackground: Phaser.GameObjects.Rectangle | null = null;
   private tooltipText: Phaser.GameObjects.Text | null = null;
   private visible = false;
+  private activeCategoryIndex = 0;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
   private keyHandler: ((event: KeyboardEvent) => void) | null = null;
 
@@ -171,6 +172,7 @@ export class CoopDefenseUpgradesOverlay {
     this.pointsText = null;
     this.progressFill = null;
     this.progressLabelText = null;
+    this.tabsContainer = null;
     this.upgradesContainer = null;
     this.tooltipContainer = null;
     this.tooltipBackground = null;
@@ -224,8 +226,11 @@ export class CoopDefenseUpgradesOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.pointsText);
 
+    this.tabsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
+    objects.push(this.tabsContainer);
+
     objects.push(
-      this.scene.add.rectangle(CX, UPGRADE_AREA_Y, UPGRADE_AREA_W, UPGRADE_AREA_H, COLORS.GREY_8, 0.52)
+      this.scene.add.rectangle(CX, CONTENT_Y, CONTENT_W, CONTENT_H, COLORS.GREY_8, 0.52)
         .setStrokeStyle(1, COLORS.GREY_5)
         .setScrollFactor(0),
     );
@@ -267,6 +272,7 @@ export class CoopDefenseUpgradesOverlay {
       || !this.progressFill
       || !this.progressLabelText
       || !this.upgradesContainer
+      || !this.tabsContainer
     ) {
       return;
     }
@@ -282,7 +288,13 @@ export class CoopDefenseUpgradesOverlay {
     this.progressFill.setDisplaySize(Math.max(0.001, BAR_W * progress.levelProgressFraction), BAR_H);
     this.progressLabelText.setText(`${progress.xpIntoLevel} / ${levelXpSpan} XP bis zum naechsten Level`);
 
-    this.renderUpgradeLanes(progress);
+    const categoryCount = progress.upgradeCategories.length;
+    if (categoryCount > 0) {
+      this.activeCategoryIndex = Phaser.Math.Clamp(this.activeCategoryIndex, 0, categoryCount - 1);
+    }
+
+    this.renderTabs(progress);
+    this.renderActiveCategory(progress);
   }
 
   show(): void {
@@ -351,119 +363,170 @@ export class CoopDefenseUpgradesOverlay {
     this.dimRect = null;
   }
 
-  private renderUpgradeLanes(progress: CoopDefenseProgressSnapshot): void {
-    if (!this.upgradesContainer) return;
+  private setActiveCategory(index: number): void {
+    if (index === this.activeCategoryIndex) return;
+    this.activeCategoryIndex = index;
+    this.hideTooltip();
+    const progress = this.getProgress();
+    this.renderTabs(progress);
+    this.renderActiveCategory(progress);
+  }
 
+  private renderTabs(progress: CoopDefenseProgressSnapshot): void {
+    if (!this.tabsContainer) return;
+    this.tabsContainer.removeAll(true);
+
+    const categories = progress.upgradeCategories;
+    if (categories.length === 0) return;
+
+    const tabW = Math.min(TAB_MAX_W, (CONTENT_W - TAB_GAP * (categories.length - 1)) / categories.length);
+    const totalW = tabW * categories.length + TAB_GAP * (categories.length - 1);
+    const startX = CX - totalW / 2;
+
+    categories.forEach((category, index) => {
+      const visuals = CATEGORY_VISUALS[category.id];
+      const isActive = index === this.activeCategoryIndex;
+      const centerX = startX + tabW / 2 + index * (tabW + TAB_GAP);
+
+      const bg = this.scene.add.rectangle(
+        centerX,
+        TAB_TOP + TAB_H / 2,
+        tabW,
+        TAB_H,
+        isActive ? visuals.laneFill : COLORS.GREY_8,
+        isActive ? 0.92 : 0.5,
+      )
+        .setStrokeStyle(isActive ? 2 : 1, isActive ? visuals.divider : COLORS.GREY_5)
+        .setScrollFactor(0)
+        .setInteractive({ useHandCursor: !isActive });
+      this.tabsContainer!.add(bg);
+
+      const label = this.scene.add.text(centerX, TAB_TOP + TAB_H / 2, category.label, {
+        fontSize: '15px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(isActive ? visuals.title : COLORS.GREY_3),
+      }).setOrigin(0.5).setScrollFactor(0);
+      this.tabsContainer!.add(label);
+
+      if (!isActive) {
+        bg.on('pointerover', () => bg.setAlpha(0.72));
+        bg.on('pointerout', () => bg.setAlpha(0.5));
+        bg.on('pointerdown', () => this.setActiveCategory(index));
+      }
+    });
+  }
+
+  private renderActiveCategory(progress: CoopDefenseProgressSnapshot): void {
+    if (!this.upgradesContainer) return;
     this.upgradesContainer.removeAll(true);
 
-    const layouts = this.buildLaneLayouts(progress.upgradeCategories);
+    const category = progress.upgradeCategories[this.activeCategoryIndex];
+    if (!category) return;
 
-    for (let laneIndex = 0; laneIndex < progress.upgradeCategories.length; laneIndex += 1) {
-      const layout = layouts[laneIndex];
-      const laneX = UPGRADE_AREA_X + laneIndex * LANE_W;
-      const laneCenterX = laneX + LANE_W / 2;
+    const visuals = CATEGORY_VISUALS[category.id];
+    const tree = this.buildCategoryTree(category.upgrades);
+    const columnCache = new Map<string, number>();
+    const depthCache = new Map<string, number>();
 
-      this.upgradesContainer.add(
-        this.scene.add.rectangle(laneCenterX, UPGRADE_AREA_Y, LANE_W, UPGRADE_AREA_H, layout.visuals.laneFill, layout.visuals.laneAlpha)
-          .setScrollFactor(0),
-      );
+    const colsPerRow = Math.max(1, Math.floor((CONTENT_W + NODE_GAP_X) / COLUMN_UNIT));
 
-      this.upgradesContainer.add(
-        this.scene.add.text(laneCenterX, UPGRADE_AREA_TOP + 16, layout.category.label, {
-          fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(layout.visuals.title),
-        }).setOrigin(0.5, 0).setScrollFactor(0),
-      );
+    const rows: { roots: CoopDefenseUpgradeNodeSnapshot[]; totalCols: number; maxDepth: number }[] = [];
+    let current = { roots: [] as CoopDefenseUpgradeNodeSnapshot[], totalCols: 0, maxDepth: 1 };
 
-      if (laneIndex > 0) {
-        this.upgradesContainer.add(
-          this.scene.add.rectangle(laneX, UPGRADE_AREA_Y, 2, UPGRADE_AREA_H - 18, COLORS.GREY_5, 0.95)
-            .setScrollFactor(0),
-        );
+    for (const root of tree.roots) {
+      const cols = this.measureColumns(root.id, tree.childrenByParentId, columnCache);
+      if (current.roots.length > 0 && current.totalCols + cols > colsPerRow) {
+        rows.push(current);
+        current = { roots: [], totalCols: 0, maxDepth: 1 };
+      }
+      current.roots.push(root);
+      current.totalCols += cols;
+      current.maxDepth = Math.max(current.maxDepth, this.measureDepth(root.id, tree.childrenByParentId, depthCache));
+    }
+    if (current.roots.length > 0) rows.push(current);
+
+    const placed: PlacedNode[] = [];
+    const placedById = new Map<string, PlacedNode>();
+
+    let rowTopY = CONTENT_TOP + 12;
+    for (const row of rows) {
+      const rowWidthPx = row.totalCols * COLUMN_UNIT - NODE_GAP_X;
+      const rowLeftX = CONTENT_X + Math.max(0, (CONTENT_W - rowWidthPx) / 2);
+
+      let colCursor = 0;
+      for (const root of row.roots) {
+        const cols = this.measureColumns(root.id, tree.childrenByParentId, columnCache);
+        this.layoutSubtree({
+          node: root,
+          leftX: rowLeftX + colCursor * COLUMN_UNIT,
+          depthIndex: 0,
+          rowTopY,
+          tree,
+          columnCache,
+          placed,
+          placedById,
+        });
+        colCursor += cols;
       }
 
-      this.upgradesContainer.add(
-        this.scene.add.rectangle(laneCenterX, UPGRADE_AREA_TOP + LANE_INNER_TOP - 10, LANE_W - 14, 2, layout.visuals.divider, 0.9)
-          .setScrollFactor(0),
-      );
+      rowTopY += row.maxDepth * ROW_UNIT + ROW_GAP;
+    }
 
-      this.renderLaneConnections(layout);
-      this.renderLaneNodes(layout);
+    this.renderConnections(placed, placedById, visuals);
+    for (const placedNode of placed) {
+      this.renderNode(placedNode, visuals);
     }
   }
 
-  private buildLaneLayouts(categories: readonly CoopDefenseUpgradeCategorySnapshot[]): LaneLayout[] {
-    const categoriesWithTrees = categories.map((category) => {
-      const tree = this.buildLaneTree(category.upgrades);
-      return {
-        category,
+  private layoutSubtree(params: {
+    node: CoopDefenseUpgradeNodeSnapshot;
+    leftX: number;
+    depthIndex: number;
+    rowTopY: number;
+    tree: CategoryTree;
+    columnCache: Map<string, number>;
+    placed: PlacedNode[];
+    placedById: Map<string, PlacedNode>;
+  }): void {
+    const { node, leftX, depthIndex, rowTopY, tree, columnCache, placed, placedById } = params;
+
+    const cols = this.measureColumns(node.id, tree.childrenByParentId, columnCache);
+    const subtreeWidthPx = cols * COLUMN_UNIT - NODE_GAP_X;
+    const x = leftX + subtreeWidthPx / 2;
+    const y = rowTopY + depthIndex * ROW_UNIT + NODE_H / 2;
+
+    const placedNode: PlacedNode = { node, x, y };
+    placed.push(placedNode);
+    placedById.set(node.id, placedNode);
+
+    const children = tree.childrenByParentId.get(node.id) ?? [];
+    let childLeft = leftX;
+    for (const child of children) {
+      this.layoutSubtree({
+        node: child,
+        leftX: childLeft,
+        depthIndex: depthIndex + 1,
+        rowTopY,
         tree,
-        totalColumns: this.getTreeMaxDepth(tree),
-      };
-    });
-
-    const maxColumns = Math.max(1, ...categoriesWithTrees.map((entry) => entry.totalColumns));
-    const laneInnerW = LANE_W - LANE_INNER_PADDING_X * 2;
-    const computedNodeWidth = Math.max(
-      74,
-      Math.floor((laneInnerW - NODE_GAP_X * Math.max(0, maxColumns - 1)) / maxColumns),
-    );
-
-    return categoriesWithTrees.map(({ category, tree }, laneIndex) => {
-      const laneLeft = UPGRADE_AREA_X + laneIndex * LANE_W;
-      const bodyTop = UPGRADE_AREA_TOP + LANE_INNER_TOP;
-      const nodesById = new Map<string, LaneLayoutNode>();
-      const nodes: LaneLayoutNode[] = [];
-
-      const rowUnit = NODE_H + NODE_GAP_Y;
-      const totalRows = this.getTreeTotalRows(tree);
-      const usedHeight = totalRows > 0 ? totalRows * rowUnit - NODE_GAP_Y : 0;
-      const startY = bodyTop + Math.max(0, (LANE_BODY_H - usedHeight) / 2) + NODE_H / 2;
-      const rowCache = new Map<string, number>();
-      let rowCursor = 0;
-
-      for (const root of tree.roots) {
-        this.placeTreeNode({
-          node: root,
-          columnIndex: 0,
-          rowStart: rowCursor,
-          startY,
-          rowUnit,
-          laneLeft,
-          nodeWidth: computedNodeWidth,
-          nodes,
-          nodesById,
-          childrenByParentId: tree.childrenByParentId,
-          rowCache,
-        });
-        rowCursor += this.measureTreeRows(root.id, tree.childrenByParentId, rowCache) + ROOT_GROUP_GAP_ROWS;
-      }
-
-      return {
-        category,
-        visuals: CATEGORY_VISUALS[category.id],
-        nodeWidth: computedNodeWidth,
-        nodes,
-        nodesById,
-      };
-    });
+        columnCache,
+        placed,
+        placedById,
+      });
+      childLeft += this.measureColumns(child.id, tree.childrenByParentId, columnCache) * COLUMN_UNIT;
+    }
   }
 
-  private buildLaneTree(upgrades: readonly CoopDefenseUpgradeNodeSnapshot[]): LaneTree {
+  private buildCategoryTree(upgrades: readonly CoopDefenseUpgradeNodeSnapshot[]): CategoryTree {
     const childrenByParentId = new Map<string, CoopDefenseUpgradeNodeSnapshot[]>();
     const rootNodes: CoopDefenseUpgradeNodeSnapshot[] = [];
 
     for (const node of upgrades) {
-      if (node.requires.length === 0) {
-        rootNodes.push(node);
-        continue;
-      }
-
       const primaryParentId = node.requires[0]?.upgradeId;
       if (!primaryParentId) {
         rootNodes.push(node);
         continue;
       }
-
       const siblings = childrenByParentId.get(primaryParentId) ?? [];
       siblings.push(node);
       childrenByParentId.set(primaryParentId, siblings);
@@ -473,153 +536,73 @@ export class CoopDefenseUpgradesOverlay {
     const markVisited = (node: CoopDefenseUpgradeNodeSnapshot): void => {
       if (visited.has(node.id)) return;
       visited.add(node.id);
-      const children = childrenByParentId.get(node.id) ?? [];
-      for (const child of children) markVisited(child);
+      for (const child of childrenByParentId.get(node.id) ?? []) markVisited(child);
     };
-
     for (const root of rootNodes) markVisited(root);
     for (const node of upgrades) {
       if (!visited.has(node.id)) rootNodes.push(node);
     }
 
-    return {
-      roots: rootNodes,
-      childrenByParentId,
-    };
+    return { roots: rootNodes, childrenByParentId };
   }
 
-  private getTreeTotalRows(tree: LaneTree): number {
-    const rowCache = new Map<string, number>();
-    let totalRows = 0;
-
-    tree.roots.forEach((root, index) => {
-      totalRows += this.measureTreeRows(root.id, tree.childrenByParentId, rowCache);
-      if (index < tree.roots.length - 1) totalRows += ROOT_GROUP_GAP_ROWS;
-    });
-
-    return totalRows;
-  }
-
-  private getTreeMaxDepth(tree: LaneTree): number {
-    const depthCache = new Map<string, number>();
-    let maxDepth = 1;
-
-    for (const root of tree.roots) {
-      maxDepth = Math.max(maxDepth, this.measureTreeDepth(root.id, tree.childrenByParentId, depthCache));
-    }
-
-    return maxDepth;
-  }
-
-  private measureTreeRows(
+  private measureColumns(
     nodeId: string,
     childrenByParentId: ReadonlyMap<string, CoopDefenseUpgradeNodeSnapshot[]>,
-    rowCache: Map<string, number>,
+    cache: Map<string, number>,
   ): number {
-    const cached = rowCache.get(nodeId);
+    const cached = cache.get(nodeId);
     if (cached != null) return cached;
 
     const children = childrenByParentId.get(nodeId) ?? [];
-    const rows = children.length === 0
+    const cols = children.length === 0
       ? 1
-      : Math.max(1, children.reduce((sum, child) => sum + this.measureTreeRows(child.id, childrenByParentId, rowCache), 0));
-    rowCache.set(nodeId, rows);
-    return rows;
+      : Math.max(1, children.reduce((sum, child) => sum + this.measureColumns(child.id, childrenByParentId, cache), 0));
+    cache.set(nodeId, cols);
+    return cols;
   }
 
-  private measureTreeDepth(
+  private measureDepth(
     nodeId: string,
     childrenByParentId: ReadonlyMap<string, CoopDefenseUpgradeNodeSnapshot[]>,
-    depthCache: Map<string, number>,
+    cache: Map<string, number>,
   ): number {
-    const cached = depthCache.get(nodeId);
+    const cached = cache.get(nodeId);
     if (cached != null) return cached;
 
     const children = childrenByParentId.get(nodeId) ?? [];
     const depth = children.length === 0
       ? 1
-      : 1 + Math.max(...children.map((child) => this.measureTreeDepth(child.id, childrenByParentId, depthCache)));
-    depthCache.set(nodeId, depth);
+      : 1 + Math.max(...children.map((child) => this.measureDepth(child.id, childrenByParentId, cache)));
+    cache.set(nodeId, depth);
     return depth;
   }
 
-  private placeTreeNode(params: {
-    node: CoopDefenseUpgradeNodeSnapshot;
-    columnIndex: number;
-    rowStart: number;
-    startY: number;
-    rowUnit: number;
-    laneLeft: number;
-    nodeWidth: number;
-    nodes: LaneLayoutNode[];
-    nodesById: Map<string, LaneLayoutNode>;
-    childrenByParentId: ReadonlyMap<string, CoopDefenseUpgradeNodeSnapshot[]>;
-    rowCache: Map<string, number>;
-  }): void {
-    const {
-      node,
-      columnIndex,
-      rowStart,
-      startY,
-      rowUnit,
-      laneLeft,
-      nodeWidth,
-      nodes,
-      nodesById,
-      childrenByParentId,
-      rowCache,
-    } = params;
-
-    const subtreeRows = this.measureTreeRows(node.id, childrenByParentId, rowCache);
-    const x = laneLeft + LANE_INNER_PADDING_X + nodeWidth / 2 + columnIndex * (nodeWidth + NODE_GAP_X);
-    const y = startY + (rowStart + (subtreeRows - 1) / 2) * rowUnit;
-    const layoutNode = { node, x, y };
-
-    nodes.push(layoutNode);
-    nodesById.set(node.id, layoutNode);
-
-    const children = childrenByParentId.get(node.id) ?? [];
-    let childRowStart = rowStart;
-    for (const child of children) {
-      this.placeTreeNode({
-        node: child,
-        columnIndex: columnIndex + 1,
-        rowStart: childRowStart,
-        startY,
-        rowUnit,
-        laneLeft,
-        nodeWidth,
-        nodes,
-        nodesById,
-        childrenByParentId,
-        rowCache,
-      });
-      childRowStart += this.measureTreeRows(child.id, childrenByParentId, rowCache);
-    }
-  }
-
-  private renderLaneConnections(layout: LaneLayout): void {
+  private renderConnections(
+    placed: readonly PlacedNode[],
+    placedById: ReadonlyMap<string, PlacedNode>,
+    visuals: CategoryVisuals,
+  ): void {
     if (!this.upgradesContainer) return;
 
     const graphics = this.scene.add.graphics().setScrollFactor(0);
-    graphics.lineStyle(1, layout.visuals.connector, 0.72);
 
-    for (const layoutNode of layout.nodes) {
-      for (const requirement of layoutNode.node.requires) {
-        const dependency = layout.nodesById.get(requirement.upgradeId);
-        if (!dependency) continue;
+    for (const child of placed) {
+      for (const requirement of child.node.requires) {
+        const parent = placedById.get(requirement.upgradeId);
+        if (!parent) continue;
 
-        const startX = dependency.x + layout.nodeWidth / 2;
-        const startY = dependency.y;
-        const endX = layoutNode.x - layout.nodeWidth / 2;
-        const endY = layoutNode.y;
-        const midX = startX + Math.max(10, (endX - startX) * 0.5);
+        const startX = parent.x;
+        const startY = parent.y + NODE_H / 2;
+        const endX = child.x;
+        const endY = child.y - NODE_H / 2;
+        const midY = startY + Math.max(8, (endY - startY) * 0.5);
 
-        graphics.lineStyle(1, requirement.satisfied ? layout.visuals.connector : COLORS.GREY_5, requirement.satisfied ? 0.82 : 0.55);
+        graphics.lineStyle(2, requirement.satisfied ? visuals.connector : COLORS.GREY_5, requirement.satisfied ? 0.82 : 0.5);
         graphics.beginPath();
         graphics.moveTo(startX, startY);
-        graphics.lineTo(midX, startY);
-        graphics.lineTo(midX, endY);
+        graphics.lineTo(startX, midY);
+        graphics.lineTo(endX, midY);
         graphics.lineTo(endX, endY);
         graphics.strokePath();
       }
@@ -628,69 +611,89 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer.add(graphics);
   }
 
-  private renderLaneNodes(layout: LaneLayout): void {
+  private renderNode(placedNode: PlacedNode, visuals: CategoryVisuals): void {
     if (!this.upgradesContainer) return;
 
-    for (const layoutNode of layout.nodes) {
-      const nodeGroup = this.scene.add.container(0, 0).setScrollFactor(0);
-      const isBaseUnlock = layoutNode.node.kind === 'unlock'
-        && layoutNode.node.startingLevel > 0
-        && !layoutNode.node.refundable;
-      const interactionEnabled = layoutNode.node.canLevelUp || layoutNode.node.canLevelDown;
-      const isLocked = !layoutNode.node.unlocked && layoutNode.node.level <= 0;
-      const progressFraction = layoutNode.node.maxLevel > 0
-        ? Phaser.Math.Clamp(layoutNode.node.level / layoutNode.node.maxLevel, 0, 1)
-        : 0;
-      const nodeBaseColor = isBaseUnlock ? BASE_UNLOCK_NODE_FILL : layout.visuals.nodeBase;
-      const nodeStrokeColor = isBaseUnlock ? BASE_UNLOCK_NODE_STROKE : layout.visuals.nodeStroke;
-      const nodeActiveColor = isBaseUnlock ? BASE_UNLOCK_NODE_ACTIVE : layout.visuals.nodeActive;
-      const baseAlpha = isLocked ? 0.28 : layoutNode.node.level > 0 ? 0.96 : 0.72;
+    const { node, x, y } = placedNode;
+    const nodeGroup = this.scene.add.container(0, 0).setScrollFactor(0);
 
-      const baseRect = this.scene.add.rectangle(layoutNode.x, layoutNode.y, layout.nodeWidth, NODE_H, nodeBaseColor, baseAlpha)
-        .setStrokeStyle(1, interactionEnabled || isBaseUnlock ? nodeStrokeColor : COLORS.GREY_5)
-        .setScrollFactor(0);
-      nodeGroup.add(baseRect);
+    const isBaseUnlock = node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable;
+    const interactionEnabled = node.canLevelUp || node.canLevelDown;
+    const isLocked = !node.unlocked && node.level <= 0;
+    const progressFraction = node.maxLevel > 0
+      ? Phaser.Math.Clamp(node.level / node.maxLevel, 0, 1)
+      : 0;
+    const nodeBaseColor = isBaseUnlock ? BASE_UNLOCK_NODE_FILL : visuals.nodeBase;
+    const nodeStrokeColor = isBaseUnlock ? BASE_UNLOCK_NODE_STROKE : visuals.nodeStroke;
+    const nodeActiveColor = isBaseUnlock ? BASE_UNLOCK_NODE_ACTIVE : visuals.nodeActive;
+    const baseAlpha = isLocked ? 0.28 : node.level > 0 ? 0.96 : 0.72;
 
-      const fillWidth = Math.max(0, (layout.nodeWidth - NODE_INNER_PADDING * 2) * progressFraction);
-      const activeFill = this.scene.add.rectangle(
-        layoutNode.x - layout.nodeWidth / 2 + NODE_INNER_PADDING,
-        layoutNode.y,
-        Math.max(0.001, fillWidth),
-        NODE_H - NODE_INNER_PADDING * 2,
-        nodeActiveColor,
-        layoutNode.node.level > 0 ? 0.94 : 0,
-      )
-        .setOrigin(0, 0.5)
-        .setScrollFactor(0);
-      nodeGroup.add(activeFill);
+    const iconKey = node.loadoutUnlock ? node.loadoutUnlock.itemId : `UPGRADE_${node.id.toUpperCase()}`;
+    const hasIcon = this.scene.textures.exists(iconKey);
 
-      const label = this.scene.add.text(layoutNode.x, layoutNode.y, layoutNode.node.label, {
-        fontSize: `${NODE_LABEL_FONT_SIZE}px`,
-        fontFamily: 'monospace',
-        fontStyle: 'bold',
-        color: toCssColor(isBaseUnlock ? COLORS.GREY_10 : isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
-        align: 'center',
-        wordWrap: { width: layout.nodeWidth - 14, useAdvancedWrap: true },
-      }).setOrigin(0.5).setScrollFactor(0);
-      nodeGroup.add(label);
+    const baseRect = this.scene.add.rectangle(x, y, NODE_W, NODE_H, nodeBaseColor, baseAlpha)
+      .setStrokeStyle(1, interactionEnabled || isBaseUnlock ? nodeStrokeColor : COLORS.GREY_5)
+      .setScrollFactor(0);
+    nodeGroup.add(baseRect);
 
-      const hitArea = this.scene.add.rectangle(layoutNode.x, layoutNode.y, layout.nodeWidth, NODE_H, 0x000000, 0.001)
+    if (hasIcon) {
+      const iconImg = this.scene.add.image(x - NODE_W / 2 + 24, y, iconKey)
         .setScrollFactor(0)
-        .setInteractive({ useHandCursor: interactionEnabled })
-        .on('pointerover', (pointer: Phaser.Input.Pointer) => {
-          baseRect.setAlpha(Math.min(1, baseAlpha + 0.12));
-          this.showTooltip(layoutNode.node, pointer);
-        })
-        .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
-        .on('pointerout', () => {
-          baseRect.setAlpha(baseAlpha);
-          this.hideTooltip();
-        })
-        .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.handleUpgradePointerDown(layoutNode.node, pointer));
-      nodeGroup.add(hitArea);
-
-      this.upgradesContainer.add(nodeGroup);
+        .setAlpha(isLocked ? 0.35 : 1.0);
+      nodeGroup.add(iconImg);
     }
+
+    const fillWidth = Math.max(0, (NODE_W - NODE_INNER_PADDING * 2) * progressFraction);
+    const activeFill = this.scene.add.rectangle(
+      x - NODE_W / 2 + NODE_INNER_PADDING,
+      y,
+      Math.max(0.001, fillWidth),
+      NODE_H - NODE_INNER_PADDING * 2,
+      nodeActiveColor,
+      node.level > 0 ? 0.94 : 0,
+    )
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0);
+    nodeGroup.add(activeFill);
+
+    const labelWidth = hasIcon ? NODE_W - 52 : NODE_W - 16;
+    const labelX = hasIcon ? x - NODE_W / 2 + 46 : x;
+
+    const label = this.scene.add.text(labelX, y - (node.maxLevel > 1 ? 7 : 0), node.label, {
+      fontSize: `${NODE_LABEL_FONT_SIZE}px`,
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      color: toCssColor(isBaseUnlock ? COLORS.GREY_10 : isLocked ? COLORS.GREY_4 : COLORS.GREY_1),
+      align: hasIcon ? 'left' : 'center',
+      wordWrap: { width: labelWidth, useAdvancedWrap: true },
+    }).setOrigin(hasIcon ? 0 : 0.5, 0.5).setScrollFactor(0);
+    nodeGroup.add(label);
+
+    if (node.maxLevel > 1) {
+      const levelText = this.scene.add.text(labelX, y + NODE_H / 2 - 9, `${node.level}/${node.maxLevel}`, {
+        fontSize: '11px',
+        fontFamily: 'monospace',
+        color: toCssColor(isLocked ? COLORS.GREY_5 : COLORS.GREY_2),
+      }).setOrigin(hasIcon ? 0 : 0.5, 0.5).setScrollFactor(0);
+      nodeGroup.add(levelText);
+    }
+
+    const hitArea = this.scene.add.rectangle(x, y, NODE_W, NODE_H, 0x000000, 0.001)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: interactionEnabled })
+      .on('pointerover', (pointer: Phaser.Input.Pointer) => {
+        baseRect.setAlpha(Math.min(1, baseAlpha + 0.12));
+        this.showTooltip(node, pointer);
+      })
+      .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
+      .on('pointerout', () => {
+        baseRect.setAlpha(baseAlpha);
+        this.hideTooltip();
+      })
+      .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.handleUpgradePointerDown(node, pointer));
+    nodeGroup.add(hitArea);
+
+    this.upgradesContainer.add(nodeGroup);
   }
 
   private handleUpgradePointerDown(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {

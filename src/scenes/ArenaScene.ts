@@ -174,6 +174,32 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
     this.load.image('badger',      './assets/sprites/32x32dachsweapon01.png');
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
+
+    // Preload Loadout & Upgrade Icons
+    for (const key of Object.keys(WEAPON_CONFIGS)) {
+      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+    }
+    for (const key of Object.keys(UTILITY_CONFIGS)) {
+      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+    }
+    for (const key of Object.keys(ULTIMATE_CONFIGS)) {
+      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+    }
+
+    const UPGRADE_IDS = [
+      'hp', 'max_adrenaline', 'adrenaline_regeneration', 'burrow_speed',
+      'weapon1_adrenaline_gain', 'weapon1_fire_rate', 'weapon1_damage',
+      'glock_bounce', 'glock_projectile_speed', 'plasma_homing_turn',
+      'weapon2_adrenaline_cost', 'weapon2_fire_rate', 'weapon2_damage',
+      'p90_range', 'p90_accuracy', 'rocket_launcher_explosion_radius',
+      'rocket_launcher_cooldown', 'utility_cooldown_reduction',
+      'he_grenade_radius', 'time_bubble_radius', 'ultimate_max_rage',
+      'ultimate_rage_gain', 'armageddon_damage', 'armageddon_duration'
+    ];
+    for (const id of UPGRADE_IDS) {
+      const key = `UPGRADE_${id.toUpperCase()}`;
+      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+    }
   }
 
   create(): void {

@@ -15,14 +15,15 @@ import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { HelpOverlay } from './HelpOverlay';
 import { OptionsOverlay } from './OptionsOverlay';
-import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs } from '../loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
 import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
-import { getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
+import { getStoredCoopDefenseUpgradeProfile, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
+import { isCoopDefenseLoadoutItemSelectable } from '../utils/coopDefenseUpgrades';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
 const LOBBY_PANEL_W = 240;
@@ -809,19 +810,31 @@ export class LeftSidePanel {
     if (items.length === 0) {
       this.loadoutNameTexts[slot]?.setText('-');
       this.loadoutIndices[slot] = 0;
+      this.updateSlotArrowVisibility(slot);
       return;
     }
     const nextIndex = Phaser.Math.Clamp(this.loadoutIndices[slot], 0, items.length - 1);
     this.loadoutIndices[slot] = nextIndex;
     const item = items[nextIndex];
     this.loadoutNameTexts[slot]?.setText(item.displayName ?? item.id);
+    this.updateSlotArrowVisibility(slot);
   }
 
   private getSlotItems(slot: LoadoutSlot): LoadoutCarouselItem[] {
-    if (slot === 'ultimate') {
-      return getAvailableUltimateConfigs(this.bridge.getGameMode());
-    }
-    return STATIC_SLOT_ITEMS[slot];
+    const mode = this.bridge.getGameMode();
+    const base: LoadoutCarouselItem[] = slot === 'ultimate'
+      ? getAvailableUltimateConfigs(mode)
+      : STATIC_SLOT_ITEMS[slot];
+
+    if (!isCoopDefenseMode(mode)) return base;
+
+    const profile = getStoredCoopDefenseUpgradeProfile();
+    const filtered = base.filter((item) => isCoopDefenseLoadoutItemSelectable(profile, slot, item.id));
+    if (filtered.length > 0) return filtered;
+
+    // Sicherheits-Fallback: Liste nie leer — Default-Item des Slots erzwingen.
+    const fallback = DEFAULT_LOADOUT[slot];
+    return [{ id: fallback.id, displayName: fallback.displayName }];
   }
 
   private syncAllLoadoutSelections(): void {
@@ -1008,17 +1021,24 @@ export class LeftSidePanel {
   }
 
   private updateLoadoutArrowVisibility(): void {
-    for (const buttons of Object.values(this.loadoutArrowButtons)) {
-      if (!buttons) continue;
-      buttons.left.setVisible(!this.lobbyFieldsLocked);
-      buttons.right.setVisible(!this.lobbyFieldsLocked);
-      if (this.lobbyFieldsLocked) {
-        buttons.left.disableInteractive();
-        buttons.right.disableInteractive();
-      } else {
-        buttons.left.setInteractive({ useHandCursor: true });
-        buttons.right.setInteractive({ useHandCursor: true });
-      }
+    for (const slot of Object.keys(this.loadoutArrowButtons) as LoadoutSlot[]) {
+      this.updateSlotArrowVisibility(slot);
+    }
+  }
+
+  /** Pfeile nur sichtbar/klickbar, wenn nicht gesperrt UND mehr als ein Item zur Auswahl steht. */
+  private updateSlotArrowVisibility(slot: LoadoutSlot): void {
+    const buttons = this.loadoutArrowButtons[slot];
+    if (!buttons) return;
+    const enabled = !this.lobbyFieldsLocked && this.getSlotItems(slot).length > 1;
+    buttons.left.setVisible(enabled);
+    buttons.right.setVisible(enabled);
+    if (enabled) {
+      buttons.left.setInteractive({ useHandCursor: true });
+      buttons.right.setInteractive({ useHandCursor: true });
+    } else {
+      buttons.left.disableInteractive();
+      buttons.right.disableInteractive();
     }
   }
 
