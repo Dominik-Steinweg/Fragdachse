@@ -1872,6 +1872,7 @@ export class CombatSystem {
     const enemy = this.enemyManager?.getEnemy(targetId);
     if (!enemy) return;
     if (amount <= 0) return;
+    if (attackerId && this.enemyManager?.hasEnemy(attackerId)) return;
     if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
 
     if (attackerId && attackerId !== targetId) {

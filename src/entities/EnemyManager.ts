@@ -9,6 +9,11 @@ import {
   type ResolvedCoopDefenseEnemyConfigs,
 } from '../config/coopDefenseEnemies';
 
+const STEER_RESPONSIVENESS = 8;
+const SPAWN_LANE_JITTER_PX = CELL_SIZE * 0.3;
+const SEPARATION_RADIUS_PX = CELL_SIZE * 2;
+const SEPARATION_STRENGTH = 0.6;
+
 export class EnemyManager {
   private readonly scene: Phaser.Scene;
   private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs;
@@ -21,7 +26,9 @@ export class EnemyManager {
   }
 
   hostSpawnDummyAt(gridX: number, gridY: number, kind: CoopDefenseEnemyKind = 'zombie-badger'): EnemyEntity {
-    const { x, y } = this.gridToWorld(gridX, gridY);
+    const world = this.gridToWorld(gridX, gridY);
+    const x = world.x + Phaser.Math.RND.realInRange(-SPAWN_LANE_JITTER_PX, SPAWN_LANE_JITTER_PX);
+    const y = world.y + Phaser.Math.RND.realInRange(-SPAWN_LANE_JITTER_PX, SPAWN_LANE_JITTER_PX);
     const id = this.generateEnemyId(kind);
     const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind]);
     this.enemies.set(id, enemy);
@@ -33,7 +40,10 @@ export class EnemyManager {
     playerFlowFieldService: EnemyFlowFieldService | null,
     movementLocked: boolean,
     now: number,
+    deltaMs: number,
   ): void {
+    const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
+
     for (const enemy of this.enemies.values()) {
       const config = this.resolvedConfigs[enemy.kind];
       const flowFieldService = config.movementTarget === 'players'
@@ -64,8 +74,42 @@ export class EnemyManager {
       }
 
       const speed = enemy.getMoveSpeed();
-      enemy.setDesiredVelocity(vector.x * speed, vector.y * speed);
+      const separation = this.computeSeparation(enemy);
+      let targetVx = vector.x * speed + separation.x * SEPARATION_STRENGTH * speed;
+      let targetVy = vector.y * speed + separation.y * SEPARATION_STRENGTH * speed;
+
+      const targetSpeed = Math.hypot(targetVx, targetVy);
+      if (targetSpeed > speed) {
+        const scale = speed / targetSpeed;
+        targetVx *= scale;
+        targetVy *= scale;
+      }
+
+      const current = enemy.getDesiredVelocity();
+      enemy.setDesiredVelocity(
+        Phaser.Math.Linear(current.vx, targetVx, lerpT),
+        Phaser.Math.Linear(current.vy, targetVy, lerpT),
+      );
     }
+  }
+
+  private computeSeparation(enemy: EnemyEntity): { x: number; y: number } {
+    let pushX = 0;
+    let pushY = 0;
+
+    for (const other of this.enemies.values()) {
+      if (other === enemy) continue;
+      const dx = enemy.sprite.x - other.sprite.x;
+      const dy = enemy.sprite.y - other.sprite.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance <= 0 || distance >= SEPARATION_RADIUS_PX) continue;
+
+      const weight = (1 - distance / SEPARATION_RADIUS_PX) / distance;
+      pushX += dx * weight;
+      pushY += dy * weight;
+    }
+
+    return { x: pushX, y: pushY };
   }
 
   getNetSnapshot(): SyncedEnemyState[] {

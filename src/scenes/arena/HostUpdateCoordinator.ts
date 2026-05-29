@@ -81,6 +81,7 @@ export class HostUpdateCoordinator {
       this.ctx.enemyPlayerFlowFieldService,
       countdownActive,
       now,
+      delta,
     );
     if (!countdownActive) {
       this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
