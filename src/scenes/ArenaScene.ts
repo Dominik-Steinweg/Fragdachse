@@ -148,6 +148,7 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
   private coopDefenseProgress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
+  private lastObservedGamePhase: GamePhase | null = null;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -663,6 +664,7 @@ export class ArenaScene extends Phaser.Scene {
     this.time.addEvent({ delay: 2000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
     this.refreshStoredCoopDefenseProgress();
+    this.lastObservedGamePhase = bridge.getGamePhase();
   }
 
   update(_time: number, delta: number): void {
@@ -670,6 +672,7 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.detectPhaseChange();
 
     const phase           = bridge.getGamePhase();
+    const enteredLobbyFromArena = this.lastObservedGamePhase === 'ARENA' && phase === 'LOBBY';
     const inGame          = phase === 'ARENA';
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
@@ -714,7 +717,7 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.refreshPlayerList(players);
       this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
-      this.processCoopDefenseRoundXp();
+      this.processCoopDefenseRoundXp(enteredLobbyFromArena);
       this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       if (localProfile) this.ctx.leftPanel.updateLocalName(localProfile.name);
@@ -732,6 +735,8 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseUpgradesOverlay?.hide();
       this.lobbyOverlay.setCoopDefenseProgress(null);
     }
+
+    this.lastObservedGamePhase = phase;
 
     if (inGame && !terminated) {
       const secs = bridge.computeSecondsLeft();
@@ -1238,8 +1243,8 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseUpgradesOverlay?.refresh();
   }
 
-  private processCoopDefenseRoundXp(): void {
-    if (!isCoopDefenseMode(bridge.getGameMode())) return;
+  private processCoopDefenseRoundXp(enteredLobbyFromArena: boolean): void {
+    if (!enteredLobbyFromArena || !isCoopDefenseMode(bridge.getGameMode())) return;
 
     const roundState = bridge.getRoundState();
     const results = bridge.getRoundResults();

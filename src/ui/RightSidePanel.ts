@@ -44,7 +44,8 @@ const LB_HEADER_FONT = '16px';
 const LB_PING_FONT   = '14px';
 const LB_TEAM_ROWS_OFFSET = 24;
 const LB_TEAM_SECTION_GAP = 16;
-const LB_FRAGS_X     = ARENA_SIDEBAR_RIGHT_X - 72;
+const LB_FRAGS_X     = ARENA_SIDEBAR_RIGHT_X - 116;
+const LB_XP_X        = ARENA_SIDEBAR_RIGHT_X - 58;
 const LB_PING_X      = ARENA_SIDEBAR_RIGHT_X;
 
 // Lobby-Endstand
@@ -57,6 +58,8 @@ const RESULTS_FONT       = '18px';
 const RESULTS_HEADER_FONT = '20px';
 const RESULTS_LABEL_FONT = '14px';
 const RESULTS_OUTCOME_FONT = '18px';
+const RESULTS_FRAGS_X    = LOBBY_SIDEBAR_RIGHT_X - 88;
+const RESULTS_XP_X       = LOBBY_SIDEBAR_RIGHT_X;
 
 const COLOR_DIM       = '#607080';
 const COLOR_KILLFEED_WEAPON = toCssColor(COLORS.GOLD_1);
@@ -133,6 +136,8 @@ export class RightSidePanel {
   }[] = [];  private lbPingRows: Phaser.GameObjects.Text[] = [];
   private lbTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
   private leaderboardScoreLabel!: Phaser.GameObjects.Text;
+  private leaderboardXpLabel!: Phaser.GameObjects.Text;
+  private leaderboardSharedXpValue!: Phaser.GameObjects.Text;
   private leaderboardCache: (LeaderboardEntryView | null)[] = Array.from({ length: 12 }, () => null);
   private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
   private readonly cssColorCache = new Map<number, string>();
@@ -142,6 +147,8 @@ export class RightSidePanel {
   private resultsSep!:    Phaser.GameObjects.Rectangle;
   private resultsOutcome!: Phaser.GameObjects.Text;
   private resultsFragsLabel!: Phaser.GameObjects.Text;
+  private resultsXpLabel!: Phaser.GameObjects.Text;
+  private resultsSharedXpValue!: Phaser.GameObjects.Text;
   private resultsEmptyState!: Phaser.GameObjects.Text;
   private resultsRows: {
     name:  Phaser.GameObjects.Text;
@@ -250,7 +257,7 @@ export class RightSidePanel {
    * entries muss bereits absteigend nach Frags sortiert sein.
    */
   updateLeaderboard(entries: LeaderboardEntry[]): void {
-    this.syncArenaScoreLabel();
+    this.syncArenaLabels(entries);
     if (entries.some((entry) => entry.teamId === 'blue' || entry.teamId === 'red')) {
       this.renderGroupedLeaderboard(entries);
       return;
@@ -270,7 +277,7 @@ export class RightSidePanel {
           visible: true,
           nameText: `${i + 1}. ${entry.name}`,
           nameColor: this.toCachedCssColor(entry.colorHex),
-          fragsText: String(this.resolveLeaderboardEntryScore(entry)),
+          fragsText: String(this.resolveLeaderboardEntryFrags(entry)),
           pingText: `${entry.ping}ms`,
           pingColor: pingColor(entry.ping),
         };
@@ -303,7 +310,7 @@ export class RightSidePanel {
     * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
    */
   showRoundResults(results: RoundResult[] | null, roundState: RoundState | null = null): void {
-    this.syncLobbyScoreLabel();
+    this.syncLobbyLabels(results);
     if (results && results.some((result) => result.teamId === 'blue' || result.teamId === 'red')) {
       this.renderGroupedRoundResults(results, roundState);
       return;
@@ -328,7 +335,7 @@ export class RightSidePanel {
       const entry = hasData ? sorted![i] : undefined;
       if (entry) {
         row.name.setText(`${i + 1}. ${entry.name}`).setColor(toCssColor(entry.colorHex)).setVisible(true);
-        row.frags.setText(String(this.resolveRoundResultScore(entry))).setVisible(true);
+        row.frags.setText(String(this.resolveRoundResultFrags(entry))).setVisible(true);
       } else {
         row.name.setVisible(false);
         row.frags.setVisible(false);
@@ -413,6 +420,13 @@ export class RightSidePanel {
       fontStyle:  'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0);
     this.gameContainer.add(this.leaderboardScoreLabel);
+    this.leaderboardXpLabel = this.scene.add.text(LB_XP_X, LB_HEADER_Y, 'X P', {
+      fontSize:   LB_HEADER_FONT,
+      fontFamily: 'monospace',
+      color:      COLOR_HEADER,
+      fontStyle:  'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    this.gameContainer.add(this.leaderboardXpLabel);
     this.gameContainer.add(
       this.scene.add.text(LB_PING_X, LB_HEADER_Y, 'ms', {
         fontSize:   LB_HEADER_FONT,
@@ -421,6 +435,13 @@ export class RightSidePanel {
         fontStyle:  'bold',
       }).setOrigin(1, 0.5).setScrollFactor(0),
     );
+    this.leaderboardSharedXpValue = this.scene.add.text(LB_XP_X, LB_START_Y, '', {
+      fontSize: LB_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.GOLD_1),
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    this.gameContainer.add(this.leaderboardSharedXpValue);
 
     const blueLabel = this.scene.add.text(ARENA_SIDEBAR_LEFT_X, LB_START_Y, 'TEAM BLAU', {
       fontSize: LB_HEADER_FONT,
@@ -507,6 +528,18 @@ export class RightSidePanel {
       fontFamily: 'monospace',
       color: COLOR_HEADER,
       fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y).setScrollFactor(0).setVisible(false);
+    this.resultsXpLabel = this.scene.add.text(RESULTS_XP_X, RESULTS_LABEL_Y, 'X P', {
+      fontSize: RESULTS_LABEL_FONT,
+      fontFamily: 'monospace',
+      color: COLOR_HEADER,
+      fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
+    this.resultsSharedXpValue = this.scene.add.text(RESULTS_XP_X, RESULTS_START_Y, '', {
+      fontSize: RESULTS_HEADER_FONT,
+      fontFamily: 'monospace',
+      color: toCssColor(COLORS.GOLD_1),
+      fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
 
     this.resultsEmptyState = this.scene.add.text(LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y, 'Noch keine Daten', {
@@ -516,7 +549,15 @@ export class RightSidePanel {
       align: 'center',
     }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
 
-    this.lobbyContainer.add([this.resultsHeader, this.resultsSep, this.resultsOutcome, this.resultsFragsLabel, this.resultsEmptyState]);
+    this.lobbyContainer.add([
+      this.resultsHeader,
+      this.resultsSep,
+      this.resultsOutcome,
+      this.resultsFragsLabel,
+      this.resultsXpLabel,
+      this.resultsSharedXpValue,
+      this.resultsEmptyState,
+    ]);
 
     const blueLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
       fontSize: RESULTS_HEADER_FONT,
@@ -524,7 +565,7 @@ export class RightSidePanel {
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    const blueScore = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
+    const blueScore = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_START_Y, '', {
       fontSize: RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
@@ -536,7 +577,7 @@ export class RightSidePanel {
       color: toCssColor(COLORS.RED_2),
       fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    const redScore = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y, '', {
+    const redScore = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_START_Y, '', {
       fontSize: RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
@@ -558,7 +599,7 @@ export class RightSidePanel {
         color:      '#ffffff',
       }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
 
-      const fragsText = this.scene.add.text(LOBBY_SIDEBAR_RIGHT_X, y, '', {
+      const fragsText = this.scene.add.text(RESULTS_FRAGS_X, y, '', {
         fontSize:   RESULTS_FONT,
         fontFamily: 'monospace',
         color:      COLOR_DIM,
@@ -640,6 +681,7 @@ export class RightSidePanel {
     const redEntries = this.sortLeaderboardEntriesForDisplay(entries.filter((entry) => entry.teamId === 'red'));
     const blueScore = this.resolveGroupedTeamScore(blueEntries);
     const redScore = this.resolveGroupedTeamScore(redEntries);
+    const sharedXp = this.resolveSharedXp(entries);
     const blueRowsStartY = LB_START_Y + LB_TEAM_ROWS_OFFSET;
     const redHeaderY = blueRowsStartY + blueEntries.length * LB_ENTRY_H + LB_TEAM_SECTION_GAP;
     const redRowsStartY = redHeaderY + LB_TEAM_ROWS_OFFSET;
@@ -652,6 +694,10 @@ export class RightSidePanel {
       .setText(getTeamLabel('blue', mode).toUpperCase())
       .setPosition(ARENA_SIDEBAR_LEFT_X, LB_START_Y);
     this.lbTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(LB_FRAGS_X, LB_START_Y);
+    this.leaderboardSharedXpValue
+      .setVisible(this.isDefenseModeWithXp(sharedXp) && (showBlueHeader || showRedHeader))
+      .setText(String(sharedXp))
+      .setPosition(LB_XP_X, LB_START_Y);
 
     let rowIndex = 0;
     rowIndex = this.renderGroupedLeaderboardTeamRows(blueEntries, rowIndex, blueRowsStartY);
@@ -679,13 +725,13 @@ export class RightSidePanel {
       const entry = entries[i];
       const y = startY + i * LB_ENTRY_H;
       row.name.setPosition(ARENA_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
-      row.frags.setPosition(LB_FRAGS_X, y).setText(String(this.resolveLeaderboardEntryScore(entry))).setVisible(true);
+      row.frags.setPosition(LB_FRAGS_X, y).setText(String(this.resolveLeaderboardEntryFrags(entry))).setVisible(true);
       pingText.setPosition(LB_PING_X, y).setText(`${entry.ping}ms`).setColor(pingColor(entry.ping)).setVisible(true);
       this.leaderboardCache[rowIndex] = {
         visible: true,
         nameText: entry.name,
         nameColor: this.toCachedCssColor(entry.colorHex),
-        fragsText: String(this.resolveLeaderboardEntryScore(entry)),
+        fragsText: String(this.resolveLeaderboardEntryFrags(entry)),
         pingText: `${entry.ping}ms`,
         pingColor: pingColor(entry.ping),
       };
@@ -699,6 +745,7 @@ export class RightSidePanel {
     const hasData = blueEntries.length > 0 || redEntries.length > 0;
     const blueScore = this.resolveGroupedTeamScore(blueEntries);
     const redScore = this.resolveGroupedTeamScore(redEntries);
+    const sharedXp = this.resolveSharedXp(results);
     const mode = bridge.getGameMode();
     const showBlueHeader = blueEntries.length > 0;
     const showRedHeader = redEntries.length > 0;
@@ -708,16 +755,20 @@ export class RightSidePanel {
     this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);
     this.resultsEmptyState.setVisible(!hasData);
+    this.resultsSharedXpValue
+      .setVisible(this.isDefenseModeWithXp(sharedXp) && hasData)
+      .setText(String(sharedXp))
+      .setPosition(RESULTS_XP_X, RESULTS_START_Y);
     this.resultsTeamHeaders?.blue.label
       .setVisible(showBlueHeader)
       .setText(getTeamLabel('blue', mode).toUpperCase())
       .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y);
-    this.resultsTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y);
+    this.resultsTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(RESULTS_FRAGS_X, RESULTS_START_Y);
     this.resultsTeamHeaders?.red.label
       .setVisible(showRedHeader)
       .setText(getTeamLabel('red', mode).toUpperCase())
       .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
-    this.resultsTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(LOBBY_SIDEBAR_RIGHT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    this.resultsTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(RESULTS_FRAGS_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
 
     let rowIndex = 0;
     rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, RESULTS_START_Y + 18);
@@ -735,15 +786,12 @@ export class RightSidePanel {
       const entry = entries[i];
       const y = startY + i * RESULTS_ENTRY_H;
       row.name.setPosition(LOBBY_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
-      row.frags.setPosition(LOBBY_SIDEBAR_RIGHT_X, y).setText(String(this.resolveRoundResultScore(entry))).setVisible(true);
+      row.frags.setPosition(RESULTS_FRAGS_X, y).setText(String(this.resolveRoundResultFrags(entry))).setVisible(true);
     }
     return rowIndex;
   }
 
   private resolveGroupedTeamScore(entries: Array<{ frags: number; teamScore?: number; sharedXp?: number }>): number {
-    if (this.isDefenseXpMode()) {
-      return Math.max(0, Math.floor(entries.find((entry) => typeof entry.sharedXp === 'number')?.sharedXp ?? 0));
-    }
     const scoredEntry = entries.find((entry) => entry.teamScore !== undefined);
     if (scoredEntry?.teamScore !== undefined) return scoredEntry.teamScore;
     return entries.reduce((sum, entry) => sum + entry.frags, 0);
@@ -753,39 +801,49 @@ export class RightSidePanel {
     return isCoopDefenseMode(bridge.getGameMode());
   }
 
-  private syncArenaScoreLabel(): void {
-    this.leaderboardScoreLabel.setText(this.isDefenseXpMode() ? 'X P' : 'F R A G S');
+  private syncArenaLabels(entries: LeaderboardEntry[]): void {
+    const sharedXp = this.resolveSharedXp(entries);
+    const showDefenseXp = this.isDefenseModeWithXp(sharedXp);
+    this.leaderboardScoreLabel.setText('F R A G S').setPosition(LB_FRAGS_X, LB_HEADER_Y);
+    this.leaderboardXpLabel.setVisible(showDefenseXp);
+    this.leaderboardSharedXpValue
+      .setVisible(showDefenseXp && entries.length > 0)
+      .setText(String(sharedXp))
+      .setPosition(LB_XP_X, LB_START_Y);
   }
 
-  private syncLobbyScoreLabel(): void {
-    this.resultsFragsLabel.setText(this.isDefenseXpMode() ? 'X P' : 'F R A G S');
+  private syncLobbyLabels(results: RoundResult[] | null): void {
+    const sharedXp = this.resolveSharedXp(results ?? []);
+    const showDefenseXp = this.isDefenseModeWithXp(sharedXp);
+    this.resultsFragsLabel.setText('F R A G S').setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y);
+    this.resultsXpLabel.setVisible(showDefenseXp);
+    this.resultsSharedXpValue
+      .setVisible(showDefenseXp && !!results?.length)
+      .setText(String(sharedXp))
+      .setPosition(RESULTS_XP_X, RESULTS_START_Y);
   }
 
-  private resolveLeaderboardEntryScore(entry: LeaderboardEntry): number {
-    if (this.isDefenseXpMode()) {
-      return Math.max(0, Math.floor(entry.sharedXp ?? 0));
-    }
+  private resolveLeaderboardEntryFrags(entry: LeaderboardEntry): number {
     return Math.max(0, Math.floor(entry.frags));
   }
 
-  private resolveRoundResultScore(entry: RoundResult): number {
-    if (this.isDefenseXpMode()) {
-      return Math.max(0, Math.floor(entry.sharedXp ?? 0));
-    }
+  private resolveRoundResultFrags(entry: RoundResult): number {
     return Math.max(0, Math.floor(entry.frags));
+  }
+
+  private resolveSharedXp(entries: Array<{ sharedXp?: number }>): number {
+    return Math.max(0, Math.floor(entries.find((entry) => typeof entry.sharedXp === 'number')?.sharedXp ?? 0));
+  }
+
+  private isDefenseModeWithXp(sharedXp: number): boolean {
+    return this.isDefenseXpMode() && sharedXp >= 0;
   }
 
   private sortLeaderboardEntriesForDisplay(entries: LeaderboardEntry[]): LeaderboardEntry[] {
-    if (this.isDefenseXpMode()) {
-      return [...entries];
-    }
     return [...entries].sort((a, b) => b.frags - a.frags);
   }
 
   private sortRoundResultsForDisplay(results: RoundResult[]): RoundResult[] {
-    if (this.isDefenseXpMode()) {
-      return [...results];
-    }
     return [...results].sort((a, b) => b.frags - a.frags);
   }
 
