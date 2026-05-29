@@ -68,6 +68,61 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'PLASMA',
     targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], operation: 'scale' }],
   },
+  'weapon.PLASMA.projectileSpeed': {
+    kind: 'weapon',
+    itemId: 'PLASMA',
+    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
+  'weapon.ASMD_PRIM.range': {
+    kind: 'weapon',
+    itemId: 'ASMD_PRIM',
+    targets: [{ path: ['range'], operation: 'scale' }],
+  },
+  'weapon.ASMD_PRIM.cooldown': {
+    kind: 'weapon',
+    itemId: 'ASMD_PRIM',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
+  'weapon.BITE.range': {
+    kind: 'weapon',
+    itemId: 'BITE',
+    targets: [{ path: ['range'], operation: 'scale' }],
+  },
+  'weapon.BITE.hitArcDegrees': {
+    kind: 'weapon',
+    itemId: 'BITE',
+    targets: [{ path: ['fire', 'hitArcDegrees'], operation: 'scale' }],
+  },
+  'weapon.HYDRA.splitCount': {
+    kind: 'weapon',
+    itemId: 'HYDRA',
+    targets: [{ path: ['splitCount'], operation: 'add' }],
+  },
+  'weapon.HYDRA.projectileSpeed': {
+    kind: 'weapon',
+    itemId: 'HYDRA',
+    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
+  'weapon.XBOW.pelletCount': {
+    kind: 'weapon',
+    itemId: 'XBOW',
+    targets: [{ path: ['pelletCount'], operation: 'add' }],
+  },
+  'weapon.XBOW.projectileSpeed': {
+    kind: 'weapon',
+    itemId: 'XBOW',
+    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
+  'weapon.LAUBBLAESER.maxKnockback': {
+    kind: 'weapon',
+    itemId: 'LAUBBLAESER',
+    targets: [{ path: ['fire', 'maxKnockback'], operation: 'scale' }],
+  },
+  'weapon.LAUBBLAESER.hitboxEndSize': {
+    kind: 'weapon',
+    itemId: 'LAUBBLAESER',
+    targets: [{ path: ['fire', 'hitboxEndSize'], operation: 'scale' }],
+  },
   'weapon.P90.range': {
     kind: 'weapon',
     itemId: 'P90',
@@ -93,6 +148,106 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'ROCKET_LAUNCHER',
     targets: [{ path: ['cooldown'], operation: 'scale' }],
   },
+  'weapon.AK47.range': {
+    kind: 'weapon',
+    itemId: 'AK47',
+    targets: [{ path: ['range'], operation: 'scale' }],
+  },
+  'weapon.AK47.spread': {
+    kind: 'weapon',
+    itemId: 'AK47',
+    targets: [
+      { path: ['spreadStanding'], operation: 'scale' },
+      { path: ['spreadMoving'], operation: 'scale' },
+      { path: ['spreadPerShot'], operation: 'scale' },
+      { path: ['maxDynamicSpread'], operation: 'scale' },
+    ],
+  },
+  'weapon.SHOTGUN.pelletCount': {
+    kind: 'weapon',
+    itemId: 'SHOTGUN',
+    targets: [{ path: ['pelletCount'], operation: 'add' }],
+  },
+  'weapon.SHOTGUN.pelletSpreadAngle': {
+    kind: 'weapon',
+    itemId: 'SHOTGUN',
+    targets: [{ path: ['pelletSpreadAngle'], operation: 'scale' }],
+  },
+  'weapon.ASMD_SEC.detonable.aoeRadius': {
+    kind: 'weapon',
+    itemId: 'ASMD_SEC',
+    targets: [{ path: ['detonable', 'aoeRadius'], operation: 'scale' }],
+  },
+  'weapon.ASMD_SEC.projectileSpeed': {
+    kind: 'weapon',
+    itemId: 'ASMD_SEC',
+    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['fire', 'impactExplosion', 'radius'], operation: 'scale' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.homing.maxTurnDegreesPerStep': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], operation: 'scale' }],
+  },
+  'weapon.AWP.cooldown': {
+    kind: 'weapon',
+    itemId: 'AWP',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
+  'weapon.AWP.spread': {
+    kind: 'weapon',
+    itemId: 'AWP',
+    targets: [
+      { path: ['spreadStanding'], operation: 'scale' },
+      { path: ['spreadMoving'], operation: 'scale' },
+      { path: ['spreadPerShot'], operation: 'scale' },
+      { path: ['maxDynamicSpread'], operation: 'scale' },
+    ],
+  },
+  'weapon.FLAMETHROWER.burnDurationMs': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'burnDurationMs'], operation: 'scale' }],
+  },
+  'weapon.FLAMETHROWER.burnDamagePerTick': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'burnDamagePerTick'], operation: 'scale' }],
+  },
+  'weapon.NEGEV.range': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['range'], operation: 'scale' }],
+  },
+  'weapon.NEGEV.projectileSpeed': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
+  'weapon.TESLA_DOME.radius': {
+    kind: 'weapon',
+    itemId: 'TESLA_DOME',
+    targets: [{ path: ['fire', 'radius'], operation: 'scale' }],
+  },
+  'weapon.TESLA_DOME.damagePerTick': {
+    kind: 'weapon',
+    itemId: 'TESLA_DOME',
+    targets: [{ path: ['fire', 'damagePerTick'], operation: 'scale' }],
+  },
+  'weapon.ENERGY_SHIELD.blockArcDegrees': {
+    kind: 'weapon',
+    itemId: 'ENERGY_SHIELD',
+    targets: [{ path: ['fire', 'blockArcDegrees'], operation: 'scale' }],
+  },
+  'weapon.ENERGY_SHIELD.buffMax': {
+    kind: 'weapon',
+    itemId: 'ENERGY_SHIELD',
+    targets: [{ path: ['fire', 'buffMax'], operation: 'scale' }],
+  },
   'utility.cooldown': {
     kind: 'utility',
     slot: 'utility',
@@ -103,10 +258,100 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'HE_GRENADE',
     targets: [{ path: ['aoeRadius'], operation: 'scale' }],
   },
+  'utility.HE_GRENADE.aoeDamage': {
+    kind: 'utility',
+    itemId: 'HE_GRENADE',
+    targets: [{ path: ['aoeDamage'], operation: 'scale' }],
+  },
   'utility.TIME_BUBBLE.bubbleRadius': {
     kind: 'utility',
     itemId: 'TIME_BUBBLE',
     targets: [{ path: ['bubbleRadius'], operation: 'scale' }],
+  },
+  'utility.TIME_BUBBLE.bubbleDuration': {
+    kind: 'utility',
+    itemId: 'TIME_BUBBLE',
+    targets: [{ path: ['bubbleDuration'], operation: 'scale' }],
+  },
+  'utility.SMOKE_GRENADE.smokeRadius': {
+    kind: 'utility',
+    itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeRadius'], operation: 'scale' }],
+  },
+  'utility.SMOKE_GRENADE.smokeLingerDuration': {
+    kind: 'utility',
+    itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeLingerDuration'], operation: 'scale' }],
+  },
+  'utility.MOLOTOV_GRENADE.fireRadius': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['fireRadius'], operation: 'scale' }],
+  },
+  'utility.MOLOTOV_GRENADE.fireLingerDuration': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['fireLingerDuration'], operation: 'scale' }],
+  },
+  'utility.STINKDRUESEN.cloudRadius': {
+    kind: 'utility',
+    itemId: 'STINKDRUESEN',
+    targets: [{ path: ['cloudRadius'], operation: 'scale' }],
+  },
+  'utility.STINKDRUESEN.cloudDamagePerTick': {
+    kind: 'utility',
+    itemId: 'STINKDRUESEN',
+    targets: [{ path: ['cloudDamagePerTick'], operation: 'scale' }],
+  },
+  'utility.TRANSLOCATOR.projectileSpeed': {
+    kind: 'utility',
+    itemId: 'TRANSLOCATOR',
+    targets: [{ path: ['projectileSpeed'], operation: 'scale' }],
+  },
+  'utility.TRANSLOCATOR.maxBounces': {
+    kind: 'utility',
+    itemId: 'TRANSLOCATOR',
+    targets: [{ path: ['maxBounces'], operation: 'add' }],
+  },
+  'utility.FELSBAU.placeable.maxHp': {
+    kind: 'utility',
+    itemId: 'FELSBAU',
+    targets: [{ path: ['placeable', 'maxHp'], operation: 'scale' }],
+  },
+  'utility.FELSBAU.placeable.lifetimeMs': {
+    kind: 'utility',
+    itemId: 'FELSBAU',
+    targets: [{ path: ['placeable', 'lifetimeMs'], operation: 'scale' }],
+  },
+  'utility.FLIEGENPILZ.placeable.maxHp': {
+    kind: 'utility',
+    itemId: 'FLIEGENPILZ',
+    targets: [{ path: ['placeable', 'maxHp'], operation: 'scale' }],
+  },
+  'utility.FLIEGENPILZ.placeable.targetRange': {
+    kind: 'utility',
+    itemId: 'FLIEGENPILZ',
+    targets: [{ path: ['placeable', 'targetRange'], operation: 'scale' }],
+  },
+  'utility.ZEUS_TASER.range': {
+    kind: 'utility',
+    itemId: 'ZEUS_TASER',
+    targets: [{ path: ['range'], operation: 'scale' }],
+  },
+  'utility.ZEUS_TASER.hitArcDegrees': {
+    kind: 'utility',
+    itemId: 'ZEUS_TASER',
+    targets: [{ path: ['hitArcDegrees'], operation: 'scale' }],
+  },
+  'utility.DECOY.decoyLifetimeMs': {
+    kind: 'utility',
+    itemId: 'DECOY',
+    targets: [{ path: ['decoyLifetimeMs'], operation: 'scale' }],
+  },
+  'utility.DECOY.stealthDurationMs': {
+    kind: 'utility',
+    itemId: 'DECOY',
+    targets: [{ path: ['stealthDurationMs'], operation: 'scale' }],
   },
   'ultimate.ARMAGEDDON.damage': {
     kind: 'ultimate',
@@ -121,6 +366,36 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
       { path: ['rageDrainDuration'], operation: 'scale' },
       { path: ['armageddon', 'meteorsPerSecond'], operation: 'scale' },
     ],
+  },
+  'ultimate.GAUSS_RIFLE.damage': {
+    kind: 'ultimate',
+    itemId: 'GAUSS_RIFLE',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
+  'ultimate.GAUSS_RIFLE.chargeDuration': {
+    kind: 'ultimate',
+    itemId: 'GAUSS_RIFLE',
+    targets: [{ path: ['chargeDuration'], operation: 'scale' }],
+  },
+  'ultimate.AIRSTRIKE.radius': {
+    kind: 'ultimate',
+    itemId: 'AIRSTRIKE',
+    targets: [{ path: ['radius'], operation: 'scale' }],
+  },
+  'ultimate.AIRSTRIKE.delayMs': {
+    kind: 'ultimate',
+    itemId: 'AIRSTRIKE',
+    targets: [{ path: ['delayMs'], operation: 'scale' }],
+  },
+  'ultimate.HONEY_BADGER_RAGE.aura.radius': {
+    kind: 'ultimate',
+    itemId: 'HONEY_BADGER_RAGE',
+    targets: [{ path: ['aura', 'radius'], operation: 'scale' }],
+  },
+  'ultimate.HONEY_BADGER_RAGE.aura.damagePerTick': {
+    kind: 'ultimate',
+    itemId: 'HONEY_BADGER_RAGE',
+    targets: [{ path: ['aura', 'damagePerTick'], operation: 'scale' }],
   },
 });
 

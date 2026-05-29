@@ -62,7 +62,11 @@ import {
   setStoredCoopDefenseTotalXp,
 } from '../utils/localPreferences';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
-import { levelDownCoopDefenseUpgrade, levelUpCoopDefenseUpgrade } from '../utils/coopDefenseUpgrades';
+import {
+  COOP_DEFENSE_UPGRADE_DEFINITIONS,
+  levelDownCoopDefenseUpgrade,
+  levelUpCoopDefenseUpgrade,
+} from '../utils/coopDefenseUpgrades';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
@@ -187,18 +191,11 @@ export class ArenaScene extends Phaser.Scene {
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
     }
 
-    const UPGRADE_IDS = [
-      'hp', 'max_adrenaline', 'adrenaline_regeneration', 'burrow_speed',
-      'weapon1_adrenaline_gain', 'weapon1_fire_rate', 'weapon1_damage',
-      'glock_bounce', 'glock_projectile_speed', 'plasma_homing_turn',
-      'weapon2_adrenaline_cost', 'weapon2_fire_rate', 'weapon2_damage',
-      'p90_range', 'p90_accuracy', 'rocket_launcher_explosion_radius',
-      'rocket_launcher_cooldown', 'utility_cooldown_reduction',
-      'he_grenade_radius', 'time_bubble_radius', 'ultimate_max_rage',
-      'ultimate_rage_gain', 'armageddon_damage', 'armageddon_duration'
-    ];
-    for (const id of UPGRADE_IDS) {
-      const key = `UPGRADE_${id.toUpperCase()}`;
+    // Upgrade-Icons direkt aus den Definitionen ableiten, damit neue Upgrades
+    // automatisch geladen werden (kein manuelles Pflegen einer Liste noetig).
+    for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
+      if (definition.kind !== 'upgrade') continue;
+      const key = `UPGRADE_${definition.id.toUpperCase()}`;
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
     }
   }

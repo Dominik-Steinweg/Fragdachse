@@ -255,6 +255,31 @@
           ]
         },
         {
+          "id": "plasma_projectile_speed",
+          "code": "B-W2-2",
+          "label": "Upgrade Plasma: Geschossgeschwindigkeit",
+          "description": "+10% Projektilgeschwindigkeit fuer Plasma je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "requires": [
+            {
+              "upgradeId": "unlock_plasma",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.PLASMA.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
           "id": "unlock_asmd_primary",
           "code": "B-W3",
           "label": "ASMD Primaer",
@@ -264,11 +289,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 150,
+          "sortOrder": 160,
           "loadoutUnlock": {
             "slot": "weapon1",
             "itemId": "ASMD_PRIM"
           }
+        },
+        {
+          "id": "asmd_primary_range",
+          "code": "B-W3-1",
+          "label": "Upgrade ASMD Primaer: Reichweite",
+          "description": "+10% Reichweite fuer ASMD Primaer je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 170,
+          "requires": [
+            {
+              "upgradeId": "unlock_asmd_primary",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_PRIM.range",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "asmd_primary_cooldown",
+          "code": "B-W3-2",
+          "label": "Upgrade ASMD Primaer: Cooldown",
+          "description": "-10% Cooldown fuer ASMD Primaer je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 180,
+          "requires": [
+            {
+              "upgradeId": "unlock_asmd_primary",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_PRIM.cooldown",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
         },
         {
           "id": "unlock_bite",
@@ -280,11 +355,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 160,
+          "sortOrder": 190,
           "loadoutUnlock": {
             "slot": "weapon1",
             "itemId": "BITE"
           }
+        },
+        {
+          "id": "bite_range",
+          "code": "B-W4-1",
+          "label": "Upgrade Dachsbiss: Reichweite",
+          "description": "+10% Reichweite fuer Dachsbiss je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 200,
+          "requires": [
+            {
+              "upgradeId": "unlock_bite",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.BITE.range",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "bite_hit_arc",
+          "code": "B-W4-2",
+          "label": "Upgrade Dachsbiss: Winkel",
+          "description": "+10% Trefferwinkel fuer Dachsbiss je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 210,
+          "requires": [
+            {
+              "upgradeId": "unlock_bite",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.BITE.hitArcDegrees",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_hydra",
@@ -296,11 +421,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 170,
+          "sortOrder": 220,
           "loadoutUnlock": {
             "slot": "weapon1",
             "itemId": "HYDRA"
           }
+        },
+        {
+          "id": "hydra_split_count",
+          "code": "B-W5-1",
+          "label": "Upgrade Hydra Gun: Split-Projektile",
+          "description": "+1 Split-Projektil fuer Hydra Gun je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 2,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 230,
+          "requires": [
+            {
+              "upgradeId": "unlock_hydra",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.HYDRA.splitCount",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "hydra_projectile_speed",
+          "code": "B-W5-2",
+          "label": "Upgrade Hydra Gun: Geschossgeschwindigkeit",
+          "description": "+10% Projektilgeschwindigkeit fuer Hydra Gun je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 240,
+          "requires": [
+            {
+              "upgradeId": "unlock_hydra",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.HYDRA.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_xbow",
@@ -312,11 +487,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 180,
+          "sortOrder": 250,
           "loadoutUnlock": {
             "slot": "weapon1",
             "itemId": "XBOW"
           }
+        },
+        {
+          "id": "xbow_pellet_count",
+          "code": "B-W6-1",
+          "label": "Upgrade XXX-BOW: Pfeilsalve",
+          "description": "+1 Pfeil pro Salve fuer XXX-BOW je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 2,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 260,
+          "requires": [
+            {
+              "upgradeId": "unlock_xbow",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.XBOW.pelletCount",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "xbow_projectile_speed",
+          "code": "B-W6-2",
+          "label": "Upgrade XXX-BOW: Geschossgeschwindigkeit",
+          "description": "+10% Projektilgeschwindigkeit fuer XXX-BOW je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 270,
+          "requires": [
+            {
+              "upgradeId": "unlock_xbow",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.XBOW.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_laubblaeser",
@@ -328,11 +553,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 190,
+          "sortOrder": 280,
           "loadoutUnlock": {
             "slot": "weapon1",
             "itemId": "LAUBBLAESER"
           }
+        },
+        {
+          "id": "laubblaeser_knockback",
+          "code": "B-W7-1",
+          "label": "Upgrade Laubblaeser: Rueckstoss",
+          "description": "+10% Maximal-Rueckstoss fuer den Laubblaeser je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 290,
+          "requires": [
+            {
+              "upgradeId": "unlock_laubblaeser",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.LAUBBLAESER.maxKnockback",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "laubblaeser_hitbox_size",
+          "code": "B-W7-2",
+          "label": "Upgrade Laubblaeser: Luftstrom",
+          "description": "+10% Endgroesse der Hitbox fuer den Laubblaeser je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 300,
+          "requires": [
+            {
+              "upgradeId": "unlock_laubblaeser",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.LAUBBLAESER.hitboxEndSize",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         }
       ]
     },
@@ -548,6 +823,56 @@
           }
         },
         {
+          "id": "ak47_range",
+          "code": "C-W3-1",
+          "label": "Upgrade AK-47: Reichweite",
+          "description": "+10% Reichweite fuer die AK-47 je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 170,
+          "requires": [
+            {
+              "upgradeId": "unlock_ak47",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.range",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "ak47_accuracy",
+          "code": "C-W3-2",
+          "label": "Upgrade AK-47: Genauigkeit",
+          "description": "-15% Spread fuer die AK-47 je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 180,
+          "requires": [
+            {
+              "upgradeId": "unlock_ak47",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.spread",
+              "mode": "add_percent_per_level",
+              "value": -0.15
+            }
+          ]
+        },
+        {
           "id": "unlock_shotgun",
           "code": "C-W4",
           "label": "Schrotflinte",
@@ -557,11 +882,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 170,
+          "sortOrder": 190,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "SHOTGUN"
           }
+        },
+        {
+          "id": "shotgun_pellet_count",
+          "code": "C-W4-1",
+          "label": "Upgrade Schrotflinte: Mehr Schrot",
+          "description": "+1 Pellet pro Schuss fuer die Schrotflinte je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 2,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 200,
+          "requires": [
+            {
+              "upgradeId": "unlock_shotgun",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.SHOTGUN.pelletCount",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "shotgun_pellet_spread",
+          "code": "C-W4-2",
+          "label": "Upgrade Schrotflinte: Engere Streuung",
+          "description": "-10% Pellet-Streuungswinkel fuer die Schrotflinte je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 210,
+          "requires": [
+            {
+              "upgradeId": "unlock_shotgun",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.SHOTGUN.pelletSpreadAngle",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
         },
         {
           "id": "unlock_asmd_secondary",
@@ -573,11 +948,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 180,
+          "sortOrder": 220,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "ASMD_SEC"
           }
+        },
+        {
+          "id": "asmd_secondary_explosion_radius",
+          "code": "C-W5-1",
+          "label": "Upgrade ASMD Sekundaer: Detonationsradius",
+          "description": "+10% Detonationsradius fuer ASMD Sekundaer je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 230,
+          "requires": [
+            {
+              "upgradeId": "unlock_asmd_secondary",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.detonable.aoeRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "asmd_secondary_projectile_speed",
+          "code": "C-W5-2",
+          "label": "Upgrade ASMD Sekundaer: Geschossgeschwindigkeit",
+          "description": "+10% Projektilgeschwindigkeit fuer ASMD Sekundaer je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 240,
+          "requires": [
+            {
+              "upgradeId": "unlock_asmd_secondary",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_mini_rocket_launcher",
@@ -589,11 +1014,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 190,
+          "sortOrder": 250,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "MINI_ROCKET_LAUNCHER"
           }
+        },
+        {
+          "id": "mini_rocket_launcher_explosion_radius",
+          "code": "C-W6-1",
+          "label": "Upgrade Mini-Raketen: Explosionsradius",
+          "description": "+10% Explosionsradius fuer Mini-Raketen je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 260,
+          "requires": [
+            {
+              "upgradeId": "unlock_mini_rocket_launcher",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "mini_rocket_launcher_homing_turn",
+          "code": "C-W6-2",
+          "label": "Upgrade Mini-Raketen: Homing",
+          "description": "+15% Lenkfaehigkeit fuer Mini-Raketen je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 270,
+          "requires": [
+            {
+              "upgradeId": "unlock_mini_rocket_launcher",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.MINI_ROCKET_LAUNCHER.homing.maxTurnDegreesPerStep",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
         },
         {
           "id": "unlock_awp",
@@ -605,11 +1080,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 200,
+          "sortOrder": 280,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "AWP"
           }
+        },
+        {
+          "id": "awp_cooldown",
+          "code": "C-W7-1",
+          "label": "Upgrade AWP: Cooldown",
+          "description": "-10% Cooldown fuer die AWP je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 290,
+          "requires": [
+            {
+              "upgradeId": "unlock_awp",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AWP.cooldown",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
+        },
+        {
+          "id": "awp_accuracy",
+          "code": "C-W7-2",
+          "label": "Upgrade AWP: Genauigkeit",
+          "description": "-20% Spread fuer die AWP je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 300,
+          "requires": [
+            {
+              "upgradeId": "unlock_awp",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AWP.spread",
+              "mode": "add_percent_per_level",
+              "value": -0.2
+            }
+          ]
         },
         {
           "id": "unlock_flamethrower",
@@ -621,11 +1146,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 210,
+          "sortOrder": 310,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "FLAMETHROWER"
           }
+        },
+        {
+          "id": "flamethrower_burn_duration",
+          "code": "C-W8-1",
+          "label": "Upgrade Flammenwerfer: Brenndauer",
+          "description": "+15% Brenndauer fuer den Flammenwerfer je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 320,
+          "requires": [
+            {
+              "upgradeId": "unlock_flamethrower",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.FLAMETHROWER.burnDurationMs",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
+        },
+        {
+          "id": "flamethrower_burn_damage",
+          "code": "C-W8-2",
+          "label": "Upgrade Flammenwerfer: Brandschaden",
+          "description": "+10% Brandschaden pro Tick fuer den Flammenwerfer je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 330,
+          "requires": [
+            {
+              "upgradeId": "unlock_flamethrower",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.FLAMETHROWER.burnDamagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_negev",
@@ -637,11 +1212,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 220,
+          "sortOrder": 340,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "NEGEV"
           }
+        },
+        {
+          "id": "negev_range",
+          "code": "C-W9-1",
+          "label": "Upgrade Negev: Reichweite",
+          "description": "+10% Reichweite fuer die Negev je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 350,
+          "requires": [
+            {
+              "upgradeId": "unlock_negev",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.NEGEV.range",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "negev_projectile_speed",
+          "code": "C-W9-2",
+          "label": "Upgrade Negev: Geschossgeschwindigkeit",
+          "description": "+10% Projektilgeschwindigkeit fuer die Negev je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 360,
+          "requires": [
+            {
+              "upgradeId": "unlock_negev",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.NEGEV.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_tesla_dome",
@@ -653,11 +1278,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 230,
+          "sortOrder": 370,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "TESLA_DOME"
           }
+        },
+        {
+          "id": "tesla_dome_radius",
+          "code": "C-W10-1",
+          "label": "Upgrade Tesla-Kuppel: Radius",
+          "description": "+10% Radius fuer die Tesla-Kuppel je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 380,
+          "requires": [
+            {
+              "upgradeId": "unlock_tesla_dome",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.TESLA_DOME.radius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "tesla_dome_damage",
+          "code": "C-W10-2",
+          "label": "Upgrade Tesla-Kuppel: Schaden",
+          "description": "+10% Schaden pro Tick fuer die Tesla-Kuppel je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 390,
+          "requires": [
+            {
+              "upgradeId": "unlock_tesla_dome",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.TESLA_DOME.damagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_energy_shield",
@@ -669,11 +1344,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 240,
+          "sortOrder": 400,
           "loadoutUnlock": {
             "slot": "weapon2",
             "itemId": "ENERGY_SHIELD"
           }
+        },
+        {
+          "id": "energy_shield_arc",
+          "code": "C-W11-1",
+          "label": "Upgrade Energie-Schild: Blockwinkel",
+          "description": "+10% Blockwinkel fuer den Energie-Schild je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 410,
+          "requires": [
+            {
+              "upgradeId": "unlock_energy_shield",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ENERGY_SHIELD.blockArcDegrees",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "energy_shield_capacity",
+          "code": "C-W11-2",
+          "label": "Upgrade Energie-Schild: Schildstaerke",
+          "description": "+10% maximales Schild fuer den Energie-Schild je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 420,
+          "requires": [
+            {
+              "upgradeId": "unlock_energy_shield",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ENERGY_SHIELD.buffMax",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         }
       ]
     },
@@ -744,6 +1469,31 @@
           ]
         },
         {
+          "id": "he_grenade_damage",
+          "code": "D-U1-2",
+          "label": "Upgrade HE-Granate: Schaden",
+          "description": "+10% Explosionsschaden fuer die HE-Granate je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 120,
+          "requires": [
+            {
+              "upgradeId": "unlock_he_grenade",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.HE_GRENADE.aoeDamage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
           "id": "unlock_time_bubble",
           "code": "D-U2",
           "label": "Time-Bubble",
@@ -753,7 +1503,7 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 120,
+          "sortOrder": 130,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "TIME_BUBBLE"
@@ -769,7 +1519,7 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 130,
+          "sortOrder": 140,
           "requires": [
             {
               "upgradeId": "unlock_time_bubble",
@@ -785,6 +1535,31 @@
           ]
         },
         {
+          "id": "time_bubble_duration",
+          "code": "D-U2-2",
+          "label": "Upgrade Time-Bubble: Dauer",
+          "description": "+10% Dauer fuer die Time-Bubble je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "requires": [
+            {
+              "upgradeId": "unlock_time_bubble",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.TIME_BUBBLE.bubbleDuration",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
           "id": "unlock_smoke_grenade",
           "code": "D-U3",
           "label": "Smoke-Granate",
@@ -794,11 +1569,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 140,
+          "sortOrder": 160,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "SMOKE_GRENADE"
           }
+        },
+        {
+          "id": "smoke_grenade_radius",
+          "code": "D-U3-1",
+          "label": "Upgrade Smoke-Granate: Radius",
+          "description": "+10% Radius fuer die Smoke-Granate je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 170,
+          "requires": [
+            {
+              "upgradeId": "unlock_smoke_grenade",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.SMOKE_GRENADE.smokeRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "smoke_grenade_duration",
+          "code": "D-U3-2",
+          "label": "Upgrade Smoke-Granate: Dauer",
+          "description": "+10% Rauchdauer fuer die Smoke-Granate je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 180,
+          "requires": [
+            {
+              "upgradeId": "unlock_smoke_grenade",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.SMOKE_GRENADE.smokeLingerDuration",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_molotov_grenade",
@@ -810,11 +1635,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 150,
+          "sortOrder": 190,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "MOLOTOV_GRENADE"
           }
+        },
+        {
+          "id": "molotov_grenade_radius",
+          "code": "D-U4-1",
+          "label": "Upgrade Molotov: Feuerflaeche",
+          "description": "+10% Feuerradius fuer den Molotov je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 200,
+          "requires": [
+            {
+              "upgradeId": "unlock_molotov_grenade",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.MOLOTOV_GRENADE.fireRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "molotov_grenade_duration",
+          "code": "D-U4-2",
+          "label": "Upgrade Molotov: Brenndauer",
+          "description": "+10% Brenndauer des Feuers fuer den Molotov je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 210,
+          "requires": [
+            {
+              "upgradeId": "unlock_molotov_grenade",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.MOLOTOV_GRENADE.fireLingerDuration",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_stinkdruesen",
@@ -826,11 +1701,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 160,
+          "sortOrder": 220,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "STINKDRUESEN"
           }
+        },
+        {
+          "id": "stinkdruesen_radius",
+          "code": "D-U5-1",
+          "label": "Upgrade Stinkdruesen: Wolkenradius",
+          "description": "+10% Wolkenradius fuer Stinkdruesen je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 230,
+          "requires": [
+            {
+              "upgradeId": "unlock_stinkdruesen",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.STINKDRUESEN.cloudRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "stinkdruesen_damage",
+          "code": "D-U5-2",
+          "label": "Upgrade Stinkdruesen: Schaden",
+          "description": "+10% Schaden pro Tick fuer Stinkdruesen je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 240,
+          "requires": [
+            {
+              "upgradeId": "unlock_stinkdruesen",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.STINKDRUESEN.cloudDamagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_translocator",
@@ -842,11 +1767,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 170,
+          "sortOrder": 250,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "TRANSLOCATOR"
           }
+        },
+        {
+          "id": "translocator_projectile_speed",
+          "code": "D-U6-1",
+          "label": "Upgrade Translocator: Fluggeschwindigkeit",
+          "description": "+10% Fluggeschwindigkeit fuer den Translocator je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 260,
+          "requires": [
+            {
+              "upgradeId": "unlock_translocator",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.TRANSLOCATOR.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "translocator_bounces",
+          "code": "D-U6-2",
+          "label": "Upgrade Translocator: Abpraller",
+          "description": "+1 Abpraller fuer den Translocator je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 2,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 270,
+          "requires": [
+            {
+              "upgradeId": "unlock_translocator",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.TRANSLOCATOR.maxBounces",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
         },
         {
           "id": "unlock_felsbau",
@@ -858,11 +1833,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 180,
+          "sortOrder": 280,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "FELSBAU"
           }
+        },
+        {
+          "id": "felsbau_hp",
+          "code": "D-U7-1",
+          "label": "Upgrade Felsbau: Strukturpunkte",
+          "description": "+15% Maximal-HP fuer Felsbau je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 290,
+          "requires": [
+            {
+              "upgradeId": "unlock_felsbau",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FELSBAU.placeable.maxHp",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
+        },
+        {
+          "id": "felsbau_duration",
+          "code": "D-U7-2",
+          "label": "Upgrade Felsbau: Haltbarkeit",
+          "description": "+10% Lebensdauer fuer Felsbau je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 300,
+          "requires": [
+            {
+              "upgradeId": "unlock_felsbau",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FELSBAU.placeable.lifetimeMs",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_fliegenpilz",
@@ -874,11 +1899,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 190,
+          "sortOrder": 310,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "FLIEGENPILZ"
           }
+        },
+        {
+          "id": "fliegenpilz_hp",
+          "code": "D-U8-1",
+          "label": "Upgrade Fliegenpilz: Strukturpunkte",
+          "description": "+15% Maximal-HP fuer den Fliegenpilz je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 320,
+          "requires": [
+            {
+              "upgradeId": "unlock_fliegenpilz",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FLIEGENPILZ.placeable.maxHp",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
+        },
+        {
+          "id": "fliegenpilz_range",
+          "code": "D-U8-2",
+          "label": "Upgrade Fliegenpilz: Zielreichweite",
+          "description": "+10% Zielreichweite fuer den Fliegenpilz je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 330,
+          "requires": [
+            {
+              "upgradeId": "unlock_fliegenpilz",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FLIEGENPILZ.placeable.targetRange",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_zeus_taser",
@@ -890,11 +1965,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 200,
+          "sortOrder": 340,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "ZEUS_TASER"
           }
+        },
+        {
+          "id": "zeus_taser_range",
+          "code": "D-U9-1",
+          "label": "Upgrade Zeus: Reichweite",
+          "description": "+10% Reichweite fuer Zeus je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 350,
+          "requires": [
+            {
+              "upgradeId": "unlock_zeus_taser",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.ZEUS_TASER.range",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "zeus_taser_arc",
+          "code": "D-U9-2",
+          "label": "Upgrade Zeus: Trefferwinkel",
+          "description": "+10% Trefferwinkel fuer Zeus je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 360,
+          "requires": [
+            {
+              "upgradeId": "unlock_zeus_taser",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.ZEUS_TASER.hitArcDegrees",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
           "id": "unlock_decoy",
@@ -906,11 +2031,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 210,
+          "sortOrder": 370,
           "loadoutUnlock": {
             "slot": "utility",
             "itemId": "DECOY"
           }
+        },
+        {
+          "id": "decoy_duration",
+          "code": "D-U10-1",
+          "label": "Upgrade Decoy: Attrappen-Dauer",
+          "description": "+10% Dauer der Attrappe fuer Decoy je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 380,
+          "requires": [
+            {
+              "upgradeId": "unlock_decoy",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.DECOY.decoyLifetimeMs",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "decoy_stealth_duration",
+          "code": "D-U10-2",
+          "label": "Upgrade Decoy: Tarnung",
+          "description": "+10% Tarnungsdauer fuer Decoy je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 390,
+          "requires": [
+            {
+              "upgradeId": "unlock_decoy",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.DECOY.stealthDurationMs",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         }
       ]
     },
@@ -1041,6 +2216,56 @@
           }
         },
         {
+          "id": "gauss_rifle_damage",
+          "code": "E-U2-1",
+          "label": "Upgrade Gauss-Gewehr: Schaden",
+          "description": "+10% Schaden fuer das Gauss-Gewehr je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 140,
+          "requires": [
+            {
+              "upgradeId": "unlock_gauss_rifle",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.GAUSS_RIFLE.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "gauss_rifle_charge_duration",
+          "code": "E-U2-2",
+          "label": "Upgrade Gauss-Gewehr: Ladezeit",
+          "description": "-10% Ladezeit fuer das Gauss-Gewehr je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "requires": [
+            {
+              "upgradeId": "unlock_gauss_rifle",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.GAUSS_RIFLE.chargeDuration",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
+        },
+        {
           "id": "unlock_airstrike",
           "code": "E-U3",
           "label": "Luftangriff",
@@ -1050,11 +2275,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 140,
+          "sortOrder": 160,
           "loadoutUnlock": {
             "slot": "ultimate",
             "itemId": "AIRSTRIKE"
           }
+        },
+        {
+          "id": "airstrike_radius",
+          "code": "E-U3-1",
+          "label": "Upgrade Luftangriff: Radius",
+          "description": "+10% Explosionsradius fuer den Luftangriff je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 170,
+          "requires": [
+            {
+              "upgradeId": "unlock_airstrike",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.AIRSTRIKE.radius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "airstrike_delay",
+          "code": "E-U3-2",
+          "label": "Upgrade Luftangriff: Einschlagszeit",
+          "description": "-10% Verzoegerung bis zum Einschlag fuer den Luftangriff je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 180,
+          "requires": [
+            {
+              "upgradeId": "unlock_airstrike",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.AIRSTRIKE.delayMs",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
         },
         {
           "id": "unlock_honey_badger_rage",
@@ -1066,11 +2341,61 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 150,
+          "sortOrder": 190,
           "loadoutUnlock": {
             "slot": "ultimate",
             "itemId": "HONEY_BADGER_RAGE"
           }
+        },
+        {
+          "id": "honey_badger_rage_radius",
+          "code": "E-U4-1",
+          "label": "Upgrade Honigdachs-Wut: Aura-Radius",
+          "description": "+10% Aura-Radius fuer Honigdachs-Wut je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 200,
+          "requires": [
+            {
+              "upgradeId": "unlock_honey_badger_rage",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.HONEY_BADGER_RAGE.aura.radius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "honey_badger_rage_damage",
+          "code": "E-U4-2",
+          "label": "Upgrade Honigdachs-Wut: Aura-Schaden",
+          "description": "+10% Aura-Schaden fuer Honigdachs-Wut je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 210,
+          "requires": [
+            {
+              "upgradeId": "unlock_honey_badger_rage",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "ultimate.HONEY_BADGER_RAGE.aura.damagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         }
       ]
     }

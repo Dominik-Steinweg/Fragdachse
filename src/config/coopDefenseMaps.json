@@ -4,7 +4,7 @@
     {
       "mapId": "1",
       "displayName": "Map 1",
-      "roundDurationSec": 120,
+      "roundDurationSec": 60,
       "bases": [
         {
           "id": "coop-base-1",
@@ -20,7 +20,7 @@
     {
       "mapId": "2",
       "displayName": "Map 2",
-      "roundDurationSec": 150,
+      "roundDurationSec": 90,
       "bases": [
         {
           "id": "coop-base-1",

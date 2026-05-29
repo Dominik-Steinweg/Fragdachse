@@ -542,7 +542,8 @@ export class CoopDefenseUpgradesOverlay {
         fontSize: '15px',
         fontFamily: 'monospace',
         fontStyle: 'bold',
-        color: toCssColor(isActive ? visuals.title : COLORS.GREY_2),
+        // Aktiv: dunkler Text auf lebendiger Farbe (hoher Kontrast); passiv: hell.
+        color: toCssColor(isActive ? COLORS.GREY_10 : COLORS.GREY_2),
       }).setOrigin(0.5).setScrollFactor(0);
       this.tabsContainer!.add(label);
 
@@ -556,34 +557,36 @@ export class CoopDefenseUpgradesOverlay {
 
   private ensureTabTexture(tabW: number, visuals: CategoryVisuals, isActive: boolean): string {
     const w = Math.max(1, Math.round(tabW));
+    // Lebendige Kategorie-Farbe (connector ist deutlich gesaettigter als nodeBase).
+    const tabColor = visuals.connector;
     if (isActive) {
       return this.ensureRoundedTexture({
-        key: `_ccdtab_${w}_${visuals.nodeBase.toString(16)}_on`,
+        key: `_ccdtab_${w}_${tabColor.toString(16)}_on`,
         w,
         h: TAB_H,
         radius: 10,
-        topColor: lerpColor(visuals.nodeBase, 0xffffff, 0.22),
-        bottomColor: lerpColor(visuals.nodeBase, 0x000000, 0.42),
-        fillAlpha: 0.96,
-        strokeColor: lerpColor(visuals.nodeStroke, 0xffffff, 0.15),
+        topColor: lerpColor(tabColor, 0xffffff, 0.2),
+        bottomColor: lerpColor(tabColor, 0x000000, 0.34),
+        fillAlpha: 0.97,
+        strokeColor: lerpColor(visuals.title, 0xffffff, 0.12),
         strokeAlpha: 0.95,
         strokeWidth: 2,
-        highlightAlpha: 0.26,
+        highlightAlpha: 0.3,
       });
     }
-    // Passiv: dunkel, aber mit angedeuteter Kategorie-Farbe.
+    // Passiv: gedimmt, aber mit klar erkennbarer Kategorie-Farbe.
     return this.ensureRoundedTexture({
-      key: `_ccdtab_${w}_${visuals.nodeBase.toString(16)}_off`,
+      key: `_ccdtab_${w}_${tabColor.toString(16)}_off`,
       w,
       h: TAB_H,
       radius: 10,
-      topColor: lerpColor(COLORS.GREY_7, visuals.nodeBase, 0.22),
-      bottomColor: lerpColor(COLORS.GREY_9, visuals.nodeBase, 0.14),
-      fillAlpha: 0.85,
-      strokeColor: lerpColor(COLORS.GREY_5, visuals.nodeStroke, 0.35),
-      strokeAlpha: 0.7,
+      topColor: lerpColor(COLORS.GREY_8, tabColor, 0.45),
+      bottomColor: lerpColor(COLORS.GREY_9, tabColor, 0.32),
+      fillAlpha: 0.9,
+      strokeColor: lerpColor(COLORS.GREY_5, tabColor, 0.55),
+      strokeAlpha: 0.75,
       strokeWidth: 1.5,
-      highlightAlpha: 0.06,
+      highlightAlpha: 0.08,
     });
   }
 
