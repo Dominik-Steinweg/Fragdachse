@@ -639,11 +639,11 @@ export const POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Statische Rocks senden normalerweise nur HP-Änderungen und Zerstörungen; Full-Resync korrigiert verlorene Frames. */
 export const ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Debug-only: Host loggt aggregierte Enemy-Sync-Payload-Metriken ins Dev-Console. */
-export const NET_DEBUG_ENEMY_SYNC_METRICS = true;
+export const NET_DEBUG_ENEMY_SYNC_METRICS = false;
 /** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
 export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
 /** Debug-only: Lokale Laufzeitmetriken fuer Host-/Client-Frames, unabhaengig vom Netzwerkpayload. */
-export const DEBUG_RUNTIME_PERF_METRICS = true;
+export const DEBUG_RUNTIME_PERF_METRICS = false;
 /** Aggregationsfenster fuer lokale Laufzeitmetriken. */
 export const DEBUG_RUNTIME_PERF_METRICS_WINDOW_MS = 2000;
 
