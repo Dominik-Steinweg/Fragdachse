@@ -49,17 +49,21 @@ const LB_XP_X        = ARENA_SIDEBAR_RIGHT_X - 58;
 const LB_PING_X      = ARENA_SIDEBAR_RIGHT_X;
 
 // Lobby-Endstand
-const RESULTS_HEADER_Y   = 60 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_SEP_Y      = 94 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_LABEL_Y    = 118 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_START_Y    = 140 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_ENTRY_H    = 26;
-const RESULTS_FONT       = '18px';
-const RESULTS_HEADER_FONT = '20px';
-const RESULTS_LABEL_FONT = '14px';
-const RESULTS_OUTCOME_FONT = '18px';
-const RESULTS_FRAGS_X    = LOBBY_SIDEBAR_RIGHT_X - 88;
-const RESULTS_XP_X       = LOBBY_SIDEBAR_RIGHT_X;
+const RESULTS_HEADER_Y   = 60  + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_SEP_Y      = 94  + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_OUTCOME_Y  = 118 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_LABEL_Y    = 140 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_START_Y    = 162 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
+const RESULTS_ENTRY_H          = 24;
+const RESULTS_FONT             = '14px'; // einzelne Spielerzeilen
+const RESULTS_HEADER_FONT      = '20px'; // "LETZTE RUNDE"
+const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile – größer als Spielerzeilen
+const RESULTS_LABEL_FONT       = '14px';
+const RESULTS_OUTCOME_FONT     = '18px';
+const RESULTS_FRAGS_X          = LOBBY_SIDEBAR_RIGHT_X - 42; // Score-Spalte
+const RESULTS_XP_X             = LOBBY_SIDEBAR_RIGHT_X;
+const RESULTS_TEAM_PLAYERS_GAP = 20; // Abstand: Team-Header → erste Spielerzeile
+const RESULTS_SECTION_GAP      = 14; // Abstand: Ende einer Sektion → nächster Team-Header
 
 const COLOR_DIM       = '#607080';
 const COLOR_KILLFEED_WEAPON = toCssColor(COLORS.GOLD_1);
@@ -516,7 +520,7 @@ export class RightSidePanel {
     this.resultsSep = this.scene.add.rectangle(LOBBY_SIDEBAR_CENTER_X, RESULTS_SEP_Y, LOBBY_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
     ).setScrollFactor(0) as Phaser.GameObjects.Rectangle;
 
-    this.resultsOutcome = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_LABEL_Y, '', {
+    this.resultsOutcome = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_OUTCOME_Y, '', {
       fontSize: RESULTS_OUTCOME_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.GREEN_2),
@@ -560,25 +564,25 @@ export class RightSidePanel {
     ]);
 
     const blueLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM BLAU', {
-      fontSize: RESULTS_HEADER_FONT,
+      fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     const blueScore = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_START_Y, '', {
-      fontSize: RESULTS_HEADER_FONT,
+      fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.BLUE_2),
       fontStyle: 'bold',
     }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
     const redLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, 'TEAM ROT', {
-      fontSize: RESULTS_HEADER_FONT,
+      fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
       fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     const redScore = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_START_Y, '', {
-      fontSize: RESULTS_HEADER_FONT,
+      fontSize: RESULTS_TEAM_HEADER_FONT,
       fontFamily: 'monospace',
       color: toCssColor(COLORS.RED_2),
       fontStyle: 'bold',
@@ -764,15 +768,19 @@ export class RightSidePanel {
       .setText(getTeamLabel('blue', mode).toUpperCase())
       .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y);
     this.resultsTeamHeaders?.blue.score.setVisible(showBlueHeader).setText(String(blueScore)).setPosition(RESULTS_FRAGS_X, RESULTS_START_Y);
+    const blueRowsStartY = RESULTS_START_Y + RESULTS_TEAM_PLAYERS_GAP;
+    const redHeaderY     = blueRowsStartY + blueEntries.length * RESULTS_ENTRY_H + RESULTS_SECTION_GAP;
+    const redRowsStartY  = redHeaderY + RESULTS_TEAM_PLAYERS_GAP;
+
     this.resultsTeamHeaders?.red.label
       .setVisible(showRedHeader)
       .setText(getTeamLabel('red', mode).toUpperCase())
-      .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
-    this.resultsTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(RESULTS_FRAGS_X, RESULTS_START_Y + 18 + blueEntries.length * RESULTS_ENTRY_H + 12);
+      .setPosition(LOBBY_SIDEBAR_LEFT_X, redHeaderY);
+    this.resultsTeamHeaders?.red.score.setVisible(showRedHeader).setText(String(redScore)).setPosition(RESULTS_FRAGS_X, redHeaderY);
 
     let rowIndex = 0;
-    rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, RESULTS_START_Y + 18);
-    rowIndex = this.renderGroupedResultRows(redEntries, rowIndex, RESULTS_START_Y + 30 + blueEntries.length * RESULTS_ENTRY_H + 12);
+    rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, blueRowsStartY);
+    rowIndex = this.renderGroupedResultRows(redEntries, rowIndex, redRowsStartY);
     for (let i = rowIndex; i < this.resultsRows.length; i++) {
       this.resultsRows[i].name.setVisible(false);
       this.resultsRows[i].frags.setVisible(false);

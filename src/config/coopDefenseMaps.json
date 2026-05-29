@@ -73,6 +73,40 @@
         { "enemyKind": "demon-badger", "intervalMs": 10000, "countPerWave": 2, "startAtMs": 0 },
         { "enemyKind": "rabid-badger", "intervalMs": 20000, "countPerWave": 3, "startAtMs": 0 }
       ]
+    },
+    {
+      "mapId": "4",
+      "displayName": "Map 4",
+      "roundDurationSec": 120,
+      "bases": [
+        {
+          "id": "coop-base-1",
+          "hpMax": 2000,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 4 }
+        },
+        {
+          "id": "coop-base-2",
+          "hpMax": 800,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 },
+              { "gridX": 1, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 },
+              { "gridX": 1, "gridY": 3 }
+            ]
+          }
+        }
+      ],
+      "waves": [
+        { "enemyKind": "zombie-badger", "intervalMs": 500, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 4000, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "rabid-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 0 }
+      ]
     }
   ]
 }

@@ -1096,13 +1096,22 @@ export class EffectSystem {
     const resolvedXp = Math.max(0, Math.floor(xp));
     if (resolvedXp <= 0) return;
 
+    // Schriftgröße logarithmisch nach XP skalieren:
+    //   1 XP  → 18 px  
+    //  10 XP  → 33 px
+    // 100 XP  → 48 px  
+    // Formel: 18 + 15 * log10(max(1, xp))  →  Bereich 18..~60
+    const logFactor = Math.log(Math.max(1, resolvedXp)) / Math.log(10); // log10 via ln
+    const fontSize = Math.round(Math.min(60, 18 + 15 * logFactor));
+    const strokeThickness = Math.round(3 + (fontSize - 18) / 8);
+
     const label = this.scene.add.text(x, y - 18, `+${resolvedXp} XP`, {
       fontFamily: 'monospace',
-      fontSize: '24px',
+      fontSize: '${fontSize}px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GOLD_1),
       stroke: '#241527',
-      strokeThickness: 4,
+      strokeThickness,
     });
     label.setOrigin(0.5);
     label.setDepth(DEPTH.OVERLAY - 5);
