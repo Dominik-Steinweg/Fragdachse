@@ -11,6 +11,43 @@ import type {
   CoopDefenseUpgradeCategorySnapshot,
   CoopDefenseUpgradeNodeSnapshot,
 } from '../utils/coopDefenseProgression';
+import {
+  LivingBarEffect,
+  createGradientTexture,
+  ensureLivingBarTextures,
+  paletteFromColor,
+  rgbStr,
+  type LivingBarPalette,
+} from './LivingBarEffect';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+
+// ── Canvas helpers for modern node textures ──────────────────────────────────
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+): void {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+function lerpColor(a: number, b: number, t: number): number {
+  const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff;
+  const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff;
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return (r << 16) | (g << 8) | bl;
+}
+
+const NODE_TEX_RADIUS = 12;
+const XP_BAR_TEX_KEY = '_ccd_xpbar';
 
 const PANEL_W = GAME_WIDTH - 120;
 const PANEL_H = GAME_HEIGHT - 88;
@@ -146,8 +183,10 @@ export class CoopDefenseUpgradesOverlay {
   private levelText: Phaser.GameObjects.Text | null = null;
   private xpText: Phaser.GameObjects.Text | null = null;
   private pointsText: Phaser.GameObjects.Text | null = null;
-  private progressFill: Phaser.GameObjects.Rectangle | null = null;
+  private progressFill: Phaser.GameObjects.Image | null = null;
+  private xpBarEffect: LivingBarEffect | null = null;
   private progressLabelText: Phaser.GameObjects.Text | null = null;
+  private contentBg: Phaser.GameObjects.Image | null = null;
   private tabsContainer: Phaser.GameObjects.Container | null = null;
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
   private tooltipContainer: Phaser.GameObjects.Container | null = null;
@@ -159,6 +198,11 @@ export class CoopDefenseUpgradesOverlay {
   private activeCategoryIndex = 0;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
   private keyHandler: ((event: KeyboardEvent) => void) | null = null;
+
+  // Per-render decoration tracking (must be torn down before each re-render).
+  private nodeEffects: LivingBarEffect[] = [];
+  private nodeGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
+  private decorationTweens: Phaser.Tweens.Tween[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -176,6 +220,7 @@ export class CoopDefenseUpgradesOverlay {
     this.pointsText = null;
     this.progressFill = null;
     this.progressLabelText = null;
+    this.contentBg = null;
     this.tabsContainer = null;
     this.upgradesContainer = null;
     this.tooltipContainer = null;
@@ -190,8 +235,7 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0);
     objects.push(this.dimRect);
 
-    const panel = this.scene.add.rectangle(CX, CY, PANEL_W, PANEL_H, PANEL_BG, PANEL_ALPHA)
-      .setStrokeStyle(2, ACCENT)
+    const panel = this.scene.add.image(CX, CY, this.ensurePanelTexture())
       .setScrollFactor(0)
       .setInteractive();
     objects.push(panel);
@@ -217,9 +261,15 @@ export class CoopDefenseUpgradesOverlay {
         .setStrokeStyle(1, COLORS.GREY_4)
         .setScrollFactor(0),
     );
-    this.progressFill = this.scene.add.rectangle(BAR_X, BAR_Y, BAR_W, BAR_H, COLORS.GREEN_4, 1)
+
+    // Modern XP bar: gradient image cropped to fill width + living particle/glow effect.
+    ensureLivingBarTextures(this.scene);
+    const xpPalette = paletteFromColor(COLORS.GREEN_3);
+    createGradientTexture(this.scene, XP_BAR_TEX_KEY, xpPalette, BAR_W, BAR_H);
+    this.progressFill = this.scene.add.image(BAR_X, BAR_Y, XP_BAR_TEX_KEY)
       .setOrigin(0, 0.5)
       .setScrollFactor(0);
+    this.progressFill.setCrop(0, 0, BAR_W, BAR_H);
     objects.push(this.progressFill);
 
     this.progressLabelText = this.scene.add.text(CX, BAR_Y + 22, '0 / 25 XP bis zum naechsten Level', {
@@ -235,11 +285,9 @@ export class CoopDefenseUpgradesOverlay {
     this.tabsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.tabsContainer);
 
-    objects.push(
-      this.scene.add.rectangle(CX, CONTENT_Y, CONTENT_W, CONTENT_H, COLORS.GREY_8, 0.52)
-        .setStrokeStyle(1, COLORS.GREY_5)
-        .setScrollFactor(0),
-    );
+    this.contentBg = this.scene.add.image(CX, CONTENT_Y, this.ensureContentBgTexture(COLORS.GREY_5))
+      .setScrollFactor(0);
+    objects.push(this.contentBg);
 
     this.upgradesContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.upgradesContainer);
@@ -279,6 +327,18 @@ export class CoopDefenseUpgradesOverlay {
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
 
+    // Living breathing effect for the XP bar (particles confined to the fill region + glow).
+    this.xpBarEffect = new LivingBarEffect(
+      this.scene,
+      this.container,
+      BAR_X,
+      BAR_Y - BAR_H / 2,
+      BAR_W,
+      BAR_H,
+      xpPalette,
+      { glowTarget: this.progressFill, scrollFactor: 0, intensity: 1.0 },
+    );
+
     this.refresh();
   }
 
@@ -303,7 +363,9 @@ export class CoopDefenseUpgradesOverlay {
     this.levelText.setText(`Level ${progress.level}`);
     this.xpText.setText(`${progress.totalXp} XP gesamt`);
     this.pointsText.setText(`${progress.availableUpgradePoints} Upgrade-Punkte verfuegbar`);
-    this.progressFill.setDisplaySize(Math.max(0.001, BAR_W * progress.levelProgressFraction), BAR_H);
+    const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
+    this.progressFill.setCrop(0, 0, fillW, BAR_H);
+    this.xpBarEffect?.setFilledWidth(fillW);
     this.progressLabelText.setText(`${progress.xpIntoLevel} / ${levelXpSpan} XP bis zum naechsten Level`);
 
     const categoryCount = progress.upgradeCategories.length;
@@ -318,6 +380,7 @@ export class CoopDefenseUpgradesOverlay {
   show(): void {
     if (this.visible || !this.container) return;
     this.visible = true;
+    this.xpBarEffect?.start();
     this.refresh();
 
     this.container.setVisible(true);
@@ -352,6 +415,9 @@ export class CoopDefenseUpgradesOverlay {
       this.keyHandler = null;
     }
 
+    this.clearNodeDecorations();
+    this.xpBarEffect?.stop();
+
     this.scene.tweens.add({
       targets: this.container,
       alpha: 0,
@@ -376,9 +442,13 @@ export class CoopDefenseUpgradesOverlay {
       this.scene.input.keyboard?.off('keydown', this.keyHandler);
       this.keyHandler = null;
     }
+    this.clearNodeDecorations();
+    this.xpBarEffect?.destroy();
+    this.xpBarEffect = null;
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
+    this.progressFill = null;
   }
 
   private setActiveCategory(index: number): void {
@@ -406,16 +476,11 @@ export class CoopDefenseUpgradesOverlay {
       const isActive = index === this.activeCategoryIndex;
       const centerX = startX + tabW / 2 + index * (tabW + TAB_GAP);
 
-      const bg = this.scene.add.rectangle(
-        centerX,
-        TAB_TOP + TAB_H / 2,
-        tabW,
-        TAB_H,
-        isActive ? visuals.laneFill : COLORS.GREY_8,
-        isActive ? 0.92 : 0.5,
-      )
-        .setStrokeStyle(isActive ? 2 : 1, isActive ? visuals.divider : COLORS.GREY_5)
+      const tabTexKey = this.ensureTabTexture(tabW, visuals, isActive);
+      const restAlpha = isActive ? 1 : 0.7;
+      const bg = this.scene.add.image(centerX, TAB_TOP + TAB_H / 2, tabTexKey)
         .setScrollFactor(0)
+        .setAlpha(restAlpha)
         .setInteractive({ useHandCursor: !isActive });
       this.tabsContainer!.add(bg);
 
@@ -423,26 +488,71 @@ export class CoopDefenseUpgradesOverlay {
         fontSize: '15px',
         fontFamily: 'monospace',
         fontStyle: 'bold',
-        color: toCssColor(isActive ? visuals.title : COLORS.GREY_3),
+        color: toCssColor(isActive ? visuals.title : COLORS.GREY_2),
       }).setOrigin(0.5).setScrollFactor(0);
       this.tabsContainer!.add(label);
 
       if (!isActive) {
-        bg.on('pointerover', () => bg.setAlpha(0.72));
-        bg.on('pointerout', () => bg.setAlpha(0.5));
+        bg.on('pointerover', () => bg.setAlpha(0.92));
+        bg.on('pointerout', () => bg.setAlpha(restAlpha));
         bg.on('pointerdown', () => this.setActiveCategory(index));
       }
     });
   }
 
+  private ensureTabTexture(tabW: number, visuals: CategoryVisuals, isActive: boolean): string {
+    const w = Math.max(1, Math.round(tabW));
+    if (isActive) {
+      return this.ensureRoundedTexture({
+        key: `_ccdtab_${w}_${visuals.nodeBase.toString(16)}_on`,
+        w,
+        h: TAB_H,
+        radius: 10,
+        topColor: lerpColor(visuals.nodeBase, 0xffffff, 0.22),
+        bottomColor: lerpColor(visuals.nodeBase, 0x000000, 0.42),
+        fillAlpha: 0.96,
+        strokeColor: lerpColor(visuals.nodeStroke, 0xffffff, 0.15),
+        strokeAlpha: 0.95,
+        strokeWidth: 2,
+        highlightAlpha: 0.26,
+      });
+    }
+    return this.ensureRoundedTexture({
+      key: `_ccdtab_${w}_off`,
+      w,
+      h: TAB_H,
+      radius: 10,
+      topColor: lerpColor(COLORS.GREY_7, 0xffffff, 0.05),
+      bottomColor: COLORS.GREY_9,
+      fillAlpha: 0.85,
+      strokeColor: COLORS.GREY_5,
+      strokeAlpha: 0.7,
+      strokeWidth: 1.5,
+      highlightAlpha: 0.06,
+    });
+  }
+
+  private clearNodeDecorations(): void {
+    for (const tween of this.decorationTweens) tween.destroy();
+    this.decorationTweens = [];
+    for (const effect of this.nodeEffects) effect.destroy();
+    this.nodeEffects = [];
+    for (const { target, glow } of this.nodeGlows) {
+      if (target.active) removeExternalFx(target, glow);
+    }
+    this.nodeGlows = [];
+  }
+
   private renderActiveCategory(progress: CoopDefenseProgressSnapshot): void {
     if (!this.upgradesContainer) return;
+    this.clearNodeDecorations();
     this.upgradesContainer.removeAll(true);
 
     const category = progress.upgradeCategories[this.activeCategoryIndex];
     if (!category) return;
 
     const visuals = CATEGORY_VISUALS[category.id];
+    this.contentBg?.setTexture(this.ensureContentBgTexture(visuals.connector));
     const tree = this.buildCategoryTree(category.upgrades);
     const columnCache = new Map<string, number>();
     const depthCache = new Map<string, number>();
@@ -604,6 +714,7 @@ export class CoopDefenseUpgradesOverlay {
     if (!this.upgradesContainer) return;
 
     const graphics = this.scene.add.graphics().setScrollFactor(0);
+    this.upgradesContainer.add(graphics);
 
     for (const child of placed) {
       for (const requirement of child.node.requires) {
@@ -616,17 +727,83 @@ export class CoopDefenseUpgradesOverlay {
         const endY = child.y - NODE_H / 2;
         const midY = startY + Math.max(8, (endY - startY) * 0.5);
 
-        graphics.lineStyle(2, requirement.satisfied ? visuals.connector : COLORS.GREY_5, requirement.satisfied ? 0.82 : 0.5);
-        graphics.beginPath();
-        graphics.moveTo(startX, startY);
-        graphics.lineTo(startX, midY);
-        graphics.lineTo(endX, midY);
-        graphics.lineTo(endX, endY);
-        graphics.strokePath();
+        const points: Array<{ x: number; y: number }> = [
+          { x: startX, y: startY },
+          { x: startX, y: midY },
+          { x: endX, y: midY },
+          { x: endX, y: endY },
+        ];
+
+        if (requirement.satisfied) {
+          // Soft glowing base line + flowing energy dot.
+          graphics.lineStyle(4, visuals.connector, 0.18);
+          this.strokePolyline(graphics, points);
+          graphics.lineStyle(2, visuals.connector, 0.85);
+          this.strokePolyline(graphics, points);
+          this.addFlowingDot(points, visuals.connector);
+        } else {
+          graphics.lineStyle(2, COLORS.GREY_5, 0.45);
+          this.strokePolyline(graphics, points);
+        }
       }
     }
+  }
 
-    this.upgradesContainer.add(graphics);
+  private strokePolyline(
+    graphics: Phaser.GameObjects.Graphics,
+    points: ReadonlyArray<{ x: number; y: number }>,
+  ): void {
+    graphics.beginPath();
+    graphics.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i += 1) graphics.lineTo(points[i].x, points[i].y);
+    graphics.strokePath();
+  }
+
+  private addFlowingDot(
+    points: ReadonlyArray<{ x: number; y: number }>,
+    color: number,
+  ): void {
+    if (!this.upgradesContainer) return;
+
+    const dot = this.scene.add.image(points[0].x, points[0].y, '_living_blob')
+      .setScrollFactor(0)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(color)
+      .setDisplaySize(14, 14)
+      .setAlpha(0.9);
+    this.upgradesContainer.add(dot);
+
+    // Segment lengths drive proportional travel timing along the elbow.
+    const segLengths: number[] = [];
+    let total = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      const len = Phaser.Math.Distance.Between(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y);
+      segLengths.push(len);
+      total += len;
+    }
+    const speed = 90; // px/sec
+    const travelDuration = Math.max(400, (total / speed) * 1000);
+
+    const tweens: Phaser.Types.Tweens.TweenBuilderConfig[] = [];
+    for (let i = 1; i < points.length; i += 1) {
+      const frac = total > 0 ? segLengths[i - 1] / total : 1 / (points.length - 1);
+      tweens.push({
+        targets: dot,
+        x: points[i].x,
+        y: points[i].y,
+        duration: Math.max(60, travelDuration * frac),
+        ease: 'Linear',
+      });
+    }
+
+    const chain = this.scene.tweens.chain({
+      targets: dot,
+      loop: -1,
+      loopDelay: 250,
+      tweens,
+      onLoop: () => dot.setPosition(points[0].x, points[0].y),
+    });
+    this.decorationTweens.push(chain as unknown as Phaser.Tweens.Tween);
   }
 
   private renderNode(placedNode: PlacedNode, visuals: CategoryVisuals): void {
@@ -638,35 +815,74 @@ export class CoopDefenseUpgradesOverlay {
     const isBaseUnlock = node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable;
     const interactionEnabled = node.canLevelUp || node.canLevelDown;
     const isLocked = !node.unlocked && node.level <= 0;
+    const isActive = node.level > 0;
     const progressFraction = node.maxLevel > 0
       ? Phaser.Math.Clamp(node.level / node.maxLevel, 0, 1)
       : 0;
     const nodeBaseColor = isBaseUnlock ? BASE_UNLOCK_NODE_FILL : visuals.nodeBase;
     const nodeStrokeColor = isBaseUnlock ? BASE_UNLOCK_NODE_STROKE : visuals.nodeStroke;
     const nodeActiveColor = isBaseUnlock ? BASE_UNLOCK_NODE_ACTIVE : visuals.nodeActive;
-    const baseAlpha = isLocked ? 0.28 : node.level > 0 ? 0.96 : 0.72;
+    const baseAlpha = isLocked ? 0.34 : isActive ? 1 : 0.82;
 
     const iconKey = this.getNodeTextureKey(node);
     const hasIcon = iconKey != null && this.scene.textures.exists(iconKey);
 
-    const baseRect = this.scene.add.rectangle(x, y, NODE_W, NODE_H, nodeBaseColor, baseAlpha)
-      .setStrokeStyle(1, interactionEnabled || isBaseUnlock ? nodeStrokeColor : COLORS.GREY_5)
-      .setScrollFactor(0);
+    // Modern glassy rounded-rect base (generated texture, glow-capable Image).
+    const baseTexKey = this.ensureNodeBaseTexture(nodeBaseColor, nodeStrokeColor);
+    const baseRect = this.scene.add.image(x, y, baseTexKey)
+      .setScrollFactor(0)
+      .setAlpha(baseAlpha);
     nodeGroup.add(baseRect);
 
     // Fortschritts-Fuellung steigt von unten hoch und scheint hinter dem transparenten Icon durch.
-    const fillHeight = Math.max(0, (NODE_H - NODE_INNER_PADDING * 2) * progressFraction);
-    const activeFill = this.scene.add.rectangle(
-      x,
-      y + NODE_H / 2 - NODE_INNER_PADDING,
-      NODE_W - NODE_INNER_PADDING * 2,
-      Math.max(0.001, fillHeight),
-      nodeActiveColor,
-      node.level > 0 ? 0.55 : 0,
-    )
-      .setOrigin(0.5, 1)
-      .setScrollFactor(0);
-    nodeGroup.add(activeFill);
+    const innerW = NODE_W - NODE_INNER_PADDING * 2;
+    const innerH = NODE_H - NODE_INNER_PADDING * 2;
+    if (isActive) {
+      const fillHeight = Math.max(1, innerH * progressFraction);
+      const fillTexKey = this.ensureNodeFillTexture(nodeActiveColor);
+      const activeFill = this.scene.add.image(x, y + NODE_H / 2 - NODE_INNER_PADDING, fillTexKey)
+        .setOrigin(0.5, 1)
+        .setScrollFactor(0)
+        .setAlpha(0.62);
+      // Crop the full-height fill texture to the filled (bottom) portion.
+      activeFill.setCrop(0, innerH - fillHeight, innerW, fillHeight);
+      nodeGroup.add(activeFill);
+
+      // Basis-Freischaltungen (z.B. Glock, nicht ruecknehmbar) bleiben ruhig/statisch -
+      // kein lebendiger Effekt, kein Leuchten.
+      if (!isBaseUnlock) {
+        // "Living" breathing effect on the upgrade-level fill (similar to the XP bar).
+        const fillTopY = y + NODE_H / 2 - NODE_INNER_PADDING - fillHeight;
+        const fillPalette = paletteFromColor(nodeActiveColor);
+        const effect = new LivingBarEffect(
+          this.scene,
+          nodeGroup,
+          x - innerW / 2,
+          fillTopY,
+          innerW,
+          fillHeight,
+          fillPalette,
+          { scrollFactor: 0, intensity: 0.55 },
+        );
+        effect.setFilledWidth(innerW);
+        this.nodeEffects.push(effect);
+
+        // Dezenter, animierter Aussen-Glow in Kategorie-Farbe fuer aktive Upgrades.
+        const glow = addExternalGlow(baseRect, visuals.connector, 0.6, 0, false, 0.1, 7);
+        if (glow) {
+          this.nodeGlows.push({ target: baseRect, glow });
+          const glowTween = this.scene.tweens.add({
+            targets: glow,
+            outerStrength: 1.8,
+            duration: 1800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+          this.decorationTweens.push(glowTween);
+        }
+      }
+    }
 
     if (hasIcon && iconKey) {
       const icon = this.scene.add.image(x, y, iconKey)
@@ -715,6 +931,188 @@ export class CoopDefenseUpgradesOverlay {
     nodeGroup.add(hitArea);
 
     this.upgradesContainer.add(nodeGroup);
+  }
+
+  private ensureNodeBaseTexture(fillColor: number, strokeColor: number): string {
+    const key = `_ccdnode_${fillColor.toString(16)}_${strokeColor.toString(16)}`;
+    if (this.scene.textures.exists(key)) return key;
+
+    const w = NODE_W;
+    const h = NODE_H;
+    const ct = this.scene.textures.createCanvas(key, w, h);
+    if (!ct) return key;
+    const ctx = ct.context;
+    ctx.clearRect(0, 0, w, h);
+
+    const inset = 1.5;
+    const top = lerpColor(fillColor, 0xffffff, 0.22);
+    const bottom = lerpColor(fillColor, 0x000000, 0.42);
+
+    roundRectPath(ctx, inset, inset, w - inset * 2, h - inset * 2, NODE_TEX_RADIUS);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, rgbStr(top));
+    grad.addColorStop(1, rgbStr(bottom));
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Glassy top highlight (clipped to the rounded shape).
+    ctx.save();
+    roundRectPath(ctx, inset, inset, w - inset * 2, h - inset * 2, NODE_TEX_RADIUS);
+    ctx.clip();
+    const hi = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+    hi.addColorStop(0, 'rgba(255,255,255,0.28)');
+    hi.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hi;
+    ctx.fillRect(0, 0, w, h * 0.55);
+    ctx.restore();
+
+    roundRectPath(ctx, inset, inset, w - inset * 2, h - inset * 2, NODE_TEX_RADIUS);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgbStr(lerpColor(strokeColor, 0xffffff, 0.15));
+    ctx.stroke();
+
+    ct.refresh();
+    return key;
+  }
+
+  private ensureNodeFillTexture(color: number): string {
+    const key = `_ccdfill_${color.toString(16)}`;
+    if (this.scene.textures.exists(key)) return key;
+
+    const w = NODE_W - NODE_INNER_PADDING * 2;
+    const h = NODE_H - NODE_INNER_PADDING * 2;
+    const ct = this.scene.textures.createCanvas(key, w, h);
+    if (!ct) return key;
+    const ctx = ct.context;
+    ctx.clearRect(0, 0, w, h);
+
+    const r = Math.max(2, NODE_TEX_RADIUS - NODE_INNER_PADDING);
+    roundRectPath(ctx, 0, 0, w, h, r);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, rgbStr(lerpColor(color, 0xffffff, 0.18)));
+    grad.addColorStop(1, rgbStr(lerpColor(color, 0x000000, 0.25)));
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ct.refresh();
+    return key;
+  }
+
+  /** Generic glassy rounded-rect texture (shared by panel, content area and tabs). */
+  private ensureRoundedTexture(params: {
+    key: string;
+    w: number;
+    h: number;
+    radius: number;
+    topColor: number;
+    bottomColor: number;
+    fillAlpha: number;
+    strokeColor: number;
+    strokeAlpha: number;
+    strokeWidth: number;
+    highlightAlpha: number;
+  }): string {
+    if (this.scene.textures.exists(params.key)) return params.key;
+
+    const w = Math.max(1, Math.round(params.w));
+    const h = Math.max(1, Math.round(params.h));
+    const ct = this.scene.textures.createCanvas(params.key, w, h);
+    if (!ct) return params.key;
+    const ctx = ct.context;
+    ctx.clearRect(0, 0, w, h);
+
+    const inset = Math.max(1, params.strokeWidth);
+    const rectW = w - inset * 2;
+    const rectH = h - inset * 2;
+
+    roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, rgbStr(params.topColor, params.fillAlpha));
+    grad.addColorStop(1, rgbStr(params.bottomColor, params.fillAlpha));
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    if (params.highlightAlpha > 0) {
+      ctx.save();
+      roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+      ctx.clip();
+      const hi = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+      hi.addColorStop(0, `rgba(255,255,255,${params.highlightAlpha})`);
+      hi.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = hi;
+      ctx.fillRect(0, 0, w, h * 0.55);
+      ctx.restore();
+    }
+
+    if (params.strokeAlpha > 0) {
+      roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+      ctx.lineWidth = params.strokeWidth;
+      ctx.strokeStyle = rgbStr(params.strokeColor, params.strokeAlpha);
+      ctx.stroke();
+    }
+
+    ct.refresh();
+    return params.key;
+  }
+
+  private ensurePanelTexture(): string {
+    return this.ensureRoundedTexture({
+      key: '_ccd_panel',
+      w: PANEL_W,
+      h: PANEL_H,
+      radius: 22,
+      topColor: lerpColor(PANEL_BG, 0xffffff, 0.07),
+      bottomColor: lerpColor(PANEL_BG, 0x000000, 0.3),
+      fillAlpha: PANEL_ALPHA,
+      strokeColor: ACCENT,
+      strokeAlpha: 0.5,
+      strokeWidth: 2,
+      highlightAlpha: 0.05,
+    });
+  }
+
+  private ensureContentBgTexture(color: number): string {
+    const key = `_ccd_contentbg_${color.toString(16)}`;
+    if (this.scene.textures.exists(key)) return key;
+
+    const w = Math.max(1, Math.round(CONTENT_W));
+    const h = Math.max(1, Math.round(CONTENT_H));
+    const ct = this.scene.textures.createCanvas(key, w, h);
+    if (!ct) return key;
+    const ctx = ct.context;
+    ctx.clearRect(0, 0, w, h);
+
+    const radius = 16;
+    const inset = 1.5;
+    const rectW = w - inset * 2;
+    const rectH = h - inset * 2;
+
+    // Dunkler Grund, sanft in die Kategoriefarbe getoent.
+    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, rgbStr(lerpColor(COLORS.GREY_8, color, 0.22), 0.55));
+    grad.addColorStop(1, rgbStr(lerpColor(COLORS.GREY_9, color, 0.08), 0.6));
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Weicher radialer Schimmer oben fuer einen ansprechenderen Look.
+    ctx.save();
+    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
+    ctx.clip();
+    const rad = ctx.createRadialGradient(w / 2, h * 0.02, 0, w / 2, h * 0.02, w * 0.62);
+    rad.addColorStop(0, rgbStr(color, 0.16));
+    rad.addColorStop(1, rgbStr(color, 0));
+    ctx.fillStyle = rad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+
+    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgbStr(color, 0.4);
+    ctx.stroke();
+
+    ct.refresh();
+    return key;
   }
 
   private handleUpgradePointerDown(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
