@@ -3,8 +3,9 @@ import {
   CELL_SIZE, GRID_COLS, GRID_ROWS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH, ARENA_HEIGHT,
+  POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
 } from '../config';
-import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal } from '../types';
+import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpSnapshot } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem }  from '../systems/CombatSystem';
 import {
@@ -84,12 +85,15 @@ type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive
  */
 export class PowerUpSystem {
   private worldItems  = new Map<number, WorldItem>();
+  private readonly netSnapshotCache = new Map<number, SyncedPowerUp>();
+  private readonly pendingRemovalUids = new Set<number>();
   private activeBuffs = new Map<string, ActiveBuff[]>(); // playerId → Buffs
   private activeNukes = new Map<number, ActiveNukeStrike>();
   private pedestals   = new Map<number, PedestalRuntime>();
   private itemToPedestal = new Map<number, number>();
   private nextUid     = 1;
   private nextNukeId  = 1;
+  private ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
 
   private arenaStartTime = 0;
   private pedestalsActivated = false;
@@ -118,11 +122,14 @@ export class PowerUpSystem {
   /** Komplett zurücksetzen (Rundenende / Teardown). */
   reset(): void {
     this.worldItems.clear();
+    this.netSnapshotCache.clear();
+    this.pendingRemovalUids.clear();
     this.activeBuffs.clear();
     this.activeNukes.clear();
     this.itemToPedestal.clear();
     this.nextUid = 1;
     this.nextNukeId = 1;
+    this.ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     this.arenaStartTime = 0;
     this.pedestalsActivated = false;
     for (const pedestal of this.pedestals.values()) {
@@ -242,6 +249,8 @@ export class PowerUpSystem {
     if (dist > PICKUP_RADIUS * 2) return; // Zu weit weg → ignorieren (großzügiger Check)
 
     this.worldItems.delete(uid);
+    this.pendingRemovalUids.add(uid);
+    this.netSnapshotCache.delete(uid);
     const pedestalId = this.itemToPedestal.get(uid);
     if (pedestalId !== undefined) {
       const pedestal = this.pedestals.get(pedestalId);
@@ -369,12 +378,53 @@ export class PowerUpSystem {
 
   // ── Netzwerk-Snapshot ───────────────────────────────────────────────────
 
-  getNetSnapshot(): SyncedPowerUp[] {
+  getWorldItemSnapshot(): SyncedPowerUp[] {
     const result: SyncedPowerUp[] = [];
     for (const item of this.worldItems.values()) {
       result.push({ uid: item.uid, defId: item.def.id, x: item.x, y: item.y });
     }
+    result.sort((left, right) => left.uid - right.uid);
     return result;
+  }
+
+  getNetSnapshot(): SyncedPowerUpSnapshot | null {
+    const full = this.ticksSinceFullNetSnapshot >= POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    const currentIds = new Set<number>();
+    const upserts: SyncedPowerUp[] = [];
+
+    for (const item of this.getWorldItemSnapshot()) {
+      currentIds.add(item.uid);
+      const previous = this.netSnapshotCache.get(item.uid);
+      if (full || !previous) {
+        upserts.push(item);
+        this.netSnapshotCache.set(item.uid, item);
+      }
+    }
+
+    const removals = full ? [] : [...this.pendingRemovalUids].sort((left, right) => left - right);
+
+    if (full) {
+      for (const uid of [...this.netSnapshotCache.keys()]) {
+        if (!currentIds.has(uid)) this.netSnapshotCache.delete(uid);
+      }
+      this.ticksSinceFullNetSnapshot = 0;
+    } else {
+      this.ticksSinceFullNetSnapshot += 1;
+      for (const uid of removals) {
+        this.netSnapshotCache.delete(uid);
+      }
+    }
+
+    this.pendingRemovalUids.clear();
+
+    if (!full && upserts.length === 0 && removals.length === 0) return null;
+
+    return {
+      full,
+      count: currentIds.size,
+      upserts,
+      removals,
+    };
   }
 
   getPedestalSnapshot(): SyncedPowerUpPedestal[] {

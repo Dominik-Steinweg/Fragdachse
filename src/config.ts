@@ -628,8 +628,12 @@ export const ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 export const ENEMY_NET_POSITION_DELTA_PX = 4;
 /** Kleine Rotationsänderungen werden erst gesammelt und dann als Delta gesendet. */
 export const ENEMY_NET_ROTATION_DELTA_RAD = 0.08;
+/** Boden-Power-Ups senden meist nur Spawn-/Pickup-Deltas; Full-Resync korrigiert verlorene Frames. */
+export const POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
+/** Statische Rocks senden normalerweise nur HP-Änderungen und Zerstörungen; Full-Resync korrigiert verlorene Frames. */
+export const ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Debug-only: Host loggt aggregierte Enemy-Sync-Payload-Metriken ins Dev-Console. */
-export const NET_DEBUG_ENEMY_SYNC_METRICS = false;
+export const NET_DEBUG_ENEMY_SYNC_METRICS = true;
 /** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
 export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
 

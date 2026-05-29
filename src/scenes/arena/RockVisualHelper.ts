@@ -220,6 +220,7 @@ export class RockVisualHelper {
       this.ctx.currentLayout.rocks,
       rockId,
     );
+    this.ctx.rockRegistry?.remove(rockId);
     this.refreshStaticShadows();
     this.ctx.powerUpSystem?.onRockDestroyed(rockId);
     const rockCell = this.ctx.currentLayout.rocks[rockId];

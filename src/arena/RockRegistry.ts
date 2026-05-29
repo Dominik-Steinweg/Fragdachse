@@ -1,5 +1,5 @@
-import { ROCK_HP_MAX } from '../config';
-import type { ArenaLayout, RockNetState } from '../types';
+import { ROCK_HP_MAX, ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS } from '../config';
+import type { ArenaLayout, RockNetState, SyncedRockSnapshot } from '../types';
 
 /**
  * RockRegistry – Host-seitiger HP-Zustand aller Felsen.
@@ -8,6 +8,9 @@ import type { ArenaLayout, RockNetState } from '../types';
 export class RockRegistry {
   /** rockIndex → aktueller HP-Wert + max HP */
   private hpMap = new Map<number, { hp: number; maxHp: number }>();
+  private readonly netSnapshotCache = new Map<number, RockNetState>();
+  private readonly pendingRemovalIds = new Set<number>();
+  private ticksSinceFullNetSnapshot = ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
 
   constructor(layout: ArenaLayout) {
     this.reset(layout);
@@ -16,6 +19,9 @@ export class RockRegistry {
   /** Initialisiert alle Felsen mit vollem HP. */
   reset(layout: ArenaLayout): void {
     this.hpMap.clear();
+    this.netSnapshotCache.clear();
+    this.pendingRemovalIds.clear();
+    this.ticksSinceFullNetSnapshot = ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     for (let i = 0; i < layout.rocks.length; i++) {
       this.hpMap.set(i, { hp: ROCK_HP_MAX, maxHp: ROCK_HP_MAX });
     }
@@ -23,6 +29,7 @@ export class RockRegistry {
 
   register(id: number, maxHp: number): void {
     this.hpMap.set(id, { hp: maxHp, maxHp });
+    this.pendingRemovalIds.delete(id);
   }
 
   /** Gibt den aktuellen HP-Wert für Felsen id zurück. */
@@ -55,19 +62,54 @@ export class RockRegistry {
   /** Entfernt den Felsen aus der Registry (nach Zerstörung). */
   remove(id: number): void {
     this.hpMap.delete(id);
+    this.netSnapshotCache.delete(id);
+    this.pendingRemovalIds.add(id);
   }
 
   /**
    * Delta-Snapshot für Netzwerk-Sync: Nur Felsen mit HP < ROCK_HP_MAX enthalten.
    * Abwesende IDs gelten beim Client als vollständig (ROCK_HP_MAX).
    */
-  getNetSnapshot(): RockNetState[] {
-    const result: RockNetState[] = [];
+  getNetSnapshot(): SyncedRockSnapshot | null {
+    const full = this.ticksSinceFullNetSnapshot >= ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    const currentIds = new Set<number>();
+    const upserts: RockNetState[] = [];
+
     for (const [id, state] of this.hpMap) {
-      if (state.hp < state.maxHp) {
-        result.push({ id, hp: state.hp });
+      if (state.hp >= state.maxHp) continue;
+
+      const nextState = { id, hp: state.hp };
+      currentIds.add(id);
+      const previous = this.netSnapshotCache.get(id);
+      if (full || !previous || previous.hp !== nextState.hp) {
+        upserts.push(nextState);
+        this.netSnapshotCache.set(id, nextState);
       }
     }
-    return result;
+
+    const removals = full ? [] : [...this.pendingRemovalIds].sort((left, right) => left - right);
+
+    if (full) {
+      for (const id of [...this.netSnapshotCache.keys()]) {
+        if (!currentIds.has(id)) this.netSnapshotCache.delete(id);
+      }
+      this.ticksSinceFullNetSnapshot = 0;
+    } else {
+      this.ticksSinceFullNetSnapshot += 1;
+      for (const id of removals) {
+        this.netSnapshotCache.delete(id);
+      }
+    }
+
+    this.pendingRemovalIds.clear();
+
+    if (!full && upserts.length === 0 && removals.length === 0) return null;
+
+    return {
+      full,
+      count: currentIds.size,
+      upserts,
+      removals,
+    };
   }
 }

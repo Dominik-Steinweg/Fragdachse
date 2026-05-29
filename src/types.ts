@@ -844,6 +844,14 @@ export interface ArenaLayout {
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
 export interface RockNetState { id: number; hp: number; }
 
+/** Snapshot-Hülle für statische Rock-HP-Änderungen und Zerstörungen. */
+export interface SyncedRockSnapshot {
+  full: boolean;
+  count: number;
+  upserts: RockNetState[];
+  removals: number[];
+}
+
 export interface SyncedPlaceableRock {
   id: number;
   kind: PlaceableKind;
@@ -936,6 +944,14 @@ export interface SyncedPowerUp {
   defId: string;   // Schlüssel in POWERUP_DEFS
   x:     number;
   y:     number;
+}
+
+/** Snapshot-Hülle für Boden-Power-Ups mit Spawn-/Pickup-Deltas. */
+export interface SyncedPowerUpSnapshot {
+  full: boolean;
+  count: number;
+  upserts: SyncedPowerUp[];
+  removals: number[];
 }
 
 /** Synchronisierter Laufzeit-Zustand eines festen Power-Up-Podests. */

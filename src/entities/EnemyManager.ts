@@ -320,8 +320,8 @@ export class EnemyManager {
     }
   }
 
-  private generateEnemyId(kind: CoopDefenseEnemyKind): string {
-    return `coop-${kind}-${this.nextEnemyIdSeq++}`;
+  private generateEnemyId(_kind: CoopDefenseEnemyKind): string {
+    return `e${(this.nextEnemyIdSeq++).toString(36)}`;
   }
 
   private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {

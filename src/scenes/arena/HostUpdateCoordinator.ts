@@ -304,7 +304,7 @@ export class HostUpdateCoordinator {
       }
     }
 
-    const rocks = this.ctx.rockRegistry?.getNetSnapshot() ?? [];
+    const rocks = this.ctx.rockRegistry?.getNetSnapshot() ?? null;
 
     // Host-local visuals each frame
     for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -339,7 +339,8 @@ export class HostUpdateCoordinator {
       this.applyDashVisual(player, player.id, dashPhase, false);
     }
 
-    const powerups    = this.ctx.powerUpSystem?.getNetSnapshot()       ?? [];
+    const powerups    = this.ctx.powerUpSystem?.getWorldItemSnapshot() ?? [];
+    const powerupSnapshot = this.ctx.powerUpSystem?.getNetSnapshot()   ?? null;
     const pedestals   = this.ctx.powerUpSystem?.getPedestalSnapshot()  ?? [];
     const nukes       = this.ctx.powerUpSystem?.getNukeSnapshot()      ?? [];
     const airstrikes  = this.ctx.airstrikeSystem?.getSnapshot()        ?? [];
@@ -537,7 +538,7 @@ export class HostUpdateCoordinator {
       timeBubbles,
       teslaDomes,
       energyShields,
-      powerups,
+      powerups: powerupSnapshot,
       pedestals,
       nukes,
       airstrikes,

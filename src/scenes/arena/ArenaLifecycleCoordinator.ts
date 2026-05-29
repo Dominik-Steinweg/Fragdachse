@@ -693,8 +693,11 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
 
       this.ctx.combatSystem.setKillCallback((killerId, victimId, weapon, x, y) => {
+        const allowKillDrop = !isCoopDefenseMode(bridge.getGameMode());
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
-          this.ctx.powerUpSystem?.onPlayerKilled(x, y);
+          if (allowKillDrop) {
+            this.ctx.powerUpSystem?.onPlayerKilled(x, y);
+          }
           const victimProfile = bridge.getConnectedPlayers().find(p => p.id === victimId);
           if (victimProfile) {
             bridge.broadcastKillEvent({
@@ -725,7 +728,9 @@ export class ArenaLifecycleCoordinator {
             victimName:  victimProfile.name,
             victimColor: victimProfile.colorHex,
           });
-          this.ctx.powerUpSystem?.onPlayerKilled(x, y);
+          if (allowKillDrop) {
+            this.ctx.powerUpSystem?.onPlayerKilled(x, y);
+          }
         }
       });
 
