@@ -22,6 +22,8 @@ import {
   RAGE_PER_DAMAGE, ADRENALINE_START,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
+import { isCoopDefenseMode } from '../gameModes';
+import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
@@ -1919,6 +1921,13 @@ export class CombatSystem {
       if (killerId && killerId !== targetId) {
         if (this.bridge.getPlayerProfile(killerId)) {
           this.bridge.incrementPlayerFrags(killerId);
+          if (isCoopDefenseMode(this.bridge.getGameMode())) {
+            const enemyXp = getCoopDefenseEnemyXp(enemy.kind);
+            if (enemyXp > 0) {
+              this.bridge.addCoopDefenseRoundXp(enemyXp);
+              this.bridge.broadcastCoopDefenseXpPopup(x, y, enemyXp);
+            }
+          }
         }
         const weapon = this.lastWeapon.get(targetId) ?? weaponName ?? 'Waffe';
         this.onKillCb?.(killerId, targetId, weapon, x, y);

@@ -54,6 +54,7 @@ const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
 const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
+const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop-Defense-XP)
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
@@ -90,6 +91,7 @@ export interface RoundResult {
   frags:    number;
   teamId:   TeamId | null;
   teamScore?: number;
+  sharedXp?: number;
 }
 
 export type RoundOutcome = 'victory' | 'defeat';
@@ -166,6 +168,7 @@ type ColorAcceptedHandler = (requesterId: string, color: number) => void;
 type ColorDeniedHandler = (requesterId: string) => void;
 type ColorChangeHandler = (playerId: string, color: number) => void;
 type KillEventHandler = (event: KillEvent) => void;
+type CoopDefenseXpPopupHandler = (x: number, y: number, xp: number) => void;
 type MeleeSwingHandler = (swing: SyncedMeleeSwing) => void;
 type PowerUpPickupHandler = (uid: number, playerId: string) => void;
 type DecoyStealthBreakHandler = (playerId: string) => void;
@@ -212,6 +215,7 @@ export class NetworkBridge {
   private colorDeniedHandler: ColorDeniedHandler | null = null;
   private colorChangeHandler: ColorChangeHandler | null = null;
   private killEventHandler: KillEventHandler | null = null;
+  private coopDefenseXpPopupHandler: CoopDefenseXpPopupHandler | null = null;
   private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
   private decoyStealthBreakHandler: DecoyStealthBreakHandler | null = null;
@@ -1501,6 +1505,28 @@ export class NetworkBridge {
     }
   }
 
+  getCoopDefenseRoundXp(): number {
+    const rawXp = getState(KEY_COOP_ROUND_XP) as number | undefined;
+    if (typeof rawXp !== 'number' || !Number.isFinite(rawXp)) return 0;
+    return Math.max(0, Math.floor(rawXp));
+  }
+
+  setCoopDefenseRoundXp(totalXp: number): void {
+    if (!isHost()) return;
+    setState(KEY_COOP_ROUND_XP, Math.max(0, Math.floor(totalXp)), true);
+  }
+
+  addCoopDefenseRoundXp(amount: number): number {
+    if (!isHost()) return this.getCoopDefenseRoundXp();
+    const nextTotal = this.getCoopDefenseRoundXp() + Math.max(0, Math.floor(amount));
+    this.setCoopDefenseRoundXp(nextTotal);
+    return nextTotal;
+  }
+
+  resetCoopDefenseRoundXp(): void {
+    this.setCoopDefenseRoundXp(0);
+  }
+
   setLocalCoopDefenseTotalXp(totalXp: number): void {
     const nextTotalXp = Math.max(0, Math.floor(totalXp));
     myPlayer().setState(KEY_COOP_XP, nextTotalXp, true);
@@ -1577,6 +1603,21 @@ export class NetworkBridge {
   /** Liest den aktuellen bzw. letzten finalen Rundenstatus. */
   getRoundState(): RoundState | null {
     return (getState(KEY_ROUND_STATE) as RoundState | null | undefined) ?? null;
+  }
+
+  broadcastCoopDefenseXpPopup(x: number, y: number, xp: number): void {
+    this.broadcastRpc('cdxp', { x, y, xp: Math.max(0, Math.floor(xp)) });
+  }
+
+  registerCoopDefenseXpPopupHandler(handler: CoopDefenseXpPopupHandler): void {
+    this.coopDefenseXpPopupHandler = handler;
+    this.registerAllRpcHandler('cdxp', async (data: unknown): Promise<unknown> => {
+      const popupHandler = this.coopDefenseXpPopupHandler;
+      if (!popupHandler) return undefined;
+      const { x, y, xp } = data as { x: number; y: number; xp: number };
+      popupHandler(x, y, xp);
+      return undefined;
+    });
   }
 
   // ── Kill-Ereignis-RPC: Host → Alle ────────────────────────────────────────

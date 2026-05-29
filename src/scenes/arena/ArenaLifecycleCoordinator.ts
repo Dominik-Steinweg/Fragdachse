@@ -53,7 +53,7 @@ import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { BaseManager } from '../../entities/BaseManager';
 import { EnemyManager } from '../../entities/EnemyManager';
-import { resolveCoopDefenseEnemyConfigs } from '../../entities/EnemyCatalog';
+import { resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 
 /**
@@ -169,6 +169,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyOverlay.lockButton();
     bridge.setMatchHostId();
     bridge.resetAllFrags();
+    bridge.resetCoopDefenseRoundXp();
     applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
     const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
@@ -225,6 +226,7 @@ export class ArenaLifecycleCoordinator {
         teamScore: bridge.getGameMode() === CAPTURE_THE_BEER_MODE && teamId
           ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
           : undefined,
+        sharedXp: isCoopDefenseMode(bridge.getGameMode()) ? bridge.getCoopDefenseRoundXp() : undefined,
       };
     });
     bridge.publishRoundResults(results);

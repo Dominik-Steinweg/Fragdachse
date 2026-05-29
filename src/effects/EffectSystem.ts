@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
+import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STAIN, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
@@ -1088,6 +1088,31 @@ export class EffectSystem {
       alpha:      0,
       duration:   850,
       ease:       'Quad.easeOut',
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  playCoopDefenseXpText(x: number, y: number, xp: number): void {
+    const resolvedXp = Math.max(0, Math.floor(xp));
+    if (resolvedXp <= 0) return;
+
+    const label = this.scene.add.text(x, y - 18, `+${resolvedXp} XP`, {
+      fontFamily: 'monospace',
+      fontSize: '24px',
+      fontStyle: 'bold',
+      color: toCssColor(COLORS.GOLD_1),
+      stroke: '#241527',
+      strokeThickness: 4,
+    });
+    label.setOrigin(0.5);
+    label.setDepth(DEPTH.OVERLAY - 5);
+
+    this.scene.tweens.add({
+      targets: label,
+      y: y - 64,
+      alpha: 0,
+      duration: 950,
+      ease: 'Quad.easeOut',
       onComplete: () => label.destroy(),
     });
   }

@@ -7,7 +7,7 @@ import {
   resolveCoopDefenseEnemyConfigs,
   type CoopDefenseEnemyKind,
   type ResolvedCoopDefenseEnemyConfigs,
-} from './EnemyCatalog';
+} from '../config/coopDefenseEnemies';
 
 export class EnemyManager {
   private readonly scene: Phaser.Scene;

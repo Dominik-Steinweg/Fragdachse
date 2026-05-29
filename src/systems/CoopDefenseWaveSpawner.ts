@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { GRID_COLS, GRID_ROWS } from '../config';
 import type { ResolvedCoopDefenseMapWaveConfig } from '../config/coopDefenseMaps';
 import type { EnemyManager } from '../entities/EnemyManager';
-import type { CoopDefenseEnemyKind } from '../entities/EnemyCatalog';
+import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 
 const LEFT_SPAWN_GRID_X_MAX = Math.max(2, Math.floor(GRID_COLS * 0.15));

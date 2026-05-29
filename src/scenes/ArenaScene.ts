@@ -1250,9 +1250,15 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    const sharedRoundFrags = results.reduce((sum, result) => sum + Math.max(0, Math.floor(result.frags)), 0);
-    if (sharedRoundFrags > 0) {
-      addStoredCoopDefenseXp(sharedRoundFrags);
+    const sharedRoundXp = Math.max(
+      0,
+      Math.floor(
+        results.find((result) => typeof result.sharedXp === 'number')?.sharedXp
+          ?? bridge.getCoopDefenseRoundXp(),
+      ),
+    );
+    if (sharedRoundXp > 0) {
+      addStoredCoopDefenseXp(sharedRoundXp);
     }
     markStoredCoopDefenseRoundProcessed(endedAt);
     this.refreshStoredCoopDefenseProgress();

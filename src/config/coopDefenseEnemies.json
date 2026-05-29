@@ -1,0 +1,67 @@
+{
+  "enemies": [
+    {
+      "id": "zombie-badger",
+      "maxHp": 20,
+      "xp": 1,
+      "size": 28,
+      "moveSpeed": 70,
+      "movementTarget": "bases",
+      "weaponId": "BITE",
+      "attackScanIntervalMs": 200,
+      "attackStopDurationMs": 200,
+      "imageKey": "badger",
+      "color": 14710832,
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.5,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      },
+      "spawnScaling": {
+        "intervalMsFactorPerAdditionalPlayer": -0.5,
+        "countPerWaveFactorPerAdditionalPlayer": 0
+      }
+    },
+    {
+      "id": "demon-badger",
+      "maxHp": 15,
+      "xp": 2,
+      "size": 24,
+      "moveSpeed": 140,
+      "movementTarget": "bases",
+      "weaponId": "BITE",
+      "attackScanIntervalMs": 200,
+      "attackStopDurationMs": 200,
+      "imageKey": "badger",
+      "color": 16755268,
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      },
+      "spawnScaling": {
+        "intervalMsFactorPerAdditionalPlayer": 0,
+        "countPerWaveFactorPerAdditionalPlayer": 1
+      }
+    },
+    {
+      "id": "rabid-badger",
+      "maxHp": 10,
+      "xp": 3,
+      "size": 22,
+      "moveSpeed": 180,
+      "movementTarget": "players",
+      "weaponId": "BITE",
+      "attackScanIntervalMs": 200,
+      "attackStopDurationMs": 100,
+      "imageKey": "badger",
+      "color": 13377568,
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      },
+      "spawnScaling": {
+        "intervalMsFactorPerAdditionalPlayer": -1,
+        "countPerWaveFactorPerAdditionalPlayer": 0
+      }
+    }
+  ]
+}

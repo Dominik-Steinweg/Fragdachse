@@ -56,6 +56,7 @@ export class RpcCoordinator {
     this.registerCaptureTheBeerFxHandler();
     this.registerExplosionEffectHandler();
     this.registerGrenadeCountdownHandler();
+    this.registerCoopDefenseXpPopupHandler();
     this.registerBfgLaserBatchHandler();
     this.registerBurrowVisualHandler();
     this.registerShockwaveEffectHandler();
@@ -126,6 +127,12 @@ export class RpcCoordinator {
   private registerGrenadeCountdownHandler(): void {
     bridge.registerGrenadeCountdownHandler((x, y, value) => {
       this.ctx.effectSystem.playCountdownText(x, y, value);
+    });
+  }
+
+  private registerCoopDefenseXpPopupHandler(): void {
+    bridge.registerCoopDefenseXpPopupHandler((x, y, xp) => {
+      this.ctx.effectSystem.playCoopDefenseXpText(x, y, xp);
     });
   }
 

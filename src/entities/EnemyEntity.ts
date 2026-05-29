@@ -12,7 +12,7 @@ import {
 import {
   type CoopDefenseEnemyKind,
   type ResolvedCoopDefenseEnemyConfig,
-} from './EnemyCatalog';
+} from '../config/coopDefenseEnemies';
 import type { SyncedEnemyState } from '../types';
 
 export class EnemyEntity {

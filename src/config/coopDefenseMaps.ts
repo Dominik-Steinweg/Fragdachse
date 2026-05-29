@@ -2,7 +2,7 @@ import rawCoopDefenseMaps from './coopDefenseMaps.json';
 import {
   resolveCoopDefenseEnemyWaveConfig,
   type CoopDefenseEnemyKind,
-} from '../entities/EnemyCatalog';
+} from './coopDefenseEnemies';
 
 export interface CoopBaseCellOffset {
   readonly gridX: number;

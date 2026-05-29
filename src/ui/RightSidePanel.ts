@@ -9,7 +9,7 @@
  */
 import * as Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, COLORS, toCssColor } from '../config';
-import { getTeamLabel } from '../gameModes';
+import { getTeamLabel, isCoopDefenseMode } from '../gameModes';
 import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
@@ -98,6 +98,7 @@ interface LeaderboardEntry {
   ping: number;
   teamId: TeamId | null;
   teamScore?: number;
+  sharedXp?: number;
 }
 
 interface TeamHeaderRow {
@@ -131,6 +132,7 @@ export class RightSidePanel {
     frags: Phaser.GameObjects.Text;
   }[] = [];  private lbPingRows: Phaser.GameObjects.Text[] = [];
   private lbTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
+  private leaderboardScoreLabel!: Phaser.GameObjects.Text;
   private leaderboardCache: (LeaderboardEntryView | null)[] = Array.from({ length: 12 }, () => null);
   private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
   private readonly cssColorCache = new Map<number, string>();
@@ -248,11 +250,13 @@ export class RightSidePanel {
    * entries muss bereits absteigend nach Frags sortiert sein.
    */
   updateLeaderboard(entries: LeaderboardEntry[]): void {
+    this.syncArenaScoreLabel();
     if (entries.some((entry) => entry.teamId === 'blue' || entry.teamId === 'red')) {
       this.renderGroupedLeaderboard(entries);
       return;
     }
 
+    const displayEntries = this.sortLeaderboardEntriesForDisplay(entries);
     this.lbTeamHeaders?.blue.label.setVisible(false);
     this.lbTeamHeaders?.blue.score.setVisible(false);
     this.lbTeamHeaders?.red.label.setVisible(false);
@@ -260,13 +264,13 @@ export class RightSidePanel {
     for (let i = 0; i < this.lbRows.length; i++) {
       const row      = this.lbRows[i];
       const pingText = this.lbPingRows[i];
-      const entry    = entries[i];
+      const entry    = displayEntries[i];
       if (entry) {
         const nextView: LeaderboardEntryView = {
           visible: true,
           nameText: `${i + 1}. ${entry.name}`,
           nameColor: this.toCachedCssColor(entry.colorHex),
-          fragsText: String(entry.frags),
+          fragsText: String(this.resolveLeaderboardEntryScore(entry)),
           pingText: `${entry.ping}ms`,
           pingColor: pingColor(entry.ping),
         };
@@ -299,12 +303,13 @@ export class RightSidePanel {
     * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
    */
   showRoundResults(results: RoundResult[] | null, roundState: RoundState | null = null): void {
+    this.syncLobbyScoreLabel();
     if (results && results.some((result) => result.teamId === 'blue' || result.teamId === 'red')) {
       this.renderGroupedRoundResults(results, roundState);
       return;
     }
 
-    const sorted  = results ? [...results].sort((a, b) => b.frags - a.frags) : null;
+    const sorted  = results ? this.sortRoundResultsForDisplay(results) : null;
     const hasData = !!sorted && sorted.length > 0;
 
     this.resultsTeamHeaders?.blue.label.setVisible(false);
@@ -323,7 +328,7 @@ export class RightSidePanel {
       const entry = hasData ? sorted![i] : undefined;
       if (entry) {
         row.name.setText(`${i + 1}. ${entry.name}`).setColor(toCssColor(entry.colorHex)).setVisible(true);
-        row.frags.setText(String(entry.frags)).setVisible(true);
+        row.frags.setText(String(this.resolveRoundResultScore(entry))).setVisible(true);
       } else {
         row.name.setVisible(false);
         row.frags.setVisible(false);
@@ -401,14 +406,13 @@ export class RightSidePanel {
     );
 
     // ── Leaderboard-Header ────────────────────────────────────────────────────
-    this.gameContainer.add(
-      this.scene.add.text(LB_FRAGS_X, LB_HEADER_Y, 'F R A G S', {
-        fontSize:   LB_HEADER_FONT,
-        fontFamily: 'monospace',
-        color:      COLOR_HEADER,
-        fontStyle:  'bold',
-      }).setOrigin(1, 0.5).setScrollFactor(0),
-    );
+    this.leaderboardScoreLabel = this.scene.add.text(LB_FRAGS_X, LB_HEADER_Y, 'F R A G S', {
+      fontSize:   LB_HEADER_FONT,
+      fontFamily: 'monospace',
+      color:      COLOR_HEADER,
+      fontStyle:  'bold',
+    }).setOrigin(1, 0.5).setScrollFactor(0);
+    this.gameContainer.add(this.leaderboardScoreLabel);
     this.gameContainer.add(
       this.scene.add.text(LB_PING_X, LB_HEADER_Y, 'ms', {
         fontSize:   LB_HEADER_FONT,
@@ -632,8 +636,8 @@ export class RightSidePanel {
   }
 
   private renderGroupedLeaderboard(entries: LeaderboardEntry[]): void {
-    const blueEntries = entries.filter((entry) => entry.teamId === 'blue').sort((a, b) => b.frags - a.frags);
-    const redEntries = entries.filter((entry) => entry.teamId === 'red').sort((a, b) => b.frags - a.frags);
+    const blueEntries = this.sortLeaderboardEntriesForDisplay(entries.filter((entry) => entry.teamId === 'blue'));
+    const redEntries = this.sortLeaderboardEntriesForDisplay(entries.filter((entry) => entry.teamId === 'red'));
     const blueScore = this.resolveGroupedTeamScore(blueEntries);
     const redScore = this.resolveGroupedTeamScore(redEntries);
     const blueRowsStartY = LB_START_Y + LB_TEAM_ROWS_OFFSET;
@@ -675,13 +679,13 @@ export class RightSidePanel {
       const entry = entries[i];
       const y = startY + i * LB_ENTRY_H;
       row.name.setPosition(ARENA_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
-      row.frags.setPosition(LB_FRAGS_X, y).setText(String(entry.frags)).setVisible(true);
+      row.frags.setPosition(LB_FRAGS_X, y).setText(String(this.resolveLeaderboardEntryScore(entry))).setVisible(true);
       pingText.setPosition(LB_PING_X, y).setText(`${entry.ping}ms`).setColor(pingColor(entry.ping)).setVisible(true);
       this.leaderboardCache[rowIndex] = {
         visible: true,
         nameText: entry.name,
         nameColor: this.toCachedCssColor(entry.colorHex),
-        fragsText: String(entry.frags),
+        fragsText: String(this.resolveLeaderboardEntryScore(entry)),
         pingText: `${entry.ping}ms`,
         pingColor: pingColor(entry.ping),
       };
@@ -690,8 +694,8 @@ export class RightSidePanel {
   }
 
   private renderGroupedRoundResults(results: RoundResult[], roundState: RoundState | null): void {
-    const blueEntries = results.filter((result) => result.teamId === 'blue').sort((a, b) => b.frags - a.frags);
-    const redEntries = results.filter((result) => result.teamId === 'red').sort((a, b) => b.frags - a.frags);
+    const blueEntries = this.sortRoundResultsForDisplay(results.filter((result) => result.teamId === 'blue'));
+    const redEntries = this.sortRoundResultsForDisplay(results.filter((result) => result.teamId === 'red'));
     const hasData = blueEntries.length > 0 || redEntries.length > 0;
     const blueScore = this.resolveGroupedTeamScore(blueEntries);
     const redScore = this.resolveGroupedTeamScore(redEntries);
@@ -731,15 +735,58 @@ export class RightSidePanel {
       const entry = entries[i];
       const y = startY + i * RESULTS_ENTRY_H;
       row.name.setPosition(LOBBY_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
-      row.frags.setPosition(LOBBY_SIDEBAR_RIGHT_X, y).setText(String(entry.frags)).setVisible(true);
+      row.frags.setPosition(LOBBY_SIDEBAR_RIGHT_X, y).setText(String(this.resolveRoundResultScore(entry))).setVisible(true);
     }
     return rowIndex;
   }
 
-  private resolveGroupedTeamScore(entries: Array<{ frags: number; teamScore?: number }>): number {
+  private resolveGroupedTeamScore(entries: Array<{ frags: number; teamScore?: number; sharedXp?: number }>): number {
+    if (this.isDefenseXpMode()) {
+      return Math.max(0, Math.floor(entries.find((entry) => typeof entry.sharedXp === 'number')?.sharedXp ?? 0));
+    }
     const scoredEntry = entries.find((entry) => entry.teamScore !== undefined);
     if (scoredEntry?.teamScore !== undefined) return scoredEntry.teamScore;
     return entries.reduce((sum, entry) => sum + entry.frags, 0);
+  }
+
+  private isDefenseXpMode(): boolean {
+    return isCoopDefenseMode(bridge.getGameMode());
+  }
+
+  private syncArenaScoreLabel(): void {
+    this.leaderboardScoreLabel.setText(this.isDefenseXpMode() ? 'X P' : 'F R A G S');
+  }
+
+  private syncLobbyScoreLabel(): void {
+    this.resultsFragsLabel.setText(this.isDefenseXpMode() ? 'X P' : 'F R A G S');
+  }
+
+  private resolveLeaderboardEntryScore(entry: LeaderboardEntry): number {
+    if (this.isDefenseXpMode()) {
+      return Math.max(0, Math.floor(entry.sharedXp ?? 0));
+    }
+    return Math.max(0, Math.floor(entry.frags));
+  }
+
+  private resolveRoundResultScore(entry: RoundResult): number {
+    if (this.isDefenseXpMode()) {
+      return Math.max(0, Math.floor(entry.sharedXp ?? 0));
+    }
+    return Math.max(0, Math.floor(entry.frags));
+  }
+
+  private sortLeaderboardEntriesForDisplay(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+    if (this.isDefenseXpMode()) {
+      return [...entries];
+    }
+    return [...entries].sort((a, b) => b.frags - a.frags);
+  }
+
+  private sortRoundResultsForDisplay(results: RoundResult[]): RoundResult[] {
+    if (this.isDefenseXpMode()) {
+      return [...results];
+    }
+    return [...results].sort((a, b) => b.frags - a.frags);
   }
 
   private renderRoundOutcome(hasData: boolean, roundState: RoundState | null): void {
