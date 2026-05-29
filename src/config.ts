@@ -622,6 +622,16 @@ export const NET_TICK_RATE_HZ     = 20;
 export const NET_TICK_INTERVAL_MS = 1000 / NET_TICK_RATE_HZ;  // 50 ms
 /** Zeitbasierte Glättung für Client-Interpolation (ms). ~1.5× Tick-Intervall. */
 export const NET_SMOOTH_TIME_MS   = 80;
+/** Ein kompletter Enemy-Resync pro Sekunde korrigiert verlorene Delta-Frames. */
+export const ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
+/** Positionsänderungen unterhalb dieses Deltas bleiben bis zum nächsten Dirty-Frame lokal. */
+export const ENEMY_NET_POSITION_DELTA_PX = 4;
+/** Kleine Rotationsänderungen werden erst gesammelt und dann als Delta gesendet. */
+export const ENEMY_NET_ROTATION_DELTA_RAD = 0.08;
+/** Debug-only: Host loggt aggregierte Enemy-Sync-Payload-Metriken ins Dev-Console. */
+export const NET_DEBUG_ENEMY_SYNC_METRICS = false;
+/** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
+export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
 
 // ---- Raumqualitaet / Lobby ----
 export const ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS = 60;

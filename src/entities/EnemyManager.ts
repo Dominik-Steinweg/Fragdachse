@@ -1,7 +1,14 @@
 import * as Phaser from 'phaser';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
+import {
+  ARENA_OFFSET_X,
+  ARENA_OFFSET_Y,
+  CELL_SIZE,
+  ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
+  ENEMY_NET_POSITION_DELTA_PX,
+  ENEMY_NET_ROTATION_DELTA_RAD,
+} from '../config';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
-import type { SyncedEnemyState } from '../types';
+import type { SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
 import { EnemyEntity } from './EnemyEntity';
 import {
   resolveCoopDefenseEnemyConfigs,
@@ -18,7 +25,10 @@ export class EnemyManager {
   private readonly scene: Phaser.Scene;
   private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs;
   private readonly enemies = new Map<string, EnemyEntity>();
+  private readonly netSnapshotCache = new Map<string, SyncedEnemyState>();
+  private readonly pendingRemovalIds = new Set<string>();
   private nextEnemyIdSeq = 1;
+  private ticksSinceFullNetSnapshot = ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
 
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
@@ -112,10 +122,57 @@ export class EnemyManager {
     return { x: pushX, y: pushY };
   }
 
-  getNetSnapshot(): SyncedEnemyState[] {
-    return [...this.enemies.values()]
-      .map((enemy) => enemy.getNetSnapshot())
+  getNetSnapshot(): SyncedEnemySnapshot {
+    const full = this.ticksSinceFullNetSnapshot >= ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    const currentIds = new Set<string>();
+    const upserts: SyncedEnemyDeltaState[] = [];
+
+    const sortedEnemies = [...this.enemies.values()]
       .sort((left, right) => left.id.localeCompare(right.id));
+
+    for (const enemy of sortedEnemies) {
+      const current = this.buildNetState(enemy);
+      currentIds.add(current.id);
+      const previous = this.netSnapshotCache.get(current.id);
+
+      if (full || !previous) {
+        upserts.push(current);
+        this.netSnapshotCache.set(current.id, current);
+        continue;
+      }
+
+      const delta = this.buildDeltaState(previous, current);
+      if (!delta) continue;
+
+      upserts.push(delta);
+      this.netSnapshotCache.set(current.id, {
+        ...previous,
+        ...delta,
+      });
+    }
+
+    const removals = full ? [] : [...this.pendingRemovalIds].sort();
+
+    if (full) {
+      for (const id of [...this.netSnapshotCache.keys()]) {
+        if (!currentIds.has(id)) this.netSnapshotCache.delete(id);
+      }
+      this.ticksSinceFullNetSnapshot = 0;
+    } else {
+      this.ticksSinceFullNetSnapshot += 1;
+      for (const id of removals) {
+        this.netSnapshotCache.delete(id);
+      }
+    }
+
+    this.pendingRemovalIds.clear();
+
+    return {
+      full,
+      count: currentIds.size,
+      upserts,
+      removals,
+    };
   }
 
   getEnemy(id: string): EnemyEntity | undefined {
@@ -140,6 +197,8 @@ export class EnemyManager {
       return { died: false, remainingHp };
     }
 
+    this.pendingRemovalIds.add(id);
+    this.netSnapshotCache.delete(id);
     enemy.destroy();
     this.enemies.delete(id);
     return { died: true, remainingHp: 0 };
@@ -151,25 +210,27 @@ export class EnemyManager {
     }
   }
 
-  applySnapshot(snapshot: readonly SyncedEnemyState[]): void {
-    const activeIds = new Set(snapshot.map((enemy) => enemy.id));
+  applySnapshot(snapshot: SyncedEnemySnapshot | null): void {
+    if (!snapshot) return;
 
-    for (const [id, enemy] of this.enemies) {
-      if (activeIds.has(id)) continue;
+    if (snapshot.full) {
+      const activeIds = new Set(snapshot.upserts.map((enemy) => enemy.id));
+      for (const [id, enemy] of this.enemies) {
+        if (activeIds.has(id)) continue;
+        enemy.destroy();
+        this.enemies.delete(id);
+      }
+    }
+
+    for (const id of snapshot.removals) {
+      const enemy = this.enemies.get(id);
+      if (!enemy) continue;
       enemy.destroy();
       this.enemies.delete(id);
     }
 
-    for (const remote of snapshot) {
-      let enemy = this.enemies.get(remote.id);
-      if (!enemy) {
-        enemy = new EnemyEntity(this.scene, remote.id, remote.x, remote.y, false, remote.kind, this.resolvedConfigs[remote.kind]);
-        enemy.faceAngle(remote.rot);
-        this.enemies.set(remote.id, enemy);
-      }
-      enemy.setHp(remote.hp, remote.maxHp);
-      enemy.setTargetPosition(remote.x, remote.y);
-      enemy.setTargetRotation(remote.rot);
+    for (const remote of snapshot.upserts) {
+      this.applyRemoteSnapshot(remote);
     }
   }
 
@@ -184,7 +245,79 @@ export class EnemyManager {
       enemy.destroy();
     }
     this.enemies.clear();
+    this.netSnapshotCache.clear();
+    this.pendingRemovalIds.clear();
     this.nextEnemyIdSeq = 1;
+    this.ticksSinceFullNetSnapshot = ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+  }
+
+  private buildNetState(enemy: EnemyEntity): SyncedEnemyState {
+    const snapshot = enemy.getNetSnapshot();
+    return {
+      ...snapshot,
+      x: Math.round(snapshot.x),
+      y: Math.round(snapshot.y),
+      rot: Math.round(snapshot.rot * 100) / 100,
+    };
+  }
+
+  private buildDeltaState(previous: SyncedEnemyState, current: SyncedEnemyState): SyncedEnemyDeltaState | null {
+    const delta: SyncedEnemyDeltaState = { id: current.id };
+
+    if (current.kind !== previous.kind) {
+      delta.kind = current.kind;
+    }
+
+    if (
+      Math.abs(current.x - previous.x) >= ENEMY_NET_POSITION_DELTA_PX
+      || Math.abs(current.y - previous.y) >= ENEMY_NET_POSITION_DELTA_PX
+    ) {
+      delta.x = current.x;
+      delta.y = current.y;
+    }
+
+    if (Math.abs(Phaser.Math.Angle.Wrap(current.rot - previous.rot)) >= ENEMY_NET_ROTATION_DELTA_RAD) {
+      delta.rot = current.rot;
+    }
+
+    if (current.hp !== previous.hp || current.maxHp !== previous.maxHp) {
+      delta.hp = current.hp;
+      delta.maxHp = current.maxHp;
+    }
+
+    return Object.keys(delta).length > 1 ? delta : null;
+  }
+
+  private applyRemoteSnapshot(remote: SyncedEnemyDeltaState): void {
+    let enemy = this.enemies.get(remote.id);
+    if (!enemy) {
+      if (remote.kind === undefined || remote.x === undefined || remote.y === undefined) return;
+      enemy = new EnemyEntity(
+        this.scene,
+        remote.id,
+        remote.x,
+        remote.y,
+        false,
+        remote.kind,
+        this.resolvedConfigs[remote.kind],
+      );
+      const rotation = remote.rot ?? 0;
+      enemy.faceAngle(rotation);
+      enemy.setTargetRotation(rotation);
+      enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
+      this.enemies.set(remote.id, enemy);
+      return;
+    }
+
+    if (remote.hp !== undefined || remote.maxHp !== undefined) {
+      enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp());
+    }
+    if (remote.x !== undefined || remote.y !== undefined) {
+      enemy.setTargetPosition(remote.x ?? enemy.sprite.x, remote.y ?? enemy.sprite.y);
+    }
+    if (remote.rot !== undefined) {
+      enemy.setTargetRotation(remote.rot);
+    }
   }
 
   private generateEnemyId(kind: CoopDefenseEnemyKind): string {

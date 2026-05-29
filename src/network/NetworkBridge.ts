@@ -10,8 +10,14 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemyState, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
-import { MAX_PLAYERS, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedProjectile, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import {
+  MAX_PLAYERS,
+  NET_DEBUG_ENEMY_SYNC_METRICS,
+  NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
+  TEAM_BLUE_COLOR,
+  TEAM_RED_COLOR,
+} from '../config';
 import { NetworkPingController } from './NetworkPingController';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
@@ -70,6 +76,20 @@ const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, u
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
 
+interface EnemySyncMetricsWindow {
+  startedAtMs: number;
+  tickCount: number;
+  totalPayloadBytes: number;
+  enemyPayloadBytes: number;
+  enemyCountSum: number;
+  fullTickCount: number;
+  upsertCountSum: number;
+  removalCountSum: number;
+  maxEnemyCount: number;
+  maxTotalPayloadBytes: number;
+  maxEnemyPayloadBytes: number;
+}
+
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
 /** Kill-Ereignis für den Killfeed (Host → Alle per RPC) */
@@ -107,7 +127,7 @@ export interface GameState {
   roundStartTime: number;
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectile[];
-  enemies:      SyncedEnemyState[];
+  enemies:      SyncedEnemySnapshot | null;
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
   placeableRocks: SyncedPlaceableRock[];
   decoys:       SyncedDecoy[];
@@ -223,6 +243,7 @@ export class NetworkBridge {
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
+  private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
 
   constructor() {
     this.pingController = new NetworkPingController({
@@ -719,7 +740,7 @@ export class NetworkBridge {
     const payload: Record<string, unknown> = { p: state.players, _s: ++this.publishSeq };
     payload.rt = state.roundStartTime;
     if (state.projectiles.length > 0)  payload.j = state.projectiles;
-    if (state.enemies.length > 0)      payload.e = state.enemies;
+    if (state.enemies)                 payload.e = state.enemies;
     if (state.rocks.length > 0)        payload.r = state.rocks;
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
     if (state.decoys.length > 0)       payload.dc = state.decoys;
@@ -738,7 +759,71 @@ export class NetworkBridge {
     if (state.train)                   payload.t = state.train;
     if (state.bases.length > 0)        payload.b = state.bases;
     if (state.captureTheBeer)          payload.cb = state.captureTheBeer;
+    this.recordEnemySyncMetrics(payload, state.enemies);
     setState(KEY_GAME_STATE, payload, false);
+  }
+
+  private recordEnemySyncMetrics(payload: Record<string, unknown>, enemySnapshot: SyncedEnemySnapshot | null): void {
+    if (!NET_DEBUG_ENEMY_SYNC_METRICS || !isHost() || !enemySnapshot) return;
+
+    const now = Date.now();
+    const totalPayloadBytes = JSON.stringify(payload).length;
+    const enemyPayloadBytes = payload.e ? JSON.stringify(payload.e).length : 0;
+    const enemyCount = enemySnapshot.count;
+    const window = this.enemySyncMetricsWindow ?? {
+      startedAtMs: now,
+      tickCount: 0,
+      totalPayloadBytes: 0,
+      enemyPayloadBytes: 0,
+      enemyCountSum: 0,
+      fullTickCount: 0,
+      upsertCountSum: 0,
+      removalCountSum: 0,
+      maxEnemyCount: 0,
+      maxTotalPayloadBytes: 0,
+      maxEnemyPayloadBytes: 0,
+    } satisfies EnemySyncMetricsWindow;
+
+    window.tickCount += 1;
+    window.totalPayloadBytes += totalPayloadBytes;
+    window.enemyPayloadBytes += enemyPayloadBytes;
+    window.enemyCountSum += enemyCount;
+    window.fullTickCount += enemySnapshot.full ? 1 : 0;
+    window.upsertCountSum += enemySnapshot.upserts.length;
+    window.removalCountSum += enemySnapshot.removals.length;
+    window.maxEnemyCount = Math.max(window.maxEnemyCount, enemyCount);
+    window.maxTotalPayloadBytes = Math.max(window.maxTotalPayloadBytes, totalPayloadBytes);
+    window.maxEnemyPayloadBytes = Math.max(window.maxEnemyPayloadBytes, enemyPayloadBytes);
+    this.enemySyncMetricsWindow = window;
+
+    if (now - window.startedAtMs < NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS) return;
+
+    const avgEnemyCount = window.enemyCountSum / Math.max(1, window.tickCount);
+    const avgTotalPayloadBytes = window.totalPayloadBytes / Math.max(1, window.tickCount);
+    const avgEnemyPayloadBytes = window.enemyPayloadBytes / Math.max(1, window.tickCount);
+    const avgEnemyPayloadShare = avgTotalPayloadBytes > 0
+      ? (avgEnemyPayloadBytes / avgTotalPayloadBytes) * 100
+      : 0;
+    const avgUpserts = window.upsertCountSum / Math.max(1, window.tickCount);
+    const avgRemovals = window.removalCountSum / Math.max(1, window.tickCount);
+
+    console.log(
+      `[NET][enemy-sync] ticks=${window.tickCount} fullTicks=${window.fullTickCount} avgEnemies=${avgEnemyCount.toFixed(1)} maxEnemies=${window.maxEnemyCount} avgUpserts=${avgUpserts.toFixed(1)} avgRemovals=${avgRemovals.toFixed(1)} avgPayload=${avgTotalPayloadBytes.toFixed(0)}B avgEnemy=${avgEnemyPayloadBytes.toFixed(0)}B enemyShare=${avgEnemyPayloadShare.toFixed(1)}% peakPayload=${window.maxTotalPayloadBytes}B peakEnemy=${window.maxEnemyPayloadBytes}B`,
+    );
+
+    this.enemySyncMetricsWindow = {
+      startedAtMs: now,
+      tickCount: 0,
+      totalPayloadBytes: 0,
+      enemyPayloadBytes: 0,
+      enemyCountSum: 0,
+      fullTickCount: 0,
+      upsertCountSum: 0,
+      removalCountSum: 0,
+      maxEnemyCount: enemyCount,
+      maxTotalPayloadBytes: totalPayloadBytes,
+      maxEnemyPayloadBytes: enemyPayloadBytes,
+    };
   }
 
   getLatestGameState(): GameState | undefined {
@@ -760,7 +845,7 @@ export class NetworkBridge {
       roundStartTime,
       players:       raw.p as Record<string, PlayerNetState>,
       projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
-      enemies:       (raw.e as SyncedEnemyState[]  | undefined) ?? [],
+      enemies:       (raw.e as SyncedEnemySnapshot | undefined) ?? null,
       rocks:         (raw.r as RockNetState[]       | undefined) ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],

@@ -527,7 +527,7 @@ export class HostUpdateCoordinator {
       roundStartTime: bridge.getArenaStartTime(),
       players,
       projectiles,
-      enemies: this.ctx.enemyManager?.getNetSnapshot() ?? [],
+      enemies: this.ctx.enemyManager?.getNetSnapshot() ?? null,
       rocks,
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
       decoys,

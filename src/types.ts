@@ -901,6 +901,25 @@ export interface SyncedEnemyState {
   maxHp:  number;
 }
 
+/** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
+export interface SyncedEnemyDeltaState {
+  id:     string;
+  kind?:  import('./config/coopDefenseEnemies').CoopDefenseEnemyKind;
+  x?:     number;
+  y?:     number;
+  rot?:   number;
+  hp?:    number;
+  maxHp?: number;
+}
+
+/** Snapshot-Hülle für Coop-Defense-Gegner mit periodischem Full-Resync und Delta-Frames. */
+export interface SyncedEnemySnapshot {
+  full: boolean;
+  count: number;
+  upserts: SyncedEnemyDeltaState[];
+  removals: string[];
+}
+
 /** Per-Frame Zug-Zustand (Host → Clients, unreliable) */
 export interface SyncedTrainState {
   alive:    boolean;  // false = zerstört oder noch nicht gespawnt

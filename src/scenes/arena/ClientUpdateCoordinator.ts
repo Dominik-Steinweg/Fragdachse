@@ -170,7 +170,7 @@ export class ClientUpdateCoordinator {
       );
 
       this.ctx.baseManager?.applySnapshot(state.bases ?? []);
-      this.ctx.enemyManager?.applySnapshot(state.enemies ?? []);
+      this.ctx.enemyManager?.applySnapshot(state.enemies);
 
       this.checkLocalPickup(state.powerups ?? []);
     }
