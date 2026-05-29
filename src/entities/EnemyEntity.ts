@@ -5,6 +5,7 @@ import type { BaseWeapon } from '../loadout/BaseWeapon';
 import {
   COLORS,
   DEPTH,
+  ENEMY_HP_BAR_VISIBLE_MS,
   HP_BAR_HEIGHT,
   HP_BAR_OFFSET_Y,
   HP_BAR_WIDTH,
@@ -26,8 +27,8 @@ export class EnemyEntity {
   private readonly authoritative: boolean;
   private readonly config: ResolvedCoopDefenseEnemyConfig;
   private readonly weapon: BaseWeapon | null;
-  private readonly hpBarBg: Phaser.GameObjects.Rectangle;
-  private readonly hpBarFg: Phaser.GameObjects.Rectangle;
+  private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
+  private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
   private maxHp = 1;
   private currentHp = 0;
   private targetX: number;
@@ -38,6 +39,7 @@ export class EnemyEntity {
   private nextAttackScanAt = 0;
   private currentAimAngle = 0;
   private targetAimAngle = 0;
+  private hpBarVisibleUntilMs = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -64,11 +66,6 @@ export class EnemyEntity {
     if (this.config.color !== undefined) {
       this.sprite.setTint(this.config.color);
     }
-    this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
-    this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
-    this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, COLORS.RED_2);
-    this.hpBarFg.setOrigin(0, 0.5);
-    this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
 
     if (authoritative) {
       scene.physics.add.existing(this.sprite);
@@ -139,10 +136,20 @@ export class EnemyEntity {
   setHp(hp: number, maxHp: number = this.maxHp): void {
     this.maxHp = Math.max(1, maxHp);
     this.currentHp = Phaser.Math.Clamp(hp, 0, this.maxHp);
+    if (this.currentHp < this.maxHp && this.currentHp > 0) {
+      this.hpBarVisibleUntilMs = Date.now() + ENEMY_HP_BAR_VISIBLE_MS;
+      this.ensureHpBars();
+    }
     const ratio = this.maxHp > 0 ? this.currentHp / this.maxHp : 0;
-    this.hpBarFg.width = HP_BAR_WIDTH * ratio;
+    if (this.hpBarFg) {
+      this.hpBarFg.width = HP_BAR_WIDTH * ratio;
+    }
     const color = ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4;
-    this.hpBarFg.setFillStyle(color);
+    this.hpBarFg?.setFillStyle(color);
+
+    if (this.currentHp >= this.maxHp || this.currentHp <= 0) {
+      this.destroyHpBars();
+    }
   }
 
   getHp(): number {
@@ -207,6 +214,13 @@ export class EnemyEntity {
   }
 
   syncBar(): void {
+    if (!this.shouldShowHpBars()) {
+      this.destroyHpBars();
+      return;
+    }
+
+    this.ensureHpBars();
+    if (!this.hpBarBg || !this.hpBarFg) return;
     const x = this.sprite.x;
     const y = this.sprite.y + HP_BAR_OFFSET_Y;
     this.hpBarBg.setPosition(x, y);
@@ -226,9 +240,32 @@ export class EnemyEntity {
   }
 
   destroy(): void {
-    this.hpBarBg.destroy();
-    this.hpBarFg.destroy();
+    this.destroyHpBars();
     this.sprite.destroy();
+  }
+
+  private shouldShowHpBars(): boolean {
+    return this.currentHp > 0
+      && this.currentHp < this.maxHp
+      && Date.now() <= this.hpBarVisibleUntilMs;
+  }
+
+  private ensureHpBars(): void {
+    if (this.hpBarBg && this.hpBarFg) return;
+    const x = this.sprite.x;
+    const y = this.sprite.y + HP_BAR_OFFSET_Y;
+    this.hpBarBg = this.sprite.scene.add.rectangle(x, y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
+    this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
+    this.hpBarFg = this.sprite.scene.add.rectangle(x, y, HP_BAR_WIDTH, HP_BAR_HEIGHT, COLORS.RED_2);
+    this.hpBarFg.setOrigin(0, 0.5);
+    this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
+  }
+
+  private destroyHpBars(): void {
+    this.hpBarBg?.destroy();
+    this.hpBarFg?.destroy();
+    this.hpBarBg = null;
+    this.hpBarFg = null;
   }
 
   private createWeapon(): BaseWeapon {

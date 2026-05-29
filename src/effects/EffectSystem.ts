@@ -56,6 +56,7 @@ export class EffectSystem {
   private damageVignetteLeft:   Phaser.GameObjects.Image | null = null;
   private damageVignetteRight:  Phaser.GameObjects.Image | null = null;
   private deathPixelChunks: DeathPixelChunk[] | null = null;
+  private activeDeathPixelRectangles = 0;
 
   constructor(
     private scene:  Phaser.Scene,
@@ -98,6 +99,7 @@ export class EffectSystem {
     this.damageVignetteLeft   = null;
     this.damageVignetteRight  = null;
     this.deathPixelChunks = null;
+    this.activeDeathPixelRectangles = 0;
   }
 
   /** Erzeugt kleine Canvas-Texturen für Explosions-Partikel (einmalig). */
@@ -1521,12 +1523,26 @@ export class EffectSystem {
     const chunks = this.getDeathPixelChunks();
     if (chunks.length === 0) return;
 
+    const availableChunkBudget = Math.max(0, DEATH_DISINTEGRATION_VFX.maxActiveChunks - this.activeDeathPixelRectangles);
+    const chunkSpawnCount = Math.min(
+      chunks.length,
+      DEATH_DISINTEGRATION_VFX.maxChunksPerEffect,
+      availableChunkBudget,
+    );
+    if (chunkSpawnCount <= 0) return;
+
     const rng = createSeededRandom(effect.seed);
     const auraColor = effect.targetColor ?? COLORS.GREY_2;
     const cos = Math.cos(effect.rotation);
     const sin = Math.sin(effect.rotation);
 
-    for (const chunk of chunks) {
+    const chunkIndices = Phaser.Utils.Array.NumberArrayStep(0, chunks.length - 1, Math.max(1, chunks.length / chunkSpawnCount));
+    let spawnedChunks = 0;
+
+    for (const chunkIndex of chunkIndices) {
+      if (spawnedChunks >= chunkSpawnCount) break;
+      const chunk = chunks[Math.floor(chunkIndex)];
+      if (!chunk) continue;
       const rx = chunk.offsetX * cos - chunk.offsetY * sin;
       const ry = chunk.offsetX * sin + chunk.offsetY * cos;
       const radialAngle = Math.hypot(rx, ry) > 0.15 ? Math.atan2(ry, rx) : rng() * Math.PI * 2;
@@ -1543,6 +1559,8 @@ export class EffectSystem {
         .setDepth(DEPTH_FX - 0.1)
         .setOrigin(0.5)
         .setScale(DEATH_DISINTEGRATION_VFX.scaleStart);
+      this.activeDeathPixelRectangles += 1;
+      spawnedChunks += 1;
 
       this.scene.tweens.add({
         targets: pixel,
@@ -1554,11 +1572,15 @@ export class EffectSystem {
         scaleY: DEATH_DISINTEGRATION_VFX.scaleEnd,
         duration: DEATH_DISINTEGRATION_VFX.durationMs,
         ease: 'Cubic.easeOut',
-        onComplete: () => pixel.destroy(),
+        onComplete: () => {
+          this.activeDeathPixelRectangles = Math.max(0, this.activeDeathPixelRectangles - 1);
+          pixel.destroy();
+        },
       });
     }
 
-    for (let i = 0; i < DEATH_DISINTEGRATION_VFX.glowCount; i++) {
+    const glowSpawnCount = Math.max(2, Math.round(DEATH_DISINTEGRATION_VFX.glowCount * (chunkSpawnCount / chunks.length)));
+    for (let i = 0; i < glowSpawnCount; i++) {
       const angle = rng() * Math.PI * 2;
       const travel = this.randomBetween(rng, DEATH_DISINTEGRATION_VFX.glowTravelMinPx, DEATH_DISINTEGRATION_VFX.glowTravelMaxPx);
       const glow = this.scene.add.image(effect.x, effect.y, TEX_DEATH_PIXEL_GLOW)

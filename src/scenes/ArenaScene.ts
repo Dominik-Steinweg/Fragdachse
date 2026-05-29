@@ -74,6 +74,7 @@ import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, P
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
+import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
 
 import {
   type ArenaContext,
@@ -158,6 +159,7 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseUpgradeProfileSnapshot: CoopDefenseUpgradeProfile | null = null;
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
+  private runtimeProfiler: ArenaRuntimeProfiler | null = null;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -436,6 +438,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Coordinators ──────────────────────────────────────────────────────
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
     this.clientUpdate = new ClientUpdateCoordinator(this, this.ctx, this.localPlayerState, this.rockVisualHelper);
+    this.runtimeProfiler = new ArenaRuntimeProfiler();
 
     // ── Input setup ───────────────────────────────────────────────────────
     inputSystem.setup();
@@ -674,6 +677,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    const frameStartMs = performance.now();
+    let primaryStepMs = 0;
     this.syncArenaMetrics();
     this.lifecycle.detectPhaseChange();
 
@@ -764,6 +769,7 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       if (bridge.isHost()) {
+        const hostStepStartMs = performance.now();
         if (isCoopDefenseMode(bridge.getGameMode()) && this.coopDefenseDebugDamageKey && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)) {
           this.ctx.coopDefenseRoundStateSystem?.applyDebugBaseDamage(50);
         }
@@ -776,7 +782,9 @@ export class ArenaScene extends Phaser.Scene {
         } else if (!countdownActive && secs <= 0) {
           this.lifecycle.hostCompleteRound();
         }
+        primaryStepMs += performance.now() - hostStepStartMs;
       } else {
+        const clientStepStartMs = performance.now();
         this.clientUpdate.runClientUpdate(delta);
 
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
@@ -796,6 +804,7 @@ export class ArenaScene extends Phaser.Scene {
         }
         this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
         this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
+        primaryStepMs += performance.now() - clientStepStartMs;
       }
 
       this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
@@ -807,6 +816,8 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.syncArenaPanelOverlayState(inGame && !terminated);
+
+    const visualsStartMs = performance.now();
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
@@ -874,7 +885,30 @@ export class ArenaScene extends Phaser.Scene {
       : (bridge.getLatestGameState()?.tunnels ?? []);
     this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
     this.tunnelRenderer.update(this.time.now);
+
+    const visualStepMs = performance.now() - visualsStartMs;
+    const shadowStepStartMs = performance.now();
     this.syncWorldShadows(inArena);
+    const shadowStepMs = performance.now() - shadowStepStartMs;
+    const frameCostMs = performance.now() - frameStartMs;
+    if (inGame) {
+      const role = bridge.isHost() ? 'host' : 'client';
+      this.runtimeProfiler?.record({
+        role,
+        deltaMs: delta,
+        frameCostMs,
+        primaryStepMs,
+        visualStepMs,
+        shadowStepMs,
+        enemyCount: this.ctx.enemyManager?.getAllEnemies().length ?? 0,
+        projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
+        playerCount: this.ctx.playerManager.getAllPlayers().length,
+        displayObjectCount: this.children.list.length,
+        sceneBreakdown: this.runtimeProfiler?.shouldCaptureSceneBreakdown(role, delta)
+          ? this.describeSceneObjectBreakdown()
+          : null,
+      });
+    }
   }
 
   // ── Network events ────────────────────────────────────────────────────────
@@ -1259,6 +1293,39 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.projectileManager.getShadowSamples(),
       trainState,
     );
+  }
+
+  private describeSceneObjectBreakdown(): string {
+    const counts = new Map<string, number>();
+    let visibleCount = 0;
+    let activeCount = 0;
+
+    for (const child of this.children.list) {
+      const gameObject = child as Phaser.GameObjects.GameObject & {
+        visible?: boolean;
+        active?: boolean;
+        type?: string;
+        texture?: { key?: string };
+      };
+
+      if (gameObject.visible !== false) visibleCount += 1;
+      if (gameObject.active !== false) activeCount += 1;
+
+      const baseType = gameObject.type || gameObject.constructor.name || 'Unknown';
+      const textureKey = typeof gameObject.texture?.key === 'string' && gameObject.texture.key.length > 0
+        ? gameObject.texture.key
+        : null;
+      const label = textureKey ? `${baseType}:${textureKey}` : baseType;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+
+    const topEntries = [...counts.entries()]
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 8)
+      .map(([label, count]) => `${label}:${count}`)
+      .join(', ');
+
+    return `visible=${visibleCount} active=${activeCount} top=${topEntries}`;
   }
 
   private initializeRoomQuality(): void {

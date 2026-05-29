@@ -295,8 +295,8 @@ export const BLOOD_HIT_VFX = {
 } as const;
 
 export const DEATH_DISINTEGRATION_VFX = {
-  durationMs: 1000,
-  chunkSizePx: 2,
+  durationMs: 700,
+  chunkSizePx: 4,
   travelMinPx: 22,
   travelMaxPx: 104,
   jitterPx: 18,
@@ -305,7 +305,9 @@ export const DEATH_DISINTEGRATION_VFX = {
   scaleEnd: 0.34,
   alpha: 0.96,
   auraTintMix: 0.18,
-  glowCount: 12,
+  maxChunksPerEffect: 64,
+  maxActiveChunks: 480,
+  glowCount: 8,
   glowTravelMinPx: 26,
   glowTravelMaxPx: 118,
   glowScaleMin: 0.28,
@@ -332,6 +334,7 @@ export const DAMAGE_VIGNETTE_VFX = {
 export const HP_BAR_WIDTH    = PLAYER_SIZE;     // gleiche Breite wie Spieler
 export const HP_BAR_HEIGHT   = 5;
 export const HP_BAR_OFFSET_Y = 24;              // Pixel unter Sprite-Mittelpunkt
+export const ENEMY_HP_BAR_VISIBLE_MS = 3000;
 export const ARMOR_BAR_WIDTH    = PLAYER_SIZE;
 export const ARMOR_BAR_HEIGHT   = 3;
 export const ARMOR_BAR_OFFSET_Y = HP_BAR_OFFSET_Y + HP_BAR_HEIGHT + 1;
@@ -622,12 +625,14 @@ export const NET_TICK_RATE_HZ     = 20;
 export const NET_TICK_INTERVAL_MS = 1000 / NET_TICK_RATE_HZ;  // 50 ms
 /** Zeitbasierte Glättung für Client-Interpolation (ms). ~1.5× Tick-Intervall. */
 export const NET_SMOOTH_TIME_MS   = 80;
-/** Ein kompletter Enemy-Resync alle zwei Sekunden korrigiert verlorene Delta-Frames und reduziert Peak-Payloads. */
-export const ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ * 2;
+/** Unveraenderte Enemies werden rollierend ueber diesen Zyklus einmal voll aufgefrischt, statt alle auf einmal. */
+export const ENEMY_NET_REFRESH_CYCLE_TICKS = NET_TICK_RATE_HZ * 2;
+/** Ein seltener Hard-Full-Snapshot bleibt fuer Bootstrap/Recovery erhalten, soll aber keine Regel-Last mehr sein. */
+export const ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ * 10;
 /** Positionsänderungen unterhalb dieses Deltas bleiben bis zum nächsten Dirty-Frame lokal. */
-export const ENEMY_NET_POSITION_DELTA_PX = 4;
+export const ENEMY_NET_POSITION_DELTA_PX = 6;
 /** Kleine Rotationsänderungen werden erst gesammelt und dann als Delta gesendet. */
-export const ENEMY_NET_ROTATION_DELTA_RAD = 0.08;
+export const ENEMY_NET_ROTATION_DELTA_RAD = 0.12;
 /** Boden-Power-Ups senden meist nur Spawn-/Pickup-Deltas; Full-Resync korrigiert verlorene Frames. */
 export const POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Statische Rocks senden normalerweise nur HP-Änderungen und Zerstörungen; Full-Resync korrigiert verlorene Frames. */
@@ -636,6 +641,10 @@ export const ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 export const NET_DEBUG_ENEMY_SYNC_METRICS = true;
 /** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
 export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
+/** Debug-only: Lokale Laufzeitmetriken fuer Host-/Client-Frames, unabhaengig vom Netzwerkpayload. */
+export const DEBUG_RUNTIME_PERF_METRICS = true;
+/** Aggregationsfenster fuer lokale Laufzeitmetriken. */
+export const DEBUG_RUNTIME_PERF_METRICS_WINDOW_MS = 2000;
 
 // ---- Raumqualitaet / Lobby ----
 export const ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS = 60;

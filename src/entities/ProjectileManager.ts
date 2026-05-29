@@ -1618,6 +1618,14 @@ export class ProjectileManager {
     return this.projectiles.filter(proj => !proj.pendingDestroy);
   }
 
+  getDebugActiveProjectileCount(): number {
+    return Math.max(
+      this.getActiveProjectiles().length,
+      this.clientProjStates.size,
+      this.clientVisuals.size,
+    );
+  }
+
   /**
    * Host: Gibt ein aktives Projektil anhand seiner ID zurück.
    */

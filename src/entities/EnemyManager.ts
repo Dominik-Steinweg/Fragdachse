@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import {
+  ENEMY_NET_REFRESH_CYCLE_TICKS,
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   CELL_SIZE,
@@ -29,6 +30,7 @@ export class EnemyManager {
   private readonly pendingRemovalIds = new Set<string>();
   private nextEnemyIdSeq = 1;
   private ticksSinceFullNetSnapshot = ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+  private refreshCursor = 0;
 
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
@@ -129,6 +131,7 @@ export class EnemyManager {
 
     const sortedEnemies = [...this.enemies.values()]
       .sort((left, right) => left.id.localeCompare(right.id));
+    const refreshIds = full ? null : this.collectRefreshIds(sortedEnemies);
 
     for (const enemy of sortedEnemies) {
       const current = this.buildNetState(enemy);
@@ -142,13 +145,19 @@ export class EnemyManager {
       }
 
       const delta = this.buildDeltaState(previous, current);
-      if (!delta) continue;
+      if (delta) {
+        upserts.push(delta);
+        this.netSnapshotCache.set(current.id, {
+          ...previous,
+          ...delta,
+        });
+        continue;
+      }
 
-      upserts.push(delta);
-      this.netSnapshotCache.set(current.id, {
-        ...previous,
-        ...delta,
-      });
+      if (!refreshIds?.has(current.id)) continue;
+
+      upserts.push(current);
+      this.netSnapshotCache.set(current.id, current);
     }
 
     const removals = full ? [] : [...this.pendingRemovalIds].sort();
@@ -158,6 +167,7 @@ export class EnemyManager {
         if (!currentIds.has(id)) this.netSnapshotCache.delete(id);
       }
       this.ticksSinceFullNetSnapshot = 0;
+      this.refreshCursor = 0;
     } else {
       this.ticksSinceFullNetSnapshot += 1;
       for (const id of removals) {
@@ -249,6 +259,25 @@ export class EnemyManager {
     this.pendingRemovalIds.clear();
     this.nextEnemyIdSeq = 1;
     this.ticksSinceFullNetSnapshot = ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    this.refreshCursor = 0;
+  }
+
+  private collectRefreshIds(sortedEnemies: EnemyEntity[]): Set<string> {
+    if (sortedEnemies.length === 0) {
+      this.refreshCursor = 0;
+      return new Set<string>();
+    }
+
+    const refreshCount = Math.max(1, Math.ceil(sortedEnemies.length / ENEMY_NET_REFRESH_CYCLE_TICKS));
+    const ids = new Set<string>();
+
+    for (let offset = 0; offset < refreshCount; offset += 1) {
+      const enemy = sortedEnemies[(this.refreshCursor + offset) % sortedEnemies.length];
+      ids.add(enemy.id);
+    }
+
+    this.refreshCursor = (this.refreshCursor + refreshCount) % sortedEnemies.length;
+    return ids;
   }
 
   private buildNetState(enemy: EnemyEntity): SyncedEnemyState {
