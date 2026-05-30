@@ -920,12 +920,25 @@ export interface SyncedEnemyDeltaState {
   maxHp?: number;
 }
 
-/** Snapshot-Hülle für Coop-Defense-Gegner mit periodischem Full-Resync und Delta-Frames. */
+/**
+ * Kompakt kodierter Snapshot-Wrapper für Coop-Defense-Gegner (Host → Clients, unreliable).
+ *
+ * Upserts werden als flacher Zahlenstrom mit Per-Eintrag-Bitmaske serialisiert, statt als Array
+ * von JSON-Objekten mit wiederholten Keys – das halbiert die Payload bei vielen Gegnern und
+ * verkleinert vor allem den Full-Snapshot-Spike (siehe enemySnapshotCodec.ts). Gegner-IDs werden
+ * numerisch übertragen (die interne String-ID `e<base36>` wird verlustfrei rekonstruiert).
+ *
+ * Feldnamen sind absichtlich einbuchstabig, da der Schlüssel pro Tick mitserialisiert wird.
+ *
+ * Es gibt keinen schweren Full-Snapshot mehr: State-Korrektur übernimmt der rollierende Refresh-Zyklus
+ * (jeder Gegner wird binnen ~2 s einmal voll nachgesendet), Removals laufen über `r` (Sticky). `a` trägt
+ * periodisch die vollständige Liste aktiver IDs zur Phantom-Reconciliation – kompakt statt 4-KB-Burst.
+ */
 export interface SyncedEnemySnapshot {
-  full: boolean;
-  count: number;
-  upserts: SyncedEnemyDeltaState[];
-  removals: string[];
+  c: number;    // Gesamtzahl aktiver Gegner (nur Telemetrie)
+  u: number[];  // flacher Upsert-Strom (siehe encodeEnemyUpsert)
+  r: number[];  // entfernte Gegner-IDs (numerisch, Sticky-Removals)
+  a?: number[]; // optional: vollständige Liste aktiver IDs (periodische Reconciliation)
 }
 
 /** Per-Frame Zug-Zustand (Host → Clients, unreliable) */
@@ -962,6 +975,18 @@ export interface SyncedPowerUpPedestal {
   y: number;
   hasPowerUp: boolean;
   nextRespawnAt: number;
+}
+
+/**
+ * Delta-Snapshot der Power-Up-Podeste. Podeste sind statisch (Position/Typ ändern sich nie) und
+ * wechseln nur selten ihren Zustand (`hasPowerUp`/`nextRespawnAt`). Statt das volle Array jeden Tick
+ * zu senden (~335 B), wird nur bei Änderung ein Upsert übertragen; ein periodischer Full-Resync
+ * korrigiert verlorene Frames. `removals` bleibt im Normalfall leer (Membership ist rundenstabil).
+ */
+export interface SyncedPowerUpPedestalSnapshot {
+  full: boolean;
+  upserts: SyncedPowerUpPedestal[];
+  removals: number[];
 }
 
 /** Aktiver Nuke-Strike (Host → Clients via GameState) */

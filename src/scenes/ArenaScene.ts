@@ -947,6 +947,19 @@ export class ArenaScene extends Phaser.Scene {
   private onReadyToggled(): void {
     const nowReady = !this.lifecycle.getIsLocalReady();
     if (nowReady) {
+      // Frühwarnung gegen P2P-Profil-Desync (Bug A/B): Nur bereit machen, wenn dieser Client
+      // denselben Spieler-Stand kennt wie der Host. Fehlt ihm hier ein Spieler, könnte er ihn auch
+      // im Match nicht rendern. Wir blockieren weich (kein Dauerblock) und loggen den Diff.
+      const roster = bridge.getRosterConsistency();
+      if (!roster.consistent) {
+        console.warn(
+          `[Roster] BEREIT blockiert – lokaler Spieler-Stand weicht vom Host ab. `
+          + `Fehlende IDs (Host kennt, Client nicht): [${roster.missingIds.join(', ')}]. `
+          + `Lokal bekannt: [${bridge.getConnectedPlayerIds().join(', ')}].`,
+        );
+        this.lobbyOverlay.showReadySyncNotice();
+        return;
+      }
       bridge.setLocalReadyWithCommittedLoadout(this.buildLocalCommittedLoadoutSnapshot());
     } else {
       bridge.setLocalReady(false);

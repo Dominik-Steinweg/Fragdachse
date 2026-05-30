@@ -5,7 +5,7 @@ import {
   ARENA_WIDTH, ARENA_HEIGHT,
   POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
 } from '../config';
-import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpSnapshot } from '../types';
+import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem }  from '../systems/CombatSystem';
 import {
@@ -94,6 +94,9 @@ export class PowerUpSystem {
   private nextUid     = 1;
   private nextNukeId  = 1;
   private ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+  // Delta-Cache der Podeste: id → Signatur des zuletzt gesendeten Zustands (hasPowerUp|nextRespawnAt).
+  private readonly pedestalNetCache = new Map<number, string>();
+  private ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
 
   private arenaStartTime = 0;
   private pedestalsActivated = false;
@@ -130,6 +133,8 @@ export class PowerUpSystem {
     this.nextUid = 1;
     this.nextNukeId = 1;
     this.ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    this.pedestalNetCache.clear();
+    this.ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     this.arenaStartTime = 0;
     this.pedestalsActivated = false;
     for (const pedestal of this.pedestals.values()) {
@@ -427,6 +432,7 @@ export class PowerUpSystem {
     };
   }
 
+  /** Voller Podest-Zustand für die host-lokale Darstellung (jeden Frame, kein Netzwerk). */
   getPedestalSnapshot(): SyncedPowerUpPedestal[] {
     const result: SyncedPowerUpPedestal[] = [];
     for (const pedestal of this.pedestals.values()) {
@@ -440,6 +446,43 @@ export class PowerUpSystem {
       });
     }
     return result;
+  }
+
+  /**
+   * Delta-Snapshot der Podeste für die Übertragung. Sendet nur geänderte Podeste (plus periodischer
+   * Full-Resync), statt das volle Array jeden Tick. Gibt null zurück, wenn nichts zu senden ist.
+   */
+  getPedestalNetSnapshot(): SyncedPowerUpPedestalSnapshot | null {
+    const full = this.ticksSinceFullPedestalSnapshot >= POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    const currentIds = new Set<number>();
+    const upserts: SyncedPowerUpPedestal[] = [];
+
+    for (const entry of this.getPedestalSnapshot()) {
+      currentIds.add(entry.id);
+      // Position/Typ sind statisch – nur der veränderliche Zustand bestimmt die Delta-Signatur.
+      const signature = `${entry.hasPowerUp ? 1 : 0}:${entry.nextRespawnAt}`;
+      if (full || this.pedestalNetCache.get(entry.id) !== signature) {
+        upserts.push(entry);
+        this.pedestalNetCache.set(entry.id, signature);
+      }
+    }
+
+    const removals: number[] = [];
+    if (full) {
+      for (const id of [...this.pedestalNetCache.keys()]) {
+        if (!currentIds.has(id)) {
+          this.pedestalNetCache.delete(id);
+          removals.push(id);
+        }
+      }
+      this.ticksSinceFullPedestalSnapshot = 0;
+    } else {
+      this.ticksSinceFullPedestalSnapshot += 1;
+    }
+
+    if (!full && upserts.length === 0 && removals.length === 0) return null;
+
+    return { full, upserts, removals };
   }
 
   getNukeSnapshot(): SyncedNukeStrike[] {

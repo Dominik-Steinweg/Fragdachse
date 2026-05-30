@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   MAX_PLAYERS,
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -19,6 +19,8 @@ import {
   TEAM_RED_COLOR,
 } from '../config';
 import { NetworkPingController } from './NetworkPingController';
+import { countEnemyUpserts } from './enemySnapshotCodec';
+import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
 import { getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
@@ -76,6 +78,7 @@ const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
+const KEY_ROSTER         = 'rst'; // global reliable: host-autoritative Liste verbundener Spieler-IDs (Roster-Konsistenz-Check)
 
 interface EnemySyncMetricsWindow {
   startedAtMs: number;
@@ -149,6 +152,10 @@ export interface RoundState {
   status: 'active' | RoundOutcome;
   roundStartTime: number;
   coopDefenseHumanPlayerCount?: number;
+  // Authoritative Coop-Defense-Map dieser Runde. Bewusst Teil des (reliable) RoundState, damit der
+  // Client Basen/Map race-frei aus EINEM Objekt baut, statt den separaten KEY_COOP_MAP_ID parallel
+  // abzuwarten (sonst kann eine Basis beim Client fehlen, wenn der Key später als die Phase ankommt).
+  coopDefenseMapId?: string;
   endedAt?: number;
 }
 
@@ -189,7 +196,7 @@ interface OutboundGameState {
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUpSnapshot | null;
-  pedestals:    SyncedPowerUpPedestal[];
+  pedestals:    SyncedPowerUpPedestalSnapshot | null;
   nukes:        SyncedNukeStrike[];
   airstrikes:   SyncedAirstrikeStrike[];
   meteors:      SyncedMeteorStrike[];
@@ -278,6 +285,9 @@ export class NetworkBridge {
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
   private grenadeCountdownHandler: GrenadeCountdownHandler | null = null;
   private effectHandler: EffectHandler | null = null;
+  // Pro Frame gesammelte Treffer-/Todes-Effekte und XP-Popups (Host), gebündelt via flushEffects().
+  private pendingEffects: SyncedCombatEffect[] = [];
+  private pendingXpPopups: { x: number; y: number; xp: number }[] = [];
   private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
@@ -379,12 +389,42 @@ export class NetworkBridge {
         this.connectedPlayersCacheDirty = true;
         if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
+        this.hostPublishRoster();
       });
 
       const profile = this.extractProfile(state);
       this.connectedPlayers.set(state.id, profile);
       this.joinCbs.forEach(cb => cb(profile));
+      this.hostPublishRoster();
     });
+  }
+
+  // ── Roster-Konsistenz (Frühwarnung gegen P2P-Profil-Desync) ────────────────
+
+  /**
+   * Host-only: Veröffentlicht die autoritative Liste verbundener Spieler-IDs (reliable).
+   * Clients vergleichen sie beim "Bereit"-Klick mit ihrem lokalen Stand, um den Desync zu erkennen,
+   * bei dem ein Client einen anderen Spieler gar nicht kennt (Ursache von Bug A/B).
+   */
+  private hostPublishRoster(): void {
+    if (!isHost()) return;
+    setState(KEY_ROSTER, [...this.connectedPlayers.keys()].sort(), true);
+  }
+
+  /**
+   * Vergleicht den lokal bekannten Spieler-Stand mit dem host-autoritativen Roster.
+   * `missingIds` = IDs, die der Host kennt, dieser Client aber (noch) nicht – exakt die Spieler, die
+   * dieser Client sonst nicht rendern könnte. `hostRosterPresent=false`, solange noch kein Roster
+   * angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
+   */
+  getRosterConsistency(): { consistent: boolean; hostRosterPresent: boolean; missingIds: string[] } {
+    const hostRoster = getState(KEY_ROSTER) as string[] | undefined;
+    if (!Array.isArray(hostRoster) || hostRoster.length === 0) {
+      return { consistent: true, hostRosterPresent: false, missingIds: [] };
+    }
+    const known = new Set(this.connectedPlayers.keys());
+    const missingIds = hostRoster.filter((id) => !known.has(id));
+    return { consistent: missingIds.length === 0, hostRosterPresent: true, missingIds };
   }
 
   // ── Identität ──────────────────────────────────────────────────────────────
@@ -788,12 +828,25 @@ export class NetworkBridge {
   private gameStateVersion = 0;
 
   /**
+   * Verwirft den clientseitigen Game-State-Merge-Cache.
+   *
+   * Die Delta-Slices (rocks/powerups/pedestals) werden auf den zuletzt gecachten Stand gemerged –
+   * "abwesend = unverändert". Bei einem Rundenwechsel muss dieser Baseline-Stand verworfen werden,
+   * sonst trägt der Client z. B. beschädigte Felsen aus der Vorrunde in die neue Runde, bis zufällig
+   * ein Full-Resync ankommt. Wird beim Arena-Aufbau aufgerufen.
+   */
+  resetGameStateCache(): void {
+    this.cachedGameState = undefined;
+    this.lastSeenSeq = -1;
+  }
+
+  /**
    * Sendet den Game State als einzelnen setState-Aufruf.
    * Leere Arrays und null-Werte werden weggelassen, um Bandbreite zu sparen.
    * Enthält eine Sequenznummer (_s) für zuverlässige Change-Detection auf Clients.
    */
   publishGameState(state: OutboundGameState): void {
-    const payload: Record<string, unknown> = { p: state.players, _s: ++this.publishSeq };
+    const payload: Record<string, unknown> = { p: encodePlayerStates(state.players), _s: ++this.publishSeq };
     payload.rt = state.roundStartTime;
     if (state.projectiles.length > 0)  payload.j = state.projectiles;
     if (state.enemies)                 payload.e = state.enemies;
@@ -807,7 +860,7 @@ export class NetworkBridge {
     if (state.teslaDomes.length > 0)   payload.td = state.teslaDomes;
     if (state.energyShields.length > 0) payload.es = state.energyShields;
     if (state.powerups)                payload.u = state.powerups;
-    if (state.pedestals.length > 0)    payload.pd = state.pedestals;
+    if (state.pedestals)               payload.pd = state.pedestals;
     if (state.nukes.length > 0)        payload.n  = state.nukes;
     if (state.airstrikes.length > 0)   payload.ak = state.airstrikes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
@@ -825,7 +878,7 @@ export class NetworkBridge {
     const now = Date.now();
     const totalPayloadBytes = JSON.stringify(payload).length;
     const enemyPayloadBytes = payload.e ? JSON.stringify(payload.e).length : 0;
-    const enemyCount = enemySnapshot.count;
+    const enemyCount = enemySnapshot.c;
     const window = this.enemySyncMetricsWindow ?? {
       startedAtMs: now,
       tickCount: 0,
@@ -847,9 +900,9 @@ export class NetworkBridge {
     window.totalPayloadBytes += totalPayloadBytes;
     window.enemyPayloadBytes += enemyPayloadBytes;
     window.enemyCountSum += enemyCount;
-    window.fullTickCount += enemySnapshot.full ? 1 : 0;
-    window.upsertCountSum += enemySnapshot.upserts.length;
-    window.removalCountSum += enemySnapshot.removals.length;
+    window.fullTickCount += enemySnapshot.a ? 1 : 0;
+    window.upsertCountSum += countEnemyUpserts(enemySnapshot.u);
+    window.removalCountSum += enemySnapshot.r.length;
     window.maxEnemyCount = Math.max(window.maxEnemyCount, enemyCount);
     window.maxTotalPayloadBytes = Math.max(window.maxTotalPayloadBytes, totalPayloadBytes);
     window.maxEnemyPayloadBytes = Math.max(window.maxEnemyPayloadBytes, enemyPayloadBytes);
@@ -946,10 +999,14 @@ export class NetworkBridge {
       raw.u as SyncedPowerUpSnapshot | undefined,
       this.cachedGameState?.powerups ?? [],
     );
+    const nextPedestals = this.mergePedestalSnapshot(
+      raw.pd as SyncedPowerUpPedestalSnapshot | undefined,
+      this.cachedGameState?.pedestals ?? [],
+    );
 
     const state: GameState = {
       roundStartTime,
-      players:       raw.p as Record<string, PlayerNetState>,
+      players:       decodePlayerStates(raw.p as Parameters<typeof decodePlayerStates>[0]),
       projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
       enemies:       (raw.e as SyncedEnemySnapshot | undefined) ?? null,
       rocks:         nextRocks,
@@ -962,7 +1019,7 @@ export class NetworkBridge {
       teslaDomes:    (raw.td as SyncedTeslaDome[]    | undefined) ?? [],
       energyShields: (raw.es as SyncedEnergyShield[] | undefined) ?? [],
       powerups:      nextPowerUps,
-      pedestals:     (raw.pd as SyncedPowerUpPedestal[] | undefined) ?? [],
+      pedestals:     nextPedestals,
       nukes:         (raw.n  as SyncedNukeStrike[]       | undefined) ?? [],
       airstrikes:    (raw.ak as SyncedAirstrikeStrike[] | undefined) ?? [],
       meteors:       (raw.mt as SyncedMeteorStrike[]    | undefined) ?? [],
@@ -993,6 +1050,28 @@ export class NetworkBridge {
       next.set(powerUp.uid, powerUp);
     }
     return [...next.values()].sort((left, right) => left.uid - right.uid);
+  }
+
+  private mergePedestalSnapshot(
+    snapshot: SyncedPowerUpPedestalSnapshot | undefined,
+    previous: readonly SyncedPowerUpPedestal[],
+  ): SyncedPowerUpPedestal[] {
+    if (!snapshot) return [...previous];
+    if (snapshot.full) {
+      return [...snapshot.upserts].sort((left, right) => left.id - right.id);
+    }
+
+    const next = new Map<number, SyncedPowerUpPedestal>();
+    for (const pedestal of previous) {
+      next.set(pedestal.id, pedestal);
+    }
+    for (const id of snapshot.removals) {
+      next.delete(id);
+    }
+    for (const pedestal of snapshot.upserts) {
+      next.set(pedestal.id, pedestal);
+    }
+    return [...next.values()].sort((left, right) => left.id - right.id);
   }
 
   private mergeRockSnapshot(snapshot: SyncedRockSnapshot | undefined, previous: readonly RockNetState[]): RockNetState[] {
@@ -1182,16 +1261,42 @@ export class NetworkBridge {
   }
 
   // ── Effekt-RPC: Host → Alle (visuelles Feedback) ──────────────────────────
+  /**
+   * Reiht einen Treffer-/Todes-Effekt zur Sammelübertragung ein, statt sofort ein eigenes RPC zu senden.
+   * Bei flächigem Schaden (eine Explosion trifft Dutzende Gegner) entstand sonst pro Treffer ein
+   * RPC.call im selben Frame – der Hauptgrund für die Host-`step`-Spikes. {@link flushEffects} sendet
+   * alle gesammelten Effekte einmal pro Frame als ein einziges Batch-RPC.
+   */
   broadcastEffect(effect: SyncedCombatEffect): void {
-    this.broadcastRpc('fx', effect);
+    this.pendingEffects.push(effect);
+  }
+
+  /**
+   * Sendet alle in diesem Frame gesammelten Effekte und XP-Popups als je ein Batch-RPC.
+   * Host-seitig einmal pro Frame aufrufen.
+   */
+  flushEffects(): void {
+    if (this.pendingEffects.length > 0) {
+      const batch = this.pendingEffects;
+      this.pendingEffects = [];
+      this.broadcastRpc('fxb', batch);
+    }
+    if (this.pendingXpPopups.length > 0) {
+      const popups = this.pendingXpPopups;
+      this.pendingXpPopups = [];
+      this.broadcastRpc('cdxpb', popups);
+    }
   }
 
   registerEffectHandler(cb: (effect: SyncedCombatEffect) => void): void {
     this.effectHandler = cb;
-    this.registerAllRpcHandler('fx', async (data: unknown): Promise<unknown> => {
+    this.registerAllRpcHandler('fxb', async (data: unknown): Promise<unknown> => {
       const effectHandler = this.effectHandler;
       if (!effectHandler) return undefined;
-      effectHandler(data as SyncedCombatEffect);
+      const effects = data as SyncedCombatEffect[];
+      for (let i = 0; i < effects.length; i += 1) {
+        effectHandler(effects[i]);
+      }
       return undefined;
     });
   }
@@ -1834,17 +1939,20 @@ export class NetworkBridge {
     return (getState(KEY_ROUND_STATE) as RoundState | null | undefined) ?? null;
   }
 
+  /** Reiht einen XP-Popup ein; bei Massensterben sonst ein RPC pro Kill (siehe {@link flushEffects}). */
   broadcastCoopDefenseXpPopup(x: number, y: number, xp: number): void {
-    this.broadcastRpc('cdxp', { x, y, xp: Math.max(0, Math.floor(xp)) });
+    this.pendingXpPopups.push({ x, y, xp: Math.max(0, Math.floor(xp)) });
   }
 
   registerCoopDefenseXpPopupHandler(handler: CoopDefenseXpPopupHandler): void {
     this.coopDefenseXpPopupHandler = handler;
-    this.registerAllRpcHandler('cdxp', async (data: unknown): Promise<unknown> => {
+    this.registerAllRpcHandler('cdxpb', async (data: unknown): Promise<unknown> => {
       const popupHandler = this.coopDefenseXpPopupHandler;
       if (!popupHandler) return undefined;
-      const { x, y, xp } = data as { x: number; y: number; xp: number };
-      popupHandler(x, y, xp);
+      const popups = data as { x: number; y: number; xp: number }[];
+      for (let i = 0; i < popups.length; i += 1) {
+        popupHandler(popups[i].x, popups[i].y, popups[i].xp);
+      }
       return undefined;
     });
   }

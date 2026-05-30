@@ -437,6 +437,10 @@ export class HostUpdateCoordinator {
 
     this.ctx.stinkCloudSystem.clientUpdate(delta);
 
+    // Gesammelte Treffer-/Todes-Effekte dieses Frames als ein einziges Batch-RPC senden, statt pro
+    // Treffer ein eigenes RPC (vermeidet Host-step-Spikes bei flächigem Massen-Schaden).
+    bridge.flushEffects();
+
     // ── Network tick throttle ─────────────────────────────────────────────
     this.netTickAccumulator += delta;
     if (this.netTickAccumulator < NET_TICK_INTERVAL_MS) return;
@@ -539,7 +543,9 @@ export class HostUpdateCoordinator {
       teslaDomes,
       energyShields,
       powerups: powerupSnapshot,
-      pedestals,
+      // Delta-Snapshot inline (einmal pro Net-Tick, nach dem Throttle); das volle Array oben
+      // (`pedestals`) dient nur der host-lokalen Darstellung.
+      pedestals: this.ctx.powerUpSystem?.getPedestalNetSnapshot() ?? null,
       nukes,
       airstrikes,
       meteors,

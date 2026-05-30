@@ -4,12 +4,19 @@ import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   CELL_SIZE,
-  ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
+  ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS,
   ENEMY_NET_POSITION_DELTA_PX,
+  ENEMY_NET_REMOVAL_RESEND_TICKS,
   ENEMY_NET_ROTATION_DELTA_RAD,
 } from '../config';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import type { SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
+import {
+  decodeEnemyUpserts,
+  encodeEnemyUpsert,
+  enemyIdToNum,
+  enemyNumToId,
+} from '../network/enemySnapshotCodec';
 import { EnemyEntity } from './EnemyEntity';
 import {
   resolveCoopDefenseEnemyConfigs,
@@ -27,9 +34,11 @@ export class EnemyManager {
   private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs;
   private readonly enemies = new Map<string, EnemyEntity>();
   private readonly netSnapshotCache = new Map<string, SyncedEnemyState>();
-  private readonly pendingRemovalIds = new Set<string>();
+  // id -> verbleibende Anzahl Delta-Snapshots, in denen die Removal noch mitgesendet wird.
+  private readonly pendingRemovals = new Map<string, number>();
   private nextEnemyIdSeq = 1;
-  private ticksSinceFullNetSnapshot = ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+  // Sendet die aktive ID-Liste sofort beim ersten Snapshot (Bootstrap), danach periodisch.
+  private ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
   private refreshCursor = 0;
 
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
@@ -55,6 +64,7 @@ export class EnemyManager {
     deltaMs: number,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
+    const separationGrid = this.buildSeparationGrid();
 
     for (const enemy of this.enemies.values()) {
       const config = this.resolvedConfigs[enemy.kind];
@@ -86,7 +96,7 @@ export class EnemyManager {
       }
 
       const speed = enemy.getMoveSpeed();
-      const separation = this.computeSeparation(enemy);
+      const separation = this.computeSeparation(enemy, separationGrid);
       let targetVx = vector.x * speed + separation.x * SEPARATION_STRENGTH * speed;
       let targetVy = vector.y * speed + separation.y * SEPARATION_STRENGTH * speed;
 
@@ -105,40 +115,79 @@ export class EnemyManager {
     }
   }
 
-  private computeSeparation(enemy: EnemyEntity): { x: number; y: number } {
+  /**
+   * Baut ein Spatial-Hash-Grid mit Zellengröße = Separations-Radius.
+   * Dadurch wird die Nachbarsuche in {@link computeSeparation} von O(N²) auf ~O(N) reduziert:
+   * Nur die 3×3 umliegenden Zellen können Gegner innerhalb des Radius enthalten.
+   */
+  private buildSeparationGrid(): Map<number, EnemyEntity[]> {
+    const grid = new Map<number, EnemyEntity[]>();
+    for (const enemy of this.enemies.values()) {
+      const key = this.separationCellKey(enemy.sprite.x, enemy.sprite.y);
+      const bucket = grid.get(key);
+      if (bucket) {
+        bucket.push(enemy);
+      } else {
+        grid.set(key, [enemy]);
+      }
+    }
+    return grid;
+  }
+
+  private separationCellKey(x: number, y: number): number {
+    const cellX = Math.floor(x / SEPARATION_RADIUS_PX);
+    const cellY = Math.floor(y / SEPARATION_RADIUS_PX);
+    // Cantor-artige Paarung in eine einzelne Number-Key (vermeidet String-Allokationen).
+    return (cellX + 0x8000) * 0x10000 + (cellY + 0x8000);
+  }
+
+  private computeSeparation(enemy: EnemyEntity, grid: Map<number, EnemyEntity[]>): { x: number; y: number } {
     let pushX = 0;
     let pushY = 0;
 
-    for (const other of this.enemies.values()) {
-      if (other === enemy) continue;
-      const dx = enemy.sprite.x - other.sprite.x;
-      const dy = enemy.sprite.y - other.sprite.y;
-      const distance = Math.hypot(dx, dy);
-      if (distance <= 0 || distance >= SEPARATION_RADIUS_PX) continue;
+    const cellX = Math.floor(enemy.sprite.x / SEPARATION_RADIUS_PX);
+    const cellY = Math.floor(enemy.sprite.y / SEPARATION_RADIUS_PX);
 
-      const weight = (1 - distance / SEPARATION_RADIUS_PX) / distance;
-      pushX += dx * weight;
-      pushY += dy * weight;
+    for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+        const bucket = grid.get(((cellX + offsetX) + 0x8000) * 0x10000 + ((cellY + offsetY) + 0x8000));
+        if (!bucket) continue;
+
+        for (const other of bucket) {
+          if (other === enemy) continue;
+          const dx = enemy.sprite.x - other.sprite.x;
+          const dy = enemy.sprite.y - other.sprite.y;
+          const distance = Math.hypot(dx, dy);
+          if (distance <= 0 || distance >= SEPARATION_RADIUS_PX) continue;
+
+          const weight = (1 - distance / SEPARATION_RADIUS_PX) / distance;
+          pushX += dx * weight;
+          pushY += dy * weight;
+        }
+      }
     }
 
     return { x: pushX, y: pushY };
   }
 
   getNetSnapshot(): SyncedEnemySnapshot {
-    const full = this.ticksSinceFullNetSnapshot >= ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    // Kein schwerer Full-Snapshot mehr: Neue/geänderte Gegner gehen als Delta, unveränderte Gegner
+    // werden rollierend (Refresh-Zyklus) binnen ~2 s einmal voll nachgesendet. Periodisch trägt der
+    // Snapshot zusätzlich die vollständige aktive ID-Liste zur Phantom-Reconciliation.
+    const sendActiveList = this.ticksSinceActiveList >= ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
     const currentIds = new Set<string>();
     const upserts: SyncedEnemyDeltaState[] = [];
 
     const sortedEnemies = [...this.enemies.values()]
       .sort((left, right) => left.id.localeCompare(right.id));
-    const refreshIds = full ? null : this.collectRefreshIds(sortedEnemies);
+    const refreshIds = this.collectRefreshIds(sortedEnemies);
 
     for (const enemy of sortedEnemies) {
       const current = this.buildNetState(enemy);
       currentIds.add(current.id);
       const previous = this.netSnapshotCache.get(current.id);
 
-      if (full || !previous) {
+      if (!previous) {
         upserts.push(current);
         this.netSnapshotCache.set(current.id, current);
         continue;
@@ -154,35 +203,48 @@ export class EnemyManager {
         continue;
       }
 
-      if (!refreshIds?.has(current.id)) continue;
+      if (!refreshIds.has(current.id)) continue;
 
       upserts.push(current);
       this.netSnapshotCache.set(current.id, current);
     }
 
-    const removals = full ? [] : [...this.pendingRemovalIds].sort();
-
-    if (full) {
-      for (const id of [...this.netSnapshotCache.keys()]) {
-        if (!currentIds.has(id)) this.netSnapshotCache.delete(id);
-      }
-      this.ticksSinceFullNetSnapshot = 0;
-      this.refreshCursor = 0;
-    } else {
-      this.ticksSinceFullNetSnapshot += 1;
-      for (const id of removals) {
-        this.netSnapshotCache.delete(id);
+    // Removals werden über mehrere Delta-Snapshots wiederholt (siehe ENEMY_NET_REMOVAL_RESEND_TICKS),
+    // damit ein verlorenes unreliable-Paket nicht zu dauerhaft sichtbaren toten Gegnern führt.
+    const removals = [...this.pendingRemovals.keys()].sort();
+    for (const id of removals) {
+      const remaining = (this.pendingRemovals.get(id) ?? 1) - 1;
+      if (remaining <= 0) {
+        this.pendingRemovals.delete(id);
+      } else {
+        this.pendingRemovals.set(id, remaining);
       }
     }
 
-    this.pendingRemovalIds.clear();
+    const encodedUpserts: number[] = [];
+    for (const entry of upserts) {
+      encodeEnemyUpsert(encodedUpserts, entry);
+    }
 
-    return {
-      full,
-      count: currentIds.size,
-      upserts,
-      removals,
+    const snapshot: SyncedEnemySnapshot = {
+      c: currentIds.size,
+      u: encodedUpserts,
+      r: removals.map(enemyIdToNum),
     };
+
+    if (sendActiveList) {
+      // Cache-Einträge entfernter Gegner aufräumen und die aktive ID-Liste als Reconciliation-Backstop
+      // anhängen. Der Client löscht lokal jeden Gegner, dessen ID hier fehlt (Phantom-Bereinigung).
+      for (const id of [...this.netSnapshotCache.keys()]) {
+        if (!currentIds.has(id)) this.netSnapshotCache.delete(id);
+      }
+      snapshot.a = [...currentIds].map(enemyIdToNum).sort((left, right) => left - right);
+      this.ticksSinceActiveList = 0;
+    } else {
+      this.ticksSinceActiveList += 1;
+    }
+
+    return snapshot;
   }
 
   getEnemy(id: string): EnemyEntity | undefined {
@@ -207,7 +269,7 @@ export class EnemyManager {
       return { died: false, remainingHp };
     }
 
-    this.pendingRemovalIds.add(id);
+    this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
     this.netSnapshotCache.delete(id);
     enemy.destroy();
     this.enemies.delete(id);
@@ -223,23 +285,28 @@ export class EnemyManager {
   applySnapshot(snapshot: SyncedEnemySnapshot | null): void {
     if (!snapshot) return;
 
-    if (snapshot.full) {
-      const activeIds = new Set(snapshot.upserts.map((enemy) => enemy.id));
+    const upserts = decodeEnemyUpserts(snapshot.u);
+
+    // Periodische Reconciliation: liegt die vollständige aktive ID-Liste vor, lösche jeden lokalen
+    // Gegner, dessen ID darin fehlt (Backstop gegen verpasste Removals = "Phantom"-Gegner).
+    if (snapshot.a) {
+      const activeIds = new Set(snapshot.a);
       for (const [id, enemy] of this.enemies) {
-        if (activeIds.has(id)) continue;
+        if (activeIds.has(enemyIdToNum(id))) continue;
         enemy.destroy();
         this.enemies.delete(id);
       }
     }
 
-    for (const id of snapshot.removals) {
+    for (const idNum of snapshot.r) {
+      const id = enemyNumToId(idNum);
       const enemy = this.enemies.get(id);
       if (!enemy) continue;
       enemy.destroy();
       this.enemies.delete(id);
     }
 
-    for (const remote of snapshot.upserts) {
+    for (const remote of upserts) {
       this.applyRemoteSnapshot(remote);
     }
   }
@@ -256,9 +323,9 @@ export class EnemyManager {
     }
     this.enemies.clear();
     this.netSnapshotCache.clear();
-    this.pendingRemovalIds.clear();
+    this.pendingRemovals.clear();
     this.nextEnemyIdSeq = 1;
-    this.ticksSinceFullNetSnapshot = ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    this.ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
     this.refreshCursor = 0;
   }
 

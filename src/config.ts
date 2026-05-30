@@ -628,22 +628,36 @@ export const NET_TICK_INTERVAL_MS = 1000 / NET_TICK_RATE_HZ;  // 50 ms
 export const NET_SMOOTH_TIME_MS   = 80;
 /** Unveraenderte Enemies werden rollierend ueber diesen Zyklus einmal voll aufgefrischt, statt alle auf einmal. */
 export const ENEMY_NET_REFRESH_CYCLE_TICKS = NET_TICK_RATE_HZ * 2;
-/** Ein seltener Hard-Full-Snapshot bleibt fuer Bootstrap/Recovery erhalten, soll aber keine Regel-Last mehr sein. */
-export const ENEMY_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ * 10;
+/**
+ * Intervall, in dem der Host die vollständige Liste aktiver Gegner-IDs zur Reconciliation mitschickt.
+ * Räumt clientseitige "Phantom"-Gegner ab (Host hat sie entfernt, Client hat die Removal verpasst) –
+ * als günstiger Backstop hinter den Sticky-Removals. Ersetzt den früheren schweren Full-Snapshot
+ * (~4 KB Burst alle 10 s) durch eine kompakte ID-Liste (~0.8 KB), die State-Korrektur übernimmt der
+ * rollierende Refresh-Zyklus [[ENEMY_NET_REFRESH_CYCLE_TICKS]].
+ */
+export const ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS = NET_TICK_RATE_HZ * 2;
 /** Positionsänderungen unterhalb dieses Deltas bleiben bis zum nächsten Dirty-Frame lokal. */
 export const ENEMY_NET_POSITION_DELTA_PX = 6;
 /** Kleine Rotationsänderungen werden erst gesammelt und dann als Delta gesendet. */
 export const ENEMY_NET_ROTATION_DELTA_RAD = 0.12;
+/**
+ * Anzahl aufeinanderfolgender Delta-Snapshots, in denen eine Gegner-Removal wiederholt
+ * gesendet wird. Da der GameState unreliable (last-write-wins) übertragen wird, würde eine
+ * einmalig gesendete Removal bei Paketverlust verloren gehen – der tote Gegner bliebe beim
+ * Client bis zum nächsten Full-Snapshot (10 s) sichtbar. Gegner-IDs werden nie wiederverwendet,
+ * daher ist das wiederholte Senden idempotent.
+ */
+export const ENEMY_NET_REMOVAL_RESEND_TICKS = 10;
 /** Boden-Power-Ups senden meist nur Spawn-/Pickup-Deltas; Full-Resync korrigiert verlorene Frames. */
 export const POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Statische Rocks senden normalerweise nur HP-Änderungen und Zerstörungen; Full-Resync korrigiert verlorene Frames. */
 export const ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Debug-only: Host loggt aggregierte Enemy-Sync-Payload-Metriken ins Dev-Console. */
-export const NET_DEBUG_ENEMY_SYNC_METRICS = false;
+export const NET_DEBUG_ENEMY_SYNC_METRICS = true;
 /** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
 export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
 /** Debug-only: Lokale Laufzeitmetriken fuer Host-/Client-Frames, unabhaengig vom Netzwerkpayload. */
-export const DEBUG_RUNTIME_PERF_METRICS = false;
+export const DEBUG_RUNTIME_PERF_METRICS = true;
 /** Aggregationsfenster fuer lokale Laufzeitmetriken. */
 export const DEBUG_RUNTIME_PERF_METRICS_WINDOW_MS = 2000;
 

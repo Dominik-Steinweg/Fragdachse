@@ -185,6 +185,7 @@ export class ArenaLifecycleCoordinator {
         status: 'active',
         roundStartTime: arenaStartTime,
         coopDefenseHumanPlayerCount: Math.max(1, bridge.getConnectedPlayers().length),
+        coopDefenseMapId: bridge.getCoopDefenseMapId(),
       }
       : null;
     bridge.publishRoundState(roundState);
@@ -241,6 +242,7 @@ export class ArenaLifecycleCoordinator {
         status: roundOutcome,
         roundStartTime: bridge.getArenaStartTime(),
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
+        coopDefenseMapId: currentRoundState?.coopDefenseMapId,
         endedAt: Date.now(),
       });
     } else {
@@ -293,12 +295,20 @@ export class ArenaLifecycleCoordinator {
   buildArena(networkLayout: ArenaLayout): void {
     this.tearDownArena();
 
+    // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
+    // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
+    bridge.resetGameStateCache();
+
     const layout = ArenaGenerator.hydrateVisualOnlyFields(networkLayout);
+    // Map-ID bevorzugt aus dem (gegateten) RoundState lesen – derselbe reliable-Snapshot, der auch die
+    // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
+    // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
+    const coopRoundState = bridge.getRoundState();
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
+      ? getCoopDefenseMapConfig(coopRoundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : null;
     const coopDefenseHumanPlayerCount = isCoopDefenseMode(bridge.getGameMode())
-      ? Math.max(1, Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1))
+      ? Math.max(1, Math.floor(coopRoundState?.coopDefenseHumanPlayerCount ?? 1))
       : 1;
     const coopDefenseEnemyConfigs = isCoopDefenseMode(bridge.getGameMode())
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
@@ -895,7 +905,13 @@ export class ArenaLifecycleCoordinator {
 
   private onTransitionToArena(): void {
     const layout = bridge.getArenaLayout();
-    if (!layout) {
+    // Im Coop-Modus zusätzlich auf den (reliable) RoundState warten: er trägt Map-ID und Spielerzahl,
+    // aus denen Basen/Wellen/Gegner deterministisch gebaut werden. Ohne dieses Gate kann der Client
+    // bauen, bevor diese Keys angekommen sind → fehlende/falsche Basis. Das 3-s-Countdown-Fenster
+    // (ARENA_COUNTDOWN_SEC) bietet reichlich Zeit für die Retries.
+    const needsCoopRoundState = isCoopDefenseMode(bridge.getGameMode());
+    const coopRoundStateReady = !needsCoopRoundState || bridge.getRoundState() !== null;
+    if (!layout || !coopRoundStateReady) {
       this.layoutRetryCount++;
       if (this.layoutRetryCount >= ArenaLifecycleCoordinator.LAYOUT_RETRY_LIMIT) {
         this.layoutRetryCount = 0;

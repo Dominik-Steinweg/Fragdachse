@@ -410,6 +410,20 @@ export class LobbyOverlay {
     });
   }
 
+  /**
+   * Transienter Hinweis am BEREIT-Button, wenn der Klick blockiert wurde, weil der lokale
+   * Spieler-Stand noch nicht mit dem Host übereinstimmt (Roster-Konsistenz-Check). Setzt sich
+   * automatisch zurück – der Spieler kann nach kurzer Konvergenz erneut klicken.
+   */
+  showReadySyncNotice(): void {
+    if (this.btnLocked) return;
+    this.readyBtnLabel.setText('SYNC…');
+    this.scene.time.delayedCall(1200, () => {
+      if (!this.readyBtnLabel.scene || this.btnLocked) return;
+      this.readyBtnLabel.setText('BEREIT');
+    });
+  }
+
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
     if (!this.coopProgressContainer || !this.coopProgressLevelText) return;
 

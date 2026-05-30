@@ -46,6 +46,21 @@ const COOP_DEFENSE_ENEMY_REGISTRY = normalizeEnemyRegistry(rawCoopDefenseEnemies
 
 export const COOP_DEFENSE_ENEMY_CONFIGS: Record<CoopDefenseEnemyKind, CoopDefenseEnemyConfig> = COOP_DEFENSE_ENEMY_REGISTRY;
 
+/**
+ * Stabile, geordnete Liste aller Gegner-Arten. Reihenfolge folgt der Insertion-Order der
+ * gebündelten JSON-Registry und ist daher auf Host und Client identisch – nur deshalb darf der
+ * Index als kompakter Wire-Wert für `kind` verwendet werden (siehe enemySnapshotCodec.ts).
+ */
+export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.keys(COOP_DEFENSE_ENEMY_REGISTRY);
+
+export function getCoopDefenseEnemyKindIndex(kind: CoopDefenseEnemyKind): number {
+  return COOP_DEFENSE_ENEMY_KINDS.indexOf(kind);
+}
+
+export function getCoopDefenseEnemyKindByIndex(index: number): CoopDefenseEnemyKind | undefined {
+  return COOP_DEFENSE_ENEMY_KINDS[index];
+}
+
 export function hasCoopDefenseEnemyKind(kind: string): kind is CoopDefenseEnemyKind {
   return Object.prototype.hasOwnProperty.call(COOP_DEFENSE_ENEMY_CONFIGS, kind);
 }
