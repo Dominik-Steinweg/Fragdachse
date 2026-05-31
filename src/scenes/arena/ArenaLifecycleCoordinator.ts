@@ -163,10 +163,20 @@ export class ArenaLifecycleCoordinator {
   // ── Host helpers called from ArenaScene.update() ─────────────────────────
 
   hostCheckReadyToStart(): void {
-    if (this.roundStartPending || !bridge.areAllPlayersReady()) return;
+    // Defensiv: eine Runde darf ausschließlich aus einer sauberen LOBBY-Phase heraus starten.
+    if (bridge.getGamePhase() !== 'LOBBY') return;
+    if (this.roundStartPending) return;
+    // "Alles stimmt überein" vor dem Start: ALLE verbundenen Spieler sind bereit UND haben ein
+    // verbindliches Loadout (im Coop zusätzlich ein Coop-Profil) – siehe areAllPlayersReady. Da die
+    // Ready-Flags beim Rundenwechsel host-autoritativ zurückgesetzt wurden, kann hier kein veralteter
+    // Stand aus der Vorrunde durchschlagen.
+    if (!bridge.areAllPlayersReady()) return;
     if (this.roomQualityMonitor.shouldBlockStart()) return;
     this.roundStartPending = true;
     this.lobbyOverlay.lockButton();
+    // Autoritativen Lobby-Snapshot final aktualisieren, damit der Stand, mit dem gestartet wird,
+    // exakt dem entspricht, gegen den die Clients beim "Bereit" geprüft haben.
+    bridge.publishLobbySync();
     bridge.setMatchHostId();
     bridge.resetAllFrags();
     bridge.resetCoopDefenseRoundXp();
@@ -196,6 +206,12 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (bridge.getPlayerReady(profile.id) && !this.ctx.playerManager.hasPlayer(profile.id)) {
+        // Erst spawnen, wenn der host das verbindliche Loadout-Snapshot wirklich hat. Sonst würde
+        // resolveCommittedLoadoutSelection() auf die separat propagierten Live-Slots zurückfallen –
+        // die bei umgekehrter Key-Reihenfolge noch veraltet sein können (Ursache von "mit falscher
+        // Waffe gestartet"). Das Match startet ohnehin erst, wenn alle committed sind (areAllPlayersReady),
+        // daher verzögert das den Spawn höchstens um wenige Frames im Countdown.
+        if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
         this.ctx.playerManager.addPlayer(profile);
         this.ctx.combatSystem.initPlayer(profile.id);
         this.ctx.resourceSystem?.initPlayer(profile.id);
@@ -204,6 +220,17 @@ export class ArenaLifecycleCoordinator {
         this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
       }
     }
+  }
+
+  /**
+   * Host: True, wenn das verbindliche Loadout (und im Coop-Modus das Coop-Profil) eines Spielers
+   * vorliegt – Vorbedingung, um ihn mit der korrekten, eingefrorenen Auswahl zu spawnen statt mit
+   * einem Live-Slot-Fallback. Spiegelt die Pro-Spieler-Bedingung aus {@link NetworkBridge.areAllPlayersReady}.
+   */
+  private hostHasCommittedLoadoutForSpawn(playerId: string): boolean {
+    if (!bridge.hasCommittedLoadout(playerId)) return false;
+    if (isCoopDefenseMode(bridge.getGameMode()) && !bridge.hasCommittedCoopDefenseProfile(playerId)) return false;
+    return true;
   }
 
   syncHostLoadoutsFromCommittedSelections(): void {
@@ -250,6 +277,10 @@ export class ArenaLifecycleCoordinator {
     }
 
     this.hostSaveRoundResults();
+    // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
+    // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
+    // zurücksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
+    bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
   }
 
@@ -261,6 +292,7 @@ export class ArenaLifecycleCoordinator {
 
     this.isLocalReady = false;
     bridge.setLocalReady(false);
+    if (bridge.isHost()) bridge.hostResetAllLobbyReady();
     this.roundStartPending = false;
     this.ctx.arenaCountdown?.clear();
 
@@ -1172,7 +1204,13 @@ export class ArenaLifecycleCoordinator {
 
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
-    if (!committed) return this.resolveLoadoutSelection(playerId);
+    if (!committed) {
+      // Nach dem Spawn-Gate (hostHasCommittedLoadoutForSpawn) sollte das nicht mehr vorkommen.
+      // Tritt es doch auf, ist die eingefrorene Auswahl noch nicht da → Live-Slot-Fallback (Risiko
+      // "falsche Waffe"); loggen, um den Fall im Realbetrieb zu erkennen.
+      console.warn(`[Loadout] Kein committed Loadout für ${playerId} – nutze Live-Slot-Fallback.`);
+      return this.resolveLoadoutSelection(playerId);
+    }
     return resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
       weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],

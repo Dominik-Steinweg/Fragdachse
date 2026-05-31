@@ -78,7 +78,7 @@ const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
-const KEY_ROSTER         = 'rst'; // global reliable: host-autoritative Liste verbundener Spieler-IDs (Roster-Konsistenz-Check)
+const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
 
 interface EnemySyncMetricsWindow {
   startedAtMs: number;
@@ -389,42 +389,71 @@ export class NetworkBridge {
         this.connectedPlayersCacheDirty = true;
         if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
-        this.hostPublishRoster();
+        this.hostPublishLobbySync();
       });
 
       const profile = this.extractProfile(state);
       this.connectedPlayers.set(state.id, profile);
       this.joinCbs.forEach(cb => cb(profile));
-      this.hostPublishRoster();
+      this.hostPublishLobbySync();
     });
   }
 
-  // ── Roster-Konsistenz (Frühwarnung gegen P2P-Profil-Desync) ────────────────
+  // ── Lobby-Sync-Konsistenz (Frühwarnung gegen Desync beim Bereit-Klick) ─────
 
   /**
-   * Host-only: Veröffentlicht die autoritative Liste verbundener Spieler-IDs (reliable).
-   * Clients vergleichen sie beim "Bereit"-Klick mit ihrem lokalen Stand, um den Desync zu erkennen,
-   * bei dem ein Client einen anderen Spieler gar nicht kennt (Ursache von Bug A/B).
+   * Host-only: Veröffentlicht einen autoritativen Lobby-Snapshot (reliable, ein Objekt):
+   * verbundene Spieler-IDs, aktueller Game-Mode und Coop-Map.
+   *
+   * Clients vergleichen beim "Bereit"-Klick ihren *separat* propagierten Stand gegen diesen
+   * gebündelten Snapshot. Da die Einzel-Keys (Roster via Join-Callbacks, KEY_GAME_MODE, KEY_COOP_MAP_ID)
+   * unabhängig voneinander ankommen, deckt der Vergleich genau die Fälle auf, in denen ein Client
+   * noch nicht aufgeschlossen hat – z. B. einen Mitspieler nicht kennt (Bug A/B) oder mit veraltetem
+   * Modus bereit würde (und so ein für den Modus ungültiges Loadout committen könnte).
    */
-  private hostPublishRoster(): void {
+  private hostPublishLobbySync(): void {
     if (!isHost()) return;
-    setState(KEY_ROSTER, [...this.connectedPlayers.keys()].sort(), true);
+    setState(KEY_LOBBY_SYNC, {
+      m: this.getGameMode(),
+      c: this.getCoopDefenseMapId(),
+      p: [...this.connectedPlayers.keys()].sort(),
+    }, true);
+  }
+
+  /** Host-only: Veröffentlicht den aktuellen Lobby-Snapshot erneut (z. B. final unmittelbar vor Rundenstart). */
+  publishLobbySync(): void {
+    this.hostPublishLobbySync();
   }
 
   /**
-   * Vergleicht den lokal bekannten Spieler-Stand mit dem host-autoritativen Roster.
-   * `missingIds` = IDs, die der Host kennt, dieser Client aber (noch) nicht – exakt die Spieler, die
-   * dieser Client sonst nicht rendern könnte. `hostRosterPresent=false`, solange noch kein Roster
-   * angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
+   * Vergleicht den lokal propagierten Lobby-Stand mit dem host-autoritativen Snapshot.
+   * `issues` listet die konkreten Abweichungen (für Logging). `hostStatePresent=false`, solange noch
+   * kein Snapshot angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
    */
-  getRosterConsistency(): { consistent: boolean; hostRosterPresent: boolean; missingIds: string[] } {
-    const hostRoster = getState(KEY_ROSTER) as string[] | undefined;
-    if (!Array.isArray(hostRoster) || hostRoster.length === 0) {
-      return { consistent: true, hostRosterPresent: false, missingIds: [] };
+  getLobbySyncConsistency(): { consistent: boolean; hostStatePresent: boolean; issues: string[] } {
+    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; p?: string[] } | undefined;
+    if (!snapshot || !Array.isArray(snapshot.p)) {
+      return { consistent: true, hostStatePresent: false, issues: [] };
     }
+
+    const issues: string[] = [];
+
     const known = new Set(this.connectedPlayers.keys());
-    const missingIds = hostRoster.filter((id) => !known.has(id));
-    return { consistent: missingIds.length === 0, hostRosterPresent: true, missingIds };
+    const missingIds = snapshot.p.filter((id) => !known.has(id));
+    if (missingIds.length > 0) {
+      issues.push(`unbekannte Spieler: [${missingIds.join(', ')}]`);
+    }
+
+    if (snapshot.m !== undefined && snapshot.m !== this.getGameMode()) {
+      issues.push(`Modus: lokal=${this.getGameMode()} host=${snapshot.m}`);
+    }
+
+    if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
+      && snapshot.c !== undefined && snapshot.c !== this.getCoopDefenseMapId()) {
+      issues.push(`Coop-Map: lokal=${this.getCoopDefenseMapId()} host=${snapshot.c}`);
+    }
+
+    return { consistent: issues.length === 0, hostStatePresent: true, issues };
   }
 
   // ── Identität ──────────────────────────────────────────────────────────────
@@ -466,6 +495,7 @@ export class NetworkBridge {
     this.hostReconcileLoadoutsForMode(mode);
     this.hostInvalidateLobbyReadyStateForAllPlayers();
     this.connectedPlayersCacheDirty = true;
+    this.hostPublishLobbySync();
   }
 
   getCoopDefenseMapId(): string {
@@ -482,6 +512,7 @@ export class NetworkBridge {
     if (this.getCoopDefenseMapId() === normalizedMapId) return;
     setState(KEY_COOP_MAP_ID, normalizedMapId, true);
     this.hostInvalidateLobbyReadyStateForAllPlayers();
+    this.hostPublishLobbySync();
   }
 
   hostReconcileLoadoutsForMode(mode: GameMode): void {
@@ -545,6 +576,16 @@ export class NetworkBridge {
       this.hostSetPlayerReady(playerId, false);
       this.hostSetPlayerCommittedLoadout(playerId, null);
     }
+  }
+
+  /**
+   * Host-only: Setzt ALLE verbundenen Spieler autoritativ auf "nicht bereit" und verwirft ihre
+   * committed Loadouts (reliable). Beim Rundenwechsel aufrufen, damit der Host-Zustandsspeicher
+   * garantiert sauber ist – unabhängig davon, ob jeder Client seinen eigenen Ready-Status rechtzeitig
+   * zurücksetzt. Verhindert u. a. einen ungewollten Sofort-Neustart durch stehengebliebene Ready-Flags.
+   */
+  hostResetAllLobbyReady(): void {
+    this.hostInvalidateLobbyReadyStateForAllPlayers();
   }
 
   getPlayerTeam(playerId: string): TeamId | null {

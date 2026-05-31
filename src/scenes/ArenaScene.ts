@@ -720,9 +720,13 @@ export class ArenaScene extends Phaser.Scene {
     if (!terminated && phase === 'LOBBY') {
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       const players = bridge.getConnectedPlayers();
+      // Lokalen Ready-Stand an den autoritativen Netzwerkwert angleichen. Setzt der Host beim
+      // Rundenwechsel (oder bei Modus-/Map-Wechsel) den Spieler auf "nicht bereit", folgt hier sowohl
+      // das interne Flag als auch der Button – so ist der Client-Zustandsspeicher garantiert konsistent.
       const localReady = bridge.getPlayerReady(bridge.getLocalPlayerId());
       if (localReady !== this.lifecycle.getIsLocalReady()) {
         this.lifecycle.setIsLocalReady(localReady);
+        this.lobbyOverlay.setReadyButtonState(localReady);
       }
       this.updateRoomQuality(this.time.now, players);
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
@@ -947,14 +951,14 @@ export class ArenaScene extends Phaser.Scene {
   private onReadyToggled(): void {
     const nowReady = !this.lifecycle.getIsLocalReady();
     if (nowReady) {
-      // Frühwarnung gegen P2P-Profil-Desync (Bug A/B): Nur bereit machen, wenn dieser Client
-      // denselben Spieler-Stand kennt wie der Host. Fehlt ihm hier ein Spieler, könnte er ihn auch
-      // im Match nicht rendern. Wir blockieren weich (kein Dauerblock) und loggen den Diff.
-      const roster = bridge.getRosterConsistency();
-      if (!roster.consistent) {
+      // Frühwarnung gegen Lobby-Desync (Bug A/B): Nur bereit machen, wenn dieser Client mit dem
+      // host-autoritativen Lobby-Stand aufgeschlossen ist (Spieler-Roster, Modus, Coop-Map). Sonst
+      // könnte er einen Mitspieler nicht rendern oder ein für den Modus ungültiges Loadout committen.
+      // Weiches Blockieren (kein Dauerblock) + Logging; löst sich, sobald der Stand konvergiert.
+      const lobbySync = bridge.getLobbySyncConsistency();
+      if (!lobbySync.consistent) {
         console.warn(
-          `[Roster] BEREIT blockiert – lokaler Spieler-Stand weicht vom Host ab. `
-          + `Fehlende IDs (Host kennt, Client nicht): [${roster.missingIds.join(', ')}]. `
+          `[LobbySync] BEREIT blockiert – lokaler Stand weicht vom Host ab: ${lobbySync.issues.join(' | ')}. `
           + `Lokal bekannt: [${bridge.getConnectedPlayerIds().join(', ')}].`,
         );
         this.lobbyOverlay.showReadySyncNotice();
