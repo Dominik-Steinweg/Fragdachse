@@ -10,6 +10,11 @@ import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
 import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
+  type GeometryHit,
+  findNearestRectangleHit as geomNearestRectangleHit,
+  findNearestCircleHit as geomNearestCircleHit,
+} from '../utils/geometry';
+import {
   ARENA_HEIGHT,
   ARMOR_MAX,
   COLORS,
@@ -554,160 +559,162 @@ export class CombatSystem {
       }
 
       const projBounds = proj.sprite.getBounds();
-      let projectileConsumed = false;
+      if (this.resolveProjectilePlayerHits(proj, projBounds)) continue;
+      if (this.resolveProjectileEnemyHits(proj, projBounds)) continue;
+      this.resolveProjectileDecoyHits(proj, projBounds);
+    }
+  }
 
-      for (const player of this.playerManager.getAllPlayers()) {
-        if (!this.isAlive(player.id))                     continue;
-        if (proj.ownerId === player.id)                   continue;
-        if (this.burrowSystem?.isBurrowed(player.id))     continue;
+  /** Schützen-Damage-Multiplikator (Loadout/Ultimate + PowerUp) auf den Projektil-Basisschaden anwenden. */
+  private computeProjectileDamage(proj: TrackedProjectile): number {
+    const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
+      ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
+      : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
+    const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
+    return proj.damage * loadoutMult * powerUpMult;
+  }
 
-        if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.sprite.getBounds())) {
-          // Damage-Multiplier des Schützen (Ultimate + PowerUp)
-          const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
-            ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
-            : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
-          const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
-          const actualDamage = proj.damage * loadoutMult * powerUpMult;
-          const canDealDamage = this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage);
+  /** AABB-Treffer gegen Spieler (Shield/Piercing/Flammen-Burn/Standard). Liefert true, wenn das Projektil verbraucht ist. */
+  private resolveProjectilePlayerHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle): boolean {
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.isAlive(player.id))                     continue;
+      if (proj.ownerId === player.id)                   continue;
+      if (this.burrowSystem?.isBurrowed(player.id))     continue;
 
-          if (canDealDamage && this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
-            this.projectileManager.destroyProjectile(proj.id);
-            projectileConsumed = true;
-            break;
-          }
+      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.sprite.getBounds())) {
+        const actualDamage = this.computeProjectileDamage(proj);
+        const canDealDamage = this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage);
 
-          if (proj.isBfg || proj.projectileStyle === 'gauss') {
-            // Piercing-Projektile: Spieler nur 1x treffen, Projektil fliegt weiter.
-            if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-            if (proj.projectileStyle === 'gauss') {
-              if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
-              if (proj.gaussHitPlayers.has(player.id)) continue;
-              proj.gaussHitPlayers.add(player.id);
-            } else {
-              if (proj.bfgHitPlayers.has(player.id)) continue;
-              proj.bfgHitPlayers.add(player.id);
-            }
-            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, {
-              sourceX: proj.sprite.x,
-              sourceY: proj.sprite.y,
-              dirX: proj.body.velocity.x,
-              dirY: proj.body.velocity.y,
-            }, {
-              allowTeamDamage: proj.allowTeamDamage,
-            });
-            continue; // kein break, kein destroyProjectile
-          }
-
-          if (proj.isFlame && canDealDamage) {
-            this.applyBurnStack(
-              player.id,
-              proj.ownerId,
-              proj.burnDurationMs ?? 0,
-              proj.burnDamagePerTick ?? 0,
-              proj.burnTickIntervalMs ?? 0,
-              proj.weaponName,
-            );
-          }
-
-          this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName, canDealDamage);
-          projectileConsumed = true;
-          break;  // Projektil trifft maximal einen Spieler pro Frame
+        if (canDealDamage && this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
+          this.projectileManager.destroyProjectile(proj.id);
+          return true;
         }
-      }
 
-      if (projectileConsumed) continue;
-
-      for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-        if (proj.ownerId === enemy.id) continue;
-
-        if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemy.sprite.getBounds())) {
-          const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
-            ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
-            : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
-          const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
-          const actualDamage = proj.damage * loadoutMult * powerUpMult;
-
-          if (proj.isBfg || proj.projectileStyle === 'gauss') {
-            if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-            const enemyKey = `enemy_${enemy.id}`;
-            if (proj.projectileStyle === 'gauss') {
-              if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
-              if (proj.gaussHitPlayers.has(enemyKey)) continue;
-              proj.gaussHitPlayers.add(enemyKey);
-            } else {
-              if (proj.bfgHitPlayers.has(enemyKey)) continue;
-              proj.bfgHitPlayers.add(enemyKey);
-            }
-            this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, {
-              sourceX: proj.sprite.x,
-              sourceY: proj.sprite.y,
-              dirX: proj.body.velocity.x,
-              dirY: proj.body.velocity.y,
-            }, {
-              allowTeamDamage: proj.allowTeamDamage,
-            });
-            continue;
+        if (proj.isBfg || proj.projectileStyle === 'gauss') {
+          // Piercing-Projektile: Spieler nur 1x treffen, Projektil fliegt weiter.
+          if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
+          if (proj.projectileStyle === 'gauss') {
+            if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
+            if (proj.gaussHitPlayers.has(player.id)) continue;
+            proj.gaussHitPlayers.add(player.id);
+          } else {
+            if (proj.bfgHitPlayers.has(player.id)) continue;
+            proj.bfgHitPlayers.add(player.id);
           }
-
-          if (proj.isFlame) {
-            this.applyBurnStack(
-              enemy.id,
-              proj.ownerId,
-              proj.burnDurationMs ?? 0,
-              proj.burnDamagePerTick ?? 0,
-              proj.burnTickIntervalMs ?? 0,
-              proj.weaponName,
-            );
-          }
-
-          this.handleEnemyHit(proj.id, enemy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
-          projectileConsumed = true;
-          break;
+          this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, {
+            sourceX: proj.sprite.x,
+            sourceY: proj.sprite.y,
+            dirX: proj.body.velocity.x,
+            dirY: proj.body.velocity.y,
+          }, {
+            allowTeamDamage: proj.allowTeamDamage,
+          });
+          continue; // kein break, kein destroyProjectile
         }
-      }
 
-      if (projectileConsumed) continue;
-
-      for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
-        if (proj.ownerId === decoy.ownerId) continue;
-
-        if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, decoy.sprite.getBounds())) {
-          const loadoutMult  = proj.sourceSlot === 'weapon1' || proj.sourceSlot === 'weapon2'
-            ? (this.loadoutManager?.getWeaponDamageMultiplier(proj.ownerId, proj.sourceSlot, Date.now()) ?? 1)
-            : (this.loadoutManager?.getDamageMultiplier(proj.ownerId) ?? 1);
-          const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(proj.ownerId) ?? 1;
-          const actualDamage = proj.damage * loadoutMult * powerUpMult;
-          const decoyKey = `decoy_${decoy.id}`;
-
-          if (proj.isBfg || proj.projectileStyle === 'gauss') {
-            if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-            if (proj.projectileStyle === 'gauss') {
-              if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
-              if (proj.gaussHitPlayers.has(decoyKey)) continue;
-              proj.gaussHitPlayers.add(decoyKey);
-            } else {
-              if (proj.bfgHitPlayers.has(decoyKey)) continue;
-              proj.bfgHitPlayers.add(decoyKey);
-            }
-
-            const hit = this.decoySystem?.applyDamage(decoy.id, actualDamage, proj.ownerId, proj.weaponName, {
-              sourceX: proj.sprite.x,
-              sourceY: proj.sprite.y,
-              dirX: proj.body.velocity.x,
-              dirY: proj.body.velocity.y,
-            }) ?? false;
-            if (hit && proj.adrenalinGain > 0) {
-              this.resourceSystem?.addAdrenaline(proj.ownerId, proj.adrenalinGain);
-            }
-            continue;
-          }
-
-          this.handleDecoyHit(proj.id, decoy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
-          projectileConsumed = true;
-          break;
+        if (proj.isFlame && canDealDamage) {
+          this.applyBurnStack(
+            player.id,
+            proj.ownerId,
+            proj.burnDurationMs ?? 0,
+            proj.burnDamagePerTick ?? 0,
+            proj.burnTickIntervalMs ?? 0,
+            proj.weaponName,
+          );
         }
+
+        this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName, canDealDamage);
+        return true;  // Projektil trifft maximal einen Spieler pro Frame
       }
     }
+    return false;
+  }
+
+  /** AABB-Treffer gegen Gegner (Coop-Defense). Liefert true, wenn das Projektil verbraucht ist. */
+  private resolveProjectileEnemyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle): boolean {
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (proj.ownerId === enemy.id) continue;
+
+      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemy.sprite.getBounds())) {
+        const actualDamage = this.computeProjectileDamage(proj);
+
+        if (proj.isBfg || proj.projectileStyle === 'gauss') {
+          if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
+          const enemyKey = `enemy_${enemy.id}`;
+          if (proj.projectileStyle === 'gauss') {
+            if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
+            if (proj.gaussHitPlayers.has(enemyKey)) continue;
+            proj.gaussHitPlayers.add(enemyKey);
+          } else {
+            if (proj.bfgHitPlayers.has(enemyKey)) continue;
+            proj.bfgHitPlayers.add(enemyKey);
+          }
+          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, {
+            sourceX: proj.sprite.x,
+            sourceY: proj.sprite.y,
+            dirX: proj.body.velocity.x,
+            dirY: proj.body.velocity.y,
+          }, {
+            allowTeamDamage: proj.allowTeamDamage,
+          });
+          continue;
+        }
+
+        if (proj.isFlame) {
+          this.applyBurnStack(
+            enemy.id,
+            proj.ownerId,
+            proj.burnDurationMs ?? 0,
+            proj.burnDamagePerTick ?? 0,
+            proj.burnTickIntervalMs ?? 0,
+            proj.weaponName,
+          );
+        }
+
+        this.handleEnemyHit(proj.id, enemy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** AABB-Treffer gegen Decoys. Liefert true, wenn das Projektil verbraucht ist. */
+  private resolveProjectileDecoyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle): boolean {
+    for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+      if (proj.ownerId === decoy.ownerId) continue;
+
+      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, decoy.sprite.getBounds())) {
+        const actualDamage = this.computeProjectileDamage(proj);
+        const decoyKey = `decoy_${decoy.id}`;
+
+        if (proj.isBfg || proj.projectileStyle === 'gauss') {
+          if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
+          if (proj.projectileStyle === 'gauss') {
+            if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
+            if (proj.gaussHitPlayers.has(decoyKey)) continue;
+            proj.gaussHitPlayers.add(decoyKey);
+          } else {
+            if (proj.bfgHitPlayers.has(decoyKey)) continue;
+            proj.bfgHitPlayers.add(decoyKey);
+          }
+
+          const hit = this.decoySystem?.applyDamage(decoy.id, actualDamage, proj.ownerId, proj.weaponName, {
+            sourceX: proj.sprite.x,
+            sourceY: proj.sprite.y,
+            dirX: proj.body.velocity.x,
+            dirY: proj.body.velocity.y,
+          }) ?? false;
+          if (hit && proj.adrenalinGain > 0) {
+            this.resourceSystem?.addAdrenaline(proj.ownerId, proj.adrenalinGain);
+          }
+          continue;
+        }
+
+        this.handleDecoyHit(proj.id, decoy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
+        return true;
+      }
+    }
+    return false;
   }
 
   private shouldUseContinuousProjectileCollision(proj: TrackedProjectile): boolean {
@@ -1584,9 +1591,8 @@ export class CombatSystem {
   private findNearestRectangleHit(
     line: Phaser.Geom.Line,
     rect: Phaser.Geom.Rectangle,
-  ): { distance: number; x: number; y: number } | null {
-    const points = Phaser.Geom.Intersects.GetLineToRectangle(line, rect, this.scratchPoints);
-    return this.pickNearestIntersection(line, points);
+  ): GeometryHit | null {
+    return geomNearestRectangleHit(line, rect, this.scratchPoints);
   }
 
   private findNearestCircleHit(
@@ -1594,28 +1600,8 @@ export class CombatSystem {
     centerX: number,
     centerY: number,
     radius: number,
-  ): { distance: number; x: number; y: number } | null {
-    this.scratchCircle.setTo(centerX, centerY, radius);
-    const points = Phaser.Geom.Intersects.GetLineToCircle(line, this.scratchCircle, this.scratchPoints);
-    return this.pickNearestIntersection(line, points);
-  }
-
-  private pickNearestIntersection(
-    line: Phaser.Geom.Line,
-    points: Phaser.Types.Math.Vector2Like[],
-  ): { distance: number; x: number; y: number } | null {
-    let bestHit: { distance: number; x: number; y: number } | null = null;
-
-    for (const point of points) {
-      const distance = Phaser.Math.Distance.Between(line.x1, line.y1, point.x, point.y);
-      if (distance <= 0.01) continue;
-      if (!bestHit || distance < bestHit.distance) {
-        bestHit = { distance, x: point.x, y: point.y };
-      }
-    }
-
-    points.length = 0;
-    return bestHit;
+  ): GeometryHit | null {
+    return geomNearestCircleHit(line, centerX, centerY, radius, this.scratchCircle, this.scratchPoints);
   }
 
   private nextEffectSeed(): number {

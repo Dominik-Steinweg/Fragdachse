@@ -1,8 +1,11 @@
 import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
-import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, HomingTargetType, EnergyBallVariant, ProjectileStyle } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle } from '../types';
+import { ProjectileHomingController } from './ProjectileHomingController';
+import type { HomingTargetCandidate } from './ProjectileHomingController';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import { type GeometryHit, findNearestRectangleHit as geomNearestRectangleHit } from '../utils/geometry';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
 import type { LeafBlowerRenderer } from '../effects/LeafBlowerRenderer';
@@ -41,15 +44,6 @@ interface ClientProjectileState {
   isDecaying: boolean;
   velocityDecay: number;
 }
-
-interface HomingTargetCandidate {
-  id: string;
-  type: HomingTargetType;
-  x: number;
-  y: number;
-}
-
-const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 
 function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset): BulletVisualPreset {
   if (preset) return preset;
@@ -117,8 +111,7 @@ export class ProjectileManager {
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
 
   // ── Homing-Zielsuche (Host-only, injiziert von ArenaScene) ──────────────
-  private homingTargetProvider: ((config: ProjectileHomingConfig, ownerId: string) => HomingTargetCandidate[]) | null = null;
-  private homingLineOfSightChecker: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null = null;
+  private readonly homingController = new ProjectileHomingController();
 
   // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
   private pendingProjectileExplosions: ExplodedProjectile[] = [];
@@ -293,12 +286,12 @@ export class ProjectileManager {
 
   /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
   setHomingTargetProvider(cb: ((config: ProjectileHomingConfig, ownerId: string) => HomingTargetCandidate[]) | null): void {
-    this.homingTargetProvider = cb;
+    this.homingController.setTargetProvider(cb);
   }
 
   /** Registriert die Host-seitige Line-of-Sight-Prüfung für Homing-Projektile. */
   setHomingLineOfSightChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
-    this.homingLineOfSightChecker = cb;
+    this.homingController.setLineOfSightChecker(cb);
   }
 
   // ── Host ──────────────────────────────────────────────────────────────────
@@ -308,37 +301,21 @@ export class ProjectileManager {
    * Granaten (isGrenade=true) haben keine Welt-/Hindernis-Kollision
    * und explodieren nach fuseTime ms.
    */
-  spawnProjectile(
-    x:       number,
-    y:       number,
-    angle:   number,
-    ownerId: string,
-    cfg:     ProjectileSpawnConfig,
-  ): number {
-    const id = this.nextId++;
+  /**
+   * Erstellt – abhängig vom Projektilstil – das spezialisierte Renderer-Visual und blendet
+   * den reinen Kollisions-Sprite aus (Rendering übernimmt der jeweilige Renderer auf Client/Host).
+   * Stile ohne Renderer (z. B. 'ball') behalten den sichtbaren Sprite.
+   */
+  private createSpawnRendererVisuals(
+    id: number,
+    sprite: Phaser.GameObjects.Shape,
+    x: number,
+    y: number,
+    cfg: ProjectileSpawnConfig,
+  ): void {
+    const style = cfg.projectileStyle;
 
-    const isBall   = cfg.projectileStyle === 'ball';
-    const isEnergyBall = cfg.projectileStyle === 'energy_ball';
-    const isHydra = cfg.projectileStyle === 'hydra';
-    const isSpore = cfg.projectileStyle === 'spore';
-    const isBullet = cfg.projectileStyle === 'bullet';
-    const isFlame  = cfg.projectileStyle === 'flame';
-    const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
-    const isBfg    = cfg.projectileStyle === 'bfg';
-    const isAwp    = cfg.projectileStyle === 'awp';
-    const isGauss  = cfg.projectileStyle === 'gauss';
-    const isGrenadeVisual = cfg.projectileStyle === 'grenade';
-    const isHolyGrenade = cfg.projectileStyle === 'holy_grenade';
-    const isRocket = cfg.projectileStyle === 'rocket';
-    const isTranslocatorPuck = cfg.projectileStyle === 'translocator_puck';
-
-    // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
-    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isHydra || isSpore)
-      ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
-      : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
-    sprite.setDepth(DEPTH.PROJECTILES);
-
-    if (isBullet && this.bulletRenderer) {
+    if (style === 'bullet' && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.bulletRenderer.createVisual(
@@ -353,7 +330,7 @@ export class ProjectileManager {
     }
 
     // AWP-Projektile sind unsichtbar (Rendering übernimmt BulletRenderer mit AWP-Stil)
-    if ((isAwp || isGauss) && this.bulletRenderer) {
+    if ((style === 'awp' || style === 'gauss') && this.bulletRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.bulletRenderer.createVisual(
@@ -367,11 +344,11 @@ export class ProjectileManager {
       );
     }
 
-    if (isGauss && this.gaussRenderer) {
+    if (style === 'gauss' && this.gaussRenderer) {
       this.gaussRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
-    if (isRocket && this.rocketRenderer) {
+    if (style === 'rocket' && this.rocketRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.rocketRenderer.createVisual(
@@ -386,53 +363,82 @@ export class ProjectileManager {
       );
     }
 
-    if (isSpore && this.sporeRenderer) {
+    if (style === 'spore' && this.sporeRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.sporeRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
-    if (isEnergyBall && this.energyBallRenderer) {
+    if (style === 'energy_ball' && this.energyBallRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.energyBallRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.energyBallVariant);
     }
 
-    if (isHydra && this.hydraRenderer) {
+    if (style === 'hydra' && this.hydraRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.hydraRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
 
-    if (isGrenadeVisual && this.grenadeRenderer) {
+    if (style === 'grenade' && this.grenadeRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.grenadeRenderer.createVisual(id, x, y, cfg.size, cfg.grenadeVisualPreset ?? 'he', cfg.ownerColor ?? cfg.color);
     }
 
-    if (isHolyGrenade && this.holyGrenadeRenderer) {
+    if (style === 'holy_grenade' && this.holyGrenadeRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.holyGrenadeRenderer.createVisual(id, x, y, cfg.size);
     }
 
-    if (isTranslocatorPuck && this.translocatorPuckRenderer) {
+    if (style === 'translocator_puck' && this.translocatorPuckRenderer) {
       sprite.setVisible(false);
       sprite.setAlpha(0);
       this.translocatorPuckRenderer.createVisual(id, x, y, cfg.ownerColor ?? cfg.color);
     }
 
     // Flame-Hitboxen sind unsichtbar (Rendering übernimmt FlameRenderer auf Client)
-    if (isFlame || isLeafBlower) {
+    if (style === 'flame' || style === 'leaf_blower') {
       sprite.setVisible(false);
       sprite.setAlpha(0);
     }
 
     // BFG-Projektile sind unsichtbar (Rendering übernimmt BfgRenderer)
-    if (isBfg) {
+    if (style === 'bfg') {
       sprite.setVisible(false);
       sprite.setAlpha(0);
     }
+  }
+
+  spawnProjectile(
+    x:       number,
+    y:       number,
+    angle:   number,
+    ownerId: string,
+    cfg:     ProjectileSpawnConfig,
+  ): number {
+    const id = this.nextId++;
+
+    // Style-Flags, die im weiteren Spawn-Ablauf (Shape, Anti-Tunneling, Body-Größe) gebraucht werden.
+    // Die renderer- und collider-spezifische Style-Auswertung passiert in den jeweiligen Helfern.
+    const isBall   = cfg.projectileStyle === 'ball';
+    const isEnergyBall = cfg.projectileStyle === 'energy_ball';
+    const isHydra = cfg.projectileStyle === 'hydra';
+    const isSpore = cfg.projectileStyle === 'spore';
+    const isFlame  = cfg.projectileStyle === 'flame';
+    const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
+    const isBfg    = cfg.projectileStyle === 'bfg';
+    const isGauss  = cfg.projectileStyle === 'gauss';
+
+    // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
+    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isHydra || isSpore)
+      ? this.scene.add.circle(x, y, cfg.size / 2, cfg.color)
+      : this.scene.add.rectangle(x, y, cfg.size, cfg.size, cfg.color);
+    sprite.setDepth(DEPTH.PROJECTILES);
+
+    this.createSpawnRendererVisuals(id, sprite, x, y, cfg);
 
     this.scene.physics.add.existing(sprite);
 
@@ -557,6 +563,51 @@ export class ProjectileManager {
         body.setDrag(1, 1);
       }
     }
+
+    this.setupProjectileColliders(id, x, y, sprite, body, tracked, cfg);
+
+    // Tracer-Leuchtlinie (optional, data-driven via tracerConfig)
+    if (cfg.tracerConfig && this.tracerRenderer) {
+      this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.ownerColor ?? cfg.color);
+    }
+
+    if (!cfg.suppressSpawnFx) {
+      const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
+      this.muzzleFlashRenderer?.playProjectileFlash(
+        muzzleOrigin.x,
+        muzzleOrigin.y,
+        Math.cos(angle) * cfg.speed,
+        Math.sin(angle) * cfg.speed,
+        cfg.projectileStyle,
+        cfg.bulletVisualPreset,
+        cfg.energyBallVariant,
+        cfg.ownerColor ?? cfg.color,
+      );
+      this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
+    }
+
+    this.projectiles.push(tracked);
+    return id;
+  }
+
+  /**
+   * Richtet je nach Projektiltyp die Welt-Bounds-/Hindernis-Collider ein:
+   * BFG/Gauss durchdringen (Overlap-Schaden), Impact-Cloud/Explosion zerstören bei Kontakt,
+   * Flamme/Leaf-Blower stoppen, normale Projektile abprallen, Granaten ohne Bounce bleiben liegen.
+   */
+  private setupProjectileColliders(
+    id: number,
+    x: number,
+    y: number,
+    sprite: Phaser.GameObjects.Shape,
+    body: Phaser.Physics.Arcade.Body,
+    tracked: TrackedProjectile,
+    cfg: ProjectileSpawnConfig,
+  ): void {
+    const isBfg = cfg.projectileStyle === 'bfg';
+    const isGauss = cfg.projectileStyle === 'gauss';
+    const isFlame = cfg.projectileStyle === 'flame';
+    const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
 
     if (isBfg || isGauss) {
       // BFG: Welt-Bounds zerstören das Projektil; Felsen/Zug werden per Overlap beschädigt,
@@ -762,29 +813,6 @@ export class ProjectileManager {
         tracked.colliders.push(c);
       }
     }
-
-    // Tracer-Leuchtlinie (optional, data-driven via tracerConfig)
-    if (cfg.tracerConfig && this.tracerRenderer) {
-      this.tracerRenderer.createTracer(id, x, y, cfg.tracerConfig, cfg.ownerColor ?? cfg.color);
-    }
-
-    if (!cfg.suppressSpawnFx) {
-      const muzzleOrigin = getTopDownMuzzleOrigin(x, y, angle);
-      this.muzzleFlashRenderer?.playProjectileFlash(
-        muzzleOrigin.x,
-        muzzleOrigin.y,
-        Math.cos(angle) * cfg.speed,
-        Math.sin(angle) * cfg.speed,
-        cfg.projectileStyle,
-        cfg.bulletVisualPreset,
-        cfg.energyBallVariant,
-        cfg.ownerColor ?? cfg.color,
-      );
-      this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
-    }
-
-    this.projectiles.push(tracked);
-    return id;
   }
 
   /**
@@ -1256,20 +1284,8 @@ export class ProjectileManager {
   private findNearestRectangleHit(
     line: Phaser.Geom.Line,
     rect: Phaser.Geom.Rectangle,
-  ): { distance: number; x: number; y: number } | null {
-    const points = Phaser.Geom.Intersects.GetLineToRectangle(line, rect, this.scratchPoints);
-    let bestHit: { distance: number; x: number; y: number } | null = null;
-
-    for (const point of points) {
-      const distance = Phaser.Math.Distance.Between(line.x1, line.y1, point.x, point.y);
-      if (distance <= 0.01) continue;
-      if (!bestHit || distance < bestHit.distance) {
-        bestHit = { distance, x: point.x, y: point.y };
-      }
-    }
-
-    points.length = 0;
-    return bestHit;
+  ): GeometryHit | null {
+    return geomNearestRectangleHit(line, rect, this.scratchPoints);
   }
 
   private getProjectileBodyCenter(proj: TrackedProjectile): { x: number; y: number } {
@@ -1520,97 +1536,6 @@ export class ProjectileManager {
     this.syncTimeBubbleDrag(proj);
   }
 
-  private updateHomingProjectile(proj: TrackedProjectile, simulatedAgeMs: number): void {
-    const homing = proj.homing;
-    if (!homing || !this.homingTargetProvider) return;
-    if (simulatedAgeMs < homing.acquireDelayMs) return;
-
-    const lastSearchAt = proj.lastHomingSearchAt ?? 0;
-    if (lastSearchAt > 0 && simulatedAgeMs - lastSearchAt < homing.retargetIntervalMs) return;
-    proj.lastHomingSearchAt = simulatedAgeMs;
-
-    const target = this.selectHomingTarget(proj, homing);
-    if (!target) {
-      proj.lockedTargetId = null;
-      proj.lockedTargetType = undefined;
-      return;
-    }
-
-    proj.lockedTargetId = target.id;
-    proj.lockedTargetType = target.type;
-
-    const currentSpeed = proj.body.velocity.length();
-    if (currentSpeed <= 0.001) return;
-
-    const currentAngle = Math.atan2(proj.body.velocity.y, proj.body.velocity.x);
-    const targetAngle = Phaser.Math.Angle.Between(proj.sprite.x, proj.sprite.y, target.x, target.y);
-    const maxTurn = Phaser.Math.DegToRad(homing.maxTurnDegreesPerStep);
-    const angleDelta = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
-    const nextAngle = currentAngle + Phaser.Math.Clamp(angleDelta, -maxTurn, maxTurn);
-
-    proj.body.setVelocity(
-      Math.cos(nextAngle) * currentSpeed,
-      Math.sin(nextAngle) * currentSpeed,
-    );
-  }
-
-  private selectHomingTarget(proj: TrackedProjectile, homing: ProjectileHomingConfig): HomingTargetCandidate | null {
-    if (!this.homingTargetProvider) return null;
-
-    const targetTypes = homing.targetTypes ?? DEFAULT_HOMING_TARGET_TYPES;
-    const requireLineOfSight = homing.requireLineOfSight === true;
-    const excludeOwner = homing.excludeOwner !== false;
-    const searchRadius = Math.max(1, homing.searchRadius);
-    const distanceWeight = Math.max(0, homing.distanceWeight ?? 1);
-    const forwardWeight = Math.max(0, homing.forwardWeight ?? 1);
-    const velocity = proj.body.velocity;
-    const speed = velocity.length();
-    const dirX = speed > 0.001 ? velocity.x / speed : 0;
-    const dirY = speed > 0.001 ? velocity.y / speed : 0;
-
-    const candidates = this.homingTargetProvider(homing, proj.ownerId).filter(candidate => {
-      if (!targetTypes.includes(candidate.type)) return false;
-      if (excludeOwner && candidate.id === proj.ownerId) return false;
-
-      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
-      if (distance > searchRadius) return false;
-      if (requireLineOfSight && this.homingLineOfSightChecker) {
-        return this.homingLineOfSightChecker(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
-      }
-      return true;
-    });
-
-    if (candidates.length === 0) return null;
-
-    if (proj.lockedTargetId) {
-      const locked = candidates.find(candidate => candidate.id === proj.lockedTargetId && candidate.type === proj.lockedTargetType);
-      if (locked) return locked;
-    }
-
-    let bestTarget: HomingTargetCandidate | null = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    for (const candidate of candidates) {
-      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
-      const distanceScore = 1 - Phaser.Math.Clamp(distance / searchRadius, 0, 1);
-      let forwardScore = 0.5;
-
-      if (speed > 0.001) {
-        const toTargetX = (candidate.x - proj.sprite.x) / distance;
-        const toTargetY = (candidate.y - proj.sprite.y) / distance;
-        forwardScore = Phaser.Math.Clamp((dirX * toTargetX + dirY * toTargetY + 1) * 0.5, 0, 1);
-      }
-
-      const score = distanceScore * distanceWeight + forwardScore * forwardWeight;
-      if (score > bestScore) {
-        bestScore = score;
-        bestTarget = candidate;
-      }
-    }
-
-    return bestTarget;
-  }
-
   /**
    * Host: Snapshot der aktiven Projektile (für Kollisionserkennung im CombatSystem).
    */
@@ -1722,9 +1647,29 @@ export class ProjectileManager {
     const explodedProjectiles = this.pendingProjectileExplosions.splice(0);
     const explodedGrenades: ExplodedGrenade[] = [];
     const countdownEvents: Array<{ x: number; y: number; value: number }> = [];
-    const renderer         = this.bulletRenderer;
+    this.projectiles = this.projectiles.filter(proj =>
+      this.stepProjectile(proj, deltaMs, now, explodedProjectiles, explodedGrenades, countdownEvents),
+    );
 
-    this.projectiles = this.projectiles.filter(proj => {
+    this.syncHostRenderers();
+
+    const synced = this.buildHostSyncSnapshot();
+    return { synced, explodedProjectiles, explodedGrenades, countdownEvents };
+  }
+
+  /**
+   * Pro-Projektil-Schritt im Host-Update: Time-Bubble, Physik/Air-Friction, Lifetime,
+   * Grenade- und Spezial-Logik (Flame/BFG/Homing). Liefert `false`, wenn das Projektil
+   * aus der aktiven Liste entfernt werden soll.
+   */
+  private stepProjectile(
+    proj: TrackedProjectile,
+    deltaMs: number,
+    now: number,
+    explodedProjectiles: ExplodedProjectile[],
+    explodedGrenades: ExplodedGrenade[],
+    countdownEvents: Array<{ x: number; y: number; value: number }>,
+  ): boolean {
       if (proj.pendingDestroy) {
         this.destroyTrackedProjectile(proj);
         return false;
@@ -1835,7 +1780,7 @@ export class ProjectileManager {
             this.bfgLaserCallback?.(proj);
           }
         } else if (proj.homing) {
-          this.updateHomingProjectile(proj, simulatedAge);
+          this.homingController.update(proj, simulatedAge);
         }
 
         // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
@@ -1878,8 +1823,11 @@ export class ProjectileManager {
 
         return !dead;
       }
-    });
+  }
 
+  /** Host: alle Projektil-Renderer an die Physik-Bodies synchronisieren und verwaiste Visuals entfernen. */
+  private syncHostRenderers(): void {
+    const renderer = this.bulletRenderer;
     // BulletRenderer-Visuals an Physik-Body synchronisieren (Bullet + AWP)
     if (renderer) {
       for (const proj of this.projectiles) {
@@ -2170,8 +2118,11 @@ export class ProjectileManager {
         if (!activeTracerIds.has(id)) tracerR.destroyTracer(id);
       }
     }
+  }
 
-    const synced: SyncedProjectile[] = this.projectiles.map(p => ({
+  /** Host: Netzwerk-Snapshot aller aktiven Projektile bauen. */
+  private buildHostSyncSnapshot(): SyncedProjectile[] {
+    return this.projectiles.map(p => ({
       id:     p.id,
       ownerId: p.ownerId,
       x:      Math.round(p.sprite.x),
@@ -2193,8 +2144,6 @@ export class ProjectileManager {
       shotAudioKey: p.shotAudioKey,
       suppressSpawnFx: p.suppressSpawnFx,
     }));
-
-    return { synced, explodedProjectiles, explodedGrenades, countdownEvents };
   }
 
   // ── Client ────────────────────────────────────────────────────────────────
@@ -2216,137 +2165,10 @@ export class ProjectileManager {
     const grenades = this.grenadeRenderer;
     const holyGrenades = this.holyGrenadeRenderer;
     const tlPucks = this.translocatorPuckRenderer;
-    const incomingHydras = data.filter((proj) => proj.style === 'hydra');
-    const newIncomingHydraIds = new Set(
-      incomingHydras
-        .filter((proj) => !this.clientProjStates.has(proj.id))
-        .map((proj) => proj.id),
-    );
-
-    // Verwaiste Visuals und States entfernen
-    for (const [id, sprite] of this.clientVisuals) {
-      if (!activeIds.has(id)) {
-        sprite.destroy();
-        this.clientVisuals.delete(id);
-        this.clientProjStates.delete(id);
-      }
-    }
-    if (renderer) {
-      for (const id of renderer.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          renderer.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (flames) {
-      for (const id of flames.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          flames.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (leafBlowers) {
-      for (const id of leafBlowers.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          leafBlowers.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (rockets) {
-      for (const id of rockets.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          rockets.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (spores) {
-      for (const id of spores.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          const state = this.clientProjStates.get(id);
-          if (state?.style === 'spore') {
-            spores.playImpact(state.serverX, state.serverY, state.color, Math.max(state.size / 16, 0.9));
-          }
-          spores.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (energyBalls) {
-      for (const id of energyBalls.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          const state = this.clientProjStates.get(id);
-          if (state?.style === 'energy_ball') {
-            energyBalls.playImpact(state.serverX, state.serverY, state.color, state.energyBallVariant, state.size / 16);
-          }
-          energyBalls.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (hydras) {
-      for (const id of hydras.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          const state = this.clientProjStates.get(id);
-          if (state?.style === 'hydra') {
-            const splitChildren = incomingHydras
-              .filter((proj) => newIncomingHydraIds.has(proj.id) && proj.suppressSpawnFx)
-              .filter((proj) => proj.color === state.color)
-              .filter((proj) => Phaser.Math.Distance.Between(state.serverX, state.serverY, proj.x, proj.y) <= Math.max(state.size * 1.5, 22))
-              .map((proj) => Math.atan2(proj.vy, proj.vx));
-            if (splitChildren.length > 0) {
-              hydras.playSplitImpact(state.serverX, state.serverY, state.color, splitChildren, Math.max(state.size / 16, 0.95));
-            } else {
-              hydras.playImpact(state.serverX, state.serverY, state.color, Math.max(state.size / 16, 0.95));
-            }
-          }
-          hydras.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (grenades) {
-      for (const id of grenades.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          grenades.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (holyGrenades) {
-      for (const id of holyGrenades.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          holyGrenades.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
-    if (tlPucks) {
-      for (const id of tlPucks.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          tlPucks.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
     const bfgR = this.bfgRenderer;
-    if (bfgR) {
-      for (const id of bfgR.getActiveIds()) {
-        if (!activeIds.has(id)) {
-          bfgR.destroyVisual(id);
-          this.clientProjStates.delete(id);
-        }
-      }
-    }
     const tracerRc = this.tracerRenderer;
-    if (tracerRc) {
-      for (const id of tracerRc.getActiveIds()) {
-        if (!activeIds.has(id)) tracerRc.destroyTracer(id);
-      }
-    }
+
+    this.cleanupOrphanedClientVisuals(data, activeIds);
 
     // Server-State aktualisieren und neue Visuals erstellen
     for (const proj of data) {
@@ -2516,6 +2338,154 @@ export class ProjectileManager {
           tracerRc.createTracer(proj.id, proj.x, proj.y, proj.tracer, proj.ownerColor ?? proj.color);
         }
         tracerRc.updateTracer(proj.id, proj.x, proj.y, proj.vx, proj.vy);
+      }
+    }
+  }
+
+  /**
+   * Client: entfernt Visuals + Extrapolations-States für Projektile, die im neuen Server-Snapshot
+   * nicht mehr enthalten sind. Spielt dabei (wo vorhanden) Impact-Effekte ab – für Hydra inkl.
+   * Split-Erkennung anhand neu eingetroffener, unterdrückter Kind-Projektile gleicher Farbe/Nähe.
+   */
+  private cleanupOrphanedClientVisuals(data: SyncedProjectile[], activeIds: Set<number>): void {
+    const renderer  = this.bulletRenderer;
+    const flames    = this.flameRenderer;
+    const leafBlowers = this.leafBlowerRenderer;
+    const rockets   = this.rocketRenderer;
+    const spores = this.sporeRenderer;
+    const energyBalls = this.energyBallRenderer;
+    const hydras = this.hydraRenderer;
+    const grenades = this.grenadeRenderer;
+    const holyGrenades = this.holyGrenadeRenderer;
+    const tlPucks = this.translocatorPuckRenderer;
+    const bfgR = this.bfgRenderer;
+    const tracerRc = this.tracerRenderer;
+    const incomingHydras = data.filter((proj) => proj.style === 'hydra');
+    const newIncomingHydraIds = new Set(
+      incomingHydras
+        .filter((proj) => !this.clientProjStates.has(proj.id))
+        .map((proj) => proj.id),
+    );
+
+    for (const [id, sprite] of this.clientVisuals) {
+      if (!activeIds.has(id)) {
+        sprite.destroy();
+        this.clientVisuals.delete(id);
+        this.clientProjStates.delete(id);
+      }
+    }
+    if (renderer) {
+      for (const id of renderer.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          renderer.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (flames) {
+      for (const id of flames.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          flames.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (leafBlowers) {
+      for (const id of leafBlowers.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          leafBlowers.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (rockets) {
+      for (const id of rockets.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          rockets.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (spores) {
+      for (const id of spores.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          const state = this.clientProjStates.get(id);
+          if (state?.style === 'spore') {
+            spores.playImpact(state.serverX, state.serverY, state.color, Math.max(state.size / 16, 0.9));
+          }
+          spores.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (energyBalls) {
+      for (const id of energyBalls.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          const state = this.clientProjStates.get(id);
+          if (state?.style === 'energy_ball') {
+            energyBalls.playImpact(state.serverX, state.serverY, state.color, state.energyBallVariant, state.size / 16);
+          }
+          energyBalls.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (hydras) {
+      for (const id of hydras.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          const state = this.clientProjStates.get(id);
+          if (state?.style === 'hydra') {
+            const splitChildren = incomingHydras
+              .filter((proj) => newIncomingHydraIds.has(proj.id) && proj.suppressSpawnFx)
+              .filter((proj) => proj.color === state.color)
+              .filter((proj) => Phaser.Math.Distance.Between(state.serverX, state.serverY, proj.x, proj.y) <= Math.max(state.size * 1.5, 22))
+              .map((proj) => Math.atan2(proj.vy, proj.vx));
+            if (splitChildren.length > 0) {
+              hydras.playSplitImpact(state.serverX, state.serverY, state.color, splitChildren, Math.max(state.size / 16, 0.95));
+            } else {
+              hydras.playImpact(state.serverX, state.serverY, state.color, Math.max(state.size / 16, 0.95));
+            }
+          }
+          hydras.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (grenades) {
+      for (const id of grenades.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          grenades.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (holyGrenades) {
+      for (const id of holyGrenades.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          holyGrenades.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (tlPucks) {
+      for (const id of tlPucks.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          tlPucks.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (bfgR) {
+      for (const id of bfgR.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          bfgR.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (tracerRc) {
+      for (const id of tracerRc.getActiveIds()) {
+        if (!activeIds.has(id)) tracerRc.destroyTracer(id);
       }
     }
   }
