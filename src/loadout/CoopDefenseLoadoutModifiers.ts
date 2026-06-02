@@ -83,30 +83,35 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'ASMD_PRIM',
     targets: [{ path: ['cooldown'], operation: 'scale' }],
   },
+  'weapon.ASMD_PRIM.damage': {
+    kind: 'weapon',
+    itemId: 'ASMD_PRIM',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
   'weapon.BITE.range': {
     kind: 'weapon',
     itemId: 'BITE',
     targets: [{ path: ['range'], operation: 'scale' }],
   },
-  'weapon.BITE.hitArcDegrees': {
+  'weapon.BITE.damage': {
     kind: 'weapon',
     itemId: 'BITE',
-    targets: [{ path: ['fire', 'hitArcDegrees'], operation: 'scale' }],
+    targets: [{ path: ['damage'], operation: 'scale' }],
   },
   'weapon.HYDRA.splitCount': {
     kind: 'weapon',
     itemId: 'HYDRA',
     targets: [{ path: ['splitCount'], operation: 'add' }],
   },
-  'weapon.HYDRA.projectileSpeed': {
+  'weapon.HYDRA.range': {
     kind: 'weapon',
     itemId: 'HYDRA',
-    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+    targets: [{ path: ['range'], operation: 'scale' }],
   },
-  'weapon.XBOW.pelletCount': {
+  'weapon.XBOW.range': {
     kind: 'weapon',
     itemId: 'XBOW',
-    targets: [{ path: ['pelletCount'], operation: 'add' }],
+    targets: [{ path: ['range'], operation: 'scale' }],
   },
   'weapon.XBOW.projectileSpeed': {
     kind: 'weapon',
@@ -138,6 +143,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
       { path: ['maxDynamicSpread'], operation: 'scale' },
     ],
   },
+  'weapon.P90.damage': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
+  'weapon.P90.adrenalinCost': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+  },
   'weapon.ROCKET_LAUNCHER.impactExplosion.radius': {
     kind: 'weapon',
     itemId: 'ROCKET_LAUNCHER',
@@ -163,6 +178,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
       { path: ['maxDynamicSpread'], operation: 'scale' },
     ],
   },
+  'weapon.AK47.damage': {
+    kind: 'weapon',
+    itemId: 'AK47',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
+  'weapon.AK47.adrenalinCost': {
+    kind: 'weapon',
+    itemId: 'AK47',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+  },
   'weapon.SHOTGUN.pelletCount': {
     kind: 'weapon',
     itemId: 'SHOTGUN',
@@ -183,6 +208,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'ASMD_SEC',
     targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
   },
+  'weapon.ASMD_SEC.damage': {
+    kind: 'weapon',
+    itemId: 'ASMD_SEC',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
   'weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius': {
     kind: 'weapon',
     itemId: 'MINI_ROCKET_LAUNCHER',
@@ -193,20 +223,25 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'MINI_ROCKET_LAUNCHER',
     targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], operation: 'scale' }],
   },
+  'weapon.MINI_ROCKET_LAUNCHER.adrenalinCost': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+  },
   'weapon.AWP.cooldown': {
     kind: 'weapon',
     itemId: 'AWP',
     targets: [{ path: ['cooldown'], operation: 'scale' }],
   },
-  'weapon.AWP.spread': {
+  'weapon.AWP.aimDuration': {
     kind: 'weapon',
     itemId: 'AWP',
-    targets: [
-      { path: ['spreadStanding'], operation: 'scale' },
-      { path: ['spreadMoving'], operation: 'scale' },
-      { path: ['spreadPerShot'], operation: 'scale' },
-      { path: ['maxDynamicSpread'], operation: 'scale' },
-    ],
+    targets: [{ path: ['scopeConfig', 'scopeInMs'], operation: 'scale' }],
+  },
+  'weapon.AWP.adrenalinCost': {
+    kind: 'weapon',
+    itemId: 'AWP',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
   },
   'weapon.FLAMETHROWER.burnDurationMs': {
     kind: 'weapon',
@@ -218,15 +253,35 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'FLAMETHROWER',
     targets: [{ path: ['fire', 'burnDamagePerTick'], operation: 'scale' }],
   },
+  'weapon.FLAMETHROWER.hitboxEndSize': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'hitboxEndSize'], operation: 'scale' }],
+  },
+  'weapon.FLAMETHROWER.piercing': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'piercingCount'], operation: 'add' }],
+  },
   'weapon.NEGEV.range': {
     kind: 'weapon',
     itemId: 'NEGEV',
     targets: [{ path: ['range'], operation: 'scale' }],
   },
-  'weapon.NEGEV.projectileSpeed': {
+  'weapon.NEGEV.holdSpeedBonus': {
     kind: 'weapon',
     itemId: 'NEGEV',
-    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+    targets: [{ path: ['holdSpeedFactor'], operation: 'add' }],
+  },
+  'weapon.NEGEV.projectileMaxBounces': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['fire', 'projectileMaxBounces'], operation: 'add' }],
+  },
+  'weapon.NEGEV.warmupDuration': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['warmupSpeedMultiplier'], operation: 'inverse_scale' }],
   },
   'weapon.TESLA_DOME.radius': {
     kind: 'weapon',
@@ -237,6 +292,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'TESLA_DOME',
     targets: [{ path: ['fire', 'damagePerTick'], operation: 'scale' }],
+  },
+  'weapon.TESLA_DOME.movementSlowFactor': {
+    kind: 'weapon',
+    itemId: 'TESLA_DOME',
+    targets: [{ path: ['fire', 'movementSlowFactor'], operation: 'add' }],
+  },
+  'weapon.TESLA_DOME.adrenalineDrain': {
+    kind: 'weapon',
+    itemId: 'TESLA_DOME',
+    targets: [{ path: ['fire', 'adrenalineDrainPerSecond'], operation: 'scale' }],
   },
   'weapon.ENERGY_SHIELD.blockArcDegrees': {
     kind: 'weapon',
@@ -263,6 +328,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'HE_GRENADE',
     targets: [{ path: ['aoeDamage'], operation: 'scale' }],
   },
+  'utility.HE_GRENADE.cooldown': {
+    kind: 'utility',
+    itemId: 'HE_GRENADE',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
   'utility.TIME_BUBBLE.bubbleRadius': {
     kind: 'utility',
     itemId: 'TIME_BUBBLE',
@@ -272,6 +342,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'utility',
     itemId: 'TIME_BUBBLE',
     targets: [{ path: ['bubbleDuration'], operation: 'scale' }],
+  },
+  'utility.TIME_BUBBLE.playerSlowFactor': {
+    kind: 'utility',
+    itemId: 'TIME_BUBBLE',
+    targets: [{ path: ['playerSlowFactor'], operation: 'scale' }],
+  },
+  'utility.TIME_BUBBLE.projectileSlowReduction': {
+    kind: 'utility',
+    itemId: 'TIME_BUBBLE',
+    targets: [{ path: ['projectileSlowFactor'], operation: 'add' }],
   },
   'utility.SMOKE_GRENADE.smokeRadius': {
     kind: 'utility',
@@ -292,6 +372,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'utility',
     itemId: 'MOLOTOV_GRENADE',
     targets: [{ path: ['fireLingerDuration'], operation: 'scale' }],
+  },
+  'utility.MOLOTOV_GRENADE.fireBurnDamagePerTick': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['fireBurnDamagePerTick'], operation: 'scale' }],
+  },
+  'utility.MOLOTOV_GRENADE.fireBurnDurationMs': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['fireBurnDurationMs'], operation: 'scale' }],
   },
   'utility.STINKDRUESEN.cloudRadius': {
     kind: 'utility',

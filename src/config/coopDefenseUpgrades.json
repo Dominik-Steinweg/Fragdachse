@@ -81,6 +81,31 @@
               "value": 0.1
             }
           ]
+        },
+        {
+          "id": "hp_regeneration",
+          "code": "A5",
+          "label": "HP-Regeneration",
+          "description": "+5 HP-Regeneration pro Sekunde je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 50,
+          "requires": [
+            {
+              "upgradeId": "hp",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "player.hpRegenPerSecond",
+              "mode": "add_per_level",
+              "value": 5
+            }
+          ]
         }
       ]
     },
@@ -346,6 +371,31 @@
           ]
         },
         {
+          "id": "asmd_primary_damage",
+          "code": "B-W3-3",
+          "label": "Upgrade ASMD Primaer: Schaden",
+          "description": "+20% Schaden fuer ASMD Primaer je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 185,
+          "requires": [
+            {
+              "upgradeId": "asmd_primary_cooldown",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_PRIM.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.2
+            }
+          ]
+        },
+        {
           "id": "unlock_bite",
           "code": "B-W4",
           "label": "Dachsbiss",
@@ -387,10 +437,10 @@
           ]
         },
         {
-          "id": "bite_hit_arc",
+          "id": "bite_damage",
           "code": "B-W4-2",
-          "label": "Upgrade Dachsbiss: Winkel",
-          "description": "+10% Trefferwinkel fuer Dachsbiss je Stufe.",
+          "label": "Upgrade Dachsbiss: Schaden",
+          "description": "+10% Schaden fuer Dachsbiss je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -405,7 +455,7 @@
           ],
           "effects": [
             {
-              "stat": "weapon.BITE.hitArcDegrees",
+              "stat": "weapon.BITE.damage",
               "mode": "add_percent_per_level",
               "value": 0.1
             }
@@ -453,10 +503,10 @@
           ]
         },
         {
-          "id": "hydra_projectile_speed",
+          "id": "hydra_range",
           "code": "B-W5-2",
-          "label": "Upgrade Hydra Gun: Geschossgeschwindigkeit",
-          "description": "+10% Projektilgeschwindigkeit fuer Hydra Gun je Stufe.",
+          "label": "Upgrade Hydra Gun: Reichweite",
+          "description": "+20% Reichweite fuer Hydra Gun je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -471,9 +521,9 @@
           ],
           "effects": [
             {
-              "stat": "weapon.HYDRA.projectileSpeed",
+              "stat": "weapon.HYDRA.range",
               "mode": "add_percent_per_level",
-              "value": 0.1
+              "value": 0.2
             }
           ]
         },
@@ -494,12 +544,12 @@
           }
         },
         {
-          "id": "xbow_pellet_count",
+          "id": "xbow_range",
           "code": "B-W6-1",
-          "label": "Upgrade XXX-BOW: Pfeilsalve",
-          "description": "+1 Pfeil pro Salve fuer XXX-BOW je Stufe.",
+          "label": "Upgrade XXX-BOW: Reichweite",
+          "description": "+20% Reichweite fuer XXX-BOW je Stufe.",
           "kind": "upgrade",
-          "maxLevel": 2,
+          "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
@@ -512,9 +562,9 @@
           ],
           "effects": [
             {
-              "stat": "weapon.XBOW.pelletCount",
-              "mode": "add_per_level",
-              "value": 1
+              "stat": "weapon.XBOW.range",
+              "mode": "add_percent_per_level",
+              "value": 0.2
             }
           ]
         },
@@ -728,8 +778,8 @@
           "sortOrder": 120,
           "requires": [
             {
-              "upgradeId": "unlock_p90",
-              "minLevel": 1
+              "upgradeId": "p90_range",
+              "minLevel": 3
             }
           ],
           "effects": [
@@ -737,6 +787,56 @@
               "stat": "weapon.P90.spread",
               "mode": "add_percent_per_level",
               "value": -0.5
+            }
+          ]
+        },
+        {
+          "id": "p90_damage",
+          "code": "C-W1-3",
+          "label": "Upgrade P90: Schaden",
+          "description": "+10% Schaden fuer die P90 je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 125,
+          "requires": [
+            {
+              "upgradeId": "unlock_p90",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.P90.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "p90_adrenaline_cost",
+          "code": "C-W1-4",
+          "label": "Upgrade P90: Adrenalin-Verbrauch",
+          "description": "-10% Adrenalin-Verbrauch fuer die P90 je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 130,
+          "requires": [
+            {
+              "upgradeId": "p90_damage",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.P90.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.1
             }
           ]
         },
@@ -860,7 +960,7 @@
           "sortOrder": 180,
           "requires": [
             {
-              "upgradeId": "unlock_ak47",
+              "upgradeId": "ak47_range",
               "minLevel": 1
             }
           ],
@@ -869,6 +969,56 @@
               "stat": "weapon.AK47.spread",
               "mode": "add_percent_per_level",
               "value": -0.15
+            }
+          ]
+        },
+        {
+          "id": "ak47_damage",
+          "code": "C-W3-3",
+          "label": "Upgrade AK-47: Schaden",
+          "description": "+10% Schaden fuer die AK-47 je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 185,
+          "requires": [
+            {
+              "upgradeId": "unlock_ak47",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "ak47_adrenaline_cost",
+          "code": "C-W3-4",
+          "label": "Upgrade AK-47: Adrenalin-Verbrauch",
+          "description": "-10% Adrenalin-Verbrauch fuer die AK-47 je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 190,
+          "requires": [
+            {
+              "upgradeId": "ak47_damage",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.1
             }
           ]
         },
@@ -1005,6 +1155,31 @@
           ]
         },
         {
+          "id": "asmd_secondary_damage",
+          "code": "C-W5-3",
+          "label": "Upgrade ASMD Sekundaer: Schaden",
+          "description": "+50% Schaden fuer ASMD Sekundaer.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 245,
+          "requires": [
+            {
+              "upgradeId": "asmd_secondary_explosion_radius",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
           "id": "unlock_mini_rocket_launcher",
           "code": "C-W6",
           "label": "Mini-Raketen",
@@ -1071,6 +1246,31 @@
           ]
         },
         {
+          "id": "mini_rocket_launcher_adrenaline_cost",
+          "code": "C-W6-3",
+          "label": "Upgrade Mini-Raketen: Adrenalin-Verbrauch",
+          "description": "-10% Adrenalin-Verbrauch fuer Mini-Raketen je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 275,
+          "requires": [
+            {
+              "upgradeId": "mini_rocket_launcher_explosion_radius",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.MINI_ROCKET_LAUNCHER.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
+        },
+        {
           "id": "unlock_awp",
           "code": "C-W7",
           "label": "AWP",
@@ -1112,10 +1312,10 @@
           ]
         },
         {
-          "id": "awp_accuracy",
+          "id": "awp_aim_duration",
           "code": "C-W7-2",
-          "label": "Upgrade AWP: Genauigkeit",
-          "description": "-20% Spread fuer die AWP je Stufe.",
+          "label": "Upgrade AWP: Zielzeit",
+          "description": "-15% Zielzeit fuer die AWP je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1130,9 +1330,34 @@
           ],
           "effects": [
             {
-              "stat": "weapon.AWP.spread",
+              "stat": "weapon.AWP.aimDuration",
               "mode": "add_percent_per_level",
-              "value": -0.2
+              "value": -0.15
+            }
+          ]
+        },
+        {
+          "id": "awp_adrenaline_cost",
+          "code": "C-W7-3",
+          "label": "Upgrade AWP: Adrenalin-Verbrauch",
+          "description": "-10% Adrenalin-Verbrauch fuer die AWP je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 305,
+          "requires": [
+            {
+              "upgradeId": "awp_cooldown",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AWP.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.1
             }
           ]
         },
@@ -1156,24 +1381,24 @@
           "id": "flamethrower_burn_duration",
           "code": "C-W8-1",
           "label": "Upgrade Flammenwerfer: Brenndauer",
-          "description": "+15% Brenndauer fuer den Flammenwerfer je Stufe.",
+          "description": "+50% Brenndauer fuer den Flammenwerfer.",
           "kind": "upgrade",
-          "maxLevel": 3,
+          "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 320,
           "requires": [
             {
-              "upgradeId": "unlock_flamethrower",
-              "minLevel": 1
+              "upgradeId": "flamethrower_burn_damage",
+              "minLevel": 3
             }
           ],
           "effects": [
             {
               "stat": "weapon.FLAMETHROWER.burnDurationMs",
               "mode": "add_percent_per_level",
-              "value": 0.15
+              "value": 0.5
             }
           ]
         },
@@ -1199,6 +1424,56 @@
               "stat": "weapon.FLAMETHROWER.burnDamagePerTick",
               "mode": "add_percent_per_level",
               "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "flamethrower_hitbox_end_size",
+          "code": "C-W8-3",
+          "label": "Upgrade Flammenwerfer: Flammengroesse",
+          "description": "+10% maximale Projektilgroesse des Flammenwerfers je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 340,
+          "requires": [
+            {
+              "upgradeId": "unlock_flamethrower",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.FLAMETHROWER.hitboxEndSize",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "flamethrower_pierce",
+          "code": "C-W8-4",
+          "label": "Upgrade Flammenwerfer: Durchschlag",
+          "description": "Flammenprojektile zerstoeren sich nicht bei Treffern und koennen mehrere Gegner treffen (kein Mehrfachtreffer).",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 350,
+          "requires": [
+            {
+              "upgradeId": "flamethrower_hitbox_end_size",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.FLAMETHROWER.piercing",
+              "mode": "add_per_level",
+              "value": 1
             }
           ]
         },
@@ -1244,10 +1519,10 @@
           ]
         },
         {
-          "id": "negev_projectile_speed",
+          "id": "negev_hold_speed",
           "code": "C-W9-2",
-          "label": "Upgrade Negev: Geschossgeschwindigkeit",
-          "description": "+10% Projektilgeschwindigkeit fuer die Negev je Stufe.",
+          "label": "Upgrade Negev: Tempo-Malus",
+          "description": "-20% Bewegungsgeschwindigkeits-Malus beim Feuern je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1262,9 +1537,59 @@
           ],
           "effects": [
             {
-              "stat": "weapon.NEGEV.projectileSpeed",
+              "stat": "weapon.NEGEV.holdSpeedBonus",
+              "mode": "add_per_level",
+              "value": 0.14
+            }
+          ]
+        },
+        {
+          "id": "negev_bounces",
+          "code": "C-W9-3",
+          "label": "Upgrade Negev: Abpraller",
+          "description": "+5 Abpraller fuer die Negev.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 365,
+          "requires": [
+            {
+              "upgradeId": "negev_range",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.NEGEV.projectileMaxBounces",
+              "mode": "add_per_level",
+              "value": 5
+            }
+          ]
+        },
+        {
+          "id": "negev_warmup_duration",
+          "code": "C-W9-4",
+          "label": "Upgrade Negev: Aufwaermzeit",
+          "description": "-50% Zeit bis zur vollen Genauigkeit.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 370,
+          "requires": [
+            {
+              "upgradeId": "negev_hold_speed",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.NEGEV.warmupDuration",
               "mode": "add_percent_per_level",
-              "value": 0.1
+              "value": -0.5
             }
           ]
         },
@@ -1313,13 +1638,38 @@
           "id": "tesla_dome_damage",
           "code": "C-W10-2",
           "label": "Upgrade Tesla-Kuppel: Schaden",
-          "description": "+10% Schaden pro Tick fuer die Tesla-Kuppel je Stufe.",
+          "description": "+50% Schaden pro Tick fuer die Tesla-Kuppel.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 390,
+          "requires": [
+            {
+              "upgradeId": "tesla_dome_radius",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.TESLA_DOME.damagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
+          "id": "tesla_dome_movement_slow",
+          "code": "C-W10-3",
+          "label": "Upgrade Tesla-Kuppel: Bewegungsmalus",
+          "description": "-20% Bewegungsgeschwindigkeits-Malus der Tesla-Kuppel je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 390,
+          "sortOrder": 395,
           "requires": [
             {
               "upgradeId": "unlock_tesla_dome",
@@ -1328,9 +1678,34 @@
           ],
           "effects": [
             {
-              "stat": "weapon.TESLA_DOME.damagePerTick",
+              "stat": "weapon.TESLA_DOME.movementSlowFactor",
+              "mode": "add_per_level",
+              "value": 0.14
+            }
+          ]
+        },
+        {
+          "id": "tesla_dome_adrenalin_drain",
+          "code": "C-W10-4",
+          "label": "Upgrade Tesla-Kuppel: Adrenalin-Verbrauch",
+          "description": "-30% Adrenalin-Verbrauch der Tesla-Kuppel.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 405,
+          "requires": [
+            {
+              "upgradeId": "tesla_dome_movement_slow",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.TESLA_DOME.adrenalineDrain",
               "mode": "add_percent_per_level",
-              "value": 0.1
+              "value": -0.3
             }
           ]
         },
@@ -1444,12 +1819,12 @@
           }
         },
         {
-          "id": "he_grenade_radius",
-          "code": "D-U1-1",
-          "label": "Upgrade HE-Granate: Explosionsradius",
-          "description": "+10% Explosionsradius fuer die HE-Granate je Stufe.",
+          "id": "he_grenade_damage",
+          "code": "D-U1-2",
+          "label": "Upgrade HE-Granate: Schaden",
+          "description": "+10% Explosionsschaden fuer die HE-Granate je Stufe.",
           "kind": "upgrade",
-          "maxLevel": 5,
+          "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
@@ -1462,23 +1837,48 @@
           ],
           "effects": [
             {
-              "stat": "utility.HE_GRENADE.aoeRadius",
+              "stat": "utility.HE_GRENADE.aoeDamage",
               "mode": "add_percent_per_level",
               "value": 0.1
             }
           ]
         },
         {
-          "id": "he_grenade_damage",
-          "code": "D-U1-2",
-          "label": "Upgrade HE-Granate: Schaden",
-          "description": "+10% Explosionsschaden fuer die HE-Granate je Stufe.",
+          "id": "he_grenade_radius",
+          "code": "D-U1-1",
+          "label": "Upgrade HE-Granate: Explosionsradius",
+          "description": "+50% Explosionsradius fuer die HE-Granate.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 120,
+          "requires": [
+            {
+              "upgradeId": "he_grenade_damage",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.HE_GRENADE.aoeRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
+          "id": "he_grenade_cooldown",
+          "code": "D-U1-3",
+          "label": "Upgrade HE-Granate: Cooldown",
+          "description": "-10% Cooldown fuer die HE-Granate je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 120,
+          "sortOrder": 125,
           "requires": [
             {
               "upgradeId": "unlock_he_grenade",
@@ -1487,9 +1887,9 @@
           ],
           "effects": [
             {
-              "stat": "utility.HE_GRENADE.aoeDamage",
+              "stat": "utility.HE_GRENADE.cooldown",
               "mode": "add_percent_per_level",
-              "value": 0.1
+              "value": -0.1
             }
           ]
         },
@@ -1538,13 +1938,38 @@
           "id": "time_bubble_duration",
           "code": "D-U2-2",
           "label": "Upgrade Time-Bubble: Dauer",
-          "description": "+10% Dauer fuer die Time-Bubble je Stufe.",
+          "description": "+50% Dauer fuer die Time-Bubble.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 150,
+          "requires": [
+            {
+              "upgradeId": "time_bubble_radius",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.TIME_BUBBLE.bubbleDuration",
+              "mode": "add_percent_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
+          "id": "time_bubble_slow_strength",
+          "code": "D-U2-3",
+          "label": "Upgrade Time-Bubble: Verlangsamung",
+          "description": "+10% Verlangsamungs-Intensitaet fuer Gegner in der Time-Bubble je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 150,
+          "sortOrder": 155,
           "requires": [
             {
               "upgradeId": "unlock_time_bubble",
@@ -1553,9 +1978,34 @@
           ],
           "effects": [
             {
-              "stat": "utility.TIME_BUBBLE.bubbleDuration",
+              "stat": "utility.TIME_BUBBLE.playerSlowFactor",
               "mode": "add_percent_per_level",
-              "value": 0.1
+              "value": -0.1
+            }
+          ]
+        },
+        {
+          "id": "time_bubble_projectile_slow",
+          "code": "D-U2-4",
+          "label": "Upgrade Time-Bubble: Projektil-Verlangsamung aufheben",
+          "description": "Projektile werden in der Time-Bubble kaum noch verlangsamt (-90% Verlangsamung).",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 160,
+          "requires": [
+            {
+              "upgradeId": "time_bubble_slow_strength",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.TIME_BUBBLE.projectileSlowReduction",
+              "mode": "add_per_level",
+              "value": 0.855
             }
           ]
         },
@@ -1669,14 +2119,39 @@
         {
           "id": "molotov_grenade_duration",
           "code": "D-U4-2",
-          "label": "Upgrade Molotov: Brenndauer",
-          "description": "+10% Brenndauer des Feuers fuer den Molotov je Stufe.",
+          "label": "Upgrade Molotov: Branddauer der Flaeche",
+          "description": "+50% Dauer der Feuerlache fuer den Molotov.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 210,
+          "requires": [
+            {
+              "upgradeId": "molotov_grenade_radius",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.MOLOTOV_GRENADE.fireLingerDuration",
+              "mode": "add_percent_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
+          "id": "molotov_burn_damage",
+          "code": "D-U4-3",
+          "label": "Upgrade Molotov: Brandschaden",
+          "description": "+10% Brandschaden fuer in Brand gesetzte Gegner je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 210,
+          "sortOrder": 215,
           "requires": [
             {
               "upgradeId": "unlock_molotov_grenade",
@@ -1685,9 +2160,34 @@
           ],
           "effects": [
             {
-              "stat": "utility.MOLOTOV_GRENADE.fireLingerDuration",
+              "stat": "utility.MOLOTOV_GRENADE.fireBurnDamagePerTick",
               "mode": "add_percent_per_level",
               "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "molotov_burn_duration",
+          "code": "D-U4-4",
+          "label": "Upgrade Molotov: Brenndauer der Gegner",
+          "description": "+30% Dauer des Brandes fuer getroffene Gegner.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 220,
+          "requires": [
+            {
+              "upgradeId": "molotov_burn_damage",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.MOLOTOV_GRENADE.fireBurnDurationMs",
+              "mode": "add_percent_per_level",
+              "value": 0.3
             }
           ]
         },

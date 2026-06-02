@@ -91,6 +91,7 @@ export class HostUpdateCoordinator {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         if (!this.ctx.burrowSystem.isBurrowed(player.id)) {
           this.ctx.resourceSystem.regenTick(player.id, delta);
+          this.ctx.combatSystem.hpRegenTick(player.id, delta);
         }
       }
       this.ctx.burrowSystem.update(delta);

@@ -100,6 +100,7 @@ const CATEGORY_IDS: readonly CoopDefenseUpgradeCategoryId[] = ['general', 'weapo
 
 export const COOP_DEFENSE_HP_UPGRADE_ID = 'hp';
 export const COOP_DEFENSE_PLAYER_STAT_MAX_HP = 'player.maxHp';
+export const COOP_DEFENSE_PLAYER_STAT_HP_REGEN_PER_SECOND = 'player.hpRegenPerSecond';
 
 const COOP_DEFENSE_UPGRADE_REGISTRY = normalizeUpgradeRegistry(
   rawCoopDefenseUpgrades as CoopDefenseUpgradeRegistryFile,

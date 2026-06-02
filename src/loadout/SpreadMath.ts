@@ -1,7 +1,7 @@
 import type { WeaponConfig } from './LoadoutConfig';
 
 export function addDynamicSpread(current: number, config: WeaponConfig): number {
-  const next = current + config.spreadPerShot;
+  const next = current + config.spreadPerShot * (config.warmupSpeedMultiplier ?? 1);
   // Negev-style weapons: spreadPerShot < 0 → dynamic spread decreases from 0 towards negative maxDynamicSpread
   if (config.maxDynamicSpread >= 0) {
     return Math.min(config.maxDynamicSpread, Math.max(0, next));

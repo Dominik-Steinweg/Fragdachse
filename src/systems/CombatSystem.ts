@@ -153,6 +153,7 @@ export class CombatSystem {
   private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private playerMaxHpResolver: ((playerId: string) => number) | null = null;
+  private playerHpRegenPerSecondResolver: ((playerId: string) => number) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -177,6 +178,7 @@ export class CombatSystem {
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
+  setPlayerHpRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerHpRegenPerSecondResolver = resolver; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -612,6 +614,16 @@ export class CombatSystem {
           continue; // kein break, kein destroyProjectile
         }
 
+        if (proj.isFlame && proj.flamePierceHitIds !== undefined) {
+          if (proj.flamePierceHitIds.has(player.id)) continue;
+          proj.flamePierceHitIds.add(player.id);
+          if (canDealDamage) {
+            this.applyBurnStack(player.id, proj.ownerId, proj.burnDurationMs ?? 0, proj.burnDamagePerTick ?? 0, proj.burnTickIntervalMs ?? 0, proj.weaponName);
+            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
+          }
+          continue;
+        }
+
         if (proj.isFlame && canDealDamage) {
           this.applyBurnStack(
             player.id,
@@ -657,6 +669,15 @@ export class CombatSystem {
           }, {
             allowTeamDamage: proj.allowTeamDamage,
           });
+          continue;
+        }
+
+        if (proj.isFlame && proj.flamePierceHitIds !== undefined) {
+          const enemyKey = `enemy_${enemy.id}`;
+          if (proj.flamePierceHitIds.has(enemyKey)) continue;
+          proj.flamePierceHitIds.add(enemyKey);
+          this.applyBurnStack(enemy.id, proj.ownerId, proj.burnDurationMs ?? 0, proj.burnDamagePerTick ?? 0, proj.burnTickIntervalMs ?? 0, proj.weaponName);
+          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
           continue;
         }
 
@@ -1983,6 +2004,16 @@ export class CombatSystem {
     player.body.enable = true;
     const spawn = this.playerManager.getSpawnPoint(playerId);
     player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
+  }
+
+  hpRegenTick(playerId: string, deltaMs: number): void {
+    if (!(this.alive.get(playerId) ?? false)) return;
+    const regenPerSecond = this.playerHpRegenPerSecondResolver?.(playerId) ?? 0;
+    if (regenPerSecond <= 0) return;
+    const current = this.hp.get(playerId) ?? 0;
+    const max = this.getMaxHp(playerId);
+    if (current >= max) return;
+    this.hp.set(playerId, Math.min(max, current + regenPerSecond * deltaMs / 1000));
   }
 
   private resolvePlayerMaxHp(playerId: string): number {

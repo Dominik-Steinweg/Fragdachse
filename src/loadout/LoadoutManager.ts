@@ -1420,6 +1420,7 @@ export class LoadoutManager {
       burnDurationMs:    fireConfig.burnDurationMs,
       burnDamagePerTick: fireConfig.burnDamagePerTick,
       burnTickIntervalMs: fireConfig.burnTickIntervalMs,
+      flamePiercing:     (fireConfig.piercingCount ?? 0) > 0,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
     });

@@ -524,6 +524,7 @@ export class ProjectileManager {
       burnDurationMs:    cfg.burnDurationMs,
       burnDamagePerTick: cfg.burnDamagePerTick,
       burnTickIntervalMs: cfg.burnTickIntervalMs,
+      flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
       leafBlowerMinKnockback: cfg.leafBlowerMinKnockback,
       leafBlowerMaxKnockback: cfg.leafBlowerMaxKnockback,
       leafBlowerSelfPush: cfg.leafBlowerSelfPush,

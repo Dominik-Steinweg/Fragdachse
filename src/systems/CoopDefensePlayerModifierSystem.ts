@@ -2,6 +2,7 @@ import { HP_MAX } from '../config';
 import type { CoopDefenseUpgradeProfile, LoadoutCommitSnapshot } from '../types';
 import {
   cloneCoopDefenseUpgradeProfile,
+  COOP_DEFENSE_PLAYER_STAT_HP_REGEN_PER_SECOND,
   COOP_DEFENSE_PLAYER_STAT_MAX_HP,
   getCoopDefenseResolvedEffectTotals,
   sanitizeCoopDefenseUpgradeProfile,
@@ -11,12 +12,14 @@ export interface CoopDefensePlayerRuntimeModifiers {
   additiveStats: Readonly<Record<string, number>>;
   percentageStats: Readonly<Record<string, number>>;
   maxHp: number;
+  hpRegenPerSecond: number;
 }
 
 const DEFAULT_RUNTIME_MODIFIERS: CoopDefensePlayerRuntimeModifiers = {
   additiveStats: Object.freeze({}),
   percentageStats: Object.freeze({}),
   maxHp: HP_MAX,
+  hpRegenPerSecond: 0,
 };
 
 export class CoopDefensePlayerModifierSystem {
@@ -79,6 +82,10 @@ export class CoopDefensePlayerModifierSystem {
     return this.getModifiers(playerId).maxHp;
   }
 
+  getHpRegenPerSecond(playerId: string): number {
+    return this.getModifiers(playerId).hpRegenPerSecond;
+  }
+
   clear(): void {
     this.committedProfiles.clear();
     this.runtimeModifiers.clear();
@@ -90,6 +97,7 @@ export class CoopDefensePlayerModifierSystem {
       additiveStats: totals.additive,
       percentageStats: totals.percentage,
       maxHp: HP_MAX + (totals.additive[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0),
+      hpRegenPerSecond: totals.additive[COOP_DEFENSE_PLAYER_STAT_HP_REGEN_PER_SECOND] ?? 0,
     };
   }
 }

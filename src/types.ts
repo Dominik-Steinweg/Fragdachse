@@ -523,6 +523,7 @@ export interface ProjectileSpawnConfig {
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
   burnTickIntervalMs?: number;
+  flamePiercing?:     boolean;   // true = Projektil zerstört sich nicht bei Treffern (piercing)
 
   // Laubblaeser (optional)
   leafBlowerMinKnockback?: number;
@@ -735,6 +736,7 @@ export interface TrackedProjectile {
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
   burnTickIntervalMs?: number;
+  flamePierceHitIds?: Set<string>; // Pierce: bereits getroffene Ziel-IDs (kein Mehrfachtreffer)
 
   // Laubblaeser (optional)
   leafBlowerMinKnockback?: number;

@@ -36,6 +36,7 @@ export interface FlamethrowerWeaponFireConfig {
   readonly burnDurationMs: number;
   readonly burnDamagePerTick: number;
   readonly burnTickIntervalMs: number;
+  readonly piercingCount?: number;      // > 0 = Projektil trifft mehrere Ziele (kein Mehrfachtreffer)
 }
 
 export interface LeafBlowerWeaponFireConfig {
@@ -156,7 +157,8 @@ export interface WeaponConfig {
   readonly trainDamageMult?: number;  // Schadensfaktor gegen den Zug (0 = kein Schaden)
 
   // Shot-Feedback-Mechaniken (optional, data-driven)
-  readonly holdSpeedFactor?:   number;  // Geschwindigkeits-Multiplikator während Feuerknopf gehalten (z.B. 0.5 = halbiert)
+  readonly holdSpeedFactor?:        number;  // Geschwindigkeits-Multiplikator während Feuerknopf gehalten (z.B. 0.5 = halbiert)
+  readonly warmupSpeedMultiplier?:  number;  // Multiplikator für spreadPerShot-Rate (Negev-Aufwärmzeit), Default 1.0
   readonly shotRecoilForce?:   number;  // Rückstoßkraft in px/s – Anfangsgeschwindigkeit des Rückstoßimpulses
   readonly shotRecoilDuration?: number; // ms – wie lange der Rückstoß anhält (Default: 180ms, Quad-Ease-Out Decay)
   readonly shotScreenShake?: {          // Kamera-Shake direkt beim Schuss (nicht während Cooldown)
@@ -1166,6 +1168,7 @@ export const WEAPON_CONFIGS = {
       burnDurationMs:     2000,
       burnDamagePerTick:  0.25,
       burnTickIntervalMs: 250,
+      piercingCount:      0,
     },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        0.5,           // Adrenalin-Kosten pro Hitbox
@@ -1338,6 +1341,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     projectileStyle:      'bullet' as ProjectileStyle,
     holdSpeedFactor:      0.3,
+    warmupSpeedMultiplier: 1,
     projectileColor:      0xc79c4f,
     bulletVisualPreset:   'negev' as BulletVisualPreset,
     shotScreenShake:      { duration: 60, intensity: 0.002 },    
