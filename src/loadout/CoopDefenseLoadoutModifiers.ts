@@ -238,6 +238,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'ASMD_SEC',
     targets: [{ path: ['damage'], operation: 'scale' }],
   },
+  'weapon.ASMD_SEC.dotArea.durationMs': {
+    kind: 'weapon',
+    itemId: 'ASMD_SEC',
+    targets: [{ path: ['detonable', 'dotArea', 'durationMs'], operation: 'add' }],
+  },
+  'weapon.ASMD_SEC.dotArea.damagePerTick': {
+    kind: 'weapon',
+    itemId: 'ASMD_SEC',
+    targets: [{ path: ['detonable', 'dotArea', 'damagePerTick'], operation: 'add' }],
+  },
   'weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius': {
     kind: 'weapon',
     itemId: 'MINI_ROCKET_LAUNCHER',

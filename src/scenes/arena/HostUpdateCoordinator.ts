@@ -148,6 +148,12 @@ export class HostUpdateCoordinator {
         det.effect.explosionColor ?? detonatorColor,
         det.effect.explosionVisualStyle,
       );
+
+      // Optionale Schaden-über-Zeit-Fläche am Detonationsort (z.B. ASMD-Sekundär-Upgrade).
+      this.spawnDotAreaFromExplosion(
+        det.effect.dotArea, det.x, det.y, det.effect.aoeRadius,
+        det.detonatorOwnerId, detonatorColor ?? 0xffffff,
+      );
     }
 
     for (const explosion of explodedProjectiles) {
@@ -656,6 +662,29 @@ export class HostUpdateCoordinator {
         }
       }
     }
+  }
+
+  /**
+   * Erzeugt am Explosions-/Detonationsort eine Schaden-über-Zeit-Fläche, sofern
+   * konfiguriert und aktiv. Generisch nutzbar für Detonationen (ASMD-Ball) und
+   * spätere Explosions-Upgrades (Rakete, HE-/Smoke-Granate, …). Der Flächenradius
+   * basiert auf dem übergebenen Explosionsradius.
+   */
+  private spawnDotAreaFromExplosion(
+    dot: import('../../types').DamageOverTimeAreaConfig | undefined,
+    x: number, y: number,
+    explosionRadius: number,
+    ownerId: string,
+    ownerColor: number,
+  ): void {
+    if (!dot || dot.damagePerTick <= 0 || dot.durationMs <= 0) return;
+    this.ctx.stinkCloudSystem.hostCreateStationaryCloud(
+      ownerId, ownerColor, x, y,
+      explosionRadius * (dot.radiusScale ?? 1),
+      dot.durationMs, dot.damagePerTick, dot.tickIntervalMs,
+      dot.rockDamageMult ?? 1, dot.trainDamageMult ?? 1,
+      dot.style,
+    );
   }
 
   applyExplosionEnvironmentDamage(

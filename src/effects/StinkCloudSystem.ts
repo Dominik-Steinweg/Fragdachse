@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, NET_SMOOTH_TIME_MS } from '../config';
 import { circleZone, edgeZone, ensureCanvasTexture } from './EffectUtils';
-import type { SyncedStinkCloud } from '../types';
+import type { DamageZoneVisualStyle, SyncedStinkCloud } from '../types';
 
 /* ── Texture keys ─────────────────────────────────────── */
 const TEX_STINK_GROUND = 'stink_ground';
@@ -39,6 +39,19 @@ const TINT_RIM_GLOW    = 0xeeff66;
 const TINT_RIM_SOFT    = 0x87ff42;
 const TINT_GROUND_GLOW = 0x1d5e09;
 const TINT_DAMAGE_GLOW = 0x72ff2f;
+
+/* ── Electric (ASMD) variant palette ─────────────────────── */
+const ELEC_GROUND     = 0x0d2b45;
+const ELEC_DAMAGE     = 0x4fc3ff;
+const ELEC_REACTION   = 0xcdefff;
+const ELEC_OUTER      = 0x2a8fd6;
+const ELEC_CORE       = 0x9fe8ff;
+const ELEC_HAZE       = 0x1f6f9e;
+const ELEC_BLOB       = [0x3aa8e0, 0x7fd8f7, 0xeaffff] as const;
+const ELEC_PARTICLE   = [0x9fe8ff, 0x4fc3ff, 0xffffff] as const;
+const ELEC_EDGE       = [0xcdefff, 0x9fe8ff, 0xffffff] as const;
+const ELEC_ARC        = 0xbdefff;
+const ELEC_ARC_BRIGHT = 0xffffff;
 
 /* ── Volumetric layer templates ────────────────────────── */
 interface HazeTemplate {
@@ -108,7 +121,7 @@ export interface StinkCloudDamageEvent {
   ownerId:        string;
   rockDamageMult: number;
   trainDamageMult: number;
-  visualVariant?: 'stink' | 'spore';
+  visualVariant?: DamageZoneVisualStyle;
 }
 
 /* ── Host-side active cloud tracking ── */
@@ -122,7 +135,7 @@ interface ActiveStinkCloud {
   tickInterval:   number;       // ms
   rockDamageMult: number;
   trainDamageMult: number;
-  visualVariant:  'stink' | 'spore';
+  visualVariant:  DamageZoneVisualStyle;
   followOwner:    boolean;
   x:              number;
   y:              number;
@@ -231,6 +244,7 @@ export class StinkCloudSystem {
     tickInterval: number,
     rockDamageMult: number,
     trainDamageMult: number,
+    visualVariant: DamageZoneVisualStyle = 'spore',
   ): void {
     const now = Date.now();
     this.activeZones.push({
@@ -243,7 +257,7 @@ export class StinkCloudSystem {
       tickInterval,
       rockDamageMult,
       trainDamageMult,
-      visualVariant: 'spore',
+      visualVariant,
       followOwner: false,
       x,
       y,
@@ -391,22 +405,24 @@ export class StinkCloudSystem {
   private createVisual(cloud: SyncedStinkCloud): StinkCloudVisual {
     const r = Math.max(cloud.radius, 8);
     const isSpore = cloud.visualVariant === 'spore';
+    const isElectric = cloud.visualVariant === 'electric';
 
     const groundGlow = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.12)
-      .setTint(isSpore ? 0x5b3818 : TINT_GROUND_GLOW)
-      .setBlendMode(Phaser.BlendModes.MULTIPLY)
-      .setAlpha(0.26);
+      .setTint(isElectric ? ELEC_GROUND : isSpore ? 0x5b3818 : TINT_GROUND_GLOW)
+      // Elektrofeld glüht additiv statt den Boden abzudunkeln.
+      .setBlendMode(isElectric ? Phaser.BlendModes.ADD : Phaser.BlendModes.MULTIPLY)
+      .setAlpha(isElectric ? 0.22 : 0.26);
 
     const damageAura = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.08)
-      .setTint(isSpore ? 0xc7d85a : TINT_DAMAGE_GLOW)
+      .setTint(isElectric ? ELEC_DAMAGE : isSpore ? 0xc7d85a : TINT_DAMAGE_GLOW)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.18);
 
     const reactionPulse = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.04)
-      .setTint(isSpore ? 0xf0e68c : TINT_CHEM_CYAN)
+      .setTint(isElectric ? ELEC_REACTION : isSpore ? 0xf0e68c : TINT_CHEM_CYAN)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0);
 
@@ -416,31 +432,32 @@ export class StinkCloudSystem {
     const hazes: StinkHazeLayer[] = HAZE_TEMPLATES.map(tmpl => {
       const img = this.scene.add.image(0, 0, TEX_STINK_HAZE)
         .setOrigin(0.5)
-        .setTint(tmpl.tint)
-        .setBlendMode(tmpl.tint === TINT_CHEM_BLUE ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL);
+        .setTint(isElectric ? ELEC_HAZE : tmpl.tint)
+        .setBlendMode(isElectric || tmpl.tint === TINT_CHEM_BLUE ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL);
       container.add(img);
       return { image: img, template: tmpl, phase: Math.random() * Math.PI * 2 };
     });
 
     const outerGlow = this.scene.add.image(0, 0, TEX_STINK_HAZE)
       .setOrigin(0.5)
-      .setTint(isSpore ? 0xf6c14d : TINT_CHEM_BLUE)
+      .setTint(isElectric ? ELEC_OUTER : isSpore ? 0xf6c14d : TINT_CHEM_BLUE)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.2);
     container.add(outerGlow);
 
     const neonCore = this.scene.add.image(0, 0, TEX_STINK_HAZE)
       .setOrigin(0.5)
-      .setTint(isSpore ? 0xf0e97f : TINT_ACID)
+      .setTint(isElectric ? ELEC_CORE : isSpore ? 0xf0e97f : TINT_ACID)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.26);
     container.add(neonCore);
 
-    const blobs: StinkBlob[] = BLOB_TEMPLATES.map(tmpl => {
+    const blobs: StinkBlob[] = BLOB_TEMPLATES.map((tmpl, index) => {
+      const elecTint = ELEC_BLOB[index % ELEC_BLOB.length];
       const img = this.scene.add.image(0, 0, TEX_STINK_BLOB)
         .setOrigin(0.5)
-        .setTint(tmpl.tint)
-        .setBlendMode(tmpl.tint === TINT_CHEM_BLUE || tmpl.tint === TINT_CHEM_CYAN ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL);
+        .setTint(isElectric ? elecTint : tmpl.tint)
+        .setBlendMode(isElectric || tmpl.tint === TINT_CHEM_BLUE || tmpl.tint === TINT_CHEM_CYAN ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL);
       container.add(img);
       return { image: img, template: tmpl, phase: Math.random() * Math.PI * 2 };
     });
@@ -454,10 +471,10 @@ export class StinkCloudSystem {
       speedY:    { min: -16, max: 10 },
       scale:     { start: 0.34, end: 1.0 },
       alpha:     { start: 0.2, end: 0 },
-      tint:      [TINT_PARTICLE_1, TINT_PARTICLE_2, TINT_TOXIC],
+      tint:      isElectric ? [...ELEC_PARTICLE] : [TINT_PARTICLE_1, TINT_PARTICLE_2, TINT_TOXIC],
       rotate:    { min: 0, max: 360 },
       emitting:  true,
-      blendMode: Phaser.BlendModes.NORMAL,
+      blendMode: isElectric ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL,
     });
     innerEmitter.setDepth(STINK_DEPTH);
     innerEmitter.addEmitZone(circleZone(Math.max(r * 0.42, 10)));
@@ -470,7 +487,7 @@ export class StinkCloudSystem {
       speedY:    { min: -20, max: 6 },
       scale:     { start: 0.12, end: 0.42 },
       alpha:     { start: 0.34, end: 0 },
-      tint:      [TINT_CHEM_BLUE, TINT_CHEM_CYAN, TINT_SULFUR],
+      tint:      isElectric ? [...ELEC_PARTICLE] : [TINT_CHEM_BLUE, TINT_CHEM_CYAN, TINT_SULFUR],
       rotate:    { min: 0, max: 360 },
       emitting:  true,
       blendMode: Phaser.BlendModes.ADD,
@@ -487,10 +504,10 @@ export class StinkCloudSystem {
       speedY:    { min: -34, max: -12 },
       scale:     { start: 0.3, end: 1.26 },
       alpha:     { start: 0.16, end: 0 },
-      tint:      [TINT_PARTICLE_2, TINT_PARTICLE_3, TINT_ACID],
+      tint:      isElectric ? [...ELEC_PARTICLE] : [TINT_PARTICLE_2, TINT_PARTICLE_3, TINT_ACID],
       rotate:    { min: 0, max: 360 },
       emitting:  true,
-      blendMode: Phaser.BlendModes.NORMAL,
+      blendMode: isElectric ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL,
     });
     plumeEmitter.setDepth(STINK_DEPTH + 0.02);
     plumeEmitter.addEmitZone(circleZone(Math.max(r * 0.24, 6)));
@@ -504,7 +521,7 @@ export class StinkCloudSystem {
       speedY:    { min: -18, max: 18 },
       scale:     { start: 0.22, end: 1.36 },
       alpha:     { start: 0.22, end: 0 },
-      tint:      [TINT_RIM_SOFT, TINT_ACID, TINT_CHEM_CYAN],
+      tint:      isElectric ? [...ELEC_EDGE] : [TINT_RIM_SOFT, TINT_ACID, TINT_CHEM_CYAN],
       rotate:    { min: 0, max: 360 },
       emitting:  true,
       blendMode: Phaser.BlendModes.ADD,
@@ -516,9 +533,9 @@ export class StinkCloudSystem {
     const fairnessCircle = this.scene.add.graphics()
       .setDepth(STINK_DEPTH + 0.1)
       .setBlendMode(Phaser.BlendModes.ADD);
-    this.drawFairnessCircle(fairnessCircle, cloud.x, cloud.y, r, cloud.ownerColor, 0, 0);
+    this.drawFairnessCircle(fairnessCircle, cloud.x, cloud.y, r, cloud.ownerColor, 0, 0, cloud.visualVariant);
 
-    this.playSpawnBurst(cloud.x, cloud.y, r);
+    this.playSpawnBurst(cloud.x, cloud.y, r, isElectric);
 
     return {
       groundGlow,
@@ -654,7 +671,7 @@ export class StinkCloudSystem {
     visual.plumeEmitter.setParticleScale(0.18 * rScale, Phaser.Math.Linear(0.94, 1.46, alpha) * rScale);
 
     /* ── Fairness circle ── */
-    this.drawFairnessCircle(visual.fairnessCircle, x, y, radius, cloud.ownerColor, alpha, t, isSpore);
+    this.drawFairnessCircle(visual.fairnessCircle, x, y, radius, cloud.ownerColor, alpha, t, cloud.visualVariant);
 
     /* ── Emit-zone resize ── */
     const target = Math.max(radius * 0.86, 12);
@@ -679,11 +696,17 @@ export class StinkCloudSystem {
     color: number,
     alpha: number,
     time: number,
-    isSpore = false,
+    variant: DamageZoneVisualStyle = 'stink',
   ): void {
     gfx.clear();
     if (alpha < 0.01) return;
 
+    if (variant === 'electric') {
+      this.drawElectricField(gfx, x, y, radius, color, alpha, time);
+      return;
+    }
+
+    const isSpore = variant === 'spore';
     gfx.lineStyle(2.2, isSpore ? 0xf2dc76 : TINT_RIM_GLOW, 0.03 * alpha);
     gfx.strokeCircle(x, y, radius);
 
@@ -707,7 +730,58 @@ export class StinkCloudSystem {
     }
   }
 
-  private playSpawnBurst(x: number, y: number, radius: number): void {
+  /**
+   * Elektrisierte Fläche (ASMD): blaue Boundary plus flackernde Blitze, die vom
+   * Zentrum nach außen zucken – passend zum Look des ASMD-Balls.
+   */
+  private drawElectricField(
+    gfx: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    radius: number,
+    color: number,
+    alpha: number,
+    time: number,
+  ): void {
+    // Boundary-Ringe (lesbarer Radius)
+    gfx.lineStyle(2.4, ELEC_ARC, 0.10 * alpha);
+    gfx.strokeCircle(x, y, radius);
+    gfx.lineStyle(1.4, color, 0.22 * alpha);
+    gfx.strokeCircle(x, y, radius);
+    gfx.lineStyle(1.0, ELEC_ARC_BRIGHT, 0.06 * alpha);
+    gfx.strokeCircle(x, y, radius * 0.96);
+
+    // Flackernde Blitze – Anzahl/Position variieren pro Frame.
+    const boltCount = 5;
+    for (let i = 0; i < boltCount; i++) {
+      const baseAngle = time * 0.6 + i * (Math.PI * 2 / boltCount);
+      const angle = baseAngle + Math.sin(time * 3.1 + i * 1.7) * 0.5;
+      const reach = radius * Phaser.Math.FloatBetween(0.55, 0.98);
+      const segments = 4;
+      const points: Array<{ x: number; y: number }> = [{ x, y }];
+      for (let s = 1; s <= segments; s++) {
+        const frac = s / segments;
+        const jitter = radius * 0.16 * (1 - frac);
+        const px = x + Math.cos(angle) * reach * frac + Phaser.Math.FloatBetween(-jitter, jitter);
+        const py = y + Math.sin(angle) * reach * frac + Phaser.Math.FloatBetween(-jitter, jitter);
+        points.push({ x: px, y: py });
+      }
+
+      gfx.lineStyle(2.0, ELEC_ARC, 0.22 * alpha);
+      gfx.beginPath();
+      gfx.moveTo(points[0].x, points[0].y);
+      for (let s = 1; s < points.length; s++) gfx.lineTo(points[s].x, points[s].y);
+      gfx.strokePath();
+
+      gfx.lineStyle(1.0, ELEC_ARC_BRIGHT, 0.5 * alpha);
+      gfx.beginPath();
+      gfx.moveTo(points[0].x, points[0].y);
+      for (let s = 1; s < points.length; s++) gfx.lineTo(points[s].x, points[s].y);
+      gfx.strokePath();
+    }
+  }
+
+  private playSpawnBurst(x: number, y: number, radius: number, isElectric = false): void {
     const burstEmitter = this.scene.add.particles(x, y, TEX_STINK_PUFF, {
       lifespan:  { min: 700, max: 2400 },
       quantity:  1,
@@ -715,7 +789,7 @@ export class StinkCloudSystem {
       speedY:    { min: -95, max: 95 },
       scale:     { start: 0.22, end: 0.78 },
       alpha:     { start: 0.34, end: 0 },
-      tint:      [TINT_ACID, TINT_CHEM_CYAN, TINT_SULFUR],
+      tint:      isElectric ? [...ELEC_EDGE] : [TINT_ACID, TINT_CHEM_CYAN, TINT_SULFUR],
       rotate:    { min: 0, max: 360 },
       emitting:  false,
       blendMode: Phaser.BlendModes.ADD,
@@ -726,7 +800,7 @@ export class StinkCloudSystem {
 
     const flash = this.scene.add.image(x, y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH + 0.03)
-      .setTint(TINT_DAMAGE_GLOW)
+      .setTint(isElectric ? ELEC_DAMAGE : TINT_DAMAGE_GLOW)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.5)
       .setScale(0.32 * (radius / REF_RADIUS), 0.3 * (radius / REF_RADIUS));

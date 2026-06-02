@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -945,6 +945,15 @@ export const WEAPON_CONFIGS = {
       selfKnockbackMult: 0.75,
       allowCrossTeam: true,   // Jeder ASMD-Primary-Schuss kann ASMD-Bälle anderer Spieler zünden
       explosionVisualStyle: 'energy',
+      // Schaden-über-Zeit-Fläche – per Upgrade aktiviert (damagePerTick/durationMs werden hochgezogen).
+      // Radius basiert auf dem Explosionsradius (aoeRadius). Stil: elektrisierte Fläche.
+      dotArea: {
+        durationMs:     0,
+        damagePerTick:  0,
+        tickIntervalMs: 250,
+        radiusScale:    1,
+        style:          'electric',
+      } satisfies DamageOverTimeAreaConfig,
     } satisfies DetonableConfig,
     shotAudio: {
       successKey: 'shot_asmd_secondary',

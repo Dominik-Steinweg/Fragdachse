@@ -210,7 +210,27 @@ export interface ImpactCloudConfig {
   readonly tickInterval: number;
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
-  readonly visualVariant?: 'stink' | 'spore';
+  readonly visualVariant?: DamageZoneVisualStyle;
+}
+
+/** Visueller Stil einer Schaden-über-Zeit-Fläche (DoT-Zone). */
+export type DamageZoneVisualStyle = 'stink' | 'spore' | 'electric';
+
+/**
+ * Generische Konfiguration für eine Schaden-über-Zeit-Fläche, die am Explosions-
+ * bzw. Detonationsort entsteht (analog zu den Impact-Clouds der Sporen). Wird an
+ * Explosionen/Detonablen geheftet, damit spätere Upgrades (HE-Granate, Smoke,
+ * Mini-Rakete, …) ebenfalls eine DoT-Fläche erzeugen können.
+ * damagePerTick = 0 oder durationMs = 0 deaktiviert den Effekt.
+ */
+export interface DamageOverTimeAreaConfig {
+  readonly durationMs: number;       // Lebensdauer der Fläche
+  readonly damagePerTick: number;    // HP-Schaden pro Tick (0 = deaktiviert)
+  readonly tickIntervalMs: number;   // ms zwischen Ticks
+  readonly radiusScale?: number;     // Flächenradius = Explosionsradius × radiusScale (Default 1)
+  readonly style: DamageZoneVisualStyle;  // Darstellungsstil je Waffe
+  readonly rockDamageMult?: number;
+  readonly trainDamageMult?: number;
 }
 
 export type HomingTargetType = 'players' | 'enemies' | 'train' | 'projectiles';
@@ -629,6 +649,7 @@ export interface DetonableConfig {
   readonly explosionVisualStyle?: ExplosionVisualStyle;
   readonly rockDamageMult?:  number; // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number; // Schadensfaktor gegen den Zug (Default 1.0)
+  readonly dotArea?: DamageOverTimeAreaConfig;  // optionale Schaden-über-Zeit-Fläche am Detonationsort
 }
 
 /**
@@ -700,7 +721,7 @@ export interface SyncedStinkCloud {
   radius:     number;
   alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
   ownerColor: number; // Spielerfarbe für Fairness-Kreis
-  visualVariant?: 'stink' | 'spore';
+  visualVariant?: DamageZoneVisualStyle;
 }
 
 export interface SyncedTimeBubble {

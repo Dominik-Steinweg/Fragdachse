@@ -1315,6 +1315,36 @@
           ]
         },
         {
+          "id": "asmd_secondary_dot_field",
+          "code": "C-W5-4",
+          "label": "Upgrade ASMD Sekundaer: Elektrofeld",
+          "description": "Die Explosion hinterlaesst 2 Sekunden lang eine elektrisierte Flaeche, die allen Gegnern darin Schaden ueber Zeit zufuegt.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 247,
+          "requires": [
+            {
+              "upgradeId": "unlock_asmd_secondary",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.dotArea.durationMs",
+              "mode": "add_per_level",
+              "value": 2000
+            },
+            {
+              "stat": "weapon.ASMD_SEC.dotArea.damagePerTick",
+              "mode": "add_per_level",
+              "value": 5
+            }
+          ]
+        },
+        {
           "id": "unlock_mini_rocket_launcher",
           "code": "C-W6",
           "label": "Mini-Raketen",
