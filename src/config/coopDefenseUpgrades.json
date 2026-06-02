@@ -239,6 +239,61 @@
           ]
         },
         {
+          "id": "glock_burning_bullets",
+          "code": "B-W1-3",
+          "label": "Upgrade Glock: Brennende Kugeln",
+          "description": "Glock-Treffer setzen Gegner in Brand und verursachen 2 Sekunden lang Feuerschaden.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 125,
+          "requires": [
+            {
+              "upgradeId": "unlock_glock",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.GLOCK.burnOnHit.durationMs",
+              "mode": "add_per_level",
+              "value": 2000
+            },
+            {
+              "stat": "weapon.GLOCK.burnOnHit.damagePerTick",
+              "mode": "add_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
+          "id": "glock_burning_bullets_damage",
+          "code": "B-W1-4",
+          "label": "Upgrade Glock: Brand-Schaden",
+          "description": "+50% Feuerschaden der brennenden Glock-Kugeln je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 127,
+          "requires": [
+            {
+              "upgradeId": "glock_burning_bullets",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.GLOCK.burnOnHit.damagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
           "id": "unlock_plasma",
           "code": "B-W2",
           "label": "Plasma",
@@ -392,6 +447,31 @@
               "stat": "weapon.ASMD_PRIM.damage",
               "mode": "add_percent_per_level",
               "value": 0.2
+            }
+          ]
+        },
+        {
+          "id": "asmd_primary_chain_lightning",
+          "code": "B-W3-4",
+          "label": "Upgrade ASMD Primaer: Kettenblitz",
+          "description": "ASMD Primaer springt je Stufe auf ein weiteres Ziel ueber (Gegner und ASMD-Baelle). Jeder Sprung verliert 10% Schaden; ASMD-Baelle werden detoniert.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 186,
+          "requires": [
+            {
+              "upgradeId": "asmd_primary_range",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_PRIM.chainLightning.maxJumps",
+              "mode": "add_per_level",
+              "value": 1
             }
           ]
         },
@@ -903,6 +983,61 @@
               "stat": "weapon.ROCKET_LAUNCHER.cooldown",
               "mode": "add_percent_per_level",
               "value": -0.1
+            }
+          ]
+        },
+        {
+          "id": "rocket_launcher_burning_explosion",
+          "code": "C-W2-3",
+          "label": "Upgrade Rocket Launcher: Brennende Explosion",
+          "description": "Die Explosion setzt alle Gegner im Radius in Brand und verursacht 2 Sekunden lang Feuerschaden.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 155,
+          "requires": [
+            {
+              "upgradeId": "unlock_rocket_launcher",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.burnOnHit.durationMs",
+              "mode": "add_per_level",
+              "value": 2000
+            },
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.burnOnHit.damagePerTick",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "rocket_launcher_burning_explosion_damage",
+          "code": "C-W2-4",
+          "label": "Upgrade Rocket Launcher: Brand-Schaden",
+          "description": "+50% Feuerschaden der brennenden Explosion je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 157,
+          "requires": [
+            {
+              "upgradeId": "rocket_launcher_burning_explosion",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.burnOnHit.damagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.5
             }
           ]
         },
@@ -1590,6 +1725,61 @@
               "stat": "weapon.NEGEV.warmupDuration",
               "mode": "add_percent_per_level",
               "value": -0.5
+            }
+          ]
+        },
+        {
+          "id": "negev_burning_bullets",
+          "code": "C-W9-5",
+          "label": "Upgrade Negev: Brennende Kugeln",
+          "description": "Negev-Treffer setzen Gegner in Brand und verursachen 2 Sekunden lang Feuerschaden.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 375,
+          "requires": [
+            {
+              "upgradeId": "unlock_negev",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.NEGEV.burnOnHit.durationMs",
+              "mode": "add_per_level",
+              "value": 2000
+            },
+            {
+              "stat": "weapon.NEGEV.burnOnHit.damagePerTick",
+              "mode": "add_per_level",
+              "value": 0.25
+            }
+          ]
+        },
+        {
+          "id": "negev_burning_bullets_damage",
+          "code": "C-W9-6",
+          "label": "Upgrade Negev: Brand-Schaden",
+          "description": "+50% Feuerschaden der brennenden Negev-Kugeln je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 377,
+          "requires": [
+            {
+              "upgradeId": "negev_burning_bullets",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.NEGEV.burnOnHit.damagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.5
             }
           ]
         },

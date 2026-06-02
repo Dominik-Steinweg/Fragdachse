@@ -175,6 +175,18 @@ export interface TracerConfig {
   readonly colorGlow?: number;   // Farb-Override äußerer Halo (undefined = Projektil-/Spielerfarbe)
 }
 
+/**
+ * Vereinheitlichte Burn-Konfiguration für „brennende Treffer". Wird an Waffen
+ * (Projektil/Hitscan/Melee) oder an Explosionen geheftet und löst exakt dieselbe
+ * Burn-Stack-Logik aus wie Flammenwerfer und Molotov. damagePerTick = 0 oder
+ * durationMs = 0 deaktiviert den Effekt (Default für Waffen ohne Upgrade).
+ */
+export interface BurnOnHitConfig {
+  readonly durationMs: number;      // Dauer eines Burn-Stacks
+  readonly damagePerTick: number;   // HP-Schaden pro Tick (0 = deaktiviert)
+  readonly tickIntervalMs: number;  // ms zwischen Ticks
+}
+
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
   readonly radius: number;
@@ -188,6 +200,7 @@ export interface ProjectileExplosionConfig {
   readonly trainDamageMult?: number;
   readonly color?: number;
   readonly visualStyle?: ExplosionVisualStyle;
+  readonly burnOnHit?: BurnOnHitConfig;  // setzt Ziele im gesamten Radius in Brand
 }
 
 export interface ImpactCloudConfig {
@@ -624,6 +637,25 @@ export interface DetonableConfig {
  */
 export interface DetonatorConfig {
   readonly triggerTags: readonly string[];  // Tags der Projektile, die gezündet werden können
+}
+
+/**
+ * Kettenblitz-Konfiguration für Hitscan-Waffen. Nach dem Primärtreffer springt
+ * der Strahl vom Einschlagspunkt auf das nächstgelegene weitere Ziel über und
+ * von dort wieder weiter (bis maxJumps). Bereits getroffene Ziele werden nie
+ * erneut getroffen; jeder Sprung respektiert die Sichtlinie (keine Wände) und
+ * verliert konfigurierbar an Schaden. maxJumps = 0 deaktiviert den Kettenblitz
+ * (Default für Waffen ohne entsprechendes Upgrade).
+ */
+export interface ChainLightningConfig {
+  readonly maxJumps: number;                  // Anzahl Sprünge (0 = deaktiviert)
+  readonly searchRadius: number;              // Suchradius (px) ab dem letzten Einschlag
+  readonly damageFalloffPerJump: number;      // Schadensreduktion je Sprung (0.1 = -10% beim 1. Sprung, -20% beim 2. …)
+  readonly targetEnemies?: boolean;           // Gegner sind gültige Ziele
+  readonly targetPlayers?: boolean;           // Spieler sind gültige Ziele
+  readonly targetDecoys?: boolean;            // Decoys sind gültige Ziele
+  readonly detonableTags?: readonly string[]; // detonierbare Projektile als Ziele (z.B. ['asmd_ball']) → lösen ihre Detonation aus
+  readonly thicknessFalloffPerJump?: number;  // visuelle Verschmälerung des Strahls je Sprung (Default 0.2)
 }
 
 /** Explodierte Granate – von ProjectileManager.hostUpdate() zurückgegeben */

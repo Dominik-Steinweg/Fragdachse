@@ -83,6 +83,30 @@ export class DetonationSystem {
   }
 
   /**
+   * Detoniert ein konkret ausgewähltes detonierbares Projektil (z.B. wenn ein
+   * Kettenblitz-Sprung gezielt auf einen ASMD-Ball überspringt). Liefert true,
+   * wenn das Projektil existierte, detonierbar war und detoniert wurde.
+   *
+   * @param projectileId      ID des zu detonierenden Projektils
+   * @param detonatorOwnerId  Spieler, dem die Detonation zugerechnet wird
+   */
+  detonateProjectile(projectileId: number, detonatorOwnerId: string): boolean {
+    const proj = this.projectileManager.getActiveProjectiles().find((p) => p.id === projectileId);
+    if (!proj?.detonable) return false;
+
+    this.pendingDetonations.push({
+      x:                 proj.sprite.x,
+      y:                 proj.sprite.y,
+      projectileOwnerId: proj.ownerId,
+      detonatorOwnerId,
+      effect:            proj.detonable,
+      weaponName:        proj.weaponName,
+    });
+    this.projectileManager.destroyProjectile(proj.id);
+    return true;
+  }
+
+  /**
    * Prüft jeden Frame ob Detonator-Projektile auf detonierbare Projektile treffen.
    * Ermöglicht z.B. Raketenwerfer-Raketen, die durch Schüsse detoniert werden können.
    * Aufrufen BEVOR combatSystem.update(), damit zerstörte Objekte nicht doppelt verarbeitet werden.

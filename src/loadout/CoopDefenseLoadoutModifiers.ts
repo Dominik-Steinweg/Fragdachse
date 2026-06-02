@@ -63,6 +63,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'GLOCK',
     targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
   },
+  'weapon.GLOCK.burnOnHit.durationMs': {
+    kind: 'weapon',
+    itemId: 'GLOCK',
+    targets: [{ path: ['burnOnHit', 'durationMs'], operation: 'add' }],
+  },
+  'weapon.GLOCK.burnOnHit.damagePerTick': {
+    kind: 'weapon',
+    itemId: 'GLOCK',
+    targets: [{ path: ['burnOnHit', 'damagePerTick'], operation: 'scale' }],
+  },
   'weapon.PLASMA.homing.maxTurnDegreesPerStep': {
     kind: 'weapon',
     itemId: 'PLASMA',
@@ -87,6 +97,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'ASMD_PRIM',
     targets: [{ path: ['damage'], operation: 'scale' }],
+  },
+  'weapon.ASMD_PRIM.chainLightning.maxJumps': {
+    kind: 'weapon',
+    itemId: 'ASMD_PRIM',
+    targets: [{ path: ['chainLightning', 'maxJumps'], operation: 'add' }],
   },
   'weapon.BITE.range': {
     kind: 'weapon',
@@ -162,6 +177,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'ROCKET_LAUNCHER',
     targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
+  'weapon.ROCKET_LAUNCHER.burnOnHit.durationMs': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['fire', 'impactExplosion', 'burnOnHit', 'durationMs'], operation: 'add' }],
+  },
+  'weapon.ROCKET_LAUNCHER.burnOnHit.damagePerTick': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['fire', 'impactExplosion', 'burnOnHit', 'damagePerTick'], operation: 'scale' }],
   },
   'weapon.AK47.range': {
     kind: 'weapon',
@@ -282,6 +307,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'NEGEV',
     targets: [{ path: ['warmupSpeedMultiplier'], operation: 'inverse_scale' }],
+  },
+  'weapon.NEGEV.burnOnHit.durationMs': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['burnOnHit', 'durationMs'], operation: 'add' }],
+  },
+  'weapon.NEGEV.burnOnHit.damagePerTick': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['burnOnHit', 'damagePerTick'], operation: 'scale' }],
   },
   'weapon.TESLA_DOME.radius': {
     kind: 'weapon',

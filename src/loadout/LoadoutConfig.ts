@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -151,6 +151,13 @@ export interface WeaponConfig {
   // Detonations-System
   readonly detonable?:  DetonableConfig;  // Projektile dieser Waffe können gezündet werden
   readonly detonator?:  DetonatorConfig;  // Diese Waffe zündet passende Detonables
+
+  // Kettenblitz (nur Hitscan-Waffen): Strahl springt nach dem Treffer weiter
+  readonly chainLightning?: ChainLightningConfig;
+
+  // Brennende Treffer: setzt getroffene Ziele in Brand (Projektil/Hitscan/Melee).
+  // Für Explosions-Brand siehe ProjectileExplosionConfig.burnOnHit.
+  readonly burnOnHit?: BurnOnHitConfig;
 
   // Objekt-Schadens-Multiplikatoren (optional, Default = 1.0 = 100%)
   readonly rockDamageMult?:  number;  // Schadensfaktor gegen Felsen (0 = kein Schaden)
@@ -534,6 +541,12 @@ export const WEAPON_CONFIGS = {
     projectileColor:      0xd2a25f,
     projectileStyle:      'bullet' as ProjectileStyle,
     bulletVisualPreset:   'glock' as BulletVisualPreset,
+    // Brennende Kugeln – per Upgrade aktiviert (damagePerTick wird von 0 hochgezogen).
+    burnOnHit: {
+      durationMs:     0,
+      damagePerTick:  0,
+      tickIntervalMs: 250,
+    } satisfies BurnOnHitConfig,
     tracerConfig: {
       widthCore:  1,
       widthGlow:  2,
@@ -575,6 +588,16 @@ export const WEAPON_CONFIGS = {
     detonator: {
       triggerTags: ['asmd_ball'],
     } satisfies DetonatorConfig,
+    // Kettenblitz – per Coop-Defense-Upgrade aktiviert (maxJumps wird von 0 hochgezogen).
+    // Gültige Ziele: Gegner und ASMD-Bälle (Sekundär); ASMD-Bälle werden dabei detoniert.
+    chainLightning: {
+      maxJumps:                0,    // 0 = deaktiviert; Upgrade erhöht auf bis zu 3
+      searchRadius:            100,
+      damageFalloffPerJump:    0.1,  // -10% pro Sprung (2. Treffer -10%, 3. Treffer -20%, …)
+      targetEnemies:           true,
+      detonableTags:           ['asmd_ball'],
+      thicknessFalloffPerJump: 0.22,
+    } satisfies ChainLightningConfig,
     rockDamageMult:  0,   // ASMD Primary macht keinen Schaden an Felsen
     shotAudio: {
       successKey: 'shot_asmd_primary',
@@ -951,6 +974,12 @@ export const WEAPON_CONFIGS = {
         trainDamageMult: 1.15,
         color:           0xff8a3d,
         visualStyle:     'rocket',
+        // Brennende Explosion – per Upgrade aktiviert (setzt den gesamten Radius in Brand).
+        burnOnHit: {
+          durationMs:     0,
+          damagePerTick:  0,
+          tickIntervalMs: 250,
+        } satisfies BurnOnHitConfig,
       } satisfies ProjectileExplosionConfig,
     },
     allowedSlots:         ['weapon2'],
@@ -1344,6 +1373,12 @@ export const WEAPON_CONFIGS = {
     warmupSpeedMultiplier: 1,
     projectileColor:      0xc79c4f,
     bulletVisualPreset:   'negev' as BulletVisualPreset,
+    // Brennende Kugeln – per Upgrade aktiviert.
+    burnOnHit: {
+      durationMs:     0,
+      damagePerTick:  0,
+      tickIntervalMs: 250,
+    } satisfies BurnOnHitConfig,
     shotScreenShake:      { duration: 60, intensity: 0.002 },    
     tracerConfig: {
       widthCore:  1,

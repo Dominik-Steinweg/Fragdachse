@@ -1317,6 +1317,10 @@ export class LoadoutManager {
       detonator:       config.detonator,
       rockDamageMult:  config.rockDamageMult,
       trainDamageMult: config.trainDamageMult,
+      // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
+      burnDurationMs:     config.burnOnHit?.durationMs,
+      burnDamagePerTick:  config.burnOnHit?.damagePerTick,
+      burnTickIntervalMs: config.burnOnHit?.tickIntervalMs,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
     });
@@ -1355,6 +1359,8 @@ export class LoadoutManager {
       config.detonator,  // DetonatorConfig weitergeben (optional)
       config.rockDamageMult  ?? 1,
       config.trainDamageMult ?? 1,
+      config.chainLightning,  // ChainLightningConfig weitergeben (optional)
+      config.burnOnHit,       // BurnOnHitConfig weitergeben (optional)
     ) ?? false;
   }
 
@@ -1384,6 +1390,7 @@ export class LoadoutManager {
       config.trainDamageMult ?? 1,
       fireConfig.visualPreset,
       config.shotAudio?.successKey,
+      config.burnOnHit,       // BurnOnHitConfig weitergeben (optional)
     ) ?? false;
   }
 

@@ -8,7 +8,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { BurnOnHitConfig, ChainLightningConfig, HitscanVisualPreset, LoadoutSlot, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   type GeometryHit,
   findNearestRectangleHit as geomNearestRectangleHit,
@@ -63,7 +63,8 @@ interface BurnStackState {
   expiresAt: number;
 }
 
-interface BurnAttackerState {
+interface BurnSourceState {
+  attackerId: string;
   stacks: BurnStackState[];
   nextTickAt: number;
   damagePerTick: number;
@@ -101,14 +102,24 @@ type SweptProjectileHit =
   | { kind: 'enemy'; enemyId: string; distance: number; x: number; y: number }
   | { kind: 'decoy'; decoyId: number; distance: number; x: number; y: number };
 
+type ChainTarget =
+  | { kind: 'enemy'; enemyId: string; x: number; y: number }
+  | { kind: 'player'; playerId: string; x: number; y: number }
+  | { kind: 'decoy'; decoyId: number; x: number; y: number }
+  | { kind: 'detonable'; projectileId: number; x: number; y: number };
+
 export class CombatSystem {
   private hp:            Map<string, number>                           = new Map();
   private maxHp:         Map<string, number>                           = new Map();
   private armor:         Map<string, number>                           = new Map();
   private alive:         Map<string, boolean>                          = new Map();
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
-  private burnStates:    Map<string, Map<string, BurnAttackerState>>   = new Map();
+  // Burn-Stacks pro Ziel, gruppiert nach Quelle (Angreifer + Waffe), damit
+  // unterschiedliche Quellen (z.B. Flammenwerfer + Molotov) sauber stacken und
+  // ihren Schaden addieren statt sich gegenseitig zu überschreiben.
+  private burnStates:    Map<string, Map<string, BurnSourceState>>      = new Map();
   private readonly hitscanLine       = new Phaser.Geom.Line();
+  private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
   private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchCircle     = new Phaser.Geom.Circle();
@@ -278,11 +289,11 @@ export class CombatSystem {
   isAlive(id: string):  boolean { return (this.alive.get(id) ?? false) || this.enemyManager?.hasEnemy(id) === true; }
   isBurrowed(id: string): boolean { return this.burrowSystem?.isBurrowed(id) ?? false; }
   getBurnStackCount(id: string): number {
-    const attackerStates = this.burnStates.get(id);
-    if (!attackerStates) return 0;
+    const sourceStates = this.burnStates.get(id);
+    if (!sourceStates) return 0;
 
     let totalStacks = 0;
-    for (const state of attackerStates.values()) {
+    for (const state of sourceStates.values()) {
       totalStacks += state.stacks.length;
     }
     return totalStacks;
@@ -380,42 +391,76 @@ export class CombatSystem {
       this.burnStates.set(targetId, targetState);
     }
 
-    let attackerState = targetState.get(attackerId);
-    if (!attackerState) {
-      attackerState = {
+    // Quelle = Angreifer + Waffe: gleiche Quelle stackt (1 Treffer = 1 Stack),
+    // verschiedene Quellen ticken unabhängig und addieren ihren Schaden.
+    const sourceKey = `${attackerId}␟${weaponName}`;
+    let sourceState = targetState.get(sourceKey);
+    if (!sourceState) {
+      sourceState = {
+        attackerId,
         stacks: [],
         nextTickAt: now + tickIntervalMs,
         damagePerTick,
         tickIntervalMs,
         weaponName,
       };
-      targetState.set(attackerId, attackerState);
+      targetState.set(sourceKey, sourceState);
     }
 
-    attackerState.damagePerTick = damagePerTick;
-    attackerState.tickIntervalMs = tickIntervalMs;
-    attackerState.weaponName = weaponName;
-    attackerState.stacks.push({ expiresAt: now + durationMs });
+    sourceState.damagePerTick = damagePerTick;
+    sourceState.tickIntervalMs = tickIntervalMs;
+    sourceState.weaponName = weaponName;
+    sourceState.stacks.push({ expiresAt: now + durationMs });
+  }
+
+  /**
+   * Wendet eine BurnOnHitConfig auf ein Ziel an (Projektil/Hitscan/Melee/Explosion).
+   * No-op, wenn keine Config vorhanden oder deaktiviert (damagePerTick/durationMs = 0).
+   */
+  private applyBurnOnHit(
+    targetId:   string,
+    attackerId: string,
+    burn:       BurnOnHitConfig | undefined,
+    weaponName: string,
+  ): void {
+    if (!burn) return;
+    this.applyBurnStack(targetId, attackerId, burn.durationMs, burn.damagePerTick, burn.tickIntervalMs, weaponName);
+  }
+
+  /**
+   * Brennende Treffer aus den Burn-Feldern eines Projektils (z.B. brennende
+   * Kugeln der Glock/Negev oder Flammenwerfer-Hitbox). No-op ohne Burn-Felder.
+   */
+  private applyProjectileBurn(targetId: string, proj: TrackedProjectile | undefined): void {
+    if (!proj) return;
+    this.applyBurnStack(
+      targetId,
+      proj.ownerId,
+      proj.burnDurationMs ?? 0,
+      proj.burnDamagePerTick ?? 0,
+      proj.burnTickIntervalMs ?? 0,
+      proj.weaponName,
+    );
   }
 
   updateBurnEffects(now: number): void {
-    for (const [targetId, attackerStates] of [...this.burnStates]) {
+    for (const [targetId, sourceStates] of [...this.burnStates]) {
       if (!this.isAlive(targetId) || this.isBurrowed(targetId)) {
         this.clearBurnForPlayer(targetId);
         continue;
       }
 
-      for (const [attackerId, state] of [...attackerStates]) {
+      for (const [sourceKey, state] of [...sourceStates]) {
         state.stacks = state.stacks.filter(stack => stack.expiresAt > now);
         if (state.stacks.length === 0) {
-          attackerStates.delete(attackerId);
+          sourceStates.delete(sourceKey);
           continue;
         }
 
         while (now >= state.nextTickAt && state.stacks.length > 0 && this.isAlive(targetId)) {
           const damage = state.damagePerTick * state.stacks.length;
-          const attacker = this.playerManager.getPlayer(attackerId);
-          this.applyDamage(targetId, damage, false, attackerId, state.weaponName, attacker
+          const attacker = this.playerManager.getPlayer(state.attackerId);
+          this.applyDamage(targetId, damage, false, state.attackerId, state.weaponName, attacker
             ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y }
             : undefined);
           state.nextTickAt += state.tickIntervalMs;
@@ -424,7 +469,7 @@ export class CombatSystem {
         }
       }
 
-      if (attackerStates.size === 0) {
+      if (sourceStates.size === 0) {
         this.burnStates.delete(targetId);
       }
     }
@@ -500,6 +545,7 @@ export class CombatSystem {
       this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
       });
+      if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, weaponName);
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
@@ -511,6 +557,7 @@ export class CombatSystem {
       this.applyDamage(enemy.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
       });
+      this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, weaponName);
     }
   }
 
@@ -624,17 +671,8 @@ export class CombatSystem {
           continue;
         }
 
-        if (proj.isFlame && canDealDamage) {
-          this.applyBurnStack(
-            player.id,
-            proj.ownerId,
-            proj.burnDurationMs ?? 0,
-            proj.burnDamagePerTick ?? 0,
-            proj.burnTickIntervalMs ?? 0,
-            proj.weaponName,
-          );
-        }
-
+        // Brennende Treffer (Flammenwerfer-Hitbox, brennende Kugeln, …) werden
+        // zentral in handleHit aus den Burn-Feldern des Projektils angewendet.
         this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName, canDealDamage);
         return true;  // Projektil trifft maximal einen Spieler pro Frame
       }
@@ -681,17 +719,7 @@ export class CombatSystem {
           continue;
         }
 
-        if (proj.isFlame) {
-          this.applyBurnStack(
-            enemy.id,
-            proj.ownerId,
-            proj.burnDurationMs ?? 0,
-            proj.burnDamagePerTick ?? 0,
-            proj.burnTickIntervalMs ?? 0,
-            proj.weaponName,
-          );
-        }
-
+        // Brennende Treffer werden zentral in handleEnemyHit angewendet.
         this.handleEnemyHit(proj.id, enemy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
         return true;
       }
@@ -884,6 +912,8 @@ export class CombatSystem {
     detonatorCfg?: DetonatorConfig,
     rockDamageMult = 1,
     trainDamageMult = 1,
+    chainCfg?: ChainLightningConfig,
+    burnOnHit?: BurnOnHitConfig,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -933,6 +963,8 @@ export class CombatSystem {
         dirY: Math.sin(angle),
       });
 
+      if (canDealDamage) this.applyBurnOnHit(trace.hitPlayerId, shooterId, burnOnHit, weaponName);
+
       if (canDealDamage && adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
@@ -948,6 +980,8 @@ export class CombatSystem {
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
       });
+
+      this.applyBurnOnHit(trace.hitEnemyId, shooterId, burnOnHit, weaponName);
 
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
@@ -976,7 +1010,198 @@ export class CombatSystem {
       );
     }
 
+    // Kettenblitz: vom Einschlagspunkt aus auf weitere Ziele überspringen.
+    if (chainCfg && chainCfg.maxJumps > 0) {
+      const loadoutMult = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const baseChainDamage = damage * loadoutMult * powerUpMult;
+
+      const visitedPlayers = new Set<string>();
+      const visitedEnemies = new Set<string>();
+      const visitedDecoys  = new Set<number>();
+      if (trace.hitPlayerId)         visitedPlayers.add(trace.hitPlayerId);
+      if (trace.hitEnemyId)          visitedEnemies.add(trace.hitEnemyId);
+      if (trace.hitDecoyId !== null) visitedDecoys.add(trace.hitDecoyId);
+
+      this.resolveChainLightning({
+        shooterId,
+        originX:       trace.endX,
+        originY:       trace.endY,
+        baseDamage:    baseChainDamage,
+        chainCfg,
+        weaponName,
+        adrenalinGain,
+        playerColor,
+        visualPreset,
+        baseThickness: traceThickness,
+        visitedPlayers,
+        visitedEnemies,
+        visitedDecoys,
+      });
+    }
+
     return true;
+  }
+
+  // ── Kettenblitz ────────────────────────────────────────────────────────────
+
+  /**
+   * Lässt einen Hitscan-Treffer als Kettenblitz von Ziel zu Ziel überspringen.
+   * Ausgangspunkt jedes Sprungs ist der letzte Einschlag; pro Sprung wird das
+   * nächstgelegene noch nicht getroffene Ziel mit freier Sichtlinie gewählt.
+   * Detonierbare Ziele (z.B. ASMD-Bälle) lösen ihre Detonation aus statt
+   * direkten Schaden zu nehmen.
+   */
+  private resolveChainLightning(opts: {
+    shooterId:      string;
+    originX:        number;
+    originY:        number;
+    baseDamage:     number;   // Primärschaden inkl. Multiplikatoren
+    chainCfg:       ChainLightningConfig;
+    weaponName:     string;
+    adrenalinGain:  number;
+    playerColor:    number;
+    visualPreset:   HitscanVisualPreset;
+    baseThickness:  number;
+    visitedPlayers: Set<string>;
+    visitedEnemies: Set<string>;
+    visitedDecoys:  Set<number>;
+  }): void {
+    const { chainCfg } = opts;
+    const maxJumps = Math.floor(chainCfg.maxJumps);
+    if (maxJumps <= 0 || opts.baseDamage <= 0) return;
+
+    const falloffPerJump   = Math.max(0, chainCfg.damageFalloffPerJump);
+    const thicknessFalloff = chainCfg.thicknessFalloffPerJump ?? 0.2;
+    const detonableTags    = chainCfg.detonableTags ?? [];
+
+    let originX = opts.originX;
+    let originY = opts.originY;
+
+    for (let jump = 1; jump <= maxJumps; jump++) {
+      const target = this.findNearestChainTarget(originX, originY, opts.shooterId, chainCfg, detonableTags, opts);
+      if (!target) break;
+
+      // Tracer wie die Hitscan-Linie, je Sprung etwas schmaler.
+      const thickness = Math.max(1, opts.baseThickness * Math.max(0.15, 1 - thicknessFalloff * jump));
+      this.queueHitscanTrace({
+        startX:      Math.round(originX),
+        startY:      Math.round(originY),
+        endX:        Math.round(target.x),
+        endY:        Math.round(target.y),
+        color:       opts.playerColor,
+        thickness,
+        impactKind:  'player',
+        visualPreset: opts.visualPreset,
+        shooterId:   opts.shooterId,
+      });
+
+      const jumpDamage = opts.baseDamage * Math.max(0, 1 - falloffPerJump * jump);
+      const visualContext: DamageVisualContext = { sourceX: originX, sourceY: originY };
+
+      if (target.kind === 'enemy') {
+        opts.visitedEnemies.add(target.enemyId);
+        this.applyDamage(target.enemyId, jumpDamage, false, opts.shooterId, opts.weaponName, visualContext);
+        if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+      } else if (target.kind === 'player') {
+        opts.visitedPlayers.add(target.playerId);
+        const canDeal = this.canDamageTarget(opts.shooterId, target.playerId);
+        if (!(canDeal && this.shouldBlockWithShield(target.playerId, 'hitscan', jumpDamage, originX, originY))) {
+          this.applyDamage(target.playerId, jumpDamage, false, opts.shooterId, opts.weaponName, visualContext);
+          if (canDeal && opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+        }
+      } else if (target.kind === 'decoy') {
+        opts.visitedDecoys.add(target.decoyId);
+        this.decoySystem?.applyDamage(target.decoyId, jumpDamage, opts.shooterId, opts.weaponName, visualContext);
+        if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+      } else {
+        // Detonierbares Ziel (z.B. ASMD-Ball) → Detonation auslösen; Projektil wird zerstört.
+        this.detonationSystem?.detonateProjectile(target.projectileId, opts.shooterId);
+      }
+
+      originX = target.x;
+      originY = target.y;
+    }
+  }
+
+  /**
+   * Sucht das nächstgelegene gültige Kettenblitz-Ziel innerhalb des Suchradius
+   * mit freier Sichtlinie zum Ausgangspunkt. Bereits getroffene Ziele werden
+   * übersprungen. Priorität: geringste Distanz.
+   */
+  private findNearestChainTarget(
+    originX:        number,
+    originY:        number,
+    shooterId:      string,
+    chainCfg:       ChainLightningConfig,
+    detonableTags:  readonly string[],
+    visited: {
+      visitedPlayers: ReadonlySet<string>;
+      visitedEnemies: ReadonlySet<string>;
+      visitedDecoys:  ReadonlySet<number>;
+    },
+  ): ChainTarget | null {
+    const radiusSq = chainCfg.searchRadius * chainCfg.searchRadius;
+    let best: ChainTarget | null = null;
+    let bestDistSq = Number.POSITIVE_INFINITY;
+
+    const consider = (x: number, y: number, build: () => ChainTarget): void => {
+      const dx = x - originX;
+      const dy = y - originY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > radiusSq || distSq >= bestDistSq) return;
+      if (!this.hasChainLineOfSight(originX, originY, x, y)) return;
+      best = build();
+      bestDistSq = distSq;
+    };
+
+    if (chainCfg.targetEnemies) {
+      for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+        if (enemy.id === shooterId || visited.visitedEnemies.has(enemy.id)) continue;
+        consider(enemy.sprite.x, enemy.sprite.y, () => ({ kind: 'enemy', enemyId: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y }));
+      }
+    }
+
+    if (chainCfg.targetPlayers) {
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (player.id === shooterId || visited.visitedPlayers.has(player.id)) continue;
+        if (!this.isAlive(player.id) || this.burrowSystem?.isBurrowed(player.id)) continue;
+        if (!this.canDamageTarget(shooterId, player.id)) continue;
+        consider(player.sprite.x, player.sprite.y, () => ({ kind: 'player', playerId: player.id, x: player.sprite.x, y: player.sprite.y }));
+      }
+    }
+
+    if (chainCfg.targetDecoys) {
+      for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+        if (decoy.ownerId === shooterId || visited.visitedDecoys.has(decoy.id)) continue;
+        consider(decoy.sprite.x, decoy.sprite.y, () => ({ kind: 'decoy', decoyId: decoy.id, x: decoy.sprite.x, y: decoy.sprite.y }));
+      }
+    }
+
+    if (detonableTags.length > 0) {
+      for (const proj of this.projectileManager.getActiveProjectiles()) {
+        if (!proj.detonable || !detonableTags.includes(proj.detonable.tag)) continue;
+        if (!proj.detonable.allowCrossTeam && proj.ownerId !== shooterId) continue;
+        const projId = proj.id;
+        consider(proj.sprite.x, proj.sprite.y, () => ({ kind: 'detonable', projectileId: projId, x: proj.sprite.x, y: proj.sprite.y }));
+      }
+    }
+
+    return best;
+  }
+
+  /**
+   * Sichtlinie für Kettenblitz-Sprünge: blockiert durch Felsen, Baumstämme,
+   * Basen und den Zug – analog zur normalen Hitscan-/Projektil-Hindernislogik.
+   */
+  private hasChainLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
+    this.chainScanLine.setTo(x1, y1, x2, y2);
+    const dist = Phaser.Geom.Line.Length(this.chainScanLine);
+    if (dist <= 0.0001) return true;
+    const blockerDistance = this.findNearestProjectilePathBlockerDistance(this.chainScanLine);
+    return blockerDistance === null || blockerDistance >= dist - 1;
   }
 
   /**
@@ -1047,6 +1272,7 @@ export class CombatSystem {
     trainDamageMult = 1,
     visualPreset: MeleeVisualPreset = 'default',
     shotAudioKey?: string,
+    burnOnHit?: BurnOnHitConfig,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -1089,6 +1315,7 @@ export class CombatSystem {
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
       });
+      this.applyBurnOnHit(player.id, shooterId, burnOnHit, weaponName);
       hitPlayer = true;
       if (dist < nearestHitDistance) {
         nearestHitDistance = dist;
@@ -1130,6 +1357,7 @@ export class CombatSystem {
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
       });
+      this.applyBurnOnHit(enemy.id, shooterId, burnOnHit, weaponName);
       hitPlayer = true;
       if (dist < nearestHitDistance) {
         nearestHitDistance = dist;
@@ -1751,6 +1979,7 @@ export class CombatSystem {
     }
     if (allowDamage) {
       this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
+      this.applyProjectileBurn(playerId, projectile);
       if (leafBlowerImpulse && this.isAlive(playerId)) {
         this.onPlayerImpulse?.(playerId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
       }
@@ -1790,6 +2019,7 @@ export class CombatSystem {
     }
 
     this.applyDamage(enemyId, damage, false, shooterId, weaponName, visualContext);
+    this.applyProjectileBurn(enemyId, projectile);
     if (leafBlowerImpulse && this.enemyManager?.hasEnemy(enemyId)) {
       this.onEnemyImpulse?.(enemyId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
     }
@@ -2026,9 +2256,11 @@ export class CombatSystem {
   }
 
   private clearBurnByAttacker(attackerId: string): void {
-    for (const [targetId, attackerStates] of this.burnStates) {
-      attackerStates.delete(attackerId);
-      if (attackerStates.size === 0) this.burnStates.delete(targetId);
+    for (const [targetId, sourceStates] of this.burnStates) {
+      for (const [sourceKey, state] of sourceStates) {
+        if (state.attackerId === attackerId) sourceStates.delete(sourceKey);
+      }
+      if (sourceStates.size === 0) this.burnStates.delete(targetId);
     }
   }
 }

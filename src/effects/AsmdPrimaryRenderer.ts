@@ -93,7 +93,9 @@ export class AsmdPrimaryRenderer {
     }
 
     const angle = Math.atan2(dy, dx);
-    const beamThickness = Math.max(thickness * 2.35, 8);
+    // Floor niedrig genug, dass schmalere Kettenblitz-Sprünge sichtbar dünner
+    // werden; die Primärwaffe (thickness 3) bleibt mit ~7.95 praktisch unverändert.
+    const beamThickness = Math.max(thickness * 2.65, 5);
     const segmentCount = Phaser.Math.Clamp(Math.round(beamLength / 64), 4, 11);
     const segmentLength = beamLength / segmentCount;
     const glowColor = playerColor;
