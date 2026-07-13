@@ -10,7 +10,7 @@
       "weaponId": "BITE",
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
-      "imageKey": "zombie",
+      "imageKey": "enemy_zombie_badger",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.5,
         "moveSpeedFactorPerAdditionalPlayer": 0
@@ -30,8 +30,7 @@
       "weaponId": "BITE",
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
-      "imageKey": "badger",
-      "color": 16755268,
+      "imageKey": "enemy_demon_badger",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0,
         "moveSpeedFactorPerAdditionalPlayer": 0
@@ -51,8 +50,7 @@
       "weaponId": "BITE",
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 100,
-      "imageKey": "badger",
-      "color": 13377568,
+      "imageKey": "enemy_rabid_badger",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0,
         "moveSpeedFactorPerAdditionalPlayer": 0
@@ -72,10 +70,9 @@
       "weaponId": "BITE",
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
-      "imageKey": "zombie",
+      "imageKey": "enemy_grave_titan",
       "isBoss": true,
       "displayName": "Grufttitan",
-      "color": 10494192,
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.75,
         "moveSpeedFactorPerAdditionalPlayer": 0

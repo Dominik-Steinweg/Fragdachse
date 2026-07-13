@@ -74,6 +74,7 @@ import type { CoopDefenseUpgradeProfile } from '../types';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
@@ -187,7 +188,12 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_nuk', './assets/sprites/16x16nuke.png');
     this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
     this.load.image('badger',      './assets/sprites/32x32dachsweapon01.png');
-    this.load.image('zombie',      './assets/sprites/32x32zombie.png');
+    for (const enemyConfig of Object.values(COOP_DEFENSE_ENEMY_CONFIGS)) {
+      this.load.image(
+        enemyConfig.imageKey,
+        `./assets/sprites/enemies/${enemyConfig.imageKey}.png`,
+      );
+    }
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
 
     // Preload Loadout & Upgrade Icons
