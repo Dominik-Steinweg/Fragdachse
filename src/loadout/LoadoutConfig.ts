@@ -10,6 +10,8 @@ export interface ProjectileWeaponFireConfig {
   readonly projectileMaxBounces: number;
   readonly limitRangeToCursor?: boolean; // true = Reichweite dieses Schusses auf Cursor-Distanz begrenzen
   readonly impactExplosion?: ProjectileExplosionConfig;
+  // Explosion, die NUR bei Treffern auf Gegner/Spieler ausgelöst wird (nicht an Wänden/am Lebensende).
+  readonly enemyHitExplosion?: ProjectileExplosionConfig;
   readonly impactCloud?: ImpactCloudConfig;
   readonly homing?: ProjectileHomingConfig;
 }
@@ -316,6 +318,8 @@ export interface SmokeUtilityConfig extends BaseUtilityConfig {
   readonly smokeLingerDuration: number;     // ms
   readonly smokeDissipateDuration: number;  // ms
   readonly smokeMaxAlpha: number;           // 0-1
+  readonly smokeDotDamagePerTick: number;   // Schaden pro Tick (0 = deaktiviert; per Upgrade aktiviert)
+  readonly smokeDotTickIntervalMs: number;  // ms zwischen Ticks
 }
 
 export interface MolotovUtilityConfig extends BaseUtilityConfig {
@@ -749,6 +753,19 @@ export const WEAPON_CONFIGS = {
       projectileSpeed:      1300,
       projectileSize:       4,
       projectileMaxBounces: 1,
+      // Explosive Bolzen – per Upgrade aktiviert (radius/maxDamage werden von 0 hochgezogen).
+      // Kleiner und schwächer als der Raketenwerfer; nur bei Gegner-Treffern.
+      enemyHitExplosion: {
+        radius:          0,
+        maxDamage:       0,
+        minDamage:       3,
+        knockback:       250,
+        selfDamageMult:  0.25,
+        rockDamageMult:  1,
+        trainDamageMult: 1,
+        color:           0xffb36b,
+        visualStyle:     'mini_rocket',
+      } satisfies ProjectileExplosionConfig,
     },
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
@@ -1450,6 +1467,8 @@ export const UTILITY_CONFIGS = {
     smokeLingerDuration:    9000,
     smokeDissipateDuration: 2000,
     smokeMaxAlpha:          0.95,
+    smokeDotDamagePerTick:  0,    // per Upgrade aktiviert ("Gewittersturm")
+    smokeDotTickIntervalMs: 250,
     allowedSlots:           ['utility'],
     projectileStyle:        'grenade' as ProjectileStyle,
     grenadeVisualPreset:    'smoke' as GrenadeVisualPreset,

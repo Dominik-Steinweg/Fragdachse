@@ -133,6 +133,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'XBOW',
     targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
   },
+  'weapon.XBOW.enemyHitExplosion.radius': {
+    kind: 'weapon',
+    itemId: 'XBOW',
+    targets: [{ path: ['fire', 'enemyHitExplosion', 'radius'], operation: 'add' }],
+  },
+  'weapon.XBOW.enemyHitExplosion.maxDamage': {
+    kind: 'weapon',
+    itemId: 'XBOW',
+    targets: [{ path: ['fire', 'enemyHitExplosion', 'maxDamage'], operation: 'add' }],
+  },
   'weapon.LAUBBLAESER.maxKnockback': {
     kind: 'weapon',
     itemId: 'LAUBBLAESER',
@@ -407,6 +417,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'utility',
     itemId: 'SMOKE_GRENADE',
     targets: [{ path: ['smokeLingerDuration'], operation: 'scale' }],
+  },
+  'utility.SMOKE_GRENADE.dotDamage': {
+    kind: 'utility',
+    itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeDotDamagePerTick'], operation: 'add' }],
   },
   'utility.MOLOTOV_GRENADE.fireRadius': {
     kind: 'utility',

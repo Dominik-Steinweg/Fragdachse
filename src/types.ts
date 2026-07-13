@@ -531,6 +531,7 @@ export interface ProjectileSpawnConfig {
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName?:     string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
+  enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
   smokeTrailColor?: number;
@@ -604,6 +605,11 @@ export interface SmokeGrenadeEffect {
   lingerDuration: number;
   dissipateDuration: number;
   maxAlpha: number;
+  // Optionale Schaden-über-Zeit-Komponente ("Gewittersturm"). Radius und Dauer
+  // werden vom Rauch übernommen; nur diese Werte steuern den Schaden.
+  // damagePerTick = 0 (oder fehlend) = deaktiviert.
+  dotDamagePerTick?: number;
+  dotTickIntervalMs?: number;
 }
 
 export interface FireGrenadeEffect {
@@ -703,6 +709,8 @@ export interface SyncedSmokeCloud {
   radius:  number;
   alpha:   number;
   density: number;
+  storm?:  boolean;  // true = elektrisierter Rauch (DoT-Upgrade aktiv) → Blitze rendern
+  stormTickMs?: number;  // Intervall der Blitze = Intervall des DoT-Schadens (nur bei storm)
 }
 
 export interface SyncedFireZone {
@@ -759,6 +767,7 @@ export interface TrackedProjectile {
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   weaponName:      string;        // Waffenname für Killfeed
   explosion?:      ProjectileExplosionConfig;
+  enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
   projectileVisualScale?: number;

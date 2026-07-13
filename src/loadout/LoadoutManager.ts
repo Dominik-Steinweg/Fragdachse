@@ -1170,6 +1170,8 @@ export class LoadoutManager {
         lingerDuration:    cfg.smokeLingerDuration,
         dissipateDuration: cfg.smokeDissipateDuration,
         maxAlpha:          cfg.smokeMaxAlpha,
+        dotDamagePerTick:  cfg.smokeDotDamagePerTick,
+        dotTickIntervalMs: cfg.smokeDotTickIntervalMs,
       };
     }
 
@@ -1307,6 +1309,7 @@ export class LoadoutManager {
       splitFactor:     config.splitFactor,
       remainingRangePx: effectiveRange,
       explosion:       fireConfig.impactExplosion,
+      enemyHitExplosion: fireConfig.enemyHitExplosion,
       impactCloud:     fireConfig.impactCloud,
       homing:          fireConfig.homing,
       projectileStyle: config.projectileStyle,

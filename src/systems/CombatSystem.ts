@@ -431,6 +431,12 @@ export class CombatSystem {
    * Brennende Treffer aus den Burn-Feldern eines Projektils (z.B. brennende
    * Kugeln der Glock/Negev oder Flammenwerfer-Hitbox). No-op ohne Burn-Felder.
    */
+  /** true, wenn das Projektil eine aktive "nur bei Gegner-Treffern"-Explosion besitzt. */
+  private hasEnemyHitExplosion(proj: TrackedProjectile | undefined): boolean {
+    const e = proj?.enemyHitExplosion;
+    return !!e && e.radius > 0 && e.maxDamage > 0;
+  }
+
   private applyProjectileBurn(targetId: string, proj: TrackedProjectile | undefined): void {
     if (!proj) return;
     this.applyBurnStack(
@@ -1972,7 +1978,10 @@ export class CombatSystem {
     if (projectile?.impactCloud) {
       this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
     }
-    if (projectile?.explosion) {
+    if (allowDamage && this.hasEnemyHitExplosion(projectile)) {
+      // Explosion nur bei tatsächlichem Treffer auf einen gültigen Gegner (z.B. XXX-BOW Explosivbolzen).
+      this.projectileManager.triggerEnemyImpactExplosion(projectileId);
+    } else if (projectile?.explosion) {
       this.projectileManager.triggerProjectileExplosion(projectileId);
     } else {
       this.projectileManager.destroyProjectile(projectileId);
@@ -2012,7 +2021,10 @@ export class CombatSystem {
     if (projectile?.impactCloud) {
       this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
     }
-    if (projectile?.explosion) {
+    if (this.hasEnemyHitExplosion(projectile)) {
+      // Explosion nur bei Gegner-Treffer (z.B. XXX-BOW Explosivbolzen).
+      this.projectileManager.triggerEnemyImpactExplosion(projectileId);
+    } else if (projectile?.explosion) {
       this.projectileManager.triggerProjectileExplosion(projectileId);
     } else {
       this.projectileManager.destroyProjectile(projectileId);

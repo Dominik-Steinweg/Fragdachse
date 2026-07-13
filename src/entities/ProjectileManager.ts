@@ -493,6 +493,7 @@ export class ProjectileManager {
       adrenalinGain:  cfg.adrenalinGain,
       weaponName:     cfg.weaponName ?? 'Waffe',
       explosion:      cfg.explosion,
+      enemyHitExplosion: cfg.enemyHitExplosion,
       impactCloud:    cfg.impactCloud,
       homing:         cfg.homing,
       projectileVisualScale: cfg.projectileVisualScale,
@@ -1603,6 +1604,26 @@ export class ProjectileManager {
     const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
     if (!proj?.explosion) return false;
     this.queueProjectileExplosion(proj);
+    return true;
+  }
+
+  /**
+   * Löst die "nur bei Gegner-Treffern"-Explosion eines Projektils aus (z.B. XXX-BOW
+   * Explosivbolzen). Nutzt denselben Explosions-Pfad wie reguläre Projektil-Explosionen.
+   */
+  triggerEnemyImpactExplosion(id: number): boolean {
+    const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+    if (!proj?.enemyHitExplosion || proj.pendingExplosion) return false;
+    proj.pendingExplosion = true;
+    this.pendingProjectileExplosions.push({
+      x: proj.sprite.x,
+      y: proj.sprite.y,
+      ownerId: proj.ownerId,
+      effect: proj.enemyHitExplosion,
+      sourceSlot: proj.sourceSlot,
+      weaponName: proj.weaponName,
+    });
+    this.queueDestroyProjectile(proj);
     return true;
   }
 

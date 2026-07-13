@@ -674,6 +674,36 @@
           ]
         },
         {
+          "id": "xbow_explosive_bolts",
+          "code": "B-W6-3",
+          "label": "Upgrade XXX-BOW: Explosivbolzen",
+          "description": "Bolzen erzeugen bei einem Gegner-Treffer eine kleine Explosion (nicht an Waenden).",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 275,
+          "requires": [
+            {
+              "upgradeId": "unlock_xbow",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.XBOW.enemyHitExplosion.radius",
+              "mode": "add_per_level",
+              "value": 45
+            },
+            {
+              "stat": "weapon.XBOW.enemyHitExplosion.maxDamage",
+              "mode": "add_per_level",
+              "value": 10
+            }
+          ]
+        },
+        {
           "id": "unlock_laubblaeser",
           "code": "B-W7",
           "label": "Laubblaeser",
@@ -2292,6 +2322,31 @@
               "stat": "utility.SMOKE_GRENADE.smokeLingerDuration",
               "mode": "add_percent_per_level",
               "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "smoke_grenade_storm",
+          "code": "D-U3-3",
+          "label": "Upgrade Smoke-Granate: Gewittersturm",
+          "description": "Der Rauch wird elektrisch aufgeladen und fuegt allen Gegnern in der Wolke Schaden ueber Zeit zu (Radius und Dauer wie der Rauch).",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 185,
+          "requires": [
+            {
+              "upgradeId": "unlock_smoke_grenade",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.SMOKE_GRENADE.dotDamage",
+              "mode": "add_per_level",
+              "value": 3
             }
           ]
         },

@@ -197,11 +197,13 @@ export class HostUpdateCoordinator {
       } else if (g.effect.type === 'time_bubble') {
         this.ctx.timeBubbleSystem?.hostCreateBubble(g.ownerId, g.x, g.y, g.effect);
       } else {
-        this.ctx.smokeSystem.hostCreateCloud(g.x, g.y, g.effect);
+        this.ctx.smokeSystem.hostCreateCloud(g.x, g.y, g.effect, g.ownerId);
       }
     }
 
-    const smokes = countdownActive ? [] : this.ctx.smokeSystem.hostUpdate(Date.now());
+    const { synced: smokes, damageEvents: smokeDmg } = countdownActive
+      ? { synced: [], damageEvents: [] }
+      : this.ctx.smokeSystem.hostUpdate(Date.now());
     const { synced: fires, damageEvents: fireDamageEvents } = countdownActive
       ? { synced: [], damageEvents: [] }
       : this.ctx.fireSystem.hostUpdate(Date.now());
@@ -269,6 +271,14 @@ export class HostUpdateCoordinator {
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
       );
+    }
+
+    for (const ev of smokeDmg) {
+      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
+        category: 'damage_over_time',
+        weaponName: 'Gewittersturm',
+        sourceSlot: 'utility',
+      });
     }
 
     // Airstrike-Strikes detonieren
