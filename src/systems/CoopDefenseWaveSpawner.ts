@@ -1,8 +1,14 @@
 import * as Phaser from 'phaser';
 import { GRID_COLS, GRID_ROWS } from '../config';
-import type { ResolvedCoopDefenseMapWaveConfig } from '../config/coopDefenseMaps';
+import type {
+  CoopDefenseMapBossConfig,
+  ResolvedCoopDefenseMapWaveConfig,
+} from '../config/coopDefenseMaps';
 import type { EnemyManager } from '../entities/EnemyManager';
-import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
+import {
+  getCoopDefenseEnemyConfig,
+  type CoopDefenseEnemyKind,
+} from '../config/coopDefenseEnemies';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 
 const LEFT_SPAWN_GRID_X_MAX = Math.max(2, Math.floor(GRID_COLS * 0.15));
@@ -14,11 +20,14 @@ export class CoopDefenseWaveSpawner {
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
   private elapsedMs = 0;
+  private bossSpawned = false;
 
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly flowFieldService: EnemyFlowFieldService,
     private readonly waveConfigs: readonly ResolvedCoopDefenseMapWaveConfig[],
+    private readonly bossConfig?: CoopDefenseMapBossConfig,
+    private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
   ) {
     this.accumulators = waveConfigs.map(() => 0);
   }
@@ -28,6 +37,10 @@ export class CoopDefenseWaveSpawner {
 
     const previousElapsedMs = this.elapsedMs;
     this.elapsedMs += deltaMs;
+
+    if (this.bossConfig && !this.bossSpawned && this.elapsedMs >= this.bossConfig.spawnAtMs) {
+      this.bossSpawned = this.spawnOne(this.bossConfig.enemyKind);
+    }
 
     for (const [index, waveConfig] of this.waveConfigs.entries()) {
       const { intervalMs } = waveConfig;
@@ -50,10 +63,17 @@ export class CoopDefenseWaveSpawner {
     this.recentCells.length = 0;
     this.exhaustionWarned = false;
     this.elapsedMs = 0;
+    this.bossSpawned = false;
+  }
+
+  isBossDefeated(): boolean {
+    return !!this.bossConfig
+      && this.bossSpawned
+      && !this.enemyManager.hasEnemyKind(this.bossConfig.enemyKind);
   }
 
   private runWave(kind: CoopDefenseEnemyKind, count: number): void {
-    const candidatesAll = this.collectCandidates();
+    const candidatesAll = this.collectCandidates(kind);
     if (candidatesAll.length === 0) {
       this.warnExhausted();
       return;
@@ -83,21 +103,41 @@ export class CoopDefenseWaveSpawner {
     }
   }
 
-  private collectCandidates(): { gridX: number; gridY: number }[] {
-    const occupied = new Set<string>();
-    for (const enemy of this.enemyManager.getAllEnemies()) {
-      const cell = this.flowFieldService.worldToGrid(enemy.sprite.x, enemy.sprite.y);
-      if (cell) occupied.add(this.key(cell.gridX, cell.gridY));
+  private spawnOne(kind: CoopDefenseEnemyKind): boolean {
+    const candidates = this.collectCandidates(kind);
+    if (candidates.length === 0) {
+      this.warnExhausted();
+      return false;
     }
+
+    const pick = Phaser.Math.RND.pick(candidates) as { gridX: number; gridY: number };
+    this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind);
+    this.pushRecent(this.key(pick.gridX, pick.gridY));
+    return true;
+  }
+
+  private collectCandidates(kind: CoopDefenseEnemyKind): { gridX: number; gridY: number }[] {
+    const flowFieldService = this.bossConfig?.enemyKind === kind && this.bossFlowFieldService
+      ? this.bossFlowFieldService
+      : this.flowFieldService;
+    const enemies = this.enemyManager.getAllEnemies();
+    const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
 
     const cells: { gridX: number; gridY: number }[] = [];
     const maxGridX = Math.min(LEFT_SPAWN_GRID_X_MAX, GRID_COLS - 1);
     for (let gridX = 0; gridX <= maxGridX; gridX++) {
       for (let gridY = 0; gridY < GRID_ROWS; gridY++) {
-        if (!this.flowFieldService.isTraversableAt(gridX, gridY)) continue;
-        const integration = this.flowFieldService.getIntegrationValueAt(gridX, gridY);
+        if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
+        const integration = flowFieldService.getIntegrationValueAt(gridX, gridY);
         if (integration >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
-        if (occupied.has(this.key(gridX, gridY))) continue;
+        const world = flowFieldService.gridToWorld(gridX, gridY);
+        if (!world) continue;
+        const overlapsEnemy = enemies.some((enemy) => {
+          const minimumDistance = spawnRadius + enemy.getCollisionRadius();
+          return Phaser.Math.Distance.Squared(world.x, world.y, enemy.sprite.x, enemy.sprite.y)
+            < minimumDistance * minimumDistance;
+        });
+        if (overlapsEnemy) continue;
         cells.push({ gridX, gridY });
       }
     }

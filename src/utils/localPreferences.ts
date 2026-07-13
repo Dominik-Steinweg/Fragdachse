@@ -3,12 +3,13 @@ import type { CoopDefenseUpgradeProfile, LoadoutSlot } from '../types';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   cloneCoopDefenseUpgradeProfile,
+  constrainCoopDefenseUpgradeProfileToBossPoints,
   sanitizeCoopDefenseUpgradeProfile,
 } from './coopDefenseUpgrades';
 import { sanitizePlayerName } from './playerName';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 4;
+const LOCAL_PREFERENCES_VERSION = 5;
 
 interface LocalPreferencesV2 {
   version: 2;
@@ -26,6 +27,7 @@ interface LocalPreferencesV2 {
 export interface CoopDefenseProgressPreferences {
   totalXp: number;
   lastProcessedRoundEndedAt: number | null;
+  completedBossMapIds: string[];
   profile: CoopDefenseUpgradeProfile;
 }
 
@@ -45,8 +47,8 @@ interface LocalPreferencesV3 {
   };
 }
 
-interface LocalPreferencesV4 {
-  version: 4;
+interface LocalPreferencesV5 {
+  version: 5;
   audio: {
     masterVolume: number;
     effectsVolume: number;
@@ -61,7 +63,7 @@ interface LocalPreferencesV4 {
   };
 }
 
-type LocalPreferences = LocalPreferencesV4;
+type LocalPreferences = LocalPreferencesV5;
 
 interface ParsedLocalPreferences {
   audio?: Partial<LocalPreferences['audio']>;
@@ -77,6 +79,7 @@ interface ParsedLocalPreferences {
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
+  completedBossMapIds: [],
   profile: buildDefaultCoopDefenseUpgradeProfile(),
 };
 
@@ -92,7 +95,7 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
   },
   loadout: {},
   progression: {
-    coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS },
+    coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS, completedBossMapIds: [] },
   },
 };
 
@@ -118,6 +121,14 @@ function sanitizeStoredRoundEndedAt(value: unknown): number | null {
   return Math.max(0, Math.floor(value));
 }
 
+function sanitizeCompletedBossMapIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0))];
+}
+
 function buildDefaultPreferences(): LocalPreferences {
   return {
     ...DEFAULT_PREFERENCES,
@@ -125,7 +136,7 @@ function buildDefaultPreferences(): LocalPreferences {
     profile: { ...DEFAULT_PREFERENCES.profile },
     loadout: {},
     progression: {
-      coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS },
+      coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS, completedBossMapIds: [] },
     },
   };
 }
@@ -152,7 +163,11 @@ function parsePreferences(raw: string | null): LocalPreferences {
       : SOUND_MUSIC_VOLUME;
     const totalXp = sanitizeStoredXp(parsed.progression?.coopDefense?.totalXp);
     const lastProcessedRoundEndedAt = sanitizeStoredRoundEndedAt(parsed.progression?.coopDefense?.lastProcessedRoundEndedAt);
-    const storedProfile = sanitizeCoopDefenseUpgradeProfile(parsed.progression?.coopDefense?.profile);
+    const completedBossMapIds = sanitizeCompletedBossMapIds(parsed.progression?.coopDefense?.completedBossMapIds);
+    const storedProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
+      sanitizeCoopDefenseUpgradeProfile(parsed.progression?.coopDefense?.profile),
+      completedBossMapIds.length,
+    );
 
     return {
       version: LOCAL_PREFERENCES_VERSION,
@@ -168,6 +183,7 @@ function parsePreferences(raw: string | null): LocalPreferences {
         coopDefense: {
           totalXp,
           lastProcessedRoundEndedAt,
+          completedBossMapIds,
           profile: storedProfile,
         },
       },
@@ -279,6 +295,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
   return {
     totalXp: progress.totalXp,
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
+    completedBossMapIds: [...progress.completedBossMapIds],
     profile: cloneCoopDefenseUpgradeProfile(progress.profile),
   };
 }
@@ -288,14 +305,16 @@ export function getStoredCoopDefenseUpgradeProfile(): CoopDefenseUpgradeProfile 
 }
 
 export function setStoredCoopDefenseUpgradeProfile(profile: CoopDefenseUpgradeProfile): void {
-  const nextProfile = sanitizeCoopDefenseUpgradeProfile(profile);
   updatePreferences((current) => ({
     ...current,
     progression: {
       ...current.progression,
       coopDefense: {
         ...current.progression.coopDefense,
-        profile: nextProfile,
+        profile: constrainCoopDefenseUpgradeProfileToBossPoints(
+          sanitizeCoopDefenseUpgradeProfile(profile),
+          current.progression.coopDefense.completedBossMapIds.length,
+        ),
       },
     },
   }));
@@ -344,4 +363,26 @@ export function markStoredCoopDefenseRoundProcessed(endedAt: number | null): voi
       },
     },
   }));
+}
+
+/** Records a successful boss map once and returns whether a new boss point was earned. */
+export function markStoredCoopDefenseBossMapCompleted(mapId: string): boolean {
+  const normalizedMapId = mapId.trim();
+  if (!normalizedMapId) return false;
+
+  const current = readPreferences();
+  const completedBossMapIds = current.progression.coopDefense.completedBossMapIds;
+  if (completedBossMapIds.includes(normalizedMapId)) return false;
+
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        completedBossMapIds: [...completedBossMapIds, normalizedMapId],
+      },
+    },
+  });
+  return true;
 }

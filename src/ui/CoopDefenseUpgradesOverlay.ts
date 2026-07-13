@@ -64,7 +64,7 @@ const PROGRESS_LABEL_Y = BAR_Y + 22;
 const HEADER_DIVIDER_Y = PROGRESS_LABEL_Y + 30;
 const HEADER_DIVIDER_W = 360;
 const POINTS_Y = HEADER_DIVIDER_Y + 32;
-const POINTS_CHIP_W = 320;
+const POINTS_CHIP_W = 520;
 const POINTS_CHIP_H = 40;
 const RESPEC_W = 180;
 const RESPEC_H = 38;
@@ -448,8 +448,10 @@ export class CoopDefenseUpgradesOverlay {
     this.levelText.setText(`Level ${progress.level}`);
     this.xpText.setText(`${progress.totalXp} XP gesamt`);
 
-    const hasPoints = progress.availableUpgradePoints > 0;
-    this.pointsText.setText(`${progress.availableUpgradePoints} Upgrade-Punkte verfuegbar`);
+    const hasPoints = progress.availableUpgradePoints > 0 || progress.availableBossPoints > 0;
+    this.pointsText.setText(
+      `${progress.availableUpgradePoints} Upgrade-Punkte  |  ★ ${progress.availableBossPoints}/${progress.earnedBossPoints} Boss-Punkte`,
+    );
     this.pointsText.setColor(toCssColor(hasPoints ? COLORS.BLUE_1 : COLORS.GREY_4));
     this.pointsChip?.setTexture(this.ensurePointsChipTexture(hasPoints));
 
@@ -1050,6 +1052,16 @@ export class CoopDefenseUpgradesOverlay {
       nodeGroup.add(levelText);
     }
 
+    if (node.bossPointCostPerLevel > 0) {
+      const bossBadge = this.scene.add.text(-NODE_W / 2 + 3, -NODE_H / 2 + 1, '★', {
+        fontSize: '16px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(node.bossPointRequirementMet || node.level > 0 ? COLORS.GOLD_1 : COLORS.RED_2),
+      }).setOrigin(0, 0).setScrollFactor(0).setStroke(toCssColor(COLORS.GREY_10), 3);
+      nodeGroup.add(bossBadge);
+    }
+
     const hitArea = this.scene.add.rectangle(0, 0, NODE_W, NODE_H, 0x000000, 0.001)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: interactionEnabled })
@@ -1410,6 +1422,12 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     lines.push(node.description);
+    if (node.bossPointCostPerLevel > 0) {
+      lines.push(`★ Boss-Kosten: ${node.bossPointCostPerLevel} Punkt`);
+      if (!node.bossPointRequirementMet && node.level < node.maxLevel) {
+        lines.push('Boss-Punkt fehlt: Boss-Level erfolgreich abschliessen.');
+      }
+    }
     return lines.join('\n');
   }
 }

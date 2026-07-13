@@ -42,6 +42,7 @@ export interface CoopDefenseUpgradeDefinition {
   maxLevel: number;
   startingLevel: number;
   costPerLevel: number;
+  bossPointCostPerLevel: number;
   refundable: boolean;
   sortOrder: number;
   requires: readonly CoopDefenseUpgradeRequirementDefinition[];
@@ -71,6 +72,7 @@ interface RawCoopDefenseUpgradeDefinition {
   maxLevel?: unknown;
   startingLevel?: unknown;
   costPerLevel?: unknown;
+  bossPointCostPerLevel?: unknown;
   refundable?: unknown;
   sortOrder?: unknown;
   requires?: readonly unknown[];
@@ -344,6 +346,34 @@ export function sanitizeCoopDefenseUpgradeProfile(raw: unknown): CoopDefenseUpgr
   return buildProfileFromRequestedLevels(requestedLevels);
 }
 
+/** Removes boss-priced levels that are not backed by earned unique boss-map completions. */
+export function constrainCoopDefenseUpgradeProfileToBossPoints(
+  profile: CoopDefenseUpgradeProfile,
+  earnedBossPoints: number,
+): CoopDefenseUpgradeProfile {
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile);
+  let remainingBossPoints = Math.max(0, Math.floor(earnedBossPoints));
+  const requestedLevels: Record<string, number> = {};
+
+  for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
+    const currentLevel = getResolvedUpgradeLevel(safeProfile, definition.id);
+    if (definition.bossPointCostPerLevel <= 0) {
+      requestedLevels[definition.id] = currentLevel;
+      continue;
+    }
+
+    const paidLevels = Math.max(0, currentLevel - definition.startingLevel);
+    const affordablePaidLevels = Math.min(
+      paidLevels,
+      Math.floor(remainingBossPoints / definition.bossPointCostPerLevel),
+    );
+    requestedLevels[definition.id] = definition.startingLevel + affordablePaidLevels;
+    remainingBossPoints -= affordablePaidLevels * definition.bossPointCostPerLevel;
+  }
+
+  return buildProfileFromRequestedLevels(requestedLevels);
+}
+
 export function getCoopDefenseUpgradeState(
   profile: CoopDefenseUpgradeProfile,
   upgradeId: string,
@@ -377,6 +407,26 @@ export function getAvailableCoopDefenseUpgradePoints(
   return Math.max(0, earnedPoints - getSpentCoopDefenseUpgradePoints(profile));
 }
 
+export function getSpentCoopDefenseBossPoints(profile: CoopDefenseUpgradeProfile): number {
+  const safeProfile = getSanitizedProfile(profile);
+  let spentPoints = 0;
+
+  for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
+    const currentLevel = getResolvedUpgradeLevel(safeProfile, definition.id);
+    const paidLevels = Math.max(0, currentLevel - definition.startingLevel);
+    spentPoints += paidLevels * definition.bossPointCostPerLevel;
+  }
+
+  return spentPoints;
+}
+
+export function getAvailableCoopDefenseBossPoints(
+  earnedBossPoints: number,
+  profile: CoopDefenseUpgradeProfile,
+): number {
+  return Math.max(0, Math.floor(earnedBossPoints) - getSpentCoopDefenseBossPoints(profile));
+}
+
 export function getCoopDefenseBlockingDependentUpgradeIds(
   profile: CoopDefenseUpgradeProfile,
   upgradeId: string,
@@ -404,6 +454,7 @@ export function canLevelUpCoopDefenseUpgrade(
   profile: CoopDefenseUpgradeProfile,
   upgradeId: string,
   playerLevel: number,
+  earnedBossPoints = 0,
 ): boolean {
   const safeProfile = getSanitizedProfile(profile);
   const definition = getCoopDefenseUpgradeDefinition(upgradeId);
@@ -412,16 +463,18 @@ export function canLevelUpCoopDefenseUpgrade(
   const state = safeProfile.upgrades[upgradeId];
   if (!state || !state.unlocked || state.level >= definition.maxLevel) return false;
 
-  return getAvailableCoopDefenseUpgradePoints(playerLevel, safeProfile) >= definition.costPerLevel;
+  return getAvailableCoopDefenseUpgradePoints(playerLevel, safeProfile) >= definition.costPerLevel
+    && getAvailableCoopDefenseBossPoints(earnedBossPoints, safeProfile) >= definition.bossPointCostPerLevel;
 }
 
 export function levelUpCoopDefenseUpgrade(
   profile: CoopDefenseUpgradeProfile,
   upgradeId: string,
   playerLevel: number,
+  earnedBossPoints = 0,
 ): CoopDefenseUpgradeProfile | null {
   const safeProfile = getSanitizedProfile(profile);
-  if (!canLevelUpCoopDefenseUpgrade(safeProfile, upgradeId, playerLevel)) {
+  if (!canLevelUpCoopDefenseUpgrade(safeProfile, upgradeId, playerLevel, earnedBossPoints)) {
     return null;
   }
 
@@ -541,6 +594,7 @@ function normalizeUpgradeDefinition(
   const maxLevel = Math.max(1, sanitizeInteger(rawDefinition.maxLevel, 1, 1));
   const startingLevel = Math.min(maxLevel, sanitizeInteger(rawDefinition.startingLevel, 0, 0));
   const costPerLevel = sanitizeInteger(rawDefinition.costPerLevel, kind === 'unlock' && startingLevel > 0 ? 0 : 1, 0);
+  const bossPointCostPerLevel = sanitizeInteger(rawDefinition.bossPointCostPerLevel, 0, 0);
   const refundable = sanitizeBoolean(rawDefinition.refundable, true);
   const sortOrder = sanitizeInteger(rawDefinition.sortOrder, index, 0);
   const requires = normalizeUpgradeRequirements(rawDefinition.requires, id);
@@ -557,6 +611,7 @@ function normalizeUpgradeDefinition(
     maxLevel,
     startingLevel,
     costPerLevel,
+    bossPointCostPerLevel,
     refundable,
     sortOrder,
     requires,

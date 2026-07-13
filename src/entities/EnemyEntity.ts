@@ -29,6 +29,9 @@ export class EnemyEntity {
   private readonly weapon: BaseWeapon | null;
   private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
   private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
+  private bossAura: Phaser.GameObjects.Ellipse | null = null;
+  private bossRing: Phaser.GameObjects.Ellipse | null = null;
+  private bossLabel: Phaser.GameObjects.Text | null = null;
   private maxHp = 1;
   private currentHp = 0;
   private targetX: number;
@@ -66,6 +69,7 @@ export class EnemyEntity {
     if (this.config.color !== undefined) {
       this.sprite.setTint(this.config.color);
     }
+    this.createBossDecorations(scene);
 
     if (authoritative) {
       scene.physics.add.existing(this.sprite);
@@ -142,12 +146,12 @@ export class EnemyEntity {
     }
     const ratio = this.maxHp > 0 ? this.currentHp / this.maxHp : 0;
     if (this.hpBarFg) {
-      this.hpBarFg.width = HP_BAR_WIDTH * ratio;
+      this.hpBarFg.width = this.getHpBarWidth() * ratio;
     }
     const color = ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4;
     this.hpBarFg?.setFillStyle(color);
 
-    if (this.currentHp >= this.maxHp || this.currentHp <= 0) {
+    if ((!this.config.isBoss && this.currentHp >= this.maxHp) || this.currentHp <= 0) {
       this.destroyHpBars();
     }
   }
@@ -162,6 +166,14 @@ export class EnemyEntity {
 
   getMoveSpeed(): number {
     return this.config.moveSpeed;
+  }
+
+  getCollisionRadius(): number {
+    return this.config.size * 0.5;
+  }
+
+  isBoss(): boolean {
+    return this.config.isBoss === true;
   }
 
   getWeapon(): BaseWeapon | null {
@@ -214,6 +226,7 @@ export class EnemyEntity {
   }
 
   syncBar(): void {
+    this.syncBossDecorations();
     if (!this.shouldShowHpBars()) {
       this.destroyHpBars();
       return;
@@ -222,9 +235,10 @@ export class EnemyEntity {
     this.ensureHpBars();
     if (!this.hpBarBg || !this.hpBarFg) return;
     const x = this.sprite.x;
-    const y = this.sprite.y + HP_BAR_OFFSET_Y;
+    const hpBarWidth = this.getHpBarWidth();
+    const y = this.sprite.y + this.getHpBarOffsetY();
     this.hpBarBg.setPosition(x, y);
-    this.hpBarFg.setPosition(x - HP_BAR_WIDTH * 0.5, y);
+    this.hpBarFg.setPosition(x - hpBarWidth * 0.5, y);
   }
 
   getNetSnapshot(): SyncedEnemyState {
@@ -241,22 +255,27 @@ export class EnemyEntity {
 
   destroy(): void {
     this.destroyHpBars();
+    this.bossAura?.destroy();
+    this.bossRing?.destroy();
+    this.bossLabel?.destroy();
     this.sprite.destroy();
   }
 
   private shouldShowHpBars(): boolean {
-    return this.currentHp > 0
-      && this.currentHp < this.maxHp
-      && Date.now() <= this.hpBarVisibleUntilMs;
+    return this.currentHp > 0 && (
+      this.config.isBoss === true
+      || (this.currentHp < this.maxHp && Date.now() <= this.hpBarVisibleUntilMs)
+    );
   }
 
   private ensureHpBars(): void {
     if (this.hpBarBg && this.hpBarFg) return;
     const x = this.sprite.x;
-    const y = this.sprite.y + HP_BAR_OFFSET_Y;
-    this.hpBarBg = this.sprite.scene.add.rectangle(x, y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
+    const hpBarWidth = this.getHpBarWidth();
+    const y = this.sprite.y + this.getHpBarOffsetY();
+    this.hpBarBg = this.sprite.scene.add.rectangle(x, y, hpBarWidth, HP_BAR_HEIGHT, 0x333333);
     this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
-    this.hpBarFg = this.sprite.scene.add.rectangle(x, y, HP_BAR_WIDTH, HP_BAR_HEIGHT, COLORS.RED_2);
+    this.hpBarFg = this.sprite.scene.add.rectangle(x, y, hpBarWidth, HP_BAR_HEIGHT, COLORS.RED_2);
     this.hpBarFg.setOrigin(0, 0.5);
     this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
   }
@@ -266,6 +285,56 @@ export class EnemyEntity {
     this.hpBarFg?.destroy();
     this.hpBarBg = null;
     this.hpBarFg = null;
+  }
+
+  private getHpBarWidth(): number {
+    return this.config.isBoss ? Math.max(76, this.config.size * 1.55) : HP_BAR_WIDTH;
+  }
+
+  private getHpBarOffsetY(): number {
+    return this.config.isBoss ? this.config.size * 0.5 + 12 : HP_BAR_OFFSET_Y;
+  }
+
+  private createBossDecorations(scene: Phaser.Scene): void {
+    if (!this.config.isBoss) return;
+
+    this.bossAura = scene.add.ellipse(
+      this.sprite.x,
+      this.sprite.y + this.config.size * 0.2,
+      this.config.size * 1.45,
+      this.config.size * 0.72,
+      0x6d1026,
+      0.38,
+    ).setDepth(DEPTH.PLAYERS - 0.08);
+    this.bossRing = scene.add.ellipse(
+      this.sprite.x,
+      this.sprite.y + this.config.size * 0.2,
+      this.config.size * 1.7,
+      this.config.size * 0.88,
+      0x000000,
+      0,
+    ).setStrokeStyle(3, COLORS.GOLD_1, 0.9).setDepth(DEPTH.PLAYERS - 0.07);
+    this.bossLabel = scene.add.text(
+      this.sprite.x,
+      this.sprite.y - this.config.size * 0.5 - 11,
+      `BOSS · ${(this.config.displayName ?? 'Boss').toUpperCase()}`,
+      {
+        fontSize: '13px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: '#ffd166',
+        stroke: '#33000d',
+        strokeThickness: 4,
+      },
+    ).setOrigin(0.5, 1).setDepth(DEPTH.PLAYERS + 2);
+  }
+
+  private syncBossDecorations(): void {
+    if (!this.config.isBoss) return;
+    const auraY = this.sprite.y + this.config.size * 0.2;
+    this.bossAura?.setPosition(this.sprite.x, auraY);
+    this.bossRing?.setPosition(this.sprite.x, auraY);
+    this.bossLabel?.setPosition(this.sprite.x, this.sprite.y - this.config.size * 0.5 - 11);
   }
 
   private createWeapon(): BaseWeapon {

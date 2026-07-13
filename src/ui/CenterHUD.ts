@@ -386,11 +386,12 @@ export class CenterHUD {
     this.puContainerRef = c;
   }
 
-  updateTimer(secs: number): void {
+  updateTimer(secs: number, bossObjectivePending = false): void {
     const mm = Math.floor(secs / 60);
     const ss = secs % 60;
-    const nextText = `${mm}:${ss.toString().padStart(2, '0')}`;
-    const nextColor = secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
+    const nextText = bossObjectivePending ? 'BOSS MUSS FALLEN' : `${mm}:${ss.toString().padStart(2, '0')}`;
+    const nextColor = bossObjectivePending ? '#ffd166' : secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
+    this.timerText.setFontSize(bossObjectivePending ? 18 : 32);
     if (nextText !== this.lastTimerText) {
       this.timerText.setText(nextText);
       this.lastTimerText = nextText;

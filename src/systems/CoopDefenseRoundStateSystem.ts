@@ -7,6 +7,8 @@ export class CoopDefenseRoundStateSystem {
   constructor(
     private readonly baseManager: BaseManager,
     private readonly getSecondsLeft: () => number,
+    private readonly bossRequired = false,
+    private readonly isBossDefeated: () => boolean = () => true,
   ) {}
 
   update(): RoundOutcome | null {
@@ -18,7 +20,7 @@ export class CoopDefenseRoundStateSystem {
       return 'defeat';
     }
 
-    if (this.getSecondsLeft() <= 0) {
+    if (this.getSecondsLeft() <= 0 && (!this.bossRequired || this.isBossDefeated())) {
       this.concluded = true;
       return 'victory';
     }

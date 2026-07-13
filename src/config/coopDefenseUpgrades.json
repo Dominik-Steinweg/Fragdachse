@@ -2334,6 +2334,7 @@
           "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
+          "bossPointCostPerLevel": 1,
           "refundable": true,
           "sortOrder": 185,
           "requires": [

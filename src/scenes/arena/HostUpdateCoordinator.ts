@@ -79,6 +79,7 @@ export class HostUpdateCoordinator {
     this.ctx.enemyManager?.hostUpdateMovement(
       this.ctx.enemyFlowFieldService,
       this.ctx.enemyPlayerFlowFieldService,
+      this.ctx.enemyBossFlowFieldService,
       countdownActive,
       now,
       delta,
@@ -970,6 +971,7 @@ export class HostUpdateCoordinator {
 
   private updateEnemyFlowFields(now: number): void {
     this.ctx.enemyFlowFieldService?.update(now);
+    this.ctx.enemyBossFlowFieldService?.update(now);
 
     const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
     if (!playerFlowFieldService) return;

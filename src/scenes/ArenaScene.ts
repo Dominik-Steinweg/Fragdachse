@@ -57,6 +57,7 @@ import {
   getStoredEffectsVolume,
   getStoredMasterVolume,
   getStoredMusicVolume,
+  markStoredCoopDefenseBossMapCompleted,
   markStoredCoopDefenseRoundProcessed,
   setStoredCoopDefenseUpgradeProfile,
   setStoredCoopDefenseTotalXp,
@@ -72,6 +73,7 @@ import {
 import type { CoopDefenseUpgradeProfile } from '../types';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
+import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
@@ -344,6 +346,7 @@ export class ArenaScene extends Phaser.Scene {
       teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
+      enemyBossFlowFieldService: null,
     };
 
     playerManager.setSpawnContextProvider((playerId) => {
@@ -755,7 +758,10 @@ export class ArenaScene extends Phaser.Scene {
 
     if (inGame && !terminated) {
       const secs = bridge.computeSecondsLeft();
-      this.ctx.centerHUD.updateTimer(secs);
+      const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
+        ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+        : null;
+      this.ctx.centerHUD.updateTimer(secs, secs <= 0 && !!activeMapConfig?.boss);
 
       // Train widget
       const trainEvent = bridge.getTrainEvent();
@@ -783,7 +789,7 @@ export class ArenaScene extends Phaser.Scene {
         const coopRoundOutcome = this.ctx.coopDefenseRoundStateSystem?.update() ?? null;
         if (coopRoundOutcome) {
           this.lifecycle.hostCompleteRound(coopRoundOutcome);
-        } else if (!countdownActive && secs <= 0) {
+        } else if (!isCoopDefenseMode(bridge.getGameMode()) && !countdownActive && secs <= 0) {
           this.lifecycle.hostCompleteRound();
         }
         primaryStepMs += performance.now() - hostStepStartMs;
@@ -1001,7 +1007,12 @@ export class ArenaScene extends Phaser.Scene {
 
   private levelUpCoopDefenseUpgrade(upgradeId: string): boolean {
     const stored = getStoredCoopDefenseProgress();
-    const nextProfile = levelUpCoopDefenseUpgrade(stored.profile, upgradeId, this.coopDefenseProgress.level);
+    const nextProfile = levelUpCoopDefenseUpgrade(
+      stored.profile,
+      upgradeId,
+      this.coopDefenseProgress.level,
+      stored.completedBossMapIds.length,
+    );
     if (!nextProfile) return false;
 
     bridge.setLocalReady(false);
@@ -1356,7 +1367,11 @@ export class ArenaScene extends Phaser.Scene {
 
   private refreshStoredCoopDefenseProgress(): void {
     const stored = getStoredCoopDefenseProgress();
-    this.coopDefenseProgress = getCoopDefenseProgressSnapshot(stored.totalXp, stored.profile);
+    this.coopDefenseProgress = getCoopDefenseProgressSnapshot(
+      stored.totalXp,
+      stored.profile,
+      stored.completedBossMapIds.length,
+    );
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
     this.coopDefenseUpgradesOverlay?.refresh();
@@ -1383,6 +1398,14 @@ export class ArenaScene extends Phaser.Scene {
     );
     if (sharedRoundXp > 0) {
       addStoredCoopDefenseXp(sharedRoundXp);
+    }
+    const completedMapId = roundState?.coopDefenseMapId;
+    if (
+      roundState?.status === 'victory'
+      && completedMapId
+      && getCoopDefenseMapConfig(completedMapId).boss
+    ) {
+      markStoredCoopDefenseBossMapCompleted(completedMapId);
     }
     markStoredCoopDefenseRoundProcessed(endedAt);
     this.refreshStoredCoopDefenseProgress();

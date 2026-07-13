@@ -1,5 +1,6 @@
 import rawCoopDefenseMaps from './coopDefenseMaps.json';
 import {
+  getCoopDefenseEnemyConfig,
   resolveCoopDefenseEnemyWaveConfig,
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
@@ -39,12 +40,18 @@ export interface ResolvedCoopDefenseMapWaveConfig {
   readonly startAtMs: number;
 }
 
+export interface CoopDefenseMapBossConfig {
+  readonly enemyKind: CoopDefenseEnemyKind;
+  readonly spawnAtMs: number;
+}
+
 export interface CoopDefenseMapConfig {
   readonly mapId: string;
   readonly displayName: string;
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly waves: readonly CoopDefenseMapWaveConfig[];
+  readonly boss?: CoopDefenseMapBossConfig;
 }
 
 interface CoopDefenseMapRegistryFile {
@@ -122,6 +129,30 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     waves: mapConfig.waves.map(normalizeWaveConfig),
+    boss: normalizeBossConfig(mapConfig),
+  };
+}
+
+function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBossConfig | undefined {
+  const bossWaves = mapConfig.waves.filter((wave) => getCoopDefenseEnemyConfig(wave.enemyKind).isBoss);
+  if (bossWaves.length > 0) {
+    throw new Error(`[coopDefenseMaps] Boss enemies must use the unique boss slot on map ${mapConfig.mapId}`);
+  }
+  if (!mapConfig.boss) return undefined;
+
+  const enemyConfig = getCoopDefenseEnemyConfig(mapConfig.boss.enemyKind);
+  if (!enemyConfig.isBoss) {
+    throw new Error(
+      `[coopDefenseMaps] Boss slot on map ${mapConfig.mapId} references non-boss enemy ${mapConfig.boss.enemyKind}`,
+    );
+  }
+
+  return {
+    enemyKind: mapConfig.boss.enemyKind,
+    spawnAtMs: Math.max(0, Math.min(
+      mapConfig.roundDurationSec * 1000 - 1,
+      Math.floor(mapConfig.boss.spawnAtMs),
+    )),
   };
 }
 

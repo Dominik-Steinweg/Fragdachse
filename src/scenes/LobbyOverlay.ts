@@ -445,13 +445,15 @@ export class LobbyOverlay {
     const freePoints = progress.availableUpgradePoints;
     if (this.coopProgressPointsText) {
       this.coopProgressPointsText.setText(
-        freePoints > 0 ? `${freePoints} Upgrade-Punkte verfuegbar` : 'Alle Punkte verteilt',
+        `${freePoints} Upgrade-P.  |  ★ ${progress.availableBossPoints}/${progress.earnedBossPoints} Boss-P.`,
       );
-      this.coopProgressPointsText.setColor(toCssColor(freePoints > 0 ? COLORS.GOLD_1 : COLORS.GREY_4));
+      this.coopProgressPointsText.setColor(toCssColor(
+        freePoints > 0 || progress.availableBossPoints > 0 ? COLORS.GOLD_1 : COLORS.GREY_4,
+      ));
     }
 
     // Aktiver Living-Bar-Effekt nur, wenn der Spieler noch freie Punkte hat.
-    if (freePoints > 0 && this.visible) {
+    if ((freePoints > 0 || progress.availableBossPoints > 0) && this.visible) {
       this.upgradeBtnEffect?.setFilledWidth(COOP_UPGRADE_BTN_W);
       this.upgradeBtnEffect?.start();
     } else {

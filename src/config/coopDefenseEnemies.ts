@@ -25,6 +25,8 @@ export interface CoopDefenseEnemyConfig {
   readonly attackScanIntervalMs: number;
   readonly attackStopDurationMs: number;
   readonly imageKey: string;
+  readonly isBoss?: boolean;
+  readonly displayName?: string;
   readonly color?: number;
   readonly playerScaling?: CoopDefenseEnemyPlayerScaling;
   readonly spawnScaling?: CoopDefenseEnemySpawnScaling;
@@ -101,6 +103,8 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         attackScanIntervalMs: config.attackScanIntervalMs,
         attackStopDurationMs: config.attackStopDurationMs,
         imageKey: config.imageKey,
+        isBoss: config.isBoss,
+        displayName: config.displayName,
         color: config.color,
         spawnScaling: config.spawnScaling,
       },
@@ -155,6 +159,10 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     attackScanIntervalMs: Math.max(1, Math.floor(enemy.attackScanIntervalMs)),
     attackStopDurationMs: Math.max(0, Math.floor(enemy.attackStopDurationMs)),
     imageKey: enemy.imageKey,
+    isBoss: enemy.isBoss === true,
+    displayName: typeof enemy.displayName === 'string' && enemy.displayName.trim().length > 0
+      ? enemy.displayName.trim()
+      : undefined,
     color: typeof enemy.color === 'number' && Number.isFinite(enemy.color)
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,

@@ -74,6 +74,8 @@ export interface EnemyFlowFieldServiceOptions {
   readonly obstacleCellProvider?: () => ReadonlyArray<EnemyFlowFieldGridCell>;
   readonly goalMode?: EnemyFlowFieldGoalMode;
   readonly dynamicGoalCells?: ReadonlyArray<EnemyFlowFieldGoalCell>;
+  /** Number of whole cells kept clear around an enemy's center. */
+  readonly clearanceCells?: number;
 }
 
 const CELL_DEFINITIONS = {
@@ -112,6 +114,7 @@ export class EnemyFlowFieldService {
   private readonly layout: ArenaLayout;
   private readonly baseSpecs: readonly BaseSpec[];
   private readonly goalMode: EnemyFlowFieldGoalMode;
+  private readonly clearanceCells: number;
   private activeBaseIds: Set<string>;
   private dynamicGoalCells: EnemyFlowFieldGoalCell[];
   private readonly eventBus: ArenaEventBus | null;
@@ -152,6 +155,7 @@ export class EnemyFlowFieldService {
     this.layout = layout;
     this.baseSpecs = [...baseSpecs];
     this.goalMode = options.goalMode ?? 'bases';
+    this.clearanceCells = Math.max(0, Math.floor(options.clearanceCells ?? 0));
     this.activeBaseIds = new Set(this.baseSpecs.map((spec) => spec.id));
     this.dynamicGoalCells = this.normalizeGoalCells(options.dynamicGoalCells ?? []);
     this.metrics = { ...metrics };
@@ -274,6 +278,7 @@ export class EnemyFlowFieldService {
       obstacleCellProvider: this.obstacleCellProvider ?? undefined,
       goalMode: this.goalMode,
       dynamicGoalCells: this.dynamicGoalCells,
+      clearanceCells: this.clearanceCells,
     });
   }
 
@@ -364,6 +369,10 @@ export class EnemyFlowFieldService {
         countsByKind[kind] += 1;
         if (definition.isTraversable) traversableCells += 1;
       }
+    }
+
+    if (this.clearanceCells > 0) {
+      traversableCells = this.applyClearanceMask();
     }
 
     this.goalMask.fill(0);
@@ -482,12 +491,13 @@ export class EnemyFlowFieldService {
       [0, -1],
     ];
 
+    const goalDistance = this.clearanceCells + 1;
     for (const baseSpec of this.baseSpecs) {
       if (!this.activeBaseIds.has(baseSpec.id)) continue;
       for (const cell of baseSpec.cells) {
         for (const [dx, dy] of directions) {
-          const neighborX = cell.gridX + dx;
-          const neighborY = cell.gridY + dy;
+          const neighborX = cell.gridX + dx * goalDistance;
+          const neighborY = cell.gridY + dy * goalDistance;
           if (!this.isGoalCandidateAt(neighborX, neighborY)) continue;
           goalSet.add(this.toIndex(neighborX, neighborY));
         }
@@ -530,7 +540,39 @@ export class EnemyFlowFieldService {
 
   private isFlowPassableAt(gridX: number, gridY: number): boolean {
     if (!this.isInBounds(gridX, gridY)) return false;
-    return this.costs[this.toIndex(gridX, gridY)] < COOP_DEFENSE_FLOW_FIELD_TRUNK_COST;
+    return this.traversable[this.toIndex(gridX, gridY)] === 1;
+  }
+
+  private applyClearanceMask(): number {
+    const source = this.traversable.slice();
+    let traversableCells = 0;
+
+    for (let gridY = 0; gridY < this.metrics.rows; gridY += 1) {
+      for (let gridX = 0; gridX < this.metrics.cols; gridX += 1) {
+        const index = this.toIndex(gridX, gridY);
+        if (source[index] !== 1) {
+          this.traversable[index] = 0;
+          continue;
+        }
+
+        let hasClearance = true;
+        for (let offsetY = -this.clearanceCells; offsetY <= this.clearanceCells && hasClearance; offsetY += 1) {
+          for (let offsetX = -this.clearanceCells; offsetX <= this.clearanceCells; offsetX += 1) {
+            const neighborX = gridX + offsetX;
+            const neighborY = gridY + offsetY;
+            if (!this.isInBounds(neighborX, neighborY) || source[this.toIndex(neighborX, neighborY)] !== 1) {
+              hasClearance = false;
+              break;
+            }
+          }
+        }
+
+        this.traversable[index] = hasClearance ? 1 : 0;
+        if (hasClearance) traversableCells += 1;
+      }
+    }
+
+    return traversableCells;
   }
 
   private isGoalCandidateAt(gridX: number, gridY: number): boolean {

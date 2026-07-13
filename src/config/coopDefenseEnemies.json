@@ -61,6 +61,25 @@
         "intervalMsFactorPerAdditionalPlayer": -1,
         "countPerWaveFactorPerAdditionalPlayer": 0
       }
+    },
+    {
+      "id": "grave-titan",
+      "maxHp": 1200,
+      "xp": 75,
+      "size": 56,
+      "moveSpeed": 48,
+      "movementTarget": "bases",
+      "weaponId": "BITE",
+      "attackScanIntervalMs": 180,
+      "attackStopDurationMs": 260,
+      "imageKey": "zombie",
+      "isBoss": true,
+      "displayName": "Grufttitan",
+      "color": 10494192,
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.75,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      }
     }
   ]
 }

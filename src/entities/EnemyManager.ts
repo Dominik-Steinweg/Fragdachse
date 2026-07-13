@@ -59,6 +59,7 @@ export class EnemyManager {
   hostUpdateMovement(
     baseFlowFieldService: EnemyFlowFieldService | null,
     playerFlowFieldService: EnemyFlowFieldService | null,
+    bossFlowFieldService: EnemyFlowFieldService | null,
     movementLocked: boolean,
     now: number,
     deltaMs: number,
@@ -68,9 +69,11 @@ export class EnemyManager {
 
     for (const enemy of this.enemies.values()) {
       const config = this.resolvedConfigs[enemy.kind];
-      const flowFieldService = config.movementTarget === 'players'
-        ? playerFlowFieldService ?? baseFlowFieldService
-        : baseFlowFieldService;
+      const flowFieldService = config.isBoss
+        ? bossFlowFieldService ?? baseFlowFieldService
+        : config.movementTarget === 'players'
+          ? playerFlowFieldService ?? baseFlowFieldService
+          : baseFlowFieldService;
 
       if (movementLocked || !flowFieldService || enemy.isAttackMovementPaused(now)) {
         enemy.stopMovement();
@@ -257,6 +260,13 @@ export class EnemyManager {
 
   hasEnemy(id: string): boolean {
     return this.enemies.has(id);
+  }
+
+  hasEnemyKind(kind: CoopDefenseEnemyKind): boolean {
+    for (const enemy of this.enemies.values()) {
+      if (enemy.kind === kind) return true;
+    }
+    return false;
   }
 
   applyDamage(id: string, damage: number): { died: boolean; remainingHp: number } | null {

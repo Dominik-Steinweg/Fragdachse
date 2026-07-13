@@ -97,6 +97,25 @@
         { "enemyKind": "demon-badger", "intervalMs": 4000, "countPerWave": 2, "startAtMs": 0 },
         { "enemyKind": "rabid-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 0 }
       ]
+    },
+    {
+      "mapId": "5",
+      "displayName": "Map 5 - Grufttitan",
+      "roundDurationSec": 100,
+      "bases": [
+        {
+          "id": "coop-base-1",
+          "hpMax": 3500,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 4 }
+        }
+      ],
+      "waves": [
+        { "enemyKind": "zombie-badger", "intervalMs": 1800, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 7000, "countPerWave": 1, "startAtMs": 20000 },
+        { "enemyKind": "rabid-badger", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 35000 }
+      ],
+      "boss": { "enemyKind": "grave-titan", "spawnAtMs": 45000 }
     }
   ]
 }

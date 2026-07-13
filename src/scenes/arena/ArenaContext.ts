@@ -109,4 +109,5 @@ export interface ArenaContext {
   trainManager:      TrainManager      | null;
   enemyFlowFieldService: EnemyFlowFieldService | null;
   enemyPlayerFlowFieldService: EnemyFlowFieldService | null;
+  enemyBossFlowFieldService: EnemyFlowFieldService | null;
 }
