@@ -130,6 +130,10 @@ export class TrainRenderer {
 
   /** Phaser-Objekte freigeben. */
   destroy(): void {
+    if (this.moveLoopHandle) {
+      this.audioSystem?.stopLoop(this.moveLoopHandle);
+      this.moveLoopHandle = null;
+    }
     if (this.gfx.active) this.gfx.destroy();
   }
 

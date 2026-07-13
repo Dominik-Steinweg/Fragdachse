@@ -116,63 +116,6 @@
       "sortOrder": 20,
       "upgrades": [
         {
-          "id": "weapon1_adrenaline_gain",
-          "code": "B1",
-          "label": "Adrenalin-Gain",
-          "description": "+10% Adrenalin je Treffer fuer Waffe 1 pro Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 10,
-          "effects": [
-            {
-              "stat": "weapon1.adrenalinGain",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
-          "id": "weapon1_fire_rate",
-          "code": "B2",
-          "label": "Feuerrate",
-          "description": "+5% Feuerrate aller Waffe-1-Waffen pro Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 20,
-          "effects": [
-            {
-              "stat": "weapon1.fireRate",
-              "mode": "add_percent_per_level",
-              "value": 0.05
-            }
-          ]
-        },
-        {
-          "id": "weapon1_damage",
-          "code": "B3",
-          "label": "Schaden",
-          "description": "+10% Schaden aller Waffe-1-Waffen pro Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 30,
-          "effects": [
-            {
-              "stat": "weapon1.damage",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
           "id": "unlock_glock",
           "code": "B-W1",
           "label": "Glock",

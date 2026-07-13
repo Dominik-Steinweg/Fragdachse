@@ -336,6 +336,60 @@ export class EnemyFlowFieldService {
     };
   }
 
+  /**
+   * Liefert den Mittelpunkt der naechsten Flow-Field-Zelle. Groessere Gegner
+   * steuern damit gezielt durch den sicheren Korridor, statt eine grobe
+   * Zellrichtung beizubehalten, wenn sie innerhalb der Zelle versetzt sind.
+   */
+  getNextCellWorldPosition(gridX: number, gridY: number): { x: number; y: number } | null {
+    const vector = this.getVectorAt(gridX, gridY);
+    const stepX = Math.sign(vector.x);
+    const stepY = Math.sign(vector.y);
+    if (stepX === 0 && stepY === 0) return null;
+    return this.gridToWorld(gridX + stepX, gridY + stepY);
+  }
+
+  /**
+   * Sucht von einer ungueltigen/abgedraengten Zelle aus den naechsten
+   * erreichbaren Korridorpunkt. Das ist insbesondere nach Rueckstoss oder
+   * Kollisionsaufloesung wichtig: Ohne Recovery bleibt ein grosser Gegner in
+   * einer durch den Clearance-Mask gesperrten Randzelle dauerhaft stehen.
+   */
+  findNearestReachableWorldPosition(
+    gridX: number,
+    gridY: number,
+    maxRadiusCells = 3,
+  ): { x: number; y: number } | null {
+    const radius = Math.max(1, Math.floor(maxRadiusCells));
+    let best: { x: number; y: number; distanceSq: number; integration: number } | null = null;
+
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        const candidateX = gridX + offsetX;
+        const candidateY = gridY + offsetY;
+        if (!this.isFlowPassableAt(candidateX, candidateY)) continue;
+
+        const integration = this.getIntegrationValueAt(candidateX, candidateY);
+        if (integration >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
+
+        const distanceSq = offsetX * offsetX + offsetY * offsetY;
+        if (
+          best
+          && (distanceSq > best.distanceSq
+            || (distanceSq === best.distanceSq && integration >= best.integration))
+        ) {
+          continue;
+        }
+
+        const world = this.gridToWorld(candidateX, candidateY);
+        if (!world) continue;
+        best = { ...world, distanceSq, integration };
+      }
+    }
+
+    return best ? { x: best.x, y: best.y } : null;
+  }
+
   registerDebugOverlayCallback(
     callback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null,
   ): void {

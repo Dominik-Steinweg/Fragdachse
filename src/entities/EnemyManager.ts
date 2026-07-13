@@ -87,7 +87,20 @@ export class EnemyManager {
       }
 
       const integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
-      if (integrationValue <= 0 || integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
+      if (integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
+        const recoveryTarget = config.isBoss
+          ? flowFieldService.findNearestReachableWorldPosition(gridCell.gridX, gridCell.gridY)
+          : null;
+        if (!recoveryTarget) {
+          enemy.stopMovement();
+          continue;
+        }
+
+        this.steerEnemyTowards(enemy, recoveryTarget.x, recoveryTarget.y, lerpT);
+        continue;
+      }
+
+      if (integrationValue <= 0) {
         enemy.stopMovement();
         continue;
       }
@@ -99,9 +112,17 @@ export class EnemyManager {
       }
 
       const speed = enemy.getMoveSpeed();
-      const separation = this.computeSeparation(enemy, separationGrid);
-      let targetVx = vector.x * speed + separation.x * SEPARATION_STRENGTH * speed;
-      let targetVy = vector.y * speed + separation.y * SEPARATION_STRENGTH * speed;
+      // Der einzelne Boss braucht keine Separation. Sie kann den grossen Body
+      // seitlich aus seinem Clearance-Korridor in eine Wand druecken.
+      const separation = config.isBoss ? { x: 0, y: 0 } : this.computeSeparation(enemy, separationGrid);
+      const bossWaypoint = config.isBoss
+        ? flowFieldService.getNextCellWorldPosition(gridCell.gridX, gridCell.gridY)
+        : null;
+      const waypointDirection = bossWaypoint
+        ? this.normalizeDirection(bossWaypoint.x - enemy.sprite.x, bossWaypoint.y - enemy.sprite.y)
+        : vector;
+      let targetVx = waypointDirection.x * speed + separation.x * SEPARATION_STRENGTH * speed;
+      let targetVy = waypointDirection.y * speed + separation.y * SEPARATION_STRENGTH * speed;
 
       const targetSpeed = Math.hypot(targetVx, targetVy);
       if (targetSpeed > speed) {
@@ -116,6 +137,22 @@ export class EnemyManager {
         Phaser.Math.Linear(current.vy, targetVy, lerpT),
       );
     }
+  }
+
+  private steerEnemyTowards(enemy: EnemyEntity, targetX: number, targetY: number, lerpT: number): void {
+    const direction = this.normalizeDirection(targetX - enemy.sprite.x, targetY - enemy.sprite.y);
+    const speed = enemy.getMoveSpeed();
+    const current = enemy.getDesiredVelocity();
+    enemy.setDesiredVelocity(
+      Phaser.Math.Linear(current.vx, direction.x * speed, lerpT),
+      Phaser.Math.Linear(current.vy, direction.y * speed, lerpT),
+    );
+  }
+
+  private normalizeDirection(x: number, y: number): { x: number; y: number } {
+    const length = Math.hypot(x, y);
+    if (length <= 0.001) return { x: 0, y: 0 };
+    return { x: x / length, y: y / length };
   }
 
   /**
