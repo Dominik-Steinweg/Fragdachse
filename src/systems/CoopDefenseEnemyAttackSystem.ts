@@ -3,6 +3,7 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
+import type { BaseWeapon } from '../loadout/BaseWeapon';
 import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { CombatSystem } from './CombatSystem';
 import { COLORS, PLAYER_SIZE } from '../config';
@@ -29,15 +30,13 @@ export class CoopDefenseEnemyAttackSystem {
       if (!enemy.sprite.active) continue;
       enemy.decayWeaponSpread(delta, now);
 
-      const weapon = enemy.getWeapon();
-      if (!weapon) continue;
       if (!enemy.canScanForAttack(now)) continue;
 
       enemy.scheduleNextAttackScan(now);
-      if (!enemy.isWeaponReady(now)) continue;
+      const attack = this.selectAttack(enemy, now);
+      if (!attack) continue;
 
-      const target = this.selectTarget(enemy, weapon.config.range);
-      if (!target) continue;
+      const { weapon, target } = attack;
 
       const angle = Phaser.Math.Angle.Between(enemy.sprite.x, enemy.sprite.y, target.targetX, target.targetY);
       enemy.faceAngle(angle);
@@ -54,9 +53,28 @@ export class CoopDefenseEnemyAttackSystem {
         COLORS.RED_2,
       );
       if (didFire) {
-        enemy.recordWeaponUse(now);
+        enemy.recordWeaponUse(weapon, now);
       }
     }
+  }
+
+  private selectAttack(enemy: EnemyEntity, now: number): SelectedEnemyAttack | null {
+    // Reihenfolge ist Absicht: Der zuerst konfigurierte Biss gewinnt im
+    // absoluten Nahbereich, erst danach kommt eine moegliche Fernkampfwaffe.
+    for (const attackWeapon of enemy.getAttackWeapons()) {
+      const weapon = attackWeapon.weapon;
+      if (weapon.config.fire.type === 'healing_aura' || weapon.config.fire.type === 'tesla_dome') continue;
+      const target = attackWeapon.targetMode === 'players'
+        ? this.findNearestPlayerTarget(enemy, weapon.config.range)
+        : this.selectTarget(enemy, weapon.config.range);
+      if (!target) continue;
+      // Existiert ein Ziel fuer eine hoeher priorisierte Waffe, wartet der
+      // Gegner deren Cooldown ab, statt im Nahkampf auf Fernkampf zu wechseln.
+      if (!enemy.isWeaponReady(weapon, now)) return null;
+      return { weapon, target };
+    }
+
+    return null;
   }
 
   private selectTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
@@ -159,4 +177,9 @@ export class CoopDefenseEnemyAttackSystem {
     }
     return candidate.distance < current.distance;
   }
+}
+
+interface SelectedEnemyAttack {
+  readonly weapon: BaseWeapon;
+  readonly target: EnemyAttackCandidate;
 }

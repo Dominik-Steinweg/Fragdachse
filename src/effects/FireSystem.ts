@@ -23,6 +23,7 @@ export interface FireDamageEvent {
   burnDurationMs?:     number;
   burnDamagePerTick?:  number;
   burnTickIntervalMs?: number;
+  weaponName: string;
 }
 
 /* ── Internal host-side tracking ── */
@@ -106,6 +107,7 @@ export class FireSystem {
           burnDurationMs:     zone.config.burnDurationMs,
           burnDamagePerTick:  zone.config.burnDamagePerTick,
           burnTickIntervalMs: zone.config.burnTickIntervalMs,
+          weaponName: zone.config.weaponName ?? 'Feuer',
         });
       }
 

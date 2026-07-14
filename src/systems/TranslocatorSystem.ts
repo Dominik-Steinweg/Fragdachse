@@ -4,12 +4,13 @@ import { ProjectileManager } from '../entities/ProjectileManager';
 import { PlayerManager } from '../entities/PlayerManager';
 import { CombatSystem } from './CombatSystem';
 import { TrainManager } from '../train/TrainManager';
-import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
+import type { TranslocatorUtilityConfig } from '../loadout/LoadoutConfig';
 
 export class TranslocatorSystem {
   // Map von playerId -> id des aktiven Pucks
   private activePucks = new Map<string, number>();
   private onUseCb: ((playerId: string) => void) | null = null;
+  private radialImpulseCb: ((x: number, y: number, radius: number, knockback: number, ownerId: string) => void) | null = null;
 
   constructor(
     private playerManager: PlayerManager,
@@ -25,6 +26,7 @@ export class TranslocatorSystem {
   public setUseCallback(cb: ((playerId: string) => void) | null): void {
     this.onUseCb = cb;
   }
+  public setRadialImpulseCallback(cb: ((x: number, y: number, radius: number, knockback: number, ownerId: string) => void) | null): void { this.radialImpulseCb = cb; }
 
   public getActivePuckId(playerId: string): number | undefined {
     return this.activePucks.get(playerId);
@@ -39,30 +41,30 @@ export class TranslocatorSystem {
     targetX: number,
     targetY: number,
     now: number,
-    params: any
+    params: any,
+    cfg: TranslocatorUtilityConfig,
   ): boolean {
     const existingPuckId = this.activePucks.get(playerId);
 
     if (existingPuckId !== undefined) {
       const puck = this.projectileManager.getProjectileById(existingPuckId);
       if (puck) {
-        return this.teleportToPuck(playerId, puck, now);
+        return this.teleportToPuck(playerId, puck, now, cfg);
       } else {
         // Puck wurde mittlerweile zerstört (Arena-Grenze, etc.), Referenz entfernen und Werfen erlauben
         this.activePucks.delete(playerId);
       }
     }
 
-    return this.throwPuck(playerId, angle, now, params);
+    return this.throwPuck(playerId, angle, now, params, cfg);
   }
 
-  private throwPuck(playerId: string, angle: number, now: number, params: any): boolean {
+  private throwPuck(playerId: string, angle: number, now: number, params: any, cfg: TranslocatorUtilityConfig): boolean {
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return false;
 
     this.onUseCb?.(playerId);
 
-    const cfg = UTILITY_CONFIGS.TRANSLOCATOR;
     const speed = cfg.projectileSpeed ?? 1200;
     
     let throwSpeed = speed;
@@ -100,7 +102,7 @@ export class TranslocatorSystem {
     return true; 
   }
 
-  private teleportToPuck(playerId: string, puck: any, now: number): boolean {
+  private teleportToPuck(playerId: string, puck: any, now: number, cfg: TranslocatorUtilityConfig): boolean {
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return false;
 
@@ -127,9 +129,14 @@ export class TranslocatorSystem {
 
     // 5. Hazard & Telefrag Checks am Zielort anwenden
     this.checkTeleportHazards(playerId, targetX, targetY);
+    if ((cfg.telefragRadius ?? 0) > 0 && (cfg.telefragDamage ?? 0) > 0) {
+      this.combatSystem.applyAoeDamage(targetX, targetY, cfg.telefragRadius ?? 0, cfg.telefragDamage ?? 0, playerId, false, { category: 'explosion', allowTeamDamage: false, weaponName: 'Telefrag', sourceSlot: 'utility' });
+      this.radialImpulseCb?.(targetX, targetY, cfg.telefragRadius ?? 0, cfg.telefragKnockback ?? 0, playerId);
+      bridge.broadcastExplosionEffect(targetX, targetY, cfg.telefragRadius ?? 0);
+    }
 
     // 6. Utility-Cooldown starten
-    const cd = UTILITY_CONFIGS.TRANSLOCATOR.cooldown;
+    const cd = cfg.cooldown;
     bridge.publishUtilityCooldownUntil(playerId, now + cd);
 
     return true;

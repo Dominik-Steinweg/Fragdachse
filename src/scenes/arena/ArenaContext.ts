@@ -29,6 +29,7 @@ import type { ShieldBuffSystem }    from '../../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
 import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
+import type { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
 import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import type { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
@@ -102,6 +103,7 @@ export interface ArenaContext {
   turretSystem:      TurretSystem      | null;
   coopDefensePlayerModifierSystem: CoopDefensePlayerModifierSystem | null;
   coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
+  coopDefenseEnemyAbilitySystem: CoopDefenseEnemyAbilitySystem | null;
   coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
   coopDefenseWaveSpawner: CoopDefenseWaveSpawner | null;
   translocatorSystem: TranslocatorSystem | null;

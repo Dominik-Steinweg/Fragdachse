@@ -7,7 +7,9 @@
       "size": 28,
       "moveSpeed": 70,
       "movementTarget": "bases",
-      "weaponId": "BITE",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all" }
+      ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
       "imageKey": "enemy_zombie_badger",
@@ -27,7 +29,9 @@
       "size": 24,
       "moveSpeed": 140,
       "movementTarget": "bases",
-      "weaponId": "BITE",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all" }
+      ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
       "imageKey": "enemy_demon_badger",
@@ -47,7 +51,9 @@
       "size": 22,
       "moveSpeed": 180,
       "movementTarget": "players",
-      "weaponId": "BITE",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all" }
+      ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 100,
       "imageKey": "enemy_rabid_badger",
@@ -67,7 +73,9 @@
       "size": 56,
       "moveSpeed": 48,
       "movementTarget": "bases",
-      "weaponId": "BITE",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all" }
+      ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
       "imageKey": "enemy_grave_titan",
@@ -76,6 +84,88 @@
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.75,
         "moveSpeedFactorPerAdditionalPlayer": 0
+      }
+    },
+    {
+      "id": "spore-warden",
+      "maxHp": 180,
+      "xp": 12,
+      "size": 32,
+      "moveSpeed": 42,
+      "movementTarget": "bases",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all" },
+        { "weaponId": "SPOREN", "targetMode": "players" }
+      ],
+      "attackScanIntervalMs": 180,
+      "attackStopDurationMs": 260,
+      "imageKey": "enemy_zombie_badger",
+      "displayName": "Sporenpanzer",
+      "color": 9414223,
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.6,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      },
+      "spawnScaling": {
+        "intervalMsFactorPerAdditionalPlayer": -0.25,
+        "countPerWaveFactorPerAdditionalPlayer": 0
+      }
+    },
+    {
+      "id": "plague-medic",
+      "maxHp": 140,
+      "xp": 20,
+      "size": 30,
+      "moveSpeed": 58,
+      "movementTarget": "bases",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all" },
+        { "weaponId": "HEALING_AURA", "targetMode": "all" }
+      ],
+      "attackScanIntervalMs": 180,
+      "attackStopDurationMs": 220,
+      "imageKey": "enemy_demon_badger",
+      "displayName": "Seuchenheiler",
+      "color": 5635925,
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.55,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      },
+      "spawnScaling": {
+        "intervalMsFactorPerAdditionalPlayer": -0.15,
+        "countPerWaveFactorPerAdditionalPlayer": 0
+      }
+    },
+    {
+      "id": "void-stalker",
+      "maxHp": 240,
+      "xp": 30,
+      "size": 32,
+      "moveSpeed": 54,
+      "movementTarget": "players",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all" },
+        { "weaponId": "MINI_TESLA_DOME", "targetMode": "players" }
+      ],
+      "attackScanIntervalMs": 160,
+      "attackStopDurationMs": 200,
+      "imageKey": "enemy_rabid_badger",
+      "displayName": "Leerenpirscher",
+      "color": 10171135,
+      "translocator": {
+        "utilityId": "TRANSLOCATOR",
+        "flightTimeMs": 1000,
+        "cooldownMs": 8500,
+        "minRange": 0,
+        "maxRange": 1100
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.65,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      },
+      "spawnScaling": {
+        "intervalMsFactorPerAdditionalPlayer": -0.1,
+        "countPerWaveFactorPerAdditionalPlayer": 0
       }
     }
   ]

@@ -25,6 +25,7 @@ interface ActiveMeteor {
   spawnedAt: number;
   impactAt:  number;
   ownerId:   string;
+  damageFactor: number;
 }
 
 interface ArmageddonSession {
@@ -34,6 +35,7 @@ interface ArmageddonSession {
   spawnAccumulator:  number;   // ms seit letztem Spawn
   nextSpawnInterval: number;   // ms bis zum nächsten Spawn (mit Jitter)
   spawning:          boolean;  // false wenn duration abgelaufen, nur noch In-Flight-Meteore
+  spawnedCount:      number;
 }
 
 // ── System ───────────────────────────────────────────────────────────────────
@@ -67,6 +69,7 @@ export class ArmageddonSystem {
       spawnAccumulator: 0,
       nextSpawnInterval: this.jitteredInterval(config),
       spawning: true,
+      spawnedCount: 0,
     });
   }
 
@@ -104,7 +107,7 @@ export class ArmageddonSystem {
           x:               m.x,
           y:               m.y,
           radius:          m.radius,
-          damage:          cfg?.meteorDamage ?? 35,
+          damage:          (cfg?.meteorDamage ?? 35) * m.damageFactor,
           damageFalloff:   cfg?.meteorDamageFalloff,
           ownerId:         m.ownerId,
           selfDamageMult:  cfg?.selfDamageMult ?? 0,
@@ -186,7 +189,9 @@ export class ArmageddonSystem {
       // Radius mit konfigurierbarem Jitter (z.B. ±10%)
       const jitter = cfg.meteorRadiusJitter;
       const radiusMult = 1 + (Math.random() * 2 - 1) * jitter;
-      const radius = Math.round(cfg.meteorDamageRadius * radiusMult);
+      session.spawnedCount += 1;
+      const isComet = (cfg.cometEveryMeteors ?? 0) > 0 && session.spawnedCount % (cfg.cometEveryMeteors ?? 1) === 0;
+      const radius = Math.round(cfg.meteorDamageRadius * radiusMult * (isComet ? (cfg.cometRadiusFactor ?? 1) : 1));
 
       this.meteors.push({
         id:        this.nextMeteorId++,
@@ -196,6 +201,7 @@ export class ArmageddonSystem {
         spawnedAt: now,
         impactAt:  now + cfg.meteorFallDuration,
         ownerId:   session.ownerId,
+        damageFactor: isComet ? (cfg.cometDamageFactor ?? 1) : 1,
       });
       return;
     }

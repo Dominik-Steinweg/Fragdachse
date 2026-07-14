@@ -11,6 +11,8 @@ import { GaussRenderer }       from '../../effects/GaussRenderer';
 import { HydraRenderer }       from '../../effects/HydraRenderer';
 import { EnergyShieldRenderer } from '../../effects/EnergyShieldRenderer';
 import { TeslaDomeRenderer }   from '../../effects/TeslaDomeRenderer';
+import { HealingAuraRenderer } from '../../effects/HealingAuraRenderer';
+import { MiniTeslaDomeRenderer } from '../../effects/MiniTeslaDomeRenderer';
 import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
@@ -47,6 +49,8 @@ export interface RendererBundle {
   gauss:               GaussRenderer;
   energyShield:        EnergyShieldRenderer;
   teslaDome:           TeslaDomeRenderer;
+  healingAura:         HealingAuraRenderer;
+  miniTeslaDome:       MiniTeslaDomeRenderer;
   timeBubble:          TimeBubbleRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
@@ -108,6 +112,12 @@ export function createRendererBundle(
   const teslaDome = new TeslaDomeRenderer(scene);
   teslaDome.generateTextures();
 
+  const healingAura = new HealingAuraRenderer(scene);
+  healingAura.generateTextures();
+
+  const miniTeslaDome = new MiniTeslaDomeRenderer(scene);
+  miniTeslaDome.generateTextures();
+
   const timeBubble = new TimeBubbleRenderer(scene);
   timeBubble.generateTextures();
 
@@ -150,7 +160,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, bite, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, timeBubble, holyGrenade,
+    bullet, asmdPrimary, bite, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, miniTeslaDome, timeBubble, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,

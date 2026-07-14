@@ -17,6 +17,7 @@ type TurretFireHandler = (
   angle: number,
   targetX: number,
   targetY: number,
+  damageFactor?: number,
 ) => void;
 
 export class TurretSystem {
@@ -76,6 +77,13 @@ export class TurretSystem {
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
       this.fireHandler?.(turret.ownerId, turret.ownerColor, muzzleX, muzzleY, angle, target.x, target.y);
+      if ((turret.secondProjectileDamageFactor ?? 0) > 0) {
+        const secondTarget = this.findNearestTarget(turret, turretX, turretY, config.placeable.targetRange, target);
+        if (secondTarget) {
+          const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
+          this.fireHandler?.(turret.ownerId, turret.ownerColor, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, turret.secondProjectileDamageFactor);
+        }
+      }
     }
 
     for (const id of [...this.nextFireAt.keys()]) {
@@ -88,11 +96,13 @@ export class TurretSystem {
     turretX: number,
     turretY: number,
     range: number,
+    excluded?: { x: number; y: number },
   ): { x: number; y: number } | null {
     let bestTarget: { x: number; y: number } | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
 
     for (const player of this.playerManager.getAllPlayers()) {
+      if (excluded && player.sprite.x === excluded.x && player.sprite.y === excluded.y) continue;
       if (player.id === turret.ownerId) continue;
       if (!player.sprite.active) continue;
       if (!this.combatSystem.isAlive(player.id)) continue;
@@ -108,6 +118,7 @@ export class TurretSystem {
     }
 
     for (const enemy of this.enemyTargetProvider?.() ?? []) {
+      if (excluded && enemy.x === excluded.x && enemy.y === excluded.y) continue;
       if (!this.combatSystem.isAlive(enemy.id)) continue;
       if (!this.combatSystem.canDamageTarget(turret.ownerId, enemy.id)) continue;
 

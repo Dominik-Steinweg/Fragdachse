@@ -177,7 +177,7 @@ export class RockVisualHelper {
       if (runtimeRock.kind === 'turret' && runtimeRock.ownerId === attackerId) {
         return runtimeRock.hp;
       }
-      const updated = this.ctx.placementSystem?.applyDamage(rockId, damage);
+      const updated = this.ctx.placementSystem?.applyDamage(rockId, damage, attackerId);
       const hp = updated?.hp ?? 0;
       this.updateRockVisualById(rockId, hp);
       return hp;
@@ -190,11 +190,16 @@ export class RockVisualHelper {
   }
 
   handleDestroyedRock(rockId: number, reason: 'damage' | 'decay'): void {
-    void reason;
     const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock) {
       if (runtimeRock.kind === 'turret') {
         this.spawnTurretDeathCloud(runtimeRock);
+      }
+      if (runtimeRock.kind === 'rock' && reason === 'damage' && runtimeRock.lastAttackerId !== runtimeRock.ownerId && (runtimeRock.enemyDestroyedExplosionRadius ?? 0) > 0) {
+        const world = { x: ARENA_OFFSET_X + runtimeRock.gridX * CELL_SIZE + CELL_SIZE / 2, y: ARENA_OFFSET_Y + runtimeRock.gridY * CELL_SIZE + CELL_SIZE / 2 };
+        this.ctx.combatSystem.applyAoeDamage(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionDamage ?? 0, runtimeRock.ownerId, false, { category: 'explosion', allowTeamDamage: false, weaponName: 'Explosiver Einsturz', sourceSlot: 'utility' });
+        this.ctx.hostPhysics.applyRadialImpulse(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionKnockback ?? 0, runtimeRock.ownerId, 0);
+        bridge.broadcastExplosionEffect(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0);
       }
       this.ctx.placementSystem?.removeRock(rockId);
       this.removePlaceableRockVisual(runtimeRock, true);

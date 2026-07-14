@@ -15,6 +15,8 @@ interface ActiveTeslaDome {
   lastRefreshAt: number;
   lastDrainAt: number;
   lastTickAt: number;
+  activatedAt: number;
+  chargeStacks: number;
 }
 
 interface TeslaRockTarget {
@@ -120,6 +122,8 @@ export class TeslaDomeSystem {
       lastRefreshAt: now,
       lastDrainAt: now,
       lastTickAt: now,
+      activatedAt: now,
+      chargeStacks: 0,
     });
   }
 
@@ -148,6 +152,12 @@ export class TeslaDomeSystem {
 
       dome.x = owner.sprite.x;
       dome.y = owner.sprite.y;
+
+      const chargeInterval = dome.config.fire.chargeIntervalMs ?? 0;
+      const maxChargeStacks = Math.max(0, Math.floor(dome.config.fire.maxChargeStacks ?? 0));
+      dome.chargeStacks = chargeInterval > 0
+        ? Math.min(maxChargeStacks, Math.floor((now - dome.activatedAt) / chargeInterval))
+        : 0;
 
       if (this.resourceSystem.getAdrenaline(ownerId) <= 0) {
         this.activeDomes.delete(ownerId);
@@ -179,9 +189,9 @@ export class TeslaDomeSystem {
         ownerId,
         x: Math.round(dome.x),
         y: Math.round(dome.y),
-        radius: dome.config.fire.radius,
+        radius: this.getEffectiveRadius(dome),
         color: dome.color,
-        alpha: 1,
+        alpha: maxChargeStacks > 0 ? 0.7 + dome.chargeStacks * 0.1 : 1,
         targets: targets.map(target => ({
           x: Math.round(target.x),
           y: Math.round(target.y),
@@ -196,7 +206,7 @@ export class TeslaDomeSystem {
   private collectTargets(dome: ActiveTeslaDome): SyncedTeslaDomeTarget[] {
     const targets: SyncedTeslaDomeTarget[] = [];
     const fire = dome.config.fire;
-    const radius = Math.max(1, fire.radius);
+    const radius = Math.max(1, this.getEffectiveRadius(dome));
 
     if (fire.targetTypes.includes('players')) {
       for (const player of this.playerManager.getAllPlayers()) {
@@ -255,7 +265,8 @@ export class TeslaDomeSystem {
   }
 
   private applyTickDamage(dome: ActiveTeslaDome, targets: SyncedTeslaDomeTarget[]): void {
-    const damage = dome.config.fire.damagePerTick;
+    const damage = dome.config.fire.damagePerTick
+      * (1 + dome.chargeStacks * (dome.config.fire.damageBonusPerCharge ?? 0));
     const playerTargets = targets.filter(target => target.type === 'players');
     const enemyTargets = targets.filter(target => target.type === 'enemies');
     const rockTargets = targets.filter(target => target.type === 'rocks');
@@ -329,5 +340,10 @@ export class TeslaDomeSystem {
     if (!fire.requireLineOfSight) return true;
     if (!this.lineOfSightChecker) return true;
     return this.lineOfSightChecker(sx, sy, ex, ey, skipRockIndex);
+  }
+
+  private getEffectiveRadius(dome: ActiveTeslaDome): number {
+    return dome.config.fire.radius
+      * (1 + dome.chargeStacks * (dome.config.fire.radiusBonusPerCharge ?? 0));
   }
 }

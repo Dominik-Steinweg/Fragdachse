@@ -90,6 +90,8 @@ const CONTENT_Y = CONTENT_TOP + CONTENT_H / 2;
 const NODE_W = 48;
 const NODE_H = 48;
 const ICON_SIZE = 32;
+const BOSS_FRAME_SIZE = 56;
+const BOSS_BADGE_SIZE = 20;
 const NODE_GAP_X = 18;
 const NODE_GAP_Y = 26;
 const ROW_GAP = 26;
@@ -870,12 +872,15 @@ export class CoopDefenseUpgradesOverlay {
         ];
 
         if (requirement.satisfied) {
+          const connectorColor = child.node.bossPointCostPerLevel > 0
+            ? (child.node.bossPointRequirementMet || child.node.level > 0 ? COLORS.GOLD_1 : COLORS.RED_2)
+            : visuals.connector;
           // Soft glowing base line + flowing energy dot.
-          graphics.lineStyle(4, visuals.connector, 0.18);
+          graphics.lineStyle(4, connectorColor, 0.18);
           this.strokePolyline(graphics, points);
-          graphics.lineStyle(2, visuals.connector, 0.85);
+          graphics.lineStyle(2, connectorColor, 0.85);
           this.strokePolyline(graphics, points);
-          this.addFlowingDot(points, visuals.connector);
+          this.addFlowingDot(points, connectorColor);
         } else {
           graphics.lineStyle(2, COLORS.GREY_5, 0.45);
           this.strokePolyline(graphics, points);
@@ -953,6 +958,9 @@ export class CoopDefenseUpgradesOverlay {
     const interactionEnabled = node.canLevelUp || node.canLevelDown;
     const isLocked = !node.unlocked && node.level <= 0;
     const isActive = node.level > 0;
+    const isBossUpgrade = node.bossPointCostPerLevel > 0;
+    const bossPointAvailable = node.bossPointRequirementMet || isActive;
+    const bossAccentColor = bossPointAvailable ? COLORS.GOLD_1 : COLORS.RED_2;
     const progressFraction = node.maxLevel > 0
       ? Phaser.Math.Clamp(node.level / node.maxLevel, 0, 1)
       : 0;
@@ -963,6 +971,38 @@ export class CoopDefenseUpgradesOverlay {
 
     const iconKey = this.getNodeTextureKey(node);
     const hasIcon = iconKey != null && this.scene.textures.exists(iconKey);
+
+    // Boss-Punkt-Upgrades bilden den hochwertigen Abschluss eines Zweigs. Ein
+    // eigener, etwas groesserer Rahmen hebt ihre Silhouette hervor, waehrend der
+    // eigentliche Knoten seine Kategorie-Farbe und damit seine Zugehoerigkeit behaelt.
+    let bossFrame: Phaser.GameObjects.Image | null = null;
+    if (isBossUpgrade) {
+      bossFrame = this.scene.add.image(
+        0,
+        0,
+        this.ensureBossNodeFrameTexture(bossAccentColor, isActive),
+      )
+        .setScrollFactor(0)
+        .setAlpha(isLocked ? 0.64 : isActive ? 1 : 0.88);
+      nodeGroup.add(bossFrame);
+
+      // Ein ruhiger Gold-Glow macht gekaufte Capstones eindeutig, ohne mit dem
+      // farbigen Aktiv-Glow der Kategorie zu konkurrieren.
+      if (isActive) {
+        const bossGlow = addExternalGlow(bossFrame, COLORS.GOLD_1, 1.15, 0, false, 0.08, 8);
+        if (bossGlow) {
+          this.nodeGlows.push({ target: bossFrame, glow: bossGlow });
+          this.decorationTweens.push(this.scene.tweens.add({
+            targets: bossGlow,
+            outerStrength: 2.25,
+            duration: 2100,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          }));
+        }
+      }
+    }
 
     // Modern glassy rounded-rect base (generated texture, glow-capable Image).
     const baseTexKey = this.ensureNodeBaseTexture(nodeBaseColor, nodeStrokeColor);
@@ -1052,13 +1092,21 @@ export class CoopDefenseUpgradesOverlay {
       nodeGroup.add(levelText);
     }
 
-    if (node.bossPointCostPerLevel > 0) {
-      const bossBadge = this.scene.add.text(-NODE_W / 2 + 3, -NODE_H / 2 + 1, '★', {
-        fontSize: '16px',
-        fontFamily: 'monospace',
+    if (isBossUpgrade) {
+      const badgeX = -NODE_W / 2 + 2;
+      const badgeY = -NODE_H / 2 + 2;
+      const badgeBase = this.scene.add.image(
+        badgeX,
+        badgeY,
+        this.ensureBossBadgeTexture(bossAccentColor),
+      ).setScrollFactor(0).setAlpha(isLocked ? 0.78 : 1);
+      const bossBadge = this.scene.add.text(badgeX, badgeY - 0.5, '★', {
+        fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
         fontStyle: 'bold',
-        color: toCssColor(node.bossPointRequirementMet || node.level > 0 ? COLORS.GOLD_1 : COLORS.RED_2),
-      }).setOrigin(0, 0).setScrollFactor(0).setStroke(toCssColor(COLORS.GREY_10), 3);
+        color: toCssColor(COLORS.GREY_10),
+      }).setOrigin(0.5).setScrollFactor(0);
+      nodeGroup.add(badgeBase);
       nodeGroup.add(bossBadge);
     }
 
@@ -1123,6 +1171,82 @@ export class CoopDefenseUpgradesOverlay {
     roundRectPath(ctx, inset, inset, w - inset * 2, h - inset * 2, NODE_TEX_RADIUS);
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = rgbStr(lerpColor(strokeColor, 0xffffff, 0.15));
+    ctx.stroke();
+
+    ct.refresh();
+    return key;
+  }
+
+  private ensureBossNodeFrameTexture(accentColor: number, active: boolean): string {
+    const state = active ? 'active' : 'idle';
+    const key = `_ccdnode_boss_${accentColor.toString(16)}_${state}`;
+    if (this.scene.textures.exists(key)) return key;
+
+    const w = BOSS_FRAME_SIZE;
+    const h = BOSS_FRAME_SIZE;
+    const ct = this.scene.textures.createCanvas(key, w, h);
+    if (!ct) return key;
+    const ctx = ct.context;
+    ctx.clearRect(0, 0, w, h);
+
+    const inset = 2.5;
+    const radius = NODE_TEX_RADIUS + 3;
+    const strokeGradient = ctx.createLinearGradient(0, 0, 0, h);
+    strokeGradient.addColorStop(0, rgbStr(lerpColor(accentColor, 0xffffff, 0.42), active ? 1 : 0.9));
+    strokeGradient.addColorStop(0.48, rgbStr(accentColor, active ? 0.96 : 0.78));
+    strokeGradient.addColorStop(1, rgbStr(lerpColor(accentColor, 0x000000, 0.38), active ? 0.92 : 0.68));
+
+    // Warmer Schimmer im Spalt zwischen Sonderrahmen und Kategorie-Knoten.
+    roundRectPath(ctx, inset, inset, w - inset * 2, h - inset * 2, radius);
+    ctx.fillStyle = rgbStr(accentColor, active ? 0.2 : 0.11);
+    ctx.fill();
+
+    roundRectPath(ctx, inset, inset, w - inset * 2, h - inset * 2, radius);
+    ctx.lineWidth = active ? 3 : 2.5;
+    ctx.strokeStyle = strokeGradient;
+    ctx.stroke();
+
+    roundRectPath(ctx, inset + 3.5, inset + 3.5, w - (inset + 3.5) * 2, h - (inset + 3.5) * 2, radius - 3.5);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = rgbStr(lerpColor(accentColor, 0xffffff, 0.35), active ? 0.58 : 0.36);
+    ctx.stroke();
+
+    // Kleine Mittelmarken geben dem Rahmen eine praegnante Capstone-Silhouette.
+    ctx.fillStyle = rgbStr(lerpColor(accentColor, 0xffffff, 0.34), active ? 0.95 : 0.78);
+    for (const [x, y] of [[w / 2, 1.5], [w - 1.5, h / 2], [w / 2, h - 1.5], [1.5, h / 2]]) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-2.5, -2.5, 5, 5);
+      ctx.restore();
+    }
+
+    ct.refresh();
+    return key;
+  }
+
+  private ensureBossBadgeTexture(accentColor: number): string {
+    const key = `_ccdnode_boss_badge_${accentColor.toString(16)}`;
+    if (this.scene.textures.exists(key)) return key;
+
+    const size = BOSS_BADGE_SIZE;
+    const ct = this.scene.textures.createCanvas(key, size, size);
+    if (!ct) return key;
+    const ctx = ct.context;
+    ctx.clearRect(0, 0, size, size);
+
+    const center = size / 2;
+    const radius = center - 1.5;
+    const fill = ctx.createRadialGradient(center - 2, center - 3, 1, center, center, radius);
+    fill.addColorStop(0, rgbStr(lerpColor(accentColor, 0xffffff, 0.28), 1));
+    fill.addColorStop(0.58, rgbStr(accentColor, 1));
+    fill.addColorStop(1, rgbStr(lerpColor(accentColor, 0x000000, 0.52), 1));
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgbStr(lerpColor(accentColor, 0xffffff, 0.58));
     ctx.stroke();
 
     ct.refresh();
@@ -1356,6 +1480,7 @@ export class CoopDefenseUpgradesOverlay {
 
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
     if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
+    if (node.id === 'fliegenpilz_cooldown') return 'UPGRADE_HE_GRENADE_COOLDOWN';
     if (node.kind === 'upgrade') return `UPGRADE_${node.id.toUpperCase()}`;
     return null;
   }
@@ -1421,6 +1546,7 @@ export class CoopDefenseUpgradesOverlay {
       lines.push('Nicht ruecknehmbar');
     }
 
+    if (node.bossPointCostPerLevel > 0) lines.push('★ Besonderes Upgrade');
     lines.push(node.description);
     if (node.bossPointCostPerLevel > 0) {
       lines.push(`★ Boss-Kosten: ${node.bossPointCostPerLevel} Punkt`);

@@ -83,6 +83,7 @@ export class ProjectileHomingController {
     const candidates = this.targetProvider(homing, proj.ownerId).filter(candidate => {
       if (!targetTypes.includes(candidate.type)) return false;
       if (excludeOwner && candidate.id === proj.ownerId) return false;
+      if (proj.multiExplosionExcludedTargetKeys?.has(`${candidate.type}:${candidate.id}`)) return false;
 
       const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
       if (distance > searchRadius) return false;

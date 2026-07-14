@@ -28,6 +28,7 @@ interface DashState {
   dirX:    number;   // normierter Startrichtungsvektor
   dirY:    number;
   vNorm:   number;   // v_norm zum Dash-Zeitpunkt (skaliert mit Buffs)
+  hitIds: Set<string>;
 }
 
 interface ExternalImpulse {
@@ -74,6 +75,10 @@ export class HostPhysicsSystem {
   private loadoutManager: LoadoutManagerType | null = null;
   private timeBubbleSystem: TimeBubbleSystem | null = null;
   private enemyManager: EnemyManager | null = null;
+  private runSpeedResolver: ((playerId: string) => number) | null = null;
+  private dashRecoveryResolver: ((playerId: string) => number) | null = null;
+  private dashImpactDamageResolver: ((playerId: string) => number) | null = null;
+  private dashImpactKnockbackResolver: ((playerId: string) => number) | null = null;
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
@@ -105,6 +110,10 @@ export class HostPhysicsSystem {
   setLoadoutManager(lm: LoadoutManagerType | null): void  { this.loadoutManager = lm; }
   setTimeBubbleSystem(system: TimeBubbleSystem | null): void { this.timeBubbleSystem = system; }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
+  setRunSpeedResolver(resolver: ((playerId: string) => number) | null): void { this.runSpeedResolver = resolver; }
+  setDashRecoveryResolver(resolver: ((playerId: string) => number) | null): void { this.dashRecoveryResolver = resolver; }
+  setDashImpactDamageResolver(resolver: ((playerId: string) => number) | null): void { this.dashImpactDamageResolver = resolver; }
+  setDashImpactKnockbackResolver(resolver: ((playerId: string) => number) | null): void { this.dashImpactKnockbackResolver = resolver; }
 
   // ── Rückstoß ─────────────────────────────────────────────────────────────
 
@@ -225,7 +234,7 @@ export class HostPhysicsSystem {
     now: number,
   ): { vx: number; vy: number } {
     if (this.burrowSystem?.isBurrowed(playerId)) return { vx, vy };
-    const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
+    const factor = this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now, playerId) ?? 1;
     if (factor >= 0.999) return { vx, vy };
     return { vx: vx * factor, vy: vy * factor };
   }
@@ -269,7 +278,7 @@ export class HostPhysicsSystem {
 
     const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(playerId) ?? 1;
     const speedMult = this.loadoutManager?.getSpeedMultiplier(playerId) ?? 1;
-    const vNorm     = PLAYER_SPEED * burrowSpeedFactor * speedMult;
+    const vNorm     = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult;
 
     this.dashStates.set(playerId, {
       phase:   1,
@@ -277,6 +286,7 @@ export class HostPhysicsSystem {
       dirX:    dx / len,
       dirY:    dy / len,
       vNorm,
+      hitIds: new Set(),
     });
     this.dashBurstPlayers.add(playerId);
   }
@@ -491,6 +501,17 @@ export class HostPhysicsSystem {
           // Hitbox sofort auf 50 % Radius (25 % Fläche)
           player.body.setCircle(PLAYER_SIZE * 0.25);
           player.sprite.setScale(0.5);
+          const impactDamage = this.dashImpactDamageResolver?.(player.id) ?? 0;
+          const impactKnockback = this.dashImpactKnockbackResolver?.(player.id) ?? 0;
+          if (impactDamage > 0) {
+            for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+              if (dash.hitIds.has(enemy.id) || !enemy.sprite.active) continue;
+              if (Phaser.Math.Distance.Between(player.sprite.x, player.sprite.y, enemy.sprite.x, enemy.sprite.y) > PLAYER_SIZE) continue;
+              dash.hitIds.add(enemy.id);
+              this.combatSystem.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.sprite.x, sourceY: player.sprite.y });
+              this.addRecoil(enemy.id, dirX * impactKnockback, dirY * impactKnockback, 180, player.id);
+            }
+          }
 
           if (elapsed >= DASH_T1_S) {
             // Phasenwechsel: Überschusszeit in Phase 2 übertragen
@@ -499,7 +520,8 @@ export class HostPhysicsSystem {
             this.dashBurstPlayers.delete(player.id);
           }
         } else {
-          const t = Math.min(1, elapsed / DASH_T2_S);
+          const recoveryDuration = Math.max(0.01, this.dashRecoveryResolver?.(player.id) ?? DASH_T2_S);
+          const t = Math.min(1, elapsed / recoveryDuration);
           // Quad.easeIn: zähes Aufrappeln von f_min auf 1.0
           const easeIn = t * t;
           speedFactor = DASH_F_MIN + (1 - DASH_F_MIN) * easeIn;
@@ -507,7 +529,7 @@ export class HostPhysicsSystem {
           player.body.setCircle(PLAYER_SIZE * scale / 2);
           player.sprite.setScale(scale);
 
-          if (elapsed >= DASH_T2_S) {
+          if (elapsed >= recoveryDuration) {
             done = true;
             this.dashStates.delete(player.id);
             player.body.setCircle(PLAYER_SIZE / 2);
@@ -540,7 +562,7 @@ export class HostPhysicsSystem {
 
       const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
       const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id) ?? 1;
-      const speed      = PLAYER_SPEED * burrowSpeedFactor * speedMult;
+      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult;
 
       if (len > 0) {
         baseVx = (dx / len) * speed;

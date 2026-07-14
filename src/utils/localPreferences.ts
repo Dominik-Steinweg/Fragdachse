@@ -4,12 +4,14 @@ import {
   buildDefaultCoopDefenseUpgradeProfile,
   cloneCoopDefenseUpgradeProfile,
   constrainCoopDefenseUpgradeProfileToBossPoints,
+  COOP_DEFENSE_UPGRADE_DEFINITIONS,
   sanitizeCoopDefenseUpgradeProfile,
 } from './coopDefenseUpgrades';
 import { sanitizePlayerName } from './playerName';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 const LOCAL_PREFERENCES_VERSION = 5;
+const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 interface LocalPreferencesV2 {
   version: 2;
@@ -25,6 +27,7 @@ interface LocalPreferencesV2 {
 }
 
 export interface CoopDefenseProgressPreferences {
+  upgradeTreeVersion: number;
   totalXp: number;
   lastProcessedRoundEndedAt: number | null;
   completedBossMapIds: string[];
@@ -77,6 +80,7 @@ interface ParsedLocalPreferences {
 }
 
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
+  upgradeTreeVersion: 2,
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
   completedBossMapIds: [],
@@ -164,8 +168,17 @@ function parsePreferences(raw: string | null): LocalPreferences {
     const totalXp = sanitizeStoredXp(parsed.progression?.coopDefense?.totalXp);
     const lastProcessedRoundEndedAt = sanitizeStoredRoundEndedAt(parsed.progression?.coopDefense?.lastProcessedRoundEndedAt);
     const completedBossMapIds = sanitizeCompletedBossMapIds(parsed.progression?.coopDefense?.completedBossMapIds);
+    const sourceTreeVersion = sanitizeStoredXp(parsed.progression?.coopDefense?.upgradeTreeVersion);
+    const migratedProfile = sanitizeCoopDefenseUpgradeProfile(parsed.progression?.coopDefense?.profile);
+    if (sourceTreeVersion < 2) {
+      for (const [upgradeId, definition] of Object.entries(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
+        if (definition.bossPointCostPerLevel <= 0 || upgradeId === 'smoke_grenade_storm') continue;
+        const state = migratedProfile.upgrades[upgradeId];
+        if (state) state.level = 0;
+      }
+    }
     const storedProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
-      sanitizeCoopDefenseUpgradeProfile(parsed.progression?.coopDefense?.profile),
+      sanitizeCoopDefenseUpgradeProfile(migratedProfile),
       completedBossMapIds.length,
     );
 
@@ -181,6 +194,7 @@ function parsePreferences(raw: string | null): LocalPreferences {
       },
       progression: {
         coopDefense: {
+          upgradeTreeVersion: 2,
           totalXp,
           lastProcessedRoundEndedAt,
           completedBossMapIds,
@@ -293,6 +307,7 @@ export function clearStoredLoadoutSlot(slot: LoadoutSlot): void {
 export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
   const progress = readPreferences().progression.coopDefense;
   return {
+    upgradeTreeVersion: progress.upgradeTreeVersion,
     totalXp: progress.totalXp,
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
     completedBossMapIds: [...progress.completedBossMapIds],
@@ -363,6 +378,39 @@ export function markStoredCoopDefenseRoundProcessed(endedAt: number | null): voi
       },
     },
   }));
+}
+
+/** Overrides the locally stored XP and earned boss points for the cheat/debug menu. */
+export function setStoredCoopDefenseCheatProgress(totalXp: number, earnedBossPoints: number): void {
+  const nextTotalXp = sanitizeStoredXp(totalXp);
+  const nextBossPointCount = sanitizeStoredXp(earnedBossPoints);
+
+  updatePreferences((current) => {
+    const storedProgress = current.progression.coopDefense;
+    const completedBossMapIds = storedProgress.completedBossMapIds
+      .filter((mapId) => !mapId.startsWith(CHEAT_BOSS_MAP_ID_PREFIX))
+      .slice(0, nextBossPointCount);
+
+    while (completedBossMapIds.length < nextBossPointCount) {
+      completedBossMapIds.push(`${CHEAT_BOSS_MAP_ID_PREFIX}${completedBossMapIds.length + 1}`);
+    }
+
+    return {
+      ...current,
+      progression: {
+        ...current.progression,
+        coopDefense: {
+          ...storedProgress,
+          totalXp: nextTotalXp,
+          completedBossMapIds,
+          profile: constrainCoopDefenseUpgradeProfileToBossPoints(
+            storedProgress.profile,
+            nextBossPointCount,
+          ),
+        },
+      },
+    };
+  });
 }
 
 /** Records a successful boss map once and returns whether a new boss point was earned. */

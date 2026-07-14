@@ -141,7 +141,12 @@ interface ActiveStinkCloud {
   y:              number;
   createdAt:      number;
   lastTickAt:     number;
+  afterCloudDurationMs: number;
+  afterCloudRadiusFactor: number;
+  afterCloudDamageFactor: number;
 }
+
+type StinkCloudEndReason = 'natural' | 'owner_inactive' | 'cleanup';
 
 /* ── Player position lookup (injected) ── */
 export interface StinkCloudPlayerInfo {
@@ -212,6 +217,9 @@ export class StinkCloudSystem {
     tickInterval: number,
     rockDamageMult: number,
     trainDamageMult: number,
+    afterCloudDurationMs = 0,
+    afterCloudRadiusFactor = 0,
+    afterCloudDamageFactor = 0,
   ): void {
     const now = Date.now();
     this.activeZones.push({
@@ -230,6 +238,9 @@ export class StinkCloudSystem {
       y: 0,
       createdAt:  now,
       lastTickAt: now,
+      afterCloudDurationMs,
+      afterCloudRadiusFactor,
+      afterCloudDamageFactor,
     });
   }
 
@@ -263,6 +274,9 @@ export class StinkCloudSystem {
       y,
       createdAt: now,
       lastTickAt: now,
+      afterCloudDurationMs: 0,
+      afterCloudRadiusFactor: 0,
+      afterCloudDamageFactor: 0,
     });
   }
 
@@ -285,7 +299,7 @@ export class StinkCloudSystem {
       if (zone.followOwner) {
         // Deaktivierung: Spieler tot, eingebuddelt, oder nicht mehr vorhanden
         if (!info || !info.alive || info.burrowed) {
-          this.activeZones.splice(i, 1);
+          this.endZoneAt(i, 'owner_inactive');
           continue;
         }
         zone.x = info.x;
@@ -296,7 +310,7 @@ export class StinkCloudSystem {
       // Duration abgelaufen
       const elapsed = now - zone.createdAt;
       if (elapsed >= zone.duration) {
-        this.activeZones.splice(i, 1);
+        this.endZoneAt(i, 'natural');
         continue;
       }
 
@@ -337,7 +351,7 @@ export class StinkCloudSystem {
   hostDeactivateForPlayer(playerId: string): void {
     for (let i = this.activeZones.length - 1; i >= 0; i--) {
       if (this.activeZones[i].ownerId === playerId) {
-        this.activeZones.splice(i, 1);
+        this.endZoneAt(i, 'cleanup');
       }
     }
   }
@@ -383,8 +397,28 @@ export class StinkCloudSystem {
   }
 
   destroyAll(): void {
-    this.activeZones.length = 0;
+    for (let i = this.activeZones.length - 1; i >= 0; i--) {
+      this.endZoneAt(i, 'cleanup');
+    }
     this.syncVisuals([]);
+  }
+
+  private endZoneAt(index: number, reason: StinkCloudEndReason): void {
+    const [zone] = this.activeZones.splice(index, 1);
+    if (!zone || reason !== 'natural' || !zone.followOwner || zone.afterCloudDurationMs <= 0) return;
+    this.hostCreateStationaryCloud(
+      zone.ownerId,
+      zone.ownerColor,
+      zone.x,
+      zone.y,
+      zone.radius * zone.afterCloudRadiusFactor,
+      zone.afterCloudDurationMs,
+      zone.damagePerTick * zone.afterCloudDamageFactor,
+      zone.tickInterval,
+      zone.rockDamageMult,
+      zone.trainDamageMult,
+      'stink',
+    );
   }
 
   // ── Alpha-Lifecycle ───────────────────────────────────────────────────────

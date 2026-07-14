@@ -31,6 +31,9 @@ type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
 export class BurrowSystem {
   private states = new Map<string, BurrowStateData>();
   private undergroundSpeedResolver: ((playerId: string) => number) | null = null;
+  private drainMultiplierResolver: ((playerId: string) => number) | null = null;
+  private shockwaveDamageResolver: ((playerId: string) => number) | null = null;
+  private shockwaveRadiusResolver: ((playerId: string) => number) | null = null;
 
   private rockGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -79,6 +82,9 @@ export class BurrowSystem {
   setUndergroundSpeedResolver(resolver: ((playerId: string) => number) | null): void {
     this.undergroundSpeedResolver = resolver;
   }
+  setDrainMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.drainMultiplierResolver = resolver; }
+  setShockwaveDamageResolver(resolver: ((playerId: string) => number) | null): void { this.shockwaveDamageResolver = resolver; }
+  setShockwaveRadiusResolver(resolver: ((playerId: string) => number) | null): void { this.shockwaveRadiusResolver = resolver; }
 
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
@@ -195,7 +201,7 @@ export class BurrowSystem {
     state.drainElapsedMs += delta;
     while (state.drainElapsedMs >= BURROW_DRAIN_INTERVAL_MS) {
       state.drainElapsedMs -= BURROW_DRAIN_INTERVAL_MS;
-      this.resources.drainAdrenaline(id, BURROW_DRAIN_AMOUNT_PER_TICK);
+      this.resources.drainAdrenaline(id, BURROW_DRAIN_AMOUNT_PER_TICK * Math.max(0, this.drainMultiplierResolver?.(id) ?? 1));
       if (this.resources.getAdrenaline(id) <= 0) {
         this.requestExit(id, 'depleted');
         return;
@@ -386,11 +392,13 @@ export class BurrowSystem {
 
     const ox = origin.sprite.x;
     const oy = origin.sprite.y;
+    const shockwaveRadius = this.shockwaveRadiusResolver?.(id) ?? SHOCKWAVE_RADIUS;
+    const shockwaveDamage = this.shockwaveDamageResolver?.(id) ?? SHOCKWAVE_DAMAGE;
 
     this.hostPhysics.applyRadialImpulse(
       ox,
       oy,
-      SHOCKWAVE_RADIUS,
+      shockwaveRadius,
       SHOCKWAVE_KNOCKBACK,
       id,
       0,
@@ -404,8 +412,8 @@ export class BurrowSystem {
       const dy   = other.sprite.y - oy;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist < SHOCKWAVE_RADIUS && dist > 0) {
-        this.combat.applyDamage(other.id, SHOCKWAVE_DAMAGE, false, undefined, undefined, {
+      if (dist < shockwaveRadius && dist > 0) {
+        this.combat.applyDamage(other.id, shockwaveDamage, false, id, 'Auftauchschockwelle', {
           sourceX: ox,
           sourceY: oy,
         });

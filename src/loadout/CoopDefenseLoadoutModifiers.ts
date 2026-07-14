@@ -181,7 +181,10 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
   'weapon.ROCKET_LAUNCHER.impactExplosion.radius': {
     kind: 'weapon',
     itemId: 'ROCKET_LAUNCHER',
-    targets: [{ path: ['fire', 'impactExplosion', 'radius'], operation: 'scale' }],
+    targets: [
+      { path: ['fire', 'impactExplosion', 'radius'], operation: 'scale' },
+      { path: ['fire', 'impactExplosion', 'groundFire', 'radius'], operation: 'scale' },
+    ],
   },
   'weapon.ROCKET_LAUNCHER.cooldown': {
     kind: 'weapon',
@@ -478,6 +481,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'FLIEGENPILZ',
     targets: [{ path: ['placeable', 'maxHp'], operation: 'scale' }],
   },
+  'utility.FLIEGENPILZ.cooldown': {
+    kind: 'utility',
+    itemId: 'FLIEGENPILZ',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
   'utility.FLIEGENPILZ.placeable.targetRange': {
     kind: 'utility',
     itemId: 'FLIEGENPILZ',
@@ -585,9 +593,22 @@ function setNumberAtPath(root: Record<string, unknown>, path: readonly string[],
     current = next;
   }
   const leaf = path[path.length - 1];
-  if (!(leaf in current) || typeof current[leaf] !== 'number') return false;
+  if (leaf in current && typeof current[leaf] !== 'number') return false;
   current[leaf] = value;
   return true;
+}
+
+function getAutomaticDescriptor(stat: string): ConfigStatDescriptor | null {
+  const parts = stat.split('.');
+  if (parts.length < 3) return null;
+  const prefix = parts.shift();
+  const itemId = parts.shift();
+  if (!itemId || (prefix !== 'weapon' && prefix !== 'utility' && prefix !== 'ultimate')) return null;
+  return {
+    kind: prefix,
+    itemId,
+    targets: [{ path: parts, operation: 'scale' }],
+  };
 }
 
 function applyOperation(baseValue: number, additive: number, percentage: number, operation: ModifierOperation): number {
@@ -637,6 +658,27 @@ function applyConfiguredStats<T extends { id: string }>(
       if (baseValue === null) continue;
       const nextValue = applyOperation(baseValue, additive, percentage, target.operation);
       changed = setNumberAtPath(targetConfig, target.path, nextValue) || changed;
+    }
+    if (changed) nextConfig = targetConfig;
+  }
+
+
+  const allStats = new Set([...Object.keys(totals.additive), ...Object.keys(totals.percentage)]);
+  for (const stat of allStats) {
+    if (stat in CONFIG_STAT_DESCRIPTORS) continue;
+    const descriptor = getAutomaticDescriptor(stat);
+    if (!descriptor || !shouldApplyDescriptor(descriptor, kind, slot, config.id)) continue;
+    const additive = totals.additive[stat] ?? 0;
+    const percentage = totals.percentage[stat] ?? 0;
+    const targetConfig = nextConfig ?? cloneValue(config as Record<string, unknown>);
+    let changed = false;
+    for (const target of descriptor.targets) {
+      const baseValue = getNumberAtPath(targetConfig, target.path) ?? 0;
+      changed = setNumberAtPath(
+        targetConfig,
+        target.path,
+        applyOperation(baseValue, additive, percentage, target.operation),
+      ) || changed;
     }
     if (changed) nextConfig = targetConfig;
   }

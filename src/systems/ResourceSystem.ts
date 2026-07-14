@@ -22,12 +22,16 @@ export class ResourceSystem {
   private adrenalineRegenRateResolver: ((id: string) => number) | null = null;
   private rageMaxResolver: ((id: string) => number) | null = null;
   private rageGainMultiplierResolver: ((id: string) => number) | null = null;
+  private adrenalineGainMultiplierResolver: ((id: string) => number) | null = null;
+  private adrenalineCostMultiplierResolver: ((id: string) => number) | null = null;
 
   setPowerUpSystem(ps: PowerUpSystemType | null): void { this.powerUpSystem = ps; }
   setAdrenalineMaxResolver(resolver: ((id: string) => number) | null): void { this.adrenalineMaxResolver = resolver; }
   setAdrenalineRegenRateResolver(resolver: ((id: string) => number) | null): void { this.adrenalineRegenRateResolver = resolver; }
   setRageMaxResolver(resolver: ((id: string) => number) | null): void { this.rageMaxResolver = resolver; }
   setRageGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.rageGainMultiplierResolver = resolver; }
+  setAdrenalineGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineGainMultiplierResolver = resolver; }
+  setAdrenalineCostMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineCostMultiplierResolver = resolver; }
 
   initPlayer(id: string): void {
     this.adrenaline.set(id, Math.min(this.getMaxAdrenaline(id), ADRENALINE_START));
@@ -66,7 +70,8 @@ export class ResourceSystem {
    * Pausiert die Regeneration NICHT – wird als Belohnung für Treffer genutzt.
    */
   addAdrenaline(id: string, amount: number): void {
-    const cur = Math.min(this.getMaxAdrenaline(id), (this.adrenaline.get(id) ?? 0) + amount);
+    const adjustedAmount = amount > 0 ? amount * Math.max(0, this.adrenalineGainMultiplierResolver?.(id) ?? 1) : amount;
+    const cur = Math.min(this.getMaxAdrenaline(id), (this.adrenaline.get(id) ?? 0) + adjustedAmount);
     this.adrenaline.set(id, cur);
   }
 
@@ -75,7 +80,8 @@ export class ResourceSystem {
    * ADRENALINE_REGEN_PAUSE_MS Millisekunden.
    */
   drainAdrenaline(id: string, amount: number): void {
-    const cur = Math.max(0, (this.adrenaline.get(id) ?? 0) - amount);
+    const adjustedAmount = amount > 0 ? amount * Math.max(0, this.adrenalineCostMultiplierResolver?.(id) ?? 1) : amount;
+    const cur = Math.max(0, (this.adrenaline.get(id) ?? 0) - adjustedAmount);
     this.adrenaline.set(id, cur);
     // Regen-Pause nicht setzen, wenn Adrenalinspritze aktiv ist
     if ((this.powerUpSystem?.getRegenMultiplier(id) ?? 1) === 1) {

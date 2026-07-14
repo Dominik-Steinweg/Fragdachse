@@ -15,6 +15,7 @@ import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
 import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
+import { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
@@ -37,7 +38,7 @@ import { getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../../config';
-import { PLAYER_SPEED } from '../../config';
+import { PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS, DASH_T2_S } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
 import type { ArenaContext }          from './ArenaContext';
@@ -479,6 +480,12 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getHpRegenPerSecond(playerId) ?? 0;
     });
+    this.ctx.combatSystem.setPlayerMaxArmorResolver((playerId) => {
+      return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.maxArmor', 100) ?? 100;
+    });
+    this.ctx.combatSystem.setPlayerArmorGainMultiplierResolver((playerId) => {
+      return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.armorGain') ?? 0);
+    });
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, damage, attackerId);
@@ -511,6 +518,14 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.hostPhysics.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
     this.ctx.hostPhysics.setEnemyManager(this.ctx.enemyManager);
+    this.ctx.hostPhysics.setRunSpeedResolver((playerId) => {
+      return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED;
+    });
+    this.ctx.hostPhysics.setDashRecoveryResolver((playerId) => {
+      return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.dashRecovery', DASH_T2_S) ?? DASH_T2_S;
+    });
+    this.ctx.hostPhysics.setDashImpactDamageResolver((playerId) => this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.dashImpactDamage') ?? 0);
+    this.ctx.hostPhysics.setDashImpactKnockbackResolver((playerId) => this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.dashImpactKnockback') ?? 0);
 
     if (bridge.isHost()) {
       this.ctx.resourceSystem = new ResourceSystem();
@@ -526,8 +541,15 @@ export class ArenaLifecycleCoordinator {
       this.ctx.resourceSystem.setRageGainMultiplierResolver((playerId) => {
         return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'ultimate.rageGainPerDamage') ?? 0);
       });
+      this.ctx.resourceSystem.setAdrenalineGainMultiplierResolver((playerId) => {
+        return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineGain') ?? 0);
+      });
+      this.ctx.resourceSystem.setAdrenalineCostMultiplierResolver((playerId) => {
+        return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineCost') ?? 0);
+      });
       this.ctx.shieldBuffSystem = new ShieldBuffSystem();
       this.ctx.timeBubbleSystem = new TimeBubbleSystem();
+      this.ctx.timeBubbleSystem.setFriendlyResolver((ownerId, subjectId) => !bridge.isEnemyPair(ownerId, subjectId));
       this.ctx.teslaDomeSystem = new TeslaDomeSystem(
         this.ctx.playerManager,
         this.ctx.combatSystem,
@@ -596,6 +618,15 @@ export class ArenaLifecycleCoordinator {
       this.ctx.burrowSystem.setUndergroundSpeedResolver((playerId) => {
         return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.burrowSpeed', 1.3) ?? 1.3;
       });
+      this.ctx.burrowSystem.setDrainMultiplierResolver((playerId) => {
+        return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.burrowCost') ?? 0);
+      });
+      this.ctx.burrowSystem.setShockwaveDamageResolver((playerId) => {
+        return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.unburrowShockwaveDamage', SHOCKWAVE_DAMAGE) ?? SHOCKWAVE_DAMAGE;
+      });
+      this.ctx.burrowSystem.setShockwaveRadiusResolver((playerId) => {
+        return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.unburrowShockwaveRadius', SHOCKWAVE_RADIUS) ?? SHOCKWAVE_RADIUS;
+      });
       this.ctx.burrowSystem.setGroups(
         this.ctx.arenaResult.rockGroup,
         this.ctx.arenaResult.trunkGroup,
@@ -619,10 +650,16 @@ export class ArenaLifecycleCoordinator {
       });
       this.ctx.decoySystem.setCombatStateReader(this.ctx.combatSystem);
       this.ctx.decoySystem.setRunSpeedResolver((playerId) => {
-        return PLAYER_SPEED * (this.ctx.loadoutManager?.getSpeedMultiplier(playerId) ?? 1);
+        const runSpeed = this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED;
+        return runSpeed * (this.ctx.loadoutManager?.getSpeedMultiplier(playerId) ?? 1);
       });
       this.ctx.decoySystem.setCooldownStarter((playerId, utilityId, when) => {
         this.ctx.loadoutManager?.beginUtilityCooldown(playerId, utilityId, when);
+      });
+      this.ctx.decoySystem.setExplosionCallback((ownerId, x, y, radius, damage, knockback) => {
+        this.ctx.combatSystem.applyAoeDamage(x, y, radius, damage, ownerId, false, { category: 'explosion', allowTeamDamage: false, weaponName: 'Sprengattrappe', sourceSlot: 'utility' });
+        this.ctx.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);
+        bridge.broadcastExplosionEffect(x, y, radius);
       });
 
       this.ctx.translocatorSystem = new TranslocatorSystem(
@@ -633,6 +670,9 @@ export class ArenaLifecycleCoordinator {
       );
       this.ctx.translocatorSystem.setUseCallback((playerId) => {
         this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
+      });
+      this.ctx.translocatorSystem.setRadialImpulseCallback((x, y, radius, knockback, ownerId) => {
+        this.ctx.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);
       });
 
       this.ctx.loadoutManager.setCombatSystem(this.ctx.combatSystem);
@@ -650,12 +690,19 @@ export class ArenaLifecycleCoordinator {
           if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
         }
       });
-      this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY) => {
+      this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY, damageFactor = 1) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
-        this.ctx.loadoutManager?.fireAutomatedWeapon(weapon, x, y, angle, targetX, targetY, ownerId, color);
+        this.ctx.loadoutManager?.fireAutomatedWeapon({ ...weapon, damage: weapon.damage * damageFactor }, x, y, angle, targetX, targetY, ownerId, color);
       });
       if (this.ctx.enemyManager && this.ctx.baseManager) {
+        this.ctx.coopDefenseEnemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
+          this.ctx.enemyManager,
+          this.ctx.playerManager,
+          this.ctx.projectileManager,
+          this.ctx.combatSystem,
+          this.ctx.energyShieldSystem,
+        );
         this.ctx.coopDefenseEnemyAttackSystem = new CoopDefenseEnemyAttackSystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
@@ -742,21 +789,28 @@ export class ArenaLifecycleCoordinator {
         return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
       });
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);
+      this.ctx.loadoutManager.setWildfireHandler((ownerId, x, y, radius, durationMs, damagePerTick) => {
+        this.ctx.fireSystem.hostCreateZone(x, y, {
+          type: 'fire', radius, damagePerTick, tickInterval: 250, lingerDuration: durationMs,
+          allowTeamDamage: false, rockDamageMult: 0, trainDamageMult: 1,
+        }, ownerId);
+      });
       this.ctx.combatSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.burrowSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
 
       this.ctx.projectileManager.setBfgLaserCallback((proj) => {
         this.hostUpdate.resolveBfgLasers(proj);
       });
-      this.ctx.projectileManager.setTimeBubbleFactorProvider((x, y, now) => {
-        return this.ctx.timeBubbleSystem?.getProjectileMovementFactorAt(x, y, now) ?? 1;
+      this.ctx.projectileManager.setTimeBubbleFactorProvider((x, y, now, ownerId) => {
+        return this.ctx.timeBubbleSystem?.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1;
       });
 
       this.ctx.hostPhysics.setBurrowSystem(this.ctx.burrowSystem);
       this.ctx.hostPhysics.setLoadoutManager(this.ctx.loadoutManager);
       this.ctx.hostPhysics.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
 
-      this.ctx.combatSystem.setKillCallback((killerId, victimId, weapon, x, y) => {
+      this.ctx.combatSystem.setKillCallback((killerId, victimId, weapon, x, y, source) => {
+        this.ctx.loadoutManager?.handleKill(killerId, weapon, x, y, source);
         const allowKillDrop = !isCoopDefenseMode(bridge.getGameMode());
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
           if (allowKillDrop) {
@@ -834,6 +888,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(): void {
+    this.ctx.coopDefenseEnemyAbilitySystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
     this.ctx.fireSystem.destroyAll();
@@ -842,6 +897,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.clearAll();
     this.renderers.timeBubble.destroyAll();
     this.renderers.teslaDome.destroyAll();
+    this.renderers.healingAura.destroyAll();
+    this.renderers.miniTeslaDome.destroyAll();
     this.renderers.energyShield.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
     this.placementPreview.clearForTeardown();
@@ -857,6 +914,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.baseManager = null;
     this.ctx.enemyManager?.destroy();
     this.ctx.enemyManager = null;
+    this.ctx.coopDefenseEnemyAbilitySystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;
     this.ctx.combatSystem.setDeathCallback(null);

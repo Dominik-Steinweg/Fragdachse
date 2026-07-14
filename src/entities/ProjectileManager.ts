@@ -105,7 +105,7 @@ export class ProjectileManager {
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
-  private timeBubbleFactorProvider: ((x: number, y: number, now: number) => number) | null = null;
+  private timeBubbleFactorProvider: ((x: number, y: number, now: number, ownerId?: string) => number) | null = null;
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
@@ -271,7 +271,7 @@ export class ProjectileManager {
     this.ownerPositionProvider = provider;
   }
 
-  setTimeBubbleFactorProvider(provider: ((x: number, y: number, now: number) => number) | null): void {
+  setTimeBubbleFactorProvider(provider: ((x: number, y: number, now: number, ownerId?: string) => number) | null): void {
     this.timeBubbleFactorProvider = provider;
   }
 
@@ -449,7 +449,7 @@ export class ProjectileManager {
       Math.sin(angle) * cfg.speed,
     );
 
-    const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(x, y, Date.now()) ?? 1;
+    const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(x, y, Date.now(), ownerId) ?? 1;
     if (initialTimeBubbleFactor < 0.999) {
       body.setVelocity(body.velocity.x * initialTimeBubbleFactor, body.velocity.y * initialTimeBubbleFactor);
     }
@@ -515,8 +515,17 @@ export class ProjectileManager {
       splitCount:      cfg.splitCount,
       splitSpread:     cfg.splitSpread,
       splitFactor:     cfg.splitFactor,
+      splitHoming:     cfg.splitHoming,
       remainingRangePx: cfg.remainingRangePx,
       suppressSpawnFx: cfg.suppressSpawnFx,
+      penetrationRemaining: cfg.penetrationCount,
+      penetrationDamageRetention: cfg.penetrationDamageRetention,
+      penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
+      reflected: cfg.reflected,
+      gaussChainRadius: cfg.gaussChainRadius,
+      gaussChainDamageFactor: cfg.gaussChainDamageFactor,
+      multiExplosionsRemaining: Math.max(1, Math.floor(cfg.multiExplosionCount ?? 1)),
+      multiExplosionExcludedTargetKeys: (cfg.multiExplosionCount ?? 1) > 1 ? new Set<string>() : undefined,
       // Flammenwerfer-Felder
       isFlame:         cfg.isFlame,
       hitboxGrowRate:  cfg.hitboxGrowRate,
@@ -1357,7 +1366,7 @@ export class ProjectileManager {
     if (outgoingSpeed <= 0.001) return false;
 
     const spawnTimeBubbleFactor = Phaser.Math.Clamp(
-      this.timeBubbleFactorProvider?.(impactX, impactY, Date.now()) ?? (proj.timeBubbleFactor ?? 1),
+      this.timeBubbleFactorProvider?.(impactX, impactY, Date.now(), proj.ownerId) ?? (proj.timeBubbleFactor ?? 1),
       0.0001,
       1,
     );
@@ -1398,7 +1407,7 @@ export class ProjectileManager {
         weaponName: proj.weaponName,
         explosion: proj.explosion,
         impactCloud: proj.impactCloud,
-        homing: proj.homing,
+        homing: proj.splitHoming ?? proj.homing,
         projectileVisualScale: proj.projectileVisualScale,
         smokeTrailColor: proj.smokeTrailColor,
         fuseTime: proj.fuseTime,
@@ -1435,6 +1444,7 @@ export class ProjectileManager {
         splitCount: proj.splitCount,
         splitSpread: proj.splitSpread,
         splitFactor: proj.splitFactor,
+        splitHoming: proj.splitHoming,
         initialBounceCount: nextBounceCount,
         remainingRangePx,
         suppressSpawnFx: true,
@@ -1490,8 +1500,11 @@ export class ProjectileManager {
     this.translocatorPuckRenderer?.destroyVisual(proj.id);
   }
 
-  private queueProjectileExplosion(proj: TrackedProjectile): void {
+  private queueProjectileExplosion(proj: TrackedProjectile, allowMultiContinue = false): void {
     if (proj.pendingExplosion || !proj.explosion) return;
+    const remaining = Math.max(1, proj.multiExplosionsRemaining ?? 1);
+    const continuesAfterExplosion = allowMultiContinue && remaining > 1;
+    proj.multiExplosionsRemaining = remaining - 1;
     proj.pendingExplosion = true;
     this.pendingProjectileExplosions.push({
       x: proj.sprite.x,
@@ -1500,8 +1513,16 @@ export class ProjectileManager {
       effect: proj.explosion,
       sourceSlot: proj.sourceSlot,
       weaponName: proj.weaponName,
+      projectileId: proj.id,
+      continuesAfterExplosion,
     });
-    this.queueDestroyProjectile(proj);
+    if (continuesAfterExplosion) {
+      proj.lockedTargetId = null;
+      proj.lockedTargetType = undefined;
+      proj.lastHomingSearchAt = undefined;
+    } else {
+      this.queueDestroyProjectile(proj);
+    }
   }
 
   private emitProjectileImpact(proj: TrackedProjectile, x: number, y: number): void {
@@ -1524,7 +1545,7 @@ export class ProjectileManager {
   }
 
   private syncTimeBubbleFactor(proj: TrackedProjectile, now: number): void {
-    const nextFactor = this.timeBubbleFactorProvider?.(proj.sprite.x, proj.sprite.y, now) ?? 1;
+    const nextFactor = this.timeBubbleFactorProvider?.(proj.sprite.x, proj.sprite.y, now, proj.ownerId) ?? 1;
     const prevFactor = proj.timeBubbleFactor ?? 1;
     if (Math.abs(nextFactor - prevFactor) <= 0.0001) return;
     if (prevFactor <= 0.0001) {
@@ -1600,11 +1621,22 @@ export class ProjectileManager {
     this.projectiles.splice(idx, 1);
   }
 
-  triggerProjectileExplosion(id: number): boolean {
+  triggerProjectileExplosion(id: number, impactTargetKey?: string): boolean {
     const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
     if (!proj?.explosion) return false;
-    this.queueProjectileExplosion(proj);
+    if (impactTargetKey) proj.multiExplosionExcludedTargetKeys?.add(impactTargetKey);
+    this.queueProjectileExplosion(proj, true);
     return true;
+  }
+
+  resumeMultiExplosionProjectile(id: number, excludedTargetKeys: readonly string[]): void {
+    const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+    if (!proj || (proj.multiExplosionsRemaining ?? 0) <= 0) return;
+    for (const key of excludedTargetKeys) proj.multiExplosionExcludedTargetKeys?.add(key);
+    proj.pendingExplosion = false;
+    proj.lockedTargetId = null;
+    proj.lockedTargetType = undefined;
+    proj.lastHomingSearchAt = undefined;
   }
 
   /**
@@ -1755,6 +1787,8 @@ export class ProjectileManager {
 
         return true;
       } else {
+        const awaitingMultiExplosionContinuation = proj.pendingExplosion
+          && (proj.multiExplosionsRemaining ?? 0) > 0;
         if (proj.remainingRangePx !== undefined) {
           const traveledDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
           if (traveledDistance > 0.01) {
@@ -1763,7 +1797,7 @@ export class ProjectileManager {
         }
 
         // Normales Projektil: Lifetime oder Max-Bounces
-        if (simulatedAge > proj.lifetime && proj.explosion) {
+        if (!awaitingMultiExplosionContinuation && simulatedAge > proj.lifetime && proj.explosion) {
           explodedProjectiles.push({
             x: proj.sprite.x,
             y: proj.sprite.y,
@@ -1789,7 +1823,8 @@ export class ProjectileManager {
         }
 
         const rangeDepleted = proj.remainingRangePx !== undefined && proj.remainingRangePx <= 0.5;
-        const dead = simulatedAge > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces;
+        const dead = !awaitingMultiExplosionContinuation
+          && (simulatedAge > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces);
         if (dead) {
           this.destroyTrackedProjectile(proj);
         } else if (proj.isFlame || proj.projectileStyle === 'leaf_blower') {

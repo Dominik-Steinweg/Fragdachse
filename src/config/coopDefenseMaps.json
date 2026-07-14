@@ -116,6 +116,83 @@
         { "enemyKind": "rabid-badger", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 35000 }
       ],
       "boss": { "enemyKind": "grave-titan", "spawnAtMs": 45000 }
+    },
+    {
+      "mapId": "6",
+      "displayName": "Map 6 - Sporenfront",
+      "roundDurationSec": 110,
+      "bases": [
+        {
+          "id": "coop-base-1",
+          "hpMax": 1800,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+        },
+        {
+          "id": "coop-base-2",
+          "hpMax": 1800,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+        }
+      ],
+      "waves": [
+        { "enemyKind": "zombie-badger", "intervalMs": 450, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 3200, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "rabid-badger", "intervalMs": 4500, "countPerWave": 2, "startAtMs": 10000 },
+        { "enemyKind": "spore-warden", "intervalMs": 6500, "countPerWave": 1, "startAtMs": 15000 }
+      ]
+    },
+    {
+      "mapId": "7",
+      "displayName": "Map 7 - Gruene Plage",
+      "roundDurationSec": 110,
+      "bases": [
+        {
+          "id": "coop-base-1",
+          "hpMax": 2000,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+        },
+        {
+          "id": "coop-base-2",
+          "hpMax": 2000,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+        }
+      ],
+      "waves": [
+        { "enemyKind": "zombie-badger", "intervalMs": 600, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 3200, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "rabid-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 10000 },
+        { "enemyKind": "spore-warden", "intervalMs": 6000, "countPerWave": 2, "startAtMs": 15000 },
+        { "enemyKind": "plague-medic", "intervalMs": 11000, "countPerWave": 1, "startAtMs": 20000 }
+      ]
+    },
+    {
+      "mapId": "8",
+      "displayName": "Map 8 - Dimensionsbruch",
+      "roundDurationSec": 105,
+      "bases": [
+        {
+          "id": "coop-base-1",
+          "hpMax": 2400,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 }
+        },
+        {
+          "id": "coop-base-2",
+          "hpMax": 2400,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+        }
+      ],
+      "waves": [
+        { "enemyKind": "demon-badger", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "rabid-badger", "intervalMs": 7000, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "spore-warden", "intervalMs": 14000, "countPerWave": 1, "startAtMs": 10000 },
+        { "enemyKind": "plague-medic", "intervalMs": 22000, "countPerWave": 1, "startAtMs": 15000 },
+        { "enemyKind": "void-stalker", "intervalMs": 11000, "countPerWave": 1, "startAtMs": 5000 }
+      ]
     }
   ]
 }

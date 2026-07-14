@@ -26,6 +26,9 @@ interface HostDecoy {
   rotation: number;
   colliders: Phaser.Physics.Arcade.Collider[];
   speed: number;
+  explosionRadius: number;
+  explosionDamage: number;
+  explosionKnockback: number;
 }
 
 interface StealthState {
@@ -54,6 +57,7 @@ export class DecoySystem {
   private beginCooldown: ((playerId: string, utilityId: string, now: number) => void) | null = null;
   private rockGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
+  private explosionCallback: ((ownerId: string, x: number, y: number, radius: number, damage: number, knockback: number) => void) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -72,6 +76,7 @@ export class DecoySystem {
   setCooldownStarter(cb: ((playerId: string, utilityId: string, now: number) => void) | null): void {
     this.beginCooldown = cb;
   }
+  setExplosionCallback(cb: ((ownerId: string, x: number, y: number, radius: number, damage: number, knockback: number) => void) | null): void { this.explosionCallback = cb; }
 
   setObstacleGroups(
     rockGroup: Phaser.Physics.Arcade.StaticGroup | null,
@@ -129,6 +134,9 @@ export class DecoySystem {
       rotation: angle,
       colliders: this.createDecoyColliders(entity),
       speed,
+      explosionRadius: cfg.explosionRadius ?? 0,
+      explosionDamage: cfg.explosionDamage ?? 0,
+      explosionKnockback: cfg.explosionKnockback ?? 0,
     };
 
     this.entities.set(id, entity);
@@ -355,6 +363,9 @@ export class DecoySystem {
     for (const collider of decoy.colliders) collider.destroy();
     if (playEffect) {
       this.bridge.broadcastEffect(this.buildDeathEffect(decoy));
+      if (decoy.explosionRadius > 0 && decoy.explosionDamage > 0) {
+        this.explosionCallback?.(decoy.ownerId, decoy.entity.sprite.x, decoy.entity.sprite.y, decoy.explosionRadius, decoy.explosionDamage, decoy.explosionKnockback);
+      }
     }
     decoy.entity.destroy();
     this.entities.delete(decoyId);

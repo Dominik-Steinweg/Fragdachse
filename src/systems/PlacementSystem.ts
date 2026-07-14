@@ -14,7 +14,7 @@ import {
 } from '../config';
 import type { ArenaLayout, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
 
-interface RuntimeRockRecord extends SyncedPlaceableRock {}
+interface RuntimeRockRecord extends SyncedPlaceableRock { lastAttackerId?: string }
 
 export interface PlacementSyncResult {
   added: SyncedPlaceableRock[];
@@ -87,10 +87,11 @@ export class PlacementSystem {
     return { ...rock };
   }
 
-  applyDamage(id: number, damage: number): SyncedPlaceableRock | undefined {
+  applyDamage(id: number, damage: number, attackerId?: string): SyncedPlaceableRock | undefined {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
     rock.hp = Math.max(0, rock.hp - damage);
+    rock.lastAttackerId = attackerId;
     return { ...rock };
   }
 
@@ -125,6 +126,10 @@ export class PlacementSystem {
       expiresAt: now + cfg.placeable.lifetimeMs,
       warningStartsAt: now + Math.max(0, cfg.placeable.lifetimeMs - cfg.placeable.warningPulseMs),
       angle: preview.angle,
+      enemyDestroyedExplosionRadius: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionRadius ?? 0) : 0,
+      enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,
+      enemyDestroyedExplosionKnockback: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionKnockback ?? 0) : 0,
+      secondProjectileDamageFactor: cfg.placeable.kind === 'turret' ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
     };
 
     this.runtimeRocks.set(rock.id, rock);

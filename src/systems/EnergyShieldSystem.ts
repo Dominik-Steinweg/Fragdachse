@@ -72,6 +72,10 @@ export class EnergyShieldSystem {
     return this.activeShields.get(playerId)?.config.fire ?? null;
   }
 
+  getReflectionDamageFactor(playerId: string): number {
+    return this.activeShields.get(playerId)?.config.fire.reflectionDamageFactor ?? 0;
+  }
+
   tryBlockDamage(attempt: ShieldBlockAttempt): boolean {
     const shield = this.activeShields.get(attempt.targetId);
     if (!shield) return false;

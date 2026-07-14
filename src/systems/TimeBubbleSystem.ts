@@ -15,6 +15,11 @@ interface ActiveTimeBubble {
 export class TimeBubbleSystem {
   private readonly activeBubbles: ActiveTimeBubble[] = [];
   private nextId = 0;
+  private friendlyResolver: ((ownerId: string, subjectId: string) => boolean) | null = null;
+
+  setFriendlyResolver(resolver: ((ownerId: string, subjectId: string) => boolean) | null): void {
+    this.friendlyResolver = resolver;
+  }
 
   hostCreateBubble(
     ownerId: string,
@@ -60,12 +65,12 @@ export class TimeBubbleSystem {
     return synced;
   }
 
-  getPlayerMovementFactorAt(x: number, y: number, now = Date.now()): number {
-    return this.getFactorAt(x, y, now, 'player');
+  getPlayerMovementFactorAt(x: number, y: number, now = Date.now(), playerId?: string): number {
+    return this.getFactorAt(x, y, now, 'player', playerId);
   }
 
-  getProjectileMovementFactorAt(x: number, y: number, now = Date.now()): number {
-    return this.getFactorAt(x, y, now, 'projectile');
+  getProjectileMovementFactorAt(x: number, y: number, now = Date.now(), ownerId?: string): number {
+    return this.getFactorAt(x, y, now, 'projectile', ownerId);
   }
 
   getTrainMovementFactorAt(
@@ -115,12 +120,14 @@ export class TimeBubbleSystem {
     y: number,
     now: number,
     kind: 'player' | 'projectile',
+    subjectId?: string,
   ): number {
     let factor = 1;
 
     for (let index = this.activeBubbles.length - 1; index >= 0; index--) {
       const bubble = this.activeBubbles[index];
       if (now - bubble.createdAt >= bubble.effect.duration) continue;
+      if ((bubble.effect.friendlyImmunity ?? 0) > 0 && subjectId && this.friendlyResolver?.(bubble.ownerId, subjectId)) continue;
       const dx = x - bubble.x;
       const dy = y - bubble.y;
       if (dx * dx + dy * dy > bubble.effect.radius * bubble.effect.radius) continue;

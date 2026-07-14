@@ -57,6 +57,13 @@ interface DamageVisualContext {
   sourceY?: number;
   dirX?: number;
   dirY?: number;
+  projectileColor?: number;
+}
+
+export interface KillSourceContext {
+  dirX?: number;
+  dirY?: number;
+  projectileColor?: number;
 }
 
 interface BurnStackState {
@@ -131,9 +138,10 @@ export class CombatSystem {
   // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
   private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
   private lastWeapon:   Map<string, string> = new Map();  // victimId → weaponName
+  private lastKillSource: Map<string, KillSourceContext> = new Map();
 
   // Callback: (killerId, victimId, weaponName) – Host-only
-  private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number) => void) | null = null;
+  private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
@@ -165,6 +173,8 @@ export class CombatSystem {
   private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private playerMaxHpResolver: ((playerId: string) => number) | null = null;
   private playerHpRegenPerSecondResolver: ((playerId: string) => number) | null = null;
+  private playerMaxArmorResolver: ((playerId: string) => number) | null = null;
+  private playerArmorGainMultiplierResolver: ((playerId: string) => number) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -190,6 +200,8 @@ export class CombatSystem {
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
   setPlayerHpRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerHpRegenPerSecondResolver = resolver; }
+  setPlayerMaxArmorResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxArmorResolver = resolver; }
+  setPlayerArmorGainMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorGainMultiplierResolver = resolver; }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -247,7 +259,7 @@ export class CombatSystem {
   }
 
   /** Setzt den Kill-Callback (Host-only). */
-  setKillCallback(cb: (killerId: string, victimId: string, weapon: string, x: number, y: number) => void): void {
+  setKillCallback(cb: (killerId: string, victimId: string, weapon: string, x: number, y: number, source?: KillSourceContext) => void): void {
     this.onKillCb = cb;
   }
 
@@ -266,6 +278,7 @@ export class CombatSystem {
     this.clearBurnForPlayer(id);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
+    this.lastKillSource.delete(id);
   }
 
   removePlayer(id: string): void {
@@ -277,6 +290,7 @@ export class CombatSystem {
     this.alive.delete(id);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
+    this.lastKillSource.delete(id);
     const t = this.respawnTimers.get(id);
     if (t) { clearTimeout(t); this.respawnTimers.delete(id); }
   }
@@ -330,6 +344,11 @@ export class CombatSystem {
     if (attackerId && attackerId !== targetId) {
       this.lastAttacker.set(targetId, attackerId);
       if (weaponName) this.lastWeapon.set(targetId, weaponName);
+      if (visualContext) this.lastKillSource.set(targetId, {
+        dirX: visualContext.dirX,
+        dirY: visualContext.dirY,
+        projectileColor: visualContext.projectileColor,
+      });
     }
 
     const player = this.playerManager.getPlayer(targetId);
@@ -531,7 +550,8 @@ export class CombatSystem {
     ownerId: string,
     sourceSlot?: LoadoutSlot,
     weaponName = 'Explosion',
-  ): void {
+  ): string[] {
+    const damagedTargetKeys: string[] = [];
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isAlive(player.id)) continue;
 
@@ -551,6 +571,7 @@ export class CombatSystem {
       this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
       });
+      damagedTargetKeys.push(`players:${player.id}`);
       if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, weaponName);
     }
 
@@ -563,8 +584,10 @@ export class CombatSystem {
       this.applyDamage(enemy.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
       });
+      damagedTargetKeys.push(`enemies:${enemy.id}`);
       this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, weaponName);
     }
+    return damagedTargetKeys;
   }
 
   canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage = false): boolean {
@@ -635,12 +658,51 @@ export class CombatSystem {
       if (!this.isAlive(player.id))                     continue;
       if (proj.ownerId === player.id)                   continue;
       if (this.burrowSystem?.isBurrowed(player.id))     continue;
+      if (proj.multiExplosionExcludedTargetKeys?.has(`players:${player.id}`)) continue;
 
       if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.sprite.getBounds())) {
         const actualDamage = this.computeProjectileDamage(proj);
         const canDealDamage = this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage);
 
         if (canDealDamage && this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
+          const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(player.id) ?? 0);
+          if (reflectionFactor > 0) {
+            const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y);
+            const angle = Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
+            this.projectileManager.spawnProjectile(player.sprite.x, player.sprite.y, angle, player.id, {
+              speed,
+              size: Math.max(1, proj.sprite.displayWidth),
+              damage: proj.damage * reflectionFactor,
+              color: proj.color,
+              ownerColor: proj.ownerColor,
+              lifetime: Math.max(1, proj.lifetime - (Date.now() - proj.createdAt)),
+              maxBounces: 0,
+              isGrenade: false,
+              adrenalinGain: 0,
+              weaponName: 'Reflektor',
+              projectileStyle: proj.projectileStyle,
+              bulletVisualPreset: proj.bulletVisualPreset,
+              tracerConfig: proj.tracerConfig,
+              reflected: true,
+              sourceSlot: 'weapon2',
+            });
+          }
+          this.projectileManager.destroyProjectile(proj.id);
+          return true;
+        }
+
+        if (proj.penetrationHitIds) {
+          if (proj.penetrationHitIds.has(player.id)) continue;
+          proj.penetrationHitIds.add(player.id);
+          if (canDealDamage) {
+            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
+            this.applyProjectileBurn(player.id, proj);
+          }
+          if ((proj.penetrationRemaining ?? 0) > 0) {
+            proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
+            proj.damage *= proj.penetrationDamageRetention ?? 1;
+            continue;
+          }
           this.projectileManager.destroyProjectile(proj.id);
           return true;
         }
@@ -664,6 +726,7 @@ export class CombatSystem {
           }, {
             allowTeamDamage: proj.allowTeamDamage,
           });
+          if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, player.id, undefined, actualDamage);
           continue; // kein break, kein destroyProjectile
         }
 
@@ -688,15 +751,35 @@ export class CombatSystem {
 
   /** AABB-Treffer gegen Gegner (Coop-Defense). Liefert true, wenn das Projektil verbraucht ist. */
   private resolveProjectileEnemyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle): boolean {
+    // Gegnergeschosse fliegen durch verbuendete Gegner. Ohne dieses Gate
+    // wuerden sie zwar keinen Friendly-Fire-Schaden verursachen, aber dennoch
+    // am ersten eigenen Mob zerstoert (wichtig fuer die Sporenkanone).
+    if (this.enemyManager?.hasEnemy(proj.ownerId)) return false;
+
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (proj.ownerId === enemy.id) continue;
+      if (proj.multiExplosionExcludedTargetKeys?.has(`enemies:${enemy.id}`)) continue;
 
       if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemy.sprite.getBounds())) {
         const actualDamage = this.computeProjectileDamage(proj);
+        const enemyKey = `enemy_${enemy.id}`;
+
+        if (proj.penetrationHitIds) {
+          if (proj.penetrationHitIds.has(enemyKey)) continue;
+          proj.penetrationHitIds.add(enemyKey);
+          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
+          this.applyProjectileBurn(enemy.id, proj);
+          if ((proj.penetrationRemaining ?? 0) > 0) {
+            proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
+            proj.damage *= proj.penetrationDamageRetention ?? 1;
+            continue;
+          }
+          this.projectileManager.destroyProjectile(proj.id);
+          return true;
+        }
 
         if (proj.isBfg || proj.projectileStyle === 'gauss') {
           if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-          const enemyKey = `enemy_${enemy.id}`;
           if (proj.projectileStyle === 'gauss') {
             if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
             if (proj.gaussHitPlayers.has(enemyKey)) continue;
@@ -713,6 +796,7 @@ export class CombatSystem {
           }, {
             allowTeamDamage: proj.allowTeamDamage,
           });
+          if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, undefined, enemy.id, actualDamage);
           continue;
         }
 
@@ -741,6 +825,19 @@ export class CombatSystem {
       if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, decoy.sprite.getBounds())) {
         const actualDamage = this.computeProjectileDamage(proj);
         const decoyKey = `decoy_${decoy.id}`;
+
+        if (proj.penetrationHitIds) {
+          if (proj.penetrationHitIds.has(decoyKey)) continue;
+          proj.penetrationHitIds.add(decoyKey);
+          this.decoySystem?.applyDamage(decoy.id, actualDamage, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y });
+          if ((proj.penetrationRemaining ?? 0) > 0) {
+            proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
+            proj.damage *= proj.penetrationDamageRetention ?? 1;
+            continue;
+          }
+          this.projectileManager.destroyProjectile(proj.id);
+          return true;
+        }
 
         if (proj.isBfg || proj.projectileStyle === 'gauss') {
           if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
@@ -776,6 +873,27 @@ export class CombatSystem {
     return proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp';
   }
 
+  private resolveGaussDischarge(proj: TrackedProjectile, hitPlayerId: string | undefined, hitEnemyId: string | undefined, damage: number): void {
+    const radius = proj.gaussChainRadius ?? 0;
+    const factor = proj.gaussChainDamageFactor ?? 0;
+    if (radius <= 0 || factor <= 0) return;
+    this.resolveChainLightning({
+      shooterId: proj.ownerId,
+      originX: proj.sprite.x,
+      originY: proj.sprite.y,
+      baseDamage: damage,
+      chainCfg: { maxJumps: 1, searchRadius: radius, damageFalloffPerJump: 1 - factor, targetPlayers: true, targetEnemies: true, targetDecoys: false },
+      weaponName: 'Magnetische Entladung',
+      adrenalinGain: 0,
+      playerColor: proj.ownerColor ?? proj.color,
+      visualPreset: 'asmd_primary',
+      baseThickness: 2,
+      visitedPlayers: new Set(hitPlayerId ? [hitPlayerId] : []),
+      visitedEnemies: new Set(hitEnemyId ? [hitEnemyId] : []),
+      visitedDecoys: new Set(),
+    });
+  }
+
   private tryResolveContinuousProjectileHit(proj: TrackedProjectile): boolean {
     const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
     const travelDistance = Phaser.Geom.Line.Length(line);
@@ -789,6 +907,7 @@ export class CombatSystem {
       if (!this.isAlive(player.id)) continue;
       if (proj.ownerId === player.id) continue;
       if (this.burrowSystem?.isBurrowed(player.id)) continue;
+      if (proj.penetrationHitIds?.has(player.id)) continue;
 
       const hit = this.findNearestCircleHit(line, player.sprite.x, player.sprite.y, PLAYER_SIZE * 0.5 + projectileRadius);
       if (!hit) continue;
@@ -800,6 +919,7 @@ export class CombatSystem {
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (proj.ownerId === enemy.id) continue;
+      if (proj.penetrationHitIds?.has(`enemy_${enemy.id}`)) continue;
 
       const enemyRadius = Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5 + projectileRadius;
       const hit = this.findNearestCircleHit(line, enemy.sprite.x, enemy.sprite.y, enemyRadius);
@@ -812,6 +932,7 @@ export class CombatSystem {
 
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
       if (proj.ownerId === decoy.ownerId) continue;
+      if (proj.penetrationHitIds?.has(`decoy_${decoy.id}`)) continue;
 
       const decoyRadius = Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5 + projectileRadius;
       const hit = this.findNearestCircleHit(line, decoy.sprite.x, decoy.sprite.y, decoyRadius);
@@ -839,6 +960,43 @@ export class CombatSystem {
       const canDealDamage = this.canDamageTarget(proj.ownerId, bestHit.playerId, proj.allowTeamDamage);
 
       if (canDealDamage && this.shouldBlockWithShield(bestHit.playerId, 'projectile', actualDamage, bestHit.x, bestHit.y)) {
+        const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(bestHit.playerId) ?? 0);
+        if (reflectionFactor > 0) {
+          const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y);
+          const angle = Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
+          this.projectileManager.spawnProjectile(bestHit.x, bestHit.y, angle, bestHit.playerId, {
+            speed,
+            size: Math.max(1, proj.sprite.displayWidth),
+            damage: proj.damage * reflectionFactor,
+            color: proj.color,
+            ownerColor: proj.ownerColor,
+            lifetime: Math.max(1, proj.lifetime - (Date.now() - proj.createdAt)),
+            maxBounces: 0,
+            isGrenade: false,
+            adrenalinGain: 0,
+            weaponName: 'Reflektor',
+            projectileStyle: proj.projectileStyle,
+            bulletVisualPreset: proj.bulletVisualPreset,
+            tracerConfig: proj.tracerConfig,
+            reflected: true,
+            sourceSlot: 'weapon2',
+          });
+        }
+        this.projectileManager.destroyProjectile(proj.id);
+        return true;
+      }
+
+      if (proj.penetrationHitIds) {
+        proj.penetrationHitIds.add(bestHit.playerId);
+        if (canDealDamage) {
+          this.applyDamage(bestHit.playerId, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage });
+          this.applyProjectileBurn(bestHit.playerId, proj);
+        }
+        if ((proj.penetrationRemaining ?? 0) > 0) {
+          proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
+          proj.damage *= proj.penetrationDamageRetention ?? 1;
+          return true;
+        }
         this.projectileManager.destroyProjectile(proj.id);
         return true;
       }
@@ -848,10 +1006,33 @@ export class CombatSystem {
     }
 
     if (bestHit.kind === 'enemy') {
+      if (proj.penetrationHitIds) {
+        proj.penetrationHitIds.add(`enemy_${bestHit.enemyId}`);
+        this.applyDamage(bestHit.enemyId, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage });
+        this.applyProjectileBurn(bestHit.enemyId, proj);
+        if ((proj.penetrationRemaining ?? 0) > 0) {
+          proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
+          proj.damage *= proj.penetrationDamageRetention ?? 1;
+          return true;
+        }
+        this.projectileManager.destroyProjectile(proj.id);
+        return true;
+      }
       this.handleEnemyHit(proj.id, bestHit.enemyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
       return true;
     }
 
+    if (proj.penetrationHitIds) {
+      proj.penetrationHitIds.add(`decoy_${bestHit.decoyId}`);
+      this.decoySystem?.applyDamage(bestHit.decoyId, actualDamage, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy });
+      if ((proj.penetrationRemaining ?? 0) > 0) {
+        proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
+        proj.damage *= proj.penetrationDamageRetention ?? 1;
+        return true;
+      }
+      this.projectileManager.destroyProjectile(proj.id);
+      return true;
+    }
     this.handleDecoyHit(proj.id, bestHit.decoyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.weaponName);
     return true;
   }
@@ -1279,6 +1460,7 @@ export class CombatSystem {
     visualPreset: MeleeVisualPreset = 'default',
     shotAudioKey?: string,
     burnOnHit?: BurnOnHitConfig,
+    chain?: { count: number; radius: number; damageFactor: number },
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -1287,6 +1469,7 @@ export class CombatSystem {
     let nearestHitDistance = Number.POSITIVE_INFINITY;
     let impactX: number | undefined;
     let impactY: number | undefined;
+    const meleeHitIds = new Set<string>();
 
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isMeleeTargetCandidate(player.id, shooterId)) continue;
@@ -1322,6 +1505,7 @@ export class CombatSystem {
         dirY: Math.sin(angle),
       });
       this.applyBurnOnHit(player.id, shooterId, burnOnHit, weaponName);
+      meleeHitIds.add(player.id);
       hitPlayer = true;
       if (dist < nearestHitDistance) {
         nearestHitDistance = dist;
@@ -1364,6 +1548,7 @@ export class CombatSystem {
         dirY: Math.sin(angle),
       });
       this.applyBurnOnHit(enemy.id, shooterId, burnOnHit, weaponName);
+      meleeHitIds.add(enemy.id);
       hitPlayer = true;
       if (dist < nearestHitDistance) {
         nearestHitDistance = dist;
@@ -1415,6 +1600,33 @@ export class CombatSystem {
 
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
+    }
+
+    if (chain && chain.count > 0 && chain.radius > 0 && impactX !== undefined && impactY !== undefined) {
+      let chainX = impactX;
+      let chainY = impactY;
+      let chainDamage = damage;
+      for (let jump = 0; jump < chain.count; jump += 1) {
+        let next: { id: string; x: number; y: number } | null = null;
+        let best = chain.radius;
+        const candidates = [
+          ...this.playerManager.getAllPlayers().map(player => ({ id: player.id, x: player.sprite.x, y: player.sprite.y })),
+          ...(this.enemyManager?.getAllEnemies() ?? []).map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })),
+        ];
+        for (const candidate of candidates) {
+          if (candidate.id === shooterId || meleeHitIds.has(candidate.id) || !this.isAlive(candidate.id) || !this.canDamageTarget(shooterId, candidate.id)) continue;
+          const distance = Phaser.Math.Distance.Between(chainX, chainY, candidate.x, candidate.y);
+          if (distance > best) continue;
+          best = distance;
+          next = candidate;
+        }
+        if (!next) break;
+        meleeHitIds.add(next.id);
+        chainDamage *= chain.damageFactor;
+        this.applyDamage(next.id, chainDamage, false, shooterId, weaponName, { sourceX: chainX, sourceY: chainY });
+        chainX = next.x;
+        chainY = next.y;
       }
     }
 
@@ -1973,6 +2185,7 @@ export class CombatSystem {
           sourceY: projectile.sprite.y,
           dirX: projectile.body.velocity.x,
           dirY: projectile.body.velocity.y,
+          projectileColor: projectile.color,
         }
       : undefined;
     if (projectile?.impactCloud) {
@@ -1982,7 +2195,7 @@ export class CombatSystem {
       // Explosion nur bei tatsächlichem Treffer auf einen gültigen Gegner (z.B. XXX-BOW Explosivbolzen).
       this.projectileManager.triggerEnemyImpactExplosion(projectileId);
     } else if (projectile?.explosion) {
-      this.projectileManager.triggerProjectileExplosion(projectileId);
+      this.projectileManager.triggerProjectileExplosion(projectileId, `players:${playerId}`);
     } else {
       this.projectileManager.destroyProjectile(projectileId);
     }
@@ -2016,6 +2229,7 @@ export class CombatSystem {
           sourceY: projectile.sprite.y,
           dirX: projectile.body.velocity.x,
           dirY: projectile.body.velocity.y,
+          projectileColor: projectile.color,
         }
       : undefined;
     if (projectile?.impactCloud) {
@@ -2025,7 +2239,7 @@ export class CombatSystem {
       // Explosion nur bei Gegner-Treffer (z.B. XXX-BOW Explosivbolzen).
       this.projectileManager.triggerEnemyImpactExplosion(projectileId);
     } else if (projectile?.explosion) {
-      this.projectileManager.triggerProjectileExplosion(projectileId);
+      this.projectileManager.triggerProjectileExplosion(projectileId, `enemies:${enemyId}`);
     } else {
       this.projectileManager.destroyProjectile(projectileId);
     }
@@ -2127,6 +2341,11 @@ export class CombatSystem {
     if (attackerId && attackerId !== targetId) {
       this.lastAttacker.set(targetId, attackerId);
       if (weaponName) this.lastWeapon.set(targetId, weaponName);
+      if (visualContext) this.lastKillSource.set(targetId, {
+        dirX: visualContext.dirX,
+        dirY: visualContext.dirY,
+        projectileColor: visualContext.projectileColor,
+      });
     }
 
     const x = enemy.sprite.x;
@@ -2180,11 +2399,12 @@ export class CombatSystem {
           }
         }
         const weapon = this.lastWeapon.get(targetId) ?? weaponName ?? 'Waffe';
-        this.onKillCb?.(killerId, targetId, weapon, x, y);
+        this.onKillCb?.(killerId, targetId, weapon, x, y, this.lastKillSource.get(targetId));
       }
 
       this.lastAttacker.delete(targetId);
       this.lastWeapon.delete(targetId);
+      this.lastKillSource.delete(targetId);
     }
   }
 
@@ -2209,7 +2429,7 @@ export class CombatSystem {
     const killerId = this.lastAttacker.get(playerId);
     if (killerId && killerId !== playerId) {
       const weapon = this.lastWeapon.get(playerId) ?? 'Waffe';
-      this.onKillCb?.(killerId, playerId, weapon, x, y);
+      this.onKillCb?.(killerId, playerId, weapon, x, y, this.lastKillSource.get(playerId));
     }
 
     const timer = setTimeout(() => this.respawn(playerId), RESPAWN_DELAY_MS);
@@ -2222,9 +2442,20 @@ export class CombatSystem {
     this.hp.set(playerId, this.getMaxHp(playerId));
   }
 
+  heal(playerId: string, amount: number): number {
+    if (!this.isAlive(playerId) || amount <= 0) return this.getHP(playerId);
+    const next = Math.min(this.getMaxHp(playerId), this.getHP(playerId) + amount);
+    this.hp.set(playerId, next);
+    return next;
+  }
+
   addArmor(playerId: string, amount: number): number {
     if (!this.isAlive(playerId)) return this.getArmor(playerId);
-    const newArmor = Phaser.Math.Clamp(this.getArmor(playerId) + amount, 0, ARMOR_MAX);
+    const adjustedAmount = amount > 0
+      ? amount * Math.max(0, this.playerArmorGainMultiplierResolver?.(playerId) ?? 1)
+      : amount;
+    const maxArmor = Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX);
+    const newArmor = Phaser.Math.Clamp(this.getArmor(playerId) + adjustedAmount, 0, maxArmor);
     this.armor.set(playerId, newArmor);
     return newArmor;
   }
@@ -2237,6 +2468,7 @@ export class CombatSystem {
     this.respawnTimers.delete(playerId);
     this.lastAttacker.delete(playerId);
     this.lastWeapon.delete(playerId);
+    this.lastKillSource.delete(playerId);
 
     this.resourceSystem?.setAdrenaline(playerId, ADRENALINE_START);
 

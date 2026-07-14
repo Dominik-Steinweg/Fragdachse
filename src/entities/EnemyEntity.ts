@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { GenericWeapon } from '../loadout/GenericWeapon';
-import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { BaseWeapon } from '../loadout/BaseWeapon';
 import {
   COLORS,
@@ -12,9 +12,15 @@ import {
 } from '../config';
 import {
   type CoopDefenseEnemyKind,
+  type CoopDefenseEnemyWeaponTargetMode,
   type ResolvedCoopDefenseEnemyConfig,
 } from '../config/coopDefenseEnemies';
 import type { SyncedEnemyState } from '../types';
+
+export interface EnemyAttackWeapon {
+  readonly weapon: BaseWeapon;
+  readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
+}
 
 export class EnemyEntity {
   // Bild zeigt nach Norden – Offset um Aim-Angle (0 = rechts) korrekt darzustellen.
@@ -26,7 +32,7 @@ export class EnemyEntity {
 
   private readonly authoritative: boolean;
   private readonly config: ResolvedCoopDefenseEnemyConfig;
-  private readonly weapon: BaseWeapon | null;
+  private readonly attackWeapons: readonly EnemyAttackWeapon[];
   private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
   private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
   private bossAura: Phaser.GameObjects.Ellipse | null = null;
@@ -57,7 +63,7 @@ export class EnemyEntity {
     this.kind = kind;
     this.authoritative = authoritative;
     this.config = config;
-    this.weapon = authoritative ? this.createWeapon() : null;
+    this.attackWeapons = authoritative ? this.createWeapons() : [];
     this.maxHp = this.config.maxHp;
     this.currentHp = this.maxHp;
     this.targetX = x;
@@ -176,22 +182,23 @@ export class EnemyEntity {
     return this.config.isBoss === true;
   }
 
-  getWeapon(): BaseWeapon | null {
-    return this.weapon;
+  getAttackWeapons(): readonly EnemyAttackWeapon[] {
+    return this.attackWeapons;
   }
 
-  isWeaponReady(now: number): boolean {
-    return this.weapon !== null && !this.weapon.isOnCooldown(now);
+  isWeaponReady(weapon: BaseWeapon, now: number): boolean {
+    return !weapon.isOnCooldown(now);
   }
 
-  recordWeaponUse(now: number): void {
-    if (!this.weapon) return;
-    this.weapon.recordUse(now);
-    this.weapon.addSpread();
+  recordWeaponUse(weapon: BaseWeapon, now: number): void {
+    weapon.recordUse(now);
+    weapon.addSpread();
   }
 
   decayWeaponSpread(delta: number, now: number): void {
-    this.weapon?.decaySpread(delta, now);
+    for (const attackWeapon of this.attackWeapons) {
+      attackWeapon.weapon.decaySpread(delta, now);
+    }
   }
 
   getAttackScanIntervalMs(): number {
@@ -337,12 +344,39 @@ export class EnemyEntity {
     this.bossLabel?.setPosition(this.sprite.x, this.sprite.y - this.config.size * 0.5 - 11);
   }
 
-  private createWeapon(): BaseWeapon {
-    const weaponConfig = WEAPON_CONFIGS[this.config.weaponId as keyof typeof WEAPON_CONFIGS];
-    if (!weaponConfig) {
-      throw new Error(`Missing weapon config for coop-defense enemy weapon: ${this.config.weaponId}`);
-    }
+  private createWeapons(): readonly EnemyAttackWeapon[] {
+    return this.config.weapons.map((configuredWeapon) => {
+      const baseConfig = WEAPON_CONFIGS[configuredWeapon.weaponId as keyof typeof WEAPON_CONFIGS];
+      if (!baseConfig) {
+        throw new Error(`Missing weapon config for coop-defense enemy weapon: ${configuredWeapon.weaponId}`);
+      }
 
-    return new GenericWeapon(weaponConfig);
+      return {
+        weapon: new GenericWeapon(this.resolveEnemyWeaponConfig(baseConfig, configuredWeapon.targetMode)),
+        targetMode: configuredWeapon.targetMode,
+      };
+    });
+  }
+
+  private resolveEnemyWeaponConfig(
+    config: WeaponConfig,
+    targetMode: CoopDefenseEnemyWeaponTargetMode,
+  ): WeaponConfig {
+    if (targetMode !== 'players' || config.fire.type !== 'projectile') return config;
+
+    return {
+      ...config,
+      rockDamageMult: 0,
+      trainDamageMult: 0,
+      fire: {
+        ...config.fire,
+        impactCloud: config.fire.impactCloud
+          ? { ...config.fire.impactCloud, rockDamageMult: 0, trainDamageMult: 0 }
+          : undefined,
+        homing: config.fire.homing
+          ? { ...config.fire.homing, targetTypes: ['players'] }
+          : undefined,
+      },
+    };
   }
 }

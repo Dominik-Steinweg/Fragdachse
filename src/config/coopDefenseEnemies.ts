@@ -5,6 +5,21 @@ export type CoopDefenseEnemyKind = string;
 
 export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
 
+export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players';
+
+export interface CoopDefenseEnemyWeaponConfig {
+  readonly weaponId: WeaponConfig['id'];
+  readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
+}
+
+export interface CoopDefenseEnemyTranslocatorConfig {
+  readonly utilityId: 'TRANSLOCATOR';
+  readonly flightTimeMs: number;
+  readonly cooldownMs: number;
+  readonly minRange: number;
+  readonly maxRange: number;
+}
+
 export interface CoopDefenseEnemyPlayerScaling {
   readonly maxHpFactorPerAdditionalPlayer?: number;
   readonly moveSpeedFactorPerAdditionalPlayer?: number;
@@ -21,13 +36,14 @@ export interface CoopDefenseEnemyConfig {
   readonly size: number;
   readonly moveSpeed: number;
   readonly movementTarget: CoopDefenseEnemyMovementTarget;
-  readonly weaponId: WeaponConfig['id'];
+  readonly weapons: readonly CoopDefenseEnemyWeaponConfig[];
   readonly attackScanIntervalMs: number;
   readonly attackStopDurationMs: number;
   readonly imageKey: string;
   readonly isBoss?: boolean;
   readonly displayName?: string;
   readonly color?: number;
+  readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
   readonly playerScaling?: CoopDefenseEnemyPlayerScaling;
   readonly spawnScaling?: CoopDefenseEnemySpawnScaling;
 }
@@ -99,13 +115,14 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
           normalizedHumanPlayerCount,
         ),
         movementTarget: config.movementTarget,
-        weaponId: config.weaponId,
+        weapons: config.weapons,
         attackScanIntervalMs: config.attackScanIntervalMs,
         attackStopDurationMs: config.attackStopDurationMs,
         imageKey: config.imageKey,
         isBoss: config.isBoss,
         displayName: config.displayName,
         color: config.color,
+        translocator: config.translocator,
         spawnScaling: config.spawnScaling,
       },
     ]),
@@ -155,7 +172,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     size: Math.max(1, enemy.size),
     moveSpeed: Math.max(1, enemy.moveSpeed),
     movementTarget: normalizeMovementTarget(enemy.movementTarget),
-    weaponId: enemy.weaponId,
+    weapons: normalizeWeapons(enemy.weapons, enemy.id),
     attackScanIntervalMs: Math.max(1, Math.floor(enemy.attackScanIntervalMs)),
     attackStopDurationMs: Math.max(0, Math.floor(enemy.attackStopDurationMs)),
     imageKey: enemy.imageKey,
@@ -166,9 +183,60 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     color: typeof enemy.color === 'number' && Number.isFinite(enemy.color)
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
+    translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
     playerScaling: normalizePlayerScaling(enemy.playerScaling),
     spawnScaling: normalizeSpawnScaling(enemy.spawnScaling),
   };
+}
+
+function normalizeTranslocatorConfig(
+  config: CoopDefenseEnemyTranslocatorConfig | undefined,
+  enemyId: string,
+): CoopDefenseEnemyTranslocatorConfig | undefined {
+  if (!config) return undefined;
+  if (config.utilityId !== 'TRANSLOCATOR') {
+    throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} references unsupported translocator utility`);
+  }
+  const minRange = Math.max(0, config.minRange);
+  return {
+    utilityId: 'TRANSLOCATOR',
+    flightTimeMs: Math.max(1, Math.floor(config.flightTimeMs)),
+    cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
+    minRange,
+    maxRange: Math.max(minRange, config.maxRange),
+  };
+}
+
+function normalizeWeapons(
+  weapons: readonly CoopDefenseEnemyWeaponConfig[],
+  enemyId: string,
+): readonly CoopDefenseEnemyWeaponConfig[] {
+  if (!Array.isArray(weapons) || weapons.length === 0) {
+    throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} must have at least one weapon`);
+  }
+
+  const weaponIds = new Set<string>();
+  return weapons.map((weapon) => {
+    if (typeof weapon.weaponId !== 'string' || weapon.weaponId.trim().length === 0) {
+      throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid weapon id`);
+    }
+    if (weaponIds.has(weapon.weaponId)) {
+      throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has duplicate weapon ${weapon.weaponId}`);
+    }
+    weaponIds.add(weapon.weaponId);
+    return {
+      weaponId: weapon.weaponId,
+      targetMode: normalizeWeaponTargetMode(weapon.targetMode, enemyId),
+    };
+  });
+}
+
+function normalizeWeaponTargetMode(
+  targetMode: CoopDefenseEnemyWeaponTargetMode,
+  enemyId: string,
+): CoopDefenseEnemyWeaponTargetMode {
+  if (targetMode === 'all' || targetMode === 'players') return targetMode;
+  throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has unsupported weapon target mode: ${String(targetMode)}`);
 }
 
 function normalizeMovementTarget(target: CoopDefenseEnemyMovementTarget): CoopDefenseEnemyMovementTarget {

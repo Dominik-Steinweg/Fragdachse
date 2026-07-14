@@ -1,3 +1,4 @@
+import * as Phaser from 'phaser';
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
@@ -22,6 +23,7 @@ import type {
   StinkCloudUtilityConfig,
   TaserUtilityConfig,
   TimeBubbleUtilityConfig,
+  TranslocatorUtilityConfig,
   TunnelUltimateConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -68,10 +70,11 @@ interface UltimateState {
   drainDurationMs: number;
   nextArmorTickAt: number;
   nextAuraTickAt: number;
+  auraLingerUntil: number;
   gaussChargeStartedAt: number | null;
 }
 
-type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
+type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
 type PhysicsSystemType  = { addRecoil(id: string, vx: number, vy: number, durationMs?: number): void };
 
 /**
@@ -100,6 +103,8 @@ export class LoadoutManager {
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
+  private shotCounters = new Map<string, number>();
+  private wildfireHandler: ((ownerId: string, x: number, y: number, radius: number, durationMs: number, damagePerTick: number) => void) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
@@ -141,6 +146,7 @@ export class LoadoutManager {
       drainDurationMs: 0,
       nextArmorTickAt: 0,
       nextAuraTickAt: 0,
+      auraLingerUntil: 0,
       gaussChargeStartedAt: null,
     });
     // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
@@ -214,6 +220,7 @@ export class LoadoutManager {
     state.drainDurationMs = 0;
     state.nextArmorTickAt = 0;
     state.nextAuraTickAt = 0;
+    state.auraLingerUntil = 0;
     state.gaussChargeStartedAt = null;
   }
 
@@ -441,6 +448,7 @@ export class LoadoutManager {
             drainDurationMs,
             nextArmorTickAt: now + cfg.armorTickIntervalMs,
             nextAuraTickAt: cfg.aura && cfg.aura.tickIntervalMs > 0 ? now + cfg.aura.tickIntervalMs : 0,
+            auraLingerUntil: 0,
             gaussChargeStartedAt: null,
           });
 
@@ -519,6 +527,18 @@ export class LoadoutManager {
       if (state.config.armorPerTick > 0 && state.config.armorTickIntervalMs > 0 && this.combatSystem) {
         while (state.nextArmorTickAt > 0 && state.nextArmorTickAt <= now && state.nextArmorTickAt <= endTime) {
           this.combatSystem.addArmor(playerId, state.config.armorPerTick);
+          const aura = state.config.aura;
+          if (aura && (aura.allyArmorPerTick ?? 0) > 0) {
+            const owner = this.playerManager.getPlayer(playerId);
+            if (owner) {
+              for (const ally of this.playerManager.getAllPlayers()) {
+                if (ally.id === playerId || this.bridge.isEnemyPair(playerId, ally.id)) continue;
+                if (Phaser.Math.Distance.Between(owner.sprite.x, owner.sprite.y, ally.sprite.x, ally.sprite.y) <= aura.radius) {
+                  this.combatSystem.addArmor(ally.id, aura.allyArmorPerTick ?? 0);
+                }
+              }
+            }
+          }
           state.nextArmorTickAt += state.config.armorTickIntervalMs;
         }
       }
@@ -547,6 +567,7 @@ export class LoadoutManager {
       }
 
       if (elapsed >= state.durationMs) {
+        state.auraLingerUntil = now + (state.config.aura?.lingerMs ?? 0);
         state.active = false;
         state.consumedRage = 0;
         state.durationMs = 0;
@@ -565,7 +586,8 @@ export class LoadoutManager {
 
   getSpeedMultiplier(playerId: string): number {
     const state        = this.ultimateStates.get(playerId);
-    const ultimateMult = state?.active && state.config.type === 'buff' ? state.config.speedMultiplier : 1;
+    const ultimateMult = (state?.active && state.config.type === 'buff' ? state.config.speedMultiplier : 1)
+      * this.getAllyAuraMultiplier(playerId, 'speed');
     const gaussSlowMult = state?.config.type === 'gauss' && state.gaussChargeStartedAt !== null
       ? state.config.movementSlowFactor
       : 1;
@@ -609,7 +631,27 @@ export class LoadoutManager {
 
   getDamageMultiplier(playerId: string): number {
     const state = this.ultimateStates.get(playerId);
-    return state?.active && state.config.type === 'buff' ? state.config.damageMultiplier : 1;
+    return (state?.active && state.config.type === 'buff' ? state.config.damageMultiplier : 1)
+      * this.getAllyAuraMultiplier(playerId, 'damage');
+  }
+  setWildfireHandler(cb: ((ownerId: string, x: number, y: number, radius: number, durationMs: number, damagePerTick: number) => void) | null): void { this.wildfireHandler = cb; }
+
+  private getAllyAuraMultiplier(playerId: string, kind: 'speed' | 'damage'): number {
+    const now = Date.now();
+    const target = this.playerManager.getPlayer(playerId);
+    if (!target) return 1;
+    let multiplier = 1;
+    for (const [ownerId, state] of this.ultimateStates) {
+      if (ownerId === playerId || state.config.type !== 'buff' || !state.config.aura) continue;
+      if (!state.active && state.auraLingerUntil < now) continue;
+      if (this.bridge.isEnemyPair(ownerId, playerId)) continue;
+      const owner = this.playerManager.getPlayer(ownerId);
+      if (!owner || Phaser.Math.Distance.Between(owner.sprite.x, owner.sprite.y, target.sprite.x, target.sprite.y) > state.config.aura.radius) continue;
+      multiplier *= kind === 'speed'
+        ? (state.config.aura.allySpeedMultiplier ?? 1)
+        : (state.config.aura.allyDamageMultiplier ?? 1);
+    }
+    return multiplier;
   }
 
   getWeaponDamageMultiplier(playerId: string, slot: WeaponSlot, now = Date.now()): number {
@@ -705,6 +747,7 @@ export class LoadoutManager {
       drainDurationMs: 0,
       nextArmorTickAt: 0,
       nextAuraTickAt: 0,
+      auraLingerUntil: 0,
       gaussChargeStartedAt: null,
     };
     currentState.config = cfg;
@@ -774,6 +817,8 @@ export class LoadoutManager {
       rockDamageMult:    cfg.rockDamageMult,
       trainDamageMult:   cfg.trainDamageMult,
       shotAudioKey:      cfg.shotAudio?.successKey,
+      gaussChainRadius:  cfg.chainRadius,
+      gaussChainDamageFactor: cfg.chainDamageFactor,
     });
 
     this.physicsSystem?.addRecoil(
@@ -807,6 +852,56 @@ export class LoadoutManager {
    */
   getDynamicSpread(playerId: string, slot: 'weapon1' | 'weapon2'): number {
     return this.loadouts.get(playerId)?.[slot].getDynamicSpread() ?? 0;
+  }
+
+  handleKill(
+    killerId: string,
+    weaponName: string,
+    x: number,
+    y: number,
+    source?: { dirX?: number; dirY?: number; projectileColor?: number },
+  ): void {
+    const loadout = this.loadouts.get(killerId);
+    if (!loadout) return;
+    const utility = loadout.utility.config;
+    if (weaponName === 'Molotov' && utility.type === 'molotov' && (utility.deathPatchRadius ?? 0) > 0) {
+      this.wildfireHandler?.(killerId, x, y, utility.deathPatchRadius ?? 0, utility.deathPatchDurationMs ?? 0, utility.deathPatchDamagePerTick ?? 0);
+    }
+    for (const weapon of [loadout.weapon1, loadout.weapon2]) {
+      const cfg = weapon.config;
+      if (cfg.displayName !== weaponName) continue;
+      if ((cfg.killHeal ?? 0) > 0) this.combatSystem?.heal(killerId, cfg.killHeal ?? 0);
+      if ((cfg.killAdrenaline ?? 0) > 0) this.resourceSystem.addAdrenaline(killerId, cfg.killAdrenaline ?? 0);
+      if ((cfg.killSplitCount ?? 0) > 0 && cfg.fire.type === 'projectile') {
+        const count = Math.max(0, Math.floor(cfg.killSplitCount ?? 0));
+        const baseAngle = source?.dirX !== undefined && source?.dirY !== undefined
+          ? Math.atan2(source.dirY, source.dirX)
+          : 0;
+        const splitAngle = Phaser.Math.DegToRad(cfg.killSplitAngleDegrees ?? 30);
+        for (let index = 0; index < count; index += 1) {
+          const offset = count === 1
+            ? 0
+            : Phaser.Math.Linear(-splitAngle, splitAngle, index / (count - 1));
+          const angle = baseAngle + offset;
+          this.projectileManager.spawnProjectile(x, y, angle, killerId, {
+            speed: cfg.fire.projectileSpeed,
+            size: cfg.fire.projectileSize,
+            damage: cfg.damage * (cfg.killSplitDamageFactor ?? 0),
+            color: source?.projectileColor ?? cfg.projectileColor ?? 0xffffff,
+            lifetime: (cfg.range / cfg.fire.projectileSpeed) * 1000,
+            maxBounces: 0,
+            isGrenade: false,
+            adrenalinGain: 0,
+            weaponName: `${cfg.displayName}-Splitter`,
+            homing: cfg.fire.homing,
+            projectileStyle: cfg.projectileStyle,
+            suppressSpawnFx: true,
+            sourceSlot: 'weapon1',
+          });
+        }
+      }
+      return;
+    }
   }
 
   getAimNetState(playerId: string, isMoving: boolean): PlayerAimNetState | undefined {
@@ -900,20 +995,38 @@ export class LoadoutManager {
     // 4. Typ-spezifische Waffenlogik ausführen.
     //    Multi-Pellet-Waffen (z.B. Shotgun) feuern alle Projektile gleichzeitig ab.
     //    Jedes Pellet erhält seinen eigenen zufälligen Spread-Offset zusätzlich zum Pellet-Winkel.
-    const pelletCount = cfg.pelletCount ?? 1;
+    const warmupFraction = cfg.maxDynamicSpread < 0
+      ? Math.min(1, Math.abs(weapon.getDynamicSpread()) / Math.max(0.0001, Math.abs(cfg.maxDynamicSpread)))
+      : 0;
+    const shotCfg = (cfg.warmupBurnThreshold ?? 0) > 0 && warmupFraction < (cfg.warmupBurnThreshold ?? 0)
+      ? { ...cfg, burnOnHit: undefined }
+      : cfg;
+    const pelletCount = Math.max(1, Math.round((shotCfg.pelletCount ?? 1) * (shotCfg.pelletCountMultiplier ?? 1)));
     let didFire: boolean;
     if (pelletCount > 1) {
       const pelletOffsets = calcPelletAngles(pelletCount, cfg.pelletSpreadAngle ?? 0);
       for (const offset of pelletOffsets) {
         const pelletAngle = angle + offset + (Math.random() * 2 - 1) * halfSpreadRad;
-        this.dispatchWeaponFire(cfg, x, y, pelletAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
+        this.dispatchWeaponFire(shotCfg, x, y, pelletAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
       }
       didFire = true;
     } else {
       const finalAngle = angle + (Math.random() * 2 - 1) * halfSpreadRad;
-      didFire = this.dispatchWeaponFire(cfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
+      didFire = this.dispatchWeaponFire(shotCfg, x, y, finalAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
     }
     if (!didFire) return { ok: false, reason: 'blocked' };
+
+    if ((shotCfg.sideBurstEveryShots ?? 0) > 0 && (shotCfg.sideBurstCount ?? 0) >= 2) {
+      const counterKey = `${playerId}:${sourceSlot}:${shotCfg.id}`;
+      const count = (this.shotCounters.get(counterKey) ?? 0) + 1;
+      this.shotCounters.set(counterKey, count);
+      if (count % (shotCfg.sideBurstEveryShots ?? 1) === 0) {
+        const sideAngle = (shotCfg.sideBurstAngleDegrees ?? 0) * Math.PI / 180;
+        const sideCfg = { ...shotCfg, damage: shotCfg.damage * (shotCfg.sideBurstDamageFactor ?? 0), sideBurstEveryShots: 0 };
+        this.dispatchWeaponFire(sideCfg, x, y, angle - sideAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
+        this.dispatchWeaponFire(sideCfg, x, y, angle + sideAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
+      }
+    }
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
     if (cfg.adrenalinCost > 0) {
@@ -963,7 +1076,7 @@ export class LoadoutManager {
     switch (cfg.activation.type) {
       case 'charged_throw':
         if (cfg.type === 'translocator') {
-          didUse = this.translocatorSystem?.handleUse(playerId, angle, targetX, targetY, now, params) ?? false;
+          didUse = this.translocatorSystem?.handleUse(playerId, angle, targetX, targetY, now, params, cfg as TranslocatorUtilityConfig) ?? false;
         } else {
           didUse = this.throwGrenadeUtility(
             cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },
@@ -1011,6 +1124,8 @@ export class LoadoutManager {
             taserCfg.trainDamageMult ?? 1,
             taserCfg.visualPreset,
             taserCfg.shotAudio?.successKey,
+            undefined,
+            (taserCfg.chainCount ?? 0) > 0 ? { count: taserCfg.chainCount ?? 0, radius: taserCfg.chainRadius ?? 0, damageFactor: taserCfg.chainDamageFactor ?? 0 } : undefined,
           ) ?? false;
         } else if (cfg.type === 'decoy') {
           didUse = this.decoySystem?.activate(cfg as DecoyUtilityConfig, playerId, angle, playerColor, now) ?? false;
@@ -1128,6 +1243,9 @@ export class LoadoutManager {
       cfg.cloudTickInterval,
       cfg.rockDamageMult ?? 1,
       cfg.trainDamageMult ?? 1,
+      cfg.afterCloudDurationMs ?? 0,
+      cfg.afterCloudRadiusFactor ?? 0,
+      cfg.afterCloudDamageFactor ?? 0,
     );
     return true;
   }
@@ -1143,6 +1261,9 @@ export class LoadoutManager {
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
         visualStyle:     cfg.explosionVisualStyle,
+        clusterCount:    cfg.clusterCount,
+        clusterRadiusFactor: cfg.clusterRadiusFactor,
+        clusterDamageFactor: cfg.clusterDamageFactor,
       };
     }
 
@@ -1185,6 +1306,7 @@ export class LoadoutManager {
         trainSlowFactor:    cfg.trainSlowFactor,
         color:              cfg.bubbleColor ?? cfg.projectileColor ?? playerColor,
         distortion:         cfg.bubbleDistortion,
+        friendlyImmunity:   cfg.friendlyImmunity,
       };
     }
 
@@ -1221,6 +1343,7 @@ export class LoadoutManager {
         return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
 
       case 'tesla_dome':
+      case 'healing_aura':
       case 'energy_shield':
         return false;
 
@@ -1294,7 +1417,7 @@ export class LoadoutManager {
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
       size:            fireConfig.projectileSize,
-      damage:          config.damage,
+      damage:          config.directDamageOverride ?? config.damage,
       color:           config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang
       ownerColor:      playerColor,
       projectileVisualScale: config.projectileVisualScale,
@@ -1307,6 +1430,17 @@ export class LoadoutManager {
       splitCount:      config.splitCount,
       splitSpread:     config.splitSpread,
       splitFactor:     config.splitFactor,
+      splitHoming:     (config.splitHomingEnabled ?? 0) > 0 ? {
+        acquireDelayMs: 0,
+        searchRadius: 500,
+        retargetIntervalMs: 50,
+        maxTurnDegreesPerStep: 20,
+        targetTypes: ['players', 'enemies'],
+        requireLineOfSight: true,
+        excludeOwner: true,
+        distanceWeight: 1,
+        forwardWeight: 0.5,
+      } : undefined,
       remainingRangePx: effectiveRange,
       explosion:       fireConfig.impactExplosion,
       enemyHitExplosion: fireConfig.enemyHitExplosion,
@@ -1326,6 +1460,9 @@ export class LoadoutManager {
       burnTickIntervalMs: config.burnOnHit?.tickIntervalMs,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
+      penetrationCount: config.penetrationCount,
+      penetrationDamageRetention: config.penetrationDamageRetention,
+      multiExplosionCount: config.multiExplosionCount,
     });
 
     return true;
@@ -1453,7 +1590,7 @@ export class LoadoutManager {
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
       size:            fireConfig.hitboxStartSize,
-      damage:          config.damage,
+      damage:          config.directDamageOverride ?? config.damage,
       color:           config.projectileColor ?? playerColor,
       ownerColor:      playerColor,
       lifetime,

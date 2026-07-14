@@ -201,6 +201,7 @@ export interface ProjectileExplosionConfig {
   readonly color?: number;
   readonly visualStyle?: ExplosionVisualStyle;
   readonly burnOnHit?: BurnOnHitConfig;  // setzt Ziele im gesamten Radius in Brand
+  readonly groundFire?: FireGrenadeEffect; // persistente Feuerfläche am Einschlagsort
 }
 
 export interface ImpactCloudConfig {
@@ -270,6 +271,11 @@ export interface SyncedProjectile {
   tracer?: TracerConfig;      // Tracer-Konfiguration (nur wenn Waffe einen Tracer hat)
   shotAudioKey?: ShotAudioKey;
   suppressSpawnFx?: boolean;
+  penetrationCount?: number;
+  penetrationDamageRetention?: number;
+  reflected?: boolean;
+  gaussChainRadius?: number;
+  gaussChainDamageFactor?: number;
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
@@ -582,9 +588,16 @@ export interface ProjectileSpawnConfig {
   splitCount?: number;
   splitSpread?: number;
   splitFactor?: number;
+  splitHoming?: ProjectileHomingConfig;
   initialBounceCount?: number;
   remainingRangePx?: number;
   suppressSpawnFx?: boolean;
+  penetrationCount?: number;
+  penetrationDamageRetention?: number;
+  reflected?: boolean;
+  gaussChainRadius?: number;
+  gaussChainDamageFactor?: number;
+  multiExplosionCount?: number;
 }
 
 export interface DamageGrenadeEffect {
@@ -596,6 +609,9 @@ export interface DamageGrenadeEffect {
   rockDamageMult?:  number;
   trainDamageMult?: number;
   visualStyle?:     ExplosionVisualStyle;
+  clusterCount?: number;
+  clusterRadiusFactor?: number;
+  clusterDamageFactor?: number;
 }
 
 export interface SmokeGrenadeEffect {
@@ -624,6 +640,7 @@ export interface FireGrenadeEffect {
   burnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   burnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
   burnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
+  weaponName?: string;
 }
 
 export interface TimeBubbleGrenadeEffect {
@@ -635,6 +652,7 @@ export interface TimeBubbleGrenadeEffect {
   trainSlowFactor: number;
   color?: number;
   distortion?: number;
+  friendlyImmunity?: number;
 }
 
 export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect | TimeBubbleGrenadeEffect;
@@ -700,6 +718,8 @@ export interface ExplodedProjectile {
   effect: ProjectileExplosionConfig;
   sourceSlot?: LoadoutSlot;
   weaponName?: string;
+  projectileId?: number;
+  continuesAfterExplosion?: boolean;
 }
 
 export interface SyncedSmokeCloud {
@@ -837,6 +857,7 @@ export interface TrackedProjectile {
   splitCount?: number;
   splitSpread?: number;
   splitFactor?: number;
+  splitHoming?: ProjectileHomingConfig;
   remainingRangePx?: number;
   suppressSpawnFx?: boolean;
   pendingHydraSplit?: {
@@ -844,6 +865,14 @@ export interface TrackedProjectile {
     y: number;
     angles: number[];
   };
+  penetrationRemaining?: number;
+  penetrationDamageRetention?: number;
+  penetrationHitIds?: Set<string>;
+  reflected?: boolean;
+  gaussChainRadius?: number;
+  gaussChainDamageFactor?: number;
+  multiExplosionsRemaining?: number;
+  multiExplosionExcludedTargetKeys?: Set<string>;
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;
@@ -928,6 +957,11 @@ export interface SyncedPlaceableRock {
   expiresAt: number;
   warningStartsAt: number;
   angle: number;
+  enemyDestroyedExplosionRadius?: number;
+  enemyDestroyedExplosionDamage?: number;
+  enemyDestroyedExplosionKnockback?: number;
+  lastAttackerId?: string;
+  secondProjectileDamageFactor?: number;
 }
 
 export interface SyncedTunnelEndpoint {

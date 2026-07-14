@@ -76,6 +76,17 @@ export interface TeslaDomeWeaponFireConfig {
   readonly visualImpactBurstScale: number;
   readonly visualWhiteness: number;
   readonly visualPulseSpeed: number;
+  readonly chargeIntervalMs?: number;
+  readonly maxChargeStacks?: number;
+  readonly radiusBonusPerCharge?: number;
+  readonly damageBonusPerCharge?: number;
+}
+
+export interface HealingAuraWeaponFireConfig {
+  readonly type: 'healing_aura';
+  readonly radius: number;
+  readonly healPerTick: number;
+  readonly tickInterval: number;
 }
 
 export interface EnergyShieldWeaponFireConfig {
@@ -96,6 +107,7 @@ export interface EnergyShieldWeaponFireConfig {
   readonly blockableCategories: readonly ShieldBlockCategory[];
   readonly visualInnerAlpha: number;
   readonly visualOuterAlpha: number;
+  readonly reflectionDamageFactor?: number;
 }
 
 export type WeaponFireConfig =
@@ -105,6 +117,7 @@ export type WeaponFireConfig =
   | FlamethrowerWeaponFireConfig
   | LeafBlowerWeaponFireConfig
   | TeslaDomeWeaponFireConfig
+  | HealingAuraWeaponFireConfig
   | EnergyShieldWeaponFireConfig;
 
 export interface WeaponConfig {
@@ -136,11 +149,27 @@ export interface WeaponConfig {
   // Sind beide Felder gesetzt und pelletCount > 1, werden alle Projektile gleichzeitig gefeuert.
   readonly pelletCount?:       number; // Anzahl gleichzeitig abgefeuerter Projektile
   readonly pelletSpreadAngle?: number; // Halbwinkel der Auffächerung in Grad ([-y, +y])
+  readonly pelletCountMultiplier?: number;
 
   // Hydra-Splitting (optional)
   readonly splitCount?:        number; // Anzahl der beim Bounce neu erzeugten Projektile
   readonly splitSpread?:       number; // Winkelabstand in Grad zwischen benachbarten Split-Bahnen
   readonly splitFactor?:       number; // Multiplikator nach der Grundteilung beim Split (1 = unverändert, 1.5 = stärkere Kinder)
+  readonly splitHomingEnabled?: number;
+  readonly directDamageOverride?: number;
+  readonly killHeal?: number;
+  readonly killAdrenaline?: number;
+  readonly killSplitCount?: number;
+  readonly killSplitDamageFactor?: number;
+  readonly killSplitAngleDegrees?: number;
+  readonly sideBurstEveryShots?: number;
+  readonly sideBurstCount?: number;
+  readonly sideBurstAngleDegrees?: number;
+  readonly sideBurstDamageFactor?: number;
+  readonly penetrationCount?: number;
+  readonly penetrationDamageRetention?: number;
+  readonly warmupBurnThreshold?: number;
+  readonly multiExplosionCount?: number;
 
   // Visuelles Override
   readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
@@ -249,6 +278,9 @@ export interface PlaceablePlacementConfig {
 
 export interface PlaceableRockPlacementConfig extends PlaceablePlacementConfig {
   readonly kind: 'rock';
+  readonly enemyDestroyedExplosionRadius?: number;
+  readonly enemyDestroyedExplosionDamage?: number;
+  readonly enemyDestroyedExplosionKnockback?: number;
 }
 
 export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig {
@@ -256,6 +288,7 @@ export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig
   readonly targetRange: number;
   readonly muzzleOffset: number;
   readonly deathCloudRadius: number;
+  readonly secondProjectileDamageFactor?: number;
 }
 
 export interface PlaceableTunnelPlacementConfig {
@@ -309,6 +342,9 @@ export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
   readonly aoeRadius: number;       // px
   readonly aoeDamage: number;       // HP-Schaden im Radius
   readonly damageFalloff?: RadialDamageFalloffConfig;
+  readonly clusterCount?: number;
+  readonly clusterRadiusFactor?: number;
+  readonly clusterDamageFactor?: number;
 }
 
 export interface SmokeUtilityConfig extends BaseUtilityConfig {
@@ -331,6 +367,9 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly fireBurnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   readonly fireBurnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
   readonly fireBurnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
+  readonly deathPatchRadius?: number;
+  readonly deathPatchDurationMs?: number;
+  readonly deathPatchDamagePerTick?: number;
 }
 
 export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
@@ -342,6 +381,7 @@ export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
   readonly trainSlowFactor: number;
   readonly bubbleColor?: number;
   readonly bubbleDistortion?: number;
+  readonly friendlyImmunity?: number;
 }
 
 export interface BfgUtilityConfig extends BaseUtilityConfig {
@@ -362,6 +402,9 @@ export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
   readonly cloudDuration: number;        // ms – Gesamtdauer der Wolke
   readonly cloudDamagePerTick: number;   // HP Schaden pro Tick
   readonly cloudTickInterval: number;    // ms zwischen Damage-Ticks
+  readonly afterCloudDurationMs?: number;
+  readonly afterCloudRadiusFactor?: number;
+  readonly afterCloudDamageFactor?: number;
 }
 
 export interface TaserUtilityConfig extends BaseUtilityConfig {
@@ -370,6 +413,9 @@ export interface TaserUtilityConfig extends BaseUtilityConfig {
   readonly range: number;
   readonly hitArcDegrees: number;
   readonly visualPreset: MeleeVisualPreset;
+  readonly chainCount?: number;
+  readonly chainRadius?: number;
+  readonly chainDamageFactor?: number;
 }
 
 export interface DecoyUtilityConfig extends BaseUtilityConfig {
@@ -381,11 +427,16 @@ export interface DecoyUtilityConfig extends BaseUtilityConfig {
   readonly stealthGlowOuterStrength: number;
   readonly wobblePeriodMs: number;
   readonly dissipateDustBurst: number;
+  readonly explosionRadius?: number;
+  readonly explosionDamage?: number;
+  readonly explosionKnockback?: number;
 }
 
 export interface TranslocatorUtilityConfig extends BaseUtilityConfig {
   readonly type: 'translocator';
-  // Translocator-spezifische Configs koennen hier rein
+  readonly telefragRadius?: number;
+  readonly telefragDamage?: number;
+  readonly telefragKnockback?: number;
 }
 
 export interface PlaceableRockUtilityConfig extends BaseUtilityConfig {
@@ -422,12 +473,19 @@ export interface ArmageddonMeteorConfig {
   readonly selfDamageMult: number;      // Selbstschadens-Multiplikator (0 = immun)
   readonly rockDamageMult?: number;     // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number;    // Schadensfaktor gegen den Zug (Default 1.0)
+  readonly cometEveryMeteors?: number;
+  readonly cometRadiusFactor?: number;
+  readonly cometDamageFactor?: number;
 }
 
 export interface BuffAuraConfig {
   readonly radius: number;
   readonly damagePerTick: number;
   readonly tickIntervalMs: number;
+  readonly allySpeedMultiplier?: number;
+  readonly allyDamageMultiplier?: number;
+  readonly allyArmorPerTick?: number;
+  readonly lingerMs?: number;
 }
 
 interface BaseUltimateConfig {
@@ -468,6 +526,8 @@ export interface GaussUltimateConfig extends BaseUltimateConfig {
   readonly shotRecoilForce: number;
   readonly shotRecoilDuration: number;
   readonly shotAudio?: LoadoutShotAudioConfig;
+  readonly chainRadius?: number;
+  readonly chainDamageFactor?: number;
 }
 
 export interface AirstrikeUltimateConfig extends BaseUltimateConfig {
@@ -481,6 +541,11 @@ export interface AirstrikeUltimateConfig extends BaseUltimateConfig {
   readonly selfDamageMult: number;    // 0 = Auslöser immun
   readonly rockDamageMult: number;
   readonly trainDamageMult: number;
+  readonly carpetStrikeCount?: number;
+  readonly carpetOffset?: number;
+  readonly carpetIntervalMs?: number;
+  readonly carpetRadiusFactor?: number;
+  readonly carpetDamageFactor?: number;
 }
 
 export interface TunnelUltimateConfig extends BaseUltimateConfig {
@@ -904,6 +969,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
     pelletCount:          5,
+    pelletCountMultiplier: 1,
     pelletSpreadAngle:    16,
     projectileColor:      0xa9a097,
     projectileStyle:      'bullet' as ProjectileStyle,
@@ -1000,12 +1066,19 @@ export const WEAPON_CONFIGS = {
         trainDamageMult: 1.15,
         color:           0xff8a3d,
         visualStyle:     'rocket',
-        // Brennende Explosion – per Upgrade aktiviert (setzt den gesamten Radius in Brand).
-        burnOnHit: {
-          durationMs:     0,
-          damagePerTick:  0,
-          tickIntervalMs: 250,
-        } satisfies BurnOnHitConfig,
+        groundFire: {
+          type: 'fire',
+          radius: 110,
+          damagePerTick: 1,
+          tickInterval: 250,
+          lingerDuration: 0,
+          rockDamageMult: 0,
+          trainDamageMult: 0,
+          burnDurationMs: 2000,
+          burnDamagePerTick: 0.25,
+          burnTickIntervalMs: 250,
+          weaponName: 'Brennender Raketenboden',
+        },
       } satisfies ProjectileExplosionConfig,
     },
     allowedSlots:         ['weapon2'],
@@ -1073,6 +1146,7 @@ export const WEAPON_CONFIGS = {
     spreadMoving:         9,
     spreadPerShot:        1.2,
     maxDynamicSpread:     12,
+    multiExplosionCount:  1,
     spreadRecoveryDelay:  180,
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
@@ -1250,6 +1324,7 @@ export const WEAPON_CONFIGS = {
     displayName:          'Laubblaeser',
     cooldown:             90,
     damage:               1,
+    directDamageOverride: 1,
     range:                350,
     fire: {
       type:               'leaf_blower',
@@ -1312,6 +1387,10 @@ export const WEAPON_CONFIGS = {
       visualImpactBurstScale:   0.95,
       visualWhiteness:          0.62,
       visualPulseSpeed:         0.0034,
+      chargeIntervalMs:         0,
+      maxChargeStacks:          0,
+      radiusBonusPerCharge:     0,
+      damageBonusPerCharge:     0,
     } satisfies TeslaDomeWeaponFireConfig,
     allowedSlots:         ['weapon2'],
     adrenalinCost:        0,
@@ -1327,6 +1406,84 @@ export const WEAPON_CONFIGS = {
     showCrosshair:        false,
     rockDamageMult:       0.55,
     trainDamageMult:      0.8,
+  } as WeaponConfig,
+
+  HEALING_AURA: {
+    id:                   'HEALING_AURA',
+    displayName:          'Heil-Aura',
+    cooldown:             0,
+    damage:               0,
+    range:                0,
+    fire: {
+      type:         'healing_aura',
+      radius:       150,
+      healPerTick:  10,
+      tickInterval: 100,
+    } satisfies HealingAuraWeaponFireConfig,
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileColor:      0x55ff88,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      0,
+  } as WeaponConfig,
+
+  MINI_TESLA_DOME: {
+    id:                   'MINI_TESLA_DOME',
+    displayName:          'Mini-Kuppel',
+    cooldown:             0,
+    damage:               0,
+    range:                0,
+    fire: {
+      type:                     'tesla_dome',
+      radius:                   78,
+      damagePerTick:            20,
+      tickInterval:             200,
+      adrenalineDrainPerSecond: 0,
+      movementSlowFactor:       1,
+      requireLineOfSight:       true,
+      targetTypes:              ['players'] satisfies readonly TeslaDomeTargetType[],
+      visualIndicatorAlpha:     0.14,
+      visualFieldAlpha:         0.24,
+      visualIdleArcCount:       3,
+      visualIdleArcLength:      30,
+      visualBoltThicknessMin:   1.1,
+      visualBoltThicknessMax:   2.6,
+      visualJitter:             7,
+      visualBranchChance:       0.2,
+      visualCoreParticleFrequency: 7,
+      visualFieldParticleFrequency: 5,
+      visualRimParticleFrequency: 4,
+      visualImpactBurstScale:   0.8,
+      visualWhiteness:          0.35,
+      visualPulseSpeed:         0.0042,
+      chargeIntervalMs:         0,
+      maxChargeStacks:          0,
+      radiusBonusPerCharge:     0,
+      damageBonusPerCharge:     0,
+    } satisfies TeslaDomeWeaponFireConfig,
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileColor:      0x9b32ff,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      0,
   } as WeaponConfig,
 
   ENERGY_SHIELD: {
@@ -1353,6 +1510,7 @@ export const WEAPON_CONFIGS = {
       blockableCategories:      ['projectile', 'hitscan', 'melee', 'explosion', 'tesla'] satisfies readonly ShieldBlockCategory[],
       visualInnerAlpha:         0.56,
       visualOuterAlpha:         0.96,
+      reflectionDamageFactor:   0,
     } satisfies EnergyShieldWeaponFireConfig,
     allowedSlots:         ['weapon2'],
     adrenalinCost:        0,
@@ -1397,6 +1555,7 @@ export const WEAPON_CONFIGS = {
     projectileStyle:      'bullet' as ProjectileStyle,
     holdSpeedFactor:      0.3,
     warmupSpeedMultiplier: 1,
+    warmupBurnThreshold:   0,
     projectileColor:      0xc79c4f,
     bulletVisualPreset:   'negev' as BulletVisualPreset,
     // Brennende Kugeln – per Upgrade aktiviert.

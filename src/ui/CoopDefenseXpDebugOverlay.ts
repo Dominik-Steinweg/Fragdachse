@@ -1,7 +1,7 @@
 import { COLORS, toCssColor } from '../config';
 import { getCoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 
-function sanitizeXpInput(value: string): number {
+function sanitizeNumberInput(value: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.floor(parsed));
@@ -13,7 +13,8 @@ export class CoopDefenseXpDebugOverlay {
 
   constructor(
     private readonly getCurrentXp: () => number,
-    private readonly onSubmit: (totalXp: number) => void,
+    private readonly getCurrentBossPoints: () => number,
+    private readonly onSubmit: (totalXp: number, bossPoints: number) => void,
   ) {}
 
   show(): void {
@@ -42,7 +43,7 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     const title = document.createElement('div');
-    title.innerText = 'COOP DEFENSE XP DEBUG';
+    title.innerText = 'COOP DEFENSE CHEATMODUS';
     Object.assign(title.style, {
       fontSize: '20px',
       fontWeight: 'bold',
@@ -52,7 +53,7 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     const subtitle = document.createElement('div');
-    subtitle.innerText = 'Nur lokal. Ueberschreibt den gespeicherten XP-Stand dieser Browser-Instanz.';
+    subtitle.innerText = 'Nur lokal. Ueberschreibt Erfahrung und Bosspunkte dieser Browser-Instanz.';
     Object.assign(subtitle.style, {
       fontSize: '12px',
       color: toCssColor(COLORS.GREY_4),
@@ -61,24 +62,49 @@ export class CoopDefenseXpDebugOverlay {
       textAlign: 'center',
     });
 
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.min = '0';
-    input.step = '1';
-    input.value = String(this.getCurrentXp());
-    Object.assign(input.style, {
+    const createNumberInput = (value: number) => {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '0';
+      input.step = '1';
+      input.value = String(value);
+      Object.assign(input.style, {
+        width: '100%',
+        padding: '8px 10px',
+        boxSizing: 'border-box',
+        border: `1px solid ${toCssColor(COLORS.GREY_5)}`,
+        backgroundColor: toCssColor(COLORS.GREY_9),
+        color: toCssColor(COLORS.GREY_1),
+        outline: 'none',
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: '10px',
+      });
+      return input;
+    };
+
+    const createInputLabel = (text: string) => {
+      const label = document.createElement('div');
+      label.innerText = text;
+      Object.assign(label.style, {
+        fontSize: '12px',
+        fontWeight: 'bold',
+        color: toCssColor(COLORS.GREY_3),
+        marginBottom: '5px',
+        textAlign: 'center',
+      });
+      return label;
+    };
+
+    const xpLabel = createInputLabel('ERFAHRUNG (XP)');
+    const xpInput = createNumberInput(this.getCurrentXp());
+    const bossPointsLabel = createInputLabel('BOSSPUNKTE');
+    const bossPointsInput = createNumberInput(this.getCurrentBossPoints());
+    Object.assign(bossPointsInput.style, {
       width: '100%',
-      padding: '8px 10px',
-      boxSizing: 'border-box',
-      border: `1px solid ${toCssColor(COLORS.GREY_5)}`,
-      backgroundColor: toCssColor(COLORS.GREY_9),
-      color: toCssColor(COLORS.GREY_1),
-      outline: 'none',
-      fontFamily: 'monospace',
-      fontSize: '22px',
-      fontWeight: 'bold',
-      textAlign: 'center',
-      marginBottom: '10px',
+      marginBottom: '12px',
     });
 
     const preview = document.createElement('div');
@@ -99,7 +125,7 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     const confirmBtn = document.createElement('button');
-    confirmBtn.innerText = 'XP SETZEN';
+    confirmBtn.innerText = 'WERTE SETZEN';
     Object.assign(confirmBtn.style, {
       padding: '8px 14px',
       border: `1px solid ${toCssColor(COLORS.GREEN_3)}`,
@@ -123,10 +149,12 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     const updatePreview = () => {
-      const totalXp = sanitizeXpInput(input.value);
-      if (String(totalXp) !== input.value) input.value = String(totalXp);
+      const totalXp = sanitizeNumberInput(xpInput.value);
+      const bossPoints = sanitizeNumberInput(bossPointsInput.value);
+      if (String(totalXp) !== xpInput.value) xpInput.value = String(totalXp);
+      if (String(bossPoints) !== bossPointsInput.value) bossPointsInput.value = String(bossPoints);
       const progress = getCoopDefenseProgressSnapshot(totalXp);
-      preview.innerText = `Level ${progress.level}\n${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}`;
+      preview.innerText = `Level ${progress.level}\n${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}  |  ★ ${bossPoints} Bosspunkte`;
     };
 
     const closePopup = () => {
@@ -138,15 +166,20 @@ export class CoopDefenseXpDebugOverlay {
     };
 
     const save = () => {
-      this.onSubmit(sanitizeXpInput(input.value));
+      this.onSubmit(
+        sanitizeNumberInput(xpInput.value),
+        sanitizeNumberInput(bossPointsInput.value),
+      );
       closePopup();
     };
 
-    input.addEventListener('input', updatePreview);
-    input.addEventListener('keydown', (event: KeyboardEvent) => {
-      if (event.key === 'Enter') save();
-      if (event.key === 'Escape') closePopup();
-    });
+    for (const input of [xpInput, bossPointsInput]) {
+      input.addEventListener('input', updatePreview);
+      input.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Enter') save();
+        if (event.key === 'Escape') closePopup();
+      });
+    }
     confirmBtn.onclick = save;
     cancelBtn.onclick = closePopup;
     backdrop.addEventListener('pointerdown', (event: PointerEvent) => {
@@ -154,15 +187,24 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     buttonRow.append(confirmBtn, cancelBtn);
-    popup.append(title, subtitle, input, preview, buttonRow);
+    popup.append(
+      title,
+      subtitle,
+      xpLabel,
+      xpInput,
+      bossPointsLabel,
+      bossPointsInput,
+      preview,
+      buttonRow,
+    );
     backdrop.appendChild(popup);
     document.body.appendChild(backdrop);
 
     this.popup = backdrop;
     this.closePopupFn = closePopup;
     updatePreview();
-    input.focus();
-    input.select();
+    xpInput.focus();
+    xpInput.select();
   }
 
   hide(): void {

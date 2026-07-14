@@ -85,6 +85,7 @@ export class HostUpdateCoordinator {
       delta,
     );
     if (!countdownActive) {
+      this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
       this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
     }
 
@@ -158,7 +159,7 @@ export class HostUpdateCoordinator {
     }
 
     for (const explosion of explodedProjectiles) {
-      this.ctx.combatSystem.applyExplosionDamage(
+      const damagedTargetKeys = this.ctx.combatSystem.applyExplosionDamage(
         explosion.x,
         explosion.y,
         explosion.effect,
@@ -176,6 +177,13 @@ export class HostUpdateCoordinator {
         explosion.x, explosion.y, explosion.effect.radius,
         explosion.effect.color, explosion.effect.visualStyle,
       );
+      const groundFire = explosion.effect.groundFire;
+      if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
+        this.ctx.fireSystem.hostCreateZone(explosion.x, explosion.y, groundFire, explosion.ownerId);
+      }
+      if (explosion.continuesAfterExplosion && explosion.projectileId !== undefined) {
+        this.ctx.projectileManager.resumeMultiExplosionProjectile(explosion.projectileId, damagedTargetKeys);
+      }
     }
 
     for (const g of explodedGrenades) {
@@ -193,6 +201,19 @@ export class HostUpdateCoordinator {
           g.effect.damageFalloff,
         );
         bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius, undefined, g.effect.visualStyle);
+        const clusterCount = Math.max(0, Math.floor(g.effect.clusterCount ?? 0));
+        for (let index = 0; index < clusterCount; index += 1) {
+          const angle = (Math.PI * 2 * index) / Math.max(1, clusterCount);
+          const radius = g.effect.radius * (g.effect.clusterRadiusFactor ?? 0);
+          const damage = g.effect.damage * (g.effect.clusterDamageFactor ?? 0);
+          const cx = g.x + Math.cos(angle) * g.effect.radius * 0.45;
+          const cy = g.y + Math.sin(angle) * g.effect.radius * 0.45;
+          this.ctx.combatSystem.applyAoeDamage(cx, cy, radius, damage, g.ownerId, false, {
+            category: 'explosion', allowTeamDamage: g.effect.allowTeamDamage, weaponName: 'Clusterladung', sourceSlot: 'utility',
+          });
+          this.applyAoeEnvironmentDamage(cx, cy, radius, damage, g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId);
+          bridge.broadcastExplosionEffect(cx, cy, radius, undefined, g.effect.visualStyle);
+        }
       } else if (g.effect.type === 'fire') {
         this.ctx.fireSystem.hostCreateZone(g.x, g.y, g.effect, g.ownerId);
       } else if (g.effect.type === 'time_bubble') {
@@ -240,7 +261,7 @@ export class HostUpdateCoordinator {
     for (const ev of fireDamageEvents) {
       this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true, {
         category: 'damage_over_time',
-        weaponName: 'Feuer',
+        weaponName: ev.weaponName,
         sourceSlot: 'utility',
       });
       this.applyAoeEnvironmentDamage(
@@ -255,7 +276,17 @@ export class HostUpdateCoordinator {
             this.ctx.combatSystem.applyBurnStack(
               player.id, ev.ownerId,
               ev.burnDurationMs, ev.burnDamagePerTick, ev.burnTickIntervalMs,
-              'Molotov',
+              ev.weaponName,
+            );
+          }
+        }
+        for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+          const dist = Phaser.Math.Distance.Between(ev.x, ev.y, enemy.sprite.x, enemy.sprite.y);
+          if (dist <= ev.radius) {
+            this.ctx.combatSystem.applyBurnStack(
+              enemy.id, ev.ownerId,
+              ev.burnDurationMs, ev.burnDamagePerTick, ev.burnTickIntervalMs,
+              ev.weaponName,
             );
           }
         }

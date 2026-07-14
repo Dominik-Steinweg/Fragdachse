@@ -59,8 +59,8 @@ import {
   getStoredMusicVolume,
   markStoredCoopDefenseBossMapCompleted,
   markStoredCoopDefenseRoundProcessed,
+  setStoredCoopDefenseCheatProgress,
   setStoredCoopDefenseUpgradeProfile,
-  setStoredCoopDefenseTotalXp,
 } from '../utils/localPreferences';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
@@ -211,6 +211,7 @@ export class ArenaScene extends Phaser.Scene {
     // automatisch geladen werden (kein manuelles Pflegen einer Liste noetig).
     for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
       if (definition.kind !== 'upgrade') continue;
+      if (definition.id === 'fliegenpilz_cooldown') continue;
       const key = `UPGRADE_${definition.id.toUpperCase()}`;
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
     }
@@ -312,8 +313,9 @@ export class ArenaScene extends Phaser.Scene {
     this.enemyHoverNameLabel = new EnemyHoverNameLabel(this);
     this.coopDefenseXpDebugOverlay = new CoopDefenseXpDebugOverlay(
       () => this.coopDefenseProgress.totalXp,
-      (totalXp) => {
-        setStoredCoopDefenseTotalXp(totalXp);
+      () => this.coopDefenseProgress.earnedBossPoints,
+      (totalXp, bossPoints) => {
+        setStoredCoopDefenseCheatProgress(totalXp, bossPoints);
         this.refreshStoredCoopDefenseProgress();
         this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       },
@@ -349,7 +351,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyBossFlowFieldService: null,
@@ -393,7 +395,14 @@ export class ArenaScene extends Phaser.Scene {
           .map((enemy) => ({
             x: enemy.sprite.x,
             y: enemy.sprite.y,
-            attackRange: enemy.getWeapon()?.config.range ?? 0,
+            attackRange: Math.max(
+              0,
+              ...enemy.getAttackWeapons().map((attackWeapon) => (
+                attackWeapon.weapon.config.fire.type === 'tesla_dome'
+                  ? attackWeapon.weapon.config.fire.radius
+                  : attackWeapon.weapon.config.range
+              )),
+            ),
           })),
         // Coop-Defense: IDs der noch verteidigten Basen → Leftmost-Spawn-Bias
         // ignoriert zerstörte Basen automatisch.
@@ -849,6 +858,11 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
     this.renderers.teslaDome.update(delta);
+    const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
+    this.renderers.healingAura.syncEnemies(auraEnemies);
+    this.renderers.healingAura.update(delta);
+    this.renderers.miniTeslaDome.syncEnemies(auraEnemies);
+    this.renderers.miniTeslaDome.update(delta);
     this.renderers.energyShield.update(delta);
 
     const utilityTargeting    = this.ctx.inputSystem.getUtilityTargetingPreviewState();

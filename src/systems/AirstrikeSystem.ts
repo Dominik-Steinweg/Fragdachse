@@ -49,17 +49,29 @@ export class AirstrikeSystem {
     config:   AirstrikeUltimateConfig,
   ): boolean {
     const armedAt = Date.now();
-    const strike: ActiveAirstrikeStrike = {
-      id:          this.nextId++,
-      x:           targetX,
-      y:           targetY,
-      radius:      config.radius,
-      armedAt,
-      explodeAt:   armedAt + config.delayMs,
-      triggeredBy: playerId,
-      config,
-    };
-    this.strikes.set(strike.id, strike);
+    const count = Math.max(1, Math.floor(config.carpetStrikeCount ?? 1));
+    const radiusFactor = count > 1 ? (config.carpetRadiusFactor ?? 1) : 1;
+    const damageFactor = count > 1 ? (config.carpetDamageFactor ?? 1) : 1;
+    for (let index = 0; index < count; index += 1) {
+      const offsetIndex = index - (count - 1) / 2;
+      const strikeConfig = count > 1 ? {
+        ...config,
+        radius: config.radius * radiusFactor,
+        maxDamage: config.maxDamage * damageFactor,
+        minDamage: config.minDamage * damageFactor,
+      } : config;
+      const strike: ActiveAirstrikeStrike = {
+        id: this.nextId++,
+        x: targetX + offsetIndex * (config.carpetOffset ?? 0),
+        y: targetY,
+        radius: strikeConfig.radius,
+        armedAt,
+        explodeAt: armedAt + config.delayMs + index * (config.carpetIntervalMs ?? 0),
+        triggeredBy: playerId,
+        config: strikeConfig,
+      };
+      this.strikes.set(strike.id, strike);
+    }
     return true;
   }
 
