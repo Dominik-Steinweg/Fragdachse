@@ -202,6 +202,8 @@ export interface ProjectileExplosionConfig {
   readonly visualStyle?: ExplosionVisualStyle;
   readonly burnOnHit?: BurnOnHitConfig;  // setzt Ziele im gesamten Radius in Brand
   readonly groundFire?: FireGrenadeEffect; // persistente Feuerfläche am Einschlagsort
+  readonly blackHoleDurationMs?: number;
+  readonly blackHolePullStrength?: number;
 }
 
 export interface ImpactCloudConfig {
@@ -337,6 +339,7 @@ export interface SyncedMeleeSwing {
   hitPlayer?: boolean;
   impactX?: number;
   impactY?: number;
+  bloodEffectMultiplier?: number;
   shotAudioKey?: ShotAudioKey;
 }
 

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
 import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
 import { BiteRenderer } from '../../effects/BiteRenderer';
+import { BlackHoleRenderer } from '../../effects/BlackHoleRenderer';
 import { ZeusTaserRenderer } from '../../effects/ZeusTaserRenderer';
 import { FlameRenderer }       from '../../effects/FlameRenderer';
 import { LeafBlowerRenderer }  from '../../effects/LeafBlowerRenderer';
@@ -40,6 +41,7 @@ export interface RendererBundle {
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
   bite:                BiteRenderer;
+  blackHole:           BlackHoleRenderer;
   zeusTaser:           ZeusTaserRenderer;
   flame:               FlameRenderer;
   leafBlower:          LeafBlowerRenderer;
@@ -84,6 +86,9 @@ export function createRendererBundle(
 
   const bite = new BiteRenderer(scene);
   bite.generateTextures();
+
+  const blackHole = new BlackHoleRenderer(scene);
+  blackHole.generateTextures();
 
   const zeusTaser = new ZeusTaserRenderer(scene);
   zeusTaser.generateTextures();
@@ -160,7 +165,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, bite, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, miniTeslaDome, timeBubble, holyGrenade,
+    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, miniTeslaDome, timeBubble, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,

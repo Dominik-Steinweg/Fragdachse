@@ -224,6 +224,7 @@ type LoadoutUseHandler = (
 ) => LoadoutUseResult;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
+type BlackHoleEffectHandler = (x: number, y: number, radius: number, durationMs: number) => void;
 type GrenadeCountdownHandler = (x: number, y: number, value: number) => void;
 type EffectHandler = (effect: SyncedCombatEffect) => void;
 type HitscanTracerHandler = (
@@ -283,6 +284,7 @@ export class NetworkBridge {
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
+  private blackHoleEffectHandler: BlackHoleEffectHandler | null = null;
   private grenadeCountdownHandler: GrenadeCountdownHandler | null = null;
   private effectHandler: EffectHandler | null = null;
   // Pro Frame gesammelte Treffer-/Todes-Effekte und XP-Popups (Host), gebündelt via flushEffects().
@@ -1280,6 +1282,21 @@ export class NetworkBridge {
       if (!explosionEffectHandler) return undefined;
       const { x, y, r, c, s } = data as { x: number; y: number; r: number; c?: number; s?: ExplosionVisualStyle };
       explosionEffectHandler(x, y, r, c, s);
+      return undefined;
+    });
+  }
+
+  broadcastBlackHoleEffect(x: number, y: number, radius: number, durationMs: number): void {
+    this.broadcastRpc('bhfx', { x, y, r: radius, d: durationMs });
+  }
+
+  registerBlackHoleEffectHandler(handler: BlackHoleEffectHandler): void {
+    this.blackHoleEffectHandler = handler;
+    this.registerAllRpcHandler('bhfx', async (data: unknown): Promise<unknown> => {
+      const blackHoleEffectHandler = this.blackHoleEffectHandler;
+      if (!blackHoleEffectHandler) return undefined;
+      const { x, y, r, d } = data as { x: number; y: number; r: number; d: number };
+      blackHoleEffectHandler(x, y, r, d);
       return undefined;
     });
   }

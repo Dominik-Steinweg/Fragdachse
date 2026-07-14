@@ -55,6 +55,7 @@ export class RpcCoordinator {
     this.registerLoadoutUseHandler();
     this.registerCaptureTheBeerFxHandler();
     this.registerExplosionEffectHandler();
+    this.registerBlackHoleEffectHandler();
     this.registerGrenadeCountdownHandler();
     this.registerCoopDefenseXpPopupHandler();
     this.registerBfgLaserBatchHandler();
@@ -121,6 +122,12 @@ export class RpcCoordinator {
       this.ctx.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
       const audio = resolveExplosionAudio(visualStyle);
       if (audio) this.ctx.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
+    });
+  }
+
+  private registerBlackHoleEffectHandler(): void {
+    bridge.registerBlackHoleEffectHandler((x, y, radius, durationMs) => {
+      this.renderers.blackHole.play(x, y, radius, durationMs);
     });
   }
 

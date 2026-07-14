@@ -1445,7 +1445,9 @@ export class LoadoutManager {
       explosion:       fireConfig.impactExplosion,
       enemyHitExplosion: fireConfig.enemyHitExplosion,
       impactCloud:     fireConfig.impactCloud,
-      homing:          fireConfig.homing,
+      homing:          config.homingEnabled === undefined || config.homingEnabled > 0
+        ? fireConfig.homing
+        : undefined,
       projectileStyle: config.projectileStyle,
       bulletVisualPreset: config.bulletVisualPreset,
       energyBallVariant: config.energyBallVariant,
@@ -1531,6 +1533,10 @@ export class LoadoutManager {
       fireConfig.visualPreset,
       config.shotAudio?.successKey,
       config.burnOnHit,       // BurnOnHitConfig weitergeben (optional)
+      undefined,
+      config.hitHeal ?? 0,
+      config.hitAdrenaline ?? 0,
+      config.bloodEffectMultiplier ?? 1,
     ) ?? false;
   }
 

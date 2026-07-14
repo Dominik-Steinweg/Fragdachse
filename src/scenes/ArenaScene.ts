@@ -211,7 +211,7 @@ export class ArenaScene extends Phaser.Scene {
     // automatisch geladen werden (kein manuelles Pflegen einer Liste noetig).
     for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
       if (definition.kind !== 'upgrade') continue;
-      if (definition.id === 'fliegenpilz_cooldown') continue;
+      if (definition.id === 'plasma_adrenalin_gain' || definition.id === 'bite_damage_reduction' || definition.id === 'hydra_projectile_speed' || definition.id === 'xbow_arrow_count' || definition.id === 'laubblaeser_adrenalin_gain' || definition.id === 'p90_bullet_storm_spread' || definition.id === 'p90_homing_overdrive' || definition.id === 'p90_homing_turn' || definition.id === 'rocket_launcher_direct_damage' || definition.id === 'rocket_launcher_adrenaline_cost' || definition.id === 'rocket_launcher_black_hole' || definition.id === 'rocket_launcher_black_hole_duration' || definition.id === 'rocket_launcher_black_hole_pull') continue;
       const key = `UPGRADE_${definition.id.toUpperCase()}`;
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
     }

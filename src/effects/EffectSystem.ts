@@ -1359,6 +1359,7 @@ export class EffectSystem {
         swing.hitPlayer ?? false,
         swing.impactX,
         swing.impactY,
+        swing.bloodEffectMultiplier ?? 1,
       );
       return;
     }

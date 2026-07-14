@@ -83,6 +83,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'PLASMA',
     targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
   },
+  'weapon.PLASMA.adrenalinGain': {
+    kind: 'weapon',
+    itemId: 'PLASMA',
+    targets: [{ path: ['fire', 'adrenalinGain'], operation: 'scale' }],
+  },
   'weapon.ASMD_PRIM.range': {
     kind: 'weapon',
     itemId: 'ASMD_PRIM',
@@ -113,6 +118,26 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'BITE',
     targets: [{ path: ['damage'], operation: 'scale' }],
   },
+  'weapon.BITE.damageReduction': {
+    kind: 'weapon',
+    itemId: 'BITE',
+    targets: [{ path: ['damageReduction'], operation: 'add' }],
+  },
+  'weapon.BITE.hitHeal': {
+    kind: 'weapon',
+    itemId: 'BITE',
+    targets: [{ path: ['hitHeal'], operation: 'add' }],
+  },
+  'weapon.BITE.hitAdrenaline': {
+    kind: 'weapon',
+    itemId: 'BITE',
+    targets: [{ path: ['hitAdrenaline'], operation: 'add' }],
+  },
+  'weapon.BITE.bloodEffectMultiplier': {
+    kind: 'weapon',
+    itemId: 'BITE',
+    targets: [{ path: ['bloodEffectMultiplier'], operation: 'scale' }],
+  },
   'weapon.HYDRA.splitCount': {
     kind: 'weapon',
     itemId: 'HYDRA',
@@ -123,6 +148,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'HYDRA',
     targets: [{ path: ['range'], operation: 'scale' }],
   },
+  'weapon.HYDRA.projectileSpeed': {
+    kind: 'weapon',
+    itemId: 'HYDRA',
+    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
   'weapon.XBOW.range': {
     kind: 'weapon',
     itemId: 'XBOW',
@@ -132,6 +162,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'XBOW',
     targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
+  },
+  'weapon.XBOW.pelletCount': {
+    kind: 'weapon',
+    itemId: 'XBOW',
+    targets: [{ path: ['pelletCount'], operation: 'add' }],
   },
   'weapon.XBOW.enemyHitExplosion.radius': {
     kind: 'weapon',
@@ -152,6 +187,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'LAUBBLAESER',
     targets: [{ path: ['fire', 'hitboxEndSize'], operation: 'scale' }],
+  },
+  'weapon.LAUBBLAESER.adrenalinGain': {
+    kind: 'weapon',
+    itemId: 'LAUBBLAESER',
+    targets: [{ path: ['adrenalinGain'], operation: 'scale' }],
   },
   'weapon.P90.range': {
     kind: 'weapon',
@@ -178,6 +218,31 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'P90',
     targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
   },
+  'weapon.P90.pelletCount': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['pelletCount'], operation: 'add' }],
+  },
+  'weapon.P90.pelletSpreadAngle': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['pelletSpreadAngle'], operation: 'add' }],
+  },
+  'weapon.P90.cooldown': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
+  'weapon.P90.homingEnabled': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['homingEnabled'], operation: 'add' }],
+  },
+  'weapon.P90.homing.maxTurnDegreesPerStep': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], operation: 'scale' }],
+  },
   'weapon.ROCKET_LAUNCHER.impactExplosion.radius': {
     kind: 'weapon',
     itemId: 'ROCKET_LAUNCHER',
@@ -190,6 +255,26 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'ROCKET_LAUNCHER',
     targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
+  'weapon.ROCKET_LAUNCHER.adrenalinCost': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+  },
+  'weapon.ROCKET_LAUNCHER.damage': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['damage'], operation: 'scale' }],
+  },
+  'weapon.ROCKET_LAUNCHER.blackHoleDurationMs': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['fire', 'impactExplosion', 'blackHoleDurationMs'], operation: 'add' }],
+  },
+  'weapon.ROCKET_LAUNCHER.blackHolePullStrength': {
+    kind: 'weapon',
+    itemId: 'ROCKET_LAUNCHER',
+    targets: [{ path: ['fire', 'impactExplosion', 'blackHolePullStrength'], operation: 'scale' }],
   },
   'weapon.ROCKET_LAUNCHER.burnOnHit.durationMs': {
     kind: 'weapon',

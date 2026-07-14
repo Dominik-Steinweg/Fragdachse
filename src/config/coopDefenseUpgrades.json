@@ -153,6 +153,31 @@
           ]
         },
         {
+          "id": "laubblaeser_adrenalin_gain",
+          "code": "B-W7-3",
+          "label": "Upgrade Laubblaeser: Adrenalingewinn",
+          "description": "+30% Adrenalingewinn fuer den Laubblaeser je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 302,
+          "requires": [
+            {
+              "upgradeId": "laubblaeser_hitbox_size",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.LAUBBLAESER.adrenalinGain",
+              "mode": "add_percent_per_level",
+              "value": 0.3
+            }
+          ]
+        },
+        {
           "id": "unlock_plasma",
           "code": "B-W2",
           "label": "Plasma",
@@ -215,6 +240,31 @@
               "stat": "weapon.PLASMA.projectileSpeed",
               "mode": "add_percent_per_level",
               "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "plasma_adrenalin_gain",
+          "code": "B-W2-3",
+          "label": "Upgrade Plasma: Adrenalingewinn",
+          "description": "+30% Adrenalingewinn fuer Plasma je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 155,
+          "requires": [
+            {
+              "upgradeId": "plasma_projectile_speed",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.PLASMA.adrenalinGain",
+              "mode": "add_percent_per_level",
+              "value": 0.3
             }
           ]
         },
@@ -389,7 +439,7 @@
           "sortOrder": 210,
           "requires": [
             {
-              "upgradeId": "unlock_bite",
+              "upgradeId": "bite_range",
               "minLevel": 1
             }
           ],
@@ -398,6 +448,31 @@
               "stat": "weapon.BITE.damage",
               "mode": "add_percent_per_level",
               "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "bite_damage_reduction",
+          "code": "B-W4-3",
+          "label": "Upgrade Dachsbiss: Dickes Fell",
+          "description": "Mit ausgeruestetem Dachsbiss erleidest du 50% weniger Schaden.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 215,
+          "requires": [
+            {
+              "upgradeId": "unlock_bite",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.BITE.damageReduction",
+              "mode": "add_per_level",
+              "value": 0.5
             }
           ]
         },
@@ -423,7 +498,7 @@
           "label": "Upgrade Hydra Gun: Split-Projektile",
           "description": "+1 Split-Projektil fuer Hydra Gun je Stufe.",
           "kind": "upgrade",
-          "maxLevel": 2,
+          "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
@@ -464,6 +539,31 @@
               "stat": "weapon.HYDRA.range",
               "mode": "add_percent_per_level",
               "value": 0.2
+            }
+          ]
+        },
+        {
+          "id": "hydra_projectile_speed",
+          "code": "B-W5-3",
+          "label": "Upgrade Hydra Gun: Fluggeschwindigkeit",
+          "description": "+10% Projektilgeschwindigkeit fuer Hydra Gun je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 245,
+          "requires": [
+            {
+              "upgradeId": "hydra_range",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.HYDRA.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
             }
           ]
         },
@@ -521,7 +621,7 @@
           "sortOrder": 270,
           "requires": [
             {
-              "upgradeId": "xbow_range",
+              "upgradeId": "unlock_xbow",
               "minLevel": 1
             }
           ],
@@ -534,8 +634,33 @@
           ]
         },
         {
-          "id": "xbow_explosive_bolts",
+          "id": "xbow_arrow_count",
           "code": "B-W6-3",
+          "label": "Upgrade XXX-BOW: Mehrfachbolzen",
+          "description": "+1 Pfeil pro Schuss fuer den XXX-BOW je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 2,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 273,
+          "requires": [
+            {
+              "upgradeId": "xbow_range",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.XBOW.pelletCount",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "xbow_explosive_bolts",
+          "code": "B-W6-4",
           "label": "Upgrade XXX-BOW: Explosivbolzen",
           "description": "Bolzen erzeugen bei einem Gegner-Treffer eine kleine Explosion (nicht an Waenden).",
           "kind": "upgrade",
@@ -547,7 +672,7 @@
           "sortOrder": 275,
           "requires": [
             {
-              "upgradeId": "unlock_xbow",
+              "upgradeId": "xbow_projectile_speed",
               "minLevel": 1
             }
           ],
@@ -630,10 +755,10 @@
             }
           ]
         },
-        { "id": "plasma_swarm", "code": "B-W2-C", "label": "Plasmaschwarm", "description": "Toedliche Treffer erzeugen zwei nicht weiter teilbare Homing-Splitter bei -30 und +30 Grad mit je 35% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 165, "requires": [{ "upgradeId": "plasma_homing_turn", "minLevel": 3 }], "effects": [{ "stat": "weapon.PLASMA.killSplitCount", "mode": "add_per_level", "value": 2 }, { "stat": "weapon.PLASMA.killSplitDamageFactor", "mode": "add_per_level", "value": 0.35 }, { "stat": "weapon.PLASMA.killSplitAngleDegrees", "mode": "add_per_level", "value": 30 }] },
-        { "id": "bite_blood_bite", "code": "B-W4-C", "label": "Blutbiss", "description": "Ein eigener Biss-Kill heilt 10 HP und gibt 10 Adrenalin.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "bite_damage", "minLevel": 3 }], "effects": [{ "stat": "weapon.BITE.killHeal", "mode": "add_per_level", "value": 10 }, { "stat": "weapon.BITE.killAdrenaline", "mode": "add_per_level", "value": 10 }] },
-        { "id": "hydra_hunting_instinct", "code": "B-W5-C", "label": "Jagdinstinkt", "description": "Hydra-Splitter verfolgen waehrend ihrer Restflugzeit das naechste Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "hydra_split_count", "minLevel": 2 }], "effects": [{ "stat": "weapon.HYDRA.splitHomingEnabled", "mode": "add_per_level", "value": 1 }] },
-        { "id": "laubblaeser_pressure_damage", "code": "B-W7-C", "label": "Druckluftschaden", "description": "Erhoeht den Direktschaden pro Treffer von 1 auf 3.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 305, "requires": [{ "upgradeId": "laubblaeser_knockback", "minLevel": 3 }], "effects": [{ "stat": "weapon.LAUBBLAESER.directDamageOverride", "mode": "add_per_level", "value": 2 }] }
+        { "id": "plasma_swarm", "code": "B-W2-C", "label": "Plasmaschwarm", "description": "Toedliche Treffer erzeugen zwei nicht weiter teilbare Homing-Splitter bei -30 und +30 Grad mit vollem Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 165, "requires": [{ "upgradeId": "plasma_homing_turn", "minLevel": 3 }], "effects": [{ "stat": "weapon.PLASMA.killSplitCount", "mode": "add_per_level", "value": 2 }, { "stat": "weapon.PLASMA.killSplitDamageFactor", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.PLASMA.killSplitAngleDegrees", "mode": "add_per_level", "value": 30 }] },
+        { "id": "bite_blood_bite", "code": "B-W4-C", "label": "Blutbiss", "description": "Jeder Biss-Treffer heilt 20 HP und gibt 10 Adrenalin. Der Bluteffekt ist 50% staerker.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "bite_damage_reduction", "minLevel": 1 }], "effects": [{ "stat": "weapon.BITE.hitHeal", "mode": "add_per_level", "value": 20 }, { "stat": "weapon.BITE.hitAdrenaline", "mode": "add_per_level", "value": 10 }, { "stat": "weapon.BITE.bloodEffectMultiplier", "mode": "add_percent_per_level", "value": 0.5 }] },
+        { "id": "hydra_hunting_instinct", "code": "B-W5-C", "label": "Jagdinstinkt", "description": "Hydra-Splitter verfolgen waehrend ihrer Restflugzeit das naechste Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "hydra_split_count", "minLevel": 1 }], "effects": [{ "stat": "weapon.HYDRA.splitHomingEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "laubblaeser_pressure_damage", "code": "B-W7-C", "label": "Druckluftschaden", "description": "Erhoeht den Direktschaden pro Treffer von 1 auf 10.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 305, "requires": [{ "upgradeId": "laubblaeser_knockback", "minLevel": 3 }], "effects": [{ "stat": "weapon.LAUBBLAESER.directDamageOverride", "mode": "add_per_level", "value": 9 }] }
       ]
     },
     {
@@ -696,8 +821,8 @@
           "sortOrder": 120,
           "requires": [
             {
-              "upgradeId": "p90_range",
-              "minLevel": 3
+              "upgradeId": "p90_bullet_storm_spread",
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -747,7 +872,7 @@
           "requires": [
             {
               "upgradeId": "p90_damage",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -755,6 +880,31 @@
               "stat": "weapon.P90.adrenalinCost",
               "mode": "add_percent_per_level",
               "value": -0.1
+            }
+          ]
+        },
+        {
+          "id": "p90_bullet_storm_spread",
+          "code": "C-W1-5",
+          "label": "Upgrade P90: Enger Kugelhagel",
+          "description": "Verringert die Seitenwinkel von Kugelhagel auf -5 und +5 Grad.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 140,
+          "requires": [
+            {
+              "upgradeId": "p90_bullet_storm",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.P90.pelletSpreadAngle",
+              "mode": "add_per_level",
+              "value": -10
             }
           ]
         },
@@ -825,6 +975,31 @@
           ]
         },
         {
+          "id": "rocket_launcher_direct_damage",
+          "code": "C-W2-5",
+          "label": "Upgrade Rocket Launcher: Direktschaden",
+          "description": "+20% Direktschaden fuer den Rocket Launcher je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 153,
+          "requires": [
+            {
+              "upgradeId": "rocket_launcher_cooldown",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.2
+            }
+          ]
+        },
+        {
           "id": "rocket_launcher_burning_explosion",
           "code": "C-W2-3",
           "label": "Upgrade Rocket Launcher: Brennende Explosion",
@@ -872,6 +1047,31 @@
               "stat": "weapon.ROCKET_LAUNCHER.fire.impactExplosion.groundFire.burnDamagePerTick",
               "mode": "add_percent_per_level",
               "value": 0.5
+            }
+          ]
+        },
+        {
+          "id": "rocket_launcher_adrenaline_cost",
+          "code": "C-W2-6",
+          "label": "Upgrade Rocket Launcher: Adrenalin-Verbrauch",
+          "description": "-10% Adrenalin-Verbrauch fuer den Rocket Launcher je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 158,
+          "requires": [
+            {
+              "upgradeId": "rocket_launcher_burning_explosion_damage",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ROCKET_LAUNCHER.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.1
             }
           ]
         },
@@ -1812,7 +2012,12 @@
             }
           ]
         },
-        { "id": "p90_bullet_storm", "code": "C-W1-C", "label": "Kugelhagel", "description": "Jeder zehnte Schuss erzeugt zwei kostenlose Seitenprojektile bei +/-8 Grad mit 50% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 150, "requires": [{ "upgradeId": "p90_accuracy", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.sideBurstEveryShots", "mode": "add_per_level", "value": 10 }, { "stat": "weapon.P90.sideBurstCount", "mode": "add_per_level", "value": 2 }, { "stat": "weapon.P90.sideBurstAngleDegrees", "mode": "add_per_level", "value": 8 }, { "stat": "weapon.P90.sideBurstDamageFactor", "mode": "add_per_level", "value": 0.5 }] },
+        { "id": "p90_bullet_storm", "code": "C-W1-C", "label": "Kugelhagel", "description": "Jeder Schuss feuert drei Projektile mit vollem Schaden bei -15, 0 und +15 Grad.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 150, "requires": [{ "upgradeId": "p90_range", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.pelletCount", "mode": "add_per_level", "value": 2 }] },
+        { "id": "p90_homing_overdrive", "code": "C-W1-D", "label": "Zielsuchender Kugelhagel", "description": "Alle P90-Geschosse verfolgen Ziele, verursachen vierfachen Schaden und feuern mit einem Viertel der bisherigen Rate.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "p90_adrenaline_cost", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homingEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.P90.damage", "mode": "add_percent_per_level", "value": 3 }, { "stat": "weapon.P90.cooldown", "mode": "add_percent_per_level", "value": 3 }] },
+        { "id": "p90_homing_turn", "code": "C-W1-6", "label": "Upgrade P90: Homing-Wendigkeit", "description": "+25% maximale Wendung pro Schritt fuer zielsuchende P90-Geschosse je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "p90_homing_overdrive", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homing.maxTurnDegreesPerStep", "mode": "add_percent_per_level", "value": 0.25 }] },
+        { "id": "rocket_launcher_black_hole", "code": "C-W2-C", "label": "Schwarzes Loch", "description": "Explosionen erzeugen ein Schwarzes Loch mit Explosionsradius, das Gegner 1 Sekunde lang leicht anzieht.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 175, "requires": [{ "upgradeId": "rocket_launcher_direct_damage", "minLevel": 1 }, { "upgradeId": "rocket_launcher_adrenaline_cost", "minLevel": 1 }], "effects": [{ "stat": "weapon.ROCKET_LAUNCHER.blackHoleDurationMs", "mode": "add_per_level", "value": 1000 }] },
+        { "id": "rocket_launcher_black_hole_duration", "code": "C-W2-7", "label": "Upgrade Rocket Launcher: Ereignishorizont", "description": "+1 Sekunde Dauer des Schwarzen Lochs je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 177, "requires": [{ "upgradeId": "rocket_launcher_black_hole", "minLevel": 1 }], "effects": [{ "stat": "weapon.ROCKET_LAUNCHER.blackHoleDurationMs", "mode": "add_per_level", "value": 1000 }] },
+        { "id": "rocket_launcher_black_hole_pull", "code": "C-W2-8", "label": "Upgrade Rocket Launcher: Gravitationssog", "description": "+30% Sogstaerke des Schwarzen Lochs je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 178, "requires": [{ "upgradeId": "rocket_launcher_black_hole", "minLevel": 1 }], "effects": [{ "stat": "weapon.ROCKET_LAUNCHER.blackHolePullStrength", "mode": "add_percent_per_level", "value": 0.3 }] },
         { "id": "ak47_armor_piercer", "code": "C-W3-C", "label": "Panzerbrecher", "description": "Kugeln durchschlagen einen Gegner und verursachen danach 70% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "ak47_accuracy", "minLevel": 3 }], "effects": [{ "stat": "weapon.AK47.penetrationCount", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.AK47.penetrationDamageRetention", "mode": "add_per_level", "value": 0.7 }] },
         { "id": "shotgun_pellet_storm", "code": "C-W4-C", "label": "Schrotsturm", "description": "Verdoppelt die finale Pelletzahl bei unveraendertem Schaden pro Pellet.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 245, "requires": [{ "upgradeId": "shotgun_pellet_count", "minLevel": 2 }], "effects": [{ "stat": "weapon.SHOTGUN.pelletCountMultiplier", "mode": "add_per_level", "value": 1 }] },
         { "id": "mini_rocket_long_range_drive", "code": "C-W6-C", "label": "Kettenreaktion", "description": "Mini-Raketen koennen dreimal explodieren. Nach jeder Explosion suchen sie ein neues, noch nicht von dieser Rakete getroffenes Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 295, "requires": [{ "upgradeId": "mini_rocket_launcher_homing_turn", "minLevel": 3 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.multiExplosionCount", "mode": "add_per_level", "value": 2 }] },

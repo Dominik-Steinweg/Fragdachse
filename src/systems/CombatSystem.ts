@@ -172,6 +172,7 @@ export class CombatSystem {
   private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private playerMaxHpResolver: ((playerId: string) => number) | null = null;
+  private playerDamageReductionResolver: ((playerId: string) => number) | null = null;
   private playerHpRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private playerMaxArmorResolver: ((playerId: string) => number) | null = null;
   private playerArmorGainMultiplierResolver: ((playerId: string) => number) | null = null;
@@ -199,6 +200,7 @@ export class CombatSystem {
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
+  setPlayerDamageReductionResolver(resolver: ((playerId: string) => number) | null): void { this.playerDamageReductionResolver = resolver; }
   setPlayerHpRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerHpRegenPerSecondResolver = resolver; }
   setPlayerMaxArmorResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxArmorResolver = resolver; }
   setPlayerArmorGainMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorGainMultiplierResolver = resolver; }
@@ -355,9 +357,11 @@ export class CombatSystem {
     const x = player?.sprite.x ?? 0;
     const y = player?.sprite.y ?? 0;
 
+    const damageReduction = Phaser.Math.Clamp(this.playerDamageReductionResolver?.(targetId) ?? 0, 0, 1);
+    const reducedAmount = amount * (1 - damageReduction);
     const currentArmor = this.armor.get(targetId) ?? 0;
-    const absorbedByArmor = Math.min(currentArmor, amount);
-    const overflowDamage = Math.max(0, amount - absorbedByArmor);
+    const absorbedByArmor = Math.min(currentArmor, reducedAmount);
+    const overflowDamage = Math.max(0, reducedAmount - absorbedByArmor);
     const newArmor = Math.max(0, currentArmor - absorbedByArmor);
     const currentHp = this.hp.get(targetId) ?? this.getMaxHp(targetId);
     const newHp = Math.max(0, currentHp - overflowDamage);
@@ -1461,6 +1465,9 @@ export class CombatSystem {
     shotAudioKey?: string,
     burnOnHit?: BurnOnHitConfig,
     chain?: { count: number; radius: number; damageFactor: number },
+    hitHeal = 0,
+    hitAdrenaline = 0,
+    bloodEffectMultiplier = 1,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -1516,6 +1523,7 @@ export class CombatSystem {
       if (canDealDamage && adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
+      if (canDealDamage) this.applyMeleeHitRewards(shooterId, hitHeal, hitAdrenaline);
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
@@ -1559,6 +1567,7 @@ export class CombatSystem {
       if (adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
+      this.applyMeleeHitRewards(shooterId, hitHeal, hitAdrenaline);
     }
 
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
@@ -1653,11 +1662,16 @@ export class CombatSystem {
     this.applyMeleeObjectDamage(x, y, angle, range, halfArcRad, damage, rockDamageMult, trainDamageMult, shooterId);
 
     // Swing-VFX für alle Clients in die Replikations-Queue einreihen
-    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, shotAudioKey });
+    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, bloodEffectMultiplier, shotAudioKey });
     return true;
   }
 
   // collectReplicatedMeleeSwings entfernt – Swings werden per RPC gesendet
+
+  private applyMeleeHitRewards(shooterId: string, hitHeal: number, hitAdrenaline: number): void {
+    if (hitHeal > 0) this.heal(shooterId, hitHeal);
+    if (hitAdrenaline > 0) this.resourceSystem?.addAdrenaline(shooterId, hitAdrenaline);
+  }
 
   /**
    * Prüft, ob Felsen oder Zug-Segmente im Melee-Trefferbogen liegen, und wendet Schaden an.

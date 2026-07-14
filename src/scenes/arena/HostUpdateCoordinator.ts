@@ -16,6 +16,7 @@ import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
 import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, TeamId, TrackedProjectile } from '../../types';
 import { emitArenaMapGridChanged } from './ArenaEvents';
+import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 
 /**
  * Runs every frame on the host.
@@ -38,6 +39,7 @@ export class HostUpdateCoordinator {
   private readonly prevAliveStates      = new Map<string, boolean>();
   private moveLoopHandle: string | null = null;
   private trainSpawned = false;
+  private readonly blackHoleSystem: BlackHoleSystem;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -45,7 +47,12 @@ export class HostUpdateCoordinator {
     private readonly renderers: RendererBundle,
     private readonly localPlayerState: LocalPlayerState,
     private readonly rockVisualHelper: RockVisualHelper,
-  ) {}
+  ) {
+    this.blackHoleSystem = new BlackHoleSystem(
+      () => this.ctx.enemyManager,
+      this.ctx.hostPhysics,
+    );
+  }
 
   setActive(v: boolean): void { this.active = v; }
 
@@ -67,6 +74,7 @@ export class HostUpdateCoordinator {
     this.prevAliveStates.clear();
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.trainSpawned = false;
+    this.blackHoleSystem.clear();
   }
 
   runHostUpdate(delta: number): void {
@@ -105,6 +113,7 @@ export class HostUpdateCoordinator {
       this.ctx.tunnelSystem?.update(now);
     }
 
+    this.blackHoleSystem.update(now);
     this.ctx.hostPhysics.update(countdownActive);
     const decoys = countdownActive ? [] : this.ctx.decoySystem.hostUpdate(now);
     if (!countdownActive) {
@@ -180,6 +189,16 @@ export class HostUpdateCoordinator {
       const groundFire = explosion.effect.groundFire;
       if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
         this.ctx.fireSystem.hostCreateZone(explosion.x, explosion.y, groundFire, explosion.ownerId);
+      }
+      if ((explosion.effect.blackHoleDurationMs ?? 0) > 0) {
+        const durationMs = explosion.effect.blackHoleDurationMs ?? 0;
+        this.blackHoleSystem.create(explosion.x, explosion.y, {
+          radius: explosion.effect.radius,
+          durationMs,
+          pullStrength: explosion.effect.blackHolePullStrength ?? 0,
+          ownerId: explosion.ownerId,
+        }, now);
+        bridge.broadcastBlackHoleEffect(explosion.x, explosion.y, explosion.effect.radius, durationMs);
       }
       if (explosion.continuesAfterExplosion && explosion.projectileId !== undefined) {
         this.ctx.projectileManager.resumeMultiExplosionProjectile(explosion.projectileId, damagedTargetKeys);

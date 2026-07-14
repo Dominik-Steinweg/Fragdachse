@@ -477,6 +477,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getMaxHp(playerId) ?? HP_MAX;
     });
+    this.ctx.combatSystem.setPlayerDamageReductionResolver((playerId) => {
+      return this.ctx.loadoutManager?.getEquippedWeaponConfig(playerId, 'weapon1')?.damageReduction ?? 0;
+    });
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getHpRegenPerSecond(playerId) ?? 0;
     });
@@ -919,6 +922,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefensePlayerModifierSystem = null;
     this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.combatSystem.setPlayerMaxHpResolver(null);
+    this.ctx.combatSystem.setPlayerDamageReductionResolver(null);
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;

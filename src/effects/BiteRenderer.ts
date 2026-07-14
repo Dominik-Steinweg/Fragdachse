@@ -80,6 +80,7 @@ export class BiteRenderer {
     hitPlayer = false,
     impactX?: number,
     impactY?: number,
+    bloodEffectMultiplier = 1,
   ): void {
     void playerColor;
 
@@ -113,10 +114,10 @@ export class BiteRenderer {
     });
 
     this.playClawWake(x, y, angle + rotationJitter, clawPaths);
-    this.playVolumeParticles(x, y, angle + rotationJitter, clawPaths, hitPlayer);
+    this.playVolumeParticles(x, y, angle + rotationJitter, clawPaths, hitPlayer, bloodEffectMultiplier);
 
     if (hitPlayer && impactX !== undefined && impactY !== undefined) {
-      this.playImpactBurst(angle + rotationJitter, impactX, impactY, resolvedRange, halfArcRad);
+      this.playImpactBurst(angle + rotationJitter, impactX, impactY, resolvedRange, halfArcRad, bloodEffectMultiplier);
       return;
     }
 
@@ -271,6 +272,7 @@ export class BiteRenderer {
     angle: number,
     clawPaths: readonly ClawPath[],
     hitPlayer: boolean,
+    bloodEffectMultiplier: number,
   ): void {
     const blood = createEmitter(this.scene, 0, 0, TEX_BITE_DROPLET, {
       lifespan: { min: 95, max: 210 },
@@ -303,7 +305,7 @@ export class BiteRenderer {
         const t = Phaser.Math.Linear(0.18, 0.98, index / Math.max(1, burstCount - 1));
         const point = this.sampleQuadratic(claw, t);
         const world = this.toWorldPoint(point.x, point.y, x, y, angle);
-        blood.explode(hitPlayer ? 2 : 1, world.x, world.y);
+        blood.explode(Math.max(1, Math.round((hitPlayer ? 2 : 1) * bloodEffectMultiplier)), world.x, world.y);
         flecks.explode(1, world.x, world.y);
       }
     }
@@ -320,6 +322,7 @@ export class BiteRenderer {
     impactY: number,
     range: number,
     halfArcRad: number,
+    bloodEffectMultiplier: number,
   ): void {
     if (!isPointInsideArena(impactX, impactY)) return;
 
@@ -339,14 +342,14 @@ export class BiteRenderer {
       .setDepth(DEPTH_TRACE + 0.145)
       .setTint(BITE_PALETTE.gore)
       .setAlpha(0.52)
-      .setDisplaySize(42, 42);
+      .setDisplaySize(42 * bloodEffectMultiplier, 42 * bloodEffectMultiplier);
 
     const mist = this.scene.add.image(impactX, impactY, TEX_BITE_MIST)
       .setDepth(DEPTH_TRACE + 0.146)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setTint(BITE_PALETTE.ivory)
       .setAlpha(0.18)
-      .setDisplaySize(52, 52);
+      .setDisplaySize(52 * bloodEffectMultiplier, 52 * bloodEffectMultiplier);
 
     this.scene.tweens.add({
       targets: [mark, gore, mist],
@@ -365,7 +368,7 @@ export class BiteRenderer {
 
     const blood = createEmitter(this.scene, impactX, impactY, TEX_BITE_DROPLET, {
       lifespan: { min: 110, max: 260 },
-      quantity: 24,
+      quantity: Math.round(24 * bloodEffectMultiplier),
       frequency: -1,
       angle: { min: Phaser.Math.RadToDeg(angle) - 42, max: Phaser.Math.RadToDeg(angle) + 42 },
       speed: { min: 100, max: 310 },
@@ -375,7 +378,7 @@ export class BiteRenderer {
       blendMode: Phaser.BlendModes.NORMAL,
       emitting: false,
     }, DEPTH_TRACE + 0.16);
-    blood.explode(24);
+    blood.explode(Math.round(24 * bloodEffectMultiplier));
 
     const chips = createEmitter(this.scene, impactX, impactY, TEX_BITE_FLECK, {
       lifespan: { min: 80, max: 180 },

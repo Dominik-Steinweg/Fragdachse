@@ -738,6 +738,7 @@ export class CoopDefenseUpgradesOverlay {
       rowTopY += row.maxDepth * ROW_UNIT + ROW_GAP;
     }
 
+    this.repositionMergeNodes(placed, placedById, tree.childrenByParentId);
     this.renderConnections(placed, placedById, visuals);
     for (const placedNode of placed) {
       this.renderNode(placedNode, visuals);
@@ -809,6 +810,43 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     return { roots: rootNodes, childrenByParentId };
+  }
+
+  private repositionMergeNodes(
+    placed: readonly PlacedNode[],
+    placedById: ReadonlyMap<string, PlacedNode>,
+    childrenByParentId: ReadonlyMap<string, readonly CoopDefenseUpgradeNodeSnapshot[]>,
+  ): void {
+    for (const merge of placed) {
+      if (merge.node.requires.length < 2) continue;
+
+      const parentPositions = merge.node.requires
+        .map((requirement) => placedById.get(requirement.upgradeId)?.x)
+        .filter((x): x is number => x !== undefined)
+        .sort((left, right) => left - right);
+      if (parentPositions.length < 2) continue;
+
+      merge.x = Phaser.Math.Average(parentPositions);
+
+      const children = (childrenByParentId.get(merge.node.id) ?? [])
+        .filter((child) => child.requires.length === 1)
+        .map((child) => placedById.get(child.id))
+        .filter((child): child is PlacedNode => child !== undefined);
+      if (children.length === 0) continue;
+
+      for (let index = 0; index < children.length; index += 1) {
+        const position = children.length === 1
+          ? parentPositions.length / 2
+          : (index * (parentPositions.length - 1)) / (children.length - 1);
+        const leftIndex = Math.floor(position);
+        const rightIndex = Math.min(parentPositions.length - 1, Math.ceil(position));
+        children[index].x = Phaser.Math.Linear(
+          parentPositions[leftIndex],
+          parentPositions[rightIndex],
+          position - leftIndex,
+        );
+      }
+    }
   }
 
   private measureColumns(

@@ -133,6 +133,7 @@ export interface WeaponConfig {
   // Ressourcen
   readonly adrenalinCost: number;       // Adrenalin-Kosten pro Schuss
   readonly adrenalinGain: number;       // Adrenalin-Gewinn bei Treffer
+  readonly damageReduction?: number;    // eingehender Schaden wird bei ausgeruesteter Waffe reduziert
 
   // Spread (Bloom) in Grad
   readonly spreadStanding: number;      // Basis-Spread im Stand
@@ -156,9 +157,13 @@ export interface WeaponConfig {
   readonly splitSpread?:       number; // Winkelabstand in Grad zwischen benachbarten Split-Bahnen
   readonly splitFactor?:       number; // Multiplikator nach der Grundteilung beim Split (1 = unverändert, 1.5 = stärkere Kinder)
   readonly splitHomingEnabled?: number;
+  readonly homingEnabled?: number;
   readonly directDamageOverride?: number;
   readonly killHeal?: number;
   readonly killAdrenaline?: number;
+  readonly hitHeal?: number;
+  readonly hitAdrenaline?: number;
+  readonly bloodEffectMultiplier?: number;
   readonly killSplitCount?: number;
   readonly killSplitDamageFactor?: number;
   readonly killSplitAngleDegrees?: number;
@@ -688,6 +693,9 @@ export const WEAPON_CONFIGS = {
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        50,
+    hitHeal:              0,
+    hitAdrenaline:        0,
+    bloodEffectMultiplier: 1,
     spreadStanding:       0,
     spreadMoving:         0,
     spreadPerShot:        0,
@@ -877,10 +885,22 @@ export const WEAPON_CONFIGS = {
       projectileSpeed:      1200,
       projectileSize:       4,
       projectileMaxBounces: 10,
+      homing: {
+        acquireDelayMs:          150,
+        searchRadius:            500,
+        retargetIntervalMs:      50,
+        maxTurnDegreesPerStep:   12,
+        targetTypes:             ['players', 'enemies'],
+        requireLineOfSight:      true,
+        excludeOwner:            true,
+        distanceWeight:          1,
+        forwardWeight:           0.5,
+      } satisfies ProjectileHomingConfig,
     },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        4,
     adrenalinGain:        0,
+    homingEnabled:        0,
     spreadStanding:       15,
     spreadMoving:         15,
     spreadPerShot:        2,
@@ -888,6 +908,8 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
+    pelletCount:          1,
+    pelletSpreadAngle:    15,
     projectileColor:      0xd7b06b,
     projectileStyle:      'bullet' as ProjectileStyle,
     bulletVisualPreset:   'p90' as BulletVisualPreset,
@@ -1066,6 +1088,8 @@ export const WEAPON_CONFIGS = {
         trainDamageMult: 1.15,
         color:           0xff8a3d,
         visualStyle:     'rocket',
+        blackHoleDurationMs: 0,
+        blackHolePullStrength: 2400,
         groundFire: {
           type: 'fire',
           radius: 110,
