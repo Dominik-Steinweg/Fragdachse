@@ -27,10 +27,15 @@ export function computeRadialDamage(
 }
 
 export function computeProjectileExplosionDamage(distance: number, effect: ProjectileExplosionConfig): number {
+  const falloffReduction = clamp01(effect.falloffReduction ?? 0);
+  const baseMinDamage = effect.minDamage;
+  const effectiveMinDamage = baseMinDamage === undefined
+    ? undefined
+    : lerp(baseMinDamage, effect.maxDamage, falloffReduction);
   return computeRadialDamage(
     distance,
     effect.radius,
     effect.maxDamage,
-    effect.minDamage === undefined ? undefined : { minDamage: effect.minDamage },
+    effectiveMinDamage === undefined ? undefined : { minDamage: effectiveMinDamage },
   );
 }

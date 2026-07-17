@@ -41,6 +41,7 @@ interface CompactPlayerState {
   cf?: number; // ultimateChargeFraction (nur wenn != 0)
   cr?: number; // ultimateChargeRange (nur wenn != 0)
   sf?: number; // decoyStealthRemainingFrac (nur wenn != 0)
+  fr?: number; // Flammenring-Radius (nur wenn aktiv)
 }
 
 function encodePlayerState(state: PlayerNetState): CompactPlayerState {
@@ -75,6 +76,7 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   if (state.ultimateChargeFraction) compact.cf = state.ultimateChargeFraction;
   if (state.ultimateChargeRange) compact.cr = state.ultimateChargeRange;
   if (state.decoyStealthRemainingFrac) compact.sf = state.decoyStealthRemainingFrac;
+  if (state.flameRingRadius) compact.fr = state.flameRingRadius;
 
   return compact;
 }
@@ -110,6 +112,7 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
     isDecoyStealthed: (flags & FLAG_DECOY_STEALTHED) !== 0,
     decoyStealthRemainingFrac: compact.sf ?? 0,
     dashPhase: compact.p as 0 | 1 | 2,
+    flameRingRadius: compact.fr,
     aim,
   };
 }

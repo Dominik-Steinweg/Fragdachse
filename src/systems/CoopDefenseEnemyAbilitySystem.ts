@@ -8,10 +8,12 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
+import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import {
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
   type HealingAuraWeaponFireConfig,
+  type StinkCloudUtilityConfig,
   type TeslaDomeWeaponFireConfig,
   type TranslocatorUtilityConfig,
   type WeaponConfig,
@@ -31,6 +33,7 @@ export class CoopDefenseEnemyAbilitySystem {
   private readonly lastHealingTickAt = new Map<string, number>();
   private readonly lastMiniDomeTickAt = new Map<string, number>();
   private readonly teleportStates = new Map<string, EnemyTeleportState>();
+  private readonly activeStinkAuraEnemyIds = new Set<string>();
 
   constructor(
     private readonly enemyManager: EnemyManager,
@@ -38,6 +41,7 @@ export class CoopDefenseEnemyAbilitySystem {
     private readonly projectileManager: ProjectileManager,
     private readonly combatSystem: CombatSystem,
     private readonly energyShieldSystem: EnergyShieldSystem | null,
+    private readonly stinkCloudSystem: StinkCloudSystem,
   ) {}
 
   hostUpdate(now: number): void {
@@ -57,6 +61,11 @@ export class CoopDefenseEnemyAbilitySystem {
         this.updateMiniDome(enemy, miniDome, miniDome.fire, now);
       }
 
+      const stinkAura = getCoopDefenseEnemyConfig(enemy.kind).stinkAura;
+      if (stinkAura && !this.activeStinkAuraEnemyIds.has(enemy.id)) {
+        this.activateStinkAura(enemy, stinkAura.utilityId);
+      }
+
       const translocator = getCoopDefenseEnemyConfig(enemy.kind).translocator;
       if (translocator) this.updateTranslocator(enemy, translocator, now);
     }
@@ -71,6 +80,26 @@ export class CoopDefenseEnemyAbilitySystem {
     this.lastHealingTickAt.clear();
     this.lastMiniDomeTickAt.clear();
     this.teleportStates.clear();
+    this.activeStinkAuraEnemyIds.clear();
+  }
+
+  private activateStinkAura(enemy: EnemyEntity, utilityId: string): void {
+    const utility = UTILITY_CONFIGS[utilityId as keyof typeof UTILITY_CONFIGS] as StinkCloudUtilityConfig | undefined;
+    if (!utility || utility.type !== 'stinkcloud') return;
+
+    this.stinkCloudSystem.hostActivate(
+      enemy.id,
+      utility.cloudRadius,
+      utility.continuous ? Number.POSITIVE_INFINITY : utility.cloudDuration,
+      utility.cloudDamagePerTick,
+      utility.cloudTickInterval,
+      utility.rockDamageMult ?? 0,
+      utility.trainDamageMult ?? 0,
+      utility.afterCloudDurationMs ?? 0,
+      utility.afterCloudRadiusFactor ?? 0,
+      utility.afterCloudDamageFactor ?? 0,
+    );
+    this.activeStinkAuraEnemyIds.add(enemy.id);
   }
 
   private updateHealingAura(enemy: EnemyEntity, fire: HealingAuraWeaponFireConfig, now: number): void {
@@ -80,6 +109,7 @@ export class CoopDefenseEnemyAbilitySystem {
     const radiusSq = fire.radius * fire.radius;
 
     for (const target of this.enemyManager.getAllEnemies()) {
+      if (target.faction !== enemy.faction) continue;
       if (target === enemy || !target.sprite.active || target.getHp() <= 0 || target.getHp() >= target.getMaxHp()) continue;
       const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
       if (distanceSq > radiusSq) continue;
@@ -96,6 +126,20 @@ export class CoopDefenseEnemyAbilitySystem {
     const tickCount = this.consumeTicks(this.lastMiniDomeTickAt, enemy.id, now, fire.tickInterval);
     if (tickCount <= 0) return;
     const damage = fire.damagePerTick * tickCount;
+
+    if (enemy.faction === 'allied') {
+      for (const target of this.enemyManager.getHostileEnemies()) {
+        if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
+        if (!this.combatSystem.canDamageTarget(enemy.id, target.id)) continue;
+        if (Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y) > fire.radius) continue;
+        if (fire.requireLineOfSight && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y)) continue;
+        this.combatSystem.applyDamage(target.id, damage, false, enemy.id, weapon.displayName, {
+          sourceX: enemy.sprite.x,
+          sourceY: enemy.sprite.y,
+        });
+      }
+      return;
+    }
 
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
@@ -175,6 +219,17 @@ export class CoopDefenseEnemyAbilitySystem {
   ): { x: number; y: number; distance: number } | null {
     let best: { x: number; y: number; distance: number } | null = null;
 
+    if (enemy.faction === 'allied') {
+      for (const target of this.enemyManager.getHostileEnemies()) {
+        if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
+        const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
+        if (distance < ability.minRange || distance > ability.maxRange || (best && distance >= best.distance)) continue;
+        if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y)) continue;
+        best = { x: target.sprite.x, y: target.sprite.y, distance };
+      }
+      return best;
+    }
+
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.sprite.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
@@ -203,6 +258,18 @@ export class CoopDefenseEnemyAbilitySystem {
     bridge.broadcastTranslocatorFlash(targetX, targetY, color, 'end');
 
     const telefragRadius = enemy.getCollisionRadius() + PLAYER_SIZE * 0.5;
+    if (enemy.faction === 'allied') {
+      for (const target of this.enemyManager.getHostileEnemies()) {
+        if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
+        if (Phaser.Math.Distance.Between(targetX, targetY, target.sprite.x, target.sprite.y) > telefragRadius + target.getCollisionRadius()) continue;
+        this.combatSystem.applyDamage(target.id, 9999, true, enemy.id, 'Telefrag', {
+          sourceX: targetX,
+          sourceY: targetY,
+        });
+      }
+      this.resetTeleportState(state, now + ability.cooldownMs);
+      return;
+    }
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.sprite.active || !this.combatSystem.isAlive(player.id)) continue;
       if (Phaser.Math.Distance.Between(targetX, targetY, player.sprite.x, player.sprite.y) > telefragRadius) continue;
@@ -252,6 +319,9 @@ export class CoopDefenseEnemyAbilitySystem {
       if (activeEnemyIds.has(enemyId)) continue;
       if (state.puckId !== undefined) this.projectileManager.destroyProjectile(state.puckId);
       this.teleportStates.delete(enemyId);
+    }
+    for (const enemyId of this.activeStinkAuraEnemyIds) {
+      if (!activeEnemyIds.has(enemyId)) this.activeStinkAuraEnemyIds.delete(enemyId);
     }
   }
 }

@@ -287,14 +287,14 @@ export class StinkCloudSystem {
    */
   hostUpdate(
     now: number,
-    playerLookup: (id: string) => StinkCloudPlayerInfo | null,
+    ownerLookup: (id: string) => StinkCloudPlayerInfo | null,
   ): { synced: SyncedStinkCloud[]; damageEvents: StinkCloudDamageEvent[] } {
     const synced:       SyncedStinkCloud[]       = [];
     const damageEvents: StinkCloudDamageEvent[]  = [];
 
     for (let i = this.activeZones.length - 1; i >= 0; i--) {
       const zone = this.activeZones[i];
-      const info = playerLookup(zone.ownerId);
+      const info = ownerLookup(zone.ownerId);
 
       if (zone.followOwner) {
         // Deaktivierung: Spieler tot, eingebuddelt, oder nicht mehr vorhanden

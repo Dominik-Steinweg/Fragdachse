@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
+import type { MiniRocketFlightPhase } from '../types';
 
 const TEX_ROCKET_BODY = '__rocket_body';
 const TEX_ROCKET_ACCENT = '__rocket_accent';
@@ -14,6 +15,7 @@ interface RocketVisual {
   glow: Phaser.GameObjects.Image;
   engine: Phaser.GameObjects.Image;
   exhaustEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  bodyColor: number;
   accentColor: number;
   smokeColor: number;
   visualScale: number;
@@ -187,6 +189,7 @@ export class RocketRenderer {
       glow,
       engine,
       exhaustEmitter,
+      bodyColor: color,
       accentColor,
       smokeColor,
       visualScale,
@@ -223,7 +226,16 @@ export class RocketRenderer {
     });
   }
 
-  updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number): void {
+  updateVisual(
+    id: number,
+    x: number,
+    y: number,
+    size: number,
+    vx: number,
+    vy: number,
+    miniRocketPhase?: MiniRocketFlightPhase,
+    miniRocketCascadeStage = 0,
+  ): void {
     const visual = this.rockets.get(id);
     if (!visual) return;
 
@@ -238,29 +250,48 @@ export class RocketRenderer {
     const engineScaleY = Math.max(size / 13, 0.6) * visual.visualScale;
     const tailX = x - nx * (visualSize * 0.9);
     const tailY = y - ny * (visualSize * 0.9);
+    const pulse = 0.5 + Math.sin(this.scene.time.now * 0.012) * 0.5;
+    const phaseColor = miniRocketPhase === 'return'
+      ? 0x68ffe1
+      : miniRocketPhase === 'coast'
+        ? 0xffd36b
+        : visual.accentColor;
 
     visual.body.setPosition(x, y);
     visual.body.setRotation(angle);
     visual.body.setScale(bodyScale, bodyScale);
+    visual.body.setTint(visual.bodyColor);
 
     visual.accent.setPosition(x, y);
     visual.accent.setRotation(angle);
     visual.accent.setScale(bodyScale, bodyScale);
+    visual.accent.setTint(phaseColor);
+    visual.accent.setAlpha(miniRocketPhase === 'return' ? 0.8 + pulse * 0.2 : 0.95);
 
     visual.glow.setPosition(x, y);
     visual.glow.setRotation(angle);
-    visual.glow.setScale(glowScale);
+    visual.glow.setScale(glowScale * (1 + Math.max(0, miniRocketCascadeStage) * 0.12));
+    visual.glow.setTint(phaseColor);
+    visual.glow.setAlpha(miniRocketPhase === 'return'
+      ? 0.58 + pulse * 0.2
+      : miniRocketPhase === 'coast'
+        ? 0.5 + pulse * 0.14
+      : Math.min(0.68, 0.42 + Math.max(0, miniRocketCascadeStage) * 0.1));
 
     const engineOffset = visualSize * 0.9;
     visual.engine.setPosition(x - nx * engineOffset, y - ny * engineOffset);
     visual.engine.setRotation(angle + Math.PI);
     visual.engine.setScale(engineScaleX, engineScaleY);
-    visual.engine.setAlpha(0.72 + Math.min(speed / 1200, 0.22));
+    visual.engine.setTint(phaseColor);
+    visual.engine.setAlpha(0.72 + Math.min(speed / 1200, 0.22) + (miniRocketPhase === 'coast' ? pulse * 0.06 : 0));
 
     const distSinceSmoke = Phaser.Math.Distance.Between(visual.lastSmokeX, visual.lastSmokeY, tailX, tailY);
     const now = this.scene.time.now;
     if (distSinceSmoke >= Math.max(visualSize * 0.55, 5) || now - visual.lastSmokeAt >= 22) {
-      this.spawnSmokePuff(tailX, tailY, visualSize, visual.smokeColor);
+      const resolvedSmokeColor = miniRocketPhase === 'return'
+        ? visual.accentColor
+        : visual.smokeColor;
+      this.spawnSmokePuff(tailX, tailY, visualSize, resolvedSmokeColor);
       visual.lastSmokeX = tailX;
       visual.lastSmokeY = tailY;
       visual.lastSmokeAt = now;
@@ -268,6 +299,63 @@ export class RocketRenderer {
 
     visual.exhaustEmitter.setPosition(tailX, tailY);
     visual.exhaustEmitter.setParticleScale(Math.max(size / 34, 0.18), 0.05);
+  }
+
+  playCollection(x: number, y: number, color: number): void {
+    const ring = this.scene.add.circle(x, y, 8, color, 0.08)
+      .setDepth(DEPTH.PROJECTILES + 1)
+      .setStrokeStyle(2, color, 0.95)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: ring,
+      radius: 38,
+      alpha: 0,
+      duration: 420,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+
+    const burst = this.scene.add.particles(x, y, TEX_ROCKET_EXHAUST, {
+      lifespan: { min: 260, max: 480 },
+      speed: { min: 35, max: 105 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.42, end: 0.02 },
+      alpha: { start: 0.95, end: 0 },
+      tint: [0xffffff, color, 0x68ffe1],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }).setDepth(DEPTH.PROJECTILES + 1);
+    burst.explode(18, x, y);
+    this.scene.time.delayedCall(520, () => burst.destroy());
+  }
+
+  playSpentDestruction(x: number, y: number, color: number): void {
+    const flash = this.scene.add.circle(x, y, 3, color, 0.7)
+      .setDepth(DEPTH.PROJECTILES + 1)
+      .setStrokeStyle(1.5, 0xffffff, 0.85)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: flash,
+      radius: 14,
+      alpha: 0,
+      duration: 180,
+      ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    const sparks = this.scene.add.particles(x, y, TEX_ROCKET_EXHAUST, {
+      lifespan: { min: 140, max: 280 },
+      speed: { min: 18, max: 60 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.22, end: 0.02 },
+      alpha: { start: 0.8, end: 0 },
+      tint: [0xffffff, color, 0x8b949b],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    }).setDepth(DEPTH.PROJECTILES + 1);
+    sparks.explode(8, x, y);
+    this.spawnSmokePuff(x, y, 6, color);
+    this.scene.time.delayedCall(320, () => sparks.destroy());
   }
 
   destroyVisual(id: number): void {

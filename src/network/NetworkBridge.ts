@@ -10,11 +10,13 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   MAX_PLAYERS,
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
+  NET_TICK_RATE_HZ,
+  COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   TEAM_BLUE_COLOR,
   TEAM_RED_COLOR,
 } from '../config';
@@ -111,6 +113,9 @@ const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
   tb: 'timeBubbles',
   td: 'teslaDomes',
   es: 'energyShields',
+  g: 'guardianSpirits',
+  sl: 'slimeTrail',
+  fg: 'burningGround',
   u: 'powerups',
   pd: 'pedestals',
   n: 'nukes',
@@ -176,12 +181,15 @@ export interface GameState {
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   tunnels:      SyncedTunnel[];
   train:        SyncedTrainState | null;  // aktueller Zug-Zustand (null = kein Zug aktiv)
-  bases:        SyncedBaseState[];        // Coop-Defense-Basen (Delta: nur beschädigte; leer = alle voll)
+  bases:        SyncedBaseState[];        // Coop-Basen: beschädigte Basen plus Zielwinkel aktiver Basistürme
   captureTheBeer: SyncedCaptureTheBeerState | null;
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
   timeBubbles:  SyncedTimeBubble[];
   teslaDomes:   SyncedTeslaDome[];
   energyShields: SyncedEnergyShield[];
+  guardianSpirits: SyncedGuardianSpirit[];
+  slimeTrail: SyncedSlimeTrailSnapshot;
+  burningGround: SyncedBurningGroundSnapshot;
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
 
@@ -208,6 +216,45 @@ interface OutboundGameState {
   timeBubbles:  SyncedTimeBubble[];
   teslaDomes:   SyncedTeslaDome[];
   energyShields: SyncedEnergyShield[];
+  guardianSpirits: SyncedGuardianSpirit[];
+  slimeTrail: SyncedSlimeTrailSnapshot;
+  burningGround: SyncedBurningGroundSnapshot;
+}
+
+type EncodedSlimeTrailSnapshot = [
+  Array<[number, number, number, number, number]>,
+  Array<[string, number, number, number]>,
+];
+
+function encodeSlimeTrailSnapshot(snapshot: SyncedSlimeTrailSnapshot): EncodedSlimeTrailSnapshot {
+  return [
+    snapshot.cells.map(cell => [cell.id, cell.x, cell.y, cell.size, cell.alpha]),
+    snapshot.affectedEnemies.map(enemy => [enemy.enemyId, enemy.x, enemy.y, enemy.alpha]),
+  ];
+}
+
+function decodeSlimeTrailSnapshot(raw: unknown): SyncedSlimeTrailSnapshot {
+  if (!Array.isArray(raw)) return { cells: [], affectedEnemies: [] };
+  const encoded = raw as EncodedSlimeTrailSnapshot;
+  return {
+    cells: (encoded[0] ?? []).map(([id, x, y, size, alpha]) => ({ id, x, y, size, alpha })),
+    affectedEnemies: (encoded[1] ?? []).map(([enemyId, x, y, alpha]) => ({ enemyId, x, y, alpha })),
+  };
+}
+
+type EncodedBurningGroundCell = [number, number, number, number];
+interface EncodedBurningGroundDelta {
+  f?: EncodedBurningGroundCell[];
+  u?: EncodedBurningGroundCell[];
+  r?: number[];
+}
+
+function encodeBurningGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {
+  return [cell.id, cell.gridX, cell.gridY, cell.expiresAt];
+}
+
+function decodeBurningGroundCell([id, gridX, gridY, expiresAt]: EncodedBurningGroundCell) {
+  return { id, gridX, gridY, expiresAt };
 }
 
 type LoadoutUseHandler = (
@@ -224,7 +271,10 @@ type LoadoutUseHandler = (
 ) => LoadoutUseResult;
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
+type SlimeBloomEffectHandler = (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
 type BlackHoleEffectHandler = (x: number, y: number, radius: number, durationMs: number) => void;
+type MiniRocketCollectionEffectHandler = (x: number, y: number, color: number) => void;
+type MiniRocketDestructionEffectHandler = (x: number, y: number, color: number) => void;
 type GrenadeCountdownHandler = (x: number, y: number, value: number) => void;
 type EffectHandler = (effect: SyncedCombatEffect) => void;
 type HitscanTracerHandler = (
@@ -284,7 +334,10 @@ export class NetworkBridge {
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
+  private slimeBloomEffectHandler: SlimeBloomEffectHandler | null = null;
   private blackHoleEffectHandler: BlackHoleEffectHandler | null = null;
+  private miniRocketCollectionEffectHandler: MiniRocketCollectionEffectHandler | null = null;
+  private miniRocketDestructionEffectHandler: MiniRocketDestructionEffectHandler | null = null;
   private grenadeCountdownHandler: GrenadeCountdownHandler | null = null;
   private effectHandler: EffectHandler | null = null;
   // Pro Frame gesammelte Treffer-/Todes-Effekte und XP-Popups (Host), gebündelt via flushEffects().
@@ -308,7 +361,7 @@ export class NetworkBridge {
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
-  private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void) | null = null;
+  private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void) | null = null;
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
   private outboundRpcBlockedUntilMs = 0;
   private lastOutboundRpcWarningAtMs = 0;
@@ -618,6 +671,14 @@ export class NetworkBridge {
   areTeammates(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return true;
     if (!isTeamGameMode(this.getGameMode())) return false;
+    if (isCoopDefenseMode(this.getGameMode())) {
+      if (firstPlayerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID) {
+        return this.connectedPlayers.has(secondPlayerId);
+      }
+      if (secondPlayerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID) {
+        return this.connectedPlayers.has(firstPlayerId);
+      }
+    }
     const firstTeam = this.getPlayerTeam(firstPlayerId);
     const secondTeam = this.getPlayerTeam(secondPlayerId);
     return firstTeam !== null && firstTeam === secondTeam;
@@ -865,6 +926,8 @@ export class NetworkBridge {
   private cachedGameState: GameState | undefined;
   // Host-seitige Sequenznummer: wird bei jedem publishGameState() inkrementiert
   private publishSeq = 0;
+  private burningGroundPublishTicks = 0;
+  private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
   // Client-seitig: zuletzt gesehene Sequenznummer für Change-Detection
   private lastSeenSeq = -1;
   // Monoton steigender Zähler: wird nur bei tatsächlich neuem Server-State inkrementiert
@@ -881,6 +944,8 @@ export class NetworkBridge {
   resetGameStateCache(): void {
     this.cachedGameState = undefined;
     this.lastSeenSeq = -1;
+    this.burningGroundPublishTicks = 0;
+    this.lastPublishedBurningGround.clear();
   }
 
   /**
@@ -902,6 +967,12 @@ export class NetworkBridge {
     if (state.timeBubbles.length > 0)  payload.tb = state.timeBubbles;
     if (state.teslaDomes.length > 0)   payload.td = state.teslaDomes;
     if (state.energyShields.length > 0) payload.es = state.energyShields;
+    if (state.guardianSpirits.length > 0) payload.g = state.guardianSpirits;
+    if (state.slimeTrail.cells.length > 0 || state.slimeTrail.affectedEnemies.length > 0) {
+      payload.sl = encodeSlimeTrailSnapshot(state.slimeTrail);
+    }
+    const burningGroundDelta = this.buildBurningGroundDelta(state.burningGround);
+    if (burningGroundDelta) payload.fg = burningGroundDelta;
     if (state.powerups)                payload.u = state.powerups;
     if (state.pedestals)               payload.pd = state.pedestals;
     if (state.nukes.length > 0)        payload.n  = state.nukes;
@@ -1046,6 +1117,10 @@ export class NetworkBridge {
       raw.pd as SyncedPowerUpPedestalSnapshot | undefined,
       this.cachedGameState?.pedestals ?? [],
     );
+    const nextBurningGround = this.mergeBurningGroundDelta(
+      raw.fg as EncodedBurningGroundDelta | undefined,
+      this.cachedGameState?.burningGround ?? { cells: [] },
+    );
 
     const state: GameState = {
       roundStartTime,
@@ -1061,6 +1136,9 @@ export class NetworkBridge {
       timeBubbles:   (raw.tb as SyncedTimeBubble[]   | undefined) ?? [],
       teslaDomes:    (raw.td as SyncedTeslaDome[]    | undefined) ?? [],
       energyShields: (raw.es as SyncedEnergyShield[] | undefined) ?? [],
+      guardianSpirits: (raw.g as SyncedGuardianSpirit[] | undefined) ?? [],
+      slimeTrail: decodeSlimeTrailSnapshot(raw.sl),
+      burningGround: nextBurningGround,
       powerups:      nextPowerUps,
       pedestals:     nextPedestals,
       nukes:         (raw.n  as SyncedNukeStrike[]       | undefined) ?? [],
@@ -1282,6 +1360,74 @@ export class NetworkBridge {
       if (!explosionEffectHandler) return undefined;
       const { x, y, r, c, s } = data as { x: number; y: number; r: number; c?: number; s?: ExplosionVisualStyle };
       explosionEffectHandler(x, y, r, c, s);
+      return undefined;
+    });
+  }
+
+  private buildBurningGroundDelta(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundDelta | null {
+    this.burningGroundPublishTicks++;
+    const current = new Map<number, EncodedBurningGroundCell>();
+    for (const cell of snapshot.cells) current.set(cell.id, encodeBurningGroundCell(cell));
+
+    const sendFull = this.burningGroundPublishTicks === 1
+      || this.burningGroundPublishTicks % NET_TICK_RATE_HZ === 0;
+    if (sendFull) {
+      this.lastPublishedBurningGround.clear();
+      for (const [id, encoded] of current) this.lastPublishedBurningGround.set(id, encoded);
+      return { f: [...current.values()] };
+    }
+
+    const upserts: EncodedBurningGroundCell[] = [];
+    const removals: number[] = [];
+    for (const [id, encoded] of current) {
+      const previous = this.lastPublishedBurningGround.get(id);
+      if (!previous || previous.some((value, index) => value !== encoded[index])) upserts.push(encoded);
+    }
+    for (const id of this.lastPublishedBurningGround.keys()) {
+      if (!current.has(id)) removals.push(id);
+    }
+    this.lastPublishedBurningGround.clear();
+    for (const [id, encoded] of current) this.lastPublishedBurningGround.set(id, encoded);
+    if (upserts.length === 0 && removals.length === 0) return null;
+    return {
+      ...(upserts.length > 0 ? { u: upserts } : {}),
+      ...(removals.length > 0 ? { r: removals } : {}),
+    };
+  }
+
+  private mergeBurningGroundDelta(
+    delta: EncodedBurningGroundDelta | undefined,
+    previous: SyncedBurningGroundSnapshot,
+  ): SyncedBurningGroundSnapshot {
+    const now = Date.now();
+    if (delta?.f) {
+      return { cells: delta.f.map(decodeBurningGroundCell).filter(cell => cell.expiresAt > now) };
+    }
+    const cells = new Map(previous.cells.filter(cell => cell.expiresAt > now).map(cell => [cell.id, cell]));
+    for (const id of delta?.r ?? []) cells.delete(id);
+    for (const encoded of delta?.u ?? []) {
+      const cell = decodeBurningGroundCell(encoded);
+      if (cell.expiresAt > now) cells.set(cell.id, cell);
+    }
+    return { cells: [...cells.values()].sort((left, right) => left.id - right.id) };
+  }
+
+  /** Repliziert die Zielzellen der Schleimbluete fuer identische Einschlagsorte auf allen Clients. */
+  broadcastSlimeBloomEffect(x: number, y: number, targets: readonly SlimeBloomTarget[]): void {
+    this.broadcastRpc('sbfx', { x, y, p: targets.flatMap(target => [target.x, target.y]) });
+  }
+
+  registerSlimeBloomEffectHandler(handler: SlimeBloomEffectHandler): void {
+    this.slimeBloomEffectHandler = handler;
+    this.registerAllRpcHandler('sbfx', async (data: unknown): Promise<unknown> => {
+      const slimeBloomEffectHandler = this.slimeBloomEffectHandler;
+      if (!slimeBloomEffectHandler) return undefined;
+      const { x, y, p } = data as { x: number; y: number; p: number[] };
+      const targets: SlimeBloomTarget[] = [];
+      for (let index = 0; index + 1 < p.length; index += 2) {
+        targets.push({ x: p[index], y: p[index + 1] });
+      }
+      slimeBloomEffectHandler(x, y, targets);
       return undefined;
     });
   }
@@ -1609,18 +1755,48 @@ export class NetworkBridge {
 
   // ── BFG-Laser-RPC: Host → Alle ──────────────────────────────────────────
 
-  broadcastBfgLaserBatch(lines: { sx: number; sy: number; ex: number; ey: number }[], color: number): void {
+  broadcastBfgLaserBatch(lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset): void {
     if (lines.length === 0) return;
-    this.broadcastRpc('bfl', { l: lines, c: color });
+    this.broadcastRpc('bfl', { l: lines, c: color, v: visualPreset });
   }
 
-  registerBfgLaserBatchHandler(handler: (lines: { sx: number; sy: number; ex: number; ey: number }[], color: number) => void): void {
+  broadcastMiniRocketCollectionEffect(x: number, y: number, color: number): void {
+    this.broadcastRpc('mrcfx', { x, y, c: color });
+  }
+
+  registerMiniRocketCollectionEffectHandler(handler: MiniRocketCollectionEffectHandler): void {
+    this.miniRocketCollectionEffectHandler = handler;
+    this.registerAllRpcHandler('mrcfx', async (data: unknown): Promise<unknown> => {
+      const collectionHandler = this.miniRocketCollectionEffectHandler;
+      if (!collectionHandler) return undefined;
+      const { x, y, c } = data as { x: number; y: number; c: number };
+      collectionHandler(x, y, c);
+      return undefined;
+    });
+  }
+
+  broadcastMiniRocketDestructionEffect(x: number, y: number, color: number): void {
+    this.broadcastRpc('mrdfx', { x, y, c: color });
+  }
+
+  registerMiniRocketDestructionEffectHandler(handler: MiniRocketDestructionEffectHandler): void {
+    this.miniRocketDestructionEffectHandler = handler;
+    this.registerAllRpcHandler('mrdfx', async (data: unknown): Promise<unknown> => {
+      const destructionHandler = this.miniRocketDestructionEffectHandler;
+      if (!destructionHandler) return undefined;
+      const { x, y, c } = data as { x: number; y: number; c: number };
+      destructionHandler(x, y, c);
+      return undefined;
+    });
+  }
+
+  registerBfgLaserBatchHandler(handler: (lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void): void {
     this.bfgLaserHandler = handler;
     this.registerAllRpcHandler('bfl', async (data: unknown): Promise<unknown> => {
       const cb = this.bfgLaserHandler;
       if (!cb) return undefined;
-      const { l, c } = data as { l: { sx: number; sy: number; ex: number; ey: number }[]; c: number };
-      cb(l, c);
+      const { l, c, v } = data as { l: { sx: number; sy: number; ex: number; ey: number }[]; c: number; v?: HitscanVisualPreset };
+      cb(l, c, v);
       return undefined;
     });
   }

@@ -1,13 +1,21 @@
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlaceableTurretUtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
-import type { SyncedPlaceableRock } from '../types';
 import type { CombatSystem } from './CombatSystem';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
 
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
-type TurretProvider = () => readonly SyncedPlaceableRock[];
-type TurretAngleUpdater = (id: number, angle: number) => void;
+export type AutomatedTurretId = number | string;
+export interface AutomatedTurret {
+  readonly id: AutomatedTurretId;
+  readonly x: number;
+  readonly y: number;
+  readonly ownerId: string;
+  readonly ownerColor: number;
+  readonly skipRockIndex?: number;
+  readonly secondProjectileDamageFactor?: number;
+}
+type TurretProvider = () => readonly AutomatedTurret[];
+type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
 type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
 type TurretFireHandler = (
   ownerId: string,
@@ -26,7 +34,7 @@ export class TurretSystem {
   private turretAngleUpdater: TurretAngleUpdater | null = null;
   private enemyTargetProvider: EnemyTargetProvider | null = null;
   private fireHandler: TurretFireHandler | null = null;
-  private nextFireAt = new Map<number, number>();
+  private nextFireAt = new Map<AutomatedTurretId, number>();
 
   constructor(
     private readonly playerManager: PlayerManager,
@@ -56,15 +64,20 @@ export class TurretSystem {
     _weaponConfig: WeaponConfig,
   ): void {
     const turrets = this.turretProvider?.() ?? [];
-    const activeIds = new Set<number>();
+    const activeIds = new Set<AutomatedTurretId>();
 
     for (const turret of turrets) {
-      if (turret.kind !== 'turret') continue;
       activeIds.add(turret.id);
 
-      const turretX = ARENA_OFFSET_X + turret.gridX * CELL_SIZE + CELL_SIZE * 0.5;
-      const turretY = ARENA_OFFSET_Y + turret.gridY * CELL_SIZE + CELL_SIZE * 0.5;
-      const target = this.findNearestTarget(turret, turretX, turretY, config.placeable.targetRange);
+      const turretX = turret.x;
+      const turretY = turret.y;
+      const target = this.findNearestTarget(
+        turret,
+        turretX,
+        turretY,
+        config.placeable.targetRange,
+        config.placeable.muzzleOffset,
+      );
       if (!target) continue;
 
       const angle = Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y);
@@ -78,7 +91,14 @@ export class TurretSystem {
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
       this.fireHandler?.(turret.ownerId, turret.ownerColor, muzzleX, muzzleY, angle, target.x, target.y);
       if ((turret.secondProjectileDamageFactor ?? 0) > 0) {
-        const secondTarget = this.findNearestTarget(turret, turretX, turretY, config.placeable.targetRange, target);
+        const secondTarget = this.findNearestTarget(
+          turret,
+          turretX,
+          turretY,
+          config.placeable.targetRange,
+          config.placeable.muzzleOffset,
+          target,
+        );
         if (secondTarget) {
           const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
           this.fireHandler?.(turret.ownerId, turret.ownerColor, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, turret.secondProjectileDamageFactor);
@@ -92,10 +112,11 @@ export class TurretSystem {
   }
 
   private findNearestTarget(
-    turret: SyncedPlaceableRock,
+    turret: AutomatedTurret,
     turretX: number,
     turretY: number,
     range: number,
+    lineOfSightStartOffset: number,
     excluded?: { x: number; y: number },
   ): { x: number; y: number } | null {
     let bestTarget: { x: number; y: number } | null = null;
@@ -111,7 +132,7 @@ export class TurretSystem {
 
       const distance = Phaser.Math.Distance.Between(turretX, turretY, player.sprite.x, player.sprite.y);
       if (distance > range || distance >= bestDistance) continue;
-      if (this.lineOfSightChecker && !this.lineOfSightChecker(turretX, turretY, player.sprite.x, player.sprite.y, turret.id)) continue;
+      if (!this.hasLineOfSightFromMuzzle(turret, turretX, turretY, player.sprite.x, player.sprite.y, lineOfSightStartOffset)) continue;
 
       bestDistance = distance;
       bestTarget = { x: player.sprite.x, y: player.sprite.y };
@@ -124,12 +145,27 @@ export class TurretSystem {
 
       const distance = Phaser.Math.Distance.Between(turretX, turretY, enemy.x, enemy.y);
       if (distance > range || distance >= bestDistance) continue;
-      if (this.lineOfSightChecker && !this.lineOfSightChecker(turretX, turretY, enemy.x, enemy.y, turret.id)) continue;
+      if (!this.hasLineOfSightFromMuzzle(turret, turretX, turretY, enemy.x, enemy.y, lineOfSightStartOffset)) continue;
 
       bestDistance = distance;
       bestTarget = { x: enemy.x, y: enemy.y };
     }
 
     return bestTarget;
+  }
+
+  private hasLineOfSightFromMuzzle(
+    turret: AutomatedTurret,
+    turretX: number,
+    turretY: number,
+    targetX: number,
+    targetY: number,
+    muzzleOffset: number,
+  ): boolean {
+    if (!this.lineOfSightChecker) return true;
+    const angle = Phaser.Math.Angle.Between(turretX, turretY, targetX, targetY);
+    const startX = turretX + Math.cos(angle) * muzzleOffset;
+    const startY = turretY + Math.sin(angle) * muzzleOffset;
+    return this.lineOfSightChecker(startX, startY, targetX, targetY, turret.skipRockIndex);
   }
 }

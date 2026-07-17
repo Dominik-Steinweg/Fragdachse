@@ -1,8 +1,9 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
-import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, usesCenteredTrackSpawn } from './BaseRegistry';
+import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
 import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
+import type { CoopDefenseMapConfig, CoopDefenseMapPowerUpConfig, CoopDefensePowerUpRegion } from '../config/coopDefenseMaps';
 
 /**
  * Prozeduraler Arena-Generator – keine Phaser-Abhängigkeit.
@@ -15,7 +16,7 @@ export class ArenaGenerator {
    * Generiert ein ArenaLayout für den gegebenen Seed.
    * Versucht bis zu 100 Mal einen konnektiven Layout zu erzeugen.
    */
-  static generate(seed: number): ArenaLayout {
+  static generate(seed: number, coopMapConfig?: CoopDefenseMapConfig): ArenaLayout {
     for (let attempt = 0; attempt < 100; attempt++) {
       const rng = ArenaGenerator.makePrng(seed + attempt);
       const blocked: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
@@ -171,7 +172,13 @@ export class ArenaGenerator {
         dirt.push({ gridX: key % GRID_COLS, gridY: Math.floor(key / GRID_COLS) });
       }
 
-      const powerUpPedestals = ArenaGenerator.generatePowerUpPedestals(rng, blocked, trackCols);
+      const powerUpPedestals = coopMapConfig === undefined
+        ? ArenaGenerator.generateRandomPowerUpPedestals(rng, blocked, trackCols)
+        : ArenaGenerator.generateCoopPowerUpPedestals(rng, blocked, trackCols, coopMapConfig);
+      // Eine Coop-Map soll exakt die konfigurierten Podeste erhalten. Falls der aktuelle
+      // prozedurale Versuch in einem Bereich keinen freien Platz lässt, wird die Arena
+      // mit dem nächsten Seed-Versuch neu erzeugt.
+      if (powerUpPedestals === null) continue;
       const decals = ArenaGenerator.generateDecals(
         ArenaGenerator.makeDecalPrng(seed + attempt),
         rocks,
@@ -253,7 +260,7 @@ export class ArenaGenerator {
     return { trackCols, tracks };
   }
 
-  private static generatePowerUpPedestals(
+  private static generateRandomPowerUpPedestals(
     rng: () => number,
     blocked: boolean[][],
     trackCols: Set<number>,
@@ -282,6 +289,131 @@ export class ArenaGenerator {
     }
 
     return pedestals;
+  }
+
+  private static generateConfiguredPowerUpPedestals(
+    rng: () => number,
+    blocked: boolean[][],
+    trackCols: Set<number>,
+    configs: readonly CoopDefenseMapPowerUpConfig[],
+  ): ArenaLayout['powerUpPedestals'] | null {
+    const margin = POWERUP_PEDESTAL_CONFIG.edgePaddingCells;
+    const candidatesByRegion = new Map<CoopDefensePowerUpRegion, Array<{ gx: number; gy: number }>>([
+      ['front', []],
+      ['middle', []],
+      ['rear', []],
+    ]);
+
+    for (let gy = margin; gy < GRID_ROWS - margin; gy++) {
+      for (let gx = margin; gx < GRID_COLS - margin; gx++) {
+        if (blocked[gy][gx]) continue;
+        if (trackCols.has(gx)) continue;
+        if (isReservedBaseObstacleCell(gx, gy)) continue;
+        candidatesByRegion.get(ArenaGenerator.getPowerUpRegion(gx))!.push({ gx, gy });
+      }
+    }
+
+    const selected: Array<{ gx: number; gy: number }> = [];
+    const pedestals: ArenaLayout['powerUpPedestals'] = [];
+    for (let index = 0; index < configs.length; index++) {
+      const config = configs[index];
+      const candidates = candidatesByRegion.get(config.region) ?? [];
+      const available = candidates.filter(
+        (candidate) => !selected.some((cell) => cell.gx === candidate.gx && cell.gy === candidate.gy),
+      );
+      const cell = ArenaGenerator.pickConfiguredPedestalCell(rng, available, selected);
+      if (!cell) return null;
+
+      selected.push(cell);
+      pedestals.push({
+        id: index + 1,
+        defId: config.defId,
+        gridX: cell.gx,
+        gridY: cell.gy,
+        respawnMs: config.respawnMs,
+        spawnOnArenaStart: config.spawnOnArenaStart ?? false,
+      });
+    }
+
+    return pedestals;
+  }
+
+  private static generateCoopPowerUpPedestals(
+    rng: () => number,
+    blocked: boolean[][],
+    trackCols: Set<number>,
+    mapConfig: CoopDefenseMapConfig,
+  ): ArenaLayout['powerUpPedestals'] | null {
+    const pedestals = ArenaGenerator.generateConfiguredPowerUpPedestals(
+      rng,
+      blocked,
+      trackCols,
+      mapConfig.powerUps,
+    );
+    if (pedestals === null) return null;
+
+    const occupied = new Set(pedestals.map((pedestal) => ArenaGenerator.cellKey(pedestal.gridX, pedestal.gridY)));
+    for (const base of resolveCoopDefenseBases(mapConfig)) {
+      for (const config of base.powerUpPedestals) {
+        const key = ArenaGenerator.cellKey(config.gridX, config.gridY);
+        if (trackCols.has(config.gridX)) {
+          throw new Error(`[ArenaGenerator] Linked pedestal ${config.id} overlaps the railway`);
+        }
+        if (occupied.has(key)) {
+          throw new Error(`[ArenaGenerator] Multiple power-up pedestals occupy cell ${config.gridX},${config.gridY}`);
+        }
+        // Ein weit außerhalb der Basis konfiguriertes Podest kann auf prozeduralen Bewuchs
+        // treffen. In diesem Fall wird der nächste Arena-Versuch verwendet.
+        if (blocked[config.gridY][config.gridX]) return null;
+
+        occupied.add(key);
+        pedestals.push({
+          id: pedestals.length + 1,
+          defId: config.defId,
+          gridX: config.gridX,
+          gridY: config.gridY,
+          respawnMs: config.respawnMs,
+          spawnOnArenaStart: config.spawnOnArenaStart,
+          linkedBaseId: config.baseId,
+        });
+      }
+    }
+    return pedestals;
+  }
+
+  /** Linkes, mittleres bzw. rechtes Drittel der Coop-Arena. */
+  private static getPowerUpRegion(gx: number): CoopDefensePowerUpRegion {
+    const third = GRID_COLS / 3;
+    if (gx < third) return 'front';
+    if (gx < third * 2) return 'middle';
+    return 'rear';
+  }
+
+  private static pickConfiguredPedestalCell(
+    rng: () => number,
+    candidates: readonly { gx: number; gy: number }[],
+    selected: readonly { gx: number; gy: number }[],
+  ): { gx: number; gy: number } | null {
+    if (candidates.length === 0) return null;
+    if (selected.length === 0) return candidates[Math.floor(rng() * candidates.length)];
+
+    let best: { gx: number; gy: number } | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const candidate of candidates) {
+      let minDistanceSq = Number.POSITIVE_INFINITY;
+      for (const existing of selected) {
+        const dx = candidate.gx - existing.gx;
+        const dy = candidate.gy - existing.gy;
+        minDistanceSq = Math.min(minDistanceSq, dx * dx + dy * dy);
+      }
+      // Weit auseinander, aber mit kleinem Seed-Jitter für abwechslungsreiche Layouts.
+      const score = minDistanceSq + ArenaGenerator.distanceToArenaEdge(candidate.gx, candidate.gy) * 0.12 + rng() * 0.025;
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    return best;
   }
 
   private static generateDecals(

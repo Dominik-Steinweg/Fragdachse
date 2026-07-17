@@ -21,6 +21,21 @@ export interface ResolvedLoadoutSelection {
   ultimate: UltimateConfig;
 }
 
+/**
+ * Loadout-Konfigurationen sind reine, serialisierbare Datenobjekte. Ein ID-Vergleich
+ * reicht im Coop-Modus nicht aus, weil Upgrades dieselbe Basiswaffe um effektive
+ * Werte und Effekte erweitern. Referenzgleichheit hält den normalen Pfad günstig;
+ * nur neu aufgelöste Konfigurationen benötigen den strukturellen Vergleich.
+ */
+export function areLoadoutConfigsEquivalent<T extends { id: string }>(
+  current: T | undefined,
+  next: T,
+): boolean {
+  if (current === next) return true;
+  return current?.id === next.id
+    && JSON.stringify(current) === JSON.stringify(next);
+}
+
 export function sanitizeLoadoutSelectionForMode(
   selection: LoadoutSelection | undefined,
   mode: GameMode,

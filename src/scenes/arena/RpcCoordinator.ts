@@ -18,9 +18,11 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
   switch (visualStyle) {
     case 'holy':        return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };
     case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
+    case 'lightning':   return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * 0.82 };
     case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
     case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };
     case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };
+    case 'mini_rocket_cascade': return { key: 'sfx_explosion_mini_rocket', scale: EXPLOSION_CLOSE_BOOST };
     case 'train':       return undefined; // sound handled separately via playLocalSound('sfx_train_explode')
     default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
   }
@@ -55,7 +57,10 @@ export class RpcCoordinator {
     this.registerLoadoutUseHandler();
     this.registerCaptureTheBeerFxHandler();
     this.registerExplosionEffectHandler();
+    this.registerSlimeBloomEffectHandler();
     this.registerBlackHoleEffectHandler();
+    this.registerMiniRocketCollectionEffectHandler();
+    this.registerMiniRocketDestructionEffectHandler();
     this.registerGrenadeCountdownHandler();
     this.registerCoopDefenseXpPopupHandler();
     this.registerBfgLaserBatchHandler();
@@ -125,9 +130,27 @@ export class RpcCoordinator {
     });
   }
 
+  private registerSlimeBloomEffectHandler(): void {
+    bridge.registerSlimeBloomEffectHandler((x, y, targets) => {
+      this.renderers.slimeTrail.playBloomBurst(x, y, targets);
+    });
+  }
+
   private registerBlackHoleEffectHandler(): void {
     bridge.registerBlackHoleEffectHandler((x, y, radius, durationMs) => {
       this.renderers.blackHole.play(x, y, radius, durationMs);
+    });
+  }
+
+  private registerMiniRocketCollectionEffectHandler(): void {
+    bridge.registerMiniRocketCollectionEffectHandler((x, y, color) => {
+      this.renderers.rocket.playCollection(x, y, color);
+    });
+  }
+
+  private registerMiniRocketDestructionEffectHandler(): void {
+    bridge.registerMiniRocketDestructionEffectHandler((x, y, color) => {
+      this.renderers.rocket.playSpentDestruction(x, y, color);
     });
   }
 
@@ -144,9 +167,13 @@ export class RpcCoordinator {
   }
 
   private registerBfgLaserBatchHandler(): void {
-    bridge.registerBfgLaserBatchHandler((lines, color) => {
+    bridge.registerBfgLaserBatchHandler((lines, color, visualPreset) => {
       for (const line of lines) {
-        this.ctx.effectSystem.playHitscanTracer(line.sx, line.sy, line.ex, line.ey, color, 2);
+        if (visualPreset === 'asmd_primary') {
+          this.renderers.asmdPrimary.playTracer(line.sx, line.sy, line.ex, line.ey, color, 1.35, 'player');
+        } else {
+          this.ctx.effectSystem.playHitscanTracer(line.sx, line.sy, line.ex, line.ey, color, 2);
+        }
       }
     });
   }

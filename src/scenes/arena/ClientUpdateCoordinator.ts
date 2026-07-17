@@ -219,6 +219,10 @@ export class ClientUpdateCoordinator {
       const utilDisplayName = overrideName
         || this.clientUtilityOverride?.displayName
         || localUtilityConfig.displayName;
+      const activePowerUps = bridge.getPlayerActiveBuffs(localId2);
+      const localWeapon2Config = this.getLocalWeaponConfig('weapon2');
+      const fireSuperiorityActive = localWeapon2Config.id === 'AK47'
+        && activePowerUps.some((buff) => buff.defId === 'AK47_FIRE_SUPERIORITY');
       const hudData = buildLocalArenaHudData({
         hp:                      localState.hp,
         maxHp:                   localState.maxHp,
@@ -237,9 +241,9 @@ export class ClientUpdateCoordinator {
         utilityDisplayName:      utilDisplayName,
         adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
         isUtilityOverridden:     overrideName !== '' || this.clientUtilityOverride !== null,
-        activePowerUps:          bridge.getPlayerActiveBuffs(localId2),
+        activePowerUps,
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
-        weapon2AdrenalineCost:   this.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
+        weapon2AdrenalineCost:   fireSuperiorityActive ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
       });
       this.localPlayerState.alive    = localState.alive;
       this.localPlayerState.burrowed = localState.isBurrowed;

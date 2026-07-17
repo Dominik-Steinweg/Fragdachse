@@ -30,7 +30,12 @@ import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
 import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import type { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
+import type { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
+import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
+import type { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
+import type { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
+import type { NecromancySystem } from '../../systems/NecromancySystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import type { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
@@ -102,8 +107,13 @@ export interface ArenaContext {
   teslaDomeSystem:   TeslaDomeSystem   | null;
   turretSystem:      TurretSystem      | null;
   coopDefensePlayerModifierSystem: CoopDefensePlayerModifierSystem | null;
+  guardianSpiritSystem: GuardianSpiritSystem | null;
+  slimeTrailSystem: SlimeTrailSystem | null;
+  flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
+  necromancySystem: NecromancySystem | null;
   coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
   coopDefenseEnemyAbilitySystem: CoopDefenseEnemyAbilitySystem | null;
+  coopDefenseEnemyTrainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null;
   coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
   coopDefenseWaveSpawner: CoopDefenseWaveSpawner | null;
   translocatorSystem: TranslocatorSystem | null;
@@ -112,4 +122,5 @@ export interface ArenaContext {
   enemyFlowFieldService: EnemyFlowFieldService | null;
   enemyPlayerFlowFieldService: EnemyFlowFieldService | null;
   enemyBossFlowFieldService: EnemyFlowFieldService | null;
+  allyFlowFieldServices: Map<string, EnemyFlowFieldService>;
 }

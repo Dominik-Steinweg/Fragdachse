@@ -10,6 +10,7 @@ import {
   ENEMY_NET_ROTATION_DELTA_RAD,
 } from '../config';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
+import type { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
 import {
   decodeEnemyUpserts,
@@ -17,7 +18,7 @@ import {
   enemyIdToNum,
   enemyNumToId,
 } from '../network/enemySnapshotCodec';
-import { EnemyEntity } from './EnemyEntity';
+import { EnemyEntity, type EnemyFaction } from './EnemyEntity';
 import {
   resolveCoopDefenseEnemyConfigs,
   type CoopDefenseEnemyKind,
@@ -28,6 +29,15 @@ const STEER_RESPONSIVENESS = 8;
 const SPAWN_LANE_JITTER_PX = CELL_SIZE * 0.3;
 const SEPARATION_RADIUS_PX = CELL_SIZE * 2;
 const SEPARATION_STRENGTH = 0.6;
+
+export interface EnemyDeathInfo {
+  readonly id: string;
+  readonly kind: CoopDefenseEnemyKind;
+  readonly x: number;
+  readonly y: number;
+  readonly faction: EnemyFaction;
+  readonly ownerId?: string;
+}
 
 export class EnemyManager {
   private readonly scene: Phaser.Scene;
@@ -50,8 +60,37 @@ export class EnemyManager {
     const world = this.gridToWorld(gridX, gridY);
     const x = world.x + Phaser.Math.RND.realInRange(-SPAWN_LANE_JITTER_PX, SPAWN_LANE_JITTER_PX);
     const y = world.y + Phaser.Math.RND.realInRange(-SPAWN_LANE_JITTER_PX, SPAWN_LANE_JITTER_PX);
+    return this.hostSpawnAtWorld(x, y, kind);
+  }
+
+  hostSpawnAtWorld(x: number, y: number, kind: CoopDefenseEnemyKind): EnemyEntity {
+    return this.hostSpawnUnitAtWorld(x, y, kind, 'hostile');
+  }
+
+  hostSpawnAllyAtWorld(
+    x: number,
+    y: number,
+    kind: CoopDefenseEnemyKind,
+    ownerId: string,
+    ownerColor: number,
+    hpMultiplier: number,
+  ): EnemyEntity {
+    const enemy = this.hostSpawnUnitAtWorld(x, y, kind, 'allied', ownerId, ownerColor);
+    const maxHp = Math.max(1, Math.round(enemy.getMaxHp() * Math.max(1, hpMultiplier)));
+    enemy.setHp(maxHp, maxHp);
+    return enemy;
+  }
+
+  private hostSpawnUnitAtWorld(
+    x: number,
+    y: number,
+    kind: CoopDefenseEnemyKind,
+    faction: EnemyFaction,
+    ownerId?: string,
+    ownerColor?: number,
+  ): EnemyEntity {
     const id = this.generateEnemyId(kind);
-    const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind]);
+    const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind], faction, ownerId, ownerColor);
     this.enemies.set(id, enemy);
     return enemy;
   }
@@ -63,11 +102,13 @@ export class EnemyManager {
     movementLocked: boolean,
     now: number,
     deltaMs: number,
+    trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
 
     for (const enemy of this.enemies.values()) {
+      if (enemy.faction === 'allied') continue;
       const config = this.resolvedConfigs[enemy.kind];
       const flowFieldService = config.isBoss
         ? bossFlowFieldService ?? baseFlowFieldService
@@ -75,8 +116,19 @@ export class EnemyManager {
           ? playerFlowFieldService ?? baseFlowFieldService
           : baseFlowFieldService;
 
-      if (movementLocked || !flowFieldService || enemy.isAttackMovementPaused(now)) {
+      if (movementLocked || !flowFieldService) {
         enemy.stopMovement();
+        continue;
+      }
+
+      if (enemy.isAttackMovementPaused(now)) {
+        const current = enemy.getDesiredVelocity();
+        const trainDecision = trainAwarenessSystem?.resolveMovement(enemy, current.vx, current.vy, now);
+        if (trainDecision?.override && trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) {
+          enemy.setDesiredVelocity(trainDecision.vx, trainDecision.vy);
+        } else {
+          enemy.stopMovement();
+        }
         continue;
       }
 
@@ -96,18 +148,18 @@ export class EnemyManager {
           continue;
         }
 
-        this.steerEnemyTowards(enemy, recoveryTarget.x, recoveryTarget.y, lerpT);
+        this.steerEnemyTowards(enemy, recoveryTarget.x, recoveryTarget.y, lerpT, now, trainAwarenessSystem);
         continue;
       }
 
       if (integrationValue <= 0) {
-        enemy.stopMovement();
+        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, trainAwarenessSystem)) enemy.stopMovement();
         continue;
       }
 
       const vector = flowFieldService.getVectorAt(gridCell.gridX, gridCell.gridY);
       if (vector.x === 0 && vector.y === 0) {
-        enemy.stopMovement();
+        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, trainAwarenessSystem)) enemy.stopMovement();
         continue;
       }
 
@@ -132,21 +184,53 @@ export class EnemyManager {
       }
 
       const current = enemy.getDesiredVelocity();
-      enemy.setDesiredVelocity(
-        Phaser.Math.Linear(current.vx, targetVx, lerpT),
-        Phaser.Math.Linear(current.vy, targetVy, lerpT),
-      );
+      const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);
+      if (decision?.override) {
+        enemy.setDesiredVelocity(decision.vx, decision.vy);
+      } else {
+        enemy.setDesiredVelocity(
+          Phaser.Math.Linear(current.vx, targetVx, lerpT),
+          Phaser.Math.Linear(current.vy, targetVy, lerpT),
+        );
+      }
     }
   }
 
-  private steerEnemyTowards(enemy: EnemyEntity, targetX: number, targetY: number, lerpT: number): void {
+  private steerEnemyTowards(
+    enemy: EnemyEntity,
+    targetX: number,
+    targetY: number,
+    lerpT: number,
+    now: number,
+    trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
+  ): void {
     const direction = this.normalizeDirection(targetX - enemy.sprite.x, targetY - enemy.sprite.y);
     const speed = enemy.getMoveSpeed();
+    const targetVx = direction.x * speed;
+    const targetVy = direction.y * speed;
+    const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);
+    if (decision?.override) {
+      enemy.setDesiredVelocity(decision.vx, decision.vy);
+      return;
+    }
     const current = enemy.getDesiredVelocity();
     enemy.setDesiredVelocity(
-      Phaser.Math.Linear(current.vx, direction.x * speed, lerpT),
-      Phaser.Math.Linear(current.vy, direction.y * speed, lerpT),
+      Phaser.Math.Linear(current.vx, targetVx, lerpT),
+      Phaser.Math.Linear(current.vy, targetVy, lerpT),
     );
+  }
+
+  private applyTrainAwarenessOverride(
+    enemy: EnemyEntity,
+    intendedVx: number,
+    intendedVy: number,
+    now: number,
+    trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
+  ): boolean {
+    const decision = trainAwarenessSystem?.resolveMovement(enemy, intendedVx, intendedVy, now);
+    if (!decision?.override) return false;
+    enemy.setDesiredVelocity(decision.vx, decision.vy);
+    return true;
   }
 
   private normalizeDirection(x: number, y: number): { x: number; y: number } {
@@ -261,7 +345,7 @@ export class EnemyManager {
       }
     }
 
-    const encodedUpserts: number[] = [];
+    const encodedUpserts: Array<number | string> = [];
     for (const entry of upserts) {
       encodeEnemyUpsert(encodedUpserts, entry);
     }
@@ -295,18 +379,26 @@ export class EnemyManager {
     return [...this.enemies.values()];
   }
 
+  getHostileEnemies(): EnemyEntity[] {
+    return [...this.enemies.values()].filter((enemy) => enemy.faction === 'hostile');
+  }
+
+  getAlliedEnemies(ownerId?: string): EnemyEntity[] {
+    return [...this.enemies.values()].filter((enemy) => enemy.faction === 'allied' && (ownerId === undefined || enemy.ownerId === ownerId));
+  }
+
   hasEnemy(id: string): boolean {
     return this.enemies.has(id);
   }
 
   hasEnemyKind(kind: CoopDefenseEnemyKind): boolean {
     for (const enemy of this.enemies.values()) {
-      if (enemy.kind === kind) return true;
+      if (enemy.faction === 'hostile' && enemy.kind === kind) return true;
     }
     return false;
   }
 
-  applyDamage(id: string, damage: number): { died: boolean; remainingHp: number } | null {
+  applyDamage(id: string, damage: number): { died: boolean; remainingHp: number; death?: EnemyDeathInfo } | null {
     const enemy = this.enemies.get(id);
     if (!enemy || damage <= 0) return null;
 
@@ -316,11 +408,42 @@ export class EnemyManager {
       return { died: false, remainingHp };
     }
 
+    const deathX = enemy.sprite.x;
+    const deathY = enemy.sprite.y;
+    const death: EnemyDeathInfo = {
+      id: enemy.id,
+      kind: enemy.kind,
+      x: deathX,
+      y: deathY,
+      faction: enemy.faction,
+      ownerId: enemy.ownerId,
+    };
+    const deathSpawns = enemy.faction === 'hostile' ? (this.resolvedConfigs[enemy.kind].deathSpawns ?? []) : [];
     this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
     this.netSnapshotCache.delete(id);
     enemy.destroy();
     this.enemies.delete(id);
-    return { died: true, remainingHp: 0 };
+    for (const spawnConfig of deathSpawns) {
+      const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
+      for (let index = 0; index < spawnConfig.count; index += 1) {
+        const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, spawnConfig.count));
+        this.hostSpawnAtWorld(
+          deathX + Math.cos(angle) * spawnConfig.offsetPx,
+          deathY + Math.sin(angle) * spawnConfig.offsetPx,
+          spawnConfig.enemyKind,
+        );
+      }
+    }
+    return { died: true, remainingHp: 0, death };
+  }
+
+  hostRemoveEnemy(id: string): void {
+    const enemy = this.enemies.get(id);
+    if (!enemy) return;
+    this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
+    this.netSnapshotCache.delete(id);
+    enemy.destroy();
+    this.enemies.delete(id);
   }
 
   syncHostVisuals(): void {
@@ -401,6 +524,9 @@ export class EnemyManager {
       x: Math.round(snapshot.x),
       y: Math.round(snapshot.y),
       rot: Math.round(snapshot.rot * 100) / 100,
+      faction: snapshot.faction,
+      ownerId: snapshot.ownerId,
+      ownerColor: snapshot.ownerColor,
     };
   }
 
@@ -428,6 +554,15 @@ export class EnemyManager {
       delta.maxHp = current.maxHp;
     }
 
+    if (current.burnStacks !== previous.burnStacks) {
+      delta.burnStacks = current.burnStacks;
+    }
+    if (current.faction !== previous.faction || current.ownerId !== previous.ownerId || current.ownerColor !== previous.ownerColor) {
+      delta.faction = current.faction;
+      delta.ownerId = current.ownerId;
+      delta.ownerColor = current.ownerColor;
+    }
+
     return Object.keys(delta).length > 1 ? delta : null;
   }
 
@@ -443,11 +578,15 @@ export class EnemyManager {
         false,
         remote.kind,
         this.resolvedConfigs[remote.kind],
+        remote.faction ?? 'hostile',
+        remote.ownerId,
+        remote.ownerColor,
       );
       const rotation = remote.rot ?? 0;
       enemy.faceAngle(rotation);
       enemy.setTargetRotation(rotation);
       enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
+      enemy.updateBurnStacks(remote.burnStacks ?? 0);
       this.enemies.set(remote.id, enemy);
       return;
     }
@@ -455,6 +594,7 @@ export class EnemyManager {
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp());
     }
+    if (remote.burnStacks !== undefined) enemy.updateBurnStacks(remote.burnStacks);
     if (remote.x !== undefined || remote.y !== undefined) {
       enemy.setTargetPosition(remote.x ?? enemy.sprite.x, remote.y ?? enemy.sprite.y);
     }

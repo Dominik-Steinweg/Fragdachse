@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -26,6 +26,7 @@ export interface MeleeWeaponFireConfig {
   readonly type: 'melee';
   readonly hitArcDegrees: number;       // Öffnungswinkel vor dem Spieler
   readonly visualPreset?: MeleeVisualPreset;
+  readonly damageTargets?: readonly MeleeDamageTarget[];
 }
 
 export interface FlamethrowerWeaponFireConfig {
@@ -37,8 +38,22 @@ export interface FlamethrowerWeaponFireConfig {
   readonly velocityDecay: number;       // Geschwindigkeits-Faktor pro Sekunde (0-1)
   readonly burnDurationMs: number;
   readonly burnDamagePerTick: number;
-  readonly burnTickIntervalMs: number;
   readonly piercingCount?: number;      // > 0 = Projektil trifft mehrere Ziele (kein Mehrfachtreffer)
+  readonly kamikaze?: {
+    readonly enabled: number;
+    readonly inheritMolotovBonuses: number;
+  };
+  readonly burningGround?: {
+    readonly cellSize: number;
+    readonly durationMs: number;
+    readonly igniteProjectiles: number;
+    readonly createOnFlameExpiry: number;
+  };
+  readonly fireRing?: {
+    readonly radius: number;
+    readonly thickness: number;
+    readonly igniteProjectiles: number;
+  };
 }
 
 export interface LeafBlowerWeaponFireConfig {
@@ -134,6 +149,8 @@ export interface WeaponConfig {
   readonly adrenalinCost: number;       // Adrenalin-Kosten pro Schuss
   readonly adrenalinGain: number;       // Adrenalin-Gewinn bei Treffer
   readonly damageReduction?: number;    // eingehender Schaden wird bei ausgeruesteter Waffe reduziert
+  readonly hitKnockback?: number;       // gerichteter Rueckstoss bei einem direkten Projektiltreffer
+  readonly hitKnockbackDurationMs?: number;
 
   // Spread (Bloom) in Grad
   readonly spreadStanding: number;      // Basis-Spread im Stand
@@ -151,6 +168,17 @@ export interface WeaponConfig {
   readonly pelletCount?:       number; // Anzahl gleichzeitig abgefeuerter Projektile
   readonly pelletSpreadAngle?: number; // Halbwinkel der Auffächerung in Grad ([-y, +y])
   readonly pelletCountMultiplier?: number;
+
+  // Schrotflinten-Spezialisierung (optional; 0 = jeweiliger Effekt deaktiviert)
+  readonly shotgunSlowFraction?: number;
+  readonly shotgunSlowDurationMs?: number;
+  readonly shotgunProximityMaxDamageBonus?: number;
+  readonly shotgunLightningRadius?: number;
+  readonly shotgunLightningDamage?: number;
+  readonly shotgunLightningAppliesSlow?: number;
+  readonly shotgunChainEnabled?: number;
+  readonly shotgunChainDamageRetention?: number;
+  readonly shotgunChainRadiusRetention?: number;
 
   // Hydra-Splitting (optional)
   readonly splitCount?:        number; // Anzahl der beim Bounce neu erzeugten Projektile
@@ -175,6 +203,27 @@ export interface WeaponConfig {
   readonly penetrationDamageRetention?: number;
   readonly warmupBurnThreshold?: number;
   readonly multiExplosionCount?: number;
+  readonly multiExplosionCoastMs?: number;
+  readonly miniRocketReturnEnabled?: number;
+  readonly miniRocketReturnRangeBuffer?: number;
+  readonly miniRocketPickupRadius?: number;
+  readonly miniRocketPickupAdrenalineRefundFraction?: number;
+  readonly miniRocketPickupArmor?: number;
+  readonly miniRocketSafetyLifetimeMs?: number;
+  readonly miniRocketCascadeInitialDamageBonus?: number;
+  readonly miniRocketCascadeDamageBonusPerExplosion?: number;
+  readonly matchPrimaryRange?: number;
+  readonly ak47Focus?: {
+    readonly maxStacks: number;
+    readonly damagePerStack: number;
+    readonly applyDamageToPrimaryWeapon: number;
+    readonly fireSuperiorityShots: number;
+    readonly fireSuperiorityDamageBonus: number;
+  };
+  /** Host-interner Snapshot fuer einen einzelnen AK-47-Schuss. */
+  readonly ak47ShotId?: number;
+  readonly ak47DamageMultiplier?: number;
+  readonly ak47FireSuperiorityShot?: boolean;
 
   // Visuelles Override
   readonly projectileColor?: number;         // Überschreibt Spielerfarbe für Projektil-Visuals (hex)
@@ -190,6 +239,7 @@ export interface WeaponConfig {
 
   // Kettenblitz (nur Hitscan-Waffen): Strahl springt nach dem Treffer weiter
   readonly chainLightning?: ChainLightningConfig;
+  readonly proximityArc?: ProjectileProximityArcConfig;
 
   // Brennende Treffer: setzt getroffene Ziele in Brand (Projektil/Hitscan/Melee).
   // Für Explosions-Brand siehe ProjectileExplosionConfig.burnOnHit.
@@ -367,11 +417,9 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly type: 'molotov';
   readonly fireRadius: number;          // px – Schadensradius
   readonly fireDamagePerTick: number;   // HP Schaden pro Tick
-  readonly fireTickInterval: number;    // ms zwischen Damage-Ticks (z.B. 200)
   readonly fireLingerDuration: number;  // ms wie lange das Feuer brennt
   readonly fireBurnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   readonly fireBurnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
-  readonly fireBurnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
   readonly deathPatchRadius?: number;
   readonly deathPatchDurationMs?: number;
   readonly deathPatchDamagePerTick?: number;
@@ -407,6 +455,7 @@ export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
   readonly cloudDuration: number;        // ms – Gesamtdauer der Wolke
   readonly cloudDamagePerTick: number;   // HP Schaden pro Tick
   readonly cloudTickInterval: number;    // ms zwischen Damage-Ticks
+  readonly continuous?: boolean;
   readonly afterCloudDurationMs?: number;
   readonly afterCloudRadiusFactor?: number;
   readonly afterCloudDamageFactor?: number;
@@ -605,6 +654,8 @@ export const WEAPON_CONFIGS = {
     allowedSlots:         ['weapon1'],
     adrenalinCost:        0,
     adrenalinGain:        10,
+    hitKnockback:         0,
+    hitKnockbackDurationMs: 180,
     spreadStanding:       5,
     spreadMoving:         10,
     spreadPerShot:        5,
@@ -619,7 +670,6 @@ export const WEAPON_CONFIGS = {
     burnOnHit: {
       durationMs:     0,
       damagePerTick:  0,
-      tickIntervalMs: 250,
     } satisfies BurnOnHitConfig,
     tracerConfig: {
       widthCore:  1,
@@ -708,6 +758,64 @@ export const WEAPON_CONFIGS = {
       successKey: 'shot_bite',
       failureKey: 'shot_dry_trigger',
     },    
+  } as WeaponConfig,
+
+  GRAVE_TITAN_BITE: {
+    id:                   'GRAVE_TITAN_BITE',
+    displayName:          'Grufttitan-Biss',
+    cooldown:             500,
+    damage:               90,
+    range:                125,
+    fire: {
+      type:                 'melee',
+      hitArcDegrees:        90,
+      visualPreset:         'bite' satisfies MeleeVisualPreset,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  500,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+    trainDamageMult:      2,
+    shotAudio: {
+      successKey: 'shot_bite',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  INFERNO_COLOSSUS_BITE: {
+    id:                   'INFERNO_COLOSSUS_BITE',
+    displayName:          'Flammenkoloss-Biss',
+    cooldown:             500,
+    damage:               90,
+    range:                125,
+    fire: {
+      type:                 'melee',
+      hitArcDegrees:        90,
+      visualPreset:         'bite' satisfies MeleeVisualPreset,
+      damageTargets:        ['rocks'],
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  500,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+    rockDamageMult:       1,
+    trainDamageMult:      0,
+    shotAudio: {
+      successKey: 'shot_bite',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   TASER: {
@@ -947,6 +1055,13 @@ export const WEAPON_CONFIGS = {
     spreadMoving:         15,
     spreadPerShot:        5,
     maxDynamicSpread:     30,
+    ak47Focus: {
+      maxStacks: 0,
+      damagePerStack: 0,
+      applyDamageToPrimaryWeapon: 0,
+      fireSuperiorityShots: 0,
+      fireSuperiorityDamageBonus: 0,
+    },
     spreadRecoveryDelay:  400,
     spreadRecoveryRate:   2,
     spreadRecoverySpeed:  100,
@@ -993,6 +1108,15 @@ export const WEAPON_CONFIGS = {
     pelletCount:          5,
     pelletCountMultiplier: 1,
     pelletSpreadAngle:    16,
+    shotgunSlowFraction:  0,
+    shotgunSlowDurationMs: 1000,
+    shotgunProximityMaxDamageBonus: 0,
+    shotgunLightningRadius: 0,
+    shotgunLightningDamage: 0,
+    shotgunLightningAppliesSlow: 0,
+    shotgunChainEnabled: 0,
+    shotgunChainDamageRetention: 0,
+    shotgunChainRadiusRetention: 0,
     projectileColor:      0xa9a097,
     projectileStyle:      'bullet' as ProjectileStyle,
     bulletVisualPreset:   'shotgun' as BulletVisualPreset,
@@ -1021,7 +1145,8 @@ export const WEAPON_CONFIGS = {
     displayName:          'ASMD Sekundär',
     cooldown:             500,
     damage:               15,          // Direkttreffer-Schaden
-    range:                500,         
+    range:                500,
+    matchPrimaryRange:    0,
     fire: {
       type:                 'projectile',
       projectileSpeed:      400,
@@ -1059,7 +1184,13 @@ export const WEAPON_CONFIGS = {
         radiusScale:    1,
         style:          'electric',
       } satisfies DamageOverTimeAreaConfig,
+      comboAdrenalineGain: 0,
     } satisfies DetonableConfig,
+    proximityArc: {
+      radius: 0,
+      damage: 0,
+      scanIntervalMs: 0,
+    } satisfies ProjectileProximityArcConfig,
     shotAudio: {
       successKey: 'shot_asmd_secondary',
       failureKey: 'shot_dry_trigger',
@@ -1094,14 +1225,12 @@ export const WEAPON_CONFIGS = {
           type: 'fire',
           radius: 110,
           damagePerTick: 1,
-          tickInterval: 250,
           lingerDuration: 0,
           rockDamageMult: 0,
           trainDamageMult: 0,
-          burnDurationMs: 2000,
-          burnDamagePerTick: 0.25,
-          burnTickIntervalMs: 250,
-          weaponName: 'Brennender Raketenboden',
+      burnDurationMs: 2000,
+      burnDamagePerTick: 0.25,
+      weaponName: 'Brennender Raketenboden',
         },
       } satisfies ProjectileExplosionConfig,
     },
@@ -1144,6 +1273,7 @@ export const WEAPON_CONFIGS = {
         radius:          65,
         maxDamage:       3,
         minDamage:       1,
+        falloffReduction: 0,
         knockback:       320,
         selfDamageMult:  1,
         rockDamageMult:  1,
@@ -1171,6 +1301,15 @@ export const WEAPON_CONFIGS = {
     spreadPerShot:        1.2,
     maxDynamicSpread:     12,
     multiExplosionCount:  1,
+    multiExplosionCoastMs: 0,
+    miniRocketReturnEnabled: 0,
+    miniRocketReturnRangeBuffer: 0.5,
+    miniRocketPickupRadius: 32,
+    miniRocketPickupAdrenalineRefundFraction: 0,
+    miniRocketPickupArmor: 0,
+    miniRocketSafetyLifetimeMs: 12_000,
+    miniRocketCascadeInitialDamageBonus: 0,
+    miniRocketCascadeDamageBonusPerExplosion: 0,
     spreadRecoveryDelay:  180,
     spreadRecoveryRate:   3,
     spreadRecoverySpeed:  100,
@@ -1320,8 +1459,22 @@ export const WEAPON_CONFIGS = {
       velocityDecay:      0.82,        // 95% der Geschwindigkeit verbleiben pro Sekunde → ~750 px Reichweite
       burnDurationMs:     2000,
       burnDamagePerTick:  0.25,
-      burnTickIntervalMs: 250,
       piercingCount:      0,
+      kamikaze: {
+        enabled: 0,
+        inheritMolotovBonuses: 0,
+      },
+      burningGround: {
+        cellSize: 0,
+        durationMs: 0,
+        igniteProjectiles: 0,
+        createOnFlameExpiry: 0,
+      },
+      fireRing: {
+        radius: 0,
+        thickness: 0,
+        igniteProjectiles: 0,
+      },
     },
     allowedSlots:         ['weapon2'],
     adrenalinCost:        0.5,           // Adrenalin-Kosten pro Hitbox
@@ -1586,7 +1739,6 @@ export const WEAPON_CONFIGS = {
     burnOnHit: {
       durationMs:     0,
       damagePerTick:  0,
-      tickIntervalMs: 250,
     } satisfies BurnOnHitConfig,
     shotScreenShake:      { duration: 60, intensity: 0.002 },    
     tracerConfig: {
@@ -1678,11 +1830,9 @@ export const UTILITY_CONFIGS = {
     maxBounces:         3,
     fireRadius:         160,
     fireDamagePerTick:  4,
-    fireTickInterval:   250,
     fireLingerDuration: 4000,
     fireBurnDurationMs:     2000,  // Burn-Stack hält 1,5 s pro Tick
     fireBurnDamagePerTick:  0.25,  // Gleicher Wert wie Flammenwerfer
-    fireBurnTickIntervalMs: 250,   // Gleicher Takt wie Flammenwerfer
     rockDamageMult:     0,  // Molotov macht keinen Schaden an Felsen
     allowedSlots:       ['utility'],
     projectileStyle:    'grenade' as ProjectileStyle,
@@ -1814,6 +1964,26 @@ export const UTILITY_CONFIGS = {
     rockDamageMult:      0.1,           // 10% Schaden an Felsen
     trainDamageMult:     0.5,           // 50% Schaden am Zug
     allowedSlots:        ['utility'],
+  } as UtilityConfig,
+
+  ENEMY_STINKDRUESEN: {
+    id:                  'ENEMY_STINKDRUESEN',
+    displayName:         'Kleine Stinkdruesen',
+    type:                'stinkcloud',
+    cooldown:            0,
+    activation:          { type: 'instant' } as InstantUtilityActivationConfig,
+    projectileSpeed:     0,
+    projectileSize:      0,
+    fuseTime:            0,
+    maxBounces:          0,
+    cloudRadius:         90,
+    cloudDuration:       0,
+    cloudDamagePerTick:  1,
+    cloudTickInterval:   250,
+    continuous:          true,
+    rockDamageMult:      0,
+    trainDamageMult:     0,
+    allowedSlots:        [],
   } as UtilityConfig,
 
   TRANSLOCATOR: {

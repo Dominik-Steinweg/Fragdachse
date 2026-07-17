@@ -2,7 +2,7 @@
 
 import { ARMOR_COLOR, COLORS } from '../config';
 
-export type PowerUpType = 'instant_heal' | 'instant_armor' | 'buff_regen' | 'buff_damage' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
+export type PowerUpType = 'instant_heal' | 'instant_armor' | 'buff_regen' | 'buff_damage' | 'weapon_buff' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
 
 export interface PowerUpDef {
   readonly id:          string;
@@ -31,6 +31,8 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
   DECOY_STEALTH: { id: 'DECOY_STEALTH', type: 'decoy_stealth', displayName: 'Unsichtbarkeit', color: COLORS.GREY_2 },
   SHIELD_OVERCHARGE: { id: 'SHIELD_OVERCHARGE', type: 'shield_overcharge', displayName: 'Schildladung', color: 0x78f0ff },
+  AK47_FOCUS: { id: 'AK47_FOCUS', type: 'weapon_buff', displayName: 'Einschiessen', color: 0xffa33a },
+  AK47_FIRE_SUPERIORITY: { id: 'AK47_FIRE_SUPERIORITY', type: 'weapon_buff', displayName: 'Feuerueberlegenheit', color: 0xffd166 },
   NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
   BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_3,  spriteKey: 'powerup_bfg'  },

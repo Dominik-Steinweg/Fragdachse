@@ -688,9 +688,15 @@ export class EffectSystem {
   playExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle: ExplosionVisualStyle = 'default'): void {
     this.ensureTextures();
 
+    if (visualStyle === 'lightning') {
+      this.playLightningExplosionEffect(x, y, radius, color ?? 0x78dfff);
+      return;
+    }
+
     const isHoly = visualStyle === 'holy';
     const isEnergy = visualStyle === 'energy';
     const isNuke = visualStyle === 'nuke';
+    const isMiniRocketCascade = visualStyle === 'mini_rocket_cascade';
     const fillColor = isHoly
       ? 0xf0c53a
       : (color ?? (isEnergy ? 0x73bed3 : (isNuke ? 0xffb347 : 0xff2200)));
@@ -843,6 +849,53 @@ export class EffectSystem {
       ease:       'Linear',
       onComplete: () => ring.destroy(),
     });
+
+    if (isMiniRocketCascade) {
+      // Gleiche visuelle Sprache wie die normale Mini-Raketen-Explosion, aber
+      // mit etwas hellerem Kern und einer zweiten, kurzen Druckwelle. Der echte
+      // Schadensradius bleibt weiterhin der uebergebene Radius.
+      const cascadeCore = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.62);
+      cascadeCore.setDepth(DEPTH_FX + 0.35);
+      cascadeCore.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: cascadeCore,
+        scaleX: (radius * 0.48) / startRadius,
+        scaleY: (radius * 0.48) / startRadius,
+        alpha: 0,
+        duration: 210,
+        ease: 'Expo.easeOut',
+        onComplete: () => cascadeCore.destroy(),
+      });
+
+      const pressureStartRadius = Math.max(6, radius * 0.34);
+      const pressureRing = this.scene.add.circle(x, y, pressureStartRadius);
+      pressureRing.setFillStyle(0, 0);
+      pressureRing.setStrokeStyle(3, this.mixColor(fillColor, 0xffffff, 0.34), 0.72);
+      pressureRing.setDepth(DEPTH_FX + 0.08);
+      pressureRing.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: pressureRing,
+        scaleX: (radius * 1.28) / pressureStartRadius,
+        scaleY: (radius * 1.28) / pressureStartRadius,
+        alpha: 0,
+        duration: 470,
+        ease: 'Cubic.easeOut',
+        onComplete: () => pressureRing.destroy(),
+      });
+
+      const cascadeSparks = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+        lifespan: { min: 240, max: 520 },
+        speed: { min: radius * 0.45, max: radius * 1.65 },
+        scale: { start: 1.05, end: 0 },
+        alpha: { start: 0.78, end: 0 },
+        tint: [0xffffff, this.mixColor(fillColor, 0xffffff, 0.28), fillColor],
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      cascadeSparks.setDepth(DEPTH_FX + 0.12);
+      cascadeSparks.explode(Math.max(8, Math.ceil(radius / 7)));
+      this.scene.time.delayedCall(620, () => cascadeSparks.destroy());
+    }
 
     if (isEnergy) {
       const outerRingRadius = radius * 0.3;
@@ -1056,6 +1109,81 @@ export class EffectSystem {
     } else if (isNuke) {
       this.scene.cameras.main.shake(550, 0.018);
     }
+  }
+
+  private playLightningExplosionEffect(x: number, y: number, radius: number, color: number): void {
+    const coreColor = this.mixColor(color, 0xffffff, 0.72);
+    const outerColor = this.mixColor(color, 0x3557d6, 0.32);
+
+    const flash = this.scene.add.circle(x, y, Math.max(5, radius * 0.12), 0xffffff, 0.92);
+    flash.setDepth(DEPTH_FX + 0.45);
+    flash.setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: flash,
+      scale: 2.8,
+      alpha: 0,
+      duration: 170,
+      ease: 'Expo.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    for (let ringIndex = 0; ringIndex < 2; ringIndex += 1) {
+      const startRadius = Math.max(5, radius * (0.2 + ringIndex * 0.08));
+      const ring = this.scene.add.circle(x, y, startRadius);
+      ring.setFillStyle(0, 0);
+      ring.setStrokeStyle(ringIndex === 0 ? 4 : 2, ringIndex === 0 ? coreColor : outerColor, 0.95);
+      ring.setDepth(DEPTH_FX + 0.25 - ringIndex * 0.03);
+      ring.setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: ring,
+        scale: (radius * (ringIndex === 0 ? 1.12 : 1.42)) / startRadius,
+        alpha: 0,
+        duration: ringIndex === 0 ? 280 : 430,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    const arcs = this.scene.add.graphics();
+    arcs.setDepth(DEPTH_FX + 0.35);
+    arcs.setBlendMode(Phaser.BlendModes.ADD);
+    const arcCount = Math.max(8, Math.ceil(radius / 7));
+    for (let arcIndex = 0; arcIndex < arcCount; arcIndex += 1) {
+      const angle = (arcIndex / arcCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18);
+      const length = radius * Phaser.Math.FloatBetween(0.72, 1.12);
+      const segments = Phaser.Math.Between(4, 7);
+      arcs.lineStyle(arcIndex % 3 === 0 ? 3 : 1.5, arcIndex % 2 === 0 ? coreColor : color, 0.92);
+      arcs.beginPath();
+      arcs.moveTo(x, y);
+      for (let segment = 1; segment <= segments; segment += 1) {
+        const progress = segment / segments;
+        const normalJitter = segment === segments ? 0 : Phaser.Math.FloatBetween(-radius * 0.09, radius * 0.09);
+        const px = x + Math.cos(angle) * length * progress - Math.sin(angle) * normalJitter;
+        const py = y + Math.sin(angle) * length * progress + Math.cos(angle) * normalJitter;
+        arcs.lineTo(px, py);
+      }
+      arcs.strokePath();
+    }
+    this.scene.tweens.add({
+      targets: arcs,
+      alpha: 0,
+      duration: 330,
+      ease: 'Quad.easeOut',
+      onComplete: () => arcs.destroy(),
+    });
+
+    const sparks = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+      lifespan: { min: 260, max: 620 },
+      speed: { min: radius * 0.35, max: radius * 1.8 },
+      scale: { start: 1.4, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: [0xffffff, coreColor, color, outerColor],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    sparks.setDepth(DEPTH_FX + 0.3);
+    sparks.explode(Math.max(18, Math.ceil(radius * 0.7)));
+    this.scene.time.delayedCall(720, () => sparks.destroy());
   }
 
   private mixColor(source: number, target: number, t: number): number {

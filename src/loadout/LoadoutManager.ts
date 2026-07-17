@@ -9,7 +9,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
+import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
 import type {
   AirstrikeUltimateConfig,
   BfgUtilityConfig,
@@ -27,6 +27,7 @@ import type {
   TunnelUltimateConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
+  MolotovUtilityConfig,
   ProjectileWeaponFireConfig,
   TeslaDomeWeaponFireConfig,
   UltimateConfig,
@@ -36,7 +37,7 @@ import type {
 import { applyCoopDefenseModifiersToUtilityConfig } from './CoopDefenseLoadoutModifiers';
 import { COLORS, getTopDownMuzzleOrigin } from '../config';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from './LoadoutConfig';
-import { sanitizeLoadoutSelectionForMode } from './LoadoutRules';
+import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 
 export interface LoadoutSelection {
@@ -74,6 +75,21 @@ interface UltimateState {
   gaussChargeStartedAt: number | null;
 }
 
+interface Ak47CombatState {
+  stacks: number;
+  fireSuperiorityShotsRemaining: number;
+  fireSuperiorityTotalShots: number;
+  nextShotId: number;
+  confirmedShotIds: Set<number>;
+}
+
+interface ShotgunLightningEvent {
+  ownerId: string;
+  x: number;
+  y: number;
+  generation: number;
+}
+
 type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
 type PhysicsSystemType  = { addRecoil(id: string, vx: number, vy: number, durationMs?: number): void };
 
@@ -105,6 +121,8 @@ export class LoadoutManager {
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   private shotCounters = new Map<string, number>();
   private wildfireHandler: ((ownerId: string, x: number, y: number, radius: number, durationMs: number, damagePerTick: number) => void) | null = null;
+  private ak47States = new Map<string, Ak47CombatState>();
+  private shotgunLightningQueue: ShotgunLightningEvent[] = [];
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
@@ -126,6 +144,7 @@ export class LoadoutManager {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   assignDefaultLoadout(playerId: string, selection?: LoadoutSelection): void {
+    this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
     const sanitized = sanitizeLoadoutSelectionForMode(selection, this.bridge.getGameMode());
     const w1Cfg = sanitized.weapon1;
     const w2Cfg = sanitized.weapon2;
@@ -157,6 +176,7 @@ export class LoadoutManager {
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.resetPlayer(playerId);
+    this.resetAk47State(playerId);
   }
 
   /**
@@ -174,10 +194,10 @@ export class LoadoutManager {
 
     if (
       current
-      && current.weapon1.config.id === nextWeapon1.id
-      && current.weapon2.config.id === nextWeapon2.id
-      && current.utility.config.id === nextUtility.id
-      && currentUltimate?.id === nextUltimate.id
+      && areLoadoutConfigsEquivalent(current.weapon1.config, nextWeapon1)
+      && areLoadoutConfigsEquivalent(current.weapon2.config, nextWeapon2)
+      && areLoadoutConfigsEquivalent(current.utility.config, nextUtility)
+      && areLoadoutConfigsEquivalent(currentUltimate, nextUltimate)
     ) {
       return;
     }
@@ -197,6 +217,94 @@ export class LoadoutManager {
     this.shieldBuffSystem?.removePlayer(playerId);
     this.translocatorSystem?.removePlayer(playerId);
     this.decoySystem?.clearPlayer(playerId);
+    this.ak47States.delete(playerId);
+    this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
+  }
+
+  resetAk47State(playerId: string): void {
+    this.ak47States.set(playerId, {
+      stacks: 0,
+      fireSuperiorityShotsRemaining: 0,
+      fireSuperiorityTotalShots: 0,
+      nextShotId: 1,
+      confirmedShotIds: new Set<number>(),
+    });
+  }
+
+  registerAk47ProjectileHit(projectile: TrackedProjectile, now = Date.now()): void {
+    const shotId = projectile.ak47ShotId;
+    if (shotId === undefined || projectile.ak47HitConfirmed) return;
+    projectile.ak47HitConfirmed = true;
+
+    const config = this.getAk47Config(projectile.ownerId);
+    const focus = config?.ak47Focus;
+    if (!focus || focus.maxStacks <= 0) return;
+
+    const state = this.getOrCreateAk47State(projectile.ownerId);
+    state.confirmedShotIds.add(shotId);
+    void now;
+
+    // Durchbruchmunition baut waehrend der laufenden Belohnungsphase keine neue
+    // Belohnungsschleife auf. Nach dem Magazin beginnt die Praezisionsserie neu.
+    if (projectile.ak47FireSuperiorityShot) return;
+
+    state.stacks = Math.min(focus.maxStacks, state.stacks + 1);
+
+    if (
+      state.stacks >= focus.maxStacks
+      && focus.fireSuperiorityShots > 0
+      && state.fireSuperiorityShotsRemaining <= 0
+    ) {
+      const shotCount = Math.max(1, Math.round(focus.fireSuperiorityShots));
+      state.fireSuperiorityShotsRemaining = shotCount;
+      state.fireSuperiorityTotalShots = shotCount;
+      state.stacks = focus.maxStacks;
+    }
+  }
+
+  resolveAk47Projectile(projectile: TrackedProjectile, now = Date.now()): void {
+    const shotId = projectile.ak47ShotId;
+    if (shotId === undefined) return;
+    const state = this.ak47States.get(projectile.ownerId);
+    if (!state) return;
+
+    const didHit = projectile.ak47HitConfirmed || state.confirmedShotIds.has(shotId);
+    state.confirmedShotIds.delete(shotId);
+    void now;
+    if (!didHit && state.fireSuperiorityShotsRemaining <= 0) {
+      state.stacks = 0;
+    }
+  }
+
+  getAk47HudBuffs(playerId: string, now = Date.now()): SyncedActiveHudBuff[] {
+    const config = this.getAk47Config(playerId);
+    const focus = config?.ak47Focus;
+    const state = this.ak47States.get(playerId);
+    if (!focus || !state) return [];
+
+    void now;
+    const result: SyncedActiveHudBuff[] = [];
+    if (state.stacks > 0) {
+      const damagePct = Math.round(state.stacks * focus.damagePerStack * 100);
+      result.push({
+        defId: 'AK47_FOCUS',
+        remainingFrac: state.stacks / Math.max(1, Math.round(focus.maxStacks)),
+        valueText: `${state.stacks}/${Math.max(1, Math.round(focus.maxStacks))} · +${damagePct}%`,
+      });
+    }
+    if (state.fireSuperiorityShotsRemaining > 0) {
+      result.push({
+        defId: 'AK47_FIRE_SUPERIORITY',
+        remainingFrac: state.fireSuperiorityShotsRemaining / Math.max(1, state.fireSuperiorityTotalShots),
+        valueText: `${state.fireSuperiorityShotsRemaining} Schuss`,
+      });
+    }
+    return result;
+  }
+
+  isAk47FireSuperiorityActive(playerId: string): boolean {
+    return this.getAk47Config(playerId) !== null
+      && (this.ak47States.get(playerId)?.fireSuperiorityShotsRemaining ?? 0) > 0;
   }
 
   beginUtilityCooldown(playerId: string, utilityId: string, now: number): void {
@@ -580,6 +688,8 @@ export class LoadoutManager {
         }
       }
     }
+
+    this.processShotgunLightningQueue();
   }
 
   // ── Multiplier-Getter ─────────────────────────────────────────────────────
@@ -845,6 +955,12 @@ export class LoadoutManager {
     return this.loadouts.get(playerId)?.utility.config;
   }
 
+  /** Wendet die Coop-Upgrades eines Spielers auf eine beliebige Utility-Basiskonfiguration an. */
+  resolveUtilityConfig(playerId: string, config: UtilityConfig): UtilityConfig {
+    const modifierSource = this.utilityConfigModifierSource?.(playerId);
+    return modifierSource ? applyCoopDefenseModifiersToUtilityConfig(config, modifierSource) : config;
+  }
+
   /**
    * Gibt den aktuellen dynamischen Spread (Bloom) der Waffe zurück.
    * Direkt aus dem BaseWeapon-Objekt – das AimSystem braucht auf dem Host
@@ -859,13 +975,52 @@ export class LoadoutManager {
     weaponName: string,
     x: number,
     y: number,
-    source?: { dirX?: number; dirY?: number; projectileColor?: number },
+    source?: { dirX?: number; dirY?: number; projectileColor?: number; shotgunLightningGeneration?: number },
   ): void {
     const loadout = this.loadouts.get(killerId);
     if (!loadout) return;
+    const shotgun = loadout.weapon2.config.id === 'SHOTGUN' ? loadout.weapon2.config : null;
+    if (shotgun) {
+      if (weaponName === shotgun.displayName && (shotgun.shotgunLightningRadius ?? 0) > 0 && (shotgun.shotgunLightningDamage ?? 0) > 0) {
+        this.shotgunLightningQueue.push({ ownerId: killerId, x, y, generation: 0 });
+      } else if (
+        weaponName === 'Schrotflinten-Blitz'
+        && (shotgun.shotgunChainEnabled ?? 0) > 0
+        && source?.shotgunLightningGeneration !== undefined
+      ) {
+        this.shotgunLightningQueue.push({
+          ownerId: killerId,
+          x,
+          y,
+          generation: source.shotgunLightningGeneration + 1,
+        });
+      }
+    }
     const utility = loadout.utility.config;
-    if (weaponName === 'Molotov' && utility.type === 'molotov' && (utility.deathPatchRadius ?? 0) > 0) {
-      this.wildfireHandler?.(killerId, x, y, utility.deathPatchRadius ?? 0, utility.deathPatchDurationMs ?? 0, utility.deathPatchDamagePerTick ?? 0);
+    let killMolotov: MolotovUtilityConfig | null = weaponName === 'Molotov' && utility.type === 'molotov'
+      ? utility
+      : null;
+    const flamethrower = loadout.weapon2.config;
+    if (
+      weaponName === 'Kamikaze-Napalm'
+      && flamethrower.id === 'FLAMETHROWER'
+      && flamethrower.fire.type === 'flamethrower'
+      && (flamethrower.fire.kamikaze?.inheritMolotovBonuses ?? 0) > 0
+    ) {
+      killMolotov = this.resolveUtilityConfig(
+        killerId,
+        UTILITY_CONFIGS.MOLOTOV_GRENADE,
+      ) as MolotovUtilityConfig;
+    }
+    if (killMolotov && (killMolotov.deathPatchRadius ?? 0) > 0) {
+      this.wildfireHandler?.(
+        killerId,
+        x,
+        y,
+        killMolotov.deathPatchRadius ?? 0,
+        killMolotov.deathPatchDurationMs ?? 0,
+        killMolotov.deathPatchDamagePerTick ?? 0,
+      );
     }
     for (const weapon of [loadout.weapon1, loadout.weapon2]) {
       const cfg = weapon.config;
@@ -904,6 +1059,45 @@ export class LoadoutManager {
     }
   }
 
+  private processShotgunLightningQueue(): void {
+    if (!this.combatSystem || this.shotgunLightningQueue.length === 0) return;
+
+    // Grosse Ketten werden ueber mehrere Frames verteilt, aber logisch nicht begrenzt.
+    const events = this.shotgunLightningQueue.splice(0, 256);
+    for (const event of events) {
+      const loadout = this.loadouts.get(event.ownerId);
+      const shotgun = loadout?.weapon2.config.id === 'SHOTGUN' ? loadout.weapon2.config : null;
+      if (!shotgun) continue;
+
+      const baseRadius = shotgun.shotgunLightningRadius ?? 0;
+      const baseDamage = shotgun.shotgunLightningDamage ?? 0;
+      if (baseRadius <= 0 || baseDamage <= 0) continue;
+
+      const damageRetention = event.generation > 0
+        ? Phaser.Math.Clamp(shotgun.shotgunChainDamageRetention ?? 0, 0, 1)
+        : 1;
+      const radiusRetention = event.generation > 0
+        ? Phaser.Math.Clamp(shotgun.shotgunChainRadiusRetention ?? 0, 0, 1)
+        : 1;
+      if (event.generation > 0 && ((shotgun.shotgunChainEnabled ?? 0) <= 0 || damageRetention <= 0 || radiusRetention <= 0)) continue;
+
+      const damage = baseDamage * Math.pow(damageRetention, event.generation);
+      const radius = baseRadius * Math.pow(radiusRetention, event.generation);
+      if (damage < 0.5 || radius < 4) continue;
+
+      this.combatSystem.applyAoeDamage(event.x, event.y, radius, damage, event.ownerId, false, {
+        category: 'explosion',
+        allowTeamDamage: false,
+        weaponName: 'Schrotflinten-Blitz',
+        sourceSlot: 'weapon2',
+        enemySlowFraction: (shotgun.shotgunLightningAppliesSlow ?? 0) > 0 ? shotgun.shotgunSlowFraction ?? 0 : 0,
+        enemySlowDurationMs: shotgun.shotgunSlowDurationMs ?? 0,
+        killSource: { shotgunLightningGeneration: event.generation },
+      });
+      this.bridge.broadcastExplosionEffect(event.x, event.y, radius, 0x78dfff, 'lightning');
+    }
+  }
+
   getAimNetState(playerId: string, isMoving: boolean): PlayerAimNetState | undefined {
     const loadout = this.loadouts.get(playerId);
     if (!loadout) return undefined;
@@ -932,6 +1126,18 @@ export class LoadoutManager {
     const loadout = this.loadouts.get(playerId);
     if (!loadout || slot === 'ultimate') return 0;
     return loadout[slot].getCooldownFrac(now);
+  }
+
+  private getAk47Config(playerId: string): WeaponConfig | null {
+    const config = this.loadouts.get(playerId)?.weapon2.config;
+    return config?.id === 'AK47' ? config : null;
+  }
+
+  private getOrCreateAk47State(playerId: string): Ak47CombatState {
+    const current = this.ak47States.get(playerId);
+    if (current) return current;
+    this.resetAk47State(playerId);
+    return this.ak47States.get(playerId)!;
   }
 
   // ── Interne Helfer ────────────────────────────────────────────────────────
@@ -968,9 +1174,13 @@ export class LoadoutManager {
     if (weapon.isOnCooldown(now)) return { ok: false, reason: 'cooldown' };
 
     const cfg = weapon.config;
+    const ak47State = cfg.id === 'AK47' ? this.getOrCreateAk47State(playerId) : null;
+    const ak47Focus = this.getAk47Config(playerId)?.ak47Focus;
+    const primaryWeaponFocusState = sourceSlot === 'weapon1' ? this.ak47States.get(playerId) : null;
+    const fireSuperiorityActive = (ak47State?.fireSuperiorityShotsRemaining ?? 0) > 0;
 
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
-    if (cfg.adrenalinCost > 0) {
+    if (!fireSuperiorityActive && cfg.adrenalinCost > 0) {
       if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
     }
 
@@ -998,16 +1208,48 @@ export class LoadoutManager {
     const warmupFraction = cfg.maxDynamicSpread < 0
       ? Math.min(1, Math.abs(weapon.getDynamicSpread()) / Math.max(0.0001, Math.abs(cfg.maxDynamicSpread)))
       : 0;
-    const shotCfg = (cfg.warmupBurnThreshold ?? 0) > 0 && warmupFraction < (cfg.warmupBurnThreshold ?? 0)
+    let shotCfg = (cfg.warmupBurnThreshold ?? 0) > 0 && warmupFraction < (cfg.warmupBurnThreshold ?? 0)
       ? { ...cfg, burnOnHit: undefined }
       : cfg;
+    if (ak47State && cfg.ak47Focus) {
+      const focusDamageMultiplier = 1 + ak47State.stacks * cfg.ak47Focus.damagePerStack;
+      const superiorityDamageMultiplier = fireSuperiorityActive
+        ? 1 + cfg.ak47Focus.fireSuperiorityDamageBonus
+        : 1;
+      shotCfg = {
+        ...shotCfg,
+        penetrationCount: fireSuperiorityActive ? 1_000_000 : shotCfg.penetrationCount,
+        penetrationDamageRetention: fireSuperiorityActive ? 1 : shotCfg.penetrationDamageRetention,
+        ak47ShotId: ak47State.nextShotId++,
+        ak47DamageMultiplier: focusDamageMultiplier * superiorityDamageMultiplier,
+        ak47FireSuperiorityShot: fireSuperiorityActive,
+      };
+    } else if (
+      primaryWeaponFocusState
+      && (ak47Focus?.applyDamageToPrimaryWeapon ?? 0) > 0
+      && primaryWeaponFocusState.stacks > 0
+    ) {
+      // Einschiessen überträgt ausschließlich den Stack-Schaden auf Waffe 1.
+      // Durchbruchmunition bleibt weiterhin ein exklusiver AK-47-Bonus.
+      shotCfg = {
+        ...shotCfg,
+        damage: shotCfg.damage * (1 + primaryWeaponFocusState.stacks * (ak47Focus?.damagePerStack ?? 0)),
+      };
+    }
     const pelletCount = Math.max(1, Math.round((shotCfg.pelletCount ?? 1) * (shotCfg.pelletCountMultiplier ?? 1)));
     let didFire: boolean;
     if (pelletCount > 1) {
       const pelletOffsets = calcPelletAngles(pelletCount, cfg.pelletSpreadAngle ?? 0);
-      for (const offset of pelletOffsets) {
+      for (let pelletIndex = 0; pelletIndex < pelletOffsets.length; pelletIndex += 1) {
+        const offset = pelletOffsets[pelletIndex];
         const pelletAngle = angle + offset + (Math.random() * 2 - 1) * halfSpreadRad;
-        this.dispatchWeaponFire(shotCfg, x, y, pelletAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
+        // Eine Salve ist ein einzelner Schuss: Nur das erste Projektil darf den
+        // Waffensound auf Host und Remote-Clients replizieren. Mündungsfeuer und
+        // Projektilvisuals bleiben für jedes Pellet aktiv.
+        const pelletConfig = pelletIndex === 0
+          ? shotCfg
+          : { ...shotCfg, shotAudio: undefined };
+        this.dispatchWeaponFire(pelletConfig, x, y, pelletAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
       }
       didFire = true;
     } else {
@@ -1016,20 +1258,33 @@ export class LoadoutManager {
     }
     if (!didFire) return { ok: false, reason: 'blocked' };
 
+    if (fireSuperiorityActive && ak47State) {
+      ak47State.fireSuperiorityShotsRemaining = Math.max(0, ak47State.fireSuperiorityShotsRemaining - 1);
+      if (ak47State.fireSuperiorityShotsRemaining <= 0) {
+        ak47State.fireSuperiorityTotalShots = 0;
+        ak47State.stacks = 0;
+      }
+    }
+
     if ((shotCfg.sideBurstEveryShots ?? 0) > 0 && (shotCfg.sideBurstCount ?? 0) >= 2) {
       const counterKey = `${playerId}:${sourceSlot}:${shotCfg.id}`;
       const count = (this.shotCounters.get(counterKey) ?? 0) + 1;
       this.shotCounters.set(counterKey, count);
       if (count % (shotCfg.sideBurstEveryShots ?? 1) === 0) {
         const sideAngle = (shotCfg.sideBurstAngleDegrees ?? 0) * Math.PI / 180;
-        const sideCfg = { ...shotCfg, damage: shotCfg.damage * (shotCfg.sideBurstDamageFactor ?? 0), sideBurstEveryShots: 0 };
+        const sideCfg = {
+          ...shotCfg,
+          damage: shotCfg.damage * (shotCfg.sideBurstDamageFactor ?? 0),
+          sideBurstEveryShots: 0,
+          shotAudio: undefined,
+        };
         this.dispatchWeaponFire(sideCfg, x, y, angle - sideAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
         this.dispatchWeaponFire(sideCfg, x, y, angle + sideAngle, targetX, targetY, playerId, playerColor, sourceSlot, shotId);
       }
     }
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
-    if (cfg.adrenalinCost > 0) {
+    if (!fireSuperiorityActive && cfg.adrenalinCost > 0) {
       this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
     }
 
@@ -1272,14 +1527,12 @@ export class LoadoutManager {
         type:           'fire',
         radius:         cfg.fireRadius,
         damagePerTick:  cfg.fireDamagePerTick,
-        tickInterval:   cfg.fireTickInterval,
         lingerDuration: cfg.fireLingerDuration,
         allowTeamDamage: cfg.allowTeamDamage,
         rockDamageMult:  cfg.rockDamageMult,
         trainDamageMult: cfg.trainDamageMult,
         burnDurationMs:     cfg.fireBurnDurationMs,
         burnDamagePerTick:  cfg.fireBurnDamagePerTick,
-        burnTickIntervalMs: cfg.fireBurnTickIntervalMs,
       };
     }
 
@@ -1413,6 +1666,9 @@ export class LoadoutManager {
       ? Math.min(config.range, cursorRange)
       : config.range;
     const lifetime = (effectiveRange / fireConfig.projectileSpeed) * 1000;
+    const isMiniRocket = config.id === 'MINI_ROCKET_LAUNCHER';
+    const hasExtendedMiniRocketFlight = isMiniRocket
+      && ((config.multiExplosionCount ?? 1) > 1 || (config.miniRocketReturnEnabled ?? 0) > 0);
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
@@ -1422,7 +1678,7 @@ export class LoadoutManager {
       ownerColor:      playerColor,
       projectileVisualScale: config.projectileVisualScale,
       smokeTrailColor: config.rocketSmokeTrailColor ?? playerColor,
-      lifetime,
+      lifetime: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : lifetime,
       maxBounces:      fireConfig.projectileMaxBounces,
       isGrenade:       false,
       adrenalinGain:   config.adrenalinGain,
@@ -1459,12 +1715,40 @@ export class LoadoutManager {
       // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
       burnDurationMs:     config.burnOnHit?.durationMs,
       burnDamagePerTick:  config.burnOnHit?.damagePerTick,
-      burnTickIntervalMs: config.burnOnHit?.tickIntervalMs,
+      canReceiveFireImbue: sourceSlot === 'weapon1' || sourceSlot === 'weapon2',
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
       penetrationCount: config.penetrationCount,
       penetrationDamageRetention: config.penetrationDamageRetention,
       multiExplosionCount: config.multiExplosionCount,
+      multiExplosionCoastMs: isMiniRocket ? config.multiExplosionCoastMs : undefined,
+      miniRocketStageRangePx: hasExtendedMiniRocketFlight ? effectiveRange : undefined,
+      miniRocketReturnEnabled: isMiniRocket && (config.miniRocketReturnEnabled ?? 0) > 0,
+      miniRocketReturnRangeBuffer: isMiniRocket ? config.miniRocketReturnRangeBuffer : undefined,
+      miniRocketPickupRadius: isMiniRocket ? config.miniRocketPickupRadius : undefined,
+      miniRocketPickupAdrenalineRefundFraction: isMiniRocket ? config.miniRocketPickupAdrenalineRefundFraction : undefined,
+      miniRocketPickupArmor: isMiniRocket ? config.miniRocketPickupArmor : undefined,
+      miniRocketAdrenalineCostPaid: isMiniRocket
+        ? Math.min(
+            this.resourceSystem.getAdrenaline(playerId),
+            this.resourceSystem.resolveAdrenalineCost(playerId, config.adrenalinCost),
+          )
+        : undefined,
+      miniRocketSafetyLifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : undefined,
+      miniRocketCascadeInitialDamageBonus: isMiniRocket ? config.miniRocketCascadeInitialDamageBonus : undefined,
+      miniRocketCascadeDamageBonusPerExplosion: isMiniRocket ? config.miniRocketCascadeDamageBonusPerExplosion : undefined,
+      shotgunOriginX: config.id === 'SHOTGUN' ? x : undefined,
+      shotgunOriginY: config.id === 'SHOTGUN' ? y : undefined,
+      shotgunResolvedRange: config.id === 'SHOTGUN' ? effectiveRange : undefined,
+      shotgunProximityMaxDamageBonus: config.id === 'SHOTGUN' ? config.shotgunProximityMaxDamageBonus : undefined,
+      shotgunSlowFraction: config.id === 'SHOTGUN' ? config.shotgunSlowFraction : undefined,
+      shotgunSlowDurationMs: config.id === 'SHOTGUN' ? config.shotgunSlowDurationMs : undefined,
+      hitKnockback: config.hitKnockback,
+      hitKnockbackDurationMs: config.hitKnockbackDurationMs,
+      proximityArc: config.proximityArc,
+      ak47ShotId: config.ak47ShotId,
+      ak47DamageMultiplier: config.ak47DamageMultiplier,
+      ak47FireSuperiorityShot: config.ak47FireSuperiorityShot,
     });
 
     return true;
@@ -1537,6 +1821,7 @@ export class LoadoutManager {
       config.hitHeal ?? 0,
       config.hitAdrenaline ?? 0,
       config.bloodEffectMultiplier ?? 1,
+      fireConfig.damageTargets,
     ) ?? false;
   }
 
@@ -1572,7 +1857,6 @@ export class LoadoutManager {
       velocityDecay:   fireConfig.velocityDecay,
       burnDurationMs:    fireConfig.burnDurationMs,
       burnDamagePerTick: fireConfig.burnDamagePerTick,
-      burnTickIntervalMs: fireConfig.burnTickIntervalMs,
       flamePiercing:     (fireConfig.piercingCount ?? 0) > 0,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,

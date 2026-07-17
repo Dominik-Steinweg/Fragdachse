@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { SyncedBaseState } from '../types';
 import { getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
-import { BaseEntity } from './BaseEntity';
+import { BaseEntity, type BaseTurretRuntimeState } from './BaseEntity';
 
 /**
  * Verwaltet alle aktiven Coop-Defense-Basen einer Runde.
@@ -31,6 +31,7 @@ export class BaseManager {
   private readonly group: Phaser.Physics.Arcade.StaticGroup;
   private readonly entities: BaseEntity[] = [];
   private readonly byId = new Map<string, BaseEntity>();
+  private readonly turretOwners = new Map<string, BaseEntity>();
   private onBaseDestroyed: ((spec: BaseSpec) => void) | null = null;
 
   constructor(scene: Phaser.Scene, baseSpecs: readonly BaseSpec[] = getCoopDefenseBases()) {
@@ -40,6 +41,7 @@ export class BaseManager {
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);
+      for (const turret of entity.getTurrets()) this.turretOwners.set(turret.id, entity);
       for (const body of entity.getCellBodies()) {
         this.group.add(body);
       }
@@ -85,6 +87,14 @@ export class BaseManager {
     return this.byId.get(id);
   }
 
+  getTurrets(): readonly BaseTurretRuntimeState[] {
+    return this.entities.flatMap((entity) => entity.getTurrets());
+  }
+
+  setTurretAngle(turretId: string, angle: number): void {
+    this.turretOwners.get(turretId)?.setTurretAngle(turretId, angle);
+  }
+
   /**
    * Host-only: Schaden auf eine Basis anwenden. Bei Übergang auf HP ≤ 0
    * triggert die Entity ihren Destroy-Callback, der via `setOnBaseDestroyed`
@@ -99,14 +109,20 @@ export class BaseManager {
   }
 
   /**
-   * Delta-Snapshot für GameState. Sendet nur Basen mit reduzierter HP.
-   * Leeres Array (= alle voll) wird vom Bridge-Publish weggelassen → Bandbreite.
+   * Delta-Snapshot für GameState. Sendet Basen mit reduzierter HP sowie aktive
+   * Basistürme, deren Zielwinkel für die Clients synchronisiert werden muss.
    */
   getNetSnapshot(): SyncedBaseState[] {
     const snapshot: SyncedBaseState[] = [];
     for (const entity of this.entities) {
-      if (entity.getHp() < entity.getMaxHp()) {
-        snapshot.push({ id: entity.id, hp: entity.getHp(), maxHp: entity.getMaxHp() });
+      const turrets = entity.getSyncedTurretStates();
+      if (entity.getHp() < entity.getMaxHp() || turrets.length > 0) {
+        snapshot.push({
+          id: entity.id,
+          hp: entity.getHp(),
+          maxHp: entity.getMaxHp(),
+          turrets: turrets.length > 0 ? turrets : undefined,
+        });
       }
     }
     return snapshot;
@@ -114,13 +130,15 @@ export class BaseManager {
 
   /** Client-only: Übernahme des Server-State aus GameState.bases. */
   applySnapshot(snapshot: readonly SyncedBaseState[]): void {
-    // Fehlende Einträge = volle HP (Delta-Convention). Erst auf Max setzen,
-    // dann gesendete Werte überschreiben.
+    // Fehlende Einträge = volle HP und keine synchronisierten Turret-Winkel
+    // (Delta-Convention). Erst auf Max setzen, dann gesendete Werte überschreiben.
     for (const entity of this.entities) {
       entity.setHp(entity.getMaxHp());
     }
     for (const remote of snapshot) {
-      this.byId.get(remote.id)?.setHp(remote.hp);
+      const entity = this.byId.get(remote.id);
+      entity?.setHp(remote.hp);
+      if (remote.turrets) entity?.applyTurretSnapshot(remote.turrets);
     }
   }
 
@@ -128,6 +146,7 @@ export class BaseManager {
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;
     this.byId.clear();
+    this.turretOwners.clear();
     this.group.destroy(true);
   }
 }

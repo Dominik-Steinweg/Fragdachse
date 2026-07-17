@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS, DEPTH } from '../config';
+import { BURN_TICK_INTERVAL_MS, COLORS, DEPTH } from '../config';
 import { circleZone, edgeZone } from './EffectUtils';
 import type { FireGrenadeEffect, SyncedFireZone } from '../types';
 
@@ -13,6 +13,7 @@ const FADE_OUT_MS  = 600;
 
 /* ── Damage event (returned to host for CombatSystem processing) ── */
 export interface FireDamageEvent {
+  sourceId: string;
   x:       number;
   y:       number;
   radius:  number;
@@ -22,7 +23,6 @@ export interface FireDamageEvent {
   trainDamageMult: number;
   burnDurationMs?:     number;
   burnDamagePerTick?:  number;
-  burnTickIntervalMs?: number;
   weaponName: string;
 }
 
@@ -71,7 +71,7 @@ export class FireSystem {
       config,
       ownerId,
       createdAt:  now,
-      lastTickAt: now,
+      lastTickAt: Math.floor(now / BURN_TICK_INTERVAL_MS) * BURN_TICK_INTERVAL_MS,
     });
   }
 
@@ -94,9 +94,12 @@ export class FireSystem {
       }
 
       // Schaden-Tick
-      if (now - zone.lastTickAt >= zone.config.tickInterval) {
-        zone.lastTickAt += zone.config.tickInterval;
+      const tickInterval = BURN_TICK_INTERVAL_MS;
+      if (now - zone.lastTickAt >= tickInterval) {
+        const elapsedTicks = Math.floor((now - zone.lastTickAt) / tickInterval);
+        zone.lastTickAt += elapsedTicks * tickInterval;
         damageEvents.push({
+          sourceId: `fire-zone:${zone.id}`,
           x:       zone.x,
           y:       zone.y,
           radius:  zone.config.radius,
@@ -106,7 +109,6 @@ export class FireSystem {
           trainDamageMult: zone.config.trainDamageMult ?? 1,
           burnDurationMs:     zone.config.burnDurationMs,
           burnDamagePerTick:  zone.config.burnDamagePerTick,
-          burnTickIntervalMs: zone.config.burnTickIntervalMs,
           weaponName: zone.config.weaponName ?? 'Feuer',
         });
       }

@@ -9,14 +9,19 @@ import { ResourceSystem }    from '../../systems/ResourceSystem';
 import { TeslaDomeSystem }   from '../../systems/TeslaDomeSystem';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { ShieldBuffSystem }   from '../../systems/ShieldBuffSystem';
-import { TurretSystem }      from '../../systems/TurretSystem';
+import { TurretSystem, type AutomatedTurretId } from '../../systems/TurretSystem';
 import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
 import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
+import { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
+import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
+import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
+import { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
+import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
@@ -37,7 +42,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, applyArenaMetricsForMode } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import { PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS, DASH_T2_S } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
@@ -187,7 +192,7 @@ export class ArenaLifecycleCoordinator {
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
       : null;
     const roundDurationSec = coopDefenseMapConfig?.roundDurationSec ?? ARENA_DURATION_SEC;
-    const layout = ArenaGenerator.generate(Date.now());
+    const layout = ArenaGenerator.generate(Date.now(), coopDefenseMapConfig ?? undefined);
     bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
     bridge.setArenaStartTime(arenaStartTime);
     bridge.setRoundEndTime(arenaStartTime + roundDurationSec * 1000);
@@ -418,12 +423,24 @@ export class ArenaLifecycleCoordinator {
         ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
           eventBus: this.scene.game.events,
           obstacleCellProvider,
+          goalMode: getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind).movementTarget === 'players'
+            ? 'dynamic-fallback-bases'
+            : 'bases',
           clearanceCells: Math.ceil(Math.max(
             0,
             getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind).size * 0.5 - CELL_SIZE * 0.5,
           ) / CELL_SIZE),
         })
         : null;
+      for (const flowField of this.ctx.allyFlowFieldServices.values()) flowField.destroy();
+      this.ctx.allyFlowFieldServices.clear();
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        this.ctx.allyFlowFieldServices.set(player.id, new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
+          eventBus: this.scene.game.events,
+          obstacleCellProvider,
+          goalMode: 'dynamic-fallback-bases',
+        }));
+      }
       if (this.ctx.enemyManager && this.ctx.enemyFlowFieldService && coopDefenseWaveConfigs.length > 0) {
         this.ctx.coopDefenseWaveSpawner = new CoopDefenseWaveSpawner(
           this.ctx.enemyManager,
@@ -441,7 +458,8 @@ export class ArenaLifecycleCoordinator {
       const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
       const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
       if (baseManager && flowFieldService && playerFlowFieldService) {
-        baseManager.setOnBaseDestroyed(() => {
+        baseManager.setOnBaseDestroyed((destroyedBase) => {
+          this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
           const activeBaseIds = baseManager.getActiveBaseIds();
           flowFieldService.setActiveBaseIds(activeBaseIds);
           playerFlowFieldService.setActiveBaseIds(activeBaseIds);
@@ -489,6 +507,48 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerArmorGainMultiplierResolver((playerId) => {
       return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.armorGain') ?? 0);
     });
+    this.ctx.combatSystem.setPlayerLifeLeechFractionResolver((playerId) => {
+      return this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.lifeLeechFraction') ?? 0;
+    });
+    this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver((playerId) => {
+      return this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.armorRegenPerSecond') ?? 0;
+    });
+    this.ctx.guardianSpiritSystem = bridge.isHost() && this.ctx.enemyManager && this.ctx.coopDefensePlayerModifierSystem
+      ? new GuardianSpiritSystem(
+        this.ctx.playerManager,
+        this.ctx.enemyManager,
+        this.ctx.combatSystem,
+        (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
+      )
+      : null;
+    this.ctx.slimeTrailSystem = bridge.isHost() && this.ctx.enemyManager && this.ctx.coopDefensePlayerModifierSystem
+      ? new SlimeTrailSystem(
+        this.ctx.playerManager,
+        this.ctx.enemyManager,
+        this.ctx.combatSystem,
+        (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
+        (playerId) => {
+          const input = bridge.getPlayerInput(playerId);
+          return this.ctx.hostPhysics.getDashPhase(playerId) === 0
+            && !(this.ctx.burrowSystem?.isBurrowed(playerId) ?? false)
+            && Math.hypot(input?.dx ?? 0, input?.dy ?? 0) > 0.01;
+        },
+      )
+      : null;
+    this.ctx.projectileManager.setNaturalFlameExpiryCallback((projectile, x, y) => {
+      this.ctx.flamethrowerUpgradeSystem?.handleNaturalFlameExpiry(projectile, x, y);
+    });
+    this.ctx.hostPhysics.setEnemyMovementFactorResolver((enemyId, now) => {
+      const slimeFactor = this.ctx.slimeTrailSystem?.getEnemyMovementFactor(enemyId, now) ?? 1;
+      const shotgunFactor = this.ctx.combatSystem.getEnemyMovementFactor(enemyId, now);
+      return Math.min(slimeFactor, shotgunFactor);
+    });
+    this.ctx.combatSystem.setEnemyDeathCallback((enemyId, x, y, burnSources, death) => {
+      this.ctx.flamethrowerUpgradeSystem?.handleEnemyDeath(x, y, burnSources);
+      const burst = this.ctx.slimeTrailSystem?.handleEnemyDeath(enemyId, x, y, Date.now());
+      if (burst) bridge.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
+      if (death) this.ctx.necromancySystem?.recordEnemyDeath(death);
+    });
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, damage, attackerId);
@@ -509,6 +569,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId);
     });
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
+      this.ctx.flamethrowerUpgradeSystem?.handlePlayerDeath(playerId, x, y);
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
       this.ctx.gameAudioSystem.playSound('sfx_player_death', x, y);
     });
@@ -575,8 +636,31 @@ export class ArenaLifecycleCoordinator {
         return this.ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex);
       });
       this.ctx.turretSystem.setTurretProvider(
-        () => this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
-        (id, angle) => this.ctx.placementSystem?.updateAngle(id, angle),
+        () => {
+          const placeableTurrets = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
+            .filter((rock) => rock.kind === 'turret')
+            .map((rock) => ({
+              id: rock.id,
+              x: ARENA_OFFSET_X + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
+              y: ARENA_OFFSET_Y + rock.gridY * CELL_SIZE + CELL_SIZE / 2,
+              ownerId: rock.ownerId,
+              ownerColor: rock.ownerColor,
+              skipRockIndex: rock.id,
+              secondProjectileDamageFactor: rock.secondProjectileDamageFactor,
+            }));
+          const baseTurrets = (this.ctx.baseManager?.getTurrets() ?? []).map((turret) => ({
+            id: turret.id,
+            x: turret.x,
+            y: turret.y,
+            ownerId: COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+            ownerColor: TEAM_BLUE_COLOR,
+          }));
+          return [...placeableTurrets, ...baseTurrets];
+        },
+        (id: AutomatedTurretId, angle) => {
+          if (typeof id === 'number') this.ctx.placementSystem?.updateAngle(id, angle);
+          else this.ctx.baseManager?.setTurretAngle(id, angle);
+        },
       );
       this.ctx.turretSystem.setEnemyTargetProvider(
         () => (this.ctx.enemyManager?.getAllEnemies() ?? [])
@@ -645,6 +729,45 @@ export class ArenaLifecycleCoordinator {
         this.ctx.resourceSystem,
         bridge,
       );
+      this.ctx.flamethrowerUpgradeSystem = this.ctx.enemyManager
+        && this.ctx.coopDefensePlayerModifierSystem
+        ? new FlamethrowerUpgradeSystem(
+          this.ctx.playerManager,
+          this.ctx.enemyManager,
+          this.ctx.projectileManager,
+          this.ctx.combatSystem,
+          this.ctx.loadoutManager,
+          this.ctx.fireSystem,
+          (playerId) => this.ctx.burrowSystem?.isBurrowed(playerId) ?? false,
+          (firstPlayerId, secondPlayerId) => !bridge.isEnemyPair(firstPlayerId, secondPlayerId),
+          (x, y, radius) => bridge.broadcastExplosionEffect(x, y, radius, 0xff6600),
+        )
+        : null;
+      this.ctx.necromancySystem = this.ctx.enemyManager
+        && this.ctx.coopDefensePlayerModifierSystem
+        ? new NecromancySystem(
+          this.ctx.playerManager,
+          this.ctx.enemyManager,
+          this.ctx.combatSystem,
+          this.ctx.loadoutManager,
+          this.ctx.allyFlowFieldServices,
+          (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
+        )
+        : null;
+      this.ctx.projectileManager.setProjectileResolvedCallback((projectile) => {
+        this.ctx.loadoutManager?.resolveAk47Projectile(projectile);
+      });
+      this.ctx.projectileManager.setMiniRocketCollectedCallback((projectile, x, y) => {
+        const refund = Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0)
+          * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0);
+        const armor = Math.max(0, projectile.miniRocketPickupArmor ?? 0);
+        if (refund > 0) this.ctx.resourceSystem?.refundAdrenaline(projectile.ownerId, refund);
+        if (armor > 0) this.ctx.combatSystem.addArmor(projectile.ownerId, armor);
+        bridge.broadcastMiniRocketCollectionEffect(x, y, projectile.ownerColor ?? projectile.color);
+      });
+      this.ctx.projectileManager.setMiniRocketDestroyedCallback((projectile, x, y) => {
+        bridge.broadcastMiniRocketDestructionEffect(x, y, projectile.ownerColor ?? projectile.color);
+      });
       this.ctx.loadoutManager.setUtilityConfigModifierSource((playerId) => {
         const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
         return modifiers
@@ -696,15 +819,39 @@ export class ArenaLifecycleCoordinator {
       this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY, damageFactor = 1) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
-        this.ctx.loadoutManager?.fireAutomatedWeapon({ ...weapon, damage: weapon.damage * damageFactor }, x, y, angle, targetX, targetY, ownerId, color);
+        const fire = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID && weapon.fire.type === 'projectile'
+          ? {
+            ...weapon.fire,
+            homing: weapon.fire.homing
+              ? { ...weapon.fire.homing, targetTypes: ['enemies'] as const }
+              : undefined,
+          }
+          : weapon.fire;
+        this.ctx.loadoutManager?.fireAutomatedWeapon(
+          { ...weapon, fire, damage: weapon.damage * damageFactor },
+          x,
+          y,
+          angle,
+          targetX,
+          targetY,
+          ownerId,
+          color,
+        );
       });
       if (this.ctx.enemyManager && this.ctx.baseManager) {
+        this.ctx.coopDefenseEnemyTrainAwarenessSystem = new CoopDefenseEnemyTrainAwarenessSystem(
+          () => this.ctx.trainManager,
+          () => bridge.getTrainEvent(),
+          (enemy, now) => enemy.getMoveSpeed()
+            * this.ctx.hostPhysics.getWorldMovementFactorAt(enemy.sprite.x, enemy.sprite.y, now),
+        );
         this.ctx.coopDefenseEnemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.projectileManager,
           this.ctx.combatSystem,
           this.ctx.energyShieldSystem,
+          this.ctx.stinkCloudSystem,
         );
         this.ctx.coopDefenseEnemyAttackSystem = new CoopDefenseEnemyAttackSystem(
           this.ctx.enemyManager,
@@ -713,7 +860,11 @@ export class ArenaLifecycleCoordinator {
           this.ctx.combatSystem,
           this.ctx.loadoutManager,
           () => this.ctx.arenaResult?.rockObjects ?? null,
+          this.ctx.coopDefenseEnemyTrainAwarenessSystem,
         );
+        this.ctx.hostPhysics.setEnemyRockContactCallback((enemyId, rock, now) => {
+          this.ctx.coopDefenseEnemyAttackSystem?.recordObstacleContact(enemyId, rock, now);
+        });
       }
       this.ctx.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor) => {
         return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor);
@@ -794,7 +945,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.loadoutManager.setWildfireHandler((ownerId, x, y, radius, durationMs, damagePerTick) => {
         this.ctx.fireSystem.hostCreateZone(x, y, {
-          type: 'fire', radius, damagePerTick, tickInterval: 250, lingerDuration: durationMs,
+          type: 'fire', radius, damagePerTick, lingerDuration: durationMs,
           allowTeamDamage: false, rockDamageMult: 0, trainDamageMult: 1,
         }, ownerId);
       });
@@ -803,6 +954,9 @@ export class ArenaLifecycleCoordinator {
 
       this.ctx.projectileManager.setBfgLaserCallback((proj) => {
         this.hostUpdate.resolveBfgLasers(proj);
+      });
+      this.ctx.projectileManager.setProximityArcCallback((proj) => {
+        this.hostUpdate.resolveProjectileProximityArcs(proj);
       });
       this.ctx.projectileManager.setTimeBubbleFactorProvider((x, y, now, ownerId) => {
         return this.ctx.timeBubbleSystem?.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1;
@@ -892,6 +1046,7 @@ export class ArenaLifecycleCoordinator {
 
   tearDownArena(): void {
     this.ctx.coopDefenseEnemyAbilitySystem?.clear();
+    this.ctx.coopDefenseEnemyTrainAwarenessSystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
     this.ctx.fireSystem.destroyAll();
@@ -903,6 +1058,9 @@ export class ArenaLifecycleCoordinator {
     this.renderers.healingAura.destroyAll();
     this.renderers.miniTeslaDome.destroyAll();
     this.renderers.energyShield.destroyAll();
+    this.renderers.guardianSpirit.destroyAll();
+    this.renderers.slimeTrail.clear();
+    this.renderers.flamethrowerUpgrades.clear();
     this.ctx.effectSystem.clearAllBurrowStates();
     this.placementPreview.clearForTeardown();
     this.rockVisualHelper.destroyAllTurretVisuals();
@@ -915,15 +1073,31 @@ export class ArenaLifecycleCoordinator {
     this.ctx.captureTheBeerSystem = null;
     this.ctx.baseManager?.destroy();
     this.ctx.baseManager = null;
+    this.ctx.necromancySystem?.clear();
+    this.ctx.necromancySystem = null;
     this.ctx.enemyManager?.destroy();
     this.ctx.enemyManager = null;
     this.ctx.coopDefenseEnemyAbilitySystem = null;
+    this.ctx.coopDefenseEnemyTrainAwarenessSystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;
+    this.ctx.guardianSpiritSystem?.clear();
+    this.ctx.guardianSpiritSystem = null;
+    this.ctx.slimeTrailSystem?.clear();
+    this.ctx.slimeTrailSystem = null;
+    this.ctx.flamethrowerUpgradeSystem?.clear();
+    this.ctx.flamethrowerUpgradeSystem = null;
+    this.ctx.projectileManager.setNaturalFlameExpiryCallback(null);
+    this.ctx.hostPhysics.setEnemyMovementFactorResolver(null);
     this.ctx.combatSystem.setDeathCallback(null);
+    this.ctx.combatSystem.setEnemyDeathCallback(null);
     this.ctx.combatSystem.setPlayerMaxHpResolver(null);
     this.ctx.combatSystem.setPlayerDamageReductionResolver(null);
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver(null);
+    this.ctx.combatSystem.setPlayerMaxArmorResolver(null);
+    this.ctx.combatSystem.setPlayerArmorGainMultiplierResolver(null);
+    this.ctx.combatSystem.setPlayerLifeLeechFractionResolver(null);
+    this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     this.ctx.placementSystem = null;
@@ -973,6 +1147,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setLoadoutManager(null);
     this.ctx.hostPhysics.setTimeBubbleSystem(null);
     this.ctx.hostPhysics.setEnemyManager(null);
+    this.ctx.hostPhysics.setEnemyRockContactCallback(null);
     this.ctx.coopDefenseEnemyAttackSystem = null;
     this.ctx.coopDefenseWaveSpawner = null;
     this.ctx.decoySystem.setCombatStateReader(null);
@@ -983,7 +1158,11 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
     this.ctx.projectileManager.setProjectileImpactCallback(null);
+    this.ctx.projectileManager.setProjectileResolvedCallback(null);
+    this.ctx.projectileManager.setMiniRocketCollectedCallback(null);
+    this.ctx.projectileManager.setMiniRocketDestroyedCallback(null);
     this.ctx.projectileManager.setBfgLaserCallback(null);
+    this.ctx.projectileManager.setProximityArcCallback(null);
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
     this.ctx.hostPhysics.setBaseGroup(null);
@@ -1009,6 +1188,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyPlayerFlowFieldService = null;
     this.ctx.enemyBossFlowFieldService?.destroy();
     this.ctx.enemyBossFlowFieldService = null;
+    for (const flowField of this.ctx.allyFlowFieldServices.values()) flowField.destroy();
+    this.ctx.allyFlowFieldServices.clear();
     this.renderers.train?.destroy();
     this.renderers.train = null;
     this.renderers.beer.clear();
@@ -1137,13 +1318,21 @@ export class ArenaLifecycleCoordinator {
       });
     });
     this.ctx.trainManager.setEnemyHitCallback((enemyId, sourceX, sourceY) => {
+      const enemy = this.ctx.enemyManager?.getEnemy(enemyId);
+      if (enemy?.faction === 'allied') return undefined;
+      const trainCollision = enemy
+        ? getCoopDefenseEnemyConfig(enemy.kind).trainCollision
+        : undefined;
       const recentPusherId = this.ctx.hostPhysics.getRecentImpulseSource(enemyId);
       const attackerId = recentPusherId ?? TRAIN.TRAIN_KILLER_ID;
       const weaponName = recentPusherId ? 'in den Zug geschubst' : 'Zug RB 54';
-      this.ctx.combatSystem.applyDamage(enemyId, 9999, true, attackerId, weaponName, {
+      this.ctx.combatSystem.applyDamage(enemyId, trainCollision?.damageToEnemy ?? 9999, true, attackerId, weaponName, {
         sourceX,
         sourceY,
       });
+      return trainCollision
+        ? { destroysTrain: trainCollision.destroysTrain }
+        : undefined;
     });
 
     this.ctx.trainManager.setIsPlayerBurrowedCallback((playerId) => {

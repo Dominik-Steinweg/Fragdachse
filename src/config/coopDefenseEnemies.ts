@@ -1,15 +1,37 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
-import type { WeaponConfig } from '../loadout/LoadoutConfig';
+import type { UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 
 export type CoopDefenseEnemyKind = string;
 
 export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
 
-export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players';
+export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players' | 'rocks';
 
 export interface CoopDefenseEnemyWeaponConfig {
   readonly weaponId: WeaponConfig['id'];
   readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
+  readonly minimumFireDurationMs?: number;
+  readonly playerMeleeWindupMs?: number;
+}
+
+export interface CoopDefenseEnemyStinkAuraConfig {
+  readonly utilityId: UtilityConfig['id'];
+}
+
+export interface CoopDefenseEnemyDeathSpawnConfig {
+  readonly enemyKind: CoopDefenseEnemyKind;
+  readonly count: number;
+  readonly offsetPx: number;
+}
+
+export interface CoopDefenseEnemyTrainAwarenessConfig {
+  readonly safetyDistancePx: number;
+  readonly timeSafetyMarginMs: number;
+}
+
+export interface CoopDefenseEnemyTrainCollisionConfig {
+  readonly damageToEnemy: number;
+  readonly destroysTrain: boolean;
 }
 
 export interface CoopDefenseEnemyTranslocatorConfig {
@@ -39,11 +61,16 @@ export interface CoopDefenseEnemyConfig {
   readonly weapons: readonly CoopDefenseEnemyWeaponConfig[];
   readonly attackScanIntervalMs: number;
   readonly attackStopDurationMs: number;
+  readonly obstacleAttackDelayMs: number;
   readonly imageKey: string;
   readonly isBoss?: boolean;
   readonly displayName?: string;
   readonly color?: number;
   readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
+  readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
+  readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
+  readonly trainAwareness?: CoopDefenseEnemyTrainAwarenessConfig;
+  readonly trainCollision?: CoopDefenseEnemyTrainCollisionConfig;
   readonly playerScaling?: CoopDefenseEnemyPlayerScaling;
   readonly spawnScaling?: CoopDefenseEnemySpawnScaling;
 }
@@ -118,11 +145,16 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         weapons: config.weapons,
         attackScanIntervalMs: config.attackScanIntervalMs,
         attackStopDurationMs: config.attackStopDurationMs,
+        obstacleAttackDelayMs: config.obstacleAttackDelayMs,
         imageKey: config.imageKey,
         isBoss: config.isBoss,
         displayName: config.displayName,
         color: config.color,
         translocator: config.translocator,
+        stinkAura: config.stinkAura,
+        deathSpawns: config.deathSpawns,
+        trainAwareness: config.trainAwareness,
+        trainCollision: config.trainCollision,
         spawnScaling: config.spawnScaling,
       },
     ]),
@@ -162,6 +194,15 @@ function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): Record<
     }
     byId[enemy.id] = normalizeEnemyConfig(enemy);
   }
+  for (const [enemyId, config] of Object.entries(byId)) {
+    for (const deathSpawn of config.deathSpawns ?? []) {
+      if (!byId[deathSpawn.enemyKind]) {
+        throw new Error(
+          `[coopDefenseEnemies] Enemy ${enemyId} references unknown death-spawn enemy ${deathSpawn.enemyKind}`,
+        );
+      }
+    }
+  }
   return byId;
 }
 
@@ -175,6 +216,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     weapons: normalizeWeapons(enemy.weapons, enemy.id),
     attackScanIntervalMs: Math.max(1, Math.floor(enemy.attackScanIntervalMs)),
     attackStopDurationMs: Math.max(0, Math.floor(enemy.attackStopDurationMs)),
+    obstacleAttackDelayMs: Math.max(0, Math.floor(enemy.obstacleAttackDelayMs)),
     imageKey: enemy.imageKey,
     isBoss: enemy.isBoss === true,
     displayName: typeof enemy.displayName === 'string' && enemy.displayName.trim().length > 0
@@ -184,8 +226,32 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
     translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
+    stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
+    deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
+    trainAwareness: normalizeTrainAwareness(enemy.trainAwareness),
+    trainCollision: normalizeTrainCollision(enemy.trainCollision),
     playerScaling: normalizePlayerScaling(enemy.playerScaling),
     spawnScaling: normalizeSpawnScaling(enemy.spawnScaling),
+  };
+}
+
+function normalizeTrainAwareness(
+  config: CoopDefenseEnemyTrainAwarenessConfig | undefined,
+): CoopDefenseEnemyTrainAwarenessConfig | undefined {
+  if (!config) return undefined;
+  return {
+    safetyDistancePx: Math.max(0, config.safetyDistancePx),
+    timeSafetyMarginMs: Math.max(0, Math.floor(config.timeSafetyMarginMs)),
+  };
+}
+
+function normalizeTrainCollision(
+  config: CoopDefenseEnemyTrainCollisionConfig | undefined,
+): CoopDefenseEnemyTrainCollisionConfig | undefined {
+  if (!config) return undefined;
+  return {
+    damageToEnemy: Math.max(0, config.damageToEnemy),
+    destroysTrain: config.destroysTrain === true,
   };
 }
 
@@ -205,6 +271,34 @@ function normalizeTranslocatorConfig(
     minRange,
     maxRange: Math.max(minRange, config.maxRange),
   };
+}
+
+function normalizeStinkAuraConfig(
+  config: CoopDefenseEnemyStinkAuraConfig | undefined,
+  enemyId: string,
+): CoopDefenseEnemyStinkAuraConfig | undefined {
+  if (!config) return undefined;
+  if (config.utilityId !== 'ENEMY_STINKDRUESEN') {
+    throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} references unsupported stink aura utility`);
+  }
+  return { utilityId: config.utilityId };
+}
+
+function normalizeDeathSpawns(
+  configs: readonly CoopDefenseEnemyDeathSpawnConfig[] | undefined,
+  enemyId: string,
+): readonly CoopDefenseEnemyDeathSpawnConfig[] | undefined {
+  if (!configs) return undefined;
+  return configs.map((config) => {
+    if (typeof config.enemyKind !== 'string' || config.enemyKind.trim().length === 0) {
+      throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid death-spawn enemy kind`);
+    }
+    return {
+      enemyKind: config.enemyKind,
+      count: Math.max(0, Math.floor(config.count)),
+      offsetPx: Math.max(0, config.offsetPx),
+    };
+  });
 }
 
 function normalizeWeapons(
@@ -227,6 +321,12 @@ function normalizeWeapons(
     return {
       weaponId: weapon.weaponId,
       targetMode: normalizeWeaponTargetMode(weapon.targetMode, enemyId),
+      minimumFireDurationMs: weapon.minimumFireDurationMs === undefined
+        ? undefined
+        : Math.max(0, Math.floor(weapon.minimumFireDurationMs)),
+      playerMeleeWindupMs: weapon.playerMeleeWindupMs === undefined
+        ? undefined
+        : Math.max(0, Math.floor(weapon.playerMeleeWindupMs)),
     };
   });
 }
@@ -235,7 +335,7 @@ function normalizeWeaponTargetMode(
   targetMode: CoopDefenseEnemyWeaponTargetMode,
   enemyId: string,
 ): CoopDefenseEnemyWeaponTargetMode {
-  if (targetMode === 'all' || targetMode === 'players') return targetMode;
+  if (targetMode === 'all' || targetMode === 'players' || targetMode === 'rocks') return targetMode;
   throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has unsupported weapon target mode: ${String(targetMode)}`);
 }
 

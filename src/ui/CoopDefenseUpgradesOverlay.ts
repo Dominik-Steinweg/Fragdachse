@@ -20,6 +20,7 @@ import {
   type LivingBarPalette,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import { getCoopDefenseUpgradeTextureKey } from '../utils/coopDefenseUpgrades';
 import { attachHoverEffect } from './uiHover';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
@@ -95,6 +96,9 @@ const BOSS_BADGE_SIZE = 20;
 const NODE_GAP_X = 18;
 const NODE_GAP_Y = 26;
 const ROW_GAP = 26;
+const ITEM_LANE_GAP_X = 18;
+const ITEM_LANE_PADDING_X = 6;
+const ITEM_LANE_PADDING_Y = 8;
 const NODE_INNER_PADDING = 2;
 const NODE_LABEL_FONT_SIZE = 9;
 
@@ -131,6 +135,13 @@ type PlacedNode = {
   node: CoopDefenseUpgradeNodeSnapshot;
   x: number;
   y: number;
+};
+
+type PlacedItemLane = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 type CategoryTree = {
@@ -694,93 +705,136 @@ export class CoopDefenseUpgradesOverlay {
     const columnCache = new Map<string, number>();
     const depthCache = new Map<string, number>();
 
-    const colsPerRow = Math.max(1, Math.floor((CONTENT_W + NODE_GAP_X) / COLUMN_UNIT));
-
-    const rows: { roots: CoopDefenseUpgradeNodeSnapshot[]; totalCols: number; maxDepth: number }[] = [];
-    let current = { roots: [] as CoopDefenseUpgradeNodeSnapshot[], totalCols: 0, maxDepth: 1 };
+    const rows: { roots: CoopDefenseUpgradeNodeSnapshot[]; totalWidthPx: number; maxDepth: number }[] = [];
+    let current = { roots: [] as CoopDefenseUpgradeNodeSnapshot[], totalWidthPx: 0, maxDepth: 1 };
 
     for (const root of tree.roots) {
       const cols = this.measureColumns(root.id, tree.childrenByParentId, columnCache);
-      if (current.roots.length > 0 && current.totalCols + cols > colsPerRow) {
+      const treeWidthPx = cols * COLUMN_UNIT - NODE_GAP_X;
+      const itemLaneWidthPx = treeWidthPx + ITEM_LANE_PADDING_X * 2;
+      const nextWidthPx = current.totalWidthPx
+        + (current.roots.length > 0 ? ITEM_LANE_GAP_X : 0)
+        + itemLaneWidthPx;
+      if (current.roots.length > 0 && nextWidthPx > CONTENT_W) {
         rows.push(current);
-        current = { roots: [], totalCols: 0, maxDepth: 1 };
+        current = { roots: [], totalWidthPx: 0, maxDepth: 1 };
       }
+      if (current.roots.length > 0) current.totalWidthPx += ITEM_LANE_GAP_X;
       current.roots.push(root);
-      current.totalCols += cols;
+      current.totalWidthPx += itemLaneWidthPx;
       current.maxDepth = Math.max(current.maxDepth, this.measureDepth(root.id, tree.childrenByParentId, depthCache));
     }
     if (current.roots.length > 0) rows.push(current);
 
     const placed: PlacedNode[] = [];
     const placedById = new Map<string, PlacedNode>();
+    const itemLanes: PlacedItemLane[] = [];
 
     let rowTopY = CONTENT_TOP + 12;
     for (const row of rows) {
-      const rowWidthPx = row.totalCols * COLUMN_UNIT - NODE_GAP_X;
-      const rowLeftX = CONTENT_X + Math.max(0, (CONTENT_W - rowWidthPx) / 2);
+      const rowLeftX = CONTENT_X + Math.max(0, (CONTENT_W - row.totalWidthPx) / 2);
+      const itemLaneHeightPx = row.maxDepth * ROW_UNIT - NODE_GAP_Y + ITEM_LANE_PADDING_Y * 2;
 
-      let colCursor = 0;
+      let itemCursorX = rowLeftX;
       for (const root of row.roots) {
         const cols = this.measureColumns(root.id, tree.childrenByParentId, columnCache);
+        const treeWidthPx = cols * COLUMN_UNIT - NODE_GAP_X;
+        const itemLaneWidthPx = treeWidthPx + ITEM_LANE_PADDING_X * 2;
         this.layoutSubtree({
           node: root,
-          leftX: rowLeftX + colCursor * COLUMN_UNIT,
-          depthIndex: 0,
+          leftX: itemCursorX + ITEM_LANE_PADDING_X,
           rowTopY,
           tree,
-          columnCache,
           placed,
           placedById,
         });
-        colCursor += cols;
+        itemLanes.push({
+          x: itemCursorX + itemLaneWidthPx / 2,
+          y: rowTopY - ITEM_LANE_PADDING_Y + itemLaneHeightPx / 2,
+          width: itemLaneWidthPx,
+          height: itemLaneHeightPx,
+        });
+        itemCursorX += itemLaneWidthPx + ITEM_LANE_GAP_X;
       }
 
       rowTopY += row.maxDepth * ROW_UNIT + ROW_GAP;
     }
 
     this.repositionMergeNodes(placed, placedById, tree.childrenByParentId);
+    this.renderItemLanes(itemLanes, visuals);
     this.renderConnections(placed, placedById, visuals);
     for (const placedNode of placed) {
       this.renderNode(placedNode, visuals);
     }
   }
 
+  private renderItemLanes(lanes: readonly PlacedItemLane[], visuals: CategoryVisuals): void {
+    if (!this.upgradesContainer || lanes.length === 0) return;
+
+    const graphics = this.scene.add.graphics().setScrollFactor(0);
+    for (const lane of lanes) {
+      const left = lane.x - lane.width / 2;
+      const top = lane.y - lane.height / 2;
+      const radius = 14;
+
+      // A soft, layered edge keeps each item group legible without turning the
+      // upgrade tree into a grid of heavy cards.
+      graphics.fillStyle(0x000000, 0.12);
+      graphics.fillRoundedRect(left + 1, top + 2, lane.width - 2, lane.height, radius);
+      graphics.fillStyle(visuals.divider, 0.06);
+      graphics.fillRoundedRect(left, top, lane.width, lane.height, radius);
+      graphics.fillStyle(visuals.laneFill, 0.17);
+      graphics.fillRoundedRect(left + 1, top + 1, lane.width - 2, lane.height - 2, radius - 1);
+      graphics.lineStyle(1, visuals.divider, 0.2);
+      graphics.strokeRoundedRect(left + 0.5, top + 0.5, lane.width - 1, lane.height - 1, radius);
+      graphics.lineStyle(1, 0xffffff, 0.035);
+      graphics.strokeRoundedRect(left + 2, top + 2, lane.width - 4, lane.height - 4, radius - 2);
+    }
+    this.upgradesContainer.add(graphics);
+  }
+
   private layoutSubtree(params: {
     node: CoopDefenseUpgradeNodeSnapshot;
     leftX: number;
-    depthIndex: number;
     rowTopY: number;
     tree: CategoryTree;
-    columnCache: Map<string, number>;
     placed: PlacedNode[];
     placedById: Map<string, PlacedNode>;
   }): void {
-    const { node, leftX, depthIndex, rowTopY, tree, columnCache, placed, placedById } = params;
-
-    const cols = this.measureColumns(node.id, tree.childrenByParentId, columnCache);
+    const { node, leftX, rowTopY, tree, placed, placedById } = params;
+    const layers = this.collectSubtreeLayers(node, tree.childrenByParentId);
+    const cols = Math.max(1, ...layers.map((layer) => layer.length));
     const subtreeWidthPx = cols * COLUMN_UNIT - NODE_GAP_X;
-    const x = leftX + subtreeWidthPx / 2;
-    const y = rowTopY + depthIndex * ROW_UNIT + NODE_H / 2;
 
-    const placedNode: PlacedNode = { node, x, y };
-    placed.push(placedNode);
-    placedById.set(node.id, placedNode);
+    for (let depthIndex = 0; depthIndex < layers.length; depthIndex += 1) {
+      const layer = layers[depthIndex];
+      const layerWidthPx = layer.length * COLUMN_UNIT - NODE_GAP_X;
+      const layerLeftX = leftX + (subtreeWidthPx - layerWidthPx) / 2;
+      const y = rowTopY + depthIndex * ROW_UNIT + NODE_H / 2;
 
-    const children = tree.childrenByParentId.get(node.id) ?? [];
-    let childLeft = leftX;
-    for (const child of children) {
-      this.layoutSubtree({
-        node: child,
-        leftX: childLeft,
-        depthIndex: depthIndex + 1,
-        rowTopY,
-        tree,
-        columnCache,
-        placed,
-        placedById,
-      });
-      childLeft += this.measureColumns(child.id, tree.childrenByParentId, columnCache) * COLUMN_UNIT;
+      for (let index = 0; index < layer.length; index += 1) {
+        const currentNode = layer[index];
+        const x = layerLeftX + index * COLUMN_UNIT + NODE_W / 2;
+        const placedNode: PlacedNode = { node: currentNode, x, y };
+        placed.push(placedNode);
+        placedById.set(currentNode.id, placedNode);
+      }
     }
+  }
+
+  private collectSubtreeLayers(
+    root: CoopDefenseUpgradeNodeSnapshot,
+    childrenByParentId: ReadonlyMap<string, readonly CoopDefenseUpgradeNodeSnapshot[]>,
+  ): CoopDefenseUpgradeNodeSnapshot[][] {
+    const layers: CoopDefenseUpgradeNodeSnapshot[][] = [];
+    let currentLayer: CoopDefenseUpgradeNodeSnapshot[] = [root];
+
+    while (currentLayer.length > 0) {
+      layers.push(currentLayer);
+      currentLayer = currentLayer.flatMap((node) => childrenByParentId.get(node.id) ?? []);
+    }
+
+    return layers;
   }
 
   private buildCategoryTree(upgrades: readonly CoopDefenseUpgradeNodeSnapshot[]): CategoryTree {
@@ -857,10 +911,14 @@ export class CoopDefenseUpgradesOverlay {
     const cached = cache.get(nodeId);
     if (cached != null) return cached;
 
-    const children = childrenByParentId.get(nodeId) ?? [];
-    const cols = children.length === 0
-      ? 1
-      : Math.max(1, children.reduce((sum, child) => sum + this.measureColumns(child.id, childrenByParentId, cache), 0));
+    let cols = 1;
+    let currentLayerIds = [nodeId];
+    while (currentLayerIds.length > 0) {
+      cols = Math.max(cols, currentLayerIds.length);
+      currentLayerIds = currentLayerIds.flatMap((id) => (
+        (childrenByParentId.get(id) ?? []).map((child) => child.id)
+      ));
+    }
     cache.set(nodeId, cols);
     return cols;
   }
@@ -913,12 +971,15 @@ export class CoopDefenseUpgradesOverlay {
           const connectorColor = child.node.bossPointCostPerLevel > 0
             ? (child.node.bossPointRequirementMet || child.node.level > 0 ? COLORS.GOLD_1 : COLORS.RED_2)
             : visuals.connector;
-          // Soft glowing base line + flowing energy dot.
+          // The path lights up as soon as its prerequisite is satisfied. The
+          // energy dot only appears once both connected upgrades are active.
           graphics.lineStyle(4, connectorColor, 0.18);
           this.strokePolyline(graphics, points);
           graphics.lineStyle(2, connectorColor, 0.85);
           this.strokePolyline(graphics, points);
-          this.addFlowingDot(points, connectorColor);
+          if (parent.node.level > 0 && child.node.level > 0) {
+            this.addFlowingDot(points, connectorColor);
+          }
         } else {
           graphics.lineStyle(2, COLORS.GREY_5, 0.45);
           this.strokePolyline(graphics, points);
@@ -1518,8 +1579,7 @@ export class CoopDefenseUpgradesOverlay {
 
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
     if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
-    if (node.id === 'fliegenpilz_cooldown') return 'UPGRADE_HE_GRENADE_COOLDOWN';
-    if (node.kind === 'upgrade') return `UPGRADE_${node.id.toUpperCase()}`;
+    if (node.kind === 'upgrade') return getCoopDefenseUpgradeTextureKey(node.id);
     return null;
   }
 

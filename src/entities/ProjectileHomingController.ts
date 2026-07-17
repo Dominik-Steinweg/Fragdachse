@@ -32,27 +32,29 @@ export class ProjectileHomingController {
   }
 
   /** Lenkt ein zielsuchendes Projektil pro Host-Schritt Richtung seines (ggf. neu gewählten) Ziels. */
-  update(proj: TrackedProjectile, simulatedAgeMs: number): void {
+  update(proj: TrackedProjectile, simulatedAgeMs: number, forceSearch = false): boolean {
     const homing = proj.homing;
-    if (!homing || !this.targetProvider) return;
-    if (simulatedAgeMs < homing.acquireDelayMs) return;
+    if (!homing || !this.targetProvider) return false;
+    if (!forceSearch && simulatedAgeMs < homing.acquireDelayMs) return proj.lockedTargetId != null;
 
     const lastSearchAt = proj.lastHomingSearchAt ?? 0;
-    if (lastSearchAt > 0 && simulatedAgeMs - lastSearchAt < homing.retargetIntervalMs) return;
+    if (!forceSearch && lastSearchAt > 0 && simulatedAgeMs - lastSearchAt < homing.retargetIntervalMs) {
+      return proj.lockedTargetId != null;
+    }
     proj.lastHomingSearchAt = simulatedAgeMs;
 
     const target = this.selectTarget(proj, homing);
     if (!target) {
       proj.lockedTargetId = null;
       proj.lockedTargetType = undefined;
-      return;
+      return false;
     }
 
     proj.lockedTargetId = target.id;
     proj.lockedTargetType = target.type;
 
     const currentSpeed = proj.body.velocity.length();
-    if (currentSpeed <= 0.001) return;
+    if (currentSpeed <= 0.001) return true;
 
     const currentAngle = Math.atan2(proj.body.velocity.y, proj.body.velocity.x);
     const targetAngle = Phaser.Math.Angle.Between(proj.sprite.x, proj.sprite.y, target.x, target.y);
@@ -64,6 +66,7 @@ export class ProjectileHomingController {
       Math.cos(nextAngle) * currentSpeed,
       Math.sin(nextAngle) * currentSpeed,
     );
+    return true;
   }
 
   private selectTarget(proj: TrackedProjectile, homing: ProjectileHomingConfig): HomingTargetCandidate | null {

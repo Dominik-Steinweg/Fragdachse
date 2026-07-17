@@ -17,6 +17,7 @@ const MIN_INTRA_WAVE_DISTANCE_CELLS = 2;
 
 export class CoopDefenseWaveSpawner {
   private readonly accumulators: number[];
+  private readonly startedWaves: boolean[];
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
   private elapsedMs = 0;
@@ -30,6 +31,7 @@ export class CoopDefenseWaveSpawner {
     private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
   ) {
     this.accumulators = waveConfigs.map(() => 0);
+    this.startedWaves = waveConfigs.map(() => false);
   }
 
   hostUpdate(deltaMs: number, countdownActive: boolean): void {
@@ -44,6 +46,13 @@ export class CoopDefenseWaveSpawner {
 
     for (const [index, waveConfig] of this.waveConfigs.entries()) {
       const { intervalMs } = waveConfig;
+      if (this.elapsedMs < waveConfig.startAtMs) continue;
+
+      if (!this.startedWaves[index]) {
+        this.startedWaves[index] = true;
+        this.runWave(waveConfig.enemyKind, waveConfig.countPerWave);
+      }
+
       const activeDeltaMs = this.getActiveDeltaMs(previousElapsedMs, this.elapsedMs, waveConfig.startAtMs);
       if (activeDeltaMs <= 0) continue;
 
@@ -59,6 +68,7 @@ export class CoopDefenseWaveSpawner {
   reset(): void {
     for (let index = 0; index < this.accumulators.length; index++) {
       this.accumulators[index] = 0;
+      this.startedWaves[index] = false;
     }
     this.recentCells.length = 0;
     this.exhaustionWarned = false;

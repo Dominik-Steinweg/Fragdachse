@@ -43,6 +43,8 @@ interface ClientProjectileState {
   projectileVisualScale?: number;
   isDecaying: boolean;
   velocityDecay: number;
+  miniRocketPhase?: import('../types').MiniRocketFlightPhase;
+  miniRocketCascadeStage?: number;
 }
 
 function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset): BulletVisualPreset {
@@ -109,6 +111,8 @@ export class ProjectileManager {
 
   // ── BFG Laser-Callback (Host-only, injiziert von ArenaScene) ────────────
   private bfgLaserCallback: ((proj: TrackedProjectile) => void) | null = null;
+  private proximityArcCallback: ((proj: TrackedProjectile) => void) | null = null;
+  private naturalFlameExpiryCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
 
   // ── Homing-Zielsuche (Host-only, injiziert von ArenaScene) ──────────────
   private readonly homingController = new ProjectileHomingController();
@@ -116,6 +120,9 @@ export class ProjectileManager {
   // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
   private pendingProjectileExplosions: ExplodedProjectile[] = [];
   private projectileImpactCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
+  private projectileResolvedCallback: ((proj: TrackedProjectile) => void) | null = null;
+  private miniRocketCollectedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
+  private miniRocketDestroyedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -203,6 +210,12 @@ export class ProjectileManager {
     this.flameRenderer = renderer;
   }
 
+  setNaturalFlameExpiryCallback(
+    callback: ((proj: TrackedProjectile, x: number, y: number) => void) | null,
+  ): void {
+    this.naturalFlameExpiryCallback = callback;
+  }
+
   /** Injiziert den LeafBlowerRenderer fuer Luftstrom-Projektile. */
   setLeafBlowerRenderer(renderer: LeafBlowerRenderer | null): void {
     this.leafBlowerRenderer = renderer;
@@ -280,8 +293,24 @@ export class ProjectileManager {
     this.bfgLaserCallback = cb;
   }
 
+  setProximityArcCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
+    this.proximityArcCallback = cb;
+  }
+
   setProjectileImpactCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
     this.projectileImpactCallback = cb;
+  }
+
+  setProjectileResolvedCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
+    this.projectileResolvedCallback = cb;
+  }
+
+  setMiniRocketCollectedCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
+    this.miniRocketCollectedCallback = cb;
+  }
+
+  setMiniRocketDestroyedCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
+    this.miniRocketDestroyedCallback = cb;
   }
 
   /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
@@ -525,7 +554,42 @@ export class ProjectileManager {
       gaussChainRadius: cfg.gaussChainRadius,
       gaussChainDamageFactor: cfg.gaussChainDamageFactor,
       multiExplosionsRemaining: Math.max(1, Math.floor(cfg.multiExplosionCount ?? 1)),
-      multiExplosionExcludedTargetKeys: (cfg.multiExplosionCount ?? 1) > 1 ? new Set<string>() : undefined,
+      multiExplosionExcludedTargetKeys: (cfg.multiExplosionCount ?? 1) > 1
+        ? new Set<string>()
+        : undefined,
+      multiExplosionCoastMs: cfg.multiExplosionCoastMs,
+      miniRocketStageRangePx: cfg.miniRocketStageRangePx,
+      miniRocketPhase: cfg.miniRocketStageRangePx !== undefined ? 'attack' : undefined,
+      miniRocketCoastUntilAgeMs: undefined,
+      miniRocketNextExplosionAtAgeMs: undefined,
+      miniRocketDeferredExplosion: false,
+      miniRocketDeferredExplosionStopsAtObstacle: false,
+      miniRocketSpent: false,
+      miniRocketDestructionFxEmitted: false,
+      miniRocketHasExploded: false,
+      miniRocketReturnEnabled: cfg.miniRocketReturnEnabled,
+      miniRocketReturnRangeBuffer: cfg.miniRocketReturnRangeBuffer,
+      miniRocketReturnReserveGranted: false,
+      miniRocketPickupRadius: cfg.miniRocketPickupRadius,
+      miniRocketPickupAdrenalineRefundFraction: cfg.miniRocketPickupAdrenalineRefundFraction,
+      miniRocketPickupArmor: cfg.miniRocketPickupArmor,
+      miniRocketAdrenalineCostPaid: cfg.miniRocketAdrenalineCostPaid,
+      miniRocketSafetyLifetimeMs: cfg.miniRocketSafetyLifetimeMs,
+      miniRocketCascadeInitialDamageBonus: cfg.miniRocketCascadeInitialDamageBonus,
+      miniRocketCascadeDamageBonusPerExplosion: cfg.miniRocketCascadeDamageBonusPerExplosion,
+      miniRocketExplosionIndex: 0,
+      ak47ShotId: cfg.ak47ShotId,
+      ak47HitConfirmed: false,
+      ak47DamageMultiplier: cfg.ak47DamageMultiplier,
+      ak47FireSuperiorityShot: cfg.ak47FireSuperiorityShot,
+      shotgunOriginX: cfg.shotgunOriginX,
+      shotgunOriginY: cfg.shotgunOriginY,
+      shotgunResolvedRange: cfg.shotgunResolvedRange,
+      shotgunProximityMaxDamageBonus: cfg.shotgunProximityMaxDamageBonus,
+      shotgunSlowFraction: cfg.shotgunSlowFraction,
+      shotgunSlowDurationMs: cfg.shotgunSlowDurationMs,
+      hitKnockback: cfg.hitKnockback,
+      hitKnockbackDurationMs: cfg.hitKnockbackDurationMs,
       // Flammenwerfer-Felder
       isFlame:         cfg.isFlame,
       hitboxGrowRate:  cfg.hitboxGrowRate,
@@ -533,8 +597,9 @@ export class ProjectileManager {
       velocityDecay:   cfg.velocityDecay,
       burnDurationMs:    cfg.burnDurationMs,
       burnDamagePerTick: cfg.burnDamagePerTick,
-      burnTickIntervalMs: cfg.burnTickIntervalMs,
       flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
+      canReceiveFireImbue: cfg.canReceiveFireImbue,
+      supplementalBurnOnHit: cfg.supplementalBurnOnHit,
       leafBlowerMinKnockback: cfg.leafBlowerMinKnockback,
       leafBlowerMaxKnockback: cfg.leafBlowerMaxKnockback,
       leafBlowerSelfPush: cfg.leafBlowerSelfPush,
@@ -546,6 +611,7 @@ export class ProjectileManager {
       bfgLaserRadius:   cfg.bfgLaserRadius,
       bfgLaserDamage:   cfg.bfgLaserDamage,
       bfgLaserInterval: cfg.bfgLaserInterval,
+      proximityArc: cfg.proximityArc,
       // Anti-Tunneling
       originalBodySize: cfg.size < MIN_BODY_LEN && !isFlame && !isLeafBlower && !isBfg && !isGauss && !cfg.isGrenade
         ? cfg.size : undefined,
@@ -720,26 +786,26 @@ export class ProjectileManager {
       body.setBounce(0, 0);
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
-        this.queueProjectileExplosion(tracked);
+        this.queueProjectileExplosion(tracked, false, true);
       };
       tracked.boundsListener = boundsListener;
       this.scene.physics.world.on('worldbounds', boundsListener);
 
       if (this.rockGroup) {
         const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
-          this.queueProjectileExplosion(tracked);
+          this.queueProjectileExplosion(tracked, false, true);
         });
         tracked.colliders.push(c);
       }
       if (this.trunkGroup) {
         const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
-          this.queueProjectileExplosion(tracked);
+          this.queueProjectileExplosion(tracked, false, true);
         });
         tracked.colliders.push(c);
       }
       if (this.baseGroup) {
         const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
-          this.queueProjectileExplosion(tracked);
+          this.queueProjectileExplosion(tracked, false, true);
         });
         tracked.colliders.push(c);
       }
@@ -747,10 +813,10 @@ export class ProjectileManager {
         const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
           const trainMult = tracked.trainDamageMult ?? 1;
-          if (trainMult !== 0 && tracked.damage > 0) {
+          if (!tracked.miniRocketSpent && trainMult !== 0 && tracked.damage > 0) {
             onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
           }
-          this.queueProjectileExplosion(tracked);
+          this.queueProjectileExplosion(tracked, false, true);
         });
         tracked.colliders.push(c);
       }
@@ -1427,7 +1493,6 @@ export class ProjectileManager {
         velocityDecay: proj.velocityDecay,
         burnDurationMs: proj.burnDurationMs,
         burnDamagePerTick: proj.burnDamagePerTick,
-        burnTickIntervalMs: proj.burnTickIntervalMs,
         leafBlowerMinKnockback: proj.leafBlowerMinKnockback,
         leafBlowerMaxKnockback: proj.leafBlowerMaxKnockback,
         leafBlowerSelfPush: proj.leafBlowerSelfPush,
@@ -1435,6 +1500,7 @@ export class ProjectileManager {
         bfgLaserRadius: proj.bfgLaserRadius,
         bfgLaserDamage: proj.bfgLaserDamage,
         bfgLaserInterval: proj.bfgLaserInterval,
+        proximityArc: proj.proximityArc,
         frictionDelayMs: proj.frictionDelayMs,
         airFrictionDecayPerSec: proj.airFrictionDecayPerSec,
         bounceFrictionMultiplier: proj.bounceFrictionMultiplier,
@@ -1466,6 +1532,7 @@ export class ProjectileManager {
   }
 
   private destroyTrackedProjectile(proj: TrackedProjectile): void {
+    this.projectileResolvedCallback?.(proj);
     const destroyX = proj.pendingHydraSplit?.x ?? proj.sprite.x;
     const destroyY = proj.pendingHydraSplit?.y ?? proj.sprite.y;
     const destroyScale = proj.sprite.displayWidth / 16;
@@ -1500,26 +1567,102 @@ export class ProjectileManager {
     this.translocatorPuckRenderer?.destroyVisual(proj.id);
   }
 
-  private queueProjectileExplosion(proj: TrackedProjectile, allowMultiContinue = false): void {
-    if (proj.pendingExplosion || !proj.explosion) return;
+  private queueProjectileExplosion(
+    proj: TrackedProjectile,
+    allowMultiContinue = false,
+    stopMultiContinuationAtObstacle = false,
+  ): void {
+    if (proj.pendingExplosion) return;
+    if (!proj.explosion) {
+      if (proj.miniRocketSpent) this.queueSpentMiniRocketDestruction(proj);
+      return;
+    }
+    const simulatedAge = proj.simulatedAgeMs ?? 0;
+    const nextExplosionAt = proj.miniRocketNextExplosionAtAgeMs ?? 0;
+    if (proj.miniRocketStageRangePx !== undefined && simulatedAge < nextExplosionAt) {
+      const velocityLength = proj.body.velocity.length();
+      if (velocityLength > 0.001) {
+        proj.miniRocketContinuationVx = proj.body.velocity.x;
+        proj.miniRocketContinuationVy = proj.body.velocity.y;
+      }
+      proj.miniRocketDeferredExplosion = true;
+      proj.miniRocketDeferredExplosionStopsAtObstacle =
+        (proj.miniRocketDeferredExplosionStopsAtObstacle ?? false) || stopMultiContinuationAtObstacle;
+      proj.body.setVelocity(0, 0);
+      proj.body.enable = false;
+      return;
+    }
+    proj.miniRocketDeferredExplosion = false;
+    const stopsAtObstacle = (proj.miniRocketDeferredExplosionStopsAtObstacle ?? false)
+      || stopMultiContinuationAtObstacle;
+    proj.miniRocketDeferredExplosionStopsAtObstacle = false;
     const remaining = Math.max(1, proj.multiExplosionsRemaining ?? 1);
-    const continuesAfterExplosion = allowMultiContinue && remaining > 1;
-    proj.multiExplosionsRemaining = remaining - 1;
+    const explosionIndex = Math.max(0, proj.miniRocketExplosionIndex ?? 0);
+    const cascadeMultiplier = 1
+      + Math.max(0, proj.miniRocketCascadeInitialDamageBonus ?? 0)
+      + explosionIndex * Math.max(0, proj.miniRocketCascadeDamageBonusPerExplosion ?? 0);
+    const cascadeColor = proj.explosion.color === undefined
+      ? undefined
+      : this.resolveMiniRocketCascadeColor(proj.explosion.color, explosionIndex);
+    const resolvedEffect = cascadeMultiplier > 1.0001
+      ? {
+          ...proj.explosion,
+          maxDamage: proj.explosion.maxDamage * cascadeMultiplier,
+          minDamage: proj.explosion.minDamage === undefined
+            ? undefined
+            : proj.explosion.minDamage * cascadeMultiplier,
+          color: cascadeColor,
+          visualStyle: proj.explosion.visualStyle === 'mini_rocket'
+            ? 'mini_rocket_cascade' as const
+            : proj.explosion.visualStyle,
+        }
+      : proj.explosion;
+    if (proj.miniRocketStageRangePx !== undefined) {
+      proj.miniRocketExplosionIndex = explosionIndex + 1;
+    }
+    const isExtendedMiniRocket = proj.miniRocketStageRangePx !== undefined;
+    const continuesChainAfterExplosion = !stopsAtObstacle
+      && (allowMultiContinue || isExtendedMiniRocket)
+      && remaining > 1;
+    const returnsSpentAfterExplosion = isExtendedMiniRocket
+      && proj.miniRocketReturnEnabled === true
+      && !continuesChainAfterExplosion;
+    const resumesAfterExplosion = continuesChainAfterExplosion || returnsSpentAfterExplosion;
+    if (resumesAfterExplosion && isExtendedMiniRocket) {
+      const velocityLength = proj.body.velocity.length();
+      if (velocityLength > 0.001) {
+        proj.miniRocketContinuationVx = proj.body.velocity.x;
+        proj.miniRocketContinuationVy = proj.body.velocity.y;
+      } else {
+        const dx = proj.sprite.x - proj.lastX;
+        const dy = proj.sprite.y - proj.lastY;
+        const distance = Math.hypot(dx, dy);
+        const fallbackSpeed = Math.max(1, (proj.initialSpeed ?? 1) * (proj.timeBubbleFactor ?? 1));
+        if (distance > 0.001) {
+          proj.miniRocketContinuationVx = (dx / distance) * fallbackSpeed;
+          proj.miniRocketContinuationVy = (dy / distance) * fallbackSpeed;
+        }
+      }
+    }
+    proj.multiExplosionsRemaining = returnsSpentAfterExplosion ? 0 : remaining - 1;
+    proj.miniRocketSpent = returnsSpentAfterExplosion;
     proj.pendingExplosion = true;
     this.pendingProjectileExplosions.push({
       x: proj.sprite.x,
       y: proj.sprite.y,
       ownerId: proj.ownerId,
-      effect: proj.explosion,
+      effect: resolvedEffect,
       sourceSlot: proj.sourceSlot,
       weaponName: proj.weaponName,
       projectileId: proj.id,
-      continuesAfterExplosion,
+      continuesAfterExplosion: resumesAfterExplosion,
     });
-    if (continuesAfterExplosion) {
+    if (resumesAfterExplosion) {
       proj.lockedTargetId = null;
       proj.lockedTargetType = undefined;
       proj.lastHomingSearchAt = undefined;
+      proj.body.setVelocity(0, 0);
+      proj.body.enable = false;
     } else {
       this.queueDestroyProjectile(proj);
     }
@@ -1624,6 +1767,11 @@ export class ProjectileManager {
   triggerProjectileExplosion(id: number, impactTargetKey?: string): boolean {
     const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
     if (!proj?.explosion) return false;
+    // Nur das Ziel, das die aktuelle Explosion ausgeloest hat, wird waehrend der
+    // anschliessenden Geradeausphase ignoriert. Andere Ziele und alle Phaser-
+    // Hinderniscollider bleiben aktiv. Nach der Coast-Phase darf dasselbe Ziel
+    // wieder gewaehlt und getroffen werden.
+    proj.multiExplosionExcludedTargetKeys?.clear();
     if (impactTargetKey) proj.multiExplosionExcludedTargetKeys?.add(impactTargetKey);
     this.queueProjectileExplosion(proj, true);
     return true;
@@ -1631,12 +1779,41 @@ export class ProjectileManager {
 
   resumeMultiExplosionProjectile(id: number, excludedTargetKeys: readonly string[]): void {
     const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
-    if (!proj || (proj.multiExplosionsRemaining ?? 0) <= 0) return;
-    for (const key of excludedTargetKeys) proj.multiExplosionExcludedTargetKeys?.add(key);
+    if (!proj || ((proj.multiExplosionsRemaining ?? 0) <= 0 && !proj.miniRocketSpent)) return;
+    void excludedTargetKeys;
     proj.pendingExplosion = false;
     proj.lockedTargetId = null;
     proj.lockedTargetType = undefined;
     proj.lastHomingSearchAt = undefined;
+    if (proj.miniRocketStageRangePx !== undefined) {
+      proj.miniRocketHasExploded = true;
+      if (proj.miniRocketSpent) {
+        // Die letzte Detonation ist verbraucht: Der Rueckflug bleibt als
+        // einsammelbares Objekt bestehen, darf aber weder Ziele suchen noch
+        // Direkttreffer oder weitere Explosionen ausloesen.
+        proj.explosion = undefined;
+        proj.multiExplosionExcludedTargetKeys?.clear();
+        proj.body.enable = true;
+        const vx = proj.miniRocketContinuationVx ?? proj.body.velocity.x;
+        const vy = proj.miniRocketContinuationVy ?? proj.body.velocity.y;
+        this.setMiniRocketVelocityFromDirection(proj, vx, vy);
+        this.enterMiniRocketReturn(proj);
+        return;
+      }
+      proj.miniRocketPhase = 'coast';
+      proj.miniRocketCoastUntilAgeMs = (proj.simulatedAgeMs ?? 0) + Math.max(0, proj.multiExplosionCoastMs ?? 0);
+      proj.miniRocketNextExplosionAtAgeMs = proj.miniRocketCoastUntilAgeMs;
+      proj.miniRocketReturnReserveGranted = false;
+      proj.remainingRangePx = proj.miniRocketStageRangePx;
+      proj.lastX = proj.sprite.x;
+      proj.lastY = proj.sprite.y;
+      const vx = proj.miniRocketContinuationVx ?? proj.body.velocity.x;
+      const vy = proj.miniRocketContinuationVy ?? proj.body.velocity.y;
+      if (Math.hypot(vx, vy) > 0.001) {
+        proj.body.enable = true;
+        this.setMiniRocketVelocityFromDirection(proj, vx, vy);
+      }
+    }
   }
 
   /**
@@ -1796,8 +1973,41 @@ export class ProjectileManager {
           }
         }
 
+        // Bis HostUpdateCoordinator die Explosion verarbeitet und die naechste
+        // Etappe freigibt, bleibt das Projektil vollstaendig eingefroren.
+        if (awaitingMultiExplosionContinuation) {
+          proj.lastX = proj.sprite.x;
+          proj.lastY = proj.sprite.y;
+          return true;
+        }
+
+        if (proj.miniRocketDeferredExplosion) {
+          if (simulatedAge >= (proj.miniRocketNextExplosionAtAgeMs ?? 0)) {
+            this.queueProjectileExplosion(
+              proj,
+              true,
+              proj.miniRocketDeferredExplosionStopsAtObstacle ?? false,
+            );
+          }
+          proj.lastX = proj.sprite.x;
+          proj.lastY = proj.sprite.y;
+          return true;
+        }
+
+        if (
+          proj.miniRocketStageRangePx !== undefined
+          && simulatedAge >= (proj.miniRocketSafetyLifetimeMs ?? proj.lifetime)
+        ) {
+          this.destroyTrackedProjectile(proj);
+          return false;
+        }
+
         // Normales Projektil: Lifetime oder Max-Bounces
-        if (!awaitingMultiExplosionContinuation && simulatedAge > proj.lifetime && proj.explosion) {
+        if (
+          proj.miniRocketStageRangePx === undefined
+          && simulatedAge > proj.lifetime
+          && proj.explosion
+        ) {
           explodedProjectiles.push({
             x: proj.sprite.x,
             y: proj.sprite.y,
@@ -1823,9 +2033,23 @@ export class ProjectileManager {
         }
 
         const rangeDepleted = proj.remainingRangePx !== undefined && proj.remainingRangePx <= 0.5;
+        if (
+          rangeDepleted
+          && proj.miniRocketStageRangePx !== undefined
+          && proj.explosion
+        ) {
+          this.queueProjectileExplosion(proj, true);
+          return true;
+        }
         const dead = !awaitingMultiExplosionContinuation
           && (simulatedAge > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces);
         if (dead) {
+          if (proj.isFlame && simulatedAge > proj.lifetime) {
+            this.naturalFlameExpiryCallback?.(proj, proj.sprite.x, proj.sprite.y);
+          }
+          if (proj.miniRocketSpent && rangeDepleted) {
+            this.emitSpentMiniRocketDestruction(proj);
+          }
           this.destroyTrackedProjectile(proj);
         } else if (proj.isFlame || proj.projectileStyle === 'leaf_blower') {
           this.updateFlameHitbox(proj, simulatedDeltaMs / 1000);
@@ -1837,7 +2061,23 @@ export class ProjectileManager {
             this.bfgLaserCallback?.(proj);
           }
         } else if (proj.homing) {
-          this.homingController.update(proj, simulatedAge);
+          if (proj.miniRocketStageRangePx !== undefined) {
+            if (this.updateMiniRocketFlight(proj, simulatedAge)) {
+              this.destroyTrackedProjectile(proj);
+              return false;
+            }
+          } else {
+            this.homingController.update(proj, simulatedAge);
+          }
+        }
+
+        const proximityArc = proj.proximityArc;
+        if (proximityArc && proximityArc.radius > 0 && proximityArc.damage > 0) {
+          const interval = Math.max(50, proximityArc.scanIntervalMs);
+          if (proj.lastProximityArcAt === undefined || simulatedAge - proj.lastProximityArcAt >= interval) {
+            proj.lastProximityArcAt = simulatedAge;
+            this.proximityArcCallback?.(proj);
+          }
         }
 
         // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
@@ -1880,6 +2120,171 @@ export class ProjectileManager {
 
         return !dead;
       }
+  }
+
+  /**
+   * Steuert die erweiterten Mini-Raketen-Phasen. Die Geradeausphase deaktiviert
+   * ausschliesslich Zielsuche/Lenkung; Phaser-Collider bleiben durchgehend aktiv.
+   */
+  private updateMiniRocketFlight(proj: TrackedProjectile, simulatedAge: number): boolean {
+    if (!proj.homing || proj.miniRocketStageRangePx === undefined) return false;
+
+    if (proj.miniRocketSpent && proj.miniRocketPhase !== 'return') {
+      this.enterMiniRocketReturn(proj);
+    }
+
+    if (proj.miniRocketPhase === 'coast') {
+      if (simulatedAge < (proj.miniRocketCoastUntilAgeMs ?? 0)) return false;
+      proj.miniRocketPhase = 'attack';
+      proj.multiExplosionExcludedTargetKeys?.clear();
+      proj.lockedTargetId = null;
+      proj.lockedTargetType = undefined;
+      proj.lastHomingSearchAt = undefined;
+      const foundTarget = this.homingController.update(proj, simulatedAge, true);
+      if (!foundTarget && proj.miniRocketReturnEnabled && proj.miniRocketHasExploded) {
+        this.enterMiniRocketReturn(proj);
+      }
+      return false;
+    }
+
+    if (proj.miniRocketPhase === 'return') {
+      if (proj.miniRocketSpent) {
+        const owner = this.ownerPositionProvider?.(proj.ownerId) ?? null;
+        if (!owner) return false;
+        const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, owner.x, owner.y);
+        if (distance <= Math.max(1, proj.miniRocketPickupRadius ?? 32)) {
+          this.miniRocketCollectedCallback?.(proj, owner.x, owner.y);
+          return true;
+        }
+        const steerInterval = Math.max(1, proj.homing.retargetIntervalMs);
+        if (
+          proj.lastHomingSearchAt === undefined
+          || simulatedAge - proj.lastHomingSearchAt >= steerInterval
+        ) {
+          proj.lastHomingSearchAt = simulatedAge;
+          this.steerMiniRocketTowards(proj, owner.x, owner.y);
+        }
+        return false;
+      }
+      const previousSearchAt = proj.lastHomingSearchAt;
+      const foundTarget = this.homingController.update(proj, simulatedAge);
+      if (foundTarget) {
+        // Das vorhandene Restbudget laeuft unveraendert weiter: kein Reset, keine Pause.
+        proj.miniRocketPhase = 'attack';
+        return false;
+      }
+
+      const owner = this.ownerPositionProvider?.(proj.ownerId) ?? null;
+      if (!owner) return false;
+      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, owner.x, owner.y);
+      if (distance <= Math.max(1, proj.miniRocketPickupRadius ?? 32)) {
+        this.miniRocketCollectedCallback?.(proj, owner.x, owner.y);
+        return true;
+      }
+
+      // Auf demselben Takt wie die gegnerische Zielsuche lenken, damit die Rakete
+      // auf dem Rueckweg nicht implizit wendiger wird.
+      if (proj.lastHomingSearchAt !== previousSearchAt) {
+        this.steerMiniRocketTowards(proj, owner.x, owner.y);
+      }
+      return false;
+    }
+
+    const foundTarget = this.homingController.update(proj, simulatedAge);
+    if (foundTarget || !proj.miniRocketReturnEnabled) return false;
+
+    const mayReturn = proj.miniRocketHasExploded
+      || (proj.remainingRangePx ?? Number.POSITIVE_INFINITY) <= Math.max(1, proj.homing.searchRadius);
+    if (mayReturn) this.enterMiniRocketReturn(proj);
+    return false;
+  }
+
+  private enterMiniRocketReturn(proj: TrackedProjectile): void {
+    const owner = this.ownerPositionProvider?.(proj.ownerId) ?? null;
+    if (!owner) return;
+
+    proj.miniRocketPhase = 'return';
+    proj.lockedTargetId = null;
+    proj.lockedTargetType = undefined;
+    proj.lastHomingSearchAt = undefined;
+
+    if (!proj.miniRocketReturnReserveGranted) {
+      const ownerDistance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, owner.x, owner.y);
+      const buffer = Math.max(0, proj.miniRocketReturnRangeBuffer ?? 0.5);
+      const requiredReturnRange = ownerDistance * (1 + buffer);
+      proj.remainingRangePx = Math.max(proj.remainingRangePx ?? 0, requiredReturnRange);
+      proj.miniRocketReturnReserveGranted = true;
+    }
+
+    // Der Rueckflug erhaelt keinen Tempobonus, uebernimmt aber auch keine durch
+    // Kollisionen oder einen kurz deaktivierten Body entstandene Restgeschwindigkeit.
+    // Direkt beim Phasenwechsel auf das normale, von der Time-Bubble beeinflusste
+    // Projektiltempo normalisieren.
+    this.steerMiniRocketTowards(proj, owner.x, owner.y);
+  }
+
+  private steerMiniRocketTowards(proj: TrackedProjectile, targetX: number, targetY: number): void {
+    const velocitySpeed = proj.body.velocity.length();
+    const normalFlightSpeed = this.getMiniRocketFlightSpeed(proj);
+    const currentSpeed = normalFlightSpeed > 0.001 ? normalFlightSpeed : velocitySpeed;
+    if (currentSpeed <= 0.001) return;
+
+    const targetAngle = Phaser.Math.Angle.Between(proj.sprite.x, proj.sprite.y, targetX, targetY);
+    const currentAngle = velocitySpeed > 0.001
+      ? Math.atan2(proj.body.velocity.y, proj.body.velocity.x)
+      : targetAngle;
+    const maxTurn = Phaser.Math.DegToRad(proj.homing?.maxTurnDegreesPerStep ?? 0);
+    const angleDelta = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
+    const nextAngle = currentAngle + Phaser.Math.Clamp(angleDelta, -maxTurn, maxTurn);
+    proj.body.setVelocity(Math.cos(nextAngle) * currentSpeed, Math.sin(nextAngle) * currentSpeed);
+  }
+
+  private getMiniRocketFlightSpeed(proj: TrackedProjectile): number {
+    const completedExplosions = Math.max(0, proj.miniRocketExplosionIndex ?? 0);
+    const explosionSpeedFactor = Math.max(0.1, 1 - completedExplosions * 0.2);
+    return (proj.initialSpeed ?? 0) * (proj.timeBubbleFactor ?? 1) * explosionSpeedFactor;
+  }
+
+  private resolveMiniRocketCascadeColor(baseColor: number, explosionIndex: number): number {
+    // Index 0 ist die urspruengliche Detonation. Die beiden anschliessenden
+    // Kaskaden werden zunehmend rot, bleiben aber klar in derselben Palette.
+    const redBlend = explosionIndex <= 0 ? 0 : explosionIndex === 1 ? 0.28 : 0.68;
+    if (redBlend <= 0) return baseColor;
+    return this.mixHexColor(baseColor, 0xff2418, redBlend);
+  }
+
+  private mixHexColor(source: number, target: number, amount: number): number {
+    const t = Phaser.Math.Clamp(amount, 0, 1);
+    const sourceR = (source >> 16) & 0xff;
+    const sourceG = (source >> 8) & 0xff;
+    const sourceB = source & 0xff;
+    const targetR = (target >> 16) & 0xff;
+    const targetG = (target >> 8) & 0xff;
+    const targetB = target & 0xff;
+    return Phaser.Display.Color.GetColor(
+      Math.round(Phaser.Math.Linear(sourceR, targetR, t)),
+      Math.round(Phaser.Math.Linear(sourceG, targetG, t)),
+      Math.round(Phaser.Math.Linear(sourceB, targetB, t)),
+    );
+  }
+
+  private setMiniRocketVelocityFromDirection(proj: TrackedProjectile, vx: number, vy: number): void {
+    const directionLength = Math.hypot(vx, vy);
+    const speed = this.getMiniRocketFlightSpeed(proj);
+    if (directionLength <= 0.001 || speed <= 0.001) return;
+    proj.body.setVelocity((vx / directionLength) * speed, (vy / directionLength) * speed);
+  }
+
+  private emitSpentMiniRocketDestruction(proj: TrackedProjectile): void {
+    if (proj.miniRocketDestructionFxEmitted) return;
+    proj.miniRocketDestructionFxEmitted = true;
+    this.miniRocketDestroyedCallback?.(proj, proj.sprite.x, proj.sprite.y);
+  }
+
+  private queueSpentMiniRocketDestruction(proj: TrackedProjectile): void {
+    if (proj.pendingDestroy) return;
+    this.emitSpentMiniRocketDestruction(proj);
+    this.queueDestroyProjectile(proj);
   }
 
   /** Host: alle Projektil-Renderer an die Physik-Bodies synchronisieren und verwaiste Visuals entfernen. */
@@ -2084,7 +2489,16 @@ export class ProjectileManager {
               proj.smokeTrailColor ?? proj.color,
             );
           }
-          rocketR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
+          rocketR.updateVisual(
+            proj.id,
+            proj.sprite.x,
+            proj.sprite.y,
+            proj.sprite.displayWidth,
+            proj.body.velocity.x,
+            proj.body.velocity.y,
+            proj.miniRocketPhase,
+            (proj.miniRocketCascadeInitialDamageBonus ?? 0) > 0 ? proj.miniRocketExplosionIndex : undefined,
+          );
         }
       }
       const activeRocketIds = new Set(
@@ -2197,6 +2611,10 @@ export class ProjectileManager {
       grenadeVisualPreset: p.grenadeVisualPreset,
       energyBallVariant: p.energyBallVariant,
       velocityDecay: p.velocityDecay,
+      miniRocketPhase: p.miniRocketPhase,
+      miniRocketCascadeStage: (p.miniRocketCascadeInitialDamageBonus ?? 0) > 0
+        ? p.miniRocketExplosionIndex
+        : undefined,
       tracer: p.tracerConfig,
       shotAudioKey: p.shotAudioKey,
       suppressSpawnFx: p.suppressSpawnFx,
@@ -2269,6 +2687,8 @@ export class ProjectileManager {
         projectileVisualScale: proj.projectileVisualScale,
         isDecaying: isFlame || isLeafBlower,
         velocityDecay: proj.velocityDecay ?? 1,
+        miniRocketPhase: proj.miniRocketPhase,
+        miniRocketCascadeStage: proj.miniRocketCascadeStage,
       });
 
       if (!prev && !proj.suppressSpawnFx) {
@@ -2348,7 +2768,16 @@ export class ProjectileManager {
             proj.projectileVisualScale,
           );
         }
-        rockets.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
+        rockets.updateVisual(
+          proj.id,
+          proj.x,
+          proj.y,
+          proj.size,
+          proj.vx,
+          proj.vy,
+          proj.miniRocketPhase,
+          proj.miniRocketCascadeStage,
+        );
       } else if (isLeafBlower && leafBlowers) {
         if (!leafBlowers.has(proj.id)) {
           leafBlowers.createVisual(proj.id, proj.x, proj.y, proj.size);
@@ -2584,7 +3013,16 @@ export class ProjectileManager {
       } else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) {
         this.translocatorPuckRenderer.updateVisual(id, ex, ey, state.ownerColor ?? state.color);
       } else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) {
-        this.rocketRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
+        this.rocketRenderer.updateVisual(
+          id,
+          ex,
+          ey,
+          state.size,
+          velocityX,
+          velocityY,
+          state.miniRocketPhase,
+          state.miniRocketCascadeStage,
+        );
       } else if (state.style === 'leaf_blower' && leafBlowers?.has(id)) {
         leafBlowers.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'flame' && flames && flames.has(id)) {

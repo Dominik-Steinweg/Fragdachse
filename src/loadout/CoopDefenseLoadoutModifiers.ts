@@ -1,6 +1,6 @@
 import type { LoadoutSlot } from '../types';
 import type { ResolvedLoadoutSelection } from './LoadoutRules';
-import type { UltimateConfig, UtilityConfig, WeaponConfig } from './LoadoutConfig';
+import { WEAPON_CONFIGS, type UltimateConfig, type UtilityConfig, type WeaponConfig } from './LoadoutConfig';
 
 export interface CoopDefenseEffectTotalsSource {
   additive: Readonly<Record<string, number>>;
@@ -52,16 +52,6 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     slot: 'weapon2',
     targets: [{ path: ['damage'], operation: 'scale' }],
-  },
-  'weapon.GLOCK.projectileMaxBounces': {
-    kind: 'weapon',
-    itemId: 'GLOCK',
-    targets: [{ path: ['fire', 'projectileMaxBounces'], operation: 'add' }],
-  },
-  'weapon.GLOCK.projectileSpeed': {
-    kind: 'weapon',
-    itemId: 'GLOCK',
-    targets: [{ path: ['fire', 'projectileSpeed'], operation: 'scale' }],
   },
   'weapon.GLOCK.burnOnHit.durationMs': {
     kind: 'weapon',
@@ -233,6 +223,13 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'P90',
     targets: [{ path: ['cooldown'], operation: 'scale' }],
   },
+  // Separater, nachgelagerter Faktor: reduziert den bereits durch Homing-Overdrive
+  // vervierfachten Cooldown, statt dessen starken Malus mit ihm zu verrechnen.
+  'weapon.P90.homingCooldownReduction': {
+    kind: 'weapon',
+    itemId: 'P90',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
   'weapon.P90.homingEnabled': {
     kind: 'weapon',
     itemId: 'P90',
@@ -319,7 +316,7 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
   'weapon.SHOTGUN.pelletSpreadAngle': {
     kind: 'weapon',
     itemId: 'SHOTGUN',
-    targets: [{ path: ['pelletSpreadAngle'], operation: 'scale' }],
+    targets: [{ path: ['pelletSpreadAngle'], operation: 'add' }],
   },
   'weapon.ASMD_SEC.detonable.aoeRadius': {
     kind: 'weapon',
@@ -344,7 +341,7 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
   'weapon.ASMD_SEC.dotArea.damagePerTick': {
     kind: 'weapon',
     itemId: 'ASMD_SEC',
-    targets: [{ path: ['detonable', 'dotArea', 'damagePerTick'], operation: 'add' }],
+    targets: [{ path: ['detonable', 'dotArea', 'damagePerTick'], operation: 'scale' }],
   },
   'weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius': {
     kind: 'weapon',
@@ -356,10 +353,53 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'MINI_ROCKET_LAUNCHER',
     targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], operation: 'scale' }],
   },
-  'weapon.MINI_ROCKET_LAUNCHER.adrenalinCost': {
+  'weapon.MINI_ROCKET_LAUNCHER.impactExplosion.falloffReduction': {
     kind: 'weapon',
     itemId: 'MINI_ROCKET_LAUNCHER',
-    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+    targets: [{ path: ['fire', 'impactExplosion', 'falloffReduction'], operation: 'add' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.impactExplosion.damage': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [
+      { path: ['fire', 'impactExplosion', 'maxDamage'], operation: 'scale' },
+      { path: ['fire', 'impactExplosion', 'minDamage'], operation: 'scale' },
+    ],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.multiExplosionCount': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['multiExplosionCount'], operation: 'add' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.multiExplosionCoastMs': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['multiExplosionCoastMs'], operation: 'add' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.miniRocketReturnEnabled': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['miniRocketReturnEnabled'], operation: 'add' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupAdrenalineRefundFraction': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['miniRocketPickupAdrenalineRefundFraction'], operation: 'add' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupArmor': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['miniRocketPickupArmor'], operation: 'add' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeInitialDamageBonus': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['miniRocketCascadeInitialDamageBonus'], operation: 'add' }],
+  },
+  'weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeDamageBonusPerExplosion': {
+    kind: 'weapon',
+    itemId: 'MINI_ROCKET_LAUNCHER',
+    targets: [{ path: ['miniRocketCascadeDamageBonusPerExplosion'], operation: 'add' }],
   },
   'weapon.AWP.cooldown': {
     kind: 'weapon',
@@ -395,6 +435,51 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'FLAMETHROWER',
     targets: [{ path: ['fire', 'piercingCount'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.kamikaze.enabled': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'kamikaze', 'enabled'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.kamikaze.inheritMolotovBonuses': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'kamikaze', 'inheritMolotovBonuses'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.burningGround.cellSize': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'burningGround', 'cellSize'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.burningGround.durationMs': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'burningGround', 'durationMs'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.burningGround.igniteProjectiles': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'burningGround', 'igniteProjectiles'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.burningGround.createOnFlameExpiry': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'burningGround', 'createOnFlameExpiry'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.fireRing.radius': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'fireRing', 'radius'], operation: 'scale' }],
+  },
+  'weapon.FLAMETHROWER.fireRing.thickness': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'fireRing', 'thickness'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.fireRing.igniteProjectiles': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['fire', 'fireRing', 'igniteProjectiles'], operation: 'add' }],
   },
   'weapon.NEGEV.range': {
     kind: 'weapon',
@@ -797,9 +882,17 @@ export function applyCoopDefenseModifiersToLoadoutSelection(
   selection: ResolvedLoadoutSelection,
   totals: CoopDefenseEffectTotalsSource,
 ): ResolvedLoadoutSelection {
+  const weapon1 = applyCoopDefenseModifiersToWeaponConfig(selection.weapon1, 'weapon1', totals);
+  let weapon2 = applyCoopDefenseModifiersToWeaponConfig(selection.weapon2, 'weapon2', totals);
+  if (weapon2.id === 'ASMD_SEC' && (weapon2.matchPrimaryRange ?? 0) > 0) {
+    const resolvedPrimary = weapon1.id === 'ASMD_PRIM'
+      ? weapon1
+      : applyCoopDefenseModifiersToWeaponConfig(WEAPON_CONFIGS.ASMD_PRIM, 'weapon1', totals);
+    weapon2 = { ...weapon2, range: resolvedPrimary.range };
+  }
   return {
-    weapon1: applyCoopDefenseModifiersToWeaponConfig(selection.weapon1, 'weapon1', totals),
-    weapon2: applyCoopDefenseModifiersToWeaponConfig(selection.weapon2, 'weapon2', totals),
+    weapon1,
+    weapon2,
     utility: applyCoopDefenseModifiersToUtilityConfig(selection.utility, totals),
     ultimate: applyCoopDefenseModifiersToUltimateConfig(selection.ultimate, totals),
   };

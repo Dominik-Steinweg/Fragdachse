@@ -10,7 +10,7 @@ import {
 import { sanitizePlayerName } from './playerName';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 5;
+const LOCAL_PREFERENCES_VERSION = 8;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 interface LocalPreferencesV2 {
@@ -50,8 +50,8 @@ interface LocalPreferencesV3 {
   };
 }
 
-interface LocalPreferencesV5 {
-  version: 5;
+interface LocalPreferencesV8 {
+  version: 8;
   audio: {
     masterVolume: number;
     effectsVolume: number;
@@ -66,7 +66,7 @@ interface LocalPreferencesV5 {
   };
 }
 
-type LocalPreferences = LocalPreferencesV5;
+type LocalPreferences = LocalPreferencesV8;
 
 interface ParsedLocalPreferences {
   audio?: Partial<LocalPreferences['audio']>;
@@ -80,7 +80,7 @@ interface ParsedLocalPreferences {
 }
 
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
-  upgradeTreeVersion: 2,
+  upgradeTreeVersion: 8,
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
   completedBossMapIds: [],
@@ -194,7 +194,7 @@ function parsePreferences(raw: string | null): LocalPreferences {
       },
       progression: {
         coopDefense: {
-          upgradeTreeVersion: 2,
+          upgradeTreeVersion: 8,
           totalXp,
           lastProcessedRoundEndedAt,
           completedBossMapIds,

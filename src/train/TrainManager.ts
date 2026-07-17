@@ -23,6 +23,15 @@ export interface TrainDestroyResult {
   segmentPositions:  { x: number; y: number }[];
 }
 
+export interface TrainCrossingHazardWindow {
+  readonly startsAt: number;
+  readonly endsAt: number;
+}
+
+export interface TrainEnemyHitResult {
+  readonly destroysTrain: boolean;
+}
+
 // ── TrainManager ──────────────────────────────────────────────────────────────
 
 /**
@@ -57,7 +66,7 @@ export class TrainManager {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   private onPlayerHit: ((playerId: string, sourceX: number, sourceY: number) => void) | null = null;
-  private onEnemyHit: ((enemyId: string, sourceX: number, sourceY: number) => void) | null = null;
+  private onEnemyHit: ((enemyId: string, sourceX: number, sourceY: number) => TrainEnemyHitResult | void) | null = null;
   private canHitPlayer: ((playerId: string) => boolean)      | null = null;
   private onDestroyed: ((r: TrainDestroyResult) => void)     | null = null;
   private onExited:    (() => void)                          | null = null;
@@ -68,6 +77,7 @@ export class TrainManager {
 
   /** Akkumulierter Delta-ms pro Spieler für den Buddel-Schaden-Tick */
   private burrowDamageTimers = new Map<string, number>();
+  private readonly hitEnemyIds = new Set<string>();
 
   constructor(
     private scene:         Phaser.Scene,
@@ -84,7 +94,9 @@ export class TrainManager {
   // ── Callback-Injection ───────────────────────────────────────────────────
 
   setPlayerHitCallback(cb: (playerId: string, sourceX: number, sourceY: number) => void): void { this.onPlayerHit = cb; }
-  setEnemyHitCallback(cb: (enemyId: string, sourceX: number, sourceY: number) => void): void { this.onEnemyHit = cb; }
+  setEnemyHitCallback(
+    cb: (enemyId: string, sourceX: number, sourceY: number) => TrainEnemyHitResult | void,
+  ): void { this.onEnemyHit = cb; }
   setCanHitPlayerCallback(cb: (playerId: string) => boolean): void { this.canHitPlayer = cb; }
   setDestroyCallback(cb: (r: TrainDestroyResult) => void):  void { this.onDestroyed  = cb; }
   setExitedCallback(cb: () => void):                        void { this.onExited     = cb; }
@@ -107,6 +119,58 @@ export class TrainManager {
   isAlive():     boolean { return this.alive;     }
   isDestroyed(): boolean { return this.destroyed; }
 
+  getTrackX(): number { return this.trackX; }
+
+  getCurrentSpeed(now = Date.now()): number {
+    if (!this.active || !this.alive || this.destroyed) return 0;
+    return TRAIN.SPEED * this.getTimeBubbleSpeedFactor(now);
+  }
+
+  getCrossingHazardWindowAt(
+    worldY: number,
+    actorRadius: number,
+    now: number,
+    spawnAt: number,
+  ): TrainCrossingHazardWindow | null {
+    if (this.destroyed) return null;
+
+    const active = this.active && this.alive;
+    const referenceTime = active ? now : spawnAt;
+    const speed = active ? this.getCurrentSpeed(now) : TRAIN.SPEED;
+    if (speed <= 0) return null;
+
+    const { frontEdge, tailEdge } = this.getSpanEdges(active ? this.locoY : this.initialLocoY());
+    const minY = worldY - actorRadius;
+    const maxY = worldY + actorRadius;
+    const startDistance = this.direction === 1
+      ? minY - frontEdge
+      : frontEdge - maxY;
+    const endDistance = this.direction === 1
+      ? maxY - tailEdge
+      : tailEdge - minY;
+    const startsAt = referenceTime + startDistance / speed * 1000;
+    const endsAt = referenceTime + endDistance / speed * 1000;
+    if (endsAt <= now) return null;
+    return { startsAt, endsAt };
+  }
+
+  getNearestAttackPoint(fromX: number, fromY: number): { x: number; y: number; distance: number } | null {
+    if (!this.active || !this.alive || this.destroyed) return null;
+    let best: { x: number; y: number; distance: number } | null = null;
+
+    for (const segment of this.segObjects) {
+      if (!segment.active || !(segment.body as Phaser.Physics.Arcade.StaticBody).enable) continue;
+      const halfWidth = segment.displayWidth * 0.5;
+      const halfHeight = segment.displayHeight * 0.5;
+      const x = Phaser.Math.Clamp(fromX, segment.x - halfWidth, segment.x + halfWidth);
+      const y = Phaser.Math.Clamp(fromY, segment.y - halfHeight, segment.y + halfHeight);
+      const distance = Phaser.Math.Distance.Between(fromX, fromY, x, y);
+      if (!best || distance < best.distance) best = { x, y, distance };
+    }
+
+    return best;
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /** Startet den Zug (Spawn-Zeitpunkt erreicht). */
@@ -119,6 +183,7 @@ export class TrainManager {
     this.lastHitter = null;
     this.locoY     = this.initialLocoY();
     this.burrowDamageTimers.clear();
+    this.hitEnemyIds.clear();
     this.updateSegmentPositions();
     this.group.refresh();
     for (const s of this.segObjects) {
@@ -153,6 +218,7 @@ export class TrainManager {
     this.group.refresh();
     this.checkPlayerOverlaps();
     this.checkEnemyOverlaps();
+    if (this.destroyed) return;
     this.checkBurrowDamage(delta);
 
     if (this.hasFullyExited()) {
@@ -219,6 +285,30 @@ export class TrainManager {
       return ARENA_OFFSET_Y - TRAIN.LOCO_HEIGHT / 2 - 2;
     }
     return ARENA_OFFSET_Y + ARENA_HEIGHT + TRAIN.LOCO_HEIGHT / 2 + 2;
+  }
+
+  private getSpanEdges(locoY: number): { frontEdge: number; tailEdge: number } {
+    const heights = this.segHeights();
+    const ys: number[] = [locoY];
+    let previousY = locoY;
+    let previousHeight = heights[0];
+    for (let index = 1; index < heights.length; index += 1) {
+      const height = heights[index];
+      previousY -= this.direction * (previousHeight * 0.5 + TRAIN.SEGMENT_GAP + height * 0.5);
+      ys.push(previousY);
+      previousHeight = height;
+    }
+
+    const lastIndex = ys.length - 1;
+    return this.direction === 1
+      ? {
+          frontEdge: ys[0] + heights[0] * 0.5,
+          tailEdge: ys[lastIndex] - heights[lastIndex] * 0.5,
+        }
+      : {
+          frontEdge: ys[0] - heights[0] * 0.5,
+          tailEdge: ys[lastIndex] + heights[lastIndex] * 0.5,
+        };
   }
 
   /**
@@ -309,6 +399,7 @@ export class TrainManager {
     this.lastHitter = null;
     this.locoY     = this.initialLocoY();
     this.burrowDamageTimers.clear();
+    this.hitEnemyIds.clear();
     // Hitboxen repositionieren und deaktivieren
     this.updateSegmentPositions();
     for (const s of this.segObjects) {
@@ -329,6 +420,7 @@ export class TrainManager {
     this.lastHitter = null;
     this.locoY      = this.initialLocoY();
     this.burrowDamageTimers.clear();
+    this.hitEnemyIds.clear();
     this.updateSegmentPositions();
     for (const s of this.segObjects) {
       (s.body as Phaser.Physics.Arcade.StaticBody).enable = false;
@@ -433,6 +525,7 @@ export class TrainManager {
 
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!enemy.sprite.active) continue;
+      if (this.hitEnemyIds.has(enemy.id)) continue;
 
       const px = enemy.sprite.x;
       const py = enemy.sprite.y;
@@ -444,7 +537,16 @@ export class TrainManager {
           Math.abs(px - this.trackX) < halfW + pr &&
           Math.abs(py - ys[i]) < halfH + pr
         ) {
-          this.onEnemyHit(enemy.id, this.trackX, ys[i]);
+          this.hitEnemyIds.add(enemy.id);
+          const result = this.onEnemyHit(enemy.id, this.trackX, ys[i]);
+          if (result?.destroysTrain) {
+            // Bosskollisionen sind keine Spieler-Lasthits. Der normale
+            // Zerstörungsablauf bleibt für Effekte, Drops und Sync erhalten.
+            this.hp = 0;
+            this.lastHitter = null;
+            this.handleDestruction();
+            return;
+          }
           break;
         }
       }

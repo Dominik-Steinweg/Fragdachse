@@ -91,7 +91,9 @@ export class HostUpdateCoordinator {
       countdownActive,
       now,
       delta,
+      this.ctx.coopDefenseEnemyTrainAwarenessSystem,
     );
+    if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
     if (!countdownActive) {
       this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
       this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
@@ -102,6 +104,7 @@ export class HostUpdateCoordinator {
         if (!this.ctx.burrowSystem.isBurrowed(player.id)) {
           this.ctx.resourceSystem.regenTick(player.id, delta);
           this.ctx.combatSystem.hpRegenTick(player.id, delta);
+          this.ctx.combatSystem.armorRegenTick(player.id, delta);
         }
       }
       this.ctx.burrowSystem.update(delta);
@@ -118,6 +121,7 @@ export class HostUpdateCoordinator {
     const decoys = countdownActive ? [] : this.ctx.decoySystem.hostUpdate(now);
     if (!countdownActive) {
       this.ctx.detonationSystem?.checkProjectileDetonations();
+      this.ctx.flamethrowerUpgradeSystem?.prepareProjectileBurns(now);
       this.ctx.combatSystem.update();
       this.ctx.combatSystem.updateBurnEffects(now);
     }
@@ -125,6 +129,18 @@ export class HostUpdateCoordinator {
     const { synced: projectiles, explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
       ? { synced: [], explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
       : this.ctx.projectileManager.hostUpdate(delta);
+    const guardianSpirits = countdownActive
+      ? []
+      : (this.ctx.guardianSpiritSystem?.hostUpdate(now, delta) ?? []);
+    this.renderers.guardianSpirit.syncVisuals(guardianSpirits);
+    const slimeTrail = countdownActive
+      ? { cells: [], affectedEnemies: [] }
+      : (this.ctx.slimeTrailSystem?.hostUpdate(now) ?? { cells: [], affectedEnemies: [] });
+    this.renderers.slimeTrail.syncVisuals(slimeTrail);
+    const burningGround = countdownActive
+      ? { cells: [] }
+      : (this.ctx.flamethrowerUpgradeSystem?.hostUpdate(now) ?? { cells: [] });
+    this.renderers.flamethrowerUpgrades.syncGround(burningGround);
 
     for (const evt of countdownEvents) {
       bridge.broadcastGrenadeCountdown(evt.x, evt.y, evt.value);
@@ -132,6 +148,10 @@ export class HostUpdateCoordinator {
 
     const detonations = countdownActive ? [] : (this.ctx.detonationSystem?.flushDetonations() ?? []);
     for (const det of detonations) {
+      const comboAdrenalineGain = Math.max(0, det.effect.comboAdrenalineGain ?? 0);
+      if (comboAdrenalineGain > 0) {
+        this.ctx.resourceSystem?.addAdrenaline(det.projectileOwnerId, comboAdrenalineGain);
+      }
       this.ctx.combatSystem.applyAoeDamage(
         det.x, det.y, det.effect.aoeRadius, det.effect.aoeDamage, det.detonatorOwnerId,
         false,
@@ -253,14 +273,25 @@ export class HostUpdateCoordinator {
       ? { synced: [], damageEvents: [] }
       : this.ctx.stinkCloudSystem.hostUpdate(Date.now(), (id) => {
           const player = this.ctx.playerManager.getPlayer(id);
-          if (!player) return null;
-          const profile = bridge.getConnectedPlayers().find(p => p.id === id);
+          if (player) {
+            const profile = bridge.getConnectedPlayers().find(p => p.id === id);
+            return {
+              x:        player.sprite.x,
+              y:        player.sprite.y,
+              alive:    this.ctx.combatSystem.isAlive(id),
+              burrowed: this.ctx.burrowSystem?.isBurrowed(id) ?? false,
+              color:    profile?.colorHex ?? 0xffffff,
+            };
+          }
+
+          const enemy = this.ctx.enemyManager?.getEnemy(id);
+          if (!enemy?.sprite.active || enemy.getHp() <= 0) return null;
           return {
-            x:        player.sprite.x,
-            y:        player.sprite.y,
-            alive:    this.ctx.combatSystem.isAlive(id),
-            burrowed: this.ctx.burrowSystem?.isBurrowed(id) ?? false,
-            color:    profile?.colorHex ?? 0xffffff,
+            x: enemy.sprite.x,
+            y: enemy.sprite.y,
+            alive: true,
+            burrowed: false,
+            color: 0x8aaa32,
           };
         });
     const timeBubbles = countdownActive ? [] : (this.ctx.timeBubbleSystem?.hostUpdate(Date.now()) ?? []);
@@ -288,13 +319,13 @@ export class HostUpdateCoordinator {
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
       );
 
-      if (ev.burnDurationMs && ev.burnDamagePerTick && ev.burnTickIntervalMs) {
+      if (ev.burnDurationMs && ev.burnDamagePerTick) {
         for (const player of this.ctx.playerManager.getAllPlayers()) {
           const dist = Phaser.Math.Distance.Between(ev.x, ev.y, player.sprite.x, player.sprite.y);
           if (dist <= ev.radius) {
-            this.ctx.combatSystem.applyBurnStack(
+            this.ctx.combatSystem.applyBurnHit(
               player.id, ev.ownerId,
-              ev.burnDurationMs, ev.burnDamagePerTick, ev.burnTickIntervalMs,
+              ev.burnDurationMs, ev.burnDamagePerTick, ev.sourceId,
               ev.weaponName,
             );
           }
@@ -302,9 +333,9 @@ export class HostUpdateCoordinator {
         for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
           const dist = Phaser.Math.Distance.Between(ev.x, ev.y, enemy.sprite.x, enemy.sprite.y);
           if (dist <= ev.radius) {
-            this.ctx.combatSystem.applyBurnStack(
+            this.ctx.combatSystem.applyBurnHit(
               enemy.id, ev.ownerId,
-              ev.burnDurationMs, ev.burnDamagePerTick, ev.burnTickIntervalMs,
+              ev.burnDurationMs, ev.burnDamagePerTick, ev.sourceId,
               ev.weaponName,
             );
           }
@@ -407,6 +438,10 @@ export class HostUpdateCoordinator {
       this.applyDashVisual(player, player.id, dashPhase, false);
     }
 
+    for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+      enemy.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(enemy.id));
+    }
+
     const powerups    = this.ctx.powerUpSystem?.getWorldItemSnapshot() ?? [];
     const powerupSnapshot = this.ctx.powerUpSystem?.getNetSnapshot()   ?? null;
     const pedestals   = this.ctx.powerUpSystem?.getPedestalSnapshot()  ?? [];
@@ -467,7 +502,10 @@ export class HostUpdateCoordinator {
       const utilCfg   = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
-      const activePowerUps = this.ctx.powerUpSystem?.getActiveBuffsForHUD(localId) ?? [];
+      const activePowerUps = [
+        ...(this.ctx.powerUpSystem?.getActiveBuffsForHUD(localId) ?? []),
+        ...(this.ctx.loadoutManager?.getAk47HudBuffs(localId, now) ?? []),
+      ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(localId, now);
       const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
       const ultimateThresholds = this.ctx.loadoutManager?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
@@ -491,7 +529,9 @@ export class HostUpdateCoordinator {
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
         activePowerUps:          stealthBuff ? [...activePowerUps, stealthBuff] : activePowerUps,
         shieldBuff,
-        weapon2AdrenalineCost:   weapon2Cfg?.adrenalinCost ?? 0,
+        weapon2AdrenalineCost:   this.ctx.loadoutManager?.isAk47FireSuperiorityActive(localId)
+          ? 0
+          : (weapon2Cfg?.adrenalinCost ?? 0),
       });
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
       this.localPlayerState.burrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
@@ -553,7 +593,10 @@ export class HostUpdateCoordinator {
                      ?? this.getDefaultAimState(isMoving);
 
       bridge.publishAdrSyringeActive(player.id, (this.ctx.powerUpSystem?.getRegenMultiplier(player.id) ?? 1) > 1);
-      const activeBuffs = this.ctx.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? [];
+      const activeBuffs = [
+        ...(this.ctx.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []),
+        ...(this.ctx.loadoutManager?.getAk47HudBuffs(player.id, now) ?? []),
+      ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(player.id, now);
       bridge.publishActiveBuffs(player.id, stealthBuff ? [...activeBuffs, stealthBuff] : activeBuffs);
       bridge.publishShieldBuffHud(player.id, this.ctx.loadoutManager?.getShieldBuffHudState(player.id, now) ?? {
@@ -587,6 +630,7 @@ export class HostUpdateCoordinator {
         isDecoyStealthed,
         decoyStealthRemainingFrac,
         dashPhase: this.ctx.hostPhysics.getDashPhase(player.id),
+        flameRingRadius: this.ctx.flamethrowerUpgradeSystem?.getActiveRingRadius(player.id),
         aim: {
           revision:             aim.revision,
           isMoving:             aim.isMoving,
@@ -595,6 +639,8 @@ export class HostUpdateCoordinator {
         },
       };
     }
+
+    this.renderers.flamethrowerUpgrades.syncRings(players);
 
     bridge.publishGameState({
       roundStartTime: bridge.getArenaStartTime(),
@@ -610,6 +656,9 @@ export class HostUpdateCoordinator {
       timeBubbles,
       teslaDomes,
       energyShields,
+      guardianSpirits,
+      slimeTrail,
+      burningGround,
       powerups: powerupSnapshot,
       // Delta-Snapshot inline (einmal pro Net-Tick, nach dem Throttle); das volle Array oben
       // (`pedestals`) dient nur der host-lokalen Darstellung.
@@ -940,6 +989,30 @@ export class HostUpdateCoordinator {
     bridge.broadcastBfgLaserBatch(laserLines, COLORS.GREEN_2);
   }
 
+  resolveProjectileProximityArcs(proj: TrackedProjectile): void {
+    const config = proj.proximityArc;
+    if (!config || config.radius <= 0 || config.damage <= 0 || !this.ctx.enemyManager) return;
+
+    const originX = proj.sprite.x;
+    const originY = proj.sprite.y;
+    const radiusSquared = config.radius * config.radius;
+    const lines: { sx: number; sy: number; ex: number; ey: number }[] = [];
+
+    for (const enemy of this.ctx.enemyManager.getAllEnemies()) {
+      if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
+      if (Phaser.Math.Distance.Squared(originX, originY, enemy.sprite.x, enemy.sprite.y) > radiusSquared) continue;
+      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y)) continue;
+
+      this.ctx.combatSystem.applyDamage(enemy.id, config.damage, false, proj.ownerId, 'ASMD Kugelgewitter', {
+        sourceX: originX,
+        sourceY: originY,
+      });
+      lines.push({ sx: originX, sy: originY, ex: enemy.sprite.x, ey: enemy.sprite.y });
+    }
+
+    bridge.broadcastBfgLaserBatch(lines, proj.color, 'asmd_primary');
+  }
+
   applyTeslaRockDamage(index: number, damage: number, ownerId: string): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
     const newHp = this.rockVisualHelper.applyObstacleDamageById(index, damage, ownerId);
@@ -1021,10 +1094,13 @@ export class HostUpdateCoordinator {
 
   private updateEnemyFlowFields(now: number): void {
     this.ctx.enemyFlowFieldService?.update(now);
-    this.ctx.enemyBossFlowFieldService?.update(now);
 
     const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
-    if (!playerFlowFieldService) return;
+    const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
+    if (!playerFlowFieldService) {
+      bossFlowFieldService?.update(now);
+      return;
+    }
 
     const playerGoalCells: { gridX: number; gridY: number }[] = [];
     for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -1038,7 +1114,18 @@ export class HostUpdateCoordinator {
     }
 
     playerFlowFieldService.setDynamicGoalCells(playerGoalCells);
+    bossFlowFieldService?.setDynamicGoalCells(playerGoalCells);
     playerFlowFieldService.update(now);
+    bossFlowFieldService?.update(now);
+
+    for (const [ownerId, flowField] of this.ctx.allyFlowFieldServices) {
+      const owner = this.ctx.playerManager.getPlayer(ownerId);
+      const goal = owner?.sprite.active && this.ctx.combatSystem.isAlive(ownerId)
+        ? flowField.worldToGrid(owner.sprite.x, owner.sprite.y)
+        : null;
+      flowField.setDynamicGoalCells(goal ? [goal] : []);
+      flowField.update(now);
+    }
   }
 
   private getLocalUtilityCooldownFrac(): number {

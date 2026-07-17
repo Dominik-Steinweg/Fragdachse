@@ -8,8 +8,10 @@
       "upgrades": [
         { "id": "hp", "code": "A1", "label": "Vitalitaet", "description": "+20 maximale HP je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 10, "effects": [{ "stat": "player.maxHp", "mode": "add_per_level", "value": 20 }] },
         { "id": "hp_regeneration", "code": "A2", "label": "HP-Regeneration", "description": "+5 HP pro Sekunde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 20, "requires": [{ "upgradeId": "hp", "minLevel": 3 }], "effects": [{ "stat": "player.hpRegenPerSecond", "mode": "add_per_level", "value": 5 }] },
+        { "id": "life_leech", "code": "A2-C", "label": "Lifeleech", "description": "Heilt 5% des tatsaechlich verursachten Schadens als Leben.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 25, "requires": [{ "upgradeId": "hp_regeneration", "minLevel": 3 }], "effects": [{ "stat": "player.lifeLeechFraction", "mode": "add_per_level", "value": 0.05 }] },
         { "id": "max_armor", "code": "A3", "label": "Ruestungsmaximum", "description": "+20 maximale Ruestung je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 30, "effects": [{ "stat": "player.maxArmor", "mode": "add_per_level", "value": 20 }] },
         { "id": "armor_gain", "code": "A4", "label": "Ruestungsgewinn", "description": "+10% positiver Ruestungsgewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 40, "requires": [{ "upgradeId": "max_armor", "minLevel": 3 }], "effects": [{ "stat": "player.armorGain", "mode": "add_percent_per_level", "value": 0.1 }] },
+        { "id": "armor_regeneration", "code": "A4-C", "label": "Ruestungsregeneration", "description": "Stellt 10 Ruestung pro Sekunde bis zum Ruestungsmaximum wieder her.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 45, "requires": [{ "upgradeId": "armor_gain", "minLevel": 3 }], "effects": [{ "stat": "player.armorRegenPerSecond", "mode": "add_per_level", "value": 10 }] },
         { "id": "max_adrenaline", "code": "A5", "label": "Adrenalinmaximum", "description": "+10 maximales Adrenalin je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 50, "effects": [{ "stat": "player.maxAdrenaline", "mode": "add_per_level", "value": 10 }] },
         { "id": "adrenaline_regeneration", "code": "A6", "label": "Adrenalin-Regeneration", "description": "+5% Regeneration je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 60, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineRegenRate", "mode": "add_percent_per_level", "value": 0.05 }] },
         { "id": "adrenaline_gain", "code": "A7", "label": "Adrenalingewinn", "description": "+10% Adrenalingewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 70, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineGain", "mode": "add_percent_per_level", "value": 0.1 }] },
@@ -21,7 +23,18 @@
         { "id": "burrow_cost", "code": "A13", "label": "Effizientes Graben", "description": "-10% Adrenalinverbrauch unter der Erde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 130, "requires": [{ "upgradeId": "burrow_speed", "minLevel": 3 }], "effects": [{ "stat": "player.burrowCost", "mode": "add_percent_per_level", "value": -0.1 }] },
         { "id": "unburrow_shockwave", "code": "A14", "label": "Auftauchschockwelle", "description": "+15% Schaden und Radius je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 140, "requires": [{ "upgradeId": "burrow_cost", "minLevel": 3 }], "effects": [{ "stat": "player.unburrowShockwaveDamage", "mode": "add_percent_per_level", "value": 0.15 }, { "stat": "player.unburrowShockwaveRadius", "mode": "add_percent_per_level", "value": 0.15 }] },
         { "id": "dash_recovery", "code": "A15", "label": "Dash-Erholung", "description": "-10% Dash-Erholung je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 150, "effects": [{ "stat": "player.dashRecovery", "mode": "add_percent_per_level", "value": -0.1 }] },
-        { "id": "dash_impact", "code": "A16", "label": "Dash-Aufprall", "description": "Der Dash verursacht 30 Schaden und 400 Rueckstoss.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 160, "requires": [{ "upgradeId": "dash_recovery", "minLevel": 3 }], "effects": [{ "stat": "player.dashImpactDamage", "mode": "add_per_level", "value": 30 }, { "stat": "player.dashImpactKnockback", "mode": "add_per_level", "value": 400 }] }
+        { "id": "dash_impact", "code": "A16", "label": "Dash-Aufprall", "description": "Der Dash verursacht 30 Schaden und 400 Rueckstoss.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 160, "requires": [{ "upgradeId": "dash_recovery", "minLevel": 3 }], "effects": [{ "stat": "player.dashImpactDamage", "mode": "add_per_level", "value": 30 }, { "stat": "player.dashImpactKnockback", "mode": "add_per_level", "value": 400 }] },
+        { "id": "guardian_spirits", "code": "A17-C", "label": "Schutzgeister", "description": "Alle 2 Sekunden erscheint ein Schutzgeist. Er umkreist den Spieler und greift Gegner innerhalb von 200 px fuer 50 Schaden an.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 170, "effects": [{ "stat": "player.guardianSpirit.maxCount", "mode": "add_per_level", "value": 1 }, { "stat": "player.guardianSpirit.damage", "mode": "add_per_level", "value": 50 }, { "stat": "player.guardianSpirit.spawnIntervalMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.guardianSpirit.scanRadius", "mode": "add_per_level", "value": 200 }, { "stat": "player.guardianSpirit.attackSpeed", "mode": "add_per_level", "value": 620 }, { "stat": "player.guardianSpirit.returnSpeed", "mode": "add_per_level", "value": 720 }, { "stat": "player.guardianSpirit.orbitRadius", "mode": "add_per_level", "value": 48 }, { "stat": "player.guardianSpirit.attackStaggerMs", "mode": "add_per_level", "value": 300 }] },
+        { "id": "guardian_spirit_damage", "code": "A17-1", "label": "Geisterzorn", "description": "+20% Schaden der Schutzgeister je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 171, "requires": [{ "upgradeId": "guardian_spirits", "minLevel": 1 }], "effects": [{ "stat": "player.guardianSpirit.damage", "mode": "add_percent_per_level", "value": 0.2 }] },
+        { "id": "guardian_spirit_cooldown", "code": "A17-2", "label": "Geisterruf", "description": "-20% Spawnintervall der Schutzgeister je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 172, "requires": [{ "upgradeId": "guardian_spirits", "minLevel": 1 }], "effects": [{ "stat": "player.guardianSpirit.spawnIntervalMs", "mode": "add_percent_per_level", "value": -0.2 }] },
+        { "id": "guardian_spirit_trinity", "code": "A17-D", "label": "Geistertrias", "description": "Erhoeht die maximale Anzahl gleichzeitig aktiver Schutzgeister auf drei. Angriffe starten um 300 ms versetzt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 173, "requires": [{ "upgradeId": "guardian_spirit_damage", "minLevel": 3 }, { "upgradeId": "guardian_spirit_cooldown", "minLevel": 3 }], "effects": [{ "stat": "player.guardianSpirit.maxCount", "mode": "add_per_level", "value": 2 }] },
+        { "id": "slime_trail", "code": "A18-C", "label": "Die Schleimspur", "description": "Normales Laufen hinterlaesst 5 Sekunden lang gruenen Schleim. Kontakt verlangsamt Gegner um 20% und verursacht 2 Sekunden lang alle 200 ms 2 Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 180, "effects": [{ "stat": "player.slimeTrail.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.slimeTrail.cellSize", "mode": "add_per_level", "value": 16 }, { "stat": "player.slimeTrail.lingerDurationMs", "mode": "add_per_level", "value": 5000 }, { "stat": "player.slimeTrail.effectDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.slimeTrail.tickIntervalMs", "mode": "add_per_level", "value": 200 }, { "stat": "player.slimeTrail.damagePerTick", "mode": "add_per_level", "value": 2 }, { "stat": "player.slimeTrail.slowFraction", "mode": "add_per_level", "value": 0.2 }] },
+        { "id": "slime_trail_slow", "code": "A18-1", "label": "Laehmender Schleim", "description": "+20 Prozentpunkte Verlangsamung je Stufe, bis maximal 80%.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 181, "requires": [{ "upgradeId": "slime_trail", "minLevel": 1 }], "effects": [{ "stat": "player.slimeTrail.slowFraction", "mode": "add_per_level", "value": 0.2 }] },
+        { "id": "slime_trail_duration", "code": "A18-2", "label": "Zaehes Sekret", "description": "+20% Lebensdauer der Schleimlachen je Stufe, bis maximal 8 Sekunden.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 182, "requires": [{ "upgradeId": "slime_trail", "minLevel": 1 }], "effects": [{ "stat": "player.slimeTrail.lingerDurationMs", "mode": "add_percent_per_level", "value": 0.2 }] },
+        { "id": "slime_trail_bloom", "code": "A18-D", "label": "Schleimbluete", "description": "Befallene Gegner schleudern beim Tod einen Schleimbrocken auf eine zufaellige Rasterzelle innerhalb von 96 px. Bestehender Schleim wird erneuert, aber nicht gestapelt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 183, "requires": [{ "upgradeId": "slime_trail_slow", "minLevel": 3 }, { "upgradeId": "slime_trail_duration", "minLevel": 3 }], "effects": [{ "stat": "player.slimeTrail.deathBurstSearchRadius", "mode": "add_per_level", "value": 96 }, { "stat": "player.slimeTrail.deathBurstPatchCount", "mode": "add_per_level", "value": 1 }] },
+        { "id": "necromancy", "code": "A19-C", "label": "Nekromantie", "description": "Alle 4 Sekunden wird der staerkste, in 300 px gestorbene Gegner wiederbelebt. Wiederbelebte kaempfen fuer dich und bleiben in deiner Naehe.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 190, "effects": [{ "stat": "player.necromancy.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.necromancy.maxAllies", "mode": "add_per_level", "value": 1 }] },
+        { "id": "necromancy_count", "code": "A19-1", "label": "Untote Schar", "description": "+1 maximaler wiederbelebter Gegner je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 191, "requires": [{ "upgradeId": "necromancy", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.maxAllies", "mode": "add_per_level", "value": 1 }] },
+        { "id": "necromancy_hp", "code": "A19-2", "label": "Knochenpanzer", "description": "+100% maximale HP wiederbelebter Gegner je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 192, "requires": [{ "upgradeId": "necromancy", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.hpMultiplier", "mode": "add_per_level", "value": 1 }] }
       ]
     },
     {
@@ -47,10 +60,10 @@
           }
         },
         {
-          "id": "glock_bounce",
+          "id": "glock_adrenaline_gain",
           "code": "B-W1-1",
-          "label": "Upgrade Glock: Abpraller",
-          "description": "+1 Abpraller fuer die Glock je Stufe.",
+          "label": "Upgrade Glock: Adrenalinsog",
+          "description": "+20% Adrenalingewinn je Glock-Treffer und Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -65,34 +78,34 @@
           ],
           "effects": [
             {
-              "stat": "weapon.GLOCK.projectileMaxBounces",
-              "mode": "add_per_level",
-              "value": 1
+              "stat": "weapon.GLOCK.adrenalinGain",
+              "mode": "add_percent_per_level",
+              "value": 0.2
             }
           ]
         },
         {
-          "id": "glock_projectile_speed",
+          "id": "glock_stopping_power",
           "code": "B-W1-2",
-          "label": "Upgrade Glock: Geschossgeschwindigkeit",
-          "description": "+20% Projektilgeschwindigkeit fuer die Glock.",
+          "label": "Upgrade Glock: Stoppwirkung",
+          "description": "Glock-Treffer stossen Gegner mit 100 Rueckstoss je Stufe zurueck.",
           "kind": "upgrade",
-          "maxLevel": 1,
+          "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 120,
           "requires": [
             {
-              "upgradeId": "glock_bounce",
-              "minLevel": 1
+              "upgradeId": "glock_adrenaline_gain",
+              "minLevel": 3
             }
           ],
           "effects": [
             {
-              "stat": "weapon.GLOCK.projectileSpeed",
-              "mode": "add_percent_per_level",
-              "value": 0.2
+              "stat": "weapon.GLOCK.hitKnockback",
+              "mode": "add_per_level",
+              "value": 100
             }
           ]
         },
@@ -593,7 +606,7 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 260,
+          "sortOrder": 255,
           "requires": [
             {
               "upgradeId": "unlock_xbow",
@@ -796,7 +809,7 @@
           "sortOrder": 110,
           "requires": [
             {
-              "upgradeId": "unlock_p90",
+              "upgradeId": "p90_adrenaline_cost",
               "minLevel": 1
             }
           ],
@@ -1092,35 +1105,10 @@
           }
         },
         {
-          "id": "ak47_range",
-          "code": "C-W3-1",
-          "label": "Upgrade AK-47: Reichweite",
-          "description": "+10% Reichweite fuer die AK-47 je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 170,
-          "requires": [
-            {
-              "upgradeId": "unlock_ak47",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.AK47.range",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
           "id": "ak47_accuracy",
-          "code": "C-W3-2",
+          "code": "C-W3-1",
           "label": "Upgrade AK-47: Genauigkeit",
-          "description": "-15% Spread fuer die AK-47 je Stufe.",
+          "description": "-20% Spread fuer die AK-47 je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1129,7 +1117,7 @@
           "sortOrder": 180,
           "requires": [
             {
-              "upgradeId": "ak47_range",
+              "upgradeId": "unlock_ak47",
               "minLevel": 1
             }
           ],
@@ -1137,15 +1125,15 @@
             {
               "stat": "weapon.AK47.spread",
               "mode": "add_percent_per_level",
-              "value": -0.15
+              "value": -0.2
             }
           ]
         },
         {
-          "id": "ak47_damage",
-          "code": "C-W3-3",
-          "label": "Upgrade AK-47: Schaden",
-          "description": "+10% Schaden fuer die AK-47 je Stufe.",
+          "id": "ak47_range",
+          "code": "C-W3-2",
+          "label": "Upgrade AK-47: Reichweite",
+          "description": "+10% Reichweite fuer die AK-47 je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1154,13 +1142,13 @@
           "sortOrder": 185,
           "requires": [
             {
-              "upgradeId": "unlock_ak47",
-              "minLevel": 1
+              "upgradeId": "ak47_accuracy",
+              "minLevel": 3
             }
           ],
           "effects": [
             {
-              "stat": "weapon.AK47.damage",
+              "stat": "weapon.AK47.range",
               "mode": "add_percent_per_level",
               "value": 0.1
             }
@@ -1179,7 +1167,7 @@
           "sortOrder": 190,
           "requires": [
             {
-              "upgradeId": "ak47_damage",
+              "upgradeId": "ak47_range",
               "minLevel": 3
             }
           ],
@@ -1188,6 +1176,167 @@
               "stat": "weapon.AK47.adrenalinCost",
               "mode": "add_percent_per_level",
               "value": -0.1
+            }
+          ]
+        },
+        {
+          "id": "ak47_focus",
+          "code": "C-W3-C1",
+          "label": "Einschiessen",
+          "description": "Aufeinanderfolgende Treffer bauen bis zu 5 Stacks auf. Jeder Stack erhoeht den Schaden um 10%. Ein Fehlschuss entfernt alle Stacks.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 181,
+          "requires": [
+            {
+              "upgradeId": "unlock_ak47",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.ak47Focus.maxStacks",
+              "mode": "add_per_level",
+              "value": 5
+            },
+            {
+              "stat": "weapon.AK47.ak47Focus.damagePerStack",
+              "mode": "add_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "ak47_focus_duration",
+          "code": "C-W3-C1-1",
+          "label": "Gekoppeltes Feuer",
+          "description": "Der zusaetzliche Schaden durch Einschiessen wirkt auch auf Waffe 1.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 186,
+          "requires": [
+            {
+              "upgradeId": "ak47_focus",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.ak47Focus.applyDamageToPrimaryWeapon",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "ak47_focus_damage",
+          "code": "C-W3-C1-2",
+          "label": "Toedlicher Rhythmus",
+          "description": "+5 Prozentpunkte Schaden je Einschiessen-Stack und Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 191,
+          "requires": [
+            {
+              "upgradeId": "ak47_focus_duration",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.ak47Focus.damagePerStack",
+              "mode": "add_per_level",
+              "value": 0.05
+            }
+          ]
+        },
+        {
+          "id": "ak47_fire_superiority",
+          "code": "C-W3-C2",
+          "label": "Feuerueberlegenheit",
+          "description": "Beim Erreichen der maximalen Einschiessen-Stacks werden die naechsten 3 Schuesse zu Durchbruchmunition. Sie durchschlagen alle Gegner ohne Schadensverlust und verbrauchen kein Adrenalin.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 196,
+          "requires": [
+            {
+              "upgradeId": "ak47_adrenaline_cost",
+              "minLevel": 3
+            },
+            {
+              "upgradeId": "ak47_focus_damage",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.ak47Focus.fireSuperiorityShots",
+              "mode": "add_per_level",
+              "value": 3
+            }
+          ]
+        },
+        {
+          "id": "ak47_fire_superiority_shots",
+          "code": "C-W3-C2-1",
+          "label": "Groesseres Durchbruchsmagazin",
+          "description": "+3 Schuesse Feuerueberlegenheit je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 201,
+          "requires": [
+            {
+              "upgradeId": "ak47_fire_superiority",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.ak47Focus.fireSuperiorityShots",
+              "mode": "add_per_level",
+              "value": 3
+            }
+          ]
+        },
+        {
+          "id": "ak47_fire_superiority_damage",
+          "code": "C-W3-C2-2",
+          "label": "Verstaerkte Durchbruchskugeln",
+          "description": "+30% Schaden waehrend Feuerueberlegenheit je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 202,
+          "requires": [
+            {
+              "upgradeId": "ak47_fire_superiority",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.AK47.ak47Focus.fireSuperiorityDamageBonus",
+              "mode": "add_per_level",
+              "value": 0.3
             }
           ]
         },
@@ -1207,56 +1356,15 @@
             "itemId": "SHOTGUN"
           }
         },
-        {
-          "id": "shotgun_pellet_count",
-          "code": "C-W4-1",
-          "label": "Upgrade Schrotflinte: Mehr Schrot",
-          "description": "+1 Pellet pro Schuss fuer die Schrotflinte je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 2,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 200,
-          "requires": [
-            {
-              "upgradeId": "unlock_shotgun",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.SHOTGUN.pelletCount",
-              "mode": "add_per_level",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "id": "shotgun_pellet_spread",
-          "code": "C-W4-2",
-          "label": "Upgrade Schrotflinte: Engere Streuung",
-          "description": "-10% Pellet-Streuungswinkel fuer die Schrotflinte je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 210,
-          "requires": [
-            {
-              "upgradeId": "unlock_shotgun",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.SHOTGUN.pelletSpreadAngle",
-              "mode": "add_percent_per_level",
-              "value": -0.1
-            }
-          ]
-        },
+        { "id": "shotgun_brake_load", "code": "C-W4-1", "label": "Bremsladung", "description": "Getroffene Gegner werden 1 Sekunde lang um 20% je Stufe verlangsamt. Der Effekt wird aktualisiert, aber nicht gestapelt.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 191, "requires": [{ "upgradeId": "unlock_shotgun", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunSlowFraction", "mode": "add_per_level", "value": 0.2 }] },
+        { "id": "shotgun_lightning_blast", "code": "C-W4-C1", "label": "Blitzschrot", "description": "Von einem Pellet getoetete Gegner entladen eine kleine Blitzexplosion mit 20 Schaden in 64 px Radius.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 0, "bossPointCostPerLevel": 1, "refundable": true, "sortOrder": 192, "requires": [{ "upgradeId": "shotgun_brake_load", "minLevel": 3 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningRadius", "mode": "add_per_level", "value": 64 }, { "stat": "weapon.SHOTGUN.shotgunLightningDamage", "mode": "add_per_level", "value": 20 }] },
+        { "id": "shotgun_lightning_slow", "code": "C-W4-3", "label": "Geladene Druckwelle", "description": "Blitzexplosionen loesen zusaetzlich den voll ausgebauten Bremsladungseffekt aus.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 193, "requires": [{ "upgradeId": "shotgun_lightning_blast", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningAppliesSlow", "mode": "add_per_level", "value": 1 }] },
+        { "id": "shotgun_round_shot", "code": "C-W4-2", "label": "Rundumschrot", "description": "Erhoeht Pelletzahl und Halbwinkel je Stufe um 8 beziehungsweise 32 Grad. Auf Stufe 5 fliegen 45 Pellets mit konstanter 8-Grad-Dichte fast vollstaendig im Kreis.", "kind": "upgrade", "maxLevel": 5, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 194, "requires": [{ "upgradeId": "unlock_shotgun", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.pelletCount", "mode": "add_per_level", "value": 8 }, { "stat": "weapon.SHOTGUN.pelletSpreadAngle", "mode": "add_per_level", "value": 32 }] },
+        { "id": "shotgun_proximity_damage", "code": "C-W4-4", "label": "Zerreissende Naehe", "description": "Erhoeht den Schaden kontinuierlich mit der Naehe. Der maximale Bonus direkt am Spieler betraegt 30% je Stufe; an der maximalen Reichweite bleibt der Schaden unveraendert.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 195, "requires": [{ "upgradeId": "shotgun_round_shot", "minLevel": 5 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunProximityMaxDamageBonus", "mode": "add_per_level", "value": 0.3 }] },
+        { "id": "shotgun_range", "code": "C-W4-5", "label": "Weitraeumige Zerreissung", "description": "Erhoeht die maximale Reichweite der Schrotflinte um 10% je Stufe und streckt damit auch die Entfernungskurve von Zerreissende Naehe.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 196, "requires": [{ "upgradeId": "shotgun_proximity_damage", "minLevel": 3 }], "effects": [{ "stat": "weapon.SHOTGUN.range", "mode": "add_percent_per_level", "value": 0.1 }] },
+        { "id": "shotgun_thunder_avalanche", "code": "C-W4-C2", "label": "Donnerlawine", "description": "Von Blitzexplosionen getoetete Gegner entladen weitere Blitze. Jede Generation behaelt 70% Schaden und 85% Radius.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 0, "bossPointCostPerLevel": 1, "refundable": true, "sortOrder": 197, "requires": [{ "upgradeId": "shotgun_lightning_slow", "minLevel": 1 }, { "upgradeId": "shotgun_range", "minLevel": 3 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunChainEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.SHOTGUN.shotgunChainDamageRetention", "mode": "add_per_level", "value": 0.7 }, { "stat": "weapon.SHOTGUN.shotgunChainRadiusRetention", "mode": "add_per_level", "value": 0.85 }] },
+        { "id": "shotgun_lightning_radius", "code": "C-W4-6", "label": "Breitbandentladung", "description": "Erhoeht den Radius aller Schrotflinten-Blitzexplosionen um 20% je Stufe.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 198, "requires": [{ "upgradeId": "shotgun_thunder_avalanche", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningRadius", "mode": "add_percent_per_level", "value": 0.2 }] },
+        { "id": "shotgun_lightning_damage", "code": "C-W4-7", "label": "Hochenergieentladung", "description": "Erhoeht den Schaden aller Schrotflinten-Blitzexplosionen um 30% je Stufe.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 199, "requires": [{ "upgradeId": "shotgun_thunder_avalanche", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningDamage", "mode": "add_percent_per_level", "value": 0.3 }] },
         {
           "id": "unlock_asmd_secondary",
           "code": "C-W5",
@@ -1299,33 +1407,33 @@
           ]
         },
         {
-          "id": "asmd_secondary_projectile_speed",
-          "code": "C-W5-2",
-          "label": "Upgrade ASMD Sekundaer: Geschossgeschwindigkeit",
-          "description": "+10% Projektilgeschwindigkeit fuer ASMD Sekundaer je Stufe.",
+          "id": "asmd_secondary_match_primary_range",
+          "code": "C-W5-6",
+          "label": "Upgrade ASMD Sekundaer: Primaer-Reichweite",
+          "description": "Setzt die Reichweite des ASMD-Balls auf die aktuell aufgeloeste Reichweite von ASMD Primaer, einschliesslich dessen Reichweiten-Upgrades.",
           "kind": "upgrade",
-          "maxLevel": 3,
+          "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 240,
+          "sortOrder": 246,
           "requires": [
             {
-              "upgradeId": "unlock_asmd_secondary",
-              "minLevel": 1
+              "upgradeId": "asmd_secondary_combo_adrenaline",
+              "minLevel": 3
             }
           ],
           "effects": [
             {
-              "stat": "weapon.ASMD_SEC.projectileSpeed",
-              "mode": "add_percent_per_level",
-              "value": 0.1
+              "stat": "weapon.ASMD_SEC.matchPrimaryRange",
+              "mode": "add_per_level",
+              "value": 1
             }
           ]
         },
         {
           "id": "asmd_secondary_damage",
-          "code": "C-W5-3",
+          "code": "C-W5-4",
           "label": "Upgrade ASMD Sekundaer: Schaden",
           "description": "+50% Schaden fuer ASMD Sekundaer.",
           "kind": "upgrade",
@@ -1333,10 +1441,10 @@
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 245,
+          "sortOrder": 240,
           "requires": [
             {
-              "upgradeId": "asmd_secondary_dot_field",
+              "upgradeId": "unlock_asmd_secondary",
               "minLevel": 1
             }
           ],
@@ -1350,7 +1458,7 @@
         },
         {
           "id": "asmd_secondary_dot_field",
-          "code": "C-W5-4",
+          "code": "C-W5-2",
           "label": "Upgrade ASMD Sekundaer: Elektrofeld",
           "description": "Die Explosion hinterlaesst 2 Sekunden lang eine elektrisierte Flaeche, die allen Gegnern darin Schaden ueber Zeit zufuegt.",
           "kind": "upgrade",
@@ -1359,7 +1467,7 @@
           "costPerLevel": 0,
           "bossPointCostPerLevel": 1,
           "refundable": true,
-          "sortOrder": 247,
+          "sortOrder": 232,
           "requires": [
             {
               "upgradeId": "asmd_secondary_explosion_radius",
@@ -1380,6 +1488,146 @@
           ]
         },
         {
+          "id": "asmd_secondary_dot_field_damage",
+          "code": "C-W5-3",
+          "label": "Upgrade ASMD Sekundaer: Elektrofeld-Schaden",
+          "description": "+50% Schaden des Elektrofelds je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 234,
+          "requires": [
+            {
+              "upgradeId": "asmd_secondary_dot_field",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.dotArea.damagePerTick",
+              "mode": "add_percent_per_level",
+              "value": 0.5
+            }
+          ]
+        },
+        {
+          "id": "asmd_secondary_combo_adrenaline",
+          "code": "C-W5-5",
+          "label": "Upgrade ASMD Sekundaer: Combo-Adrenalin",
+          "description": "Eine erfolgreiche ASMD-Primary-Detonation gibt je Stufe 15 Adrenalin zurueck.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 244,
+          "requires": [
+            {
+              "upgradeId": "asmd_secondary_damage",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.detonable.comboAdrenalineGain",
+              "mode": "add_per_level",
+              "value": 15
+            }
+          ]
+        },
+        {
+          "id": "asmd_secondary_arc_lightning",
+          "code": "C-W5-C",
+          "label": "Kugelgewitter",
+          "description": "Der ASMD-Ball schockt alle 500 ms nahe Gegner innerhalb von 160 px fuer 10 Schaden. Ziele koennen von spaeteren Salven erneut getroffen werden.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 248,
+          "requires": [
+            {
+              "upgradeId": "asmd_secondary_match_primary_range",
+              "minLevel": 1
+            },
+            {
+              "upgradeId": "asmd_secondary_dot_field_damage",
+              "minLevel": 3
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.proximityArc.radius",
+              "mode": "add_per_level",
+              "value": 160
+            },
+            {
+              "stat": "weapon.ASMD_SEC.proximityArc.damage",
+              "mode": "add_per_level",
+              "value": 10
+            },
+            {
+              "stat": "weapon.ASMD_SEC.proximityArc.scanIntervalMs",
+              "mode": "add_per_level",
+              "value": 500
+            }
+          ]
+        },
+        {
+          "id": "asmd_secondary_arc_range",
+          "code": "C-W5-7",
+          "label": "Upgrade ASMD Sekundaer: Gewitterreichweite",
+          "description": "+20% Reichweite der Kugelblitze je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 248.1,
+          "requires": [
+            {
+              "upgradeId": "asmd_secondary_arc_lightning",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.proximityArc.radius",
+              "mode": "add_percent_per_level",
+              "value": 0.2
+            }
+          ]
+        },
+        {
+          "id": "asmd_secondary_arc_damage",
+          "code": "C-W5-8",
+          "label": "Upgrade ASMD Sekundaer: Gewitterschaden",
+          "description": "+20% Schaden der Kugelblitze je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 248.2,
+          "requires": [
+            {
+              "upgradeId": "asmd_secondary_arc_lightning",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.ASMD_SEC.proximityArc.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.2
+            }
+          ]
+        },
+        {
           "id": "unlock_mini_rocket_launcher",
           "code": "C-W6",
           "label": "Mini-Raketen",
@@ -1395,17 +1643,18 @@
             "itemId": "MINI_ROCKET_LAUNCHER"
           }
         },
+        { "id": "mini_rocket_long_range_drive", "code": "C-W6-C1", "label": "Kettenreaktion", "description": "Mini-Raketen explodieren zweimal, mit mindestens 250 ms Abstand. Nach jeder Explosion sinkt ihr Tempo um 20%. Das gerade getroffene Ziel wird waehrend des ungelenkten Weiterflugs kurz ignoriert.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "unlock_mini_rocket_launcher", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.multiExplosionCount", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.MINI_ROCKET_LAUNCHER.multiExplosionCoastMs", "mode": "add_per_level", "value": 250 }] },
         {
-          "id": "mini_rocket_launcher_explosion_radius",
-          "code": "C-W6-1",
-          "label": "Upgrade Mini-Raketen: Explosionsradius",
-          "description": "+10% Explosionsradius fuer Mini-Raketen je Stufe.",
+          "id": "mini_rocket_thermobaric_charge",
+          "code": "C-W6-2",
+          "label": "Upgrade Mini-Raketen: Thermobarische Ladung",
+          "description": "Reduziert den radialen Schadensabfall um 33% und erhoeht den Explosionsradius um 10% je Stufe. Mit drei Stufen verursacht die Explosion im gesamten Radius vollen Schaden.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 260,
+          "sortOrder": 257,
           "requires": [
             {
               "upgradeId": "unlock_mini_rocket_launcher",
@@ -1413,6 +1662,11 @@
             }
           ],
           "effects": [
+            {
+              "stat": "weapon.MINI_ROCKET_LAUNCHER.impactExplosion.falloffReduction",
+              "mode": "add_per_level",
+              "value": 0.3333333333333333
+            },
             {
               "stat": "weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius",
               "mode": "add_percent_per_level",
@@ -1422,51 +1676,51 @@
         },
         {
           "id": "mini_rocket_launcher_homing_turn",
-          "code": "C-W6-2",
-          "label": "Upgrade Mini-Raketen: Homing",
-          "description": "+15% Lenkfaehigkeit fuer Mini-Raketen je Stufe.",
+          "code": "C-W6-3",
+          "label": "Upgrade Mini-Raketen: Lenkduesen",
+          "description": "+33% Lenkfaehigkeit fuer Mini-Raketen je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 270,
+          "sortOrder": 262,
           "requires": [
             {
-              "upgradeId": "unlock_mini_rocket_launcher",
-              "minLevel": 1
+              "upgradeId": "mini_rocket_thermobaric_charge",
+              "minLevel": 3
             }
           ],
           "effects": [
             {
               "stat": "weapon.MINI_ROCKET_LAUNCHER.homing.maxTurnDegreesPerStep",
               "mode": "add_percent_per_level",
-              "value": 0.15
+              "value": 0.33
             }
           ]
         },
         {
-          "id": "mini_rocket_launcher_adrenaline_cost",
-          "code": "C-W6-3",
-          "label": "Upgrade Mini-Raketen: Adrenalin-Verbrauch",
-          "description": "-10% Adrenalin-Verbrauch fuer Mini-Raketen je Stufe.",
+          "id": "mini_rocket_launcher_explosion_damage",
+          "code": "C-W6-4",
+          "label": "Upgrade Mini-Raketen: Sprengstoffverdichtung",
+          "description": "+10% Explosionsschaden fuer Mini-Raketen je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 275,
+          "sortOrder": 267,
           "requires": [
             {
-              "upgradeId": "mini_rocket_launcher_explosion_radius",
+              "upgradeId": "mini_rocket_launcher_homing_turn",
               "minLevel": 3
             }
           ],
           "effects": [
             {
-              "stat": "weapon.MINI_ROCKET_LAUNCHER.adrenalinCost",
+              "stat": "weapon.MINI_ROCKET_LAUNCHER.impactExplosion.damage",
               "mode": "add_percent_per_level",
-              "value": -0.1
+              "value": 0.1
             }
           ]
         },
@@ -1578,10 +1832,10 @@
           }
         },
         {
-          "id": "flamethrower_burn_duration",
+          "id": "flamethrower_pierce",
           "code": "C-W8-1",
-          "label": "Upgrade Flammenwerfer: Brenndauer",
-          "description": "+50% Brenndauer fuer den Flammenwerfer.",
+          "label": "Upgrade Flammenwerfer: Durchschlag",
+          "description": "Flammenprojektile zerstoeren sich nicht bei Treffern und koennen mehrere Gegner treffen (kein Mehrfachtreffer).",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -1590,84 +1844,8 @@
           "sortOrder": 320,
           "requires": [
             {
-              "upgradeId": "flamethrower_burn_damage",
-              "minLevel": 3
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.FLAMETHROWER.burnDurationMs",
-              "mode": "add_percent_per_level",
-              "value": 0.5
-            }
-          ]
-        },
-        {
-          "id": "flamethrower_burn_damage",
-          "code": "C-W8-2",
-          "label": "Upgrade Flammenwerfer: Brandschaden",
-          "description": "+10% Brandschaden pro Tick fuer den Flammenwerfer je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 330,
-          "requires": [
-            {
               "upgradeId": "unlock_flamethrower",
               "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.FLAMETHROWER.burnDamagePerTick",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
-          "id": "flamethrower_hitbox_end_size",
-          "code": "C-W8-3",
-          "label": "Upgrade Flammenwerfer: Flammengroesse",
-          "description": "+10% maximale Projektilgroesse des Flammenwerfers je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 340,
-          "requires": [
-            {
-              "upgradeId": "unlock_flamethrower",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.FLAMETHROWER.hitboxEndSize",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
-          "id": "flamethrower_pierce",
-          "code": "C-W8-4",
-          "label": "Upgrade Flammenwerfer: Durchschlag",
-          "description": "Flammenprojektile zerstoeren sich nicht bei Treffern und koennen mehrere Gegner treffen (kein Mehrfachtreffer).",
-          "kind": "upgrade",
-          "maxLevel": 1,
-          "startingLevel": 0,
-          "costPerLevel": 0,
-          "bossPointCostPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 350,
-          "requires": [
-            {
-              "upgradeId": "flamethrower_hitbox_end_size",
-              "minLevel": 3
             }
           ],
           "effects": [
@@ -1677,6 +1855,129 @@
               "value": 1
             }
           ]
+        },
+        {
+          "id": "flamethrower_kamikaze",
+          "code": "C-W8-2",
+          "label": "Kamikaze-Napalm",
+          "description": "Beim Tod entsteht am Spieler eine Napalm-Explosion mit den Basiswerten eines Molotovs.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 330,
+          "requires": [{ "upgradeId": "flamethrower_pierce", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.kamikaze.enabled", "mode": "add_per_level", "value": 1 }]
+        },
+        {
+          "id": "flamethrower_kamikaze_molotov_bonuses",
+          "code": "C-W8-3",
+          "label": "Napalm-Mischung",
+          "description": "Kamikaze-Napalm verwendet die vollstaendig geskillte Molotov-Konfiguration des Spielers, einschliesslich Lauffeuer.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 340,
+          "requires": [{ "upgradeId": "flamethrower_kamikaze", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.kamikaze.inheritMolotovBonuses", "mode": "add_per_level", "value": 1 }]
+        },
+        {
+          "id": "flamethrower_burning_ground",
+          "code": "C-W8-C1",
+          "label": "Brennender Boden",
+          "description": "Gegner, die brennend sterben, entzuenden ihre 32-Pixel-Rasterzelle fuer 2 Sekunden. Gegner im Feuer erhalten alle 250 ms einen Brand-Stack; erneutes Entzuenden verlaengert die Zellendauer.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 350,
+          "requires": [{ "upgradeId": "unlock_flamethrower", "minLevel": 1 }],
+          "effects": [
+            { "stat": "weapon.FLAMETHROWER.burningGround.cellSize", "mode": "add_per_level", "value": 32 },
+            { "stat": "weapon.FLAMETHROWER.burningGround.durationMs", "mode": "add_per_level", "value": 2000 }
+          ]
+        },
+        {
+          "id": "flamethrower_burning_projectiles",
+          "code": "C-W8-C1-1",
+          "label": "Brennende Projektile",
+          "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten dauerhaft einen zusaetzlichen Brand, wenn sie durch eigenen brennenden Boden fliegen.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 352,
+          "requires": [{ "upgradeId": "flamethrower_expiry_ground", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.burningGround.igniteProjectiles", "mode": "add_per_level", "value": 1 }]
+        },
+        {
+          "id": "flamethrower_expiry_ground",
+          "code": "C-W8-C1-2",
+          "label": "Auslaufendes Inferno",
+          "description": "Flammenwerfer-Projektile erzeugen beim Erreichen ihrer maximalen Lebensdauer brennenden Boden.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 351,
+          "requires": [{ "upgradeId": "flamethrower_burning_ground", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.burningGround.createOnFlameExpiry", "mode": "add_per_level", "value": 1 }]
+        },
+        {
+          "id": "flamethrower_fire_ring",
+          "code": "C-W8-C2",
+          "label": "Flammenring",
+          "description": "Solange der Flammenwerfer ausgeruestet ist, umgibt den lebenden, oberirdischen Spieler ein 16 Pixel breiter Flammenring mit 64 Pixel Radius. Beruehrte Gegner erhalten alle 250 ms einen Brand-Stack.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 360,
+          "requires": [
+            { "upgradeId": "flamethrower_kamikaze_molotov_bonuses", "minLevel": 1 },
+            { "upgradeId": "flamethrower_burning_projectiles", "minLevel": 1 }
+          ],
+          "effects": [
+            { "stat": "weapon.FLAMETHROWER.fireRing.radius", "mode": "add_per_level", "value": 64 },
+            { "stat": "weapon.FLAMETHROWER.fireRing.thickness", "mode": "add_per_level", "value": 16 }
+          ]
+        },
+        {
+          "id": "flamethrower_fire_ring_projectiles",
+          "code": "C-W8-C2-1",
+          "label": "Flammenring-Munition",
+          "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten beim Durchqueren des Flammenrings dauerhaft einen zusaetzlichen Brand.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 361,
+          "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.fireRing.igniteProjectiles", "mode": "add_per_level", "value": 1 }]
+        },
+        {
+          "id": "flamethrower_fire_ring_radius",
+          "code": "C-W8-C2-2",
+          "label": "Weiter Flammenkreis",
+          "description": "+20% Radius des Flammenrings je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 362,
+          "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.fireRing.radius", "mode": "add_percent_per_level", "value": 0.2 }]
         },
         {
           "id": "unlock_negev",
@@ -2012,15 +2313,18 @@
             }
           ]
         },
-        { "id": "p90_bullet_storm", "code": "C-W1-C", "label": "Kugelhagel", "description": "Jeder Schuss feuert drei Projektile mit vollem Schaden bei -15, 0 und +15 Grad.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 150, "requires": [{ "upgradeId": "p90_range", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.pelletCount", "mode": "add_per_level", "value": 2 }] },
-        { "id": "p90_homing_overdrive", "code": "C-W1-D", "label": "Zielsuchender Kugelhagel", "description": "Alle P90-Geschosse verfolgen Ziele, verursachen vierfachen Schaden und feuern mit einem Viertel der bisherigen Rate.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "p90_adrenaline_cost", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homingEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.P90.damage", "mode": "add_percent_per_level", "value": 3 }, { "stat": "weapon.P90.cooldown", "mode": "add_percent_per_level", "value": 3 }] },
+        { "id": "p90_bullet_storm", "code": "C-W1-C", "label": "Kugelhagel", "description": "Jeder Schuss feuert drei Projektile mit vollem Schaden bei -15, 0 und +15 Grad.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 150, "requires": [{ "upgradeId": "unlock_p90", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.pelletCount", "mode": "add_per_level", "value": 2 }] },
+        { "id": "p90_homing_overdrive", "code": "C-W1-D", "label": "Zielsuchender Kugelhagel", "description": "Alle P90-Geschosse verfolgen Ziele, verursachen vierfachen Schaden und feuern mit einem Viertel der bisherigen Rate.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "p90_accuracy", "minLevel": 1 }, { "upgradeId": "p90_range", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homingEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.P90.damage", "mode": "add_percent_per_level", "value": 3 }, { "stat": "weapon.P90.cooldown", "mode": "add_percent_per_level", "value": 3 }] },
         { "id": "p90_homing_turn", "code": "C-W1-6", "label": "Upgrade P90: Homing-Wendigkeit", "description": "+25% maximale Wendung pro Schritt fuer zielsuchende P90-Geschosse je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "p90_homing_overdrive", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homing.maxTurnDegreesPerStep", "mode": "add_percent_per_level", "value": 0.25 }] },
+        { "id": "p90_homing_cooldown", "code": "C-W1-7", "label": "Upgrade P90: Beschleunigte Zielerfassung", "description": "Reduziert den Cooldown des zielsuchenden Kugelhagels um 10% je Stufe. Der starke Cooldown-Malus bleibt bestehen.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 157, "requires": [{ "upgradeId": "p90_homing_overdrive", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homingCooldownReduction", "mode": "add_percent_per_level", "value": -0.1 }] },
         { "id": "rocket_launcher_black_hole", "code": "C-W2-C", "label": "Schwarzes Loch", "description": "Explosionen erzeugen ein Schwarzes Loch mit Explosionsradius, das Gegner 1 Sekunde lang leicht anzieht.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 175, "requires": [{ "upgradeId": "rocket_launcher_direct_damage", "minLevel": 1 }, { "upgradeId": "rocket_launcher_adrenaline_cost", "minLevel": 1 }], "effects": [{ "stat": "weapon.ROCKET_LAUNCHER.blackHoleDurationMs", "mode": "add_per_level", "value": 1000 }] },
         { "id": "rocket_launcher_black_hole_duration", "code": "C-W2-7", "label": "Upgrade Rocket Launcher: Ereignishorizont", "description": "+1 Sekunde Dauer des Schwarzen Lochs je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 177, "requires": [{ "upgradeId": "rocket_launcher_black_hole", "minLevel": 1 }], "effects": [{ "stat": "weapon.ROCKET_LAUNCHER.blackHoleDurationMs", "mode": "add_per_level", "value": 1000 }] },
         { "id": "rocket_launcher_black_hole_pull", "code": "C-W2-8", "label": "Upgrade Rocket Launcher: Gravitationssog", "description": "+30% Sogstaerke des Schwarzen Lochs je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 178, "requires": [{ "upgradeId": "rocket_launcher_black_hole", "minLevel": 1 }], "effects": [{ "stat": "weapon.ROCKET_LAUNCHER.blackHolePullStrength", "mode": "add_percent_per_level", "value": 0.3 }] },
-        { "id": "ak47_armor_piercer", "code": "C-W3-C", "label": "Panzerbrecher", "description": "Kugeln durchschlagen einen Gegner und verursachen danach 70% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "ak47_accuracy", "minLevel": 3 }], "effects": [{ "stat": "weapon.AK47.penetrationCount", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.AK47.penetrationDamageRetention", "mode": "add_per_level", "value": 0.7 }] },
-        { "id": "shotgun_pellet_storm", "code": "C-W4-C", "label": "Schrotsturm", "description": "Verdoppelt die finale Pelletzahl bei unveraendertem Schaden pro Pellet.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 245, "requires": [{ "upgradeId": "shotgun_pellet_count", "minLevel": 2 }], "effects": [{ "stat": "weapon.SHOTGUN.pelletCountMultiplier", "mode": "add_per_level", "value": 1 }] },
-        { "id": "mini_rocket_long_range_drive", "code": "C-W6-C", "label": "Kettenreaktion", "description": "Mini-Raketen koennen dreimal explodieren. Nach jeder Explosion suchen sie ein neues, noch nicht von dieser Rakete getroffenes Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 295, "requires": [{ "upgradeId": "mini_rocket_launcher_homing_turn", "minLevel": 3 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.multiExplosionCount", "mode": "add_per_level", "value": 2 }] },
+        { "id": "mini_rocket_triple_detonation", "code": "C-W6-5", "label": "Upgrade Mini-Raketen: Dreifachzuendung", "description": "Erhoeht die maximale Zahl der Explosionen von zwei auf drei.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 260, "requires": [{ "upgradeId": "mini_rocket_long_range_drive", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.multiExplosionCount", "mode": "add_per_level", "value": 1 }] },
+        { "id": "mini_rocket_cascade_charge", "code": "C-W6-6", "label": "Upgrade Mini-Raketen: Kaskadenladung", "description": "Erhoeht Explosionsschaden und Explosionsradius um jeweils 20% je Stufe, insgesamt auf 20%, 40% oder 60% Bonus.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 265, "requires": [{ "upgradeId": "mini_rocket_triple_detonation", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeInitialDamageBonus", "mode": "add_per_level", "value": 0.2 }, { "stat": "weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius", "mode": "add_percent_per_level", "value": 0.2 }] },
+        { "id": "mini_rocket_homecoming_protocol", "code": "C-W6-C2", "label": "Heimkehrprotokoll", "description": "Findet eine Rakete kein Ziel mehr, kann sie zum Spieler zurueckkehren und unterwegs weiter nach Gegnern suchen. Nach ihrer letzten Explosion kehrt sie verbraucht mit 40% Tempo zurueck und kann nur noch eingesammelt werden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 270, "requires": [{ "upgradeId": "mini_rocket_cascade_charge", "minLevel": 3 }, { "upgradeId": "mini_rocket_launcher_explosion_damage", "minLevel": 3 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketReturnEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "mini_rocket_adrenaline_recovery", "code": "C-W6-6", "label": "Upgrade Mini-Raketen: Adrenalinrueckgewinnung", "description": "Erstattet beim Einsammeln 50% der tatsaechlich bezahlten Adrenalinkosten je Stufe, bis zu 150%.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 272, "requires": [{ "upgradeId": "mini_rocket_homecoming_protocol", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupAdrenalineRefundFraction", "mode": "add_per_level", "value": 0.5 }] },
+        { "id": "mini_rocket_armor_recovery", "code": "C-W6-7", "label": "Upgrade Mini-Raketen: Panzerungsbergung", "description": "Gewaehrt beim Einsammeln +1 Ruestung je Stufe. Kein interner Cooldown.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 274, "requires": [{ "upgradeId": "mini_rocket_homecoming_protocol", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupArmor", "mode": "add_per_level", "value": 1 }] },
         { "id": "awp_penetrating_shot", "code": "C-W7-C", "label": "Durchschuss", "description": "Durchschlaegt mehrere Gegner, verliert je Treffer 25% Restschaden und stoppt an Waenden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 325, "requires": [{ "upgradeId": "awp_aim_duration", "minLevel": 3 }], "effects": [{ "stat": "weapon.AWP.penetrationCount", "mode": "add_per_level", "value": 99 }, { "stat": "weapon.AWP.penetrationDamageRetention", "mode": "add_per_level", "value": 0.75 }] },
         { "id": "tesla_dome_high_voltage", "code": "C-W10-C", "label": "Hochspannung", "description": "Aktivhalten laedt bis zu drei Stufen; jede erhoeht Radius und Schaden um 10%, ohne Mehrverbrauch.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 405, "requires": [{ "upgradeId": "tesla_dome_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.TESLA_DOME.fire.chargeIntervalMs", "mode": "add_per_level", "value": 1000 }, { "stat": "weapon.TESLA_DOME.fire.maxChargeStacks", "mode": "add_per_level", "value": 3 }, { "stat": "weapon.TESLA_DOME.fire.radiusBonusPerCharge", "mode": "add_per_level", "value": 0.1 }, { "stat": "weapon.TESLA_DOME.fire.damageBonusPerCharge", "mode": "add_per_level", "value": 0.1 }] },
         { "id": "energy_shield_reflector", "code": "C-W11-C", "label": "Reflektor", "description": "Geblockte Projektile werden einmalig mit 60% Schaden reflektiert.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 435, "requires": [{ "upgradeId": "energy_shield_capacity", "minLevel": 3 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.reflectionDamageFactor", "mode": "add_per_level", "value": 0.6 }] }
@@ -2427,7 +2731,7 @@
           "id": "molotov_burn_duration",
           "code": "D-U4-4",
           "label": "Upgrade Molotov: Brenndauer der Gegner",
-          "description": "+30% Dauer des Brandes fuer getroffene Gegner.",
+          "description": "+30% Dauer jedes durch die Feuerflaeche erzeugten Brand-Stacks.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,

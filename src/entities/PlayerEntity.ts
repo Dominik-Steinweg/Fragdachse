@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { BurrowPhase, PlayerProfile } from '../types';
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
-import { PlayerBurnRenderer } from '../effects/PlayerBurnRenderer';
+import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
@@ -47,7 +47,7 @@ export class PlayerEntity {
   private stealthScan: Phaser.GameObjects.Image | null = null;
   private stealthAmbientParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private stealthTrailParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
-  private burnRenderer: PlayerBurnRenderer | null = null;
+  private burnRenderer: EntityBurnRenderer | null = null;
   private rageRenderer: HoneyBadgerRageRenderer | null = null;
   private burnStacks = 0;
 
@@ -288,7 +288,7 @@ export class PlayerEntity {
     }
 
     if (!this.burnRenderer) {
-      this.burnRenderer = new PlayerBurnRenderer(this.sprite.scene);
+      this.burnRenderer = new EntityBurnRenderer(this.sprite.scene);
     }
 
     this.syncAttachedEffects();

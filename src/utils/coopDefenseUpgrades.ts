@@ -16,6 +16,48 @@ export type CoopDefenseUpgradeCategoryId = 'general' | 'weapon1' | 'weapon2' | '
 export type CoopDefenseUpgradeKind = 'upgrade' | 'unlock';
 export type CoopDefenseUpgradeEffectMode = 'add_per_level' | 'add_percent_per_level';
 
+const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  glock_adrenaline_gain: 'UPGRADE_ADRENALINE_GAIN',
+  glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
+  asmd_secondary_dot_field_damage: 'UPGRADE_ASMD_SECONDARY_DOT_FIELD',
+  asmd_secondary_combo_adrenaline: 'UPGRADE_ADRENALINE_GAIN',
+  asmd_secondary_match_primary_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
+  asmd_secondary_arc_lightning: 'UPGRADE_ASMD_PRIMARY_CHAIN_LIGHTNING',
+  asmd_secondary_arc_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
+  asmd_secondary_arc_damage: 'UPGRADE_ASMD_SECONDARY_DAMAGE',
+  ak47_focus: 'UPGRADE_AK47_ACCURACY',
+  ak47_focus_duration: 'UPGRADE_AK47_RANGE',
+  ak47_focus_damage: 'UPGRADE_AK47_DAMAGE',
+  ak47_fire_superiority: 'UPGRADE_AK47_ARMOR_PIERCER',
+  ak47_fire_superiority_shots: 'UPGRADE_AK47_ADRENALINE_COST',
+  ak47_fire_superiority_damage: 'UPGRADE_AK47_DAMAGE',
+  shotgun_brake_load: 'UPGRADE_SHOTGUN_PELLET_SPREAD',
+  shotgun_lightning_blast: 'UPGRADE_ASMD_PRIMARY_CHAIN_LIGHTNING',
+  shotgun_lightning_slow: 'UPGRADE_TIME_BUBBLE_SLOW_STRENGTH',
+  shotgun_round_shot: 'UPGRADE_SHOTGUN_PELLET_STORM',
+  shotgun_proximity_damage: 'UPGRADE_SHOTGUN_PELLET_COUNT',
+  shotgun_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
+  shotgun_thunder_avalanche: 'UPGRADE_ASMD_PRIMARY_CHAIN_LIGHTNING',
+  shotgun_lightning_radius: 'UPGRADE_ASMD_SECONDARY_EXPLOSION_RADIUS',
+  shotgun_lightning_damage: 'UPGRADE_ASMD_SECONDARY_DAMAGE',
+  mini_rocket_thermobaric_charge: 'UPGRADE_MINI_ROCKET_LAUNCHER_EXPLOSION_RADIUS',
+  mini_rocket_launcher_homing_turn: 'UPGRADE_P90_HOMING_TURN',
+  mini_rocket_launcher_explosion_damage: 'UPGRADE_ROCKET_LAUNCHER_DIRECT_DAMAGE',
+  mini_rocket_long_range_drive: 'UPGRADE_ROCKET_LAUNCHER_BLACK_HOLE',
+  mini_rocket_triple_detonation: 'UPGRADE_SHOTGUN_PELLET_STORM',
+  mini_rocket_cascade_charge: 'UPGRADE_ROCKET_LAUNCHER_DIRECT_DAMAGE',
+  mini_rocket_homecoming_protocol: 'UPGRADE_TRANSLOCATOR_SPEED',
+  mini_rocket_adrenaline_recovery: 'UPGRADE_ADRENALINE_GAIN',
+  mini_rocket_armor_recovery: 'UPGRADE_ARMOR_REGENERATION',
+  necromancy: 'UPGRADE_GUARDIAN_SPIRITS',
+  necromancy_count: 'UPGRADE_GUARDIAN_SPIRITS',
+  necromancy_hp: 'UPGRADE_HP',
+});
+
+export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string {
+  return COOP_DEFENSE_UPGRADE_ICON_ALIASES[upgradeId] ?? `UPGRADE_${upgradeId.toUpperCase()}`;
+}
+
 export interface CoopDefenseUpgradeEffectDefinition {
   stat: string;
   mode: CoopDefenseUpgradeEffectMode;

@@ -50,6 +50,7 @@ export type BurrowPhase = 'idle' | 'windup' | 'underground' | 'trapped' | 'recov
 export interface SyncedActiveHudBuff {
   defId: string;
   remainingFrac: number;
+  valueText?: string;
 }
 
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
@@ -75,6 +76,7 @@ export interface PlayerNetState {
   isDecoyStealthed?: boolean;
   decoyStealthRemainingFrac?: number;
   dashPhase:  0 | 1 | 2; // 0 = kein Dash, 1 = Burst, 2 = Recovery
+  flameRingRadius?: number;
   aim:        PlayerAimNetState;
 }
 
@@ -147,12 +149,13 @@ export type HitscanVisualPreset = 'default' | 'asmd_primary';
 
 /** Visuelles Preset fuer Melee-Swings. */
 export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite';
+export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'rocks' | 'train';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'nuke' | 'rocket' | 'mini_rocket' | 'train';
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -184,7 +187,6 @@ export interface TracerConfig {
 export interface BurnOnHitConfig {
   readonly durationMs: number;      // Dauer eines Burn-Stacks
   readonly damagePerTick: number;   // HP-Schaden pro Tick (0 = deaktiviert)
-  readonly tickIntervalMs: number;  // ms zwischen Ticks
 }
 
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
@@ -192,6 +194,7 @@ export interface ProjectileExplosionConfig {
   readonly radius: number;
   readonly maxDamage: number;
   readonly minDamage?: number;  // undefined = konstanter Schaden im gesamten Radius
+  readonly falloffReduction?: number; // 0 = normaler Falloff, 1 = voller Schaden bis zum Rand
   readonly knockback: number;
   readonly selfDamageMult: number;
   readonly allowTeamDamage?: boolean;
@@ -237,6 +240,7 @@ export interface DamageOverTimeAreaConfig {
 }
 
 export type HomingTargetType = 'players' | 'enemies' | 'train' | 'projectiles';
+export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
 
 /** Data-driven Zielsuche/Lenkung für Projektilwaffen. */
 export interface ProjectileHomingConfig {
@@ -278,6 +282,8 @@ export interface SyncedProjectile {
   reflected?: boolean;
   gaussChainRadius?: number;
   gaussChainDamageFactor?: number;
+  miniRocketPhase?: MiniRocketFlightPhase;
+  miniRocketCascadeStage?: number;
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
@@ -527,6 +533,7 @@ export interface UtilityPlacementPreviewState {
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
 export interface ProjectileSpawnConfig {
+  proximityArc?: ProjectileProximityArcConfig;
   speed:           number;
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
@@ -565,8 +572,9 @@ export interface ProjectileSpawnConfig {
   velocityDecay?:   number;     // Geschwindigkeits-Multiplikator pro Sekunde (0-1, kleiner = schnellerer Abbau)
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
-  burnTickIntervalMs?: number;
   flamePiercing?:     boolean;   // true = Projektil zerstört sich nicht bei Treffern (piercing)
+  canReceiveFireImbue?: boolean;
+  supplementalBurnOnHit?: BurnOnHitConfig;
 
   // Laubblaeser (optional)
   leafBlowerMinKnockback?: number;
@@ -601,6 +609,28 @@ export interface ProjectileSpawnConfig {
   gaussChainRadius?: number;
   gaussChainDamageFactor?: number;
   multiExplosionCount?: number;
+  multiExplosionCoastMs?: number;
+  miniRocketStageRangePx?: number;
+  miniRocketReturnEnabled?: boolean;
+  miniRocketReturnRangeBuffer?: number;
+  miniRocketPickupRadius?: number;
+  miniRocketPickupAdrenalineRefundFraction?: number;
+  miniRocketPickupArmor?: number;
+  miniRocketAdrenalineCostPaid?: number;
+  miniRocketSafetyLifetimeMs?: number;
+  miniRocketCascadeInitialDamageBonus?: number;
+  miniRocketCascadeDamageBonusPerExplosion?: number;
+  ak47ShotId?: number;
+  ak47DamageMultiplier?: number;
+  ak47FireSuperiorityShot?: boolean;
+  shotgunOriginX?: number;
+  shotgunOriginY?: number;
+  shotgunResolvedRange?: number;
+  shotgunProximityMaxDamageBonus?: number;
+  shotgunSlowFraction?: number;
+  shotgunSlowDurationMs?: number;
+  hitKnockback?: number;
+  hitKnockbackDurationMs?: number;
 }
 
 export interface DamageGrenadeEffect {
@@ -635,14 +665,12 @@ export interface FireGrenadeEffect {
   type: 'fire';
   radius: number;
   damagePerTick: number;
-  tickInterval: number;    // ms
   lingerDuration: number;  // ms
   allowTeamDamage?: boolean;
   rockDamageMult?:  number;
   trainDamageMult?: number;
   burnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   burnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
-  burnTickIntervalMs?: number;  // ms zwischen Burn-Ticks
   weaponName?: string;
 }
 
@@ -665,6 +693,7 @@ export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | Fir
  * Data-driven: konfigurierbar pro Waffe, flexibel erweiterbar (ASMD Ball, Rakete, …).
  */
 export interface DetonableConfig {
+  readonly comboAdrenalineGain?: number;
   readonly tag: string;              // Bezeichner, z.B. 'asmd_ball'
   readonly aoeDamage: number;        // Explosionsschaden bei Detonation
   readonly aoeRadius: number;        // Explosionsradius in px
@@ -683,6 +712,12 @@ export interface DetonableConfig {
  * Markiert einen Schuss/Treffer als Detonator für passende DetonableConfig-Tags.
  * Wird an WeaponConfig geheftet; gilt sowohl für Hitscan- als auch Projektil-Waffen.
  */
+export interface ProjectileProximityArcConfig {
+  readonly radius: number;
+  readonly damage: number;
+  readonly scanIntervalMs: number;
+}
+
 export interface DetonatorConfig {
   readonly triggerTags: readonly string[];  // Tags der Projektile, die gezündet werden können
 }
@@ -768,6 +803,8 @@ export interface SyncedTimeBubble {
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
 export interface TrackedProjectile {
+  proximityArc?: ProjectileProximityArcConfig;
+  lastProximityArcAt?: number;
   id:              number;
   sprite:          Phaser.GameObjects.Shape;  // Rectangle (bullet) oder Arc (ball)
   body:            Phaser.Physics.Arcade.Body;
@@ -820,8 +857,9 @@ export interface TrackedProjectile {
   initialSpeed?:    number;     // Geschwindigkeit bei Spawn (für Decay-Berechnung)
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
-  burnTickIntervalMs?: number;
   flamePierceHitIds?: Set<string>; // Pierce: bereits getroffene Ziel-IDs (kein Mehrfachtreffer)
+  canReceiveFireImbue?: boolean;
+  supplementalBurnOnHit?: BurnOnHitConfig;
 
   // Laubblaeser (optional)
   leafBlowerMinKnockback?: number;
@@ -876,6 +914,41 @@ export interface TrackedProjectile {
   gaussChainDamageFactor?: number;
   multiExplosionsRemaining?: number;
   multiExplosionExcludedTargetKeys?: Set<string>;
+  multiExplosionCoastMs?: number;
+  miniRocketStageRangePx?: number;
+  miniRocketPhase?: MiniRocketFlightPhase;
+  miniRocketCoastUntilAgeMs?: number;
+  miniRocketNextExplosionAtAgeMs?: number;
+  miniRocketDeferredExplosion?: boolean;
+  miniRocketDeferredExplosionStopsAtObstacle?: boolean;
+  miniRocketSpent?: boolean;
+  miniRocketDestructionFxEmitted?: boolean;
+  miniRocketContinuationVx?: number;
+  miniRocketContinuationVy?: number;
+  miniRocketHasExploded?: boolean;
+  miniRocketReturnEnabled?: boolean;
+  miniRocketReturnRangeBuffer?: number;
+  miniRocketReturnReserveGranted?: boolean;
+  miniRocketPickupRadius?: number;
+  miniRocketPickupAdrenalineRefundFraction?: number;
+  miniRocketPickupArmor?: number;
+  miniRocketAdrenalineCostPaid?: number;
+  miniRocketSafetyLifetimeMs?: number;
+  miniRocketCascadeInitialDamageBonus?: number;
+  miniRocketCascadeDamageBonusPerExplosion?: number;
+  miniRocketExplosionIndex?: number;
+  ak47ShotId?: number;
+  ak47HitConfirmed?: boolean;
+  ak47DamageMultiplier?: number;
+  ak47FireSuperiorityShot?: boolean;
+  shotgunOriginX?: number;
+  shotgunOriginY?: number;
+  shotgunResolvedRange?: number;
+  shotgunProximityMaxDamageBonus?: number;
+  shotgunSlowFraction?: number;
+  shotgunSlowDurationMs?: number;
+  hitKnockback?: number;
+  hitKnockbackDurationMs?: number;
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;
@@ -924,6 +997,62 @@ export interface PowerUpPedestalCell {
   defId: string;
   gridX: number;
   gridY: number;
+  /** Optionaler Map-Override; fehlt bei den global generierten PvP-Podesten. */
+  respawnMs?: number;
+  /** Optionaler Map-Override; fehlt bei den global generierten PvP-Podesten. */
+  spawnOnArenaStart?: boolean;
+  /** Ist gesetzt, wenn das Podest zusammen mit dieser Coop-Basis zerstört wird. */
+  linkedBaseId?: string;
+}
+
+export type GuardianSpiritPhase = 'orbiting' | 'attacking' | 'returning' | 'impact';
+
+/** Host-autoritatives Schutzgeist-Snapshot fuer die reine Client-Darstellung. */
+export interface SyncedGuardianSpirit {
+  id: number;
+  ownerId: string;
+  ownerColor: number;
+  x: number;
+  y: number;
+  phase: GuardianSpiritPhase;
+  targetId?: string;
+}
+
+export interface SyncedSlimeTrailCell {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  alpha: number;
+}
+
+export interface SyncedSlimedEnemy {
+  enemyId: string;
+  x: number;
+  y: number;
+  alpha: number;
+}
+
+export interface SyncedSlimeTrailSnapshot {
+  cells: SyncedSlimeTrailCell[];
+  affectedEnemies: SyncedSlimedEnemy[];
+}
+
+export interface SyncedBurningGroundCell {
+  id: number;
+  gridX: number;
+  gridY: number;
+  expiresAt: number;
+}
+
+export interface SyncedBurningGroundSnapshot {
+  cells: SyncedBurningGroundCell[];
+}
+
+/** Zielzelle eines replizierten Schleimblueten-Brockens. */
+export interface SlimeBloomTarget {
+  x: number;
+  y: number;
 }
 
 /** Vollständiger Arena-Layout-Deskriptor – visuelle Decals können im Netzwerkpayload ausgelassen und lokal rekonstruiert werden. */
@@ -990,13 +1119,20 @@ export interface TrainEventConfig {
 
 /**
  * Per-Frame Zustand einer Coop-Defense-Basis (Host → Clients, unreliable).
- * Delta-Kompression über GameState: Nur Basen mit reduzierten HP werden gesendet;
- * fehlende Einträge = volle HP (analog zu rocks).
+ * Delta-Kompression über GameState: Basen mit reduzierten HP sowie Basen mit
+ * aktiven Geschütztürmen werden gesendet; sonst gilt fehlend = volle HP.
  */
 export interface SyncedBaseState {
   id:     string;
   hp:     number;
   maxHp:  number;
+  /** Zielwinkel der an diese Basis gekoppelten Geschütztürme. */
+  turrets?: SyncedBaseTurretState[];
+}
+
+export interface SyncedBaseTurretState {
+  id: string;
+  angle: number;
 }
 
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
@@ -1008,6 +1144,10 @@ export interface SyncedEnemyState {
   rot:    number;
   hp:     number;
   maxHp:  number;
+  burnStacks: number;
+  faction: 'hostile' | 'allied';
+  ownerId?: string;
+  ownerColor?: number;
 }
 
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
@@ -1019,6 +1159,10 @@ export interface SyncedEnemyDeltaState {
   rot?:   number;
   hp?:    number;
   maxHp?: number;
+  burnStacks?: number;
+  faction?: 'hostile' | 'allied';
+  ownerId?: string;
+  ownerColor?: number;
 }
 
 /**
@@ -1037,7 +1181,7 @@ export interface SyncedEnemyDeltaState {
  */
 export interface SyncedEnemySnapshot {
   c: number;    // Gesamtzahl aktiver Gegner (nur Telemetrie)
-  u: number[];  // flacher Upsert-Strom (siehe encodeEnemyUpsert)
+  u: Array<number | string>;  // flacher Upsert-Strom (siehe encodeEnemyUpsert)
   r: number[];  // entfernte Gegner-IDs (numerisch, Sticky-Removals)
   a?: number[]; // optional: vollständige Liste aktiver IDs (periodische Reconciliation)
 }

@@ -8,10 +8,11 @@
       "moveSpeed": 70,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all" }
+        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
+      "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_zombie_badger",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.5,
@@ -30,10 +31,11 @@
       "moveSpeed": 140,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all" }
+        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
+      "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_demon_badger",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0,
@@ -52,10 +54,11 @@
       "moveSpeed": 180,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all" }
+        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 100,
+      "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_rabid_badger",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0,
@@ -69,18 +72,27 @@
     {
       "id": "grave-titan",
       "maxHp": 1200,
-      "xp": 75,
+      "xp": 100,
       "size": 56,
       "moveSpeed": 48,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all" }
+        { "weaponId": "GRAVE_TITAN_BITE", "targetMode": "all", "playerMeleeWindupMs": 450 }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
+      "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_grave_titan",
       "isBoss": true,
       "displayName": "Grufttitan",
+      "trainAwareness": {
+        "safetyDistancePx": 48,
+        "timeSafetyMarginMs": 750
+      },
+      "trainCollision": {
+        "damageToEnemy": 300,
+        "destroysTrain": true
+      },
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.75,
         "moveSpeedFactorPerAdditionalPlayer": 0
@@ -89,19 +101,19 @@
     {
       "id": "spore-warden",
       "maxHp": 180,
-      "xp": 12,
+      "xp": 15,
       "size": 32,
       "moveSpeed": 42,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all" },
+        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
         { "weaponId": "SPOREN", "targetMode": "players" }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
-      "imageKey": "enemy_zombie_badger",
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_spore_warden",
       "displayName": "Sporenpanzer",
-      "color": 9414223,
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.6,
         "moveSpeedFactorPerAdditionalPlayer": 0
@@ -114,19 +126,19 @@
     {
       "id": "plague-medic",
       "maxHp": 140,
-      "xp": 20,
+      "xp": 25,
       "size": 30,
       "moveSpeed": 58,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all" },
+        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
         { "weaponId": "HEALING_AURA", "targetMode": "all" }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 220,
-      "imageKey": "enemy_demon_badger",
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_plague_medic",
       "displayName": "Seuchenheiler",
-      "color": 5635925,
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.55,
         "moveSpeedFactorPerAdditionalPlayer": 0
@@ -139,19 +151,19 @@
     {
       "id": "void-stalker",
       "maxHp": 240,
-      "xp": 30,
+      "xp": 40,
       "size": 32,
       "moveSpeed": 54,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all" },
+        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
         { "weaponId": "MINI_TESLA_DOME", "targetMode": "players" }
       ],
       "attackScanIntervalMs": 160,
       "attackStopDurationMs": 200,
-      "imageKey": "enemy_rabid_badger",
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_void_stalker",
       "displayName": "Leerenpirscher",
-      "color": 10171135,
       "translocator": {
         "utilityId": "TRANSLOCATOR",
         "flightTimeMs": 1000,
@@ -166,6 +178,66 @@
       "spawnScaling": {
         "intervalMsFactorPerAdditionalPlayer": -0.1,
         "countPerWaveFactorPerAdditionalPlayer": 0
+      }
+    },
+    {
+      "id": "stink-broodmother",
+      "maxHp": 360,
+      "xp": 50,
+      "size": 40,
+      "moveSpeed": 44,
+      "movementTarget": "players",
+      "weapons": [
+        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
+      ],
+      "attackScanIntervalMs": 180,
+      "attackStopDurationMs": 240,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_stink_broodmother",
+      "displayName": "Faulnisbrueter",
+      "stinkAura": {
+        "utilityId": "ENEMY_STINKDRUESEN"
+      },
+      "deathSpawns": [
+        { "enemyKind": "rabid-badger", "count": 2, "offsetPx": 9 }
+      ],
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.65,
+        "moveSpeedFactorPerAdditionalPlayer": 0
+      },
+      "spawnScaling": {
+        "intervalMsFactorPerAdditionalPlayer": -0.1,
+        "countPerWaveFactorPerAdditionalPlayer": 0
+      }
+    },
+    {
+      "id": "inferno-colossus",
+      "maxHp": 3000,
+      "xp": 200,
+      "size": 68,
+      "moveSpeed": 36,
+      "movementTarget": "players",
+      "weapons": [
+        { "weaponId": "FLAMETHROWER", "targetMode": "players", "minimumFireDurationMs": 1000 },
+        { "weaponId": "INFERNO_COLOSSUS_BITE", "targetMode": "rocks" }
+      ],
+      "attackScanIntervalMs": 70,
+      "attackStopDurationMs": 110,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_inferno_colossus",
+      "isBoss": true,
+      "displayName": "Flammenkoloss",
+      "trainAwareness": {
+        "safetyDistancePx": 48,
+        "timeSafetyMarginMs": 750
+      },
+      "trainCollision": {
+        "damageToEnemy": 1250,
+        "destroysTrain": true
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.8,
+        "moveSpeedFactorPerAdditionalPlayer": 0
       }
     }
   ]

@@ -13,6 +13,9 @@ import { HydraRenderer }       from '../../effects/HydraRenderer';
 import { EnergyShieldRenderer } from '../../effects/EnergyShieldRenderer';
 import { TeslaDomeRenderer }   from '../../effects/TeslaDomeRenderer';
 import { HealingAuraRenderer } from '../../effects/HealingAuraRenderer';
+import { GuardianSpiritRenderer } from '../../effects/GuardianSpiritRenderer';
+import { SlimeTrailRenderer } from '../../effects/SlimeTrailRenderer';
+import { FlamethrowerUpgradeRenderer } from '../../effects/FlamethrowerUpgradeRenderer';
 import { MiniTeslaDomeRenderer } from '../../effects/MiniTeslaDomeRenderer';
 import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
@@ -52,6 +55,9 @@ export interface RendererBundle {
   energyShield:        EnergyShieldRenderer;
   teslaDome:           TeslaDomeRenderer;
   healingAura:         HealingAuraRenderer;
+  guardianSpirit:      GuardianSpiritRenderer;
+  slimeTrail:          SlimeTrailRenderer;
+  flamethrowerUpgrades: FlamethrowerUpgradeRenderer;
   miniTeslaDome:       MiniTeslaDomeRenderer;
   timeBubble:          TimeBubbleRenderer;
   holyGrenade:         HolyGrenadeRenderer;
@@ -76,6 +82,7 @@ export interface RendererBundle {
 /** Create and generate textures for all scene-lifetime renderers. */
 export function createRendererBundle(
   scene: Phaser.Scene,
+  playerManager: PlayerManager,
   arenaMask: Phaser.Display.Masks.GeometryMask | null = null,
 ): RendererBundle {
   const bullet = new BulletRenderer(scene);
@@ -119,6 +126,12 @@ export function createRendererBundle(
 
   const healingAura = new HealingAuraRenderer(scene);
   healingAura.generateTextures();
+
+  const guardianSpirit = new GuardianSpiritRenderer(scene);
+  guardianSpirit.generateTextures();
+
+  const slimeTrail = new SlimeTrailRenderer(scene);
+  const flamethrowerUpgrades = new FlamethrowerUpgradeRenderer(scene, playerManager);
 
   const miniTeslaDome = new MiniTeslaDomeRenderer(scene);
   miniTeslaDome.generateTextures();
@@ -165,7 +178,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, miniTeslaDome, timeBubble, holyGrenade,
+    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, slimeTrail, flamethrowerUpgrades, miniTeslaDome, timeBubble, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,

@@ -209,6 +209,7 @@ export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
 
 // ---- Combat ----
 export const HP_MAX           = 100;
+export const BURN_TICK_INTERVAL_MS = 250;
 export const ARMOR_MAX        = 100;
 export const ARMOR_COLOR      = COLORS.GOLD_2;
 export const RESPAWN_DELAY_MS = 2000;
@@ -607,6 +608,8 @@ export const PLAYER_COLORS: readonly number[] = [
 
 export const TEAM_BLUE_COLOR = COLORS.BLUE_3;
 export const TEAM_RED_COLOR = COLORS.RED_3;
+/** Pseudo-Besitzer für fest an Coop-Basen montierte Geschütztürme. */
+export const COOP_DEFENSE_BASE_TURRET_OWNER_ID = '__coop_base_turret__';
 export const CAPTURE_THE_BEER_BASE_TINT_ALPHA = 0.80;
 export const CAPTURE_THE_BEER_BLUE_BASE_TINT = TEAM_BLUE_COLOR;
 export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;

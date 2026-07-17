@@ -38,6 +38,7 @@ interface PedestalRuntime {
   y: number;
   respawnMs: number;
   spawnOnArenaStart: boolean;
+  linkedBaseId?: string;
   currentUid: number | null;
   nextRespawnAt: number;
 }
@@ -96,6 +97,7 @@ export class PowerUpSystem {
   private ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
   // Delta-Cache der Podeste: id → Signatur des zuletzt gesendeten Zustands (hasPowerUp|nextRespawnAt).
   private readonly pedestalNetCache = new Map<number, string>();
+  private readonly pendingPedestalRemovalIds = new Set<number>();
   private ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
 
   private arenaStartTime = 0;
@@ -134,6 +136,7 @@ export class PowerUpSystem {
     this.nextNukeId = 1;
     this.ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     this.pedestalNetCache.clear();
+    this.pendingPedestalRemovalIds.clear();
     this.ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     this.arenaStartTime = 0;
     this.pedestalsActivated = false;
@@ -146,6 +149,23 @@ export class PowerUpSystem {
   /** Buffs eines abgehenden Spielers aufräumen. */
   removePlayer(id: string): void {
     this.activeBuffs.delete(id);
+  }
+
+  /** Entfernt alle Podeste und eventuell darauf liegenden Power-Ups einer zerstörten Basis. */
+  destroyPedestalsLinkedToBase(baseId: string): void {
+    for (const [pedestalId, pedestal] of [...this.pedestals]) {
+      if (pedestal.linkedBaseId !== baseId) continue;
+
+      if (pedestal.currentUid !== null) {
+        this.worldItems.delete(pedestal.currentUid);
+        this.netSnapshotCache.delete(pedestal.currentUid);
+        this.pendingRemovalUids.add(pedestal.currentUid);
+        this.itemToPedestal.delete(pedestal.currentUid);
+      }
+      this.pedestals.delete(pedestalId);
+      this.pedestalNetCache.delete(pedestalId);
+      this.pendingPedestalRemovalIds.add(pedestalId);
+    }
   }
 
   // ── Host-Update (jeden Frame) ───────────────────────────────────────────
@@ -467,7 +487,9 @@ export class PowerUpSystem {
       }
     }
 
-    const removals: number[] = [];
+    const removals: number[] = full
+      ? []
+      : [...this.pendingPedestalRemovalIds].sort((left, right) => left - right);
     if (full) {
       for (const id of [...this.pedestalNetCache.keys()]) {
         if (!currentIds.has(id)) {
@@ -479,6 +501,8 @@ export class PowerUpSystem {
     } else {
       this.ticksSinceFullPedestalSnapshot += 1;
     }
+
+    this.pendingPedestalRemovalIds.clear();
 
     if (!full && upserts.length === 0 && removals.length === 0) return null;
 
@@ -589,8 +613,9 @@ export class PowerUpSystem {
         def,
         x: this.cellToWorldX(cell.gridX),
         y: this.cellToWorldY(cell.gridY),
-        respawnMs: cfg.respawnMs,
-        spawnOnArenaStart: cfg.spawnOnArenaStart,
+        respawnMs: Math.max(1, Math.floor(cell.respawnMs ?? cfg.respawnMs)),
+        spawnOnArenaStart: cell.spawnOnArenaStart ?? cfg.spawnOnArenaStart,
+        linkedBaseId: cell.linkedBaseId,
         currentUid: null,
         nextRespawnAt: 0,
       });

@@ -69,6 +69,7 @@ import {
   cloneCoopDefenseUpgradeProfile,
   levelDownCoopDefenseUpgrade,
   levelUpCoopDefenseUpgrade,
+  getCoopDefenseUpgradeTextureKey,
 } from '../utils/coopDefenseUpgrades';
 import type { CoopDefenseUpgradeProfile } from '../types';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
@@ -209,10 +210,12 @@ export class ArenaScene extends Phaser.Scene {
 
     // Upgrade-Icons direkt aus den Definitionen ableiten, damit neue Upgrades
     // automatisch geladen werden (kein manuelles Pflegen einer Liste noetig).
+    const queuedUpgradeTextures = new Set<string>();
     for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
       if (definition.kind !== 'upgrade') continue;
-      if (definition.id === 'plasma_adrenalin_gain' || definition.id === 'bite_damage_reduction' || definition.id === 'hydra_projectile_speed' || definition.id === 'xbow_arrow_count' || definition.id === 'laubblaeser_adrenalin_gain' || definition.id === 'p90_bullet_storm_spread' || definition.id === 'p90_homing_overdrive' || definition.id === 'p90_homing_turn' || definition.id === 'rocket_launcher_direct_damage' || definition.id === 'rocket_launcher_adrenaline_cost' || definition.id === 'rocket_launcher_black_hole' || definition.id === 'rocket_launcher_black_hole_duration' || definition.id === 'rocket_launcher_black_hole_pull') continue;
-      const key = `UPGRADE_${definition.id.toUpperCase()}`;
+      const key = getCoopDefenseUpgradeTextureKey(definition.id);
+      if (queuedUpgradeTextures.has(key)) continue;
+      queuedUpgradeTextures.add(key);
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
     }
   }
@@ -351,10 +354,11 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, guardianSpiritSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyBossFlowFieldService: null,
+      allyFlowFieldServices: new Map(),
     };
 
     playerManager.setSpawnContextProvider((playerId) => {
@@ -415,7 +419,7 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── Renderers ─────────────────────────────────────────────────────────
-    this.renderers = createRendererBundle(this, this.arenaClipMask);
+    this.renderers = createRendererBundle(this, playerManager, this.arenaClipMask);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
@@ -498,7 +502,12 @@ export class ArenaScene extends Phaser.Scene {
       }
     };
     const isWeapon2AdrenalineInsufficient = (assumeRecentLocalShot = false): boolean => {
+      const localId = bridge.getLocalPlayerId();
       const weapon2Config = this.clientUpdate.getLocalWeaponConfig('weapon2');
+      const fireSuperiorityActive = this.ctx.loadoutManager?.isAk47FireSuperiorityActive(localId)
+        ?? (weapon2Config.id === 'AK47'
+          && bridge.getPlayerActiveBuffs(localId).some((buff) => buff.defId === 'AK47_FIRE_SUPERIORITY'));
+      if (fireSuperiorityActive) return false;
       const adrenalineCost = weapon2Config.adrenalinCost ?? 0;
       if (adrenalineCost <= 0) return false;
 
@@ -820,6 +829,10 @@ export class ArenaScene extends Phaser.Scene {
           this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
           this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
           this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
+          this.renderers.guardianSpirit.syncVisuals(state.guardianSpirits ?? []);
+          this.renderers.slimeTrail.syncVisuals(state.slimeTrail ?? { cells: [], affectedEnemies: [] });
+          this.renderers.flamethrowerUpgrades.syncGround(state.burningGround ?? { cells: [] });
+          this.renderers.flamethrowerUpgrades.syncRings(state.players);
           this.renderers.train?.setTarget(state.train ?? null);
           this.renderers.powerUp.syncPedestals(state.pedestals ?? []);
           this.renderers.powerUp.sync(state.powerups ?? []);
@@ -859,11 +872,15 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.timeBubble.update(delta);
     this.renderers.teslaDome.update(delta);
     const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
+    this.ctx.enemyManager?.syncHostVisuals();
     this.renderers.healingAura.syncEnemies(auraEnemies);
     this.renderers.healingAura.update(delta);
     this.renderers.miniTeslaDome.syncEnemies(auraEnemies);
     this.renderers.miniTeslaDome.update(delta);
     this.renderers.energyShield.update(delta);
+    this.renderers.guardianSpirit.update(delta);
+    this.renderers.slimeTrail.update(delta);
+    this.renderers.flamethrowerUpgrades.update(bridge.getSynchronizedNow());
 
     const utilityTargeting    = this.ctx.inputSystem.getUtilityTargetingPreviewState();
     const airstrikeTargeting  = this.ctx.inputSystem.getAirstrikeTargetingPreviewState();

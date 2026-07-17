@@ -79,6 +79,8 @@ export class HostPhysicsSystem {
   private dashRecoveryResolver: ((playerId: string) => number) | null = null;
   private dashImpactDamageResolver: ((playerId: string) => number) | null = null;
   private dashImpactKnockbackResolver: ((playerId: string) => number) | null = null;
+  private enemyMovementFactorResolver: ((enemyId: string, now: number) => number) | null = null;
+  private enemyRockContactCallback: ((enemyId: string, rock: Phaser.GameObjects.Image, now: number) => void) | null = null;
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
@@ -109,11 +111,21 @@ export class HostPhysicsSystem {
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void  { this.loadoutManager = lm; }
   setTimeBubbleSystem(system: TimeBubbleSystem | null): void { this.timeBubbleSystem = system; }
+
+  getWorldMovementFactorAt(x: number, y: number, now = Date.now()): number {
+    return this.timeBubbleSystem?.getPlayerMovementFactorAt(x, y, now) ?? 1;
+  }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setRunSpeedResolver(resolver: ((playerId: string) => number) | null): void { this.runSpeedResolver = resolver; }
   setDashRecoveryResolver(resolver: ((playerId: string) => number) | null): void { this.dashRecoveryResolver = resolver; }
   setDashImpactDamageResolver(resolver: ((playerId: string) => number) | null): void { this.dashImpactDamageResolver = resolver; }
   setDashImpactKnockbackResolver(resolver: ((playerId: string) => number) | null): void { this.dashImpactKnockbackResolver = resolver; }
+  setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
+  setEnemyRockContactCallback(
+    callback: ((enemyId: string, rock: Phaser.GameObjects.Image, now: number) => void) | null,
+  ): void {
+    this.enemyRockContactCallback = callback;
+  }
 
   // ── Rückstoß ─────────────────────────────────────────────────────────────
 
@@ -592,7 +604,11 @@ export class HostPhysicsSystem {
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (this.rockGroup && !this.enemyRockCollidersSetup.has(enemy.id)) {
         const existing = this.enemyColliders.get(enemy.id) ?? [];
-        existing.push(this.scene.physics.add.collider(enemy.sprite, this.rockGroup));
+        existing.push(this.scene.physics.add.collider(enemy.sprite, this.rockGroup, (_enemy, rockObject) => {
+          const rock = rockObject as Phaser.GameObjects.Image;
+          if (!rock.active) return;
+          this.enemyRockContactCallback?.(enemy.id, rock, Date.now());
+        }));
         this.enemyColliders.set(enemy.id, existing);
         this.enemyRockCollidersSetup.add(enemy.id);
       }
@@ -620,7 +636,8 @@ export class HostPhysicsSystem {
         desiredVelocity.vy + impulse.vy,
         now,
       );
-      enemy.body.setVelocity(slowed.vx, slowed.vy);
+      const enemyMovementFactor = Phaser.Math.Clamp(this.enemyMovementFactorResolver?.(enemy.id, now) ?? 1, 0, 1);
+      enemy.body.setVelocity(slowed.vx * enemyMovementFactor, slowed.vy * enemyMovementFactor);
       enemy.syncBar();
     }
   }

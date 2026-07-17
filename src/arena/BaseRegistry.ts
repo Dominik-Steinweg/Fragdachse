@@ -16,9 +16,30 @@ import {
   type CoopBaseAnchor,
   type CoopBaseCellOffset,
   type CoopBaseConfig,
+  type CoopBasePowerUpPedestalConfig,
   type CoopBaseShape,
+  type CoopBaseTurretConfig,
   type CoopDefenseMapConfig,
 } from '../config/coopDefenseMaps';
+
+export interface BaseTurretSpec {
+  readonly id: string;
+  readonly baseId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly initialAngle: number;
+  readonly weaponId: 'SPOREN';
+}
+
+export interface BasePowerUpPedestalSpec {
+  readonly id: string;
+  readonly baseId: string;
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly defId: string;
+  readonly respawnMs: number;
+  readonly spawnOnArenaStart: boolean;
+}
 
 /**
  * Beschreibt eine einzelne Basis: Identität + Grid-Footprint + HP-Soll.
@@ -36,6 +57,8 @@ export interface BaseSpec {
   readonly cells: readonly { gridX: number; gridY: number }[];
   readonly region: ArenaGridRegion;
   readonly hpMax: number;
+  readonly turrets: readonly BaseTurretSpec[];
+  readonly powerUpPedestals: readonly BasePowerUpPedestalSpec[];
 }
 
 // ── Anker- & Shape-Auflösung ───────────────────────────────────────────────
@@ -120,12 +143,79 @@ function resolveBaseSpec(config: CoopBaseConfig): BaseSpec {
     ? { minGridX: minX, maxGridX: maxX, minGridY: minY, maxGridY: maxY }
     : { minGridX: 0, maxGridX: 0, minGridY: 0, maxGridY: 0 };
 
+  const turrets = (config.turrets ?? []).map((turret) => resolveBaseTurretSpec(
+    config.id,
+    turret,
+    minGridX,
+    minGridY,
+  ));
+  const powerUpPedestals = (config.powerUpPedestals ?? []).map((pedestal) => resolveBasePowerUpPedestalSpec(
+    config.id,
+    pedestal,
+    minGridX,
+    minGridY,
+    absoluteCells,
+  ));
+
   return {
     id: config.id,
     cells: absoluteCells,
     region,
     hpMax: Math.max(1, config.hpMax),
+    turrets,
+    powerUpPedestals,
   };
+}
+
+function resolveBasePowerUpPedestalSpec(
+  baseId: string,
+  config: CoopBasePowerUpPedestalConfig,
+  baseMinGridX: number,
+  baseMinGridY: number,
+  baseCells: readonly { gridX: number; gridY: number }[],
+): BasePowerUpPedestalSpec {
+  const gridX = baseMinGridX + config.cellOffset.gridX;
+  const gridY = baseMinGridY + config.cellOffset.gridY;
+  if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) {
+    throw new Error(`[BaseRegistry] Power-up pedestal ${baseId}:${config.id} is outside the arena grid`);
+  }
+  if (baseCells.some((cell) => cell.gridX === gridX && cell.gridY === gridY)) {
+    throw new Error(`[BaseRegistry] Power-up pedestal ${baseId}:${config.id} overlaps its base`);
+  }
+
+  return {
+    id: `${baseId}:${config.id}`,
+    baseId,
+    gridX,
+    gridY,
+    defId: config.defId,
+    respawnMs: config.respawnMs,
+    spawnOnArenaStart: config.spawnOnArenaStart ?? false,
+  };
+}
+
+function resolveBaseTurretSpec(
+  baseId: string,
+  config: CoopBaseTurretConfig,
+  baseMinGridX: number,
+  baseMinGridY: number,
+): BaseTurretSpec {
+  const cellCenterX = ARENA_OFFSET_X + (baseMinGridX + config.cellOffset.gridX) * CELL_SIZE + CELL_SIZE / 2;
+  const cellCenterY = ARENA_OFFSET_Y + (baseMinGridY + config.cellOffset.gridY) * CELL_SIZE + CELL_SIZE / 2;
+  // Der Turm sitzt optisch exakt auf der konfigurierten Basiszelle. Sichtlinie und
+  // Projektil beginnen erst an seiner Mündung (siehe TurretSystem), damit der
+  // darunterliegende Basis-Collider den Turm nicht selbst blockiert.
+
+  switch (config.mountSide) {
+    case 'front':
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: Math.PI, weaponId: config.weaponId };
+    case 'rear':
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: 0, weaponId: config.weaponId };
+    case 'top':
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: -Math.PI / 2, weaponId: config.weaponId };
+    case 'bottom':
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: Math.PI / 2, weaponId: config.weaponId };
+  }
 }
 
 // ── Öffentliche API ────────────────────────────────────────────────────────
@@ -133,6 +223,11 @@ function resolveBaseSpec(config: CoopBaseConfig): BaseSpec {
 /** Aktive Coop-Basen für die laufende Runde. Leeres Array außerhalb des Coop-Modus. */
 export function getCoopDefenseBases(mapConfig: CoopDefenseMapConfig = resolveActiveCoopDefenseMapConfig()): readonly BaseSpec[] {
   if (!isCoopDefenseBasesActive()) return [];
+  return resolveCoopDefenseBases(mapConfig);
+}
+
+/** Löst eine Map-Konfiguration unabhängig vom derzeit aktiven Spielmodus auf. */
+export function resolveCoopDefenseBases(mapConfig: CoopDefenseMapConfig): readonly BaseSpec[] {
   return mapConfig.bases.map(resolveBaseSpec);
 }
 

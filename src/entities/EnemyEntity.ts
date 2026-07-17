@@ -16,10 +16,15 @@ import {
   type ResolvedCoopDefenseEnemyConfig,
 } from '../config/coopDefenseEnemies';
 import type { SyncedEnemyState } from '../types';
+import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
+
+export type EnemyFaction = 'hostile' | 'allied';
 
 export interface EnemyAttackWeapon {
   readonly weapon: BaseWeapon;
   readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
+  readonly minimumFireDurationMs: number;
+  readonly playerMeleeWindupMs: number;
 }
 
 export class EnemyEntity {
@@ -29,6 +34,9 @@ export class EnemyEntity {
   readonly id: string;
   readonly sprite: Phaser.GameObjects.Image;
   readonly kind: CoopDefenseEnemyKind;
+  readonly faction: EnemyFaction;
+  readonly ownerId?: string;
+  readonly ownerColor?: number;
 
   private readonly authoritative: boolean;
   private readonly config: ResolvedCoopDefenseEnemyConfig;
@@ -49,6 +57,9 @@ export class EnemyEntity {
   private currentAimAngle = 0;
   private targetAimAngle = 0;
   private hpBarVisibleUntilMs = 0;
+  private burnRenderer: EntityBurnRenderer | null = null;
+  private ownerRing: Phaser.GameObjects.Ellipse | null = null;
+  private burnStacks = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -58,9 +69,15 @@ export class EnemyEntity {
     authoritative: boolean,
     kind: CoopDefenseEnemyKind,
     config: ResolvedCoopDefenseEnemyConfig,
+    faction: EnemyFaction = 'hostile',
+    ownerId?: string,
+    ownerColor?: number,
   ) {
     this.id = id;
     this.kind = kind;
+    this.faction = faction;
+    this.ownerId = ownerId;
+    this.ownerColor = ownerColor;
     this.authoritative = authoritative;
     this.config = config;
     this.attackWeapons = authoritative ? this.createWeapons() : [];
@@ -72,10 +89,15 @@ export class EnemyEntity {
     this.sprite = scene.add.image(x, y, this.config.imageKey);
     this.sprite.setDisplaySize(this.config.size, this.config.size);
     this.sprite.setDepth(DEPTH.PLAYERS - 0.05);
-    if (this.config.color !== undefined) {
+    if (faction === 'allied') {
+      this.sprite.setTint(0x89d66d);
+      this.ownerRing = scene.add.ellipse(x, y + this.config.size * 0.22, this.config.size * 1.15, this.config.size * 0.52, 0x000000, 0)
+        .setStrokeStyle(2, ownerColor ?? 0x80ff80, 0.95)
+        .setDepth(DEPTH.PLAYERS - 0.08);
+    } else if (this.config.color !== undefined) {
       this.sprite.setTint(this.config.color);
     }
-    this.createBossDecorations(scene);
+    if (faction === 'hostile') this.createBossDecorations(scene);
 
     if (authoritative) {
       scene.physics.add.existing(this.sprite);
@@ -157,7 +179,7 @@ export class EnemyEntity {
     const color = ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4;
     this.hpBarFg?.setFillStyle(color);
 
-    if ((!this.config.isBoss && this.currentHp >= this.maxHp) || this.currentHp <= 0) {
+    if (((this.faction === 'allied' || !this.config.isBoss) && this.currentHp >= this.maxHp) || this.currentHp <= 0) {
       this.destroyHpBars();
     }
   }
@@ -168,6 +190,18 @@ export class EnemyEntity {
 
   getMaxHp(): number {
     return this.maxHp;
+  }
+
+  updateBurnStacks(stacks: number): void {
+    const nextStacks = Math.max(0, Math.floor(stacks));
+    this.burnStacks = nextStacks;
+    if (nextStacks <= 0) {
+      this.burnRenderer?.destroy();
+      this.burnRenderer = null;
+      return;
+    }
+    if (!this.burnRenderer) this.burnRenderer = new EntityBurnRenderer(this.sprite.scene);
+    this.syncBurnEffect();
   }
 
   getMoveSpeed(): number {
@@ -184,6 +218,10 @@ export class EnemyEntity {
 
   getAttackWeapons(): readonly EnemyAttackWeapon[] {
     return this.attackWeapons;
+  }
+
+  getObstacleAttackDelayMs(): number {
+    return this.config.obstacleAttackDelayMs;
   }
 
   isWeaponReady(weapon: BaseWeapon, now: number): boolean {
@@ -234,6 +272,7 @@ export class EnemyEntity {
 
   syncBar(): void {
     this.syncBossDecorations();
+    this.syncBurnEffect();
     if (!this.shouldShowHpBars()) {
       this.destroyHpBars();
       return;
@@ -257,20 +296,38 @@ export class EnemyEntity {
       rot: this.currentAimAngle,
       hp: this.currentHp,
       maxHp: this.getMaxHp(),
+      burnStacks: Math.min(this.burnStacks, MAX_VISUAL_BURN_STACKS),
+      faction: this.faction,
+      ownerId: this.ownerId,
+      ownerColor: this.ownerColor,
     };
   }
 
   destroy(): void {
     this.destroyHpBars();
+    this.burnRenderer?.destroy();
+    this.burnRenderer = null;
+    this.ownerRing?.destroy();
+    this.ownerRing = null;
     this.bossAura?.destroy();
     this.bossRing?.destroy();
     this.bossLabel?.destroy();
     this.sprite.destroy();
   }
 
+  private syncBurnEffect(): void {
+    this.burnRenderer?.sync(
+      this.sprite.x,
+      this.sprite.y,
+      this.config.size,
+      this.burnStacks,
+      this.sprite.visible && this.currentHp > 0,
+    );
+  }
+
   private shouldShowHpBars(): boolean {
     return this.currentHp > 0 && (
-      this.config.isBoss === true
+      (this.faction === 'hostile' && this.config.isBoss === true)
       || (this.currentHp < this.maxHp && Date.now() <= this.hpBarVisibleUntilMs)
     );
   }
@@ -295,11 +352,11 @@ export class EnemyEntity {
   }
 
   private getHpBarWidth(): number {
-    return this.config.isBoss ? Math.max(76, this.config.size * 1.55) : HP_BAR_WIDTH;
+    return this.faction === 'hostile' && this.config.isBoss ? Math.max(76, this.config.size * 1.55) : HP_BAR_WIDTH;
   }
 
   private getHpBarOffsetY(): number {
-    return this.config.isBoss ? this.config.size * 0.5 + 12 : HP_BAR_OFFSET_Y;
+    return this.faction === 'hostile' && this.config.isBoss ? this.config.size * 0.5 + 12 : HP_BAR_OFFSET_Y;
   }
 
   private createBossDecorations(scene: Phaser.Scene): void {
@@ -337,6 +394,7 @@ export class EnemyEntity {
   }
 
   private syncBossDecorations(): void {
+    this.ownerRing?.setPosition(this.sprite.x, this.sprite.y + this.config.size * 0.22);
     if (!this.config.isBoss) return;
     const auraY = this.sprite.y + this.config.size * 0.2;
     this.bossAura?.setPosition(this.sprite.x, auraY);
@@ -354,6 +412,8 @@ export class EnemyEntity {
       return {
         weapon: new GenericWeapon(this.resolveEnemyWeaponConfig(baseConfig, configuredWeapon.targetMode)),
         targetMode: configuredWeapon.targetMode,
+        minimumFireDurationMs: configuredWeapon.minimumFireDurationMs ?? 0,
+        playerMeleeWindupMs: configuredWeapon.playerMeleeWindupMs ?? 0,
       };
     });
   }
@@ -374,7 +434,7 @@ export class EnemyEntity {
           ? { ...config.fire.impactCloud, rockDamageMult: 0, trainDamageMult: 0 }
           : undefined,
         homing: config.fire.homing
-          ? { ...config.fire.homing, targetTypes: ['players'] }
+          ? { ...config.fire.homing, targetTypes: this.faction === 'allied' ? ['enemies'] : ['players'] }
           : undefined,
       },
     };

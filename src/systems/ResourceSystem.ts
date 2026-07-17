@@ -75,12 +75,26 @@ export class ResourceSystem {
     this.adrenaline.set(id, cur);
   }
 
+  /** Berechnet die tatsaechlichen Kosten inklusive spielerweiter Verbrauchsmodifikatoren. */
+  resolveAdrenalineCost(id: string, amount: number): number {
+    return amount > 0
+      ? amount * Math.max(0, this.adrenalineCostMultiplierResolver?.(id) ?? 1)
+      : amount;
+  }
+
+  /** Exakte Erstattung bereits bezahlter Kosten; Gewinnmodifikatoren werden bewusst nicht erneut angewendet. */
+  refundAdrenaline(id: string, amount: number): void {
+    if (amount <= 0) return;
+    const cur = Math.min(this.getMaxAdrenaline(id), (this.adrenaline.get(id) ?? 0) + amount);
+    this.adrenaline.set(id, cur);
+  }
+
   /**
    * Zieht Adrenalin ab und pausiert die passive Regeneration für
    * ADRENALINE_REGEN_PAUSE_MS Millisekunden.
    */
   drainAdrenaline(id: string, amount: number): void {
-    const adjustedAmount = amount > 0 ? amount * Math.max(0, this.adrenalineCostMultiplierResolver?.(id) ?? 1) : amount;
+    const adjustedAmount = this.resolveAdrenalineCost(id, amount);
     const cur = Math.max(0, (this.adrenaline.get(id) ?? 0) - adjustedAmount);
     this.adrenaline.set(id, cur);
     // Regen-Pause nicht setzen, wenn Adrenalinspritze aktiv ist

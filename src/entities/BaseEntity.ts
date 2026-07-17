@@ -8,9 +8,20 @@ import {
   COOP_DEFENSE_BASE_HP_BAR_GAP,
   COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
   DEPTH,
+  TEAM_BLUE_COLOR,
 } from '../config';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
+import type { SyncedBaseTurretState } from '../types';
+
+export interface BaseTurretRuntimeState {
+  readonly id: string;
+  readonly baseId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+  readonly weaponId: 'SPOREN';
+}
 
 /**
  * Visuelle und logische Repräsentation einer einzelnen Coop-Defense-Basis.
@@ -34,6 +45,8 @@ export class BaseEntity {
   private readonly scene: Phaser.Scene;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
+  private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
+  private readonly turretAngles = new Map<string, number>();
   private readonly hpBarBg: Phaser.GameObjects.Rectangle;
   private readonly hpBarFg: Phaser.GameObjects.Rectangle;
   private readonly hpBarWidth: number;
@@ -75,6 +88,18 @@ export class BaseEntity {
       staticBody.setSize(CELL_SIZE, CELL_SIZE);
       staticBody.updateFromGameObject();
       this.cellBodies.push(body);
+    }
+
+    // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
+    // Ihr kompletter Lebenszyklus wird von dieser BaseEntity besessen.
+    for (const turret of spec.turrets) {
+      const image = scene.add.image(turret.x, turret.y, 'placeable_turret')
+        .setDisplaySize(CELL_SIZE, CELL_SIZE)
+        .setRotation(turret.initialAngle)
+        .setTint(TEAM_BLUE_COLOR)
+        .setDepth(DEPTH.BASES + 3);
+      this.turretImages.set(turret.id, image);
+      this.turretAngles.set(turret.id, turret.initialAngle);
     }
 
     // ── 2) HP-Bar (eine pro Basis, unter der Bounding-Box) ─────────────
@@ -148,6 +173,32 @@ export class BaseEntity {
     return this.spec;
   }
 
+  getTurrets(): readonly BaseTurretRuntimeState[] {
+    if (this.isDestroyed()) return [];
+    return this.spec.turrets.map((turret) => ({
+      id: turret.id,
+      baseId: turret.baseId,
+      x: turret.x,
+      y: turret.y,
+      angle: this.turretAngles.get(turret.id) ?? turret.initialAngle,
+      weaponId: turret.weaponId,
+    }));
+  }
+
+  getSyncedTurretStates(): SyncedBaseTurretState[] {
+    return this.getTurrets().map((turret) => ({ id: turret.id, angle: turret.angle }));
+  }
+
+  setTurretAngle(turretId: string, angle: number): void {
+    if (this.isDestroyed() || !Number.isFinite(angle) || !this.turretAngles.has(turretId)) return;
+    this.turretAngles.set(turretId, angle);
+    this.turretImages.get(turretId)?.setRotation(angle);
+  }
+
+  applyTurretSnapshot(turrets: readonly SyncedBaseTurretState[]): void {
+    for (const turret of turrets) this.setTurretAngle(turret.id, turret.angle);
+  }
+
   isDestroyed(): boolean {
     return this.currentHp <= 0;
   }
@@ -195,6 +246,11 @@ export class BaseEntity {
     }
     this.cellBodies.length = 0;
 
+    for (const image of this.turretImages.values()) {
+      if (image.active) image.destroy();
+    }
+    this.turretImages.clear();
+
     if (this.hpBarBg.active) this.hpBarBg.setVisible(false);
     if (this.hpBarFg.active) this.hpBarFg.setVisible(false);
 
@@ -210,6 +266,11 @@ export class BaseEntity {
       if (body.active) body.destroy();
     }
     this.cellBodies.length = 0;
+    for (const image of this.turretImages.values()) {
+      if (image.active) image.destroy();
+    }
+    this.turretImages.clear();
+    this.turretAngles.clear();
     if (this.hpBarBg.active) this.hpBarBg.destroy();
     if (this.hpBarFg.active) this.hpBarFg.destroy();
   }

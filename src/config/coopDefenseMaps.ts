@@ -4,6 +4,7 @@ import {
   resolveCoopDefenseEnemyWaveConfig,
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
+import { TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
 
 export interface CoopBaseCellOffset {
   readonly gridX: number;
@@ -19,11 +20,30 @@ export type CoopBaseShape =
   | { kind: 'rectangle'; widthCells: number; heightCells: number }
   | { kind: 'cells'; cells: readonly CoopBaseCellOffset[] };
 
+export type CoopBaseTurretMountSide = 'front' | 'rear' | 'top' | 'bottom';
+
+export interface CoopBaseTurretConfig {
+  readonly id: string;
+  readonly cellOffset: CoopBaseCellOffset;
+  readonly mountSide: CoopBaseTurretMountSide;
+  readonly weaponId: 'SPOREN';
+}
+
+export interface CoopBasePowerUpPedestalConfig {
+  readonly id: string;
+  readonly cellOffset: CoopBaseCellOffset;
+  readonly defId: string;
+  readonly respawnMs: number;
+  readonly spawnOnArenaStart?: boolean;
+}
+
 export interface CoopBaseConfig {
   readonly id: string;
   readonly hpMax: number;
   readonly anchor: CoopBaseAnchor;
   readonly shape: CoopBaseShape;
+  readonly turrets?: readonly CoopBaseTurretConfig[];
+  readonly powerUpPedestals?: readonly CoopBasePowerUpPedestalConfig[];
 }
 
 export interface CoopDefenseMapWaveConfig {
@@ -45,11 +65,21 @@ export interface CoopDefenseMapBossConfig {
   readonly spawnAtMs: number;
 }
 
+export type CoopDefensePowerUpRegion = 'front' | 'middle' | 'rear';
+
+export interface CoopDefenseMapPowerUpConfig {
+  readonly defId: string;
+  readonly region: CoopDefensePowerUpRegion;
+  readonly respawnMs: number;
+  readonly spawnOnArenaStart?: boolean;
+}
+
 export interface CoopDefenseMapConfig {
   readonly mapId: string;
   readonly displayName: string;
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
+  readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
   readonly waves: readonly CoopDefenseMapWaveConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
 }
@@ -128,8 +158,33 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     displayName: mapConfig.displayName,
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
+    powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     waves: mapConfig.waves.map(normalizeWaveConfig),
     boss: normalizeBossConfig(mapConfig),
+  };
+}
+
+function normalizePowerUpConfig(
+  mapId: string,
+  powerUpConfig: CoopDefenseMapPowerUpConfig,
+): CoopDefenseMapPowerUpConfig {
+  if (!TIMED_POWERUP_PEDESTAL_CONFIGS[powerUpConfig.defId]) {
+    throw new Error(`[coopDefenseMaps] Unknown pedestal power-up on map ${mapId}: ${powerUpConfig.defId}`);
+  }
+  if (
+    powerUpConfig.region !== 'front'
+    && powerUpConfig.region !== 'middle'
+    && powerUpConfig.region !== 'rear'
+  ) {
+    throw new Error(`[coopDefenseMaps] Unknown power-up region on map ${mapId}: ${powerUpConfig.region}`);
+  }
+
+  return {
+    defId: powerUpConfig.defId,
+    region: powerUpConfig.region,
+    respawnMs: Math.max(1, Math.floor(powerUpConfig.respawnMs)),
+    // Coop-Podeste durchlaufen auch vor ihrem ersten Spawn den vollen Timer.
+    spawnOnArenaStart: powerUpConfig.spawnOnArenaStart ?? false,
   };
 }
 
@@ -157,11 +212,75 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
 }
 
 function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
+  const uniqueTurretIds = new Set<string>();
+  const turrets = (baseConfig.turrets ?? []).map((turret) => {
+    if (uniqueTurretIds.has(turret.id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate turret id on base ${baseConfig.id}: ${turret.id}`);
+    }
+    uniqueTurretIds.add(turret.id);
+    return normalizeBaseTurretConfig(baseConfig.id, turret);
+  });
+  const uniquePedestalIds = new Set<string>();
+  const powerUpPedestals = (baseConfig.powerUpPedestals ?? []).map((pedestal) => {
+    if (uniquePedestalIds.has(pedestal.id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate power-up pedestal id on base ${baseConfig.id}: ${pedestal.id}`);
+    }
+    uniquePedestalIds.add(pedestal.id);
+    return normalizeBasePowerUpPedestalConfig(baseConfig.id, pedestal);
+  });
+
   return {
     id: baseConfig.id,
     hpMax: Math.max(1, Math.floor(baseConfig.hpMax)),
     anchor: normalizeBaseAnchor(baseConfig.anchor),
     shape: normalizeBaseShape(baseConfig.shape),
+    turrets,
+    powerUpPedestals,
+  };
+}
+
+function normalizeBasePowerUpPedestalConfig(
+  baseId: string,
+  pedestal: CoopBasePowerUpPedestalConfig,
+): CoopBasePowerUpPedestalConfig {
+  if (!TIMED_POWERUP_PEDESTAL_CONFIGS[pedestal.defId]) {
+    throw new Error(`[coopDefenseMaps] Unknown pedestal power-up on base ${baseId}: ${pedestal.defId}`);
+  }
+
+  return {
+    id: pedestal.id,
+    cellOffset: {
+      gridX: Math.floor(pedestal.cellOffset.gridX),
+      gridY: Math.floor(pedestal.cellOffset.gridY),
+    },
+    defId: pedestal.defId,
+    respawnMs: Math.max(1, Math.floor(pedestal.respawnMs)),
+    // Auch gekoppelte Coop-Podeste starten standardmäßig erst nach ihrem ersten Timer.
+    spawnOnArenaStart: pedestal.spawnOnArenaStart ?? false,
+  };
+}
+
+function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig): CoopBaseTurretConfig {
+  if (
+    turret.mountSide !== 'front'
+    && turret.mountSide !== 'rear'
+    && turret.mountSide !== 'top'
+    && turret.mountSide !== 'bottom'
+  ) {
+    throw new Error(`[coopDefenseMaps] Unknown turret mount side on base ${baseId}: ${turret.mountSide}`);
+  }
+  if (turret.weaponId !== 'SPOREN') {
+    throw new Error(`[coopDefenseMaps] Unsupported base turret weapon on base ${baseId}: ${turret.weaponId}`);
+  }
+
+  return {
+    id: turret.id,
+    cellOffset: {
+      gridX: Math.max(0, Math.floor(turret.cellOffset.gridX)),
+      gridY: Math.max(0, Math.floor(turret.cellOffset.gridY)),
+    },
+    mountSide: turret.mountSide,
+    weaponId: turret.weaponId,
   };
 }
 
