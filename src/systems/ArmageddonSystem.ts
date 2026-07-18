@@ -1,11 +1,12 @@
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, CELL_SIZE } from '../config';
 import type { ArmageddonMeteorConfig } from '../loadout/LoadoutConfig';
 import type { RockGridIndex } from '../arena/RockGridIndex';
-import type { RadialDamageFalloffConfig, SyncedMeteorStrike } from '../types';
+import type { FireChunkBurstConfig, RadialDamageFalloffConfig, SyncedMeteorStrike } from '../types';
 
 // ── Typen ────────────────────────────────────────────────────────────────────
 
 export interface MeteorImpactEvent {
+  id:             number;
   x:              number;
   y:              number;
   radius:         number;
@@ -15,6 +16,7 @@ export interface MeteorImpactEvent {
   selfDamageMult: number;
   rockDamageMult: number;
   trainDamageMult: number;
+  fireChunkBurst: FireChunkBurstConfig;
 }
 
 interface ActiveMeteor {
@@ -25,7 +27,12 @@ interface ActiveMeteor {
   spawnedAt: number;
   impactAt:  number;
   ownerId:   string;
-  damageFactor: number;
+  damage:    number;
+  damageFalloff?: RadialDamageFalloffConfig;
+  selfDamageMult: number;
+  rockDamageMult: number;
+  trainDamageMult: number;
+  fireChunkBurst: FireChunkBurstConfig;
 }
 
 interface ArmageddonSession {
@@ -100,19 +107,18 @@ export class ArmageddonSystem {
     const remaining: ActiveMeteor[] = [];
     for (const m of this.meteors) {
       if (now >= m.impactAt) {
-        // Session-Config für Schadens-Multiplikatoren holen
-        const session = this.sessions.get(m.ownerId);
-        const cfg = session?.config;
         impacts.push({
+          id:              m.id,
           x:               m.x,
           y:               m.y,
           radius:          m.radius,
-          damage:          (cfg?.meteorDamage ?? 35) * m.damageFactor,
-          damageFalloff:   cfg?.meteorDamageFalloff,
+          damage:          m.damage,
+          damageFalloff:   m.damageFalloff,
           ownerId:         m.ownerId,
-          selfDamageMult:  cfg?.selfDamageMult ?? 0,
-          rockDamageMult:  cfg?.rockDamageMult ?? 1,
-          trainDamageMult: cfg?.trainDamageMult ?? 1,
+          selfDamageMult:  m.selfDamageMult,
+          rockDamageMult:  m.rockDamageMult,
+          trainDamageMult: m.trainDamageMult,
+          fireChunkBurst:  m.fireChunkBurst,
         });
       } else {
         remaining.push(m);
@@ -153,9 +159,12 @@ export class ArmageddonSystem {
 
   // ── Internes ──────────────────────────────────────────────────────────────
 
-  /** Spawn-Intervall mit ±20% Jitter */
+  /** Normale Meteore variieren um ±20%; Kometenhagel verwendet ein festes Intervall. */
   private jitteredInterval(config: ArmageddonMeteorConfig): number {
-    const base = 1000 / config.meteorsPerSecond;
+    const cometStorm = config.cometStormEnabled > 0;
+    const rateDivisor = cometStorm ? Math.max(1, config.cometSpawnRateDivisor) : 1;
+    const base = 1000 / Math.max(0.0001, config.meteorsPerSecond / rateDivisor);
+    if (cometStorm) return base;
     return base * (0.8 + Math.random() * 0.4);
   }
 
@@ -169,6 +178,16 @@ export class ArmageddonSystem {
     const minY = ARENA_OFFSET_Y;
     const maxX = ARENA_OFFSET_X + ARENA_WIDTH;
     const maxY = ARENA_OFFSET_Y + ARENA_HEIGHT;
+
+    if (cfg.cometStormEnabled > 0) {
+      this.spawnMeteor(
+        session,
+        now,
+        Math.min(maxX, Math.max(minX, pos.x)),
+        Math.min(maxY, Math.max(minY, pos.y)),
+      );
+      return;
+    }
 
     for (let attempt = 0; attempt < 5; attempt++) {
       // Zufällige Position im Spawn-Radius
@@ -185,26 +204,42 @@ export class ArmageddonSystem {
       const gy = Math.floor((wy - ARENA_OFFSET_Y) / CELL_SIZE);
       if (this.rockGrid?.isOccupied(gx, gy)) continue;
 
-      // Freies Feld gefunden → Meteor spawnen
-      // Radius mit konfigurierbarem Jitter (z.B. ±10%)
-      const jitter = cfg.meteorRadiusJitter;
-      const radiusMult = 1 + (Math.random() * 2 - 1) * jitter;
-      session.spawnedCount += 1;
-      const isComet = (cfg.cometEveryMeteors ?? 0) > 0 && session.spawnedCount % (cfg.cometEveryMeteors ?? 1) === 0;
-      const radius = Math.round(cfg.meteorDamageRadius * radiusMult * (isComet ? (cfg.cometRadiusFactor ?? 1) : 1));
-
-      this.meteors.push({
-        id:        this.nextMeteorId++,
-        x:         Math.round(wx),
-        y:         Math.round(wy),
-        radius,
-        spawnedAt: now,
-        impactAt:  now + cfg.meteorFallDuration,
-        ownerId:   session.ownerId,
-        damageFactor: isComet ? (cfg.cometDamageFactor ?? 1) : 1,
-      });
+      this.spawnMeteor(session, now, wx, wy);
       return;
     }
     // Alle 5 Versuche blockiert → dieser Spawn wird übersprungen
+  }
+
+  private spawnMeteor(session: ArmageddonSession, now: number, x: number, y: number): void {
+    const cfg = session.config;
+    const cometStorm = cfg.cometStormEnabled > 0;
+    const radiusJitter = 1 + (Math.random() * 2 - 1) * cfg.meteorRadiusJitter;
+    const radiusFactor = cometStorm ? Math.max(0, cfg.cometRadiusFactor) : 1;
+    const damageFactor = cometStorm ? Math.max(0, cfg.cometDamageFactor) : 1;
+    const fallDurationFactor = cometStorm ? Math.max(0, cfg.cometFallDurationFactor) : 1;
+    const chunkCountFactor = cometStorm ? Math.max(0, cfg.cometChunkCountFactor) : 1;
+    const damageFalloff = cfg.meteorDamageFalloff
+      ? { minDamage: cfg.meteorDamageFalloff.minDamage * damageFactor }
+      : undefined;
+
+    session.spawnedCount += 1;
+    this.meteors.push({
+      id:              this.nextMeteorId++,
+      x:               Math.round(x),
+      y:               Math.round(y),
+      radius:          Math.round(cfg.meteorDamageRadius * radiusJitter * radiusFactor),
+      spawnedAt:       now,
+      impactAt:        now + Math.max(1, Math.round(cfg.meteorFallDuration * fallDurationFactor)),
+      ownerId:         session.ownerId,
+      damage:          cfg.meteorDamage * damageFactor,
+      damageFalloff,
+      selfDamageMult:  cfg.selfDamageMult,
+      rockDamageMult:  cfg.rockDamageMult ?? 1,
+      trainDamageMult: cfg.trainDamageMult ?? 1,
+      fireChunkBurst: {
+        ...cfg.fireChunkBurst,
+        count: Math.max(0, Math.floor(cfg.fireChunkBurst.count * chunkCountFactor)),
+      },
+    });
   }
 }

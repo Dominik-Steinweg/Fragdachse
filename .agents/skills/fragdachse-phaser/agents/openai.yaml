@@ -1,0 +1,5 @@
+interface:
+  display_name: "Fragdachse Phaser"
+  short_description: "Lokale Phaser-4-Regeln fuer Fragdachse"
+  default_prompt: "Use $fragdachse-phaser to implement this Phaser change with the local conventions and proportional verification."
+

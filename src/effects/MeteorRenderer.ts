@@ -19,6 +19,7 @@ const METEOR_EMBER_TINTS  = [0xff6622, 0xff4400, 0xcc3300];
 const WARNING_COLOR       = 0xff4400;
 const WARNING_FILL_ALPHA  = 0.12;
 const WARNING_STROKE_ALPHA = 0.55;
+const BASE_METEOR_RADIUS  = 96;
 
 // ── Depth-Layering ─────────────────────────────────────────────────────────
 const DEPTH_WARNING  = DEPTH.FIRE - 0.5;
@@ -33,6 +34,7 @@ interface MeteorWarningVisual {
   shadow:         Phaser.GameObjects.Ellipse;    // Schlagschatten
   meteorGlow:     Phaser.GameObjects.Image;      // Leuchtender Kern (skaliert hoch)
   trailEmitter:   Phaser.GameObjects.Particles.ParticleEmitter;  // Schweif-Partikel
+  sizeFactor:     number;
 }
 
 /**
@@ -171,6 +173,7 @@ export class MeteorRenderer {
   // ── Warning-Visual erstellen ──────────────────────────────────────────────
 
   private createWarningVisual(m: SyncedMeteorStrike): MeteorWarningVisual {
+    const sizeFactor = Math.max(0.5, m.radius / BASE_METEOR_RADIUS);
     // Boden-Warnkreis (Stroke)
     const warningCircle = this.scene.add.circle(m.x, m.y, m.radius);
     warningCircle.setStrokeStyle(2, WARNING_COLOR, WARNING_STROKE_ALPHA);
@@ -218,8 +221,9 @@ export class MeteorRenderer {
       emitting:  false,
     });
     trailEmitter.setDepth(DEPTH_METEOR + 0.05);
+    trailEmitter.setScale(sizeFactor);
 
-    return { warningCircle, warningFill, shadow, meteorGlow, trailEmitter };
+    return { warningCircle, warningFill, shadow, meteorGlow, trailEmitter, sizeFactor };
   }
 
   // ── Warning-Visual aktualisieren ──────────────────────────────────────────
@@ -239,7 +243,7 @@ export class MeteorRenderer {
     visual.warningFill.setAlpha(fillAlpha);
 
     // Schatten wächst mit (von klein zu voller Größe)
-    const shadowScale = 0.5 + 1.5 * progress;
+    const shadowScale = (0.5 + 1.5 * progress) * visual.sizeFactor;
     visual.shadow.setScale(shadowScale, shadowScale * 0.5);
     visual.shadow.setAlpha(0.15 + 0.2 * progress);
 
@@ -247,7 +251,7 @@ export class MeteorRenderer {
     if (progress > 0.2) {
       const meteorProgress = (progress - 0.2) / 0.8;
       const meteorScale = 0.3 + 2.2 * Phaser.Math.Easing.Quadratic.In(meteorProgress);
-      visual.meteorGlow.setScale(meteorScale);
+      visual.meteorGlow.setScale(meteorScale * visual.sizeFactor);
       visual.meteorGlow.setAlpha(0.4 + 0.6 * meteorProgress);
       // Schweif-Emitter aktiv
       visual.trailEmitter.emitting = true;
@@ -259,7 +263,7 @@ export class MeteorRenderer {
     // Schweif-Emitter Zone anpassen (größer wenn Meteor näher)
     if (progress > 0.2) {
       visual.trailEmitter.clearEmitZones();
-      const spread = 4 + 12 * progress;
+      const spread = (4 + 12 * progress) * visual.sizeFactor;
       visual.trailEmitter.addEmitZone(circleZone(spread, 2));
     }
   }
@@ -329,7 +333,8 @@ export class MeteorRenderer {
       emitting:  false,
     });
     sparkEmitter.setDepth(DEPTH_IMPACT + 0.1);
-    sparkEmitter.explode(18);
+    const impactParticleFactor = Math.max(0.75, Math.sqrt(radius / BASE_METEOR_RADIUS));
+    sparkEmitter.explode(Math.round(18 * impactParticleFactor));
     this.scene.time.delayedCall(700, () => sparkEmitter.destroy());
 
     // 5. Glut-Partikel (langsamer, mit Drift + Gravitation)
@@ -344,7 +349,7 @@ export class MeteorRenderer {
       emitting:  false,
     });
     emberEmitter.setDepth(DEPTH_IMPACT);
-    emberEmitter.explode(10);
+    emberEmitter.explode(Math.round(10 * impactParticleFactor));
     this.scene.time.delayedCall(1100, () => emberEmitter.destroy());
 
     // 6. Boden-Scorch (dunkler Kreis, fadet langsam)
@@ -359,7 +364,7 @@ export class MeteorRenderer {
     });
 
     // 7. Kamera-Shake (dezent, da viele Einschläge)
-    this.scene.cameras.main.shake(80, 0.002);
+    this.scene.cameras.main.shake(80, Math.min(0.006, 0.002 * impactParticleFactor));
   }
 
   // ── Cleanup ───────────────────────────────────────────────────────────────

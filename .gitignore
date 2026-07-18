@@ -43,6 +43,7 @@ Thumbs.db
 # Misc
 coverage/
 public/build/
+tmp/
 
 # Interne Notizen und ToDos
 ToDo/

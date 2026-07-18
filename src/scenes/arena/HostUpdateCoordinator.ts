@@ -210,11 +210,12 @@ export class HostUpdateCoordinator {
         this.ctx.fireSystem.hostCreateZone(explosion.x, explosion.y, groundFire, explosion.ownerId);
       }
       if (explosion.effect.fireChunkBurst) {
-        this.ctx.flamethrowerUpgradeSystem?.handleFireballExplosion(
+        this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
           explosion.ownerId,
           explosion.x,
           explosion.y,
           explosion.effect.fireChunkBurst,
+          `fireball-impact:${explosion.ownerId}`,
           now,
         );
       }
@@ -443,6 +444,14 @@ export class HostUpdateCoordinator {
         mi.damageFalloff,
       );
       bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622);
+      this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
+        mi.ownerId,
+        mi.x,
+        mi.y,
+        mi.fireChunkBurst,
+        `armageddon-impact:${mi.id}`,
+        now,
+      );
     }
 
     if (!countdownActive && this.ctx.trainManager) {

@@ -6,8 +6,10 @@
   "scripts": {
     "audio:convert": "node scripts/convert-audio.mjs",
     "dev": "vite",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc && vite build",
+    "check": "npm test && npm run build",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"

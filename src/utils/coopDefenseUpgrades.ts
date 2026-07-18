@@ -64,6 +64,10 @@ const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Obje
   flamethrower_fireball: 'UPGRADE_ROCKET_LAUNCHER_BURNING_EXPLOSION',
   flamethrower_fireball_trail: 'UPGRADE_ROCKET_LAUNCHER_BURNING_EXPLOSION_DAMAGE',
   flamethrower_fireball_chunks: 'UPGRADE_MOLOTOV_WILDFIRE',
+  armageddon_meteor_count: 'UPGRADE_WEAPON2_FIRE_RATE',
+  armageddon_rage_required: 'UPGRADE_ULTIMATE_MAX_RAGE',
+  armageddon_radius: 'UPGRADE_AIRSTRIKE_RADIUS',
+  armageddon_fire_chunks: 'UPGRADE_MOLOTOV_WILDFIRE',
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string {

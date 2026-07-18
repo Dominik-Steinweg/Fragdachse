@@ -153,14 +153,15 @@ export class FlamethrowerUpgradeSystem {
     }
   }
 
-  handleFireballExplosion(
+  hostCreateFireChunkBurst(
     ownerId: string,
     x: number,
     y: number,
     burst: FireChunkBurstConfig,
+    sourceKey: string,
     now = Date.now(),
   ): void {
-    this.launchFireChunks(ownerId, x, y, burst, now, `fireball-impact:${ownerId}`);
+    this.launchFireChunks(ownerId, x, y, burst, now, sourceKey);
   }
 
   handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, now = Date.now()): void {

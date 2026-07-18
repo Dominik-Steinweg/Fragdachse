@@ -3218,10 +3218,10 @@
           }
         },
         {
-          "id": "armageddon_damage",
-          "code": "E-U1-1",
-          "label": "Upgrade Armageddon: Schaden",
-          "description": "+10% Schaden fuer Armageddon je Stufe.",
+          "id": "armageddon_duration",
+          "code": "E-U1-L1",
+          "label": "Upgrade Armageddon: Dauer",
+          "description": "+10% Dauer fuer Armageddon je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -3236,36 +3236,81 @@
           ],
           "effects": [
             {
-              "stat": "ultimate.ARMAGEDDON.damage",
+              "stat": "ultimate.ARMAGEDDON.duration",
               "mode": "add_percent_per_level",
               "value": 0.1
             }
           ]
         },
         {
-          "id": "armageddon_duration",
-          "code": "E-U1-2",
-          "label": "Upgrade Armageddon: Dauer",
-          "description": "+10% Dauer fuer Armageddon je Stufe.",
+          "id": "armageddon_damage",
+          "code": "E-U1-L2",
+          "label": "Upgrade Armageddon: Schaden",
+          "description": "+10% Explosionsschaden fuer Armageddon je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 120,
-          "requires": [
-            {
-              "upgradeId": "unlock_armageddon",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "ultimate.ARMAGEDDON.duration",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
+          "sortOrder": 111,
+          "requires": [{ "upgradeId": "armageddon_duration", "minLevel": 3 }],
+          "effects": [{ "stat": "ultimate.ARMAGEDDON.damage", "mode": "add_percent_per_level", "value": 0.1 }]
+        },
+        {
+          "id": "armageddon_meteor_count",
+          "code": "E-U1-L3",
+          "label": "Upgrade Armageddon: Meteormenge",
+          "description": "+10% Meteore pro Sekunde je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 112,
+          "requires": [{ "upgradeId": "armageddon_damage", "minLevel": 3 }],
+          "effects": [{ "stat": "ultimate.ARMAGEDDON.meteorCount", "mode": "add_percent_per_level", "value": 0.1 }]
+        },
+        {
+          "id": "armageddon_rage_required",
+          "code": "E-U1-R1",
+          "label": "Upgrade Armageddon: Rage-Schwelle",
+          "description": "-15% benoetigte Mindest-Rage je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 113,
+          "requires": [{ "upgradeId": "unlock_armageddon", "minLevel": 1 }],
+          "effects": [{ "stat": "ultimate.ARMAGEDDON.rageRequired", "mode": "add_percent_per_level", "value": -0.15 }]
+        },
+        {
+          "id": "armageddon_radius",
+          "code": "E-U1-R2",
+          "label": "Upgrade Armageddon: Explosionsradius",
+          "description": "+15% Explosionsradius je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 114,
+          "requires": [{ "upgradeId": "armageddon_rage_required", "minLevel": 3 }],
+          "effects": [{ "stat": "ultimate.ARMAGEDDON.radius", "mode": "add_percent_per_level", "value": 0.15 }]
+        },
+        {
+          "id": "armageddon_fire_chunks",
+          "code": "E-U1-R3",
+          "label": "Upgrade Armageddon: Brennende Brocken",
+          "description": "+3 brennende Brocken je Meteor und Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 115,
+          "requires": [{ "upgradeId": "armageddon_radius", "minLevel": 3 }],
+          "effects": [{ "stat": "ultimate.ARMAGEDDON.fireChunks", "mode": "add_per_level", "value": 3 }]
         },
         {
           "id": "unlock_gauss_rifle",
@@ -3465,7 +3510,7 @@
             }
           ]
         },
-        { "id": "armageddon_comet_storm", "code": "E-U1-C", "label": "Kometenhagel", "description": "Jeder zehnte Meteor erhaelt doppelten Radius, 1,5-fachen Schaden und eine besondere Vorwarnung.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 125, "requires": [{ "upgradeId": "armageddon_damage", "minLevel": 3 }], "effects": [{ "stat": "ultimate.ARMAGEDDON.armageddon.cometEveryMeteors", "mode": "add_per_level", "value": 10 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometRadiusFactor", "mode": "add_per_level", "value": 2 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometDamageFactor", "mode": "add_per_level", "value": 1.5 }] },
+        { "id": "armageddon_comet_storm", "code": "E-U1-C", "label": "Kometenhagel", "description": "Wandelt Armageddon in einen gezielten Kometenhagel um: ein Drittel der aufgewerteten Spawnrate, 75% kuerzere Fallzeit, doppelter Radius, dreifacher Schaden und dreifache Brockenmenge.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 116, "requires": [{ "upgradeId": "armageddon_meteor_count", "minLevel": 3 }, { "upgradeId": "armageddon_fire_chunks", "minLevel": 3 }], "effects": [{ "stat": "ultimate.ARMAGEDDON.armageddon.cometStormEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometSpawnRateDivisor", "mode": "add_per_level", "value": 2 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometFallDurationFactor", "mode": "add_percent_per_level", "value": -0.75 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometRadiusFactor", "mode": "add_percent_per_level", "value": 1 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometDamageFactor", "mode": "add_percent_per_level", "value": 2 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometChunkCountFactor", "mode": "add_percent_per_level", "value": 2 }] },
         { "id": "gauss_magnetic_discharge", "code": "E-U2-C", "label": "Magnetische Entladung", "description": "Jeder durchschlagene Gegner loest einmalig einen 40%-Kettenblitz innerhalb 140 px aus.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "gauss_rifle_damage", "minLevel": 3 }], "effects": [{ "stat": "ultimate.GAUSS_RIFLE.chainRadius", "mode": "add_per_level", "value": 140 }, { "stat": "ultimate.GAUSS_RIFLE.chainDamageFactor", "mode": "add_per_level", "value": 0.4 }] },
         { "id": "airstrike_carpet_bombing", "code": "E-U3-C", "label": "Teppichbombardement", "description": "Drei um 120 px versetzte Einschlaege im Abstand von 150 ms mit 80% Radius und 55% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 185, "requires": [{ "upgradeId": "airstrike_radius", "minLevel": 3 }], "effects": [{ "stat": "ultimate.AIRSTRIKE.carpetStrikeCount", "mode": "add_per_level", "value": 3 }, { "stat": "ultimate.AIRSTRIKE.carpetOffset", "mode": "add_per_level", "value": 120 }, { "stat": "ultimate.AIRSTRIKE.carpetIntervalMs", "mode": "add_per_level", "value": 150 }, { "stat": "ultimate.AIRSTRIKE.carpetRadiusFactor", "mode": "add_per_level", "value": 0.8 }, { "stat": "ultimate.AIRSTRIKE.carpetDamageFactor", "mode": "add_per_level", "value": 0.55 }] },
         { "id": "honey_badger_pack_rage", "code": "E-U4-C", "label": "Rudelwut", "description": "Verbuendete erhalten +25% Laufgeschwindigkeit, +25% Schaden und 2 Ruestung je Ruestungstick; 500 ms Nachlauf.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 215, "requires": [{ "upgradeId": "honey_badger_rage_radius", "minLevel": 3 }], "effects": [{ "stat": "ultimate.HONEY_BADGER_RAGE.aura.allySpeedMultiplier", "mode": "add_per_level", "value": 1.25 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.allyDamageMultiplier", "mode": "add_per_level", "value": 1.25 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.allyArmorPerTick", "mode": "add_per_level", "value": 2 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.lingerMs", "mode": "add_per_level", "value": 500 }] }

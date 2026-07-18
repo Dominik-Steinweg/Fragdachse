@@ -723,7 +723,10 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
   'ultimate.ARMAGEDDON.damage': {
     kind: 'ultimate',
     itemId: 'ARMAGEDDON',
-    targets: [{ path: ['armageddon', 'meteorDamage'], operation: 'scale' }],
+    targets: [
+      { path: ['armageddon', 'meteorDamage'], operation: 'scale' },
+      { path: ['armageddon', 'meteorDamageFalloff', 'minDamage'], operation: 'scale' },
+    ],
   },
   'ultimate.ARMAGEDDON.duration': {
     kind: 'ultimate',
@@ -731,8 +734,27 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     targets: [
       { path: ['duration'], operation: 'scale' },
       { path: ['rageDrainDuration'], operation: 'scale' },
-      { path: ['armageddon', 'meteorsPerSecond'], operation: 'scale' },
     ],
+  },
+  'ultimate.ARMAGEDDON.meteorCount': {
+    kind: 'ultimate',
+    itemId: 'ARMAGEDDON',
+    targets: [{ path: ['armageddon', 'meteorsPerSecond'], operation: 'scale' }],
+  },
+  'ultimate.ARMAGEDDON.rageRequired': {
+    kind: 'ultimate',
+    itemId: 'ARMAGEDDON',
+    targets: [{ path: ['rageRequired'], operation: 'scale' }],
+  },
+  'ultimate.ARMAGEDDON.radius': {
+    kind: 'ultimate',
+    itemId: 'ARMAGEDDON',
+    targets: [{ path: ['armageddon', 'meteorDamageRadius'], operation: 'scale' }],
+  },
+  'ultimate.ARMAGEDDON.fireChunks': {
+    kind: 'ultimate',
+    itemId: 'ARMAGEDDON',
+    targets: [{ path: ['armageddon', 'fireChunkBurst', 'count'], operation: 'add' }],
   },
   'ultimate.GAUSS_RIFLE.damage': {
     kind: 'ultimate',

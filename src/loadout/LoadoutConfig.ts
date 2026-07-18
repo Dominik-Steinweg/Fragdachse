@@ -1,5 +1,5 @@
 import { COLORS, RAGE_MAX } from '../config';
-import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -544,9 +544,13 @@ export interface ArmageddonMeteorConfig {
   readonly selfDamageMult: number;      // Selbstschadens-Multiplikator (0 = immun)
   readonly rockDamageMult?: number;     // Schadensfaktor gegen Felsen (Default 1.0)
   readonly trainDamageMult?: number;    // Schadensfaktor gegen den Zug (Default 1.0)
-  readonly cometEveryMeteors?: number;
-  readonly cometRadiusFactor?: number;
-  readonly cometDamageFactor?: number;
+  readonly fireChunkBurst: FireChunkBurstConfig;
+  readonly cometStormEnabled: number;
+  readonly cometSpawnRateDivisor: number;
+  readonly cometFallDurationFactor: number;
+  readonly cometRadiusFactor: number;
+  readonly cometDamageFactor: number;
+  readonly cometChunkCountFactor: number;
 }
 
 export interface BuffAuraConfig {
@@ -2190,8 +2194,8 @@ export const UTILITY_CONFIGS = {
 export const ULTIMATE_CONFIGS = {
   /**
    * ARMAGEDDON – Inspiriert vom Druiden-Skill aus Diablo 2.
-   * Spawnt ~70 Meteore über 7 Sekunden im Radius um den Spieler.
-   * Jeder Meteor zeigt einen Warnkreis, fällt dann herab und macht AoE-Schaden.
+   * Spawnt ~21 Meteore über 7 Sekunden im Radius um den Spieler.
+   * Jeder Meteor zeigt einen Warnkreis, verursacht AoE-Schaden und verteilt Feuer.
    */
   ARMAGEDDON: {
     type:               'buff',
@@ -2207,15 +2211,31 @@ export const ULTIMATE_CONFIGS = {
     rageDrainDuration:  7000,
     armageddon: {
       meteorSpawnRadius:  350,    // px um den Spieler
-      meteorDamageRadius: 64,     // px AoE bei Einschlag (~1.5 Tiles)
-      meteorDamage:       60,     // HP pro Meteor
-      meteorDamageFalloff: { minDamage: 40 } satisfies RadialDamageFalloffConfig,
+      meteorDamageRadius: 96,     // px AoE bei Einschlag
+      meteorDamage:       120,    // HP pro Meteor
+      meteorDamageFalloff: { minDamage: 80 } satisfies RadialDamageFalloffConfig,
       meteorFallDuration: 1200,   // ms Vorwarnung
-      meteorsPerSecond:   10,     // ~70 Meteore in 7 Sekunden
+      meteorsPerSecond:   3,      // ~21 Meteore in 7 Sekunden
       meteorRadiusJitter: 0.1,    // ±10% Radius-Zufallsabweichung
       selfDamageMult:     0,      // Caster immun
       rockDamageMult:     0.5,
       trainDamageMult:    0.5,
+      fireChunkBurst: {
+        count: 3,
+        searchRadius: 96,
+        flightMs: 320,
+        igniteCenter: true,
+        durationMs: 2000,
+        burnDurationMs: 2000,
+        burnDamagePerTick: 0.5,
+        weaponName: 'Armageddon-Brand',
+      },
+      cometStormEnabled: 0,
+      cometSpawnRateDivisor: 1,
+      cometFallDurationFactor: 1,
+      cometRadiusFactor: 1,
+      cometDamageFactor: 1,
+      cometChunkCountFactor: 1,
     },
   } as BuffUltimateConfig,
 
