@@ -32,25 +32,13 @@ import {
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC,
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, GAME_WIDTH, CELL_SIZE, COLORS, DEPTH,
-  ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS,
   NET_SMOOTH_TIME_MS,
   applyArenaMetricsForMode,
 } from '../config';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
-import {
-  beginAutomaticRoomSearch,
-  clearAutomaticRoomSearchState,
-  clearRoomQualityRetryCount,
-  consumeAutomaticRoomSearchAttempt,
-  copyCurrentRoomShareUrl,
-  getAutomaticRoomSearchState,
-  getRoomQualityRetryCount,
-  markAutomaticRoomSearchExhausted,
-  restartRoomForAutomaticRoomSearch,
-  restartRoomForQualityRetry,
-} from '../utils/roomQuality';
+import { copyCurrentRoomShareUrl, restartRoomForQualityRetry } from '../utils/roomQuality';
 import {
   addStoredCoopDefenseXp,
   getStoredCoopDefenseProgress,
@@ -658,23 +646,13 @@ export class ArenaScene extends Phaser.Scene {
       () => this.onReadyToggled(),
       () => { void this.onCopyRoomLink(); },
       () => this.onRetryRoom(),
-      () => this.onStartAutomaticRoomSearch(),
+      () => bridge.toggleGameplayTransportMode(),
       () => this.openCoopDefenseUpgradesOverlay(),
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
 
-    this.roomQualityMonitor = new RoomQualityMonitor({
-      bridge,
-      getRetryCount:    () => getRoomQualityRetryCount(),
-      clearRetryCount:  () => clearRoomQualityRetryCount(),
-      restartRoomForQualityRetry:       () => restartRoomForQualityRetry(),
-      restartRoomForAutomaticRoomSearch: () => restartRoomForAutomaticRoomSearch(),
-      getAutomaticRoomSearchState:      () => getAutomaticRoomSearchState(),
-      consumeAutomaticRoomSearchAttempt: () => consumeAutomaticRoomSearchAttempt(),
-      clearAutomaticRoomSearchState:    () => clearAutomaticRoomSearchState(),
-      markAutomaticRoomSearchExhausted: () => markAutomaticRoomSearchExhausted(),
-    });
+    this.roomQualityMonitor = new RoomQualityMonitor(bridge);
 
     // ── RPC + Lifecycle coordinators ──────────────────────────────────────
     this.rpcCoordinator = new RpcCoordinator(this, this.ctx, this.renderers, this.clientUpdate, leftPanel);
@@ -697,7 +675,8 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.initialize();
     this.registerArenaPanelHotkeys();
     bridge.setupPingMeasurement();
-    this.time.addEvent({ delay: 2000, callback: () => bridge.sendPingToHost(), loop: true });
+    bridge.sendPingToHost();
+    this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
     this.refreshStoredCoopDefenseProgress();
     this.lastObservedGamePhase = bridge.getGamePhase();
@@ -708,6 +687,7 @@ export class ArenaScene extends Phaser.Scene {
     let primaryStepMs = 0;
     this.syncArenaMetrics();
     this.lifecycle.detectPhaseChange();
+    bridge.updateGameplayTransport();
 
     const phase           = bridge.getGamePhase();
     const enteredLobbyFromArena = this.lastObservedGamePhase === 'ARENA' && phase === 'LOBBY';
@@ -1094,20 +1074,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private onRetryRoom(): void {
-    clearAutomaticRoomSearchState();
     restartRoomForQualityRetry();
-  }
-
-  private onStartAutomaticRoomSearch(): void {
-    const autoSearchState = getAutomaticRoomSearchState();
-    if (autoSearchState.active) {
-      clearAutomaticRoomSearchState();
-      clearRoomQualityRetryCount();
-      return;
-    }
-    clearRoomQualityRetryCount();
-    beginAutomaticRoomSearch(ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS);
-    restartRoomForAutomaticRoomSearch();
   }
 
   // ── Visual helpers ────────────────────────────────────────────────────────

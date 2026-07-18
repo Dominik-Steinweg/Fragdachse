@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GameplayTransportMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   MAX_PLAYERS,
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -19,11 +19,18 @@ import {
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   TEAM_BLUE_COLOR,
   TEAM_RED_COLOR,
+  GAMEPLAY_TRANSPORT_DEFAULT,
+  NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS,
+  NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS,
 } from '../config';
 import { NetworkPingController } from './NetworkPingController';
+import {
+  GameplayTransportChannel,
+  type GameplayCommandAck,
+  type GameplayCommandKind,
+} from './GameplayTransportChannel';
 import { countEnemyUpserts } from './enemySnapshotCodec';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
-import type { HostRoomQualityProbeResult } from './NetworkPingController';
 import { sanitizePlayerName } from '../utils/playerName';
 import { getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
@@ -31,7 +38,6 @@ import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/Lo
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
-export type { HostRoomQualityProbeResult } from './NetworkPingController';
 
 const HOST_RPC_CHANNEL = 'rpc_host';
 const ALL_RPC_CHANNEL  = 'rpc_all';
@@ -81,6 +87,8 @@ const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, u
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
 const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
+
+const KEY_GAMEPLAY_TRANSPORT = 'gtm'; // global reliable: 'fast' | 'rpc'
 
 interface EnemySyncMetricsWindow {
   startedAtMs: number;
@@ -314,6 +322,14 @@ interface RpcEnvelope {
   payload: unknown;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 const TEAM_IDS: readonly TeamId[] = ['blue', 'red'];
 
 export class NetworkBridge {
@@ -330,6 +346,7 @@ export class NetworkBridge {
   private allDispatcherRegistered = false;
   private knownPlayerColors: readonly number[] = [];
   private pingController: NetworkPingController;
+  private gameplayTransport: GameplayTransportChannel;
   private hostRpcHandlers = new Map<string, (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown>();
   private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
 
@@ -367,16 +384,46 @@ export class NetworkBridge {
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
   private outboundRpcBlockedUntilMs = 0;
   private lastOutboundRpcWarningAtMs = 0;
+  private nextGameplayTransportMetricsAtMs = 0;
 
   constructor() {
     this.pingController = new NetworkPingController({
       isHost: () => isHost(),
+      getMode: () => this.getGameplayTransportMode(),
       getLocalPlayerId: () => myPlayer().id,
+      getLocalPlayer: () => myPlayer(),
+      getPlayers: () => [...this.playerStateMap.values()],
       setLocalPing: (pingMs: number) => { myPlayer().setState(KEY_PING, pingMs); },
       sendHostRpc: (type: string, payload: unknown) => this.sendHostRpc(type, payload),
       broadcastRpc: (type: string, payload: unknown) => this.broadcastRpc(type, payload),
       registerHostRpcHandler: (type, handler) => this.registerHostRpcHandler(type, handler),
       registerAllRpcHandler: (type, handler) => this.registerAllRpcHandler(type, handler),
+    });
+
+    this.gameplayTransport = new GameplayTransportChannel({
+      isHost: () => isHost(),
+      getMode: () => this.getGameplayTransportMode(),
+      getLocalPlayer: () => myPlayer(),
+      getPlayers: () => [...this.playerStateMap.values()],
+      getGlobalState: key => getState(key),
+      setGlobalState: (key, value, reliable) => setState(key, value, reliable),
+      executeCommand: (kind, payload, caller) => this.executeGameplayCommand(kind, payload, caller as PlayerState),
+      callCommandFallback: async batch => {
+        const result = await this.callHostRpc('gcf', batch, 1200);
+        return result as GameplayCommandAck;
+      },
+      sendEventFallback: batch => this.broadcastRpc('gef', batch),
+      dispatchEvent: (kind, payload) => this.dispatchGameplayEvent(kind, payload),
+      now: () => this.pingController.getSynchronizedNow(),
+    });
+
+    this.registerHostRpcHandler('gcf', async (payload: unknown, caller: PlayerState): Promise<unknown> => {
+      if (!isHost()) return undefined;
+      return this.gameplayTransport.handleCommandFallback(payload, caller);
+    });
+    this.registerAllRpcHandler('gef', async (payload: unknown): Promise<unknown> => {
+      this.gameplayTransport.handleEventFallback(payload);
+      return undefined;
     });
 
     this.registerHostRpcHandler('tmr', async (payload: unknown, caller: PlayerState): Promise<unknown> => {
@@ -434,6 +481,10 @@ export class NetworkBridge {
     if (this.activated) return;
     this.activated = true;
 
+    if (isHost() && getState(KEY_GAMEPLAY_TRANSPORT) === undefined) {
+      setState(KEY_GAMEPLAY_TRANSPORT, GAMEPLAY_TRANSPORT_DEFAULT, true);
+    }
+
     onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
       this.connectedPlayersCacheDirty = true;
@@ -443,6 +494,8 @@ export class NetworkBridge {
         this.playerStateMap.delete(state.id);
         this.connectedPlayers.delete(state.id);
         this.connectedPlayersCacheDirty = true;
+        this.gameplayTransport.removePlayer(state.id);
+        this.pingController.removePlayer(state.id);
         if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
         this.hostPublishLobbySync();
@@ -472,6 +525,7 @@ export class NetworkBridge {
     setState(KEY_LOBBY_SYNC, {
       m: this.getGameMode(),
       c: this.getCoopDefenseMapId(),
+      n: this.getGameplayTransportMode(),
       p: [...this.connectedPlayers.keys()].sort(),
     }, true);
   }
@@ -487,7 +541,7 @@ export class NetworkBridge {
    * kein Snapshot angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
    */
   getLobbySyncConsistency(): { consistent: boolean; hostStatePresent: boolean; issues: string[] } {
-    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; p?: string[] } | undefined;
+    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; n?: GameplayTransportMode; p?: string[] } | undefined;
     if (!snapshot || !Array.isArray(snapshot.p)) {
       return { consistent: true, hostStatePresent: false, issues: [] };
     }
@@ -507,6 +561,10 @@ export class NetworkBridge {
     if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
       && snapshot.c !== undefined && snapshot.c !== this.getCoopDefenseMapId()) {
       issues.push(`Coop-Map: lokal=${this.getCoopDefenseMapId()} host=${snapshot.c}`);
+    }
+
+    if (snapshot.n !== undefined && snapshot.n !== this.getGameplayTransportMode()) {
+      issues.push(`Netzmodus: lokal=${this.getGameplayTransportMode()} host=${snapshot.n}`);
     }
 
     return { consistent: issues.length === 0, hostStatePresent: true, issues };
@@ -539,6 +597,25 @@ export class NetworkBridge {
 
   getGameMode(): GameMode {
     return (getState(KEY_GAME_MODE) as GameMode | undefined) ?? 'deathmatch';
+  }
+
+  getGameplayTransportMode(): GameplayTransportMode {
+    const mode = getState(KEY_GAMEPLAY_TRANSPORT) as GameplayTransportMode | undefined;
+    return mode === 'fast' || mode === 'rpc' ? mode : GAMEPLAY_TRANSPORT_DEFAULT;
+  }
+
+  setGameplayTransportMode(mode: GameplayTransportMode): void {
+    if (!isHost() || this.getGamePhase() !== 'LOBBY') return;
+    if (mode !== 'fast' && mode !== 'rpc') return;
+    if (this.getGameplayTransportMode() === mode) return;
+    this.gameplayTransport.reset();
+    setState(KEY_GAMEPLAY_TRANSPORT, mode, true);
+    this.hostInvalidateLobbyReadyStateForAllPlayers();
+    this.hostPublishLobbySync();
+  }
+
+  toggleGameplayTransportMode(): void {
+    this.setGameplayTransportMode(this.getGameplayTransportMode() === 'fast' ? 'rpc' : 'fast');
   }
 
   setGameMode(mode: GameMode): void {
@@ -1234,7 +1311,7 @@ export class NetworkBridge {
 
   /** Host-only: Broadcastet, dass der Zug zerstört wurde. */
   broadcastTrainDestroyed(): void {
-    this.broadcastRpc('trdes', {});
+    this.broadcastGameplayEvent('trdes', {});
   }
 
   /** Registriert einen Handler für die Zug-Zerstörung (alle Clients inkl. Host). */
@@ -1263,11 +1340,21 @@ export class NetworkBridge {
     if (isHost()) {
       return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
     }
+    const payload = { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow };
+    if (this.getGameplayTransportMode() === 'fast') {
+      const resultPromise = this.gameplayTransport.sendCommand('lu', payload, awaitResult);
+      if (!awaitResult) {
+        void resultPromise.catch(() => undefined);
+        return null;
+      }
+      const result = await resultPromise;
+      return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
+    }
     if (!awaitResult) {
-      this.sendHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow });
+      this.sendHostRpc('lu', payload);
       return null;
     }
-    const result = await this.callHostRpc('lu', { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow }, 1200);
+    const result = await this.callHostRpc('lu', payload, 1200);
     return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
   }
 
@@ -1290,6 +1377,7 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
+      if (!isRecord(data)) return { ok: false, reason: 'invalid' };
       const { slot, angle, tx, ty, sid, prm, px, py, ts } = data as {
         slot: LoadoutSlot;
         angle: number;
@@ -1301,6 +1389,17 @@ export class NetworkBridge {
         py?: number;
         ts?: number;
       };
+      if (!['weapon1', 'weapon2', 'utility', 'ultimate'].includes(slot)
+        || !isFiniteNumber(angle)
+        || !isFiniteNumber(tx)
+        || !isFiniteNumber(ty)
+        || (sid !== undefined && !isFiniteNumber(sid))
+        || (px !== undefined && !isFiniteNumber(px))
+        || (py !== undefined && !isFiniteNumber(py))
+        || (ts !== undefined && !isFiniteNumber(ts))
+        || (prm !== undefined && !isRecord(prm))) {
+        return { ok: false, reason: 'invalid' };
+      }
       // Verwende Client-Timestamp für Cooldown-Tracking (verhindert Schussverlust bei variierender RPC-Latenz).
       // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
       const hostNow = Date.now();
@@ -1316,6 +1415,10 @@ export class NetworkBridge {
       this.powerUpPickupHandler?.(uid, myPlayer().id);
       return;
     }
+    if (this.getGameplayTransportMode() === 'fast') {
+      void this.gameplayTransport.sendCommand('pup', { uid }).catch(() => undefined);
+      return;
+    }
     this.sendHostRpc('pup', { uid });
   }
 
@@ -1325,7 +1428,9 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const cb = this.powerUpPickupHandler;
       if (!cb) return undefined;
+      if (!isRecord(data)) return undefined;
       const { uid } = data as { uid: number };
+      if (!Number.isSafeInteger(uid) || uid < 0) return undefined;
       cb(uid, caller.id);
       return undefined;
     });
@@ -1334,6 +1439,10 @@ export class NetworkBridge {
   sendDecoyStealthBreakRequest(): void {
     if (isHost()) {
       this.decoyStealthBreakHandler?.(myPlayer().id);
+      return;
+    }
+    if (this.getGameplayTransportMode() === 'fast') {
+      void this.gameplayTransport.sendCommand('dbr', {}).catch(() => undefined);
       return;
     }
     this.sendHostRpc('dbr', {});
@@ -1351,7 +1460,7 @@ export class NetworkBridge {
   // ── Explosions-Effekt-RPC: Host → Alle ────────────────────────────────────
 
   broadcastExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle): void {
-    this.broadcastRpc('xfx', { x, y, r: radius, c: color, s: visualStyle });
+    this.broadcastGameplayEvent('xfx', { x, y, r: radius, c: color, s: visualStyle });
   }
 
   registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void): void {
@@ -1415,7 +1524,7 @@ export class NetworkBridge {
 
   /** Repliziert die Zielzellen der Schleimbluete fuer identische Einschlagsorte auf allen Clients. */
   broadcastSlimeBloomEffect(x: number, y: number, targets: readonly SlimeBloomTarget[]): void {
-    this.broadcastRpc('sbfx', { x, y, p: targets.flatMap(target => [target.x, target.y]) });
+    this.broadcastGameplayEvent('sbfx', { x, y, p: targets.flatMap(target => [target.x, target.y]) });
   }
 
   registerSlimeBloomEffectHandler(handler: SlimeBloomEffectHandler): void {
@@ -1434,7 +1543,7 @@ export class NetworkBridge {
   }
 
   broadcastFireChunkEffect(x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number): void {
-    this.broadcastRpc('fcfx', { x, y, t: landsAt, p: targets.flatMap(target => [target.x, target.y]) });
+    this.broadcastGameplayEvent('fcfx', { x, y, t: landsAt, p: targets.flatMap(target => [target.x, target.y]) });
   }
 
   registerFireChunkEffectHandler(handler: FireChunkEffectHandler): void {
@@ -1451,7 +1560,7 @@ export class NetworkBridge {
   }
 
   broadcastBlackHoleEffect(x: number, y: number, radius: number, durationMs: number): void {
-    this.broadcastRpc('bhfx', { x, y, r: radius, d: durationMs });
+    this.broadcastGameplayEvent('bhfx', { x, y, r: radius, d: durationMs });
   }
 
   registerBlackHoleEffectHandler(handler: BlackHoleEffectHandler): void {
@@ -1468,7 +1577,7 @@ export class NetworkBridge {
   // ── Granaten-Countdown-RPC: Host → Alle ──────────────────────────────────
 
   broadcastGrenadeCountdown(x: number, y: number, value: number): void {
-    this.broadcastRpc('gcnt', { x, y, v: value });
+    this.broadcastGameplayEvent('gcnt', { x, y, v: value });
   }
 
   registerGrenadeCountdownHandler(handler: (x: number, y: number, value: number) => void): void {
@@ -1501,12 +1610,12 @@ export class NetworkBridge {
     if (this.pendingEffects.length > 0) {
       const batch = this.pendingEffects;
       this.pendingEffects = [];
-      this.broadcastRpc('fxb', batch);
+      this.broadcastGameplayEvent('fxb', batch);
     }
     if (this.pendingXpPopups.length > 0) {
       const popups = this.pendingXpPopups;
       this.pendingXpPopups = [];
-      this.broadcastRpc('cdxpb', popups);
+      this.broadcastGameplayEvent('cdxpb', popups);
     }
   }
 
@@ -1525,7 +1634,7 @@ export class NetworkBridge {
 
   // ── Shot-Feedback-RPC: Host → Alle (Screenshake bei Schuss) ───────────────
   broadcastShotFx(shooterId: string, duration: number, intensity: number): void {
-    this.broadcastRpc('sfx', { id: shooterId, d: duration, i: intensity });
+    this.broadcastGameplayEvent('sfx', { id: shooterId, d: duration, i: intensity });
   }
 
   registerShotFxHandler(cb: (shooterId: string, duration: number, intensity: number) => void): void {
@@ -1549,7 +1658,7 @@ export class NetworkBridge {
     shotId?: number,
     shotAudioKey?: ShotAudioKey,
   ): void {
-    this.broadcastRpc('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId, sa: shotAudioKey });
+    this.broadcastGameplayEvent('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId, sa: shotAudioKey });
   }
 
   registerHitscanTracerHandler(handler: HitscanTracerHandler): void {
@@ -1578,7 +1687,7 @@ export class NetworkBridge {
   // ── Translocator-Effekt-RPC: Host → Alle ───────────────────────────────────
 
   broadcastTranslocatorFlash(x: number, y: number, color: number, type: 'start' | 'end'): void {
-    this.broadcastRpc('tlfx', { x, y, c: color, t: type });
+    this.broadcastGameplayEvent('tlfx', { x, y, c: color, t: type });
   }
 
   registerTranslocatorFlashHandler(handler: TranslocatorFlashHandler): void {
@@ -1594,7 +1703,7 @@ export class NetworkBridge {
 
   broadcastCaptureTheBeerFx(event: CaptureTheBeerFxEvent): void {
     if (event.kind === 'drop' || event.kind === 'score') {
-      this.broadcastRpc('btfx', {
+      this.broadcastGameplayEvent('btfx', {
         k: event.kind,
         bt: event.beerTeamId,
         x: event.x,
@@ -1604,7 +1713,7 @@ export class NetworkBridge {
       return;
     }
 
-    this.broadcastRpc('btfx', {
+    this.broadcastGameplayEvent('btfx', {
       k: 'reset',
       bt: event.beerTeamId,
       sx: event.sourceX,
@@ -1671,7 +1780,7 @@ export class NetworkBridge {
   // ── Melee-Swing-RPC: Host → Alle ──────────────────────────────────────────
 
   broadcastMeleeSwing(swing: SyncedMeleeSwing): void {
-    this.broadcastRpc('msfx', {
+    this.broadcastGameplayEvent('msfx', {
       sid: swing.swingId, x: swing.x, y: swing.y,
       a: swing.angle, ad: swing.arcDegrees, r: swing.range,
       c: swing.color, id: swing.shooterId,
@@ -1706,6 +1815,14 @@ export class NetworkBridge {
   // ── Dash-RPC: Client → Host ───────────────────────────────────────────────
 
   sendDash(dx: number, dy: number): void {
+    if (isHost()) {
+      this.dashHandler?.(myPlayer().id, dx, dy);
+      return;
+    }
+    if (this.getGameplayTransportMode() === 'fast') {
+      void this.gameplayTransport.sendCommand('dash', { dx, dy }).catch(() => undefined);
+      return;
+    }
     this.sendHostRpc('dash', { dx, dy });
   }
 
@@ -1715,7 +1832,9 @@ export class NetworkBridge {
       if (!isHost()) return;
       const dashHandler = this.dashHandler;
       if (!dashHandler) return undefined;
+      if (!isRecord(data)) return undefined;
       const { dx, dy } = data as { dx: number; dy: number };
+      if (!isFiniteNumber(dx) || !isFiniteNumber(dy)) return undefined;
       dashHandler(caller.id, dx, dy);
       return undefined;
     });
@@ -1724,6 +1843,14 @@ export class NetworkBridge {
   // ── Burrow-RPC: Client → Host ─────────────────────────────────────────────
 
   sendBurrowRequest(wantsBurrowed: boolean): void {
+    if (isHost()) {
+      this.burrowHandler?.(myPlayer().id, wantsBurrowed);
+      return;
+    }
+    if (this.getGameplayTransportMode() === 'fast') {
+      void this.gameplayTransport.sendCommand('burrow', { want: wantsBurrowed }).catch(() => undefined);
+      return;
+    }
     this.sendHostRpc('burrow', { want: wantsBurrowed });
   }
 
@@ -1733,7 +1860,9 @@ export class NetworkBridge {
       if (!isHost()) return;
       const burrowHandler = this.burrowHandler;
       if (!burrowHandler) return undefined;
+      if (!isRecord(data)) return undefined;
       const { want } = data as { want: boolean };
+      if (typeof want !== 'boolean') return undefined;
       burrowHandler(caller.id, want);
       return undefined;
     });
@@ -1742,11 +1871,11 @@ export class NetworkBridge {
   // ── Schockwellen-Effekt: Host → Alle ─────────────────────────────────────
 
   broadcastShockwaveEffect(x: number, y: number): void {
-    this.broadcastRpc('shockfx', { x, y });
+    this.broadcastGameplayEvent('shockfx', { x, y });
   }
 
   broadcastTrainBurrowSparks(x: number, y: number): void {
-    this.broadcastRpc('tbsparks', { x, y });
+    this.broadcastGameplayEvent('tbsparks', { x, y });
   }
 
   registerTrainBurrowSparksHandler(cb: (x: number, y: number) => void): void {
@@ -1775,11 +1904,11 @@ export class NetworkBridge {
 
   broadcastBfgLaserBatch(lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset): void {
     if (lines.length === 0) return;
-    this.broadcastRpc('bfl', { l: lines, c: color, v: visualPreset });
+    this.broadcastGameplayEvent('bfl', { l: lines, c: color, v: visualPreset });
   }
 
   broadcastMiniRocketCollectionEffect(x: number, y: number, color: number): void {
-    this.broadcastRpc('mrcfx', { x, y, c: color });
+    this.broadcastGameplayEvent('mrcfx', { x, y, c: color });
   }
 
   registerMiniRocketCollectionEffectHandler(handler: MiniRocketCollectionEffectHandler): void {
@@ -1794,7 +1923,7 @@ export class NetworkBridge {
   }
 
   broadcastMiniRocketDestructionEffect(x: number, y: number, color: number): void {
-    this.broadcastRpc('mrdfx', { x, y, c: color });
+    this.broadcastGameplayEvent('mrdfx', { x, y, c: color });
   }
 
   registerMiniRocketDestructionEffectHandler(handler: MiniRocketDestructionEffectHandler): void {
@@ -1822,7 +1951,7 @@ export class NetworkBridge {
   // ── Burrow-Visualisierung: Host → Alle ────────────────────────────────────
 
   broadcastBurrowVisual(playerId: string, phase: BurrowPhase): void {
-    this.broadcastRpc('bfx', { id: playerId, p: phase });
+    this.broadcastGameplayEvent('bfx', { id: playerId, p: phase });
   }
 
   registerBurrowVisualHandler(cb: (playerId: string, phase: BurrowPhase) => void): void {
@@ -2143,10 +2272,6 @@ export class NetworkBridge {
     return (getState(KEY_ROOM_QUALITY) as RoomQualitySnapshot | null | undefined) ?? null;
   }
 
-  async measureHostRoomLatency(sampleCount: number, timeoutMs: number): Promise<HostRoomQualityProbeResult> {
-    return await this.pingController.measureHostRoomLatency(sampleCount, timeoutMs);
-  }
-
   /**
    * Client-only: Sendet einen Ping-Request an den Host.
    * Für den Host kein-Op (bleibt bei Default-Ping 0 ms).
@@ -2213,7 +2338,7 @@ export class NetworkBridge {
 
   /** Host-only: Sendet ein Kill-Ereignis an alle Clients (inkl. Host selbst). */
   broadcastKillEvent(event: KillEvent): void {
-    this.broadcastRpc('kev', event);
+    this.broadcastGameplayEvent('kev', event);
   }
 
   /** Registriert einen Handler für eingehende Kill-Ereignisse (alle Clients). */
@@ -2225,6 +2350,52 @@ export class NetworkBridge {
       killEventHandler(data as KillEvent);
       return undefined;
     });
+  }
+
+  /** Verarbeitet eingehende Fast-Path-Nachrichten und ausstehende Fallbacks. Pro Frame aufrufen. */
+  updateGameplayTransport(): void {
+    this.gameplayTransport.update();
+    this.pingController.updateFastPath();
+    if (NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS && Date.now() >= this.nextGameplayTransportMetricsAtMs) {
+      this.nextGameplayTransportMetricsAtMs = Date.now() + NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS;
+      const metrics = this.gameplayTransport.getMetrics();
+      if (metrics.commandFallbacks > 0 || metrics.eventFallbacks > 0 || metrics.commandTimeouts > 0) {
+        console.debug('[GameplayTransport]', this.getGameplayTransportMode(), metrics);
+      }
+    }
+  }
+
+  /** Veröffentlicht die im aktuellen Frame gebündelten Host-Ereignisse. */
+  flushGameplayTransport(): void {
+    this.gameplayTransport.flush();
+  }
+
+  resetGameplayTransport(): void {
+    this.gameplayTransport.reset();
+  }
+
+  getGameplayTransportMetrics() {
+    return this.gameplayTransport.getMetrics();
+  }
+
+  private executeGameplayCommand(kind: GameplayCommandKind, payload: unknown, caller: PlayerState): Promise<unknown> | unknown {
+    const handler = this.hostRpcHandlers.get(kind);
+    if (!handler) return undefined;
+    return handler(payload, caller);
+  }
+
+  private broadcastGameplayEvent(type: string, payload: unknown): void {
+    if (this.getGameplayTransportMode() === 'fast') {
+      this.gameplayTransport.emitEvent(type, payload);
+      return;
+    }
+    this.broadcastRpc(type, payload);
+  }
+
+  private dispatchGameplayEvent(type: string, payload: unknown): Promise<unknown> | unknown {
+    const handler = this.allRpcHandlers.get(type);
+    if (!handler) return undefined;
+    return handler(payload);
   }
 
   private sendHostRpc(type: string, payload: unknown): void {

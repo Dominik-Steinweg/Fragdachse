@@ -70,7 +70,7 @@ const TEAM_SECTION_GAP = 10;
 const READY_BTN_X = GAME_WIDTH / 2;
 const COPY_BTN_X = GAME_WIDTH / 2 - (ACTION_BTN_W + ACTION_BTN_GAP);
 const RETRY_BTN_X = GAME_WIDTH / 2;
-const AUTO_BTN_X = GAME_WIDTH / 2 + (ACTION_BTN_W + ACTION_BTN_GAP);
+const TRANSPORT_BTN_X = GAME_WIDTH / 2 + (ACTION_BTN_W + ACTION_BTN_GAP);
 
 function btnTexKey(color: number, w: number, h: number): string {
   return `_lobby_btn_${color.toString(16)}_${Math.round(w)}x${Math.round(h)}`;
@@ -105,8 +105,8 @@ export class LobbyOverlay {
   private copyBtnLabel!:  Phaser.GameObjects.Text;
   private retryBtn!:      Phaser.GameObjects.Image;
   private retryBtnLabel!: Phaser.GameObjects.Text;
-  private autoBtn!:       Phaser.GameObjects.Image;
-  private autoBtnLabel!:  Phaser.GameObjects.Text;
+  private transportBtn!:       Phaser.GameObjects.Image;
+  private transportBtnLabel!:  Phaser.GameObjects.Text;
   private coopProgressContainer: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
@@ -126,7 +126,7 @@ export class LobbyOverlay {
     private onReadyToggled: () => void,
     private onCopyRoomLink: () => void,
     private onRetryRoom: () => void,
-    private onStartAutomaticRoomSearch: () => void,
+    private onToggleGameplayTransport: () => void,
     private onOpenCoopDefenseUpgrades: () => void,
   ) {}
 
@@ -237,20 +237,20 @@ export class LobbyOverlay {
     objects.push(this.retryBtnLabel);
     this.attachHoverEffect(this.retryBtn, this.retryBtnLabel);
 
-    this.autoBtn = this.scene.add.image(
-      AUTO_BTN_X, ACTION_BTN_Y,
+    this.transportBtn = this.scene.add.image(
+      TRANSPORT_BTN_X, ACTION_BTN_Y,
       ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_AUTO_COLOR, ACTION_BTN_W, ACTION_BTN_H), ACTION_BTN_W, ACTION_BTN_H, BTN_AUTO_COLOR),
     )
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => { if (!this.btnLocked) this.onStartAutomaticRoomSearch(); })
+      .on('pointerdown', () => { if (!this.btnLocked) this.onToggleGameplayTransport(); })
       .setScrollFactor(0);
-    objects.push(this.autoBtn);
+    objects.push(this.transportBtn);
 
-    this.autoBtnLabel = this.scene.add.text(AUTO_BTN_X, ACTION_BTN_Y, 'AUTO-SUCHE', {
+    this.transportBtnLabel = this.scene.add.text(TRANSPORT_BTN_X, ACTION_BTN_Y, 'NETZ: SCHNELL', {
       fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
-    objects.push(this.autoBtnLabel);
-    this.attachHoverEffect(this.autoBtn, this.autoBtnLabel);
+    objects.push(this.transportBtnLabel);
+    this.attachHoverEffect(this.transportBtn, this.transportBtnLabel);
 
     const coopProgressBg = this.scene.add.image(
       READY_BTN_X, COOP_PROGRESS_PANEL_Y,
@@ -633,11 +633,10 @@ export class LobbyOverlay {
 
   private updateRoomActionButtons(): void {
     const canShowActions = this.localIsHost;
-    const autoSearchActive = this.roomQuality?.autoSearchActive === true;
-    const readyDisabled = this.btnLocked || (canShowActions && autoSearchActive);
-    const retryDisabled = this.btnLocked || autoSearchActive || this.roomQuality?.status === 'retrying';
-    const copyDisabled = this.btnLocked || autoSearchActive;
-    const autoDisabled = this.btnLocked;
+    const readyDisabled = this.btnLocked;
+    const retryDisabled = this.btnLocked;
+    const copyDisabled = this.btnLocked;
+    const transportDisabled = this.btnLocked;
 
     this.readyBtn.setAlpha(!readyDisabled ? 1 : 0.4);
     if (!readyDisabled) this.readyBtn.setInteractive({ useHandCursor: true });
@@ -648,9 +647,9 @@ export class LobbyOverlay {
     this.copyBtnLabel.setVisible(canShowActions);
     this.retryBtn.setVisible(canShowActions).setAlpha(canShowActions && !retryDisabled ? 1 : 0.4);
     this.retryBtnLabel.setVisible(canShowActions);
-    this.autoBtn.setVisible(canShowActions).setAlpha(canShowActions && !autoDisabled ? 1 : 0.4);
-    this.autoBtnLabel.setVisible(canShowActions);
-    this.autoBtnLabel.setText(this.getAutoButtonLabel());
+    this.transportBtn.setVisible(canShowActions).setAlpha(canShowActions && !transportDisabled ? 1 : 0.4);
+    this.transportBtnLabel.setVisible(canShowActions);
+    this.transportBtnLabel.setText(this.bridge.getGameplayTransportMode() === 'fast' ? 'NETZ: SCHNELL' : 'NETZ: RPC');
 
     if (canShowActions && !copyDisabled) this.copyBtn.setInteractive({ useHandCursor: true });
     else this.copyBtn.disableInteractive();
@@ -658,35 +657,19 @@ export class LobbyOverlay {
     if (canShowActions && !retryDisabled) this.retryBtn.setInteractive({ useHandCursor: true });
     else this.retryBtn.disableInteractive();
 
-    if (canShowActions && !autoDisabled) this.autoBtn.setInteractive({ useHandCursor: true });
-    else this.autoBtn.disableInteractive();
+    if (canShowActions && !transportDisabled) this.transportBtn.setInteractive({ useHandCursor: true });
+    else this.transportBtn.disableInteractive();
   }
 
   private formatRoomQualityText(): string {
     if (!this.roomQuality) return 'Ping-Check wird vorbereitet…';
 
-    if (this.roomQuality.autoSearchActive) {
-      const attemptText = this.getAutoSearchAttemptText();
-      if (this.roomQuality.status === 'sampling' || this.roomQuality.status === 'waiting') {
-        return `Auto-Suche ${attemptText}: Raum wird geprueft. Klick auf STOPP beendet die Suche.`;
-      }
-      if (this.roomQuality.status === 'retrying') {
-        return `Auto-Suche ${attemptText}: Raum ungeeignet, neuer Raum folgt. Klick auf STOPP beendet die Suche.`;
-      }
-    }
-
-    if (this.roomQuality.autoSearchExhausted) {
-      return `Auto-Suche beendet: Kein guter Raum nach ${this.roomQuality.autoSearchMaxAttempts} Versuchen.`;
-    }
-
     if (this.roomQuality.status === 'sampling') {
-      return this.roomQuality.source === 'host-proxy'
-        ? 'Host-Probe prueft die Raumqualitaet…'
-        : `Raumtest sammelt Ping-Daten (${this.roomQuality.minSamplesCollected}/${this.roomQuality.requiredSamples}).`;
+      return `Raumtest sammelt ${this.roomQuality.source === 'fast-ping' ? 'Schnellkanal' : 'RPC'}-Ping-Daten (${this.roomQuality.minSamplesCollected}/${this.roomQuality.requiredSamples}).`;
     }
 
     if (this.roomQuality.status === 'waiting') {
-      return 'Host-Probe ohne Ergebnis. Link kann trotzdem geteilt werden.';
+      return 'Pingmessung startet, sobald ein Mitspieler verbunden ist.';
     }
 
     if (this.roomQuality.status === 'good' && this.roomQuality.worstPingMs !== null) {
@@ -698,29 +681,12 @@ export class LobbyOverlay {
       return `Raumtest zu hoch: ${this.roomQuality.worstPingMs}ms bei Ziel ${this.roomQuality.thresholdMs}ms. Neuer Raum empfohlen.`;
     }
 
-    if (this.roomQuality.status === 'retrying' && this.roomQuality.worstPingMs !== null) {
-      return `Raumtest zu hoch: ${this.roomQuality.worstPingMs}ms. Neuer Raum folgt.`;
-    }
-
     return this.roomQuality.summary;
-  }
-
-  private getAutoButtonLabel(): string {
-    if (!this.roomQuality?.autoSearchActive) return 'AUTO-SUCHE';
-    return `STOPP ${this.getAutoSearchAttemptText()}`;
-  }
-
-  private getAutoSearchAttemptText(): string {
-    if (!this.roomQuality) return '1/1';
-    const currentAttempt = Math.max(1, this.roomQuality.autoSearchAttempt || 1);
-    const maxAttempts = Math.max(currentAttempt, this.roomQuality.autoSearchMaxAttempts || currentAttempt);
-    return `${currentAttempt}/${maxAttempts}`;
   }
 
   private getRoomQualityColor(status: RoomQualitySnapshot['status']): string {
     if (status === 'good') return toCssColor(COLORS.GREEN_2);
     if (status === 'bad') return toCssColor(COLORS.RED_2);
-    if (status === 'retrying') return toCssColor(COLORS.GOLD_1);
     return TEXT_COLOR;
   }
 }

@@ -1,4 +1,4 @@
-import type { GameMode, GamePhase, RoomQualityRetryMode, RoomQualityStartPolicy, TeamId } from './types';
+import type { GameMode, GamePhase, GameplayTransportMode, RoomQualityStartPolicy, TeamId } from './types';
 import { CAPTURE_THE_BEER_MODE, COOP_DEFENSE_MODE } from './gameModes';
 
 // ---- Display ----
@@ -668,13 +668,12 @@ export const DEBUG_RUNTIME_PERF_METRICS_WINDOW_MS = 2000;
 export const ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS = 60;
 export const ROOM_QUALITY_REQUIRED_SAMPLES = 3;
 export const ROOM_QUALITY_SAMPLE_INTERVAL_MS = 500;
-export const ROOM_QUALITY_MAX_AUTO_RETRIES = 3;
-export const ROOM_QUALITY_AUTO_RETRY_DELAY_MS = 2500;
-export const ROOM_QUALITY_HOST_PROBE_SAMPLE_COUNT = 3;
-/** Obergrenze fuer die gesamte parallel laufende Host-Probe. */
-export const ROOM_QUALITY_HOST_PROBE_TIMEOUT_MS = 800;
-export const ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS = 5;
-export const ROOM_QUALITY_RETRY_MODE: RoomQualityRetryMode = 'suggest';
 export const ROOM_QUALITY_START_POLICY: RoomQualityStartPolicy = 'warn';
+
+/** Neuer Raumstandard; der Host kann den Modus in der Lobby umschalten. */
+export const GAMEPLAY_TRANSPORT_DEFAULT: GameplayTransportMode = 'fast';
+/** Aggregierte Diagnosewerte fuer Fast-Path, Wiederholungen und RPC-Fallbacks. */
+export const NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS = true;
+export const NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS = 2000;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.

@@ -423,28 +423,23 @@ export type CaptureTheBeerFxEvent =
   | CaptureTheBeerScoreFxEvent
   | CaptureTheBeerResetFxEvent;
 
-export type RoomQualityStatus = 'waiting' | 'sampling' | 'good' | 'bad' | 'retrying';
-
-export type RoomQualityRetryMode = 'suggest' | 'auto';
+export type RoomQualityStatus = 'waiting' | 'sampling' | 'good' | 'bad';
 
 export type RoomQualityStartPolicy = 'warn' | 'block';
+
+/** Vom Host gewaehlter Transport fuer zeitkritische Arena-Aktionen. */
+export type GameplayTransportMode = 'fast' | 'rpc';
 
 export interface RoomQualitySnapshot {
   status: RoomQualityStatus;
   summary: string;
-  source: 'host-proxy' | 'team-ping';
-  autoSearchActive: boolean;
-  autoSearchAttempt: number;
-  autoSearchMaxAttempts: number;
-  autoSearchExhausted: boolean;
+  source: 'fast-ping' | 'rpc-ping';
   thresholdMs: number;
   worstPingMs: number | null;
   measuredPlayers: number;
   totalPlayers: number;
   minSamplesCollected: number;
   requiredSamples: number;
-  retryCount: number;
-  retryMode: RoomQualityRetryMode;
   startBlocked: boolean;
 }
 

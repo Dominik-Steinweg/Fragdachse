@@ -160,6 +160,7 @@ export class ArenaLifecycleCoordinator {
 
     const prev     = this.lastPhase;
     this.lastPhase = current;
+    bridge.resetGameplayTransport();
     if (prev === 'LOBBY' && current === 'ARENA') {
       this.arenaEnteredAt = Date.now();
       this.onTransitionToArena();
