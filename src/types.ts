@@ -136,7 +136,7 @@ export interface SyncedDecoy {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'gauss' | 'negev';
@@ -189,6 +189,28 @@ export interface BurnOnHitConfig {
   readonly damagePerTick: number;   // HP-Schaden pro Tick (0 = deaktiviert)
 }
 
+/** Herkunft eines Brand-Stacks. Direkte Flammenwerfer-Quellen duerfen Todeseffekte ausloesen. */
+export type BurnOrigin = 'generic' | 'flamethrower_direct' | 'ground_fire' | 'fire_ring';
+
+export interface GroundFireCellEffect {
+  readonly durationMs: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerTick: number;
+  readonly weaponName: string;
+}
+
+export interface FireChunkBurstConfig extends GroundFireCellEffect {
+  readonly count: number;
+  readonly searchRadius: number;
+  readonly flightMs: number;
+  readonly igniteCenter: boolean;
+}
+
+export interface FireChunkTarget {
+  x: number;
+  y: number;
+}
+
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
   readonly radius: number;
@@ -204,7 +226,9 @@ export interface ProjectileExplosionConfig {
   readonly color?: number;
   readonly visualStyle?: ExplosionVisualStyle;
   readonly burnOnHit?: BurnOnHitConfig;  // setzt Ziele im gesamten Radius in Brand
+  readonly burnOrigin?: BurnOrigin;
   readonly groundFire?: FireGrenadeEffect; // persistente Feuerfläche am Einschlagsort
+  readonly fireChunkBurst?: FireChunkBurstConfig;
   readonly blackHoleDurationMs?: number;
   readonly blackHolePullStrength?: number;
 }
@@ -577,6 +601,7 @@ export interface ProjectileSpawnConfig {
   flamePiercing?:     boolean;   // true = Projektil zerstört sich nicht bei Treffern (piercing)
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;
+  fireTrail?: GroundFireCellEffect;
 
   // Laubblaeser (optional)
   leafBlowerMinKnockback?: number;
@@ -862,6 +887,8 @@ export interface TrackedProjectile {
   flamePierceHitIds?: Set<string>; // Pierce: bereits getroffene Ziel-IDs (kein Mehrfachtreffer)
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;
+  fireTrail?: GroundFireCellEffect;
+  lastFireTrailCellKey?: string;
 
   // Laubblaeser (optional)
   leafBlowerMinKnockback?: number;

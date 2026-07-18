@@ -10,6 +10,9 @@ export interface ArenaRuntimeSample {
   primaryStepMs: number;
   visualStepMs: number;
   shadowStepMs: number;
+  fireSimulationMs: number;
+  fireCreationMs: number;
+  fireVisualMs: number;
   enemyCount: number;
   projectileCount: number;
   playerCount: number;
@@ -31,6 +34,11 @@ interface ArenaRuntimeMetricsWindow {
   visualStepPeakMs: number;
   shadowStepSumMs: number;
   shadowStepPeakMs: number;
+  fireSimulationSumMs: number;
+  fireSimulationPeakMs: number;
+  fireCreationPeakMs: number;
+  fireVisualSumMs: number;
+  fireVisualPeakMs: number;
   enemyCountSum: number;
   enemyCountPeak: number;
   projectileCountSum: number;
@@ -64,6 +72,11 @@ export class ArenaRuntimeProfiler {
     window.visualStepPeakMs = Math.max(window.visualStepPeakMs, sample.visualStepMs);
     window.shadowStepSumMs += sample.shadowStepMs;
     window.shadowStepPeakMs = Math.max(window.shadowStepPeakMs, sample.shadowStepMs);
+    window.fireSimulationSumMs += sample.fireSimulationMs;
+    window.fireSimulationPeakMs = Math.max(window.fireSimulationPeakMs, sample.fireSimulationMs);
+    window.fireCreationPeakMs = Math.max(window.fireCreationPeakMs, sample.fireCreationMs);
+    window.fireVisualSumMs += sample.fireVisualMs;
+    window.fireVisualPeakMs = Math.max(window.fireVisualPeakMs, sample.fireVisualMs);
     window.enemyCountSum += sample.enemyCount;
     window.enemyCountPeak = Math.max(window.enemyCountPeak, sample.enemyCount);
     window.projectileCountSum += sample.projectileCount;
@@ -84,6 +97,8 @@ export class ArenaRuntimeProfiler {
     const avgPrimaryMs = window.primaryStepSumMs / window.sampleCount;
     const avgVisualMs = window.visualStepSumMs / window.sampleCount;
     const avgShadowMs = window.shadowStepSumMs / window.sampleCount;
+    const avgFireSimulationMs = window.fireSimulationSumMs / window.sampleCount;
+    const avgFireVisualMs = window.fireVisualSumMs / window.sampleCount;
     const avgEnemies = window.enemyCountSum / window.sampleCount;
     const avgProjectiles = window.projectileCountSum / window.sampleCount;
     const avgPlayers = window.playerCountSum / window.sampleCount;
@@ -96,6 +111,9 @@ export class ArenaRuntimeProfiler {
       + `step=${avgPrimaryMs.toFixed(2)}/${window.primaryStepPeakMs.toFixed(2)}ms `
       + `visuals=${avgVisualMs.toFixed(2)}/${window.visualStepPeakMs.toFixed(2)}ms `
       + `shadows=${avgShadowMs.toFixed(2)}/${window.shadowStepPeakMs.toFixed(2)}ms `
+      + `fireSim=${avgFireSimulationMs.toFixed(2)}/${window.fireSimulationPeakMs.toFixed(2)}ms `
+      + `fireCreatePeak=${window.fireCreationPeakMs.toFixed(2)}ms `
+      + `fireVisual=${avgFireVisualMs.toFixed(2)}/${window.fireVisualPeakMs.toFixed(2)}ms `
       + `delta=${avgDeltaMs.toFixed(2)}/${window.deltaPeakMs.toFixed(2)}ms `
       + `enemies=${avgEnemies.toFixed(1)}/${window.enemyCountPeak} `
       + `projectiles=${avgProjectiles.toFixed(1)}/${window.projectileCountPeak} `
@@ -133,6 +151,11 @@ export class ArenaRuntimeProfiler {
       visualStepPeakMs: 0,
       shadowStepSumMs: 0,
       shadowStepPeakMs: 0,
+      fireSimulationSumMs: 0,
+      fireSimulationPeakMs: 0,
+      fireCreationPeakMs: 0,
+      fireVisualSumMs: 0,
+      fireVisualPeakMs: 0,
       enemyCountSum: 0,
       enemyCountPeak: 0,
       projectileCountSum: 0,

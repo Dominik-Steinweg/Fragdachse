@@ -42,6 +42,11 @@ export interface GroundFireProjectileIgniter {
   burn: BurnOnHitConfig;
 }
 
+export interface GroundFireOwner {
+  sourceId: string;
+  ownerId: string;
+}
+
 export interface GroundFireCellOptions {
   /** Stabiler logischer Schluessel; pro Rasterzelle wird daraus eine auffrischbare Quelle. */
   sourceKey: string;
@@ -80,6 +85,8 @@ interface ActiveGroundCell {
   gridX: number;
   gridY: number;
   sourceKeys: Set<string>;
+  expiresAt: number;
+  intensity: number;
 }
 
 export interface FireSystemUpdate {
@@ -113,6 +120,10 @@ export class FireSystem {
   private lastDamageTick = -1;
   private isCellBlocked: GroundFireCellBlockedResolver | null = null;
   private hasLineOfSight: GroundFireLineOfSightResolver | null = null;
+  private groundSnapshotDirty = true;
+  private cachedGroundSnapshot: SyncedBurningGroundSnapshot = { cells: [] };
+  private lastSimulationMs = 0;
+  private lastCreationMs = 0;
 
   constructor(private readonly scene: Phaser.Scene) {
     void this.scene;
@@ -132,6 +143,7 @@ export class FireSystem {
     const radius = Math.max(0, config.radius);
     if (durationMs <= 0 || radius <= 0) return;
 
+    const creationStartedAt = performance.now();
     const now = Date.now();
     const id = this.nextSourceId++;
     const key = `zone:${id}`;
@@ -158,6 +170,7 @@ export class FireSystem {
     this.sources.set(key, source);
     this.rasterizeCircle(source);
     if (source.cells.size === 0) this.sources.delete(key);
+    this.lastCreationMs = performance.now() - creationStartedAt;
   }
 
   /**
@@ -205,10 +218,19 @@ export class FireSystem {
       source.burn = options.burn ? { ...options.burn } : undefined;
       source.igniteProjectiles = options.igniteProjectiles === true;
       source.weaponName = options.weaponName ?? source.weaponName;
+      this.refreshCellAggregate(gridX, gridY);
     }
   }
 
+  canPlaceGroundCell(x: number, y: number): boolean {
+    const gridX = Math.floor(x / GROUND_FIRE_CELL_SIZE);
+    const gridY = Math.floor(y / GROUND_FIRE_CELL_SIZE);
+    const bounds = this.cellBounds(gridX, gridY);
+    return isPointInsideArena(bounds.centerX, bounds.centerY) && !this.isCellBlocked?.(bounds);
+  }
+
   hostUpdate(now: number): FireSystemUpdate {
+    const simulationStartedAt = performance.now();
     this.removeExpiredSources(now);
     const tick = Math.floor(now / BURN_TICK_INTERVAL_MS);
     const damageTick = tick !== this.lastDamageTick;
@@ -240,7 +262,15 @@ export class FireSystem {
         }))
       : [];
 
-    return { synced, ground: this.getGroundSnapshot(), damageEvents, damageTick };
+    const result = { synced, ground: this.getGroundSnapshot(), damageEvents, damageTick };
+    this.lastSimulationMs = performance.now() - simulationStartedAt;
+    return result;
+  }
+
+  takePerformanceMetrics(): { simulationMs: number; creationMs: number } {
+    const metrics = { simulationMs: this.lastSimulationMs, creationMs: this.lastCreationMs };
+    this.lastCreationMs = 0;
+    return metrics;
   }
 
   /** Liefert jede beruehrte Quelle genau einmal, auch wenn mehrere ihrer Zellen getroffen werden. */
@@ -291,6 +321,28 @@ export class FireSystem {
     return [...igniters.values()];
   }
 
+  /** Liefert alle aktiven Feuerbesitzer entlang eines Segmentes, unabhaengig vom Quelltyp. */
+  collectGroundFireOwnersAlongSegment(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    now = Date.now(),
+  ): GroundFireOwner[] {
+    const owners = new Map<string, GroundFireOwner>();
+    this.visitGridSegment(fromX, fromY, toX, toY, (gridX, gridY) => {
+      const cell = this.cells.get(this.cellKey(gridX, gridY));
+      if (!cell) return;
+      for (const sourceKey of cell.sourceKeys) {
+        const source = this.sources.get(sourceKey);
+        if (!source || source.expiresAt <= now) continue;
+        const key = `${source.ownerId}\u001f${source.key}`;
+        if (!owners.has(key)) owners.set(key, { sourceId: source.key, ownerId: source.ownerId });
+      }
+    });
+    return [...owners.values()];
+  }
+
   /** Alte Kreisvisuals sind absichtlich deaktiviert; Clients rendern das gemeinsame Raster. */
   syncVisuals(_zones: SyncedFireZone[]): void {}
 
@@ -300,6 +352,10 @@ export class FireSystem {
     this.nextSourceId = 1;
     this.nextCellId = 1;
     this.lastDamageTick = -1;
+    this.groundSnapshotDirty = true;
+    this.cachedGroundSnapshot = { cells: [] };
+    this.lastSimulationMs = 0;
+    this.lastCreationMs = 0;
   }
 
   private rasterizeCircle(source: ActiveGroundSource): void {
@@ -331,11 +387,12 @@ export class FireSystem {
     const key = this.cellKey(gridX, gridY);
     let cell = this.cells.get(key);
     if (!cell) {
-      cell = { id: this.nextCellId++, key, gridX, gridY, sourceKeys: new Set() };
+      cell = { id: this.nextCellId++, key, gridX, gridY, sourceKeys: new Set(), expiresAt: 0, intensity: 0 };
       this.cells.set(key, cell);
     }
     cell.sourceKeys.add(source.key);
     source.cells.add(key);
+    this.refreshCellAggregate(gridX, gridY);
   }
 
   private removeExpiredSources(now: number): void {
@@ -345,29 +402,48 @@ export class FireSystem {
         const cell = this.cells.get(cellKey);
         if (!cell) continue;
         cell.sourceKeys.delete(sourceKey);
-        if (cell.sourceKeys.size === 0) this.cells.delete(cellKey);
+        if (cell.sourceKeys.size === 0) {
+          this.cells.delete(cellKey);
+          this.groundSnapshotDirty = true;
+        } else {
+          this.refreshCellAggregate(cell.gridX, cell.gridY);
+        }
       }
       this.sources.delete(sourceKey);
     }
   }
 
   private getGroundSnapshot(): SyncedBurningGroundSnapshot {
-    return {
+    if (!this.groundSnapshotDirty) return this.cachedGroundSnapshot;
+    this.cachedGroundSnapshot = {
       cells: [...this.cells.values()]
         .sort((left, right) => left.id - right.id)
-        .map(cell => {
-          const sources = [...cell.sourceKeys]
-            .map(key => this.sources.get(key))
-            .filter((source): source is ActiveGroundSource => source !== undefined);
-          return {
-            id: cell.id,
-            gridX: cell.gridX,
-            gridY: cell.gridY,
-            expiresAt: Math.max(...sources.map(source => source.expiresAt)),
-            intensity: Math.max(1, sources.length),
-          };
-        }),
+        .map(cell => ({
+          id: cell.id,
+          gridX: cell.gridX,
+          gridY: cell.gridY,
+          expiresAt: cell.expiresAt,
+          intensity: Math.max(1, cell.intensity),
+        })),
     };
+    this.groundSnapshotDirty = false;
+    return this.cachedGroundSnapshot;
+  }
+
+  private refreshCellAggregate(gridX: number, gridY: number): void {
+    const cell = this.cells.get(this.cellKey(gridX, gridY));
+    if (!cell) return;
+    let expiresAt = 0;
+    let intensity = 0;
+    for (const sourceKey of cell.sourceKeys) {
+      const source = this.sources.get(sourceKey);
+      if (!source) continue;
+      expiresAt = Math.max(expiresAt, source.expiresAt);
+      intensity += 1;
+    }
+    cell.expiresAt = expiresAt;
+    cell.intensity = intensity;
+    this.groundSnapshotDirty = true;
   }
 
   private visitTouchingCells(

@@ -8,7 +8,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { BurnOnHitConfig, ChainLightningConfig, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   type GeometryHit,
   findNearestRectangleHit as geomNearestRectangleHit,
@@ -96,12 +96,14 @@ interface BurnSourceState {
   sourceId: string;
   stacks: BurnStackBucket[];
   weaponName: string;
+  origin: BurnOrigin;
 }
 
 export interface ActiveBurnSource {
   attackerId: string;
   sourceId: string;
   weaponName: string;
+  origin: BurnOrigin;
   stackCount: number;
   damagePerTick: number;
   tickIntervalMs: number;
@@ -374,6 +376,7 @@ export class CombatSystem {
         attackerId: state.attackerId,
         sourceId: state.sourceId,
         weaponName: state.weaponName,
+        origin: state.origin,
         stackCount,
         damagePerTick: totalDamagePerTick / stackCount,
         tickIntervalMs: BURN_TICK_INTERVAL_MS,
@@ -471,6 +474,7 @@ export class CombatSystem {
     damagePerTick: number,
     sourceId: string,
     weaponName: string,
+    origin: BurnOrigin = 'generic',
   ): void {
     if (!this.isAlive(targetId)) return;
     if (!this.canDamageTarget(attackerId, targetId)) return;
@@ -493,6 +497,7 @@ export class CombatSystem {
         sourceId,
         stacks: [],
         weaponName,
+        origin,
       };
       targetState.set(sourceKey, sourceState);
     }
@@ -516,6 +521,7 @@ export class CombatSystem {
     attackerId: string,
     burn:       BurnOnHitConfig | undefined,
     weaponName: string,
+    origin: BurnOrigin = 'generic',
   ): void {
     if (!burn) return;
     this.applyBurnHit(
@@ -525,6 +531,7 @@ export class CombatSystem {
       burn.damagePerTick,
       `weapon:${weaponName}`,
       weaponName,
+      origin,
     );
   }
 
@@ -547,6 +554,7 @@ export class CombatSystem {
       proj.burnDamagePerTick ?? 0,
       `weapon:${proj.weaponName}`,
       proj.weaponName,
+      proj.isFlame ? 'flamethrower_direct' : 'generic',
     );
     const supplemental = proj.supplementalBurnOnHit;
     if (supplemental) {
@@ -735,11 +743,11 @@ export class CombatSystem {
       if (roundedDamage <= 0) continue;
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
       void sourceSlot;
+      if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, weaponName, effect.burnOrigin);
       this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
       });
       damagedTargetKeys.push(`players:${player.id}`);
-      if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, weaponName);
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
@@ -748,11 +756,11 @@ export class CombatSystem {
 
       const roundedDamage = Math.round(computeProjectileExplosionDamage(dist, effect));
       if (roundedDamage <= 0) continue;
+      this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, weaponName, effect.burnOrigin);
       this.applyDamage(enemy.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
       });
       damagedTargetKeys.push(`enemies:${enemy.id}`);
-      this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, weaponName);
     }
     return damagedTargetKeys;
   }
@@ -939,6 +947,7 @@ export class CombatSystem {
               proj.burnDamagePerTick ?? 0,
               `weapon:${proj.weaponName}`,
               proj.weaponName,
+              'flamethrower_direct',
             );
             this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
           }
@@ -969,8 +978,8 @@ export class CombatSystem {
         if (proj.penetrationHitIds) {
           if (proj.penetrationHitIds.has(enemyKey)) continue;
           proj.penetrationHitIds.add(enemyKey);
-          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
           this.applyProjectileBurn(enemy.id, proj);
+          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
           if ((proj.penetrationRemaining ?? 0) > 0) {
             proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
             proj.damage *= proj.penetrationDamageRetention ?? 1;
@@ -1013,6 +1022,7 @@ export class CombatSystem {
             proj.burnDamagePerTick ?? 0,
             `weapon:${proj.weaponName}`,
             proj.weaponName,
+            'flamethrower_direct',
           );
           this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
           continue;
@@ -2450,8 +2460,8 @@ export class CombatSystem {
       this.projectileManager.destroyProjectile(projectileId);
     }
     if (allowDamage) {
-      this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
       this.applyProjectileBurn(playerId, projectile);
+      this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
       if (leafBlowerImpulse && this.isAlive(playerId)) {
         this.onPlayerImpulse?.(playerId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
       }
@@ -2498,8 +2508,8 @@ export class CombatSystem {
     if ((projectile?.shotgunSlowFraction ?? 0) > 0 && (projectile?.shotgunSlowDurationMs ?? 0) > 0) {
       this.applyEnemySlow(enemyId, projectile?.shotgunSlowFraction ?? 0, projectile?.shotgunSlowDurationMs ?? 0);
     }
-    this.applyDamage(enemyId, damage, false, shooterId, weaponName, visualContext);
     this.applyProjectileBurn(enemyId, projectile);
+    this.applyDamage(enemyId, damage, false, shooterId, weaponName, visualContext);
     if (leafBlowerImpulse && this.enemyManager?.hasEnemy(enemyId)) {
       this.onEnemyImpulse?.(enemyId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
     }

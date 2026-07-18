@@ -58,6 +58,7 @@ export class RpcCoordinator {
     this.registerCaptureTheBeerFxHandler();
     this.registerExplosionEffectHandler();
     this.registerSlimeBloomEffectHandler();
+    this.registerFireChunkEffectHandler();
     this.registerBlackHoleEffectHandler();
     this.registerMiniRocketCollectionEffectHandler();
     this.registerMiniRocketDestructionEffectHandler();
@@ -133,6 +134,12 @@ export class RpcCoordinator {
   private registerSlimeBloomEffectHandler(): void {
     bridge.registerSlimeBloomEffectHandler((x, y, targets) => {
       this.renderers.slimeTrail.playBloomBurst(x, y, targets);
+    });
+  }
+
+  private registerFireChunkEffectHandler(): void {
+    bridge.registerFireChunkEffectHandler((x, y, targets, landsAt) => {
+      this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets, landsAt, bridge.getSynchronizedNow());
     });
   }
 

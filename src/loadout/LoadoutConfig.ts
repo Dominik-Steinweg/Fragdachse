@@ -54,6 +54,21 @@ export interface FlamethrowerWeaponFireConfig {
     readonly thickness: number;
     readonly igniteProjectiles: number;
   };
+  readonly fireball?: {
+    readonly enabled: number;
+    readonly projectileSpeed: number;
+    readonly projectileSize: number;
+    readonly explosionRadius: number;
+    readonly explosionMaxDamage: number;
+    readonly explosionMinDamage: number;
+    readonly explosionKnockback: number;
+    readonly selfDamageMult: number;
+    readonly trailEnabled: number;
+    readonly chunkCount: number;
+    readonly chunkSearchRadius: number;
+    readonly chunkFlightMs: number;
+    readonly groundDurationMs: number;
+  };
 }
 
 export interface LeafBlowerWeaponFireConfig {
@@ -635,6 +650,36 @@ export function getAvailableUltimateConfigs(mode: GameMode): UltimateConfig[] {
 
 // ── Item-Registrierung ────────────────────────────────────────────────────────
 
+function createEnemyBiteConfig(id: string, displayName: string, damage: number): WeaponConfig {
+  return {
+    id,
+    displayName,
+    cooldown: 350,
+    damage,
+    range: 50,
+    fire: {
+      type: 'melee',
+      hitArcDegrees: 80,
+      visualPreset: 'bite' satisfies MeleeVisualPreset,
+    },
+    allowedSlots: [],
+    adrenalinCost: 0,
+    adrenalinGain: 0,
+    spreadStanding: 0,
+    spreadMoving: 0,
+    spreadPerShot: 0,
+    maxDynamicSpread: 0,
+    spreadRecoveryDelay: 400,
+    spreadRecoveryRate: 5,
+    spreadRecoverySpeed: 100,
+    trainDamageMult: 1.5,
+    shotAudio: {
+      successKey: 'shot_bite',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig;
+}
+
 export const WEAPON_CONFIGS = {
   /**
    * "WEAPON1" - Linke Maustaste
@@ -759,6 +804,17 @@ export const WEAPON_CONFIGS = {
       failureKey: 'shot_dry_trigger',
     },    
   } as WeaponConfig,
+
+  // Nicht-Boss-Gegner nutzen eigene, nicht durch Spieler-Upgrades beeinflusste
+  // Bisse. Schaden: lineare XP-Einordnung zwischen rund 10% (XP 1) und 50% (XP 50)
+  // des urspruenglichen Dachsbisses mit 50 Schaden, auf ganze Trefferwerte gerundet.
+  ZOMBIE_BADGER_BITE: createEnemyBiteConfig('ZOMBIE_BADGER_BITE', 'Zombie-Dachsbiss', 5),
+  DEMON_BADGER_BITE: createEnemyBiteConfig('DEMON_BADGER_BITE', 'Daemonen-Dachsbiss', 5),
+  RABID_BADGER_BITE: createEnemyBiteConfig('RABID_BADGER_BITE', 'Tollwut-Dachsbiss', 6),
+  SPORE_WARDEN_BITE: createEnemyBiteConfig('SPORE_WARDEN_BITE', 'Sporenpanzer-Biss', 11),
+  PLAGUE_MEDIC_BITE: createEnemyBiteConfig('PLAGUE_MEDIC_BITE', 'Seuchenheiler-Biss', 15),
+  VOID_STALKER_BITE: createEnemyBiteConfig('VOID_STALKER_BITE', 'Leerenpirscher-Biss', 21),
+  STINK_BROODMOTHER_BITE: createEnemyBiteConfig('STINK_BROODMOTHER_BITE', 'Faulnisbrueter-Biss', 25),
 
   GRAVE_TITAN_BITE: {
     id:                   'GRAVE_TITAN_BITE',
@@ -1474,6 +1530,21 @@ export const WEAPON_CONFIGS = {
         radius: 0,
         thickness: 0,
         igniteProjectiles: 0,
+      },
+      fireball: {
+        enabled: 0,
+        projectileSpeed: 450,
+        projectileSize: 28,
+        explosionRadius: 120,
+        explosionMaxDamage: 45,
+        explosionMinDamage: 10,
+        explosionKnockback: 1250,
+        selfDamageMult: 0.25,
+        trailEnabled: 0,
+        chunkCount: 0,
+        chunkSearchRadius: 96,
+        chunkFlightMs: 320,
+        groundDurationMs: 2000,
       },
     },
     allowedSlots:         ['weapon2'],

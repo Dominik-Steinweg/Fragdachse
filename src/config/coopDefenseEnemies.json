@@ -8,7 +8,7 @@
       "moveSpeed": 70,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
+        { "weaponId": "ZOMBIE_BADGER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
@@ -31,7 +31,7 @@
       "moveSpeed": 140,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
+        { "weaponId": "DEMON_BADGER_BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
@@ -54,7 +54,7 @@
       "moveSpeed": 180,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
+        { "weaponId": "RABID_BADGER_BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 100,
@@ -106,7 +106,7 @@
       "moveSpeed": 42,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
+        { "weaponId": "SPORE_WARDEN_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
         { "weaponId": "SPOREN", "targetMode": "players" }
       ],
       "attackScanIntervalMs": 180,
@@ -131,7 +131,7 @@
       "moveSpeed": 58,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
+        { "weaponId": "PLAGUE_MEDIC_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
         { "weaponId": "HEALING_AURA", "targetMode": "all" }
       ],
       "attackScanIntervalMs": 180,
@@ -156,7 +156,7 @@
       "moveSpeed": 54,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
+        { "weaponId": "VOID_STALKER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
         { "weaponId": "MINI_TESLA_DOME", "targetMode": "players" }
       ],
       "attackScanIntervalMs": 160,
@@ -188,7 +188,7 @@
       "moveSpeed": 44,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
+        { "weaponId": "STINK_BROODMOTHER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 240,

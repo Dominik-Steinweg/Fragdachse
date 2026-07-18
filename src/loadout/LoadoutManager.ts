@@ -1835,6 +1835,56 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
   ): boolean {
+    const fireball = fireConfig.fireball;
+    if ((fireball?.enabled ?? 0) > 0) {
+      const groundEffect = {
+        durationMs: fireball?.groundDurationMs ?? 2000,
+        burnDurationMs: fireConfig.burnDurationMs,
+        burnDamagePerTick: fireConfig.burnDamagePerTick,
+        weaponName: 'Feuerball-Brand',
+      };
+      const chunkCount = Math.max(0, Math.floor(fireball?.chunkCount ?? 0));
+      this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+        speed: fireball?.projectileSpeed ?? 450,
+        size: fireball?.projectileSize ?? 28,
+        damage: config.damage,
+        color: 0xff7417,
+        ownerColor: playerColor,
+        lifetime: config.range / Math.max(1, fireball?.projectileSpeed ?? 450) * 1000,
+        maxBounces: 0,
+        isGrenade: false,
+        adrenalinGain: config.adrenalinGain,
+        weaponName: 'Feuerball-Werfer',
+        projectileStyle: 'fireball',
+        rockDamageMult: 1,
+        trainDamageMult: 1.15,
+        explosion: {
+          radius: fireball?.explosionRadius ?? 120,
+          maxDamage: fireball?.explosionMaxDamage ?? 45,
+          minDamage: fireball?.explosionMinDamage ?? 10,
+          knockback: fireball?.explosionKnockback ?? 1250,
+          selfDamageMult: fireball?.selfDamageMult ?? 0.25,
+          rockDamageMult: 1,
+          trainDamageMult: 1.15,
+          color: 0xff6a14,
+          visualStyle: 'rocket',
+          burnOnHit: { durationMs: fireConfig.burnDurationMs, damagePerTick: fireConfig.burnDamagePerTick },
+          burnOrigin: 'flamethrower_direct',
+          fireChunkBurst: {
+            ...groundEffect,
+            count: chunkCount,
+            searchRadius: fireball?.chunkSearchRadius ?? 96,
+            flightMs: fireball?.chunkFlightMs ?? 320,
+            igniteCenter: true,
+          },
+        },
+        fireTrail: (fireball?.trailEnabled ?? 0) > 0 ? groundEffect : undefined,
+        sourceSlot,
+        shotAudioKey: config.shotAudio?.successKey,
+      });
+      return true;
+    }
+
     const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {

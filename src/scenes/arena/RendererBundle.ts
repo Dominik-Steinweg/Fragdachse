@@ -21,6 +21,7 @@ import { MiniTeslaDomeRenderer } from '../../effects/MiniTeslaDomeRenderer';
 import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
+import { FireballRenderer }    from '../../effects/FireballRenderer';
 import { SporeRenderer }       from '../../effects/SporeRenderer';
 import { GrenadeRenderer }     from '../../effects/GrenadeRenderer';
 import { MuzzleFlashRenderer } from '../../effects/MuzzleFlashRenderer';
@@ -64,6 +65,7 @@ export interface RendererBundle {
   timeBubble:          TimeBubbleRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
+  fireball:            FireballRenderer;
   spore:               SporeRenderer;
   grenade:             GrenadeRenderer;
   muzzleFlash:         MuzzleFlashRenderer;
@@ -147,6 +149,7 @@ export function createRendererBundle(
 
   const rocket = new RocketRenderer(scene);
   rocket.generateTextures();
+  const fireball = new FireballRenderer(scene);
 
   const spore = new SporeRenderer(scene);
   spore.generateTextures();
@@ -182,7 +185,7 @@ export function createRendererBundle(
 
   return {
     bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, slimeTrail, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, holyGrenade,
-    rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
+    rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,
     translocatorTeleport: null,
@@ -205,6 +208,7 @@ export function wireRenderersToProjManager(
   pm.setGaussRenderer(bundle.gauss);
   pm.setHolyGrenadeRenderer(bundle.holyGrenade);
   pm.setRocketRenderer(bundle.rocket);
+  pm.setFireballRenderer(bundle.fireball);
   pm.setSporeRenderer(bundle.spore);
   pm.setGrenadeRenderer(bundle.grenade);
   pm.setTranslocatorPuckRenderer(bundle.translocatorPuck);

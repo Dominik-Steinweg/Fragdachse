@@ -52,6 +52,18 @@ const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Obje
   necromancy: 'UPGRADE_GUARDIAN_SPIRITS',
   necromancy_count: 'UPGRADE_GUARDIAN_SPIRITS',
   necromancy_hp: 'UPGRADE_HP',
+  necromancy_vitality: 'UPGRADE_HP',
+  general_burning_projectiles: 'UPGRADE_NEGEV_BURNING_BULLETS',
+  flamethrower_fire_ring: 'UPGRADE_FLAMETHROWER_BURN_DURATION',
+  flamethrower_fire_ring_projectiles: 'UPGRADE_GLOCK_BURNING_BULLETS',
+  flamethrower_fire_ring_damage: 'UPGRADE_FLAMETHROWER_BURN_DAMAGE',
+  flamethrower_fire_ring_radius: 'UPGRADE_MOLOTOV_GRENADE_RADIUS',
+  flamethrower_death_fire_burst: 'UPGRADE_MOLOTOV_WILDFIRE',
+  flamethrower_adrenalin_efficiency: 'UPGRADE_AK47_ADRENALINE_COST',
+  flamethrower_range: 'UPGRADE_ASMD_PRIMARY_RANGE',
+  flamethrower_fireball: 'UPGRADE_ROCKET_LAUNCHER_BURNING_EXPLOSION',
+  flamethrower_fireball_trail: 'UPGRADE_ROCKET_LAUNCHER_BURNING_EXPLOSION_DAMAGE',
+  flamethrower_fireball_chunks: 'UPGRADE_MOLOTOV_WILDFIRE',
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string {

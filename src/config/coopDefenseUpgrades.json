@@ -34,7 +34,15 @@
         { "id": "slime_trail_bloom", "code": "A18-D", "label": "Schleimbluete", "description": "Befallene Gegner schleudern beim Tod einen Schleimbrocken auf eine zufaellige Rasterzelle innerhalb von 96 px. Bestehender Schleim wird erneuert, aber nicht gestapelt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 183, "requires": [{ "upgradeId": "slime_trail_slow", "minLevel": 3 }, { "upgradeId": "slime_trail_duration", "minLevel": 3 }], "effects": [{ "stat": "player.slimeTrail.deathBurstSearchRadius", "mode": "add_per_level", "value": 96 }, { "stat": "player.slimeTrail.deathBurstPatchCount", "mode": "add_per_level", "value": 1 }] },
         { "id": "necromancy", "code": "A19-C", "label": "Nekromantie", "description": "Alle 4 Sekunden wird der staerkste, in 300 px gestorbene Gegner wiederbelebt. Wiederbelebte kaempfen fuer dich und bleiben in deiner Naehe.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 190, "effects": [{ "stat": "player.necromancy.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.necromancy.maxAllies", "mode": "add_per_level", "value": 1 }] },
         { "id": "necromancy_count", "code": "A19-1", "label": "Untote Schar", "description": "+1 maximaler wiederbelebter Gegner je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 191, "requires": [{ "upgradeId": "necromancy", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.maxAllies", "mode": "add_per_level", "value": 1 }] },
-        { "id": "necromancy_hp", "code": "A19-2", "label": "Knochenpanzer", "description": "+100% maximale HP wiederbelebter Gegner je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 192, "requires": [{ "upgradeId": "necromancy", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.hpMultiplier", "mode": "add_per_level", "value": 1 }] }
+        { "id": "necromancy_hp", "code": "A19-2", "label": "Knochenpanzer", "description": "+100% maximale HP wiederbelebter Gegner je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 192, "requires": [{ "upgradeId": "necromancy", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.hpMultiplier", "mode": "add_per_level", "value": 1 }] },
+        { "id": "necromancy_vitality", "code": "A19-D", "label": "Unheilige Vitalitaet", "description": "Wiederbelebte Gegner bewegen sich 50% schneller und regenerieren 20 HP pro Sekunde.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 193, "requires": [{ "upgradeId": "necromancy_count", "minLevel": 3 }, { "upgradeId": "necromancy_hp", "minLevel": 3 }], "effects": [{ "stat": "player.necromancy.moveSpeedMultiplier", "mode": "add_per_level", "value": 0.5 }, { "stat": "player.necromancy.hpRegenPerSecond", "mode": "add_per_level", "value": 20 }] },
+        { "id": "flamethrower_fire_ring", "code": "A21-C", "label": "Flammenring", "description": "Ein 16 Pixel breiter Flammenring mit 64 Pixel Radius umgibt den lebenden, oberirdischen Spieler und setzt beruehrte Gegner in Brand.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 210, "effects": [{ "stat": "player.fire.ring.radius", "mode": "add_per_level", "value": 64 }, { "stat": "player.fire.ring.thickness", "mode": "add_per_level", "value": 16 }, { "stat": "player.fire.ring.burnDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.ring.burnDamagePerTick", "mode": "add_per_level", "value": 0.25 }] },
+        { "id": "flamethrower_fire_ring_damage", "code": "A21-1", "label": "Lodernder Flammenring", "description": "+10% Brandschaden des Flammenrings je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 211, "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.burnDamagePerTick", "mode": "add_percent_per_level", "value": 0.1 }] },
+        { "id": "flamethrower_fire_ring_radius", "code": "A21-2", "label": "Weiter Flammenkreis", "description": "+20% Radius des Flammenrings je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 212, "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.radius", "mode": "add_percent_per_level", "value": 0.2 }] },
+        { "id": "flamethrower_fire_ring_projectiles", "code": "A21-D", "label": "Flammenring-Munition", "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten beim Durchqueren des Flammenrings dauerhaft einen zusaetzlichen Brand.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 213, "requires": [{ "upgradeId": "flamethrower_fire_ring_damage", "minLevel": 3 }, { "upgradeId": "flamethrower_fire_ring_radius", "minLevel": 3 }], "effects": [{ "stat": "player.fire.ring.igniteProjectiles", "mode": "add_per_level", "value": 1 }] },
+        { "id": "flamethrower_burning_ground", "code": "A22-C", "label": "Brennender Boden", "description": "Jeder Gegner, der durch einen von dir verursachten Brand brennt und stirbt, entzuendet seine 16-Pixel-Rasterzelle fuer 2 Sekunden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 220, "effects": [{ "stat": "player.fire.deathGround.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.deathGround.burnDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.deathGround.burnDamagePerTick", "mode": "add_per_level", "value": 0.25 }, { "stat": "player.fire.deathGround.burstRadius", "mode": "add_per_level", "value": 96 }] },
+        { "id": "flamethrower_death_fire_burst", "code": "A22-1", "label": "Brandexplosion", "description": "Brennende Gegner schleudern beim Tod einen Brandbrocken je Stufe auf einzigartige Bodenstellen in bis zu 96 Pixel Entfernung.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 221, "requires": [{ "upgradeId": "flamethrower_burning_ground", "minLevel": 1 }], "effects": [{ "stat": "player.fire.deathGround.burstCount", "mode": "add_per_level", "value": 1 }] },
+        { "id": "general_burning_projectiles", "code": "A22-D", "label": "Brennende Projektile", "description": "Eigene Projektilwaffen-Geschosse erhalten dauerhaft einen zusaetzlichen 2-Sekunden-Brand, wenn sie eigene oder verbuendete Brandflaechen durchqueren.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 222, "requires": [{ "upgradeId": "flamethrower_death_fire_burst", "minLevel": 3 }], "effects": [{ "stat": "player.fire.burningProjectiles.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.fire.burningProjectiles.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.burningProjectiles.damagePerTick", "mode": "add_per_level", "value": 0.25 }] }
       ]
     },
     {
@@ -1832,6 +1840,53 @@
           }
         },
         {
+          "id": "flamethrower_expiry_ground",
+          "code": "C-W8-C1",
+          "label": "Auslaufendes Inferno",
+          "description": "Flammenwerfer-Projektile erzeugen beim Erreichen ihrer maximalen Lebensdauer 2 Sekunden lang brennenden Boden.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 315,
+          "requires": [{ "upgradeId": "unlock_flamethrower", "minLevel": 1 }],
+          "effects": [
+            { "stat": "weapon.FLAMETHROWER.burningGround.cellSize", "mode": "add_per_level", "value": 16 },
+            { "stat": "weapon.FLAMETHROWER.burningGround.durationMs", "mode": "add_per_level", "value": 2000 },
+            { "stat": "weapon.FLAMETHROWER.burningGround.createOnFlameExpiry", "mode": "add_per_level", "value": 1 }
+          ]
+        },
+        {
+          "id": "flamethrower_adrenalin_efficiency",
+          "code": "C-W8-C1-1",
+          "label": "Effiziente Verbrennung",
+          "description": "Reduziert den Adrenalinverbrauch des Flammenwerfers und Feuerball-Werfers um 10% je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 316,
+          "requires": [{ "upgradeId": "flamethrower_expiry_ground", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.adrenalinCost", "mode": "add_percent_per_level", "value": -0.1 }]
+        },
+        {
+          "id": "flamethrower_range",
+          "code": "C-W8-C1-2",
+          "label": "Weitreichende Flammen",
+          "description": "Erhoeht die Reichweite des Flammenwerfers und Feuerball-Werfers um 10% je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 317,
+          "requires": [{ "upgradeId": "flamethrower_adrenalin_efficiency", "minLevel": 3 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.range", "mode": "add_percent_per_level", "value": 0.1 }]
+        },
+        {
           "id": "flamethrower_pierce",
           "code": "C-W8-1",
           "label": "Upgrade Flammenwerfer: Durchschlag",
@@ -1885,56 +1940,10 @@
           "effects": [{ "stat": "weapon.FLAMETHROWER.kamikaze.inheritMolotovBonuses", "mode": "add_per_level", "value": 1 }]
         },
         {
-          "id": "flamethrower_burning_ground",
-          "code": "C-W8-C1",
-          "label": "Brennender Boden",
-          "description": "Gegner, die brennend sterben, entzuenden ihre 16-Pixel-Rasterzelle fuer 2 Sekunden. Gegner im Feuer erhalten alle 250 ms einen Brand-Stack; erneutes Entzuenden verlaengert die Zellendauer.",
-          "kind": "upgrade",
-          "maxLevel": 1,
-          "startingLevel": 0,
-          "costPerLevel": 0,
-          "bossPointCostPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 350,
-          "requires": [{ "upgradeId": "unlock_flamethrower", "minLevel": 1 }],
-          "effects": [
-            { "stat": "weapon.FLAMETHROWER.burningGround.cellSize", "mode": "add_per_level", "value": 16 },
-            { "stat": "weapon.FLAMETHROWER.burningGround.durationMs", "mode": "add_per_level", "value": 2000 }
-          ]
-        },
-        {
-          "id": "flamethrower_burning_projectiles",
-          "code": "C-W8-C1-1",
-          "label": "Brennende Projektile",
-          "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten dauerhaft einen zusaetzlichen Brand, wenn sie durch eigenen brennenden Boden fliegen.",
-          "kind": "upgrade",
-          "maxLevel": 1,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 352,
-          "requires": [{ "upgradeId": "flamethrower_expiry_ground", "minLevel": 1 }],
-          "effects": [{ "stat": "weapon.FLAMETHROWER.burningGround.igniteProjectiles", "mode": "add_per_level", "value": 1 }]
-        },
-        {
-          "id": "flamethrower_expiry_ground",
-          "code": "C-W8-C1-2",
-          "label": "Auslaufendes Inferno",
-          "description": "Flammenwerfer-Projektile erzeugen beim Erreichen ihrer maximalen Lebensdauer brennenden Boden.",
-          "kind": "upgrade",
-          "maxLevel": 1,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 351,
-          "requires": [{ "upgradeId": "flamethrower_burning_ground", "minLevel": 1 }],
-          "effects": [{ "stat": "weapon.FLAMETHROWER.burningGround.createOnFlameExpiry", "mode": "add_per_level", "value": 1 }]
-        },
-        {
-          "id": "flamethrower_fire_ring",
+          "id": "flamethrower_fireball",
           "code": "C-W8-C2",
-          "label": "Flammenring",
-          "description": "Solange der Flammenwerfer ausgeruestet ist, umgibt den lebenden, oberirdischen Spieler ein 16 Pixel breiter Flammenring mit 64 Pixel Radius. Beruehrte Gegner erhalten alle 250 ms einen Brand-Stack.",
+          "label": "Feuerball-Werfer",
+          "description": "Wandelt den Flammenwerfer in einen langsamer feuernden, grossen Feuerball um, der bei Kontakt explodiert und Ziele in Brand setzt.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -1944,40 +1953,43 @@
           "sortOrder": 360,
           "requires": [
             { "upgradeId": "flamethrower_kamikaze_molotov_bonuses", "minLevel": 1 },
-            { "upgradeId": "flamethrower_burning_projectiles", "minLevel": 1 }
+            { "upgradeId": "flamethrower_range", "minLevel": 3 }
           ],
           "effects": [
-            { "stat": "weapon.FLAMETHROWER.fireRing.radius", "mode": "add_per_level", "value": 64 },
-            { "stat": "weapon.FLAMETHROWER.fireRing.thickness", "mode": "add_per_level", "value": 16 }
+            { "stat": "weapon.FLAMETHROWER.cooldown", "mode": "add_per_level", "value": 1430 },
+            { "stat": "weapon.FLAMETHROWER.damage", "mode": "add_per_level", "value": 18 },
+            { "stat": "weapon.FLAMETHROWER.range", "mode": "add_per_level", "value": 450 },
+            { "stat": "weapon.FLAMETHROWER.adrenalinCost", "mode": "add_per_level", "value": 9.5 },
+            { "stat": "weapon.FLAMETHROWER.fire.fireball.enabled", "mode": "add_per_level", "value": 1 }
           ]
         },
         {
-          "id": "flamethrower_fire_ring_projectiles",
+          "id": "flamethrower_fireball_trail",
           "code": "C-W8-C2-1",
-          "label": "Flammenring-Munition",
-          "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten beim Durchqueren des Flammenrings dauerhaft einen zusaetzlichen Brand.",
+          "label": "Brennende Spur",
+          "description": "Der Feuerball hinterlaesst waehrend des Flugs 2 Sekunden lang brennenden Boden.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 361,
-          "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }],
-          "effects": [{ "stat": "weapon.FLAMETHROWER.fireRing.igniteProjectiles", "mode": "add_per_level", "value": 1 }]
+          "requires": [{ "upgradeId": "flamethrower_fireball", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.fire.fireball.trailEnabled", "mode": "add_per_level", "value": 1 }]
         },
         {
-          "id": "flamethrower_fire_ring_radius",
+          "id": "flamethrower_fireball_chunks",
           "code": "C-W8-C2-2",
-          "label": "Weiter Flammenkreis",
-          "description": "+20% Radius des Flammenrings je Stufe.",
+          "label": "Brennende Brocken",
+          "description": "Die Feuerball-Explosion schleudert zwei zusaetzliche Brandbrocken je Stufe bis zu 96 Pixel weit. Der Einschlagsort brennt immer.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 362,
-          "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }],
-          "effects": [{ "stat": "weapon.FLAMETHROWER.fireRing.radius", "mode": "add_percent_per_level", "value": 0.2 }]
+          "requires": [{ "upgradeId": "flamethrower_fireball", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.FLAMETHROWER.fire.fireball.chunkCount", "mode": "add_per_level", "value": 2 }]
         },
         {
           "id": "unlock_negev",

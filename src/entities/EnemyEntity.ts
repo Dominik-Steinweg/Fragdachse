@@ -60,6 +60,7 @@ export class EnemyEntity {
   private burnRenderer: EntityBurnRenderer | null = null;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
+  private moveSpeedMultiplier = 1;
 
   constructor(
     scene: Phaser.Scene,
@@ -205,7 +206,11 @@ export class EnemyEntity {
   }
 
   getMoveSpeed(): number {
-    return this.config.moveSpeed;
+    return this.config.moveSpeed * this.moveSpeedMultiplier;
+  }
+
+  setMoveSpeedMultiplier(multiplier: number): void {
+    this.moveSpeedMultiplier = Math.max(0, multiplier);
   }
 
   getCollisionRadius(): number {

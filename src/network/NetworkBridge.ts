@@ -10,7 +10,7 @@
  */
 import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
 import type { PlayerState } from 'playroomkit';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   MAX_PLAYERS,
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -272,6 +272,7 @@ type LoadoutUseHandler = (
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type SlimeBloomEffectHandler = (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
+type FireChunkEffectHandler = (x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number) => void;
 type BlackHoleEffectHandler = (x: number, y: number, radius: number, durationMs: number) => void;
 type MiniRocketCollectionEffectHandler = (x: number, y: number, color: number) => void;
 type MiniRocketDestructionEffectHandler = (x: number, y: number, color: number) => void;
@@ -335,6 +336,7 @@ export class NetworkBridge {
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
   private slimeBloomEffectHandler: SlimeBloomEffectHandler | null = null;
+  private fireChunkEffectHandler: FireChunkEffectHandler | null = null;
   private blackHoleEffectHandler: BlackHoleEffectHandler | null = null;
   private miniRocketCollectionEffectHandler: MiniRocketCollectionEffectHandler | null = null;
   private miniRocketDestructionEffectHandler: MiniRocketDestructionEffectHandler | null = null;
@@ -1428,6 +1430,23 @@ export class NetworkBridge {
         targets.push({ x: p[index], y: p[index + 1] });
       }
       slimeBloomEffectHandler(x, y, targets);
+      return undefined;
+    });
+  }
+
+  broadcastFireChunkEffect(x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number): void {
+    this.broadcastRpc('fcfx', { x, y, t: landsAt, p: targets.flatMap(target => [target.x, target.y]) });
+  }
+
+  registerFireChunkEffectHandler(handler: FireChunkEffectHandler): void {
+    this.fireChunkEffectHandler = handler;
+    this.registerAllRpcHandler('fcfx', async (data: unknown): Promise<unknown> => {
+      const fireChunkEffectHandler = this.fireChunkEffectHandler;
+      if (!fireChunkEffectHandler) return undefined;
+      const { x, y, t, p } = data as { x: number; y: number; t: number; p: number[] };
+      const targets: FireChunkTarget[] = [];
+      for (let index = 0; index + 1 < p.length; index += 2) targets.push({ x: p[index], y: p[index + 1] });
+      fireChunkEffectHandler(x, y, targets, t);
       return undefined;
     });
   }

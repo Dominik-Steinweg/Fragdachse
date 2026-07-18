@@ -207,6 +207,15 @@ export class HostUpdateCoordinator {
       if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
         this.ctx.fireSystem.hostCreateZone(explosion.x, explosion.y, groundFire, explosion.ownerId);
       }
+      if (explosion.effect.fireChunkBurst) {
+        this.ctx.flamethrowerUpgradeSystem?.handleFireballExplosion(
+          explosion.ownerId,
+          explosion.x,
+          explosion.y,
+          explosion.effect.fireChunkBurst,
+          now,
+        );
+      }
       if ((explosion.effect.blackHoleDurationMs ?? 0) > 0) {
         const durationMs = explosion.effect.blackHoleDurationMs ?? 0;
         this.blackHoleSystem.create(explosion.x, explosion.y, {
@@ -327,7 +336,13 @@ export class HostUpdateCoordinator {
               { allowTeamDamage: contact.allowTeamDamage },
             );
           }
-          if (contact.burn) {
+          // Bodenfeuer darf seinen Besitzer oder dessen Team nicht entzuenden.
+          // allowTeamDamage betrifft weiterhin nur den direkten Flaechenschaden.
+          if (
+            contact.burn
+            && player.id !== contact.ownerId
+            && this.ctx.combatSystem.canDamageTarget(contact.ownerId, player.id)
+          ) {
             this.ctx.combatSystem.applyBurnHit(
               player.id,
               contact.ownerId,
@@ -335,6 +350,7 @@ export class HostUpdateCoordinator {
               contact.burn.damagePerTick,
               contact.sourceId,
               contact.weaponName,
+              'ground_fire',
             );
           }
         }
@@ -367,6 +383,7 @@ export class HostUpdateCoordinator {
               contact.burn.damagePerTick,
               contact.sourceId,
               contact.weaponName,
+              'ground_fire',
             );
           }
         }

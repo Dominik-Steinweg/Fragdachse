@@ -36,6 +36,7 @@ import { AirstrikeSystem }   from '../../systems/AirstrikeSystem';
 import { TrainManager }      from '../../train/TrainManager';
 import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
+import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
@@ -61,35 +62,6 @@ import { BaseManager } from '../../entities/BaseManager';
 import { EnemyManager } from '../../entities/EnemyManager';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { emitArenaMapGridChanged } from './ArenaEvents';
-
-function segmentIntersectsBounds(
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-  left: number,
-  top: number,
-  right: number,
-  bottom: number,
-): boolean {
-  const dx = endX - startX;
-  const dy = endY - startY;
-  let entry = 0;
-  let exit = 1;
-  const clip = (origin: number, delta: number, min: number, max: number): boolean => {
-    if (Math.abs(delta) <= 0.0001) return origin >= min && origin <= max;
-    let near = (min - origin) / delta;
-    let far = (max - origin) / delta;
-    if (near > far) [near, far] = [far, near];
-    entry = Math.max(entry, near);
-    exit = Math.min(exit, far);
-    return entry <= exit;
-  };
-  return clip(startX, dx, left, right)
-    && clip(startY, dy, top, bottom)
-    && exit > 0.001
-    && entry < 0.999;
-}
 
 /**
  * Manages the arena round lifecycle.
@@ -519,45 +491,71 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+    // Brandraster-Hindernisse werden einmalig in 16-px-Zellen projiziert und bei
+    // platzierten/zerstoerten Felsen periodisch aktualisiert. Damit ist sowohl die
+    // Zellpruefung als auch der Sichtstrahl unabhaengig von der Felsanzahl.
+    const blockedFireCells = new Set<string>();
+    const fireLineOfSightCells = new Set<string>();
+    let fireObstacleIndexUpdatedAt = -Infinity;
+    const fireCellKey = (gridX: number, gridY: number) => `${gridX}:${gridY}`;
+    const addBoundsToFireIndex = (
+      left: number, top: number, right: number, bottom: number, blocksCell: boolean,
+    ) => {
+      const minX = Math.floor(left / GROUND_FIRE_CELL_SIZE);
+      const maxX = Math.floor((right - 0.001) / GROUND_FIRE_CELL_SIZE);
+      const minY = Math.floor(top / GROUND_FIRE_CELL_SIZE);
+      const maxY = Math.floor((bottom - 0.001) / GROUND_FIRE_CELL_SIZE);
+      for (let gridY = minY; gridY <= maxY; gridY += 1) {
+        for (let gridX = minX; gridX <= maxX; gridX += 1) {
+          const key = fireCellKey(gridX, gridY);
+          fireLineOfSightCells.add(key);
+          if (blocksCell) blockedFireCells.add(key);
+        }
+      }
+    };
+    const refreshFireObstacleIndex = () => {
+      const now = performance.now();
+      if (now - fireObstacleIndexUpdatedAt < 100) return;
+      fireObstacleIndexUpdatedAt = now;
+      blockedFireCells.clear();
+      fireLineOfSightCells.clear();
+      for (const rock of this.ctx.arenaResult?.rockObjects ?? []) {
+        if (!rock?.active) continue;
+        const bounds = rock.getBounds();
+        addBoundsToFireIndex(bounds.left, bounds.top, bounds.right, bounds.bottom, true);
+      }
+      for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+        const left = ARENA_OFFSET_X + rock.gridX * CELL_SIZE;
+        const top = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE;
+        addBoundsToFireIndex(left, top, left + CELL_SIZE, top + CELL_SIZE, true);
+      }
+      for (const trunk of this.ctx.arenaResult?.trunkObjects ?? []) {
+        if (!trunk?.active) continue;
+        const bounds = trunk.getBounds();
+        addBoundsToFireIndex(bounds.left, bounds.top, bounds.right, bounds.bottom, false);
+      }
+      for (const bounds of this.ctx.baseManager?.getObstacleRectangles() ?? []) {
+        addBoundsToFireIndex(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height, false);
+      }
+    };
     this.ctx.fireSystem.setGroundResolvers(
       (bounds) => {
-        for (const rock of this.ctx.arenaResult?.rockObjects ?? []) {
-          if (!rock?.active) continue;
-          const rockBounds = rock.getBounds();
-          if (
-            bounds.left < rockBounds.right
-            && bounds.right > rockBounds.left
-            && bounds.top < rockBounds.bottom
-            && bounds.bottom > rockBounds.top
-          ) return true;
-        }
-        for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
-          const left = ARENA_OFFSET_X + rock.gridX * CELL_SIZE;
-          const top = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE;
-          if (
-            bounds.left < left + CELL_SIZE
-            && bounds.right > left
-            && bounds.top < top + CELL_SIZE
-            && bounds.bottom > top
-          ) return true;
-        }
-        return false;
+        refreshFireObstacleIndex();
+        return blockedFireCells.has(fireCellKey(
+          Math.floor(bounds.centerX / GROUND_FIRE_CELL_SIZE),
+          Math.floor(bounds.centerY / GROUND_FIRE_CELL_SIZE),
+        ));
       },
       (startX, startY, endX, endY) => {
-        if (!this.ctx.combatSystem.hasLineOfSight(startX, startY, endX, endY)) return false;
-        for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
-          const left = ARENA_OFFSET_X + rock.gridX * CELL_SIZE;
-          const top = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE;
-          if (segmentIntersectsBounds(
-            startX,
-            startY,
-            endX,
-            endY,
-            left,
-            top,
-            left + CELL_SIZE,
-            top + CELL_SIZE,
-          )) return false;
+        refreshFireObstacleIndex();
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / GROUND_FIRE_CELL_SIZE));
+        for (let step = 1; step < steps; step += 1) {
+          const t = step / steps;
+          const gridX = Math.floor((startX + dx * t) / GROUND_FIRE_CELL_SIZE);
+          const gridY = Math.floor((startY + dy * t) / GROUND_FIRE_CELL_SIZE);
+          if (fireLineOfSightCells.has(fireCellKey(gridX, gridY))) return false;
         }
         return true;
       },
@@ -813,6 +811,8 @@ export class ArenaLifecycleCoordinator {
           (playerId) => this.ctx.burrowSystem?.isBurrowed(playerId) ?? false,
           (firstPlayerId, secondPlayerId) => !bridge.isEnemyPair(firstPlayerId, secondPlayerId),
           (x, y, radius) => bridge.broadcastExplosionEffect(x, y, radius, 0xff6600),
+          (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
+          (x, y, targets, landsAt) => bridge.broadcastFireChunkEffect(x, y, targets, landsAt),
         )
         : null;
       this.ctx.necromancySystem = this.ctx.enemyManager

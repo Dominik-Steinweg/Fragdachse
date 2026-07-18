@@ -35,6 +35,8 @@ interface NecromancyConfig {
   enabled: boolean;
   maxAllies: number;
   hpMultiplier: number;
+  moveSpeedMultiplier: number;
+  hpRegenPerSecond: number;
   intervalMs: number;
   corpseLifetimeMs: number;
   reviveRadius: number;
@@ -120,6 +122,10 @@ export class NecromancySystem {
     now: number,
     deltaMs: number,
   ): void {
+    ally.setMoveSpeedMultiplier(cfg.moveSpeedMultiplier);
+    if (cfg.hpRegenPerSecond > 0 && ally.getHp() > 0 && ally.getHp() < ally.getMaxHp()) {
+      ally.setHp(Math.min(ally.getMaxHp(), ally.getHp() + cfg.hpRegenPerSecond * Math.max(0, deltaMs) / 1000));
+    }
     const target = this.findTarget(ownerX, ownerY, cfg.targetRadius);
     const ownerDistance = Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, ownerX, ownerY);
     const targetInLeash = target
@@ -234,6 +240,8 @@ export class NecromancySystem {
       enabled: this.resolveStat(playerId, `${STAT_PREFIX}.enabled`, 0) > 0,
       maxAllies: Math.max(0, Math.floor(this.resolveStat(playerId, `${STAT_PREFIX}.maxAllies`, 0))),
       hpMultiplier: Math.max(1, this.resolveStat(playerId, `${STAT_PREFIX}.hpMultiplier`, 1)),
+      moveSpeedMultiplier: Math.max(0, this.resolveStat(playerId, `${STAT_PREFIX}.moveSpeedMultiplier`, 1)),
+      hpRegenPerSecond: Math.max(0, this.resolveStat(playerId, `${STAT_PREFIX}.hpRegenPerSecond`, 0)),
       intervalMs: Math.max(100, this.resolveStat(playerId, `${STAT_PREFIX}.intervalMs`, DEFAULT_INTERVAL_MS)),
       corpseLifetimeMs: Math.max(100, this.resolveStat(playerId, `${STAT_PREFIX}.corpseLifetimeMs`, DEFAULT_CORPSE_LIFETIME_MS)),
       reviveRadius: this.resolveStat(playerId, `${STAT_PREFIX}.reviveRadius`, DEFAULT_REVIVE_RADIUS),

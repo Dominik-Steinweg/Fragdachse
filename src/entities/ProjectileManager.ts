@@ -18,6 +18,7 @@ import type { HydraRenderer } from '../effects/HydraRenderer';
 import type { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import type { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
 import type { RocketRenderer }  from '../effects/RocketRenderer';
+import type { FireballRenderer } from '../effects/FireballRenderer';
 import type { SporeRenderer }  from '../effects/SporeRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 
@@ -95,6 +96,7 @@ export class ProjectileManager {
 
   // ── Rocket-Renderer (Raketenkörper + Rauchspur) ────────────────────────
   private rocketRenderer: RocketRenderer | null = null;
+  private fireballRenderer: FireballRenderer | null = null;
 
   // ── Spore-Renderer (organische Cluster + toxische Spur) ────────────────
   private sporeRenderer: SporeRenderer | null = null;
@@ -263,6 +265,10 @@ export class ProjectileManager {
     this.rocketRenderer = renderer;
   }
 
+  setFireballRenderer(renderer: FireballRenderer | null): void {
+    this.fireballRenderer = renderer;
+  }
+
   /** Injiziert den SporeRenderer fuer Sporen-Projektile. */
   setSporeRenderer(renderer: SporeRenderer | null): void {
     this.sporeRenderer = renderer;
@@ -397,6 +403,12 @@ export class ProjectileManager {
         cfg.smokeTrailColor ?? cfg.color,
         cfg.projectileVisualScale,
       );
+    }
+
+    if (style === 'fireball' && this.fireballRenderer) {
+      sprite.setVisible(false);
+      sprite.setAlpha(0);
+      this.fireballRenderer.createVisual(id, x, y, cfg.size);
     }
 
     if (style === 'spore' && this.sporeRenderer) {
@@ -607,6 +619,8 @@ export class ProjectileManager {
       flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
       canReceiveFireImbue: cfg.canReceiveFireImbue,
       supplementalBurnOnHit: cfg.supplementalBurnOnHit,
+      fireTrail: cfg.fireTrail,
+      lastFireTrailCellKey: undefined,
       leafBlowerMinKnockback: cfg.leafBlowerMinKnockback,
       leafBlowerMaxKnockback: cfg.leafBlowerMaxKnockback,
       leafBlowerSelfPush: cfg.leafBlowerSelfPush,
@@ -1571,6 +1585,7 @@ export class ProjectileManager {
     this.grenadeRenderer?.destroyVisual(proj.id);
     this.holyGrenadeRenderer?.destroyVisual(proj.id);
     this.rocketRenderer?.destroyVisual(proj.id);
+    this.fireballRenderer?.destroyVisual(proj.id);
     this.sporeRenderer?.destroyVisual(proj.id);
     this.translocatorPuckRenderer?.destroyVisual(proj.id);
   }
@@ -1865,6 +1880,7 @@ export class ProjectileManager {
     this.grenadeRenderer?.destroyAll();
     this.holyGrenadeRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
+    this.fireballRenderer?.destroyAll();
     this.sporeRenderer?.destroyAll();
     this.translocatorPuckRenderer?.destroyAll();
     this.pendingProjectileExplosions = [];
@@ -2022,6 +2038,8 @@ export class ProjectileManager {
             y: proj.sprite.y,
             ownerId: proj.ownerId,
             effect: proj.explosion,
+            sourceSlot: proj.sourceSlot,
+            weaponName: proj.weaponName,
           });
           this.destroyTrackedProjectile(proj);
           return false;
@@ -2532,6 +2550,26 @@ export class ProjectileManager {
       }
     }
 
+    const fireballR = this.fireballRenderer;
+    if (fireballR) {
+      for (const proj of this.projectiles) {
+        if (proj.projectileStyle !== 'fireball') continue;
+        if (!fireballR.has(proj.id)) {
+          fireballR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+        }
+        fireballR.updateVisual(
+          proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth,
+          proj.body.velocity.x, proj.body.velocity.y,
+        );
+      }
+      const activeFireballIds = new Set(
+        this.projectiles.filter(p => p.projectileStyle === 'fireball').map(p => p.id),
+      );
+      for (const id of fireballR.getActiveIds()) {
+        if (!activeFireballIds.has(id)) fireballR.destroyVisual(id);
+      }
+    }
+
     const sporeR = this.sporeRenderer;
     if (sporeR) {
       for (const proj of this.projectiles) {
@@ -2658,6 +2696,7 @@ export class ProjectileManager {
     const flames    = this.flameRenderer;
     const leafBlowers = this.leafBlowerRenderer;
     const rockets   = this.rocketRenderer;
+    const fireballs = this.fireballRenderer;
     const spores = this.sporeRenderer;
     const energyBalls = this.energyBallRenderer;
     const hydras = this.hydraRenderer;
@@ -2683,6 +2722,7 @@ export class ProjectileManager {
       const isAwpP   = proj.style === 'awp';
       const isGaussP = proj.style === 'gauss';
       const isRocket = proj.style === 'rocket';
+      const isFireball = proj.style === 'fireball';
       const isGrenadeP = proj.style === 'grenade';
       const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
 
@@ -2781,6 +2821,9 @@ export class ProjectileManager {
           tlPucks.createVisual(proj.id, proj.x, proj.y, proj.ownerColor ?? proj.color);
         }
         tlPucks.updateVisual(proj.id, proj.x, proj.y, proj.ownerColor ?? proj.color);
+      } else if (isFireball && fireballs) {
+        if (!fireballs.has(proj.id)) fireballs.createVisual(proj.id, proj.x, proj.y, proj.size);
+        fireballs.updateVisual(proj.id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (isRocket && rockets) {
         if (!rockets.has(proj.id)) {
           rockets.createVisual(
@@ -2868,6 +2911,7 @@ export class ProjectileManager {
     const flames    = this.flameRenderer;
     const leafBlowers = this.leafBlowerRenderer;
     const rockets   = this.rocketRenderer;
+    const fireballs = this.fireballRenderer;
     const spores = this.sporeRenderer;
     const energyBalls = this.energyBallRenderer;
     const hydras = this.hydraRenderer;
@@ -2918,6 +2962,14 @@ export class ProjectileManager {
       for (const id of rockets.getActiveIds()) {
         if (!activeIds.has(id)) {
           rockets.destroyVisual(id);
+          this.clientProjStates.delete(id);
+        }
+      }
+    }
+    if (fireballs) {
+      for (const id of fireballs.getActiveIds()) {
+        if (!activeIds.has(id)) {
+          fireballs.destroyVisual(id);
           this.clientProjStates.delete(id);
         }
       }
@@ -3053,6 +3105,8 @@ export class ProjectileManager {
           state.miniRocketPhase,
           state.miniRocketCascadeStage,
         );
+      } else if (state.style === 'fireball' && this.fireballRenderer?.has(id)) {
+        this.fireballRenderer.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'leaf_blower' && leafBlowers?.has(id)) {
         leafBlowers.updateVisual(id, ex, ey, state.size, velocityX, velocityY);
       } else if (state.style === 'flame' && flames && flames.has(id)) {

@@ -940,6 +940,7 @@ export class ArenaScene extends Phaser.Scene {
     const frameCostMs = performance.now() - frameStartMs;
     if (inGame) {
       const role = bridge.isHost() ? 'host' : 'client';
+      const firePerformance = this.ctx.fireSystem.takePerformanceMetrics();
       this.runtimeProfiler?.record({
         role,
         deltaMs: delta,
@@ -947,6 +948,9 @@ export class ArenaScene extends Phaser.Scene {
         primaryStepMs,
         visualStepMs,
         shadowStepMs,
+        fireSimulationMs: firePerformance.simulationMs,
+        fireCreationMs: firePerformance.creationMs,
+        fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
         enemyCount: this.ctx.enemyManager?.getAllEnemies().length ?? 0,
         projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
         playerCount: this.ctx.playerManager.getAllPlayers().length,

@@ -51,7 +51,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
   'weapon2.damage': {
     kind: 'weapon',
     slot: 'weapon2',
-    targets: [{ path: ['damage'], operation: 'scale' }],
+    targets: [
+      { path: ['damage'], operation: 'scale' },
+      { path: ['fire', 'fireball', 'explosionMaxDamage'], operation: 'scale' },
+      { path: ['fire', 'fireball', 'explosionMinDamage'], operation: 'scale' },
+    ],
   },
   'weapon.GLOCK.burnOnHit.durationMs': {
     kind: 'weapon',
@@ -435,6 +439,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'weapon',
     itemId: 'FLAMETHROWER',
     targets: [{ path: ['fire', 'piercingCount'], operation: 'add' }],
+  },
+  'weapon.FLAMETHROWER.adrenalinCost': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+  },
+  'weapon.FLAMETHROWER.range': {
+    kind: 'weapon',
+    itemId: 'FLAMETHROWER',
+    targets: [{ path: ['range'], operation: 'scale' }],
   },
   'weapon.FLAMETHROWER.kamikaze.enabled': {
     kind: 'weapon',
