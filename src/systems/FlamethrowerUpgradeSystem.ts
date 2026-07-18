@@ -9,33 +9,15 @@ import {
   type FlamethrowerWeaponFireConfig,
   type MolotovUtilityConfig,
 } from '../loadout/LoadoutConfig';
-import type { BurnOnHitConfig, FireGrenadeEffect, SyncedBurningGroundSnapshot, TrackedProjectile } from '../types';
+import type { BurnOnHitConfig, FireGrenadeEffect, TrackedProjectile } from '../types';
 import type { FireSystem } from '../effects/FireSystem';
 import { BURN_TICK_INTERVAL_MS } from '../config';
 import type { ActiveBurnSource, CombatSystem } from './CombatSystem';
-
-const DEFAULT_CELL_SIZE = 32;
 
 interface ResolvedFlameOwner {
   playerId: string;
   fire: FlamethrowerWeaponFireConfig;
   burn: BurnOnHitConfig;
-}
-
-interface GroundContributor {
-  ownerId: string;
-  expiresAt: number;
-  burn: BurnOnHitConfig;
-  igniteProjectiles: boolean;
-}
-
-interface ActiveGroundCell {
-  id: number;
-  key: string;
-  gridX: number;
-  gridY: number;
-  cellSize: number;
-  contributors: Map<string, GroundContributor>;
 }
 
 interface RingRuntime extends ResolvedFlameOwner {
@@ -51,9 +33,7 @@ export type FlamethrowerFriendlyResolver = (firstPlayerId: string, secondPlayerI
 
 /** Host-authoritative simulation for the Flamethrower's passive upgrade branches. */
 export class FlamethrowerUpgradeSystem {
-  private readonly cells = new Map<string, ActiveGroundCell>();
-  private nextCellId = 1;
-  private lastContactTick = -1;
+  private lastRingContactTick = -1;
 
   constructor(
     private readonly playerManager: PlayerManager,
@@ -69,7 +49,6 @@ export class FlamethrowerUpgradeSystem {
 
   /** Must run before CombatSystem.update so a swept projectile is imbued before a same-frame hit. */
   prepareProjectileBurns(now: number): void {
-    this.removeExpiredCells(now);
     const rings = this.getActiveRings();
     for (const projectile of this.projectileManager.getActiveProjectiles()) {
       if (!projectile.canReceiveFireImbue || projectile.pendingDestroy) continue;
@@ -80,16 +59,10 @@ export class FlamethrowerUpgradeSystem {
       const toY = projectile.sprite.y;
       if (Math.abs(toX - fromX) + Math.abs(toY - fromY) <= 0.01) continue;
 
-      this.visitGridSegment(fromX, fromY, toX, toY, DEFAULT_CELL_SIZE, (gridX, gridY) => {
-        const cell = this.cells.get(this.cellKey(gridX, gridY));
-        if (!cell) return false;
-        for (const contributor of cell.contributors.values()) {
-          if (contributor.expiresAt <= now || !contributor.igniteProjectiles) continue;
-          if (!this.areFriendly(contributor.ownerId, projectile.ownerId)) continue;
-          this.applyStrongestSupplementalBurn(projectile, contributor.burn);
-        }
-        return false;
-      });
+      for (const igniter of this.fireSystem.collectProjectileIgnitersAlongSegment(fromX, fromY, toX, toY, now)) {
+        if (!this.areFriendly(igniter.ownerId, projectile.ownerId)) continue;
+        this.applyStrongestSupplementalBurn(projectile, igniter.burn);
+      }
 
       for (const ring of rings) {
         if (!ring.igniteProjectiles || !this.areFriendly(ring.playerId, projectile.ownerId)) continue;
@@ -99,25 +72,15 @@ export class FlamethrowerUpgradeSystem {
     }
   }
 
-  hostUpdate(now: number): SyncedBurningGroundSnapshot {
-    this.removeExpiredCells(now);
+  /** Flammenring-Kontakte; alle Boden-Kontakte verarbeitet das gemeinsame FireSystem. */
+  hostUpdate(now: number): void {
     const contactTick = Math.floor(now / BURN_TICK_INTERVAL_MS);
-    if (contactTick === this.lastContactTick) return this.getSnapshot();
-    this.lastContactTick = contactTick;
+    if (contactTick === this.lastRingContactTick) return;
+    this.lastRingContactTick = contactTick;
 
     const rings = this.getActiveRings();
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!this.combatSystem.isAlive(enemy.id)) continue;
-      for (const ground of this.findGroundContactsByOwner(enemy, now)) {
-        this.combatSystem.applyBurnHit(
-          enemy.id,
-          ground.ownerId,
-          ground.burn.durationMs,
-          ground.burn.damagePerTick,
-          `burning-ground:${ground.ownerId}`,
-          'Brennender Boden',
-        );
-      }
       for (const ring of this.findRingContacts(enemy, rings)) {
         this.combatSystem.applyBurnHit(
           enemy.id,
@@ -129,7 +92,6 @@ export class FlamethrowerUpgradeSystem {
         );
       }
     }
-    return this.getSnapshot();
   }
 
   handleEnemyDeath(x: number, y: number, burnSources: readonly ActiveBurnSource[], now = Date.now()): void {
@@ -137,9 +99,7 @@ export class FlamethrowerUpgradeSystem {
     for (const source of burnSources) {
       if (handledOwners.has(source.attackerId)) continue;
       const owner = this.getEquippedFlameOwner(source.attackerId);
-      if (!owner) continue;
-      if ((owner.fire.burningGround?.durationMs ?? 0) <= 0) continue;
-      if ((owner.fire.burningGround?.cellSize ?? 0) <= 0) continue;
+      if (!owner || (owner.fire.burningGround?.durationMs ?? 0) <= 0) continue;
       handledOwners.add(owner.playerId);
       this.refreshGroundAt(x, y, owner, now);
     }
@@ -181,9 +141,7 @@ export class FlamethrowerUpgradeSystem {
   }
 
   clear(): void {
-    this.cells.clear();
-    this.nextCellId = 1;
-    this.lastContactTick = -1;
+    this.lastRingContactTick = -1;
   }
 
   private getEquippedFlameOwner(playerId: string): ResolvedFlameOwner | null {
@@ -221,53 +179,16 @@ export class FlamethrowerUpgradeSystem {
   }
 
   private refreshGroundAt(x: number, y: number, owner: ResolvedFlameOwner, now: number): void {
-    const cellSize = Math.max(1, Math.round(owner.fire.burningGround?.cellSize ?? DEFAULT_CELL_SIZE));
     const durationMs = Math.max(0, owner.fire.burningGround?.durationMs ?? 0);
     if (durationMs <= 0) return;
-    const gridX = Math.floor(x / cellSize);
-    const gridY = Math.floor(y / cellSize);
-    const key = this.cellKey(gridX, gridY);
-    let cell = this.cells.get(key);
-    if (!cell) {
-      cell = {
-        id: this.nextCellId++,
-        key,
-        gridX,
-        gridY,
-        cellSize,
-        contributors: new Map(),
-      };
-      this.cells.set(key, cell);
-    }
-    cell.contributors.set(owner.playerId, {
+    this.fireSystem.hostRefreshGroundCell(x, y, {
+      sourceKey: `flamethrower:${owner.playerId}`,
       ownerId: owner.playerId,
-      expiresAt: now + durationMs,
-      burn: { ...owner.burn },
+      durationMs,
+      burn: owner.burn,
       igniteProjectiles: (owner.fire.burningGround?.igniteProjectiles ?? 0) > 0,
-    });
-  }
-
-  private findGroundContactsByOwner(enemy: EnemyEntity, now: number): GroundContributor[] {
-    const radius = enemy.getCollisionRadius();
-    const minGridX = Math.floor((enemy.sprite.x - radius) / DEFAULT_CELL_SIZE);
-    const maxGridX = Math.floor((enemy.sprite.x + radius) / DEFAULT_CELL_SIZE);
-    const minGridY = Math.floor((enemy.sprite.y - radius) / DEFAULT_CELL_SIZE);
-    const maxGridY = Math.floor((enemy.sprite.y + radius) / DEFAULT_CELL_SIZE);
-    const byOwner = new Map<string, GroundContributor>();
-    for (let gridY = minGridY; gridY <= maxGridY; gridY++) {
-      for (let gridX = minGridX; gridX <= maxGridX; gridX++) {
-        const cell = this.cells.get(this.cellKey(gridX, gridY));
-        if (!cell || !this.enemyTouchesCell(enemy, cell)) continue;
-        for (const contributor of cell.contributors.values()) {
-          if (contributor.expiresAt <= now) continue;
-          const existing = byOwner.get(contributor.ownerId);
-          if (!existing || this.burnDps(contributor.burn) > this.burnDps(existing.burn)) {
-            byOwner.set(contributor.ownerId, contributor);
-          }
-        }
-      }
-    }
-    return [...byOwner.values()].sort((left, right) => left.ownerId.localeCompare(right.ownerId));
+      weaponName: 'Brennender Boden',
+    }, now);
   }
 
   private findRingContacts(enemy: EnemyEntity, rings: readonly RingRuntime[]): RingRuntime[] {
@@ -279,16 +200,6 @@ export class FlamethrowerUpgradeSystem {
       contacts.push(ring);
     }
     return contacts.sort((left, right) => left.playerId.localeCompare(right.playerId));
-  }
-
-  private enemyTouchesCell(enemy: EnemyEntity, cell: ActiveGroundCell): boolean {
-    const left = cell.gridX * cell.cellSize;
-    const top = cell.gridY * cell.cellSize;
-    const nearestX = Phaser.Math.Clamp(enemy.sprite.x, left, left + cell.cellSize);
-    const nearestY = Phaser.Math.Clamp(enemy.sprite.y, top, top + cell.cellSize);
-    const dx = enemy.sprite.x - nearestX;
-    const dy = enemy.sprite.y - nearestY;
-    return dx * dx + dy * dy <= enemy.getCollisionRadius() ** 2;
   }
 
   private segmentTouchesRing(
@@ -324,67 +235,5 @@ export class FlamethrowerUpgradeSystem {
 
   private burnDps(burn: BurnOnHitConfig): number {
     return burn.damagePerTick * 1000 / BURN_TICK_INTERVAL_MS;
-  }
-
-  private removeExpiredCells(now: number): void {
-    for (const [key, cell] of this.cells) {
-      for (const [ownerId, contributor] of cell.contributors) {
-        if (contributor.expiresAt <= now) cell.contributors.delete(ownerId);
-      }
-      if (cell.contributors.size === 0) this.cells.delete(key);
-    }
-  }
-
-  private getSnapshot(): SyncedBurningGroundSnapshot {
-    return {
-      cells: [...this.cells.values()]
-        .sort((left, right) => left.id - right.id)
-        .map(cell => ({
-          id: cell.id,
-          gridX: cell.gridX,
-          gridY: cell.gridY,
-          expiresAt: Math.max(...[...cell.contributors.values()].map(contributor => contributor.expiresAt)),
-        })),
-    };
-  }
-
-  private cellKey(gridX: number, gridY: number): string {
-    return `${gridX}:${gridY}`;
-  }
-
-  private visitGridSegment(
-    fromX: number,
-    fromY: number,
-    toX: number,
-    toY: number,
-    cellSize: number,
-    visitor: (gridX: number, gridY: number) => boolean,
-  ): void {
-    let gridX = Math.floor(fromX / cellSize);
-    let gridY = Math.floor(fromY / cellSize);
-    const endGridX = Math.floor(toX / cellSize);
-    const endGridY = Math.floor(toY / cellSize);
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    const stepX = Math.sign(dx);
-    const stepY = Math.sign(dy);
-    const tDeltaX = stepX === 0 ? Infinity : cellSize / Math.abs(dx);
-    const tDeltaY = stepY === 0 ? Infinity : cellSize / Math.abs(dy);
-    const nextBoundaryX = stepX > 0 ? (gridX + 1) * cellSize : gridX * cellSize;
-    const nextBoundaryY = stepY > 0 ? (gridY + 1) * cellSize : gridY * cellSize;
-    let tMaxX = stepX === 0 ? Infinity : Math.abs((nextBoundaryX - fromX) / dx);
-    let tMaxY = stepY === 0 ? Infinity : Math.abs((nextBoundaryY - fromY) / dy);
-
-    for (;;) {
-      if (visitor(gridX, gridY)) return;
-      if (gridX === endGridX && gridY === endGridY) return;
-      if (tMaxX < tMaxY) {
-        gridX += stepX;
-        tMaxX += tDeltaX;
-      } else {
-        gridY += stepY;
-        tMaxY += tDeltaY;
-      }
-    }
   }
 }

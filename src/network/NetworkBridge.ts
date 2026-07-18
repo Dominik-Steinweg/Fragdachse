@@ -242,7 +242,7 @@ function decodeSlimeTrailSnapshot(raw: unknown): SyncedSlimeTrailSnapshot {
   };
 }
 
-type EncodedBurningGroundCell = [number, number, number, number];
+type EncodedBurningGroundCell = [number, number, number, number, number];
 interface EncodedBurningGroundDelta {
   f?: EncodedBurningGroundCell[];
   u?: EncodedBurningGroundCell[];
@@ -250,11 +250,11 @@ interface EncodedBurningGroundDelta {
 }
 
 function encodeBurningGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {
-  return [cell.id, cell.gridX, cell.gridY, cell.expiresAt];
+  return [cell.id, cell.gridX, cell.gridY, cell.expiresAt, cell.intensity];
 }
 
-function decodeBurningGroundCell([id, gridX, gridY, expiresAt]: EncodedBurningGroundCell) {
-  return { id, gridX, gridY, expiresAt };
+function decodeBurningGroundCell([id, gridX, gridY, expiresAt, intensity]: EncodedBurningGroundCell) {
+  return { id, gridX, gridY, expiresAt, intensity: Math.max(1, intensity ?? 1) };
 }
 
 type LoadoutUseHandler = (

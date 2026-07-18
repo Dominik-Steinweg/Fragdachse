@@ -284,6 +284,8 @@ export interface SyncedProjectile {
   gaussChainDamageFactor?: number;
   miniRocketPhase?: MiniRocketFlightPhase;
   miniRocketCascadeStage?: number;
+  /** Aktiver Brand auf dem Projektil (Waffen-Upgrade oder Feuerflaechen-Imbue). */
+  burning?: boolean;
 }
 
 /** Kurzlebiger Hitscan-Trace für VFX-Replikation (Host → Clients, unreliable). */
@@ -1043,6 +1045,8 @@ export interface SyncedBurningGroundCell {
   gridX: number;
   gridY: number;
   expiresAt: number;
+  /** Anzahl gleichzeitig aktiver, eigenstaendiger Brandquellen in dieser Zelle. */
+  intensity: number;
 }
 
 export interface SyncedBurningGroundSnapshot {

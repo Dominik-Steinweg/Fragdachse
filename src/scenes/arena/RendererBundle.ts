@@ -16,6 +16,7 @@ import { HealingAuraRenderer } from '../../effects/HealingAuraRenderer';
 import { GuardianSpiritRenderer } from '../../effects/GuardianSpiritRenderer';
 import { SlimeTrailRenderer } from '../../effects/SlimeTrailRenderer';
 import { FlamethrowerUpgradeRenderer } from '../../effects/FlamethrowerUpgradeRenderer';
+import { ProjectileBurnRenderer } from '../../effects/ProjectileBurnRenderer';
 import { MiniTeslaDomeRenderer } from '../../effects/MiniTeslaDomeRenderer';
 import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
@@ -58,6 +59,7 @@ export interface RendererBundle {
   guardianSpirit:      GuardianSpiritRenderer;
   slimeTrail:          SlimeTrailRenderer;
   flamethrowerUpgrades: FlamethrowerUpgradeRenderer;
+  projectileBurn:      ProjectileBurnRenderer;
   miniTeslaDome:       MiniTeslaDomeRenderer;
   timeBubble:          TimeBubbleRenderer;
   holyGrenade:         HolyGrenadeRenderer;
@@ -132,6 +134,7 @@ export function createRendererBundle(
 
   const slimeTrail = new SlimeTrailRenderer(scene);
   const flamethrowerUpgrades = new FlamethrowerUpgradeRenderer(scene, playerManager);
+  const projectileBurn = new ProjectileBurnRenderer(scene);
 
   const miniTeslaDome = new MiniTeslaDomeRenderer(scene);
   miniTeslaDome.generateTextures();
@@ -178,7 +181,7 @@ export function createRendererBundle(
   const shadow = new ShadowSystem(scene, arenaMask);
 
   return {
-    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, slimeTrail, flamethrowerUpgrades, miniTeslaDome, timeBubble, holyGrenade,
+    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, slimeTrail, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, holyGrenade,
     rocket, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
     train: null,
@@ -193,6 +196,7 @@ export function wireRenderersToProjManager(
   playerManager: PlayerManager,
 ): void {
   pm.setBulletRenderer(bundle.bullet);
+  pm.setProjectileBurnRenderer(bundle.projectileBurn);
   pm.setFlameRenderer(bundle.flame);
   pm.setLeafBlowerRenderer(bundle.leafBlower);
   pm.setBfgRenderer(bundle.bfg);

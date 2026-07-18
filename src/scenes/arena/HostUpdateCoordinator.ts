@@ -137,10 +137,7 @@ export class HostUpdateCoordinator {
       ? { cells: [], affectedEnemies: [] }
       : (this.ctx.slimeTrailSystem?.hostUpdate(now) ?? { cells: [], affectedEnemies: [] });
     this.renderers.slimeTrail.syncVisuals(slimeTrail);
-    const burningGround = countdownActive
-      ? { cells: [] }
-      : (this.ctx.flamethrowerUpgradeSystem?.hostUpdate(now) ?? { cells: [] });
-    this.renderers.flamethrowerUpgrades.syncGround(burningGround);
+    if (!countdownActive) this.ctx.flamethrowerUpgradeSystem?.hostUpdate(now);
 
     for (const evt of countdownEvents) {
       bridge.broadcastGrenadeCountdown(evt.x, evt.y, evt.value);
@@ -265,9 +262,15 @@ export class HostUpdateCoordinator {
     const { synced: smokes, damageEvents: smokeDmg } = countdownActive
       ? { synced: [], damageEvents: [] }
       : this.ctx.smokeSystem.hostUpdate(Date.now());
-    const { synced: fires, damageEvents: fireDamageEvents } = countdownActive
-      ? { synced: [], damageEvents: [] }
-      : this.ctx.fireSystem.hostUpdate(Date.now());
+    const {
+      synced: fires,
+      ground: burningGround,
+      damageEvents: fireDamageEvents,
+      damageTick: fireDamageTick,
+    } = countdownActive
+      ? { synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }
+      : this.ctx.fireSystem.hostUpdate(now);
+    this.renderers.flamethrowerUpgrades.syncGround(burningGround);
 
     const { synced: stinkClouds, damageEvents: stinkDmg } = countdownActive
       ? { synced: [], damageEvents: [] }
@@ -308,39 +311,73 @@ export class HostUpdateCoordinator {
     this.renderers.teslaDome.syncVisuals(teslaDomes);
     this.renderers.energyShield.syncVisuals(energyShields);
 
-    for (const ev of fireDamageEvents) {
-      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, true, {
-        category: 'damage_over_time',
-        weaponName: ev.weaponName,
-        sourceSlot: 'utility',
-      });
-      this.applyAoeEnvironmentDamage(
-        ev.x, ev.y, ev.radius, ev.damage,
-        ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
-      );
-
-      if (ev.burnDurationMs && ev.burnDamagePerTick) {
-        for (const player of this.ctx.playerManager.getAllPlayers()) {
-          const dist = Phaser.Math.Distance.Between(ev.x, ev.y, player.sprite.x, player.sprite.y);
-          if (dist <= ev.radius) {
-            this.ctx.combatSystem.applyBurnHit(
-              player.id, ev.ownerId,
-              ev.burnDurationMs, ev.burnDamagePerTick, ev.sourceId,
-              ev.weaponName,
+    if (fireDamageTick) {
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+        const radius = Math.max(player.sprite.displayWidth, player.sprite.displayHeight) * 0.5;
+        for (const contact of this.ctx.fireSystem.collectContacts(player.sprite.x, player.sprite.y, radius, now)) {
+          if (contact.damagePerTick > 0 && player.id !== contact.ownerId) {
+            this.ctx.combatSystem.applyDamage(
+              player.id,
+              Math.round(contact.damagePerTick),
+              false,
+              contact.ownerId,
+              contact.weaponName,
+              { sourceX: contact.x, sourceY: contact.y },
+              { allowTeamDamage: contact.allowTeamDamage },
             );
           }
-        }
-        for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
-          const dist = Phaser.Math.Distance.Between(ev.x, ev.y, enemy.sprite.x, enemy.sprite.y);
-          if (dist <= ev.radius) {
+          if (contact.burn) {
             this.ctx.combatSystem.applyBurnHit(
-              enemy.id, ev.ownerId,
-              ev.burnDurationMs, ev.burnDamagePerTick, ev.sourceId,
-              ev.weaponName,
+              player.id,
+              contact.ownerId,
+              contact.burn.durationMs,
+              contact.burn.damagePerTick,
+              contact.sourceId,
+              contact.weaponName,
             );
           }
         }
       }
+
+      for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+        if (!this.ctx.combatSystem.isAlive(enemy.id)) continue;
+        for (const contact of this.ctx.fireSystem.collectContacts(
+          enemy.sprite.x,
+          enemy.sprite.y,
+          enemy.getCollisionRadius(),
+          now,
+        )) {
+          if (contact.damagePerTick > 0) {
+            this.ctx.combatSystem.applyDamage(
+              enemy.id,
+              Math.round(contact.damagePerTick),
+              false,
+              contact.ownerId,
+              contact.weaponName,
+              { sourceX: contact.x, sourceY: contact.y },
+              { allowTeamDamage: contact.allowTeamDamage },
+            );
+          }
+          if (contact.burn) {
+            this.ctx.combatSystem.applyBurnHit(
+              enemy.id,
+              contact.ownerId,
+              contact.burn.durationMs,
+              contact.burn.damagePerTick,
+              contact.sourceId,
+              contact.weaponName,
+            );
+          }
+        }
+      }
+    }
+
+    for (const ev of fireDamageEvents) {
+      this.applyAoeEnvironmentDamage(
+        ev.x, ev.y, ev.radius, ev.damage,
+        ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
+      );
     }
 
     for (const ev of stinkDmg) {

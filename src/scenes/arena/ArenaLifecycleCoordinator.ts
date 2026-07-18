@@ -62,6 +62,35 @@ import { EnemyManager } from '../../entities/EnemyManager';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 
+function segmentIntersectsBounds(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+): boolean {
+  const dx = endX - startX;
+  const dy = endY - startY;
+  let entry = 0;
+  let exit = 1;
+  const clip = (origin: number, delta: number, min: number, max: number): boolean => {
+    if (Math.abs(delta) <= 0.0001) return origin >= min && origin <= max;
+    let near = (min - origin) / delta;
+    let far = (max - origin) / delta;
+    if (near > far) [near, far] = [far, near];
+    entry = Math.max(entry, near);
+    exit = Math.min(exit, far);
+    return entry <= exit;
+  };
+  return clip(startX, dx, left, right)
+    && clip(startY, dy, top, bottom)
+    && exit > 0.001
+    && entry < 0.999;
+}
+
 /**
  * Manages the arena round lifecycle.
  *
@@ -490,6 +519,49 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+    this.ctx.fireSystem.setGroundResolvers(
+      (bounds) => {
+        for (const rock of this.ctx.arenaResult?.rockObjects ?? []) {
+          if (!rock?.active) continue;
+          const rockBounds = rock.getBounds();
+          if (
+            bounds.left < rockBounds.right
+            && bounds.right > rockBounds.left
+            && bounds.top < rockBounds.bottom
+            && bounds.bottom > rockBounds.top
+          ) return true;
+        }
+        for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+          const left = ARENA_OFFSET_X + rock.gridX * CELL_SIZE;
+          const top = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE;
+          if (
+            bounds.left < left + CELL_SIZE
+            && bounds.right > left
+            && bounds.top < top + CELL_SIZE
+            && bounds.bottom > top
+          ) return true;
+        }
+        return false;
+      },
+      (startX, startY, endX, endY) => {
+        if (!this.ctx.combatSystem.hasLineOfSight(startX, startY, endX, endY)) return false;
+        for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+          const left = ARENA_OFFSET_X + rock.gridX * CELL_SIZE;
+          const top = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE;
+          if (segmentIntersectsBounds(
+            startX,
+            startY,
+            endX,
+            endY,
+            left,
+            top,
+            left + CELL_SIZE,
+            top + CELL_SIZE,
+          )) return false;
+        }
+        return true;
+      },
+    );
     this.ctx.combatSystem.setBaseManager(this.ctx.baseManager);
     this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
@@ -1050,6 +1122,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
     this.ctx.fireSystem.destroyAll();
+    this.ctx.fireSystem.setGroundResolvers(null, null);
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.timeBubbleSystem?.destroyAll();
     this.ctx.decoySystem.clearAll();

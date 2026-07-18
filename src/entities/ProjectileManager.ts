@@ -8,6 +8,7 @@ import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { type GeometryHit, findNearestRectangleHit as geomNearestRectangleHit } from '../utils/geometry';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
 import type { FlameRenderer }   from '../effects/FlameRenderer';
+import type { ProjectileBurnRenderer } from '../effects/ProjectileBurnRenderer';
 import type { LeafBlowerRenderer } from '../effects/LeafBlowerRenderer';
 import type { BfgRenderer }     from '../effects/BfgRenderer';
 import type { EnergyBallRenderer } from '../effects/EnergyBallRenderer';
@@ -45,6 +46,7 @@ interface ClientProjectileState {
   velocityDecay: number;
   miniRocketPhase?: import('../types').MiniRocketFlightPhase;
   miniRocketCascadeStage?: number;
+  burning: boolean;
 }
 
 function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset): BulletVisualPreset {
@@ -68,6 +70,7 @@ export class ProjectileManager {
 
   // ── Flame-Renderer (Flammenwerfer-Partikel) ───────────────────────────────
   private flameRenderer: FlameRenderer | null = null;
+  private projectileBurnRenderer: ProjectileBurnRenderer | null = null;
 
   // ── Leaf-Blower-Renderer (Luftstrom + Blätter) ────────────────────────────
   private leafBlowerRenderer: LeafBlowerRenderer | null = null;
@@ -208,6 +211,10 @@ export class ProjectileManager {
    */
   setFlameRenderer(renderer: FlameRenderer | null): void {
     this.flameRenderer = renderer;
+  }
+
+  setProjectileBurnRenderer(renderer: ProjectileBurnRenderer | null): void {
+    this.projectileBurnRenderer = renderer;
   }
 
   setNaturalFlameExpiryCallback(
@@ -1542,6 +1549,7 @@ export class ProjectileManager {
     this.bulletRenderer?.destroyVisual(proj.id);
     this.tracerRenderer?.destroyTracer(proj.id);
     this.flameRenderer?.destroyVisual(proj.id);
+    this.projectileBurnRenderer?.destroyVisual(proj.id);
     this.leafBlowerRenderer?.destroyVisual(proj.id);
     this.bfgRenderer?.destroyVisual(proj.id);
     this.gaussRenderer?.destroyVisual(proj.id);
@@ -1848,6 +1856,7 @@ export class ProjectileManager {
     this.bulletRenderer?.destroyAll();
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
+    this.projectileBurnRenderer?.destroyAll();
     this.leafBlowerRenderer?.destroyAll();
     this.bfgRenderer?.destroyAll();
     this.gaussRenderer?.destroyAll();
@@ -2309,6 +2318,20 @@ export class ProjectileManager {
       }
     }
 
+    const burningProjectiles = new Set<number>();
+    for (const proj of this.projectiles) {
+      const burning = this.hasVisibleProjectileBurn(proj);
+      this.projectileBurnRenderer?.sync(
+        proj.id,
+        proj.sprite.x,
+        proj.sprite.y,
+        proj.sprite.displayWidth,
+        burning,
+      );
+      if (burning) burningProjectiles.add(proj.id);
+    }
+    this.projectileBurnRenderer?.retain(burningProjectiles);
+
     // FlameRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
     const flames = this.flameRenderer;
     if (flames) {
@@ -2618,6 +2641,7 @@ export class ProjectileManager {
       tracer: p.tracerConfig,
       shotAudioKey: p.shotAudioKey,
       suppressSpawnFx: p.suppressSpawnFx,
+      burning: this.hasVisibleProjectileBurn(p) || undefined,
     }));
   }
 
@@ -2642,6 +2666,7 @@ export class ProjectileManager {
     const tlPucks = this.translocatorPuckRenderer;
     const bfgR = this.bfgRenderer;
     const tracerRc = this.tracerRenderer;
+    const burningIds = new Set<number>();
 
     this.cleanupOrphanedClientVisuals(data, activeIds);
 
@@ -2689,6 +2714,7 @@ export class ProjectileManager {
         velocityDecay: proj.velocityDecay ?? 1,
         miniRocketPhase: proj.miniRocketPhase,
         miniRocketCascadeStage: proj.miniRocketCascadeStage,
+        burning: proj.burning === true,
       });
 
       if (!prev && !proj.suppressSpawnFx) {
@@ -2825,7 +2851,11 @@ export class ProjectileManager {
         }
         tracerRc.updateTracer(proj.id, proj.x, proj.y, proj.vx, proj.vy);
       }
+
+      this.projectileBurnRenderer?.sync(proj.id, proj.x, proj.y, proj.size, proj.burning === true);
+      if (proj.burning) burningIds.add(proj.id);
     }
+    this.projectileBurnRenderer?.retain(burningIds);
   }
 
   /**
@@ -3041,7 +3071,15 @@ export class ProjectileManager {
       if (tracerRe && tracerRe.has(id)) {
         tracerRe.updateTracer(id, ex, ey, velocityX, velocityY);
       }
+      this.projectileBurnRenderer?.sync(id, ex, ey, state.size, state.burning);
     }
+  }
+
+  private hasVisibleProjectileBurn(proj: TrackedProjectile): boolean {
+    if (proj.isFlame || proj.isGrenade) return false;
+    return ((proj.burnDurationMs ?? 0) > 0 && (proj.burnDamagePerTick ?? 0) > 0)
+      || ((proj.supplementalBurnOnHit?.durationMs ?? 0) > 0
+        && (proj.supplementalBurnOnHit?.damagePerTick ?? 0) > 0);
   }
 
   private extrapolateClientProjectileState(

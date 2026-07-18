@@ -1888,7 +1888,7 @@
           "id": "flamethrower_burning_ground",
           "code": "C-W8-C1",
           "label": "Brennender Boden",
-          "description": "Gegner, die brennend sterben, entzuenden ihre 32-Pixel-Rasterzelle fuer 2 Sekunden. Gegner im Feuer erhalten alle 250 ms einen Brand-Stack; erneutes Entzuenden verlaengert die Zellendauer.",
+          "description": "Gegner, die brennend sterben, entzuenden ihre 16-Pixel-Rasterzelle fuer 2 Sekunden. Gegner im Feuer erhalten alle 250 ms einen Brand-Stack; erneutes Entzuenden verlaengert die Zellendauer.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -1898,7 +1898,7 @@
           "sortOrder": 350,
           "requires": [{ "upgradeId": "unlock_flamethrower", "minLevel": 1 }],
           "effects": [
-            { "stat": "weapon.FLAMETHROWER.burningGround.cellSize", "mode": "add_per_level", "value": 32 },
+            { "stat": "weapon.FLAMETHROWER.burningGround.cellSize", "mode": "add_per_level", "value": 16 },
             { "stat": "weapon.FLAMETHROWER.burningGround.durationMs", "mode": "add_per_level", "value": 2000 }
           ]
         },
