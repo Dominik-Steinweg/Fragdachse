@@ -80,6 +80,14 @@ export class CoopDefenseEnemyAttackSystem {
       activeEnemyIds.add(enemy.id);
       enemy.decayWeaponSpread(delta, now);
 
+      if (this.enemyManager.isEnemyPanicking(enemy.id)) {
+        this.sustainedAttacks.delete(enemy.id);
+        this.meleeWindups.delete(enemy.id);
+        this.obstacleContacts.delete(enemy.id);
+        this.resetMovementProgress(enemy, now);
+        continue;
+      }
+
       if (this.trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) {
         this.sustainedAttacks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);

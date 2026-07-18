@@ -27,7 +27,6 @@ import type {
   TunnelUltimateConfig,
   FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
-  MolotovUtilityConfig,
   ProjectileWeaponFireConfig,
   TeslaDomeWeaponFireConfig,
   UltimateConfig,
@@ -120,7 +119,6 @@ export class LoadoutManager {
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   private shotCounters = new Map<string, number>();
-  private wildfireHandler: ((ownerId: string, x: number, y: number, radius: number, durationMs: number, damagePerTick: number) => void) | null = null;
   private ak47States = new Map<string, Ak47CombatState>();
   private shotgunLightningQueue: ShotgunLightningEvent[] = [];
 
@@ -744,8 +742,6 @@ export class LoadoutManager {
     return (state?.active && state.config.type === 'buff' ? state.config.damageMultiplier : 1)
       * this.getAllyAuraMultiplier(playerId, 'damage');
   }
-  setWildfireHandler(cb: ((ownerId: string, x: number, y: number, radius: number, durationMs: number, damagePerTick: number) => void) | null): void { this.wildfireHandler = cb; }
-
   private getAllyAuraMultiplier(playerId: string, kind: 'speed' | 'damage'): number {
     const now = Date.now();
     const target = this.playerManager.getPlayer(playerId);
@@ -995,32 +991,6 @@ export class LoadoutManager {
           generation: source.shotgunLightningGeneration + 1,
         });
       }
-    }
-    const utility = loadout.utility.config;
-    let killMolotov: MolotovUtilityConfig | null = weaponName === 'Molotov' && utility.type === 'molotov'
-      ? utility
-      : null;
-    const flamethrower = loadout.weapon2.config;
-    if (
-      weaponName === 'Kamikaze-Napalm'
-      && flamethrower.id === 'FLAMETHROWER'
-      && flamethrower.fire.type === 'flamethrower'
-      && (flamethrower.fire.kamikaze?.inheritMolotovBonuses ?? 0) > 0
-    ) {
-      killMolotov = this.resolveUtilityConfig(
-        killerId,
-        UTILITY_CONFIGS.MOLOTOV_GRENADE,
-      ) as MolotovUtilityConfig;
-    }
-    if (killMolotov && (killMolotov.deathPatchRadius ?? 0) > 0) {
-      this.wildfireHandler?.(
-        killerId,
-        x,
-        y,
-        killMolotov.deathPatchRadius ?? 0,
-        killMolotov.deathPatchDurationMs ?? 0,
-        killMolotov.deathPatchDamagePerTick ?? 0,
-      );
     }
     for (const weapon of [loadout.weapon1, loadout.weapon2]) {
       const cfg = weapon.config;
@@ -1533,6 +1503,11 @@ export class LoadoutManager {
         trainDamageMult: cfg.trainDamageMult,
         burnDurationMs:     cfg.fireBurnDurationMs,
         burnDamagePerTick:  cfg.fireBurnDamagePerTick,
+        wildfire: (cfg.wildfireEnabled ?? 0) > 0 ? {
+          speedMultiplier: cfg.wildfirePanicSpeedMultiplier ?? 1.5,
+          trailDurationMs: cfg.wildfireTrailDurationMs ?? 2000,
+          trailDamagePerTick: cfg.wildfireTrailDamagePerTick ?? 2,
+        } : undefined,
       };
     }
 
@@ -1840,7 +1815,7 @@ export class LoadoutManager {
       const groundEffect = {
         durationMs: fireball?.groundDurationMs ?? 2000,
         burnDurationMs: fireConfig.burnDurationMs,
-        burnDamagePerTick: fireConfig.burnDamagePerTick,
+        burnDamagePerTick: fireball?.groundBurnDamagePerTick ?? 0.5,
         weaponName: 'Feuerball-Brand',
       };
       const chunkCount = Math.max(0, Math.floor(fireball?.chunkCount ?? 0));
@@ -1860,8 +1835,8 @@ export class LoadoutManager {
         trainDamageMult: 1.15,
         explosion: {
           radius: fireball?.explosionRadius ?? 120,
-          maxDamage: fireball?.explosionMaxDamage ?? 45,
-          minDamage: fireball?.explosionMinDamage ?? 10,
+          maxDamage: fireball?.explosionMaxDamage ?? 90,
+          minDamage: fireball?.explosionMinDamage ?? 20,
           knockback: fireball?.explosionKnockback ?? 1250,
           selfDamageMult: fireball?.selfDamageMult ?? 0.25,
           rockDamageMult: 1,

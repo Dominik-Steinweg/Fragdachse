@@ -91,6 +91,8 @@ export class HostUpdateCoordinator {
       countdownActive,
       now,
       delta,
+      this.ctx.fireSystem,
+      (enemyId, at) => this.ctx.combatSystem.getActiveBurnSources(enemyId, at),
       this.ctx.coopDefenseEnemyTrainAwarenessSystem,
     );
     if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);

@@ -22,10 +22,12 @@ const GROUND_PARTICLE_DEPTH = DEPTH.FIRE - 0.18;
 const RING_PARTICLE_DEPTH = DEPTH.FIRE + 0.12;
 const MAX_GROUND_EMISSIONS_PER_SECOND = 720;
 const RING_BAND_THICKNESS = 16;
-const RING_POINT_SPACING = 4.8;
+const RING_CORE_THICKNESS = 7;
+const RING_POINT_SPACING = 4;
 const RING_BAND_REFRESH_MS = 430;
+const RING_CORE_REFRESH_MS = 260;
 const RING_BAND_FREQUENCY_MS = 16;
-const RING_ACCENT_RATE_AT_BASE_RADIUS = 64;
+const RING_ACCENT_RATE_AT_BASE_RADIUS = 88;
 const RING_BASE_RADIUS = 64;
 const RING_GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const TWO_PI = Math.PI * 2;
@@ -41,8 +43,15 @@ interface RingVisual {
   radius: number;
   phase: number;
   bandEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  coreEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   accentAccumulator: number;
   accentCursor: number;
+}
+
+interface RingParticleProfile {
+  size: number;
+  intensity: number;
+  heat: number;
 }
 
 /**
@@ -132,6 +141,8 @@ export class FlamethrowerUpgradeRenderer {
     this.ringSparks = this.createSparkEmitter(RING_PARTICLE_DEPTH + 0.1, true);
     this.ringFlames.addParticleProcessor(new RingTurbulenceProcessor(32));
     this.ringSparks.addParticleProcessor(new RingTurbulenceProcessor(54));
+    setInternalFxPadding(this.ringFlames, 10);
+    addInternalGlow(this.ringFlames, 0xff7b21, 1.45, 0.2, false, 0.1, 5);
   }
 
   syncGround(snapshot: SyncedBurningGroundSnapshot): void {
@@ -341,7 +352,11 @@ export class FlamethrowerUpgradeRenderer {
       visual.bandEmitter
         .setPosition(player.sprite.x, player.sprite.y)
         .setVisible(visible);
+      visual.coreEmitter
+        .setPosition(player.sprite.x, player.sprite.y)
+        .setVisible(visible);
       visual.bandEmitter.emitting = visible;
+      visual.coreEmitter.emitting = visible;
       if (!visible) continue;
 
       this.emitRingAccents(visual, player.sprite.x, player.sprite.y, delta, now);
@@ -350,17 +365,42 @@ export class FlamethrowerUpgradeRenderer {
 
   private createRingVisual(playerId: string, radius: number, x: number, y: number): RingVisual {
     const phase = this.seededUnit(this.hashString(playerId), 83) * TWO_PI;
-    const bandEmitter = createEmitter(this.scene, x, y, TEX_FLAME_CORE, {
-      lifespan: { min: 520, max: 720 },
+    const bandProfiles = new WeakMap<Phaser.GameObjects.Particles.Particle, RingParticleProfile>();
+    const getBandProfile = (
+      particle: Phaser.GameObjects.Particles.Particle,
+      refresh = false,
+    ): RingParticleProfile => {
+      let profile = bandProfiles.get(particle);
+      if (!profile || refresh) {
+        profile = this.sampleRingParticleProfile(particle, phase, 0.37);
+        bandProfiles.set(particle, profile);
+      }
+      return profile;
+    };
+    const bandEmitter = createEmitter(this.scene, x, y, TEX_FLAME_EMBER, {
+      lifespan: { min: 420, max: 650 },
       frequency: RING_BAND_FREQUENCY_MS,
       quantity: this.getRingBandEmissionQuantity(radius),
-      speedX: { min: -3.5, max: 3.5 },
-      speedY: { min: -3.5, max: 3.5 },
-      scale: { start: 0.44, end: 0.27, ease: 'Sine.easeOut' },
-      alpha: { start: 0.9, end: 0, ease: 'Quad.easeIn' },
-      color: [0xffffdd, 0xffdd70, 0xff982c, 0xe94712],
-      colorEase: 'Quad.easeOut',
-      rotate: { min: -28, max: 28 },
+      speedX: { min: -5, max: 5 },
+      speedY: { min: -5, max: 5 },
+      scaleX: {
+        onEmit: particle => particle ? 1.02 * getBandProfile(particle, true).size : 1.02,
+        onUpdate: (particle, _key, t) => Phaser.Math.Linear(1.02, 0.62, Phaser.Math.Easing.Sine.Out(t))
+          * getBandProfile(particle).size,
+      },
+      scaleY: {
+        onEmit: particle => particle ? 0.88 * getBandProfile(particle).size : 0.88,
+        onUpdate: (particle, _key, t) => Phaser.Math.Linear(0.88, 0.52, Phaser.Math.Easing.Sine.Out(t))
+          * getBandProfile(particle).size,
+      },
+      alpha: {
+        onEmit: particle => particle ? 0.7 * getBandProfile(particle).intensity : 0.7,
+        onUpdate: (particle, _key, t) => 0.7 * getBandProfile(particle).intensity
+          * (1 - Phaser.Math.Easing.Quadratic.In(t)),
+      },
+      tint: (particle?: Phaser.GameObjects.Particles.Particle) => particle
+        ? this.getRingOuterTint(getBandProfile(particle).heat)
+        : 0xff7b21,
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: this.getRingBandPoolSize(radius),
       maxAliveParticles: this.getRingBandPoolSize(radius),
@@ -369,16 +409,77 @@ export class FlamethrowerUpgradeRenderer {
       emitZone: this.createRingBandZone(radius, phase),
     }, RING_PARTICLE_DEPTH);
 
+    bandEmitter.onParticleEmit((particle) => {
+      const tangentAngle = Math.atan2(particle.y, particle.x) + Math.PI * 0.5;
+      particle.rotation = tangentAngle + Phaser.Math.FloatBetween(-0.08, 0.08);
+      particle.angle = Phaser.Math.RadToDeg(particle.rotation);
+    });
     bandEmitter.addParticleProcessor(new RingTurbulenceProcessor(8));
-    setInternalFxPadding(bandEmitter, 10);
-    addInternalBlur(bandEmitter, 0, 0.9, 0.9, 1, 0xff8a24, 1);
-    addInternalGlow(bandEmitter, 0xff7a1d, 1.35, 0.18, false, 0.1, 5);
-    bandEmitter.fastForward(720, 16.67);
+    setInternalFxPadding(bandEmitter, 14);
+    addInternalBlur(bandEmitter, 1, 1.15, 1.15, 1, 0xff5b18, 1);
+    addInternalGlow(bandEmitter, 0xff4d18, 1.9, 0.2, false, 0.1, 7);
+    bandEmitter.fastForward(650, 16.67);
+
+    const coreProfiles = new WeakMap<Phaser.GameObjects.Particles.Particle, RingParticleProfile>();
+    const getCoreProfile = (
+      particle: Phaser.GameObjects.Particles.Particle,
+      refresh = false,
+    ): RingParticleProfile => {
+      let profile = coreProfiles.get(particle);
+      if (!profile || refresh) {
+        profile = this.sampleRingParticleProfile(particle, phase, 0.52);
+        coreProfiles.set(particle, profile);
+      }
+      return profile;
+    };
+    const coreEmitter = createEmitter(this.scene, x, y, TEX_FLAME_CORE, {
+      lifespan: { min: 220, max: 380 },
+      frequency: RING_BAND_FREQUENCY_MS,
+      quantity: this.getRingCoreEmissionQuantity(radius),
+      speedX: { min: -4, max: 4 },
+      speedY: { min: -4, max: 4 },
+      scaleX: {
+        onEmit: particle => particle ? 0.62 * getCoreProfile(particle, true).size : 0.62,
+        onUpdate: (particle, _key, t) => Phaser.Math.Linear(0.62, 0.36, Phaser.Math.Easing.Sine.Out(t))
+          * getCoreProfile(particle).size,
+      },
+      scaleY: {
+        onEmit: particle => particle ? 0.3 * getCoreProfile(particle).size : 0.3,
+        onUpdate: (particle, _key, t) => Phaser.Math.Linear(0.3, 0.15, Phaser.Math.Easing.Sine.Out(t))
+          * getCoreProfile(particle).size,
+      },
+      alpha: {
+        onEmit: particle => particle ? 0.82 * getCoreProfile(particle).intensity : 0.82,
+        onUpdate: (particle, _key, t) => 0.82 * getCoreProfile(particle).intensity
+          * (1 - Phaser.Math.Easing.Quadratic.In(t)),
+      },
+      tint: (particle?: Phaser.GameObjects.Particles.Particle) => particle
+        ? this.getRingCoreTint(getCoreProfile(particle).heat)
+        : 0xffe36b,
+      blendMode: Phaser.BlendModes.ADD,
+      maxParticles: this.getRingCorePoolSize(radius),
+      maxAliveParticles: this.getRingCorePoolSize(radius),
+      reserve: this.getRingCoreReserve(radius),
+      emitting: true,
+      emitZone: this.createRingBandZone(radius, phase, RING_CORE_THICKNESS),
+    }, RING_PARTICLE_DEPTH + 0.02);
+
+    coreEmitter.onParticleEmit((particle) => {
+      const tangentAngle = Math.atan2(particle.y, particle.x) + Math.PI * 0.5;
+      particle.rotation = tangentAngle + Phaser.Math.FloatBetween(-0.06, 0.06);
+      particle.angle = Phaser.Math.RadToDeg(particle.rotation);
+    });
+    coreEmitter.addParticleProcessor(new RingTurbulenceProcessor(6));
+    setInternalFxPadding(coreEmitter, 10);
+    addInternalBlur(coreEmitter, 0, 0.45, 0.45, 1, 0xffd34f, 1);
+    addInternalGlow(coreEmitter, 0xffb12e, 1.15, 0.28, false, 0.1, 5);
+    coreEmitter.fastForward(380, 16.67);
 
     return {
       radius,
       phase,
       bandEmitter,
+      coreEmitter,
       accentAccumulator: 0,
       accentCursor: 0,
     };
@@ -393,13 +494,25 @@ export class FlamethrowerUpgradeRenderer {
     visual.bandEmitter.maxAliveParticles = this.getRingBandPoolSize(radius);
     visual.bandEmitter.killAll();
     visual.bandEmitter.reserve(this.getRingBandReserve(radius));
-    visual.bandEmitter.fastForward(720, 16.67);
+    visual.bandEmitter.fastForward(650, 16.67);
+    visual.coreEmitter.clearEmitZones();
+    visual.coreEmitter.addEmitZone(this.createRingBandZone(radius, visual.phase, RING_CORE_THICKNESS));
+    visual.coreEmitter.setQuantity(this.getRingCoreEmissionQuantity(radius));
+    visual.coreEmitter.maxParticles = this.getRingCorePoolSize(radius);
+    visual.coreEmitter.maxAliveParticles = this.getRingCorePoolSize(radius);
+    visual.coreEmitter.killAll();
+    visual.coreEmitter.reserve(this.getRingCoreReserve(radius));
+    visual.coreEmitter.fastForward(380, 16.67);
   }
 
-  private createRingBandZone(radius: number, phase: number): Phaser.Types.GameObjects.Particles.EmitZoneData {
+  private createRingBandZone(
+    radius: number,
+    phase: number,
+    thickness = RING_BAND_THICKNESS,
+  ): Phaser.Types.GameObjects.Particles.EmitZoneData {
     return {
       type: 'edge',
-      source: new RingBandEdgeSource(radius, RING_BAND_THICKNESS, phase),
+      source: new RingBandEdgeSource(radius, thickness, phase),
       quantity: this.getRingBandPointCount(radius),
       yoyo: false,
       seamless: false,
@@ -424,8 +537,8 @@ export class FlamethrowerUpgradeRenderer {
       const tangentY = radialX;
       const x = centerX + radialX * emissionRadius;
       const y = centerY + radialY * emissionRadius;
-      const radialSpeed = Phaser.Math.FloatBetween(14, 31);
-      const tangentialSpeed = Phaser.Math.FloatBetween(-10, 10);
+      const radialSpeed = Phaser.Math.FloatBetween(18, 38);
+      const tangentialSpeed = Phaser.Math.FloatBetween(-8, 8);
 
       const flame = this.ringFlames.emitParticleAt(x, y, 1);
       if (flame) {
@@ -434,7 +547,7 @@ export class FlamethrowerUpgradeRenderer {
         flame.rotation = angle + Phaser.Math.FloatBetween(-0.24, 0.24);
       }
 
-      if ((cursor + Math.floor(visual.phase * 10)) % 6 !== 0) continue;
+      if ((cursor + Math.floor(visual.phase * 10)) % 4 !== 0) continue;
       const spark = this.ringSparks.emitParticleAt(x, y, 1);
       if (!spark) continue;
       const sparkRadialSpeed = Phaser.Math.FloatBetween(42, 76);
@@ -447,16 +560,22 @@ export class FlamethrowerUpgradeRenderer {
   private destroyRingVisual(playerId: string, visual: RingVisual): void {
     this.ringVisuals.delete(playerId);
     destroyEmitter(visual.bandEmitter);
+    destroyEmitter(visual.coreEmitter);
   }
 
   private getRingBandPointCount(radius: number): number {
     const angularPoints = Math.ceil(TWO_PI * radius / RING_POINT_SPACING);
-    return Phaser.Math.Clamp(angularPoints * 2, 120, 300);
+    return Phaser.Math.Clamp(angularPoints * 2, 140, 360);
   }
 
   private getRingBandEmissionQuantity(radius: number): number {
     const pointsPerRefresh = this.getRingBandPointCount(radius);
     return Math.max(4, Math.ceil(pointsPerRefresh * RING_BAND_FREQUENCY_MS / RING_BAND_REFRESH_MS));
+  }
+
+  private getRingCoreEmissionQuantity(radius: number): number {
+    const pointsPerRefresh = this.getRingBandPointCount(radius);
+    return Math.max(6, Math.ceil(pointsPerRefresh * RING_BAND_FREQUENCY_MS / RING_CORE_REFRESH_MS));
   }
 
   private getRingBandReserve(radius: number): number {
@@ -465,6 +584,14 @@ export class FlamethrowerUpgradeRenderer {
 
   private getRingBandPoolSize(radius: number): number {
     return Math.ceil(this.getRingBandPointCount(radius) * 2.1);
+  }
+
+  private getRingCoreReserve(radius: number): number {
+    return Math.ceil(this.getRingBandPointCount(radius) * 1.35);
+  }
+
+  private getRingCorePoolSize(radius: number): number {
+    return Math.ceil(this.getRingBandPointCount(radius) * 1.8);
   }
 
   private createCoreEmitter(depth: number): Phaser.GameObjects.Particles.ParticleEmitter {
@@ -507,15 +634,15 @@ export class FlamethrowerUpgradeRenderer {
 
   private createRingFlameEmitter(depth: number): Phaser.GameObjects.Particles.ParticleEmitter {
     return createEmitter(this.scene, 0, 0, TEX_FLAME_EMBER, {
-      lifespan: { min: 340, max: 620 },
+      lifespan: { min: 420, max: 760 },
       frequency: -1,
       quantity: 1,
       speedX: 0,
       speedY: 0,
       gravityY: 0,
-      scale: { start: 0.66, end: 0.05, random: true, ease: 'Quad.easeIn' },
-      alpha: { start: 0.82, end: 0, ease: 'Quad.easeIn' },
-      color: [0xffffc2, 0xffb12e, 0xff5b16, 0xc92c0c],
+      scale: { start: 0.82, end: 0.06, ease: 'Quad.easeIn' },
+      alpha: { start: 0.96, end: 0, ease: 'Quad.easeIn' },
+      color: [0xffffdf, 0xffd34f, 0xff7b21, 0xd93411],
       colorEase: 'Quad.easeOut',
       rotate: { min: -22, max: 22 },
       blendMode: Phaser.BlendModes.ADD,
@@ -534,7 +661,7 @@ export class FlamethrowerUpgradeRenderer {
       speedX: ring ? 0 : { min: -34, max: 34 },
       speedY: ring ? 0 : { min: -98, max: -38 },
       gravityY: ring ? 0 : -36,
-      scale: { start: ring ? 0.72 : 0.75, end: 0.04 },
+      scale: { start: ring ? 0.9 : 0.75, end: 0.04 },
       alpha: { start: 1, end: 0 },
       tint: [...FLAME_COLORS_SPARK],
       blendMode: Phaser.BlendModes.ADD,
@@ -600,6 +727,41 @@ export class FlamethrowerUpgradeRenderer {
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 48, 48);
     });
+  }
+
+  private sampleRingParticleProfile(
+    particle: Phaser.GameObjects.Particles.Particle,
+    phase: number,
+    layerSeed: number,
+  ): RingParticleProfile {
+    const angle = Math.atan2(particle.y, particle.x);
+    const slowBlend = 0.5 + Math.sin(this.scene.time.now * 0.00022 + phase * 0.71 + layerSeed) * 0.5;
+    const broadA = Math.sin(angle * 3 + phase * 1.37 + layerSeed);
+    const broadB = Math.sin(angle * 5 - phase * 0.83 + layerSeed * 2.1);
+    const broad = Phaser.Math.Linear(broadA, broadB, slowBlend);
+    const detail = Math.sin(angle * 9 + phase * 2.43 - layerSeed) * 0.32;
+    const grain = Phaser.Math.FloatBetween(-0.055, 0.055);
+    const shape = broad + detail;
+
+    return {
+      size: Phaser.Math.Clamp(1 + shape * 0.17 + grain, 0.76, 1.28),
+      intensity: Phaser.Math.Clamp(0.86 + shape * 0.18 + grain * 0.7, 0.56, 1.1),
+      heat: Phaser.Math.Clamp(broad * 0.78 + detail + grain, -1, 1),
+    };
+  }
+
+  private getRingOuterTint(heat: number): number {
+    if (heat > 0.42) return 0xffad2f;
+    if (heat > -0.08) return 0xff7b21;
+    if (heat > -0.52) return 0xff5419;
+    return 0xe52611;
+  }
+
+  private getRingCoreTint(heat: number): number {
+    if (heat > 0.56) return 0xffffff;
+    if (heat > 0.12) return 0xffffbd;
+    if (heat > -0.38) return 0xffe36b;
+    return 0xffa526;
   }
 
   private seededUnit(id: number, salt: number): number {

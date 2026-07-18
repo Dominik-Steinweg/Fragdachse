@@ -68,6 +68,7 @@ export interface FlamethrowerWeaponFireConfig {
     readonly chunkSearchRadius: number;
     readonly chunkFlightMs: number;
     readonly groundDurationMs: number;
+    readonly groundBurnDamagePerTick: number;
   };
 }
 
@@ -435,9 +436,10 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly fireLingerDuration: number;  // ms wie lange das Feuer brennt
   readonly fireBurnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   readonly fireBurnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
-  readonly deathPatchRadius?: number;
-  readonly deathPatchDurationMs?: number;
-  readonly deathPatchDamagePerTick?: number;
+  readonly wildfireEnabled?: number;
+  readonly wildfirePanicSpeedMultiplier?: number;
+  readonly wildfireTrailDurationMs?: number;
+  readonly wildfireTrailDamagePerTick?: number;
 }
 
 export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
@@ -1536,8 +1538,8 @@ export const WEAPON_CONFIGS = {
         projectileSpeed: 450,
         projectileSize: 28,
         explosionRadius: 120,
-        explosionMaxDamage: 45,
-        explosionMinDamage: 10,
+        explosionMaxDamage: 90,
+        explosionMinDamage: 20,
         explosionKnockback: 1250,
         selfDamageMult: 0.25,
         trailEnabled: 0,
@@ -1545,6 +1547,7 @@ export const WEAPON_CONFIGS = {
         chunkSearchRadius: 96,
         chunkFlightMs: 320,
         groundDurationMs: 2000,
+        groundBurnDamagePerTick: 0.5,
       },
     },
     allowedSlots:         ['weapon2'],
@@ -1904,6 +1907,10 @@ export const UTILITY_CONFIGS = {
     fireLingerDuration: 4000,
     fireBurnDurationMs:     2000,  // Burn-Stack hält 1,5 s pro Tick
     fireBurnDamagePerTick:  0.25,  // Gleicher Wert wie Flammenwerfer
+    wildfireEnabled:                0,
+    wildfirePanicSpeedMultiplier:   0,
+    wildfireTrailDurationMs:        0,
+    wildfireTrailDamagePerTick:     0,
     rockDamageMult:     0,  // Molotov macht keinen Schaden an Felsen
     allowedSlots:       ['utility'],
     projectileStyle:    'grenade' as ProjectileStyle,

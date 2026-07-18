@@ -615,6 +615,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'MOLOTOV_GRENADE',
     targets: [{ path: ['fireRadius'], operation: 'scale' }],
   },
+  'utility.MOLOTOV_GRENADE.cooldown': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['cooldown'], operation: 'scale' }],
+  },
   'utility.MOLOTOV_GRENADE.fireLingerDuration': {
     kind: 'utility',
     itemId: 'MOLOTOV_GRENADE',
@@ -629,6 +634,26 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'utility',
     itemId: 'MOLOTOV_GRENADE',
     targets: [{ path: ['fireBurnDurationMs'], operation: 'scale' }],
+  },
+  'utility.MOLOTOV_GRENADE.wildfireEnabled': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['wildfireEnabled'], operation: 'add' }],
+  },
+  'utility.MOLOTOV_GRENADE.wildfirePanicSpeedMultiplier': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['wildfirePanicSpeedMultiplier'], operation: 'add' }],
+  },
+  'utility.MOLOTOV_GRENADE.wildfireTrailDurationMs': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['wildfireTrailDurationMs'], operation: 'add' }],
+  },
+  'utility.MOLOTOV_GRENADE.wildfireTrailDamagePerTick': {
+    kind: 'utility',
+    itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['wildfireTrailDamagePerTick'], operation: 'add' }],
   },
   'utility.STINKDRUESEN.cloudRadius': {
     kind: 'utility',

@@ -1015,12 +1015,6 @@ export class ArenaLifecycleCoordinator {
         return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
       });
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);
-      this.ctx.loadoutManager.setWildfireHandler((ownerId, x, y, radius, durationMs, damagePerTick) => {
-        this.ctx.fireSystem.hostCreateZone(x, y, {
-          type: 'fire', radius, damagePerTick, lingerDuration: durationMs,
-          allowTeamDamage: false, rockDamageMult: 0, trainDamageMult: 1,
-        }, ownerId);
-      });
       this.ctx.combatSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.burrowSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
 

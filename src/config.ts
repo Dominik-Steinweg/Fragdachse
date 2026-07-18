@@ -671,7 +671,8 @@ export const ROOM_QUALITY_SAMPLE_INTERVAL_MS = 500;
 export const ROOM_QUALITY_MAX_AUTO_RETRIES = 3;
 export const ROOM_QUALITY_AUTO_RETRY_DELAY_MS = 2500;
 export const ROOM_QUALITY_HOST_PROBE_SAMPLE_COUNT = 3;
-export const ROOM_QUALITY_HOST_PROBE_TIMEOUT_MS = 2500;
+/** Obergrenze fuer die gesamte parallel laufende Host-Probe. */
+export const ROOM_QUALITY_HOST_PROBE_TIMEOUT_MS = 800;
 export const ROOM_QUALITY_AUTO_SEARCH_MAX_ATTEMPTS = 5;
 export const ROOM_QUALITY_RETRY_MODE: RoomQualityRetryMode = 'suggest';
 export const ROOM_QUALITY_START_POLICY: RoomQualityStartPolicy = 'warn';

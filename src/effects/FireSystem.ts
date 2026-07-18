@@ -12,6 +12,10 @@ export const GROUND_FIRE_CELL_SIZE = 16;
 
 const FADE_IN_MS = 180;
 const FADE_OUT_MS = 500;
+const FLOW_DIRECTIONS: readonly (readonly [number, number])[] = [
+  [0, -1], [1, 0], [0, 1], [-1, 0],
+  [1, -1], [1, 1], [-1, 1], [-1, -1],
+];
 
 export interface FireDamageEvent {
   sourceId: string;
@@ -47,6 +51,15 @@ export interface GroundFireOwner {
   ownerId: string;
 }
 
+export interface WildfireSourceInfo {
+  sourceId: string;
+  ownerId: string;
+  speedMultiplier: number;
+  trailDurationMs: number;
+  trailDamagePerTick: number;
+  burn?: BurnOnHitConfig;
+}
+
 export interface GroundFireCellOptions {
   /** Stabiler logischer Schluessel; pro Rasterzelle wird daraus eine auffrischbare Quelle. */
   sourceKey: string;
@@ -77,6 +90,8 @@ interface ActiveGroundSource {
   weaponName: string;
   exposeAsZone: boolean;
   cells: Set<string>;
+  wildfire?: FireGrenadeEffect['wildfire'];
+  wildfireEscapeVectors: Map<string, { x: number; y: number }>;
 }
 
 interface ActiveGroundCell {
@@ -165,11 +180,14 @@ export class FireSystem {
       weaponName: config.weaponName ?? 'Molotov',
       exposeAsZone: true,
       cells: new Set(),
+      wildfire: config.wildfire ? { ...config.wildfire } : undefined,
+      wildfireEscapeVectors: new Map(),
     };
 
     this.sources.set(key, source);
     this.rasterizeCircle(source);
     if (source.cells.size === 0) this.sources.delete(key);
+    else if (source.wildfire) this.buildWildfireEscapeField(source);
     this.lastCreationMs = performance.now() - creationStartedAt;
   }
 
@@ -209,6 +227,7 @@ export class FireSystem {
         weaponName: options.weaponName ?? 'Brennender Boden',
         exposeAsZone: false,
         cells: new Set(),
+        wildfireEscapeVectors: new Map(),
       };
       this.sources.set(key, source);
       this.attachSourceToCell(source, gridX, gridY);
@@ -222,11 +241,76 @@ export class FireSystem {
     }
   }
 
+  hostRefreshGroundCellsAlongSegment(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    options: GroundFireCellOptions,
+    now = Date.now(),
+  ): void {
+    this.visitGridSegment(fromX, fromY, toX, toY, (gridX, gridY) => {
+      this.hostRefreshGroundCell(
+        (gridX + 0.5) * GROUND_FIRE_CELL_SIZE,
+        (gridY + 0.5) * GROUND_FIRE_CELL_SIZE,
+        options,
+        now,
+      );
+    });
+  }
+
   canPlaceGroundCell(x: number, y: number): boolean {
     const gridX = Math.floor(x / GROUND_FIRE_CELL_SIZE);
     const gridY = Math.floor(y / GROUND_FIRE_CELL_SIZE);
     const bounds = this.cellBounds(gridX, gridY);
     return isPointInsideArena(bounds.centerX, bounds.centerY) && !this.isCellBlocked?.(bounds);
+  }
+
+  getWildfireSourceInfo(sourceId: string): WildfireSourceInfo | null {
+    const source = this.sources.get(sourceId);
+    if (!source?.wildfire) return null;
+    return {
+      sourceId: source.key,
+      ownerId: source.ownerId,
+      speedMultiplier: Math.max(1, source.wildfire.speedMultiplier),
+      trailDurationMs: Math.max(0, source.wildfire.trailDurationMs),
+      trailDamagePerTick: Math.max(0, source.wildfire.trailDamagePerTick),
+      burn: source.burn ? { ...source.burn } : undefined,
+    };
+  }
+
+  /**
+   * Liefert den vorberechneten Flow-Vektor zum naechsten Ausgang dieser
+   * Molotov-Flaeche. Ausserhalb der Quelle wird absichtlich kein neuer Vektor
+   * geliefert, damit der Gegner seine letzte Fluchtrichtung beibehalten kann.
+   */
+  getWildfireEscapeVector(
+    sourceId: string,
+    x: number,
+    y: number,
+    radius = 0,
+  ): { x: number; y: number } | null {
+    const source = this.sources.get(sourceId);
+    if (!source?.wildfire) return null;
+    const centerGridX = Math.floor(x / GROUND_FIRE_CELL_SIZE);
+    const centerGridY = Math.floor(y / GROUND_FIRE_CELL_SIZE);
+    const centerVector = source.wildfireEscapeVectors.get(this.cellKey(centerGridX, centerGridY));
+    if (centerVector) return { ...centerVector };
+
+    const cellRadius = Math.max(0, Math.ceil(radius / GROUND_FIRE_CELL_SIZE));
+    let nearest: { vector: { x: number; y: number }; distanceSq: number } | null = null;
+    for (let offsetY = -cellRadius; offsetY <= cellRadius; offsetY += 1) {
+      for (let offsetX = -cellRadius; offsetX <= cellRadius; offsetX += 1) {
+        const vector = source.wildfireEscapeVectors.get(this.cellKey(
+          centerGridX + offsetX,
+          centerGridY + offsetY,
+        ));
+        if (!vector) continue;
+        const distanceSq = offsetX * offsetX + offsetY * offsetY;
+        if (!nearest || distanceSq < nearest.distanceSq) nearest = { vector, distanceSq };
+      }
+    }
+    return nearest ? { ...nearest.vector } : null;
   }
 
   hostUpdate(now: number): FireSystemUpdate {
@@ -381,6 +465,86 @@ export class FireSystem {
         this.attachSourceToCell(source, gridX, gridY);
       }
     }
+  }
+
+  /**
+   * Multi-Source-Flowfield pro Molotov statt einer Wegsuche pro Gegner. Alle
+   * offenen Randzellen sind Ziele; die Integration propagiert einmalig beim
+   * Erzeugen der Flaeche durch deren begehbare Rasterzellen.
+   */
+  private buildWildfireEscapeField(source: ActiveGroundSource): void {
+    source.wildfireEscapeVectors.clear();
+    const distances = new Map<string, number>();
+    const queue: Array<{ gridX: number; gridY: number }> = [];
+
+    for (const key of source.cells) {
+      const { gridX, gridY } = this.parseCellKey(key);
+      const centerX = (gridX + 0.5) * GROUND_FIRE_CELL_SIZE;
+      const centerY = (gridY + 0.5) * GROUND_FIRE_CELL_SIZE;
+      const outwardX = centerX - source.x;
+      const outwardY = centerY - source.y;
+      let bestExit: { x: number; y: number; score: number } | null = null;
+
+      for (const [dx, dy] of FLOW_DIRECTIONS) {
+        const neighborKey = this.cellKey(gridX + dx, gridY + dy);
+        if (source.cells.has(neighborKey)) continue;
+        if (!this.canTraverseGridStep(gridX, gridY, gridX + dx, gridY + dy)) continue;
+        const length = Math.hypot(dx, dy);
+        const score = (dx * outwardX + dy * outwardY) / Math.max(0.001, length);
+        if (!bestExit || score > bestExit.score) {
+          bestExit = { x: dx / length, y: dy / length, score };
+        }
+      }
+
+      if (!bestExit) continue;
+      distances.set(key, 0);
+      source.wildfireEscapeVectors.set(key, { x: bestExit.x, y: bestExit.y });
+      queue.push({ gridX, gridY });
+    }
+
+    let queueIndex = 0;
+    while (queueIndex < queue.length) {
+      const current = queue[queueIndex++];
+      const currentKey = this.cellKey(current.gridX, current.gridY);
+      const currentDistance = distances.get(currentKey) ?? 0;
+
+      for (const [dx, dy] of FLOW_DIRECTIONS) {
+        const neighborX = current.gridX + dx;
+        const neighborY = current.gridY + dy;
+        const neighborKey = this.cellKey(neighborX, neighborY);
+        if (!source.cells.has(neighborKey)) continue;
+        if (!this.canTraverseGridStep(neighborX, neighborY, current.gridX, current.gridY)) continue;
+        const nextDistance = currentDistance + Math.hypot(dx, dy);
+        if ((distances.get(neighborKey) ?? Infinity) <= nextDistance) continue;
+
+        const length = Math.hypot(dx, dy);
+        distances.set(neighborKey, nextDistance);
+        source.wildfireEscapeVectors.set(neighborKey, { x: -dx / length, y: -dy / length });
+        queue.push({ gridX: neighborX, gridY: neighborY });
+      }
+    }
+  }
+
+  private canTraverseGridStep(fromX: number, fromY: number, toX: number, toY: number): boolean {
+    if (!this.canPlaceGridCell(toX, toY)) return false;
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    if (Math.abs(dx) !== 1 || Math.abs(dy) !== 1) return true;
+    return this.canPlaceGridCell(fromX + dx, fromY)
+      && this.canPlaceGridCell(fromX, fromY + dy);
+  }
+
+  private canPlaceGridCell(gridX: number, gridY: number): boolean {
+    const bounds = this.cellBounds(gridX, gridY);
+    return isPointInsideArena(bounds.centerX, bounds.centerY) && !this.isCellBlocked?.(bounds);
+  }
+
+  private parseCellKey(key: string): { gridX: number; gridY: number } {
+    const separator = key.indexOf(':');
+    return {
+      gridX: Number(key.slice(0, separator)),
+      gridY: Number(key.slice(separator + 1)),
+    };
   }
 
   private attachSourceToCell(source: ActiveGroundSource, gridX: number, gridY: number): void {

@@ -2895,7 +2895,14 @@ export class ProjectileManager {
         tracerRc.updateTracer(proj.id, proj.x, proj.y, proj.vx, proj.vy);
       }
 
-      this.projectileBurnRenderer?.sync(proj.id, proj.x, proj.y, proj.size, proj.burning === true);
+      this.projectileBurnRenderer?.sync(
+        proj.id,
+        proj.x,
+        proj.y,
+        proj.size,
+        proj.burning === true,
+        false,
+      );
       if (proj.burning) burningIds.add(proj.id);
     }
     this.projectileBurnRenderer?.retain(burningIds);

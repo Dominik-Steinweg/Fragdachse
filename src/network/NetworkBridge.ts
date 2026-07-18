@@ -377,7 +377,6 @@ export class NetworkBridge {
       broadcastRpc: (type: string, payload: unknown) => this.broadcastRpc(type, payload),
       registerHostRpcHandler: (type, handler) => this.registerHostRpcHandler(type, handler),
       registerAllRpcHandler: (type, handler) => this.registerAllRpcHandler(type, handler),
-      callHostRpc: (type: string, payload: unknown, timeoutMs: number) => this.callHostRpc(type, payload, timeoutMs),
     });
 
     this.registerHostRpcHandler('tmr', async (payload: unknown, caller: PlayerState): Promise<unknown> => {
@@ -2144,8 +2143,8 @@ export class NetworkBridge {
     return (getState(KEY_ROOM_QUALITY) as RoomQualitySnapshot | null | undefined) ?? null;
   }
 
-  async measureHostRoomLoopback(sampleCount: number, timeoutMs: number): Promise<HostRoomQualityProbeResult> {
-    return await this.pingController.measureHostRoomLoopback(sampleCount, timeoutMs);
+  async measureHostRoomLatency(sampleCount: number, timeoutMs: number): Promise<HostRoomQualityProbeResult> {
+    return await this.pingController.measureHostRoomLatency(sampleCount, timeoutMs);
   }
 
   /**

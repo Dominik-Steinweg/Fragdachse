@@ -2,6 +2,21 @@
   "defaultMapId": "1",
   "maps": [
     {
+      "mapId": "0",
+      "displayName": "Map 0 - Testmap",
+      "roundDurationSec": 600,
+      "bases": [
+        {
+          "id": "dev-test-base",
+          "hpMax": 5000,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 }
+        }
+      ],
+      "powerUps": [],
+      "waves": []
+    },
+    {
       "mapId": "1",
       "displayName": "Map 1",
       "roundDurationSec": 40,

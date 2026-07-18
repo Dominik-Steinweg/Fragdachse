@@ -15,8 +15,14 @@ interface BurningProjectileVisual {
   y: number;
   lastEmitX: number;
   lastEmitY: number;
+  lastEmitAt: number;
   size: number;
 }
+
+const MAX_TRAIL_SAMPLES_PER_SYNC = 7;
+const TARGET_TRAIL_SAMPLES_PER_SYNC = 36;
+const MIN_TRAIL_EMIT_INTERVAL_MS = 14;
+const MAX_TRAIL_SAMPLES_PER_MS = 2.5;
 
 /** Starkes, rendererunabhaengiges Brand-Overlay fuer schnelle und kleine Projektile. */
 export class ProjectileBurnRenderer {
@@ -37,7 +43,7 @@ export class ProjectileBurnRenderer {
       alpha: { start: 0.94, end: 0 },
       tint: [0xff7b21, 0xff4417, 0xe52611, 0xffad2f],
       blendMode: Phaser.BlendModes.ADD,
-      maxParticles: 900,
+      maxAliveParticles: 900,
       reserve: 260,
       emitting: false,
     }, DEPTH.PROJECTILES + 0.34);
@@ -50,7 +56,7 @@ export class ProjectileBurnRenderer {
       alpha: { start: 1, end: 0 },
       tint: [0xffffff, 0xffe36b, 0xffa526, 0xff681c],
       blendMode: Phaser.BlendModes.ADD,
-      maxParticles: 720,
+      maxAliveParticles: 720,
       reserve: 220,
       emitting: false,
     }, DEPTH.PROJECTILES + 0.39);
@@ -64,13 +70,20 @@ export class ProjectileBurnRenderer {
       alpha: { start: 1, end: 0 },
       tint: [0xffffff, 0xffd94f, 0xff7a22, 0xed2d15],
       blendMode: Phaser.BlendModes.ADD,
-      maxParticles: 420,
+      maxAliveParticles: 420,
       reserve: 128,
       emitting: false,
     }, DEPTH.PROJECTILES + 0.43);
   }
 
-  sync(id: number, x: number, y: number, size: number, burning: boolean): void {
+  sync(
+    id: number,
+    x: number,
+    y: number,
+    size: number,
+    burning: boolean,
+    emitTrail = true,
+  ): void {
     if (!burning) {
       this.destroyVisual(id);
       return;
@@ -83,27 +96,60 @@ export class ProjectileBurnRenderer {
         .setBlendMode(Phaser.BlendModes.ADD)
         .setTint(0xff4d18)
         .setAlpha(0.78);
-      visual = { glow, x, y, lastEmitX: x, lastEmitY: y, size };
+      visual = {
+        glow,
+        x,
+        y,
+        lastEmitX: x,
+        lastEmitY: y,
+        lastEmitAt: this.scene.time.now,
+        size,
+      };
       this.visuals.set(id, visual);
       this.emitAt(x, y, size, 3);
     }
 
-    const dx = x - visual.lastEmitX;
-    const dy = y - visual.lastEmitY;
-    const distance = Math.hypot(dx, dy);
-    const spacing = Math.max(3, Math.min(8, size * 0.75));
-    const steps = Phaser.Math.Clamp(Math.ceil(distance / spacing), 1, 7);
-    for (let step = 1; step <= steps; step++) {
-      const t = step / steps;
-      this.emitAt(visual.lastEmitX + dx * t, visual.lastEmitY + dy * t, size, step === steps ? 2 : 1);
+    const now = this.scene.time.now;
+    if (!emitTrail) {
+      // Network snapshots correct the extrapolation anchor. Emission happens in
+      // clientExtrapolate(), otherwise clients emit twice on snapshot frames.
+      visual.lastEmitX = x;
+      visual.lastEmitY = y;
+    } else {
+      const visualCount = Math.max(1, this.visuals.size);
+      const minEmitInterval = Math.max(
+        MIN_TRAIL_EMIT_INTERVAL_MS,
+        visualCount / MAX_TRAIL_SAMPLES_PER_MS,
+      );
+      const dx = x - visual.lastEmitX;
+      const dy = y - visual.lastEmitY;
+      const distance = Math.hypot(dx, dy);
+      const spacing = Math.max(3, Math.min(8, size * 0.75));
+
+      if (distance > 0.01 && now - visual.lastEmitAt >= minEmitInterval) {
+        // Share the fixed particle pools between all burning projectiles. With a
+        // fully upgraded shotgun this deliberately becomes one sample per pellet
+        // and update instead of silently exhausting the emitters for later pellets.
+        const sampleBudget = Phaser.Math.Clamp(
+          Math.floor(TARGET_TRAIL_SAMPLES_PER_SYNC / visualCount),
+          1,
+          MAX_TRAIL_SAMPLES_PER_SYNC,
+        );
+        const samples = Math.min(Math.ceil(distance / spacing), sampleBudget);
+        for (let sample = 1; sample <= samples; sample++) {
+          const t = sample / samples;
+          this.emitAt(visual.lastEmitX + dx * t, visual.lastEmitY + dy * t, size, 1);
+        }
+        visual.lastEmitX = x;
+        visual.lastEmitY = y;
+        visual.lastEmitAt = now;
+      }
     }
 
     visual.x = x;
     visual.y = y;
-    visual.lastEmitX = x;
-    visual.lastEmitY = y;
     visual.size = size;
-    const pulse = 0.88 + Math.sin(this.scene.time.now * 0.024 + id * 1.7) * 0.12;
+    const pulse = 0.88 + Math.sin(now * 0.024 + id * 1.7) * 0.12;
     visual.glow
       .setPosition(x, y)
       .setScale(Math.max(0.68, size / 11) * pulse)

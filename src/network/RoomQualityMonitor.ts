@@ -19,7 +19,7 @@ interface RoomQualityBridge {
   getPlayerPing(playerId: string): number;
   getRoomQuality(): RoomQualitySnapshot | null;
   publishRoomQuality(snapshot: RoomQualitySnapshot | null): void;
-  measureHostRoomLoopback(sampleCount: number, timeoutMs: number): Promise<HostRoomQualityProbeResult>;
+  measureHostRoomLatency(sampleCount: number, timeoutMs: number): Promise<HostRoomQualityProbeResult>;
 }
 
 interface RoomQualityMonitorDeps {
@@ -42,7 +42,7 @@ export class RoomQualityMonitor {
   private autoRetryTriggered = false;
   private hostSoloProbeInFlight = false;
   private hostSoloProbeEstimateMs: number | null = null;
-  private hostSoloProbeLoopbackMs: number | null = null;
+  private hostSoloProbeEdgeRttMs: number | null = null;
   private hostSoloProbeSampleCount = 0;
   private hostSoloProbeAttempted = false;
 
@@ -55,7 +55,7 @@ export class RoomQualityMonitor {
     this.autoRetryTriggered = false;
     this.hostSoloProbeInFlight = false;
     this.hostSoloProbeEstimateMs = null;
-    this.hostSoloProbeLoopbackMs = null;
+    this.hostSoloProbeEdgeRttMs = null;
     this.hostSoloProbeSampleCount = 0;
     this.hostSoloProbeAttempted = false;
 
@@ -225,8 +225,8 @@ export class RoomQualityMonitor {
       return;
     }
 
-    const summaryDetails = this.hostSoloProbeLoopbackMs !== null
-      ? `Loopback ${this.hostSoloProbeLoopbackMs}ms`
+    const summaryDetails = this.hostSoloProbeEdgeRttMs !== null
+      ? `Prognose ${this.hostSoloProbeEstimateMs}ms (Playroom-Edge ${this.hostSoloProbeEdgeRttMs}ms)`
       : `Host-Probe ${this.hostSoloProbeEstimateMs}ms`;
 
     if (this.hostSoloProbeEstimateMs <= ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS) {
@@ -270,13 +270,13 @@ export class RoomQualityMonitor {
     this.hostSoloProbeInFlight = true;
     this.hostSoloProbeAttempted = true;
     try {
-      const result = await this.deps.bridge.measureHostRoomLoopback(
+      const result = await this.deps.bridge.measureHostRoomLatency(
         ROOM_QUALITY_HOST_PROBE_SAMPLE_COUNT,
         ROOM_QUALITY_HOST_PROBE_TIMEOUT_MS,
       );
       this.hostSoloProbeEstimateMs = result.estimateMs;
-      this.hostSoloProbeLoopbackMs = result.loopbackAverageMs;
-      this.hostSoloProbeSampleCount = result.successfulLoopbackSamples;
+      this.hostSoloProbeEdgeRttMs = result.edgeRttMedianMs;
+      this.hostSoloProbeSampleCount = result.successfulEdgeSamples;
     } finally {
       this.hostSoloProbeInFlight = false;
     }

@@ -699,6 +699,11 @@ export interface FireGrenadeEffect {
   burnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   burnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
   weaponName?: string;
+  wildfire?: {
+    speedMultiplier: number;
+    trailDurationMs: number;
+    trailDamagePerTick: number;
+  };
 }
 
 export interface TimeBubbleGrenadeEffect {

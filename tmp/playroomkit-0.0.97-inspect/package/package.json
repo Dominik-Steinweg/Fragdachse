@@ -1,0 +1,24 @@
+{
+  "name": "playroomkit",
+  "version": "0.0.97",
+  "homepage": "https://joinplayroom.com",
+  "main": "./multiplayer.mjs",
+  "types": "./types.d.ts",
+  "bin": "./bin/cli.js",
+  "files": [
+    "multiplayer.umd.js",
+    "multiplayer.full.umd.js",
+    "multiplayer.mjs",
+    "style.css",
+    "types.d.ts",
+    "bin"
+  ],
+  "dependencies": {},
+  "peerDependencies": {
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20"
+  },
+  "optionalDependencies": {
+    "@discord/embedded-app-sdk": ">=2.0.0"
+  }
+}

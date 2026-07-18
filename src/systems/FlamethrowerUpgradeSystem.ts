@@ -189,6 +189,11 @@ export class FlamethrowerUpgradeSystem {
       rockDamageMult: molotov.rockDamageMult,
       trainDamageMult: molotov.trainDamageMult,
       weaponName: 'Kamikaze-Napalm',
+      wildfire: inherit && (molotov.wildfireEnabled ?? 0) > 0 ? {
+        speedMultiplier: molotov.wildfirePanicSpeedMultiplier ?? 1.5,
+        trailDurationMs: molotov.wildfireTrailDurationMs ?? 2000,
+        trailDamagePerTick: molotov.wildfireTrailDamagePerTick ?? 2,
+      } : undefined,
     };
     this.fireSystem.hostCreateZone(x, y, effect, playerId);
     this.playKamikazeExplosion(x, y, effect.radius);

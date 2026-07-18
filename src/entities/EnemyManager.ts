@@ -10,6 +10,7 @@ import {
   ENEMY_NET_ROTATION_DELTA_RAD,
 } from '../config';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
+import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
 import {
@@ -39,6 +40,14 @@ export interface EnemyDeathInfo {
   readonly ownerId?: string;
 }
 
+interface WildfirePanicState extends WildfireSourceInfo {
+  directionX: number;
+  directionY: number;
+  lastTrailCellKey: string | null;
+  lastTrailX: number;
+  lastTrailY: number;
+}
+
 export class EnemyManager {
   private readonly scene: Phaser.Scene;
   private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs;
@@ -50,6 +59,7 @@ export class EnemyManager {
   // Sendet die aktive ID-Liste sofort beim ersten Snapshot (Bootstrap), danach periodisch.
   private ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
   private refreshCursor = 0;
+  private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
 
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
@@ -102,6 +112,8 @@ export class EnemyManager {
     movementLocked: boolean,
     now: number,
     deltaMs: number,
+    fireSystem?: FireSystem | null,
+    activeBurnSourceResolver?: ((enemyId: string, now: number) => ReadonlyArray<{ sourceId: string }>) | null,
     trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
@@ -116,7 +128,31 @@ export class EnemyManager {
           ? playerFlowFieldService ?? baseFlowFieldService
           : baseFlowFieldService;
 
-      if (movementLocked || !flowFieldService) {
+      if (movementLocked) {
+        enemy.stopMovement();
+        continue;
+      }
+
+      const wildfirePanic = this.updateWildfirePanicState(
+        enemy,
+        fireSystem ?? null,
+        activeBurnSourceResolver ?? null,
+        now,
+      );
+      if (wildfirePanic) {
+        const speed = enemy.getMoveSpeed() * wildfirePanic.speedMultiplier;
+        const targetVx = wildfirePanic.directionX * speed;
+        const targetVy = wildfirePanic.directionY * speed;
+        const current = enemy.getDesiredVelocity();
+        const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);
+        enemy.setDesiredVelocity(
+          decision?.override ? decision.vx : Phaser.Math.Linear(current.vx, targetVx, lerpT),
+          decision?.override ? decision.vy : Phaser.Math.Linear(current.vy, targetVy, lerpT),
+        );
+        continue;
+      }
+
+      if (!flowFieldService) {
         enemy.stopMovement();
         continue;
       }
@@ -194,6 +230,95 @@ export class EnemyManager {
         );
       }
     }
+  }
+
+  isEnemyPanicking(enemyId: string): boolean {
+    return this.wildfirePanicStates.has(enemyId);
+  }
+
+  private updateWildfirePanicState(
+    enemy: EnemyEntity,
+    fireSystem: FireSystem | null,
+    activeBurnSourceResolver: ((enemyId: string, now: number) => ReadonlyArray<{ sourceId: string }>) | null,
+    now: number,
+  ): WildfirePanicState | null {
+    if (!fireSystem || !activeBurnSourceResolver) {
+      this.wildfirePanicStates.delete(enemy.id);
+      return null;
+    }
+
+    const activeBurns = activeBurnSourceResolver(enemy.id, now);
+    const activeSourceIds = new Set(activeBurns.map(source => source.sourceId));
+    let state = this.wildfirePanicStates.get(enemy.id) ?? null;
+    if (state && !activeSourceIds.has(state.sourceId)) {
+      this.wildfirePanicStates.delete(enemy.id);
+      state = null;
+    }
+
+    if (!state) {
+      const candidates = [...activeSourceIds].sort();
+      for (const sourceId of candidates) {
+        const info = fireSystem.getWildfireSourceInfo(sourceId);
+        const direction = fireSystem.getWildfireEscapeVector(
+          sourceId,
+          enemy.sprite.x,
+          enemy.sprite.y,
+          enemy.getCollisionRadius(),
+        );
+        if (!info || !direction) continue;
+        state = {
+          ...info,
+          directionX: direction.x,
+          directionY: direction.y,
+          lastTrailCellKey: null,
+          lastTrailX: enemy.sprite.x,
+          lastTrailY: enemy.sprite.y,
+        };
+        this.wildfirePanicStates.set(enemy.id, state);
+        break;
+      }
+    }
+    if (!state) return null;
+
+    const updatedDirection = fireSystem.getWildfireEscapeVector(
+      state.sourceId,
+      enemy.sprite.x,
+      enemy.sprite.y,
+      enemy.getCollisionRadius(),
+    );
+    if (updatedDirection) {
+      state.directionX = updatedDirection.x;
+      state.directionY = updatedDirection.y;
+    }
+
+    const trailGridX = Math.floor(enemy.sprite.x / GROUND_FIRE_CELL_SIZE);
+    const trailGridY = Math.floor(enemy.sprite.y / GROUND_FIRE_CELL_SIZE);
+    const trailCellKey = `${trailGridX}:${trailGridY}`;
+    if (state.trailDurationMs > 0 && trailCellKey !== state.lastTrailCellKey) {
+      state.lastTrailCellKey = trailCellKey;
+      fireSystem.hostRefreshGroundCellsAlongSegment(
+        state.lastTrailX,
+        state.lastTrailY,
+        enemy.sprite.x,
+        enemy.sprite.y,
+        {
+          // Pro Besitzer und Rasterzelle teilen sich alle Gegner eine auffrischbare
+          // Quelle. So waechst die Feuerspur mit belegten Zellen statt mit der
+          // Anzahl Gegner und bleibt auch bei grossen Horden begrenzt.
+          sourceKey: `wildfire-trail:${state.ownerId}`,
+          ownerId: state.ownerId,
+          durationMs: state.trailDurationMs,
+          damagePerTick: state.trailDamagePerTick,
+          burn: state.burn,
+          weaponName: 'Lauffeuer',
+        },
+        now,
+      );
+      state.lastTrailX = enemy.sprite.x;
+      state.lastTrailY = enemy.sprite.y;
+    }
+
+    return state;
   }
 
   private steerEnemyTowards(
@@ -423,6 +548,7 @@ export class EnemyManager {
     this.netSnapshotCache.delete(id);
     enemy.destroy();
     this.enemies.delete(id);
+    this.wildfirePanicStates.delete(id);
     for (const spawnConfig of deathSpawns) {
       const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
       for (let index = 0; index < spawnConfig.count; index += 1) {
@@ -444,6 +570,7 @@ export class EnemyManager {
     this.netSnapshotCache.delete(id);
     enemy.destroy();
     this.enemies.delete(id);
+    this.wildfirePanicStates.delete(id);
   }
 
   syncHostVisuals(): void {
@@ -492,6 +619,7 @@ export class EnemyManager {
       enemy.destroy();
     }
     this.enemies.clear();
+    this.wildfirePanicStates.clear();
     this.netSnapshotCache.clear();
     this.pendingRemovals.clear();
     this.nextEnemyIdSeq = 1;
