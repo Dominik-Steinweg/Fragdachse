@@ -1172,14 +1172,9 @@ export class HostUpdateCoordinator {
     playerFlowFieldService.update(now);
     bossFlowFieldService?.update(now);
 
-    for (const [ownerId, flowField] of this.ctx.allyFlowFieldServices) {
-      const owner = this.ctx.playerManager.getPlayer(ownerId);
-      const goal = owner?.sprite.active && this.ctx.combatSystem.isAlive(ownerId)
-        ? flowField.worldToGrid(owner.sprite.x, owner.sprite.y)
-        : null;
-      flowField.setDynamicGoalCells(goal ? [goal] : []);
-      flowField.update(now);
-    }
+    // Die Nekromantie setzt ihr gemeinsames Besitzer-Flowfield selbst auf den
+    // aktuellen Gegner oder, beim Leash-Rueckzug, auf den Besitzer. Ein zweites
+    // Ziel-Update hier wuerde das Angriffsziel jeden Frame wieder ueberschreiben.
   }
 
   private getLocalUtilityCooldownFrac(): number {

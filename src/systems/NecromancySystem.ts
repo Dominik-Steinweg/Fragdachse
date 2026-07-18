@@ -14,6 +14,8 @@ const DEFAULT_CORPSE_LIFETIME_MS = 6000;
 const DEFAULT_REVIVE_RADIUS = 300;
 const DEFAULT_TARGET_RADIUS = 350;
 const DEFAULT_LEASH_RADIUS = 500;
+const DEFAULT_TELEPORT_DISTANCE = 1200;
+const TELEPORT_SEARCH_RADIUS_CELLS = 3;
 const STEER_RESPONSIVENESS = 9;
 
 export type NecromancyStatResolver = (playerId: string, stat: string, baseValue: number) => number;
@@ -42,6 +44,7 @@ interface NecromancyConfig {
   reviveRadius: number;
   targetRadius: number;
   leashRadius: number;
+  teleportDistance: number;
 }
 
 /** Host-authoritative summons for the Nekromantie boss upgrade. */
@@ -54,7 +57,7 @@ export class NecromancySystem {
     private readonly enemyManager: EnemyManager,
     private readonly combatSystem: CombatSystem,
     private readonly loadoutManager: LoadoutManager,
-    private readonly homeFlowFields: ReadonlyMap<string, EnemyFlowFieldService>,
+    private readonly allyFlowFields: ReadonlyMap<string, EnemyFlowFieldService>,
     private readonly resolveStat: NecromancyStatResolver,
   ) {}
 
@@ -95,8 +98,28 @@ export class NecromancySystem {
         owner.nextRaiseAt = now + cfg.intervalMs;
       }
 
-      for (const ally of this.enemyManager.getAlliedEnemies(player.id)) {
-        this.updateAlly(ally, player.id, player.sprite.x, player.sprite.y, player.color, cfg, now, deltaMs);
+      const allies = this.enemyManager.getAlliedEnemies(player.id);
+      for (const ally of allies) {
+        this.prepareAlly(ally, player.id, player.sprite.x, player.sprite.y, cfg, deltaMs);
+      }
+
+      const target = this.findTarget(player.sprite.x, player.sprite.y, cfg.targetRadius);
+      const targetInLeash = target
+        && Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, player.sprite.x, player.sprite.y) <= cfg.leashRadius;
+      // Ein Flowfield wird pro Besitzer geteilt. Wenn auch nur ein Mitglied der
+      // Gruppe die Leash verlassen hat, kehrt deshalb die ganze Gruppe kurz zum
+      // Besitzer zurueck. So zeigen Navigation und tatsaechliches Ziel immer auf
+      // dieselbe Position.
+      const returningHome = !targetInLeash || allies.some((ally) => (
+        Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, player.sprite.x, player.sprite.y) > cfg.leashRadius
+      ));
+      const destination = returningHome
+        ? { x: player.sprite.x, y: player.sprite.y, target: undefined }
+        : { x: target.sprite.x, y: target.sprite.y, target };
+
+      this.updateFlowFieldGoal(player.id, destination.x, destination.y, now);
+      for (const ally of allies) {
+        this.updateAlly(ally, player.id, player.color, destination, now, deltaMs);
       }
     }
 
@@ -115,48 +138,35 @@ export class NecromancySystem {
   private updateAlly(
     ally: EnemyEntity,
     ownerId: string,
-    ownerX: number,
-    ownerY: number,
     ownerColor: number,
-    cfg: NecromancyConfig,
+    destination: { x: number; y: number; target?: EnemyEntity },
     now: number,
     deltaMs: number,
   ): void {
-    ally.setMoveSpeedMultiplier(cfg.moveSpeedMultiplier);
-    if (cfg.hpRegenPerSecond > 0 && ally.getHp() > 0 && ally.getHp() < ally.getMaxHp()) {
-      ally.setHp(Math.min(ally.getMaxHp(), ally.getHp() + cfg.hpRegenPerSecond * Math.max(0, deltaMs) / 1000));
-    }
-    const target = this.findTarget(ownerX, ownerY, cfg.targetRadius);
-    const ownerDistance = Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, ownerX, ownerY);
-    const targetInLeash = target
-      && Phaser.Math.Distance.Between(target.sprite.x, target.sprite.y, ownerX, ownerY) <= cfg.leashRadius;
-    const returningHome = ownerDistance > cfg.leashRadius || !targetInLeash;
-    const destination = returningHome ? { x: ownerX, y: ownerY, target: undefined } : {
-      x: target.sprite.x,
-      y: target.sprite.y,
-      target,
-    };
-
     if (!ally.isAttackMovementPaused(now)) {
       const dx = destination.x - ally.sprite.x;
       const dy = destination.y - ally.sprite.y;
       const length = Math.hypot(dx, dy);
       if (length > 8) {
-        const homeVector = returningHome ? this.getHomeVector(ownerId, ally) : null;
-        const desiredVx = (homeVector?.x ?? dx / length) * ally.getMoveSpeed();
-        const desiredVy = (homeVector?.y ?? dy / length) * ally.getMoveSpeed();
-        const current = ally.getDesiredVelocity();
-        const lerp = 1 - Math.exp(-STEER_RESPONSIVENESS * Math.min(100, Math.max(0, deltaMs)) / 1000);
-        ally.setDesiredVelocity(
-          Phaser.Math.Linear(current.vx, desiredVx, lerp),
-          Phaser.Math.Linear(current.vy, desiredVy, lerp),
-        );
+        const flowDirection = this.getFlowDirection(ownerId, ally);
+        if (flowDirection === null) {
+          ally.stopMovement();
+        } else {
+          const desiredVx = (flowDirection?.x ?? dx / length) * ally.getMoveSpeed();
+          const desiredVy = (flowDirection?.y ?? dy / length) * ally.getMoveSpeed();
+          const current = ally.getDesiredVelocity();
+          const lerp = 1 - Math.exp(-STEER_RESPONSIVENESS * Math.min(100, Math.max(0, deltaMs)) / 1000);
+          ally.setDesiredVelocity(
+            Phaser.Math.Linear(current.vx, desiredVx, lerp),
+            Phaser.Math.Linear(current.vy, desiredVy, lerp),
+          );
+        }
       } else {
         ally.stopMovement();
       }
     }
 
-    if (!destination.target || !ally.canScanForAttack(now)) return;
+    if (!destination.target?.sprite.active || !this.combatSystem.isAlive(destination.target.id) || !ally.canScanForAttack(now)) return;
     ally.scheduleNextAttackScan(now);
     for (const attackWeapon of ally.getAttackWeapons()) {
       const weapon = attackWeapon.weapon;
@@ -182,6 +192,25 @@ export class NecromancySystem {
     }
   }
 
+  private prepareAlly(
+    ally: EnemyEntity,
+    ownerId: string,
+    ownerX: number,
+    ownerY: number,
+    cfg: NecromancyConfig,
+    deltaMs: number,
+  ): void {
+    ally.setMoveSpeedMultiplier(cfg.moveSpeedMultiplier);
+    if (cfg.hpRegenPerSecond > 0 && ally.getHp() > 0 && ally.getHp() < ally.getMaxHp()) {
+      ally.setHp(Math.min(ally.getMaxHp(), ally.getHp() + cfg.hpRegenPerSecond * Math.max(0, deltaMs) / 1000));
+    }
+
+    if (Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, ownerX, ownerY) <= cfg.teleportDistance) return;
+    const fallback = this.findTeleportPosition(ownerId, ownerX, ownerY);
+    ally.stopMovement();
+    ally.setPosition(fallback.x, fallback.y);
+  }
+
   private findTarget(ownerX: number, ownerY: number, radius: number): EnemyEntity | null {
     let best: EnemyEntity | null = null;
     let bestDistance = radius;
@@ -195,14 +224,64 @@ export class NecromancySystem {
     return best;
   }
 
-  private getHomeVector(ownerId: string, ally: EnemyEntity): { x: number; y: number } | null {
-    const flowField = this.homeFlowFields.get(ownerId);
-    if (!flowField) return null;
+  private updateFlowFieldGoal(ownerId: string, worldX: number, worldY: number, now: number): void {
+    const flowField = this.allyFlowFields.get(ownerId);
+    if (!flowField) return;
+    const goal = flowField.worldToGrid(worldX, worldY);
+    flowField.setDynamicGoalCells(goal ? [goal] : []);
+    flowField.update(now);
+  }
+
+  /**
+   * Nutzt dieselben Integrationswerte und Richtungsvektoren wie normale Gegner.
+   * undefined bedeutet: Zielzelle erreicht, die letzten Pixel direkt laufen.
+   * null bedeutet: kein erreichbarer Pfad; nicht blind durch Hindernisse steuern.
+   */
+  private getFlowDirection(ownerId: string, ally: EnemyEntity): { x: number; y: number } | null | undefined {
+    const flowField = this.allyFlowFields.get(ownerId);
+    if (!flowField) return undefined;
     const cell = flowField.worldToGrid(ally.sprite.x, ally.sprite.y);
-    if (!cell) return null;
-    if (flowField.getIntegrationValueAt(cell.gridX, cell.gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) return null;
+    if (!cell) return undefined;
+    const integration = flowField.getIntegrationValueAt(cell.gridX, cell.gridY);
+    if (integration >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
+      const recovery = flowField.findNearestReachableWorldPosition(cell.gridX, cell.gridY);
+      if (!recovery) return null;
+      const dx = recovery.x - ally.sprite.x;
+      const dy = recovery.y - ally.sprite.y;
+      const length = Math.hypot(dx, dy);
+      return length > 0.001 ? { x: dx / length, y: dy / length } : null;
+    }
+    if (integration <= 0) return undefined;
     const vector = flowField.getVectorAt(cell.gridX, cell.gridY);
-    return vector.x === 0 && vector.y === 0 ? null : vector;
+    if (vector.x === 0 && vector.y === 0) return null;
+    if (!ally.isBoss()) return vector;
+    const waypoint = flowField.getNextCellWorldPosition(cell.gridX, cell.gridY);
+    if (!waypoint) return vector;
+    const dx = waypoint.x - ally.sprite.x;
+    const dy = waypoint.y - ally.sprite.y;
+    const length = Math.hypot(dx, dy);
+    return length > 0.001 ? { x: dx / length, y: dy / length } : vector;
+  }
+
+  private findTeleportPosition(ownerId: string, ownerX: number, ownerY: number): { x: number; y: number } {
+    const flowField = this.allyFlowFields.get(ownerId);
+    const ownerCell = flowField?.worldToGrid(ownerX, ownerY);
+    if (!flowField || !ownerCell) return { x: ownerX, y: ownerY };
+
+    for (let radius = 1; radius <= TELEPORT_SEARCH_RADIUS_CELLS; radius += 1) {
+      for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+          if (Math.max(Math.abs(offsetX), Math.abs(offsetY)) !== radius) continue;
+          const gridX = ownerCell.gridX + offsetX;
+          const gridY = ownerCell.gridY + offsetY;
+          if (!flowField.isTraversableAt(gridX, gridY)) continue;
+          const world = flowField.gridToWorld(gridX, gridY);
+          if (world) return world;
+        }
+      }
+    }
+
+    return { x: ownerX, y: ownerY };
   }
 
   private findBestCorpseIndex(ownerX: number, ownerY: number, radius: number): number {
@@ -236,6 +315,7 @@ export class NecromancySystem {
   }
 
   private resolveConfig(playerId: string): NecromancyConfig {
+    const leashRadius = Math.max(0, this.resolveStat(playerId, `${STAT_PREFIX}.leashRadius`, DEFAULT_LEASH_RADIUS));
     return {
       enabled: this.resolveStat(playerId, `${STAT_PREFIX}.enabled`, 0) > 0,
       maxAllies: Math.max(0, Math.floor(this.resolveStat(playerId, `${STAT_PREFIX}.maxAllies`, 0))),
@@ -246,7 +326,11 @@ export class NecromancySystem {
       corpseLifetimeMs: Math.max(100, this.resolveStat(playerId, `${STAT_PREFIX}.corpseLifetimeMs`, DEFAULT_CORPSE_LIFETIME_MS)),
       reviveRadius: this.resolveStat(playerId, `${STAT_PREFIX}.reviveRadius`, DEFAULT_REVIVE_RADIUS),
       targetRadius: this.resolveStat(playerId, `${STAT_PREFIX}.targetRadius`, DEFAULT_TARGET_RADIUS),
-      leashRadius: this.resolveStat(playerId, `${STAT_PREFIX}.leashRadius`, DEFAULT_LEASH_RADIUS),
+      leashRadius,
+      teleportDistance: Math.max(
+        leashRadius,
+        this.resolveStat(playerId, `${STAT_PREFIX}.teleportDistance`, DEFAULT_TELEPORT_DISTANCE),
+      ),
     };
   }
 }

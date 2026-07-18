@@ -1392,19 +1392,22 @@ export class ArenaLifecycleCoordinator {
     });
     this.ctx.trainManager.setEnemyHitCallback((enemyId, sourceX, sourceY) => {
       const enemy = this.ctx.enemyManager?.getEnemy(enemyId);
-      if (enemy?.faction === 'allied') return undefined;
       const trainCollision = enemy
         ? getCoopDefenseEnemyConfig(enemy.kind).trainCollision
         : undefined;
+      const isRevivedAlly = enemy?.faction === 'allied';
       const recentPusherId = this.ctx.hostPhysics.getRecentImpulseSource(enemyId);
       const attackerId = recentPusherId ?? TRAIN.TRAIN_KILLER_ID;
       const weaponName = recentPusherId ? 'in den Zug geschubst' : 'Zug RB 54';
-      this.ctx.combatSystem.applyDamage(enemyId, trainCollision?.damageToEnemy ?? 9999, true, attackerId, weaponName, {
+      const collisionDamage = isRevivedAlly
+        ? Math.max(9999, enemy?.getHp() ?? 0)
+        : (trainCollision?.damageToEnemy ?? 9999);
+      this.ctx.combatSystem.applyDamage(enemyId, collisionDamage, true, attackerId, weaponName, {
         sourceX,
         sourceY,
-      });
+      }, { allowTeamDamage: isRevivedAlly });
       return trainCollision
-        ? { destroysTrain: trainCollision.destroysTrain }
+        ? { destroysTrain: !isRevivedAlly && trainCollision.destroysTrain }
         : undefined;
     });
 
