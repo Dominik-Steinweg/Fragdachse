@@ -32,6 +32,7 @@ import { TRAIN } from '../train/TrainConfig';
 import { isCoopDefenseMode } from '../gameModes';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
+import { getRageGeneratingDamage } from '../utils/rageDamage';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -210,6 +211,7 @@ export class CombatSystem {
   private playerHpRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private playerMaxArmorResolver: ((playerId: string) => number) | null = null;
   private playerArmorGainMultiplierResolver: ((playerId: string) => number) | null = null;
+  private playerArmorDamageGrantsRageResolver: ((playerId: string) => boolean) | null = null;
   private playerLifeLeechFractionResolver: ((playerId: string) => number) | null = null;
   private playerArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
 
@@ -240,6 +242,7 @@ export class CombatSystem {
   setPlayerHpRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerHpRegenPerSecondResolver = resolver; }
   setPlayerMaxArmorResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxArmorResolver = resolver; }
   setPlayerArmorGainMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorGainMultiplierResolver = resolver; }
+  setPlayerArmorDamageGrantsRageResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerArmorDamageGrantsRageResolver = resolver; }
   setPlayerLifeLeechFractionResolver(resolver: ((playerId: string) => number) | null): void { this.playerLifeLeechFractionResolver = resolver; }
   setPlayerArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorRegenPerSecondResolver = resolver; }
   setArenaObstacles(
@@ -442,9 +445,14 @@ export class CombatSystem {
     this.armor.set(targetId, newArmor);
     this.hp.set(targetId, newHp);
 
-    // Wut-Gewinn nur aus tatsaechlich verlorenem HP-Wert, nie aus Armor oder Overkill.
-    if (hpLost > 0) {
-      this.resourceSystem?.addRage(targetId, hpLost * RAGE_PER_DAMAGE);
+    // Armor-Schaden zaehlt nur mit dem passenden Coop-Defense-Upgrade als Rage-Quelle.
+    const rageDamage = getRageGeneratingDamage(
+      hpLost,
+      armorLost,
+      this.playerArmorDamageGrantsRageResolver?.(targetId) ?? false,
+    );
+    if (rageDamage > 0) {
+      this.resourceSystem?.addRage(targetId, rageDamage * RAGE_PER_DAMAGE);
     }
 
     if (totalDamage > 0) {

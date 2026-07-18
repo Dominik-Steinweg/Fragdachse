@@ -6,9 +6,10 @@ import type { CombatSystem }  from './CombatSystem';
 import type { TimeBubbleSystem } from './TimeBubbleSystem';
 import {
   PLAYER_SPEED, PLAYER_SIZE,
-  DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START,
+  DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START, DASH_HOLD_MAX_DURATION_FACTOR,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
+import { getDashBurstTiming } from '../utils/dashTiming';
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = {
@@ -29,7 +30,20 @@ interface DashState {
   dirY:    number;
   vNorm:   number;   // v_norm zum Dash-Zeitpunkt (skaliert mit Buffs)
   hitIds: Set<string>;
+  lastGroundX: number;
+  lastGroundY: number;
 }
+
+type DashGroundFireHandler = (
+  playerId: string,
+  sourceKey: string,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  durationMs: number,
+  now: number,
+) => void;
 
 interface ExternalImpulse {
   vx: number;
@@ -76,9 +90,13 @@ export class HostPhysicsSystem {
   private timeBubbleSystem: TimeBubbleSystem | null = null;
   private enemyManager: EnemyManager | null = null;
   private runSpeedResolver: ((playerId: string) => number) | null = null;
-  private dashRecoveryResolver: ((playerId: string) => number) | null = null;
+  private dashRangeMultiplierResolver: ((playerId: string) => number) | null = null;
+  private dashRecoveryDurationResolver: ((playerId: string) => number) | null = null;
   private dashImpactDamageResolver: ((playerId: string) => number) | null = null;
   private dashImpactKnockbackResolver: ((playerId: string) => number) | null = null;
+  private dashGroundFireDurationResolver: ((playerId: string) => number) | null = null;
+  private dashGroundFireHandler: DashGroundFireHandler | null = null;
+  private dashHoldEnabledResolver: ((playerId: string) => boolean) | null = null;
   private enemyMovementFactorResolver: ((enemyId: string, now: number) => number) | null = null;
   private enemyRockContactCallback: ((enemyId: string, rock: Phaser.GameObjects.Image, now: number) => void) | null = null;
 
@@ -117,9 +135,13 @@ export class HostPhysicsSystem {
   }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setRunSpeedResolver(resolver: ((playerId: string) => number) | null): void { this.runSpeedResolver = resolver; }
-  setDashRecoveryResolver(resolver: ((playerId: string) => number) | null): void { this.dashRecoveryResolver = resolver; }
+  setDashRangeMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.dashRangeMultiplierResolver = resolver; }
+  setDashRecoveryDurationResolver(resolver: ((playerId: string) => number) | null): void { this.dashRecoveryDurationResolver = resolver; }
   setDashImpactDamageResolver(resolver: ((playerId: string) => number) | null): void { this.dashImpactDamageResolver = resolver; }
   setDashImpactKnockbackResolver(resolver: ((playerId: string) => number) | null): void { this.dashImpactKnockbackResolver = resolver; }
+  setDashGroundFireDurationResolver(resolver: ((playerId: string) => number) | null): void { this.dashGroundFireDurationResolver = resolver; }
+  setDashGroundFireHandler(handler: DashGroundFireHandler | null): void { this.dashGroundFireHandler = handler; }
+  setDashHoldEnabledResolver(resolver: ((playerId: string) => boolean) | null): void { this.dashHoldEnabledResolver = resolver; }
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
   setEnemyRockContactCallback(
     callback: ((enemyId: string, rock: Phaser.GameObjects.Image, now: number) => void) | null,
@@ -290,7 +312,10 @@ export class HostPhysicsSystem {
 
     const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(playerId) ?? 1;
     const speedMult = this.loadoutManager?.getSpeedMultiplier(playerId) ?? 1;
-    const vNorm     = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult;
+    const dashRangeMultiplier = Math.max(0, this.dashRangeMultiplierResolver?.(playerId) ?? 1);
+    const vNorm     = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * dashRangeMultiplier;
+    const player = this.playerManager.getPlayer(playerId);
+    if (!player) return;
 
     this.dashStates.set(playerId, {
       phase:   1,
@@ -299,6 +324,8 @@ export class HostPhysicsSystem {
       dirY:    dy / len,
       vNorm,
       hitIds: new Set(),
+      lastGroundX: player.sprite.x,
+      lastGroundY: player.sprite.y,
     });
     this.dashBurstPlayers.add(playerId);
   }
@@ -505,7 +532,14 @@ export class HostPhysicsSystem {
         let done = false;
 
         if (dash.phase === 1) {
-          const t = Math.min(1, elapsed / DASH_T1_S);
+          const timing = getDashBurstTiming(
+            elapsed,
+            DASH_T1_S,
+            this.dashHoldEnabledResolver?.(player.id) ?? false,
+            input?.dashHeld === true,
+            DASH_HOLD_MAX_DURATION_FACTOR,
+          );
+          const t = timing.progress;
           // Quad.easeOut: sofortiger Abfall von f_start auf f_min
           const easeOut = 1 - (1 - t) * (1 - t);
           speedFactor = DASH_F_START + (DASH_F_MIN - DASH_F_START) * easeOut;
@@ -513,6 +547,21 @@ export class HostPhysicsSystem {
           // Hitbox sofort auf 50 % Radius (25 % Fläche)
           player.body.setCircle(PLAYER_SIZE * 0.25);
           player.sprite.setScale(0.5);
+          const groundFireDurationMs = this.dashGroundFireDurationResolver?.(player.id) ?? 0;
+          if (groundFireDurationMs > 0) {
+            this.dashGroundFireHandler?.(
+              player.id,
+              `dash:${player.id}:${dash.startMs}`,
+              dash.lastGroundX,
+              dash.lastGroundY,
+              player.sprite.x,
+              player.sprite.y,
+              groundFireDurationMs,
+              now,
+            );
+            dash.lastGroundX = player.sprite.x;
+            dash.lastGroundY = player.sprite.y;
+          }
           const impactDamage = this.dashImpactDamageResolver?.(player.id) ?? 0;
           const impactKnockback = this.dashImpactKnockbackResolver?.(player.id) ?? 0;
           if (impactDamage > 0) {
@@ -525,14 +574,14 @@ export class HostPhysicsSystem {
             }
           }
 
-          if (elapsed >= DASH_T1_S) {
-            // Phasenwechsel: Überschusszeit in Phase 2 übertragen
+          if (timing.shouldEnd) {
+            // Phase 2 beginnt bei Loslassen bzw. am normalen/erweiterten Zeitlimit neu.
             dash.phase   = 2;
-            dash.startMs = now - (elapsed - DASH_T1_S) * 1000;
+            dash.startMs = now;
             this.dashBurstPlayers.delete(player.id);
           }
         } else {
-          const recoveryDuration = Math.max(0.01, this.dashRecoveryResolver?.(player.id) ?? DASH_T2_S);
+          const recoveryDuration = Math.max(0.01, this.dashRecoveryDurationResolver?.(player.id) ?? DASH_T2_S);
           const t = Math.min(1, elapsed / recoveryDuration);
           // Quad.easeIn: zähes Aufrappeln von f_min auf 1.0
           const easeIn = t * t;

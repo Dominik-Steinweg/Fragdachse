@@ -414,6 +414,7 @@ export class InputSystem {
       dx,
       dy,
       aim: quantizeAngle(this.currentAimAngle),
+      dashHeld: this.inputEnabled && this.keySpace.isDown,
       placementPreview: this.placementPreviewState,
     };
     this.bridge.sendLocalInput(input);

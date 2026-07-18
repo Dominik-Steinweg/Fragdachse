@@ -13,6 +13,7 @@ export interface PlayerInput {
   dx: number;  // -1 | 0 | 1
   dy: number;  // -1 | 0 | 1
   aim: number; // Aim-Winkel quantisiert als uint8 (0-255 → 0-2π)
+  dashHeld?: boolean;
   placementPreview?: PlacementPreviewNetState | null;
 }
 

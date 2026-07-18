@@ -17,6 +17,11 @@ export type CoopDefenseUpgradeKind = 'upgrade' | 'unlock';
 export type CoopDefenseUpgradeEffectMode = 'add_per_level' | 'add_percent_per_level';
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  ultimate_armor_rage: 'UPGRADE_ULTIMATE_RAGE_GAIN',
+  dash_range: 'UPGRADE_DASH_RECOVERY',
+  dash_fire_trail: 'UPGRADE_MOLOTOV_WILDFIRE',
+  dash_impact_damage: 'UPGRADE_DASH_IMPACT',
+  dash_overdrive: 'UPGRADE_DASH_RECOVERY',
   glock_adrenaline_gain: 'UPGRADE_ADRENALINE_GAIN',
   glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
   asmd_secondary_dot_field_damage: 'UPGRADE_ASMD_SECONDARY_DOT_FIELD',

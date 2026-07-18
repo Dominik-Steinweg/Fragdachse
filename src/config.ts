@@ -524,6 +524,9 @@ export const DASH_F_MIN   = 0.25;   // Kriechgang-Faktor (25 % v_norm)
 // f_start = (3*t1 + 2*t2 - 2*f_min*(t1+t2)) / t1 = 3.25 — Strecken-Neutralität
 export const DASH_F_START =
   (3 * DASH_T1_S + 2 * DASH_T2_S - 2 * DASH_F_MIN * (DASH_T1_S + DASH_T2_S)) / DASH_T1_S;
+export const DASH_HOLD_MAX_DURATION_FACTOR = 2;
+export const DASH_GROUND_FIRE_BURN_DURATION_MS = 2000;
+export const DASH_GROUND_FIRE_DAMAGE_PER_TICK = 0.25;
 
 // ---- Burrow ----
 export const BURROW_MIN_ADRENALINE       = 15;

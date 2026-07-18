@@ -44,7 +44,7 @@ import { getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
-import { PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS, DASH_T2_S } from '../../config';
+import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
 import type { ArenaContext }          from './ArenaContext';
@@ -578,6 +578,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerArmorGainMultiplierResolver((playerId) => {
       return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.armorGain') ?? 0);
     });
+    this.ctx.combatSystem.setPlayerArmorDamageGrantsRageResolver((playerId) => {
+      return (this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'ultimate.rageGainFromArmorDamage') ?? 0) > 0;
+    });
     this.ctx.combatSystem.setPlayerLifeLeechFractionResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.lifeLeechFraction') ?? 0;
     });
@@ -656,11 +659,30 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setRunSpeedResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED;
     });
-    this.ctx.hostPhysics.setDashRecoveryResolver((playerId) => {
+    this.ctx.hostPhysics.setDashRangeMultiplierResolver((playerId) => {
+      return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.dashRange') ?? 0);
+    });
+    this.ctx.hostPhysics.setDashRecoveryDurationResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.dashRecovery', DASH_T2_S) ?? DASH_T2_S;
     });
-    this.ctx.hostPhysics.setDashImpactDamageResolver((playerId) => this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.dashImpactDamage') ?? 0);
+    this.ctx.hostPhysics.setDashImpactDamageResolver((playerId) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.dashImpactDamage', 0) ?? 0);
     this.ctx.hostPhysics.setDashImpactKnockbackResolver((playerId) => this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.dashImpactKnockback') ?? 0);
+    this.ctx.hostPhysics.setDashGroundFireDurationResolver((playerId) => this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.dashGroundFireDurationMs') ?? 0);
+    this.ctx.hostPhysics.setDashGroundFireHandler((playerId, sourceKey, fromX, fromY, toX, toY, durationMs, now) => {
+      this.ctx.fireSystem.hostRefreshGroundCellsAlongSegment(fromX, fromY, toX, toY, {
+        sourceKey,
+        ownerId: playerId,
+        durationMs,
+        burn: {
+          durationMs: DASH_GROUND_FIRE_BURN_DURATION_MS,
+          damagePerTick: DASH_GROUND_FIRE_DAMAGE_PER_TICK,
+        },
+        weaponName: 'Brennende Dash-Spur',
+      }, now);
+    });
+    this.ctx.hostPhysics.setDashHoldEnabledResolver((playerId) => {
+      return (this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.dashHoldEnabled') ?? 0) > 0;
+    });
 
     if (bridge.isHost()) {
       this.ctx.resourceSystem = new ResourceSystem();
@@ -1164,6 +1186,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver(null);
     this.ctx.combatSystem.setPlayerMaxArmorResolver(null);
     this.ctx.combatSystem.setPlayerArmorGainMultiplierResolver(null);
+    this.ctx.combatSystem.setPlayerArmorDamageGrantsRageResolver(null);
     this.ctx.combatSystem.setPlayerLifeLeechFractionResolver(null);
     this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver(null);
     this.ctx.rockRegistry   = null;
@@ -1216,6 +1239,13 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setTimeBubbleSystem(null);
     this.ctx.hostPhysics.setEnemyManager(null);
     this.ctx.hostPhysics.setEnemyRockContactCallback(null);
+    this.ctx.hostPhysics.setDashRangeMultiplierResolver(null);
+    this.ctx.hostPhysics.setDashRecoveryDurationResolver(null);
+    this.ctx.hostPhysics.setDashImpactDamageResolver(null);
+    this.ctx.hostPhysics.setDashImpactKnockbackResolver(null);
+    this.ctx.hostPhysics.setDashGroundFireDurationResolver(null);
+    this.ctx.hostPhysics.setDashGroundFireHandler(null);
+    this.ctx.hostPhysics.setDashHoldEnabledResolver(null);
     this.ctx.coopDefenseEnemyAttackSystem = null;
     this.ctx.coopDefenseWaveSpawner = null;
     this.ctx.decoySystem.setCombatStateReader(null);
