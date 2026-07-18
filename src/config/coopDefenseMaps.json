@@ -18,223 +18,167 @@
     },
     {
       "mapId": "1",
-      "displayName": "Map 1",
+      "displayName": "Map 1 - Letzte Stellung",
+      "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP. Nach Level-Ups können Skill-Punkte verteilt werden.",
       "roundDurationSec": 40,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 5000,
+          "id": "coop-base-rear",
+          "hpMax": 2000,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 4 }
+          "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 3 }
         }
       ],
-      "powerUps": [
-        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000 },
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 }
-      ],
+      "powerUps": [],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 1610, "countPerWave": 1, "startAtMs": 0 }
+        { "enemyKind": "zombie-badger", "intervalMs": 1000, "countPerWave": 1, "startAtMs": 0 }
       ]
     },
     {
       "mapId": "2",
-      "displayName": "Map 2",
+      "displayName": "Map 2 - Doppelte Front",
+      "tutorialText": "Auf dieser Map hat die zweite Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
       "roundDurationSec": 60,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 3000,
+          "id": "coop-base-rear",
+          "hpMax": 2000,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 3 }
         },
         {
-          "id": "coop-base-2",
-          "hpMax": 500,
-          "anchor": { "kind": "center-offset", "dxCells": -5, "dyCells": -2 },
-          "shape": {
-            "kind": "cells",
-            "cells": [
-              { "gridX": 0, "gridY": 0 },
-              { "gridX": 1, "gridY": 0 },
-              { "gridX": 2, "gridY": 0 },
-              { "gridX": 0, "gridY": 1 },
-              { "gridX": 0, "gridY": 2 },
-              { "gridX": 0, "gridY": 3 },
-              { "gridX": 0, "gridY": 4 },
-              { "gridX": 1, "gridY": 4 },
-              { "gridX": 2, "gridY": 4 }
-            ]
-          },
-          "powerUpPedestals": [
-            {
-              "id": "armor-station",
-              "cellOffset": { "gridX": 2, "gridY": 2 },
-              "defId": "ARMOR",
-              "respawnMs": 10000
-            }
+          "id": "coop-base-middle",
+          "hpMax": 1000,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 },
+          "turrets": [
+            { "id": "front-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "mountSide": "front", "weaponId": "SPOREN" }
           ]
         }
       ],
-      "powerUps": [
-        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000 }
-      ],
+      "powerUps": [],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 3050, "countPerWave": 2, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 6100, "countPerWave": 1, "startAtMs": 30000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 4000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 5000, "countPerWave": 2, "startAtMs": 10000 }
       ]
     },
     {
       "mapId": "3",
-      "displayName": "Map 3",
+      "displayName": "Map 3 - Tollwut",
+      "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
       "roundDurationSec": 60,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 2000,
+          "id": "coop-base-rear",
+          "hpMax": 2500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 4 }
+          "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ]
         },
         {
-          "id": "coop-base-2",
-          "hpMax": 800,
-          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
-          "shape": {
-            "kind": "cells",
-            "cells": [
-              { "gridX": 0, "gridY": 0 },
-              { "gridX": 1, "gridY": 0 },
-              { "gridX": 0, "gridY": 1 },
-              { "gridX": 0, "gridY": 2 },
-              { "gridX": 0, "gridY": 3 },
-              { "gridX": 1, "gridY": 3 }
-            ]
-          },
-          "turrets": [
-            {
-              "id": "front-top",
-              "cellOffset": { "gridX": 0, "gridY": 0 },
-              "mountSide": "front",
-              "weaponId": "SPOREN"
-            },
-            {
-              "id": "front-bottom",
-              "cellOffset": { "gridX": 0, "gridY": 3 },
-              "mountSide": "front",
-              "weaponId": "SPOREN"
-            }
-          ]
+          "id": "coop-base-middle",
+          "hpMax": 500,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
         }
       ],
-      "powerUps": [
-        { "defId": "ADRENALINE", "region": "front", "respawnMs": 10000 },
-        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000 },
-        { "defId": "ARMOR", "region": "rear", "respawnMs": 10000 }
-      ],
+      "powerUps": [],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 2050, "countPerWave": 1, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 9300, "countPerWave": 2, "startAtMs": 5000 },
-        { "enemyKind": "rabid-badger", "intervalMs": 17000, "countPerWave": 3, "startAtMs": 10000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 6000, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 5000 },
+        { "enemyKind": "rabid-badger", "intervalMs": 5000, "countPerWave": 2, "startAtMs": 5000 }
       ]
     },
     {
       "mapId": "4",
-      "displayName": "Map 4",
+      "displayName": "Map 4 - Versorgungsbruch",
+      "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
       "roundDurationSec": 60,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 2000,
+          "id": "coop-base-rear",
+          "hpMax": 3000,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ]
         },
         {
-          "id": "coop-base-2",
-          "hpMax": 2000,
-          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
+          "id": "coop-base-middle",
+          "hpMax": 1500,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
           "shape": {
             "kind": "cells",
             "cells": [
-              { "gridX": 0, "gridY": 0 },
-              { "gridX": 1, "gridY": 0 },
-              { "gridX": 2, "gridY": 0 },
-              { "gridX": 3, "gridY": 0 },
-              { "gridX": 0, "gridY": 1 },
-              { "gridX": 0, "gridY": 2 },
-              { "gridX": 0, "gridY": 3 },
-              { "gridX": 0, "gridY": 4 },
-              { "gridX": 1, "gridY": 4 },
-              { "gridX": 2, "gridY": 4 },
-              { "gridX": 3, "gridY": 4 }
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }
             ]
           },
-          "turrets": [
-            {
-              "id": "front-top",
-              "cellOffset": { "gridX": 0, "gridY": 0 },
-              "mountSide": "front",
-              "weaponId": "SPOREN"
-            },
-            {
-              "id": "front-middle",
-              "cellOffset": { "gridX": 0, "gridY": 2 },
-              "mountSide": "front",
-              "weaponId": "SPOREN"
-            },
-            {
-              "id": "front-bottom",
-              "cellOffset": { "gridX": 0, "gridY": 4 },
-              "mountSide": "front",
-              "weaponId": "SPOREN"
-            }
-          ],
           "powerUpPedestals": [
-            {
-              "id": "armor-station",
-              "cellOffset": { "gridX": 2, "gridY": 2 },
-              "defId": "ARMOR",
-              "respawnMs": 10000
-            },
-            {
-              "id": "double-damage-station",
-              "cellOffset": { "gridX": 3, "gridY": 2 },
-              "defId": "DOUBLE_DAMAGE",
-              "respawnMs": 30000
-            }
+            { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
           ]
         }
       ],
       "powerUps": [
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 }
+        { "defId": "BFG", "region": "front", "respawnMs": 30000, "spawnOnArenaStart": false }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 670, "countPerWave": 2, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 5600, "countPerWave": 2, "startAtMs": 5000 },
-        { "enemyKind": "rabid-badger", "intervalMs": 5100, "countPerWave": 1, "startAtMs": 10000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 1500, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "rabid-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 0 }
       ]
     },
     {
       "mapId": "5",
       "displayName": "Map 5 - Grufttitan",
+      "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Wenn ein Boss erstmalig erledigt wird, erhält man einen Boss-Punkt für spezielle Upgrades.",
       "roundDurationSec": 75,
       "bases": [
         {
-          "id": "coop-base-1",
+          "id": "coop-base-rear",
           "hpMax": 3500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 4 }
+          "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ]
+        },
+        {
+          "id": "coop-base-middle",
+          "hpMax": 750,
+          "anchor": { "kind": "center-offset", "dxCells": -5, "dyCells": -1 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }
+            ]
+          },
+          "powerUpPedestals": [
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
+          ]
         }
       ],
       "powerUps": [
-        { "defId": "HOLY_HAND_GRENADE", "region": "front", "respawnMs": 30000 },
-        { "defId": "ARMOR", "region": "middle", "respawnMs": 10000 },
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 }
+        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 2150, "countPerWave": 3, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 6600, "countPerWave": 2, "startAtMs": 10000 },
-        { "enemyKind": "rabid-badger", "intervalMs": 5600, "countPerWave": 1, "startAtMs": 20000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 5000 },
+        { "enemyKind": "rabid-badger", "intervalMs": 3500, "countPerWave": 1, "startAtMs": 5000 }
       ],
-      "boss": { "enemyKind": "grave-titan", "spawnAtMs": 25000 }
+      "boss": { "enemyKind": "grave-titan", "spawnAtMs": 15000 }
     },
     {
       "mapId": "6",
@@ -242,29 +186,56 @@
       "roundDurationSec": 60,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 1800,
+          "id": "coop-base-rear",
+          "hpMax": 2500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 }, { "gridX": 3, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }, { "gridX": 3, "gridY": 2 },
+              { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 }, { "gridX": 3, "gridY": 3 },
+              { "gridX": 0, "gridY": 4 }, { "gridX": 1, "gridY": 4 }, { "gridX": 2, "gridY": 4 }, { "gridX": 3, "gridY": 4 }
+            ]
+          },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 4 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ],
+          "powerUpPedestals": [
+            { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true },
+            { "id": "health-station-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true }
+          ]
         },
         {
-          "id": "coop-base-2",
-          "hpMax": 1800,
-          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "id": "coop-base-middle",
+          "hpMax": 750,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }
+            ]
+          },
+          "powerUpPedestals": [
+            { "id": "double-damage-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "DOUBLE_DAMAGE", "respawnMs": 20000, "spawnOnArenaStart": false }
+          ]
         }
       ],
       "powerUps": [
-        { "defId": "ADRENALINE", "region": "front", "respawnMs": 10000 },
-        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000 },
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 },
-        { "defId": "ARMOR", "region": "rear", "respawnMs": 10000 }
+        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HOLY_HAND_GRENADE", "region": "rear", "respawnMs": 30000, "spawnOnArenaStart": false }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 1630, "countPerWave": 5, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 5600, "countPerWave": 2, "startAtMs": 5000 },
-        { "enemyKind": "rabid-badger", "intervalMs": 5100, "countPerWave": 1, "startAtMs": 10000 },
-        { "enemyKind": "spore-warden", "intervalMs": 16000, "countPerWave": 1, "startAtMs": 15000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 8000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 7000, "countPerWave": 1, "startAtMs": 5000 },
+        { "enemyKind": "rabid-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 10000 },
+        { "enemyKind": "spore-warden", "intervalMs": 4200, "countPerWave": 1, "startAtMs": 0 }
       ]
     },
     {
@@ -273,29 +244,58 @@
       "roundDurationSec": 60,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 2000,
+          "id": "coop-base-rear",
+          "hpMax": 2500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 }, { "gridX": 3, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }, { "gridX": 3, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 }, { "gridX": 3, "gridY": 3 }
+            ]
+          },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ],
+          "powerUpPedestals": [
+            { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
+          ]
         },
         {
-          "id": "coop-base-2",
-          "hpMax": 2000,
-          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "id": "coop-base-middle",
+          "hpMax": 750,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }
+            ]
+          },
+          "turrets": [
+            { "id": "front-middle", "cellOffset": { "gridX": 1, "gridY": 1 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ],
+          "powerUpPedestals": [
+            { "id": "nuke-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "NUKE", "respawnMs": 30000, "spawnOnArenaStart": false }
+          ]
         }
       ],
       "powerUps": [
-        { "defId": "DOUBLE_DAMAGE", "region": "front", "respawnMs": 30000 },
-        { "defId": "ARMOR", "region": "middle", "respawnMs": 10000 },
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 }
+        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "DOUBLE_DAMAGE", "region": "rear", "respawnMs": 20000, "spawnOnArenaStart": false }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 1160, "countPerWave": 5, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 11100, "countPerWave": 2, "startAtMs": 5000 },
-        { "enemyKind": "rabid-badger", "intervalMs": 10100, "countPerWave": 1, "startAtMs": 10000 },
-        { "enemyKind": "spore-warden", "intervalMs": 23000, "countPerWave": 1, "startAtMs": 15000 },
-        { "enemyKind": "plague-medic", "intervalMs": 36000, "countPerWave": 1, "startAtMs": 25000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 1200, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "rabid-badger", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "spore-warden", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 10000 },
+        { "enemyKind": "plague-medic", "intervalMs": 15000, "countPerWave": 1, "startAtMs": 0 }
       ]
     },
     {
@@ -304,29 +304,55 @@
       "roundDurationSec": 60,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 2400,
+          "id": "coop-base-rear",
+          "hpMax": 2500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 }
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 }, { "gridX": 3, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }, { "gridX": 3, "gridY": 2 },
+              { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 }, { "gridX": 3, "gridY": 3 },
+              { "gridX": 0, "gridY": 4 }, { "gridX": 1, "gridY": 4 }, { "gridX": 2, "gridY": 4 }, { "gridX": 3, "gridY": 4 }
+            ]
+          },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 4 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ],
+          "powerUpPedestals": [
+            { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true },
+            { "id": "health-station-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true }
+          ]
         },
         {
-          "id": "coop-base-2",
-          "hpMax": 2400,
-          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "id": "coop-base-middle",
+          "hpMax": 750,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }
+            ]
+          },
+          "powerUpPedestals": [
+            { "id": "double-damage-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "DOUBLE_DAMAGE", "respawnMs": 20000, "spawnOnArenaStart": false }
+          ]
         }
       ],
       "powerUps": [
-        { "defId": "ARMOR", "region": "front", "respawnMs": 10000 },
-        { "defId": "BFG", "region": "middle", "respawnMs": 30000 },
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 }
+        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HOLY_HAND_GRENADE", "region": "rear", "respawnMs": 30000, "spawnOnArenaStart": false }
       ],
       "waves": [
-        { "enemyKind": "demon-badger", "intervalMs": 2740, "countPerWave": 5, "startAtMs": 0 },
-        { "enemyKind": "rabid-badger", "intervalMs": 5600, "countPerWave": 1, "startAtMs": 5000 },
-        { "enemyKind": "spore-warden", "intervalMs": 13000, "countPerWave": 1, "startAtMs": 10000 },
-        { "enemyKind": "plague-medic", "intervalMs": 23000, "countPerWave": 1, "startAtMs": 15000 },
-        { "enemyKind": "void-stalker", "intervalMs": 41000, "countPerWave": 1, "startAtMs": 20000 }
+        { "enemyKind": "spore-warden", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 5000 },
+        { "enemyKind": "void-stalker", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 0 }
       ]
     },
     {
@@ -335,31 +361,46 @@
       "roundDurationSec": 60,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 2600,
+          "id": "coop-base-rear",
+          "hpMax": 1000,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 }
         },
         {
-          "id": "coop-base-2",
-          "hpMax": 2200,
-          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -2 },
-          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 2 }
+          "id": "coop-base-middle",
+          "hpMax": 1500,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }
+            ]
+          },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ],
+          "powerUpPedestals": [
+            { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "health-station-bottom", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true }
+          ]
         }
       ],
       "powerUps": [
-        { "defId": "HOLY_HAND_GRENADE", "region": "front", "respawnMs": 30000 },
-        { "defId": "ADRENALINE", "region": "middle", "respawnMs": 10000 },
-        { "defId": "ARMOR", "region": "middle", "respawnMs": 10000 },
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 }
+        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "ARMOR", "region": "front", "respawnMs": 10000, "spawnOnArenaStart": true },
+        { "defId": "ARMOR", "region": "rear", "respawnMs": 10000, "spawnOnArenaStart": true }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 1880, "countPerWave": 5, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 5600, "countPerWave": 2, "startAtMs": 5000 },
-        { "enemyKind": "rabid-badger", "intervalMs": 5100, "countPerWave": 1, "startAtMs": 10000 },
-        { "enemyKind": "spore-warden", "intervalMs": 11500, "countPerWave": 1, "startAtMs": 15000 },
-        { "enemyKind": "plague-medic", "intervalMs": 21000, "countPerWave": 1, "startAtMs": 20000 },
-        { "enemyKind": "stink-broodmother", "intervalMs": 18000, "countPerWave": 1, "startAtMs": 25000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 1200, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 8000, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "spore-warden", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "plague-medic", "intervalMs": 30000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "stink-broodmother", "intervalMs": 15000, "countPerWave": 1, "startAtMs": 0 }
       ]
     },
     {
@@ -368,23 +409,43 @@
       "roundDurationSec": 90,
       "bases": [
         {
-          "id": "coop-base-1",
-          "hpMax": 7000,
+          "id": "coop-base-rear",
+          "hpMax": 5000,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-          "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 4 }
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 }, { "gridX": 3, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }, { "gridX": 3, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 }, { "gridX": 3, "gridY": 3 }
+            ]
+          },
+          "powerUpPedestals": [
+            { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
+          ]
+        },
+        {
+          "id": "coop-base-middle",
+          "hpMax": 1000,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 },
+          "turrets": [
+            { "id": "front-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "mountSide": "front", "weaponId": "SPOREN" }
+          ]
         }
       ],
       "powerUps": [
-        { "defId": "BFG", "region": "front", "respawnMs": 30000 },
-        { "defId": "DOUBLE_DAMAGE", "region": "middle", "respawnMs": 30000 },
-        { "defId": "ARMOR", "region": "rear", "respawnMs": 10000 },
-        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000 }
+        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 2200, "countPerWave": 5, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 8600, "countPerWave": 2, "startAtMs": 5000 },
-        { "enemyKind": "spore-warden", "intervalMs": 38000, "countPerWave": 1, "startAtMs": 15000 },
-        { "enemyKind": "plague-medic", "intervalMs": 61000, "countPerWave": 1, "startAtMs": 30000 }
+        { "enemyKind": "zombie-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "spore-warden", "intervalMs": 15000, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "plague-medic", "intervalMs": 15000, "countPerWave": 1, "startAtMs": 0 }
       ],
       "boss": { "enemyKind": "inferno-colossus", "spawnAtMs": 0 }
     }

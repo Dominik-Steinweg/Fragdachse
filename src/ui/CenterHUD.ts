@@ -13,6 +13,12 @@ import {
   ensureLivingBarTextures, createGradientTexture, LivingBarEffect, randomEmitZoneData,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import {
+  COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X,
+  COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT,
+  COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
+  COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
+} from '../config/coopDefenseTutorial';
 
 const CENTER_X       = GAME_WIDTH / 2;
 const PANEL_WIDTH    = 200;
@@ -23,6 +29,13 @@ const TIMER_Y             = 28;
 const TIMER_BG_H          = 44;
 const TIMER_COLOR_NORMAL  = '#e0e0e0';
 const TIMER_COLOR_WARNING = '#ff4444';
+
+const TUTORIAL_PAD_X      = 28;
+const TUTORIAL_PAD_TOP    = 18;
+const TUTORIAL_TITLE_H    = 22;
+const TUTORIAL_FADE_MS    = 220;
+const TUTORIAL_BG_COLOR   = 0x07131f;
+const TUTORIAL_ACCENT     = COLORS.GOLD_2;
 
 const ANNOUNCEMENT_Y          = GAME_HEIGHT / 2;
 const ANNOUNCEMENT_MAX_TEXT_W = 560;
@@ -83,6 +96,14 @@ const ANNOUNCEMENT_FONT = {
   align: 'center' as const,
   wordWrap: { width: ANNOUNCEMENT_MAX_TEXT_W },
 };
+const TUTORIAL_TITLE_FONT = {
+  fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(TUTORIAL_ACCENT),
+};
+const TUTORIAL_BODY_FONT = {
+  fontSize: '19px', fontFamily: 'monospace', color: '#f1f4f6', align: 'center' as const,
+  lineSpacing: 5,
+  wordWrap: { width: COOP_DEFENSE_TUTORIAL_PANEL_WIDTH - TUTORIAL_PAD_X * 2 },
+};
 
 function ensureBarBgTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
   if (scene.textures.exists(key)) return;
@@ -139,6 +160,12 @@ export class CenterHUD {
   private container!: Phaser.GameObjects.Container;
 
   private timerText!: Phaser.GameObjects.Text;
+  private tutorialContainer!: Phaser.GameObjects.Container;
+  private tutorialGraphics!: Phaser.GameObjects.Graphics;
+  private tutorialTitle!: Phaser.GameObjects.Text;
+  private tutorialBody!: Phaser.GameObjects.Text;
+  private tutorialTween: Phaser.Tweens.Tween | null = null;
+  private tutorialValue: string | null = null;
   private announcementContainer!: Phaser.GameObjects.Container;
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
@@ -197,6 +224,7 @@ export class CenterHUD {
     }
 
     this.buildTimer();
+    this.buildTutorialPanel();
     this.buildAnnouncementOverlay();
     this.buildTrainWidget();
     this.buildBottomStack();
@@ -209,6 +237,27 @@ export class CenterHUD {
       fontSize: '32px', fontFamily: 'monospace', color: TIMER_COLOR_NORMAL, fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     this.container.add([timerBg, this.timerText]);
+  }
+
+  private buildTutorialPanel(): void {
+    this.tutorialGraphics = this.scene.add.graphics();
+    this.tutorialTitle = this.scene.add.text(0, TUTORIAL_PAD_TOP, 'TUTORIAL', TUTORIAL_TITLE_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    this.tutorialBody = this.scene.add.text(0, TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H, '', TUTORIAL_BODY_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    this.tutorialContainer = this.scene.add.container(
+      COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X,
+      COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
+      [
+      this.tutorialGraphics,
+      this.tutorialTitle,
+      this.tutorialBody,
+      ],
+    );
+    this.tutorialContainer.setScrollFactor(0).setVisible(false).setAlpha(0);
+    this.container.add(this.tutorialContainer);
   }
 
   private buildAnnouncementOverlay(): void {
@@ -366,6 +415,7 @@ export class CenterHUD {
   transitionToLobby(): void {
     this.container.setVisible(false);
     this.hideAnnouncement();
+    this.hideTutorial(true);
     this.hideTrainWidget();
     this.hideLowerSection(this.armorSection);
     this.hideLowerSection(this.utilitySection);
@@ -400,6 +450,43 @@ export class CenterHUD {
       this.timerText.setColor(nextColor);
       this.lastTimerColor = nextColor;
     }
+  }
+
+  updateTutorial(text: string | null): void {
+    const nextText = text?.trim() || null;
+    if (nextText === this.tutorialValue) return;
+    this.tutorialValue = nextText;
+    this.tutorialTween?.destroy();
+    this.tutorialTween = null;
+
+    if (!nextText) {
+      this.hideTutorial(false);
+      return;
+    }
+
+    this.tutorialBody.setText(nextText);
+    const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
+    const height = COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT;
+    const left = -width / 2;
+
+    this.tutorialGraphics.clear();
+    this.tutorialGraphics.fillStyle(0x000000, 0.24);
+    this.tutorialGraphics.fillRoundedRect(left + 4, 4, width, height, 12);
+    this.tutorialGraphics.fillStyle(TUTORIAL_BG_COLOR, 0.78);
+    this.tutorialGraphics.fillRoundedRect(left, 0, width, height, 12);
+    this.tutorialGraphics.lineStyle(2, TUTORIAL_ACCENT, 0.72);
+    this.tutorialGraphics.strokeRoundedRect(left, 0, width, height, 12);
+    this.tutorialGraphics.fillStyle(TUTORIAL_ACCENT, 0.9);
+    this.tutorialGraphics.fillRoundedRect(left, 10, 4, height - 20, 2);
+
+    this.tutorialContainer.setVisible(true).setAlpha(0);
+    this.tutorialTween = this.scene.tweens.add({
+      targets: this.tutorialContainer,
+      alpha: 1,
+      duration: TUTORIAL_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => { this.tutorialTween = null; },
+    });
   }
 
   setTrainArrival(arrivalTimerSecs: number): void {
@@ -583,6 +670,7 @@ export class CenterHUD {
 
   destroy(): void {
     this.hideAnnouncement();
+    this.hideTutorial(true);
     this.trainBarEffect.destroy();
     this.stopSectionAttention(this.armorSection);
     this.stopSectionAttention(this.utilitySection);
@@ -757,5 +845,25 @@ export class CenterHUD {
     this.announcementContainer.setVisible(false).setAlpha(1);
     this.announcementBg.setVisible(false);
     this.announcementText.setVisible(false);
+  }
+
+  private hideTutorial(immediate: boolean): void {
+    this.tutorialTween?.destroy();
+    this.tutorialTween = null;
+    this.tutorialValue = null;
+    if (immediate || !this.tutorialContainer.visible) {
+      this.tutorialContainer.setVisible(false).setAlpha(0);
+      return;
+    }
+    this.tutorialTween = this.scene.tweens.add({
+      targets: this.tutorialContainer,
+      alpha: 0,
+      duration: TUTORIAL_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tutorialTween = null;
+        this.tutorialContainer.setVisible(false).setAlpha(0);
+      },
+    });
   }
 }

@@ -60,6 +60,7 @@ import {
   getCoopDefenseUpgradeTextureKey,
 } from '../utils/coopDefenseUpgrades';
 import type { CoopDefenseUpgradeProfile } from '../types';
+import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
@@ -766,6 +767,12 @@ export class ArenaScene extends Phaser.Scene {
         ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
         : null;
       this.ctx.centerHUD.updateTimer(secs, secs <= 0 && !!activeMapConfig?.boss);
+      const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
+      this.ctx.centerHUD.updateTutorial(
+        activeMapConfig?.tutorialText && roundElapsedMs >= 0 && roundElapsedMs < COOP_DEFENSE_TUTORIAL_DURATION_MS
+          ? activeMapConfig.tutorialText
+          : null,
+      );
 
       // Train widget
       const trainEvent = bridge.getTrainEvent();

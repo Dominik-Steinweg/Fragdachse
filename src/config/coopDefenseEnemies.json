@@ -15,17 +15,12 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_zombie_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5,
-        "moveSpeedFactorPerAdditionalPlayer": 0
-      },
-      "spawnScaling": {
-        "intervalMsFactorPerAdditionalPlayer": -0.5,
-        "countPerWaveFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
       "id": "demon-badger",
-      "maxHp": 15,
+      "maxHp": 25,
       "xp": 2,
       "size": 24,
       "moveSpeed": 140,
@@ -38,17 +33,12 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_demon_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0,
-        "moveSpeedFactorPerAdditionalPlayer": 0
-      },
-      "spawnScaling": {
-        "intervalMsFactorPerAdditionalPlayer": 0,
-        "countPerWaveFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
       "id": "rabid-badger",
-      "maxHp": 10,
+      "maxHp": 30,
       "xp": 3,
       "size": 22,
       "moveSpeed": 180,
@@ -61,17 +51,12 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_rabid_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0,
-        "moveSpeedFactorPerAdditionalPlayer": 0
-      },
-      "spawnScaling": {
-        "intervalMsFactorPerAdditionalPlayer": -1,
-        "countPerWaveFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
       "id": "grave-titan",
-      "maxHp": 1200,
+      "maxHp": 750,
       "xp": 100,
       "size": 56,
       "moveSpeed": 48,
@@ -94,8 +79,7 @@
         "destroysTrain": true
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.75,
-        "moveSpeedFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
@@ -103,7 +87,7 @@
       "maxHp": 180,
       "xp": 15,
       "size": 32,
-      "moveSpeed": 42,
+      "moveSpeed": 100,
       "movementTarget": "bases",
       "weapons": [
         { "weaponId": "SPORE_WARDEN_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
@@ -115,20 +99,15 @@
       "imageKey": "enemy_spore_warden",
       "displayName": "Sporenpanzer",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.6,
-        "moveSpeedFactorPerAdditionalPlayer": 0
-      },
-      "spawnScaling": {
-        "intervalMsFactorPerAdditionalPlayer": -0.25,
-        "countPerWaveFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
       "id": "plague-medic",
-      "maxHp": 140,
+      "maxHp": 100,
       "xp": 25,
       "size": 30,
-      "moveSpeed": 58,
+      "moveSpeed": 70,
       "movementTarget": "bases",
       "weapons": [
         { "weaponId": "PLAGUE_MEDIC_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
@@ -140,12 +119,7 @@
       "imageKey": "enemy_plague_medic",
       "displayName": "Seuchenheiler",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.55,
-        "moveSpeedFactorPerAdditionalPlayer": 0
-      },
-      "spawnScaling": {
-        "intervalMsFactorPerAdditionalPlayer": -0.15,
-        "countPerWaveFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
@@ -153,7 +127,7 @@
       "maxHp": 240,
       "xp": 40,
       "size": 32,
-      "moveSpeed": 54,
+      "moveSpeed": 120,
       "movementTarget": "players",
       "weapons": [
         { "weaponId": "VOID_STALKER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
@@ -166,26 +140,21 @@
       "displayName": "Leerenpirscher",
       "translocator": {
         "utilityId": "TRANSLOCATOR",
-        "flightTimeMs": 1000,
-        "cooldownMs": 8500,
+        "flightTimeMs": 1500,
+        "cooldownMs": 4000,
         "minRange": 0,
         "maxRange": 1100
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.65,
-        "moveSpeedFactorPerAdditionalPlayer": 0
-      },
-      "spawnScaling": {
-        "intervalMsFactorPerAdditionalPlayer": -0.1,
-        "countPerWaveFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
       "id": "stink-broodmother",
-      "maxHp": 360,
+      "maxHp": 200,
       "xp": 50,
       "size": 40,
-      "moveSpeed": 44,
+      "moveSpeed": 80,
       "movementTarget": "players",
       "weapons": [
         { "weaponId": "STINK_BROODMOTHER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
@@ -199,20 +168,15 @@
         "utilityId": "ENEMY_STINKDRUESEN"
       },
       "deathSpawns": [
-        { "enemyKind": "rabid-badger", "count": 2, "offsetPx": 9 }
+        { "enemyKind": "rabid-badger", "count": 4, "offsetPx": 9 }
       ],
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.65,
-        "moveSpeedFactorPerAdditionalPlayer": 0
-      },
-      "spawnScaling": {
-        "intervalMsFactorPerAdditionalPlayer": -0.1,
-        "countPerWaveFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     },
     {
       "id": "inferno-colossus",
-      "maxHp": 3000,
+      "maxHp": 1500,
       "xp": 200,
       "size": 68,
       "moveSpeed": 36,
@@ -236,8 +200,7 @@
         "destroysTrain": true
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.8,
-        "moveSpeedFactorPerAdditionalPlayer": 0
+        "maxHpFactorPerAdditionalPlayer": 1
       }
     }
   ]

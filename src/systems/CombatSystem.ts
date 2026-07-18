@@ -687,6 +687,7 @@ export class CombatSystem {
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (!includeSelf && enemy.id === ownerId) continue;
       if (!this.canDamageTarget(ownerId, enemy.id, options?.allowTeamDamage)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > radius) continue;

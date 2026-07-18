@@ -20,7 +20,8 @@ import {
   type CoopDefenseUpgradeRequirementDefinition,
 } from './coopDefenseUpgrades';
 
-const XP_STEP = 25;
+const FIRST_LEVEL_UP_XP = 10;
+const XP_INCREASE_PER_LEVEL = 25;
 
 export interface CoopDefenseProgressSnapshot {
   totalXp: number;
@@ -84,15 +85,19 @@ function sanitizeXp(value: number): number {
 
 export function getCoopDefenseXpThresholdForLevel(level: number): number {
   const safeLevel = Math.max(1, Math.floor(level));
-  const previousLevels = safeLevel - 1;
-  return XP_STEP * previousLevels * safeLevel / 2;
+  const completedLevelUps = safeLevel - 1;
+  if (completedLevelUps === 0) return 0;
+  return completedLevelUps * (
+    2 * FIRST_LEVEL_UP_XP + (completedLevelUps - 1) * XP_INCREASE_PER_LEVEL
+  ) / 2;
 }
 
 export function getCoopDefenseLevelForXp(totalXp: number): number {
   const safeXp = sanitizeXp(totalXp);
-  const progressUnits = safeXp / XP_STEP;
-  const completedSteps = Math.floor((Math.sqrt(1 + 8 * progressUnits) - 1) / 2);
-  return Math.max(1, completedSteps + 1);
+  // threshold(n) = n * (20 + 25 * (n - 1)) / 2 = (25n² - 5n) / 2,
+  // where n is the number of completed level-ups.
+  const completedLevelUps = Math.floor((5 + Math.sqrt(25 + 200 * safeXp)) / 50);
+  return Math.max(1, completedLevelUps + 1);
 }
 
 export function getCoopDefenseProgressSnapshot(

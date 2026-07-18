@@ -4,7 +4,7 @@ import {
   resolveCoopDefenseEnemyWaveConfig,
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
-import { TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
+import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
 
 export interface CoopBaseCellOffset {
   readonly gridX: number;
@@ -77,6 +77,7 @@ export interface CoopDefenseMapPowerUpConfig {
 export interface CoopDefenseMapConfig {
   readonly mapId: string;
   readonly displayName: string;
+  readonly tutorialText?: string;
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
@@ -156,6 +157,9 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
   return {
     mapId: mapConfig.mapId,
     displayName: mapConfig.displayName,
+    tutorialText: typeof mapConfig.tutorialText === 'string' && mapConfig.tutorialText.trim().length > 0
+      ? mapConfig.tutorialText.trim()
+      : undefined,
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
@@ -184,7 +188,9 @@ function normalizePowerUpConfig(
     region: powerUpConfig.region,
     respawnMs: Math.max(1, Math.floor(powerUpConfig.respawnMs)),
     // Coop-Podeste durchlaufen auch vor ihrem ersten Spawn den vollen Timer.
-    spawnOnArenaStart: powerUpConfig.spawnOnArenaStart ?? false,
+    spawnOnArenaStart: shouldDelayFirstPedestalSpawn(powerUpConfig.defId)
+      ? false
+      : (powerUpConfig.spawnOnArenaStart ?? false),
   };
 }
 
@@ -256,7 +262,9 @@ function normalizeBasePowerUpPedestalConfig(
     defId: pedestal.defId,
     respawnMs: Math.max(1, Math.floor(pedestal.respawnMs)),
     // Auch gekoppelte Coop-Podeste starten standardmäßig erst nach ihrem ersten Timer.
-    spawnOnArenaStart: pedestal.spawnOnArenaStart ?? false,
+    spawnOnArenaStart: shouldDelayFirstPedestalSpawn(pedestal.defId)
+      ? false
+      : (pedestal.spawnOnArenaStart ?? false),
   };
 }
 

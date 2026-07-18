@@ -6,6 +6,7 @@
   "scripts": {
     "audio:convert": "node scripts/convert-audio.mjs",
     "dev": "vite",
+    "dev:browser": "vite --host 127.0.0.1 --port 8080 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc && vite build",

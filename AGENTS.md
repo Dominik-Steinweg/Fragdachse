@@ -41,3 +41,10 @@
 - Keine Tests nur für Abdeckungszahlen erzeugen. Im Abschluss ausschließlich tatsächlich ausgeführte Prüfungen knapp nennen.
 - Keine Linux-/CI-, Playwright-, Coverage-, ESLint- oder Modell-Konfiguration ergänzen, sofern die Aufgabe dies nicht ausdrücklich verlangt.
 
+## Browser-Verifikation
+
+- Der Browser ist keine Standardprüfung. Nur für sichtbar geänderte Phaser-/UI-/Scene-Darstellung und einmal am Ende verwenden.
+- `npm run dev:browser` starten. Vor dem Öffnen muss `Invoke-WebRequest -Uri 'http://127.0.0.1:8080/' -UseBasicParsing -TimeoutSec 5` Status 200 liefern; dann exakt diese URL öffnen.
+- Höchstens einen Verbindungs- und einen Seitenlade-Wiederholungsversuch. Blockiert Playroom den Boot, abbrechen und als Umgebungsblocker melden.
+- Nur den betroffenen Modus/Zustand prüfen; Konsole und Netzwerk nur bei konkreter Diagnose. Browser und Server danach beenden.
+- Bekannte Phaser-Meldungen `Failed to process file ... image ...` für noch fehlende Loadout-, Upgrade- und Gegnerfähigkeits-Sprites ignorieren. Sie sind nicht testentscheidend und werden nicht untersucht, solange das Zielbild rendert.

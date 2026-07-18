@@ -814,13 +814,13 @@ export const WEAPON_CONFIGS = {
   // Nicht-Boss-Gegner nutzen eigene, nicht durch Spieler-Upgrades beeinflusste
   // Bisse. Schaden: lineare XP-Einordnung zwischen rund 10% (XP 1) und 50% (XP 50)
   // des urspruenglichen Dachsbisses mit 50 Schaden, auf ganze Trefferwerte gerundet.
-  ZOMBIE_BADGER_BITE: createEnemyBiteConfig('ZOMBIE_BADGER_BITE', 'Zombie-Dachsbiss', 5),
-  DEMON_BADGER_BITE: createEnemyBiteConfig('DEMON_BADGER_BITE', 'Daemonen-Dachsbiss', 5),
-  RABID_BADGER_BITE: createEnemyBiteConfig('RABID_BADGER_BITE', 'Tollwut-Dachsbiss', 6),
-  SPORE_WARDEN_BITE: createEnemyBiteConfig('SPORE_WARDEN_BITE', 'Sporenpanzer-Biss', 11),
-  PLAGUE_MEDIC_BITE: createEnemyBiteConfig('PLAGUE_MEDIC_BITE', 'Seuchenheiler-Biss', 15),
-  VOID_STALKER_BITE: createEnemyBiteConfig('VOID_STALKER_BITE', 'Leerenpirscher-Biss', 21),
-  STINK_BROODMOTHER_BITE: createEnemyBiteConfig('STINK_BROODMOTHER_BITE', 'Faulnisbrueter-Biss', 25),
+  ZOMBIE_BADGER_BITE: createEnemyBiteConfig('ZOMBIE_BADGER_BITE', 'Zombie-Dachsbiss', 10),
+  DEMON_BADGER_BITE: createEnemyBiteConfig('DEMON_BADGER_BITE', 'Daemonen-Dachsbiss', 20),
+  RABID_BADGER_BITE: createEnemyBiteConfig('RABID_BADGER_BITE', 'Tollwut-Dachsbiss', 25),
+  SPORE_WARDEN_BITE: createEnemyBiteConfig('SPORE_WARDEN_BITE', 'Sporenpanzer-Biss', 40),
+  PLAGUE_MEDIC_BITE: createEnemyBiteConfig('PLAGUE_MEDIC_BITE', 'Seuchenheiler-Biss', 30),
+  VOID_STALKER_BITE: createEnemyBiteConfig('VOID_STALKER_BITE', 'Leerenpirscher-Biss', 50),
+  STINK_BROODMOTHER_BITE: createEnemyBiteConfig('STINK_BROODMOTHER_BITE', 'Faulnisbrueter-Biss', 40),
 
   GRAVE_TITAN_BITE: {
     id:                   'GRAVE_TITAN_BITE',
@@ -2058,9 +2058,9 @@ export const UTILITY_CONFIGS = {
     projectileSize:      0,
     fuseTime:            0,
     maxBounces:          0,
-    cloudRadius:         90,
+    cloudRadius:         140,
     cloudDuration:       0,
-    cloudDamagePerTick:  1,
+    cloudDamagePerTick:  5,
     cloudTickInterval:   250,
     continuous:          true,
     rockDamageMult:      0,

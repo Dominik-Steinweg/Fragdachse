@@ -343,10 +343,10 @@ export class EnemyEntity {
     const hpBarWidth = this.getHpBarWidth();
     const y = this.sprite.y + this.getHpBarOffsetY();
     this.hpBarBg = this.sprite.scene.add.rectangle(x, y, hpBarWidth, HP_BAR_HEIGHT, 0x333333);
-    this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
+    this.hpBarBg.setDepth(DEPTH.SMOKE + 0.5);
     this.hpBarFg = this.sprite.scene.add.rectangle(x, y, hpBarWidth, HP_BAR_HEIGHT, COLORS.RED_2);
     this.hpBarFg.setOrigin(0, 0.5);
-    this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
+    this.hpBarFg.setDepth(DEPTH.SMOKE + 0.6);
   }
 
   private destroyHpBars(): void {

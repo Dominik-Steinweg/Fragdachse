@@ -4,6 +4,11 @@ import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalText
 import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type { CoopDefenseMapConfig, CoopDefenseMapPowerUpConfig, CoopDefensePowerUpRegion } from '../config/coopDefenseMaps';
+import {
+  COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
+  getCoopDefenseTutorialRockRegion,
+  isCoopDefenseTutorialMap,
+} from '../config/coopDefenseTutorial';
 
 /**
  * Prozeduraler Arena-Generator – keine Phaser-Abhängigkeit.
@@ -64,6 +69,10 @@ export class ArenaGenerator {
           }
         }
         map = newMap;
+      }
+
+      if (coopMapConfig?.tutorialText && isCoopDefenseTutorialMap(coopMapConfig.mapId)) {
+        ArenaGenerator.applyTutorialRockFormation(map, trackCols, rng);
       }
 
       // 3. map auf blocked übertragen und rocks-Array befüllen
@@ -258,6 +267,29 @@ export class ArenaGenerator {
       }
     }
     return { trackCols, tracks };
+  }
+
+  private static applyTutorialRockFormation(
+    map: boolean[][],
+    trackCols: ReadonlySet<number>,
+    rng: () => number,
+  ): void {
+    const panelRegion = getCoopDefenseTutorialRockRegion();
+    // Bis zum oberen Arenarand auffüllen, damit oberhalb des HUD-Blocks keine
+    // kleinen, vom restlichen Spielfeld abgeschnittenen Bodentaschen entstehen.
+    const region = { ...panelRegion, minGridY: 0 };
+    const halo = COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS;
+    for (let gy = Math.max(0, region.minGridY - halo); gy <= Math.min(GRID_ROWS - 1, region.maxGridY + halo); gy++) {
+      for (let gx = Math.max(0, region.minGridX - halo); gx <= Math.min(GRID_COLS - 1, region.maxGridX + halo); gx++) {
+        if (trackCols.has(gx) || isReservedBaseObstacleCell(gx, gy)) continue;
+        const dx = gx < region.minGridX ? region.minGridX - gx : gx > region.maxGridX ? gx - region.maxGridX : 0;
+        const dy = gy < region.minGridY ? region.minGridY - gy : gy > region.maxGridY ? gy - region.maxGridY : 0;
+        const distance = Math.max(dx, dy);
+        if (distance === 0 || rng() < (distance === 1 ? 0.72 : 0.36)) {
+          map[gy][gx] = true;
+        }
+      }
+    }
   }
 
   private static generateRandomPowerUpPedestals(

@@ -24,6 +24,17 @@ export interface TimedPedestalPowerUpConfig {
   readonly spawnOnArenaStart: boolean;
 }
 
+const DELAYED_FIRST_PEDESTAL_POWER_UPS = new Set([
+  'DOUBLE_DAMAGE',
+  'NUKE',
+  'HOLY_HAND_GRENADE',
+  'BFG',
+]);
+
+export function shouldDelayFirstPedestalSpawn(defId: string): boolean {
+  return DELAYED_FIRST_PEDESTAL_POWER_UPS.has(defId);
+}
+
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal',  displayName: 'Medipack',            amount: 999,                        color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
   ARMOR:         { id: 'ARMOR',         type: 'instant_armor', displayName: 'Armor',               amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
@@ -44,44 +55,44 @@ export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUp
   HEALTH_PACK: {
     defId: 'HEALTH_PACK',
     weight: 300,
-    respawnMs: 20_000,
+    respawnMs: 5_000,
     spawnOnArenaStart: true,
   },
  ARMOR: {
     defId: 'ARMOR',
     weight: 0,
-    respawnMs: 30_000,
-    spawnOnArenaStart: false,
+    respawnMs: 10_000,
+    spawnOnArenaStart: true,
   },    
   ADRENALINE: {
     defId: 'ADRENALINE',
     weight: 0,
-    respawnMs: 20_000,
-    spawnOnArenaStart: false,
+    respawnMs: 10_000,
+    spawnOnArenaStart: true,
   },     
   DOUBLE_DAMAGE: {
     defId: 'DOUBLE_DAMAGE',
     weight: 50,
-    respawnMs: 70_000,
+    respawnMs: 20_000,
     spawnOnArenaStart: false,
   },
   NUKE: {
     defId: 'NUKE',
     weight: 0,
-    respawnMs: 90_000,
+    respawnMs: 30_000,
     spawnOnArenaStart: false,
   },     
   HOLY_HAND_GRENADE: {
     defId: 'HOLY_HAND_GRENADE',
     weight: 50,
-    respawnMs: 70_000,
+    respawnMs: 30_000,
     spawnOnArenaStart: false,
   },      
   BFG: {
     defId: 'BFG',
     weight: 0,
-    respawnMs: 90_000,
-    spawnOnArenaStart: true,
+    respawnMs: 30_000,
+    spawnOnArenaStart: false,
   },   
 };
 
