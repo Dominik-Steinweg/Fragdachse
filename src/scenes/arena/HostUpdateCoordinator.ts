@@ -578,6 +578,7 @@ export class HostUpdateCoordinator {
         hp:                      this.ctx.combatSystem.getHP(localId),
         maxHp:                   this.ctx.combatSystem.getMaxHp(localId),
         armor:                   this.ctx.combatSystem.getArmor(localId),
+        maxArmor:                this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(localId, 'player.maxArmor', 100) ?? 100,
         adrenaline:              this.ctx.resourceSystem?.getAdrenaline(localId) ?? 0,
         maxAdrenaline:           this.ctx.resourceSystem?.getMaxAdrenaline(localId) ?? 100,
         rage:                    this.ctx.resourceSystem?.getRage(localId) ?? 0,

@@ -227,6 +227,7 @@ export class ClientUpdateCoordinator {
         hp:                      localState.hp,
         maxHp:                   localState.maxHp,
         armor:                   localState.armor,
+        maxArmor:                this.getLocalMaxArmor(),
         adrenaline:              localState.adrenaline,
         maxAdrenaline:           this.getLocalMaxAdrenaline(),
         rage:                    localState.rage,
@@ -383,6 +384,10 @@ export class ClientUpdateCoordinator {
 
   getLocalMaxAdrenaline(): number {
     return this.getResolvedLocalPlayerStat('player.maxAdrenaline', 100);
+  }
+
+  getLocalMaxArmor(): number {
+    return this.getResolvedLocalPlayerStat('player.maxArmor', 100);
   }
 
   getLocalMaxRage(): number {

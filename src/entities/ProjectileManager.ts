@@ -529,6 +529,7 @@ export class ProjectileManager {
       bounceCount:    cfg.initialBounceCount ?? 0,
       createdAt:      Date.now(),
       ownerId,
+      ignoreBaseCollisions: cfg.ignoreBaseCollisions,
       color:          cfg.color,
       allowTeamDamage: cfg.allowTeamDamage,
       ownerColor:     cfg.ownerColor,
@@ -782,7 +783,7 @@ export class ProjectileManager {
         });
         tracked.colliders.push(c);
       }
-      if (this.baseGroup) {
+      if (this.baseGroup && !tracked.ignoreBaseCollisions) {
         const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
           this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
           this.queueDestroyProjectile(tracked);
@@ -824,7 +825,7 @@ export class ProjectileManager {
         });
         tracked.colliders.push(c);
       }
-      if (this.baseGroup) {
+      if (this.baseGroup && !tracked.ignoreBaseCollisions) {
         const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
           this.queueProjectileExplosion(tracked, false, true);
         });
@@ -895,7 +896,7 @@ export class ProjectileManager {
         });
         tracked.colliders.push(c);
       }
-      if (this.baseGroup) {
+      if (this.baseGroup && !tracked.ignoreBaseCollisions) {
         const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
           body.setVelocity(0, 0);
         });
@@ -936,7 +937,7 @@ export class ProjectileManager {
       const c = this.scene.physics.add.collider(sprite, this.trunkGroup);
       tracked.colliders.push(c);
     }
-    if (this.baseGroup) {
+    if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const c = this.scene.physics.add.collider(sprite, this.baseGroup);
       tracked.colliders.push(c);
     }
@@ -972,7 +973,7 @@ export class ProjectileManager {
       });
       tracked.colliders.push(c);
     }
-    if (this.baseGroup) {
+    if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
         this.queueDestroyProjectile(tracked);
       });
@@ -1147,7 +1148,7 @@ export class ProjectileManager {
       tracked.colliders.push(trunkCollider);
     }
 
-    if (this.baseGroup) {
+    if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const baseCollider = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
@@ -1486,6 +1487,7 @@ export class ProjectileManager {
         damage: childDamage,
         color: proj.color,
         allowTeamDamage: proj.allowTeamDamage,
+        ignoreBaseCollisions: proj.ignoreBaseCollisions,
         ownerColor: proj.ownerColor,
         lifetime: childLifetime,
         maxBounces: proj.maxBounces,

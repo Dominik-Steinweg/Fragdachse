@@ -421,8 +421,9 @@ export class LoadoutManager {
     targetY: number,
     playerId: string,
     playerColor: number,
+    options?: { ignoreBaseCollisions?: boolean },
   ): boolean {
-    return this.dispatchWeaponFire(config, x, y, angle, targetX, targetY, playerId, playerColor, undefined);
+    return this.dispatchWeaponFire(config, x, y, angle, targetX, targetY, playerId, playerColor, undefined, undefined, options);
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
@@ -1553,10 +1554,11 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
     shotId?:     number,
+    options?: { ignoreBaseCollisions?: boolean },
   ): boolean {
     switch (config.fire.type) {
       case 'projectile':
-        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot);
+        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options);
 
       case 'hitscan':
         return this.fireHitscanWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId);
@@ -1635,6 +1637,7 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
+    options?: { ignoreBaseCollisions?: boolean },
   ): boolean {
     const cursorRange = Math.hypot(targetX - x, targetY - y);
     const effectiveRange = fireConfig.limitRangeToCursor
@@ -1647,6 +1650,7 @@ export class LoadoutManager {
 
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
+      ignoreBaseCollisions: options?.ignoreBaseCollisions,
       size:            fireConfig.projectileSize,
       damage:          config.directDamageOverride ?? config.damage,
       color:           config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang

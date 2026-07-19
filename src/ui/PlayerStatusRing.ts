@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import {
   ARMOR_COLOR,
-  ARMOR_MAX,
   COLORS,
   DEPTH,
   PLAYER_SIZE,
@@ -227,7 +226,7 @@ export class PlayerStatusRing {
     const nextHpFrac = clamp01(data.hp / Math.max(1, data.maxHp));
     const nextAdrFrac = clamp01(data.adrenaline / Math.max(1, data.maxAdrenaline));
     const nextRageFrac = clamp01(data.rage / Math.max(1, data.maxRage));
-    const nextArmorFrac = clamp01(data.armor / ARMOR_MAX);
+    const nextArmorFrac = clamp01(data.armor / Math.max(1, data.maxArmor));
     const now = this.scene.time.now;
 
     if (nextHpFrac < this.prevHpFrac - 0.005) {

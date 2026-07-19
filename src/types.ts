@@ -556,6 +556,8 @@ export interface UtilityPlacementPreviewState {
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
 export interface ProjectileSpawnConfig {
   proximityArc?: ProjectileProximityArcConfig;
+  /** Base-mounted turret projectiles pass through their own base footprint. */
+  ignoreBaseCollisions?: boolean;
   speed:           number;
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
@@ -843,6 +845,7 @@ export interface TrackedProjectile {
   bounceCount:     number;
   createdAt:       number;
   ownerId:         string;
+  ignoreBaseCollisions?: boolean;
   color:           number;  // hex – gespeichert bei Spawn, entkoppelt von Shape
   allowTeamDamage?: boolean;
   ownerColor?:     number;

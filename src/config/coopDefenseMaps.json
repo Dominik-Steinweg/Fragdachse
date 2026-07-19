@@ -18,7 +18,7 @@
     },
     {
       "mapId": "1",
-      "displayName": "Map 1 - Letzte Stellung",
+      "displayName": "Map 1 - Feuertaufe",
       "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
       "roundDurationSec": 40,
       "bases": [
@@ -36,19 +36,19 @@
     },
     {
       "mapId": "2",
-      "displayName": "Map 2 - Doppelte Front",
-      "tutorialText": "Auf dieser Map hat die zweite Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
+      "displayName": "Map 2 - Zweite Front",
+      "tutorialText": "Auf dieser Map hat die wa Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
       "roundDurationSec": 60,
       "bases": [
         {
           "id": "coop-base-rear",
-          "hpMax": 2000,
+          "hpMax": 1500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 3 }
         },
         {
           "id": "coop-base-middle",
-          "hpMax": 1000,
+          "hpMax": 750,
           "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
           "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 },
           "turrets": [
@@ -59,18 +59,18 @@
       "powerUps": [],
       "waves": [
         { "enemyKind": "zombie-badger", "intervalMs": 4000, "countPerWave": 1, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 5000, "countPerWave": 2, "startAtMs": 10000 }
+        { "enemyKind": "demon-badger", "intervalMs": 3000, "countPerWave": 2, "startAtMs": 10000 }
       ]
     },
     {
       "mapId": "3",
-      "displayName": "Map 3 - Tollwut",
+      "displayName": "Map 3 - Rastlos",
       "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
       "roundDurationSec": 60,
       "bases": [
         {
           "id": "coop-base-rear",
-          "hpMax": 2500,
+          "hpMax": 1500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
           "turrets": [
@@ -94,13 +94,13 @@
     },
     {
       "mapId": "4",
-      "displayName": "Map 4 - Versorgungsbruch",
+      "displayName": "Map 4 - Adrenalinrausch",
       "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
       "roundDurationSec": 60,
       "bases": [
         {
           "id": "coop-base-rear",
-          "hpMax": 3000,
+          "hpMax": 1500,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
           "turrets": [
@@ -110,7 +110,7 @@
         },
         {
           "id": "coop-base-middle",
-          "hpMax": 1500,
+          "hpMax": 1000,
           "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
           "shape": {
             "kind": "cells",
@@ -123,7 +123,7 @@
           },
           "powerUpPedestals": [
             { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
-            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
+            { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true }
           ]
         }
       ],
@@ -140,7 +140,7 @@
       "mapId": "5",
       "displayName": "Map 5 - Grufttitan",
       "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Wenn ein Boss erstmalig erledigt wird, erhält man einen Boss-Punkt für spezielle Upgrades.",
-      "roundDurationSec": 60,
+      "roundDurationSec": 45,
       "bases": [
         {
           "id": "coop-base-rear",
@@ -170,8 +170,9 @@
         }
       ],
       "powerUps": [
-        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
-        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true }
+        { "defId": "ADRENALINE", "region": "front", "respawnMs": 10000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true }
       ],
       "waves": [
         { "enemyKind": "zombie-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 },
@@ -187,7 +188,7 @@
       "bases": [
         {
           "id": "coop-base-rear",
-          "hpMax": 2500,
+          "hpMax": 2000,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": {
             "kind": "cells",
@@ -200,13 +201,12 @@
             ]
           },
           "turrets": [
-            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
-            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 4 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-middle", "cellOffset": { "gridX": 1, "gridY": 2 }, "mountSide": "front", "weaponId": "SPOREN" }
           ],
           "powerUpPedestals": [
             { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
             { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true },
-            { "id": "health-station-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true }
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
           ]
         },
         {
@@ -227,8 +227,9 @@
         }
       ],
       "powerUps": [
-        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "ADRENALINE", "region": "front", "respawnMs": 10000, "spawnOnArenaStart": true },
         { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true },
         { "defId": "HOLY_HAND_GRENADE", "region": "rear", "respawnMs": 30000, "spawnOnArenaStart": false }
       ],
       "waves": [
@@ -240,12 +241,12 @@
     },
     {
       "mapId": "7",
-      "displayName": "Map 7 - Gruene Plage",
+      "displayName": "Map 7 - MEDIC!",
       "roundDurationSec": 60,
       "bases": [
         {
           "id": "coop-base-rear",
-          "hpMax": 2500,
+          "hpMax": 2000,
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": {
             "kind": "cells",
@@ -324,7 +325,7 @@
           "powerUpPedestals": [
             { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
             { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true },
-            { "id": "health-station-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true }
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
           ]
         },
         {
@@ -385,7 +386,7 @@
           ],
           "powerUpPedestals": [
             { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
-            { "id": "health-station-bottom", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true }
+            { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true }
           ]
         }
       ],

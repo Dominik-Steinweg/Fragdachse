@@ -9,6 +9,7 @@ interface BuildLocalArenaHudDataParams {
   hp: number;
   maxHp: number;
   armor: number;
+  maxArmor: number;
   adrenaline: number;
   maxAdrenaline: number;
   rage: number;
@@ -29,6 +30,7 @@ interface BuildLocalArenaHudDataParams {
 }
 
 interface BuildInitialLocalArenaHudDataParams {
+  maxArmor?: number;
   maxAdrenaline?: number;
   maxRage?: number;
   ultimateRequiredRage: number;
@@ -43,6 +45,7 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     hp: params.hp,
     maxHp: params.maxHp,
     armor: params.armor,
+    maxArmor: params.maxArmor,
     adrenaline: params.adrenaline,
     maxAdrenaline: params.maxAdrenaline,
     rage: params.rage,
@@ -70,6 +73,7 @@ export function buildInitialLocalArenaHudData(
     hp: HP_MAX,
     maxHp: HP_MAX,
     armor: 0,
+    maxArmor: params.maxArmor ?? 100,
     adrenaline: 0,
     maxAdrenaline: params.maxAdrenaline ?? ADRENALINE_MAX,
     rage: 0,

@@ -931,6 +931,7 @@ export class ArenaLifecycleCoordinator {
           targetY,
           ownerId,
           color,
+          { ignoreBaseCollisions: ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID },
         );
       });
       if (this.ctx.enemyManager && this.ctx.baseManager) {
@@ -1559,6 +1560,7 @@ export class ArenaLifecycleCoordinator {
   private resetLocalArenaHudState(): void {
     const config = this.clientUpdate.getLocalUltimateConfig();
     const hudData = buildInitialLocalArenaHudData({
+      maxArmor: this.clientUpdate.getLocalMaxArmor(),
       maxAdrenaline: this.clientUpdate.getLocalMaxAdrenaline(),
       maxRage: this.clientUpdate.getLocalMaxRage(),
       ultimateRequiredRage: config.rageRequired,

@@ -183,6 +183,7 @@ export interface ArenaHUDData {
   hp:                       number;
   maxHp:                    number;
   armor:                    number;
+  maxArmor:                 number;
   adrenaline:               number;
   maxAdrenaline:            number;
   rage:                     number;
@@ -231,6 +232,7 @@ export class ArenaHUD {
   private adrBurstEmitter:  Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private currentMaxAdrenaline = 100;
   private currentMaxRage = 600;
+  private currentMaxArmor = ARMOR_MAX;
 
   // Adrenaline syringe state
   private adrSyringeGlow:   GlowHandle | null = null;
@@ -500,10 +502,11 @@ export class ArenaHUD {
   }
 
   update(data: ArenaHUDData): void {
+    this.currentMaxArmor = Math.max(1, data.maxArmor);
     this.currentMaxAdrenaline = Math.max(1, data.maxAdrenaline);
     this.currentMaxRage = Math.max(1, data.maxRage);
     this.updateHP(data.hp, data.maxHp);
-    this.updateArmor(data.armor);
+    this.updateArmor(data.armor, this.currentMaxArmor);
     this.updateAdrenaline(data.adrenaline, this.currentMaxAdrenaline, data.adrenalineSyringeActive ?? false);
     this.updateUltimate(data.rage, this.currentMaxRage, data.ultimateRequiredRage, data.ultimateThresholds, data.isUltimateActive);
     this.updateCooldownBar(this.w1, data.weapon1CooldownFrac);
@@ -664,11 +667,11 @@ export class ArenaHUD {
     }
   }
 
-  private updateArmor(armor: number): void {
-    this.updateTrackedValueBar(this.armor, armor, ARMOR_MAX, this.armorTrailDelay, timer => {
+  private updateArmor(armor: number, maxArmor: number): void {
+    this.updateTrackedValueBar(this.armor, armor, maxArmor, this.armorTrailDelay, timer => {
       this.armorTrailDelay = timer;
     });
-    const nextText = `${Math.round(armor)}/${ARMOR_MAX}`;
+    const nextText = `${Math.round(armor)}/${Math.round(maxArmor)}`;
     if (nextText !== this.lastArmorText) {
       this.armor.valueText?.setText(nextText);
       this.lastArmorText = nextText;

@@ -269,7 +269,14 @@ export class EnemyFlowFieldService {
       if (identical) return;
     }
     this.activeBaseIds = next;
-    this.isGridDirty = true;
+    // A base can be destroyed after the regular flow-field update of the
+    // current frame. Rebuilding only after the normal throttle interval
+    // leaves an enemy standing on the old goal in the meantime; for bosses
+    // this is especially visible because they have no separation movement to
+    // nudge them out of that cell. Base changes are rare, so apply this
+    // topology change immediately instead of waiting for update().
+    this.recomputeFields();
+    this.isGridDirty = false;
   }
 
   rebuild(): EnemyFlowFieldService {
