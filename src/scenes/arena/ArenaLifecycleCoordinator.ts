@@ -740,6 +740,7 @@ export class ArenaLifecycleCoordinator {
               ownerColor: rock.ownerColor,
               skipRockIndex: rock.id,
               secondProjectileDamageFactor: rock.secondProjectileDamageFactor,
+              weaponId: 'SPOREN' as const,
             }));
           const baseTurrets = (this.ctx.baseManager?.getTurrets() ?? []).map((turret) => ({
             id: turret.id,
@@ -747,6 +748,7 @@ export class ArenaLifecycleCoordinator {
             y: turret.y,
             ownerId: COOP_DEFENSE_BASE_TURRET_OWNER_ID,
             ownerColor: TEAM_BLUE_COLOR,
+            weaponId: turret.weaponId,
           }));
           return [...placeableTurrets, ...baseTurrets];
         },
@@ -911,9 +913,9 @@ export class ArenaLifecycleCoordinator {
           if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
         }
       });
-      this.ctx.turretSystem.setFireHandler((ownerId, color, x, y, angle, targetX, targetY, damageFactor = 1) => {
+      this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
-        const weapon    = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
+        const weapon    = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
         const fire = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID && weapon.fire.type === 'projectile'
           ? {
             ...weapon.fire,

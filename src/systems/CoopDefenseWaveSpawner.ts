@@ -114,7 +114,10 @@ export class CoopDefenseWaveSpawner {
   }
 
   private spawnOne(kind: CoopDefenseEnemyKind): boolean {
-    const candidates = this.collectCandidates(kind);
+    let candidates = this.collectCandidates(kind);
+    if (candidates.length === 0 && this.bossConfig?.enemyKind === kind && this.bossFlowFieldService) {
+      candidates = this.collectCandidates(kind, this.flowFieldService);
+    }
     if (candidates.length === 0) {
       this.warnExhausted();
       return false;
@@ -126,10 +129,14 @@ export class CoopDefenseWaveSpawner {
     return true;
   }
 
-  private collectCandidates(kind: CoopDefenseEnemyKind): { gridX: number; gridY: number }[] {
-    const flowFieldService = this.bossConfig?.enemyKind === kind && this.bossFlowFieldService
+  private collectCandidates(
+    kind: CoopDefenseEnemyKind,
+    fallbackFlowFieldService?: EnemyFlowFieldService,
+  ): { gridX: number; gridY: number }[] {
+    const flowFieldService = fallbackFlowFieldService
+      ?? (this.bossConfig?.enemyKind === kind && this.bossFlowFieldService
       ? this.bossFlowFieldService
-      : this.flowFieldService;
+      : this.flowFieldService);
     const enemies = this.enemyManager.getAllEnemies();
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
 

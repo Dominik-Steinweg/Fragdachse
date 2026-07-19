@@ -12,6 +12,9 @@ import {
 } from '../config';
 import type { AudioKey } from '../types';
 import { getSoundVolume, isMusicAudioKey } from './AudioCatalog';
+import { getHitFeedbackVolumeScale } from './HitFeedbackAudio';
+
+const HIT_FEEDBACK_MERGE_WINDOW_MS = 30;
 
 interface ListenerPosition {
   x: number;
@@ -42,6 +45,12 @@ export class GameAudioSystem {
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private currentMusic: Phaser.Sound.BaseSound | null = null;
   private currentMusicKey: string | null = null;
+  private pendingHitFeedbackDamage = 0;
+  private hitFeedbackTimer: Phaser.Time.TimerEvent | null = null;
+  private pendingDamageFeedbackDamage = 0;
+  private pendingDamageFeedbackX = 0;
+  private pendingDamageFeedbackY = 0;
+  private damageFeedbackTimer: Phaser.Time.TimerEvent | null = null;
   private masterVolume: number;
   private effectsVolume: number;
   private musicVolume: number;
@@ -136,6 +145,46 @@ export class GameAudioSystem {
     this.scene.sound.play(soundKey, {
       volume: Phaser.Math.Clamp(finalVolume, 0, 1),
       pan: 0,
+    });
+  }
+
+  queueHitFeedback(totalDamage: number): void {
+    if (totalDamage <= 0) return;
+
+    this.pendingHitFeedbackDamage += totalDamage;
+    if (this.hitFeedbackTimer) return;
+
+    this.hitFeedbackTimer = this.scene.time.delayedCall(HIT_FEEDBACK_MERGE_WINDOW_MS, () => {
+      const damage = this.pendingHitFeedbackDamage;
+      this.pendingHitFeedbackDamage = 0;
+      this.hitFeedbackTimer = null;
+      this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));
+    });
+  }
+
+  queueDamageFeedback(totalDamage: number, emitterX: number, emitterY: number): void {
+    if (totalDamage <= 0) return;
+
+    const previousDamage = this.pendingDamageFeedbackDamage;
+    const combinedDamage = previousDamage + totalDamage;
+    this.pendingDamageFeedbackX = previousDamage <= 0
+      ? emitterX
+      : (this.pendingDamageFeedbackX * previousDamage + emitterX * totalDamage) / combinedDamage;
+    this.pendingDamageFeedbackY = previousDamage <= 0
+      ? emitterY
+      : (this.pendingDamageFeedbackY * previousDamage + emitterY * totalDamage) / combinedDamage;
+    this.pendingDamageFeedbackDamage = combinedDamage;
+    if (this.damageFeedbackTimer) return;
+
+    this.damageFeedbackTimer = this.scene.time.delayedCall(HIT_FEEDBACK_MERGE_WINDOW_MS, () => {
+      const damage = this.pendingDamageFeedbackDamage;
+      const emitterX = this.pendingDamageFeedbackX;
+      const emitterY = this.pendingDamageFeedbackY;
+      this.pendingDamageFeedbackDamage = 0;
+      this.pendingDamageFeedbackX = 0;
+      this.pendingDamageFeedbackY = 0;
+      this.damageFeedbackTimer = null;
+      this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));
     });
   }
 
@@ -262,6 +311,14 @@ export class GameAudioSystem {
    * Stoppt alle aktiven Loops und Musik. Muss bei Scene-Teardown aufgerufen werden.
    */
   cleanup(): void {
+    this.hitFeedbackTimer?.remove();
+    this.hitFeedbackTimer = null;
+    this.pendingHitFeedbackDamage = 0;
+    this.damageFeedbackTimer?.remove();
+    this.damageFeedbackTimer = null;
+    this.pendingDamageFeedbackDamage = 0;
+    this.pendingDamageFeedbackX = 0;
+    this.pendingDamageFeedbackY = 0;
     for (const [handle] of this.activeLoops) {
       this.stopLoop(handle);
     }

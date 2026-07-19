@@ -122,7 +122,7 @@ export class EnemyManager {
     for (const enemy of this.enemies.values()) {
       if (enemy.faction === 'allied') continue;
       const config = this.resolvedConfigs[enemy.kind];
-      const flowFieldService = config.isBoss
+      const primaryFlowFieldService = config.isBoss
         ? bossFlowFieldService ?? baseFlowFieldService
         : config.movementTarget === 'players'
           ? playerFlowFieldService ?? baseFlowFieldService
@@ -152,7 +152,7 @@ export class EnemyManager {
         continue;
       }
 
-      if (!flowFieldService) {
+      if (!primaryFlowFieldService) {
         enemy.stopMovement();
         continue;
       }
@@ -168,13 +168,24 @@ export class EnemyManager {
         continue;
       }
 
-      const gridCell = flowFieldService.worldToGrid(enemy.sprite.x, enemy.sprite.y);
+      const gridCell = primaryFlowFieldService.worldToGrid(enemy.sprite.x, enemy.sprite.y);
       if (!gridCell) {
         enemy.stopMovement();
         continue;
       }
 
-      const integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
+      let flowFieldService = primaryFlowFieldService;
+      let integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
+      if (
+        config.isBoss
+        && flowFieldService !== baseFlowFieldService
+        && baseFlowFieldService
+        && integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY
+      ) {
+        flowFieldService = baseFlowFieldService;
+        integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
+      }
+
       if (integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
         const recoveryTarget = config.isBoss
           ? flowFieldService.findNearestReachableWorldPosition(gridCell.gridX, gridCell.gridY)

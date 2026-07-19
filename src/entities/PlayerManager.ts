@@ -20,7 +20,7 @@ import {
   getCaptureTheBeerTeamSpawnRegion,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
-import { getBaseWorldBounds, getCoopDefenseBases } from '../arena/BaseRegistry';
+import { getBaseWorldBounds, getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
 
 const PREFERRED_OPPONENT_DISTANCE_PX = CELL_SIZE * 10;
 const MIN_OPPONENT_DISTANCE_PX = CELL_SIZE * 2;
@@ -28,6 +28,8 @@ const MIN_OPPONENT_DISTANCE_PX = CELL_SIZE * 2;
 const COOP_BASE_NEAR_SPAWN_RANGE_PX = CELL_SIZE * 10;
 /** Stärke des Spawn-Bonus pro Pixel-Abstand-Defizit (überwiegt den Opponent-Distance-Bonus). */
 const COOP_BASE_NEAR_SPAWN_WEIGHT = 4.0;
+/** Größter bevorzugter Abstand zur aktuell bedrohten Basis. */
+const COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX = CELL_SIZE * 14;
 /**
  * Coop-Defense: Sicherheitsabstand zur Angriffsreichweite eines Gegners.
  * Liegt der Spawn-Kandidat näher als (Reichweite + dieser Puffer) am Gegner,
@@ -63,6 +65,9 @@ interface SpawnEnemyThreatSnapshot {
   y: number;
   /** Effektive Angriffsreichweite des Gegners in Pixel (0 = harmlos). */
   attackRange: number;
+  /** Nächstgelegene lebende Coop-Basis, auf die der Gegner zuläuft. */
+  targetBaseId?: string;
+  targetBaseDistance?: number;
 }
 
 interface SpawnContextSnapshot {
@@ -75,7 +80,7 @@ interface SpawnContextSnapshot {
   readonly projectiles: readonly SpawnProjectileSnapshot[];
   /** Coop-Defense: aktive Feindbedrohungen mit Reichweite (leer in anderen Modi). */
   readonly enemyThreats?: readonly SpawnEnemyThreatSnapshot[];
-  /** Coop-Defense: IDs der noch lebenden Basen (für Leftmost-Spawn-Bias). */
+  /** Coop-Defense: IDs der noch lebenden Basen (für Spawn-Fokus und Fallback). */
   readonly livingCoopBaseIds?: ReadonlySet<string>;
   readonly isRelevantOpponent?: (playerId: string) => boolean;
   readonly hasLineOfSight?: (sx: number, sy: number, ex: number, ey: number) => boolean;
@@ -90,6 +95,7 @@ interface SpawnCandidate {
 
 interface SpawnEvaluation {
   candidate: SpawnCandidate;
+  coopBaseDistance: number;
   nearestOpponentDistance: number;
   nearestProjectileDistance: number;
   edgeDistance: number;
@@ -215,7 +221,30 @@ export class PlayerManager {
       return { x: CELL_SIZE / 2, y: CELL_SIZE / 2 }; // Notfall-Fallback
     }
 
-    const evaluations = free.map(candidate => this.evaluateSpawnCandidate(candidate, requestingPlayerId, spawnContext));
+    const coopDefenseBase = this.resolveCoopDefenseSpawnBase(spawnContext);
+    const evaluations = free.map(candidate => this.evaluateSpawnCandidate(
+      candidate,
+      requestingPlayerId,
+      spawnContext,
+      coopDefenseBase,
+    ));
+
+    const focusedEvaluations = coopDefenseBase
+      ? evaluations.filter((evaluation) => evaluation.coopBaseDistance <= COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX)
+      : evaluations;
+    const focusedChoice = this.pickSpawnWithFallbacks(focusedEvaluations);
+    if (focusedChoice) return focusedChoice;
+
+    const globalChoice = focusedEvaluations === evaluations
+      ? null
+      : this.pickSpawnWithFallbacks(evaluations);
+    return globalChoice ?? { x: CELL_SIZE / 2, y: CELL_SIZE / 2 };
+  }
+
+  private pickSpawnWithFallbacks(
+    evaluations: readonly SpawnEvaluation[],
+  ): { x: number; y: number } | null {
+    if (evaluations.length === 0) return null;
     const relaxedThresholds = this.buildRelaxedOpponentThresholds();
 
     for (const threshold of relaxedThresholds) {
@@ -254,7 +283,7 @@ export class PlayerManager {
     )));
     if (minimumChoice) return minimumChoice;
 
-    return this.pickCandidate(evaluations) ?? { x: CELL_SIZE / 2, y: CELL_SIZE / 2 };
+    return this.pickCandidate(evaluations);
   }
 
   private buildBlockedCells(
@@ -387,6 +416,7 @@ export class PlayerManager {
     candidate: SpawnCandidate,
     requestingPlayerId: string | null,
     spawnContext: SpawnContextSnapshot,
+    coopDefenseBase: BaseSpec | null,
   ): SpawnEvaluation {
     let nearestOpponentDistance = Number.POSITIVE_INFINITY;
     for (const player of this.players.values()) {
@@ -423,29 +453,16 @@ export class PlayerManager {
     score += Math.min(projectileDanger.nearestDistance, PROJECTILE_SOFT_RADIUS_PX * 2) * 0.8;
     score += Math.min(edgeDistance, EDGE_SOFT_DISTANCE_PX) * 0.7;
 
-    // Coop-Defense: Bonus für Spawn-Punkte nah an der **am weitesten links liegenden,
-    // noch lebenden** Basis. Zerstörte Basen werden ignoriert; ist die linke Basis
-    // gefallen, springt der Bias automatisch zur nächst-linken überlebenden Basis.
-    // Auf Modi ohne Coop-Basen ist dies ein No-Op (leere Liste).
-    const coopBases = getCoopDefenseBases();
-    if (coopBases.length > 0) {
-      const livingIds = spawnContext.livingCoopBaseIds;
-      const livingBases = livingIds
-        ? coopBases.filter((base) => livingIds.has(base.id))
-        : coopBases; // Fallback: kein Living-Filter geliefert → alle akzeptieren.
-      if (livingBases.length > 0) {
-        let leftmost = livingBases[0];
-        for (const base of livingBases) {
-          if (base.region.minGridX < leftmost.region.minGridX) leftmost = base;
-        }
-        const bounds = getBaseWorldBounds(leftmost.region);
-        const bx = bounds.x + bounds.width / 2;
-        const by = bounds.y + bounds.height / 2;
-        const distance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, bx, by);
-        if (distance < COOP_BASE_NEAR_SPAWN_RANGE_PX) {
-          score += (COOP_BASE_NEAR_SPAWN_RANGE_PX - distance) * COOP_BASE_NEAR_SPAWN_WEIGHT;
-        }
+    let coopBaseDistance = Number.POSITIVE_INFINITY;
+    if (coopDefenseBase) {
+      const bounds = getBaseWorldBounds(coopDefenseBase.region);
+      const bx = bounds.x + bounds.width / 2;
+      const by = bounds.y + bounds.height / 2;
+      coopBaseDistance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, bx, by);
+      if (coopBaseDistance < COOP_BASE_NEAR_SPAWN_RANGE_PX) {
+        score += (COOP_BASE_NEAR_SPAWN_RANGE_PX - coopBaseDistance) * COOP_BASE_NEAR_SPAWN_WEIGHT;
       }
+      score -= Math.max(0, coopBaseDistance - COOP_BASE_NEAR_SPAWN_RANGE_PX) * 0.8;
     }
 
     if (edgeDistance < EDGE_SOFT_DISTANCE_PX) {
@@ -462,6 +479,7 @@ export class PlayerManager {
 
     return {
       candidate,
+      coopBaseDistance,
       nearestOpponentDistance,
       nearestProjectileDistance: projectileDanger.nearestDistance,
       edgeDistance,
@@ -474,6 +492,46 @@ export class PlayerManager {
       projectilePenalty: projectileDanger.penalty,
       score,
     };
+  }
+
+  private resolveCoopDefenseSpawnBase(spawnContext: SpawnContextSnapshot): BaseSpec | null {
+    const coopBases = getCoopDefenseBases();
+    if (coopBases.length === 0) return null;
+
+    const livingIds = spawnContext.livingCoopBaseIds;
+    const livingBases = livingIds
+      ? coopBases.filter((base) => livingIds.has(base.id))
+      : coopBases;
+    if (livingBases.length === 0) return null;
+
+    const pressureByBaseId = new Map<string, number>();
+    for (const enemy of spawnContext.enemyThreats ?? []) {
+      if (!enemy.targetBaseId || (livingIds && !livingIds.has(enemy.targetBaseId))) continue;
+      const targetBase = livingBases.find((base) => base.id === enemy.targetBaseId);
+      if (!targetBase) continue;
+      const distance = enemy.targetBaseDistance ?? Number.POSITIVE_INFINITY;
+      const pressureRange = enemy.attackRange + COOP_ENEMY_ATTACK_SOFT_BUFFER_PX;
+      if (distance > pressureRange) continue;
+      const pressure = 1 + Math.max(0, pressureRange - distance) / CELL_SIZE;
+      pressureByBaseId.set(enemy.targetBaseId, (pressureByBaseId.get(enemy.targetBaseId) ?? 0) + pressure);
+    }
+
+    let selectedBase: BaseSpec | null = null;
+    let selectedPressure = 0;
+    for (const base of livingBases) {
+      const pressure = pressureByBaseId.get(base.id) ?? 0;
+      if (pressure > selectedPressure) {
+        selectedBase = base;
+        selectedPressure = pressure;
+      }
+    }
+    if (selectedBase) return selectedBase;
+
+    let leftmost = livingBases[0];
+    for (const base of livingBases) {
+      if (base.region.minGridX < leftmost.region.minGridX) leftmost = base;
+    }
+    return leftmost;
   }
 
   /**

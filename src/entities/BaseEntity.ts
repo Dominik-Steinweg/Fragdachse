@@ -20,7 +20,7 @@ export interface BaseTurretRuntimeState {
   readonly x: number;
   readonly y: number;
   readonly angle: number;
-  readonly weaponId: 'SPOREN';
+  readonly weaponId: 'SPOREN' | 'BASE_SPOREN';
 }
 
 /**

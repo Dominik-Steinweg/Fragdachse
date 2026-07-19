@@ -37,7 +37,7 @@
     {
       "mapId": "2",
       "displayName": "Map 2 - Zweite Front",
-      "tutorialText": "Auf dieser Map hat die wa Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
+      "tutorialText": "Auf dieser Map hat die Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
       "roundDurationSec": 60,
       "bases": [
         {
@@ -52,7 +52,7 @@
           "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
           "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 },
           "turrets": [
-            { "id": "front-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ]
         }
       ],
@@ -74,8 +74,8 @@
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
           "turrets": [
-            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
-            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "BASE_SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ]
         },
         {
@@ -104,8 +104,8 @@
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
           "turrets": [
-            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
-            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "BASE_SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ]
         },
         {
@@ -148,8 +148,8 @@
           "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
           "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 },
           "turrets": [
-            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
-            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "BASE_SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ]
         },
         {
@@ -176,8 +176,8 @@
       ],
       "waves": [
         { "enemyKind": "zombie-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 5000 },
-        { "enemyKind": "rabid-badger", "intervalMs": 3500, "countPerWave": 1, "startAtMs": 5000 }
+        { "enemyKind": "demon-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 5000 },
+        { "enemyKind": "rabid-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 5000 }
       ],
       "boss": { "enemyKind": "grave-titan", "spawnAtMs": 15000 }
     },
@@ -201,7 +201,7 @@
             ]
           },
           "turrets": [
-            { "id": "front-middle", "cellOffset": { "gridX": 1, "gridY": 2 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-middle", "cellOffset": { "gridX": 1, "gridY": 2 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ],
           "powerUpPedestals": [
             { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
@@ -236,13 +236,13 @@
         { "enemyKind": "zombie-badger", "intervalMs": 8000, "countPerWave": 1, "startAtMs": 0 },
         { "enemyKind": "demon-badger", "intervalMs": 7000, "countPerWave": 1, "startAtMs": 5000 },
         { "enemyKind": "rabid-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 10000 },
-        { "enemyKind": "spore-warden", "intervalMs": 4200, "countPerWave": 1, "startAtMs": 0 }
+        { "enemyKind": "spore-warden", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 }
       ]
     },
     {
       "mapId": "7",
       "displayName": "Map 7 - MEDIC!",
-      "roundDurationSec": 60,
+      "roundDurationSec": 70,
       "bases": [
         {
           "id": "coop-base-rear",
@@ -258,8 +258,8 @@
             ]
           },
           "turrets": [
-            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
-            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "BASE_SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ],
           "powerUpPedestals": [
             { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
@@ -279,7 +279,7 @@
             ]
           },
           "turrets": [
-            { "id": "front-middle", "cellOffset": { "gridX": 1, "gridY": 1 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-middle", "cellOffset": { "gridX": 1, "gridY": 1 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ],
           "powerUpPedestals": [
             { "id": "nuke-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "NUKE", "respawnMs": 30000, "spawnOnArenaStart": false }
@@ -302,7 +302,7 @@
     {
       "mapId": "8",
       "displayName": "Map 8 - Dimensionsbruch",
-      "roundDurationSec": 60,
+      "roundDurationSec": 80,
       "bases": [
         {
           "id": "coop-base-rear",
@@ -319,8 +319,8 @@
             ]
           },
           "turrets": [
-            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
-            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 4 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "BASE_SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 4 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ],
           "powerUpPedestals": [
             { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
@@ -359,7 +359,7 @@
     {
       "mapId": "9",
       "displayName": "Map 9 - Faulnisbrut",
-      "roundDurationSec": 60,
+      "roundDurationSec": 90,
       "bases": [
         {
           "id": "coop-base-rear",
@@ -381,8 +381,8 @@
             ]
           },
           "turrets": [
-            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "SPOREN" },
-            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "BASE_SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 3 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ],
           "powerUpPedestals": [
             { "id": "health-station-top", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
@@ -397,9 +397,9 @@
         { "defId": "ARMOR", "region": "rear", "respawnMs": 10000, "spawnOnArenaStart": true }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 1200, "countPerWave": 2, "startAtMs": 0 },
+        { "enemyKind": "zombie-badger", "intervalMs": 2000, "countPerWave": 2, "startAtMs": 0 },
         { "enemyKind": "demon-badger", "intervalMs": 8000, "countPerWave": 2, "startAtMs": 0 },
-        { "enemyKind": "spore-warden", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "spore-warden", "intervalMs": 30000, "countPerWave": 1, "startAtMs": 30000 },
         { "enemyKind": "plague-medic", "intervalMs": 30000, "countPerWave": 1, "startAtMs": 0 },
         { "enemyKind": "stink-broodmother", "intervalMs": 15000, "countPerWave": 1, "startAtMs": 0 }
       ]
@@ -433,7 +433,7 @@
           "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
           "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 },
           "turrets": [
-            { "id": "front-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "mountSide": "front", "weaponId": "SPOREN" }
+            { "id": "front-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
           ]
         }
       ],

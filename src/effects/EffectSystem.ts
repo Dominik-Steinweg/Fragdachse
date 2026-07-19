@@ -216,10 +216,10 @@ export class EffectSystem {
       if (effect.type === 'hit') {
         if (effect.shooterId === this.bridge.getLocalPlayerId()) {
           onLocalConfirmedHit?.();
-          this.audioSystem?.playLocalSound('sfx_hit_feedback');
+          this.audioSystem?.queueHitFeedback(effect.totalDamage);
         }
         this.playHitEffect(effect);
-        this.audioSystem?.playSound('sfx_player_hit', effect.x, effect.y);
+        this.audioSystem?.queueDamageFeedback(effect.totalDamage, effect.x, effect.y);
         if (effect.targetId === this.bridge.getLocalPlayerId()) {
           this.playDamageVignette(effect);
         }

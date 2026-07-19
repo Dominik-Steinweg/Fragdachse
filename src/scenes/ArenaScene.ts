@@ -385,22 +385,36 @@ export class ArenaScene extends Phaser.Scene {
           })),
         // Coop-Defense: Lebende Gegner mit ihrer effektiven Angriffsreichweite
         // veröffentlichen, damit der Spawn nicht in deren Wirkungskreis fällt.
-        enemyThreats: (this.ctx.enemyManager?.getAllEnemies() ?? [])
-          .filter((enemy) => enemy.sprite.active && combatSystem.isAlive(enemy.id))
-          .map((enemy) => ({
-            x: enemy.sprite.x,
-            y: enemy.sprite.y,
-            attackRange: Math.max(
-              0,
-              ...enemy.getAttackWeapons().map((attackWeapon) => (
-                attackWeapon.weapon.config.fire.type === 'tesla_dome'
-                  ? attackWeapon.weapon.config.fire.radius
-                  : attackWeapon.weapon.config.range
-              )),
-            ),
-          })),
-        // Coop-Defense: IDs der noch verteidigten Basen → Leftmost-Spawn-Bias
-        // ignoriert zerstörte Basen automatisch.
+        enemyThreats: (() => {
+          const livingBases = this.ctx.baseManager?.getBases().filter((base) => base.getHp() > 0) ?? [];
+          return (this.ctx.enemyManager?.getAllEnemies() ?? [])
+          .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && combatSystem.isAlive(enemy.id))
+          .map((enemy) => {
+            let targetBaseId: string | undefined;
+            let targetBaseDistance = Number.POSITIVE_INFINITY;
+            for (const base of livingBases) {
+              const surface = base.getNearestSurfacePoint(enemy.sprite.x, enemy.sprite.y);
+              if (surface && surface.distance < targetBaseDistance) {
+                targetBaseId = base.id;
+                targetBaseDistance = surface.distance;
+              }
+            }
+            return {
+              x: enemy.sprite.x,
+              y: enemy.sprite.y,
+              attackRange: Math.max(
+                0,
+                ...enemy.getAttackWeapons().map((attackWeapon) => (
+                  attackWeapon.weapon.config.fire.type === 'tesla_dome'
+                    ? attackWeapon.weapon.config.fire.radius
+                    : attackWeapon.weapon.config.range
+                )),
+              ),
+              targetBaseId,
+              targetBaseDistance,
+            };
+          });
+        })(),
         livingCoopBaseIds: this.ctx.baseManager?.getActiveBaseIds(),
         isRelevantOpponent: (otherPlayerId) => playerId === null
           ? combatSystem.isAlive(otherPlayerId)

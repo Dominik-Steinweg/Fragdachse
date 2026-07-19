@@ -28,7 +28,7 @@ export interface BaseTurretSpec {
   readonly x: number;
   readonly y: number;
   readonly initialAngle: number;
-  readonly weaponId: 'SPOREN';
+  readonly weaponId: 'SPOREN' | 'BASE_SPOREN';
 }
 
 export interface BasePowerUpPedestalSpec {

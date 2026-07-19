@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { PlaceableTurretUtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CombatSystem } from './CombatSystem';
 
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
@@ -11,6 +11,7 @@ export interface AutomatedTurret {
   readonly y: number;
   readonly ownerId: string;
   readonly ownerColor: number;
+  readonly weaponId?: keyof typeof WEAPON_CONFIGS;
   readonly skipRockIndex?: number;
   readonly secondProjectileDamageFactor?: number;
 }
@@ -20,6 +21,7 @@ type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[]
 type TurretFireHandler = (
   ownerId: string,
   color: number,
+  weaponId: keyof typeof WEAPON_CONFIGS,
   x: number,
   y: number,
   angle: number,
@@ -83,13 +85,15 @@ export class TurretSystem {
       const angle = Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y);
       this.turretAngleUpdater?.(turret.id, angle);
 
+      const turretWeaponId = turret.weaponId ?? 'SPOREN';
+      const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
-      this.nextFireAt.set(turret.id, now + Math.max(1, _weaponConfig.cooldown));
+      this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
 
       const muzzleDistance = config.placeable.muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
-      this.fireHandler?.(turret.ownerId, turret.ownerColor, muzzleX, muzzleY, angle, target.x, target.y);
+      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y);
       if ((turret.secondProjectileDamageFactor ?? 0) > 0) {
         const secondTarget = this.findNearestTarget(
           turret,
@@ -101,7 +105,7 @@ export class TurretSystem {
         );
         if (secondTarget) {
           const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
-          this.fireHandler?.(turret.ownerId, turret.ownerColor, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, turret.secondProjectileDamageFactor);
+          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, turret.secondProjectileDamageFactor);
         }
       }
     }

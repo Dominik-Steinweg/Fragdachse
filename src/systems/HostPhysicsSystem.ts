@@ -449,6 +449,11 @@ export class HostPhysicsSystem {
     }
 
     for (const player of this.playerManager.getAllPlayers()) {
+      // Entity kann während Round-/Scene-Teardown noch im Manager stehen,
+      // obwohl Phaser den Sprite bzw. dessen Arcade-Body bereits entfernt hat.
+      const playerBody = player.sprite.body as Phaser.Physics.Arcade.Body | null;
+      if (!player.sprite.active || !playerBody) continue;
+
       // Lazy: Collider mit Felsen anlegen
       if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {
         const existing = this.playerColliders.get(player.id) ?? [];
@@ -488,7 +493,7 @@ export class HostPhysicsSystem {
 
       if (movementLocked) {
         const slowed = this.applyTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
-        player.body.setVelocity(slowed.vx, slowed.vy);
+        playerBody.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
 
@@ -501,14 +506,14 @@ export class HostPhysicsSystem {
           forcedMovement.vy + impulse.vy,
           now,
         );
-        player.body.setVelocity(slowed.vx, slowed.vy);
+        playerBody.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
 
       // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
       if (this.burrowSystem?.isStunned(player.id)) {
         const slowed = this.applyTimeBubbleFactor(player.id, player.sprite.x, player.sprite.y, impulse.vx, impulse.vy, now);
-        player.body.setVelocity(slowed.vx, slowed.vy);
+        playerBody.setVelocity(slowed.vx, slowed.vy);
         continue;
       }
 
@@ -609,7 +614,7 @@ export class HostPhysicsSystem {
             baseVy + impulse.vy,
             now,
           );
-          player.body.setVelocity(slowed.vx, slowed.vy);
+          playerBody.setVelocity(slowed.vx, slowed.vy);
           continue;
         }
         // done → fällt durch zur normalen Bewegung
@@ -647,10 +652,13 @@ export class HostPhysicsSystem {
         baseVy + impulse.vy,
         now,
       );
-      player.body.setVelocity(slowed.vx, slowed.vy);
+      playerBody.setVelocity(slowed.vx, slowed.vy);
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      const enemyBody = enemy.sprite.body as Phaser.Physics.Arcade.Body | null;
+      if (!enemy.sprite.active || !enemyBody) continue;
+
       if (this.rockGroup && !this.enemyRockCollidersSetup.has(enemy.id)) {
         const existing = this.enemyColliders.get(enemy.id) ?? [];
         existing.push(this.scene.physics.add.collider(enemy.sprite, this.rockGroup, (_enemy, rockObject) => {
@@ -686,7 +694,7 @@ export class HostPhysicsSystem {
         now,
       );
       const enemyMovementFactor = Phaser.Math.Clamp(this.enemyMovementFactorResolver?.(enemy.id, now) ?? 1, 0, 1);
-      enemy.body.setVelocity(slowed.vx * enemyMovementFactor, slowed.vy * enemyMovementFactor);
+      enemyBody.setVelocity(slowed.vx * enemyMovementFactor, slowed.vy * enemyMovementFactor);
       enemy.syncBar();
     }
   }

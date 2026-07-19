@@ -21,12 +21,13 @@ export type CoopBaseShape =
   | { kind: 'cells'; cells: readonly CoopBaseCellOffset[] };
 
 export type CoopBaseTurretMountSide = 'front' | 'rear' | 'top' | 'bottom';
+export type CoopBaseTurretWeaponId = 'SPOREN' | 'BASE_SPOREN';
 
 export interface CoopBaseTurretConfig {
   readonly id: string;
   readonly cellOffset: CoopBaseCellOffset;
   readonly mountSide: CoopBaseTurretMountSide;
-  readonly weaponId: 'SPOREN';
+  readonly weaponId: CoopBaseTurretWeaponId;
 }
 
 export interface CoopBasePowerUpPedestalConfig {
@@ -277,7 +278,7 @@ function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig)
   ) {
     throw new Error(`[coopDefenseMaps] Unknown turret mount side on base ${baseId}: ${turret.mountSide}`);
   }
-  if (turret.weaponId !== 'SPOREN') {
+  if (turret.weaponId !== 'SPOREN' && turret.weaponId !== 'BASE_SPOREN') {
     throw new Error(`[coopDefenseMaps] Unsupported base turret weapon on base ${baseId}: ${turret.weaponId}`);
   }
 

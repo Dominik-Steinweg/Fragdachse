@@ -2,7 +2,7 @@
   "enemies": [
     {
       "id": "zombie-badger",
-      "maxHp": 20,
+      "maxHp": 15,
       "xp": 1,
       "size": 28,
       "moveSpeed": 70,
@@ -15,12 +15,12 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_zombie_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
       "id": "demon-badger",
-      "maxHp": 25,
+      "maxHp": 20,
       "xp": 2,
       "size": 24,
       "moveSpeed": 140,
@@ -33,12 +33,12 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_demon_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
       "id": "rabid-badger",
-      "maxHp": 30,
+      "maxHp": 20,
       "xp": 3,
       "size": 22,
       "moveSpeed": 180,
@@ -51,12 +51,12 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_rabid_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
       "id": "grave-titan",
-      "maxHp": 750,
+      "maxHp": 600,
       "xp": 100,
       "size": 56,
       "moveSpeed": 48,
@@ -79,19 +79,19 @@
         "destroysTrain": true
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
       "id": "spore-warden",
-      "maxHp": 180,
+      "maxHp": 120,
       "xp": 15,
       "size": 32,
       "moveSpeed": 100,
       "movementTarget": "bases",
       "weapons": [
         { "weaponId": "SPORE_WARDEN_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
-        { "weaponId": "SPOREN", "targetMode": "players" }
+        { "weaponId": "WARDEN_SPOREN", "targetMode": "players" }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
@@ -99,7 +99,7 @@
       "imageKey": "enemy_spore_warden",
       "displayName": "Sporenpanzer",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
@@ -119,12 +119,12 @@
       "imageKey": "enemy_plague_medic",
       "displayName": "Seuchenheiler",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
       "id": "void-stalker",
-      "maxHp": 240,
+      "maxHp": 160,
       "xp": 40,
       "size": 32,
       "moveSpeed": 120,
@@ -146,12 +146,12 @@
         "maxRange": 1100
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
       "id": "stink-broodmother",
-      "maxHp": 200,
+      "maxHp": 140,
       "xp": 50,
       "size": 40,
       "moveSpeed": 80,
@@ -171,12 +171,12 @@
         { "enemyKind": "rabid-badger", "count": 4, "offsetPx": 9 }
       ],
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     },
     {
       "id": "inferno-colossus",
-      "maxHp": 1500,
+      "maxHp": 1200,
       "xp": 200,
       "size": 68,
       "moveSpeed": 36,
@@ -200,7 +200,7 @@
         "destroysTrain": true
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 1
+        "maxHpFactorPerAdditionalPlayer": 0.5
       }
     }
   ]
