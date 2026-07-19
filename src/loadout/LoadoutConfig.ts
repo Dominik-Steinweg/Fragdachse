@@ -656,7 +656,7 @@ export function getAvailableUltimateConfigs(mode: GameMode): UltimateConfig[] {
 
 // ── Item-Registrierung ────────────────────────────────────────────────────────
 
-function createEnemyBiteConfig(id: string, displayName: string, damage: number): WeaponConfig {
+function createEnemyBiteConfig(id: string, displayName: string, damage: number, rockDamageMult: number): WeaponConfig {
   return {
     id,
     displayName,
@@ -678,6 +678,7 @@ function createEnemyBiteConfig(id: string, displayName: string, damage: number):
     spreadRecoveryDelay: 400,
     spreadRecoveryRate: 5,
     spreadRecoverySpeed: 100,
+    rockDamageMult,
     trainDamageMult: 1.5,
     shotAudio: {
       successKey: 'shot_bite',
@@ -814,13 +815,13 @@ export const WEAPON_CONFIGS = {
   // Nicht-Boss-Gegner nutzen eigene, nicht durch Spieler-Upgrades beeinflusste
   // Bisse. Schaden: lineare XP-Einordnung zwischen rund 10% (XP 1) und 50% (XP 50)
   // des urspruenglichen Dachsbisses mit 50 Schaden, auf ganze Trefferwerte gerundet.
-  ZOMBIE_BADGER_BITE: createEnemyBiteConfig('ZOMBIE_BADGER_BITE', 'Zombie-Dachsbiss', 10),
-  DEMON_BADGER_BITE: createEnemyBiteConfig('DEMON_BADGER_BITE', 'Daemonen-Dachsbiss', 20),
-  RABID_BADGER_BITE: createEnemyBiteConfig('RABID_BADGER_BITE', 'Tollwut-Dachsbiss', 25),
-  SPORE_WARDEN_BITE: createEnemyBiteConfig('SPORE_WARDEN_BITE', 'Sporenpanzer-Biss', 40),
-  PLAGUE_MEDIC_BITE: createEnemyBiteConfig('PLAGUE_MEDIC_BITE', 'Seuchenheiler-Biss', 30),
-  VOID_STALKER_BITE: createEnemyBiteConfig('VOID_STALKER_BITE', 'Leerenpirscher-Biss', 50),
-  STINK_BROODMOTHER_BITE: createEnemyBiteConfig('STINK_BROODMOTHER_BITE', 'Faulnisbrueter-Biss', 40),
+  ZOMBIE_BADGER_BITE: createEnemyBiteConfig('ZOMBIE_BADGER_BITE', 'Zombie-Dachsbiss', 10, 4),
+  DEMON_BADGER_BITE: createEnemyBiteConfig('DEMON_BADGER_BITE', 'Daemonen-Dachsbiss', 20, 4),
+  RABID_BADGER_BITE: createEnemyBiteConfig('RABID_BADGER_BITE', 'Tollwut-Dachsbiss', 25, 4),
+  SPORE_WARDEN_BITE: createEnemyBiteConfig('SPORE_WARDEN_BITE', 'Sporenpanzer-Biss', 40, 4),
+  PLAGUE_MEDIC_BITE: createEnemyBiteConfig('PLAGUE_MEDIC_BITE', 'Seuchenheiler-Biss', 30, 4),
+  VOID_STALKER_BITE: createEnemyBiteConfig('VOID_STALKER_BITE', 'Leerenpirscher-Biss', 50, 4),
+  STINK_BROODMOTHER_BITE: createEnemyBiteConfig('STINK_BROODMOTHER_BITE', 'Faulnisbrueter-Biss', 40, 4),
 
   GRAVE_TITAN_BITE: {
     id:                   'GRAVE_TITAN_BITE',
@@ -843,6 +844,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  500,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
+    rockDamageMult:       4,
     trainDamageMult:      2,
     shotAudio: {
       successKey: 'shot_bite',
@@ -872,7 +874,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryDelay:  500,
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
-    rockDamageMult:       1,
+    rockDamageMult:       4,
     trainDamageMult:      0,
     shotAudio: {
       successKey: 'shot_bite',
@@ -1291,7 +1293,7 @@ export const WEAPON_CONFIGS = {
           rockDamageMult: 0,
           trainDamageMult: 0,
       burnDurationMs: 2000,
-      burnDamagePerTick: 0.25,
+      burnDamagePerTick: 1,
       weaponName: 'Brennender Raketenboden',
         },
       } satisfies ProjectileExplosionConfig,

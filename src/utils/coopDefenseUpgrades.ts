@@ -95,6 +95,8 @@ export interface CoopDefenseLoadoutUnlockDefinition {
   itemId: string;
 }
 
+export type CoopDefenseUpgradeLoadoutSelection = CoopDefenseLoadoutUnlockDefinition;
+
 export interface CoopDefenseUpgradeDefinition {
   id: string;
   code?: string;
@@ -297,6 +299,30 @@ export function getCoopDefenseUpgradeDefinitionsForCategory(
 
 export function getCoopDefenseUpgradeDefinition(upgradeId: string): CoopDefenseUpgradeDefinition | null {
   return COOP_DEFENSE_UPGRADE_DEFINITIONS[upgradeId] ?? null;
+}
+
+/** Finds the loadout item an upgrade belongs to, including upgrades below its unlock node. */
+export function getCoopDefenseUpgradeLoadoutSelection(
+  upgradeId: string,
+): CoopDefenseUpgradeLoadoutSelection | null {
+  const visited = new Set<string>();
+
+  const resolve = (currentUpgradeId: string): CoopDefenseUpgradeLoadoutSelection | null => {
+    if (visited.has(currentUpgradeId)) return null;
+    visited.add(currentUpgradeId);
+
+    const definition = getCoopDefenseUpgradeDefinition(currentUpgradeId);
+    if (!definition) return null;
+    if (definition.loadoutUnlock) return definition.loadoutUnlock;
+
+    for (const requirement of definition.requires) {
+      const selection = resolve(requirement.upgradeId);
+      if (selection) return selection;
+    }
+    return null;
+  };
+
+  return resolve(upgradeId);
 }
 
 export function getCoopDefenseLoadoutUnlockUpgradeId(slot: LoadoutSlot, itemId: string): string | null {

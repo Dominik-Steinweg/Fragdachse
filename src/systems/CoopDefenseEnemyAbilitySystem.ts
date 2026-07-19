@@ -28,6 +28,8 @@ interface EnemyTeleportState {
   teleportAt?: number;
 }
 
+const ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER = 2;
+
 /** Host-seitige, dauerhaft aktive Spezialfaehigkeiten der Coop-Gegner. */
 export class CoopDefenseEnemyAbilitySystem {
   private readonly lastHealingTickAt = new Map<string, number>();
@@ -191,7 +193,13 @@ export class CoopDefenseEnemyAbilitySystem {
     const spawnY = enemy.sprite.y + Math.sin(angle) * spawnDistance;
     const color = getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
     const plannedFlightSeconds = Math.max(0.1, ability.flightTimeMs / 1000);
-    const throwSpeed = Phaser.Math.Clamp(target.distance / plannedFlightSeconds, 16, utility.projectileSpeed);
+    // Die Puck-Physik verliert während des Fluges viel Geschwindigkeit durch Luftreibung.
+    // Gegner dürfen deshalb stärker werfen, damit der Puck den anvisierten Spieler erreicht.
+    const throwSpeed = Phaser.Math.Clamp(
+      (target.distance / plannedFlightSeconds) * ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER,
+      16,
+      utility.projectileSpeed * ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER,
+    );
 
     state.puckId = this.projectileManager.spawnProjectile(spawnX, spawnY, angle, enemy.id, {
       speed: throwSpeed,

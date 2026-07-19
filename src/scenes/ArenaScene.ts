@@ -48,6 +48,7 @@ import {
   markStoredCoopDefenseBossMapCompleted,
   markStoredCoopDefenseRoundProcessed,
   setStoredCoopDefenseCheatProgress,
+  setStoredLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
 } from '../utils/localPreferences';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
@@ -57,6 +58,7 @@ import {
   cloneCoopDefenseUpgradeProfile,
   levelDownCoopDefenseUpgrade,
   levelUpCoopDefenseUpgrade,
+  getCoopDefenseUpgradeLoadoutSelection,
   getCoopDefenseUpgradeTextureKey,
 } from '../utils/coopDefenseUpgrades';
 import type { CoopDefenseUpgradeProfile } from '../types';
@@ -1046,6 +1048,13 @@ export class ArenaScene extends Phaser.Scene {
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
     setStoredCoopDefenseUpgradeProfile(nextProfile);
+
+    const loadoutSelection = getCoopDefenseUpgradeLoadoutSelection(upgradeId);
+    if (loadoutSelection) {
+      bridge.setLocalLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
+      setStoredLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
+    }
+
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
     return true;

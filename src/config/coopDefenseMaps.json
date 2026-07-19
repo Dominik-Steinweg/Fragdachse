@@ -19,7 +19,7 @@
     {
       "mapId": "1",
       "displayName": "Map 1 - Letzte Stellung",
-      "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP. Nach Level-Ups können Skill-Punkte verteilt werden.",
+      "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
       "roundDurationSec": 40,
       "bases": [
         {
@@ -140,7 +140,7 @@
       "mapId": "5",
       "displayName": "Map 5 - Grufttitan",
       "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Wenn ein Boss erstmalig erledigt wird, erhält man einen Boss-Punkt für spezielle Upgrades.",
-      "roundDurationSec": 75,
+      "roundDurationSec": 60,
       "bases": [
         {
           "id": "coop-base-rear",
