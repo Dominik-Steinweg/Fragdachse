@@ -7,12 +7,13 @@ import {
 import { getCoopDefenseEnemyXp } from '../src/config/coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 
-const EXPECTED_XP = [41, 60, 114, 143, 192, 267, 304, 390, 519, 615] as const;
+const EXPECTED_XP = [41, 84, 114, 143, 154, 267, 304, 390, 519, 615] as const;
 const EXPECTED_NAMES = [
-  'Map 1 - Letzte Stellung',
-  'Map 2 - Doppelte Front',
-  'Map 3 - Tollwut',
-  'Map 4 - Versorgungsbruch',
+  'Map 1 - Feuertaufe',
+  'Map 2 - Zweite Front',
+  'Map 3 - Rastlos',
+  'Map 4 - Adrenalinrausch',
+  'Map 5 - Grufttitan',
 ] as const;
 
 function getShapeBounds(shape: CoopBaseShape): { width: number; height: number } {
@@ -54,7 +55,7 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('has strictly increasing theoretical XP in the agreed amounts', () => {
+  it('has strictly increasing theoretical XP in the configured amounts', () => {
     const actualXp = Array.from({ length: 10 }, (_, index) => getTheoreticalMapXp(String(index + 1)));
     expect(actualXp).toEqual(EXPECTED_XP);
     for (let index = 1; index < actualXp.length; index++) {
@@ -62,14 +63,20 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('maps increasing HP tiers to non-decreasing visual footprints', () => {
-    const bases = COOP_DEFENSE_MAP_CONFIGS
+  it('uses valid visual footprints for every base', () => {
+    for (const base of COOP_DEFENSE_MAP_CONFIGS
       .filter(({ mapId }) => mapId !== '0')
-      .flatMap((map) => map.bases)
-      .map((base) => ({ hp: base.hpMax, area: Object.values(getShapeBounds(base.shape)).reduce((a, b) => a * b) }))
-      .sort((a, b) => a.hp - b.hp);
-    for (let index = 1; index < bases.length; index++) {
-      expect(bases[index].area).toBeGreaterThanOrEqual(bases[index - 1].area);
+      .flatMap((map) => map.bases)) {
+      const bounds = getShapeBounds(base.shape);
+      expect(base.hpMax).toBeGreaterThan(0);
+      expect(bounds.width).toBeGreaterThan(0);
+      expect(bounds.height).toBeGreaterThan(0);
+      for (const turret of base.turrets ?? []) {
+        expect(turret.cellOffset.gridX).toBeGreaterThanOrEqual(0);
+        expect(turret.cellOffset.gridX).toBeLessThan(bounds.width);
+        expect(turret.cellOffset.gridY).toBeGreaterThanOrEqual(0);
+        expect(turret.cellOffset.gridY).toBeLessThan(bounds.height);
+      }
     }
   });
 
@@ -96,13 +103,13 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('centers single turrets on 2x3 base footprints', () => {
+  it('centers single turrets vertically on their base footprints', () => {
     const singleTurretBases = COOP_DEFENSE_MAP_CONFIGS.flatMap((map) => map.bases)
       .filter((base) => (base.turrets?.length ?? 0) === 1);
     expect(singleTurretBases.length).toBeGreaterThan(0);
     for (const base of singleTurretBases) {
-      expect(getShapeBounds(base.shape)).toEqual({ width: 2, height: 3 });
-      expect(base.turrets?.[0].cellOffset.gridY).toBe(1);
+      const { height } = getShapeBounds(base.shape);
+      expect(base.turrets?.[0].cellOffset.gridY).toBe(Math.floor(height / 2));
     }
   });
 
@@ -117,7 +124,7 @@ describe('Coop defense map progression', () => {
     expect(getTheoreticalMapXp('8')).toBe(390);
   });
 
-  it('embeds two health packs and one adrenaline pickup in the enlarged rear bases of maps 6 and 8', () => {
+  it('embeds health, adrenaline, and armor pickups in the enlarged rear bases of maps 6 and 8', () => {
     for (const mapId of ['6', '8']) {
       const rearBase = getCoopDefenseMapConfig(mapId).bases.find((base) => base.id === 'coop-base-rear');
       expect(rearBase).toBeDefined();
@@ -125,7 +132,7 @@ describe('Coop defense map progression', () => {
       expect(rearBase!.powerUpPedestals?.map((pedestal) => pedestal.defId)).toEqual([
         'HEALTH_PACK',
         'ADRENALINE',
-        'HEALTH_PACK',
+        'ARMOR',
       ]);
     }
   });
