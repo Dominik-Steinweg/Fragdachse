@@ -4,7 +4,7 @@ import { UTILITY_CONFIGS }  from '../../loadout/LoadoutConfig';
 import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig, PlaceableRockUtilityConfig } from '../../loadout/LoadoutConfig';
 import { WEAPON_CONFIGS }   from '../../loadout/LoadoutConfig';
 import { bridge }           from '../../network/bridge';
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH } from '../../config';
+import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, ROCK_HP_MAX } from '../../config';
 import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../../effects/EffectUtils';
 import type { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import type { ShadowSystem } from '../../effects/ShadowSystem';
@@ -165,7 +165,7 @@ export class RockVisualHelper {
       this.ctx.currentLayout.rocks,
       rockId,
       hp,
-      runtimeRock?.maxHp ?? this.ctx.rockRegistry?.getMaxHP(rockId) ?? 200,
+      runtimeRock?.maxHp ?? this.ctx.rockRegistry?.getMaxHP(rockId) ?? ROCK_HP_MAX,
       runtimeRock?.ownerColor,
       runtimeRock ? (UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig).placeable.ownerTintStrength : 0,
     );

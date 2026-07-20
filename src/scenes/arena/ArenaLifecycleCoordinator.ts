@@ -21,6 +21,7 @@ import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayer
 import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
 import { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
+import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
@@ -41,7 +42,7 @@ import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } fr
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -840,6 +841,34 @@ export class ArenaLifecycleCoordinator {
           (x, y, targets, landsAt) => bridge.broadcastFireChunkEffect(x, y, targets, landsAt),
         )
         : null;
+      this.ctx.weaponUpgradeSystem = this.ctx.enemyManager
+        ? new WeaponUpgradeSystem(
+          this.ctx.projectileManager,
+          this.ctx.enemyManager,
+          this.ctx.combatSystem,
+          this.ctx.hostPhysics,
+          this.ctx.fireSystem,
+        )
+        : null;
+      this.ctx.loadoutManager.setNegevKillstreakExplosionHandler((event) => {
+        bridge.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d);
+        this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
+          event.ownerId,
+          event.x,
+          event.y,
+          {
+            count: event.kills,
+            searchRadius: event.radius,
+            flightMs: 320,
+            igniteCenter: false,
+            durationMs: event.fireChunkDurationMs,
+            burnDurationMs: event.fireChunkBurnDurationMs,
+            burnDamagePerTick: event.fireChunkBurnDamagePerTick,
+            weaponName: 'Negev-Killstreak',
+          },
+          `negev-killstreak:${event.ownerId}:${Date.now()}`,
+        );
+      });
       this.ctx.necromancySystem = this.ctx.enemyManager
         && this.ctx.coopDefensePlayerModifierSystem
         ? new NecromancySystem(
@@ -1017,6 +1046,18 @@ export class ArenaLifecycleCoordinator {
         onBfgPickup: (playerId) => {
           this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.BFG, 1);
         },
+        coopDefenseMapXpTotal: coopDefenseMapConfig
+          ? getCoopDefenseMapScheduledXp(coopDefenseMapConfig, coopDefenseWaveConfigs)
+          : 1,
+        isAdrenalineDropEnabled: (playerId) => (
+          (this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.adrenalineDropEnabled', 0) ?? 0) > 0
+        ),
+        getAdrenalineDropChanceMultiplier: (playerId) => (
+          1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineDropChance') ?? 0)
+        ),
+        getAdrenalineSyringeDurationMultiplier: (playerId) => (
+          1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
+        ),
       });
       this.ctx.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
       this.ctx.combatSystem.setPowerUpSystem(this.ctx.powerUpSystem);
@@ -1060,6 +1101,9 @@ export class ArenaLifecycleCoordinator {
 
       this.ctx.combatSystem.setKillCallback((killerId, victimId, weapon, x, y, source) => {
         this.ctx.loadoutManager?.handleKill(killerId, weapon, x, y, source);
+        if (isCoopDefenseMode(bridge.getGameMode()) && (source?.enemyXp ?? 0) > 0) {
+          this.ctx.powerUpSystem?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
+        }
         const allowKillDrop = !isCoopDefenseMode(bridge.getGameMode());
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
           if (allowKillDrop) {
@@ -1180,6 +1224,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.slimeTrailSystem = null;
     this.ctx.flamethrowerUpgradeSystem?.clear();
     this.ctx.flamethrowerUpgradeSystem = null;
+    this.ctx.weaponUpgradeSystem = null;
     this.ctx.projectileManager.setNaturalFlameExpiryCallback(null);
     this.ctx.hostPhysics.setEnemyMovementFactorResolver(null);
     this.ctx.combatSystem.setDeathCallback(null);
@@ -1213,6 +1258,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.setTeslaDomeSystem(null);
     this.ctx.loadoutManager?.setEnergyShieldSystem(null);
     this.ctx.loadoutManager?.setShieldBuffSystem(null);
+    this.ctx.loadoutManager?.setNegevKillstreakExplosionHandler(null);
     this.ctx.loadoutManager?.setDecoySystem(null);
     this.ctx.loadoutManager?.setPlaceableRockHandler(null);
     this.ctx.loadoutManager?.setTunnelPlacementHandler(null);

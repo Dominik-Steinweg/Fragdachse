@@ -124,6 +124,7 @@ export class HostUpdateCoordinator {
     if (!countdownActive) {
       this.ctx.detonationSystem?.checkProjectileDetonations();
       this.ctx.flamethrowerUpgradeSystem?.prepareProjectileBurns(now);
+      this.ctx.weaponUpgradeSystem?.hostUpdate(now);
       this.ctx.combatSystem.update();
       this.ctx.combatSystem.updateBurnEffects(now);
     }
@@ -570,6 +571,7 @@ export class HostUpdateCoordinator {
       const activePowerUps = [
         ...(this.ctx.powerUpSystem?.getActiveBuffsForHUD(localId) ?? []),
         ...(this.ctx.loadoutManager?.getAk47HudBuffs(localId, now) ?? []),
+        ...(this.ctx.loadoutManager?.getNegevHudBuffs(localId) ?? []),
       ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(localId, now);
       const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
@@ -663,6 +665,7 @@ export class HostUpdateCoordinator {
       const activeBuffs = [
         ...(this.ctx.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []),
         ...(this.ctx.loadoutManager?.getAk47HudBuffs(player.id, now) ?? []),
+        ...(this.ctx.loadoutManager?.getNegevHudBuffs(player.id) ?? []),
       ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(player.id, now);
       bridge.publishActiveBuffs(player.id, stealthBuff ? [...activeBuffs, stealthBuff] : activeBuffs);

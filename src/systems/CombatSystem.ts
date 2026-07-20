@@ -77,6 +77,7 @@ export interface KillSourceContext {
   dirY?: number;
   projectileColor?: number;
   shotgunLightningGeneration?: number;
+  enemyXp?: number;
 }
 
 interface EnemySlowState {
@@ -1128,7 +1129,7 @@ export class CombatSystem {
     const travelDistance = Phaser.Geom.Line.Length(line);
     if (travelDistance <= 0.5) return false;
 
-    const blockerDistance = this.findNearestProjectilePathBlockerDistance(line);
+    const blockerDistance = this.findNearestProjectilePathBlockerDistance(line, proj.penetratesRocks === true);
     const projectileRadius = Math.max(proj.sprite.displayWidth, proj.sprite.displayHeight) * 0.5;
     let bestHit: SweptProjectileHit | null = null;
 
@@ -1268,10 +1269,13 @@ export class CombatSystem {
     return true;
   }
 
-  private findNearestProjectilePathBlockerDistance(line: Phaser.Geom.Line): number | null {
+  private findNearestProjectilePathBlockerDistance(
+    line: Phaser.Geom.Line,
+    ignoreRocks = false,
+  ): number | null {
     let bestDistance: number | null = null;
 
-    if (this.rockObjects) {
+    if (!ignoreRocks && this.rockObjects) {
       for (const rock of this.rockObjects) {
         if (!rock?.active) continue;
         const hit = this.findNearestRectangleHit(line, rock.getBounds());
@@ -2514,8 +2518,10 @@ export class CombatSystem {
       this.projectileManager.destroyProjectile(projectileId);
     }
 
-    if ((projectile?.shotgunSlowFraction ?? 0) > 0 && (projectile?.shotgunSlowDurationMs ?? 0) > 0) {
-      this.applyEnemySlow(enemyId, projectile?.shotgunSlowFraction ?? 0, projectile?.shotgunSlowDurationMs ?? 0);
+    const slowFraction = projectile?.hitSlowFraction ?? projectile?.shotgunSlowFraction ?? 0;
+    const slowDurationMs = projectile?.hitSlowDurationMs ?? projectile?.shotgunSlowDurationMs ?? 0;
+    if (slowFraction > 0 && slowDurationMs > 0) {
+      this.applyEnemySlow(enemyId, slowFraction, slowDurationMs);
     }
     this.applyProjectileBurn(enemyId, projectile);
     this.applyDamage(enemyId, damage, false, shooterId, weaponName, visualContext);
@@ -2700,15 +2706,18 @@ export class CombatSystem {
         if (killedByPlayer) {
           this.bridge.incrementPlayerFrags(effectiveKillerId as string);
         }
+        const enemyXp = getCoopDefenseEnemyXp(enemy.kind);
         if ((killedByPlayer || killedByBaseTurret) && isCoopDefenseMode(this.bridge.getGameMode())) {
-          const enemyXp = getCoopDefenseEnemyXp(enemy.kind);
           if (enemyXp > 0) {
             this.bridge.addCoopDefenseRoundXp(enemyXp);
             this.bridge.broadcastCoopDefenseXpPopup(x, y, enemyXp);
           }
         }
         const weapon = this.lastWeapon.get(targetId) ?? weaponName ?? 'Waffe';
-        this.onKillCb?.(effectiveKillerId ?? killerId, targetId, weapon, x, y, this.lastKillSource.get(targetId));
+        this.onKillCb?.(effectiveKillerId ?? killerId, targetId, weapon, x, y, {
+          ...this.lastKillSource.get(targetId),
+          enemyXp,
+        });
       }
 
       this.lastAttacker.delete(targetId);

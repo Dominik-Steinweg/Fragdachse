@@ -35,6 +35,7 @@ import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefenseP
 import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import type { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
 import type { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
+import type { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import type { NecromancySystem } from '../../systems/NecromancySystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import type { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
@@ -110,6 +111,7 @@ export interface ArenaContext {
   guardianSpiritSystem: GuardianSpiritSystem | null;
   slimeTrailSystem: SlimeTrailSystem | null;
   flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
+  weaponUpgradeSystem: WeaponUpgradeSystem | null;
   necromancySystem: NecromancySystem | null;
   coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
   coopDefenseEnemyAbilitySystem: CoopDefenseEnemyAbilitySystem | null;

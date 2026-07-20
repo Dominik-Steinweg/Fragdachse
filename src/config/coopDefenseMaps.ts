@@ -127,6 +127,33 @@ export function resolveCoopDefenseMapWaveConfigs(
   });
 }
 
+/** Erwartete XP-Summe aller regulaer geplanten Spawns einer Map. */
+export function getCoopDefenseMapScheduledXp(
+  mapConfig: CoopDefenseMapConfig,
+  waveConfigs: readonly ResolvedCoopDefenseMapWaveConfig[],
+): number {
+  const durationMs = mapConfig.roundDurationSec * 1000;
+  let totalXp = 0;
+  for (const wave of waveConfigs) {
+    const activeDurationMs = Math.max(0, durationMs - wave.startAtMs);
+    if (activeDurationMs <= 0 || wave.countPerWave <= 0) continue;
+    const waveCount = Math.max(1, Math.ceil(activeDurationMs / wave.intervalMs));
+    totalXp += waveCount * wave.countPerWave * getEnemyLifecycleXp(wave.enemyKind);
+  }
+  if (mapConfig.boss) totalXp += getEnemyLifecycleXp(mapConfig.boss.enemyKind);
+  return Math.max(1, totalXp);
+}
+
+function getEnemyLifecycleXp(kind: CoopDefenseEnemyKind, ancestors = new Set<string>()): number {
+  const config = getCoopDefenseEnemyConfig(kind);
+  if (ancestors.has(kind)) return config.xp;
+  const nextAncestors = new Set(ancestors).add(kind);
+  return config.xp + (config.deathSpawns ?? []).reduce(
+    (sum, spawn) => sum + Math.max(0, spawn.count) * getEnemyLifecycleXp(spawn.enemyKind, nextAncestors),
+    0,
+  );
+}
+
 function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefenseMapRegistryFile {
   const maps = registry.maps.map(normalizeMapConfig);
   const uniqueMapIds = new Set<string>();

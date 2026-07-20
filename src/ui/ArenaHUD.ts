@@ -975,9 +975,18 @@ export class ArenaHUD {
         `Power-Up: ${def.displayName}`,
         palette,
         texKey,
-        pu.defId === 'SHIELD_OVERCHARGE' ? { value: true, panel: true } : { panel: true },
+        pu.defId === 'SHIELD_OVERCHARGE' || pu.defId === 'NEGEV_KILLSTREAK'
+          ? { value: true, panel: true }
+          : { panel: true },
         this.puContainer,
       );
+      if (pu.defId === 'NEGEV_KILLSTREAK') {
+        bundle.bgImg.setVisible(false);
+        bundle.fgImg.setVisible(false);
+        bundle.border.setVisible(false);
+        bundle.trail?.setVisible(false);
+        bundle.highlight?.setVisible(false);
+      }
       this.setBarEnergized(bundle, true);
 
       this.puEntries.set(pu.defId, bundle);
@@ -1050,7 +1059,7 @@ export class ArenaHUD {
       const bundle = this.puEntries.get(pu.defId);
       if (!bundle) continue;
       const frac = Math.max(0, Math.min(1, pu.remainingFrac));
-      this.setBarFrac(bundle, frac);
+      if (pu.defId !== 'NEGEV_KILLSTREAK') this.setBarFrac(bundle, frac);
       bundle.valueText?.setText(pu.valueText ?? '');
     }
   }

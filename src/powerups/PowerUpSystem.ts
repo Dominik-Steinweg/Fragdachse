@@ -13,6 +13,7 @@ import {
   PICKUP_RADIUS, NUKE_CONFIG,
   type PowerUpDef, type DropTable,
 } from './PowerUpConfig';
+import { getAdrenalineSyringeDropChance } from '../utils/adrenalineDrops';
 
 // ── Internes Tracking eines aktiven Buffs ──────────────────────────────────
 
@@ -20,6 +21,7 @@ interface ActiveBuff {
   defId:      string;
   multiplier: number;
   expiresAt:  number; // Date.now()-Timestamp
+  durationMs: number;
 }
 
 // ── Internes Tracking eines World-Items ────────────────────────────────────
@@ -58,6 +60,10 @@ interface PowerUpSystemOptions {
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
   onHolyHandGrenadePickup?: (playerId: string) => void;
   onBfgPickup?: (playerId: string) => void;
+  coopDefenseMapXpTotal?: number;
+  isAdrenalineDropEnabled?: (playerId: string) => boolean;
+  getAdrenalineDropChanceMultiplier?: (playerId: string) => number;
+  getAdrenalineSyringeDurationMultiplier?: (playerId: string) => number;
 }
 
 // ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
@@ -249,6 +255,18 @@ export class PowerUpSystem {
     this.spawnFromTable('ENEMY_KILL', x, y);
   }
 
+  onCoopDefenseEnemyKilled(killerId: string, enemyXp: number, x: number, y: number): void {
+    if (!this.options.isAdrenalineDropEnabled?.(killerId)) return;
+    const multiplier = Math.max(0, this.options.getAdrenalineDropChanceMultiplier?.(killerId) ?? 1);
+    const chance = getAdrenalineSyringeDropChance(
+      enemyXp,
+      this.options.coopDefenseMapXpTotal ?? 1,
+      multiplier,
+    );
+    if (Math.random() >= chance) return;
+    this.spawnPowerUpDef(POWERUP_DEFS.ADRENALINE, x, y);
+  }
+
   /** Callback: Ein Fels wurde zerstört → Drop an Fels-Mitte. */
   onRockDestroyed(rockId: number): void {
     const rock = this.layout.rocks[rockId];
@@ -301,16 +319,22 @@ export class PowerUpSystem {
       case 'buff_regen':
       case 'buff_damage': {
         const buffs = this.activeBuffs.get(playerId) ?? [];
+        const durationMultiplier = def.id === 'ADRENALINE'
+          ? Math.max(0, this.options.getAdrenalineSyringeDurationMultiplier?.(playerId) ?? 1)
+          : 1;
+        const durationMs = Math.max(0, (def.durationMs ?? 0) * durationMultiplier);
         // Gleichen Buff-Typ auffrischen statt stacken
         const existing = buffs.find(b => b.defId === def.id);
         if (existing) {
-          existing.expiresAt = Date.now() + (def.durationMs ?? 0);
+          existing.expiresAt = Date.now() + durationMs;
           existing.multiplier = def.multiplier ?? 1;
+          existing.durationMs = durationMs;
         } else {
           buffs.push({
             defId:      def.id,
             multiplier: def.multiplier ?? 1,
-            expiresAt:  Date.now() + (def.durationMs ?? 0),
+            expiresAt:  Date.now() + durationMs,
+            durationMs,
           });
         }
         this.activeBuffs.set(playerId, buffs);
@@ -382,9 +406,9 @@ export class PowerUpSystem {
     for (const b of buffs) {
       if (b.expiresAt <= now) continue;
       const def = POWERUP_DEFS[b.defId];
-      if (!def?.durationMs) continue;
+      if (!def?.durationMs || b.durationMs <= 0) continue;
       const remaining = b.expiresAt - now;
-      result.push({ defId: b.defId, remainingFrac: Math.min(1, remaining / def.durationMs) });
+      result.push({ defId: b.defId, remainingFrac: Math.min(1, remaining / b.durationMs) });
     }
     return result;
   }

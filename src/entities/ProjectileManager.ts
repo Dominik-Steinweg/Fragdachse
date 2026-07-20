@@ -570,6 +570,8 @@ export class ProjectileManager {
       penetrationRemaining: cfg.penetrationCount,
       penetrationDamageRetention: cfg.penetrationDamageRetention,
       penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
+      penetratesRocks: cfg.penetratesRocks,
+      penetratedRockIds: cfg.penetratesRocks ? new Set<number>() : undefined,
       reflected: cfg.reflected,
       gaussChainRadius: cfg.gaussChainRadius,
       gaussChainDamageFactor: cfg.gaussChainDamageFactor,
@@ -608,6 +610,8 @@ export class ProjectileManager {
       shotgunProximityMaxDamageBonus: cfg.shotgunProximityMaxDamageBonus,
       shotgunSlowFraction: cfg.shotgunSlowFraction,
       shotgunSlowDurationMs: cfg.shotgunSlowDurationMs,
+      hitSlowFraction: cfg.hitSlowFraction,
+      hitSlowDurationMs: cfg.hitSlowDurationMs,
       hitKnockback: cfg.hitKnockback,
       hitKnockbackDurationMs: cfg.hitKnockbackDurationMs,
       // Flammenwerfer-Felder
@@ -622,6 +626,12 @@ export class ProjectileManager {
       supplementalBurnOnHit: cfg.supplementalBurnOnHit,
       fireTrail: cfg.fireTrail,
       lastFireTrailCellKey: undefined,
+      fireTrailHalfWidthCells: cfg.fireTrailHalfWidthCells,
+      awpCorridorHalfWidth: cfg.awpCorridorHalfWidth,
+      awpCorridorDamage: cfg.awpCorridorDamage,
+      awpCorridorKnockback: cfg.awpCorridorKnockback,
+      awpCorridorKnockbackDurationMs: cfg.awpCorridorKnockbackDurationMs,
+      awpCorridorHitIds: cfg.awpCorridorHalfWidth !== undefined ? new Set<string>() : undefined,
       leafBlowerMinKnockback: cfg.leafBlowerMinKnockback,
       leafBlowerMaxKnockback: cfg.leafBlowerMaxKnockback,
       leafBlowerSelfPush: cfg.leafBlowerSelfPush,
@@ -1065,6 +1075,20 @@ export class ProjectileManager {
     if (this.rockGroup) {
       const rockObjects = this.rockObjects;
       const onHit       = this.onRockHit;
+      if (tracked.penetratesRocks) {
+        const rockOverlap = this.scene.physics.add.overlap(sprite, this.rockGroup, (_proj, rockGO) => {
+          const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+          if (idx < 0 || tracked.penetratedRockIds?.has(idx)) return;
+          tracked.penetratedRockIds?.add(idx);
+          const rockMult = tracked.rockDamageMult ?? 1;
+          if (applyRockDamage && rockMult !== 0) {
+            onHit?.(idx, tracked.damage * rockMult, tracked.ownerId);
+          }
+          const impact = this.resolveObstacleImpactPoint(tracked, rockGO as Phaser.GameObjects.GameObject);
+          playImpact(impact.x, impact.y, body.velocity.x, body.velocity.y, tracked.color);
+        });
+        tracked.colliders.push(rockOverlap);
+      } else {
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
         if (tracked.bounceProcessedThisStep) {
@@ -1108,6 +1132,7 @@ export class ProjectileManager {
         }
       });
       tracked.colliders.push(rockCollider);
+      }
     }
 
     if (this.trunkGroup) {
@@ -1270,6 +1295,7 @@ export class ProjectileManager {
       && !proj.isBfg
       && !proj.pendingDestroy
       && !proj.bounceProcessedThisStep
+      && !proj.penetratesRocks
       && !!this.rockObjects;
   }
 

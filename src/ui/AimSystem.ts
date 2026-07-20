@@ -90,6 +90,7 @@ export class AimSystem {
   private prevShowAim = false;
   private confirmedHitUntil = 0;
   private scopeProgress = 0;
+  private weaponChargeProgress = 0;
 
   constructor(
     private readonly scene:           Phaser.Scene,
@@ -116,6 +117,10 @@ export class AimSystem {
 
   setScopeProgress(progress: number): void {
     this.scopeProgress = progress;
+  }
+
+  setWeaponChargeProgress(progress: number): void {
+    this.weaponChargeProgress = Phaser.Math.Clamp(progress, 0, 1);
   }
 
   update(
@@ -214,6 +219,9 @@ export class AimSystem {
     }
 
     this.drawCrosshair(this.snap(px), this.snap(py), frac, palette, accentColor);
+    if ((cfg.awpCharge?.maxDamageBonus ?? 0) > 0 && this.weaponChargeProgress > 0) {
+      this.drawWeaponChargeRing(this.snap(px), this.snap(py), frac, this.weaponChargeProgress, palette);
+    }
   }
 
   destroy(): void {
@@ -268,6 +276,31 @@ export class AimSystem {
     this.gfx.fillCircle(cx, cy, CENTER_DOT_R + 1.5);
     this.gfx.fillStyle(accentColor, 0.97);
     this.gfx.fillCircle(cx, cy, CENTER_DOT_R);
+  }
+
+  private drawWeaponChargeRing(
+    cx: number,
+    cy: number,
+    spreadFrac: number,
+    chargeFrac: number,
+    palette: SlotPalette,
+  ): void {
+    const spreadRadius = (RING_GAP_MIN + spreadFrac * (RING_GAP_MAX - RING_GAP_MIN)) * 1.1;
+    const radius = spreadRadius + 8;
+    const start = -Math.PI / 2;
+    const end = start + Math.PI * 2 * Phaser.Math.Clamp(chargeFrac, 0, 1);
+    const full = chargeFrac >= 0.999;
+    const pulse = full ? 0.78 + Math.sin(this.scene.time.now * 0.012) * 0.16 : 0.68;
+    const color = full ? 0xff6a2b : palette.crossMain;
+
+    this.gfx.lineStyle(5, CROSS_SHADOW_COLOR, 0.34);
+    this.gfx.strokeCircle(cx, cy, radius);
+    this.gfx.lineStyle(3, palette.crossGlow, 0.18);
+    this.gfx.strokeCircle(cx, cy, radius);
+    this.gfx.lineStyle(full ? 3 : 2, color, pulse);
+    this.gfx.beginPath();
+    this.gfx.arc(cx, cy, radius, start, end, false);
+    this.gfx.strokePath();
   }
 
   private drawRangeIndicator(

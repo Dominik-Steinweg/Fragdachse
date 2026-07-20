@@ -195,6 +195,8 @@ export interface WeaponConfig {
   readonly shotgunChainEnabled?: number;
   readonly shotgunChainDamageRetention?: number;
   readonly shotgunChainRadiusRetention?: number;
+  readonly hitSlowFraction?: number;
+  readonly hitSlowDurationMs?: number;
 
   // Hydra-Splitting (optional)
   readonly splitCount?:        number; // Anzahl der beim Bounce neu erzeugten Projektile
@@ -217,7 +219,10 @@ export interface WeaponConfig {
   readonly sideBurstDamageFactor?: number;
   readonly penetrationCount?: number;
   readonly penetrationDamageRetention?: number;
+  readonly penetratesRocks?: number;
   readonly warmupBurnThreshold?: number;
+  readonly awpCharge?: AwpChargeConfig;
+  readonly negevKillstreak?: NegevKillstreakConfig;
   readonly multiExplosionCount?: number;
   readonly multiExplosionCoastMs?: number;
   readonly miniRocketReturnEnabled?: number;
@@ -296,6 +301,37 @@ export interface ScopeModeConfig {
   readonly edgeSoftnessPx: number;       // Weichheits-Breite am Rand der Sichtverdunkelung, z.B. 40
   readonly unscopedSpreadDeg: number;    // Streuung (Grad) bei scope=0 (sehr ungenau), z.B. 30
   readonly unscopeSpeedMs: number;       // ms zum Entscopen nach Schuss / Loslassen, z.B. 250
+}
+
+export interface AwpChargeConfig {
+  /** Zeit bis zum maximalen Schadensbonus; unabhaengig von der Scope-Zielzeit. */
+  readonly durationMs: number;
+  readonly maxDamageBonus: number;
+  readonly fullChargeDamageBonus: number;
+  readonly fireTrailDurationMs: number;
+  readonly fireTrailBurnDurationMs: number;
+  readonly fireTrailBurnDamagePerTick: number;
+  readonly fireTrailHalfWidthCells: number;
+  readonly corridorEnabled: number;
+  readonly corridorHalfWidth: number;
+  readonly corridorDamage: number;
+  readonly corridorKnockback: number;
+  readonly corridorKnockbackDurationMs: number;
+}
+
+export interface NegevKillstreakConfig {
+  readonly damageBonusPerKill: number;
+  readonly healPerKill: number;
+  readonly armorPerKill: number;
+  readonly explosionEnabled: number;
+  readonly explosionDamagePerKill: number;
+  readonly explosionBaseRadius: number;
+  readonly explosionRadiusPerKill: number;
+  readonly explosionBaseKnockback: number;
+  readonly explosionKnockbackPerKill: number;
+  readonly fireChunkDurationMs: number;
+  readonly fireChunkBurnDurationMs: number;
+  readonly fireChunkBurnDamagePerTick: number;
 }
 
 export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'time_bubble' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'taser' | 'decoy';
@@ -1587,6 +1623,21 @@ export const WEAPON_CONFIGS = {
     shotRecoilDuration:   200,         // ms – Rückstoß hält 200ms an → deutlich sichtbar
     shotScreenShake:      { duration: 120, intensity: 0.006 },
     rockDamageMult:       1.0,
+    penetratesRocks:      0,
+    awpCharge: {
+      durationMs:                    3000,
+      maxDamageBonus:                0,
+      fullChargeDamageBonus:         0,
+      fireTrailDurationMs:           0,
+      fireTrailBurnDurationMs:       2000,
+      fireTrailBurnDamagePerTick:    0.5,
+      fireTrailHalfWidthCells:       0,
+      corridorEnabled:               0,
+      corridorHalfWidth:             56,
+      corridorDamage:                35,
+      corridorKnockback:             900,
+      corridorKnockbackDurationMs:   260,
+    } satisfies AwpChargeConfig,
     tracerConfig: {
       widthCore:  2,
       widthGlow:  6,
@@ -1920,6 +1971,9 @@ export const WEAPON_CONFIGS = {
     holdSpeedFactor:      0.3,
     warmupSpeedMultiplier: 1,
     warmupBurnThreshold:   0,
+    hitSlowFraction:       0,
+    hitSlowDurationMs:     500,
+    rockDamageMult:        1,
     projectileColor:      0xc79c4f,
     bulletVisualPreset:   'negev' as BulletVisualPreset,
     // Brennende Kugeln – per Upgrade aktiviert.
@@ -1927,6 +1981,20 @@ export const WEAPON_CONFIGS = {
       durationMs:     0,
       damagePerTick:  0,
     } satisfies BurnOnHitConfig,
+    negevKillstreak: {
+      damageBonusPerKill:            0,
+      healPerKill:                   0,
+      armorPerKill:                  0,
+      explosionEnabled:              0,
+      explosionDamagePerKill:        20,
+      explosionBaseRadius:           64,
+      explosionRadiusPerKill:        12,
+      explosionBaseKnockback:        300,
+      explosionKnockbackPerKill:     75,
+      fireChunkDurationMs:           3000,
+      fireChunkBurnDurationMs:       2000,
+      fireChunkBurnDamagePerTick:    0.5,
+    } satisfies NegevKillstreakConfig,
     shotScreenShake:      { duration: 60, intensity: 0.002 },    
     tracerConfig: {
       widthCore:  1,

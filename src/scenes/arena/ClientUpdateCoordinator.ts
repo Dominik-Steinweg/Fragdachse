@@ -124,13 +124,20 @@ export class ClientUpdateCoordinator {
 
       if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
         const nextDamagedStaticRockIds = new Set<number>();
-        for (const rs of state.rocks) {
-          if (!this.ctx.placementSystem?.getRuntimeRock(rs.id)) {
-            nextDamagedStaticRockIds.add(rs.id);
+        for (const rockId of state.rockRemovals) {
+          if (!this.ctx.placementSystem?.getRuntimeRock(rockId)) {
+            this.rockVisualHelper.handleDestroyedRock(rockId, 'damage');
+            this.damagedStaticRockIds.delete(rockId);
           }
+        }
+        for (const rs of state.rocks) {
           if (rs.hp <= 0) {
             this.rockVisualHelper.handleDestroyedRock(rs.id, 'damage');
+            this.damagedStaticRockIds.delete(rs.id);
             continue;
+          }
+          if (!this.ctx.placementSystem?.getRuntimeRock(rs.id)) {
+            nextDamagedStaticRockIds.add(rs.id);
           }
           this.rockVisualHelper.updateRockVisualById(rs.id, rs.hp);
         }

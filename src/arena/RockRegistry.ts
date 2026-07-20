@@ -59,9 +59,11 @@ export class RockRegistry {
     return hp !== undefined && hp.hp <= 0;
   }
 
-  /** Entfernt den Felsen aus der Registry (nach Zerstörung). */
+  /** Behält nach der Zerstörung einen HP-0-Tombstone für die Netzwerksynchronisierung. */
   remove(id: number): void {
-    this.hpMap.delete(id);
+    const current = this.hpMap.get(id);
+    if (!current) return;
+    this.hpMap.set(id, { hp: 0, maxHp: current.maxHp });
     this.netSnapshotCache.delete(id);
     this.pendingRemovalIds.add(id);
   }
@@ -87,7 +89,7 @@ export class RockRegistry {
       }
     }
 
-    const removals = full ? [] : [...this.pendingRemovalIds].sort((left, right) => left - right);
+    const removals = [...this.pendingRemovalIds].sort((left, right) => left - right);
 
     if (full) {
       for (const id of [...this.netSnapshotCache.keys()]) {

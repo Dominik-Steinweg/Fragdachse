@@ -176,6 +176,7 @@ export interface GameState {
   roundStartTime: number;
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectile[];
+  rockRemovals: number[];
   enemies:      SyncedEnemySnapshot | null;
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
   placeableRocks: SyncedPlaceableRock[];
@@ -1183,8 +1184,9 @@ export class NetworkBridge {
       return undefined;
     }
 
+    const rockSnapshot = raw.r as SyncedRockSnapshot | undefined;
     const nextRocks = this.mergeRockSnapshot(
-      raw.r as SyncedRockSnapshot | undefined,
+      rockSnapshot,
       this.cachedGameState?.rocks ?? [],
     );
     const nextPowerUps = this.mergePowerUpSnapshot(
@@ -1206,6 +1208,7 @@ export class NetworkBridge {
       projectiles:   (raw.j as SyncedProjectile[]  | undefined) ?? [],
       enemies:       (raw.e as SyncedEnemySnapshot | undefined) ?? null,
       rocks:         nextRocks,
+      rockRemovals:  rockSnapshot?.removals ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
@@ -1276,7 +1279,14 @@ export class NetworkBridge {
   private mergeRockSnapshot(snapshot: SyncedRockSnapshot | undefined, previous: readonly RockNetState[]): RockNetState[] {
     if (!snapshot) return [...previous];
     if (snapshot.full) {
-      return [...snapshot.upserts].sort((left, right) => left.id - right.id);
+      const next = new Map<number, RockNetState>();
+      for (const rock of snapshot.upserts) {
+        next.set(rock.id, rock);
+      }
+      for (const id of snapshot.removals) {
+        next.delete(id);
+      }
+      return [...next.values()].sort((left, right) => left.id - right.id);
     }
 
     const next = new Map<number, RockNetState>();

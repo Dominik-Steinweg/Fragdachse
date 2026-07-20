@@ -16,6 +16,9 @@
         { "id": "adrenaline_regeneration", "code": "A6", "label": "Adrenalin-Regeneration", "description": "+5% Regeneration je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 60, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineRegenRate", "mode": "add_percent_per_level", "value": 0.05 }] },
         { "id": "adrenaline_gain", "code": "A7", "label": "Adrenalingewinn", "description": "+10% Adrenalingewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 70, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineGain", "mode": "add_percent_per_level", "value": 0.1 }] },
         { "id": "adrenaline_cost", "code": "A8", "label": "Adrenalinverbrauch", "description": "-5% Adrenalinverbrauch je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 80, "requires": [{ "upgradeId": "adrenaline_gain", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineCost", "mode": "add_percent_per_level", "value": -0.05 }] },
+        { "id": "adrenaline_syringe_drops", "code": "A8-C", "label": "Adrenalin-Ernte", "description": "Getoetete Gegner koennen anhand ihres XP-Anteils an der aktuellen Map eine Adrenalin-Spritze hinterlassen; im Mittel entstehen zwei Spritzen pro Map.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 81, "requires": [{ "upgradeId": "adrenaline_regeneration", "minLevel": 3 }, { "upgradeId": "adrenaline_cost", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineDropEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "adrenaline_syringe_drop_chance", "code": "A8-1", "label": "Reiche Adrenalin-Ernte", "description": "+100% Wahrscheinlichkeit auf eine Adrenalin-Spritze je Stufe; bei Stufe 3 entstehen im Mittel acht Spritzen pro Map.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 82, "requires": [{ "upgradeId": "adrenaline_syringe_drops", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineDropChance", "mode": "add_percent_per_level", "value": 1 }] },
+        { "id": "adrenaline_syringe_duration", "code": "A8-2", "label": "Langzeit-Adrenalin", "description": "+50% Dauer eingesammelter Adrenalin-Spritzen je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 83, "requires": [{ "upgradeId": "adrenaline_syringe_drops", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineSyringeDuration", "mode": "add_percent_per_level", "value": 0.5 }] },
         { "id": "ultimate_rage_gain", "code": "A9", "label": "Rage-Gewinn", "description": "+10% Rage-Gewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 90, "effects": [{ "stat": "ultimate.rageGainPerDamage", "mode": "add_percent_per_level", "value": 0.1 }] },
         { "id": "ultimate_max_rage", "code": "A10", "label": "Max. Rage", "description": "+20% maximales Rage je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 100, "requires": [{ "upgradeId": "ultimate_rage_gain", "minLevel": 3 }], "effects": [{ "stat": "ultimate.maxRage", "mode": "add_percent_per_level", "value": 0.2 }] },
         { "id": "ultimate_armor_rage", "code": "A10-C", "label": "Gepanzerte Wut", "description": "Gewaehrt Rage auch fuer Schaden, den die Ruestung absorbiert.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 105, "requires": [{ "upgradeId": "ultimate_max_rage", "minLevel": 3 }], "effects": [{ "stat": "ultimate.rageGainFromArmorDamage", "mode": "add_per_level", "value": 1 }] },
@@ -1754,10 +1757,10 @@
           }
         },
         {
-          "id": "awp_cooldown",
+          "id": "awp_adrenaline_cost",
           "code": "C-W7-1",
-          "label": "Upgrade AWP: Cooldown",
-          "description": "-10% Cooldown fuer die AWP je Stufe.",
+          "label": "Upgrade AWP: Adrenalin-Verbrauch",
+          "description": "-25% Adrenalin-Verbrauch fuer die AWP je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1772,17 +1775,17 @@
           ],
           "effects": [
             {
-              "stat": "weapon.AWP.cooldown",
+              "stat": "weapon.AWP.adrenalinCost",
               "mode": "add_percent_per_level",
-              "value": -0.1
+              "value": -0.25
             }
           ]
         },
         {
           "id": "awp_aim_duration",
           "code": "C-W7-2",
-          "label": "Upgrade AWP: Zielzeit",
-          "description": "-15% Zielzeit fuer die AWP je Stufe.",
+          "label": "Upgrade AWP: Zielzeit und Cooldown",
+          "description": "-15% Zielzeit und Cooldown fuer die AWP je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1791,8 +1794,8 @@
           "sortOrder": 300,
           "requires": [
             {
-              "upgradeId": "unlock_awp",
-              "minLevel": 1
+              "upgradeId": "awp_adrenaline_cost",
+              "minLevel": 3
             }
           ],
           "effects": [
@@ -1800,31 +1803,41 @@
               "stat": "weapon.AWP.aimDuration",
               "mode": "add_percent_per_level",
               "value": -0.15
+            },
+            {
+              "stat": "weapon.AWP.cooldown",
+              "mode": "add_percent_per_level",
+              "value": -0.15
             }
           ]
         },
         {
-          "id": "awp_adrenaline_cost",
+          "id": "awp_moving_precision",
           "code": "C-W7-3",
-          "label": "Upgrade AWP: Adrenalin-Verbrauch",
-          "description": "-10% Adrenalin-Verbrauch fuer die AWP je Stufe.",
+          "label": "Upgrade AWP: Bewegliche Scharfsicht",
+          "description": "75% genauer in Bewegung; der voll gezielte Sichtbereich bleibt 75% groesser.",
           "kind": "upgrade",
-          "maxLevel": 3,
+          "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 305,
           "requires": [
             {
-              "upgradeId": "awp_cooldown",
+              "upgradeId": "awp_aim_duration",
               "minLevel": 3
             }
           ],
           "effects": [
             {
-              "stat": "weapon.AWP.adrenalinCost",
+              "stat": "weapon.AWP.spreadMoving",
               "mode": "add_percent_per_level",
-              "value": -0.1
+              "value": -0.75
+            },
+            {
+              "stat": "weapon.AWP.scopeViewRadius",
+              "mode": "add_percent_per_level",
+              "value": 0.75
             }
           ]
         },
@@ -2016,9 +2029,9 @@
           "id": "negev_range",
           "code": "C-W9-1",
           "label": "Upgrade Negev: Reichweite",
-          "description": "+10% Reichweite fuer die Negev je Stufe.",
+          "description": "+25% Reichweite fuer die Negev je Stufe.",
           "kind": "upgrade",
-          "maxLevel": 3,
+          "maxLevel": 2,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
@@ -2033,15 +2046,15 @@
             {
               "stat": "weapon.NEGEV.range",
               "mode": "add_percent_per_level",
-              "value": 0.1
+              "value": 0.25
             }
           ]
         },
         {
           "id": "negev_hold_speed",
           "code": "C-W9-2",
-          "label": "Upgrade Negev: Tempo-Malus",
-          "description": "-20% Bewegungsgeschwindigkeits-Malus beim Feuern je Stufe.",
+          "label": "Upgrade Negev: Unterdrueckungsfeuer",
+          "description": "Reduziert den Tempo-Malus beim Feuern je Stufe um 15% und verlangsamt getroffene Gegner fuer 0,5 Sekunden um 25 Prozentpunkte je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -2058,17 +2071,22 @@
             {
               "stat": "weapon.NEGEV.holdSpeedBonus",
               "mode": "add_per_level",
-              "value": 0.14
+              "value": 0.105
+            },
+            {
+              "stat": "weapon.NEGEV.hitSlowFraction",
+              "mode": "add_per_level",
+              "value": 0.25
             }
           ]
         },
         {
-          "id": "negev_bounces",
+          "id": "negev_adrenaline_cost",
           "code": "C-W9-3",
-          "label": "Upgrade Negev: Abpraller",
-          "description": "+5 Abpraller fuer die Negev.",
+          "label": "Upgrade Negev: Adrenalin-Verbrauch",
+          "description": "-15% Adrenalin-Verbrauch fuer die Negev je Stufe.",
           "kind": "upgrade",
-          "maxLevel": 1,
+          "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
@@ -2076,14 +2094,14 @@
           "requires": [
             {
               "upgradeId": "negev_range",
-              "minLevel": 3
+              "minLevel": 2
             }
           ],
           "effects": [
             {
-              "stat": "weapon.NEGEV.projectileMaxBounces",
-              "mode": "add_per_level",
-              "value": 5
+              "stat": "weapon.NEGEV.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.15
             }
           ]
         },
@@ -2091,9 +2109,9 @@
           "id": "negev_warmup_duration",
           "code": "C-W9-4",
           "label": "Upgrade Negev: Aufwaermzeit",
-          "description": "-50% Zeit bis zur vollen Genauigkeit.",
+          "description": "-25% Zeit bis zur vollen Genauigkeit je Stufe.",
           "kind": "upgrade",
-          "maxLevel": 1,
+          "maxLevel": 3,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
@@ -2108,7 +2126,7 @@
             {
               "stat": "weapon.NEGEV.warmupDuration",
               "mode": "add_percent_per_level",
-              "value": -0.5
+              "value": -0.25
             }
           ]
         },
@@ -2116,7 +2134,7 @@
           "id": "negev_burning_bullets",
           "code": "C-W9-5",
           "label": "Glühender Lauf",
-          "description": "Bei mindestens 99,9% Aufwaermung erhalten neu verschossene Kugeln Brandmunition.",
+          "description": "Bei mindestens 99% Aufwaermung erhalten neu verschossene Kugeln Brandmunition und lassen Gegner brennen.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -2127,14 +2145,14 @@
           "requires": [
             {
               "upgradeId": "negev_warmup_duration",
-              "minLevel": 1
+              "minLevel": 3
             }
           ],
           "effects": [
             {
               "stat": "weapon.NEGEV.warmupBurnThreshold",
               "mode": "add_per_level",
-              "value": 0.999
+              "value": 0.99
             },
             {
               "stat": "weapon.NEGEV.burnOnHit.durationMs",
@@ -2147,6 +2165,62 @@
               "value": 0.25
             }
           ]
+        },
+        {
+          "id": "negev_rock_damage",
+          "code": "C-W9-L3",
+          "label": "Upgrade Negev: Felsbrecher",
+          "description": "+300% Schaden an Felsen.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 366,
+          "requires": [{ "upgradeId": "negev_adrenaline_cost", "minLevel": 3 }],
+          "effects": [{ "stat": "weapon.NEGEV.rockDamageMult", "mode": "add_percent_per_level", "value": 3 }]
+        },
+        {
+          "id": "negev_killstreak",
+          "code": "C-W9-D",
+          "label": "Endloses Sperrfeuer",
+          "description": "Jeder Negev-Kill waehrend eines Dauerfeuers erhoeht den Schaden bis zum Ende des Dauerfeuers um 10%. Der unbegrenzte Killstreak erscheint ohne Balken im Power-Up-Bereich.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 376,
+          "requires": [{ "upgradeId": "negev_rock_damage", "minLevel": 1 }, { "upgradeId": "negev_burning_bullets", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.NEGEV.negevKillstreak.damageBonusPerKill", "mode": "add_per_level", "value": 0.1 }]
+        },
+        {
+          "id": "negev_killstreak_recovery",
+          "code": "C-W9-D1",
+          "label": "Blutiger Nachschub",
+          "description": "Jeder Negev-Kill im Dauerfeuer heilt 5 HP und gibt 5 Ruestung je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 377,
+          "requires": [{ "upgradeId": "negev_killstreak", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.NEGEV.negevKillstreak.healPerKill", "mode": "add_per_level", "value": 5 }, { "stat": "weapon.NEGEV.negevKillstreak.armorPerKill", "mode": "add_per_level", "value": 5 }]
+        },
+        {
+          "id": "negev_killstreak_explosion",
+          "code": "C-W9-D2",
+          "label": "Finale Detonation",
+          "description": "Das Ende eines Killstreaks erzeugt eine mit seiner Hoehe skalierende Schadens- und Rueckstossexplosion sowie einen brennenden Brocken je Kill.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 378,
+          "requires": [{ "upgradeId": "negev_killstreak", "minLevel": 1 }],
+          "effects": [{ "stat": "weapon.NEGEV.negevKillstreak.explosionEnabled", "mode": "add_per_level", "value": 1 }]
         },
         {
           "id": "unlock_tesla_dome",
@@ -2342,7 +2416,12 @@
         { "id": "mini_rocket_homecoming_protocol", "code": "C-W6-C2", "label": "Heimkehrprotokoll", "description": "Findet eine Rakete kein Ziel mehr, kann sie zum Spieler zurueckkehren und unterwegs weiter nach Gegnern suchen. Nach ihrer letzten Explosion kehrt sie verbraucht mit 40% Tempo zurueck und kann nur noch eingesammelt werden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 270, "requires": [{ "upgradeId": "mini_rocket_cascade_charge", "minLevel": 3 }, { "upgradeId": "mini_rocket_launcher_explosion_damage", "minLevel": 3 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketReturnEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "mini_rocket_adrenaline_recovery", "code": "C-W6-6", "label": "Upgrade Mini-Raketen: Adrenalinrueckgewinnung", "description": "Erstattet beim Einsammeln 50% der tatsaechlich bezahlten Adrenalinkosten je Stufe, bis zu 150%.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 272, "requires": [{ "upgradeId": "mini_rocket_homecoming_protocol", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupAdrenalineRefundFraction", "mode": "add_per_level", "value": 0.5 }] },
         { "id": "mini_rocket_armor_recovery", "code": "C-W6-7", "label": "Upgrade Mini-Raketen: Panzerungsbergung", "description": "Gewaehrt beim Einsammeln +1 Ruestung je Stufe. Kein interner Cooldown.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 274, "requires": [{ "upgradeId": "mini_rocket_homecoming_protocol", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupArmor", "mode": "add_per_level", "value": 1 }] },
-        { "id": "awp_penetrating_shot", "code": "C-W7-C", "label": "Durchschuss", "description": "Durchschlaegt mehrere Gegner, verliert je Treffer 25% Restschaden und stoppt an Waenden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 325, "requires": [{ "upgradeId": "awp_aim_duration", "minLevel": 3 }], "effects": [{ "stat": "weapon.AWP.penetrationCount", "mode": "add_per_level", "value": 99 }, { "stat": "weapon.AWP.penetrationDamageRetention", "mode": "add_per_level", "value": 0.75 }] },
+        { "id": "awp_charge_damage", "code": "C-W7-4", "label": "Geduldiger Tod", "description": "Erhoeht den AWP-Schaden stetig mit der Zielzeit bis auf +100% nach 3 Sekunden. Ein Kreisbalken um das Fadenkreuz zeigt die Ladung.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 291, "requires": [{ "upgradeId": "unlock_awp", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.maxDamageBonus", "mode": "add_per_level", "value": 1 }] },
+        { "id": "awp_penetrating_shot", "code": "C-W7-C", "label": "Unaufhaltsamer Durchschuss", "description": "Durchschlaegt Gegner und Felsen ohne Schadensverlust nach einem Durchschlag.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 301, "requires": [{ "upgradeId": "awp_charge_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.penetrationCount", "mode": "add_per_level", "value": 1000000 }, { "stat": "weapon.AWP.penetrationDamageRetention", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.AWP.penetratesRocks", "mode": "add_per_level", "value": 1 }] },
+        { "id": "awp_fire_trail", "code": "C-W7-5", "label": "Brandspur", "description": "AWP-Projektile hinterlassen in ihrer Flugbahn 2,5 Sekunden lang brennenden Boden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 311, "requires": [{ "upgradeId": "awp_penetrating_shot", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.fireTrailDurationMs", "mode": "add_per_level", "value": 2500 }] },
+        { "id": "awp_destruction_corridor", "code": "C-W7-D", "label": "Schneise der Zerstoerung", "description": "Voll aufgeladene Schuesse verwunden Gegner entlang der Flugbahn, stossen sie seitlich weg und hinterlassen eine deutlich breitere Feuerschneise.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 326, "requires": [{ "upgradeId": "awp_moving_precision", "minLevel": 1 }, { "upgradeId": "awp_fire_trail", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.corridorEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.AWP.awpCharge.fireTrailHalfWidthCells", "mode": "add_per_level", "value": 2 }] },
+        { "id": "awp_full_charge_time", "code": "C-W7-D1", "label": "Schnellladung", "description": "-15% Zeit bis zur vollen AWP-Schadensladung je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 327, "requires": [{ "upgradeId": "awp_destruction_corridor", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.durationMs", "mode": "add_percent_per_level", "value": -0.15 }] },
+        { "id": "awp_full_charge_damage", "code": "C-W7-D2", "label": "Vernichtungsladung", "description": "+20% auf alle Schadenswerte voll aufgeladener AWP-Schuesse je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 328, "requires": [{ "upgradeId": "awp_destruction_corridor", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.fullChargeDamageBonus", "mode": "add_per_level", "value": 0.2 }] },
         { "id": "tesla_dome_high_voltage", "code": "C-W10-C", "label": "Hochspannung", "description": "Aktivhalten laedt bis zu drei Stufen; jede erhoeht Radius und Schaden um 10%, ohne Mehrverbrauch.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 405, "requires": [{ "upgradeId": "tesla_dome_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.TESLA_DOME.fire.chargeIntervalMs", "mode": "add_per_level", "value": 1000 }, { "stat": "weapon.TESLA_DOME.fire.maxChargeStacks", "mode": "add_per_level", "value": 3 }, { "stat": "weapon.TESLA_DOME.fire.radiusBonusPerCharge", "mode": "add_per_level", "value": 0.1 }, { "stat": "weapon.TESLA_DOME.fire.damageBonusPerCharge", "mode": "add_per_level", "value": 0.1 }] },
         { "id": "energy_shield_reflector", "code": "C-W11-C", "label": "Reflektor", "description": "Geblockte Projektile werden einmalig mit 60% Schaden reflektiert.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 435, "requires": [{ "upgradeId": "energy_shield_capacity", "minLevel": 3 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.reflectionDamageFactor", "mode": "add_per_level", "value": 0.6 }] }
       ]

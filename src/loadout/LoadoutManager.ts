@@ -89,8 +89,27 @@ interface ShotgunLightningEvent {
   generation: number;
 }
 
+interface NegevCombatState {
+  kills: number;
+}
+
+export interface NegevKillstreakExplosionEvent {
+  ownerId: string;
+  x: number;
+  y: number;
+  kills: number;
+  radius: number;
+  damage: number;
+  fireChunkDurationMs: number;
+  fireChunkBurnDurationMs: number;
+  fireChunkBurnDamagePerTick: number;
+}
+
 type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>;
-type PhysicsSystemType  = { addRecoil(id: string, vx: number, vy: number, durationMs?: number): void };
+type PhysicsSystemType  = {
+  addRecoil(id: string, vx: number, vy: number, durationMs?: number): void;
+  applyRadialImpulse(x: number, y: number, radius: number, force: number, ownerId?: string, selfMultiplier?: number, durationMs?: number): void;
+};
 
 /**
  * LoadoutManager – Host-autoritär.
@@ -120,7 +139,9 @@ export class LoadoutManager {
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   private shotCounters = new Map<string, number>();
   private ak47States = new Map<string, Ak47CombatState>();
+  private negevStates = new Map<string, NegevCombatState>();
   private shotgunLightningQueue: ShotgunLightningEvent[] = [];
+  private negevKillstreakExplosionHandler: ((event: NegevKillstreakExplosionEvent) => void) | null = null;
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
@@ -175,6 +196,7 @@ export class LoadoutManager {
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.resetPlayer(playerId);
     this.resetAk47State(playerId);
+    this.negevStates.set(playerId, { kills: 0 });
   }
 
   /**
@@ -216,6 +238,7 @@ export class LoadoutManager {
     this.translocatorSystem?.removePlayer(playerId);
     this.decoySystem?.clearPlayer(playerId);
     this.ak47States.delete(playerId);
+    this.negevStates.delete(playerId);
     this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
   }
 
@@ -298,6 +321,20 @@ export class LoadoutManager {
       });
     }
     return result;
+  }
+
+  getNegevHudBuffs(playerId: string): SyncedActiveHudBuff[] {
+    const config = this.loadouts.get(playerId)?.weapon2.config;
+    const state = this.negevStates.get(playerId);
+    const damagePerKill = config?.id === 'NEGEV'
+      ? (config.negevKillstreak?.damageBonusPerKill ?? 0)
+      : 0;
+    if (!state || state.kills <= 0 || damagePerKill <= 0) return [];
+    return [{
+      defId: 'NEGEV_KILLSTREAK',
+      remainingFrac: 1,
+      valueText: `${state.kills} Kills · +${Math.round(state.kills * damagePerKill * 100)}%`,
+    }];
   }
 
   isAk47FireSuperiorityActive(playerId: string): boolean {
@@ -397,6 +434,12 @@ export class LoadoutManager {
 
   setShieldBuffSystem(sys: ShieldBuffSystem | null): void {
     this.shieldBuffSystem = sys;
+  }
+
+  setNegevKillstreakExplosionHandler(
+    handler: ((event: NegevKillstreakExplosionEvent) => void) | null,
+  ): void {
+    this.negevKillstreakExplosionHandler = handler;
   }
 
   /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
@@ -614,6 +657,15 @@ export class LoadoutManager {
     for (const loadout of this.loadouts.values()) {
       loadout.weapon1.decaySpread(delta, now);
       loadout.weapon2.decaySpread(delta, now);
+    }
+
+    for (const [playerId, state] of this.negevStates) {
+      if (state.kills <= 0) continue;
+      const held = this.heldFireSlots.get(playerId);
+      const stillFiringNegev = held?.slot === 'weapon2'
+        && now - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS
+        && this.loadouts.get(playerId)?.weapon2.config.id === 'NEGEV';
+      if (!stillFiringNegev) this.finishNegevKillstreak(playerId, state.kills);
     }
 
     // Ultimate: Rage proportional drainieren + Effekt nach duration deaktivieren
@@ -976,6 +1028,20 @@ export class LoadoutManager {
   ): void {
     const loadout = this.loadouts.get(killerId);
     if (!loadout) return;
+    const negev = loadout.weapon2.config.id === 'NEGEV' ? loadout.weapon2.config : null;
+    if (
+      negev
+      && weaponName === negev.displayName
+      && (negev.negevKillstreak?.damageBonusPerKill ?? 0) > 0
+    ) {
+      const state = this.negevStates.get(killerId) ?? { kills: 0 };
+      state.kills += 1;
+      this.negevStates.set(killerId, state);
+      const heal = negev.negevKillstreak?.healPerKill ?? 0;
+      const armor = negev.negevKillstreak?.armorPerKill ?? 0;
+      if (heal > 0) this.combatSystem?.heal(killerId, heal);
+      if (armor > 0) this.combatSystem?.addArmor(killerId, armor);
+    }
     const shotgun = loadout.weapon2.config.id === 'SHOTGUN' ? loadout.weapon2.config : null;
     if (shotgun) {
       if (weaponName === shotgun.displayName && (shotgun.shotgunLightningRadius ?? 0) > 0 && (shotgun.shotgunLightningDamage ?? 0) > 0) {
@@ -1028,6 +1094,43 @@ export class LoadoutManager {
       }
       return;
     }
+  }
+
+  private finishNegevKillstreak(playerId: string, kills: number): void {
+    const state = this.negevStates.get(playerId);
+    if (state) state.kills = 0;
+    if (kills <= 0) return;
+
+    const config = this.loadouts.get(playerId)?.weapon2.config;
+    const streak = config?.id === 'NEGEV' ? config.negevKillstreak : undefined;
+    if (!streak || streak.explosionEnabled <= 0) return;
+    const player = this.playerManager.getPlayer(playerId);
+    if (!player) return;
+
+    const radius = streak.explosionBaseRadius + kills * streak.explosionRadiusPerKill;
+    const damage = kills * streak.explosionDamagePerKill;
+    const knockback = streak.explosionBaseKnockback + kills * streak.explosionKnockbackPerKill;
+    if (damage > 0 && radius > 0) {
+      this.combatSystem?.applyAoeDamage(player.sprite.x, player.sprite.y, radius, damage, playerId, false, {
+        category: 'explosion',
+        weaponName: 'Negev-Killstreak',
+        sourceSlot: 'weapon2',
+      });
+    }
+    if (knockback > 0 && radius > 0) {
+      this.physicsSystem?.applyRadialImpulse(player.sprite.x, player.sprite.y, radius, knockback, playerId, 0);
+    }
+    this.negevKillstreakExplosionHandler?.({
+      ownerId: playerId,
+      x: player.sprite.x,
+      y: player.sprite.y,
+      kills,
+      radius,
+      damage,
+      fireChunkDurationMs: streak.fireChunkDurationMs,
+      fireChunkBurnDurationMs: streak.fireChunkBurnDurationMs,
+      fireChunkBurnDamagePerTick: streak.fireChunkBurnDamagePerTick,
+    });
   }
 
   private processShotgunLightningQueue(): void {
@@ -1182,6 +1285,35 @@ export class LoadoutManager {
     let shotCfg = (cfg.warmupBurnThreshold ?? 0) > 0 && warmupFraction < (cfg.warmupBurnThreshold ?? 0)
       ? { ...cfg, burnOnHit: undefined }
       : cfg;
+    if (cfg.id === 'AWP' && cfg.awpCharge) {
+      const chargeProgress = Phaser.Math.Clamp(params?.scopeChargeProgress ?? 0, 0, 1);
+      const fullyCharged = chargeProgress >= 0.999;
+      const fullChargeMultiplier = fullyCharged ? 1 + cfg.awpCharge.fullChargeDamageBonus : 1;
+      shotCfg = {
+        ...shotCfg,
+        damage: shotCfg.damage * (1 + chargeProgress * cfg.awpCharge.maxDamageBonus) * fullChargeMultiplier,
+        awpCharge: {
+          ...cfg.awpCharge,
+          fireTrailBurnDamagePerTick: cfg.awpCharge.fireTrailBurnDamagePerTick * fullChargeMultiplier,
+          corridorEnabled: fullyCharged ? cfg.awpCharge.corridorEnabled : 0,
+          corridorDamage: cfg.awpCharge.corridorDamage * fullChargeMultiplier,
+        },
+      };
+    }
+    if (cfg.id === 'NEGEV') {
+      const kills = this.negevStates.get(playerId)?.kills ?? 0;
+      const damageMultiplier = 1 + kills * (cfg.negevKillstreak?.damageBonusPerKill ?? 0);
+      if (damageMultiplier > 1) {
+        shotCfg = {
+          ...shotCfg,
+          damage: shotCfg.damage * damageMultiplier,
+          burnOnHit: shotCfg.burnOnHit ? {
+            ...shotCfg.burnOnHit,
+            damagePerTick: shotCfg.burnOnHit.damagePerTick * damageMultiplier,
+          } : undefined,
+        };
+      }
+    }
     if (ak47State && cfg.ak47Focus) {
       const focusDamageMultiplier = 1 + ak47State.stacks * cfg.ak47Focus.damagePerStack;
       const superiorityDamageMultiplier = fireSuperiorityActive
@@ -1699,6 +1831,7 @@ export class LoadoutManager {
       shotAudioKey:    config.shotAudio?.successKey,
       penetrationCount: config.penetrationCount,
       penetrationDamageRetention: config.penetrationDamageRetention,
+      penetratesRocks: (config.penetratesRocks ?? 0) > 0,
       multiExplosionCount: config.multiExplosionCount,
       multiExplosionCoastMs: isMiniRocket ? config.multiExplosionCoastMs : undefined,
       miniRocketStageRangePx: hasExtendedMiniRocketFlight ? effectiveRange : undefined,
@@ -1722,8 +1855,29 @@ export class LoadoutManager {
       shotgunProximityMaxDamageBonus: config.id === 'SHOTGUN' ? config.shotgunProximityMaxDamageBonus : undefined,
       shotgunSlowFraction: config.id === 'SHOTGUN' ? config.shotgunSlowFraction : undefined,
       shotgunSlowDurationMs: config.id === 'SHOTGUN' ? config.shotgunSlowDurationMs : undefined,
+      hitSlowFraction: config.hitSlowFraction,
+      hitSlowDurationMs: config.hitSlowDurationMs,
       hitKnockback: config.hitKnockback,
       hitKnockbackDurationMs: config.hitKnockbackDurationMs,
+      fireTrail: config.id === 'AWP' && (config.awpCharge?.fireTrailDurationMs ?? 0) > 0 ? {
+        durationMs: config.awpCharge?.fireTrailDurationMs ?? 0,
+        burnDurationMs: config.awpCharge?.fireTrailBurnDurationMs ?? 0,
+        burnDamagePerTick: config.awpCharge?.fireTrailBurnDamagePerTick ?? 0,
+        weaponName: 'AWP-Brandspur',
+      } : undefined,
+      fireTrailHalfWidthCells: config.id === 'AWP' ? config.awpCharge?.fireTrailHalfWidthCells : undefined,
+      awpCorridorHalfWidth: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
+        ? config.awpCharge?.corridorHalfWidth
+        : undefined,
+      awpCorridorDamage: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
+        ? config.awpCharge?.corridorDamage
+        : undefined,
+      awpCorridorKnockback: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
+        ? config.awpCharge?.corridorKnockback
+        : undefined,
+      awpCorridorKnockbackDurationMs: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
+        ? config.awpCharge?.corridorKnockbackDurationMs
+        : undefined,
       proximityArc: config.proximityArc,
       ak47ShotId: config.ak47ShotId,
       ak47DamageMultiplier: config.ak47DamageMultiplier,

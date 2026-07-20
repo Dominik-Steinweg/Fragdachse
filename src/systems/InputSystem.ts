@@ -85,6 +85,7 @@ export class InputSystem {
   // Scope-Mechanik (für Waffen mit scopeConfig, z.B. AWP)
   private scopeStartedAt: number | null = null;  // Timestamp des RMB-Press
   private scopeProgress = 0;                     // 0–1, aktueller Scope-Fortschritt
+  private scopeChargeProgress = 0;               // 0–1, separater Schadens-Ladefortschritt
   private getWeapon2Config: (() => WeaponConfig | undefined) | null = null;
   private canStartScope: (() => boolean) | null = null;
 
@@ -172,6 +173,10 @@ export class InputSystem {
     return this.scopeProgress;
   }
 
+  getScopeChargeProgress(): number {
+    return this.scopeChargeProgress;
+  }
+
   /** Gibt die ScopeModeConfig der aktuellen weapon2 zurück, oder undefined. */
   getWeapon2ScopeConfig(): ScopeModeConfig | undefined {
     return this.getWeapon2Config?.()?.scopeConfig;
@@ -213,6 +218,7 @@ export class InputSystem {
       this.ultimateTargetingActive = false;
       this.scopeStartedAt = null;
       this.scopeProgress = 0;
+      this.scopeChargeProgress = 0;
       this.tunnelPlacementAnchor = null;
       this.placementPreviewState = null;
       this.suppressWeapon1UntilLeftRelease = false;
@@ -637,14 +643,22 @@ export class InputSystem {
           }
           const elapsed = this.scopeStartedAt !== null ? now - this.scopeStartedAt : 0;
           this.scopeProgress = Math.min(1, elapsed / scopeCfg.scopeInMs);
+          const chargeDurationMs = this.getWeapon2Config?.()?.awpCharge?.durationMs ?? scopeCfg.scopeInMs;
+          this.scopeChargeProgress = Math.min(1, elapsed / Math.max(1, chargeDurationMs));
           this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { scopeHolding: true });
         } else if (this.scopeStartedAt !== null) {
           // RMB losgelassen → Schuss auslösen mit berechnetem Scope-Fortschritt
           const elapsed = now - this.scopeStartedAt;
           const progress = Math.min(1, elapsed / scopeCfg.scopeInMs);
-          this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { scopeProgress: progress });
+          const chargeDurationMs = this.getWeapon2Config?.()?.awpCharge?.durationMs ?? scopeCfg.scopeInMs;
+          const chargeProgress = Math.min(1, elapsed / Math.max(1, chargeDurationMs));
+          this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, {
+            scopeProgress: progress,
+            scopeChargeProgress: chargeProgress,
+          });
           this.scopeStartedAt = null;
           this.scopeProgress = 0;
+          this.scopeChargeProgress = 0;
         }
       } else if (rightPointerDown) {
         // Normales Dauerfeuer für Nicht-Scope-Waffen
@@ -656,6 +670,7 @@ export class InputSystem {
     if (weaponsBlocked && this.scopeStartedAt !== null) {
       this.scopeStartedAt = null;
       this.scopeProgress = 0;
+      this.scopeChargeProgress = 0;
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {

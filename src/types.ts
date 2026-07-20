@@ -486,6 +486,7 @@ export interface LoadoutUseParams {
   ultimateChargeFraction?: number;
   inputStarted?: boolean;
   scopeProgress?: number;  // 0–1, für fire-on-release Scope-Waffen (beim Loslassen gesetzt)
+  scopeChargeProgress?: number; // 0–1, separater Schadens-Ladefortschritt einer Scope-Waffe
   scopeHolding?: boolean;  // true = RMB gehalten aber noch kein Schuss (nur holdSpeedFactor aktiv)
   tunnelAction?: 'commit';
   tunnelStartX?: number;
@@ -630,6 +631,7 @@ export interface ProjectileSpawnConfig {
   suppressSpawnFx?: boolean;
   penetrationCount?: number;
   penetrationDamageRetention?: number;
+  penetratesRocks?: boolean;
   reflected?: boolean;
   gaussChainRadius?: number;
   gaussChainDamageFactor?: number;
@@ -654,8 +656,15 @@ export interface ProjectileSpawnConfig {
   shotgunProximityMaxDamageBonus?: number;
   shotgunSlowFraction?: number;
   shotgunSlowDurationMs?: number;
+  hitSlowFraction?: number;
+  hitSlowDurationMs?: number;
   hitKnockback?: number;
   hitKnockbackDurationMs?: number;
+  fireTrailHalfWidthCells?: number;
+  awpCorridorHalfWidth?: number;
+  awpCorridorDamage?: number;
+  awpCorridorKnockback?: number;
+  awpCorridorKnockbackDurationMs?: number;
 }
 
 export interface DamageGrenadeEffect {
@@ -942,6 +951,8 @@ export interface TrackedProjectile {
   penetrationRemaining?: number;
   penetrationDamageRetention?: number;
   penetrationHitIds?: Set<string>;
+  penetratesRocks?: boolean;
+  penetratedRockIds?: Set<number>;
   reflected?: boolean;
   gaussChainRadius?: number;
   gaussChainDamageFactor?: number;
@@ -980,8 +991,16 @@ export interface TrackedProjectile {
   shotgunProximityMaxDamageBonus?: number;
   shotgunSlowFraction?: number;
   shotgunSlowDurationMs?: number;
+  hitSlowFraction?: number;
+  hitSlowDurationMs?: number;
   hitKnockback?: number;
   hitKnockbackDurationMs?: number;
+  fireTrailHalfWidthCells?: number;
+  awpCorridorHalfWidth?: number;
+  awpCorridorDamage?: number;
+  awpCorridorKnockback?: number;
+  awpCorridorKnockbackDurationMs?: number;
+  awpCorridorHitIds?: Set<string>;
 
   // Anti-Tunneling: Original-Größe für geschwindigkeitsproportionale Body-Verlängerung
   originalBodySize?: number;

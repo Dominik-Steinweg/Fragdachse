@@ -440,6 +440,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'FLAMETHROWER',
     targets: [{ path: ['fire', 'piercingCount'], operation: 'add' }],
   },
+  'weapon.AWP.spreadMoving': {
+    kind: 'weapon',
+    itemId: 'AWP',
+    targets: [{ path: ['spreadMoving'], operation: 'scale' }],
+  },
+  'weapon.AWP.scopeViewRadius': {
+    kind: 'weapon',
+    itemId: 'AWP',
+    targets: [{ path: ['scopeConfig', 'fullScopeViewRadius'], operation: 'scale' }],
+  },
   'weapon.FLAMETHROWER.adrenalinCost': {
     kind: 'weapon',
     itemId: 'FLAMETHROWER',
@@ -614,6 +624,16 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     kind: 'utility',
     itemId: 'MOLOTOV_GRENADE',
     targets: [{ path: ['fireRadius'], operation: 'scale' }],
+  },
+  'weapon.NEGEV.adrenalinCost': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['adrenalinCost'], operation: 'scale' }],
+  },
+  'weapon.NEGEV.rockDamageMult': {
+    kind: 'weapon',
+    itemId: 'NEGEV',
+    targets: [{ path: ['rockDamageMult'], operation: 'scale' }],
   },
   'utility.MOLOTOV_GRENADE.cooldown': {
     kind: 'utility',
