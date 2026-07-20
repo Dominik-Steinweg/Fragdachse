@@ -6,7 +6,7 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
-import type { EnergyShieldSystem } from './EnergyShieldSystem';
+import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
 import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
@@ -56,6 +56,7 @@ interface AoeDamageOptions {
   selfDamageMult?: number;
   enemySlowFraction?: number;
   enemySlowDurationMs?: number;
+  skipEnemies?: boolean;
   killSource?: KillSourceContext;
 }
 
@@ -432,6 +433,10 @@ export class CombatSystem {
     const x = player?.sprite.x ?? 0;
     const y = player?.sprite.y ?? 0;
 
+    // Energie-Kuppel: Liegt der Schadenspunkt in einer verbündeten Kuppel, wird der Schaden
+    // vollständig abgewehrt (jeder abdeckende Kuppel-Besitzer erhält den Schadensbonus).
+    if (this.energyShieldSystem?.tryDomeProtect(x, y, targetId, amount, Date.now())) return;
+
     const damageReduction = Phaser.Math.Clamp(this.playerDamageReductionResolver?.(targetId) ?? 0, 0, 1);
     const reducedAmount = amount * (1 - damageReduction);
     const currentArmor = this.armor.get(targetId) ?? 0;
@@ -687,6 +692,8 @@ export class CombatSystem {
       }, options);
     }
 
+    if (options?.skipEnemies) return;
+
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!includeSelf && enemy.id === ownerId) continue;
       if (!this.canDamageTarget(ownerId, enemy.id, options?.allowTeamDamage)) continue;
@@ -815,6 +822,8 @@ export class CombatSystem {
   update(): void {
     if (!this.bridge.isHost()) return;
 
+    this.applyDomeProjectileBarrier();
+
     for (const proj of this.projectileManager.getActiveProjectiles()) {
       if (proj.isGrenade) continue;  // Granaten treffen nicht direkt, nur AoE
       if (proj.miniRocketDeferredExplosion) continue;
@@ -833,6 +842,71 @@ export class CombatSystem {
       if (this.resolveProjectileEnemyHits(proj, projBounds)) continue;
       this.resolveProjectileDecoyHits(proj, projBounds);
     }
+  }
+
+  /**
+   * Energie-Kuppel-Projektilbarriere: Gegnerische Projektile innerhalb einer Kuppel werden
+   * absorbiert (a1) oder nach außen abgeprallt (d2). Abgeprallte Projektile gelten danach als
+   * Projektile des Kuppel-Besitzers und treffen Gegner. In beiden Fällen lädt der Schadensbonus.
+   */
+  private applyDomeProjectileBarrier(): void {
+    const domes = this.energyShieldSystem?.getReflectDomes();
+    if (!domes || domes.length === 0) return;
+    const now = Date.now();
+
+    for (const proj of this.projectileManager.getActiveProjectiles()) {
+      if (proj.isGrenade) continue;
+      if (proj.miniRocketDeferredExplosion || proj.miniRocketSpent) continue;
+
+      for (const dome of domes) {
+        if (proj.ownerId === dome.ownerId) continue;
+        // Nur feindliche Projektile abwehren – eigene/verbündete Geschosse passieren die Kuppel.
+        if (!this.canDamageTarget(proj.ownerId, dome.ownerId, proj.allowTeamDamage)) continue;
+
+        const dx = proj.sprite.x - dome.x;
+        const dy = proj.sprite.y - dome.y;
+        if (dx * dx + dy * dy > dome.radius * dome.radius) continue;
+
+        const blockedDamage = this.computeProjectileDamage(proj);
+        this.energyShieldSystem?.onDomeAbsorb(dome.ownerId, blockedDamage, now);
+
+        if (dome.reflect) {
+          this.reflectProjectileFromDome(proj, dome, now);
+        } else {
+          this.projectileManager.destroyProjectile(proj.id);
+        }
+        break; // Projektil ist behandelt
+      }
+    }
+  }
+
+  /** Schleudert ein gegnerisches Projektil radial aus der Kuppel und übergibt es an den Besitzer. */
+  private reflectProjectileFromDome(proj: TrackedProjectile, dome: ReflectDomeInfo, now: number): void {
+    const dirX = proj.sprite.x - dome.x;
+    const dirY = proj.sprite.y - dome.y;
+    const angle = (dirX === 0 && dirY === 0)
+      ? Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x)
+      : Math.atan2(dirY, dirX);
+    const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y) || 400;
+
+    this.projectileManager.spawnProjectile(proj.sprite.x, proj.sprite.y, angle, dome.ownerId, {
+      speed,
+      size: Math.max(1, proj.sprite.displayWidth),
+      damage: proj.damage,
+      color: proj.color,
+      ownerColor: dome.color,
+      lifetime: Math.max(1, proj.lifetime - (now - proj.createdAt)),
+      maxBounces: 0,
+      isGrenade: false,
+      adrenalinGain: 0,
+      weaponName: 'Reflexkuppel',
+      projectileStyle: proj.projectileStyle,
+      bulletVisualPreset: proj.bulletVisualPreset,
+      tracerConfig: proj.tracerConfig,
+      reflected: true,
+      sourceSlot: 'weapon2',
+    });
+    this.projectileManager.destroyProjectile(proj.id);
   }
 
   /** Schützen-Damage-Multiplikator (Loadout/Ultimate + PowerUp) auf den Projektil-Basisschaden anwenden. */
@@ -2015,6 +2089,11 @@ export class CombatSystem {
         : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
+      // Energie-Kuppel: schützt die getroffene Basisstelle, wenn sie in einer Kuppel liegt.
+      if (this.energyShieldSystem?.tryDomeProtect(targetX, targetY, null, actualDamage, Date.now())) {
+        hit = true;
+        continue;
+      }
       this.baseManager?.applyDamage(base.id, actualDamage);
       hit = true;
 
@@ -2658,6 +2737,10 @@ export class CombatSystem {
 
     const x = enemy.sprite.x;
     const y = enemy.sprite.y;
+
+    // Energie-Kuppel schützt auch verbündete Gegner (Nekromantie), wenn sie in der Kuppel stehen.
+    if (enemy.faction === 'allied' && this.energyShieldSystem?.tryDomeProtect(x, y, null, amount, Date.now())) return;
+
     const previousHp = enemy.getHp();
     const result = this.enemyManager?.applyDamage(targetId, amount);
     if (!result) return;

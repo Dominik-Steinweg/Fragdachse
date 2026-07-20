@@ -14,11 +14,6 @@ export const COOP_DEFENSE_TUTORIAL_PANEL_WIDTH = 840;
 export const COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT = 168;
 export const COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS = 2;
 
-export function isCoopDefenseTutorialMap(mapId: string): boolean {
-  const numericMapId = Number(mapId);
-  return Number.isInteger(numericMapId) && numericMapId >= 1 && numericMapId <= 5;
-}
-
 export function getCoopDefenseTutorialRockRegion(): {
   minGridX: number;
   maxGridX: number;

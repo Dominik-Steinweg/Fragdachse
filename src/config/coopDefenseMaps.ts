@@ -79,6 +79,10 @@ export interface CoopDefenseMapConfig {
   readonly mapId: string;
   readonly displayName: string;
   readonly tutorialText?: string;
+  /** Anzeigedauer des Tutorial-Fensters; Standard ist COOP_DEFENSE_TUTORIAL_DURATION_MS. */
+  readonly tutorialDurationMs?: number;
+  /** True: Die Zombie-Fraktion führt auf dieser Map eigene Luftangriffe durch. */
+  readonly enemyAirstrikes?: boolean;
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
@@ -188,6 +192,10 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     tutorialText: typeof mapConfig.tutorialText === 'string' && mapConfig.tutorialText.trim().length > 0
       ? mapConfig.tutorialText.trim()
       : undefined,
+    tutorialDurationMs: typeof mapConfig.tutorialDurationMs === 'number' && Number.isFinite(mapConfig.tutorialDurationMs)
+      ? Math.max(1000, Math.floor(mapConfig.tutorialDurationMs))
+      : undefined,
+    enemyAirstrikes: mapConfig.enemyAirstrikes === true ? true : undefined,
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),

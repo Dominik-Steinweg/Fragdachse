@@ -13,9 +13,11 @@ describe('Coop defense multiplayer scaling', () => {
     for (const playerCount of [1, 2, 3, 4]) {
       const resolved = resolveCoopDefenseEnemyConfigs(playerCount);
       for (const [kind, base] of Object.entries(COOP_DEFENSE_ENEMY_CONFIGS)) {
-        expect(base.playerScaling).toEqual({ maxHpFactorPerAdditionalPlayer: 1 });
+        expect(base.playerScaling?.moveSpeedFactorPerAdditionalPlayer).toBeUndefined();
         expect(base.spawnScaling).toBeUndefined();
-        expect(resolved[kind].maxHp).toBe(base.maxHp * playerCount);
+        const hpFactor = base.playerScaling?.maxHpFactorPerAdditionalPlayer ?? 0;
+        const expectedMaxHp = Math.max(1, Math.round(base.maxHp * (1 + hpFactor * (playerCount - 1))));
+        expect(resolved[kind].maxHp).toBe(expectedMaxHp);
         expect(resolved[kind].moveSpeed).toBe(base.moveSpeed);
         expect(resolved[kind].xp).toBe(base.xp);
       }

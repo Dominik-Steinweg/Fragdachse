@@ -555,16 +555,6 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'TESLA_DOME',
     targets: [{ path: ['fire', 'adrenalineDrainPerSecond'], operation: 'scale' }],
   },
-  'weapon.ENERGY_SHIELD.blockArcDegrees': {
-    kind: 'weapon',
-    itemId: 'ENERGY_SHIELD',
-    targets: [{ path: ['fire', 'blockArcDegrees'], operation: 'scale' }],
-  },
-  'weapon.ENERGY_SHIELD.buffMax': {
-    kind: 'weapon',
-    itemId: 'ENERGY_SHIELD',
-    targets: [{ path: ['fire', 'buffMax'], operation: 'scale' }],
-  },
   'utility.cooldown': {
     kind: 'utility',
     slot: 'utility',

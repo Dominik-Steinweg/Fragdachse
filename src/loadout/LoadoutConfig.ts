@@ -139,6 +139,12 @@ export interface EnergyShieldWeaponFireConfig {
   readonly visualInnerAlpha: number;
   readonly visualOuterAlpha: number;
   readonly reflectionDamageFactor?: number;
+  // Kuppel-Erweiterungen (0 = deaktiviert, hält den gerichteten Basis-Schild unverändert)
+  readonly domeEnabled: number;            // >0: 360°-Kuppel statt gerichtetem Bogen (Boss a1)
+  readonly domeRadius: number;             // Radius der Kuppel in px (d1 skaliert)
+  readonly domeHealPerSecond: number;      // HP/s Heilung für Ziele in der Kuppel (a2)
+  readonly domeToggleEnabled: number;      // >0: Rechtsklick toggelt die Kuppel statt Halten (Boss c)
+  readonly domeReflectProjectiles: number; // >0: gegnerische Projektile prallen an der Kuppel ab (Boss d2)
 }
 
 export type WeaponFireConfig =
@@ -652,6 +658,8 @@ export interface AirstrikeUltimateConfig extends BaseUltimateConfig {
   readonly selfDamageMult: number;    // 0 = Auslöser immun
   readonly rockDamageMult: number;
   readonly trainDamageMult: number;
+  readonly baseDamageMult?: number;   // >0: Coop-Basen im Radius erhalten Schaden (Zombie-Luftangriffe)
+  readonly skipEnemyDamage?: boolean; // true: Coop-Gegner werden verschont (Zombie-Luftangriffe)
   readonly carpetStrikeCount?: number;
   readonly carpetOffset?: number;
   readonly carpetIntervalMs?: number;
@@ -1926,6 +1934,11 @@ export const WEAPON_CONFIGS = {
       visualInnerAlpha:         0.56,
       visualOuterAlpha:         0.96,
       reflectionDamageFactor:   0,
+      domeEnabled:              0,
+      domeRadius:               96,
+      domeHealPerSecond:        0,
+      domeToggleEnabled:        0,
+      domeReflectProjectiles:   0,
     } satisfies EnergyShieldWeaponFireConfig,
     allowedSlots:         ['weapon2'],
     adrenalinCost:        0,

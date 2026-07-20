@@ -7,7 +7,6 @@ import type { CoopDefenseMapConfig, CoopDefenseMapPowerUpConfig, CoopDefensePowe
 import {
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
   getCoopDefenseTutorialRockRegion,
-  isCoopDefenseTutorialMap,
 } from '../config/coopDefenseTutorial';
 
 /**
@@ -71,7 +70,7 @@ export class ArenaGenerator {
         map = newMap;
       }
 
-      if (coopMapConfig?.tutorialText && isCoopDefenseTutorialMap(coopMapConfig.mapId)) {
+      if (coopMapConfig?.tutorialText) {
         ArenaGenerator.applyTutorialRockFormation(map, trackCols, rng);
       }
 

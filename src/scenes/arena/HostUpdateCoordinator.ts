@@ -83,6 +83,7 @@ export class HostUpdateCoordinator {
     const now = Date.now();
 
     this.ctx.coopDefenseWaveSpawner?.hostUpdate(delta, countdownActive);
+    this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     this.ctx.enemyManager?.hostUpdateMovement(
       this.ctx.enemyFlowFieldService,
@@ -961,7 +962,27 @@ export class HostUpdateCoordinator {
       allowTeamDamage: cfg.allowTeamDamage,
       selfDamageMult:  cfg.selfDamageMult,
       damageFalloff:   falloff,
+      skipEnemies:     cfg.skipEnemyDamage,
     });
+
+    // Basis-Schaden (nur Zombie-Luftangriffe konfigurieren baseDamageMult > 0)
+    if ((cfg.baseDamageMult ?? 0) > 0 && this.ctx.baseManager) {
+      for (const base of this.ctx.baseManager.getBases()) {
+        if (base.isDestroyed()) continue;
+        let minDist = Infinity;
+        for (const cell of base.getCellBodies()) {
+          const b  = cell.getBounds();
+          const dx = Math.max(b.left - x, 0, x - b.right);
+          const dy = Math.max(b.top  - y, 0, y - b.bottom);
+          const d  = Math.sqrt(dx * dx + dy * dy);
+          if (d < minDist) minDist = d;
+        }
+        if (minDist > radius) continue;
+        const baseDmg = computeRadialDamage(minDist, radius, cfg.maxDamage, falloff);
+        const damage = Math.round(baseDmg * (cfg.baseDamageMult ?? 0));
+        if (damage > 0) this.ctx.baseManager.applyDamage(base.id, damage);
+      }
+    }
 
     // Felsen-Schaden
     if (cfg.rockDamageMult !== 0 && arenaResult) {

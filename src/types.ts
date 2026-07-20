@@ -121,6 +121,7 @@ export interface SyncedEnergyShield {
   color: number;
   alpha: number;
   flashAlpha: number;
+  isDome: boolean;
 }
 
 export interface SyncedDecoy {

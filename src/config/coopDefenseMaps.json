@@ -449,6 +449,63 @@
         { "enemyKind": "plague-medic", "intervalMs": 15000, "countPerWave": 1, "startAtMs": 0 }
       ],
       "boss": { "enemyKind": "inferno-colossus", "spawnAtMs": 0 }
+    },
+    {
+      "mapId": "11",
+      "displayName": "Map 11 - Bombergeschwader",
+      "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
+      "tutorialDurationMs": 10000,
+      "enemyAirstrikes": true,
+      "roundDurationSec": 90,
+      "bases": [
+        {
+          "id": "coop-base-rear",
+          "hpMax": 2000,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }
+            ]
+          },
+          "powerUpPedestals": [
+            { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true }
+          ]
+        },
+        {
+          "id": "coop-base-middle",
+          "hpMax": 600,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }
+            ]
+          },
+          "turrets": [
+            { "id": "front-middle", "cellOffset": { "gridX": 1, "gridY": 1 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
+          ],
+          "powerUpPedestals": [
+            { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true }
+          ]
+        }
+      ],
+      "powerUps": [
+        { "defId": "ARMOR", "region": "front", "respawnMs": 10000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "middle", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "DOUBLE_DAMAGE", "region": "rear", "respawnMs": 20000, "spawnOnArenaStart": false }
+      ],
+      "waves": [
+        { "enemyKind": "spore-warden", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "void-stalker", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 5000 },
+        { "enemyKind": "stink-broodmother", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 10000 }
+      ]
     }
   ]
 }

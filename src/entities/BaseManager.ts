@@ -104,6 +104,14 @@ export class BaseManager {
     this.byId.get(baseId)?.applyDamage(damage);
   }
 
+  /** Host-only: Heilt eine Basis bis zum Maximum (z.B. Energie-Kuppel). */
+  heal(baseId: string, amount: number): void {
+    if (amount <= 0) return;
+    const base = this.byId.get(baseId);
+    if (!base || base.getHp() <= 0) return;
+    base.setHp(base.getHp() + amount);
+  }
+
   private handleBaseDestroyed(entity: BaseEntity): void {
     this.onBaseDestroyed?.(entity.spec);
   }

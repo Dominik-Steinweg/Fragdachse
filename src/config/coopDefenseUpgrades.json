@@ -2354,56 +2354,14 @@
             "itemId": "ENERGY_SHIELD"
           }
         },
-        {
-          "id": "energy_shield_arc",
-          "code": "C-W11-1",
-          "label": "Upgrade Energie-Schild: Blockwinkel",
-          "description": "+10% Blockwinkel fuer den Energie-Schild je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 410,
-          "requires": [
-            {
-              "upgradeId": "unlock_energy_shield",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.ENERGY_SHIELD.blockArcDegrees",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
-          "id": "energy_shield_capacity",
-          "code": "C-W11-2",
-          "label": "Upgrade Energie-Schild: Schildstaerke",
-          "description": "+10% maximales Schild fuer den Energie-Schild je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 420,
-          "requires": [
-            {
-              "upgradeId": "unlock_energy_shield",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "weapon.ENERGY_SHIELD.buffMax",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
+        { "id": "energy_shield_dome", "code": "C-W11-C", "label": "Energie-Kuppel", "description": "Formt den Schild zu einer 360-Grad-Kuppel (Radius 96) um den Spieler. Spieler, Verbuendete und Basen innerhalb der Kuppel sind unverwundbar; abgewehrter Schaden laedt weiterhin den Schadensbonus.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 410, "requires": [{ "upgradeId": "unlock_energy_shield", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "energy_shield_dome_heal", "code": "C-W11-1", "label": "Upgrade Energie-Schild: Kuppel-Heilung", "description": "Heilt Spieler, Verbuendete und Basen in der Kuppel um 10 HP pro Sekunde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 412, "requires": [{ "upgradeId": "energy_shield_dome", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeHealPerSecond", "mode": "add_per_level", "value": 10 }] },
+        { "id": "energy_shield_mobility", "code": "C-W11-2", "label": "Upgrade Energie-Schild: Bewegungsfreiheit", "description": "Verringert die Bewegungsstrafe bei aktivem Schild je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 414, "requires": [{ "upgradeId": "energy_shield_dome", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.movementSlowFactor", "mode": "add_per_level", "value": 0.1 }] },
+        { "id": "energy_shield_overcharge", "code": "C-W11-3", "label": "Upgrade Energie-Schild: Ueberladung", "description": "+50% maximaler Schadensbonus je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 420, "requires": [{ "upgradeId": "unlock_energy_shield", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.buffMaxBonus", "mode": "add_per_level", "value": 0.5 }] },
+        { "id": "energy_shield_sustain", "code": "C-W11-4", "label": "Upgrade Energie-Schild: Anhaltende Ladung", "description": "+20% Verzoegerung bis zum Abbau und -20% Abbaugeschwindigkeit des Schadensbonus je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 422, "requires": [{ "upgradeId": "energy_shield_overcharge", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.buffDecayDelayMs", "mode": "add_percent_per_level", "value": 0.2 }, { "stat": "weapon.ENERGY_SHIELD.fire.buffDecayPerSecond", "mode": "add_percent_per_level", "value": -0.2 }] },
+        { "id": "energy_shield_efficiency", "code": "C-W11-5", "label": "Upgrade Energie-Schild: Effizienz", "description": "-10% Adrenalinverbrauch des Schilds je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 424, "requires": [{ "upgradeId": "energy_shield_sustain", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.adrenalineDrainPerSecond", "mode": "add_percent_per_level", "value": -0.1 }] },
+        { "id": "energy_shield_autonomous", "code": "C-W11-D", "label": "Autonome Kuppel", "description": "Die Kuppel wird per Rechtsklick an- und ausgeschaltet, statt gehalten zu werden. Waffe 1, Utility und Ultimate bleiben nutzbar. Der Adrenalinverbrauch bleibt bestehen; die Kuppel erlischt bei leerem Adrenalin oder in Zustaenden ohne Waffennutzung und startet nicht automatisch neu.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 430, "requires": [{ "upgradeId": "energy_shield_dome_heal", "minLevel": 3 }, { "upgradeId": "energy_shield_mobility", "minLevel": 3 }, { "upgradeId": "energy_shield_efficiency", "minLevel": 3 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeToggleEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "energy_shield_dome_size", "code": "C-W11-6", "label": "Upgrade Energie-Schild: Groessere Kuppel", "description": "+15% Kuppelradius je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 432, "requires": [{ "upgradeId": "energy_shield_autonomous", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeRadius", "mode": "add_percent_per_level", "value": 0.15 }] },
         { "id": "p90_bullet_storm", "code": "C-W1-C", "label": "Kugelhagel", "description": "Jeder Schuss feuert drei Projektile mit vollem Schaden bei -15, 0 und +15 Grad.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 150, "requires": [{ "upgradeId": "unlock_p90", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.pelletCount", "mode": "add_per_level", "value": 2 }] },
         { "id": "p90_homing_overdrive", "code": "C-W1-D", "label": "Zielsuchender Kugelhagel", "description": "Alle P90-Geschosse verfolgen Ziele, verursachen vierfachen Schaden und feuern mit einem Viertel der bisherigen Rate.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "p90_accuracy", "minLevel": 1 }, { "upgradeId": "p90_range", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homingEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.P90.damage", "mode": "add_percent_per_level", "value": 3 }, { "stat": "weapon.P90.cooldown", "mode": "add_percent_per_level", "value": 3 }] },
         { "id": "p90_homing_turn", "code": "C-W1-6", "label": "Upgrade P90: Homing-Wendigkeit", "description": "+25% maximale Wendung pro Schritt fuer zielsuchende P90-Geschosse je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "p90_homing_overdrive", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homing.maxTurnDegreesPerStep", "mode": "add_percent_per_level", "value": 0.25 }] },
@@ -2423,7 +2381,7 @@
         { "id": "awp_full_charge_time", "code": "C-W7-D1", "label": "Schnellladung", "description": "-15% Zeit bis zur vollen AWP-Schadensladung je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 327, "requires": [{ "upgradeId": "awp_destruction_corridor", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.durationMs", "mode": "add_percent_per_level", "value": -0.15 }] },
         { "id": "awp_full_charge_damage", "code": "C-W7-D2", "label": "Vernichtungsladung", "description": "+20% auf alle Schadenswerte voll aufgeladener AWP-Schuesse je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 328, "requires": [{ "upgradeId": "awp_destruction_corridor", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.fullChargeDamageBonus", "mode": "add_per_level", "value": 0.2 }] },
         { "id": "tesla_dome_high_voltage", "code": "C-W10-C", "label": "Hochspannung", "description": "Aktivhalten laedt bis zu drei Stufen; jede erhoeht Radius und Schaden um 10%, ohne Mehrverbrauch.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 405, "requires": [{ "upgradeId": "tesla_dome_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.TESLA_DOME.fire.chargeIntervalMs", "mode": "add_per_level", "value": 1000 }, { "stat": "weapon.TESLA_DOME.fire.maxChargeStacks", "mode": "add_per_level", "value": 3 }, { "stat": "weapon.TESLA_DOME.fire.radiusBonusPerCharge", "mode": "add_per_level", "value": 0.1 }, { "stat": "weapon.TESLA_DOME.fire.damageBonusPerCharge", "mode": "add_per_level", "value": 0.1 }] },
-        { "id": "energy_shield_reflector", "code": "C-W11-C", "label": "Reflektor", "description": "Geblockte Projektile werden einmalig mit 60% Schaden reflektiert.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 435, "requires": [{ "upgradeId": "energy_shield_capacity", "minLevel": 3 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.reflectionDamageFactor", "mode": "add_per_level", "value": 0.6 }] }
+        { "id": "energy_shield_dome_reflect", "code": "C-W11-C2", "label": "Reflexkuppel", "description": "Gegnerische Projektile prallen an der Kuppelgrenze nach aussen ab und behalten ihre Geschwindigkeit. Sie gelten danach als eigene Projektile und treffen Gegner; der Schadensbonus wird berechnet.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 435, "requires": [{ "upgradeId": "energy_shield_autonomous", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeReflectProjectiles", "mode": "add_per_level", "value": 1 }] }
       ]
     },
     {

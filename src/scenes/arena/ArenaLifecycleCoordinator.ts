@@ -25,6 +25,11 @@ import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
+import {
+  CoopDefenseAirstrikeDirector,
+  COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
+  isPointNearBaseRegion,
+} from '../../systems/CoopDefenseAirstrikeDirector';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
@@ -41,7 +46,7 @@ import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
-import { getCoopDefenseBases } from '../../arena/BaseRegistry';
+import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
@@ -1030,6 +1035,15 @@ export class ArenaLifecycleCoordinator {
       this.ctx.combatSystem.setResourceSystem(this.ctx.resourceSystem);
       this.ctx.combatSystem.setLoadoutManager(this.ctx.loadoutManager);
       this.ctx.combatSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
+      this.ctx.energyShieldSystem?.setCombatSystem(this.ctx.combatSystem);
+      this.ctx.energyShieldSystem?.setEnemyManager(this.ctx.enemyManager);
+      this.ctx.energyShieldSystem?.setBaseManager(this.ctx.baseManager);
+      this.ctx.energyShieldSystem?.setWeaponUsageBlockedChecker((playerId) => {
+        if (!this.ctx.combatSystem.isAlive(playerId)) return true;
+        if (this.ctx.burrowSystem?.isWeaponBlocked(playerId)) return true;
+        if (this.ctx.hostPhysics?.isDashBurst(playerId)) return true;
+        return false;
+      });
       this.ctx.combatSystem.setDecoySystem(this.ctx.decoySystem);
 
       this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
@@ -1081,6 +1095,26 @@ export class ArenaLifecycleCoordinator {
         this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);
         return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
       });
+      // Zombie-Luftangriffe: Auf Maps mit enemyAirstrikes bombardiert die Gegner-
+      // fraktion erst den Tutorial-Felsbereich und jagt danach zufällige Spieler.
+      this.ctx.coopDefenseAirstrikeDirector = coopDefenseMapConfig?.enemyAirstrikes
+        ? new CoopDefenseAirstrikeDirector({
+          scheduleStrike: (x, y, cfg) => {
+            this.ctx.airstrikeSystem?.scheduleStrike(COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, x, y, cfg);
+          },
+          getAlivePlayerPositions: () => this.ctx.playerManager.getAllPlayers()
+            .filter((player) => this.ctx.combatSystem.isAlive(player.id))
+            .map((player) => ({ x: player.sprite.x, y: player.sprite.y })),
+          isProtectedBasePoint: (x, y) => isPointNearBaseRegion(
+            x,
+            y,
+            coopDefenseBases.map((base) => getBaseWorldBounds(base.region)),
+          ),
+          playStrikeAudio: (x, y) => {
+            this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);
+          },
+        })
+        : null;
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.combatSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
       this.ctx.burrowSystem.setStinkCloudSystem(this.ctx.stinkCloudSystem);
@@ -1116,6 +1150,21 @@ export class ArenaLifecycleCoordinator {
               killerName:  'RB 54',
               killerColor: 0xcf573c,
               weapon:      'überfahren',
+              victimId,
+              victimName:  victimProfile.name,
+              victimColor: victimProfile.colorHex,
+            });
+          }
+          return;
+        }
+        if (killerId === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID) {
+          const victimProfile = bridge.getConnectedPlayers().find(p => p.id === victimId);
+          if (victimProfile) {
+            bridge.broadcastKillEvent({
+              killerId:    COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
+              killerName:  'Zombie-Bomber',
+              killerColor: 0xff9933,
+              weapon:      'Luftangriff',
               victimId,
               victimName:  victimProfile.name,
               victimColor: victimProfile.colorHex,
@@ -1326,6 +1375,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.armageddonSystem = null;
     this.ctx.airstrikeSystem?.clear();
     this.ctx.airstrikeSystem = null;
+    this.ctx.coopDefenseAirstrikeDirector = null;
 
     this.ctx.trainManager?.destroy();
     this.ctx.trainManager = null;

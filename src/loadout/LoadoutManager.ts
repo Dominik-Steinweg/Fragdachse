@@ -753,6 +753,14 @@ export class LoadoutManager {
       ? state.config.movementSlowFactor
       : 1;
 
+    // Energie-Schild/Kuppel verlangsamt, solange er aktiv ist – auch im Toggle-Modus ohne Halten.
+    if (this.energyShieldSystem?.isActive(playerId)) {
+      const shieldCfg = this.loadouts.get(playerId)?.weapon2.config;
+      if (shieldCfg?.fire.type === 'energy_shield') {
+        return ultimateMult * gaussSlowMult * (shieldCfg.fire as EnergyShieldWeaponFireConfig).movementSlowFactor;
+      }
+    }
+
     // holdSpeedFactor: Verlangsamung wenn Feuerknopf gehalten wird
     const held = this.heldFireSlots.get(playerId);
     if (held && Date.now() - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
@@ -1240,7 +1248,7 @@ export class LoadoutManager {
       return this.okResult;
     }
     if (weapon.config.fire.type === 'energy_shield') {
-      this.activateEnergyShieldWeapon(weapon, playerId, now, playerColor);
+      this.activateEnergyShieldWeapon(weapon, playerId, now, playerColor, params?.inputStarted === true);
       return this.okResult;
     }
 
@@ -1747,6 +1755,7 @@ export class LoadoutManager {
     playerId: string,
     now: number,
     playerColor: number,
+    pressed: boolean,
   ): void {
     if (!this.energyShieldSystem) return;
     if (this.resourceSystem.getAdrenaline(playerId) <= 0) {
@@ -1755,7 +1764,7 @@ export class LoadoutManager {
     }
 
     const cfg = weapon.config as WeaponConfig & { fire: EnergyShieldWeaponFireConfig };
-    this.energyShieldSystem.hostRefresh(playerId, now, cfg, cfg.projectileColor ?? playerColor);
+    this.energyShieldSystem.hostRefresh(playerId, now, cfg, cfg.projectileColor ?? playerColor, pressed);
   }
 
   private fireProjectileWeapon(

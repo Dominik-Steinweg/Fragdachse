@@ -8,11 +8,15 @@ import {
   destroyEmitter,
   ensureCanvasTexture,
   fillRadialGradientTexture,
+  mixColors,
 } from './EffectUtils';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 const TEX_SHIELD_GLOW     = '__energy_shield_glow';
 const TEX_SHIELD_PARTICLE = '__energy_shield_particle';
 const TEX_SHIELD_FLARE    = '__energy_shield_flare';
+const TEX_DOME_FIELD      = '__energy_dome_field';
+const DOME_TEX_SIZE       = 256;
 
 /** Brighter tint of a hex color, used for highlight accents. */
 function lightenColor(hex: number, t = 0.55): number {
@@ -52,6 +56,9 @@ interface ShieldVisual {
   lastBurstAt:       number;
   arcDegrees:        number;
   color:             number;
+  isDome:            boolean;
+  domeField:         Phaser.GameObjects.Image | null;
+  domeGlow:          GlowHandle | null;
 }
 
 const SHIELD_SMOOTH_TIME_MS = 46;
@@ -99,6 +106,56 @@ export class EnergyShieldRenderer {
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 16, 16);
     });
+
+    // Energie-Kuppel-Feld: zurückhaltende Innenfläche, die zur Schale hin heller wird,
+    // mit konzentrischen Ringen und radialen Speichen für einen elektrischen (nicht Seifenblasen-)Look.
+    ensureCanvasTexture(textures, TEX_DOME_FIELD, DOME_TEX_SIZE, DOME_TEX_SIZE, (ctx) => {
+      const c = DOME_TEX_SIZE / 2;
+      const r = c - 1;
+      ctx.clearRect(0, 0, DOME_TEX_SIZE, DOME_TEX_SIZE);
+      ctx.globalCompositeOperation = 'screen';
+
+      // Grundfüllung: fast transparente Mitte, heller Energiesaum kurz vor dem Rand.
+      const fill = ctx.createRadialGradient(c, c, 0, c, c, r);
+      fill.addColorStop(0,    'rgba(255,255,255,0.035)');
+      fill.addColorStop(0.55, 'rgba(255,255,255,0.06)');
+      fill.addColorStop(0.82, 'rgba(255,255,255,0.13)');
+      fill.addColorStop(0.94, 'rgba(255,255,255,0.42)');
+      fill.addColorStop(0.99, 'rgba(255,255,255,0.9)');
+      fill.addColorStop(1,    'rgba(255,255,255,0.0)');
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(c, c, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Konzentrische Energieringe.
+      for (let i = 1; i <= 3; i += 1) {
+        const rr = r * (0.44 + i * 0.16);
+        ctx.strokeStyle = `rgba(255,255,255,${(0.05 + i * 0.02).toFixed(3)})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(c, c, rr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Radiale Speichen – nach außen heller werdend (elektrisches Feld).
+      const spokes = 24;
+      for (let i = 0; i < spokes; i += 1) {
+        const a = (i / spokes) * Math.PI * 2;
+        const ex = c + Math.cos(a) * r;
+        const ey = c + Math.sin(a) * r;
+        const grad = ctx.createLinearGradient(c, c, ex, ey);
+        grad.addColorStop(0,    'rgba(255,255,255,0.0)');
+        grad.addColorStop(0.72, 'rgba(255,255,255,0.0)');
+        grad.addColorStop(1,    'rgba(255,255,255,0.14)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(c, c);
+        ctx.lineTo(c + Math.cos(a) * (r - 2), c + Math.sin(a) * (r - 2));
+        ctx.stroke();
+      }
+    });
   }
 
   syncVisuals(shields: SyncedEnergyShield[]): void {
@@ -106,18 +163,18 @@ export class EnergyShieldRenderer {
 
     for (const [ownerId, visual] of this.visuals) {
       if (activeIds.has(ownerId)) continue;
-      visual.halo.destroy();
-      visual.outerGlow.destroy();
-      visual.glow.destroy();
-      visual.core.destroy();
-      destroyEmitter(visual.rimEmitter);
-      destroyEmitter(visual.flowEmitter);
-      destroyEmitter(visual.sparkEmitter);
+      this.disposeVisual(visual);
       this.visuals.delete(ownerId);
     }
 
     for (const shield of shields) {
       let visual = this.visuals.get(shield.ownerId);
+      // Wechsel zwischen gerichtetem Schild und Kuppel → Visual neu aufbauen.
+      if (visual && visual.isDome !== shield.isDome) {
+        this.disposeVisual(visual);
+        this.visuals.delete(shield.ownerId);
+        visual = undefined;
+      }
       if (!visual) {
         visual = this.createVisual(shield);
         this.visuals.set(shield.ownerId, visual);
@@ -164,15 +221,23 @@ export class EnergyShieldRenderer {
 
   destroyAll(): void {
     for (const visual of this.visuals.values()) {
-      visual.halo.destroy();
-      visual.outerGlow.destroy();
-      visual.glow.destroy();
-      visual.core.destroy();
-      destroyEmitter(visual.rimEmitter);
-      destroyEmitter(visual.flowEmitter);
-      destroyEmitter(visual.sparkEmitter);
+      this.disposeVisual(visual);
     }
     this.visuals.clear();
+  }
+
+  private disposeVisual(visual: ShieldVisual): void {
+    visual.halo.destroy();
+    visual.outerGlow.destroy();
+    visual.glow.destroy();
+    visual.core.destroy();
+    destroyEmitter(visual.rimEmitter);
+    destroyEmitter(visual.flowEmitter);
+    destroyEmitter(visual.sparkEmitter);
+    if (visual.domeField) {
+      removeExternalFx(visual.domeField, visual.domeGlow);
+      visual.domeField.destroy();
+    }
   }
 
   private createVisual(shield: SyncedEnergyShield): ShieldVisual {
@@ -230,6 +295,18 @@ export class EnergyShieldRenderer {
       emitting:  false,
     }, DEPTH.FIRE + 0.25);
 
+    // Energie-Kuppel: gefülltes, additiv leuchtendes Energiefeld (Phaser-4 Glow-PostFX),
+    // leicht in Spielerfarbe getränkt – klar unterscheidbar von der irisierenden TimeBubble.
+    let domeField: Phaser.GameObjects.Image | null = null;
+    let domeGlow: GlowHandle | null = null;
+    if (shield.isDome) {
+      domeField = this.scene.add.image(shield.x, shield.y, TEX_DOME_FIELD)
+        .setDepth(DEPTH.FIRE + 0.20)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(shield.color);
+      domeGlow = addExternalGlow(domeField, mixColors(shield.color, 0xffffff, 0.5), 2.4, 0.12, false, 0.3, 12);
+    }
+
     return {
       halo, outerGlow, glow, core,
       rimEmitter, flowEmitter, sparkEmitter,
@@ -251,10 +328,17 @@ export class EnergyShieldRenderer {
       lastBurstAt:       -Infinity,
       arcDegrees:        shield.arcDegrees,
       color:             shield.color,
+      isDome:            shield.isDome,
+      domeField,
+      domeGlow,
     };
   }
 
   private redrawVisual(visual: ShieldVisual, now: number): void {
+    if (visual.isDome) {
+      this.redrawDome(visual, now);
+      return;
+    }
     const start  = visual.currentAngle - Phaser.Math.DegToRad(visual.arcDegrees) * 0.5;
     const end    = visual.currentAngle + Phaser.Math.DegToRad(visual.arcDegrees) * 0.5;
     const radius    = Math.max(4, visual.currentRadius);
@@ -396,6 +480,66 @@ export class EnergyShieldRenderer {
     visual.core.beginPath();
     visual.core.arc(visual.currentX, visual.currentY, innerRadius, start + 0.08, end - 0.08, false);
     visual.core.strokePath();
+  }
+
+  /** 360°-Energie-Kuppel: gefülltes Energiefeld + dünner heller Rand im Energie-Schild-Stil. */
+  private redrawDome(visual: ShieldVisual, now: number): void {
+    const radius = Math.max(6, visual.currentRadius);
+    const flash  = Phaser.Math.Clamp(visual.currentFlashAlpha, 0, 1);
+    const alpha  = Phaser.Math.Clamp(visual.currentAlpha, 0, 1);
+    const pulse  = 0.5 + 0.5 * Math.sin(now * 0.006);
+    const pulse2 = 0.5 + 0.5 * Math.sin(now * 0.011 + 1.3);
+    const lightColor = lightenColor(visual.color);
+    const cx = visual.currentX;
+    const cy = visual.currentY;
+
+    // Arc-spezifische Elemente für die Kuppel abschalten.
+    visual.flowEmitter.emitting  = false;
+    visual.rimEmitter.emitting   = false;
+    visual.sparkEmitter.emitting = false;
+    visual.halo.setAlpha(0);
+
+    // Energiefeld-Membran (leicht rotierend, in Spielerfarbe getränkt).
+    if (visual.domeField) {
+      const scale = (radius * 2) / DOME_TEX_SIZE;
+      visual.domeField
+        .setPosition(cx, cy)
+        .setScale(scale)
+        .setRotation(now * 0.00016)
+        .setTint(visual.color)
+        .setAlpha(Phaser.Math.Clamp(0.32 + alpha * 0.3 + pulse * 0.08 + flash * 0.4, 0, 1));
+    }
+    if (visual.domeGlow) {
+      visual.domeGlow.color = mixColors(visual.color, 0xffffff, 0.5);
+      visual.domeGlow.outerStrength = 1.6 + pulse * 0.5 + flash * 1.8;
+      visual.domeGlow.innerStrength = 0.08 + pulse2 * 0.05;
+    }
+
+    // Dünner, heller Rand (voller Kreis) im Stil des gerichteten Energie-Schilds.
+    visual.outerGlow.clear();
+    visual.outerGlow.lineStyle(6, visual.color, Math.max(0.06, alpha * 0.18 + flash * 0.22));
+    visual.outerGlow.strokeCircle(cx, cy, radius + 1);
+
+    visual.glow.clear();
+    visual.glow.lineStyle(3.5, visual.color, Math.max(0.24, alpha * 0.5 + pulse * 0.1 + flash * 0.4));
+    visual.glow.strokeCircle(cx, cy, radius);
+    visual.glow.lineStyle(1.8, lightColor, Math.max(0.16, alpha * 0.32 + pulse2 * 0.08 + flash * 0.3));
+    visual.glow.strokeCircle(cx, cy, radius - 1.5);
+
+    visual.core.clear();
+    visual.core.lineStyle(1.4, 0xffffff, Math.max(0.3, alpha * 0.6 + flash * 0.4));
+    visual.core.strokeCircle(cx, cy, radius);
+
+    // Rotierende helle Energieknoten am Rand.
+    const nodeCount = 6;
+    for (let i = 0; i < nodeCount; i += 1) {
+      const a = (i / nodeCount) * Math.PI * 2 + now * 0.0011;
+      const flick = 0.5 + 0.5 * Math.sin(now * 0.01 + i * 1.7);
+      const nx = cx + Math.cos(a) * radius;
+      const ny = cy + Math.sin(a) * radius;
+      visual.core.fillStyle(lightColor, (0.25 + flick * 0.4) * (0.5 + flash * 0.5));
+      visual.core.fillCircle(nx, ny, 1.4 + flick * 1.3);
+    }
   }
 
   private burstFlashParticles(visual: ShieldVisual): void {
