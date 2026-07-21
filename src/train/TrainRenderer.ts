@@ -248,8 +248,11 @@ export class TrainRenderer {
   /**
    * Berechnet die Y-Mitten aller Segmente aus Lokomotive-Y und Fahrtrichtung.
    * Spiegelt die Logik von TrainManager.segCenterYs(), aber ohne Phaser-Abhängigkeit.
+   *
+   * Index 0 ist die Lok, danach folgen die Waggons entgegen der Fahrtrichtung.
+   * Öffentlich, damit die Zugbeleuchtung dieselben Positionen nutzt wie die Grafik.
    */
-  private computeSegYs(locoY: number, dir: 1 | -1): number[] {
+  computeSegYs(locoY: number, dir: 1 | -1): number[] {
     const ys: number[] = [locoY];
     let prev  = locoY;
     let prevH = TRAIN.LOCO_HEIGHT;

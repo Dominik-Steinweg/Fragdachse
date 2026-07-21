@@ -6,9 +6,19 @@ import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   ARENA_WIDTH,
+  CELL_SIZE,
 } from '../config';
+import { EDGE_BOTTOM, EDGE_LEFT, EDGE_RIGHT, EDGE_TOP } from './lightShadowGeometry';
 
 const BUCKET_SIZE = 128;
+
+/**
+ * Verbund, zu dem ein Zell-Occluder gehört. Nur Zellen desselben Verbunds verschmelzen
+ * zu einem Block – Felsen und Basen sehen unterschiedlich aus und sollen an ihrer
+ * Berührungskante weiterhin eine Silhouette werfen.
+ */
+const GROUP_ROCK = 1;
+const GROUP_BASE = 2;
 
 export interface LightOccluderSources {
   /** Paralleles Array zu `layout.rocks` – `null`/inaktiv bedeutet zerstört. */
@@ -28,6 +38,8 @@ export interface LightOccluderSources {
 
 export type RectOccluderVisitor = (
   left: number, top: number, right: number, bottom: number,
+  /** Bitmaske der freiliegenden Kanten (siehe `EDGE_*` in `lightShadowGeometry`). */
+  exposedEdges: number,
 ) => void;
 
 export type CircleOccluderVisitor = (
@@ -50,7 +62,16 @@ export type CircleOccluderVisitor = (
 export class LightOccluderIndex {
   /** Rechteck-Occluder als flaches [l,t,r,b]. */
   private rectData = new Float64Array(0);
+  /** Freiliegende Kanten je Rechteck, parallel zu `rectData`. */
+  private rectExposedEdges = new Uint8Array(0);
+  /** Verbund je Rechteck, parallel zu `rectData`. */
+  private rectGroup = new Uint8Array(0);
   private rectCount = 0;
+
+  /** Zellbelegung des Arena-Grids: 0 = frei, sonst der Verbund der Zelle. */
+  private cellGroups = new Uint8Array(0);
+  private cellCols = 0;
+  private cellRows = 0;
   /** Kreis-Occluder als flaches [cx,cy,r]. */
   private circleData = new Float64Array(0);
   private circleCount = 0;
@@ -119,6 +140,7 @@ export class LightOccluderIndex {
               this.rectData[offset + 1],
               this.rectData[offset + 2],
               this.rectData[offset + 3],
+              this.rectExposedEdges[entry],
             );
           } else {
             const offset = (entry - this.rectCount) * 3;
@@ -137,6 +159,7 @@ export class LightOccluderIndex {
     this.dirty = false;
     this.builtBaseGeneration = this.sources.baseGeneration();
     this.collectOccluders();
+    this.buildExposedEdges();
     this.buildBuckets();
   }
 
@@ -152,18 +175,24 @@ export class LightOccluderIndex {
     for (const trunk of trunks) if (trunk.active) circleCount += 1;
 
     if (this.rectData.length < rectCount * 4) this.rectData = new Float64Array(rectCount * 4);
+    if (this.rectExposedEdges.length < rectCount) this.rectExposedEdges = new Uint8Array(rectCount);
+    if (this.rectGroup.length < rectCount) this.rectGroup = new Uint8Array(rectCount);
     if (this.circleData.length < circleCount * 3) this.circleData = new Float64Array(circleCount * 3);
     this.rectCount = rectCount;
     this.circleCount = circleCount;
 
-    let rectOffset = 0;
+    let rectIndex = 0;
     for (const rock of rocks) {
       if (!rock?.active) continue;
-      rectOffset = this.writeRect(rectOffset, rock);
+      this.rectGroup[rectIndex] = GROUP_ROCK;
+      this.writeRect(rectIndex, rock);
+      rectIndex += 1;
     }
     for (const cell of baseCells) {
       if (!cell.active) continue;
-      rectOffset = this.writeRect(rectOffset, cell);
+      this.rectGroup[rectIndex] = GROUP_BASE;
+      this.writeRect(rectIndex, cell);
+      rectIndex += 1;
     }
 
     let circleOffset = 0;
@@ -177,18 +206,71 @@ export class LightOccluderIndex {
   }
 
   private writeRect(
-    offset: number,
+    rectIndex: number,
     source: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle,
-  ): number {
+  ): void {
     // Beim ersten Aufruf legt Phaser das Rechteck an, danach wird es wiederbefüllt.
     const bounds = this.scratchBounds
       ? source.getBounds(this.scratchBounds)
       : (this.scratchBounds = source.getBounds());
+    const offset = rectIndex * 4;
     this.rectData[offset] = bounds.left;
     this.rectData[offset + 1] = bounds.top;
     this.rectData[offset + 2] = bounds.right;
     this.rectData[offset + 3] = bounds.bottom;
-    return offset + 4;
+  }
+
+  /**
+   * Bestimmt je Zell-Occluder, welche Kanten frei liegen.
+   *
+   * Felsen und Basiszellen sitzen exakt auf dem Arena-Grid und werden über das
+   * 47-Blob-Autotiling zu einem durchgehenden Block gezeichnet. Eine Kante zwischen zwei
+   * belegten Zellen desselben Verbunds existiert im fertigen Bild gar nicht und darf
+   * deshalb weder Schatten werfen noch den Lichtsaum unterbrechen – sonst zeichnete sich
+   * das Gitter als Treppenmuster in den Block.
+   */
+  private buildExposedEdges(): void {
+    this.cellCols = Math.max(1, Math.round(ARENA_WIDTH / CELL_SIZE));
+    this.cellRows = Math.max(1, Math.round(ARENA_HEIGHT / CELL_SIZE));
+    const cellTotal = this.cellCols * this.cellRows;
+    if (this.cellGroups.length < cellTotal) {
+      this.cellGroups = new Uint8Array(cellTotal);
+    } else {
+      this.cellGroups.fill(0, 0, cellTotal);
+    }
+
+    for (let rect = 0; rect < this.rectCount; rect += 1) {
+      const cell = this.cellIndexOf(rect);
+      if (cell >= 0) this.cellGroups[cell] = this.rectGroup[rect];
+    }
+
+    for (let rect = 0; rect < this.rectCount; rect += 1) {
+      const offset = rect * 4;
+      const gridX = Math.floor((this.rectData[offset] - ARENA_OFFSET_X) / CELL_SIZE + 0.5);
+      const gridY = Math.floor((this.rectData[offset + 1] - ARENA_OFFSET_Y) / CELL_SIZE + 0.5);
+      const group = this.rectGroup[rect];
+
+      let mask = 0;
+      if (this.cellGroupAt(gridX, gridY - 1) !== group) mask |= EDGE_TOP;
+      if (this.cellGroupAt(gridX, gridY + 1) !== group) mask |= EDGE_BOTTOM;
+      if (this.cellGroupAt(gridX - 1, gridY) !== group) mask |= EDGE_LEFT;
+      if (this.cellGroupAt(gridX + 1, gridY) !== group) mask |= EDGE_RIGHT;
+      this.rectExposedEdges[rect] = mask;
+    }
+  }
+
+  /** Grid-Index eines Rechtecks, oder -1 wenn es nicht auf einer Arena-Zelle sitzt. */
+  private cellIndexOf(rect: number): number {
+    const offset = rect * 4;
+    const gridX = Math.floor((this.rectData[offset] - ARENA_OFFSET_X) / CELL_SIZE + 0.5);
+    const gridY = Math.floor((this.rectData[offset + 1] - ARENA_OFFSET_Y) / CELL_SIZE + 0.5);
+    if (gridX < 0 || gridX >= this.cellCols || gridY < 0 || gridY >= this.cellRows) return -1;
+    return gridY * this.cellCols + gridX;
+  }
+
+  private cellGroupAt(gridX: number, gridY: number): number {
+    if (gridX < 0 || gridX >= this.cellCols || gridY < 0 || gridY >= this.cellRows) return 0;
+    return this.cellGroups[gridY * this.cellCols + gridX];
   }
 
   private buildBuckets(): void {

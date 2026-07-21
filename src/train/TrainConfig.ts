@@ -38,6 +38,16 @@ export const TRAIN = {
   /** Streifenhöhe in px für den Waggon-Geschwindigkeitseffekt */
   WAGON_STRIPE_H:  8,
 
+  // ── Beleuchtung (nur im Nachtprofil aktiv) ────────────────────────────────
+  /** Querversatz der beiden Frontscheinwerfer von der Gleismitte, wie beim Vorbild. */
+  HEADLIGHT_OFFSET_X: 18,
+  /** Längsversatz der Scheinwerfer vor die Lokmitte – knapp hinter der Nasenspitze. */
+  HEADLIGHT_OFFSET_Y: CELL_SIZE * 2 - 6,
+  /** Querversatz der Fensterlichter: an der Kante des Wagenkastens (Breite/2 = 32). */
+  WINDOW_LIGHT_OFFSET_X: 28,
+  /** Längsversatz der Fensterlichter zur Waggonmitte; die Enden bleiben dunkel. */
+  WINDOW_LIGHT_OFFSETS_Y: [-78, 0, 78],
+
   /**
    * Pseudo-Attacker-ID für Zug-Instakills.
    * Verhindert, dass ein echter Spieler einen Frag bekommt.

@@ -15,6 +15,7 @@ import {
   MAX_OCCLUDING_LIGHTS_PER_FRAME,
   MAX_OCCLUDING_LIGHT_RADIUS,
   OCCLUDER_SCRATCH_SIZE,
+  OCCLUDER_SHADE_FALLOFF_PX,
   SHADOW_EXTEND_FACTOR,
   resolvePresetOverride,
   type LightPreset,
@@ -115,6 +116,7 @@ export class LightingSystem {
 
   private occluders: LightOccluderIndex | null = null;
   private readonly shadowQuads = new ShadowQuadBuffer();
+  private readonly falloffQuads = new ShadowQuadBuffer();
   private readonly coneTextureKeys = new Map<number, string>();
 
   private enabled = false;
@@ -150,8 +152,9 @@ export class LightingSystem {
     return this.profileId;
   }
 
-  isFlashlightEnabled(): boolean {
-    return this.enabled && this.profile.flashlightEnabled;
+  /** Taschenlampen und Zugscheinwerfer gibt es nur im Nachtprofil. */
+  areNightLightsEnabled(): boolean {
+    return this.enabled && this.profile.nightLightsEnabled;
   }
 
   toggleProfile(): LightProfileId {
@@ -161,6 +164,55 @@ export class LightingSystem {
 
   getLastUpdateCostMs(): number {
     return this.lastCostMs;
+  }
+
+  /**
+   * Tint für eine Baumkrone an dieser Weltposition.
+   *
+   * Kronen liegen über dem Lightmap-Overlay, damit der Schatten ihres eigenen Stamms
+   * nicht auf ihnen landet. Damit sie trotzdem auf Licht reagieren, bekommen sie einen
+   * eigenen Tint: unbeleuchtet auf Umgebungsniveau wie der Boden, unter Licht nur um
+   * `canopyLightFactor` gedämpft heller. Das nähert die Höhe der Krone über den
+   * bodennahen Lichtquellen an, ohne eine zweite Lightmap zu brauchen.
+   *
+   * Verdeckung wird bewusst ignoriert: eine Krone liegt über Felsen und Stämmen.
+   */
+  resolveCanopyTint(x: number, y: number): number {
+    const factor = this.profile.canopyLightFactor;
+    if (!this.enabled || factor <= 0) return 0xffffff;
+
+    const lit = Phaser.Math.Clamp(this.sampleLightAmount(x, y) * factor, 0, 1);
+    return mixChannels(this.profile.ambientColor, 0xffffff, lit);
+  }
+
+  /**
+   * Summierte Lichtmenge an einer Weltposition (0…1), ohne Verdeckung.
+   * Bildet die Abstandskurve der Lichttexturen nach: (1 - d/r)².
+   */
+  private sampleLightAmount(x: number, y: number): number {
+    let total = 0;
+    for (const light of this.lights) {
+      if (light.effectiveIntensity <= 0) continue;
+      const dx = x - light.x;
+      const dy = y - light.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance >= light.radiusPx) continue;
+
+      let contribution = (1 - distance / light.radiusPx) ** 2 * light.effectiveIntensity;
+      if (light.shape === 'cone' && distance > 0.0001) {
+        const halfAngle = light.coneAngle * 0.5;
+        const delta = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(dy, dx) - light.angle));
+        if (delta >= halfAngle) continue;
+        // Gleicher weicher Rand wie in der Kegeltextur.
+        const edgeStart = halfAngle * 0.7;
+        if (delta > edgeStart) {
+          contribution *= 1 - (delta - edgeStart) / (halfAngle - edgeStart);
+        }
+      }
+      total += contribution;
+      if (total >= 1) return 1;
+    }
+    return total;
   }
 
   /** Gibt alle Lichter frei, ohne die Texturen zu zerstören. */
@@ -464,7 +516,18 @@ export class LightingSystem {
     this.lightMap?.draw([slot.image]);
   }
 
-  /** Zeichnet die Schattenpolygone einer Lichtquelle in Scratch-Koordinaten. */
+  /**
+   * Zeichnet die Schattenpolygone einer Lichtquelle in Scratch-Koordinaten.
+   *
+   * Zwei aneinandergrenzende, überschneidungsfreie Zonen ab der beleuchteten Außenkante
+   * des Blocks:
+   *   0 … falloff  – weicher Verlauf, Alpha 0 an der Kante bis 1 am Ende (Gouraud)
+   *   falloff … ∞  – Vollschatten (Oberseite dahinter und Boden hinter dem Hindernis)
+   *
+   * Die seitlichen Ränder beider Zonen liegen auf denselben Silhouettenstrahlen, weil
+   * das Zurücksetzen entlang des Lichtstrahls den Strahl nicht verlässt. Der Schatten
+   * beginnt also exakt an der Hinderniskante und ist nicht versetzt.
+   */
   private buildShadowGraphics(
     light: ActiveLight,
     graphics: Phaser.GameObjects.Graphics,
@@ -474,25 +537,40 @@ export class LightingSystem {
     const index = this.occluders;
     if (!index) return;
 
-    const quads = this.shadowQuads;
-    quads.reset();
+    const core = this.shadowQuads;
+    const falloff = this.falloffQuads;
+    core.reset();
+    falloff.reset();
     const extendPx = light.radiusPx * SHADOW_EXTEND_FACTOR;
+    const falloffPx = OCCLUDER_SHADE_FALLOFF_PX;
 
     index.queryCircle(
       light.x,
       light.y,
       light.radiusPx,
-      (left, top, right, bottom) => {
-        projectRectShadowQuads(quads, light.x, light.y, left, top, right, bottom, extendPx);
+      (left, top, right, bottom, exposedEdges) => {
+        projectRectShadowQuads(falloff, light.x, light.y, left, top, right, bottom, 0, falloffPx, exposedEdges);
+        projectRectShadowQuads(core, light.x, light.y, left, top, right, bottom, falloffPx, extendPx, exposedEdges);
       },
       (centerX, centerY, radius) => {
-        projectCircleShadowQuad(quads, light.x, light.y, centerX, centerY, radius, extendPx);
+        projectCircleShadowQuad(falloff, light.x, light.y, centerX, centerY, radius, 0, falloffPx);
+        projectCircleShadowQuad(core, light.x, light.y, centerX, centerY, radius, falloffPx, extendPx);
       },
     );
 
-    if (quads.length === 0) return;
+    if (core.length === 0 && falloff.length === 0) return;
 
     graphics.fillStyle(0xffffff, 1);
+    this.fillShadowQuads(graphics, core, light, center);
+    this.fillFalloffQuads(graphics, falloff, light, center);
+  }
+
+  private fillShadowQuads(
+    graphics: Phaser.GameObjects.Graphics,
+    quads: ShadowQuadBuffer,
+    light: ActiveLight,
+    center: number,
+  ): void {
     const data = quads.data;
     for (let quad = 0; quad < quads.length; quad += 1) {
       const offset = quad * SHADOW_QUAD_STRIDE;
@@ -509,6 +587,38 @@ export class LightingSystem {
       }
       graphics.closePath();
       graphics.fillPath();
+    }
+  }
+
+  /**
+   * Zeichnet den Übergangsstreifen als zwei Gouraud-Dreiecke. Die beiden Ecken an der
+   * beleuchteten Kante bekommen Alpha 0, die beiden am Ende des Streifens Alpha 1 –
+   * `FillTri` interpoliert dazwischen pro Fragment, der Verlauf ist damit stufenlos.
+   */
+  private fillFalloffQuads(
+    graphics: Phaser.GameObjects.Graphics,
+    quads: ShadowQuadBuffer,
+    light: ActiveLight,
+    center: number,
+  ): void {
+    const data = quads.data;
+    for (let quad = 0; quad < quads.length; quad += 1) {
+      const offset = quad * SHADOW_QUAD_STRIDE;
+      // Punktreihenfolge aus pushProjectedEdge: 0/1 an der Kante, 2/3 am Streifenende.
+      const x0 = (data[offset] - light.x) * LIGHTMAP_SCALE + center;
+      const y0 = (data[offset + 1] - light.y) * LIGHTMAP_SCALE + center;
+      const x1 = (data[offset + 2] - light.x) * LIGHTMAP_SCALE + center;
+      const y1 = (data[offset + 3] - light.y) * LIGHTMAP_SCALE + center;
+      const x2 = (data[offset + 4] - light.x) * LIGHTMAP_SCALE + center;
+      const y2 = (data[offset + 5] - light.y) * LIGHTMAP_SCALE + center;
+      const x3 = (data[offset + 6] - light.x) * LIGHTMAP_SCALE + center;
+      const y3 = (data[offset + 7] - light.y) * LIGHTMAP_SCALE + center;
+
+      // Alpha-Zuordnung von fillGradientStyle auf fillTriangle: TL→Ecke A, TR→B, BL→C.
+      graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0, 0, 1, 1);
+      graphics.fillTriangle(x0, y0, x1, y1, x2, y2);
+      graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0, 1, 1, 1);
+      graphics.fillTriangle(x0, y0, x2, y2, x3, y3);
     }
   }
 
@@ -639,6 +749,14 @@ function compareLightImportance(left: ActiveLight, right: ActiveLight): number {
   if (left.occludes !== right.occludes) return left.occludes ? -1 : 1;
   if (left.priority !== right.priority) return right.priority - left.priority;
   return right.effectiveIntensity - left.effectiveIntensity;
+}
+
+/** Kanalweise Mischung zweier Farben; `amount` 0 liefert `from`, 1 liefert `to`. */
+function mixChannels(from: number, to: number, amount: number): number {
+  const red = Math.round((from >> 16 & 0xff) + ((to >> 16 & 0xff) - (from >> 16 & 0xff)) * amount);
+  const green = Math.round((from >> 8 & 0xff) + ((to >> 8 & 0xff) - (from >> 8 & 0xff)) * amount);
+  const blue = Math.round((from & 0xff) + ((to & 0xff) - (from & 0xff)) * amount);
+  return (red << 16) | (green << 8) | blue;
 }
 
 /** Stabile Flackerphase pro Licht-Key, damit benachbarte Feuer nicht im Takt pulsen. */

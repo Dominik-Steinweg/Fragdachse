@@ -6,6 +6,7 @@ import {
   CANOPY_RADIUS,
   CELL_SIZE,
   DEPTH,
+  DEPTH_LIGHTING,
   PLAYER_SIZE,
   TRUNK_RADIUS,
 } from '../config';
@@ -96,7 +97,9 @@ export const SHADOW_CASTERS = {
   },
   canopy: {
     enabled: true,
-    layerDepth: DEPTH.CANOPY - 0.2,
+    // Knapp unter dem Lightmap-Overlay: der Kronenschatten gehört zur Grundszene und
+    // soll von dynamischem Licht aufgehellt werden können, nicht darüber liegen.
+    layerDepth: DEPTH_LIGHTING - 0.1,
     airborneHeightPx: 20,
     castHeightPx: 10,
     opacity: 0.78,

@@ -63,7 +63,8 @@ import {
 } from '../utils/coopDefenseUpgrades';
 import type { CoopDefenseUpgradeProfile } from '../types';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
-import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
+import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import { TRAIN } from '../train/TrainConfig';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
@@ -109,6 +110,20 @@ function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): numbe
   }
 }
 
+/** Eine feste Lampe am Zug, relativ zur Mitte ihres Segments. */
+interface TrainLamp {
+  readonly key: string;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  /** Index in `TrainRenderer.computeSegYs()`: 0 = Lok, danach die Waggons. */
+  readonly segment: number;
+}
+
+interface TrainLightPlan {
+  readonly headlights: readonly TrainLamp[];
+  readonly windows: readonly TrainLamp[];
+}
+
 export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
@@ -128,6 +143,10 @@ export class ArenaScene extends Phaser.Scene {
   private renderers!: RendererBundle;
   private localPlayerState!: LocalPlayerState;
   private rockVisualHelper!: RockVisualHelper;
+  /** Links/rechts am Zug – als Konstante, damit die Licht-Keys stabil bleiben. */
+  private static readonly TRAIN_LIGHT_SIDES = [-1, 1] as const;
+  private trainLightPlan: TrainLightPlan | null = null;
+  private trainLightsActive = false;
   private placementPreview!: PlacementPreviewRenderer;
   private tunnelRenderer!: TunnelRenderer;
   private gaussWarning!: GaussWarningRenderer;
@@ -865,7 +884,11 @@ export class ArenaScene extends Phaser.Scene {
 
       if (this.ctx.arenaResult) {
         const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite ?? null;
-        ArenaBuilder.updateCanopyTransparency(this.ctx.arenaResult.canopyObjects, localSprite);
+        ArenaBuilder.updateCanopyTransparency(
+          this.ctx.arenaResult.canopyObjects,
+          localSprite,
+          (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
+        );
       }
     }
 
@@ -1361,45 +1384,60 @@ export class ArenaScene extends Phaser.Scene {
     return this.cameras.main.getWorldPoint(pointer.x, pointer.y);
   }
 
+  /**
+   * Aktueller Zugzustand für Schatten und Licht. Bevorzugt den interpolierten Stand des
+   * Renderers, damit beide nicht am Netz-Tick kleben.
+   */
+  private resolveTrainState(): SyncedTrainState | null {
+    return this.renderers.train?.getShadowState()
+      ?? (bridge.isHost()
+        ? (this.ctx.trainManager?.getNetSnapshot() ?? null)
+        : (bridge.getLatestGameState()?.train ?? null));
+  }
+
   private syncWorldShadows(inArena: boolean): void {
     if (!inArena || !this.ctx.currentLayout || !this.ctx.arenaResult) {
       this.renderers.shadow.clear();
       return;
     }
 
-    const trainState = this.renderers.train?.getShadowState()
-      ?? (bridge.isHost()
-        ? (this.ctx.trainManager?.getNetSnapshot() ?? null)
-        : (bridge.getLatestGameState()?.train ?? null));
-
     this.renderers.shadow.syncDynamicShadows(
       this.ctx.playerManager.getAllPlayers(),
       this.ctx.projectileManager.getShadowSamples(),
-      trainState,
+      this.resolveTrainState(),
     );
   }
 
   /**
    * Dynamische Beleuchtung. Die Lichtquellen selbst melden sich in ihren eigenen
-   * Renderern an (Mündungsfeuer, Explosionen, Feuer); hier wird nur die
-   * spielergebundene Taschenlampe nachgeführt und die Lightmap komponiert.
+   * Renderern an (Mündungsfeuer, Explosionen, Feuer); hier hängen nur die Lichter, die
+   * an einem bewegten Träger sitzen – Taschenlampen und Zugscheinwerfer – sowie die
+   * Komposition der Lightmap.
    */
   private syncWorldLighting(inArena: boolean): void {
     const lighting = this.renderers.lighting;
+    const nightLights = inArena && lighting.areNightLightsEnabled();
 
-    if (inArena && lighting.isFlashlightEnabled()) {
+    this.syncTrainLights(nightLights);
+
+    if (nightLights) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         const key = `flashlight:${player.id}`;
         const sprite = player.sprite;
         const burrowPhase = player.getBurrowPhase();
-        // Dieselben Sichtbarkeitsbedingungen wie beim dynamischen Schatten: wer nicht
-        // sichtbar auf dem Feld steht, leuchtet auch nicht.
+        // Exakt dieselben Sichtbarkeitsbedingungen wie beim dynamischen Schatten: wer
+        // nicht sichtbar auf dem Feld steht, leuchtet auch nicht.
+        //
+        // Bewusst kein `combatSystem.isAlive()`: dessen Zustand entsteht in
+        // `initPlayer()` und das läuft nur auf dem Host, auf Clients wäre also jeder
+        // Spieler tot und keine Taschenlampe sichtbar. Der Lebendzustand steckt ohnehin
+        // schon in `sprite.visible` – beide Seiten setzen ihn beim Tod (siehe
+        // HostUpdateCoordinator und ClientUpdateCoordinator).
         const visible = sprite.active
           && sprite.visible
           && !player.isDecoyStealthedVisual()
           && burrowPhase !== 'underground'
-          && burrowPhase !== 'trapped'
-          && this.ctx.combatSystem.isAlive(player.id);
+          && burrowPhase !== 'trapped';
 
         const spillKey = `flashlightspill:${player.id}`;
         if (!visible) {
@@ -1416,6 +1454,86 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     lighting.update();
+  }
+
+  /**
+   * Zugbeleuchtung: zwei Frontscheinwerfer an der Lok, dazu Fensterlichter an beiden
+   * Seiten jedes Waggons.
+   *
+   * Der Zug fährt entlang Y: `dir = 1` bedeutet nach Süden, `dir = -1` nach Norden
+   * (`TrainManager` addiert `direction * SPEED` auf `locoY`). Die Lok ist dabei immer
+   * das führende Segment, die Nase liegt also eine halbe Loklänge in Fahrtrichtung vor
+   * ihrem Mittelpunkt. Die Segmentmitten kommen aus `TrainRenderer.computeSegYs()` –
+   * dieselbe Rechnung, aus der auch die Zuggrafik entsteht.
+   */
+  private syncTrainLights(nightLights: boolean): void {
+    const lighting = this.renderers.lighting;
+    const trainRenderer = this.renderers.train;
+    const train = nightLights ? this.resolveTrainState() : null;
+
+    if (!train?.alive || !trainRenderer) {
+      if (this.trainLightsActive) {
+        const plan = this.getTrainLightPlan();
+        for (const lamp of plan.headlights) lighting.releaseLight(lamp.key);
+        for (const lamp of plan.windows) lighting.releaseLight(lamp.key);
+        this.trainLightsActive = false;
+      }
+      return;
+    }
+
+    const segmentYs = trainRenderer.computeSegYs(train.y, train.dir);
+    const beamAngle = train.dir === 1 ? Math.PI / 2 : -Math.PI / 2;
+    const noseY = segmentYs[0] + train.dir * TRAIN.HEADLIGHT_OFFSET_Y;
+    const plan = this.getTrainLightPlan();
+
+    for (const lamp of plan.headlights) {
+      lighting.setLight(lamp.key, 'trainHeadlight', train.x + lamp.offsetX, noseY, { angle: beamAngle });
+    }
+    for (const lamp of plan.windows) {
+      // Waggons hinter dem sichtbaren Bereich fallen in `LightingSystem` durch das
+      // Screen-Culling; hier bleibt es bei einem Upsert ohne Allokation.
+      lighting.setLight(
+        lamp.key,
+        'trainWindow',
+        train.x + lamp.offsetX,
+        segmentYs[lamp.segment] + lamp.offsetY,
+      );
+    }
+
+    this.trainLightsActive = true;
+  }
+
+  /**
+   * Feste Lampenanordnung des Zugs, einmalig aufgebaut. Die Menge ist konstant, die
+   * Keys dürfen deshalb nicht pro Frame neu zusammengesetzt werden.
+   */
+  private getTrainLightPlan(): TrainLightPlan {
+    if (this.trainLightPlan) return this.trainLightPlan;
+
+    const headlights: TrainLamp[] = [];
+    const windows: TrainLamp[] = [];
+
+    for (const side of ArenaScene.TRAIN_LIGHT_SIDES) {
+      headlights.push({
+        key: `trainheadlight:${side}`,
+        offsetX: side * TRAIN.HEADLIGHT_OFFSET_X,
+        offsetY: 0,
+        segment: 0,
+      });
+      for (let wagon = 1; wagon <= TRAIN.WAGON_COUNT; wagon += 1) {
+        for (let slot = 0; slot < TRAIN.WINDOW_LIGHT_OFFSETS_Y.length; slot += 1) {
+          windows.push({
+            key: `trainwindow:${wagon}:${side}:${slot}`,
+            offsetX: side * TRAIN.WINDOW_LIGHT_OFFSET_X,
+            offsetY: TRAIN.WINDOW_LIGHT_OFFSETS_Y[slot],
+            segment: wagon,
+          });
+        }
+      }
+    }
+
+    this.trainLightPlan = { headlights, windows };
+    return this.trainLightPlan;
   }
 
   private describeSceneObjectBreakdown(): string {

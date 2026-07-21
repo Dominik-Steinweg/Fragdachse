@@ -156,8 +156,8 @@ export class MuzzleFlashRenderer {
     // ein Schlagschatten überhaupt lesbar wäre.
     this.lighting?.pulse('muzzleFlash', x, y, {
       color: color ?? cfg.tint,
-      radiusPx: 110 * (0.75 + cfg.scaleX * 0.35),
-      intensity: Phaser.Math.Clamp(cfg.alpha * 0.8, 0.18, 0.85),
+      radiusPx: 170 * (0.8 + cfg.scaleX * 0.4),
+      intensity: Phaser.Math.Clamp(cfg.alpha * 1.35, 0.45, 1),
     });
 
     // x, y is already the muzzle origin – callers compute it before passing here

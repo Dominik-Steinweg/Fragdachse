@@ -19,8 +19,18 @@ export interface LightProfile {
   readonly compositeBlendMode: number;
   /** Skaliert alle Lichtintensitäten des Profils (Feinabstimmung Tag/Nacht). */
   readonly lightIntensityMult: number;
-  /** Taschenlampen gibt es nur dort, wo sie gebraucht werden. */
-  readonly flashlightEnabled: boolean;
+  /**
+   * Künstliche Lichter, die man nur nachts einschaltet: Taschenlampen der Spieler und
+   * der Scheinwerfer des Zugs. Am Tag existieren sie gar nicht.
+   */
+  readonly nightLightsEnabled: boolean;
+  /**
+   * Baumkronen liegen über dem Lightmap-Overlay und werden einzeln eingefärbt. Dieser
+   * Faktor dämpft, wie stark Lichtquellen sie erreichen – eine einfache Näherung dafür,
+   * dass die Krone deutlich höher liegt als die bodennahen Lichtquellen. 0 = die Krone
+   * bleibt immer auf Umgebungsniveau, 1 = so hell wie der Boden.
+   */
+  readonly canopyLightFactor: number;
 }
 
 export const LIGHTING_PROFILES: Readonly<Record<LightProfileId, LightProfile>> = {
@@ -28,7 +38,10 @@ export const LIGHTING_PROFILES: Readonly<Record<LightProfileId, LightProfile>> =
     ambientColor: 0x000000,
     compositeBlendMode: Phaser.BlendModes.ADD,
     lightIntensityMult: 1,
-    flashlightEnabled: false,
+    nightLightsEnabled: false,
+    // Am Tag additiv komponiert: eine Krone kann über einen Tint nicht heller als ihre
+    // eigene Textur werden, deshalb bleibt sie hier unverändert.
+    canopyLightFactor: 0,
   },
   night: {
     // ~11 % Helligkeit mit kaltem Blaustich: ohne Lichtquelle sieht man praktisch nichts,
@@ -36,7 +49,8 @@ export const LIGHTING_PROFILES: Readonly<Record<LightProfileId, LightProfile>> =
     ambientColor: 0x161a24,
     compositeBlendMode: Phaser.BlendModes.MULTIPLY,
     lightIntensityMult: 1,
-    flashlightEnabled: true,
+    nightLightsEnabled: true,
+    canopyLightFactor: 0.45,
   },
 };
 
@@ -52,10 +66,32 @@ export const OCCLUDER_SCRATCH_SIZE = 512;
 export const MAX_OCCLUDING_LIGHT_RADIUS = (OCCLUDER_SCRATCH_SIZE / LIGHTMAP_SCALE) * 0.5;
 
 export const MAX_LIGHTS_PER_FRAME = 48;
-export const MAX_OCCLUDING_LIGHTS_PER_FRAME = 4;
+/**
+ * Jeder Slot kostet eine eigene Scratch-Textur und einen Renderpass. Sechs reichen für
+ * vier Spielertaschenlampen plus die beiden Zugscheinwerfer; darüber hinaus fallen
+ * Lichter weich auf den verdeckungsfreien Pfad zurück.
+ */
+export const MAX_OCCLUDING_LIGHTS_PER_FRAME = 6;
 
 /** Schattenpolygone werden über den Lichtradius hinaus verlängert und dann geclippt. */
 export const SHADOW_EXTEND_FACTOR = 2.2;
+
+/**
+ * Länge des weichen Helligkeitsabfalls auf der Oberseite eines Hindernisses.
+ *
+ * Der Abfall beginnt exakt an der beleuchteten Außenkante des Blocks – die äußersten
+ * Pixel bleiben voll hell, danach läuft die Helligkeit über diese Strecke stufenlos in
+ * den Schatten. Der Verlauf entsteht aus Gouraud-Dreiecken mit Alpha pro Ecke, also
+ * hardware-interpoliert und ohne sichtbare Stufen.
+ *
+ * Wichtig: der Schatten selbst wird dadurch nicht versetzt. Der Verlauf sitzt zwischen
+ * Kante und Vollschatten; die seitlichen Silhouettenstrahlen bleiben unverändert, weil
+ * das Zurücksetzen entlang des Lichtstrahls auf demselben Strahl bleibt.
+ *
+ * Gemessen ab der Außenkante des zusammenhängenden Blocks, nicht ab der Gitterzelle:
+ * `LightOccluderIndex` liefert dafür die freiliegenden Kanten mit.
+ */
+export const OCCLUDER_SHADE_FALLOFF_PX = 14;
 
 export interface LightPresetOverride {
   readonly intensityMult?: number;
@@ -92,11 +128,13 @@ export const LIGHT_PRESETS = {
   muzzleFlash: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 110,
+    radiusPx: 180,
     color: 0xffe0a8,
-    intensity: 0.55,
-    durationMs: 70,
-    decayExponent: 2,
+    intensity: 0.9,
+    // Etwas länger und mit flacherem Abklingen als ein reiner Ein-Frame-Blitz, sonst
+    // ist der Impuls bei 60 fps kaum als Licht zu erkennen.
+    durationMs: 130,
+    decayExponent: 1.5,
     occludes: false,
     priority: 2,
     flickerAmount: 0,
@@ -148,6 +186,47 @@ export const LIGHT_PRESETS = {
     decayExponent: 1,
     occludes: false,
     priority: 7,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
+  /**
+   * Scheinwerfer an der Front der Lokomotive, strahlt in Fahrtrichtung. Die Lok trägt
+   * zwei davon, links und rechts wie beim Vorbild; jeder ist deshalb schmaler als ein
+   * einzelner Strahl es wäre. Wie die Taschenlampe nur im Nachtprofil aktiv, und mit
+   * Verdeckung, weil der Strahl über die halbe Arena läuft und ohne Felsschatten
+   * unglaubwürdig wirkt.
+   */
+  trainHeadlight: {
+    enabled: true,
+    shape: 'cone',
+    radiusPx: 460,
+    color: 0xfff0c8,
+    intensity: 0.92,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: true,
+    // Unter der Taschenlampe: die eigenen Strahlen der Spieler sollen die knappen
+    // Verdeckungs-Slots zuerst bekommen.
+    priority: 7,
+    flickerAmount: 0,
+    flickerHz: 0,
+    coneAngle: Math.PI * 0.15,
+  },
+  /**
+   * Fensterlicht an der Seite eines Waggons: klein, ungerichtet, warm. Bewusst ohne
+   * Verdeckung – bei diesem Radius wäre ein eigener Renderpass reine Verschwendung, und
+   * es sind viele davon.
+   */
+  trainWindow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 78,
+    color: 0xffd9a0,
+    intensity: 0.42,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 4,
     flickerAmount: 0,
     flickerHz: 0,
   },
@@ -211,19 +290,32 @@ export const LIGHT_PRESETS = {
     flickerHz: 0,
     day: { intensityMult: 0.4 },
   },
+  /**
+   * Brennendes Projektil: kleiner Radius, dafür ein heller Kern.
+   *
+   * Die Farbe ist bewusst weit weniger gesättigt als die Flammenpartikel selbst. Unter
+   * dem MULTIPLY-Composite der Nacht bestimmt der *schwächste* Kanal, wie hell der Boden
+   * werden kann – ein sattes Orange wie 0xff5f1e (normalisiert 1.00/0.37/0.12) lässt
+   * Grün und Blau unten und liest sich deshalb selbst bei voller Intensität nur als
+   * rötlicher Schleier, nicht als Licht. Die heiße Kernfarbe hebt alle drei Kanäle an.
+   */
   projectileBurn: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 85,
-    color: 0xff5f1e,
-    intensity: 0.55,
+    radiusPx: 112,
+    color: 0xffb060,
+    intensity: 1,
     durationMs: 0,
     decayExponent: 1,
     occludes: false,
-    priority: 3,
-    flickerAmount: 0.2,
-    flickerHz: 10,
-    day: { intensityMult: 0.35 },
+    // Über den dekorativen Zugfenstern: ein brennendes Projektil zeigt an, wo etwas
+    // Gefährliches unterwegs ist, und darf nicht als Erstes aus dem Budget fallen.
+    priority: 6,
+    // Nur noch leichtes Flackern: bei Intensität 1 wird der Ausschlag nach oben ohnehin
+    // abgeschnitten, ein starkes Flackern würde das Licht im Mittel nur dunkler machen.
+    flickerAmount: 0.12,
+    flickerHz: 11,
+    day: { intensityMult: 0.45 },
   },
   flameProjectile: {
     enabled: true,

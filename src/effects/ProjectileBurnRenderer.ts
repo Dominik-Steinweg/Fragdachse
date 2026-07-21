@@ -158,9 +158,10 @@ export class ProjectileBurnRenderer {
       .setAlpha(0.66 + pulse * 0.18);
 
     // Dauerlicht am selben Lebenszyklus wie das Glow-Visual: erzeugt in `sync()`,
-    // freigegeben in `destroyVisual()`.
+    // freigegeben in `destroyVisual()`. Der Radius bleibt eng – die Helligkeit kommt
+    // aus Intensität und Kernfarbe des Presets, nicht aus der Reichweite.
     this.lighting?.setLight(`projburn:${id}`, 'projectileBurn', x, y, {
-      radiusPx: 55 + size * 2.6,
+      radiusPx: 45 + size * 2.4,
     });
   }
 

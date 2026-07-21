@@ -346,12 +346,15 @@ export const DEPTH_TRACE = 16;
 export const DEPTH_FX = 25;
 
 /**
- * Lightmap-Overlay der dynamischen Beleuchtung: über Boden, Felsen, Spielern und
- * Baumkronen (`DEPTH.CANOPY` = 20), aber unter den Sidebars (`DEPTH.LOCAL_UI - 1` = 21)
- * und unter `DEPTH_FX` – Explosions- und Feuer-Visuals sind emissiv und sollen auch
- * nachts ungedimmt bleiben.
+ * Lightmap-Overlay der dynamischen Beleuchtung: über Boden, Felsen, Baumstämmen und
+ * Spielern, aber **unter** den Baumkronen (`DEPTH.CANOPY` = 20) und unter `DEPTH_FX` –
+ * Explosions- und Feuer-Visuals sind emissiv und sollen auch nachts ungedimmt bleiben.
+ *
+ * Die Kronen liegen bewusst darüber: der Schattenwurf gehört zum Baumstamm und darf
+ * optisch nicht auf der eigenen Krone landen. Kronen werden stattdessen einzeln über
+ * `LightingSystem.resolveCanopyTint()` eingefärbt.
  */
-export const DEPTH_LIGHTING = DEPTH.CANOPY + 0.5;
+export const DEPTH_LIGHTING = DEPTH.CANOPY - 0.5;
 
 // ---- Prozedurales Arena-Grid ----
 export const CELL_SIZE           = 32;

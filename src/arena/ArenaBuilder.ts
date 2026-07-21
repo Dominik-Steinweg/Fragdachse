@@ -176,10 +176,15 @@ export class ArenaBuilder {
   /**
    * Setzt Alpha der Baumkrone auf CANOPY_ALPHA_PLAYER wenn sich der lokale
    * Spieler darunter befindet. Nur lokal – keine Netzwerkauswirkungen.
+   *
+   * Kronen liegen über dem Lightmap-Overlay (siehe `DEPTH_LIGHTING`), damit der
+   * Schatten des eigenen Baumstamms nicht auf ihnen landet. Sie werden deshalb hier
+   * einzeln eingefärbt; `resolveCanopyTint` liefert bei Tageslicht neutrales Weiß.
    */
   static updateCanopyTransparency(
     canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }>,
     localSprite:   Phaser.GameObjects.GameObject & { x: number; y: number } | null,
+    resolveCanopyTint?: (worldX: number, worldY: number) => number,
   ): void {
     for (const { gfx, worldX, worldY } of canopyObjects) {
       if (!gfx.active) continue;
@@ -187,6 +192,7 @@ export class ArenaBuilder {
       const dy     = (localSprite?.y ?? -9999) - worldY;
       const inside = Math.sqrt(dx * dx + dy * dy) < CANOPY_RADIUS;
       gfx.setAlpha(inside ? CANOPY_ALPHA_PLAYER : 1.0);
+      if (resolveCanopyTint) gfx.setTint(resolveCanopyTint(worldX, worldY));
     }
   }
 
