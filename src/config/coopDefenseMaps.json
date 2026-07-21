@@ -455,7 +455,7 @@
       "displayName": "Map 11 - Bombergeschwader",
       "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
       "tutorialDurationMs": 10000,
-      "enemyAirstrikes": true,
+      "enemyAirstrikes": { "bombTutorialRock": true, "huntIntervalMs": 10000 },
       "roundDurationSec": 90,
       "bases": [
         {
@@ -512,8 +512,7 @@
     {
       "mapId": "12",
       "displayName": "Map 12 - Unterwanderung",
-      "tutorialText": "Alien-Dachse graben sich vom linken Rand ein und tauchen erst im freien Feld auf. Eingebuddelt sind sie unverwundbar, koennen aber auch selbst nicht angreifen.",
-      "tutorialDurationMs": 10000,
+      "enemyAirstrikes": { "bombTutorialRock": false, "huntIntervalMs": 25000 },
       "roundDurationSec": 90,
       "bases": [
         {

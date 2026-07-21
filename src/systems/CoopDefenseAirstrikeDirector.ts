@@ -43,7 +43,6 @@ const OPENING_BARRAGE_MIN_GAP_MS = 280;
 const OPENING_BARRAGE_MAX_GAP_MS = 540;
 
 const PLAYER_HUNT_START_MS = 20_000;
-const PLAYER_HUNT_INTERVAL_MS = 10_000;
 const PLAYER_HUNT_MIN_OFFSET_PX = 60;
 const PLAYER_HUNT_MAX_OFFSET_PX = 220;
 const PLAYER_HUNT_BASE_AVOID_ATTEMPTS = 12;
@@ -64,15 +63,23 @@ export interface CoopDefenseAirstrikeDirectorDeps {
   playStrikeAudio(x: number, y: number): void;
 }
 
+export interface CoopDefenseAirstrikeDirectorConfig {
+  /** True: Eröffnungsbombardement räumt den Tutorial-Felsbereich. */
+  readonly bombTutorialRock: boolean;
+  /** Abstand zwischen den Verfolgungs-Einzelschlägen nach der Eröffnung, in ms. */
+  readonly huntIntervalMs: number;
+}
+
 /**
  * CoopDefenseAirstrikeDirector – Host-autoritär.
  *
  * Steuert die Luftangriffe der Zombie-Fraktion auf Maps mit `enemyAirstrikes`:
- *   1. Eröffnungs-Bombardement: Ein "Bomberflug" über den Felsbereich des
- *      Tutorial-Fensters – leicht chaotisch gestreute Einschläge von links nach
- *      rechts mit kurzen, unregelmäßigen Abständen.
- *   2. Danach alle 10 s ein Einschlag in der Nähe eines zufälligen Spielers;
- *      Basisbereiche werden nach Möglichkeit gemieden.
+ *   1. Eröffnungs-Bombardement (optional, `bombTutorialRock`): Ein "Bomberflug"
+ *      über den Felsbereich des Tutorial-Fensters – leicht chaotisch gestreute
+ *      Einschläge von links nach rechts mit kurzen, unregelmäßigen Abständen.
+ *   2. Danach im konfigurierten Abstand (`huntIntervalMs`) ein Einschlag in der
+ *      Nähe eines zufälligen Spielers; Basisbereiche werden nach Möglichkeit
+ *      gemieden.
  *
  * Die eigentlichen Strikes laufen über das reguläre AirstrikeSystem und werden
  * damit automatisch an alle Clients synchronisiert (Warnkreis + Explosion).
@@ -84,12 +91,21 @@ export class CoopDefenseAirstrikeDirector {
   private readonly openingBarrageCompleteAtMs: number;
   private barrageAudioPlayed = false;
   private nextHuntStrikeAtMs = PLAYER_HUNT_START_MS;
+  private readonly huntIntervalMs: number;
 
-  constructor(private readonly deps: CoopDefenseAirstrikeDirectorDeps) {
-    this.pendingBarrageStrikes = this.buildOpeningBarrage();
-    const lastStrike = this.pendingBarrageStrikes[this.pendingBarrageStrikes.length - 1];
-    this.openingBarrageCompleteAtMs = (lastStrike?.dueAtMs ?? OPENING_BARRAGE_FIRST_LAUNCH_MS)
-      + OPENING_BARRAGE_STRIKE_CONFIG.delayMs;
+  constructor(
+    private readonly deps: CoopDefenseAirstrikeDirectorDeps,
+    config: CoopDefenseAirstrikeDirectorConfig,
+  ) {
+    this.huntIntervalMs = config.huntIntervalMs;
+    this.pendingBarrageStrikes = config.bombTutorialRock ? this.buildOpeningBarrage() : [];
+    if (config.bombTutorialRock) {
+      const lastStrike = this.pendingBarrageStrikes[this.pendingBarrageStrikes.length - 1];
+      this.openingBarrageCompleteAtMs = (lastStrike?.dueAtMs ?? OPENING_BARRAGE_FIRST_LAUNCH_MS)
+        + OPENING_BARRAGE_STRIKE_CONFIG.delayMs;
+    } else {
+      this.openingBarrageCompleteAtMs = 0;
+    }
   }
 
   /** True, sobald der letzte Eröffnungs-Einschlag explodiert ist und der Felsbereich (das "Pop-Up") geräumt wurde. */
@@ -111,7 +127,7 @@ export class CoopDefenseAirstrikeDirector {
     }
 
     while (this.elapsedMs >= this.nextHuntStrikeAtMs) {
-      this.nextHuntStrikeAtMs += PLAYER_HUNT_INTERVAL_MS;
+      this.nextHuntStrikeAtMs += this.huntIntervalMs;
       const target = this.pickHuntTarget();
       if (!target) continue;
       this.deps.scheduleStrike(target.x, target.y, PLAYER_HUNT_STRIKE_CONFIG);

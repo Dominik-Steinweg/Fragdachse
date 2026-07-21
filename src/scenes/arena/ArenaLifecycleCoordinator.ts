@@ -1129,8 +1129,11 @@ export class ArenaLifecycleCoordinator {
         return this.ctx.airstrikeSystem?.scheduleStrike(playerId, targetX, targetY, cfg) ?? false;
       });
       // Zombie-Luftangriffe: Auf Maps mit enemyAirstrikes bombardiert die Gegner-
-      // fraktion erst den Tutorial-Felsbereich und jagt danach zufällige Spieler.
-      this.ctx.coopDefenseAirstrikeDirector = coopDefenseMapConfig?.enemyAirstrikes
+      // fraktion optional erst den Tutorial-Felsbereich und jagt danach im
+      // konfigurierten Abstand zufällige Spieler.
+      const enemyAirstrikeConfig = coopDefenseMapConfig?.enemyAirstrikes;
+      const resolvedEnemyAirstrikeConfig = typeof enemyAirstrikeConfig === 'object' ? enemyAirstrikeConfig : undefined;
+      this.ctx.coopDefenseAirstrikeDirector = resolvedEnemyAirstrikeConfig
         ? new CoopDefenseAirstrikeDirector({
           scheduleStrike: (x, y, cfg) => {
             this.ctx.airstrikeSystem?.scheduleStrike(COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, x, y, cfg);
@@ -1146,6 +1149,9 @@ export class ArenaLifecycleCoordinator {
           playStrikeAudio: (x, y) => {
             this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);
           },
+        }, {
+          bombTutorialRock: resolvedEnemyAirstrikeConfig.bombTutorialRock ?? true,
+          huntIntervalMs: resolvedEnemyAirstrikeConfig.huntIntervalMs ?? 10_000,
         })
         : null;
       this.ctx.loadoutManager.setStinkCloudSystem(this.ctx.stinkCloudSystem);

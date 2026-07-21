@@ -12,6 +12,9 @@ import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '.
  */
 const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
 
+/** Standard-Abstand der Verfolgungs-Einzelschläge, wenn eine Map keinen eigenen Wert setzt. */
+const DEFAULT_AIRSTRIKE_HUNT_INTERVAL_MS = 10_000;
+
 export interface CoopBaseCellOffset {
   readonly gridX: number;
   readonly gridY: number;
@@ -68,6 +71,14 @@ export interface ResolvedCoopDefenseMapWaveConfig {
   readonly countPerWave: number;
   readonly startAtMs: number;
   readonly startsAfterAirstrikeBarrage: boolean;
+}
+
+/** Konfiguriert die Zombie-Luftangriffe einer Map (siehe `CoopDefenseAirstrikeDirector`). */
+export interface CoopDefenseMapAirstrikeConfig {
+  /** True: Eröffnungsbombardement räumt den Tutorial-Felsbereich (Default: true). */
+  readonly bombTutorialRock?: boolean;
+  /** Abstand zwischen den Verfolgungs-Einzelschlägen nach der Eröffnung, in ms (Default: 10000). */
+  readonly huntIntervalMs?: number;
 }
 
 export interface CoopDefenseMapBossConfig {
@@ -127,8 +138,8 @@ export interface CoopDefenseMapConfig {
   readonly tutorialText?: string;
   /** Anzeigedauer des Tutorial-Fensters; Standard ist COOP_DEFENSE_TUTORIAL_DURATION_MS. */
   readonly tutorialDurationMs?: number;
-  /** True: Die Zombie-Fraktion führt auf dieser Map eigene Luftangriffe durch. */
-  readonly enemyAirstrikes?: boolean;
+  /** True/Konfiguration: Die Zombie-Fraktion führt auf dieser Map eigene Luftangriffe durch. */
+  readonly enemyAirstrikes?: boolean | CoopDefenseMapAirstrikeConfig;
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   readonly roundDurationSec: number;
@@ -244,13 +255,24 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     tutorialDurationMs: typeof mapConfig.tutorialDurationMs === 'number' && Number.isFinite(mapConfig.tutorialDurationMs)
       ? Math.max(1000, Math.floor(mapConfig.tutorialDurationMs))
       : undefined,
-    enemyAirstrikes: mapConfig.enemyAirstrikes === true ? true : undefined,
+    enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     waves: mapConfig.waves.map(normalizeWaveConfig),
     boss: normalizeBossConfig(mapConfig),
+  };
+}
+
+function normalizeAirstrikeConfig(
+  enemyAirstrikes: boolean | CoopDefenseMapAirstrikeConfig | undefined,
+): CoopDefenseMapAirstrikeConfig | undefined {
+  if (!enemyAirstrikes) return undefined;
+  const config = enemyAirstrikes === true ? {} : enemyAirstrikes;
+  return {
+    bombTutorialRock: config.bombTutorialRock ?? true,
+    huntIntervalMs: Math.max(1, Math.floor(config.huntIntervalMs ?? DEFAULT_AIRSTRIKE_HUNT_INTERVAL_MS)),
   };
 }
 
