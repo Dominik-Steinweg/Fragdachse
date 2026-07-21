@@ -61,6 +61,7 @@ export class EnemyEntity {
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
   private moveSpeedMultiplier = 1;
+  private burrowed = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -217,6 +218,28 @@ export class EnemyEntity {
     return this.config.size * 0.5;
   }
 
+  isBurrowed(): boolean {
+    return this.burrowed;
+  }
+
+  /**
+   * Setzt den Einbuddel-Zustand. Unter der Erde ist der Gegner – genau wie ein eingebuddelter
+   * Spieler – komplett unsichtbar; nur die Buddel-Partikel verraten seine Position.
+   * Liefert true, wenn sich der Zustand geaendert hat (Trigger fuer die Buddel-Visuals).
+   */
+  setBurrowed(burrowed: boolean): boolean {
+    if (this.burrowed === burrowed) return false;
+    this.burrowed = burrowed;
+    this.sprite.setVisible(!burrowed);
+    this.ownerRing?.setVisible(!burrowed);
+    this.bossAura?.setVisible(!burrowed);
+    this.bossRing?.setVisible(!burrowed);
+    this.bossLabel?.setVisible(!burrowed);
+    if (burrowed) this.destroyHpBars();
+    this.syncBar();
+    return true;
+  }
+
   isBoss(): boolean {
     return this.config.isBoss === true;
   }
@@ -303,6 +326,7 @@ export class EnemyEntity {
       maxHp: this.getMaxHp(),
       burnStacks: Math.min(this.burnStacks, MAX_VISUAL_BURN_STACKS),
       faction: this.faction,
+      burrowed: this.burrowed,
       ownerId: this.ownerId,
       ownerColor: this.ownerColor,
     };
@@ -331,6 +355,7 @@ export class EnemyEntity {
   }
 
   private shouldShowHpBars(): boolean {
+    if (this.burrowed) return false;
     return this.currentHp > 0 && (
       (this.faction === 'hostile' && this.config.isBoss === true)
       || (this.currentHp < this.maxHp && Date.now() <= this.hpBarVisibleUntilMs)

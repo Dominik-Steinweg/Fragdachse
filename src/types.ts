@@ -52,6 +52,8 @@ export interface SyncedActiveHudBuff {
   defId: string;
   remainingFrac: number;
   valueText?: string;
+  /** 0..1 – Staerke des Buffs; skaliert die Partikel-Intensitaet im HUD. */
+  intensity?: number;
 }
 
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
@@ -141,10 +143,12 @@ export interface SyncedDecoy {
 export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck';
 
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
-export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'gauss' | 'negev';
+// 'awp_charged'  = voll aufgeladener Schuss (Geduldiger Tod) ohne Schneisen-Upgrade
+// 'awp_corridor' = voll aufgeladener Schuss mit "Schneise der Zerstoerung" (inkl. Sturm-VFX)
+export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'awp_charged' | 'awp_corridor' | 'gauss' | 'negev';
 
 /** Data-driven Preset fuer klassische geworfene Granaten. */
-export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov' | 'time_bubble';
+export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov' | 'time_bubble' | 'fur_ball';
 
 /** Visuelles Preset fuer Hitscan-Strahlen. */
 export type HitscanVisualPreset = 'default' | 'asmd_primary';
@@ -664,6 +668,8 @@ export interface ProjectileSpawnConfig {
   fireTrailHalfWidthCells?: number;
   awpCorridorHalfWidth?: number;
   awpCorridorDamage?: number;
+  awpCorridorDotDurationMs?: number;
+  awpCorridorDotTickIntervalMs?: number;
   awpCorridorKnockback?: number;
   awpCorridorKnockbackDurationMs?: number;
 }
@@ -726,7 +732,24 @@ export interface TimeBubbleGrenadeEffect {
   friendlyImmunity?: number;
 }
 
-export type GrenadeEffectConfig = DamageGrenadeEffect | SmokeGrenadeEffect | FireGrenadeEffect | TimeBubbleGrenadeEffect;
+/**
+ * Wurfgeschoss, das beim Ausloesen keine Explosion erzeugt, sondern Gegner absetzt
+ * (Brutbombe des Wurf-Dachses).
+ */
+export interface SpawnEnemyGrenadeEffect {
+  type: 'spawn_enemy';
+  enemyKind: string;
+  count: number;
+  offsetPx: number;
+  color?: number;
+}
+
+export type GrenadeEffectConfig =
+  | DamageGrenadeEffect
+  | SmokeGrenadeEffect
+  | FireGrenadeEffect
+  | TimeBubbleGrenadeEffect
+  | SpawnEnemyGrenadeEffect;
 
 /**
  * Markiert ein Projektil als detonierbar durch spezifische Auslöser-Tags.
@@ -999,6 +1022,8 @@ export interface TrackedProjectile {
   fireTrailHalfWidthCells?: number;
   awpCorridorHalfWidth?: number;
   awpCorridorDamage?: number;
+  awpCorridorDotDurationMs?: number;
+  awpCorridorDotTickIntervalMs?: number;
   awpCorridorKnockback?: number;
   awpCorridorKnockbackDurationMs?: number;
   awpCorridorHitIds?: Set<string>;
@@ -1201,6 +1226,8 @@ export interface SyncedEnemyState {
   maxHp:  number;
   burnStacks: number;
   faction: 'hostile' | 'allied';
+  /** True: Gegner ist eingebuddelt (unverwundbar, ohne Kollisionen, unsichtbar bis auf Buddel-Partikel). */
+  burrowed: boolean;
   ownerId?: string;
   ownerColor?: number;
 }
@@ -1216,6 +1243,7 @@ export interface SyncedEnemyDeltaState {
   maxHp?: number;
   burnStacks?: number;
   faction?: 'hostile' | 'allied';
+  burrowed?: boolean;
   ownerId?: string;
   ownerColor?: number;
 }

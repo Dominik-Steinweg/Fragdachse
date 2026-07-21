@@ -14,9 +14,10 @@
         { "id": "armor_regeneration", "code": "A4-C", "label": "Ruestungsregeneration", "description": "Stellt 10 Ruestung pro Sekunde bis zum Ruestungsmaximum wieder her.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 45, "requires": [{ "upgradeId": "armor_gain", "minLevel": 3 }], "effects": [{ "stat": "player.armorRegenPerSecond", "mode": "add_per_level", "value": 10 }] },
         { "id": "max_adrenaline", "code": "A5", "label": "Adrenalinmaximum", "description": "+10 maximales Adrenalin je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 50, "effects": [{ "stat": "player.maxAdrenaline", "mode": "add_per_level", "value": 10 }] },
         { "id": "adrenaline_regeneration", "code": "A6", "label": "Adrenalin-Regeneration", "description": "+5% Regeneration je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 60, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineRegenRate", "mode": "add_percent_per_level", "value": 0.05 }] },
+        { "id": "adrenaline_spawn_full", "code": "A6-1", "label": "Adrenalinschub", "description": "Startet beim Spawn und bei Wiederbelebung mit 100% Adrenalin.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 65, "requires": [{ "upgradeId": "adrenaline_regeneration", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineSpawnFull", "mode": "add_per_level", "value": 1 }] },
         { "id": "adrenaline_gain", "code": "A7", "label": "Adrenalingewinn", "description": "+10% Adrenalingewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 70, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineGain", "mode": "add_percent_per_level", "value": 0.1 }] },
         { "id": "adrenaline_cost", "code": "A8", "label": "Adrenalinverbrauch", "description": "-5% Adrenalinverbrauch je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 80, "requires": [{ "upgradeId": "adrenaline_gain", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineCost", "mode": "add_percent_per_level", "value": -0.05 }] },
-        { "id": "adrenaline_syringe_drops", "code": "A8-C", "label": "Adrenalin-Ernte", "description": "Getoetete Gegner koennen anhand ihres XP-Anteils an der aktuellen Map eine Adrenalin-Spritze hinterlassen; im Mittel entstehen zwei Spritzen pro Map.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 81, "requires": [{ "upgradeId": "adrenaline_regeneration", "minLevel": 3 }, { "upgradeId": "adrenaline_cost", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineDropEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "adrenaline_syringe_drops", "code": "A8-C", "label": "Adrenalin-Ernte", "description": "Getoetete Gegner koennen anhand ihres XP-Anteils an der aktuellen Map eine Adrenalin-Spritze hinterlassen; im Mittel entstehen zwei Spritzen pro Map.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 81, "requires": [{ "upgradeId": "adrenaline_spawn_full", "minLevel": 1 }, { "upgradeId": "adrenaline_cost", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineDropEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "adrenaline_syringe_drop_chance", "code": "A8-1", "label": "Reiche Adrenalin-Ernte", "description": "+100% Wahrscheinlichkeit auf eine Adrenalin-Spritze je Stufe; bei Stufe 3 entstehen im Mittel acht Spritzen pro Map.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 82, "requires": [{ "upgradeId": "adrenaline_syringe_drops", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineDropChance", "mode": "add_percent_per_level", "value": 1 }] },
         { "id": "adrenaline_syringe_duration", "code": "A8-2", "label": "Langzeit-Adrenalin", "description": "+50% Dauer eingesammelter Adrenalin-Spritzen je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 83, "requires": [{ "upgradeId": "adrenaline_syringe_drops", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineSyringeDuration", "mode": "add_percent_per_level", "value": 0.5 }] },
         { "id": "ultimate_rage_gain", "code": "A9", "label": "Rage-Gewinn", "description": "+10% Rage-Gewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 90, "effects": [{ "stat": "ultimate.rageGainPerDamage", "mode": "add_percent_per_level", "value": 0.1 }] },
@@ -1760,7 +1761,7 @@
           "id": "awp_adrenaline_cost",
           "code": "C-W7-1",
           "label": "Upgrade AWP: Adrenalin-Verbrauch",
-          "description": "-25% Adrenalin-Verbrauch fuer die AWP je Stufe.",
+          "description": "-10% Adrenalin-Verbrauch fuer die AWP je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1777,7 +1778,7 @@
             {
               "stat": "weapon.AWP.adrenalinCost",
               "mode": "add_percent_per_level",
-              "value": -0.25
+              "value": -0.1
             }
           ]
         },
@@ -1785,7 +1786,7 @@
           "id": "awp_aim_duration",
           "code": "C-W7-2",
           "label": "Upgrade AWP: Zielzeit und Cooldown",
-          "description": "-15% Zielzeit und Cooldown fuer die AWP je Stufe.",
+          "description": "-20% Zielzeit und Cooldown fuer die AWP je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -1802,12 +1803,12 @@
             {
               "stat": "weapon.AWP.aimDuration",
               "mode": "add_percent_per_level",
-              "value": -0.15
+              "value": -0.2
             },
             {
               "stat": "weapon.AWP.cooldown",
               "mode": "add_percent_per_level",
-              "value": -0.15
+              "value": -0.2
             }
           ]
         },
@@ -1815,7 +1816,7 @@
           "id": "awp_moving_precision",
           "code": "C-W7-3",
           "label": "Upgrade AWP: Bewegliche Scharfsicht",
-          "description": "75% genauer in Bewegung; der voll gezielte Sichtbereich bleibt 75% groesser.",
+          "description": "75% genauer in Bewegung; der voll gezielte Sichtbereich bleibt 150% groesser.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -1837,7 +1838,7 @@
             {
               "stat": "weapon.AWP.scopeViewRadius",
               "mode": "add_percent_per_level",
-              "value": 0.75
+              "value": 1.5
             }
           ]
         },
@@ -2054,7 +2055,7 @@
           "id": "negev_hold_speed",
           "code": "C-W9-2",
           "label": "Upgrade Negev: Unterdrueckungsfeuer",
-          "description": "Reduziert den Tempo-Malus beim Feuern je Stufe um 15% und verlangsamt getroffene Gegner fuer 0,5 Sekunden um 25 Prozentpunkte je Stufe.",
+          "description": "Reduziert den Tempo-Malus beim Feuern je Stufe um 15% und verlangsamt getroffene Gegner fuer 1 Sekunde um 25 Prozentpunkte je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -2170,7 +2171,7 @@
           "id": "negev_rock_damage",
           "code": "C-W9-L3",
           "label": "Upgrade Negev: Felsbrecher",
-          "description": "+300% Schaden an Felsen.",
+          "description": "+500% Schaden an Felsen.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -2178,7 +2179,7 @@
           "refundable": true,
           "sortOrder": 366,
           "requires": [{ "upgradeId": "negev_adrenaline_cost", "minLevel": 3 }],
-          "effects": [{ "stat": "weapon.NEGEV.rockDamageMult", "mode": "add_percent_per_level", "value": 3 }]
+          "effects": [{ "stat": "weapon.NEGEV.rockDamageMult", "mode": "add_percent_per_level", "value": 5 }]
         },
         {
           "id": "negev_killstreak",
@@ -2355,12 +2356,12 @@
           }
         },
         { "id": "energy_shield_dome", "code": "C-W11-C", "label": "Energie-Kuppel", "description": "Formt den Schild zu einer 360-Grad-Kuppel (Radius 96) um den Spieler. Spieler, Verbuendete und Basen innerhalb der Kuppel sind unverwundbar; abgewehrter Schaden laedt weiterhin den Schadensbonus.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 410, "requires": [{ "upgradeId": "unlock_energy_shield", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeEnabled", "mode": "add_per_level", "value": 1 }] },
-        { "id": "energy_shield_dome_heal", "code": "C-W11-1", "label": "Upgrade Energie-Schild: Kuppel-Heilung", "description": "Heilt Spieler, Verbuendete und Basen in der Kuppel um 10 HP pro Sekunde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 412, "requires": [{ "upgradeId": "energy_shield_dome", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeHealPerSecond", "mode": "add_per_level", "value": 10 }] },
-        { "id": "energy_shield_mobility", "code": "C-W11-2", "label": "Upgrade Energie-Schild: Bewegungsfreiheit", "description": "Verringert die Bewegungsstrafe bei aktivem Schild je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 414, "requires": [{ "upgradeId": "energy_shield_dome", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.movementSlowFactor", "mode": "add_per_level", "value": 0.1 }] },
+        { "id": "energy_shield_mobility", "code": "C-W11-1", "label": "Upgrade Energie-Schild: Bewegungsfreiheit", "description": "Verringert die Bewegungsstrafe bei aktivem Schild je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 412, "requires": [{ "upgradeId": "energy_shield_dome", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.movementSlowFactor", "mode": "add_per_level", "value": 0.1 }] },
+        { "id": "energy_shield_dome_heal", "code": "C-W11-2", "label": "Upgrade Energie-Schild: Kuppel-Heilung", "description": "Heilt Spieler, Verbuendete und Basen in der Kuppel um 10 HP pro Sekunde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 414, "requires": [{ "upgradeId": "energy_shield_mobility", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeHealPerSecond", "mode": "add_per_level", "value": 10 }] },
         { "id": "energy_shield_overcharge", "code": "C-W11-3", "label": "Upgrade Energie-Schild: Ueberladung", "description": "+50% maximaler Schadensbonus je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 420, "requires": [{ "upgradeId": "unlock_energy_shield", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.buffMaxBonus", "mode": "add_per_level", "value": 0.5 }] },
         { "id": "energy_shield_sustain", "code": "C-W11-4", "label": "Upgrade Energie-Schild: Anhaltende Ladung", "description": "+20% Verzoegerung bis zum Abbau und -20% Abbaugeschwindigkeit des Schadensbonus je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 422, "requires": [{ "upgradeId": "energy_shield_overcharge", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.buffDecayDelayMs", "mode": "add_percent_per_level", "value": 0.2 }, { "stat": "weapon.ENERGY_SHIELD.fire.buffDecayPerSecond", "mode": "add_percent_per_level", "value": -0.2 }] },
         { "id": "energy_shield_efficiency", "code": "C-W11-5", "label": "Upgrade Energie-Schild: Effizienz", "description": "-10% Adrenalinverbrauch des Schilds je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 424, "requires": [{ "upgradeId": "energy_shield_sustain", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.adrenalineDrainPerSecond", "mode": "add_percent_per_level", "value": -0.1 }] },
-        { "id": "energy_shield_autonomous", "code": "C-W11-D", "label": "Autonome Kuppel", "description": "Die Kuppel wird per Rechtsklick an- und ausgeschaltet, statt gehalten zu werden. Waffe 1, Utility und Ultimate bleiben nutzbar. Der Adrenalinverbrauch bleibt bestehen; die Kuppel erlischt bei leerem Adrenalin oder in Zustaenden ohne Waffennutzung und startet nicht automatisch neu.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 430, "requires": [{ "upgradeId": "energy_shield_dome_heal", "minLevel": 3 }, { "upgradeId": "energy_shield_mobility", "minLevel": 3 }, { "upgradeId": "energy_shield_efficiency", "minLevel": 3 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeToggleEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "energy_shield_autonomous", "code": "C-W11-D", "label": "Autonome Kuppel", "description": "Die Kuppel wird per Rechtsklick an- und ausgeschaltet, statt gehalten zu werden. Waffe 1, Utility und Ultimate bleiben nutzbar. Der Adrenalinverbrauch bleibt bestehen; die Kuppel erlischt bei leerem Adrenalin oder in Zustaenden ohne Waffennutzung und startet nicht automatisch neu.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 430, "requires": [{ "upgradeId": "energy_shield_dome_heal", "minLevel": 3 }, { "upgradeId": "energy_shield_efficiency", "minLevel": 3 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeToggleEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "energy_shield_dome_size", "code": "C-W11-6", "label": "Upgrade Energie-Schild: Groessere Kuppel", "description": "+15% Kuppelradius je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 432, "requires": [{ "upgradeId": "energy_shield_autonomous", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeRadius", "mode": "add_percent_per_level", "value": 0.15 }] },
         { "id": "p90_bullet_storm", "code": "C-W1-C", "label": "Kugelhagel", "description": "Jeder Schuss feuert drei Projektile mit vollem Schaden bei -15, 0 und +15 Grad.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 150, "requires": [{ "upgradeId": "unlock_p90", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.pelletCount", "mode": "add_per_level", "value": 2 }] },
         { "id": "p90_homing_overdrive", "code": "C-W1-D", "label": "Zielsuchender Kugelhagel", "description": "Alle P90-Geschosse verfolgen Ziele, verursachen vierfachen Schaden und feuern mit einem Viertel der bisherigen Rate.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "p90_accuracy", "minLevel": 1 }, { "upgradeId": "p90_range", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homingEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.P90.damage", "mode": "add_percent_per_level", "value": 3 }, { "stat": "weapon.P90.cooldown", "mode": "add_percent_per_level", "value": 3 }] },
@@ -2376,12 +2377,12 @@
         { "id": "mini_rocket_armor_recovery", "code": "C-W6-7", "label": "Upgrade Mini-Raketen: Panzerungsbergung", "description": "Gewaehrt beim Einsammeln +1 Ruestung je Stufe. Kein interner Cooldown.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 274, "requires": [{ "upgradeId": "mini_rocket_homecoming_protocol", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupArmor", "mode": "add_per_level", "value": 1 }] },
         { "id": "awp_charge_damage", "code": "C-W7-4", "label": "Geduldiger Tod", "description": "Erhoeht den AWP-Schaden stetig mit der Zielzeit bis auf +100% nach 3 Sekunden. Ein Kreisbalken um das Fadenkreuz zeigt die Ladung.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 291, "requires": [{ "upgradeId": "unlock_awp", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.maxDamageBonus", "mode": "add_per_level", "value": 1 }] },
         { "id": "awp_penetrating_shot", "code": "C-W7-C", "label": "Unaufhaltsamer Durchschuss", "description": "Durchschlaegt Gegner und Felsen ohne Schadensverlust nach einem Durchschlag.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 301, "requires": [{ "upgradeId": "awp_charge_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.penetrationCount", "mode": "add_per_level", "value": 1000000 }, { "stat": "weapon.AWP.penetrationDamageRetention", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.AWP.penetratesRocks", "mode": "add_per_level", "value": 1 }] },
-        { "id": "awp_fire_trail", "code": "C-W7-5", "label": "Brandspur", "description": "AWP-Projektile hinterlassen in ihrer Flugbahn 2,5 Sekunden lang brennenden Boden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 311, "requires": [{ "upgradeId": "awp_penetrating_shot", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.fireTrailDurationMs", "mode": "add_per_level", "value": 2500 }] },
-        { "id": "awp_destruction_corridor", "code": "C-W7-D", "label": "Schneise der Zerstoerung", "description": "Voll aufgeladene Schuesse verwunden Gegner entlang der Flugbahn, stossen sie seitlich weg und hinterlassen eine deutlich breitere Feuerschneise.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 326, "requires": [{ "upgradeId": "awp_moving_precision", "minLevel": 1 }, { "upgradeId": "awp_fire_trail", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.corridorEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.AWP.awpCharge.fireTrailHalfWidthCells", "mode": "add_per_level", "value": 2 }] },
-        { "id": "awp_full_charge_time", "code": "C-W7-D1", "label": "Schnellladung", "description": "-15% Zeit bis zur vollen AWP-Schadensladung je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 327, "requires": [{ "upgradeId": "awp_destruction_corridor", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.durationMs", "mode": "add_percent_per_level", "value": -0.15 }] },
+        { "id": "awp_fire_trail", "code": "C-W7-5", "label": "Brandspur", "description": "AWP-Projektile hinterlassen in ihrer Flugbahn 2 Sekunden lang brennenden Boden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 311, "requires": [{ "upgradeId": "awp_penetrating_shot", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.fireTrailDurationMs", "mode": "add_per_level", "value": 2000 }] },
+        { "id": "awp_destruction_corridor", "code": "C-W7-D", "label": "Schneise der Zerstoerung", "description": "Nur voll aufgeladene Schuesse: Gegner neben der Flugbahn werden von einer Sturmboe zur Seite geschleudert und brennen dabei kurz nach. Zusaetzlich bleibt eine deutlich breitere Feuerschneise zurueck.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 326, "requires": [{ "upgradeId": "awp_moving_precision", "minLevel": 1 }, { "upgradeId": "awp_fire_trail", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.corridorEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.AWP.awpCharge.fireTrailHalfWidthCells", "mode": "add_per_level", "value": 2 }] },
+        { "id": "awp_full_charge_time", "code": "C-W7-D1", "label": "Schnellladung", "description": "-25% Zeit bis zur vollen AWP-Schadensladung (Geduldiger Tod) je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 327, "requires": [{ "upgradeId": "awp_destruction_corridor", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.durationMs", "mode": "add_percent_per_level", "value": -0.25 }] },
         { "id": "awp_full_charge_damage", "code": "C-W7-D2", "label": "Vernichtungsladung", "description": "+20% auf alle Schadenswerte voll aufgeladener AWP-Schuesse je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 328, "requires": [{ "upgradeId": "awp_destruction_corridor", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.fullChargeDamageBonus", "mode": "add_per_level", "value": 0.2 }] },
         { "id": "tesla_dome_high_voltage", "code": "C-W10-C", "label": "Hochspannung", "description": "Aktivhalten laedt bis zu drei Stufen; jede erhoeht Radius und Schaden um 10%, ohne Mehrverbrauch.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 405, "requires": [{ "upgradeId": "tesla_dome_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.TESLA_DOME.fire.chargeIntervalMs", "mode": "add_per_level", "value": 1000 }, { "stat": "weapon.TESLA_DOME.fire.maxChargeStacks", "mode": "add_per_level", "value": 3 }, { "stat": "weapon.TESLA_DOME.fire.radiusBonusPerCharge", "mode": "add_per_level", "value": 0.1 }, { "stat": "weapon.TESLA_DOME.fire.damageBonusPerCharge", "mode": "add_per_level", "value": 0.1 }] },
-        { "id": "energy_shield_dome_reflect", "code": "C-W11-C2", "label": "Reflexkuppel", "description": "Gegnerische Projektile prallen an der Kuppelgrenze nach aussen ab und behalten ihre Geschwindigkeit. Sie gelten danach als eigene Projektile und treffen Gegner; der Schadensbonus wird berechnet.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 435, "requires": [{ "upgradeId": "energy_shield_autonomous", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeReflectProjectiles", "mode": "add_per_level", "value": 1 }] }
+        { "id": "energy_shield_dome_reflect", "code": "C-W11-7", "label": "Reflexkuppel", "description": "Gegnerische Projektile prallen an der Kuppelgrenze nach aussen ab und behalten ihre Geschwindigkeit. Sie gelten danach als eigene Projektile und treffen Gegner; der Schadensbonus wird berechnet.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 435, "requires": [{ "upgradeId": "energy_shield_autonomous", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeReflectProjectiles", "mode": "add_per_level", "value": 1 }] }
       ]
     },
     {

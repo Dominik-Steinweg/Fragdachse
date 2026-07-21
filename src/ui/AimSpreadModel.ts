@@ -55,6 +55,15 @@ export class AimSpreadModel {
     this.lastAppliedRevision = state.revision;
   }
 
+  /**
+   * Aktiven Slot ohne Schuss umschalten – z.B. sobald eine Scope-Waffe anvisiert
+   * wird. Ohne das bliebe das Fadenkreuz bis zum naechsten Schuss auf der zuvor
+   * gefeuerten Waffe stehen.
+   */
+  setActiveSlot(slot: WeaponSlot): void {
+    this.activeSlot = slot;
+  }
+
   notifyShot(slot: WeaponSlot, now = Date.now()): void {
     this.activeSlot = slot;
 

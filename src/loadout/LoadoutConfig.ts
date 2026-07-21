@@ -320,7 +320,12 @@ export interface AwpChargeConfig {
   readonly fireTrailHalfWidthCells: number;
   readonly corridorEnabled: number;
   readonly corridorHalfWidth: number;
+  /** Gesamtschaden der Schneise; wird als kurzer DoT ueber corridorDotDurationMs verteilt. */
   readonly corridorDamage: number;
+  /** Laufzeit des Schneisen-DoT – kurz genug, dass der Wegstoss sichtbar bleibt. */
+  readonly corridorDotDurationMs: number;
+  /** Abstand zweier DoT-Ticks; bestimmt zusammen mit der Laufzeit die Tick-Anzahl. */
+  readonly corridorDotTickIntervalMs: number;
   readonly corridorKnockback: number;
   readonly corridorKnockbackDurationMs: number;
 }
@@ -731,6 +736,30 @@ function createEnemyBiteConfig(id: string, displayName: string, damage: number, 
   } as WeaponConfig;
 }
 
+/**
+ * Belagerungsbiss: gleiche Kennwerte wie {@link createEnemyBiteConfig}, aber mit groesserer
+ * Reichweite und auf Basen/Felsen/Zug beschraenktem Schaden. Spieler bleiben unberuehrt, damit
+ * der Gegner sie ausschliesslich mit seiner Fernwaffe bekaempft.
+ */
+function createEnemyStructureBiteConfig(
+  id: string,
+  displayName: string,
+  damage: number,
+  rockDamageMult: number,
+): WeaponConfig {
+  return {
+    ...createEnemyBiteConfig(id, displayName, damage, rockDamageMult),
+    cooldown: 500,
+    range: 90,
+    fire: {
+      type: 'melee',
+      hitArcDegrees: 90,
+      visualPreset: 'bite' satisfies MeleeVisualPreset,
+      damageTargets: ['bases', 'rocks', 'train'] satisfies readonly MeleeDamageTarget[],
+    },
+  } as WeaponConfig;
+}
+
 export const WEAPON_CONFIGS = {
   /**
    * "WEAPON1" - Linke Maustaste
@@ -867,6 +896,11 @@ export const WEAPON_CONFIGS = {
   VOID_STALKER_BITE: createEnemyBiteConfig('VOID_STALKER_BITE', 'Leerenpirscher-Biss', 50, 4),
   STINK_BROODMOTHER_BITE: createEnemyBiteConfig('STINK_BROODMOTHER_BITE', 'Faulnisbrueter-Biss', 40, 4),
 
+  // Belagerungsbisse: Alien- und Wurf-Dachs greifen Spieler ausschliesslich mit ihrer Fernwaffe an,
+  // der Biss ist auf Basen und Felsen beschraenkt (targetMode 'structures' in der Gegner-Registry).
+  ALIEN_BADGER_BITE: createEnemyStructureBiteConfig('ALIEN_BADGER_BITE', 'Alien-Dachsbiss', 70, 4),
+  THROWER_BADGER_BITE: createEnemyStructureBiteConfig('THROWER_BADGER_BITE', 'Wurf-Dachsbiss', 85, 4),
+
   GRAVE_TITAN_BITE: {
     id:                   'GRAVE_TITAN_BITE',
     displayName:          'Grufttitan-Biss',
@@ -993,6 +1027,55 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     projectileStyle:      'energy_ball' satisfies ProjectileStyle,
     energyBallVariant:    'plasma' satisfies EnergyBallVariant,
+    shotAudio: {
+      successKey: 'shot_plasma',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  /**
+   * Alien-Plasma – Kopie der Plasma Gun fuer den Alien-Dachs: deutlich niedrigere Schussrate,
+   * traegere Lenkung der Projektile und rote Einfaerbung.
+   */
+  ALIEN_BADGER_PLASMA: {
+    id:                   'ALIEN_BADGER_PLASMA',
+    displayName:          'Alien-Plasma',
+    cooldown:             850,
+    damage:               18,
+    range:                520,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      420,
+      projectileSize:       10,
+      projectileMaxBounces: 0,
+      homing: {
+        acquireDelayMs:        260,
+        searchRadius:          260,
+        retargetIntervalMs:    220,
+        maxTurnDegreesPerStep: 3,
+        targetTypes:           ['players'],
+        requireLineOfSight:    true,
+        excludeOwner:          true,
+        distanceWeight:        1,
+        forwardWeight:         1,
+      } satisfies ProjectileHomingConfig,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'energy_ball' satisfies ProjectileStyle,
+    energyBallVariant:    'plasma' satisfies EnergyBallVariant,
+    projectileColor:      COLORS.RED_3,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      0,
     shotAudio: {
       successKey: 'shot_plasma',
       failureKey: 'shot_dry_trigger',
@@ -1643,6 +1726,8 @@ export const WEAPON_CONFIGS = {
       corridorEnabled:               0,
       corridorHalfWidth:             56,
       corridorDamage:                35,
+      corridorDotDurationMs:         500,
+      corridorDotTickIntervalMs:     100,
       corridorKnockback:             900,
       corridorKnockbackDurationMs:   260,
     } satisfies AwpChargeConfig,
@@ -1985,7 +2070,7 @@ export const WEAPON_CONFIGS = {
     warmupSpeedMultiplier: 1,
     warmupBurnThreshold:   0,
     hitSlowFraction:       0,
-    hitSlowDurationMs:     500,
+    hitSlowDurationMs:     1000,
     rockDamageMult:        1,
     projectileColor:      0xc79c4f,
     bulletVisualPreset:   'negev' as BulletVisualPreset,

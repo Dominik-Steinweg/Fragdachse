@@ -16,6 +16,7 @@ import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
 import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, TeamId, TrackedProjectile } from '../../types';
 import { emitArenaMapGridChanged } from './ArenaEvents';
+import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 
 /**
@@ -85,6 +86,8 @@ export class HostUpdateCoordinator {
     this.ctx.coopDefenseWaveSpawner?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
+    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
+    if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
     this.ctx.enemyManager?.hostUpdateMovement(
       this.ctx.enemyFlowFieldService,
       this.ctx.enemyPlayerFlowFieldService,
@@ -95,6 +98,7 @@ export class HostUpdateCoordinator {
       this.ctx.fireSystem,
       (enemyId, at) => this.ctx.combatSystem.getActiveBurnSources(enemyId, at),
       this.ctx.coopDefenseEnemyTrainAwarenessSystem,
+      this.ctx.coopDefenseEnemyBurrowSystem,
     );
     if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
     if (!countdownActive) {
@@ -264,6 +268,8 @@ export class HostUpdateCoordinator {
           this.applyAoeEnvironmentDamage(cx, cy, radius, damage, g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId);
           bridge.broadcastExplosionEffect(cx, cy, radius, undefined, g.effect.visualStyle);
         }
+      } else if (g.effect.type === 'spawn_enemy') {
+        this.spawnEnemiesFromGrenade(g.x, g.y, g.effect, g.ownerId);
       } else if (g.effect.type === 'fire') {
         this.ctx.fireSystem.hostCreateZone(g.x, g.y, g.effect, g.ownerId);
       } else if (g.effect.type === 'time_bubble') {
@@ -866,6 +872,38 @@ export class HostUpdateCoordinator {
       dot.rockDamageMult ?? 1, dot.trainDamageMult ?? 1,
       dot.style,
     );
+  }
+
+  /**
+   * Brutbombe des Wurf-Dachses: statt einer Explosion entstehen am Einschlagsort neue Gegner,
+   * die sofort ihrem eigenen Bewegungsziel (Spieler) folgen.
+   *
+   * Hat ein Spieler die Bombe an seiner Reflexkuppel abgefangen, gehört sie ihm – die Brut
+   * schlüpft dann als sein Verbündeter und verhält sich wie ein per Nekromantie wiederbelebter
+   * Dachs (siehe NecromancySystem.captureAlly).
+   */
+  private spawnEnemiesFromGrenade(
+    x: number, y: number,
+    effect: import('../../types').SpawnEnemyGrenadeEffect,
+    ownerId: string,
+  ): void {
+    const enemyManager = this.ctx.enemyManager;
+    if (!enemyManager || !hasCoopDefenseEnemyKind(effect.enemyKind)) return;
+    const capturedByPlayer = this.ctx.playerManager.getPlayer(ownerId) !== undefined;
+
+    const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
+    for (let index = 0; index < effect.count; index += 1) {
+      const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, effect.count));
+      const spawnX = x + Math.cos(angle) * effect.offsetPx;
+      const spawnY = y + Math.sin(angle) * effect.offsetPx;
+      // Scheitert die Übernahme (Abfänger inzwischen tot), schlüpft die Brut regulär feindlich –
+      // die Bombe soll nicht stillschweigend verpuffen.
+      const captured = capturedByPlayer
+        ? this.ctx.necromancySystem?.captureAlly(ownerId, spawnX, spawnY, effect.enemyKind) ?? null
+        : null;
+      if (!captured) enemyManager.hostSpawnAtWorld(spawnX, spawnY, effect.enemyKind);
+    }
+    bridge.broadcastExplosionEffect(x, y, effect.offsetPx * 2, effect.color, 'default');
   }
 
   applyExplosionEnvironmentDamage(

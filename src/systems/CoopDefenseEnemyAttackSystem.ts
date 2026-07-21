@@ -80,6 +80,15 @@ export class CoopDefenseEnemyAttackSystem {
       activeEnemyIds.add(enemy.id);
       enemy.decayWeaponSpread(delta, now);
 
+      // Eingebuddelt gilt dieselbe Waffensperre wie beim Spieler.
+      if (enemy.isBurrowed()) {
+        this.sustainedAttacks.delete(enemy.id);
+        this.meleeWindups.delete(enemy.id);
+        this.obstacleContacts.delete(enemy.id);
+        this.resetMovementProgress(enemy, now);
+        continue;
+      }
+
       if (this.enemyManager.isEnemyPanicking(enemy.id)) {
         this.sustainedAttacks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
@@ -258,7 +267,9 @@ export class CoopDefenseEnemyAttackSystem {
         ? this.findNearestLivingTarget(enemy, weapon.config.range)
         : attackWeapon.targetMode === 'rocks'
           ? this.findNearestObstacleTarget(enemy, weapon.config.range, now)
-          : this.selectTarget(enemy, weapon.config.range, now);
+          : attackWeapon.targetMode === 'structures'
+            ? this.selectStructureTarget(enemy, weapon.config.range, now)
+            : this.selectTarget(enemy, weapon.config.range, now);
       const trainTarget = (weapon.config.trainDamageMult ?? 1) > 0
         ? this.findTrainTarget(enemy, weapon.config.range)
         : null;
@@ -335,6 +346,13 @@ export class CoopDefenseEnemyAttackSystem {
     }
 
     return best;
+  }
+
+  /** Wie {@link selectTarget}, aber ohne Spieler und Verbuendete – reine Belagerungsziele. */
+  private selectStructureTarget(enemy: EnemyEntity, range: number, now: number): EnemyAttackCandidate | null {
+    const best = this.findNearestBaseTarget(enemy, range);
+    const obstacle = this.findNearestObstacleTarget(enemy, range, now);
+    return this.isBetterCandidate(obstacle, best) ? obstacle : best;
   }
 
   private findNearestBaseTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {

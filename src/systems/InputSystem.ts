@@ -177,6 +177,14 @@ export class InputSystem {
     return this.scopeChargeProgress;
   }
 
+  /**
+   * True solange die rechte Maustaste eine Scope-Waffe anvisiert – schon im
+   * allerersten Frame, in dem scopeProgress noch 0 ist.
+   */
+  isScoping(): boolean {
+    return this.scopeStartedAt !== null;
+  }
+
   /** Gibt die ScopeModeConfig der aktuellen weapon2 zurück, oder undefined. */
   getWeapon2ScopeConfig(): ScopeModeConfig | undefined {
     return this.getWeapon2Config?.()?.scopeConfig;

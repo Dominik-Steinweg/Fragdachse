@@ -7,8 +7,30 @@ import type { TrackedProjectile } from '../types';
 
 type WeaponUpgradeCombat = Pick<CombatSystem, 'applyDamage' | 'canDamageTarget'>;
 
+const CORRIDOR_WEAPON_NAME = 'AWP-Schneise';
+const CORRIDOR_DOT_FALLBACK_DURATION_MS = 500;
+const CORRIDOR_DOT_FALLBACK_TICK_MS = 100;
+
+/**
+ * Nachbrenner eines Schneisen-Treffers: Der Gesamtschaden wird in Ticks zerlegt,
+ * damit der Gegner den Wegstoss ueberlebt und die Flugbahn sichtbar verlaesst.
+ */
+interface CorridorDotState {
+  enemyId: string;
+  ownerId: string;
+  damagePerTick: number;
+  ticksRemaining: number;
+  nextTickAt: number;
+  tickIntervalMs: number;
+  /** Stossrichtung des Treffers – haelt Blut-/Treffer-FX in der Wegstoss-Richtung. */
+  dirX: number;
+  dirY: number;
+}
+
 /** Host-autoritative Flugbahneffekte fuer spezielle Waffen-Upgrades. */
 export class WeaponUpgradeSystem {
+  private corridorDots: CorridorDotState[] = [];
+
   constructor(
     private readonly projectileManager: ProjectileManager,
     private readonly enemyManager: EnemyManager,
@@ -21,8 +43,9 @@ export class WeaponUpgradeSystem {
     for (const projectile of this.projectileManager.getActiveProjectiles()) {
       if (projectile.projectileStyle !== 'awp') continue;
       this.refreshAwpFireTrail(projectile, now);
-      this.applyAwpDestructionCorridor(projectile);
+      this.applyAwpDestructionCorridor(projectile, now);
     }
+    this.tickCorridorDots(now);
   }
 
   private refreshAwpFireTrail(projectile: TrackedProjectile, now: number): void {
@@ -58,7 +81,7 @@ export class WeaponUpgradeSystem {
     }
   }
 
-  private applyAwpDestructionCorridor(projectile: TrackedProjectile): void {
+  private applyAwpDestructionCorridor(projectile: TrackedProjectile, now: number): void {
     const halfWidth = projectile.awpCorridorHalfWidth ?? 0;
     const damage = projectile.awpCorridorDamage ?? 0;
     if (halfWidth <= 0 || damage <= 0) return;
@@ -87,24 +110,79 @@ export class WeaponUpgradeSystem {
       projectile.awpCorridorHitIds?.add(enemy.id);
       const cross = dx * relativeY - dy * relativeX;
       const side = Math.abs(cross) > 0.001 ? Math.sign(cross) : this.stableSide(enemy.id);
-      this.combatSystem.applyDamage(
-        enemy.id,
-        damage,
-        false,
-        projectile.ownerId,
-        'AWP-Schneise',
-        { sourceX: nearestX, sourceY: nearestY, dirX: normalX * side, dirY: normalY * side },
-      );
-      if (this.enemyManager.hasEnemy(enemy.id) && (projectile.awpCorridorKnockback ?? 0) > 0) {
+      const pushX = normalX * side;
+      const pushY = normalY * side;
+
+      // Erst wegstossen, dann verwunden: Der Gegner soll die Flugbahn sichtbar
+      // verlassen, statt neben dem Projektil sofort umzufallen.
+      if ((projectile.awpCorridorKnockback ?? 0) > 0) {
         this.hostPhysics.addRecoil(
           enemy.id,
-          normalX * side * (projectile.awpCorridorKnockback ?? 0),
-          normalY * side * (projectile.awpCorridorKnockback ?? 0),
+          pushX * (projectile.awpCorridorKnockback ?? 0),
+          pushY * (projectile.awpCorridorKnockback ?? 0),
           projectile.awpCorridorKnockbackDurationMs ?? 260,
           projectile.ownerId,
         );
       }
+      this.startCorridorDot(enemy.id, projectile, damage, pushX, pushY, now);
     }
+  }
+
+  /** Verteilt den Schneisen-Schaden als kurzen Nachbrenner auf mehrere Ticks. */
+  private startCorridorDot(
+    enemyId: string,
+    projectile: TrackedProjectile,
+    damage: number,
+    dirX: number,
+    dirY: number,
+    now: number,
+  ): void {
+    const durationMs = projectile.awpCorridorDotDurationMs ?? CORRIDOR_DOT_FALLBACK_DURATION_MS;
+    const tickIntervalMs = Math.max(1, projectile.awpCorridorDotTickIntervalMs ?? CORRIDOR_DOT_FALLBACK_TICK_MS);
+    const tickCount = Math.max(1, Math.round(durationMs / tickIntervalMs));
+
+    this.corridorDots.push({
+      enemyId,
+      ownerId: projectile.ownerId,
+      damagePerTick: damage / tickCount,
+      ticksRemaining: tickCount,
+      nextTickAt: now + tickIntervalMs,
+      tickIntervalMs,
+      dirX,
+      dirY,
+    });
+  }
+
+  private tickCorridorDots(now: number): void {
+    if (this.corridorDots.length === 0) return;
+
+    let writeIndex = 0;
+    for (const dot of this.corridorDots) {
+      while (dot.ticksRemaining > 0 && now >= dot.nextTickAt) {
+        const enemy = this.enemyManager.getEnemy(dot.enemyId);
+        if (!enemy) {
+          dot.ticksRemaining = 0;
+          break;
+        }
+        this.combatSystem.applyDamage(
+          dot.enemyId,
+          dot.damagePerTick,
+          false,
+          dot.ownerId,
+          CORRIDOR_WEAPON_NAME,
+          {
+            sourceX: enemy.sprite.x - dot.dirX * 24,
+            sourceY: enemy.sprite.y - dot.dirY * 24,
+            dirX: dot.dirX,
+            dirY: dot.dirY,
+          },
+        );
+        dot.ticksRemaining -= 1;
+        dot.nextTickAt += dot.tickIntervalMs;
+      }
+      if (dot.ticksRemaining > 0) this.corridorDots[writeIndex++] = dot;
+    }
+    this.corridorDots.length = writeIndex;
   }
 
   private stableSide(id: string): 1 | -1 {

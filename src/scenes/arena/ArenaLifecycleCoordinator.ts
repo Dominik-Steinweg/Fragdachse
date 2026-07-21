@@ -17,6 +17,7 @@ import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
+import { CoopDefenseEnemyBurrowSystem } from '../../systems/CoopDefenseEnemyBurrowSystem';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
@@ -380,6 +381,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
+    // Eingebuddelte Gegner nutzen dieselben Buddel-Partikel wie eingebuddelte Spieler –
+    // auf Host und Client, da beide Seiten den Einbuddel-Zustand über den Snapshot kennen.
+    this.ctx.enemyManager?.setBurrowVisualSink(this.ctx.effectSystem);
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost() && this.ctx.baseManager && isCoopDefenseMode(bridge.getGameMode())
       ? new CoopDefenseRoundStateSystem(
         this.ctx.baseManager,
@@ -456,6 +460,7 @@ export class ArenaLifecycleCoordinator {
           coopDefenseWaveConfigs,
           coopDefenseMapConfig?.boss,
           this.ctx.enemyBossFlowFieldService,
+          () => this.ctx.coopDefenseAirstrikeDirector?.isOpeningBarrageComplete() ?? true,
         );
       }
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
@@ -709,6 +714,9 @@ export class ArenaLifecycleCoordinator {
       });
       this.ctx.resourceSystem.setAdrenalineCostMultiplierResolver((playerId) => {
         return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineCost') ?? 0);
+      });
+      this.ctx.resourceSystem.setAdrenalineSpawnFullResolver((playerId) => {
+        return (this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.adrenalineSpawnFull') ?? 0) > 0;
       });
       this.ctx.shieldBuffSystem = new ShieldBuffSystem();
       this.ctx.timeBubbleSystem = new TimeBubbleSystem();
@@ -977,6 +985,15 @@ export class ArenaLifecycleCoordinator {
           (enemy, now) => enemy.getMoveSpeed()
             * this.ctx.hostPhysics.getWorldMovementFactorAt(enemy.sprite.x, enemy.sprite.y, now),
         );
+        this.ctx.coopDefenseEnemyBurrowSystem = new CoopDefenseEnemyBurrowSystem(
+          this.ctx.enemyManager,
+          (enemyId, enabled) => this.ctx.hostPhysics.setEnemyBurrowed(enemyId, !enabled),
+          (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
+        );
+        this.ctx.coopDefenseEnemyTrainAwarenessSystem.setBurrowSource(this.ctx.coopDefenseEnemyBurrowSystem);
+        this.ctx.enemyManager.setEnemySpawnedCallback((enemy) => {
+          this.ctx.coopDefenseEnemyBurrowSystem?.notifyEnemySpawned(enemy);
+        });
         this.ctx.coopDefenseEnemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
@@ -1231,6 +1248,7 @@ export class ArenaLifecycleCoordinator {
 
   tearDownArena(): void {
     this.ctx.coopDefenseEnemyAbilitySystem?.clear();
+    this.ctx.coopDefenseEnemyBurrowSystem?.clear();
     this.ctx.coopDefenseEnemyTrainAwarenessSystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
@@ -1261,9 +1279,12 @@ export class ArenaLifecycleCoordinator {
     this.ctx.baseManager = null;
     this.ctx.necromancySystem?.clear();
     this.ctx.necromancySystem = null;
+    this.ctx.enemyManager?.setEnemySpawnedCallback(null);
     this.ctx.enemyManager?.destroy();
+    this.ctx.enemyManager?.setBurrowVisualSink(null);
     this.ctx.enemyManager = null;
     this.ctx.coopDefenseEnemyAbilitySystem = null;
+    this.ctx.coopDefenseEnemyBurrowSystem = null;
     this.ctx.coopDefenseEnemyTrainAwarenessSystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;
@@ -1482,6 +1503,27 @@ export class ArenaLifecycleCoordinator {
     this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
+  }
+
+  /**
+   * True, wenn ein Gegner an dieser Stelle auftauchen kann: Der Mittelpunkt und alle vier
+   * Randpunkte seines Körpers müssen auf begehbaren, per Flowfield erreichbaren Zellen liegen.
+   * Grundlage für das Auftauchen nach der Einbuddel-Anfahrt vom linken Spielfeldrand.
+   */
+  private isFreeEnemyGroundAt(x: number, y: number, radius: number): boolean {
+    const flowFieldService = this.ctx.enemyPlayerFlowFieldService ?? this.ctx.enemyFlowFieldService;
+    if (!flowFieldService) return true;
+
+    const probes: readonly [number, number][] = [
+      [x, y], [x + radius, y], [x - radius, y], [x, y + radius], [x, y - radius],
+    ];
+    return probes.every(([probeX, probeY]) => {
+      const cell = flowFieldService.worldToGrid(probeX, probeY);
+      if (!cell) return false;
+      if (!flowFieldService.isTraversableAt(cell.gridX, cell.gridY)) return false;
+      return flowFieldService.getIntegrationValueAt(cell.gridX, cell.gridY)
+        < EnemyFlowFieldService.INTEGRATION_INFINITY;
+    });
   }
 
   private setupHostTrainEvent(trackGridX: number): void {

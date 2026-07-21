@@ -629,6 +629,8 @@ export class ProjectileManager {
       fireTrailHalfWidthCells: cfg.fireTrailHalfWidthCells,
       awpCorridorHalfWidth: cfg.awpCorridorHalfWidth,
       awpCorridorDamage: cfg.awpCorridorDamage,
+      awpCorridorDotDurationMs: cfg.awpCorridorDotDurationMs,
+      awpCorridorDotTickIntervalMs: cfg.awpCorridorDotTickIntervalMs,
       awpCorridorKnockback: cfg.awpCorridorKnockback,
       awpCorridorKnockbackDurationMs: cfg.awpCorridorKnockbackDurationMs,
       awpCorridorHitIds: cfg.awpCorridorHalfWidth !== undefined ? new Set<string>() : undefined,

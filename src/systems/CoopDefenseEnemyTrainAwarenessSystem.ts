@@ -18,15 +18,28 @@ export interface EnemyTrainMovementDecision {
   readonly override: boolean;
 }
 
+/**
+ * Gegner, die sich statt zu warten unter den Gleisen durchgraben können.
+ * Liefert true, solange das Einbuddeln deshalb aktiv ist.
+ */
+export interface TrainCrossingBurrowSource {
+  requestTrainCrossingBurrow(enemyId: string, now: number): boolean;
+}
+
 /** Vorausschauende, pro Gegnerart konfigurierbare Gleis- und Zug-KI. */
 export class CoopDefenseEnemyTrainAwarenessSystem {
   private readonly states = new Map<string, EnemyTrainAwarenessState>();
+  private burrowSource: TrainCrossingBurrowSource | null = null;
 
   constructor(
     private readonly getTrainManager: () => TrainManager | null,
     private readonly getTrainEvent: () => TrainEventConfig | undefined,
     private readonly getEffectiveMoveSpeed: (enemy: EnemyEntity, now: number) => number,
   ) {}
+
+  setBurrowSource(source: TrainCrossingBurrowSource | null): void {
+    this.burrowSource = source;
+  }
 
   resolveMovement(
     enemy: EnemyEntity,
@@ -66,7 +79,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
         return { vx: intendedVx, vy: intendedVy, override: false };
       }
       return this.resolveBeforeCrossing(
-        state, config, x, leftSafeX, rightSafeX, 1, movementSpeed, effectiveSpeed,
+        enemy, state, config, x, leftSafeX, rightSafeX, 1, movementSpeed, effectiveSpeed,
         hazard.startsAt, hazard.endsAt, now,
         intendedVx, intendedVy,
       );
@@ -79,7 +92,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
         return { vx: intendedVx, vy: intendedVy, override: false };
       }
       return this.resolveBeforeCrossing(
-        state, config, x, rightSafeX, leftSafeX, -1, movementSpeed, effectiveSpeed,
+        enemy, state, config, x, rightSafeX, leftSafeX, -1, movementSpeed, effectiveSpeed,
         hazard.startsAt, hazard.endsAt, now,
         intendedVx, intendedVy,
       );
@@ -93,6 +106,12 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
       state.mode = 'crossing';
       state.crossingDirection = intendedDirection;
       return { vx: intendedDirection * movementSpeed, vy: 0, override: true };
+    }
+
+    // Bereits zwischen den Gleisen und zu langsam zum Räumen: abtauchen schlägt Zurückrennen.
+    if (this.tryBurrowThroughTracks(enemy, now)) {
+      this.resetState(state);
+      return { vx: intendedVx, vy: intendedVy, override: false };
     }
 
     const leftDistance = Math.abs(x - leftSafeX);
@@ -117,7 +136,16 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     this.states.clear();
   }
 
+  /**
+   * Fordert bei grabfähigen Gegnern das Einbuddeln an. Unter der Erde ist der Zug ungefährlich,
+   * der Gegner darf also unverändert weiterlaufen.
+   */
+  private tryBurrowThroughTracks(enemy: EnemyEntity, now: number): boolean {
+    return this.burrowSource?.requestTrainCrossingBurrow(enemy.id, now) ?? false;
+  }
+
   private resolveBeforeCrossing(
+    enemy: EnemyEntity,
     state: EnemyTrainAwarenessState,
     config: CoopDefenseEnemyTrainAwarenessConfig,
     x: number,
@@ -150,6 +178,12 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     const approachCaptureDistance = Math.max(8, config.safetyDistancePx);
     if (distanceToEntry > approachCaptureDistance) {
       state.mode = 'normal';
+      return { vx: intendedVx, vy: intendedVy, override: false };
+    }
+
+    // Statt vor den Gleisen zu warten, graben sich grabfähige Gegner einfach darunter durch.
+    if (this.tryBurrowThroughTracks(enemy, now)) {
+      this.resetState(state);
       return { vx: intendedVx, vy: intendedVy, override: false };
     }
     if (distanceToEntry <= 1) {

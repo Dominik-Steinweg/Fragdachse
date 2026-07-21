@@ -175,6 +175,74 @@
       }
     },
     {
+      "id": "alien-badger",
+      "maxHp": 150,
+      "xp": 70,
+      "size": 30,
+      "moveSpeed": 150,
+      "movementTarget": "players",
+      "weapons": [
+        { "weaponId": "ALIEN_BADGER_BITE", "targetMode": "structures" },
+        { "weaponId": "ALIEN_BADGER_PLASMA", "targetMode": "players" }
+      ],
+      "attackScanIntervalMs": 160,
+      "attackStopDurationMs": 180,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_alien_badger",
+      "displayName": "Alien-Dachs",
+      "color": 8188576,
+      "burrow": {
+        "maxDurationMs": 2000,
+        "speedFactor": 1,
+        "spawnBurrowedAtLeftEdge": true,
+        "spawnTunnelMinDistancePx": 96,
+        "spawnTunnelTimeoutMs": 5000,
+        "crossesTrainTracks": true
+      },
+      "trainAwareness": {
+        "safetyDistancePx": 48,
+        "timeSafetyMarginMs": 600
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.5
+      }
+    },
+    {
+      "id": "thrower-badger",
+      "maxHp": 320,
+      "xp": 90,
+      "size": 38,
+      "moveSpeed": 105,
+      "movementTarget": "players",
+      "weapons": [
+        { "weaponId": "THROWER_BADGER_BITE", "targetMode": "structures" }
+      ],
+      "attackScanIntervalMs": 180,
+      "attackStopDurationMs": 220,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_thrower_badger",
+      "displayName": "Wurf-Dachs",
+      "color": 11566322,
+      "spawnThrow": {
+        "displayName": "Brutbombe",
+        "enemyKind": "rabid-badger",
+        "count": 1,
+        "spawnOffsetPx": 12,
+        "cooldownMs": 6000,
+        "flightTimeMs": 1000,
+        "fuseTimeMs": 1600,
+        "minRange": 120,
+        "maxRange": 720,
+        "projectileSpeed": 600,
+        "projectileSize": 16,
+        "maxBounces": 3,
+        "color": 9067058
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.5
+      }
+    },
+    {
       "id": "inferno-colossus",
       "maxHp": 1200,
       "xp": 200,

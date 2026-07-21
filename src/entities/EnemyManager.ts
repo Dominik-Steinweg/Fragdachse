@@ -12,7 +12,7 @@ import {
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
-import type { SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
+import type { BurrowPhase, SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
 import {
   decodeEnemyUpserts,
   encodeEnemyUpsert,
@@ -40,6 +40,28 @@ export interface EnemyDeathInfo {
   readonly ownerId?: string;
 }
 
+/**
+ * Minimal-Schnittstelle des Gegner-Einbuddel-Systems für die Bewegung – als lokaler Typ gehalten,
+ * damit der EnemyManager nicht auf das System zurück-importieren muss.
+ */
+export interface EnemyBurrowMovementSource {
+  isBurrowed(enemyId: string): boolean;
+  /** Erzwungene Grabrichtung während der Einbuddel-Anfahrt; null = normale Wegfindung. */
+  getForcedDirection(enemyId: string): { x: number; y: number } | null;
+  getSpeedFactor(enemyId: string): number;
+}
+
+/**
+ * Buddel-Visuals (Erd-/Staubpartikel und Ein-/Austauch-Effekt). Strukturell erfüllt vom
+ * EffectSystem, das dieselben Effekte für eingebuddelte Spieler zeichnet – als lokaler Typ
+ * gehalten, damit der EnemyManager nicht auf die Effekt-Schicht importieren muss.
+ */
+export interface EnemyBurrowVisualSink {
+  syncBurrowState(id: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void;
+  clearBurrowState(id: string): void;
+  playBurrowPhaseEffect(x: number, y: number, phase: BurrowPhase): void;
+}
+
 interface WildfirePanicState extends WildfireSourceInfo {
   directionX: number;
   directionY: number;
@@ -60,10 +82,41 @@ export class EnemyManager {
   private ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
+  private onEnemySpawned: ((enemy: EnemyEntity) => void) | null = null;
+  private burrowVisualSink: EnemyBurrowVisualSink | null = null;
 
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
     this.resolvedConfigs = resolvedConfigs;
+  }
+
+  /**
+   * Host-Callback fuer jeden neu erzeugten Gegner – unabhaengig davon, ob er aus einer Welle,
+   * einem Death-Spawn oder einer Gegner-Faehigkeit stammt.
+   */
+  setEnemySpawnedCallback(callback: ((enemy: EnemyEntity) => void) | null): void {
+    this.onEnemySpawned = callback;
+  }
+
+  /** Registriert die Effekt-Schicht für die Buddel-Visuals (Host wie Client). */
+  setBurrowVisualSink(sink: EnemyBurrowVisualSink | null): void {
+    this.burrowVisualSink = sink;
+  }
+
+  /**
+   * Einziger Weg, den Einbuddel-Zustand eines Gegners zu setzen – hier hängen die Buddel-Visuals
+   * dran. Der Host ruft das aus dem Burrow-System, der Client beim Anwenden des Snapshots, so dass
+   * beide Seiten dieselbe Darstellung wie bei eingebuddelten Spielern zeigen.
+   */
+  setEnemyBurrowed(enemyId: string, burrowed: boolean): void {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || !enemy.setBurrowed(burrowed)) return;
+
+    const sink = this.burrowVisualSink;
+    if (!sink) return;
+    sink.playBurrowPhaseEffect(enemy.sprite.x, enemy.sprite.y, burrowed ? 'windup' : 'recovery');
+    if (burrowed) sink.syncBurrowState(enemyId, 'underground', enemy.sprite);
+    else sink.clearBurrowState(enemyId);
   }
 
   hostSpawnDummyAt(gridX: number, gridY: number, kind: CoopDefenseEnemyKind = 'zombie-badger'): EnemyEntity {
@@ -102,6 +155,7 @@ export class EnemyManager {
     const id = this.generateEnemyId(kind);
     const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind], faction, ownerId, ownerColor);
     this.enemies.set(id, enemy);
+    this.onEnemySpawned?.(enemy);
     return enemy;
   }
 
@@ -115,6 +169,7 @@ export class EnemyManager {
     fireSystem?: FireSystem | null,
     activeBurnSourceResolver?: ((enemyId: string, now: number) => ReadonlyArray<{ sourceId: string }>) | null,
     trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
+    burrowSystem?: EnemyBurrowMovementSource | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
@@ -122,6 +177,10 @@ export class EnemyManager {
     for (const enemy of this.enemies.values()) {
       if (enemy.faction === 'allied') continue;
       const config = this.resolvedConfigs[enemy.kind];
+      const isBurrowed = burrowSystem?.isBurrowed(enemy.id) ?? false;
+      const burrowSpeedFactor = isBurrowed ? (burrowSystem?.getSpeedFactor(enemy.id) ?? 1) : 1;
+      // Unter der Erde ist der Zug keine Gefahr – die Gleis-KI bleibt dann komplett aussen vor.
+      const activeTrainAwareness = isBurrowed ? null : trainAwarenessSystem;
       const primaryFlowFieldService = config.isBoss
         ? bossFlowFieldService ?? baseFlowFieldService
         : config.movementTarget === 'players'
@@ -130,6 +189,18 @@ export class EnemyManager {
 
       if (movementLocked) {
         enemy.stopMovement();
+        continue;
+      }
+
+      // Einbuddel-Anfahrt: der Gegner graebt sich stur in die vorgegebene Richtung, bis das
+      // Burrow-System ein freies Feld meldet. Wegfindung, Separation und Gleis-KI ruhen solange.
+      const forcedBurrowDirection = burrowSystem?.getForcedDirection(enemy.id) ?? null;
+      if (forcedBurrowDirection) {
+        const burrowSpeed = enemy.getMoveSpeed() * burrowSpeedFactor;
+        enemy.setDesiredVelocity(
+          forcedBurrowDirection.x * burrowSpeed,
+          forcedBurrowDirection.y * burrowSpeed,
+        );
         continue;
       }
 
@@ -144,7 +215,7 @@ export class EnemyManager {
         const targetVx = wildfirePanic.directionX * speed;
         const targetVy = wildfirePanic.directionY * speed;
         const current = enemy.getDesiredVelocity();
-        const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);
+        const decision = activeTrainAwareness?.resolveMovement(enemy, targetVx, targetVy, now);
         enemy.setDesiredVelocity(
           decision?.override ? decision.vx : Phaser.Math.Linear(current.vx, targetVx, lerpT),
           decision?.override ? decision.vy : Phaser.Math.Linear(current.vy, targetVy, lerpT),
@@ -159,8 +230,8 @@ export class EnemyManager {
 
       if (enemy.isAttackMovementPaused(now)) {
         const current = enemy.getDesiredVelocity();
-        const trainDecision = trainAwarenessSystem?.resolveMovement(enemy, current.vx, current.vy, now);
-        if (trainDecision?.override && trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) {
+        const trainDecision = activeTrainAwareness?.resolveMovement(enemy, current.vx, current.vy, now);
+        if (trainDecision?.override && activeTrainAwareness?.blocksRegularAttacks(enemy.id)) {
           enemy.setDesiredVelocity(trainDecision.vx, trainDecision.vy);
         } else {
           enemy.stopMovement();
@@ -195,22 +266,22 @@ export class EnemyManager {
           continue;
         }
 
-        this.steerEnemyTowards(enemy, recoveryTarget.x, recoveryTarget.y, lerpT, now, trainAwarenessSystem);
+        this.steerEnemyTowards(enemy, recoveryTarget.x, recoveryTarget.y, lerpT, now, activeTrainAwareness);
         continue;
       }
 
       if (integrationValue <= 0) {
-        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, trainAwarenessSystem)) enemy.stopMovement();
+        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) enemy.stopMovement();
         continue;
       }
 
       const vector = flowFieldService.getVectorAt(gridCell.gridX, gridCell.gridY);
       if (vector.x === 0 && vector.y === 0) {
-        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, trainAwarenessSystem)) enemy.stopMovement();
+        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) enemy.stopMovement();
         continue;
       }
 
-      const speed = enemy.getMoveSpeed();
+      const speed = enemy.getMoveSpeed() * burrowSpeedFactor;
       // Der einzelne Boss braucht keine Separation. Sie kann den grossen Body
       // seitlich aus seinem Clearance-Korridor in eine Wand druecken.
       const separation = config.isBoss ? { x: 0, y: 0 } : this.computeSeparation(enemy, separationGrid);
@@ -231,7 +302,7 @@ export class EnemyManager {
       }
 
       const current = enemy.getDesiredVelocity();
-      const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);
+      const decision = activeTrainAwareness?.resolveMovement(enemy, targetVx, targetVy, now);
       if (decision?.override) {
         enemy.setDesiredVelocity(decision.vx, decision.vy);
       } else {
@@ -557,8 +628,7 @@ export class EnemyManager {
     const deathSpawns = enemy.faction === 'hostile' ? (this.resolvedConfigs[enemy.kind].deathSpawns ?? []) : [];
     this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
     this.netSnapshotCache.delete(id);
-    enemy.destroy();
-    this.enemies.delete(id);
+    this.destroyEnemyEntity(id, enemy);
     this.wildfirePanicStates.delete(id);
     for (const spawnConfig of deathSpawns) {
       const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
@@ -579,9 +649,18 @@ export class EnemyManager {
     if (!enemy) return;
     this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
     this.netSnapshotCache.delete(id);
+    this.destroyEnemyEntity(id, enemy);
+    this.wildfirePanicStates.delete(id);
+  }
+
+  /**
+   * Entfernt einen Gegner samt seiner Buddel-Partikel. Die Emitter folgen dem Sprite, deshalb
+   * müssen sie vor dessen Zerstörung abgeräumt werden.
+   */
+  private destroyEnemyEntity(id: string, enemy: EnemyEntity): void {
+    this.burrowVisualSink?.clearBurrowState(id);
     enemy.destroy();
     this.enemies.delete(id);
-    this.wildfirePanicStates.delete(id);
   }
 
   syncHostVisuals(): void {
@@ -601,8 +680,7 @@ export class EnemyManager {
       const activeIds = new Set(snapshot.a);
       for (const [id, enemy] of this.enemies) {
         if (activeIds.has(enemyIdToNum(id))) continue;
-        enemy.destroy();
-        this.enemies.delete(id);
+        this.destroyEnemyEntity(id, enemy);
       }
     }
 
@@ -610,8 +688,7 @@ export class EnemyManager {
       const id = enemyNumToId(idNum);
       const enemy = this.enemies.get(id);
       if (!enemy) continue;
-      enemy.destroy();
-      this.enemies.delete(id);
+      this.destroyEnemyEntity(id, enemy);
     }
 
     for (const remote of upserts) {
@@ -626,7 +703,8 @@ export class EnemyManager {
   }
 
   destroy(): void {
-    for (const enemy of this.enemies.values()) {
+    for (const [id, enemy] of this.enemies) {
+      this.burrowVisualSink?.clearBurrowState(id);
       enemy.destroy();
     }
     this.enemies.clear();
@@ -664,6 +742,7 @@ export class EnemyManager {
       y: Math.round(snapshot.y),
       rot: Math.round(snapshot.rot * 100) / 100,
       faction: snapshot.faction,
+      burrowed: snapshot.burrowed,
       ownerId: snapshot.ownerId,
       ownerColor: snapshot.ownerColor,
     };
@@ -702,6 +781,10 @@ export class EnemyManager {
       delta.ownerColor = current.ownerColor;
     }
 
+    if (current.burrowed !== previous.burrowed) {
+      delta.burrowed = current.burrowed;
+    }
+
     return Object.keys(delta).length > 1 ? delta : null;
   }
 
@@ -727,8 +810,12 @@ export class EnemyManager {
       enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
       enemy.updateBurnStacks(remote.burnStacks ?? 0);
       this.enemies.set(remote.id, enemy);
+      // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
+      if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);
       return;
     }
+
+    if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
 
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp());

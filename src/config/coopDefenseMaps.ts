@@ -52,6 +52,8 @@ export interface CoopDefenseMapWaveConfig {
   readonly intervalMs: number;
   readonly countPerWave: number;
   readonly startAtMs?: number;
+  /** True: Welle startet erst, wenn das Eröffnungsbombardement (enemyAirstrikes) den Felsbereich geräumt hat. */
+  readonly startsAfterAirstrikeBarrage?: boolean;
 }
 
 export interface ResolvedCoopDefenseMapWaveConfig {
@@ -59,6 +61,7 @@ export interface ResolvedCoopDefenseMapWaveConfig {
   readonly intervalMs: number;
   readonly countPerWave: number;
   readonly startAtMs: number;
+  readonly startsAfterAirstrikeBarrage: boolean;
 }
 
 export interface CoopDefenseMapBossConfig {
@@ -127,6 +130,7 @@ export function resolveCoopDefenseMapWaveConfigs(
       intervalMs: resolvedWaveConfig.intervalMs,
       countPerWave: resolvedWaveConfig.countPerWave,
       startAtMs: Math.max(0, Math.floor(waveConfig.startAtMs ?? 0)),
+      startsAfterAirstrikeBarrage: waveConfig.startsAfterAirstrikeBarrage ?? false,
     };
   });
 }
@@ -369,5 +373,6 @@ function normalizeWaveConfig(waveConfig: CoopDefenseMapWaveConfig): CoopDefenseM
     intervalMs: Math.max(1, Math.floor(waveConfig.intervalMs)),
     countPerWave: Math.max(0, Math.floor(waveConfig.countPerWave)),
     startAtMs: Math.max(0, Math.floor(waveConfig.startAtMs ?? 0)),
+    startsAfterAirstrikeBarrage: waveConfig.startsAfterAirstrikeBarrage ?? false,
   };
 }

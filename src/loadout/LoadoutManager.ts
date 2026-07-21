@@ -91,6 +91,8 @@ interface ShotgunLightningEvent {
 
 interface NegevCombatState {
   kills: number;
+  /** Zeitpunkt des letzten tatsaechlich abgefeuerten Negev-Schusses. */
+  lastShotAt: number;
 }
 
 export interface NegevKillstreakExplosionEvent {
@@ -146,6 +148,14 @@ export class LoadoutManager {
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
   private static readonly HOLD_EXPIRE_MS = 100;
+  /**
+   * Dauerfeuer gilt als unterbrochen, wenn so lange kein Negev-Schuss mehr fiel.
+   * Bewusst an den echten Schuessen statt am gehaltenen Feuerknopf gemessen: So
+   * endet der Killstreak auch bei leerem Adrenalin, Tod, Eingraben oder Dodge.
+   */
+  private static readonly NEGEV_STREAK_GAP_MS = 300;
+  /** Kill-Zahl, ab der die HUD-Partikel des Killstreaks ihre volle Staerke erreichen. */
+  private static readonly NEGEV_STREAK_FULL_INTENSITY_KILLS = 15;
 
   private readonly okResult: LoadoutUseResult = { ok: true };
 
@@ -196,7 +206,7 @@ export class LoadoutManager {
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.resetPlayer(playerId);
     this.resetAk47State(playerId);
-    this.negevStates.set(playerId, { kills: 0 });
+    this.negevStates.set(playerId, { kills: 0, lastShotAt: 0 });
   }
 
   /**
@@ -334,6 +344,8 @@ export class LoadoutManager {
       defId: 'NEGEV_KILLSTREAK',
       remainingFrac: 1,
       valueText: `${state.kills} Kills · +${Math.round(state.kills * damagePerKill * 100)}%`,
+      // Der Streak ist unbegrenzt – ab dieser Kill-Zahl laeuft die Anzeige auf Vollgas.
+      intensity: Math.min(1, state.kills / LoadoutManager.NEGEV_STREAK_FULL_INTENSITY_KILLS),
     }];
   }
 
@@ -661,9 +673,7 @@ export class LoadoutManager {
 
     for (const [playerId, state] of this.negevStates) {
       if (state.kills <= 0) continue;
-      const held = this.heldFireSlots.get(playerId);
-      const stillFiringNegev = held?.slot === 'weapon2'
-        && now - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS
+      const stillFiringNegev = now - state.lastShotAt < LoadoutManager.NEGEV_STREAK_GAP_MS
         && this.loadouts.get(playerId)?.weapon2.config.id === 'NEGEV';
       if (!stillFiringNegev) this.finishNegevKillstreak(playerId, state.kills);
     }
@@ -1042,9 +1052,8 @@ export class LoadoutManager {
       && weaponName === negev.displayName
       && (negev.negevKillstreak?.damageBonusPerKill ?? 0) > 0
     ) {
-      const state = this.negevStates.get(killerId) ?? { kills: 0 };
+      const state = this.getOrCreateNegevState(killerId);
       state.kills += 1;
-      this.negevStates.set(killerId, state);
       const heal = negev.negevKillstreak?.healPerKill ?? 0;
       const armor = negev.negevKillstreak?.armorPerKill ?? 0;
       if (heal > 0) this.combatSystem?.heal(killerId, heal);
@@ -1102,6 +1111,15 @@ export class LoadoutManager {
       }
       return;
     }
+  }
+
+  private getOrCreateNegevState(playerId: string): NegevCombatState {
+    let state = this.negevStates.get(playerId);
+    if (!state) {
+      state = { kills: 0, lastShotAt: 0 };
+      this.negevStates.set(playerId, state);
+    }
+    return state;
   }
 
   private finishNegevKillstreak(playerId: string, kills: number): void {
@@ -1263,7 +1281,15 @@ export class LoadoutManager {
 
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
     if (!fireSuperiorityActive && cfg.adrenalinCost > 0) {
-      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
+      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) {
+        // Zu wenig Adrenalin fuer den naechsten Schuss = Dauerfeuer vorbei.
+        // Sofort beenden, damit nachtropfendes Adrenalin den Streak nicht am Leben haelt.
+        if (cfg.id === 'NEGEV') {
+          const streakKills = this.negevStates.get(playerId)?.kills ?? 0;
+          if (streakKills > 0) this.finishNegevKillstreak(playerId, streakKills);
+        }
+        return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
+      }
     }
 
     // 3. Spread-Parameter berechnen
@@ -1297,19 +1323,31 @@ export class LoadoutManager {
       const chargeProgress = Phaser.Math.Clamp(params?.scopeChargeProgress ?? 0, 0, 1);
       const fullyCharged = chargeProgress >= 0.999;
       const fullChargeMultiplier = fullyCharged ? 1 + cfg.awpCharge.fullChargeDamageBonus : 1;
+      const corridorActive = fullyCharged && cfg.awpCharge.corridorEnabled > 0;
       shotCfg = {
         ...shotCfg,
         damage: shotCfg.damage * (1 + chargeProgress * cfg.awpCharge.maxDamageBonus) * fullChargeMultiplier,
+        // Voll aufgeladene Schuesse sind sofort erkennbar: groesser + rot, mit Schneise nochmals groesser.
+        bulletVisualPreset: corridorActive
+          ? 'awp_corridor'
+          : fullyCharged ? 'awp_charged' : shotCfg.bulletVisualPreset,
         awpCharge: {
           ...cfg.awpCharge,
           fireTrailBurnDamagePerTick: cfg.awpCharge.fireTrailBurnDamagePerTick * fullChargeMultiplier,
-          corridorEnabled: fullyCharged ? cfg.awpCharge.corridorEnabled : 0,
+          // Saemtliche Schneisen-Boni – inklusive der breiteren Feuerspur – gelten
+          // ausschliesslich fuer voll aufgeladene Schuesse (Geduldiger Tod).
+          corridorEnabled: corridorActive ? cfg.awpCharge.corridorEnabled : 0,
           corridorDamage: cfg.awpCharge.corridorDamage * fullChargeMultiplier,
+          fireTrailHalfWidthCells: fullyCharged ? cfg.awpCharge.fireTrailHalfWidthCells : 0,
         },
       };
     }
     if (cfg.id === 'NEGEV') {
-      const kills = this.negevStates.get(playerId)?.kills ?? 0;
+      const negevState = this.getOrCreateNegevState(playerId);
+      // Bewusst Host-Wanduhr statt des (client-gelieferten) now: update() vergleicht
+      // ebenfalls gegen Date.now(), sonst wuerde Clock-Skew den Streak abreissen.
+      negevState.lastShotAt = Date.now();
+      const kills = negevState.kills;
       const damageMultiplier = 1 + kills * (cfg.negevKillstreak?.damageBonusPerKill ?? 0);
       if (damageMultiplier > 1) {
         shotCfg = {
@@ -1880,6 +1918,12 @@ export class LoadoutManager {
         : undefined,
       awpCorridorDamage: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
         ? config.awpCharge?.corridorDamage
+        : undefined,
+      awpCorridorDotDurationMs: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
+        ? config.awpCharge?.corridorDotDurationMs
+        : undefined,
+      awpCorridorDotTickIntervalMs: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
+        ? config.awpCharge?.corridorDotTickIntervalMs
         : undefined,
       awpCorridorKnockback: config.id === 'AWP' && (config.awpCharge?.corridorEnabled ?? 0) > 0
         ? config.awpCharge?.corridorKnockback

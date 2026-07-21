@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { PLAYER_SIZE } from '../config';
 import {
   getCoopDefenseEnemyConfig,
+  type CoopDefenseEnemySpawnThrowConfig,
   type CoopDefenseEnemyTranslocatorConfig,
 } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
@@ -30,11 +31,26 @@ interface EnemyTeleportState {
 
 const ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER = 2;
 
+/**
+ * Wie beim Translocator bremst die Luftreibung das Geschoss waehrend des Fluges spuerbar ab.
+ * Gegner werfen deshalb staerker, damit der geplante Zielpunkt tatsaechlich erreicht wird.
+ */
+const ENEMY_THROW_SPEED_MULTIPLIER = 2;
+
+/** Flugphysik geworfener Gegner-Projektile – uebernommen vom bewaehrten Translocator-Puck. */
+const ENEMY_THROW_FLIGHT_PHYSICS = {
+  frictionDelayMs: 300,
+  airFrictionDecayPerSec: 0.15,
+  bounceFrictionMultiplier: 0.3,
+  stopSpeedThreshold: 15,
+} as const;
+
 /** Host-seitige, dauerhaft aktive Spezialfaehigkeiten der Coop-Gegner. */
 export class CoopDefenseEnemyAbilitySystem {
   private readonly lastHealingTickAt = new Map<string, number>();
   private readonly lastMiniDomeTickAt = new Map<string, number>();
   private readonly teleportStates = new Map<string, EnemyTeleportState>();
+  private readonly spawnThrowReadyAt = new Map<string, number>();
   private readonly activeStinkAuraEnemyIds = new Set<string>();
 
   constructor(
@@ -52,6 +68,8 @@ export class CoopDefenseEnemyAbilitySystem {
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       activeEnemyIds.add(enemy.id);
+      // Eingebuddelte Gegner setzen – wie eingebuddelte Spieler – keine Faehigkeiten ein.
+      if (enemy.isBurrowed()) continue;
 
       const healingAura = this.getWeaponConfig(enemy, 'HEALING_AURA');
       if (healingAura?.fire.type === 'healing_aura') {
@@ -70,6 +88,9 @@ export class CoopDefenseEnemyAbilitySystem {
 
       const translocator = getCoopDefenseEnemyConfig(enemy.kind).translocator;
       if (translocator) this.updateTranslocator(enemy, translocator, now);
+
+      const spawnThrow = getCoopDefenseEnemyConfig(enemy.kind).spawnThrow;
+      if (spawnThrow) this.updateSpawnThrow(enemy, spawnThrow, now);
     }
 
     this.pruneInactiveEnemies(activeEnemyIds);
@@ -82,6 +103,7 @@ export class CoopDefenseEnemyAbilitySystem {
     this.lastHealingTickAt.clear();
     this.lastMiniDomeTickAt.clear();
     this.teleportStates.clear();
+    this.spawnThrowReadyAt.clear();
     this.activeStinkAuraEnemyIds.clear();
   }
 
@@ -221,6 +243,102 @@ export class CoopDefenseEnemyAbilitySystem {
     state.teleportAt = now + ability.flightTimeMs;
   }
 
+  /**
+   * Brutbombe: geworfenes Projektil mit Granaten-Flugphysik, das nach der Zuendzeit keine Explosion
+   * ausloest, sondern neue Gegner absetzt. Die Wurfballistik entspricht bewusst dem gegnerischen
+   * Translocator – Wurfgeschwindigkeit aus Zieldistanz und geplanter Flugzeit, kompensiert um die
+   * Luftreibung, die das Geschoss unterwegs abbremst.
+   */
+  private updateSpawnThrow(
+    enemy: EnemyEntity,
+    ability: CoopDefenseEnemySpawnThrowConfig,
+    now: number,
+  ): void {
+    const nextReadyAt = this.spawnThrowReadyAt.get(enemy.id);
+    if (nextReadyAt === undefined) {
+      this.spawnThrowReadyAt.set(enemy.id, now + ability.cooldownMs);
+      return;
+    }
+    if (now < nextReadyAt) return;
+
+    const target = this.findThrowTarget(enemy, ability.minRange, ability.maxRange);
+    if (!target) return;
+
+    const angle = Phaser.Math.Angle.Between(enemy.sprite.x, enemy.sprite.y, target.x, target.y);
+    const spawnDistance = enemy.getCollisionRadius() + ability.projectileSize * 0.5;
+    const plannedFlightSeconds = Math.max(0.1, ability.flightTimeMs / 1000);
+    const throwSpeed = Phaser.Math.Clamp(
+      (target.distance / plannedFlightSeconds) * ENEMY_THROW_SPEED_MULTIPLIER,
+      16,
+      ability.projectileSpeed * ENEMY_THROW_SPEED_MULTIPLIER,
+    );
+
+    this.projectileManager.spawnProjectile(
+      enemy.sprite.x + Math.cos(angle) * spawnDistance,
+      enemy.sprite.y + Math.sin(angle) * spawnDistance,
+      angle,
+      enemy.id,
+      {
+        speed: throwSpeed,
+        size: ability.projectileSize,
+        damage: 0,
+        color: ability.color,
+        ownerColor: ability.color,
+        lifetime: ability.fuseTimeMs,
+        maxBounces: ability.maxBounces,
+        isGrenade: true,
+        fuseTime: ability.fuseTimeMs,
+        adrenalinGain: 0,
+        weaponName: ability.displayName,
+        projectileStyle: 'grenade',
+        grenadeVisualPreset: 'fur_ball',
+        rockDamageMult: 0,
+        trainDamageMult: 0,
+        grenadeEffect: {
+          type: 'spawn_enemy',
+          enemyKind: ability.enemyKind,
+          count: ability.count,
+          offsetPx: ability.spawnOffsetPx,
+          color: ability.color,
+        },
+        ...ENEMY_THROW_FLIGHT_PHYSICS,
+      },
+    );
+    this.spawnThrowReadyAt.set(enemy.id, now + ability.cooldownMs);
+  }
+
+  /** Naechstes gueltiges Wurfziel innerhalb der Reichweite (Spieler bzw. gegnerische Fraktion). */
+  private findThrowTarget(
+    enemy: EnemyEntity,
+    minRange: number,
+    maxRange: number,
+  ): { x: number; y: number; distance: number } | null {
+    let best: { x: number; y: number; distance: number } | null = null;
+
+    if (enemy.faction === 'allied') {
+      for (const target of this.enemyManager.getHostileEnemies()) {
+        if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
+        if (!this.combatSystem.canDamageTarget(enemy.id, target.id)) continue;
+        const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
+        if (distance < minRange || distance > maxRange || (best && distance >= best.distance)) continue;
+        if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y)) continue;
+        best = { x: target.sprite.x, y: target.sprite.y, distance };
+      }
+      return best;
+    }
+
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!player.sprite.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
+      if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
+      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+      if (distance < minRange || distance > maxRange || (best && distance >= best.distance)) continue;
+      if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)) continue;
+      best = { x: player.sprite.x, y: player.sprite.y, distance };
+    }
+
+    return best;
+  }
+
   private findTranslocatorTarget(
     enemy: EnemyEntity,
     ability: CoopDefenseEnemyTranslocatorConfig,
@@ -322,6 +440,9 @@ export class CoopDefenseEnemyAbilitySystem {
     }
     for (const enemyId of this.lastMiniDomeTickAt.keys()) {
       if (!activeEnemyIds.has(enemyId)) this.lastMiniDomeTickAt.delete(enemyId);
+    }
+    for (const enemyId of this.spawnThrowReadyAt.keys()) {
+      if (!activeEnemyIds.has(enemyId)) this.spawnThrowReadyAt.delete(enemyId);
     }
     for (const [enemyId, state] of this.teleportStates) {
       if (activeEnemyIds.has(enemyId)) continue;

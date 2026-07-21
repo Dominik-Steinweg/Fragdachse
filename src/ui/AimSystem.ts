@@ -119,6 +119,14 @@ export class AimSystem {
     this.scopeProgress = progress;
   }
 
+  /**
+   * Zielen mit einer Scope-Waffe uebernimmt sofort das Fadenkreuz von Waffe 2 –
+   * inklusive Ladebalken –, auch wenn zuletzt mit Waffe 1 geschossen wurde.
+   */
+  setScoping(scoping: boolean): void {
+    if (scoping) this.spreadModel.setActiveSlot('weapon2');
+  }
+
   setWeaponChargeProgress(progress: number): void {
     this.weaponChargeProgress = Phaser.Math.Clamp(progress, 0, 1);
   }

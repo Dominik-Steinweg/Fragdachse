@@ -1,24 +1,76 @@
 import * as Phaser from 'phaser';
 import { DEPTH, isPointInsideArena } from '../config';
 import type { BulletVisualPreset } from '../types';
-import { configureAdditiveImage, ensureCanvasTexture } from './EffectUtils';
+import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, setEmitterAngleRange } from './EffectUtils';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_TRAIL = '__bullet_trail';
 const TEX_GLOW  = '__bullet_glow';
 const TEX_SPARK = '__bullet_spark';
+const TEX_AURA  = '__bullet_charge_aura';
+const TEX_WIND  = '__bullet_charge_wind';
+const TEX_GUST  = '__bullet_charge_gust';
 
 // ── Textur-Dimensionen ─────────────────────────────────────────────────────
 const TRAIL_TEX_W   = 48;
 const TRAIL_TEX_H   = 8;
 const GLOW_TEX_SIZE = 24;
+const AURA_TEX_SIZE = 72;
+const WIND_TEX_W    = 40;
+const WIND_TEX_H    = 6;
+const GUST_TEX_W    = 72;
+const GUST_TEX_H    = 26;
 
 // Depth-Layer
+const DEPTH_WIND   = DEPTH.PROJECTILES - 1.5;
 const DEPTH_TRAIL  = DEPTH.PROJECTILES - 1;
 const DEPTH_GLOW   = DEPTH.PROJECTILES - 1;
+const DEPTH_AURA   = DEPTH.PROJECTILES - 0.5;
 const DEPTH_BULLET = DEPTH.PROJECTILES;
 const DEPTH_ACCENT = DEPTH.PROJECTILES + 1;
 const DEPTH_SPARK  = DEPTH.PROJECTILES + 1;
+
+/** Obergrenze pro Frame, damit ein einzelner Physik-Sprung keine Partikelflut ausloest. */
+const MAX_EMISSIONS_PER_FRAME = 16;
+/** Nachlaufzeit der Sturm-Emitter nach dem Einschlag (deckt die laengste Partikel-Lifespan ab). */
+const WIND_LINGER_MS = 420;
+
+/**
+ * Zusatz-VFX voll aufgeladener AWP-Schuesse: pulsierende Hitze-Aura und – mit
+ * "Schneise der Zerstoerung" – ein Sturm, der entlang der Flugbahn zu beiden
+ * Seiten wegdrueckt.
+ */
+export interface BulletChargeFxConfig {
+  auraScale:      number;
+  auraAlpha:      number;
+  auraColor:      number;
+  /** Pulsfrequenz der Aura in rad/ms. */
+  auraPulseSpeed: number;
+  wind?: BulletChargeWindConfig;
+}
+
+export interface BulletChargeWindConfig {
+  /** Streckenabstand zweier Wind-Emissionen entlang der Flugbahn (px). */
+  streakSpacingPx: number;
+  streakQuantity:  number;
+  streakSpeedMin:  number;
+  streakSpeedMax:  number;
+  /** Wie weit die Boe entgegen der Flugrichtung nachgezogen wird (Grad). */
+  sweepMinDeg:     number;
+  sweepMaxDeg:     number;
+  streakLifespanMin: number;
+  streakLifespanMax: number;
+  streakScaleStart: number;
+  streakScaleEnd:   number;
+  streakAlpha:      number;
+  streakColors:     readonly number[];
+  /** Streckenabstand der seitlichen Druckwellen-Klingen (px). */
+  gustSpacingPx:  number;
+  gustReachPx:    number;
+  gustDurationMs: number;
+  gustAlpha:      number;
+  gustColor:      number;
+}
 
 // ── Stil-Konfiguration ────────────────────────────────────────────────────
 export interface BulletStyleConfig {
@@ -45,6 +97,12 @@ export interface BulletStyleConfig {
   impactFlashScale: number;
   impactFlashAlpha: number;
   impactFlashDuration: number;
+  /** Farb-Overrides – ohne Angabe gewinnt die Projektil-/Spielerfarbe. */
+  bodyTint?:   number;
+  accentTint?: number;
+  trailTint?:  number;
+  glowTint?:   number;
+  chargeFx?:   BulletChargeFxConfig;
 }
 
 const DEFAULT_BULLET_VISUAL_PRESET: BulletVisualPreset = 'default';
@@ -57,6 +115,8 @@ const BODY_TEXTURE_KEYS: Record<BulletVisualPreset, string> = {
   ak47: '__bullet_body_ak47',
   shotgun: '__bullet_body_shotgun',
   awp: '__bullet_body_awp',
+  awp_charged: '__bullet_body_awp',
+  awp_corridor: '__bullet_body_awp',
   gauss: '__bullet_body_gauss',
   negev: '__bullet_body_negev',
 };
@@ -69,6 +129,8 @@ const ACCENT_TEXTURE_KEYS: Record<BulletVisualPreset, string | undefined> = {
   ak47: '__bullet_accent_ak47',
   shotgun: '__bullet_accent_shotgun',
   awp: '__bullet_accent_awp',
+  awp_charged: '__bullet_accent_awp',
+  awp_corridor: '__bullet_accent_awp',
   gauss: '__bullet_accent_gauss',
   negev: '__bullet_accent_negev',
 };
@@ -249,6 +311,97 @@ const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
     impactFlashAlpha: 0.48,
     impactFlashDuration: 110,
   },
+  // Voll aufgeladen (Geduldiger Tod), ohne Schneise: deutlich groesser und glutrot.
+  awp_charged: {
+    bodyTextureKey: BODY_TEXTURE_KEYS.awp_charged,
+    accentTextureKey: ACCENT_TEXTURE_KEYS.awp_charged,
+    scaleBoost:      2.1,
+    trailLengthMult: 11.0,
+    trailAlpha:      0.95,
+    trailScaleYMult: 1.75,
+    glowScale:       3.6,
+    glowAlpha:       0.52,
+    accentAlpha:     0.82,
+    accentScaleX:    1.3,
+    accentScaleY:    0.98,
+    sparkCount:      24,
+    sparkLifespan:   340,
+    sparkSpeedMin:   130,
+    sparkSpeedMax:   440,
+    sparkSpreadDeg:  58,
+    sparkGravityY:   200,
+    sparkScaleStart: 2.0,
+    sparkScaleEnd:   0.14,
+    sparkColors:     [0xffffff, 0xffc9a0, 0xff6a25, 0xd4180a],
+    impactFlashScale: 3.4,
+    impactFlashAlpha: 0.6,
+    impactFlashDuration: 145,
+    bodyTint:   0xff5a2a,
+    accentTint: 0xffe2c0,
+    trailTint:  0xff3212,
+    glowTint:   0xff2a08,
+    chargeFx: {
+      auraScale:      1.5,
+      auraAlpha:      0.5,
+      auraColor:      0xff3a12,
+      auraPulseSpeed: 0.028,
+    },
+  },
+  // Voll aufgeladen + Schneise der Zerstoerung: weissglueh, groesser, mit Sturmboe.
+  awp_corridor: {
+    bodyTextureKey: BODY_TEXTURE_KEYS.awp_corridor,
+    accentTextureKey: ACCENT_TEXTURE_KEYS.awp_corridor,
+    scaleBoost:      2.8,
+    trailLengthMult: 13.5,
+    trailAlpha:      1.0,
+    trailScaleYMult: 2.15,
+    glowScale:       4.4,
+    glowAlpha:       0.62,
+    accentAlpha:     0.95,
+    accentScaleX:    1.38,
+    accentScaleY:    1.05,
+    sparkCount:      34,
+    sparkLifespan:   400,
+    sparkSpeedMin:   150,
+    sparkSpeedMax:   520,
+    sparkSpreadDeg:  70,
+    sparkGravityY:   180,
+    sparkScaleStart: 2.4,
+    sparkScaleEnd:   0.16,
+    sparkColors:     [0xffffff, 0xffe6b0, 0xff8a30, 0xff3c08],
+    impactFlashScale: 4.2,
+    impactFlashAlpha: 0.7,
+    impactFlashDuration: 175,
+    bodyTint:   0xffd08a,
+    accentTint: 0xffffff,
+    trailTint:  0xff5a18,
+    glowTint:   0xff7a20,
+    chargeFx: {
+      auraScale:      2.1,
+      auraAlpha:      0.62,
+      auraColor:      0xff6a1e,
+      auraPulseSpeed: 0.038,
+      wind: {
+        streakSpacingPx:   18,
+        streakQuantity:    2,
+        streakSpeedMin:    340,
+        streakSpeedMax:    820,
+        sweepMinDeg:       78,
+        sweepMaxDeg:       136,
+        streakLifespanMin: 170,
+        streakLifespanMax: 360,
+        streakScaleStart:  1.15,
+        streakScaleEnd:    0.05,
+        streakAlpha:       0.62,
+        streakColors:      [0xffffff, 0xffe8c4, 0xffb063, 0xd9d4cc],
+        gustSpacingPx:  110,
+        gustReachPx:    150,
+        gustDurationMs: 260,
+        gustAlpha:      0.55,
+        gustColor:      0xfff0d2,
+      },
+    },
+  },
   gauss: {
     bodyTextureKey: BODY_TEXTURE_KEYS.gauss,
     accentTextureKey: ACCENT_TEXTURE_KEYS.gauss,
@@ -302,6 +455,17 @@ const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
 };
 
 // ── Interner State pro Bullet ──────────────────────────────────────────────
+/** Laufender Zustand der Aufladungs-VFX (nur bei Presets mit chargeFx belegt). */
+interface BulletChargeFxState {
+  aura:      Phaser.GameObjects.Image;
+  windLeft:  Phaser.GameObjects.Particles.ParticleEmitter | null;
+  windRight: Phaser.GameObjects.Particles.ParticleEmitter | null;
+  /** Reststrecke seit der letzten Emission – haelt den Abstand geschwindigkeitsunabhaengig. */
+  streakCarryPx: number;
+  gustCarryPx:   number;
+  scaleFactor:   number;
+}
+
 interface BulletVisual {
   bullet:  Phaser.GameObjects.Image;
   accent:  Phaser.GameObjects.Image | null;
@@ -311,6 +475,7 @@ interface BulletVisual {
   prevY:   number;
   config:  BulletStyleConfig;
   accentColor: number;
+  chargeFx: BulletChargeFxState | null;
 }
 
 /**
@@ -328,6 +493,8 @@ export class BulletRenderer {
 
   // Pool für Impact-Emitter (auto-destroy nach Lifespan)
   private activeSparkEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
+  // Kurzlebige Druckwellen-Klingen der Sturmboe (per Tween selbst aufräumend)
+  private activeGusts: Phaser.GameObjects.Image[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -401,6 +568,8 @@ export class BulletRenderer {
         });
         break;
       case 'awp':
+      case 'awp_charged':
+      case 'awp_corridor':
         ensureCanvasTexture(texMgr, key, 20, 6, (ctx) => {
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
@@ -502,6 +671,8 @@ export class BulletRenderer {
         });
         break;
       case 'awp':
+      case 'awp_charged':
+      case 'awp_corridor':
         ensureCanvasTexture(texMgr, key, 20, 6, (ctx) => {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(1.5, 2.1, 12.5, 1.8);
@@ -594,6 +765,74 @@ export class BulletRenderer {
       canvas.refresh();
     }
 
+    // ── Ladungs-Aura: heisser Kern mit weichem Abfall ────────────────────
+    if (!texMgr.exists(TEX_AURA)) {
+      const size = AURA_TEX_SIZE;
+      const canvas = texMgr.createCanvas(TEX_AURA, size, size)!;
+      const ctx = canvas.context;
+      const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      grad.addColorStop(0.0, 'rgba(255,255,255,0.95)');
+      grad.addColorStop(0.18, 'rgba(255,255,255,0.55)');
+      grad.addColorStop(0.45, 'rgba(255,255,255,0.2)');
+      grad.addColorStop(0.75, 'rgba(255,255,255,0.06)');
+      grad.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, size, size);
+      canvas.refresh();
+    }
+
+    // ── Wind-Streifen: beidseitig auslaufender Strich für Sturmpartikel ──
+    if (!texMgr.exists(TEX_WIND)) {
+      const tw = WIND_TEX_W, th = WIND_TEX_H;
+      const canvas = texMgr.createCanvas(TEX_WIND, tw, th)!;
+      const ctx = canvas.context;
+      const imgData = ctx.createImageData(tw, th);
+      const d = imgData.data;
+      const cy = th / 2;
+
+      for (let y = 0; y < th; y++) {
+        const vDist = Math.abs(y - cy) / cy;
+        const vAlpha = 1.0 - vDist * vDist;
+        for (let x = 0; x < tw; x++) {
+          // Symmetrischer Sinus-Bogen: beide Enden laufen weich aus.
+          const hAlpha = Math.sin((x / (tw - 1)) * Math.PI) ** 1.4;
+          const idx = (y * tw + x) * 4;
+          d[idx] = 255;
+          d[idx + 1] = 255;
+          d[idx + 2] = 255;
+          d[idx + 3] = Math.round(vAlpha * hAlpha * 255);
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      canvas.refresh();
+    }
+
+    // ── Druckwellen-Klinge: nach aussen gewölbter Bogen mit weichen Enden ─
+    if (!texMgr.exists(TEX_GUST)) {
+      const gw = GUST_TEX_W, gh = GUST_TEX_H;
+      const canvas = texMgr.createCanvas(TEX_GUST, gw, gh)!;
+      const ctx = canvas.context;
+      const fade = ctx.createLinearGradient(0, 0, gw, 0);
+      fade.addColorStop(0.0, 'rgba(255,255,255,0.0)');
+      fade.addColorStop(0.28, 'rgba(255,255,255,0.85)');
+      fade.addColorStop(0.5, 'rgba(255,255,255,1.0)');
+      fade.addColorStop(0.72, 'rgba(255,255,255,0.85)');
+      fade.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+      ctx.strokeStyle = fade;
+      ctx.lineCap = 'round';
+      // Drei versetzte Bögen erzeugen eine dichte Mitte und ausgefranste Ränder.
+      for (const [offsetY, width, alpha] of [[0, 5, 1.0], [5, 2.6, 0.55], [-4, 2.0, 0.4]] as const) {
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(1, gh - 3 + offsetY * 0.2);
+        ctx.quadraticCurveTo(gw / 2, -8 + offsetY, gw - 1, gh - 3 + offsetY * 0.2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      canvas.refresh();
+    }
+
     // ── Spark-Textur: kleiner elongierter Funke (6×3 px) ─────────────────
     if (!texMgr.exists(TEX_SPARK)) {
       const sw = 6, sh = 3;
@@ -631,7 +870,7 @@ export class BulletRenderer {
 
     const bullet = this.scene.add.image(x, y, config.bodyTextureKey);
     bullet.setScale(scaleFactor, scaleFactor);
-    bullet.setTint(color);
+    bullet.setTint(config.bodyTint ?? color);
     bullet.setDepth(DEPTH_BULLET);
 
     const accent = config.accentTextureKey
@@ -640,14 +879,14 @@ export class BulletRenderer {
           .setScale(scaleFactor * config.accentScaleX, scaleFactor * config.accentScaleY),
         DEPTH_ACCENT,
         config.accentAlpha,
-        accentColor,
+        config.accentTint ?? accentColor,
       )
       : null;
 
     const trail = this.scene.add.image(x, y, TEX_TRAIL);
     trail.setOrigin(1.0, 0.5);
     trail.setScale((size * config.trailLengthMult) / TRAIL_TEX_W, scaleFactor * config.trailScaleYMult);
-    trail.setTint(accentColor);
+    trail.setTint(config.trailTint ?? accentColor);
     trail.setAlpha(config.trailAlpha);
     trail.setBlendMode(Phaser.BlendModes.ADD);
     trail.setDepth(DEPTH_TRAIL);
@@ -656,10 +895,203 @@ export class BulletRenderer {
       this.scene.add.image(x, y, TEX_GLOW).setScale(scaleFactor * config.glowScale),
       DEPTH_GLOW,
       config.glowAlpha,
-      accentColor,
+      config.glowTint ?? accentColor,
     );
 
-    this.bullets.set(id, { bullet, accent, trail, glow, prevX: x, prevY: y, config, accentColor });
+    this.bullets.set(id, {
+      bullet,
+      accent,
+      trail,
+      glow,
+      prevX: x,
+      prevY: y,
+      config,
+      accentColor,
+      chargeFx: this.createChargeFx(config, x, y, scaleFactor),
+    });
+  }
+
+  // ── Aufladungs-VFX (voll aufgeladene AWP) ────────────────────────────────
+
+  private createChargeFx(
+    config: BulletStyleConfig,
+    x: number,
+    y: number,
+    scaleFactor: number,
+  ): BulletChargeFxState | null {
+    const fx = config.chargeFx;
+    if (!fx) return null;
+
+    const aura = configureAdditiveImage(
+      this.scene.add.image(x, y, TEX_AURA).setScale(scaleFactor * fx.auraScale),
+      DEPTH_AURA,
+      fx.auraAlpha,
+      fx.auraColor,
+    );
+
+    const wind = fx.wind;
+    const makeWindEmitter = (): Phaser.GameObjects.Particles.ParticleEmitter | null => {
+      if (!wind) return null;
+      // Der Emitter bleibt untransformiert im Ursprung, damit emitParticleAt()
+      // direkt in Weltkoordinaten arbeiten kann.
+      const emitter = this.scene.add.particles(0, 0, TEX_WIND, {
+        lifespan: { min: wind.streakLifespanMin, max: wind.streakLifespanMax },
+        speed:    { min: wind.streakSpeedMin, max: wind.streakSpeedMax },
+        // Startwert; die echte Stossrichtung folgt pro Frame aus der Flugrichtung.
+        angle:    { min: wind.sweepMinDeg, max: wind.sweepMaxDeg },
+        // Streifen zeigen in ihre Flugrichtung – sonst stehen sie quer zum Wind.
+        // onUpdate statt onEmit: beim Emit ist die Velocity noch nicht gesetzt.
+        rotate:   { onUpdate: (particle: Phaser.GameObjects.Particles.Particle) =>
+          Phaser.Math.RadToDeg(Math.atan2(particle.velocityY, particle.velocityX)) },
+        scale:    { start: wind.streakScaleStart, end: wind.streakScaleEnd },
+        alpha:    { start: wind.streakAlpha, end: 0 },
+        color:    [...wind.streakColors],
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      emitter.setDepth(DEPTH_WIND);
+      return emitter;
+    };
+
+    return {
+      aura,
+      windLeft: makeWindEmitter(),
+      windRight: makeWindEmitter(),
+      streakCarryPx: 0,
+      gustCarryPx: 0,
+      scaleFactor,
+    };
+  }
+
+  /**
+   * Treibt Aura und Sturmboe entlang des in diesem Frame zurueckgelegten Segments an.
+   * Emissionen werden streckenbasiert verteilt, damit die Boe bei jeder
+   * Projektilgeschwindigkeit gleichmaessig dicht bleibt.
+   */
+  private updateChargeFx(bv: BulletVisual, x: number, y: number, vx: number, vy: number): void {
+    const state = bv.chargeFx;
+    const fx = bv.config.chargeFx;
+    if (!state || !fx) return;
+
+    const pulse = 0.8 + 0.2 * Math.sin(this.scene.time.now * fx.auraPulseSpeed);
+    state.aura
+      .setPosition(x, y)
+      .setScale(state.scaleFactor * fx.auraScale * pulse)
+      .setAlpha(fx.auraAlpha * pulse);
+
+    const wind = fx.wind;
+    if (!wind || !state.windLeft || !state.windRight) return;
+
+    const dx = x - bv.prevX;
+    const dy = y - bv.prevY;
+    const travel = Math.hypot(dx, dy);
+    if (travel <= 0.01) return;
+
+    const headingDeg = Phaser.Math.RadToDeg(Math.atan2(vy, vx));
+    // Nach hinten gezogene Boe: die Luft wird seitlich verdraengt und bleibt zurueck.
+    setEmitterAngleRange(state.windRight, headingDeg + wind.sweepMinDeg, headingDeg + wind.sweepMaxDeg);
+    setEmitterAngleRange(state.windLeft, headingDeg - wind.sweepMaxDeg, headingDeg - wind.sweepMinDeg);
+
+    this.walkSegment(state.streakCarryPx, travel, wind.streakSpacingPx, (t) => {
+      const px = bv.prevX + dx * t;
+      const py = bv.prevY + dy * t;
+      state.windRight!.emitParticleAt(px, py, wind.streakQuantity);
+      state.windLeft!.emitParticleAt(px, py, wind.streakQuantity);
+    }, (carry) => { state.streakCarryPx = carry; });
+
+    const normalX = -dy / travel;
+    const normalY = dx / travel;
+    this.walkSegment(state.gustCarryPx, travel, wind.gustSpacingPx, (t) => {
+      const px = bv.prevX + dx * t;
+      const py = bv.prevY + dy * t;
+      this.spawnGustBlade(px, py, normalX, normalY, 1, wind);
+      this.spawnGustBlade(px, py, normalX, normalY, -1, wind);
+    }, (carry) => { state.gustCarryPx = carry; });
+  }
+
+  /**
+   * Ruft `emit` an gleichmaessig verteilten Punkten des Segments auf und meldet die
+   * uebrig gebliebene Reststrecke via `storeCarry` zurueck.
+   */
+  private walkSegment(
+    carryPx: number,
+    travelPx: number,
+    spacingPx: number,
+    emit: (t: number) => void,
+    storeCarry: (carry: number) => void,
+  ): void {
+    const spacing = Math.max(1, spacingPx);
+    let distance = spacing - carryPx;
+    let emissions = 0;
+    while (distance <= travelPx && emissions < MAX_EMISSIONS_PER_FRAME) {
+      emit(distance / travelPx);
+      distance += spacing;
+      emissions += 1;
+    }
+    storeCarry(Phaser.Math.Clamp(travelPx - (distance - spacing), 0, spacing));
+  }
+
+  /** Einzelne Druckwelle, die seitlich aus der Flugbahn nach aussen gedrueckt wird. */
+  private spawnGustBlade(
+    x: number,
+    y: number,
+    normalX: number,
+    normalY: number,
+    side: 1 | -1,
+    wind: BulletChargeWindConfig,
+  ): void {
+    if (!isPointInsideArena(x, y)) return;
+
+    const blade = configureAdditiveImage(
+      this.scene.add.image(x, y, TEX_GUST),
+      DEPTH_WIND,
+      wind.gustAlpha,
+      wind.gustColor,
+    );
+    // Die Klinge woelbt sich in Stossrichtung: Laengsachse entlang der Flugbahn.
+    blade.setOrigin(0.5, 1);
+    blade.setRotation(Math.atan2(normalY * side, normalX * side) - Math.PI / 2);
+    blade.setScale(0.55, 0.75);
+
+    this.activeGusts.push(blade);
+    this.scene.tweens.add({
+      targets: blade,
+      x: x + normalX * side * wind.gustReachPx,
+      y: y + normalY * side * wind.gustReachPx,
+      scaleX: 1.75,
+      scaleY: 0.22,
+      alpha: 0,
+      duration: wind.gustDurationMs,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        const index = this.activeGusts.indexOf(blade);
+        if (index !== -1) this.activeGusts.splice(index, 1);
+        if (blade.scene) blade.destroy();
+      },
+    });
+  }
+
+  /**
+   * Aura sofort entfernen, die Sturm-Emitter aber noch ausklingen lassen –
+   * abrupt verschwindende Partikel wuerden den Einschlag unsauber wirken lassen.
+   */
+  private destroyChargeFx(state: BulletChargeFxState | null, lingerMs = WIND_LINGER_MS): void {
+    if (!state) return;
+    state.aura.destroy();
+    for (const emitter of [state.windLeft, state.windRight]) {
+      if (!emitter) continue;
+      if (lingerMs <= 0) {
+        destroyEmitter(emitter);
+        continue;
+      }
+      emitter.stop();
+      this.activeSparkEmitters.push(emitter);
+      this.scene.time.delayedCall(lingerMs, () => {
+        const index = this.activeSparkEmitters.indexOf(emitter);
+        if (index !== -1) this.activeSparkEmitters.splice(index, 1);
+        if (emitter.scene) emitter.destroy();
+      });
+    }
   }
 
   /**
@@ -675,6 +1107,7 @@ export class BulletRenderer {
     bv.accent?.setPosition(x, y).setRotation(rot);
     bv.trail.setPosition(x, y).setRotation(rot);
     bv.glow.setPosition(x, y);
+    this.updateChargeFx(bv, x, y, vx, vy);
 
     // Bounce-Erkennung: Richtungswechsel in X oder Y
     const dx = x - bv.prevX;
@@ -706,6 +1139,7 @@ export class BulletRenderer {
     bv.accent?.setPosition(x, y);
     bv.trail.setPosition(x, y);
     bv.glow.setPosition(x, y);
+    this.updateChargeFx(bv, x, y, vx, vy);
 
     // Bounce-Erkennung: Delta vs. Velocity
     const dx = x - bv.prevX;
@@ -729,6 +1163,7 @@ export class BulletRenderer {
     bv.accent?.destroy();
     bv.trail.destroy();
     bv.glow.destroy();
+    this.destroyChargeFx(bv.chargeFx);
   }
 
   /**
@@ -799,6 +1234,7 @@ export class BulletRenderer {
       bv.accent?.destroy();
       bv.trail.destroy();
       bv.glow.destroy();
+      this.destroyChargeFx(bv.chargeFx, 0);
     }
     this.bullets.clear();
 
@@ -806,5 +1242,11 @@ export class BulletRenderer {
       if (e.scene) e.destroy();
     }
     this.activeSparkEmitters.length = 0;
+
+    for (const gust of this.activeGusts) {
+      this.scene.tweens.killTweensOf(gust);
+      if (gust.scene) gust.destroy();
+    }
+    this.activeGusts.length = 0;
   }
 }

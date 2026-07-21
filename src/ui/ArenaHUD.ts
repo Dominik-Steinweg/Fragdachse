@@ -169,6 +169,7 @@ interface BarBundle {
   currentFrac:  number;
   renderedWidth: number;
   energized:    boolean;       // true = intense sparkle, false = calm breathing
+  particleIntensity: number;   // 0..1 – zuletzt angewandte Partikel-Verstärkung
 }
 
 /** Info about a single active power-up buff for HUD display. */
@@ -176,6 +177,7 @@ export interface ActivePowerUpInfo {
   defId:         string;
   remainingFrac: number; // 1 = full, 0 = expired
   valueText?:    string;
+  intensity?:    number; // 0..1 – skaliert die Partikel-Intensität der Leiste
 }
 
 /** Data pushed every frame from ArenaScene. */
@@ -476,7 +478,28 @@ export class ArenaHUD {
       currentFrac: 1,
       renderedWidth: barWidth,
       energized: false,
+      particleIntensity: 0,
     };
+  }
+
+  /**
+   * Verstärkt die Energized-Partikel einer Leiste stufenlos (0 = Grundzustand,
+   * 1 = maximal). Genutzt für unbegrenzte Buffs wie den Negev-Killstreak, die
+   * ihre Stärke nicht über einen Balken zeigen können.
+   */
+  private setBarParticleIntensity(bundle: BarBundle, intensity: number): void {
+    const t = Phaser.Math.Clamp(intensity, 0, 1);
+    if (Math.abs(bundle.particleIntensity - t) < 0.01) return;
+    bundle.particleIntensity = t;
+
+    bundle.coreEmitter.setFrequency(Phaser.Math.Linear(30, 8, t), Phaser.Math.Linear(2, 6, t));
+    bundle.coreEmitter.ops.scaleX.start = Phaser.Math.Linear(0.6, 1.2, t);
+    bundle.coreEmitter.ops.scaleY.start = Phaser.Math.Linear(0.6, 1.2, t);
+
+    bundle.outerEmitter.setFrequency(Phaser.Math.Linear(50, 14, t), Phaser.Math.Linear(1, 4, t));
+    bundle.outerEmitter.ops.scaleX.start = Phaser.Math.Linear(0.7, 1.4, t);
+    bundle.outerEmitter.ops.scaleY.start = Phaser.Math.Linear(0.7, 1.4, t);
+    bundle.outerEmitter.ops.alpha.start = Phaser.Math.Linear(0.5, 0.9, t);
   }
 
   private divider(y: number): Phaser.GameObjects.Rectangle {
@@ -986,8 +1009,12 @@ export class ArenaHUD {
         bundle.border.setVisible(false);
         bundle.trail?.setVisible(false);
         bundle.highlight?.setVisible(false);
+        // Ohne Balken ist die Wertzeile frei: eine Zeile tiefer, damit sie nicht
+        // mehr mit dem langen Power-Up-Namen kollidiert.
+        bundle.valueText?.setPosition(BAR_X + barWidth, barY);
       }
       this.setBarEnergized(bundle, true);
+      this.setBarParticleIntensity(bundle, pu.intensity ?? 0);
 
       this.puEntries.set(pu.defId, bundle);
       this.puOrder.push(pu.defId);
@@ -1061,6 +1088,7 @@ export class ArenaHUD {
       const frac = Math.max(0, Math.min(1, pu.remainingFrac));
       if (pu.defId !== 'NEGEV_KILLSTREAK') this.setBarFrac(bundle, frac);
       bundle.valueText?.setText(pu.valueText ?? '');
+      this.setBarParticleIntensity(bundle, pu.intensity ?? 0);
     }
   }
 

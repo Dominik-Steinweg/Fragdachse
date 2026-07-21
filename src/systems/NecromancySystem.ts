@@ -73,6 +73,20 @@ export class NecromancySystem {
     });
   }
 
+  /**
+   * Übernimmt einen Gegner ohne Wiederbelebung als Verbündeten – etwa eine an der Reflexkuppel
+   * abgefangene Brutbombe. Das Ally-Limit wird hier bewusst **nicht** geprüft, so dass eine
+   * Übernahme darüber hinausgehen darf; die übernommenen Einheiten zählen danach aber ganz normal
+   * ins Limit für reguläre Wiederbelebungen. Nekromantie-Boni (HP-Multiplikator beim Spawn, Tempo
+   * und Regeneration im Frame-Update) gelten wie für wiederbelebte Dachse.
+   */
+  captureAlly(ownerId: string, x: number, y: number, kind: CoopDefenseEnemyKind): EnemyEntity | null {
+    const owner = this.playerManager.getPlayer(ownerId);
+    if (!owner?.sprite.active || !this.combatSystem.isAlive(ownerId)) return null;
+    const cfg = this.resolveConfig(ownerId);
+    return this.enemyManager.hostSpawnAllyAtWorld(x, y, kind, ownerId, owner.color, cfg.hpMultiplier);
+  }
+
   hostUpdate(now: number, deltaMs: number): void {
     this.pruneExpiredCorpses(now);
     const activeOwners = new Set<string>();
@@ -80,7 +94,10 @@ export class NecromancySystem {
     for (const player of this.playerManager.getAllPlayers()) {
       const cfg = this.resolveConfig(player.id);
       const alive = player.sprite.active && this.combatSystem.isAlive(player.id);
-      if (!cfg.enabled || !alive) {
+      // Auch ohne Nekromantie-Upgrade werden bereits übernommene Verbündete weiter gesteuert –
+      // sonst würden an der Kuppel abgefangene Dachse sofort wieder verschwinden.
+      const hasAllies = this.enemyManager.getAlliedEnemies(player.id).length > 0;
+      if (!alive || (!cfg.enabled && !hasAllies)) {
         this.clearOwner(player.id);
         continue;
       }
@@ -89,7 +106,7 @@ export class NecromancySystem {
       const owner = this.owners.get(player.id) ?? { nextRaiseAt: now };
       this.owners.set(player.id, owner);
 
-      if (now >= owner.nextRaiseAt && this.enemyManager.getAlliedEnemies(player.id).length < cfg.maxAllies) {
+      if (cfg.enabled && now >= owner.nextRaiseAt && this.enemyManager.getAlliedEnemies(player.id).length < cfg.maxAllies) {
         const corpseIndex = this.findBestCorpseIndex(player.sprite.x, player.sprite.y, cfg.reviveRadius);
         if (corpseIndex >= 0) {
           const [corpse] = this.corpses.splice(corpseIndex, 1);

@@ -8,7 +8,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   type GeometryHit,
   findNearestRectangleHit as geomNearestRectangleHit,
@@ -26,7 +26,7 @@ import {
   HITSCAN_FAVOR_THE_SHOOTER_MAX_OFFSET,
   HITSCAN_FAVOR_THE_SHOOTER_MS,
   PLAYER_SIZE,
-  RAGE_PER_DAMAGE, ADRENALINE_START,
+  RAGE_PER_DAMAGE,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
 import { isCoopDefenseMode } from '../gameModes';
@@ -350,7 +350,11 @@ export class CombatSystem {
   getMaxHp(id: string): number  { return this.maxHp.get(id) ?? this.resolvePlayerMaxHp(id); }
   getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
   isAlive(id: string):  boolean { return (this.alive.get(id) ?? false) || this.enemyManager?.hasEnemy(id) === true; }
-  isBurrowed(id: string): boolean { return this.burrowSystem?.isBurrowed(id) ?? false; }
+  isBurrowed(id: string): boolean {
+    const enemy = this.enemyManager?.getEnemy(id);
+    if (enemy) return enemy.isBurrowed();
+    return this.burrowSystem?.isBurrowed(id) ?? false;
+  }
   getBurnStackCount(id: string): number {
     const sourceStates = this.burnStates.get(id);
     if (!sourceStates) return 0;
@@ -788,6 +792,8 @@ export class CombatSystem {
     if (allowTeamDamage) return true;
     const attackerEnemy = this.enemyManager?.getEnemy(attackerId);
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
+    // Eingebuddelte Gegner sind – wie eingebuddelte Spieler – weder Ziel noch Angreifer.
+    if (targetEnemy?.isBurrowed() || attackerEnemy?.isBurrowed()) return false;
     if (attackerEnemy && targetEnemy) return attackerEnemy.faction !== targetEnemy.faction;
     if (attackerEnemy) return attackerEnemy.faction === 'hostile';
     if (targetEnemy) return targetEnemy.faction === 'hostile';
@@ -855,7 +861,10 @@ export class CombatSystem {
     const now = Date.now();
 
     for (const proj of this.projectileManager.getActiveProjectiles()) {
-      if (proj.isGrenade) continue;
+      // Geworfene Utilities fliegen weiterhin durch die Kuppel. Einzige Ausnahme sind
+      // Brut-Wurfgeschosse: die faengt die Kuppel ab, damit ihr Besitzer die Brut uebernimmt.
+      const isCapturableGrenade = proj.grenadeEffect?.type === 'spawn_enemy';
+      if (proj.isGrenade && !isCapturableGrenade) continue;
       if (proj.miniRocketDeferredExplosion || proj.miniRocketSpent) continue;
 
       for (const dome of domes) {
@@ -870,14 +879,45 @@ export class CombatSystem {
         const blockedDamage = this.computeProjectileDamage(proj);
         this.energyShieldSystem?.onDomeAbsorb(dome.ownerId, blockedDamage, now);
 
-        if (dome.reflect) {
-          this.reflectProjectileFromDome(proj, dome, now);
-        } else {
+        if (!dome.reflect) {
+          // Reine Absorptionskuppel: das Geschoss verschwindet folgenlos, bei Brutbomben
+          // schluepft also gar nichts.
           this.projectileManager.destroyProjectile(proj.id);
+        } else if (isCapturableGrenade) {
+          this.captureSpawnGrenadeFromDome(proj, dome, now);
+        } else {
+          this.reflectProjectileFromDome(proj, dome, now);
         }
         break; // Projektil ist behandelt
       }
     }
+  }
+
+  /**
+   * Trägt die Trefferwirkungen eines Projektils (Boden-DoT-Wolken, Explosionen, Brand, Debuffs)
+   * in ein neu gespawntes Projektil weiter, damit sie nach einem Abprall/einer Reflexion
+   * weiterhin ausgelöst werden, statt beim Reflect stillschweigend verloren zu gehen.
+   */
+  private inheritedProjectileEffects(proj: TrackedProjectile): Partial<ProjectileSpawnConfig> {
+    return {
+      explosion:            proj.explosion,
+      enemyHitExplosion:    proj.enemyHitExplosion,
+      impactCloud:          proj.impactCloud,
+      grenadeEffect:        proj.grenadeEffect,
+      burnDurationMs:       proj.burnDurationMs,
+      burnDamagePerTick:    proj.burnDamagePerTick,
+      supplementalBurnOnHit: proj.supplementalBurnOnHit,
+      canReceiveFireImbue:  proj.canReceiveFireImbue,
+      fireTrail:            proj.fireTrail,
+      detonable:            proj.detonable,
+      detonator:            proj.detonator,
+      rockDamageMult:       proj.rockDamageMult,
+      trainDamageMult:      proj.trainDamageMult,
+      hitSlowFraction:      proj.hitSlowFraction,
+      hitSlowDurationMs:    proj.hitSlowDurationMs,
+      hitKnockback:         proj.hitKnockback,
+      hitKnockbackDurationMs: proj.hitKnockbackDurationMs,
+    };
   }
 
   /** Schleudert ein gegnerisches Projektil radial aus der Kuppel und übergibt es an den Besitzer. */
@@ -890,6 +930,7 @@ export class CombatSystem {
     const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y) || 400;
 
     this.projectileManager.spawnProjectile(proj.sprite.x, proj.sprite.y, angle, dome.ownerId, {
+      ...this.inheritedProjectileEffects(proj),
       speed,
       size: Math.max(1, proj.sprite.displayWidth),
       damage: proj.damage,
@@ -903,6 +944,45 @@ export class CombatSystem {
       projectileStyle: proj.projectileStyle,
       bulletVisualPreset: proj.bulletVisualPreset,
       tracerConfig: proj.tracerConfig,
+      reflected: true,
+      sourceSlot: 'weapon2',
+    });
+    this.projectileManager.destroyProjectile(proj.id);
+  }
+
+  /**
+   * Übernimmt ein Brut-Wurfgeschoss an der Kuppelgrenze: Es bleibt eine Granate mit Restzündzeit,
+   * prallt nach außen ab und gehört danach dem Kuppel-Besitzer. Die schlüpfende Brut spawnt
+   * dadurch als sein Verbündeter (siehe HostUpdateCoordinator.spawnEnemiesFromGrenade).
+   */
+  private captureSpawnGrenadeFromDome(proj: TrackedProjectile, dome: ReflectDomeInfo, now: number): void {
+    const dirX = proj.sprite.x - dome.x;
+    const dirY = proj.sprite.y - dome.y;
+    const angle = (dirX === 0 && dirY === 0)
+      ? Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x)
+      : Math.atan2(dirY, dirX);
+    const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y) || 400;
+    const remainingFuse = Math.max(1, (proj.fuseTime ?? proj.lifetime) - (now - proj.createdAt));
+
+    this.projectileManager.spawnProjectile(proj.sprite.x, proj.sprite.y, angle, dome.ownerId, {
+      ...this.inheritedProjectileEffects(proj),
+      speed,
+      size: Math.max(1, proj.sprite.displayWidth),
+      damage: 0,
+      color: dome.color,
+      ownerColor: dome.color,
+      lifetime: remainingFuse,
+      fuseTime: remainingFuse,
+      maxBounces: proj.maxBounces,
+      isGrenade: true,
+      adrenalinGain: 0,
+      weaponName: 'Reflexkuppel',
+      projectileStyle: proj.projectileStyle,
+      grenadeVisualPreset: proj.grenadeVisualPreset,
+      frictionDelayMs: proj.frictionDelayMs,
+      airFrictionDecayPerSec: proj.airFrictionDecayPerSec,
+      bounceFrictionMultiplier: proj.bounceFrictionMultiplier,
+      stopSpeedThreshold: proj.stopSpeedThreshold,
       reflected: true,
       sourceSlot: 'weapon2',
     });
@@ -958,6 +1038,7 @@ export class CombatSystem {
             const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y);
             const angle = Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
             this.projectileManager.spawnProjectile(player.sprite.x, player.sprite.y, angle, player.id, {
+              ...this.inheritedProjectileEffects(proj),
               speed,
               size: Math.max(1, proj.sprite.displayWidth),
               damage: proj.damage * reflectionFactor,
@@ -1267,6 +1348,7 @@ export class CombatSystem {
           const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y);
           const angle = Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
           this.projectileManager.spawnProjectile(bestHit.x, bestHit.y, angle, bestHit.playerId, {
+            ...this.inheritedProjectileEffects(proj),
             speed,
             size: Math.max(1, proj.sprite.displayWidth),
             damage: proj.damage * reflectionFactor,
@@ -2722,6 +2804,7 @@ export class CombatSystem {
     const enemy = this.enemyManager?.getEnemy(targetId);
     if (!enemy) return;
     if (amount <= 0) return;
+    if (enemy.isBurrowed()) return;
     if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
 
     if (attackerId && attackerId !== targetId) {
@@ -2880,7 +2963,7 @@ export class CombatSystem {
     this.lastWeapon.delete(playerId);
     this.lastKillSource.delete(playerId);
 
-    this.resourceSystem?.setAdrenaline(playerId, ADRENALINE_START);
+    this.resourceSystem?.resetAdrenalineForSpawn(playerId);
 
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return;

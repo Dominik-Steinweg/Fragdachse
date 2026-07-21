@@ -5,7 +5,12 @@ export type CoopDefenseEnemyKind = string;
 
 export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
 
-export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players' | 'rocks';
+/**
+ * `structures` deckt Basen und Felsen ab (plus den Zug ueber trainDamageMult), laesst Spieler und
+ * Verbuendete aber aus. Damit koennen Gegner eine reine Belagerungswaffe neben einer reinen
+ * Anti-Spieler-Waffe fuehren, ohne dass die Belagerungswaffe auf Spieler anschlaegt.
+ */
+export type CoopDefenseEnemyWeaponTargetMode = 'all' | 'players' | 'rocks' | 'structures';
 
 export interface CoopDefenseEnemyWeaponConfig {
   readonly weaponId: WeaponConfig['id'];
@@ -42,6 +47,49 @@ export interface CoopDefenseEnemyTranslocatorConfig {
   readonly maxRange: number;
 }
 
+/**
+ * Einbuddeln fuer Gegner. Unter der Erde gelten dieselben Einschraenkungen wie beim Spieler:
+ * keine Kollisionen, keine Angriffe, unverwundbar.
+ */
+export interface CoopDefenseEnemyBurrowConfig {
+  /** Maximale Zeit, die der Gegner am Stueck eingebuddelt bleibt. */
+  readonly maxDurationMs: number;
+  /** Geschwindigkeitsfaktor unter der Erde (1 = unveraendert). */
+  readonly speedFactor: number;
+  /** True: Gegner erscheint eingebuddelt am linken Spielfeldrand und graebt sich geradeaus nach rechts frei. */
+  readonly spawnBurrowedAtLeftEdge: boolean;
+  /** Mindest-Grabstrecke der Anfahrt, bevor der Gegner ueberhaupt auftauchen darf. */
+  readonly spawnTunnelMinDistancePx: number;
+  /** Not-Aus fuer die Einbuddel-Anfahrt; danach taucht der Gegner auf, wo er gerade steht. */
+  readonly spawnTunnelTimeoutMs: number;
+  /** True: unterquert eingebuddelt die Gleise, statt auf den vorbeifahrenden Zug zu warten. */
+  readonly crossesTrainTracks: boolean;
+}
+
+/**
+ * Geworfenes Projektil mit Granaten-Flugverhalten, das statt einer Explosion neue Gegner absetzt.
+ * Die Zielerfassung entspricht dem gegnerischen Translocator (Wurfgeschwindigkeit aus Distanz und
+ * geplanter Flugzeit), da sich diese Ballistik bereits bewaehrt hat.
+ */
+export interface CoopDefenseEnemySpawnThrowConfig {
+  readonly displayName: string;
+  /** Gegnerart, die beim Ausloesen entsteht. */
+  readonly enemyKind: CoopDefenseEnemyKind;
+  readonly count: number;
+  readonly spawnOffsetPx: number;
+  readonly cooldownMs: number;
+  /** Geplante Flugzeit bis zum Zielpunkt; bestimmt die Wurfgeschwindigkeit. */
+  readonly flightTimeMs: number;
+  /** Verzoegerung ab Wurf bis zum Ausloesen (analog Granaten-Zuendzeit). */
+  readonly fuseTimeMs: number;
+  readonly minRange: number;
+  readonly maxRange: number;
+  readonly projectileSpeed: number;
+  readonly projectileSize: number;
+  readonly maxBounces: number;
+  readonly color: number;
+}
+
 export interface CoopDefenseEnemyPlayerScaling {
   readonly maxHpFactorPerAdditionalPlayer?: number;
   readonly moveSpeedFactorPerAdditionalPlayer?: number;
@@ -67,6 +115,8 @@ export interface CoopDefenseEnemyConfig {
   readonly displayName?: string;
   readonly color?: number;
   readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
+  readonly burrow?: CoopDefenseEnemyBurrowConfig;
+  readonly spawnThrow?: CoopDefenseEnemySpawnThrowConfig;
   readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
   readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
   readonly trainAwareness?: CoopDefenseEnemyTrainAwarenessConfig;
@@ -151,6 +201,8 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         displayName: config.displayName,
         color: config.color,
         translocator: config.translocator,
+        burrow: config.burrow,
+        spawnThrow: config.spawnThrow,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
         trainAwareness: config.trainAwareness,
@@ -202,6 +254,11 @@ function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): Record<
         );
       }
     }
+    if (config.spawnThrow && !byId[config.spawnThrow.enemyKind]) {
+      throw new Error(
+        `[coopDefenseEnemies] Enemy ${enemyId} references unknown spawn-throw enemy ${config.spawnThrow.enemyKind}`,
+      );
+    }
   }
   return byId;
 }
@@ -226,6 +283,8 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
     translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
+    burrow: normalizeBurrowConfig(enemy.burrow),
+    spawnThrow: normalizeSpawnThrowConfig(enemy.spawnThrow, enemy.id),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
     trainAwareness: normalizeTrainAwareness(enemy.trainAwareness),
@@ -270,6 +329,46 @@ function normalizeTranslocatorConfig(
     cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
     minRange,
     maxRange: Math.max(minRange, config.maxRange),
+  };
+}
+
+function normalizeBurrowConfig(
+  config: CoopDefenseEnemyBurrowConfig | undefined,
+): CoopDefenseEnemyBurrowConfig | undefined {
+  if (!config) return undefined;
+  return {
+    maxDurationMs: Math.max(1, Math.floor(config.maxDurationMs)),
+    speedFactor: Math.max(0.05, config.speedFactor),
+    spawnBurrowedAtLeftEdge: config.spawnBurrowedAtLeftEdge === true,
+    spawnTunnelMinDistancePx: Math.max(0, config.spawnTunnelMinDistancePx),
+    spawnTunnelTimeoutMs: Math.max(1, Math.floor(config.spawnTunnelTimeoutMs)),
+    crossesTrainTracks: config.crossesTrainTracks === true,
+  };
+}
+
+function normalizeSpawnThrowConfig(
+  config: CoopDefenseEnemySpawnThrowConfig | undefined,
+  enemyId: string,
+): CoopDefenseEnemySpawnThrowConfig | undefined {
+  if (!config) return undefined;
+  if (typeof config.enemyKind !== 'string' || config.enemyKind.trim().length === 0) {
+    throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid spawn-throw enemy kind`);
+  }
+  const minRange = Math.max(0, config.minRange);
+  return {
+    displayName: config.displayName,
+    enemyKind: config.enemyKind,
+    count: Math.max(1, Math.floor(config.count)),
+    spawnOffsetPx: Math.max(0, config.spawnOffsetPx),
+    cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
+    flightTimeMs: Math.max(1, Math.floor(config.flightTimeMs)),
+    fuseTimeMs: Math.max(1, Math.floor(config.fuseTimeMs)),
+    minRange,
+    maxRange: Math.max(minRange, config.maxRange),
+    projectileSpeed: Math.max(1, config.projectileSpeed),
+    projectileSize: Math.max(1, config.projectileSize),
+    maxBounces: Math.max(0, Math.floor(config.maxBounces)),
+    color: Math.max(0, Math.floor(config.color)),
   };
 }
 
@@ -335,7 +434,12 @@ function normalizeWeaponTargetMode(
   targetMode: CoopDefenseEnemyWeaponTargetMode,
   enemyId: string,
 ): CoopDefenseEnemyWeaponTargetMode {
-  if (targetMode === 'all' || targetMode === 'players' || targetMode === 'rocks') return targetMode;
+  if (
+    targetMode === 'all'
+    || targetMode === 'players'
+    || targetMode === 'rocks'
+    || targetMode === 'structures'
+  ) return targetMode;
   throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has unsupported weapon target mode: ${String(targetMode)}`);
 }
 

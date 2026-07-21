@@ -31,6 +31,7 @@ import type { TurretSystem }        from '../../systems/TurretSystem';
 import type { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import type { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
+import type { CoopDefenseEnemyBurrowSystem } from '../../systems/CoopDefenseEnemyBurrowSystem';
 import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import type { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
@@ -117,6 +118,7 @@ export interface ArenaContext {
   coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
   coopDefenseEnemyAbilitySystem: CoopDefenseEnemyAbilitySystem | null;
   coopDefenseEnemyTrainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null;
+  coopDefenseEnemyBurrowSystem: CoopDefenseEnemyBurrowSystem | null;
   coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
   coopDefenseWaveSpawner: CoopDefenseWaveSpawner | null;
   coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;

@@ -80,11 +80,21 @@ export interface CoopDefenseAirstrikeDirectorDeps {
 export class CoopDefenseAirstrikeDirector {
   private elapsedMs = 0;
   private readonly pendingBarrageStrikes: ScheduledBarrageStrike[];
+  /** Zeitpunkt, ab dem der letzte Eröffnungs-Einschlag explodiert ist – der Felsbereich gilt danach als geräumt. */
+  private readonly openingBarrageCompleteAtMs: number;
   private barrageAudioPlayed = false;
   private nextHuntStrikeAtMs = PLAYER_HUNT_START_MS;
 
   constructor(private readonly deps: CoopDefenseAirstrikeDirectorDeps) {
     this.pendingBarrageStrikes = this.buildOpeningBarrage();
+    const lastStrike = this.pendingBarrageStrikes[this.pendingBarrageStrikes.length - 1];
+    this.openingBarrageCompleteAtMs = (lastStrike?.dueAtMs ?? OPENING_BARRAGE_FIRST_LAUNCH_MS)
+      + OPENING_BARRAGE_STRIKE_CONFIG.delayMs;
+  }
+
+  /** True, sobald der letzte Eröffnungs-Einschlag explodiert ist und der Felsbereich (das "Pop-Up") geräumt wurde. */
+  isOpeningBarrageComplete(): boolean {
+    return this.elapsedMs >= this.openingBarrageCompleteAtMs;
   }
 
   hostUpdate(deltaMs: number, countdownActive: boolean): void {

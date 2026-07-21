@@ -83,6 +83,7 @@ export class HostPhysicsSystem {
   private enemyTrunkCollidersSetup = new Set<string>();
   private enemyBaseCollidersSetup  = new Set<string>();
   private enemyColliders           = new Map<string, Phaser.Physics.Arcade.Collider[]>();
+  private burrowedEnemies          = new Set<string>();
 
   // Optionale Referenzen
   private burrowSystem:   BurrowSystemType   | null = null;
@@ -350,6 +351,17 @@ export class HostPhysicsSystem {
     }
   }
 
+  /**
+   * Gegenstück zu {@link setPlayerBurrowed} für Coop-Defense-Gegner. Die Collider werden lazy im
+   * Frame-Update angelegt; deshalb merkt sich das Set den Zustand und {@link update} hält neu
+   * erzeugte Collider eines eingebuddelten Gegners inaktiv.
+   */
+  setEnemyBurrowed(id: string, burrowed: boolean): void {
+    if (burrowed) this.burrowedEnemies.add(id);
+    else this.burrowedEnemies.delete(id);
+    for (const collider of this.enemyColliders.get(id) ?? []) collider.active = !burrowed;
+  }
+
   // ── Obstacle-Gruppen ─────────────────────────────────────────────────────
 
   /**
@@ -377,6 +389,7 @@ export class HostPhysicsSystem {
       this.enemyTrunkCollidersSetup.clear();
       this.enemyBaseCollidersSetup.clear();
       this.burrowedPlayers.clear();
+      this.burrowedEnemies.clear();
       this.dashStates.clear();
       this.dashBurstPlayers.clear();
       this.pendingRecoils.clear();
@@ -427,6 +440,7 @@ export class HostPhysicsSystem {
     this.enemyRockCollidersSetup.delete(id);
     this.enemyTrunkCollidersSetup.delete(id);
     this.enemyBaseCollidersSetup.delete(id);
+    this.burrowedEnemies.delete(id);
     this.pendingRecoils.delete(id);
     this.recentImpulseSources.delete(id);
     this.forcedMovement.delete(id);
@@ -682,6 +696,11 @@ export class HostPhysicsSystem {
         existing.push(this.scene.physics.add.collider(enemy.sprite, this.baseGroup));
         this.enemyColliders.set(enemy.id, existing);
         this.enemyBaseCollidersSetup.add(enemy.id);
+      }
+
+      // Eingebuddelte Gegner kollidieren mit nichts – auch nicht mit erst hier lazy erzeugten Collidern.
+      if (this.burrowedEnemies.has(enemy.id)) {
+        for (const collider of this.enemyColliders.get(enemy.id) ?? []) collider.active = false;
       }
 
       const impulse = this.consumeImpulseVelocity(enemy.id, now);

@@ -124,6 +124,23 @@ export function setEmitterTintArray(
   (emitter as any).ops?.tint?.loadConfig({ tint: colors });
 }
 
+/**
+ * Correctly updates the emission direction of a radial particle emitter.
+ *
+ * Same trap as setEmitterTintArray(): setEmitterAngle() only calls EmitterOp.onChange(),
+ * which updates `current` but neither `propertyValue` nor the emit method. A {min,max}
+ * range passed that way never reaches randomRangedIntEmit(), so the emitter keeps its
+ * previous (by default full-circle) direction. loadConfig() rebinds the emit method.
+ */
+export function setEmitterAngleRange(
+  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
+  minDeg: number,
+  maxDeg: number,
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (emitter as any).ops?.angle?.loadConfig({ angle: { min: minDeg, max: maxDeg } });
+}
+
 export function createSeededRandom(seed: number): () => number {
   let state = (seed >>> 0) || 0x6d2b79f5;
 

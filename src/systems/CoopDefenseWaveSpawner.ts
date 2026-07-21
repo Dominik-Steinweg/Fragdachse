@@ -22,6 +22,8 @@ export class CoopDefenseWaveSpawner {
   private exhaustionWarned = false;
   private elapsedMs = 0;
   private bossSpawned = false;
+  /** Zeitpunkt (elapsedMs), zu dem das Luftangriffs-Eröffnungsbombardement fertig war; null solange offen/nicht zutreffend. */
+  private airstrikeBarrageGateOpenedAtMs: number | null = null;
 
   constructor(
     private readonly enemyManager: EnemyManager,
@@ -29,6 +31,7 @@ export class CoopDefenseWaveSpawner {
     private readonly waveConfigs: readonly ResolvedCoopDefenseMapWaveConfig[],
     private readonly bossConfig?: CoopDefenseMapBossConfig,
     private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
+    private readonly isAirstrikeBarrageComplete?: () => boolean,
   ) {
     this.accumulators = waveConfigs.map(() => 0);
     this.startedWaves = waveConfigs.map(() => false);
@@ -40,20 +43,25 @@ export class CoopDefenseWaveSpawner {
     const previousElapsedMs = this.elapsedMs;
     this.elapsedMs += deltaMs;
 
+    if (this.airstrikeBarrageGateOpenedAtMs === null && (this.isAirstrikeBarrageComplete?.() ?? false)) {
+      this.airstrikeBarrageGateOpenedAtMs = this.elapsedMs;
+    }
+
     if (this.bossConfig && !this.bossSpawned && this.elapsedMs >= this.bossConfig.spawnAtMs) {
       this.bossSpawned = this.spawnOne(this.bossConfig.enemyKind);
     }
 
     for (const [index, waveConfig] of this.waveConfigs.entries()) {
       const { intervalMs } = waveConfig;
-      if (this.elapsedMs < waveConfig.startAtMs) continue;
+      const effectiveStartAtMs = this.getEffectiveStartAtMs(waveConfig);
+      if (effectiveStartAtMs === null || this.elapsedMs < effectiveStartAtMs) continue;
 
       if (!this.startedWaves[index]) {
         this.startedWaves[index] = true;
         this.runWave(waveConfig.enemyKind, waveConfig.countPerWave);
       }
 
-      const activeDeltaMs = this.getActiveDeltaMs(previousElapsedMs, this.elapsedMs, waveConfig.startAtMs);
+      const activeDeltaMs = this.getActiveDeltaMs(previousElapsedMs, this.elapsedMs, effectiveStartAtMs);
       if (activeDeltaMs <= 0) continue;
 
       let acc = this.accumulators[index] + activeDeltaMs;
@@ -74,6 +82,7 @@ export class CoopDefenseWaveSpawner {
     this.exhaustionWarned = false;
     this.elapsedMs = 0;
     this.bossSpawned = false;
+    this.airstrikeBarrageGateOpenedAtMs = null;
   }
 
   isBossDefeated(): boolean {
@@ -133,6 +142,10 @@ export class CoopDefenseWaveSpawner {
     kind: CoopDefenseEnemyKind,
     fallbackFlowFieldService?: EnemyFlowFieldService,
   ): { gridX: number; gridY: number }[] {
+    if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtLeftEdge) {
+      return this.collectLeftEdgeCandidates(kind);
+    }
+
     const flowFieldService = fallbackFlowFieldService
       ?? (this.bossConfig?.enemyKind === kind && this.bossFlowFieldService
       ? this.bossFlowFieldService
@@ -161,6 +174,30 @@ export class CoopDefenseWaveSpawner {
     return cells;
   }
 
+  /**
+   * Eingebuddelt startende Gegner erscheinen direkt in der äußersten linken Spalte – auch dort,
+   * wo Felsen den Weg versperren. Sie graben sich anschließend geradeaus nach rechts frei
+   * (siehe CoopDefenseEnemyBurrowSystem), Begehbarkeit ist beim Spawn deshalb irrelevant.
+   */
+  private collectLeftEdgeCandidates(kind: CoopDefenseEnemyKind): { gridX: number; gridY: number }[] {
+    const enemies = this.enemyManager.getAllEnemies();
+    const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
+
+    const cells: { gridX: number; gridY: number }[] = [];
+    for (let gridY = 0; gridY < GRID_ROWS; gridY++) {
+      const world = this.flowFieldService.gridToWorld(0, gridY);
+      if (!world) continue;
+      const overlapsEnemy = enemies.some((enemy) => {
+        const minimumDistance = spawnRadius + enemy.getCollisionRadius();
+        return Phaser.Math.Distance.Squared(world.x, world.y, enemy.sprite.x, enemy.sprite.y)
+          < minimumDistance * minimumDistance;
+      });
+      if (overlapsEnemy) continue;
+      cells.push({ gridX: 0, gridY });
+    }
+    return cells;
+  }
+
   private pushRecent(key: string): void {
     this.recentCells.push(key);
     if (this.recentCells.length > RECENT_CELL_MEMORY) {
@@ -172,6 +209,17 @@ export class CoopDefenseWaveSpawner {
     if (this.exhaustionWarned) return;
     this.exhaustionWarned = true;
     console.warn('[CoopDefenseWaveSpawner] Keine freien Spawn-Zellen mehr im linken Arena-Bereich.');
+  }
+
+  /**
+   * Effektiver Startzeitpunkt einer Welle: normal `startAtMs`, außer die Welle wartet auf das
+   * Ende des Luftangriffs-Eröffnungsbombardements – dann frühestens `startAtMs`, aber nicht bevor
+   * das Bombardement abgeschlossen ist (null = Gate noch geschlossen, Welle startet noch nicht).
+   */
+  private getEffectiveStartAtMs(waveConfig: ResolvedCoopDefenseMapWaveConfig): number | null {
+    if (!waveConfig.startsAfterAirstrikeBarrage) return waveConfig.startAtMs;
+    if (this.airstrikeBarrageGateOpenedAtMs === null) return null;
+    return Math.max(waveConfig.startAtMs, this.airstrikeBarrageGateOpenedAtMs);
   }
 
   private getActiveDeltaMs(previousElapsedMs: number, nextElapsedMs: number, startAtMs: number): number {

@@ -50,20 +50,21 @@ describe('AWP coop-defense upgrades', () => {
     }));
     const resolved = applyCoopDefenseModifiersToWeaponConfig(WEAPON_CONFIGS.AWP, 'weapon2', totals);
 
-    expect(resolved.adrenalinCost).toBe(10);
-    expect(resolved.cooldown).toBeCloseTo(440);
+    expect(resolved.adrenalinCost).toBeCloseTo(28);
+    expect(resolved.cooldown).toBeCloseTo(320);
     expect(resolved.spreadMoving).toBeCloseTo(8.75);
-    expect(resolved.scopeConfig).toMatchObject({ scopeInMs: 660, fullScopeViewRadius: 84 });
+    expect(resolved.scopeConfig?.scopeInMs).toBeCloseTo(480);
+    expect(resolved.scopeConfig?.fullScopeViewRadius).toBeCloseTo(120);
     expect(resolved.penetrationCount).toBe(1_000_000);
     expect(resolved.penetrationDamageRetention).toBe(1);
     expect(resolved.penetratesRocks).toBe(1);
     expect(resolved.awpCharge).toMatchObject({
       maxDamageBonus: 1,
-      fireTrailDurationMs: 2500,
+      fireTrailDurationMs: 2000,
       fireTrailHalfWidthCells: 2,
       corridorEnabled: 1,
     });
-    expect(resolved.awpCharge?.durationMs).toBeCloseTo(1650);
+    expect(resolved.awpCharge?.durationMs).toBeCloseTo(750);
     expect(resolved.awpCharge?.fullChargeDamageBonus).toBeCloseTo(0.6);
   });
 });
@@ -97,10 +98,10 @@ describe('Negev coop-defense upgrades', () => {
 
     expect(resolved.range).toBe(1275);
     expect(resolved.adrenalinCost).toBeCloseTo(0.55);
-    expect(resolved.rockDamageMult).toBe(4);
+    expect(resolved.rockDamageMult).toBe(6);
     expect(resolved.holdSpeedFactor).toBeCloseTo(0.615);
     expect(resolved.hitSlowFraction).toBe(0.75);
-    expect(resolved.hitSlowDurationMs).toBe(500);
+    expect(resolved.hitSlowDurationMs).toBe(1000);
     expect(resolved.warmupSpeedMultiplier).toBe(4);
     expect(resolved.warmupBurnThreshold).toBe(0.99);
     expect(resolved.burnOnHit).toEqual({ durationMs: 2000, damagePerTick: 0.25 });
@@ -116,7 +117,7 @@ describe('Negev coop-defense upgrades', () => {
 describe('Adrenaline syringe drops', () => {
   it('follows the completed existing adrenaline branches and exposes two follow-ups', () => {
     expect(getCoopDefenseUpgradeDefinition('adrenaline_syringe_drops')?.requires).toEqual([
-      { upgradeId: 'adrenaline_regeneration', minLevel: 3 },
+      { upgradeId: 'adrenaline_spawn_full', minLevel: 1 },
       { upgradeId: 'adrenaline_cost', minLevel: 3 },
     ]);
     expect(getCoopDefenseUpgradeDefinition('adrenaline_syringe_drop_chance')?.maxLevel).toBe(3);

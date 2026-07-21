@@ -7,6 +7,7 @@ import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColor
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { BiteRenderer } from './BiteRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import type { EnemyBurrowVisualSink } from '../entities/EnemyManager';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
@@ -40,7 +41,11 @@ interface DeathPixelChunk {
   brightness: number;
 }
 
-export class EffectSystem {
+/**
+ * Die Buddel-Effekte werden nicht nur für Spieler, sondern auch für eingebuddelte Coop-Defense-
+ * Gegner genutzt; `implements` hält die dafür erwartete Signatur kompilierzeit-fest.
+ */
+export class EffectSystem implements EnemyBurrowVisualSink {
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();

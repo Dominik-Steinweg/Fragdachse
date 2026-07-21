@@ -24,6 +24,7 @@ export class ResourceSystem {
   private rageGainMultiplierResolver: ((id: string) => number) | null = null;
   private adrenalineGainMultiplierResolver: ((id: string) => number) | null = null;
   private adrenalineCostMultiplierResolver: ((id: string) => number) | null = null;
+  private adrenalineSpawnFullResolver: ((id: string) => boolean) | null = null;
 
   setPowerUpSystem(ps: PowerUpSystemType | null): void { this.powerUpSystem = ps; }
   setAdrenalineMaxResolver(resolver: ((id: string) => number) | null): void { this.adrenalineMaxResolver = resolver; }
@@ -32,11 +33,23 @@ export class ResourceSystem {
   setRageGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.rageGainMultiplierResolver = resolver; }
   setAdrenalineGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineGainMultiplierResolver = resolver; }
   setAdrenalineCostMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineCostMultiplierResolver = resolver; }
+  setAdrenalineSpawnFullResolver(resolver: ((id: string) => boolean) | null): void { this.adrenalineSpawnFullResolver = resolver; }
+
+  /** Adrenalin-Wert fuer (Wieder-)Belebung: Maximum bei aktivem "Adrenalinschub"-Upgrade, sonst ADRENALINE_START. */
+  private getSpawnAdrenaline(id: string): number {
+    const max = this.getMaxAdrenaline(id);
+    return this.adrenalineSpawnFullResolver?.(id) ? max : Math.min(max, ADRENALINE_START);
+  }
 
   initPlayer(id: string): void {
-    this.adrenaline.set(id, Math.min(this.getMaxAdrenaline(id), ADRENALINE_START));
+    this.adrenaline.set(id, this.getSpawnAdrenaline(id));
     this.rage.set(id, 0);
     this.regenPausedUntil.set(id, 0);
+  }
+
+  /** Setzt Adrenalin auf den Spawn-Wert zurueck (fuer Respawn). */
+  resetAdrenalineForSpawn(id: string): void {
+    this.adrenaline.set(id, this.getSpawnAdrenaline(id));
   }
 
   removePlayer(id: string): void {

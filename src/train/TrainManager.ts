@@ -525,6 +525,8 @@ export class TrainManager {
 
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!enemy.sprite.active) continue;
+      // Eingebuddelte Gegner unterqueren die Gleise gefahrlos.
+      if (enemy.isBurrowed()) continue;
       if (this.hitEnemyIds.has(enemy.id)) continue;
 
       const px = enemy.sprite.x;
