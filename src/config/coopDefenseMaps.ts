@@ -5,6 +5,10 @@ import {
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
+import { ROCK_FILL_RATIO } from '../config';
+
+/** Obergrenze für `rockFillRatio` – darüber lässt die Konnektivitätsprüfung kaum noch Gänge übrig. */
+const MAX_ROCK_FILL_RATIO = 0.85;
 
 /**
  * Unterhalb dieses Radius würde ein Gang stellenweise nur noch eine Zelle breit werden – zu eng
@@ -129,6 +133,12 @@ export interface CoopDefenseMapRockFieldConfig {
   readonly corridorWanderCells: number;
   /** Zufällige Verschiebung der Zwischenpunkte; Anfangs- und Endpunkt bleiben fest. */
   readonly waypointJitterCells: number;
+  /**
+   * Globaler Multiplikator auf alle Gang-Radien (Standard 1 = unverändert). Das ist bei einem
+   * Felsfeld das Äquivalent zu `rockFillRatio`: kleiner als 1 fräst schmalere Gänge (mehr Fels),
+   * größer als 1 breitere Gänge (weniger Fels).
+   */
+  readonly rockDensityScale?: number;
   readonly corridors: readonly CoopDefenseMapCorridorConfig[];
 }
 
@@ -140,6 +150,13 @@ export interface CoopDefenseMapConfig {
   readonly tutorialDurationMs?: number;
   /** True/Konfiguration: Die Zombie-Fraktion führt auf dieser Map eigene Luftangriffe durch. */
   readonly enemyAirstrikes?: boolean | CoopDefenseMapAirstrikeConfig;
+  /**
+   * Anteil der Zellen, die vor dem Cellular-Automata-Smoothing als Fels ausgewürfelt werden
+   * (0…1, Standard entspricht dem globalen `ROCK_FILL_RATIO`). Steuert, wie voll die Map mit
+   * Felsen wird. Wird ignoriert, wenn `rockField` gesetzt ist – dort steuert stattdessen
+   * `rockField.rockDensityScale` die Fülle über die Gangbreite.
+   */
+  readonly rockFillRatio?: number;
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   readonly roundDurationSec: number;
@@ -256,6 +273,7 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
       ? Math.max(1000, Math.floor(mapConfig.tutorialDurationMs))
       : undefined,
     enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
+    rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
@@ -282,6 +300,10 @@ function normalizeRockFieldConfig(
 ): CoopDefenseMapRockFieldConfig | undefined {
   if (!rockField) return undefined;
 
+  const densityScale = typeof rockField.rockDensityScale === 'number' && Number.isFinite(rockField.rockDensityScale) && rockField.rockDensityScale > 0
+    ? rockField.rockDensityScale
+    : 1;
+
   const uniqueCorridorIds = new Set<string>();
   const corridors = rockField.corridors.map((corridor) => {
     if (uniqueCorridorIds.has(corridor.id)) {
@@ -295,7 +317,7 @@ function normalizeRockFieldConfig(
     return {
       id: corridor.id,
       radiusCells: typeof corridor.radiusCells === 'number' && Number.isFinite(corridor.radiusCells)
-        ? clampCorridorRadius(corridor.radiusCells)
+        ? clampCorridorRadius(corridor.radiusCells * densityScale)
         : undefined,
       points: corridor.points.map((point) => ({
         gridX: Math.floor(point.gridX),
@@ -309,7 +331,7 @@ function normalizeRockFieldConfig(
   }
 
   return {
-    corridorRadiusCells: clampCorridorRadius(rockField.corridorRadiusCells),
+    corridorRadiusCells: clampCorridorRadius(rockField.corridorRadiusCells * densityScale),
     corridorRadiusVarianceCells: Math.max(0, rockField.corridorRadiusVarianceCells),
     corridorWanderCells: Math.max(0, rockField.corridorWanderCells),
     waypointJitterCells: Math.max(0, rockField.waypointJitterCells),
@@ -319,6 +341,11 @@ function normalizeRockFieldConfig(
 
 function clampCorridorRadius(radiusCells: number): number {
   return Math.max(MIN_CORRIDOR_RADIUS_CELLS, radiusCells);
+}
+
+function normalizeRockFillRatio(rockFillRatio: number | undefined): number {
+  if (typeof rockFillRatio !== 'number' || !Number.isFinite(rockFillRatio)) return ROCK_FILL_RATIO;
+  return Math.max(0, Math.min(MAX_ROCK_FILL_RATIO, rockFillRatio));
 }
 
 function normalizePowerUpConfig(

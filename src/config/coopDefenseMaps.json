@@ -4,6 +4,7 @@
     {
       "mapId": "0",
       "displayName": "Map 0 - Testmap",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 600,
       "bases": [
         {
@@ -20,6 +21,7 @@
       "mapId": "1",
       "displayName": "Map 1 - Feuertaufe",
       "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 40,
       "bases": [
         {
@@ -38,6 +40,7 @@
       "mapId": "2",
       "displayName": "Map 2 - Zweite Front",
       "tutorialText": "Auf dieser Map hat die Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
+      "rockFillRatio": 0.15,
       "roundDurationSec": 60,
       "bases": [
         {
@@ -66,6 +69,7 @@
       "mapId": "3",
       "displayName": "Map 3 - Rastlos",
       "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
+      "rockFillRatio": 0.42,
       "roundDurationSec": 60,
       "bases": [
         {
@@ -96,6 +100,7 @@
       "mapId": "4",
       "displayName": "Map 4 - Adrenalinrausch",
       "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 60,
       "bases": [
         {
@@ -140,6 +145,7 @@
       "mapId": "5",
       "displayName": "Map 5 - Grufttitan",
       "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Wenn ein Boss erstmalig erledigt wird, erhält man einen Boss-Punkt für spezielle Upgrades.",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 45,
       "bases": [
         {
@@ -184,6 +190,7 @@
     {
       "mapId": "6",
       "displayName": "Map 6 - Sporenfront",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 60,
       "bases": [
         {
@@ -242,6 +249,7 @@
     {
       "mapId": "7",
       "displayName": "Map 7 - MEDIC!",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 70,
       "bases": [
         {
@@ -302,6 +310,7 @@
     {
       "mapId": "8",
       "displayName": "Map 8 - Dimensionsbruch",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 80,
       "bases": [
         {
@@ -359,6 +368,7 @@
     {
       "mapId": "9",
       "displayName": "Map 9 - Faulnisbrut",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 90,
       "bases": [
         {
@@ -407,6 +417,7 @@
     {
       "mapId": "10",
       "displayName": "Map 10 - Flammenkoloss",
+      "rockFillRatio": 0.3,
       "roundDurationSec": 90,
       "bases": [
         {
@@ -456,6 +467,7 @@
       "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
       "tutorialDurationMs": 10000,
       "enemyAirstrikes": { "bombTutorialRock": true, "huntIntervalMs": 10000 },
+      "rockFillRatio": 0.3,
       "roundDurationSec": 90,
       "bases": [
         {
@@ -513,6 +525,7 @@
       "mapId": "12",
       "displayName": "Map 12 - Unterwanderung",
       "enemyAirstrikes": { "bombTutorialRock": false, "huntIntervalMs": 25000 },
+      "rockFillRatio": 0.3,
       "roundDurationSec": 90,
       "bases": [
         {
@@ -578,6 +591,7 @@
       "displayName": "Map 13 - Brutbomben",
       "tutorialText": "Wurf-Dachse schleudern Brutbomben. Wo sie einschlagen, schluepft nach kurzer Verzoegerung ein Tollwut-Dachs - fangt die Bomben ab, bevor die Brut euch ueberrennt.",
       "tutorialDurationMs": 10000,
+      "rockFillRatio": 0.3,
       "roundDurationSec": 90,
       "bases": [
         {
@@ -651,6 +665,7 @@
         "corridorRadiusVarianceCells": 0.4,
         "corridorWanderCells": 0.9,
         "waypointJitterCells": 0.8,
+        "rockDensityScale": 1,
         "corridors": [
           { "id": "front-top", "points": [{ "gridX": 0, "gridY": 4 }, { "gridX": 6, "gridY": 3 }, { "gridX": 12, "gridY": 4 }, { "gridX": 17, "gridY": 8 }, { "gridX": 19, "gridY": 8 }] },
           { "id": "front-middle", "points": [{ "gridX": 0, "gridY": 16 }, { "gridX": 5, "gridY": 17 }, { "gridX": 10, "gridY": 14 }, { "gridX": 19, "gridY": 14 }] },

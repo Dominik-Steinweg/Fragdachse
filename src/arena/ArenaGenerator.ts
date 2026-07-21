@@ -56,8 +56,9 @@ export class ArenaGenerator {
       // --- Cellular Automata Felsen-Platzierung ---
 
       // 1. Initialer Noise
+      const rockFillRatio = coopMapConfig?.rockFillRatio ?? ROCK_FILL_RATIO;
       let map: boolean[][] = Array.from({ length: GRID_ROWS }, () =>
-        Array.from({ length: GRID_COLS }, () => rng() < ROCK_FILL_RATIO),
+        Array.from({ length: GRID_COLS }, () => rng() < rockFillRatio),
       );
 
       // 2. Smoothing-Steps
