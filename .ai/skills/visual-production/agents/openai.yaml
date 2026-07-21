@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual Production"
+  short_description: "Production-ready top-down game visuals"
+  default_prompt: "Use $visual-production to create a polished top-down gameplay visual for Fragdachse."

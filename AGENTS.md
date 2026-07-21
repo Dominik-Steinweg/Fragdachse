@@ -1,50 +1,45 @@
-# Fragdachse: Arbeitsregeln
+# Fragdachse – Agenten-Router
 
-## Kontext sparsam einsetzen
+Fragdachse ist ein schneller browserbasierter 2D-PvP/PvE-Arena-Shooter mit Phaser 4 und PlayroomKit. Der Quellcode ist die technische Wahrheit; Dokumentation hält Absichten, Systemgrenzen und nicht offensichtliche Verträge fest.
 
-- Zuerst mit `rg` nach Symbolen, Imports und vorhandenen Tests suchen. Nur relevante Dateiausschnitte lesen; große Dateien nicht vollständig laden.
-- Für kleine, klar begrenzte Änderungen keine Subagenten, langen Pläne oder vollständigen Repository-Audits starten.
-- Repository-Fakten selbst ermitteln. Nur bei einer echten, folgenreichen Produktentscheidung nachfragen.
-- Dokumentation nur ändern, wenn sich Verhalten, Bedienung oder eine Architekturregel ändert.
-- `docs/architecture.md` nur bei bereichsübergreifenden Änderungen an Netzwerk, Arena-Lifecycle oder Systemgrenzen lesen.
+## Erst suchen, dann lesen
 
-## Projektkarte
+- Zuerst mit `rg` nach Symbolen, Imports und passenden Tests suchen. Nur relevante Ausschnitte und aufgabenbezogene Dokumente laden, niemals pauschal die ganze Wissensbasis.
+- Einstieg: `src/main.ts` → `src/scenes/ArenaScene.ts`. Gameplay: `src/systems/`; Darstellung: `src/effects/`; Entities und Synchronisierung: `src/entities/`; Round-Orchestrierung: `src/scenes/arena/`; Netzwerkgrenze: `src/network/NetworkBridge.ts`; gemeinsame Verträge: `src/types.ts`, `src/config.ts`.
+- Wissensrouter: [`docs/ai/index.md`](docs/ai/index.md). Architektur, Gameplay, Netzwerk oder Visuals nur lesen, wenn die Aufgabe den Bereich berührt.
 
-- `src/systems/`: hostseitige Simulation und Gameplay-Regeln.
-- `src/effects/`: Darstellung, Partikel und visuelle Effekte; kein autoritativer Gameplay-State.
-- `src/entities/`: Entity-Lifecycle, Manager und Netzwerk-Synchronisierung.
-- `src/scenes/` und `src/scenes/arena/`: schlanke Orchestrierung, Round-Lifecycle und Update-Koordination.
-- `src/ui/`: HUD, Overlays und UI-Eingaben.
-- `src/network/`: PlayroomKit-Bridge, RPC und Snapshots.
-- `src/loadout/`, `src/config/`, `src/types.ts`: Ausrüstung, Konfiguration und gemeinsame Verträge.
+## Dauerhafte Architekturregeln
 
-## Invarianten
+- Phaser ist exakt auf 4.2.1 gelockt. Als `import * as Phaser from 'phaser'` importieren und keine Phaser-3-Muster übernehmen.
+- Nur `src/network/NetworkBridge.ts` importiert `playroomkit` direkt. Gameplay ist host-autoritativ; Clients senden Eingaben/Aktionen und rendern replizierten Zustand sowie Ereignisse.
+- `ArenaContext` trennt Scene-Lifetime von Round-Lifetime. Round-Systeme sind außerhalb einer aktiven Runde `null`, werden in `buildArena()` gesetzt und in `tearDownArena()` vollständig entkoppelt und bereinigt.
+- Scenes und Coordinator orchestrieren. Regeln gehören in Systems, Visuals in Effects/Renderer, Entity-Lifecycle in Manager. Bestehende Infrastruktur und Konstanten vor neuen Abstraktionen prüfen.
 
-- Das Projekt verwendet Phaser 4. Keine Phaser-3-APIs oder -Muster übernehmen. Phaser als `import * as Phaser from 'phaser'` importieren.
-- Nur `src/network/NetworkBridge.ts` importiert `playroomkit` direkt. Gameplay bleibt host-autoritativ; Clients senden Eingaben und stellen Snapshots/Ereignisse dar.
-- `ArenaContext` trennt Scene-Lifetime von Round-Lifetime. Round-Systeme sind außerhalb einer aktiven Runde `null`, werden in `buildArena()` gesetzt und in `tearDownArena()` bereinigt.
-- Scenes orchestrieren. Gameplay-Logik gehört in Systems, Visuals in Effects/Renderer und Entity-Lifecycle in Manager.
-- Vor neuen Abstraktionen bestehende Systeme, Manager, Renderer und Utilities prüfen. Gameplay-Konstanten nicht als Magic Numbers verteilen.
+## Skills und visuelle Qualität
+
+- Für Phaser-Aufgaben zuerst den projektspezifischen Skill `fragdachse-phaser` und die passenden offiziellen Skills unter `.agents/skills/` konsultieren; nur relevante Skills laden, nicht den gesamten Satz. Kanonische Quellen: `.ai/skills/` und `.ai/vendor/phaser-skills/`.
+- Für Explosionen, Partikel, Projektile, Kamera-Feedback, Sprites, PNGs oder andere Gameplay-Grafiken zusätzlich den Skill `visual-production` verwenden und bestehende hochwertige Referenzen untersuchen.
+- Sichtbare Ergebnisse sind standardmäßig produktionsnah, nicht bloße Platzhalter. Gameplay-Grafiken verwenden eine orthografische 90°-Top-down-Ansicht: kein Isometric, keine Dreiviertelansicht, kein Horizont und keine sichtbaren Objektseiten. Details: [`docs/ai/visual-guidelines.md`](docs/ai/visual-guidelines.md).
+- Eigene Skills nur unter `.ai/skills/` bearbeiten. `.agents/skills/` und `.claude/skills/` sind generierte, eingecheckte Spiegel; nach Skill-Änderungen `npm run ai:sync` ausführen.
 
 ## Proportionale Prüfung
 
-| Änderung | Erforderliche Prüfung |
+| Änderung | Prüfung |
 |---|---|
-| Nur Markdown, Agentenanweisungen oder Kommentare | Keine Tests |
+| Nur Markdown, Instruktionen oder Kommentare | Links/Pfade und betroffene Inhalte prüfen |
 | Kleine isolierte TypeScript-Änderung | `npm run typecheck` |
-| Änderung an einem getesteten Modul | Passende Testdatei, z. B. `npm test -- tests/RoomQualityMonitor.test.ts` |
+| Getestetes Modul | passende Testdatei, z. B. `npm test -- tests/GameplayTransportChannel.test.ts` |
 | Mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration | `npm run check` |
-| Sichtbare Phaser-/UI-Änderung | `npm run build`; visuell nur bei tatsächlich geändertem Verhalten prüfen |
+| Sichtbare Phaser-/UI-Änderung | `npm run build`; Browserprüfung einmal am Ende und nur für das betroffene Verhalten |
 
-- Nicht automatisch `npm ci`, Build und vollständige Tests für jede Kleinigkeit ausführen.
-- Vor `npm run build` nicht zusätzlich typechecken; der Build enthält TypeScript bereits.
-- Keine Tests nur für Abdeckungszahlen erzeugen. Im Abschluss ausschließlich tatsächlich ausgeführte Prüfungen knapp nennen.
-- Keine Linux-/CI-, Playwright-, Coverage-, ESLint- oder Modell-Konfiguration ergänzen, sofern die Aufgabe dies nicht ausdrücklich verlangt.
+Vor `npm run build` nicht zusätzlich typechecken; der Build enthält TypeScript. Es gibt derzeit kein Lint-Script. Keine Tests nur für Coverage und keine neue CI-/Lint-/Browser-Infrastruktur ohne ausdrücklichen Auftrag.
 
-## Browser-Verifikation
+## Browserprüfung
 
-- Der Browser ist keine Standardprüfung. Nur für sichtbar geänderte Phaser-/UI-/Scene-Darstellung und einmal am Ende verwenden.
-- `npm run dev:browser` starten. Vor dem Öffnen muss `Invoke-WebRequest -Uri 'http://127.0.0.1:8080/' -UseBasicParsing -TimeoutSec 5` Status 200 liefern; dann exakt diese URL öffnen.
-- Höchstens einen Verbindungs- und einen Seitenlade-Wiederholungsversuch. Blockiert Playroom den Boot, abbrechen und als Umgebungsblocker melden.
-- Nur den betroffenen Modus/Zustand prüfen; Konsole und Netzwerk nur bei konkreter Diagnose. Browser und Server danach beenden.
-- Bekannte Phaser-Meldungen `Failed to process file ... image ...` für noch fehlende Loadout-, Upgrade- und Gegnerfähigkeits-Sprites ignorieren. Sie sind nicht testentscheidend und werden nicht untersucht, solange das Zielbild rendert.
+Nur bei sichtbar geändertem Verhalten: `npm run dev:browser`, dann erst nach HTTP 200 von `http://127.0.0.1:8080/` genau diese URL öffnen. Höchstens ein Verbindungs- und ein Seitenlade-Retry; bei Playroom-Bootblockade abbrechen und melden. Bekannte Meldungen zu noch fehlenden Loadout-/Upgrade-/Gegner-Sprites ignorieren, wenn das Zielbild rendert. Server und Browser danach beenden.
+
+## Definition of Done und Knowledge Writeback
+
+- Nach substanziellen Aufgaben prüfen, ob eine Erkenntnis projektspezifisch, nicht offensichtlich, verifiziert, wiederverwendbar und voraussichtlich langlebig ist. Nur dann das passendste vorhandene Dokument unter `docs/ai/` knapp ergänzen; neue Seiten nur für ein tragfähiges eigenständiges Thema und dann in `docs/ai/index.md` verlinken.
+- Keine Bug-Chronik, Tippfehler, Einmalfehler, Debugdaten, verworfenen Experimente oder aus einer einzelnen Codezeile offensichtlichen Fakten dokumentieren. Allgemeine Verträge statt Entstehungsgeschichte festhalten.
+- Im Abschluss größerer Aufgaben genau eine kurze Zeile angeben: `Knowledge writeback: No durable project knowledge discovered.` oder `Knowledge writeback: Updated <path> with <verified rule>.`
