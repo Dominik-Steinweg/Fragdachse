@@ -97,20 +97,27 @@ export class ArenaGenerator {
       // Ein konfiguriertes Felsfeld ersetzt die prozedurale Verteilung komplett – auch die
       // Tutorial-Formation, deren Zweck (Bereich unter dem Hinweisfenster zubauen) es ohnehin
       // bereits erfüllt.
+      let tutorialRockCells: Set<string> | null = null;
       if (coopMapConfig?.rockField) {
         ArenaGenerator.applyRockField(map, coopMapConfig.rockField, rng);
       } else if (coopMapConfig?.tutorialText) {
-        ArenaGenerator.applyTutorialRockFormation(map, trackCols, rng);
+        tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(map, trackCols, rng);
       }
 
       // 3. map auf blocked übertragen und rocks-Array befüllen
       //    Gleis-Spalten bleiben frei (trackCols sind begehbar)
+      const tutorialRockArmorDropMult = coopMapConfig?.tutorialRockArmorDropMult;
       const rocks: RockCell[] = [];
       for (let gy = 0; gy < GRID_ROWS; gy++) {
         for (let gx = 0; gx < GRID_COLS; gx++) {
           if (map[gy][gx] && !trackCols.has(gx) && !isReservedBaseObstacleCell(gx, gy)) {
             blocked[gy][gx] = true;
-            rocks.push({ gridX: gx, gridY: gy });
+            const isTutorialRock = tutorialRockCells?.has(`${gx}_${gy}`) ?? false;
+            rocks.push({
+              gridX: gx,
+              gridY: gy,
+              armorDropMult: isTutorialRock ? tutorialRockArmorDropMult : undefined,
+            });
           }
         }
       }
@@ -123,8 +130,10 @@ export class ArenaGenerator {
         }
       }
 
-      // Konnektivitätsprüfung
-      if (!ArenaGenerator.isConnected(blocked)) continue;
+      // Konnektivität sicherstellen: Statt bei einer abgeschnürten Tasche den kompletten Versuch
+      // zu verwerfen (was bei höherem rockFillRatio schnell alle 100 Versuche verbraucht und in
+      // einer Exception endet), wird die günstigste Verbindung zwischen den Regionen nachgefräst.
+      ArenaGenerator.ensureConnected(blocked, rocks);
 
       // Bäume auf verbleibenden freien Zellen platzieren.
       // Mindestabstand zum Arena-Rand: ceil(CANOPY_RADIUS / CELL_SIZE) Zellen,
@@ -154,12 +163,15 @@ export class ArenaGenerator {
           t => Math.max(Math.abs(gx - t.gridX), Math.abs(gy - t.gridY)) < TREE_MIN_SPACING,
         );
         if (tooClose) continue;
+        // Ein Baum darf keine Engstelle komplett zustellen – notfalls wird nur dieser eine
+        // Baum übersprungen statt den ganzen (bereits konnektiven) Versuch zu verwerfen.
         blocked[gy][gx] = true;
+        if (!ArenaGenerator.isConnected(blocked)) {
+          blocked[gy][gx] = false;
+          continue;
+        }
         trees.push({ gridX: gx, gridY: gy });
       }
-
-      // Nochmalige Konnektivitätsprüfung nach Baumplatzierung
-      if (!ArenaGenerator.isConnected(blocked)) continue;
 
       // Dirt-Zellen: Unter/um Felsen, unter/um Gleise + zusammenhängende Zufallsflecken
       const dirtSet = new Set<number>(); // gy * GRID_COLS + gx
@@ -430,7 +442,8 @@ export class ArenaGenerator {
     map: boolean[][],
     trackCols: ReadonlySet<number>,
     rng: () => number,
-  ): void {
+  ): Set<string> {
+    const tutorialRockCells = new Set<string>();
     const panelRegion = getCoopDefenseTutorialRockRegion();
     // Bis zum oberen Arenarand auffüllen, damit oberhalb des HUD-Blocks keine
     // kleinen, vom restlichen Spielfeld abgeschnittenen Bodentaschen entstehen.
@@ -444,9 +457,11 @@ export class ArenaGenerator {
         const distance = Math.max(dx, dy);
         if (distance === 0 || rng() < (distance === 1 ? 0.72 : 0.36)) {
           map[gy][gx] = true;
+          tutorialRockCells.add(`${gx}_${gy}`);
         }
       }
     }
+    return tutorialRockCells;
   }
 
   private static generateRandomPowerUpPedestals(
@@ -825,6 +840,143 @@ export class ArenaGenerator {
     }
 
     return visitedCount === freeCells;
+  }
+
+  /**
+   * Garantiert Konnektivität durch minimales Nachfräsen statt komplettem Neuversuch: verschmilzt
+   * iterativ die größte freie Region mit der jeweils nächstgrößten, indem der Pfad mit den
+   * wenigsten neu zu fräsenden Fels-Zellen gesucht wird (siehe `findCheapestPath`). Bei höheren
+   * `rockFillRatio`-Werten kann die CA-Verteilung vereinzelt Taschen abschnüren – ohne dieses
+   * Nachfräsen würde `generate()` dafür alle 100 Versuche verbrauchen und mit einer Exception
+   * abbrechen.
+   */
+  private static ensureConnected(blocked: boolean[][], rocks: RockCell[]): void {
+    const rockIndexByKey = new Map<number, number>();
+    rocks.forEach((rock, index) => rockIndexByKey.set(ArenaGenerator.cellKey(rock.gridX, rock.gridY), index));
+
+    // Obergrenze schützt vor einer Endlosschleife; jede Iteration verschmilzt mindestens zwei
+    // Regionen zu einer, mehr als GRID_ROWS * GRID_COLS Regionen kann es nie geben.
+    for (let guard = 0; guard < GRID_ROWS * GRID_COLS; guard++) {
+      const components = ArenaGenerator.findFreeComponents(blocked);
+      if (components.length <= 1) return;
+
+      components.sort((a, b) => b.length - a.length);
+      const main = components[0];
+      const other = components[1];
+      const path = ArenaGenerator.findCheapestPath(blocked, other, main);
+
+      for (const [gx, gy] of path) {
+        if (!blocked[gy][gx]) continue;
+        blocked[gy][gx] = false;
+
+        const key = ArenaGenerator.cellKey(gx, gy);
+        const index = rockIndexByKey.get(key);
+        if (index === undefined) continue;
+        const lastIndex = rocks.length - 1;
+        const lastRock = rocks[lastIndex];
+        rocks[index] = lastRock;
+        rockIndexByKey.set(ArenaGenerator.cellKey(lastRock.gridX, lastRock.gridY), index);
+        rocks.pop();
+        rockIndexByKey.delete(key);
+      }
+    }
+  }
+
+  /** Alle zusammenhängenden Regionen freier (nicht blockierter) Zellen (4-connected). */
+  private static findFreeComponents(blocked: boolean[][]): Array<Array<[number, number]>> {
+    const visited = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(false));
+    const components: Array<Array<[number, number]>> = [];
+    const DIRS: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+    for (let gy = 0; gy < GRID_ROWS; gy++) {
+      for (let gx = 0; gx < GRID_COLS; gx++) {
+        if (blocked[gy][gx] || visited[gy][gx]) continue;
+
+        const component: Array<[number, number]> = [];
+        const queue: Array<[number, number]> = [[gx, gy]];
+        visited[gy][gx] = true;
+        while (queue.length > 0) {
+          const [cx, cy] = queue.shift()!;
+          component.push([cx, cy]);
+          for (const [dx, dy] of DIRS) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+            if (visited[ny][nx] || blocked[ny][nx]) continue;
+            visited[ny][nx] = true;
+            queue.push([nx, ny]);
+          }
+        }
+        components.push(component);
+      }
+    }
+    return components;
+  }
+
+  /**
+   * 0/1-BFS von `sourceCells` zu einer beliebigen Zelle aus `targetCells`: Bewegung über bereits
+   * freie Zellen kostet 0, das Durchbrechen einer Fels-Zelle kostet 1. Liefert damit den Pfad, der
+   * am wenigsten zusätzlichen Fels wegfräst – meist eine einzelne, natürlich wirkende Engstelle
+   * statt eines langen geraden Tunnels.
+   */
+  private static findCheapestPath(
+    blocked: boolean[][],
+    sourceCells: ReadonlyArray<[number, number]>,
+    targetCells: ReadonlyArray<[number, number]>,
+  ): Array<[number, number]> {
+    const targetSet = new Set(targetCells.map(([gx, gy]) => ArenaGenerator.cellKey(gx, gy)));
+    const dist: number[][] = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(Infinity));
+    const prevX: number[][] = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(-1));
+    const prevY: number[][] = Array.from({ length: GRID_ROWS }, () => new Array(GRID_COLS).fill(-1));
+    const DIRS: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const deque: Array<[number, number, number]> = [];
+
+    for (const [gx, gy] of sourceCells) {
+      if (dist[gy][gx] > 0) {
+        dist[gy][gx] = 0;
+        deque.push([gx, gy, 0]);
+      }
+    }
+
+    let targetX = -1;
+    let targetY = -1;
+    while (deque.length > 0) {
+      const [cx, cy, d] = deque.shift()!;
+      if (d > dist[cy][cx]) continue; // veralteter Queue-Eintrag, bereits verbessert
+      if (targetSet.has(ArenaGenerator.cellKey(cx, cy))) {
+        targetX = cx;
+        targetY = cy;
+        break;
+      }
+      for (const [dx, dy] of DIRS) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || nx >= GRID_COLS || ny < 0 || ny >= GRID_ROWS) continue;
+        const weight = blocked[ny][nx] ? 1 : 0;
+        const nextDist = d + weight;
+        if (nextDist < dist[ny][nx]) {
+          dist[ny][nx] = nextDist;
+          prevX[ny][nx] = cx;
+          prevY[ny][nx] = cy;
+          if (weight === 0) deque.unshift([nx, ny, nextDist]);
+          else deque.push([nx, ny, nextDist]);
+        }
+      }
+    }
+
+    if (targetX === -1) return [];
+
+    const path: Array<[number, number]> = [];
+    let cx = targetX;
+    let cy = targetY;
+    while (cx !== -1 && cy !== -1) {
+      path.push([cx, cy]);
+      const px = prevX[cy][cx];
+      const py = prevY[cy][cx];
+      cx = px;
+      cy = py;
+    }
+    return path;
   }
 
   /**

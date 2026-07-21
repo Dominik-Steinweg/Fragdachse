@@ -1039,7 +1039,12 @@ export interface TrackedProjectile {
 // ---- Prozedurales Arena-Layout ----
 
 /** Ein Felsen-Gitterzelle (relativ zur Arena, 48px-Raster) */
-export interface RockCell { gridX: number; gridY: number; }
+export interface RockCell {
+  gridX: number;
+  gridY: number;
+  /** Multiplikator (0…1) auf die Armor-Drop-Chance bei Zerstörung; fehlt = normale Chance. */
+  armorDropMult?: number;
+}
 
 export interface PlaceableFootprintCell {
   dx: number;

@@ -223,12 +223,12 @@ export class PowerUpSystem {
    * `fixedX / fixedY` = Welt-Koordinaten (z.B. Todesposition, Fels-Mitte).
    * Wenn nicht angegeben, wird eine zufällige freie Zelle gewählt.
    */
-  spawnFromTable(tableName: string, fixedX?: number, fixedY?: number): void {
+  spawnFromTable(tableName: string, fixedX?: number, fixedY?: number, chanceMultiplier = 1): void {
     const table: DropTable | undefined = DROP_TABLES[tableName];
     if (!table) return;
 
     // Chance prüfen
-    const chance = table.chanceToDrop ?? 1.0;
+    const chance = (table.chanceToDrop ?? 1.0) * chanceMultiplier;
     if (Math.random() > chance) return;
 
     const defId = weightedRandom(table.items);
@@ -273,7 +273,7 @@ export class PowerUpSystem {
     if (!rock) return;
     const wx = ARENA_OFFSET_X + rock.gridX * CELL_SIZE + CELL_SIZE / 2;
     const wy = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE + CELL_SIZE / 2;
-    this.spawnFromTable('ROCK_DESTROY', wx, wy);
+    this.spawnFromTable('ROCK_DESTROY', wx, wy, rock.armorDropMult ?? 1);
   }
 
   // ── Pickup ──────────────────────────────────────────────────────────────

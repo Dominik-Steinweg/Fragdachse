@@ -19,6 +19,14 @@ const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
 /** Standard-Abstand der Verfolgungs-Einzelschläge, wenn eine Map keinen eigenen Wert setzt. */
 const DEFAULT_AIRSTRIKE_HUNT_INTERVAL_MS = 10_000;
 
+/**
+ * Standard-Multiplikator auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (0…1).
+ * Diese Felsen werden nur zugebaut, um den Bereich unter dem Tutorial-Hinweisfenster zu füllen,
+ * und anschliessend vom Eröffnungs-Luftangriff planmässig weggesprengt – ohne Reduktion würden
+ * Spieler dadurch quasi-garantiert Armor geschenkt bekommen.
+ */
+const DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT = 0.15;
+
 export interface CoopBaseCellOffset {
   readonly gridX: number;
   readonly gridY: number;
@@ -159,6 +167,12 @@ export interface CoopDefenseMapConfig {
   readonly rockFillRatio?: number;
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
+  /**
+   * Multiplikator (0…1) auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (siehe
+   * `tutorialText`). Nur relevant, wenn die Map eine Tutorial-Formation erzeugt. Standard:
+   * `DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT` – kann pro Map zum Finetuning überschrieben werden.
+   */
+  readonly tutorialRockArmorDropMult?: number;
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
@@ -275,6 +289,7 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
+    tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
@@ -346,6 +361,11 @@ function clampCorridorRadius(radiusCells: number): number {
 function normalizeRockFillRatio(rockFillRatio: number | undefined): number {
   if (typeof rockFillRatio !== 'number' || !Number.isFinite(rockFillRatio)) return ROCK_FILL_RATIO;
   return Math.max(0, Math.min(MAX_ROCK_FILL_RATIO, rockFillRatio));
+}
+
+function normalizeTutorialRockArmorDropMult(mult: number | undefined): number {
+  if (typeof mult !== 'number' || !Number.isFinite(mult)) return DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT;
+  return Math.max(0, Math.min(1, mult));
 }
 
 function normalizePowerUpConfig(

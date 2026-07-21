@@ -69,7 +69,7 @@
       "mapId": "3",
       "displayName": "Map 3 - Rastlos",
       "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
-      "rockFillRatio": 0.42,
+      "rockFillRatio": 0.4,
       "roundDurationSec": 60,
       "bases": [
         {
@@ -145,7 +145,7 @@
       "mapId": "5",
       "displayName": "Map 5 - Grufttitan",
       "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Wenn ein Boss erstmalig erledigt wird, erhält man einen Boss-Punkt für spezielle Upgrades.",
-      "rockFillRatio": 0.3,
+      "rockFillRatio": 0.2,
       "roundDurationSec": 45,
       "bases": [
         {
@@ -190,7 +190,7 @@
     {
       "mapId": "6",
       "displayName": "Map 6 - Sporenfront",
-      "rockFillRatio": 0.3,
+      "rockFillRatio": 0.1,
       "roundDurationSec": 60,
       "bases": [
         {
@@ -310,7 +310,7 @@
     {
       "mapId": "8",
       "displayName": "Map 8 - Dimensionsbruch",
-      "rockFillRatio": 0.3,
+      "rockFillRatio": 0.15,
       "roundDurationSec": 80,
       "bases": [
         {
@@ -368,7 +368,7 @@
     {
       "mapId": "9",
       "displayName": "Map 9 - Faulnisbrut",
-      "rockFillRatio": 0.3,
+      "rockFillRatio": 0.4,
       "roundDurationSec": 90,
       "bases": [
         {
@@ -417,7 +417,7 @@
     {
       "mapId": "10",
       "displayName": "Map 10 - Flammenkoloss",
-      "rockFillRatio": 0.3,
+      "rockFillRatio": 0.1,
       "roundDurationSec": 90,
       "bases": [
         {
@@ -467,7 +467,8 @@
       "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
       "tutorialDurationMs": 10000,
       "enemyAirstrikes": { "bombTutorialRock": true, "huntIntervalMs": 10000 },
-      "rockFillRatio": 0.3,
+      "rockFillRatio": 0.4,
+      "tutorialRockArmorDropMult": 0.02,
       "roundDurationSec": 90,
       "bases": [
         {
