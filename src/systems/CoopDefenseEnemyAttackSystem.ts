@@ -39,7 +39,13 @@ interface MeleeWindupState {
 interface EnemyMovementProgressState {
   anchorX: number;
   anchorY: number;
-  lastProgressAt: number;
+  /**
+   * Aufsummierte Zeit ohne Ortsveränderung, in der der Gegner laufen wollte oder von der
+   * Wegfindung keine Route bekam. Freiwilliges Stehenbleiben – Angriffspause, Gefechtsabstand –
+   * zählt bewusst nicht mit, setzt den Zähler aber auch nicht zurück: Ein dauerfeuernder
+   * Fernkämpfer würde sonst nie bemerken, dass er in einem Felsen klemmt.
+   */
+  blockedMs: number;
   clearingObstacle: Phaser.GameObjects.Image | null;
 }
 
@@ -85,7 +91,7 @@ export class CoopDefenseEnemyAttackSystem {
         this.sustainedAttacks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
         this.obstacleContacts.delete(enemy.id);
-        this.resetMovementProgress(enemy, now);
+        this.resetMovementProgress(enemy);
         continue;
       }
 
@@ -93,7 +99,7 @@ export class CoopDefenseEnemyAttackSystem {
         this.sustainedAttacks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
         this.obstacleContacts.delete(enemy.id);
-        this.resetMovementProgress(enemy, now);
+        this.resetMovementProgress(enemy);
         continue;
       }
 
@@ -101,17 +107,17 @@ export class CoopDefenseEnemyAttackSystem {
         this.sustainedAttacks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
         this.obstacleContacts.delete(enemy.id);
-        this.resetMovementProgress(enemy, now);
+        this.resetMovementProgress(enemy);
         continue;
       }
 
       if (this.meleeWindups.has(enemy.id)) {
-        this.resetMovementProgress(enemy, now);
+        this.resetMovementProgress(enemy);
         this.updateMeleeWindup(enemy, now);
         continue;
       }
 
-      this.updateMovementProgress(enemy, now);
+      this.updateMovementProgress(enemy, delta, now);
 
       if (!enemy.canScanForAttack(now)) continue;
 
@@ -154,7 +160,7 @@ export class CoopDefenseEnemyAttackSystem {
       aimAngle,
       executeAt: now + attack.attackWeapon.playerMeleeWindupMs,
     });
-    this.resetMovementProgress(enemy, now);
+    this.resetMovementProgress(enemy);
     enemy.stopMovement();
     enemy.faceAngle(aimAngle);
   }
@@ -220,7 +226,7 @@ export class CoopDefenseEnemyAttackSystem {
       weapon.config,
       enemy.sprite.x,
       enemy.sprite.y,
-      angle,
+      angle + enemy.rollWeaponSpreadOffset(weapon),
       target.targetX,
       target.targetY,
       enemy.id,
@@ -230,7 +236,7 @@ export class CoopDefenseEnemyAttackSystem {
 
     enemy.pauseAttackMovement(now);
     enemy.recordWeaponUse(weapon, now);
-    this.updateObstacleClearingState(enemy, target, now);
+    this.updateObstacleClearingState(enemy, target);
 
     const existingSustainedAttack = this.sustainedAttacks.get(enemy.id);
     if (existingSustainedAttack) {
@@ -247,14 +253,16 @@ export class CoopDefenseEnemyAttackSystem {
     }
   }
 
-  private updateObstacleClearingState(enemy: EnemyEntity, target: EnemyAttackCandidate, now: number): void {
-    if (target.kind !== 'obstacle' || !target.obstacle?.active) {
-      this.resetMovementProgress(enemy, now);
-      return;
-    }
-
-    const progress = this.ensureMovementProgress(enemy, now);
-    progress.clearingObstacle = target.obstacle;
+  /**
+   * Merkt sich den Felsen, an dem der Gegner gerade arbeitet. Bewusst ohne Reset des
+   * Blockier-Zählers: ein festhängender Fernkämpfer schießt weiter auf Spieler und würde sich
+   * sonst mit jedem Schuss selbst wieder als „nicht blockiert" einstufen.
+   */
+  private updateObstacleClearingState(enemy: EnemyEntity, target: EnemyAttackCandidate): void {
+    const progress = this.ensureMovementProgress(enemy);
+    progress.clearingObstacle = target.kind === 'obstacle' && target.obstacle?.active
+      ? target.obstacle
+      : null;
   }
 
   private selectAttack(enemy: EnemyEntity, now: number): SelectedEnemyAttack | null {
@@ -379,7 +387,7 @@ export class CoopDefenseEnemyAttackSystem {
   }
 
   private findNearestObstacleTarget(enemy: EnemyEntity, range: number, now: number): EnemyAttackCandidate | null {
-    if (!this.isObstacleAttackUnlocked(enemy, now)) return null;
+    if (!this.isObstacleAttackUnlocked(enemy)) return null;
 
     const rockObjects = this.getRockObjects() ?? [];
     const progress = this.movementProgress.get(enemy.id);
@@ -503,10 +511,10 @@ export class CoopDefenseEnemyAttackSystem {
     };
   }
 
-  private updateMovementProgress(enemy: EnemyEntity, now: number): void {
-    const progress = this.ensureMovementProgress(enemy, now);
+  private updateMovementProgress(enemy: EnemyEntity, delta: number, now: number): void {
+    const progress = this.ensureMovementProgress(enemy);
     if (progress.clearingObstacle && !progress.clearingObstacle.active) {
-      this.resetMovementProgress(enemy, now);
+      this.resetMovementProgress(enemy);
       return;
     }
 
@@ -517,29 +525,32 @@ export class CoopDefenseEnemyAttackSystem {
       enemy.sprite.y,
     );
     if (movedDistance >= CoopDefenseEnemyAttackSystem.MOVEMENT_PROGRESS_DISTANCE_PX) {
-      this.resetMovementProgress(enemy, now);
+      this.resetMovementProgress(enemy);
       return;
     }
 
-    if (enemy.isAttackMovementPaused(now) && !progress.clearingObstacle) {
-      this.resetMovementProgress(enemy, now);
+    // Ein Gegner ohne Route steht auch dann fest, wenn seine Wunschgeschwindigkeit auf 0
+    // gesetzt wurde – genau das ist der Fall, wenn ihn die Kollisionsauflösung mit dem
+    // Mittelpunkt in eine Felszelle geschoben hat.
+    if (enemy.wantsToMove() || enemy.isPathBlocked()) {
+      progress.blockedMs += Math.max(0, delta);
     }
   }
 
-  private isObstacleAttackUnlocked(enemy: EnemyEntity, now: number): boolean {
+  private isObstacleAttackUnlocked(enemy: EnemyEntity): boolean {
     const progress = this.movementProgress.get(enemy.id);
     if (!progress) return false;
     if (progress.clearingObstacle?.active) return true;
-    return now - progress.lastProgressAt >= enemy.getObstacleAttackDelayMs();
+    return progress.blockedMs >= enemy.getObstacleAttackDelayMs();
   }
 
-  private ensureMovementProgress(enemy: EnemyEntity, now: number): EnemyMovementProgressState {
+  private ensureMovementProgress(enemy: EnemyEntity): EnemyMovementProgressState {
     let progress = this.movementProgress.get(enemy.id);
     if (!progress) {
       progress = {
         anchorX: enemy.sprite.x,
         anchorY: enemy.sprite.y,
-        lastProgressAt: now,
+        blockedMs: 0,
         clearingObstacle: null,
       };
       this.movementProgress.set(enemy.id, progress);
@@ -547,11 +558,11 @@ export class CoopDefenseEnemyAttackSystem {
     return progress;
   }
 
-  private resetMovementProgress(enemy: EnemyEntity, now: number): void {
+  private resetMovementProgress(enemy: EnemyEntity): void {
     this.movementProgress.set(enemy.id, {
       anchorX: enemy.sprite.x,
       anchorY: enemy.sprite.y,
-      lastProgressAt: now,
+      blockedMs: 0,
       clearingObstacle: null,
     });
   }

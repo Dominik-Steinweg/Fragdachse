@@ -537,21 +537,19 @@ export class GrenadeRenderer {
   private generateFurBallTextures(textures: Phaser.Textures.TextureManager): void {
     const CENTER = 19;
     const BODY_RADIUS = 12;
-    const TUFT_COUNT = 22;
+    const TUFT_COUNT = 30;
 
     ensureCanvasTexture(textures, BODY_KEYS.fur_ball, 38, 38, (ctx) => {
-      // Fellspitzen zuerst, damit der Körper ihre Ansätze sauber überdeckt.
-      ctx.fillStyle = 'rgba(96,62,32,0.95)';
+      // Fellsaum zuerst, damit der Körper die Ansätze sauber überdeckt. Überlappende Kreise
+      // statt Spitzen – Spitzen lesen sich als Igel/Kastanie, Kreise als Fell.
+      ctx.fillStyle = 'rgba(104,68,36,0.97)';
+      const TUFT_RING = BODY_RADIUS + 0.4;
       for (let index = 0; index < TUFT_COUNT; index++) {
         const angle = (Math.PI * 2 * index) / TUFT_COUNT;
-        // Alternierende Längen -> unregelmäßiger, zotteliger Umriss.
-        const tip = BODY_RADIUS + (index % 3 === 0 ? 5.6 : index % 2 === 0 ? 3.4 : 4.6);
-        const spread = 0.10;
+        // Wechselnde Büschelgrößen -> unregelmäßiger, zotteliger Umriss.
+        const tuftRadius = 2.4 + (index % 3) * 0.9;
         ctx.beginPath();
-        ctx.moveTo(CENTER + Math.cos(angle - spread) * (BODY_RADIUS - 1), CENTER + Math.sin(angle - spread) * (BODY_RADIUS - 1));
-        ctx.lineTo(CENTER + Math.cos(angle) * tip, CENTER + Math.sin(angle) * tip);
-        ctx.lineTo(CENTER + Math.cos(angle + spread) * (BODY_RADIUS - 1), CENTER + Math.sin(angle + spread) * (BODY_RADIUS - 1));
-        ctx.closePath();
+        ctx.arc(CENTER + Math.cos(angle) * TUFT_RING, CENTER + Math.sin(angle) * TUFT_RING, tuftRadius, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -568,28 +566,29 @@ export class GrenadeRenderer {
     });
 
     ensureCanvasTexture(textures, DETAIL_KEYS.fur_ball, 38, 38, (ctx) => {
-      // Fellsträhnen: kurze, gebogene Striche entlang der Wölbung.
-      ctx.strokeStyle = 'rgba(66,41,20,0.55)';
+      // Fellsträhnen: kurze, gebogene Striche in unterschiedlichen Tiefen. Gleich lange Striche
+      // ab der Mitte würden als Sternmuster statt als Fell lesen.
+      ctx.strokeStyle = 'rgba(70,44,22,0.42)';
       ctx.lineCap = 'round';
-      ctx.lineWidth = 1.3;
-      for (let index = 0; index < 9; index++) {
-        const angle = (Math.PI * 2 * index) / 9 + 0.4;
-        const inner = BODY_RADIUS * 0.34;
-        const outer = BODY_RADIUS * 0.92;
+      ctx.lineWidth = 1.1;
+      for (let index = 0; index < 12; index++) {
+        const angle = (Math.PI * 2 * index) / 12 + (index % 2) * 0.26 + 0.3;
+        const inner = BODY_RADIUS * (0.42 + (index % 3) * 0.12);
+        const outer = inner + BODY_RADIUS * 0.34;
         ctx.beginPath();
         ctx.moveTo(CENTER + Math.cos(angle) * inner, CENTER + Math.sin(angle) * inner);
         ctx.quadraticCurveTo(
-          CENTER + Math.cos(angle + 0.30) * (inner + outer) * 0.5,
-          CENTER + Math.sin(angle + 0.30) * (inner + outer) * 0.5,
-          CENTER + Math.cos(angle + 0.16) * outer,
-          CENTER + Math.sin(angle + 0.16) * outer,
+          CENTER + Math.cos(angle + 0.22) * (inner + outer) * 0.5,
+          CENTER + Math.sin(angle + 0.22) * (inner + outer) * 0.5,
+          CENTER + Math.cos(angle + 0.10) * outer,
+          CENTER + Math.sin(angle + 0.10) * outer,
         );
         ctx.stroke();
       }
 
       // Glanzfleck oben links, damit der Ball rund wirkt.
       const sheen = ctx.createRadialGradient(CENTER - 5, CENTER - 6, 0, CENTER - 5, CENTER - 6, 6.5);
-      sheen.addColorStop(0, 'rgba(244,216,178,0.46)');
+      sheen.addColorStop(0, 'rgba(244,216,178,0.44)');
       sheen.addColorStop(1, 'rgba(244,216,178,0.0)');
       ctx.fillStyle = sheen;
       ctx.beginPath();

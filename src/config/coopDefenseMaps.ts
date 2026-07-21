@@ -6,6 +6,12 @@ import {
 } from './coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
 
+/**
+ * Unterhalb dieses Radius würde ein Gang stellenweise nur noch eine Zelle breit werden – zu eng
+ * für Dachse und die perfekte Falle für steckenbleibende Gegner.
+ */
+const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
+
 export interface CoopBaseCellOffset {
   readonly gridX: number;
   readonly gridY: number;
@@ -78,6 +84,43 @@ export interface CoopDefenseMapPowerUpConfig {
   readonly spawnOnArenaStart?: boolean;
 }
 
+export interface CoopDefenseMapCorridorPoint {
+  readonly gridX: number;
+  readonly gridY: number;
+}
+
+/**
+ * Ein Gang durch das Felsfeld: grober Streckenzug, an dem sich der Generator entlanghangelt.
+ * Die Punkte geben nur den Verlauf vor – ausgehöhlt wird mit wandernder Mittellinie und
+ * schwankendem Radius, damit der Gang nicht wie ein gezeichneter Korridor aussieht.
+ */
+export interface CoopDefenseMapCorridorConfig {
+  readonly id: string;
+  /** Abweichender mittlerer Radius; ohne Angabe gilt `corridorRadiusCells` des Felsfelds. */
+  readonly radiusCells?: number;
+  readonly points: readonly CoopDefenseMapCorridorPoint[];
+}
+
+/**
+ * Ersetzt die prozeduralen Felsen durch ein durchgehend zugebautes Feld, in das nur die
+ * konfigurierten Gänge gefräst werden. Die Schutzradien der Basen und die Gleisspalten bleiben
+ * wie immer frei; Bäume entfallen, damit sie keinen Gang zustellen.
+ *
+ * Alle Streuwerte hängen am Arena-Seed: dieselbe Map sieht jede Runde etwas anders aus, bleibt
+ * aber zwischen Host und Clients identisch.
+ */
+export interface CoopDefenseMapRockFieldConfig {
+  /** Mittlerer Radius der Gänge in Zellen (Mitte der Schwankung). */
+  readonly corridorRadiusCells: number;
+  /** Maximale Abweichung des Radius nach oben und unten – erzeugt Engstellen und Kammern. */
+  readonly corridorRadiusVarianceCells: number;
+  /** Maximaler seitlicher Versatz der Mittellinie gegenüber dem konfigurierten Verlauf. */
+  readonly corridorWanderCells: number;
+  /** Zufällige Verschiebung der Zwischenpunkte; Anfangs- und Endpunkt bleiben fest. */
+  readonly waypointJitterCells: number;
+  readonly corridors: readonly CoopDefenseMapCorridorConfig[];
+}
+
 export interface CoopDefenseMapConfig {
   readonly mapId: string;
   readonly displayName: string;
@@ -86,6 +129,8 @@ export interface CoopDefenseMapConfig {
   readonly tutorialDurationMs?: number;
   /** True: Die Zombie-Fraktion führt auf dieser Map eigene Luftangriffe durch. */
   readonly enemyAirstrikes?: boolean;
+  /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
+  readonly rockField?: CoopDefenseMapRockFieldConfig;
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
@@ -200,12 +245,58 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
       ? Math.max(1000, Math.floor(mapConfig.tutorialDurationMs))
       : undefined,
     enemyAirstrikes: mapConfig.enemyAirstrikes === true ? true : undefined,
+    rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     waves: mapConfig.waves.map(normalizeWaveConfig),
     boss: normalizeBossConfig(mapConfig),
   };
+}
+
+function normalizeRockFieldConfig(
+  mapId: string,
+  rockField: CoopDefenseMapRockFieldConfig | undefined,
+): CoopDefenseMapRockFieldConfig | undefined {
+  if (!rockField) return undefined;
+
+  const uniqueCorridorIds = new Set<string>();
+  const corridors = rockField.corridors.map((corridor) => {
+    if (uniqueCorridorIds.has(corridor.id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate corridor id on map ${mapId}: ${corridor.id}`);
+    }
+    uniqueCorridorIds.add(corridor.id);
+    if (corridor.points.length < 2) {
+      throw new Error(`[coopDefenseMaps] Corridor ${mapId}:${corridor.id} needs at least two points`);
+    }
+
+    return {
+      id: corridor.id,
+      radiusCells: typeof corridor.radiusCells === 'number' && Number.isFinite(corridor.radiusCells)
+        ? clampCorridorRadius(corridor.radiusCells)
+        : undefined,
+      points: corridor.points.map((point) => ({
+        gridX: Math.floor(point.gridX),
+        gridY: Math.floor(point.gridY),
+      })),
+    };
+  });
+
+  if (corridors.length === 0) {
+    throw new Error(`[coopDefenseMaps] Rock field on map ${mapId} needs at least one corridor`);
+  }
+
+  return {
+    corridorRadiusCells: clampCorridorRadius(rockField.corridorRadiusCells),
+    corridorRadiusVarianceCells: Math.max(0, rockField.corridorRadiusVarianceCells),
+    corridorWanderCells: Math.max(0, rockField.corridorWanderCells),
+    waypointJitterCells: Math.max(0, rockField.waypointJitterCells),
+    corridors,
+  };
+}
+
+function clampCorridorRadius(radiusCells: number): number {
+  return Math.max(MIN_CORRIDOR_RADIUS_CELLS, radiusCells);
 }
 
 function normalizePowerUpConfig(

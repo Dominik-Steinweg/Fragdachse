@@ -363,10 +363,22 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
   // ── Dash-Trail-Effekt ─────────────────────────────────────────────────────
 
-  /** Trail-Geist: verblassende Sprite-Kopie des Spielers während Phase 1. */
-  playDashTrailGhost(x: number, y: number, color: number, scale: number, rotation: number): void {
-    const ghost = this.scene.add.image(x, y, 'badger');
-    ghost.setDisplaySize(PLAYER_SIZE * scale, PLAYER_SIZE * scale);
+  /**
+   * Trail-Geist: verblassende Sprite-Kopie während Phase 1 eines Dashs.
+   * Gegner reichen ihren eigenen Texturschlüssel und ihre Kantenlänge durch, damit ihr
+   * Ausweichschritt genauso aussieht wie der Spieler-Dash.
+   */
+  playDashTrailGhost(
+    x: number,
+    y: number,
+    color: number,
+    scale: number,
+    rotation: number,
+    textureKey = 'badger',
+    baseSize = PLAYER_SIZE,
+  ): void {
+    const ghost = this.scene.add.image(x, y, textureKey);
+    ghost.setDisplaySize(baseSize * scale, baseSize * scale);
     ghost.setRotation(rotation);
     ghost.setTint(color);
     ghost.setAlpha(0.45);

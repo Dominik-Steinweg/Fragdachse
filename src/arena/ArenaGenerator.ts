@@ -3,11 +3,34 @@ import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefen
 import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
 import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
-import type { CoopDefenseMapConfig, CoopDefenseMapPowerUpConfig, CoopDefensePowerUpRegion } from '../config/coopDefenseMaps';
+import type {
+  CoopDefenseMapConfig,
+  CoopDefenseMapCorridorPoint,
+  CoopDefenseMapPowerUpConfig,
+  CoopDefenseMapRockFieldConfig,
+  CoopDefensePowerUpRegion,
+} from '../config/coopDefenseMaps';
 import {
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
   getCoopDefenseTutorialRockRegion,
 } from '../config/coopDefenseTutorial';
+
+// ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
+/** Abtastschritt entlang eines Gangs in Zellen; kleiner = glattere Wand, mehr Rechenaufwand. */
+const CORRIDOR_SAMPLE_STEP_CELLS = 0.4;
+/** Dämpfung der Random Walks: nahe 1 = weite Bögen, kleiner = nervöser Verlauf. */
+const CORRIDOR_WANDER_DAMPING = 0.94;
+const CORRIDOR_WANDER_STEP = 0.14;
+const CORRIDOR_RADIUS_DAMPING = 0.9;
+const CORRIDOR_RADIUS_STEP = 0.22;
+/** Auf dieser Länge läuft der seitliche Versatz an den Gang-Enden auf 0 aus. */
+const CORRIDOR_TAPER_CELLS = 3;
+/** Harte Untergrenze des Aushubradius, damit nie eine unpassierbare Engstelle entsteht. */
+const MIN_CARVED_RADIUS_CELLS = 1.05;
+
+function clampToUnitRange(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
 
 /**
  * Prozeduraler Arena-Generator – keine Phaser-Abhängigkeit.
@@ -70,7 +93,12 @@ export class ArenaGenerator {
         map = newMap;
       }
 
-      if (coopMapConfig?.tutorialText) {
+      // Ein konfiguriertes Felsfeld ersetzt die prozedurale Verteilung komplett – auch die
+      // Tutorial-Formation, deren Zweck (Bereich unter dem Hinweisfenster zubauen) es ohnehin
+      // bereits erfüllt.
+      if (coopMapConfig?.rockField) {
+        ArenaGenerator.applyRockField(map, coopMapConfig.rockField, rng);
+      } else if (coopMapConfig?.tutorialText) {
         ArenaGenerator.applyTutorialRockFormation(map, trackCols, rng);
       }
 
@@ -102,7 +130,9 @@ export class ArenaGenerator {
       // damit die Baumkrone nie über die Arena-Grenze hinausragt.
       const treeMargin = Math.ceil(CANOPY_RADIUS / CELL_SIZE); // bei r=96, size=48 → 2
       const trees: TreeCell[] = [];
-      const shuffledForTrees = allCells.filter(
+      // Im Felsfeld sind die einzigen freien Zellen die Gänge – ein Baum darin würde sie
+      // verstopfen und die Konnektivität kippen. Deshalb wachsen dort keine Bäume.
+      const shuffledForTrees = coopMapConfig?.rockField ? [] : allCells.filter(
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
@@ -266,6 +296,133 @@ export class ArenaGenerator {
       }
     }
     return { trackCols, tracks };
+  }
+
+  /**
+   * Baut die komplette Arena mit Fels zu und fräst anschließend die konfigurierten Gänge frei.
+   * Gleisspalten und die Schutzradien der Basen werden erst beim Übertragen nach `blocked`
+   * ausgenommen (siehe generate()) und brauchen hier keine Sonderbehandlung.
+   */
+  private static applyRockField(
+    map: boolean[][],
+    rockField: CoopDefenseMapRockFieldConfig,
+    rng: () => number,
+  ): void {
+    for (let gy = 0; gy < GRID_ROWS; gy++) {
+      for (let gx = 0; gx < GRID_COLS; gx++) {
+        map[gy][gx] = true;
+      }
+    }
+
+    for (const corridor of rockField.corridors) {
+      ArenaGenerator.carveOrganicCorridor(map, corridor, rockField, rng);
+    }
+  }
+
+  /**
+   * Fräst einen Gang entlang seines Streckenzugs frei. Statt eines Rechtecks konstanter Breite
+   * wandert die Mittellinie in weichen Bögen um den Sollverlauf und der Aushubradius schwankt –
+   * so entstehen Engstellen und Ausbuchtungen wie in einem gewachsenen Höhlensystem.
+   *
+   * Beide Zufallsanteile sind gedämpfte Random Walks: der neue Wert hängt am alten, deshalb
+   * ergeben sich Bögen statt Zickzack. Zum Anfang und Ende hin läuft der Versatz auf 0 aus, damit
+   * der Gang exakt an seinem Start- und Zielpunkt ankommt (Spawnrand bzw. Basis-Schutzradius).
+   */
+  private static carveOrganicCorridor(
+    map: boolean[][],
+    corridor: CoopDefenseMapRockFieldConfig['corridors'][number],
+    rockField: CoopDefenseMapRockFieldConfig,
+    rng: () => number,
+  ): void {
+    const points = ArenaGenerator.jitterCorridorWaypoints(corridor.points, rockField.waypointJitterCells, rng);
+    const baseRadius = corridor.radiusCells ?? rockField.corridorRadiusCells;
+    const totalLength = ArenaGenerator.measurePathLength(points);
+    if (totalLength <= 0) return;
+
+    let wander = 0;
+    let radiusOffset = 0;
+    let travelled = 0;
+
+    for (let index = 1; index < points.length; index++) {
+      const from = points[index - 1];
+      const to = points[index];
+      const segmentLength = Math.hypot(to.x - from.x, to.y - from.y);
+      if (segmentLength <= 0) continue;
+
+      const dirX = (to.x - from.x) / segmentLength;
+      const dirY = (to.y - from.y) / segmentLength;
+      const steps = Math.max(1, Math.ceil(segmentLength / CORRIDOR_SAMPLE_STEP_CELLS));
+
+      for (let step = 0; step <= steps; step++) {
+        const alongSegment = (segmentLength * step) / steps;
+        wander = clampToUnitRange(wander * CORRIDOR_WANDER_DAMPING + (rng() * 2 - 1) * CORRIDOR_WANDER_STEP);
+        radiusOffset = clampToUnitRange(
+          radiusOffset * CORRIDOR_RADIUS_DAMPING + (rng() * 2 - 1) * CORRIDOR_RADIUS_STEP,
+        );
+
+        const distanceToEnd = totalLength - (travelled + alongSegment);
+        const taper = Math.min(
+          1,
+          (travelled + alongSegment) / CORRIDOR_TAPER_CELLS,
+          distanceToEnd / CORRIDOR_TAPER_CELLS,
+        );
+        const offset = wander * rockField.corridorWanderCells * Math.max(0, taper);
+        const radius = Math.max(
+          MIN_CARVED_RADIUS_CELLS,
+          baseRadius + radiusOffset * rockField.corridorRadiusVarianceCells,
+        );
+
+        ArenaGenerator.carveDisc(
+          map,
+          from.x + dirX * alongSegment - dirY * offset,
+          from.y + dirY * alongSegment + dirX * offset,
+          radius,
+        );
+      }
+
+      travelled += segmentLength;
+    }
+  }
+
+  /** Verschiebt die Zwischenpunkte zufällig; Start und Ende bleiben als Andockstellen unangetastet. */
+  private static jitterCorridorWaypoints(
+    points: readonly CoopDefenseMapCorridorPoint[],
+    jitterCells: number,
+    rng: () => number,
+  ): Array<{ x: number; y: number }> {
+    return points.map((point, index) => {
+      const isEndpoint = index === 0 || index === points.length - 1;
+      if (isEndpoint || jitterCells <= 0) return { x: point.gridX, y: point.gridY };
+      return {
+        x: point.gridX + (rng() * 2 - 1) * jitterCells,
+        y: point.gridY + (rng() * 2 - 1) * jitterCells,
+      };
+    });
+  }
+
+  private static measurePathLength(points: readonly { x: number; y: number }[]): number {
+    let length = 0;
+    for (let index = 1; index < points.length; index++) {
+      length += Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y);
+    }
+    return length;
+  }
+
+  /** Räumt alle Zellen frei, deren Mittelpunkt im Radius um (centerX, centerY) liegt. */
+  private static carveDisc(map: boolean[][], centerX: number, centerY: number, radiusCells: number): void {
+    const minGridX = Math.max(0, Math.ceil(centerX - radiusCells));
+    const maxGridX = Math.min(GRID_COLS - 1, Math.floor(centerX + radiusCells));
+    const minGridY = Math.max(0, Math.ceil(centerY - radiusCells));
+    const maxGridY = Math.min(GRID_ROWS - 1, Math.floor(centerY + radiusCells));
+    const radiusSq = radiusCells * radiusCells;
+
+    for (let gy = minGridY; gy <= maxGridY; gy++) {
+      for (let gx = minGridX; gx <= maxGridX; gx++) {
+        const dx = gx - centerX;
+        const dy = gy - centerY;
+        if (dx * dx + dy * dy <= radiusSq) map[gy][gx] = false;
+      }
+    }
   }
 
   private static applyTutorialRockFormation(

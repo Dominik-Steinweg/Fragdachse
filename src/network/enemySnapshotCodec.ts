@@ -8,7 +8,7 @@
  * Update-Frequenz oder Interpolation (Direktheit bleibt unverändert).
  *
  * Stromformat von `u` (Einträge hintereinander, variable Länge):
- *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?
+ *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?
  * Reihenfolge der optionalen Felder ist fix; `mask` gibt an, welche vorhanden sind.
  */
 import {
@@ -24,6 +24,7 @@ const FIELD_KIND = 8;  // kindIndex
 const FIELD_BURN = 16; // visuelle Brand-Stackzahl
 const FIELD_FACTION = 32; // Fraktion und optionale Besitzerdarstellung
 const FIELD_BURROW = 64;  // Einbuddel-Zustand
+const FIELD_DASH = 128;   // Ausweichschritt-Phase (0/1/2)
 
 /** Rotation wird als Integer (2 Nachkommastellen) übertragen, um den Dezimalpunkt zu sparen. */
 const ROT_QUANT = 100;
@@ -48,6 +49,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (entry.burnStacks !== undefined) mask |= FIELD_BURN;
   if (entry.faction !== undefined) mask |= FIELD_FACTION;
   if (entry.burrowed !== undefined) mask |= FIELD_BURROW;
+  if (entry.dashPhase !== undefined) mask |= FIELD_DASH;
 
   out.push(enemyIdToNum(entry.id), mask);
   if (mask & FIELD_POS) out.push(entry.x as number, entry.y as number);
@@ -59,6 +61,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     out.push(entry.faction === 'allied' ? 1 : 0, entry.ownerId ?? '', entry.ownerColor ?? 0);
   }
   if (mask & FIELD_BURROW) out.push(entry.burrowed ? 1 : 0);
+  if (mask & FIELD_DASH) out.push(entry.dashPhase as number);
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -81,6 +84,7 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       entry.ownerColor = stream[i++] as number;
     }
     if (mask & FIELD_BURROW) { entry.burrowed = (stream[i++] as number) === 1; }
+    if (mask & FIELD_DASH) { entry.dashPhase = (stream[i++] as number) as 0 | 1 | 2; }
     result.push(entry);
   }
   return result;
@@ -100,6 +104,7 @@ export function countEnemyUpserts(stream: readonly (number | string)[]): number 
     if (mask & FIELD_BURN) i += 1;
     if (mask & FIELD_FACTION) i += 3;
     if (mask & FIELD_BURROW) i += 1;
+    if (mask & FIELD_DASH) i += 1;
     count += 1;
   }
   return count;

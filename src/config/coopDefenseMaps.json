@@ -642,6 +642,73 @@
         { "enemyKind": "alien-badger", "intervalMs": 25000, "countPerWave": 1, "startAtMs": 15000 },
         { "enemyKind": "thrower-badger", "intervalMs": 11000, "countPerWave": 1, "startAtMs": 0 }
       ]
+    },
+    {
+      "mapId": "14",
+      "displayName": "Map 14 - Brandschneise",
+      "roundDurationSec": 90,
+      "rockField": {
+        "corridorRadiusCells": 1.35,
+        "corridorRadiusVarianceCells": 0.4,
+        "corridorWanderCells": 0.9,
+        "waypointJitterCells": 0.8,
+        "corridors": [
+          { "id": "front-top", "points": [{ "gridX": 0, "gridY": 4 }, { "gridX": 6, "gridY": 3 }, { "gridX": 12, "gridY": 4 }, { "gridX": 17, "gridY": 8 }, { "gridX": 19, "gridY": 8 }] },
+          { "id": "front-middle", "points": [{ "gridX": 0, "gridY": 16 }, { "gridX": 5, "gridY": 17 }, { "gridX": 10, "gridY": 14 }, { "gridX": 19, "gridY": 14 }] },
+          { "id": "front-bottom", "points": [{ "gridX": 0, "gridY": 28 }, { "gridX": 6, "gridY": 29 }, { "gridX": 12, "gridY": 28 }, { "gridX": 17, "gridY": 20 }, { "gridX": 19, "gridY": 20 }] },
+          { "id": "rear-north", "points": [{ "gridX": 30, "gridY": 12 }, { "gridX": 36, "gridY": 14 }, { "gridX": 44, "gridY": 12 }, { "gridX": 51, "gridY": 14 }] },
+          { "id": "rear-south", "points": [{ "gridX": 30, "gridY": 19 }, { "gridX": 38, "gridY": 26 }, { "gridX": 46, "gridY": 25 }, { "gridX": 51, "gridY": 21 }] }
+        ]
+      },
+      "bases": [
+        {
+          "id": "coop-base-rear",
+          "hpMax": 3000,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 }, { "gridX": 3, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }, { "gridX": 3, "gridY": 2 }, { "gridX": 3, "gridY": 2 },
+              { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 }, { "gridX": 3, "gridY": 3 },
+              { "gridX": 0, "gridY": 4 }, { "gridX": 1, "gridY": 4 }, { "gridX": 2, "gridY": 4 }, { "gridX": 3, "gridY": 4 }
+            ]
+          },
+          "turrets": [
+            { "id": "front-top", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "BASE_SPOREN" },
+            { "id": "front-bottom", "cellOffset": { "gridX": 0, "gridY": 4 }, "mountSide": "front", "weaponId": "BASE_SPOREN" }
+          ],
+          "powerUpPedestals": [
+            { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true }
+          ]
+        },
+        {
+          "id": "coop-base-middle",
+          "hpMax": 1200,
+          "anchor": { "kind": "center-offset", "dxCells": -5, "dyCells": -2 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }
+            ]
+          },
+          "powerUpPedestals": [
+            { "id": "health-station-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true }
+          ]
+        }
+      ],
+      "powerUps": [],
+      "waves": [
+        { "enemyKind": "pyro-badger", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 3000 },
+        { "enemyKind": "zombie-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 }
+      ]
     }
   ]
 }

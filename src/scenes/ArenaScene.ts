@@ -180,11 +180,13 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_nuk', './assets/sprites/16x16nuke.png');
     this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
     this.load.image('badger',      './assets/sprites/32x32dachsweapon01.png');
-    for (const enemyConfig of Object.values(COOP_DEFENSE_ENEMY_CONFIGS)) {
-      this.load.image(
-        enemyConfig.imageKey,
-        `./assets/sprites/enemies/${enemyConfig.imageKey}.png`,
-      );
+    // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
+    // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
+    const enemyImageKeys = new Set(
+      Object.values(COOP_DEFENSE_ENEMY_CONFIGS).map((enemyConfig) => enemyConfig.imageKey),
+    );
+    for (const imageKey of enemyImageKeys) {
+      this.load.image(imageKey, `./assets/sprites/enemies/${imageKey}.png`);
     }
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
 
@@ -345,7 +347,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, guardianSpiritSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, guardianSpiritSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyBossFlowFieldService: null,

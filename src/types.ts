@@ -161,7 +161,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train';
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -1228,6 +1228,8 @@ export interface SyncedEnemyState {
   faction: 'hostile' | 'allied';
   /** True: Gegner ist eingebuddelt (unverwundbar, ohne Kollisionen, unsichtbar bis auf Buddel-Partikel). */
   burrowed: boolean;
+  /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
+  dashPhase: 0 | 1 | 2;
   ownerId?: string;
   ownerColor?: number;
 }
@@ -1244,6 +1246,7 @@ export interface SyncedEnemyDeltaState {
   burnStacks?: number;
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
+  dashPhase?: 0 | 1 | 2;
   ownerId?: string;
   ownerColor?: number;
 }

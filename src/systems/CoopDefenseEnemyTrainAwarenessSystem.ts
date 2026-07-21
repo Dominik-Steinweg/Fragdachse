@@ -26,7 +26,15 @@ export interface TrainCrossingBurrowSource {
   requestTrainCrossingBurrow(enemyId: string, now: number): boolean;
 }
 
-/** Vorausschauende, pro Gegnerart konfigurierbare Gleis- und Zug-KI. */
+/**
+ * Vorausschauende, pro Gegnerart konfigurierbare Gleis- und Zug-KI.
+ *
+ * Alle Quermanöver steuern ausschließlich die X-Achse: Gefahr und Räumzeit hängen allein davon ab,
+ * wie schnell der Gegner den Gleisbereich seitlich verlässt. Die Y-Komponente der Wegfindung wird
+ * deshalb unverändert durchgereicht. Sie zu nullen wäre auf offenem Feld unauffällig, sperrt den
+ * Gegner aber in einem von Felsen gesäumten Gleisabschnitt fest: Er drückt dann seitlich gegen
+ * den Stein und darf nicht mehr längs des Gleises ausweichen.
+ */
 export class CoopDefenseEnemyTrainAwarenessSystem {
   private readonly states = new Map<string, EnemyTrainAwarenessState>();
   private burrowSource: TrainCrossingBurrowSource | null = null;
@@ -105,7 +113,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     if (this.canClearBeforeHazard(config, remainingCrossingMs, hazard.startsAt, hazard.endsAt, now)) {
       state.mode = 'crossing';
       state.crossingDirection = intendedDirection;
-      return { vx: intendedDirection * movementSpeed, vy: 0, override: true };
+      return { vx: intendedDirection * movementSpeed, vy: intendedVy, override: true };
     }
 
     // Bereits zwischen den Gleisen und zu langsam zum Räumen: abtauchen schlägt Zurückrennen.
@@ -119,7 +127,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     const escapeDirection: -1 | 1 = leftDistance <= rightDistance ? -1 : 1;
     state.mode = 'escaping';
     state.crossingDirection = escapeDirection;
-    return { vx: escapeDirection * movementSpeed, vy: 0, override: true };
+    return { vx: escapeDirection * movementSpeed, vy: intendedVy, override: true };
   }
 
   blocksRegularAttacks(enemyId: string): boolean {
@@ -167,7 +175,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     if (canCross && distanceToEntry <= 3) {
       state.mode = 'crossing';
       state.crossingDirection = direction;
-      return { vx: direction * movementSpeed, vy: 0, override: true };
+      return { vx: direction * movementSpeed, vy: intendedVy, override: true };
     }
     if (canCross) {
       this.resetState(state);
@@ -194,7 +202,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     state.mode = 'approaching';
     return {
       vx: direction * Math.min(movementSpeed, distanceToEntry * 8),
-      vy: 0,
+      vy: intendedVy,
       override: true,
     };
   }

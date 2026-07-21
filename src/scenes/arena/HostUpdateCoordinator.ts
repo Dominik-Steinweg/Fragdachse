@@ -18,6 +18,7 @@ import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, Team
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
+import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
 /**
  * Runs every frame on the host.
@@ -41,6 +42,7 @@ export class HostUpdateCoordinator {
   private moveLoopHandle: string | null = null;
   private trainSpawned = false;
   private readonly blackHoleSystem: BlackHoleSystem;
+  private readonly enemyDashVisuals: EnemyDashVisualTracker;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -52,6 +54,12 @@ export class HostUpdateCoordinator {
     this.blackHoleSystem = new BlackHoleSystem(
       () => this.ctx.enemyManager,
       this.ctx.hostPhysics,
+    );
+    this.enemyDashVisuals = new EnemyDashVisualTracker(
+      this.scene,
+      this.ctx.effectSystem,
+      this.ctx.gameAudioSystem,
+      false,
     );
   }
 
@@ -76,6 +84,7 @@ export class HostUpdateCoordinator {
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.trainSpawned = false;
     this.blackHoleSystem.clear();
+    this.enemyDashVisuals.reset();
   }
 
   runHostUpdate(delta: number): void {
@@ -88,6 +97,9 @@ export class HostUpdateCoordinator {
     this.updateEnemyFlowFields(now);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
+    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
+    // Wegfindung im selben Frame.
+    if (!countdownActive) this.ctx.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
     this.ctx.enemyManager?.hostUpdateMovement(
       this.ctx.enemyFlowFieldService,
       this.ctx.enemyPlayerFlowFieldService,
@@ -99,6 +111,7 @@ export class HostUpdateCoordinator {
       (enemyId, at) => this.ctx.combatSystem.getActiveBurnSources(enemyId, at),
       this.ctx.coopDefenseEnemyTrainAwarenessSystem,
       this.ctx.coopDefenseEnemyBurrowSystem,
+      this.ctx.coopDefenseEnemyCombatPositioningSystem,
     );
     if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
     if (!countdownActive) {
@@ -124,6 +137,9 @@ export class HostUpdateCoordinator {
     }
 
     this.blackHoleSystem.update(now);
+    // Letzter Schritt vor der Physik: ein laufender Ausweichschritt überschreibt die
+    // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
+    if (!countdownActive) this.ctx.coopDefenseEnemyDodgeSystem?.hostUpdate(now);
     this.ctx.hostPhysics.update(countdownActive);
     const decoys = countdownActive ? [] : this.ctx.decoySystem.hostUpdate(now);
     if (!countdownActive) {
@@ -513,6 +529,8 @@ export class HostUpdateCoordinator {
 
     for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
       enemy.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(enemy.id));
+      // Die Hitbox-Skalierung besorgt die Physik; hier fehlen nur Trail-Geister und Dash-Sound.
+      this.enemyDashVisuals.sync(enemy);
     }
 
     const powerups    = this.ctx.powerUpSystem?.getWorldItemSnapshot() ?? [];
@@ -903,7 +921,7 @@ export class HostUpdateCoordinator {
         : null;
       if (!captured) enemyManager.hostSpawnAtWorld(spawnX, spawnY, effect.enemyKind);
     }
-    bridge.broadcastExplosionEffect(x, y, effect.offsetPx * 2, effect.color, 'default');
+    bridge.broadcastExplosionEffect(x, y, effect.offsetPx * 2, effect.color, 'brood_hatch');
   }
 
   applyExplosionEnvironmentDamage(

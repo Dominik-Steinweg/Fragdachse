@@ -737,20 +737,22 @@ function createEnemyBiteConfig(id: string, displayName: string, damage: number, 
 }
 
 /**
- * Belagerungsbiss: gleiche Kennwerte wie {@link createEnemyBiteConfig}, aber mit groesserer
- * Reichweite und auf Basen/Felsen/Zug beschraenktem Schaden. Spieler bleiben unberuehrt, damit
- * der Gegner sie ausschliesslich mit seiner Fernwaffe bekaempft.
+ * Belagerungsbiss: gleiche Kennwerte wie {@link createEnemyBiteConfig}, aber auf Basen/Felsen/Zug
+ * beschraenkter Schaden. Spieler bleiben unberuehrt, damit der Gegner sie ausschliesslich mit
+ * seiner Fernwaffe bekaempft. Die Reichweite ist per Default groesser als beim Nahkampf-Biss;
+ * kurzreichweitige Belagerer geben sie explizit an.
  */
 function createEnemyStructureBiteConfig(
   id: string,
   displayName: string,
   damage: number,
   rockDamageMult: number,
+  range = 90,
 ): WeaponConfig {
   return {
     ...createEnemyBiteConfig(id, displayName, damage, rockDamageMult),
     cooldown: 500,
-    range: 90,
+    range,
     fire: {
       type: 'melee',
       hitArcDegrees: 90,
@@ -900,6 +902,9 @@ export const WEAPON_CONFIGS = {
   // der Biss ist auf Basen und Felsen beschraenkt (targetMode 'structures' in der Gegner-Registry).
   ALIEN_BADGER_BITE: createEnemyStructureBiteConfig('ALIEN_BADGER_BITE', 'Alien-Dachsbiss', 70, 4),
   THROWER_BADGER_BITE: createEnemyStructureBiteConfig('THROWER_BADGER_BITE', 'Wurf-Dachsbiss', 85, 4),
+  // Kurzer Belagerungsbiss auf Dachsbiss-Reichweite: der Pyro-Dachs muss direkt an Fels oder
+  // Basis stehen, um zuzubeissen – sein eigentlicher Angriff ist die Brand-Glock.
+  PYRO_BADGER_BITE: createEnemyStructureBiteConfig('PYRO_BADGER_BITE', 'Pyro-Dachsbiss', 75, 4, 50),
 
   GRAVE_TITAN_BITE: {
     id:                   'GRAVE_TITAN_BITE',
@@ -1040,7 +1045,7 @@ export const WEAPON_CONFIGS = {
   ALIEN_BADGER_PLASMA: {
     id:                   'ALIEN_BADGER_PLASMA',
     displayName:          'Alien-Plasma',
-    cooldown:             850,
+    cooldown:             500,
     damage:               18,
     range:                520,
     fire: {
@@ -1049,10 +1054,10 @@ export const WEAPON_CONFIGS = {
       projectileSize:       10,
       projectileMaxBounces: 0,
       homing: {
-        acquireDelayMs:        260,
+        acquireDelayMs:        50,
         searchRadius:          260,
         retargetIntervalMs:    220,
-        maxTurnDegreesPerStep: 3,
+        maxTurnDegreesPerStep: 12,
         targetTypes:           ['players'],
         requireLineOfSight:    true,
         excludeOwner:          true,
@@ -1078,6 +1083,65 @@ export const WEAPON_CONFIGS = {
     trainDamageMult:      0,
     shotAudio: {
       successKey: 'shot_plasma',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  /**
+   * Brand-Glock des Pyro-Dachses: dieselbe Waffenmechanik wie die Spieler-Glock, aber mit fest
+   * verdrahtetem `burnOnHit`. Die Brandwerte sind Teil der Waffe (nicht eines Upgrades), deshalb
+   * traegt jedes Projektil automatisch den Brandschweif aus dem ProjectileBurnRenderer und setzt
+   * Getroffene in Brand – identisch zur voll ausgebauten Spieler-Glock.
+   */
+  PYRO_BADGER_GLOCK: {
+    id:                   'PYRO_BADGER_GLOCK',
+    displayName:          'Brand-Glock',
+    cooldown:             380,
+    damage:               5,
+    range:                470,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      780,
+      projectileSize:       4,
+      projectileMaxBounces: 2,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    hitKnockback:         0,
+    hitKnockbackDurationMs: 180,
+    // Deutlich ungenauer als die Spieler-Glock, damit der Dauerbeschuss auf Distanz nicht jeden
+    // Schuss trifft. Gegner werten dieselben Streuwerte aus wie Spieler (siehe
+    // CoopDefenseEnemyAttackSystem), inklusive Bloom pro Schuss.
+    spreadStanding:       9,
+    spreadMoving:         16,
+    spreadPerShot:        4,
+    maxDynamicSpread:     14,
+    spreadRecoveryDelay:  350,
+    spreadRecoveryRate:   5,
+    spreadRecoverySpeed:  100,
+    projectileColor:      COLORS.RED_1,
+    projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'glock' as BulletVisualPreset,
+    burnOnHit: {
+      durationMs:     2000,
+      damagePerTick:  2,
+    } satisfies BurnOnHitConfig,
+    tracerConfig: {
+      widthCore:  1,
+      widthGlow:  2,
+      alphaCore:  0.3,
+      alphaGlow:  0.08,
+      segments:   4,
+      fadeMs:     90,
+      colorCore:  COLORS.GOLD_1,
+      colorGlow:  COLORS.RED_2,
+    } satisfies TracerConfig,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      0,
+    shotAudio: {
+      successKey: 'shot_glock',
       failureKey: 'shot_dry_trigger',
     },
   } as WeaponConfig,

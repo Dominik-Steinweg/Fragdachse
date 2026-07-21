@@ -14,6 +14,11 @@ import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 const LEFT_SPAWN_GRID_X_MAX = Math.max(2, Math.floor(GRID_COLS * 0.15));
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_WAVE_DISTANCE_CELLS = 2;
+/**
+ * Spielraum um die kürzeste Grabstrecke herum. Ohne Toleranz würden sich alle eingebuddelten
+ * Gegner auf eine einzige Reihe drängen; mit ihr bleiben mehrere Zugänge in Benutzung.
+ */
+const SPAWN_TUNNEL_DIG_TOLERANCE_CELLS = 2;
 
 export class CoopDefenseWaveSpawner {
   private readonly accumulators: number[];
@@ -178,12 +183,17 @@ export class CoopDefenseWaveSpawner {
    * Eingebuddelt startende Gegner erscheinen direkt in der äußersten linken Spalte – auch dort,
    * wo Felsen den Weg versperren. Sie graben sich anschließend geradeaus nach rechts frei
    * (siehe CoopDefenseEnemyBurrowSystem), Begehbarkeit ist beim Spawn deshalb irrelevant.
+   *
+   * Bevorzugt werden Reihen mit der kürzesten Grabstrecke bis zum ersten begehbaren, erreichbaren
+   * Feld. Auf stark zugebauten Maps taucht der Gegner dadurch am Eingang eines Weges auf, statt
+   * sich minutenlang quer durch das Felsfeld zu wühlen.
    */
   private collectLeftEdgeCandidates(kind: CoopDefenseEnemyKind): { gridX: number; gridY: number }[] {
     const enemies = this.enemyManager.getAllEnemies();
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
 
-    const cells: { gridX: number; gridY: number }[] = [];
+    const rows: { gridY: number; digCells: number | null }[] = [];
+    let shortestDigCells = Number.POSITIVE_INFINITY;
     for (let gridY = 0; gridY < GRID_ROWS; gridY++) {
       const world = this.flowFieldService.gridToWorld(0, gridY);
       if (!world) continue;
@@ -193,9 +203,32 @@ export class CoopDefenseWaveSpawner {
           < minimumDistance * minimumDistance;
       });
       if (overlapsEnemy) continue;
-      cells.push({ gridX: 0, gridY });
+
+      const digCells = this.measureLeftEdgeDigDistance(gridY);
+      if (digCells !== null) shortestDigCells = Math.min(shortestDigCells, digCells);
+      rows.push({ gridY, digCells });
     }
-    return cells;
+
+    // Meldet keine Reihe erreichbaren Boden (etwa bevor das Flow-Field steht), zählt wie bisher
+    // jede freie Randzelle; sonst gewinnen die Reihen mit der kürzesten Grabstrecke.
+    if (!Number.isFinite(shortestDigCells)) {
+      return rows.map((row) => ({ gridX: 0, gridY: row.gridY }));
+    }
+
+    const maxDigCells = shortestDigCells + SPAWN_TUNNEL_DIG_TOLERANCE_CELLS;
+    return rows
+      .filter((row) => row.digCells !== null && row.digCells <= maxDigCells)
+      .map((row) => ({ gridX: 0, gridY: row.gridY }));
+  }
+
+  /** Spalten-Index des ersten begehbaren, erreichbaren Feldes einer Reihe; null = ganze Reihe zu. */
+  private measureLeftEdgeDigDistance(gridY: number): number | null {
+    for (let gridX = 0; gridX < GRID_COLS; gridX++) {
+      if (!this.flowFieldService.isTraversableAt(gridX, gridY)) continue;
+      if (this.flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
+      return gridX;
+    }
+    return null;
   }
 
   private pushRecent(key: string): void {

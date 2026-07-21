@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { NetworkBridge } from '../network/NetworkBridge';
@@ -32,6 +33,19 @@ interface DashState {
   hitIds: Set<string>;
   lastGroundX: number;
   lastGroundY: number;
+}
+
+/**
+ * Ausweichschritt eines Gegners. Nutzt dieselbe Zweiphasen-Kurve wie der Spieler-Dash
+ * (Burst mit Quad.easeOut, danach zähes Aufrappeln), aber ohne Upgrade-Einflüsse, ohne
+ * Air-Control und ohne Aufprallschaden – der Standard-Dash also.
+ */
+interface EnemyDashState {
+  phase:   1 | 2;
+  startMs: number;
+  dirX:    number;
+  dirY:    number;
+  vNorm:   number;
 }
 
 type DashGroundFireHandler = (
@@ -104,6 +118,7 @@ export class HostPhysicsSystem {
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
   private dashBurstPlayers = new Set<string>(); // Phase 1 aktiv → Schießen blockiert
+  private enemyDashStates  = new Map<string, EnemyDashState>();
 
   // Burrow-State (Collider-Enable-Tracking)
   private burrowedPlayers = new Set<string>();
@@ -156,11 +171,17 @@ export class HostPhysicsSystem {
    * Startet einen zeitbasierter Rückstoß-Impuls (Quad-Ease-Out Decay über durationMs).
    * Wird in HostPhysicsSystem.update() additiv zur regulären Velocity addiert.
    * Amplitude zum Zeitpunkt t: force * (1 - t/duration)²
+   *
+   * Zielt der Impuls auf einen Gegner, wird er mit dessen Wegstossfaktor skaliert – das ist der
+   * einzige Ort, an dem Gegner-Impulse entstehen, damit gilt der Faktor für jeden Wegstoß-Effekt.
    */
   addRecoil(playerId: string, vx: number, vy: number, durationMs = 180, sourcePlayerId?: string): void {
+    const knockbackFactor = this.enemyManager?.getEnemy(playerId)?.getKnockbackFactor() ?? 1;
+    if (knockbackFactor <= 0) return;
+
     const startMs = Date.now();
     const impulses = this.pendingRecoils.get(playerId) ?? [];
-    impulses.push({ vx, vy, startMs, durationMs, sourcePlayerId });
+    impulses.push({ vx: vx * knockbackFactor, vy: vy * knockbackFactor, startMs, durationMs, sourcePlayerId });
     this.pendingRecoils.set(playerId, impulses);
     if (sourcePlayerId) {
       this.recentImpulseSources.set(playerId, {
@@ -331,6 +352,34 @@ export class HostPhysicsSystem {
     this.dashBurstPlayers.add(playerId);
   }
 
+  /**
+   * Startet einen Gegner-Ausweichschritt in Richtung (dx, dy). Identische Mechanik zum
+   * Spieler-Dash: Zweiphasen-Kurve, halbierte Trefferkugel während des Bursts. Liefert false,
+   * wenn bereits ein Schritt läuft oder die Richtung leer ist.
+   */
+  startEnemyDash(enemyId: string, dx: number, dy: number): boolean {
+    if (this.enemyDashStates.has(enemyId)) return false;
+    const enemy = this.enemyManager?.getEnemy(enemyId);
+    if (!enemy?.sprite.active || !this.combatSystem.isAlive(enemyId)) return false;
+
+    const length = Math.hypot(dx, dy);
+    if (length === 0) return false;
+
+    this.enemyDashStates.set(enemyId, {
+      phase:   1,
+      startMs: Date.now(),
+      dirX:    dx / length,
+      dirY:    dy / length,
+      vNorm:   enemy.getMoveSpeed(),
+    });
+    enemy.setDashPhase(1);
+    return true;
+  }
+
+  isEnemyDashing(enemyId: string): boolean {
+    return this.enemyDashStates.has(enemyId);
+  }
+
   // ── Burrow-Kollisions-Steuerung (aufgerufen von BurrowSystem) ────────────
 
   /**
@@ -392,6 +441,7 @@ export class HostPhysicsSystem {
       this.burrowedEnemies.clear();
       this.dashStates.clear();
       this.dashBurstPlayers.clear();
+      this.enemyDashStates.clear();
       this.pendingRecoils.clear();
       this.recentImpulseSources.clear();
       this.forcedMovement.clear();
@@ -704,7 +754,8 @@ export class HostPhysicsSystem {
       }
 
       const impulse = this.consumeImpulseVelocity(enemy.id, now);
-      const desiredVelocity = enemy.getDesiredVelocity();
+      const dashVelocity = this.advanceEnemyDash(enemy, now);
+      const desiredVelocity = dashVelocity ?? enemy.getDesiredVelocity();
       const slowed = this.applyWorldMovementFactor(
         enemy.sprite.x,
         enemy.sprite.y,
@@ -716,5 +767,63 @@ export class HostPhysicsSystem {
       enemyBody.setVelocity(slowed.vx * enemyMovementFactor, slowed.vy * enemyMovementFactor);
       enemy.syncBar();
     }
+
+    // Stirbt ein Gegner mitten im Ausweichschritt, bleibt sein Eintrag sonst bis zum Rundenende liegen.
+    for (const enemyId of this.enemyDashStates.keys()) {
+      if (!this.enemyManager?.hasEnemy(enemyId)) this.enemyDashStates.delete(enemyId);
+    }
+  }
+
+  /**
+   * Schreibt einen laufenden Gegner-Ausweichschritt fort und liefert dessen Wunschgeschwindigkeit;
+   * null, wenn kein Schritt läuft (dann gilt die normale Wegfindung).
+   *
+   * Bewusst identisch zum Spieler-Dash in {@link update}: Phase 1 fällt per Quad.easeOut von
+   * DASH_F_START auf DASH_F_MIN und halbiert die Trefferkugel, Phase 2 rappelt sich per
+   * Quad.easeIn auf 1.0 zurück. Ohne Air-Control und ohne Upgrade-Resolver – Standard-Dash.
+   */
+  private advanceEnemyDash(enemy: EnemyEntity, now: number): { vx: number; vy: number } | null {
+    const dash = this.enemyDashStates.get(enemy.id);
+    if (!dash) return null;
+
+    // Unter der Erde bzw. im Tod bricht der Schritt sofort ab, damit die Hitbox nicht klein bleibt.
+    if (enemy.isBurrowed() || !this.combatSystem.isAlive(enemy.id)) {
+      this.endEnemyDash(enemy);
+      return null;
+    }
+
+    const elapsed = (now - dash.startMs) / 1000;
+    let speedFactor: number;
+
+    if (dash.phase === 1) {
+      const timing = getDashBurstTiming(elapsed, DASH_T1_S, false, false, DASH_HOLD_MAX_DURATION_FACTOR);
+      const easeOut = 1 - (1 - timing.progress) * (1 - timing.progress);
+      speedFactor = DASH_F_START + (DASH_F_MIN - DASH_F_START) * easeOut;
+      enemy.setDashScale(0.5);
+
+      if (timing.shouldEnd) {
+        dash.phase = 2;
+        dash.startMs = now;
+        enemy.setDashPhase(2);
+      }
+    } else {
+      const t = Math.min(1, elapsed / DASH_T2_S);
+      const easeIn = t * t;
+      speedFactor = DASH_F_MIN + (1 - DASH_F_MIN) * easeIn;
+      enemy.setDashScale(0.5 + 0.5 * easeIn);
+
+      if (elapsed >= DASH_T2_S) {
+        this.endEnemyDash(enemy);
+        return null;
+      }
+    }
+
+    return { vx: dash.dirX * dash.vNorm * speedFactor, vy: dash.dirY * dash.vNorm * speedFactor };
+  }
+
+  private endEnemyDash(enemy: EnemyEntity): void {
+    this.enemyDashStates.delete(enemy.id);
+    enemy.setDashPhase(0);
+    enemy.setDashScale(1);
   }
 }

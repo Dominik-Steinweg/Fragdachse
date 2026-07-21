@@ -5,6 +5,7 @@ import {
   getCoopDefenseEnemyKindIndex,
 } from '../src/config/coopDefenseEnemies';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { DASH_F_MIN, DASH_F_START, DASH_T1_S, DASH_T2_S } from '../src/config';
 import { decodeEnemyUpserts, encodeEnemyUpsert } from '../src/network/enemySnapshotCodec';
 import type { SyncedEnemyDeltaState } from '../src/types';
 
@@ -91,6 +92,70 @@ describe('Wurf-Dachs', () => {
   });
 });
 
+describe('Pyro-Dachs', () => {
+  const pyro = getCoopDefenseEnemyConfig('pyro-badger');
+  const alien = getCoopDefenseEnemyConfig('alien-badger');
+
+  it('is a faster and far sturdier relative of the alien badger', () => {
+    expect(pyro.moveSpeed).toBeGreaterThan(alien.moveSpeed);
+    expect(pyro.maxHp).toBeGreaterThan(alien.maxHp * 2);
+    expect(pyro.knockbackFactor!).toBeLessThan(alien.knockbackFactor!);
+    expect(pyro.movementTarget).toBe('players');
+    expect(pyro.xp).toBeGreaterThan(alien.xp);
+  });
+
+  it('always fires burning bullets from its glock variant, but aims worse than a player', () => {
+    const glock = WEAPON_CONFIGS.PYRO_BADGER_GLOCK;
+    if (glock.fire.type !== 'projectile') throw new Error('Brand-Glock muss eine Projektilwaffe sein');
+
+    // Beim Spieler schaltet erst ein Upgrade den Brand frei (Startwerte 0), hier gehoert er zur Waffe.
+    expect(WEAPON_CONFIGS.GLOCK.burnOnHit?.damagePerTick).toBe(0);
+    expect(glock.burnOnHit!.durationMs).toBe(2000);
+    expect(glock.burnOnHit!.damagePerTick).toBeGreaterThan(0);
+    expect(glock.bulletVisualPreset).toBe(WEAPON_CONFIGS.GLOCK.bulletVisualPreset);
+    expect(glock.cooldown).toBeGreaterThan(WEAPON_CONFIGS.GLOCK.cooldown);
+    expect(glock.spreadStanding).toBeGreaterThan(WEAPON_CONFIGS.GLOCK.spreadStanding);
+    expect(glock.spreadMoving).toBeGreaterThan(WEAPON_CONFIGS.GLOCK.spreadMoving);
+
+    expect(pyro.weapons.find((weapon) => weapon.weaponId === 'PYRO_BADGER_GLOCK')?.targetMode)
+      .toBe('players');
+    expect(pyro.weapons.find((weapon) => weapon.weaponId === 'PYRO_BADGER_BITE')?.targetMode)
+      .toBe('structures');
+  });
+
+  it('only bites structures it is standing right next to', () => {
+    const bite = WEAPON_CONFIGS.PYRO_BADGER_BITE;
+    if (bite.fire.type !== 'melee') throw new Error('Biss muss eine Nahkampfwaffe sein');
+
+    // Kurze Reichweite wie der Spieler-Dachsbiss, nicht die Belagerungsreichweite der anderen Dachse.
+    expect(bite.range).toBe(WEAPON_CONFIGS.BITE.range);
+    expect(bite.range).toBeLessThan(WEAPON_CONFIGS.ALIEN_BADGER_BITE.range);
+    expect(bite.fire.damageTargets).toContain('rocks');
+    expect(bite.fire.damageTargets).not.toContain('players');
+  });
+
+  it('surfaces immediately after spawning instead of tunnelling through the rock field', () => {
+    expect(pyro.burrow?.spawnBurrowedAtLeftEdge).toBe(true);
+    expect(pyro.burrow?.spawnTunnelMinDistancePx).toBe(0);
+    expect(pyro.burrow!.spawnTunnelTimeoutMs).toBeLessThan(alien.burrow!.spawnTunnelTimeoutMs);
+    expect(pyro.burrow!.speedFactor).toBeGreaterThan(alien.burrow!.speedFactor);
+  });
+
+  it('uses the plain player dash and only configures when to trigger it', () => {
+    const dodge = pyro.dodge!;
+    expect(dodge.cooldownMs).toBeGreaterThan(0);
+    expect(dodge.approachMaxDistancePx).toBeGreaterThan(dodge.approachMinDistancePx);
+
+    // Strecke und Dauer stammen aus den Dash-Konstanten, nicht aus der Gegner-Konfiguration.
+    const dashDistancePerSpeed = (DASH_F_START + (DASH_F_MIN - DASH_F_START) * (2 / 3)) * DASH_T1_S
+      + (DASH_F_MIN + (1 - DASH_F_MIN) / 3) * DASH_T2_S;
+    const stepDistancePx = pyro.moveSpeed * dashDistancePerSpeed;
+    expect(dodge.evadeScanRadiusPx).toBeGreaterThan(stepDistancePx);
+    // Ein Satz darf nicht weiter reichen als der Bereich, in dem nachgesetzt wird.
+    expect(stepDistancePx).toBeLessThan(dodge.approachMaxDistancePx);
+  });
+});
+
 describe('Enemy snapshot codec', () => {
   it('round-trips the burrow flag without disturbing the other fields', () => {
     const entry: SyncedEnemyDeltaState = {
@@ -104,6 +169,7 @@ describe('Enemy snapshot codec', () => {
       burnStacks: 2,
       faction: 'hostile',
       burrowed: true,
+      dashPhase: 1,
     };
 
     const stream: Array<number | string> = [];
@@ -111,6 +177,12 @@ describe('Enemy snapshot codec', () => {
     const [decoded] = decodeEnemyUpserts(stream);
 
     expect(decoded).toEqual({ ...entry, ownerId: undefined, ownerColor: 0 });
+  });
+
+  it('omits the dash phase entirely when it did not change', () => {
+    const stream: Array<number | string> = [];
+    encodeEnemyUpsert(stream, { id: 'e2a', x: 10, y: 20 });
+    expect(decodeEnemyUpserts(stream)[0].dashPhase).toBeUndefined();
   });
 
   it('omits the burrow field entirely when it did not change', () => {

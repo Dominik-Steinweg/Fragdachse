@@ -52,6 +52,15 @@ export interface EnemyBurrowMovementSource {
 }
 
 /**
+ * Minimal-Schnittstelle des Gefechtsabstand-Systems – strukturell erfüllt vom
+ * CoopDefenseEnemyCombatPositioningSystem. Liefert für Fernkämpfer eine Wunschgeschwindigkeit,
+ * die die Wegfindung ersetzt (Rückzug oder Stehenbleiben auf dem gewünschten Abstand).
+ */
+export interface EnemyCombatPositioningSource {
+  getMovementOverride(enemyId: string): { vx: number; vy: number } | null;
+}
+
+/**
  * Buddel-Visuals (Erd-/Staubpartikel und Ein-/Austauch-Effekt). Strukturell erfüllt vom
  * EffectSystem, das dieselben Effekte für eingebuddelte Spieler zeichnet – als lokaler Typ
  * gehalten, damit der EnemyManager nicht auf die Effekt-Schicht importieren muss.
@@ -170,12 +179,17 @@ export class EnemyManager {
     activeBurnSourceResolver?: ((enemyId: string, now: number) => ReadonlyArray<{ sourceId: string }>) | null,
     trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
     burrowSystem?: EnemyBurrowMovementSource | null,
+    combatPositioningSystem?: EnemyCombatPositioningSource | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
 
     for (const enemy of this.enemies.values()) {
       if (enemy.faction === 'allied') continue;
+      // Standardfall: der Gegner hat eine Route. Nur die Zweige, die ihn wirklich ohne Weg
+      // stehen lassen, setzen die Markierung – daran erkennt das Angriffssystem, dass ein
+      // reglos stehender Gegner festhängt und einen Felsen wegbeißen darf.
+      enemy.setPathBlocked(false);
       const config = this.resolvedConfigs[enemy.kind];
       const isBurrowed = burrowSystem?.isBurrowed(enemy.id) ?? false;
       const burrowSpeedFactor = isBurrowed ? (burrowSystem?.getSpeedFactor(enemy.id) ?? 1) : 1;
@@ -239,8 +253,27 @@ export class EnemyManager {
         continue;
       }
 
+      // Gefechtsabstand: Fernkämpfer halten ihren Wunschabstand, statt der Wegfindung bis in den
+      // Nahkampf zu folgen. Die Vorgabe greift erst hinter der Angriffspause, damit ein Gegner
+      // während seines Schusses stehen bleibt.
+      const positioningOverride = combatPositioningSystem?.getMovementOverride(enemy.id) ?? null;
+      if (positioningOverride) {
+        const decision = activeTrainAwareness?.resolveMovement(
+          enemy,
+          positioningOverride.vx,
+          positioningOverride.vy,
+          now,
+        );
+        enemy.setDesiredVelocity(
+          decision?.override ? decision.vx : positioningOverride.vx,
+          decision?.override ? decision.vy : positioningOverride.vy,
+        );
+        continue;
+      }
+
       const gridCell = primaryFlowFieldService.worldToGrid(enemy.sprite.x, enemy.sprite.y);
       if (!gridCell) {
+        enemy.setPathBlocked(true);
         enemy.stopMovement();
         continue;
       }
@@ -257,11 +290,14 @@ export class EnemyManager {
         integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
       }
 
+      // Steht ein Gegner auf einer Zelle ohne Route – etwa weil ihn Kollisionsauflösung,
+      // Rückstoß oder ein Ausweichschritt mit dem Mittelpunkt in eine Felszelle geschoben hat –,
+      // steuert er zur nächsten erreichbaren Zelle zurück. Ohne diese Rückholung bliebe er dort
+      // für immer stehen: keine Bewegung heißt auch keine neue Zelle.
       if (integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
-        const recoveryTarget = config.isBoss
-          ? flowFieldService.findNearestReachableWorldPosition(gridCell.gridX, gridCell.gridY)
-          : null;
+        const recoveryTarget = flowFieldService.findNearestReachableWorldPosition(gridCell.gridX, gridCell.gridY);
         if (!recoveryTarget) {
+          enemy.setPathBlocked(true);
           enemy.stopMovement();
           continue;
         }
@@ -277,6 +313,7 @@ export class EnemyManager {
 
       const vector = flowFieldService.getVectorAt(gridCell.gridX, gridCell.gridY);
       if (vector.x === 0 && vector.y === 0) {
+        enemy.setPathBlocked(true);
         if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) enemy.stopMovement();
         continue;
       }
@@ -743,6 +780,7 @@ export class EnemyManager {
       rot: Math.round(snapshot.rot * 100) / 100,
       faction: snapshot.faction,
       burrowed: snapshot.burrowed,
+      dashPhase: snapshot.dashPhase,
       ownerId: snapshot.ownerId,
       ownerColor: snapshot.ownerColor,
     };
@@ -785,6 +823,10 @@ export class EnemyManager {
       delta.burrowed = current.burrowed;
     }
 
+    if (current.dashPhase !== previous.dashPhase) {
+      delta.dashPhase = current.dashPhase;
+    }
+
     return Object.keys(delta).length > 1 ? delta : null;
   }
 
@@ -809,6 +851,7 @@ export class EnemyManager {
       enemy.setTargetRotation(rotation);
       enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
       enemy.updateBurnStacks(remote.burnStacks ?? 0);
+      enemy.setDashPhase(remote.dashPhase ?? 0);
       this.enemies.set(remote.id, enemy);
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);
@@ -821,6 +864,7 @@ export class EnemyManager {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp());
     }
     if (remote.burnStacks !== undefined) enemy.updateBurnStacks(remote.burnStacks);
+    if (remote.dashPhase !== undefined) enemy.setDashPhase(remote.dashPhase);
     if (remote.x !== undefined || remote.y !== undefined) {
       enemy.setTargetPosition(remote.x ?? enemy.sprite.x, remote.y ?? enemy.sprite.y);
     }

@@ -24,6 +24,10 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
     case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };
     case 'mini_rocket_cascade': return { key: 'sfx_explosion_mini_rocket', scale: EXPLOSION_CLOSE_BOOST };
     case 'train':       return undefined; // sound handled separately via playLocalSound('sfx_train_explode')
+    // Aus der Brutbombe schluepft ein Dachs, es explodiert nichts – deshalb der Wurfgeraeusch-Sound
+    // statt eines Explosionsknalls. Kein EXPLOSION_CLOSE_BOOST: er soll genauso klingen wie eine
+    // geworfene Granate, nicht wie ein Welt-Ereignis.
+    case 'brood_hatch': return { key: 'shot_throw', scale: 1 };
     default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
   }
 }

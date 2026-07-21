@@ -18,6 +18,8 @@ import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAtta
 import { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import { CoopDefenseEnemyBurrowSystem } from '../../systems/CoopDefenseEnemyBurrowSystem';
+import { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodgeSystem';
+import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
@@ -994,6 +996,20 @@ export class ArenaLifecycleCoordinator {
         this.ctx.enemyManager.setEnemySpawnedCallback((enemy) => {
           this.ctx.coopDefenseEnemyBurrowSystem?.notifyEnemySpawned(enemy);
         });
+        this.ctx.coopDefenseEnemyDodgeSystem = new CoopDefenseEnemyDodgeSystem(
+          this.ctx.enemyManager,
+          this.ctx.playerManager,
+          this.ctx.projectileManager,
+          this.ctx.combatSystem,
+          this.ctx.hostPhysics,
+          (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
+        );
+        this.ctx.coopDefenseEnemyCombatPositioningSystem = new CoopDefenseEnemyCombatPositioningSystem(
+          this.ctx.enemyManager,
+          this.ctx.playerManager,
+          this.ctx.combatSystem,
+          (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
+        );
         this.ctx.coopDefenseEnemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
@@ -1249,6 +1265,8 @@ export class ArenaLifecycleCoordinator {
   tearDownArena(): void {
     this.ctx.coopDefenseEnemyAbilitySystem?.clear();
     this.ctx.coopDefenseEnemyBurrowSystem?.clear();
+    this.ctx.coopDefenseEnemyDodgeSystem?.clear();
+    this.ctx.coopDefenseEnemyCombatPositioningSystem?.clear();
     this.ctx.coopDefenseEnemyTrainAwarenessSystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
@@ -1285,6 +1303,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyManager = null;
     this.ctx.coopDefenseEnemyAbilitySystem = null;
     this.ctx.coopDefenseEnemyBurrowSystem = null;
+    this.ctx.coopDefenseEnemyDodgeSystem = null;
+    this.ctx.coopDefenseEnemyCombatPositioningSystem = null;
     this.ctx.coopDefenseEnemyTrainAwarenessSystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;

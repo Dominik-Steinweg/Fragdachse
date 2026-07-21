@@ -5,6 +5,9 @@ export type CoopDefenseEnemyKind = string;
 
 export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
 
+/** Standard-Wegstossfaktor, wenn ein Gegner keinen eigenen Wert konfiguriert. */
+export const DEFAULT_ENEMY_KNOCKBACK_FACTOR = 1;
+
 /**
  * `structures` deckt Basen und Felsen ab (plus den Zug ueber trainDamageMult), laesst Spieler und
  * Verbuendete aber aus. Damit koennen Gegner eine reine Belagerungswaffe neben einer reinen
@@ -67,6 +70,52 @@ export interface CoopDefenseEnemyBurrowConfig {
 }
 
 /**
+ * Bevorzugter Gefechtsabstand eines Fernkaempfers. Der Gegner laeuft weiterhin grundsaetzlich auf
+ * die Spieler zu (`movementTarget: 'players'`), haelt aber ab dieser Distanz an und weicht zurueck,
+ * wenn ein Spieler zu nah herankommt – statt in den Nahkampf zu rennen.
+ *
+ * Bewusst allgemein gehalten: jede Gegner-Art mit diesem Block bekommt das Verhalten, ohne dass
+ * dafuer Code angefasst werden muss.
+ */
+export interface CoopDefenseEnemyCombatPositioningConfig {
+  /** Wunschabstand zum naechsten Spieler in Pixeln. */
+  readonly preferredDistancePx: number;
+  /** Totzone um den Wunschabstand; darin bleibt der Gegner einfach stehen und feuert. */
+  readonly toleranceP: number;
+  /** Rueckwaerts-Tempo als Anteil der Laufgeschwindigkeit (1 = volles Tempo). */
+  readonly retreatSpeedFactor: number;
+  /**
+   * Nur Spieler mit freier Sichtlinie zaehlen. Ohne Sichtlinie kann der Gegner ohnehin nicht
+   * schiessen und laeuft besser weiter auf sein Ziel zu.
+   */
+  readonly requireLineOfSight: boolean;
+}
+
+/**
+ * Ausweichschritt. Der Gegner setzt ihn in zwei Situationen ein:
+ *  1. seitlich weg von einem Projektil, das ihn sonst treffen wuerde,
+ *  2. nach vorne auf einen Spieler zu, der bereits in Naehe ist.
+ *
+ * Ausgefuehrt wird der Standard-Dash des Spielers (siehe HostPhysicsSystem): Dauer, Kurve und
+ * zurueckgelegte Strecke stammen aus den DASH_*-Konstanten und sind deshalb hier nicht
+ * konfigurierbar. Konfiguriert wird nur, *wann* der Gegner ausweicht.
+ */
+export interface CoopDefenseEnemyDodgeConfig {
+  /** Wartezeit nach dem Ende eines Ausweichschritts, bevor der naechste starten darf. */
+  readonly cooldownMs: number;
+  /** Suchradius fuer bedrohende Projektile. */
+  readonly evadeScanRadiusPx: number;
+  /** Nur Projektile, die den Gegner innerhalb dieser Zeit erreichen, loesen ein Ausweichen aus. */
+  readonly evadeLeadTimeMs: number;
+  /** Sicherheitsaufschlag auf den Trefferradius bei der Einschlagsprognose. */
+  readonly evadeMissMarginPx: number;
+  /** Naeher als das wird nicht nachgesetzt – der Gegner steht bereits im Nahbereich. */
+  readonly approachMinDistancePx: number;
+  /** Weiter als das lohnt der Sprung nicht; der Gegner laeuft dann normal weiter. */
+  readonly approachMaxDistancePx: number;
+}
+
+/**
  * Geworfenes Projektil mit Granaten-Flugverhalten, das statt einer Explosion neue Gegner absetzt.
  * Die Zielerfassung entspricht dem gegnerischen Translocator (Wurfgeschwindigkeit aus Distanz und
  * geplanter Flugzeit), da sich diese Ballistik bereits bewaehrt hat.
@@ -105,6 +154,12 @@ export interface CoopDefenseEnemyConfig {
   readonly xp: number;
   readonly size: number;
   readonly moveSpeed: number;
+  /**
+   * Faktor auf alle Wegstoss-Impulse (Raketen, Granaten, Laubblaeser, Dash-Aufprall, Schockwellen …).
+   * 1 = normales Wegstoessen, >1 = leichter Gegner fliegt weiter, <1 = schwerer Gegner haelt dagegen,
+   * 0 = komplett immun. Fehlt der Wert, gilt 1.
+   */
+  readonly knockbackFactor?: number;
   readonly movementTarget: CoopDefenseEnemyMovementTarget;
   readonly weapons: readonly CoopDefenseEnemyWeaponConfig[];
   readonly attackScanIntervalMs: number;
@@ -116,6 +171,8 @@ export interface CoopDefenseEnemyConfig {
   readonly color?: number;
   readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
   readonly burrow?: CoopDefenseEnemyBurrowConfig;
+  readonly dodge?: CoopDefenseEnemyDodgeConfig;
+  readonly combatPositioning?: CoopDefenseEnemyCombatPositioningConfig;
   readonly spawnThrow?: CoopDefenseEnemySpawnThrowConfig;
   readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
   readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
@@ -191,6 +248,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
           config.playerScaling?.moveSpeedFactorPerAdditionalPlayer,
           normalizedHumanPlayerCount,
         ),
+        knockbackFactor: config.knockbackFactor,
         movementTarget: config.movementTarget,
         weapons: config.weapons,
         attackScanIntervalMs: config.attackScanIntervalMs,
@@ -202,6 +260,8 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         color: config.color,
         translocator: config.translocator,
         burrow: config.burrow,
+        dodge: config.dodge,
+        combatPositioning: config.combatPositioning,
         spawnThrow: config.spawnThrow,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
@@ -269,6 +329,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     xp: Math.max(0, Math.floor(enemy.xp)),
     size: Math.max(1, enemy.size),
     moveSpeed: Math.max(1, enemy.moveSpeed),
+    knockbackFactor: normalizeKnockbackFactor(enemy.knockbackFactor),
     movementTarget: normalizeMovementTarget(enemy.movementTarget),
     weapons: normalizeWeapons(enemy.weapons, enemy.id),
     attackScanIntervalMs: Math.max(1, Math.floor(enemy.attackScanIntervalMs)),
@@ -284,6 +345,8 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       : undefined,
     translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
     burrow: normalizeBurrowConfig(enemy.burrow),
+    dodge: normalizeDodgeConfig(enemy.dodge),
+    combatPositioning: normalizeCombatPositioningConfig(enemy.combatPositioning),
     spawnThrow: normalizeSpawnThrowConfig(enemy.spawnThrow, enemy.id),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
@@ -329,6 +392,32 @@ function normalizeTranslocatorConfig(
     cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
     minRange,
     maxRange: Math.max(minRange, config.maxRange),
+  };
+}
+
+function normalizeCombatPositioningConfig(
+  config: CoopDefenseEnemyCombatPositioningConfig | undefined,
+): CoopDefenseEnemyCombatPositioningConfig | undefined {
+  if (!config) return undefined;
+  return {
+    preferredDistancePx: Math.max(0, config.preferredDistancePx),
+    toleranceP: Math.max(1, config.toleranceP),
+    retreatSpeedFactor: Math.max(0, config.retreatSpeedFactor),
+    requireLineOfSight: config.requireLineOfSight !== false,
+  };
+}
+
+function normalizeDodgeConfig(
+  config: CoopDefenseEnemyDodgeConfig | undefined,
+): CoopDefenseEnemyDodgeConfig | undefined {
+  if (!config) return undefined;
+  return {
+    cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
+    evadeScanRadiusPx: Math.max(0, config.evadeScanRadiusPx),
+    evadeLeadTimeMs: Math.max(0, Math.floor(config.evadeLeadTimeMs)),
+    evadeMissMarginPx: Math.max(0, config.evadeMissMarginPx),
+    approachMinDistancePx: Math.max(0, config.approachMinDistancePx),
+    approachMaxDistancePx: Math.max(0, config.approachMaxDistancePx),
   };
 }
 
@@ -441,6 +530,12 @@ function normalizeWeaponTargetMode(
     || targetMode === 'structures'
   ) return targetMode;
   throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has unsupported weapon target mode: ${String(targetMode)}`);
+}
+
+/** Fehlender oder ungueltiger Wert bedeutet normales Wegstoessen; negative Werte sind sinnlos. */
+function normalizeKnockbackFactor(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_ENEMY_KNOCKBACK_FACTOR;
+  return Math.max(0, value);
 }
 
 function normalizeMovementTarget(target: CoopDefenseEnemyMovementTarget): CoopDefenseEnemyMovementTarget {

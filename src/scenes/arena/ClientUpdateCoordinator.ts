@@ -18,6 +18,7 @@ import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
 import { getStoredCoopDefenseProgress } from '../../utils/localPreferences';
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
+import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
 /**
  * Runs every frame on non-host clients.
@@ -44,12 +45,23 @@ export class ClientUpdateCoordinator {
   /** Client-side prediction for utility override (BFG / Holy Hand Grenade pickup). */
   clientUtilityOverride: UtilityConfig | null = null;
 
+  private readonly enemyDashVisuals: EnemyDashVisualTracker;
+
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly ctx: ArenaContext,
     private readonly localPlayerState: LocalPlayerState,
     private readonly rockVisualHelper: RockVisualHelper,
-  ) {}
+  ) {
+    // Auf dem Client gibt es keine Physik – die Ausweich-Skalierung kommt hier aus der
+    // uebertragenen Dash-Phase.
+    this.enemyDashVisuals = new EnemyDashVisualTracker(
+      this.scene,
+      this.ctx.effectSystem,
+      this.ctx.gameAudioSystem,
+      true,
+    );
+  }
 
   runClientUpdate(delta: number): void {
     const state = bridge.getLatestGameState();
@@ -193,6 +205,9 @@ export class ClientUpdateCoordinator {
     }
 
     this.ctx.enemyManager?.updateClientInterpolation(lerpFactor);
+    for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+      this.enemyDashVisuals.sync(enemy);
+    }
 
     this.ctx.decoySystem.updateVisuals(lerpFactor);
 
@@ -449,6 +464,7 @@ export class ClientUpdateCoordinator {
     this.prevStealthStates.clear();
     this.dashPhase2StartTimes.clear();
     this.dashTrailTimers.clear();
+    this.enemyDashVisuals.reset();
     this.weaponLastFired = { weapon1: 0, weapon2: 0 };
     this.predictedHitscanCooldownUntil = { weapon1: 0, weapon2: 0 };
     this.nextPredictedHitscanShotId = 1;

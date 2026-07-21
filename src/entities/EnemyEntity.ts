@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { GenericWeapon } from '../loadout/GenericWeapon';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../loadout/LoadoutConfig';
+import { isVelocityMoving } from '../loadout/SpreadMath';
 import type { BaseWeapon } from '../loadout/BaseWeapon';
 import {
   COLORS,
@@ -11,6 +12,7 @@ import {
   HP_BAR_WIDTH,
 } from '../config';
 import {
+  DEFAULT_ENEMY_KNOCKBACK_FACTOR,
   type CoopDefenseEnemyKind,
   type CoopDefenseEnemyWeaponTargetMode,
   type ResolvedCoopDefenseEnemyConfig,
@@ -62,6 +64,8 @@ export class EnemyEntity {
   private burnStacks = 0;
   private moveSpeedMultiplier = 1;
   private burrowed = false;
+  private dashPhase: 0 | 1 | 2 = 0;
+  private pathBlocked = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -146,6 +150,24 @@ export class EnemyEntity {
     return { vx: this.desiredVelocityX, vy: this.desiredVelocityY };
   }
 
+  /**
+   * True, wenn die Wegfindung dem Gegner in diesem Frame keine Route liefern konnte – er steht
+   * also nicht freiwillig still, sondern hängt fest. Wird vom EnemyManager gesetzt und vom
+   * Angriffssystem ausgewertet, um Felsen freizubeissen.
+   */
+  isPathBlocked(): boolean {
+    return this.pathBlocked;
+  }
+
+  setPathBlocked(blocked: boolean): void {
+    this.pathBlocked = blocked;
+  }
+
+  /** True, wenn der Gegner sich in diesem Frame ueberhaupt bewegen will. */
+  wantsToMove(): boolean {
+    return Math.abs(this.desiredVelocityX) > 0.5 || Math.abs(this.desiredVelocityY) > 0.5;
+  }
+
   stopMovement(): void {
     this.setDesiredVelocity(0, 0);
     if (this.authoritative && this.sprite.body) {
@@ -214,8 +236,47 @@ export class EnemyEntity {
     this.moveSpeedMultiplier = Math.max(0, multiplier);
   }
 
+  /** Faktor, mit dem Wegstoss-Impulse auf diesen Gegner skaliert werden (1 = normal). */
+  getKnockbackFactor(): number {
+    return this.config.knockbackFactor ?? DEFAULT_ENEMY_KNOCKBACK_FACTOR;
+  }
+
   getCollisionRadius(): number {
     return this.config.size * 0.5;
+  }
+
+  /** Volle Kantenlänge des Gegners – Basis für Ausweich-Skalierung und Trail-Geister. */
+  getSize(): number {
+    return this.config.size;
+  }
+
+  getImageKey(): string {
+    return this.config.imageKey;
+  }
+
+  /** Farbe für Trail-Geister; ohne eigene Einfärbung bleibt das Sprite unverfälscht. */
+  getTintColor(): number {
+    return this.config.color ?? 0xffffff;
+  }
+
+  getDashPhase(): 0 | 1 | 2 {
+    return this.dashPhase;
+  }
+
+  setDashPhase(phase: 0 | 1 | 2): void {
+    this.dashPhase = phase;
+  }
+
+  /**
+   * Skaliert Darstellung und – auf dem Host – die Trefferkugel des Gegners. Wird für den
+   * Ausweichschritt genutzt und entspricht der Hitbox-Verkleinerung des Spieler-Dashs.
+   */
+  setDashScale(scale: number): void {
+    const clamped = Phaser.Math.Clamp(scale, 0.1, 1);
+    this.sprite.setDisplaySize(this.config.size * clamped, this.config.size * clamped);
+    if (this.authoritative && this.sprite.body) {
+      this.body.setCircle(this.config.size * clamped * 0.5);
+    }
   }
 
   isBurrowed(): boolean {
@@ -265,6 +326,22 @@ export class EnemyEntity {
     for (const attackWeapon of this.attackWeapons) {
       attackWeapon.weapon.decaySpread(delta, now);
     }
+  }
+
+  /**
+   * Zufälliger Zielversatz in Radiant nach demselben Modell wie beim Spieler: Grundstreuung je
+   * nachdem, ob der Gegner steht oder läuft, plus dem Bloom aus den bisherigen Schüssen.
+   * Waffen ohne Streuwerte liefern 0 und zielen damit weiterhin exakt.
+   */
+  rollWeaponSpreadOffset(weapon: BaseWeapon): number {
+    const config = weapon.config;
+    const body = this.authoritative ? (this.sprite.body as Phaser.Physics.Arcade.Body | null) : null;
+    const moving = isVelocityMoving(body?.velocity.x ?? 0, body?.velocity.y ?? 0);
+    const totalSpreadDeg = Math.max(0, (moving ? config.spreadMoving : config.spreadStanding) + weapon.getDynamicSpread());
+    if (totalSpreadDeg <= 0) return 0;
+
+    const halfSpreadRad = (totalSpreadDeg * Math.PI / 180) / 2;
+    return Phaser.Math.FloatBetween(-halfSpreadRad, halfSpreadRad);
   }
 
   getAttackScanIntervalMs(): number {
@@ -327,6 +404,7 @@ export class EnemyEntity {
       burnStacks: Math.min(this.burnStacks, MAX_VISUAL_BURN_STACKS),
       faction: this.faction,
       burrowed: this.burrowed,
+      dashPhase: this.dashPhase,
       ownerId: this.ownerId,
       ownerColor: this.ownerColor,
     };
