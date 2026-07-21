@@ -16,8 +16,8 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "phaser": "^4.1.0",
-    "playroomkit": "^0.0.91"
+    "phaser": "^4.2.1",
+    "playroomkit": "^0.0.97"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0",

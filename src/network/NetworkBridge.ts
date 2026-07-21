@@ -481,6 +481,7 @@ export class NetworkBridge {
   activate(): void {
     if (this.activated) return;
     this.activated = true;
+    this.ensureRpcDispatchersRegistered();
 
     if (isHost() && getState(KEY_GAMEPLAY_TRANSPORT) === undefined) {
       setState(KEY_GAMEPLAY_TRANSPORT, GAMEPLAY_TRANSPORT_DEFAULT, true);
@@ -2467,7 +2468,6 @@ export class NetworkBridge {
     handler: (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown,
   ): void {
     this.hostRpcHandlers.set(type, handler);
-    this.ensureRpcDispatchersRegistered();
   }
 
   private registerAllRpcHandler(
@@ -2475,7 +2475,6 @@ export class NetworkBridge {
     handler: (payload: unknown) => Promise<unknown> | unknown,
   ): void {
     this.allRpcHandlers.set(type, handler);
-    this.ensureRpcDispatchersRegistered();
   }
 
   private ensureRpcDispatchersRegistered(): void {
