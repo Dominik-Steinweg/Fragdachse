@@ -14,6 +14,8 @@ export interface AutomatedTurret {
   readonly weaponId?: keyof typeof WEAPON_CONFIGS;
   readonly skipRockIndex?: number;
   readonly secondProjectileDamageFactor?: number;
+  /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
+  readonly targetRange?: number;
 }
 type TurretProvider = () => readonly AutomatedTurret[];
 type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
@@ -28,6 +30,7 @@ type TurretFireHandler = (
   targetX: number,
   targetY: number,
   damageFactor?: number,
+  rangeFactor?: number,
 ) => void;
 
 export class TurretSystem {
@@ -73,11 +76,16 @@ export class TurretSystem {
 
       const turretX = turret.x;
       const turretY = turret.y;
+      // Zielreichweite-Upgrades haengen am platzierten Turret, nicht an der Basis-Config. Der
+      // gleiche Faktor streckt die Waffenreichweite mit, sonst sterben Projektile vor dem Ziel.
+      const baseTargetRange = config.placeable.targetRange;
+      const targetRange = turret.targetRange ?? baseTargetRange;
+      const rangeFactor = baseTargetRange > 0 ? targetRange / baseTargetRange : 1;
       const target = this.findNearestTarget(
         turret,
         turretX,
         turretY,
-        config.placeable.targetRange,
+        targetRange,
         config.placeable.muzzleOffset,
       );
       if (!target) continue;
@@ -93,19 +101,19 @@ export class TurretSystem {
       const muzzleDistance = config.placeable.muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
-      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y);
+      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, 1, rangeFactor);
       if ((turret.secondProjectileDamageFactor ?? 0) > 0) {
         const secondTarget = this.findNearestTarget(
           turret,
           turretX,
           turretY,
-          config.placeable.targetRange,
+          targetRange,
           config.placeable.muzzleOffset,
           target,
         );
         if (secondTarget) {
           const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
-          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, turret.secondProjectileDamageFactor);
+          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, turret.secondProjectileDamageFactor, rangeFactor);
         }
       }
     }

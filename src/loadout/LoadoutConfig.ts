@@ -407,6 +407,8 @@ export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig
   readonly muzzleOffset: number;
   readonly deathCloudRadius: number;
   readonly secondProjectileDamageFactor?: number;
+  /** > 0 ersetzt die Sporen-Waffe des Turrets durch `FLIEGENPILZ_PLASMA` (Boss-Upgrade). */
+  readonly plasmaWeaponEnabled?: number;
 }
 
 export interface PlaceableTunnelPlacementConfig {
@@ -1081,6 +1083,58 @@ export const WEAPON_CONFIGS = {
     showCrosshair:        false,
     rockDamageMult:       0,
     trainDamageMult:      0,
+    shotAudio: {
+      successKey: 'shot_plasma',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  /**
+   * Fliegenpilz-Plasma – Kopie der Plasma Gun fuer das Boss-Upgrade "Plasmapilz". Leeres
+   * `allowedSlots` haelt die Waffe komplett aus der Spieler-Waffenwahl heraus; sie wird
+   * ausschliesslich vom Fliegenpilz-Turret abgefeuert und ersetzt dort die Sporen-Waffe.
+   * Einziger Balance-Unterschied zur Spieler-Plasma-Gun: halbe Feuerrate (doppelter Cooldown).
+   * Spread-Werte sind wie bei allen Turret-Waffen 0, weil automatisiertes Feuer den Bloom-Pfad
+   * in `fireWeapon` gar nicht durchlaeuft.
+   */
+  FLIEGENPILZ_PLASMA: {
+    id:                   'FLIEGENPILZ_PLASMA',
+    displayName:          'Fliegenpilz-Plasma',
+    cooldown:             240,
+    damage:               3,
+    range:                500,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      500,
+      projectileSize:       8,
+      projectileMaxBounces: 0,
+      homing: {
+        acquireDelayMs:        200,
+        searchRadius:          320,
+        retargetIntervalMs:    100,
+        maxTurnDegreesPerStep: 8,
+        targetTypes:           ['players', 'enemies'],
+        requireLineOfSight:    true,
+        excludeOwner:          true,
+        distanceWeight:        1,
+        forwardWeight:         1,
+      } satisfies ProjectileHomingConfig,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'energy_ball' satisfies ProjectileStyle,
+    energyBallVariant:    'plasma' satisfies EnergyBallVariant,
+    showCrosshair:        false,
+    rockDamageMult:       1,
+    trainDamageMult:      1,
     shotAudio: {
       successKey: 'shot_plasma',
       failureKey: 'shot_dry_trigger',

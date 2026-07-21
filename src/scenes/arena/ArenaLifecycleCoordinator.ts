@@ -756,7 +756,8 @@ export class ArenaLifecycleCoordinator {
               ownerColor: rock.ownerColor,
               skipRockIndex: rock.id,
               secondProjectileDamageFactor: rock.secondProjectileDamageFactor,
-              weaponId: 'SPOREN' as const,
+              targetRange: rock.targetRange,
+              weaponId: rock.turretWeaponId ?? ('SPOREN' as const),
             }));
           const baseTurrets = (this.ctx.baseManager?.getTurrets() ?? []).map((turret) => ({
             id: turret.id,
@@ -957,7 +958,7 @@ export class ArenaLifecycleCoordinator {
           if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
         }
       });
-      this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1) => {
+      this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
         const fire = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID && weapon.fire.type === 'projectile'
@@ -969,7 +970,7 @@ export class ArenaLifecycleCoordinator {
           }
           : weapon.fire;
         this.ctx.loadoutManager?.fireAutomatedWeapon(
-          { ...weapon, fire, damage: weapon.damage * damageFactor },
+          { ...weapon, fire, damage: weapon.damage * damageFactor, range: weapon.range * rangeFactor },
           x,
           y,
           angle,

@@ -130,6 +130,10 @@ export class PlacementSystem {
       enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,
       enemyDestroyedExplosionKnockback: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionKnockback ?? 0) : 0,
       secondProjectileDamageFactor: cfg.placeable.kind === 'turret' ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
+      targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
+      turretWeaponId: cfg.placeable.kind === 'turret' && (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
+        ? 'FLIEGENPILZ_PLASMA'
+        : undefined,
     };
 
     this.runtimeRocks.set(rock.id, rock);

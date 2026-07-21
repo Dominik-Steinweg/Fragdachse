@@ -1179,7 +1179,17 @@ export interface SyncedPlaceableRock {
   enemyDestroyedExplosionKnockback?: number;
   lastAttackerId?: string;
   secondProjectileDamageFactor?: number;
+  /**
+   * Beim Platzieren eingefrorene Upgrade-Werte des Besitzers. Die Utility-Config im
+   * TurretSystem ist die unveraenderte Basis-Config, deshalb muessen spielerbezogene
+   * Upgrades am Turret selbst haengen.
+   */
+  targetRange?: number;
+  turretWeaponId?: TurretWeaponId;
 }
+
+/** Waffen, die ein platzierbares Turret fuehren kann. */
+export type TurretWeaponId = 'SPOREN' | 'FLIEGENPILZ_PLASMA';
 
 export interface SyncedTunnelEndpoint {
   gridX: number;

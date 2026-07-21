@@ -375,7 +375,7 @@ export class ArenaScene extends Phaser.Scene {
             x: ARENA_OFFSET_X + placeable.gridX * CELL_SIZE + CELL_SIZE * 0.5,
             y: ARENA_OFFSET_Y + placeable.gridY * CELL_SIZE + CELL_SIZE * 0.5,
             ownerId: placeable.ownerId,
-            range: turretRange,
+            range: placeable.targetRange ?? turretRange,
           })),
         projectiles: (latestState?.projectiles ?? [])
           .filter((projectile) => playerId !== null && combatSystem.canDamageTarget(projectile.ownerId, playerId, projectile.allowTeamDamage))

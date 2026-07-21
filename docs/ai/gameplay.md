@@ -27,4 +27,6 @@ PvP- und PvE-Regeln teilen Kernsysteme wie Spieler, Combat, Projektile, Ressourc
 - Netzwerk-, Input- und Feedbackpfade auf niedrige wahrgenommene Latenz optimieren; lokale Prediction darf die Host-Autorität nicht umgehen.
 - Effekte sollen Treffer, Gefahrenzonen und Waffencharakter schnell lesbar machen, ohne relevante Spielflächen dauerhaft zu verdecken.
 - Loadout-Daten und Konstanten in `src/loadout/` beziehungsweise `src/config.ts` erweitern, statt Waffenregeln als Scene-Sonderfälle zu verteilen.
+- Coop-Defense-Upgrades wirken nur auf die pro Spieler aufgelöste Loadout-Config. Systeme, die platzierte Objekte global verwalten (z. B. `TurretSystem` über `UTILITY_CONFIGS`), sehen die unveränderte Basis-Config; besitzerabhängige Upgrade-Werte müssen deshalb beim Platzieren in den `SyncedPlaceableRock` eingefroren werden.
+- Waffen, die nur von NPCs, Basen oder platzierbaren Objekten geführt werden, sind reguläre `WEAPON_CONFIGS`-Einträge mit leerem `allowedSlots`; das ist der einzige Filter, der sie aus der Spieler-Waffenwahl heraushält.
 - Der visuelle Schadensradius sollte, wo als Gameplay-Telegraph verwendet, den autoritativen Radius nachvollziehbar abbilden.

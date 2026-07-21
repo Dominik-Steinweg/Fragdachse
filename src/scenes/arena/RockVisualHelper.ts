@@ -266,7 +266,11 @@ export class RockVisualHelper {
     visual.image.setPosition(world.x, world.y).setRotation(rock.angle);
     visual.rangeCircle.clear();
     visual.rangeCircle.lineStyle(1.4, rock.ownerColor, 0.48);
-    visual.rangeCircle.strokeCircle(world.x, world.y, (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable.targetRange);
+    visual.rangeCircle.strokeCircle(
+      world.x,
+      world.y,
+      rock.targetRange ?? (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable.targetRange,
+    );
 
     visual.hpBarBg.setPosition(world.x, world.y + 22).setVisible(ratio < 1);
     visual.hpBarFg
