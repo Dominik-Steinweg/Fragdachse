@@ -35,6 +35,7 @@ import { MeteorRenderer }      from '../../effects/MeteorRenderer';
 import { AirstrikeRenderer }   from '../../effects/AirstrikeRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
+import { LightingSystem }      from '../../effects/LightingSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { ProjectileManager } from '../../entities/ProjectileManager';
 import type { PlayerManager }     from '../../entities/PlayerManager';
@@ -78,6 +79,7 @@ export interface RendererBundle {
   rockDestruction:     RockDestructionRenderer;
   powerUp:             PowerUpRenderer;
   shadow:              ShadowSystem;
+  lighting:            LightingSystem;
   // Round-scoped: created in buildArena(), destroyed in tearDownArena()
   train:               TrainRenderer | null;
   translocatorTeleport: TranslocatorTeleportRenderer | null;
@@ -183,10 +185,18 @@ export function createRendererBundle(
   const powerUp = new PowerUpRenderer(scene);
   const shadow = new ShadowSystem(scene, arenaMask);
 
+  // Dynamische Beleuchtung: scene-lifetime wie der Schatten. Die Lichtquellen melden
+  // sich selbst an, deshalb kennen die einzelnen Renderer das System direkt.
+  const lighting = new LightingSystem(scene);
+  muzzleFlash.setLightingSystem(lighting);
+  flame.setLightingSystem(lighting);
+  projectileBurn.setLightingSystem(lighting);
+  flamethrowerUpgrades.setLightingSystem(lighting);
+
   return {
     bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, slimeTrail, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, meteor, rockDestruction, powerUp, shadow,
+    nuke, airstrike, meteor, rockDestruction, powerUp, shadow, lighting,
     train: null,
     translocatorTeleport: null,
   };
@@ -233,6 +243,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setZeusTaserRenderer(bundle.zeusTaser);
   bundle.nuke.setEffectSystem(effectSystem);
   bundle.airstrike.setEffectSystem(effectSystem);
+  effectSystem.setLightingSystem(bundle.lighting);
 }
 
 /** Wire GameAudioSystem to renderers that play sounds. */

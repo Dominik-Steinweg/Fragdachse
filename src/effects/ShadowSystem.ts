@@ -11,7 +11,9 @@ import type { ArenaLayout, SyncedPlaceableRock, SyncedTrainState } from '../type
 import {
   getProjectileShadowConfig,
   SHADOW_CASTERS,
+  SHADOW_PROFILES,
   type ShadowCasterConfig,
+  type ShadowProfile,
   type ShadowProjectileSample,
   WORLD_SHADOW_CONFIG,
 } from './ShadowConfig';
@@ -61,6 +63,7 @@ const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: num
 export class ShadowSystem {
   private readonly layers = new Map<string, ShadowLayerBucket>();
   private worldBoundsOverride: ShadowWorldBounds | null = null;
+  private profile: ShadowProfile = SHADOW_PROFILES.day;
 
   // Reusable point buffers — mutated in-place each draw call to avoid
   // allocating hundreds of Vector2 objects per frame.
@@ -84,6 +87,15 @@ export class ShadowSystem {
 
   setWorldBoundsOverride(bounds: ShadowWorldBounds | null): void {
     this.worldBoundsOverride = bounds;
+  }
+
+  /**
+   * Wählt die Tag- oder Nachtvariante. Nachts bleiben die Sonnenschatten erhalten,
+   * werden aber zu kurzen, weichen und blassen Mondschatten. Vor einem Rebuild der
+   * statischen Layer setzen – dynamische Schatten übernehmen es ab dem nächsten Frame.
+   */
+  setProfile(profileId: 'day' | 'night'): void {
+    this.profile = SHADOW_PROFILES[profileId];
   }
 
   setVisible(visible: boolean): void {
@@ -271,10 +283,16 @@ export class ShadowSystem {
     width = preset.footprintWidthPx,
     height = preset.footprintHeightPx,
   ): void {
+    // Profil-Multiplikatoren (Tag/Nacht) skalieren Länge, Deckkraft und Weichheit;
+    // die Lichtrichtung bleibt konstant, siehe SHADOW_PROFILES.
+    const profile = this.profile;
+    const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
+    const softnessPx = preset.softnessPx * profile.softnessMult;
+
     const maxExtent = Math.max(width, height) * 0.5
       + (preset.airborneHeightPx ?? 0)
-      + preset.castHeightPx * preset.stretch
-      + preset.softnessPx
+      + castLength
+      + softnessPx
       + 16;
     if (!this.isVisibleInArena(x, y, maxExtent)) return;
 
@@ -284,7 +302,7 @@ export class ShadowSystem {
     const airborneHeight = preset.airborneHeightPx ?? 0;
 
     // Fixed directional offset for all layers.
-    const offsetScale = airborneHeight + preset.castHeightPx * preset.stretch;
+    const offsetScale = airborneHeight + castLength;
     const dx = dir.x * offsetScale;
     const dy = dir.y * offsetScale;
     const drawX = x + dx;
@@ -292,8 +310,8 @@ export class ShadowSystem {
 
     for (let step = steps - 1; step >= 0; step -= 1) {
       const t = step / denominator;
-      const inflate = preset.inflatePx + preset.softnessPx * t;
-      const alpha = preset.opacity * (1 - t * 0.88) / steps;
+      const inflate = preset.inflatePx + softnessPx * t;
+      const alpha = preset.opacity * profile.opacityMult * (1 - t * 0.88) / steps;
       const drawWidth = Math.max(1, width + inflate * 2);
       const drawHeight = Math.max(1, height + inflate * 2);
 

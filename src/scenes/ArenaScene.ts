@@ -342,7 +342,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -479,6 +479,16 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Debug Hotkeys ─────────────────────────────────────────────────────
     inputSystem.setupDebugHotkeys((type) => {
+      // Rein lokales Umschalten des Beleuchtungsprofils zum Tunen, ohne eine
+      // Nachtkarte anlegen zu müssen. Bewusst auch für Clients erlaubt.
+      if (type === 'lighting_profile') {
+        const profileId = this.renderers.lighting.toggleProfile();
+        this.renderers.shadow.setProfile(profileId);
+        this.rockVisualHelper.rebuildStaticShadows();
+        console.log(`[ArenaScene] Lighting profile → ${profileId}`);
+        return;
+      }
+
       if (!bridge.isHost()) return;
 
       const service = type === 'flowfield_players'
@@ -945,6 +955,8 @@ export class ArenaScene extends Phaser.Scene {
     const shadowStepStartMs = performance.now();
     this.syncWorldShadows(inArena);
     const shadowStepMs = performance.now() - shadowStepStartMs;
+    this.syncWorldLighting(inArena);
+    const lightingStepMs = this.renderers.lighting.getLastUpdateCostMs();
     const frameCostMs = performance.now() - frameStartMs;
     if (inGame) {
       const role = bridge.isHost() ? 'host' : 'client';
@@ -956,6 +968,7 @@ export class ArenaScene extends Phaser.Scene {
         primaryStepMs,
         visualStepMs,
         shadowStepMs,
+        lightingStepMs,
         fireSimulationMs: firePerformance.simulationMs,
         fireCreationMs: firePerformance.creationMs,
         fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
@@ -1364,6 +1377,45 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.projectileManager.getShadowSamples(),
       trainState,
     );
+  }
+
+  /**
+   * Dynamische Beleuchtung. Die Lichtquellen selbst melden sich in ihren eigenen
+   * Renderern an (Mündungsfeuer, Explosionen, Feuer); hier wird nur die
+   * spielergebundene Taschenlampe nachgeführt und die Lightmap komponiert.
+   */
+  private syncWorldLighting(inArena: boolean): void {
+    const lighting = this.renderers.lighting;
+
+    if (inArena && lighting.isFlashlightEnabled()) {
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        const key = `flashlight:${player.id}`;
+        const sprite = player.sprite;
+        const burrowPhase = player.getBurrowPhase();
+        // Dieselben Sichtbarkeitsbedingungen wie beim dynamischen Schatten: wer nicht
+        // sichtbar auf dem Feld steht, leuchtet auch nicht.
+        const visible = sprite.active
+          && sprite.visible
+          && !player.isDecoyStealthedVisual()
+          && burrowPhase !== 'underground'
+          && burrowPhase !== 'trapped'
+          && this.ctx.combatSystem.isAlive(player.id);
+
+        const spillKey = `flashlightspill:${player.id}`;
+        if (!visible) {
+          lighting.releaseLight(key);
+          lighting.releaseLight(spillKey);
+          continue;
+        }
+        lighting.setLight(key, 'flashlight', sprite.x, sprite.y, {
+          angle: player.getAimAngle(),
+        });
+        // Nimmt dem Kegelansatz die harte Kante an der Spielerlinie.
+        lighting.setLight(spillKey, 'flashlightSpill', sprite.x, sprite.y);
+      }
+    }
+
+    lighting.update();
   }
 
   private describeSceneObjectBreakdown(): string {

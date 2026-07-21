@@ -33,6 +33,7 @@ export class BaseManager {
   private readonly byId = new Map<string, BaseEntity>();
   private readonly turretOwners = new Map<string, BaseEntity>();
   private onBaseDestroyed: ((spec: BaseSpec) => void) | null = null;
+  private obstacleGeneration = 0;
 
   constructor(scene: Phaser.Scene, baseSpecs: readonly BaseSpec[] = getCoopDefenseBases()) {
     this.group = scene.physics.add.staticGroup();
@@ -69,6 +70,16 @@ export class BaseManager {
       for (const body of entity.getCellBodies()) result.push(body);
     }
     return result;
+  }
+
+  /**
+   * Zählt hoch, sobald eine Basis zerstört wird – auf Host und Client, da der Übergang
+   * in `BaseEntity.setHp()` beidseitig läuft. Verbraucher, die aus
+   * `getObstacleRectangles()` einen Cache aufbauen (dynamische Lichtverdeckung), können
+   * daran erkennen, dass er ungültig geworden ist, ohne eine eigene Basisliste zu führen.
+   */
+  getObstacleGeneration(): number {
+    return this.obstacleGeneration;
   }
 
   getBases(): readonly BaseEntity[] {
@@ -113,6 +124,7 @@ export class BaseManager {
   }
 
   private handleBaseDestroyed(entity: BaseEntity): void {
+    this.obstacleGeneration += 1;
     this.onBaseDestroyed?.(entity.spec);
   }
 

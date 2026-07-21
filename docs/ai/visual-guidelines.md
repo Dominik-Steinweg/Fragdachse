@@ -39,6 +39,18 @@ Effekte als zeitlich komponierte, gegebenenfalls mehrschichtige Sequenz planen. 
 
 Nicht jedes Element ist immer sinnvoll. Telegraphen priorisieren Lesbarkeit und korrekte Fläche; Impact-Layer dürfen spektakulär sein, sollen aber Ziele und Gefahren nicht unnötig lange verdecken. Kamerashake nach Reichweite, Bedeutung und Häufigkeit dosieren.
 
+## Licht und Schatten
+
+Es gibt drei getrennte Aufgaben, die nicht vermischt werden dürfen: statische Sonnen-/Mondschatten für die Tiefenwirkung (`ShadowSystem`), dynamische Beleuchtung und dynamische Lichtverdeckung (`LightingSystem`).
+
+- **Phasers eingebautes Lighting ist für Gameplay-Licht nicht nutzbar.** Der Shader (`DefineLights.glsl`) ersetzt die Fragmentfarbe durch `ambient + Σ Lichter`, braucht Normal Maps, verlangt `setLighting(true)` pro Objekt (bricht Batches) und kennt **keine geometrische Verdeckung**; `selfShadow` ist nur ein Helligkeitstrick auf der eigenen Textur. Stattdessen komponiert `LightingSystem` eine halbauflösende Lightmap in einer `RenderTexture` und legt sie als ein einziges Overlay auf `DEPTH_LIGHTING` über die Welt – damit werden auch viele Gegner ohne Per-Objekt-Kosten beleuchtet.
+- **Tag und Nacht sind derselbe Pfad.** Tag füllt die Lightmap schwarz und komponiert `ADD` (nur Zusatzlicht; hinter einem Felsen fehlt die Aufhellung, es wird aber nicht dunkel), Nacht füllt sie dunkel und komponiert `MULTIPLY`. Neue Lichtquellen nie gegen ein Profil bauen, sondern per Preset mit optionalen `day`/`night`-Overrides.
+- **Lichtquellen melden sich in ihrem eigenen Renderer an**, mit `pulse()` für Einmaleffekte und `setLight(key, …)`/`releaseLight(key)` für Dauerlichter am bereits vorhandenen `Map<id, visual>`-Lebenszyklus. Verdeckung ist die Ausnahme (Explosionen, Taschenlampe) und hat ein hartes Frame-Budget; überzählige Lichter fallen auf den verdeckungsfreien Pfad zurück. Spieler und Gegner werden beleuchtet, blocken aber kein Licht.
+- **`RockVisualHelper.refreshObstacleVisuals()` ist der einzige Trichter für geänderte Hindernisse.** Er zeichnet die statischen Schatten neu *und* invalidiert den Occluder-Index. Der Index ist reiner Cache über `arenaResult.rockObjects`, `arenaResult.trunkObjects` und `BaseManager.getObstacleRectangles()` – dieselben Referenzen, die `CombatSystem` für Line-of-Sight nutzt. Nie eine zweite Liste zerstörbarer Felsen anlegen. Basen tragen keinen solchen Trichter und werden über `BaseManager.getObstacleGeneration()` erkannt.
+- **`DynamicTexture`-Befehle sind aufgeschoben.** An `draw()`/`erase()` übergebene Game Objects werden erst beim Flush ausgelesen, ein wiederverwendetes `Graphics`/`Image` würde also über mehrere Lichter hinweg aliasen. Deshalb besitzt jeder Verdeckungs-Slot eigene Objekte, und die Scratch-`RenderTexture`s laufen mit `setRenderMode('redraw')` knapp unter der Lightmap – die Display-List-Reihenfolge garantiert, dass sie vor ihr geleert werden.
+- **Kegellichter brauchen einen schmalen Öffnungswinkel und ein separates Nahfeld.** Ein weiter Kegel deckt am Strahlende mit seinem weichen Saum die halbe Bildhöhe ab und liest sich dann als flächiger Schein statt als Strahl. Ein in die Kegeltextur gebackenes Nahfeld ist zwangsläufig eine Halbscheibe und bricht an der Trägerlinie hart ab; das Nahfeld gehört deshalb als eigenes rundes Licht daneben (`flashlightSpill`).
+- Die Lichtrichtung der statischen Schatten ist konstant: `ShadowSystem` berechnet daraus beim Modul-Load feste Bogentabellen. Ein Nachtprofil ändert nur Länge, Deckkraft und Weichheit (`SHADOW_PROFILES`), niemals die Richtung.
+
 ## Offsets und Ausrichtung
 
 Weltpositionen, Aimwinkel und visuelle Anhänge nicht mit Sprite-Frame-Offsets vermischen.

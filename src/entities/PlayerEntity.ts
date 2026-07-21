@@ -231,6 +231,15 @@ export class PlayerEntity {
     this.targetRotation = aimAngle;
   }
 
+  /**
+   * Aktueller Aimwinkel in Gameplay-Konvention (0 = rechts), also ohne den
+   * Nordausrichtungs-Offset des Sprites. Für alles, was in Blickrichtung ausgerichtet
+   * wird, ohne den Sprite-Offset weiterzureichen (z. B. der Taschenlampenkegel).
+   */
+  getAimAngle(): number {
+    return this.sprite.rotation - PlayerEntity.ROTATION_OFFSET;
+  }
+
   /** Rotation smooth zum Ziel interpolieren (Shortest-Path). */
   private lerpRotation(factor: number): void {
     const current = this.sprite.rotation - PlayerEntity.ROTATION_OFFSET;

@@ -10,6 +10,7 @@ export interface ArenaRuntimeSample {
   primaryStepMs: number;
   visualStepMs: number;
   shadowStepMs: number;
+  lightingStepMs: number;
   fireSimulationMs: number;
   fireCreationMs: number;
   fireVisualMs: number;
@@ -34,6 +35,8 @@ interface ArenaRuntimeMetricsWindow {
   visualStepPeakMs: number;
   shadowStepSumMs: number;
   shadowStepPeakMs: number;
+  lightingStepSumMs: number;
+  lightingStepPeakMs: number;
   fireSimulationSumMs: number;
   fireSimulationPeakMs: number;
   fireCreationPeakMs: number;
@@ -72,6 +75,8 @@ export class ArenaRuntimeProfiler {
     window.visualStepPeakMs = Math.max(window.visualStepPeakMs, sample.visualStepMs);
     window.shadowStepSumMs += sample.shadowStepMs;
     window.shadowStepPeakMs = Math.max(window.shadowStepPeakMs, sample.shadowStepMs);
+    window.lightingStepSumMs += sample.lightingStepMs;
+    window.lightingStepPeakMs = Math.max(window.lightingStepPeakMs, sample.lightingStepMs);
     window.fireSimulationSumMs += sample.fireSimulationMs;
     window.fireSimulationPeakMs = Math.max(window.fireSimulationPeakMs, sample.fireSimulationMs);
     window.fireCreationPeakMs = Math.max(window.fireCreationPeakMs, sample.fireCreationMs);
@@ -97,6 +102,7 @@ export class ArenaRuntimeProfiler {
     const avgPrimaryMs = window.primaryStepSumMs / window.sampleCount;
     const avgVisualMs = window.visualStepSumMs / window.sampleCount;
     const avgShadowMs = window.shadowStepSumMs / window.sampleCount;
+    const avgLightingMs = window.lightingStepSumMs / window.sampleCount;
     const avgFireSimulationMs = window.fireSimulationSumMs / window.sampleCount;
     const avgFireVisualMs = window.fireVisualSumMs / window.sampleCount;
     const avgEnemies = window.enemyCountSum / window.sampleCount;
@@ -111,6 +117,7 @@ export class ArenaRuntimeProfiler {
       + `step=${avgPrimaryMs.toFixed(2)}/${window.primaryStepPeakMs.toFixed(2)}ms `
       + `visuals=${avgVisualMs.toFixed(2)}/${window.visualStepPeakMs.toFixed(2)}ms `
       + `shadows=${avgShadowMs.toFixed(2)}/${window.shadowStepPeakMs.toFixed(2)}ms `
+      + `lighting=${avgLightingMs.toFixed(2)}/${window.lightingStepPeakMs.toFixed(2)}ms `
       + `fireSim=${avgFireSimulationMs.toFixed(2)}/${window.fireSimulationPeakMs.toFixed(2)}ms `
       + `fireCreatePeak=${window.fireCreationPeakMs.toFixed(2)}ms `
       + `fireVisual=${avgFireVisualMs.toFixed(2)}/${window.fireVisualPeakMs.toFixed(2)}ms `
@@ -151,6 +158,8 @@ export class ArenaRuntimeProfiler {
       visualStepPeakMs: 0,
       shadowStepSumMs: 0,
       shadowStepPeakMs: 0,
+      lightingStepSumMs: 0,
+      lightingStepPeakMs: 0,
       fireSimulationSumMs: 0,
       fireSimulationPeakMs: 0,
       fireCreationPeakMs: 0,

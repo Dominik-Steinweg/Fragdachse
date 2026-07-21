@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
 import { createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_FLASH = '__muzzle_flash';
 const TEX_SPARK = '__muzzle_spark';
@@ -54,7 +55,13 @@ const FLASH_PRESETS: Record<MuzzleFlashPreset, FlashPresetConfig> = {
 };
 
 export class MuzzleFlashRenderer {
+  private lighting: LightingSystem | null = null;
+
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   generateTextures(): void {
     const textures = this.scene.textures;
@@ -143,6 +150,16 @@ export class MuzzleFlashRenderer {
   ): void {
     const cfg = FLASH_PRESETS[preset];
     const angle = Math.atan2(vy, vx);
+
+    // Kurzer Lichtimpuls in der Mündungsfarbe. Bewusst ohne Lichtverdeckung: Schüsse
+    // sind die mit Abstand häufigste Lichtquelle, und der Impuls ist zu kurz, als dass
+    // ein Schlagschatten überhaupt lesbar wäre.
+    this.lighting?.pulse('muzzleFlash', x, y, {
+      color: color ?? cfg.tint,
+      radiusPx: 110 * (0.75 + cfg.scaleX * 0.35),
+      intensity: Phaser.Math.Clamp(cfg.alpha * 0.8, 0.18, 0.85),
+    });
+
     // x, y is already the muzzle origin – callers compute it before passing here
     const texture = cfg.useEnergyCore ? TEX_ENERGY : TEX_FLASH;
     const flash = this.scene.add.image(x, y, texture)

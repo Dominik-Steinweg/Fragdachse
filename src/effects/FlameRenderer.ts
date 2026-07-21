@@ -11,6 +11,8 @@ import {
   TEX_FLAME_SPARK,
   TEX_FLAME_GLOW,
 } from './FlameShared';
+import { FLAME_LIGHT_ID_STRIDE } from './LightingConfig';
+import type { LightingSystem } from './LightingSystem';
 
 // ── Konfigurations-Konstanten ──────────────────────────────────────────────
 const CORE_LIFESPAN    = { min: 120, max: 280 };
@@ -42,9 +44,14 @@ interface FlameVisual {
 export class FlameRenderer {
   private scene: Phaser.Scene;
   private flames = new Map<number, FlameVisual>();
+  private lighting: LightingSystem | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   // ── Texturen ──────────────────────────────────────────────────────────────
@@ -158,10 +165,19 @@ export class FlameRenderer {
     const scaleFactor = 0.3 + size * 0.01;
     visual.coreEmitter.setParticleScale(scaleFactor, 0.05);
     visual.outerEmitter.setParticleScale(0.4 + size * 0.015, 0.05);
+
+    // Nur jede n-te Hitbox trägt Licht – sonst überstrahlt ein einzelner Strahl das
+    // gesamte Frame-Budget. Freigabe läuft über destroyVisual().
+    if (id % FLAME_LIGHT_ID_STRIDE === 0) {
+      this.lighting?.setLight(`flame:${id}`, 'flameProjectile', x, y, {
+        radiusPx: 80 + size * 2.2,
+      });
+    }
   }
 
   /** Entfernt eine Flammen-Hitbox-Visualisierung. */
   destroyVisual(id: number): void {
+    this.lighting?.releaseLight(`flame:${id}`);
     const visual = this.flames.get(id);
     if (!visual) return;
 

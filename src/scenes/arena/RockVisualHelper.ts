@@ -101,7 +101,7 @@ export class RockVisualHelper {
     }
 
     this.updateRockVisualById(rock.id, rock.hp);
-    if (refreshStaticShadows) this.refreshStaticShadows();
+    if (refreshStaticShadows) this.refreshObstacleVisuals();
 
     if (playSpawnFx) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
@@ -138,7 +138,7 @@ export class RockVisualHelper {
       ArenaBuilder.destroyRock(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.rockGroup, rock.id);
       this.ctx.arenaResult.rockGrid.remove(rock.gridX, rock.gridY);
       this.destroyTurretVisual(rock.id);
-      this.refreshStaticShadows();
+      this.refreshObstacleVisuals();
       return;
     }
     ArenaBuilder.destroyRockAndRetile(
@@ -148,7 +148,7 @@ export class RockVisualHelper {
       this.ctx.currentLayout.rocks,
       rock.id,
     );
-    this.refreshStaticShadows();
+    this.refreshObstacleVisuals();
   }
 
   updateRockVisualById(rockId: number, hp: number): void {
@@ -226,7 +226,7 @@ export class RockVisualHelper {
       rockId,
     );
     this.ctx.rockRegistry?.remove(rockId);
-    this.refreshStaticShadows();
+    this.refreshObstacleVisuals();
     this.ctx.powerUpSystem?.onRockDestroyed(rockId);
     const rockCell = this.ctx.currentLayout.rocks[rockId];
     emitArenaMapGridChanged(this.scene.game.events, {
@@ -297,7 +297,7 @@ export class RockVisualHelper {
   }
 
   rebuildStaticShadows(): void {
-    this.refreshStaticShadows();
+    this.refreshObstacleVisuals();
   }
 
   spawnTurretDeathCloud(rock: SyncedPlaceableRock): void {
@@ -383,11 +383,21 @@ export class RockVisualHelper {
     this.scene.time.delayedCall(700, () => destroyEmitter(emitter));
   }
 
-  private refreshStaticShadows(): void {
+  /**
+   * Einziger Trichter für "die Hindernisse haben sich geändert".
+   *
+   * Statischer Sonnenschatten und dynamische Lichtverdeckung hängen hier gemeinsam
+   * dran, damit ein zerstörter Fels nicht seinen Schatten verlieren, aber weiter Licht
+   * blockieren kann. Beide leiten sich aus denselben Referenzen ab
+   * (`arenaResult.rockObjects`, `placementSystem.getAllRuntimeRocks()`), es gibt keine
+   * zweite Liste zerstörbarer Felsen.
+   */
+  private refreshObstacleVisuals(): void {
     this.shadowSystem?.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
       this.ctx.arenaResult,
       this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
     );
+    this.ctx.lightOccluderIndex?.markDirty();
   }
 }

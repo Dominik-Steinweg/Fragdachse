@@ -14,6 +14,8 @@ import {
   TEX_FLAME_SPARK,
 } from './FlameShared';
 import { GROUND_FIRE_CELL_SIZE } from './FireSystem';
+import { GROUND_FIRE_LIGHT_BUCKET_SIZE, MAX_GROUND_FIRE_LIGHTS } from './LightingConfig';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_GROUND_HEAT = '__ground_fire_heat_haze';
 const TEX_GROUND_SMOKE = '__ground_fire_smoke';
@@ -125,6 +127,17 @@ export class FlamethrowerUpgradeRenderer {
   private groundAccumulator = 0;
   private previousNow = 0;
   private lastUpdateMs = 0;
+  private lighting: LightingSystem | null = null;
+  /**
+   * Gröbere Cluster-Ebene über der 32-px-Blockkarte, allein für die Beleuchtung:
+   * ein Flächenbrand soll wenige große warme Lichter werfen statt hunderter kleiner.
+   * Wiederverwendete Puffer, damit pro Frame nichts allokiert wird.
+   */
+  private readonly groundLightBuckets = new Map<string, { x: number; y: number; weight: number }>();
+  private readonly activeGroundLightKeys = new Set<string>();
+  private readonly groundLightRanking: Array<{ key: string; x: number; y: number; weight: number }> = [];
+  private nextChunkLightId = 0;
+  private readonly activeChunkLightKeys = new Set<string>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -197,6 +210,9 @@ export class FlamethrowerUpgradeRenderer {
   playFireChunkBurst(x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number, now = Date.now()): void {
     const duration = Phaser.Math.Clamp(landsAt - now, 80, 420);
     for (const target of targets) {
+      // Ein Follow-Light je fliegendem Brocken; freigegeben beim Aufschlag.
+      const lightKey = `firechunk:${this.nextChunkLightId++}`;
+      this.activeChunkLightKeys.add(lightKey);
       const chunk = this.scene.add.image(x, y, TEX_FLAME_EMBER)
         .setDepth(DEPTH.PROJECTILES + 0.4)
         .setBlendMode(Phaser.BlendModes.ADD)
@@ -218,12 +234,16 @@ export class FlamethrowerUpgradeRenderer {
           );
           chunk.setRotation(t * Math.PI * 4);
           chunk.setScale(0.72 + Math.sin(t * Math.PI) * 0.28);
+          this.lighting?.setLight(lightKey, 'fireChunk', chunk.x, chunk.y);
         },
         onComplete: () => {
           const shouldLand = chunk.active;
           this.flyingChunks.delete(chunk);
+          this.activeChunkLightKeys.delete(lightKey);
+          this.lighting?.releaseLight(lightKey);
           chunk.destroy();
           if (!shouldLand) return;
+          this.lighting?.pulse('fireChunkImpact', target.x, target.y);
           this.groundOuter.emitParticleAt(target.x, target.y, 3);
           this.groundCore.emitParticleAt(target.x, target.y, 2);
           this.groundSparks.emitParticleAt(target.x, target.y, 3);
@@ -269,10 +289,72 @@ export class FlamethrowerUpgradeRenderer {
 
     this.emitGroundParticles(delta);
     this.updateRingVisuals(delta, now);
+    this.syncGroundFireLights(now);
     this.lastUpdateMs = performance.now() - updateStartedAt;
   }
 
+  /**
+   * Fasst die Bodenfeuer-Blöcke zu wenigen Lichtern zusammen. Die Blockkarte `ground`
+   * ist die einzige Quelle; erlischt ein Block, verschwindet sein Beitrag automatisch,
+   * und leergelaufene Licht-Buckets werden freigegeben.
+   */
+  private syncGroundFireLights(now: number): void {
+    const lighting = this.lighting;
+    if (!lighting) return;
+
+    const buckets = this.groundLightBuckets;
+    buckets.clear();
+
+    for (const visual of this.ground.values()) {
+      const remaining = visual.expiresAt - now;
+      if (remaining <= 0) continue;
+      const bucketX = Math.floor(visual.image.x / GROUND_FIRE_LIGHT_BUCKET_SIZE);
+      const bucketY = Math.floor(visual.image.y / GROUND_FIRE_LIGHT_BUCKET_SIZE);
+      const key = `${bucketX}:${bucketY}`;
+      const weight = Phaser.Math.Clamp(Math.log2(visual.intensity + 1) / 3, 0.28, 1)
+        * Phaser.Math.Clamp(remaining / 420, 0, 1);
+
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.weight += weight;
+      } else {
+        buckets.set(key, {
+          x: (bucketX + 0.5) * GROUND_FIRE_LIGHT_BUCKET_SIZE,
+          y: (bucketY + 0.5) * GROUND_FIRE_LIGHT_BUCKET_SIZE,
+          weight,
+        });
+      }
+    }
+
+    this.groundLightRanking.length = 0;
+    for (const [key, bucket] of buckets) {
+      this.groundLightRanking.push({ key, x: bucket.x, y: bucket.y, weight: bucket.weight });
+    }
+    this.groundLightRanking.sort((left, right) => right.weight - left.weight);
+    if (this.groundLightRanking.length > MAX_GROUND_FIRE_LIGHTS) {
+      this.groundLightRanking.length = MAX_GROUND_FIRE_LIGHTS;
+    }
+
+    const stillActive = this.activeGroundLightKeys;
+    for (const entry of this.groundLightRanking) {
+      const strength = Phaser.Math.Clamp(entry.weight, 0.25, 2.2);
+      lighting.setLight(`groundfire:${entry.key}`, 'groundFire', entry.x, entry.y, {
+        radiusPx: GROUND_FIRE_LIGHT_BUCKET_SIZE * (1.1 + Math.min(strength, 1.6) * 0.6),
+        intensity: 0.45 + Math.min(strength, 1.6) * 0.3,
+      });
+      stillActive.delete(entry.key);
+    }
+    for (const staleKey of stillActive) lighting.releaseLight(`groundfire:${staleKey}`);
+
+    stillActive.clear();
+    for (const entry of this.groundLightRanking) stillActive.add(entry.key);
+  }
+
   getLastUpdateCostMs(): number { return this.lastUpdateMs; }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   clear(): void {
     this.cells = [];
@@ -293,6 +375,13 @@ export class FlamethrowerUpgradeRenderer {
       chunk.destroy();
     }
     this.flyingChunks.clear();
+    // Die Tweens wurden abgebrochen, ihre onComplete-Freigabe läuft also nicht mehr.
+    for (const key of this.activeChunkLightKeys) this.lighting?.releaseLight(key);
+    this.activeChunkLightKeys.clear();
+    for (const key of this.activeGroundLightKeys) this.lighting?.releaseLight(`groundfire:${key}`);
+    this.activeGroundLightKeys.clear();
+    this.groundLightBuckets.clear();
+    this.groundLightRanking.length = 0;
   }
 
   destroyAll(): void {
@@ -357,7 +446,16 @@ export class FlamethrowerUpgradeRenderer {
         .setVisible(visible);
       visual.bandEmitter.emitting = visible;
       visual.coreEmitter.emitting = visible;
-      if (!visible) continue;
+      if (!visible) {
+        this.lighting?.releaseLight(`flamering:${playerId}`);
+        continue;
+      }
+
+      // Ein weiches Licht pro Ring – Radius folgt dem Ring, damit Upgrades sichtbar
+      // mehr Umgebung ausleuchten.
+      this.lighting?.setLight(`flamering:${playerId}`, 'flameRing', player.sprite.x, player.sprite.y, {
+        radiusPx: radius * 1.5,
+      });
 
       this.emitRingAccents(visual, player.sprite.x, player.sprite.y, delta, now);
     }
@@ -558,6 +656,7 @@ export class FlamethrowerUpgradeRenderer {
   }
 
   private destroyRingVisual(playerId: string, visual: RingVisual): void {
+    this.lighting?.releaseLight(`flamering:${playerId}`);
     this.ringVisuals.delete(playerId);
     destroyEmitter(visual.bandEmitter);
     destroyEmitter(visual.coreEmitter);

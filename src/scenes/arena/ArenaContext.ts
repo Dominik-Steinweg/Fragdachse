@@ -16,6 +16,7 @@ import type { ArenaCountdownOverlay } from '../../ui/ArenaCountdownOverlay';
 import type { LocalArenaHudData }   from '../../ui/LocalArenaHudData';
 import type { ArenaBuilderResult }  from '../../arena/ArenaBuilder';
 import type { RockRegistry }        from '../../arena/RockRegistry';
+import type { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import type { PlacementSystem }     from '../../systems/PlacementSystem';
 import type { ResourceSystem }      from '../../systems/ResourceSystem';
 import type { BurrowSystem }        from '../../systems/BurrowSystem';
@@ -94,6 +95,13 @@ export interface ArenaContext {
   currentLayout:     ArenaLayout        | null;
   placementSystem:   PlacementSystem    | null;
   rockRegistry:      RockRegistry       | null;
+  /**
+   * Cache der lichtblockierenden Hindernisse. Wird aus denselben Referenzen aufgebaut,
+   * die `CombatSystem` für Line-of-Sight nutzt, und über
+   * `RockVisualHelper.refreshObstacleVisuals()` invalidiert – demselben Trichter, der
+   * auch die statischen Sonnenschatten neu zeichnet.
+   */
+  lightOccluderIndex: LightOccluderIndex | null;
   captureTheBeerSystem: CaptureTheBeerSystem | null;
   baseManager: BaseManager | null;
   enemyManager: EnemyManager | null;

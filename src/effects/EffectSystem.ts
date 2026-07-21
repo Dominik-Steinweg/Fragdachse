@@ -9,6 +9,8 @@ import { BiteRenderer } from './BiteRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { EnemyBurrowVisualSink } from '../entities/EnemyManager';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
+import type { LightingSystem } from './LightingSystem';
+import { EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS, EXPLOSION_LIGHT_RADIUS_FACTOR } from './LightingConfig';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
 const HITSCAN_TRACER_FADE_MS = 320;
@@ -54,6 +56,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private biteRenderer: BiteRenderer | null = null;
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
+  private lighting: LightingSystem | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
@@ -72,6 +75,10 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
   setMuzzleFlashRenderer(renderer: MuzzleFlashRenderer | null): void {
     this.muzzleFlashRenderer = renderer;
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   setAsmdPrimaryRenderer(renderer: AsmdPrimaryRenderer | null): void {
@@ -704,6 +711,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
    */
   playExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle: ExplosionVisualStyle = 'default'): void {
     this.ensureTextures();
+    this.emitExplosionLight(x, y, radius, color, visualStyle);
 
     if (visualStyle === 'lightning') {
       this.playLightningExplosionEffect(x, y, radius, color ?? 0x78dfff);
@@ -1126,6 +1134,45 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     } else if (isNuke) {
       this.scene.cameras.main.shake(550, 0.018);
     }
+  }
+
+  /**
+   * Lichtstoß einer Explosion. Einziger Aufrufer von `playExplosionEffect` ist der
+   * `RpcCoordinator`, deshalb sehen Host und Clients denselben Blitz.
+   *
+   * Große Explosionen werfen echte Schatten: Felsen, Baumstämme und Basen blocken den
+   * Zusatzlichtanteil, sodass der Bereich dahinter am Tag unbeleuchtet bleibt statt
+   * mit aufzuhellen. Kleine Detonationen bekommen nur Licht, kein Verdeckungspass.
+   */
+  private emitExplosionLight(
+    x: number,
+    y: number,
+    radius: number,
+    color: number | undefined,
+    visualStyle: ExplosionVisualStyle,
+  ): void {
+    if (!this.lighting) return;
+
+    const lightColor = visualStyle === 'lightning'
+      ? 0x9fe8ff
+      : visualStyle === 'energy'
+        ? 0xbfeaf7
+        : visualStyle === 'holy'
+          ? 0xffeaa8
+          : visualStyle === 'nuke'
+            ? 0xffd9a0
+            : mixColors(color ?? 0xff5a1e, 0xffffff, 0.45);
+
+    const intensity = visualStyle === 'nuke' ? 1 : visualStyle === 'holy' ? 0.95 : 0.85;
+
+    this.lighting.pulse('explosion', x, y, {
+      radiusPx: radius * EXPLOSION_LIGHT_RADIUS_FACTOR,
+      color: lightColor,
+      intensity,
+      // Größere Detonationen glühen länger nach.
+      durationMs: Phaser.Math.Clamp(180 + radius * 1.1, 180, 700),
+      occludes: radius >= EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
+    });
   }
 
   private playLightningExplosionEffect(x: number, y: number, radius: number, color: number): void {

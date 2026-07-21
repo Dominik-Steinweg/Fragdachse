@@ -46,11 +46,13 @@ import { TrainManager }      from '../../train/TrainManager';
 import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
 import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
+import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
+import { DEFAULT_LIGHT_PROFILE_ID, type LightProfileId } from '../../effects/LightingConfig';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -1257,11 +1259,27 @@ export class ArenaLifecycleCoordinator {
     this.renderers.train = new TrainRenderer(this.scene);
     this.renderers.train.setAudioSystem(this.ctx.gameAudioSystem);
     this.renderers.translocatorTeleport = new TranslocatorTeleportRenderer(this.scene);
+    // Beleuchtungsprofil vor dem Schattenaufbau setzen: nachts werden die statischen
+    // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.
+    const lightProfileId = resolveLightProfileId(coopDefenseMapConfig);
+    this.renderers.shadow.setProfile(lightProfileId);
     this.renderers.shadow.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
       this.ctx.arenaResult,
       this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
     );
+
+    // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`
+    // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.
+    this.ctx.lightOccluderIndex = new LightOccluderIndex({
+      rocks: () => this.ctx.arenaResult?.rockObjects ?? null,
+      trunks: () => this.ctx.arenaResult?.trunkObjects ?? null,
+      baseCells: () => this.ctx.baseManager?.getObstacleRectangles() ?? null,
+      baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
+    });
+    this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
+    this.renderers.lighting.setProfile(lightProfileId);
+    this.renderers.lighting.setActive(true);
 
     // Reset per-round state in coordinators
     this.hostUpdate.resetPerRound();
@@ -1439,6 +1457,9 @@ export class ArenaLifecycleCoordinator {
     this.renderers.train = null;
     this.renderers.beer.clear();
     this.renderers.shadow.clear();
+    this.renderers.lighting.setActive(false);
+    this.renderers.lighting.setOccluderIndex(null);
+    this.ctx.lightOccluderIndex = null;
     this.renderers.translocatorTeleport = null;
     this.ctx.projectileManager.setTrainGroup(null);
     this.ctx.projectileManager.setTrainHitCallback(null);
@@ -1777,4 +1798,13 @@ export class ArenaLifecycleCoordinator {
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
     }, bridge.getGameMode());
   }
+}
+
+/**
+ * Beleuchtungsprofil der Runde. Nur Coop-Defense-Maps können ein Profil setzen; alle
+ * übrigen Modi bleiben beim Tagprofil. Host und Client lösen dieselbe Map-Konfiguration
+ * auf, deshalb ist kein eigener Netzwerkpfad nötig.
+ */
+function resolveLightProfileId(mapConfig: CoopDefenseMapConfig | null): LightProfileId {
+  return mapConfig?.lighting === 'night' ? 'night' : DEFAULT_LIGHT_PROFILE_ID;
 }

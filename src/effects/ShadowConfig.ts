@@ -49,6 +49,24 @@ export const WORLD_SHADOW_CONFIG = {
   },
 };
 
+/**
+ * Tag-/Nachtvariante der statischen Schatten.
+ *
+ * Die Lichtrichtung bleibt bewusst unangetastet: `ShadowSystem` berechnet daraus beim
+ * Modul-Load feste Bogentabellen, eine Laufzeitänderung würde sie ungültig machen.
+ * Der Mondschatten entsteht deshalb allein über Länge, Deckkraft und Weichheit.
+ */
+export interface ShadowProfile {
+  readonly opacityMult: number;
+  readonly lengthMult: number;
+  readonly softnessMult: number;
+}
+
+export const SHADOW_PROFILES: Readonly<Record<'day' | 'night', ShadowProfile>> = {
+  day: { opacityMult: 1, lengthMult: 1, softnessMult: 1 },
+  night: { opacityMult: 0.35, lengthMult: 0.5, softnessMult: 1.8 },
+};
+
 export const SHADOW_CASTERS = {
   rock: {
     enabled: true,

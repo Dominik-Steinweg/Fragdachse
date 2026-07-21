@@ -168,6 +168,16 @@ export interface CoopDefenseMapConfig {
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /**
+   * Beleuchtungsprofil der Map (Standard `'day'`). `'night'` verdunkelt die Arena stark,
+   * schwächt die statischen Sonnenschatten zu Mondschatten ab und gibt den Spielern eine
+   * Taschenlampe. Dynamische Lichtquellen und deren Verdeckung durch Felsen funktionieren
+   * in beiden Profilen identisch – nur die Komposition unterscheidet sich.
+   *
+   * Wird auf Host und Clients lokal aus der bereits replizierten Map-ID abgeleitet und
+   * braucht deshalb keinen eigenen Netzwerkpfad.
+   */
+  readonly lighting?: 'day' | 'night';
+  /**
    * Multiplikator (0…1) auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (siehe
    * `tutorialText`). Nur relevant, wenn die Map eine Tutorial-Formation erzeugt. Standard:
    * `DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT` – kann pro Map zum Finetuning überschrieben werden.
@@ -289,6 +299,7 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
+    lighting: mapConfig.lighting === 'night' ? 'night' : 'day',
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,

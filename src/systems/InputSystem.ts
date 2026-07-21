@@ -28,7 +28,7 @@ type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUti
 type TargetedActivation = TargetedClickUtilityActivationConfig;
 type PlacementActivation = PlacementModeUtilityActivationConfig;
 
-type DebugHotkeyType = 'flowfield_bases' | 'flowfield_players';
+type DebugHotkeyType = 'flowfield_bases' | 'flowfield_players' | 'lighting_profile';
 
 export class InputSystem {
   private scene:           Phaser.Scene;
@@ -45,6 +45,7 @@ export class InputSystem {
   private keyQ!:     Phaser.Input.Keyboard.Key;
   private keyB!:     Phaser.Input.Keyboard.Key;
   private keyN!:     Phaser.Input.Keyboard.Key;
+  private keyM!:     Phaser.Input.Keyboard.Key;
 
   // Lokaler Dash-Cooldown (nur für HUD-Visualisierung, kein Gameplay-Impact)
   private dashCooldownUntil = 0;  // ms-Timestamp
@@ -120,6 +121,7 @@ export class InputSystem {
     this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
     this.keyB     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B, false);
     this.keyN     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N, false);
+    this.keyM     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.M, false);
 
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
@@ -407,6 +409,12 @@ export class InputSystem {
       console.log('[InputSystem] N key pressed - triggering flowfield_players');
       this.onDebugHotkey('flowfield_players');
       this.keyN.isDown = false; // Reset to avoid repeated triggers
+    }
+
+    // M key (Mond): toggle day/night lighting profile locally
+    if (this.keyM.isDown) {
+      this.onDebugHotkey('lighting_profile');
+      this.keyM.isDown = false; // Reset to avoid repeated triggers
     }
   }
 

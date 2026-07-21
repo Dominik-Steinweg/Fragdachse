@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { createEmitter, destroyEmitter } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 import {
   ensureFlameTextures,
   TEX_FLAME_CORE,
@@ -27,6 +28,7 @@ const MAX_TRAIL_SAMPLES_PER_MS = 2.5;
 /** Starkes, rendererunabhaengiges Brand-Overlay fuer schnelle und kleine Projektile. */
 export class ProjectileBurnRenderer {
   private readonly visuals = new Map<number, BurningProjectileVisual>();
+  private lighting: LightingSystem | null = null;
   private readonly outer: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly core: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly sparks: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -154,6 +156,12 @@ export class ProjectileBurnRenderer {
       .setPosition(x, y)
       .setScale(Math.max(0.68, size / 11) * pulse)
       .setAlpha(0.66 + pulse * 0.18);
+
+    // Dauerlicht am selben Lebenszyklus wie das Glow-Visual: erzeugt in `sync()`,
+    // freigegeben in `destroyVisual()`.
+    this.lighting?.setLight(`projburn:${id}`, 'projectileBurn', x, y, {
+      radiusPx: 55 + size * 2.6,
+    });
   }
 
   retain(activeBurningIds: ReadonlySet<number>): void {
@@ -162,7 +170,12 @@ export class ProjectileBurnRenderer {
     }
   }
 
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
+
   destroyVisual(id: number): void {
+    this.lighting?.releaseLight(`projburn:${id}`);
     const visual = this.visuals.get(id);
     if (!visual) return;
     visual.glow.destroy();

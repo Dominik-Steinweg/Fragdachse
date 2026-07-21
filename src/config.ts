@@ -345,6 +345,14 @@ export const ARMOR_BAR_OFFSET_Y = HP_BAR_OFFSET_Y + HP_BAR_HEIGHT + 1;
 export const DEPTH_TRACE = 16;
 export const DEPTH_FX = 25;
 
+/**
+ * Lightmap-Overlay der dynamischen Beleuchtung: über Boden, Felsen, Spielern und
+ * Baumkronen (`DEPTH.CANOPY` = 20), aber unter den Sidebars (`DEPTH.LOCAL_UI - 1` = 21)
+ * und unter `DEPTH_FX` – Explosions- und Feuer-Visuals sind emissiv und sollen auch
+ * nachts ungedimmt bleiben.
+ */
+export const DEPTH_LIGHTING = DEPTH.CANOPY + 0.5;
+
 // ---- Prozedurales Arena-Grid ----
 export const CELL_SIZE           = 32;
 export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 / 135
