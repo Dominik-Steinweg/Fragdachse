@@ -77,7 +77,7 @@ const KEY_INPUT        = 'inp';
 const KEY_PLAYERS      = 'plr';
 const KEY_PROJECTILES  = 'prj';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
-const KEY_NAME         = 'pnm';   // per-player string: Anzeigename (überschreibt Playroom-Profil)
+const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeigename
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
 const KEY_COOP_MAP_ID  = 'cmd';   // global: string (ausgewaehlte Coop-Defense-Map)
@@ -908,7 +908,7 @@ export class NetworkBridge {
 
   // ── Anzeigename: pro Spieler ──────────────────────────────────────────────
 
-  /** Setzt den eigenen Anzeigenamen (überschreibt Playroom-Profil-Name). */
+  /** Setzt den eigenen Anzeigenamen (ersetzt den Platzhalter aus der Spieler-ID). */
   setLocalName(name: string): void {
     myPlayer().setState(KEY_NAME, sanitizePlayerName(name) || 'Player');
   }

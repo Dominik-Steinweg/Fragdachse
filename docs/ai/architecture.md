@@ -11,7 +11,7 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
 - `ArenaLifecycleCoordinator`: Phasenwechsel, Arena-Aufbau/-Abbau und Rundenergebnisse.
 - `HostUpdateCoordinator`: autoritative Simulation und Publikation.
 - `ClientUpdateCoordinator`: empfangene Zustände, Interpolation und lokale Prediction.
-- `RpcCoordinator`: fachliche RPC-Handler; der eigentliche Playroom-Zugriff bleibt im Bridge-Modul.
+- `RpcCoordinator`: fachliche RPC-Handler; der eigentliche Transportzugriff bleibt im Bridge-Modul.
 
 `ArenaScene.update()` koordiniert diese Komponenten. Neue umfangreiche Regel- oder Effektlogik gehört nicht direkt in die Scene.
 
@@ -23,10 +23,10 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
 - `src/arena/`: Layout-Erzeugung, Terrain, Registrys und statische/dynamische Arena-Objekte.
 - `src/loadout/`: Waffen-, Utility- und Ultimate-Konfiguration sowie Ausführung.
 - `src/ui/`: HUD, Overlays und lokale Eingabevisualisierung.
-- `src/network/`: PlayroomKit-Adapter, schneller Gameplay-Kanal, Ping/Qualität und Snapshot-Codecs.
+- `src/network/`: fachliche Netzwerkgrenze, WebRTC-Substrat unter `peer/`, Ping/Qualität, Transportdiagnose und Snapshot-Codecs.
 - `src/config.ts`, `src/types.ts`: gemeinsame Konstanten und Wire-/Domänenverträge; Magic Numbers nicht verteilen.
 
-Abhängigkeiten laufen grob von Scene/Coordinators zu Systems/Manager/Renderer. Gameplay-Module sprechen über die fachliche `NetworkBridge`-API, nicht über PlayroomKit. Renderer lesen entschiedene Zustände oder Ereignisse und bleiben von autoritativer Logik getrennt.
+Abhängigkeiten laufen grob von Scene/Coordinators zu Systems/Manager/Renderer. Gameplay-Module sprechen über die fachliche `NetworkBridge`-API, nie über das Transportsubstrat. Renderer lesen entschiedene Zustände oder Ereignisse und bleiben von autoritativer Logik getrennt.
 
 ## Zwei Lebensdauern
 

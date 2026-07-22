@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 
-/** Spielerprofil – spiellogik-seitig, kein Playroom-Typ */
+/** Spielerprofil – spiellogik-seitig, kein Transporttyp */
 export interface PlayerProfile {
   id:       string;
   name:     string;

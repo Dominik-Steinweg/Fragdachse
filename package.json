@@ -18,8 +18,7 @@
   },
   "dependencies": {
     "peerjs": "^1.5.5",
-    "phaser": "^4.2.1",
-    "playroomkit": "^0.0.97"
+    "phaser": "^4.2.1"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0",

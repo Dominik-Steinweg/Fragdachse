@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Der Generator fragt die aktive Map über die Netzwerk-Bridge ab (Basis-Schutzradien).
-// Ohne laufende Playroom-Session wird hier nur diese eine Auskunft ersetzt.
+// Ohne laufende Netzwerksitzung wird hier nur diese eine Auskunft ersetzt.
 vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '14' },
 }));

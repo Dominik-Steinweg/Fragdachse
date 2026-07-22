@@ -4,7 +4,7 @@ Diese Seiten sind ein kleiner Router für langlebiges Projektwissen. Der Quellco
 
 - [`architecture.md`](architecture.md): Systemgrenzen, Einstiegspunkte und Scene-/Round-Lifecycle.
 - [`gameplay.md`](gameplay.md): Spielidee, Modi sowie Trennung von Lobby und Arena.
-- [`networking.md`](networking.md): PlayroomKit-Grenze, Host-Autorität, Transportpfade und Replikation.
+- [`networking.md`](networking.md): WebRTC-Transport, Host-Autorität, Kanalzuordnung, Replikation und Diagnose.
 - [`visual-guidelines.md`](visual-guidelines.md): verbindliche Perspektive, Qualitätsmaßstab, Effekt- und Assetregeln.
 - [`reference-implementations.md`](reference-implementations.md): wenige bewährte Code-Referenzen und ihre sinnvolle Verwendung.
 

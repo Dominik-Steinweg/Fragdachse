@@ -1,6 +1,6 @@
 # Fragdachse – Agenten-Router
 
-Fragdachse ist ein schneller browserbasierter 2D-PvP/PvE-Arena-Shooter mit Phaser 4 und PlayroomKit. Der Quellcode ist die technische Wahrheit; Dokumentation hält Absichten, Systemgrenzen und nicht offensichtliche Verträge fest.
+Fragdachse ist ein schneller browserbasierter 2D-PvP/PvE-Arena-Shooter mit Phaser 4 und direkten WebRTC-Verbindungen. Der Quellcode ist die technische Wahrheit; Dokumentation hält Absichten, Systemgrenzen und nicht offensichtliche Verträge fest.
 
 ## Erst suchen, dann lesen
 
@@ -11,7 +11,7 @@ Fragdachse ist ein schneller browserbasierter 2D-PvP/PvE-Arena-Shooter mit Phase
 ## Dauerhafte Architekturregeln
 
 - Phaser ist exakt auf 4.2.1 gelockt. Als `import * as Phaser from 'phaser'` importieren und keine Phaser-3-Muster übernehmen.
-- Nur `src/network/NetworkBridge.ts` importiert `playroomkit` direkt. Gameplay ist host-autoritativ; Clients senden Eingaben/Aktionen und rendern replizierten Zustand sowie Ereignisse.
+- Der Transport liegt in `src/network/peer/`; nur `PeerJsTransport.ts` importiert `peerjs`, und PeerJS dient ausschließlich als Signaling-Broker. Gameplay-Code spricht nur über `NetworkBridge`. Gameplay ist host-autoritativ; Clients senden Eingaben/Aktionen und rendern replizierten Zustand sowie Ereignisse.
 - `ArenaContext` trennt Scene-Lifetime von Round-Lifetime. Round-Systeme sind außerhalb einer aktiven Runde `null`, werden in `buildArena()` gesetzt und in `tearDownArena()` vollständig entkoppelt und bereinigt.
 - Scenes und Coordinator orchestrieren. Regeln gehören in Systems, Visuals in Effects/Renderer, Entity-Lifecycle in Manager. Bestehende Infrastruktur und Konstanten vor neuen Abstraktionen prüfen.
 
@@ -36,7 +36,7 @@ Vor `npm run build` nicht zusätzlich typechecken; der Build enthält TypeScript
 
 ## Browserprüfung
 
-Nur bei sichtbar geändertem Verhalten: `npm run dev:browser`, dann erst nach HTTP 200 von `http://127.0.0.1:8080/` genau diese URL öffnen. Höchstens ein Verbindungs- und ein Seitenlade-Retry; bei Playroom-Bootblockade abbrechen und melden. Bekannte Meldungen zu noch fehlenden Loadout-/Upgrade-/Gegner-Sprites ignorieren, wenn das Zielbild rendert. Server und Browser danach beenden.
+Nur bei sichtbar geändertem Verhalten: `npm run dev:browser`, dann erst nach HTTP 200 von `http://127.0.0.1:8080/` genau diese URL öffnen. Höchstens ein Verbindungs- und ein Seitenlade-Retry; bei blockiertem Verbindungsaufbau abbrechen und melden. Für Mehrspielerprüfungen einen zweiten Tab mit der `#r=`-URL des ersten öffnen. Bekannte Meldungen zu noch fehlenden Loadout-/Upgrade-/Gegner-Sprites ignorieren, wenn das Zielbild rendert. Server und Browser danach beenden.
 
 ## Definition of Done und Knowledge Writeback
 
