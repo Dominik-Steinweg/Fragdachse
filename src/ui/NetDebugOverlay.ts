@@ -98,6 +98,7 @@ export class NetDebugOverlay {
     const diagnostics = this.getDiagnostics();
     const lines: string[] = [
       `NETZ  Raum ${this.getRoomCode()}  Rolle ${this.getLocalRole()}  Verbindungen ${diagnostics.length}`,
+      'Ping = Netzwerk-RTT (STUN, bildratenunabhängig) · Reaktion = Umlauf durch beide Spielschleifen',
       '',
     ];
 
@@ -112,8 +113,8 @@ export class NetDebugOverlay {
         `  Pfad        ${describePath(link)}`,
         `  Zustand     pc=${link.connectionState}  ice=${link.iceConnectionState}`,
         `  Kanäle      rel=${link.reliableChannelState}  fast=${link.fastChannelState}`,
-        `  Ping App    Median ${formatMs(link.medianPingMs)}  Max ${formatMs(link.maxPingMs)}  Jitter ${formatMs(link.jitterMs)}  (n=${link.pingSampleCount})`,
-        `  RTT WebRTC  ${formatMs(link.webrtcRttMs)}`,
+        `  Ping (Netz) Median ${formatMs(link.medianRttMs)}  Max ${formatMs(link.maxRttMs)}  Jitter ${formatMs(link.jitterRttMs)}  (n=${link.rttSampleCount})`,
+        `  Reaktion    Median ${formatMs(link.medianAppPingMs)}  Max ${formatMs(link.maxAppPingMs)}  Jitter ${formatMs(link.jitterAppPingMs)}  (n=${link.appPingSampleCount})`,
         `  Aufbau      ${formatMs(link.connectDurationMs)}  Abbrüche ${link.disconnectCount}`,
         `  Volumen     ↑${formatBytes(link.bytesSent)}  ↓${formatBytes(link.bytesReceived)}`,
         `  Puffer      rel=${formatBytes(link.reliableBufferedBytes)}  fast=${formatBytes(link.fastBufferedBytes)}`

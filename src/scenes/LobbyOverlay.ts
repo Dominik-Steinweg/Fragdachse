@@ -77,10 +77,14 @@ function btnTexKey(color: number, w: number, h: number): string {
   return `_lobby_btn_${color.toString(16)}_${Math.round(w)}x${Math.round(h)}`;
 }
 
+/**
+ * Schwellen fuer die Netzwerk-RTT, nicht fuer die Umlaufzeit durch die Spielschleifen:
+ * im LAN einstellig, innerhalb DE/AT typisch 10-40 ms.
+ */
 function pingColor(ms: number): string {
-  if (ms <= 50)  return toCssColor(COLORS.GREEN_2);
-  if (ms <= 100) return toCssColor(COLORS.GOLD_1);
-  if (ms <= 200) return toCssColor(COLORS.RED_1);
+  if (ms <= 20)  return toCssColor(COLORS.GREEN_2);
+  if (ms <= 50)  return toCssColor(COLORS.GOLD_1);
+  if (ms <= 100) return toCssColor(COLORS.RED_1);
   return toCssColor(COLORS.RED_3);
 }
 
@@ -621,6 +625,10 @@ export class LobbyOverlay {
   private refreshPings(): void {
     for (const [id, row] of this.playerRows) {
       const ms = this.bridge.getPlayerPing(id);
+      if (ms === null) {
+        row.ping.setText('–').setColor(TEXT_COLOR);
+        continue;
+      }
       row.ping.setText(`${ms}ms`).setColor(pingColor(ms));
     }
   }
@@ -682,14 +690,14 @@ export class LobbyOverlay {
     }
 
     const path = `${link.localCandidateType}/${link.remoteCandidateType ?? '?'}`;
-    if (link.medianPingMs === null) {
+    if (link.medianRttMs === null) {
       return { text: `Direkte Verbindung (${path}) – Ping wird gemessen…`, color: toCssColor(COLORS.GREEN_2) };
     }
 
-    const jitter = link.jitterMs === null ? '' : `, Jitter ${Math.round(link.jitterMs)}ms`;
+    const jitter = link.jitterRttMs === null ? '' : `, Jitter ${Math.round(link.jitterRttMs)}ms`;
     return {
-      text: `Direkte Verbindung (${path}) – Ping ${Math.round(link.medianPingMs)}ms${jitter}`,
-      color: pingColor(link.medianPingMs),
+      text: `Direkte Verbindung (${path}) – Ping ${Math.round(link.medianRttMs)}ms${jitter}`,
+      color: pingColor(link.medianRttMs),
     };
   }
 

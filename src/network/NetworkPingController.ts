@@ -22,7 +22,6 @@ interface NetworkPingControllerDeps {
   getLocalPlayerId: () => string;
   getLocalPlayer: () => PingPlayerState;
   getPlayers: () => PingPlayerState[];
-  setLocalPing: (pingMs: number) => void;
 }
 
 interface FastPingProbe {
@@ -52,12 +51,22 @@ export class NetworkPingController {
   private bestClockSyncRttMs = Number.POSITIVE_INFINITY;
   private nextFastProbeSeq = 1;
   private lastFastAckSeq = 0;
+  private lastAppPingMs: number | null = null;
   private handledHostProbeSeq = new Map<string, number>();
 
   constructor(private deps: NetworkPingControllerDeps) {}
 
   getSynchronizedNow(): number {
     return this.deps.isHost() ? Date.now() : Date.now() + this.hostClockOffsetMs;
+  }
+
+  /**
+   * Zuletzt gemessene Umlaufzeit durch beide Spielschleifen. Nicht die Leitung: darin steckt
+   * die Frame-Quantisierung beider Seiten. Als angezeigter Ping ungeeignet, als Maß für die
+   * gefühlte Reaktionszeit aussagekräftig.
+   */
+  getAppPingMs(): number | null {
+    return this.lastAppPingMs;
   }
 
   sendPingToHost(): void {
@@ -95,7 +104,7 @@ export class NetworkPingController {
   private applyMeasurement(sentAt: number, hostTs: number): void {
     const now = Date.now();
     const rtt = Math.max(0, now - sentAt);
-    this.deps.setLocalPing(rtt);
+    this.lastAppPingMs = rtt;
 
     if (this.deps.isHost()) return;
     // Nur die schnellsten Messungen zur Zeitsynchronisation heranziehen: bei ihnen ist die

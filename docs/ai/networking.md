@@ -50,11 +50,20 @@ Der Host veröffentlicht bei `NET_TICK_RATE_HZ = 20` einen einzelnen kompakten `
 
 Nutzlast ist JSON. Ein Binärformat lohnt erst, wenn die Slice-Metriken (`NET_DEBUG_ENEMY_SYNC_METRICS`) es belegen.
 
-## Messung statt Grenzwerte
+## Zwei Latenzen, die nicht verwechselt werden dürfen
 
-`TransportDiagnostics` liest je Verbindung aus `getStats()`: Kandidatenpaar und -typen, WebRTC-RTT, Byte-Zähler, ICE-Zustandswechsel, Sendepuffer und Aufbauzeit. Der Anwendungs-Ping (`NetworkPingController`, unzuverlässiger Kanal, liefert zugleich den Host-Zeitversatz für `getSynchronizedNow()`) wird zu Median, Maximum und Jitter aggregiert. Jitter ist die mittlere Abweichung aufeinanderfolgender Messungen – für das Spielgefühl zählt Sprunghaftigkeit, nicht Streubreite.
+**Ping (Netzwerk-RTT).** `RTCIceCandidatePairStats.currentRoundTripTime` des gewählten Kandidatenpaars. Der ICE-Stack misst sie per STUN **außerhalb unseres Main-Threads**, sie ist daher bildratenunabhängig und mit der Ping-Anzeige üblicher Shooter vergleichbar: auf einem Rechner bzw. im LAN einstellig. Das ist der Wert, der als `KEY_PING` veröffentlicht und in Lobby und Leaderboard angezeigt wird, und der den Raumtest speist.
 
-Taste **P** blendet alle Werte je Peer ein (auch über den Lobby-Button „NETZ-INFO"). Ping- und Jitter-Grenzwerte sind bewusst noch nicht festgelegt; `ROOM_QUALITY_START_POLICY` bleibt `'warn'`, bis reale Werte mit den üblichen Mitspielern vorliegen.
+Zwei Fallstricke:
+
+- **0 ms ist ein gültiges Ergebnis**, kein „noch nicht gemessen". Deshalb liefert `getPlayerPing()` `number | null` statt `?? 0` – ein `<= 0`-Filter würde eine LAN-Runde dauerhaft im Status `sampling` festhalten.
+- `currentRoundTripTime` aktualisiert nur alle **~2–5 s** (STUN-Consent-Checks). Ein neues Sample wird deshalb nur gezählt, wenn `responsesReceived` steigt; sonst ginge derselbe Messwert mehrfach in Median und Jitter ein.
+
+**Reaktion (Anwendungs-Ping).** `NetworkPingController` misst über den unzuverlässigen Kanal einen Umlauf durch **beide Spielschleifen**. Darin stecken rund vier Frame-Grenzen (Sende-Puffer bis Frame-Ende, Verarbeitung am Frame-Anfang – auf beiden Seiten), also bei 60 fps schon ohne Netz 30–60 ms; bei gedrosselten Hintergrund-Tabs deutlich mehr. Als angezeigter Ping ist der Wert unbrauchbar, als Maß für die gefühlte Reaktionszeit aussagekräftig. Er dient außerdem weiterhin der Host-Zeitsynchronisation für `getSynchronizedNow()` – dafür wird er gebraucht, die Netzwerk-RTT liefert keinen Zeitversatz.
+
+Beide Werte stehen getrennt im Overlay (Taste **P**, auch über den Lobby-Button „NETZ-INFO"). Jitter ist jeweils die mittlere Abweichung aufeinanderfolgender Messungen – für das Spielgefühl zählt Sprunghaftigkeit, nicht Streubreite.
+
+`ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS = 60` bezieht sich seit der Umstellung auf die Netzwerk-RTT und ist damit erst aussagekräftig. `ROOM_QUALITY_START_POLICY` bleibt `'warn'`, bis reale Werte mit den üblichen Mitspielern vorliegen.
 
 ## Referenzen
 

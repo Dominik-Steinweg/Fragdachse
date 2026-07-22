@@ -9,7 +9,7 @@ import {
 interface RoomQualityBridge {
   isHost(): boolean;
   getLocalPlayerId(): string;
-  getPlayerPing(playerId: string): number;
+  getPlayerPing(playerId: string): number | null;
   getRoomQuality(): RoomQualitySnapshot | null;
   publishRoomQuality(snapshot: RoomQualitySnapshot | null): void;
 }
@@ -52,7 +52,9 @@ export class RoomQualityMonitor {
       this.nextRoomQualitySampleAt = now + ROOM_QUALITY_SAMPLE_INTERVAL_MS;
       for (const player of remotePlayers) {
         const ping = this.bridge.getPlayerPing(player.id);
-        if (!Number.isFinite(ping) || ping <= 0) continue;
+        // `null` heisst "noch nicht gemessen". 0 ms dagegen ist ein echtes Ergebnis und muss
+        // zaehlen, sonst kaeme eine LAN-Runde nie ueber den Status 'sampling' hinaus.
+        if (ping === null) continue;
         const samples = this.roomQualitySamples.get(player.id) ?? [];
         samples.push(ping);
         if (samples.length > ROOM_QUALITY_REQUIRED_SAMPLES) samples.shift();

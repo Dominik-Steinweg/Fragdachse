@@ -794,7 +794,9 @@ export class HostUpdateCoordinator {
         name:     bridge.getPlayerName(playerId),
         colorHex: bridge.getPlayerColor(playerId) ?? 0xffffff,
         frags:    bridge.getPlayerFrags(playerId),
-        ping:     bridge.getPlayerPing(playerId),
+        // Das Leaderboard zeigt eine Zahl; solange nichts gemessen wurde, ist 0 die
+        // ehrlichste Naeherung (der Host misst sich ohnehin nie selbst).
+        ping:     bridge.getPlayerPing(playerId) ?? 0,
         teamId:   isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(playerId) : null,
         teamScore: this.resolveEntryTeamScore(playerId, blueTeamScore, redTeamScore),
         sharedXp,

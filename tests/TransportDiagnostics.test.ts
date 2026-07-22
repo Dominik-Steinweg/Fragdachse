@@ -28,6 +28,7 @@ function candidatePairReport(localType: string, remoteType: string, extra: Recor
       localCandidateId: 'L1',
       remoteCandidateId: 'R1',
       currentRoundTripTime: 0.024,
+      responsesReceived: 1,
       bytesSent: 2048,
       bytesReceived: 4096,
       ...extra,
@@ -131,7 +132,8 @@ describe('readSelectedPairStats', () => {
     expect(stats).toEqual({
       localCandidateType: 'srflx',
       remoteCandidateType: 'host',
-      webrtcRttMs: 24,
+      rttMs: 24,
+      responsesReceived: 1,
       bytesSent: 2048,
       bytesReceived: 4096,
     });
@@ -157,13 +159,13 @@ describe('readSelectedPairStats', () => {
 
     const stats = readSelectedPairStats(report);
     expect(stats.localCandidateType).toBe('host');
-    expect(stats.webrtcRttMs).toBe(8);
+    expect(stats.rttMs).toBe(8);
   });
 
   it('returns empty values when no pair succeeded', () => {
     const stats = readSelectedPairStats(statsReport([{ id: 'P0', type: 'candidate-pair', state: 'in-progress' }]));
     expect(stats.localCandidateType).toBeNull();
-    expect(stats.webrtcRttMs).toBeNull();
+    expect(stats.rttMs).toBeNull();
   });
 });
 
@@ -177,9 +179,39 @@ describe('TransportDiagnostics', () => {
     expect(snapshot.playerId).toBe('p1');
     expect(snapshot.localCandidateType).toBe('srflx');
     expect(snapshot.usesRelay).toBe(false);
-    expect(snapshot.webrtcRttMs).toBe(24);
+    expect(snapshot.rttMs).toBe(24);
+    expect(snapshot.medianRttMs).toBe(24);
     expect(snapshot.connectDurationMs).toBe(350);
     expect(snapshot.bytesSent).toBe(2048);
+  });
+
+  it('records a new network rtt sample only when a stun response arrived', async () => {
+    const harness = createHarness();
+    harness.link.setReport(candidatePairReport('host', 'host', { currentRoundTripTime: 0.01, responsesReceived: 3 }));
+    await harness.poll();
+    harness.advance(PEER_DIAGNOSTICS_POLL_MS);
+    // Gleiche Antwortzahl: derselbe Messwert, kein zweites Sample.
+    await harness.poll();
+    expect(harness.diagnostics.getSnapshots()[0].rttSampleCount).toBe(1);
+
+    harness.link.setReport(candidatePairReport('host', 'host', { currentRoundTripTime: 0.03, responsesReceived: 4 }));
+    harness.advance(PEER_DIAGNOSTICS_POLL_MS);
+    await harness.poll();
+
+    const [snapshot] = harness.diagnostics.getSnapshots();
+    expect(snapshot.rttSampleCount).toBe(2);
+    expect(snapshot.medianRttMs).toBe(20);
+    expect(snapshot.maxRttMs).toBe(30);
+  });
+
+  it('treats a zero millisecond rtt as a real measurement', async () => {
+    const harness = createHarness();
+    harness.link.setReport(candidatePairReport('host', 'host', { currentRoundTripTime: 0, responsesReceived: 2 }));
+    await harness.poll();
+
+    const [snapshot] = harness.diagnostics.getSnapshots();
+    expect(snapshot.rttSampleCount).toBe(1);
+    expect(snapshot.medianRttMs).toBe(0);
   });
 
   it('rejects a relay candidate exactly once', async () => {
@@ -205,10 +237,10 @@ describe('TransportDiagnostics', () => {
     }
 
     const [snapshot] = harness.diagnostics.getSnapshots();
-    expect(snapshot.pingSampleCount).toBe(3);
-    expect(snapshot.medianPingMs).toBe(25);
-    expect(snapshot.maxPingMs).toBe(30);
-    expect(snapshot.jitterMs).toBe(7.5);
+    expect(snapshot.appPingSampleCount).toBe(3);
+    expect(snapshot.medianAppPingMs).toBe(25);
+    expect(snapshot.maxAppPingMs).toBe(30);
+    expect(snapshot.jitterAppPingMs).toBe(7.5);
   });
 
   it('keeps the ping window bounded', () => {
@@ -218,7 +250,7 @@ describe('TransportDiagnostics', () => {
       harness.diagnostics.update();
     }
 
-    expect(harness.diagnostics.getSnapshots()[0].pingSampleCount).toBe(PEER_DIAGNOSTICS_SAMPLE_WINDOW);
+    expect(harness.diagnostics.getSnapshots()[0].appPingSampleCount).toBe(PEER_DIAGNOSTICS_SAMPLE_WINDOW);
   });
 
   it('ignores unmeasured pings instead of recording zeros', () => {
@@ -227,8 +259,8 @@ describe('TransportDiagnostics', () => {
     harness.diagnostics.update();
 
     const [snapshot] = harness.diagnostics.getSnapshots();
-    expect(snapshot.pingSampleCount).toBe(0);
-    expect(snapshot.medianPingMs).toBeNull();
+    expect(snapshot.appPingSampleCount).toBe(0);
+    expect(snapshot.medianAppPingMs).toBeNull();
   });
 
   it('counts transitions into a broken ice state', () => {
@@ -270,7 +302,7 @@ describe('TransportDiagnostics', () => {
     });
 
     diagnostics.update();
-    expect(diagnostics.getSnapshots()[0].pingSampleCount).toBe(1);
+    expect(diagnostics.getSnapshots()[0].appPingSampleCount).toBe(1);
 
     links = [];
     diagnostics.update();
@@ -278,19 +310,24 @@ describe('TransportDiagnostics', () => {
 
     links = [link];
     diagnostics.update();
-    expect(diagnostics.getSnapshots()[0].pingSampleCount).toBe(1);
+    expect(diagnostics.getSnapshots()[0].appPingSampleCount).toBe(1);
   });
 
-  it('picks the slowest link as the worst snapshot', () => {
+  it('picks the link with the highest network rtt as the worst snapshot', async () => {
     const fast = new FakeLink('peer-fast', 'p1');
     const slow = new FakeLink('peer-slow', 'p2');
-    const pings: Record<string, number> = { p1: 12, p2: 90 };
+    fast.setReport(candidatePairReport('host', 'host', { currentRoundTripTime: 0.012 }));
+    slow.setReport(candidatePairReport('srflx', 'srflx', { currentRoundTripTime: 0.09 }));
     const diagnostics = new TransportDiagnostics({
       getLinks: () => [fast, slow],
-      getAppPingMs: (playerId) => pings[playerId],
+      getAppPingMs: () => 0,
     });
 
     diagnostics.update();
+    await Promise.resolve();
+    await Promise.resolve();
+
     expect(diagnostics.getWorstSnapshot()?.playerId).toBe('p2');
+    expect(diagnostics.getWorstSnapshot()?.medianRttMs).toBe(90);
   });
 });

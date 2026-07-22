@@ -448,6 +448,7 @@ export class NetworkBridge {
   private networkFailureCbs: Array<(message: string) => void> = [];
   private lastSentInput: PlayerInput | null = null;
   private lastInputSentAtMs = 0;
+  private lastPublishedPingMs = -1;
 
   constructor() {
     this.pingController = new NetworkPingController({
@@ -455,7 +456,6 @@ export class NetworkBridge {
       getLocalPlayerId: () => myPlayer().id,
       getLocalPlayer: () => myPlayer(),
       getPlayers: () => [...this.playerStateMap.values()],
-      setLocalPing: (pingMs: number) => { myPlayer().setState(KEY_PING, pingMs); },
     });
 
     this.registerHostRpcHandler('tmr', async (payload: unknown, caller: PlayerState): Promise<unknown> => {
@@ -577,7 +577,9 @@ export class NetworkBridge {
 
     this.diagnostics = new TransportDiagnostics({
       getLinks: () => session.transport.getLinks(),
-      getAppPingMs: (playerId) => this.getPlayerPing(playerId),
+      // Den Anwendungs-Ping misst nur der Client fuer seine Verbindung zum Host; auf dem
+      // Host gibt es keinen Umlauf zu messen.
+      getAppPingMs: () => this.pingController.getAppPingMs() ?? 0,
       // Ohne konfiguriertes TURN darf kein Relay-Kandidat gewaehlt werden. Passiert es doch,
       // ist die ICE-Konfiguration kaputt: Verbindung trennen statt still ueber einen fremden
       // Server weiterspielen.
@@ -2321,9 +2323,17 @@ export class NetworkBridge {
 
   // ── Ping-Messung: Client → Host → Alle ────────────────────────────────────
 
-  /** Liest den gemessenen Roundtrip-Ping eines Spielers in ms (Standard: 0 für Host). */
-  getPlayerPing(playerId: string): number {
-    return (this.playerStateMap.get(playerId)?.getState(KEY_PING) as number | undefined) ?? 0;
+  /**
+   * Netzwerk-RTT eines Spielers in ms, `null` solange nichts gemessen wurde.
+   *
+   * Die Unterscheidung ist wichtig: 0 ms ist ein gültiges Ergebnis (gleiches LAN oder
+   * derselbe Rechner) und darf nicht mit "noch keine Messung" verwechselt werden.
+   * Der Host misst sich nicht selbst und liefert deshalb 0.
+   */
+  getPlayerPing(playerId: string): number | null {
+    if (playerId === this.getLocalPlayerId() && isHost()) return 0;
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_PING);
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
 
   publishRoomQuality(snapshot: RoomQualitySnapshot | null): void {
@@ -2405,6 +2415,26 @@ export class NetworkBridge {
   updateNetwork(): void {
     this.pingController.update();
     this.diagnostics?.update();
+    this.publishLocalPing();
+  }
+
+  /**
+   * Veröffentlicht den eigenen Ping, damit ihn alle Spieler in der Lobby sehen.
+   *
+   * Angezeigt wird die **Netzwerk-RTT** des ICE-Kandidatenpaars, nicht die Zeit durch die
+   * Spielschleifen: Der ICE-Stack misst sie per STUN außerhalb des Main-Threads, sie ist
+   * daher unabhängig von der Bildrate und mit der Ping-Anzeige üblicher Shooter vergleichbar.
+   * Solange noch keine STUN-Antwort vorliegt, dient der Anwendungs-Ping als Notbehelf.
+   */
+  private publishLocalPing(): void {
+    if (isHost()) return;
+    const link = this.diagnostics?.getWorstSnapshot();
+    const ping = link?.medianRttMs ?? this.pingController.getAppPingMs();
+    if (ping === null) return;
+    const rounded = Math.round(ping);
+    if (rounded === this.lastPublishedPingMs) return;
+    this.lastPublishedPingMs = rounded;
+    myPlayer().setState(KEY_PING, rounded);
   }
 
   /**

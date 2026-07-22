@@ -7,7 +7,7 @@ function player(id: string): PlayerProfile {
   return { id } as PlayerProfile;
 }
 
-function createMonitor(getPlayerPing: (playerId: string) => number) {
+function createMonitor(getPlayerPing: (playerId: string) => number | null) {
   let published: RoomQualitySnapshot | null = null;
   const monitor = new RoomQualityMonitor({
     isHost: () => true,
@@ -21,7 +21,7 @@ function createMonitor(getPlayerPing: (playerId: string) => number) {
 
 describe('RoomQualityMonitor', () => {
   it('does not invent a ping while the host is alone', () => {
-    const monitor = createMonitor(() => 0);
+    const monitor = createMonitor(() => null);
 
     monitor.initialize(0);
     const snapshot = monitor.update(500, [player('host')]);
@@ -50,9 +50,38 @@ describe('RoomQualityMonitor', () => {
     expect(rated?.worstPingMs).toBe(50);
   });
 
+  it('accepts a zero millisecond ping as a real measurement', () => {
+    // Auf demselben Rechner oder im gleichen LAN liegt die RTT unter einer Millisekunde.
+    // Wird die 0 als "noch nichts gemessen" behandelt, bleibt der Raumtest ewig im Sampling.
+    const monitor = createMonitor(() => 0);
+    const players = [player('host'), player('client')];
+
+    monitor.initialize(0);
+    for (let sample = 0; sample <= ROOM_QUALITY_REQUIRED_SAMPLES; sample++) {
+      monitor.update(sample * 500, players);
+    }
+
+    const snapshot = monitor.update((ROOM_QUALITY_REQUIRED_SAMPLES + 1) * 500, players);
+    expect(snapshot?.status).toBe('good');
+    expect(snapshot?.worstPingMs).toBe(0);
+  });
+
+  it('stays in sampling while a player has not reported a ping yet', () => {
+    const pings: Record<string, number | null> = { measured: 15, silent: null };
+    const monitor = createMonitor(playerId => pings[playerId] ?? null);
+    const players = [player('host'), player('measured'), player('silent')];
+
+    monitor.initialize(0);
+    for (let sample = 0; sample <= ROOM_QUALITY_REQUIRED_SAMPLES + 1; sample++) {
+      monitor.update(sample * 500, players);
+    }
+
+    expect(monitor.getSnapshot()?.status).toBe('sampling');
+  });
+
   it('rates the room by its slowest player', () => {
     const pings: Record<string, number> = { fast: 20, slow: ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS + 40 };
-    const monitor = createMonitor(playerId => pings[playerId] ?? 0);
+    const monitor = createMonitor(playerId => pings[playerId] ?? null);
     const players = [player('host'), player('fast'), player('slow')];
 
     monitor.initialize(0);

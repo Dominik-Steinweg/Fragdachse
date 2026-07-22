@@ -29,14 +29,24 @@ export interface LinkDiagnostics {
   remoteCandidateType: IceCandidateType | null;
   /** True, wenn eine Seite über einen Relay läuft – gilt als Konfigurationsfehler. */
   usesRelay: boolean;
-  /** RTT laut WebRTC (ausgewähltes Kandidatenpaar). */
-  webrtcRttMs: number | null;
-  /** Anwendungs-Ping: enthält zusätzlich Frame- und Verarbeitungszeit. */
-  medianPingMs: number | null;
-  maxPingMs: number | null;
-  /** Mittlere absolute Abweichung aufeinanderfolgender Ping-Messungen. */
-  jitterMs: number | null;
-  pingSampleCount: number;
+  /**
+   * Netzwerk-RTT des ausgewählten Kandidatenpaars – die Zahl, die in Shootern als „Ping"
+   * angezeigt wird. Wird vom ICE-Stack des Browsers per STUN gemessen, also außerhalb
+   * unseres Main-Threads und damit unabhängig von der Bildrate.
+   */
+  rttMs: number | null;
+  medianRttMs: number | null;
+  maxRttMs: number | null;
+  jitterRttMs: number | null;
+  rttSampleCount: number;
+  /**
+   * Anwendungs-Ping: derselbe Weg, aber durch beide Spielschleifen. Enthält die
+   * Frame-Quantisierung und bildet damit die gefühlte Reaktionszeit ab, nicht die Leitung.
+   */
+  medianAppPingMs: number | null;
+  maxAppPingMs: number | null;
+  jitterAppPingMs: number | null;
+  appPingSampleCount: number;
   connectDurationMs: number | null;
   disconnectCount: number;
   bytesSent: number;
@@ -74,13 +84,21 @@ export interface TransportDiagnosticsDeps {
 interface PolledStats {
   localCandidateType: IceCandidateType | null;
   remoteCandidateType: IceCandidateType | null;
-  webrtcRttMs: number | null;
+  rttMs: number | null;
+  /**
+   * Anzahl beantworteter STUN-Prüfungen. Steigt sie, liegt eine *neue* RTT-Messung vor.
+   * Nötig, weil `currentRoundTripTime` nur alle paar Sekunden aktualisiert wird und wir
+   * sonst denselben Wert mehrfach in die Statistik zählen würden.
+   */
+  responsesReceived: number;
   bytesSent: number;
   bytesReceived: number;
 }
 
 interface LinkRecord {
-  pings: number[];
+  appPings: number[];
+  rtts: number[];
+  lastResponsesReceived: number;
   stats: PolledStats | null;
   lastIceState: RTCIceConnectionState | null;
   disconnects: number;
@@ -91,7 +109,8 @@ interface LinkRecord {
 const EMPTY_STATS: PolledStats = {
   localCandidateType: null,
   remoteCandidateType: null,
-  webrtcRttMs: null,
+  rttMs: null,
+  responsesReceived: 0,
   bytesSent: 0,
   bytesReceived: 0,
 };
@@ -149,12 +168,12 @@ export class TransportDiagnostics {
     return this.deps.getLinks().map((link) => this.describe(link));
   }
 
-  /** Verbindung mit der schlechtesten Messung. Basis für die Lobby-Anzeige. */
+  /** Verbindung mit der höchsten Netzwerk-RTT. Basis für die Lobby-Anzeige. */
   getWorstSnapshot(): LinkDiagnostics | null {
     const snapshots = this.getSnapshots();
     if (snapshots.length === 0) return null;
     return snapshots.reduce((worst, candidate) => (
-      (candidate.medianPingMs ?? Number.POSITIVE_INFINITY) > (worst.medianPingMs ?? Number.POSITIVE_INFINITY)
+      (candidate.medianRttMs ?? Number.POSITIVE_INFINITY) > (worst.medianRttMs ?? Number.POSITIVE_INFINITY)
         ? candidate
         : worst
     ));
@@ -172,7 +191,16 @@ export class TransportDiagnostics {
   private record(link: DiagnosableLink): LinkRecord {
     let record = this.records.get(link.remotePeerId);
     if (!record) {
-      record = { pings: [], stats: null, lastIceState: null, disconnects: 0, backpressureSeen: false, relayReported: false };
+      record = {
+        appPings: [],
+        rtts: [],
+        lastResponsesReceived: 0,
+        stats: null,
+        lastIceState: null,
+        disconnects: 0,
+        backpressureSeen: false,
+        relayReported: false,
+      };
       this.records.set(link.remotePeerId, record);
     }
     return record;
@@ -192,7 +220,7 @@ export class TransportDiagnostics {
       const ping = this.deps.getAppPingMs(link.playerId);
       if (!Number.isFinite(ping) || ping <= 0) continue;
       const record = this.record(link);
-      const pings = record.pings;
+      const pings = record.appPings;
       if (pings.length > 0 && pings[pings.length - 1] === ping) continue; // gleiche Messung, kein neues Sample
       pings.push(ping);
       if (pings.length > PEER_DIAGNOSTICS_SAMPLE_WINDOW) pings.shift();
@@ -247,6 +275,14 @@ export class TransportDiagnostics {
     const record = this.record(link);
     record.stats = stats;
 
+    // Nur echte Neumessungen zaehlen. 0 ms ist dabei ein gueltiger Wert – im selben LAN
+    // oder gar auf demselben Rechner liegt die RTT unter einer Millisekunde.
+    if (stats.rttMs !== null && stats.responsesReceived > record.lastResponsesReceived) {
+      record.lastResponsesReceived = stats.responsesReceived;
+      record.rtts.push(stats.rttMs);
+      if (record.rtts.length > PEER_DIAGNOSTICS_SAMPLE_WINDOW) record.rtts.shift();
+    }
+
     const usesRelay = stats.localCandidateType === 'relay' || stats.remoteCandidateType === 'relay';
     if (usesRelay && !record.relayReported) {
       record.relayReported = true;
@@ -261,7 +297,8 @@ export class TransportDiagnostics {
   private describe(link: DiagnosableLink): LinkDiagnostics {
     const record = this.records.get(link.remotePeerId);
     const stats = record?.stats ?? EMPTY_STATS;
-    const pings = record?.pings ?? [];
+    const appPings = record?.appPings ?? [];
+    const rtts = record?.rtts ?? [];
     const reliableBufferedBytes = link.reliableChannel?.bufferedAmount ?? 0;
     const fastBufferedBytes = link.unreliableChannel?.bufferedAmount ?? 0;
 
@@ -275,11 +312,15 @@ export class TransportDiagnostics {
       localCandidateType: stats.localCandidateType,
       remoteCandidateType: stats.remoteCandidateType,
       usesRelay: stats.localCandidateType === 'relay' || stats.remoteCandidateType === 'relay',
-      webrtcRttMs: stats.webrtcRttMs,
-      medianPingMs: median(pings),
-      maxPingMs: pings.length > 0 ? Math.max(...pings) : null,
-      jitterMs: meanConsecutiveDeviation(pings),
-      pingSampleCount: pings.length,
+      rttMs: stats.rttMs,
+      medianRttMs: median(rtts),
+      maxRttMs: rtts.length > 0 ? Math.max(...rtts) : null,
+      jitterRttMs: meanConsecutiveDeviation(rtts),
+      rttSampleCount: rtts.length,
+      medianAppPingMs: median(appPings),
+      maxAppPingMs: appPings.length > 0 ? Math.max(...appPings) : null,
+      jitterAppPingMs: meanConsecutiveDeviation(appPings),
+      appPingSampleCount: appPings.length,
       connectDurationMs: link.openedAtMs > 0 ? link.openedAtMs - link.createdAtMs : null,
       disconnectCount: record?.disconnects ?? 0,
       bytesSent: stats.bytesSent,
@@ -300,6 +341,7 @@ interface CandidatePairStatsLike {
   localCandidateId?: string;
   remoteCandidateId?: string;
   currentRoundTripTime?: number;
+  responsesReceived?: number;
   bytesSent?: number;
   bytesReceived?: number;
 }
@@ -350,7 +392,8 @@ export function readSelectedPairStats(report: RTCStatsReport): PolledStats {
     localCandidateType: toCandidateType(local?.candidateType),
     remoteCandidateType: toCandidateType(remote?.candidateType),
     // WebRTC liefert Sekunden, angezeigt werden Millisekunden.
-    webrtcRttMs: typeof pair.currentRoundTripTime === 'number' ? pair.currentRoundTripTime * 1000 : null,
+    rttMs: typeof pair.currentRoundTripTime === 'number' ? pair.currentRoundTripTime * 1000 : null,
+    responsesReceived: pair.responsesReceived ?? 0,
     bytesSent: pair.bytesSent ?? 0,
     bytesReceived: pair.bytesReceived ?? 0,
   };
