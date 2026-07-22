@@ -684,6 +684,61 @@ export const ROOM_QUALITY_REQUIRED_SAMPLES = 3;
 export const ROOM_QUALITY_SAMPLE_INTERVAL_MS = 500;
 export const ROOM_QUALITY_START_POLICY: RoomQualityStartPolicy = 'warn';
 
+// ---- WebRTC-Transport (PeerJS-Signaling, eigene Datenebene) ----
+/**
+ * Signaling-Broker. Nur fuer den Verbindungsaufbau zustaendig – ueber ihn laufen NIEMALS
+ * Spieldaten. Default ist die kostenlose PeerJS-Cloud; fuer einen eigenen PeerServer nur
+ * diese Konstanten aendern, kein Code.
+ */
+export const PEER_BROKER = {
+  host: '0.peerjs.com',
+  port: 443,
+  path: '/',
+  key: 'peerjs',
+  secure: true,
+} as const;
+
+/**
+ * ICE-Server: ausschliesslich STUN. Bewusst KEIN TURN.
+ *
+ * Wichtig: PeerJS' eigener Default (`util.defaultConfig`) enthaelt TURN-Server
+ * (turn:eu-0.turn.peerjs.com / turn:us-0.turn.peerjs.com). Ohne dieses explizite Override
+ * waere die Anforderung "keine Relay-Verbindungen" still verletzt. Diese Liste muss daher
+ * immer vollstaendig an `new Peer({ config })` uebergeben werden.
+ */
+export const PEER_ICE_SERVERS: RTCIceServer[] = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: ['stun:stun.cloudflare.com:3478'] },
+];
+
+/** Laenge des menschenlesbaren Raumcodes (Crockford-Base32 ohne I/L/O/U). */
+export const PEER_ROOM_CODE_LENGTH = 6;
+/** Praefix der Broker-Peer-ID. Trennt uns von anderen Nutzern der geteilten PeerJS-Cloud. */
+export const PEER_ID_PREFIX = 'fragdachse-';
+/** Maximale Versuche, einen freien Raumcode auf dem Broker zu belegen. */
+export const PEER_ROOM_CODE_MAX_ATTEMPTS = 5;
+/** Zeit bis zum Broker (Peer 'open'), danach Abbruch mit Fehlermeldung. */
+export const PEER_BROKER_TIMEOUT_MS = 10_000;
+/** Zeit bis die direkte Verbindung zum Host steht, danach Abbruch. */
+export const PEER_CONNECT_TIMEOUT_MS = 15_000;
+/**
+ * Feste SCTP-Stream-ID des unzuverlaessigen Kanals. Der Kanal wird mit `negotiated: true`
+ * erzeugt: beide Seiten legen ihn lokal an, es feuert kein 'datachannel'-Event. Das ist
+ * zwingend, weil PeerJS' eigener ondatachannel-Handler jeden eingehenden Kanal als seinen
+ * eigenen behandeln wuerde und damit die zuverlaessige DataConnection kapern wuerde.
+ */
+export const PEER_FAST_CHANNEL_ID = 100;
+export const PEER_FAST_CHANNEL_LABEL = 'fdx-fast';
+/**
+ * Frist, in der der unzuverlaessige Kanal nach dem zuverlaessigen aufgehen muss. Da die
+ * SCTP-Verbindung zu diesem Zeitpunkt bereits steht, geschieht das normalerweise sofort.
+ * Laeuft die Frist ab, gilt der Link als gescheitert – lieber ein klarer Abbruch als eine
+ * still degradierte Verbindung, die alles ueber den geordneten Kanal schiebt.
+ */
+export const PEER_FAST_CHANNEL_TIMEOUT_MS = 3_000;
+/** Ab dieser Fuellung des Sendepuffers werden unzuverlaessige Nachrichten verworfen statt gestaut. */
+export const PEER_FAST_BUFFER_LIMIT_BYTES = 256 * 1024;
+
 /** Neuer Raumstandard; der Host kann den Modus in der Lobby umschalten. */
 export const GAMEPLAY_TRANSPORT_DEFAULT: GameplayTransportMode = 'fast';
 /** Aggregierte Diagnosewerte fuer Fast-Path, Wiederholungen und RPC-Fallbacks. */
