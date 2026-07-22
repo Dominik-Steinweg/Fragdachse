@@ -10,7 +10,7 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-export const PEER_PROTOCOL_VERSION = 1;
+export const PEER_PROTOCOL_VERSION = 2;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';
@@ -20,6 +20,18 @@ export interface HelloMessage {
   t: 'hello';
   /** Protokollversion des Clients. */
   v: number;
+  /** Stabiles, raumbezogenes Token fuer die kurze Wiederaufnahme desselben Spielerslots. */
+  k: string;
+  /** True nur bei einer Wiederverbindung innerhalb einer bereits laufenden Client-Session. */
+  r?: boolean;
+}
+
+export type RejectReason = 'room-full' | 'protocol-mismatch' | 'resume-expired';
+
+/** Host -> Client: Der Handshake kann nicht abgeschlossen werden. */
+export interface RejectMessage {
+  t: 'reject';
+  k: RejectReason;
 }
 
 /** Ein Eintrag des Host-autoritativen Rosters. */
@@ -64,6 +76,8 @@ export interface QuitMessage {
  */
 export interface BatchMessage {
   t: 'b';
+  /** Monotone Sequenz auf dem Fast-Kanal; auf dem Reliable-Kanal nicht gesetzt. */
+  q?: number;
   g?: Array<[string, unknown]>;
   p?: Array<[string, string, unknown]>;
 }
@@ -91,6 +105,7 @@ export interface RpcResultMessage {
 
 export type PeerMessage =
   | HelloMessage
+  | RejectMessage
   | WelcomeMessage
   | JoinMessage
   | QuitMessage
@@ -163,8 +178,14 @@ export function parsePeerMessage(raw: unknown): PeerMessage | null {
 
   switch (value.t) {
     case 'hello': {
-      if (!Number.isSafeInteger(value.v)) return null;
-      return { t: 'hello', v: value.v as number };
+      if (!Number.isSafeInteger(value.v) || typeof value.k !== 'string' || value.k.length < 16) return null;
+      const message: HelloMessage = { t: 'hello', v: value.v as number, k: value.k };
+      if (value.r === true) message.r = true;
+      return message;
+    }
+    case 'reject': {
+      if (value.k !== 'room-full' && value.k !== 'protocol-mismatch' && value.k !== 'resume-expired') return null;
+      return { t: 'reject', k: value.k };
     }
     case 'welcome': {
       if (!Number.isSafeInteger(value.v)
@@ -192,6 +213,10 @@ export function parsePeerMessage(raw: unknown): PeerMessage | null {
     }
     case 'b': {
       const message: BatchMessage = { t: 'b' };
+      if (value.q !== undefined) {
+        if (!Number.isSafeInteger(value.q) || (value.q as number) <= 0) return null;
+        message.q = value.q as number;
+      }
       if (value.g !== undefined) {
         const entries = parseGlobalEntries(value.g);
         if (!entries) return null;

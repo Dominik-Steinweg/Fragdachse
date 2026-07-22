@@ -132,6 +132,7 @@ export class LobbyOverlay {
     private bridge:         NetworkBridge,
     private onReadyToggled: () => void,
     private onCopyRoomLink: () => void,
+    private onRejoinRoom: () => void,
     private onRetryRoom: () => void,
     private onShowNetDiagnostics: () => void,
     private onOpenCoopDefenseUpgrades: () => void,
@@ -220,7 +221,10 @@ export class LobbyOverlay {
       ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_COPY_COLOR, ACTION_BTN_W, ACTION_BTN_H), ACTION_BTN_W, ACTION_BTN_H, BTN_COPY_COLOR),
     )
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => { if (!this.btnLocked) this.onCopyRoomLink(); })
+      .on('pointerdown', () => {
+        if (this.connectionEnded && !this.localIsHost) this.onRejoinRoom();
+        else if (!this.btnLocked) this.onCopyRoomLink();
+      })
       .setScrollFactor(0);
     objects.push(this.copyBtn);
 
@@ -235,7 +239,7 @@ export class LobbyOverlay {
       ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_RETRY_COLOR, ACTION_BTN_W, ACTION_BTN_H), ACTION_BTN_W, ACTION_BTN_H, BTN_RETRY_COLOR),
     )
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => { if (!this.btnLocked) this.onRetryRoom(); })
+      .on('pointerdown', () => { if (this.connectionEnded || !this.btnLocked) this.onRetryRoom(); })
       .setScrollFactor(0);
     objects.push(this.retryBtn);
 
@@ -709,10 +713,14 @@ export class LobbyOverlay {
   }
 
   private updateRoomActionButtons(): void {
-    const canShowActions = this.localIsHost;
+    const canShowActions = this.localIsHost || this.connectionEnded;
+    const showCopy = (this.localIsHost && !this.connectionEnded)
+      || (this.connectionEnded && !this.localIsHost);
+    const showRetry = this.localIsHost || this.connectionEnded;
+    const showTransport = this.localIsHost && !this.connectionEnded;
     const readyDisabled = this.btnLocked;
-    const retryDisabled = this.btnLocked;
-    const copyDisabled = this.btnLocked;
+    const retryDisabled = this.btnLocked && !this.connectionEnded;
+    const copyDisabled = this.btnLocked && !this.connectionEnded;
     const transportDisabled = this.btnLocked;
 
     this.readyBtn.setAlpha(!readyDisabled ? 1 : 0.4);
@@ -721,22 +729,25 @@ export class LobbyOverlay {
 
     // Raumcode sichtbar halten: seit der Host den Code nicht mehr in seiner Adresszeile traegt,
     // waere er sonst nur ueber den Kopieren-Button erreichbar.
-    this.hostActionsLabel.setText(`— Host-Funktionen —   Raum ${this.bridge.getRoomCode()}`);
+    this.hostActionsLabel.setText(this.connectionEnded
+      ? `— Verbindung beendet —   Raum ${this.bridge.getRoomCode()}`
+      : `— Host-Funktionen —   Raum ${this.bridge.getRoomCode()}`);
     this.hostActionsLabel.setVisible(canShowActions);
-    this.copyBtn.setVisible(canShowActions).setAlpha(canShowActions && !copyDisabled ? 1 : 0.4);
-    this.copyBtnLabel.setVisible(canShowActions);
-    this.retryBtn.setVisible(canShowActions).setAlpha(canShowActions && !retryDisabled ? 1 : 0.4);
-    this.retryBtnLabel.setVisible(canShowActions);
-    this.transportBtn.setVisible(canShowActions).setAlpha(canShowActions && !transportDisabled ? 1 : 0.4);
-    this.transportBtnLabel.setVisible(canShowActions);
+    this.copyBtnLabel.setText(this.connectionEnded ? 'ERNEUT BEITRETEN' : 'LINK KOPIEREN');
+    this.copyBtn.setVisible(showCopy).setAlpha(showCopy && !copyDisabled ? 1 : 0.4);
+    this.copyBtnLabel.setVisible(showCopy);
+    this.retryBtn.setVisible(showRetry).setAlpha(showRetry && !retryDisabled ? 1 : 0.4);
+    this.retryBtnLabel.setVisible(showRetry);
+    this.transportBtn.setVisible(showTransport).setAlpha(showTransport && !transportDisabled ? 1 : 0.4);
+    this.transportBtnLabel.setVisible(showTransport);
 
-    if (canShowActions && !copyDisabled) this.copyBtn.setInteractive({ useHandCursor: true });
+    if (showCopy && !copyDisabled) this.copyBtn.setInteractive({ useHandCursor: true });
     else this.copyBtn.disableInteractive();
 
-    if (canShowActions && !retryDisabled) this.retryBtn.setInteractive({ useHandCursor: true });
+    if (showRetry && !retryDisabled) this.retryBtn.setInteractive({ useHandCursor: true });
     else this.retryBtn.disableInteractive();
 
-    if (canShowActions && !transportDisabled) this.transportBtn.setInteractive({ useHandCursor: true });
+    if (showTransport && !transportDisabled) this.transportBtn.setInteractive({ useHandCursor: true });
     else this.transportBtn.disableInteractive();
   }
 

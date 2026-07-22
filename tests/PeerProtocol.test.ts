@@ -13,7 +13,8 @@ function roundTrip(message: PeerMessage): PeerMessage | null {
 describe('peer protocol', () => {
   it('roundtrips every message type', () => {
     const messages: PeerMessage[] = [
-      { t: 'hello', v: PEER_PROTOCOL_VERSION },
+      { t: 'hello', v: PEER_PROTOCOL_VERSION, k: '0123456789abcdef' },
+      { t: 'reject', k: 'room-full' },
       {
         t: 'welcome',
         v: PEER_PROTOCOL_VERSION,
@@ -25,7 +26,7 @@ describe('peer protocol', () => {
       },
       { t: 'join', id: 'p2', s: { pnm: 'Gast' } },
       { t: 'quit', id: 'p2' },
-      { t: 'b', g: [['gs', { _s: 4 }]], p: [['p1', 'inp', { dx: 1 }]] },
+      { t: 'b', q: 7, g: [['gs', { _s: 4 }]], p: [['p1', 'inp', { dx: 1 }]] },
       { t: 'rpc', c: 7, n: 'lu', d: { slot: 'weapon1' } },
       { t: 'rpc', c: 0, n: 'xfx', d: { x: 1 }, s: 'p0' },
       { t: 'res', c: 7, d: { ok: true } },

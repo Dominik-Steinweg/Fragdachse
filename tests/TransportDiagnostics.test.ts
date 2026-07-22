@@ -330,4 +330,21 @@ describe('TransportDiagnostics', () => {
     expect(diagnostics.getWorstSnapshot()?.playerId).toBe('p2');
     expect(diagnostics.getWorstSnapshot()?.medianRttMs).toBe(90);
   });
+
+  it('does not let an unmeasured link replace a measured worst snapshot', async () => {
+    const measured = new FakeLink('peer-measured', 'p1');
+    const waiting = new FakeLink('peer-waiting', 'p2');
+    measured.setReport(candidatePairReport('host', 'host', { currentRoundTripTime: 0.025 }));
+    const diagnostics = new TransportDiagnostics({
+      getLinks: () => [measured, waiting],
+      getAppPingMs: () => 0,
+    });
+
+    diagnostics.update();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(diagnostics.getWorstSnapshot()?.playerId).toBe('p1');
+    expect(diagnostics.getWorstSnapshot()?.medianRttMs).toBe(25);
+  });
 });

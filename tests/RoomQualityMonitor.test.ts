@@ -9,10 +9,14 @@ function player(id: string): PlayerProfile {
 
 function createMonitor(getPlayerPing: (playerId: string) => number | null) {
   let published: RoomQualitySnapshot | null = null;
+  let sequence = 0;
   const monitor = new RoomQualityMonitor({
     isHost: () => true,
     getLocalPlayerId: () => 'host',
-    getPlayerPing,
+    getPlayerPingSample: (playerId) => {
+      const ping = getPlayerPing(playerId);
+      return ping === null ? null : { m: ping, s: ++sequence };
+    },
     getRoomQuality: () => published,
     publishRoomQuality: snapshot => { published = snapshot; },
   });
@@ -48,6 +52,29 @@ describe('RoomQualityMonitor', () => {
     expect(rated?.status).toBe('good');
     expect(rated?.source).toBe('webrtc');
     expect(rated?.worstPingMs).toBe(50);
+  });
+
+  it('counts only increasing published ICE sample sequences', () => {
+    let sequence = 1;
+    let published: RoomQualitySnapshot | null = null;
+    const monitor = new RoomQualityMonitor({
+      isHost: () => true,
+      getLocalPlayerId: () => 'host',
+      getPlayerPingSample: () => ({ m: 40, s: sequence }),
+      getRoomQuality: () => published,
+      publishRoomQuality: snapshot => { published = snapshot; },
+    });
+    const players = [player('host'), player('client')];
+
+    monitor.initialize(0);
+    monitor.update(0, players);
+    monitor.update(500, players);
+    monitor.update(1000, players);
+    expect(monitor.getSnapshot()?.minSamplesCollected).toBe(1);
+
+    sequence = 2;
+    monitor.update(1500, players);
+    expect(monitor.getSnapshot()?.minSamplesCollected).toBe(2);
   });
 
   it('accepts a zero millisecond ping as a real measurement', () => {

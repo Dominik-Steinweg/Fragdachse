@@ -101,14 +101,22 @@ export class PeerLink implements PeerLinkLike {
     if (this.closed) return;
     const payload = encodePeerMessage(message);
 
-    if (channel === 'fast' && this.fastChannel?.readyState === 'open') {
+    if (channel === 'fast') {
+      if (this.fastChannel?.readyState !== 'open') {
+        this.droppedFastMessages++;
+        return;
+      }
       // Ueberlaufender Sendepuffer heisst: die Leitung kommt nicht hinterher. Bei ersetzbaren
       // Daten ist Verwerfen richtig – der naechste Snapshot ist ohnehin aktueller.
       if (this.fastChannel.bufferedAmount > PEER_FAST_BUFFER_LIMIT_BYTES) {
         this.droppedFastMessages++;
         return;
       }
-      this.fastChannel.send(payload);
+      try {
+        this.fastChannel.send(payload);
+      } catch {
+        this.handleRemoteClose();
+      }
       return;
     }
 
@@ -167,29 +175,51 @@ export class PeerLink implements PeerLinkLike {
       if (message) this.deliver(message, 'fast');
     });
 
-    if (channel.readyState === 'open') return Promise.resolve();
+    if (channel.readyState === 'open') {
+      this.bindFastChannelFailure(channel);
+      return Promise.resolve();
+    }
 
     return new Promise<void>((resolve, reject) => {
       const cleanup = (): void => {
         window.clearTimeout(timeout);
         channel.removeEventListener('open', onOpen);
+        channel.removeEventListener('close', onClose);
         channel.removeEventListener('error', onError);
       };
-      const onOpen = (): void => { cleanup(); resolve(); };
+      const onOpen = (): void => {
+        cleanup();
+        this.bindFastChannelFailure(channel);
+        resolve();
+      };
+      const onClose = (): void => { cleanup(); reject(createPeerNetworkError('connection-failed')); };
       const onError = (): void => { cleanup(); reject(createPeerNetworkError('connection-failed')); };
       const timeout = window.setTimeout(() => {
         cleanup();
         reject(createPeerNetworkError('connection-failed'));
       }, PEER_FAST_CHANNEL_TIMEOUT_MS);
       channel.addEventListener('open', onOpen);
+      channel.addEventListener('close', onClose);
       channel.addEventListener('error', onError);
     });
+  }
+
+  private bindFastChannelFailure(channel: RTCDataChannel): void {
+    const fail = (): void => this.handleRemoteClose();
+    channel.addEventListener('close', fail, { once: true });
+    channel.addEventListener('error', fail, { once: true });
   }
 
   private handleRemoteClose(): void {
     if (this.closed) return;
     this.closed = true;
+    try {
+      this.fastChannel?.close();
+    } catch {
+      // Already closed.
+    }
     this.fastChannel = null;
+    if (this.connection.open) this.connection.close();
     this.handlers?.onClose();
   }
 }

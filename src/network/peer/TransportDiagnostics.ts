@@ -99,6 +99,7 @@ interface LinkRecord {
   appPings: number[];
   rtts: number[];
   lastResponsesReceived: number;
+  rttSampleCount: number;
   stats: PolledStats | null;
   lastIceState: RTCIceConnectionState | null;
   disconnects: number;
@@ -172,10 +173,10 @@ export class TransportDiagnostics {
   getWorstSnapshot(): LinkDiagnostics | null {
     const snapshots = this.getSnapshots();
     if (snapshots.length === 0) return null;
-    return snapshots.reduce((worst, candidate) => (
-      (candidate.medianRttMs ?? Number.POSITIVE_INFINITY) > (worst.medianRttMs ?? Number.POSITIVE_INFINITY)
-        ? candidate
-        : worst
+    const measured = snapshots.filter(snapshot => snapshot.medianRttMs !== null);
+    if (measured.length === 0) return snapshots[0];
+    return measured.reduce((worst, candidate) => (
+      (candidate.medianRttMs ?? 0) > (worst.medianRttMs ?? 0) ? candidate : worst
     ));
   }
 
@@ -195,6 +196,7 @@ export class TransportDiagnostics {
         appPings: [],
         rtts: [],
         lastResponsesReceived: 0,
+        rttSampleCount: 0,
         stats: null,
         lastIceState: null,
         disconnects: 0,
@@ -279,6 +281,7 @@ export class TransportDiagnostics {
     // oder gar auf demselben Rechner liegt die RTT unter einer Millisekunde.
     if (stats.rttMs !== null && stats.responsesReceived > record.lastResponsesReceived) {
       record.lastResponsesReceived = stats.responsesReceived;
+      record.rttSampleCount++;
       record.rtts.push(stats.rttMs);
       if (record.rtts.length > PEER_DIAGNOSTICS_SAMPLE_WINDOW) record.rtts.shift();
     }
@@ -316,7 +319,7 @@ export class TransportDiagnostics {
       medianRttMs: median(rtts),
       maxRttMs: rtts.length > 0 ? Math.max(...rtts) : null,
       jitterRttMs: meanConsecutiveDeviation(rtts),
-      rttSampleCount: rtts.length,
+      rttSampleCount: record?.rttSampleCount ?? 0,
       medianAppPingMs: median(appPings),
       maxAppPingMs: appPings.length > 0 ? Math.max(...appPings) : null,
       jitterAppPingMs: meanConsecutiveDeviation(appPings),

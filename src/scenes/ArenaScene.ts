@@ -39,7 +39,7 @@ import {
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
-import { copyRoomShareUrl, restartWithNewRoom } from '../utils/roomQuality';
+import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
 import {
   addStoredCoopDefenseXp,
   getStoredCoopDefenseProgress,
@@ -702,6 +702,7 @@ export class ArenaScene extends Phaser.Scene {
       this, bridge,
       () => this.onReadyToggled(),
       () => { void this.onCopyRoomLink(); },
+      () => rejoinCurrentRoom(),
       () => this.onRetryRoom(),
       () => this.netDebugOverlay?.toggle(),
       () => this.openCoopDefenseUpgradesOverlay(),

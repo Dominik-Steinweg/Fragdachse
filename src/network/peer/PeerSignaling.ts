@@ -23,12 +23,14 @@ export type PeerFailureKind =
   | 'broker-unreachable'
   | 'host-not-found'
   | 'room-code-taken'
+  | 'invalid-room-code'
   | 'browser-unsupported'
   | 'connection-failed'
   | 'relay-rejected'
   | 'protocol-mismatch'
   | 'host-left'
-  | 'room-full';
+  | 'room-full'
+  | 'resume-expired';
 
 export class PeerNetworkError extends Error {
   constructor(readonly kind: PeerFailureKind, message: string, readonly cause?: unknown) {
@@ -38,6 +40,8 @@ export class PeerNetworkError extends Error {
 }
 
 const FAILURE_MESSAGES: Record<PeerFailureKind, string> = {
+  'invalid-room-code': 'Der Raumcode im Einladungslink ist ungültig.',
+  'resume-expired': 'Die Wiederverbindungsfrist ist abgelaufen. Bitte erneut beitreten.',
   'broker-unreachable': 'Verbindungsserver nicht erreichbar. Internetverbindung prüfen und neu laden.',
   'host-not-found': 'Host nicht gefunden. Der Raum existiert nicht mehr oder der Code ist falsch.',
   'room-code-taken': 'Kein freier Raumcode verfügbar. Bitte neu laden.',

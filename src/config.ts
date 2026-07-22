@@ -670,7 +670,9 @@ export const POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Statische Rocks senden normalerweise nur HP-Änderungen und Zerstörungen; Full-Resync korrigiert verlorene Frames. */
 export const ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS = NET_TICK_RATE_HZ;
 /** Debug-only: Host loggt aggregierte Enemy-Sync-Payload-Metriken ins Dev-Console. */
-export const NET_DEBUG_ENEMY_SYNC_METRICS = true;
+export const NET_DEBUG_ENEMY_SYNC_METRICS = (
+  import.meta as ImportMeta & { env?: { DEV?: boolean } }
+).env?.DEV === true;
 /** Aggregationsfenster für Enemy-Sync-Debug-Metriken. */
 export const NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS = 2000;
 /** Debug-only: Lokale Laufzeitmetriken fuer Host-/Client-Frames, unabhaengig vom Netzwerkpayload. */
@@ -721,6 +723,12 @@ export const PEER_ROOM_CODE_MAX_ATTEMPTS = 5;
 export const PEER_BROKER_TIMEOUT_MS = 10_000;
 /** Zeit bis die direkte Verbindung zum Host steht, danach Abbruch. */
 export const PEER_CONNECT_TIMEOUT_MS = 15_000;
+/** Zeit zwischen offenem Link und abgeschlossenem hello/welcome-Handshake. */
+export const PEER_HANDSHAKE_TIMEOUT_MS = 5_000;
+/** Kurzes Fenster, in dem ein getrennter Client seinen vorhandenen Spielerslot fortsetzt. */
+export const PEER_RESUME_GRACE_MS = 10_000;
+/** Obergrenze des Backoffs zwischen Resume-Versuchen. */
+export const PEER_RECONNECT_MAX_DELAY_MS = 2_000;
 /**
  * Feste SCTP-Stream-ID des unzuverlaessigen Kanals. Der Kanal wird mit `negotiated: true`
  * erzeugt: beide Seiten legen ihn lokal an, es feuert kein 'datachannel'-Event. Das ist

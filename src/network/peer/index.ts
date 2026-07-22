@@ -35,7 +35,12 @@ async function startSession(room: PeerRoom, transport: PeerJsTransport, roomCode
 }
 
 export { PeerRoom } from './PeerRoom';
-export type { PeerPlayerHandle, PeerRoomOptions, PeerRpcHandler } from './PeerRoom';
+export type {
+  PeerPlayerHandle,
+  PeerReconnectStatus,
+  PeerRoomOptions,
+  PeerRpcHandler,
+} from './PeerRoom';
 export { PeerJsTransport } from './PeerJsTransport';
 export { PeerLink } from './PeerLink';
 export {

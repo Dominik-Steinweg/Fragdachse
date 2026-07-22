@@ -13,7 +13,12 @@
  * Ein lokaler Schreibvorgang wirkt sofort lokal und wird danach verteilt. `setLocalReady(true)`
  * gefolgt von `getPlayerReady(localId)` liefert ohne Netzwerk-Roundtrip `true`.
  */
-import { MAX_PLAYERS } from '../../config';
+import {
+  MAX_PLAYERS,
+  PEER_HANDSHAKE_TIMEOUT_MS,
+  PEER_RECONNECT_MAX_DELAY_MS,
+  PEER_RESUME_GRACE_MS,
+} from '../../config';
 import { createPeerNetworkError, type PeerNetworkError } from './PeerSignaling';
 import {
   PEER_PROTOCOL_VERSION,
@@ -23,6 +28,8 @@ import {
   type RosterEntry,
 } from './protocol';
 import type { PeerLinkLike, PeerRoomTransport } from './transport';
+
+let temporaryResumeTokenSequence = 0;
 
 /** Schmales Gegenstück zu einem Spieler-Zustandsobjekt, wie die Bridge es erwartet. */
 export interface PeerPlayerHandle {
@@ -41,12 +48,30 @@ export interface PeerRoomOptions {
    * voller Lobby den Großteil des Relay-Verkehrs.
    */
   hostOnlyPlayerKeys?: readonly string[];
+  /** Stable per-room client token used only for the short resume window. */
+  resumeToken?: string;
 }
+
+export type PeerReconnectStatus =
+  | { state: 'reconnecting' | 'resumed' | 'failed' }
+  | { state: 'player-disconnected' | 'player-resumed' | 'player-expired'; playerId: string };
 
 interface PendingRpc {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
+}
+
+interface PendingHandshake {
+  resolve: () => void;
+  reject: (error: PeerNetworkError) => void;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+interface ResumeSlot {
+  playerId: string;
+  link: PeerLinkLike | null;
+  expiryTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /**
@@ -79,15 +104,21 @@ class OutboundBuffer {
 export class PeerRoom {
   private readonly links = new Set<PeerLinkLike>();
   private readonly fastBuffers = new Map<PeerLinkLike, OutboundBuffer>();
+  private readonly fastSendSequences = new Map<PeerLinkLike, number>();
+  private readonly fastReceiveSequences = new Map<PeerLinkLike, number>();
   private readonly globalState = new Map<string, unknown>();
   private readonly playerStates = new Map<string, Map<string, unknown>>();
   private readonly playerHandles = new Map<string, PeerPlayerHandle>();
   private readonly quitCallbacks = new Map<string, Array<() => void>>();
   private readonly hostOnlyPlayerKeys: ReadonlySet<string>;
+  private readonly resumeToken: string;
+  private readonly resumeSlots = new Map<string, ResumeSlot>();
+  private readonly linkResumeTokens = new Map<PeerLinkLike, string>();
 
   private readonly joinCallbacks: Array<(handle: PeerPlayerHandle) => void> = [];
   private readonly playerQuitCallbacks: Array<(playerId: string) => void> = [];
   private fatalCallback: ((error: PeerNetworkError) => void) | null = null;
+  private reconnectStatusCallback: ((status: PeerReconnectStatus) => void) | null = null;
 
   private readonly hostHandlers = new Map<string, PeerRpcHandler>();
   private readonly allHandlers = new Map<string, PeerRpcHandler>();
@@ -97,17 +128,20 @@ export class PeerRoom {
   private hostLink: PeerLinkLike | null = null;
   private localPlayerId = '';
   private hostPlayerId = '';
-  private welcomeReceived: (() => void) | null = null;
+  private pendingHandshake: PendingHandshake | null = null;
+  private reconnecting = false;
+  private reconnectDelayTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
 
   constructor(private readonly transport: PeerRoomTransport, options: PeerRoomOptions = {}) {
     this.hostOnlyPlayerKeys = new Set(options.hostOnlyPlayerKeys ?? []);
+    this.resumeToken = options.resumeToken ?? `temporary-client-token-${++temporaryResumeTokenSequence}`;
     this.transport.setHandlers({
       onLinkRegistered: (link) => this.handleLinkRegistered(link),
       onLinkReady: (link) => this.handleLinkReady(link),
       onMessage: (link, message, channel) => this.handleMessage(link, message, channel),
       onLinkClosed: (link) => this.handleLinkClosed(link),
-      onFatal: (error) => this.reportFatal(error),
+      onFatal: (error) => this.handleTransportFatal(error),
     });
   }
 
@@ -126,9 +160,13 @@ export class PeerRoom {
       return;
     }
 
-    const welcome = new Promise<void>((resolve) => { this.welcomeReceived = resolve; });
-    await this.transport.start();
-    await welcome;
+    const welcome = this.createHandshakeWaiter();
+    try {
+      await Promise.all([this.transport.start(), welcome]);
+    } catch (error) {
+      this.rejectHandshake(this.asPeerError(error));
+      throw error;
+    }
   }
 
   // ── Identität und Roster ──────────────────────────────────────────────────
@@ -166,6 +204,10 @@ export class PeerRoom {
     this.fatalCallback = callback;
   }
 
+  onReconnectStatus(callback: (status: PeerReconnectStatus) => void): void {
+    this.reconnectStatusCallback = callback;
+  }
+
   // ── Store ─────────────────────────────────────────────────────────────────
 
   getGlobal(key: string): unknown {
@@ -198,7 +240,11 @@ export class PeerRoom {
     if (this.destroyed) return;
     for (const [link, buffer] of this.fastBuffers) {
       const batch = buffer.drain();
-      if (batch) link.send(batch, 'fast');
+      if (!batch) continue;
+      const sequence = (this.fastSendSequences.get(link) ?? 0) + 1;
+      this.fastSendSequences.set(link, sequence);
+      batch.q = sequence;
+      link.send(batch, 'fast');
     }
   }
 
@@ -282,14 +328,15 @@ export class PeerRoom {
   // ── Nachrichtenverarbeitung ───────────────────────────────────────────────
 
   private handleMessage(link: PeerLinkLike, message: PeerMessage, channel: PeerChannelKind): void {
+    if (message.t === 'b' && channel === 'fast' && !this.acceptFastBatch(link, message)) return;
     if (this.transport.isHost) this.handleHostMessage(link, message, channel);
-    else this.handleClientMessage(link, message);
+    else this.handleClientMessage(link, message, channel);
   }
 
   private handleHostMessage(link: PeerLinkLike, message: PeerMessage, channel: PeerChannelKind): void {
     switch (message.t) {
       case 'hello':
-        this.completeHandshake(link, message.v);
+        this.completeHandshake(link, message.v, message.k, message.r === true);
         return;
       case 'b':
         this.applyBatch(message);
@@ -303,10 +350,18 @@ export class PeerRoom {
     }
   }
 
-  private handleClientMessage(link: PeerLinkLike, message: PeerMessage): void {
+  private handleClientMessage(
+    link: PeerLinkLike,
+    message: PeerMessage,
+    _channel: PeerChannelKind,
+  ): void {
     switch (message.t) {
       case 'welcome':
         this.applyWelcome(link, message);
+        return;
+      case 'reject':
+        this.rejectHandshake(createPeerNetworkError(message.k));
+        link.close();
         return;
       case 'join':
         this.playerStates.set(message.id, new Map(Object.entries(message.s)));
@@ -334,15 +389,53 @@ export class PeerRoom {
     }
   }
 
-  private completeHandshake(link: PeerLinkLike, version: number): void {
+  private acceptFastBatch(link: PeerLinkLike, message: BatchMessage): boolean {
+    if (message.q === undefined) return false;
+    const lastSeen = this.fastReceiveSequences.get(link) ?? 0;
+    if (message.q <= lastSeen) return false;
+    this.fastReceiveSequences.set(link, message.q);
+    return true;
+  }
+
+  private completeHandshake(
+    link: PeerLinkLike,
+    version: number,
+    resumeToken: string,
+    isResume: boolean,
+  ): void {
     if (version !== PEER_PROTOCOL_VERSION) {
       console.warn(`[PeerRoom] Protokollversion passt nicht (Gegenseite ${version}, hier ${PEER_PROTOCOL_VERSION}).`);
+      link.send({ t: 'reject', k: 'protocol-mismatch' }, 'rel');
       link.close();
       return;
     }
     if (link.playerId.length > 0) return;
+
+    const existing = this.resumeSlots.get(resumeToken);
+    if (existing) {
+      if (existing.link && existing.link !== link) {
+        link.send({ t: 'reject', k: 'resume-expired' }, 'rel');
+        link.close();
+        return;
+      }
+      if (existing.expiryTimer) clearTimeout(existing.expiryTimer);
+      existing.expiryTimer = null;
+      existing.link = link;
+      link.playerId = existing.playerId;
+      this.linkResumeTokens.set(link, resumeToken);
+      this.sendWelcome(link, existing.playerId);
+      this.reconnectStatusCallback?.({ state: 'player-resumed', playerId: existing.playerId });
+      return;
+    }
+
+    if (isResume) {
+      link.send({ t: 'reject', k: 'resume-expired' }, 'rel');
+      link.close();
+      return;
+    }
     if (this.playerStates.size >= MAX_PLAYERS) {
       console.warn('[PeerRoom] Raum ist voll, Verbindung wird abgewiesen.');
+      link.send({ t: 'reject', k: 'room-full' }, 'rel');
       link.close();
       return;
     }
@@ -350,7 +443,19 @@ export class PeerRoom {
     const playerId = this.allocatePlayerId();
     link.playerId = playerId;
     this.playerStates.set(playerId, new Map());
+    this.resumeSlots.set(resumeToken, { playerId, link, expiryTimer: null });
+    this.linkResumeTokens.set(link, resumeToken);
 
+    this.sendWelcome(link, playerId);
+
+    for (const other of this.links) {
+      if (other !== link) other.send({ t: 'join', id: playerId, s: {} }, 'rel');
+    }
+
+    this.emitJoin(playerId);
+  }
+
+  private sendWelcome(link: PeerLinkLike, playerId: string): void {
     const roster: RosterEntry[] = this.getPlayerIds().map((id) => ({ id }));
     link.send({
       t: 'welcome',
@@ -361,12 +466,6 @@ export class PeerRoom {
       g: Object.fromEntries(this.globalState),
       p: Object.fromEntries([...this.playerStates].map(([id, state]) => [id, Object.fromEntries(state)])),
     }, 'rel');
-
-    for (const other of this.links) {
-      if (other !== link) other.send({ t: 'join', id: playerId, s: {} }, 'rel');
-    }
-
-    this.emitJoin(playerId);
   }
 
   private applyWelcome(
@@ -377,7 +476,7 @@ export class PeerRoom {
       this.reportFatal(createPeerNetworkError('protocol-mismatch'));
       return;
     }
-    if (this.localPlayerId.length > 0) return;
+    const wasReconnect = this.reconnecting;
 
     link.playerId = message.h;
     this.localPlayerId = message.id;
@@ -386,6 +485,10 @@ export class PeerRoom {
     this.globalState.clear();
     for (const [key, value] of Object.entries(message.g)) this.globalState.set(key, value);
 
+    const incomingPlayerIds = new Set([...Object.keys(message.p), message.id]);
+    for (const playerId of [...this.playerHandles.keys()]) {
+      if (!incomingPlayerIds.has(playerId)) this.removePlayer(playerId);
+    }
     this.playerStates.clear();
     for (const [playerId, state] of Object.entries(message.p)) {
       this.playerStates.set(playerId, new Map(Object.entries(state)));
@@ -395,9 +498,11 @@ export class PeerRoom {
     for (const entry of message.roster) this.emitJoin(entry.id);
     this.emitJoin(message.id);
 
-    const resolve = this.welcomeReceived;
-    this.welcomeReceived = null;
-    resolve?.();
+    this.resolveHandshake();
+    if (wasReconnect) {
+      this.reconnecting = false;
+      this.reconnectStatusCallback?.({ state: 'resumed' });
+    }
   }
 
   private applyBatch(message: BatchMessage): void {
@@ -466,29 +571,57 @@ export class PeerRoom {
   private handleLinkRegistered(link: PeerLinkLike): void {
     this.links.add(link);
     this.fastBuffers.set(link, new OutboundBuffer());
+    this.fastSendSequences.set(link, 0);
+    this.fastReceiveSequences.set(link, 0);
     if (!this.transport.isHost) this.hostLink = link;
   }
 
   private handleLinkReady(link: PeerLinkLike): void {
     if (this.transport.isHost) return;
-    link.send({ t: 'hello', v: PEER_PROTOCOL_VERSION }, 'rel');
+    this.armHandshakeTimeout();
+    link.send({
+      t: 'hello',
+      v: PEER_PROTOCOL_VERSION,
+      k: this.resumeToken,
+      r: this.reconnecting || undefined,
+    }, 'rel');
   }
 
   private handleLinkClosed(link: PeerLinkLike): void {
     if (!this.links.delete(link)) return;
     this.fastBuffers.delete(link);
+    this.fastSendSequences.delete(link);
+    this.fastReceiveSequences.delete(link);
 
     if (!this.transport.isHost) {
-      this.hostLink = null;
-      if (this.hostPlayerId.length > 0) this.removePlayer(this.hostPlayerId);
-      this.reportFatal(createPeerNetworkError('host-left'));
+      if (this.hostLink === link) this.hostLink = null;
+      if (this.localPlayerId.length === 0) {
+        this.rejectHandshake(createPeerNetworkError('connection-failed'));
+        return;
+      }
+      this.beginReconnect();
       return;
     }
 
     const playerId = link.playerId;
     if (playerId.length === 0) return;
-    this.removePlayer(playerId);
-    this.sendToLinks({ t: 'quit', id: playerId }, 'rel', null);
+    const token = this.linkResumeTokens.get(link);
+    this.linkResumeTokens.delete(link);
+    if (!token) return;
+    const slot = this.resumeSlots.get(token);
+    if (!slot || slot.link !== link) return;
+    slot.link = null;
+    this.reconnectStatusCallback?.({ state: 'player-disconnected', playerId });
+    slot.expiryTimer = setTimeout(() => this.expireResumeSlot(token, slot), PEER_RESUME_GRACE_MS);
+  }
+
+  private expireResumeSlot(token: string, slot: ResumeSlot): void {
+    if (this.destroyed || this.resumeSlots.get(token) !== slot || slot.link) return;
+    this.resumeSlots.delete(token);
+    slot.expiryTimer = null;
+    this.removePlayer(slot.playerId);
+    this.sendToLinks({ t: 'quit', id: slot.playerId }, 'rel', null);
+    this.reconnectStatusCallback?.({ state: 'player-expired', playerId: slot.playerId });
   }
 
   private allocatePlayerId(): string {
@@ -529,6 +662,104 @@ export class PeerRoom {
     for (const callback of this.playerQuitCallbacks) callback(playerId);
   }
 
+  private createHandshakeWaiter(): Promise<void> {
+    if (this.pendingHandshake) {
+      this.rejectHandshake(createPeerNetworkError('connection-failed'));
+    }
+    return new Promise<void>((resolve, reject) => {
+      this.pendingHandshake = { resolve, reject, timer: null };
+    });
+  }
+
+  private armHandshakeTimeout(): void {
+    const pending = this.pendingHandshake;
+    if (!pending || pending.timer) return;
+    pending.timer = setTimeout(() => {
+      this.rejectHandshake(createPeerNetworkError('connection-failed'));
+      this.hostLink?.close();
+    }, PEER_HANDSHAKE_TIMEOUT_MS);
+  }
+
+  private resolveHandshake(): void {
+    const pending = this.pendingHandshake;
+    if (!pending) return;
+    this.pendingHandshake = null;
+    if (pending.timer) clearTimeout(pending.timer);
+    pending.resolve();
+  }
+
+  private rejectHandshake(error: PeerNetworkError): void {
+    const pending = this.pendingHandshake;
+    if (!pending) return;
+    this.pendingHandshake = null;
+    if (pending.timer) clearTimeout(pending.timer);
+    pending.reject(error);
+  }
+
+  private beginReconnect(): void {
+    if (this.destroyed || this.reconnecting) return;
+    this.reconnecting = true;
+    this.reconnectStatusCallback?.({ state: 'reconnecting' });
+    void this.reconnectWithinGracePeriod();
+  }
+
+  private async reconnectWithinGracePeriod(): Promise<void> {
+    const deadline = Date.now() + PEER_RESUME_GRACE_MS;
+    let delayMs = 0;
+
+    while (!this.destroyed && Date.now() < deadline) {
+      if (delayMs > 0) await this.waitForReconnectDelay(Math.min(delayMs, deadline - Date.now()));
+      if (this.destroyed || Date.now() >= deadline) break;
+
+      const welcome = this.createHandshakeWaiter();
+      try {
+        await Promise.all([this.transport.reconnect(), welcome]);
+        return;
+      } catch (error) {
+        const peerError = this.asPeerError(error);
+        this.rejectHandshake(peerError);
+        if (peerError.kind === 'protocol-mismatch'
+          || peerError.kind === 'room-full'
+          || peerError.kind === 'resume-expired') {
+          this.finishFailedReconnect(peerError);
+          return;
+        }
+      }
+      delayMs = delayMs === 0 ? 500 : Math.min(delayMs * 2, PEER_RECONNECT_MAX_DELAY_MS);
+    }
+
+    if (!this.destroyed) this.finishFailedReconnect(createPeerNetworkError('resume-expired'));
+  }
+
+  private waitForReconnectDelay(delayMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      this.reconnectDelayTimer = setTimeout(() => {
+        this.reconnectDelayTimer = null;
+        resolve();
+      }, Math.max(0, delayMs));
+    });
+  }
+
+  private finishFailedReconnect(error: PeerNetworkError): void {
+    this.reconnecting = false;
+    this.reconnectStatusCallback?.({ state: 'failed' });
+    this.reportFatal(error.kind === 'resume-expired' ? error : createPeerNetworkError(error.kind, error));
+  }
+
+  private handleTransportFatal(error: PeerNetworkError): void {
+    if (this.pendingHandshake) {
+      this.rejectHandshake(error);
+      return;
+    }
+    if (!this.reconnecting) this.reportFatal(error);
+  }
+
+  private asPeerError(error: unknown): PeerNetworkError {
+    return error instanceof Error && error.name === 'PeerNetworkError'
+      ? error as PeerNetworkError
+      : createPeerNetworkError('connection-failed', error);
+  }
+
   private reportFatal(error: PeerNetworkError): void {
     if (this.destroyed) return;
     if (this.fatalCallback) this.fatalCallback(error);
@@ -538,6 +769,14 @@ export class PeerRoom {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    if (this.reconnectDelayTimer) clearTimeout(this.reconnectDelayTimer);
+    this.reconnectDelayTimer = null;
+    for (const slot of this.resumeSlots.values()) {
+      if (slot.expiryTimer) clearTimeout(slot.expiryTimer);
+    }
+    this.resumeSlots.clear();
+    this.linkResumeTokens.clear();
+    this.rejectHandshake(createPeerNetworkError('connection-failed'));
     for (const pending of this.pendingRpcs.values()) {
       clearTimeout(pending.timeout);
       pending.reject(new Error('PeerRoom destroyed'));
@@ -545,6 +784,8 @@ export class PeerRoom {
     this.pendingRpcs.clear();
     this.links.clear();
     this.fastBuffers.clear();
+    this.fastSendSequences.clear();
+    this.fastReceiveSequences.clear();
     this.transport.destroy();
   }
 }

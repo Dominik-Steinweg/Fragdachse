@@ -44,5 +44,7 @@ export interface PeerRoomTransport {
    * Client: baut die Verbindung zum Host auf und löst auf, sobald der Link offen ist.
    */
   start(): Promise<void>;
+  /** Client-only: baut nach einem Linkabriss eine neue Verbindung zum selben Host auf. */
+  reconnect(): Promise<void>;
   destroy(): void;
 }

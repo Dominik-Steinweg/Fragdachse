@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }         from './network/bridge';
 import { NetworkBridge }  from './network/NetworkBridge';
 import { PeerNetworkError } from './network/peer';
-import { restartWithNewRoom }  from './utils/roomQuality';
+import { rejoinCurrentRoom, restartWithNewRoom }  from './utils/roomQuality';
 import { ArenaScene }     from './scenes/ArenaScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 
@@ -10,7 +10,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from './config';
  * Zeigt einen Verbindungsfehler an, statt ein Spiel zu starten, das nicht spielbar waere.
  * Bewusst reines DOM: zu diesem Zeitpunkt laeuft noch kein Phaser.
  */
-function showBootError(message: string): void {
+function showBootError(message: string, canRejoin: boolean): void {
   const container = document.getElementById('game-container');
   if (!container) return;
   const panel = document.createElement('div');
@@ -32,6 +32,17 @@ function showBootError(message: string): void {
 
   // Ausdruecklicher Weg zurueck zu einem frischen Raum – ein blosser Reload wuerde bei einem
   // Client denselben, nicht mehr existierenden Raum erneut anwaehlen.
+  if (canRejoin) {
+    const rejoin = document.createElement('button');
+    rejoin.textContent = 'ERNEUT BEITRETEN';
+    rejoin.style.cssText = [
+      'padding:10px 18px', 'font-family:monospace', 'font-size:15px', 'font-weight:bold',
+      'cursor:pointer', 'color:#e8e2d4', 'background:#31506a', 'border:1px solid #6389a8',
+    ].join(';');
+    rejoin.onclick = () => rejoinCurrentRoom();
+    panel.appendChild(rejoin);
+  }
+
   const restart = document.createElement('button');
   restart.textContent = 'NEUEN RAUM ERÖFFNEN';
   restart.style.cssText = [
@@ -49,6 +60,24 @@ function showBootError(message: string): void {
   container.appendChild(panel);
 }
 
+function installReconnectNotice(): void {
+  const container = document.getElementById('game-container');
+  if (!container) return;
+  const notice = document.createElement('div');
+  notice.textContent = 'Verbindung wird wiederhergestellt…';
+  notice.style.cssText = [
+    'display:none', 'position:absolute', 'left:50%', 'top:18px', 'transform:translateX(-50%)',
+    'z-index:20', 'padding:10px 16px', 'font-family:monospace', 'font-size:15px',
+    'font-weight:bold', 'color:#e8e2d4', 'background:rgba(30,24,18,.94)',
+    'border:1px solid #d98d3a', 'pointer-events:none',
+  ].join(';');
+  container.appendChild(notice);
+  bridge.onReconnectStatus((status) => {
+    if (status.state === 'reconnecting') notice.style.display = 'block';
+    else if (status.state === 'resumed' || status.state === 'failed') notice.style.display = 'none';
+  });
+}
+
 async function boot(): Promise<void> {
   // 1. Raum eroeffnen oder dem Raum aus dem URL-Hash beitreten. Blockiert, bis die direkte
   //    WebRTC-Verbindung steht bzw. endgueltig gescheitert ist – es gibt keinen Fallback.
@@ -56,6 +85,7 @@ async function boot(): Promise<void> {
 
   // 2. Bridge aktivieren (einmalig – registriert Roster-Listener und RPC-Namen)
   bridge.activate();
+  installReconnectNotice();
 
   // 3. Phaser-Spiel starten – ERST nach stehender Verbindung
   new Phaser.Game({
@@ -82,7 +112,11 @@ async function boot(): Promise<void> {
 
 boot().catch((error: unknown) => {
   console.error(error);
-  showBootError(error instanceof PeerNetworkError
-    ? error.message
-    : 'Unerwarteter Fehler beim Verbindungsaufbau.');
+  showBootError(
+    error instanceof PeerNetworkError
+      ? error.message
+      : 'Unerwarteter Fehler beim Verbindungsaufbau.',
+    window.location.hash.startsWith('#r=')
+      && (!(error instanceof PeerNetworkError) || error.kind !== 'invalid-room-code'),
+  );
 });

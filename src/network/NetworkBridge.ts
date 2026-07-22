@@ -21,8 +21,9 @@ import {
   createPeerNetworkError,
   type LinkDiagnostics,
   type PeerPlayerHandle,
+  type PeerReconnectStatus,
 } from './peer';
-import { readRoomCodeFromUrl } from '../utils/roomQuality';
+import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
 import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -116,6 +117,11 @@ const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, u
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
 const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
+
+export interface NetworkPingSample {
+  m: number;
+  s: number;
+}
 
 /**
  * Per-Spieler-Keys, die ausschliesslich der Host liest. Der Host reicht sie nicht an die
@@ -446,9 +452,11 @@ export class NetworkBridge {
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
   private diagnostics: TransportDiagnostics | null = null;
   private networkFailureCbs: Array<(message: string) => void> = [];
+  private reconnectStatusCbs: Array<(status: PeerReconnectStatus) => void> = [];
   private lastSentInput: PlayerInput | null = null;
   private lastInputSentAtMs = 0;
-  private lastPublishedPingMs = -1;
+  private lastObservedRttSampleCount = 0;
+  private publishedPingSequence = 0;
 
   constructor() {
     this.pingController = new NetworkPingController({
@@ -483,7 +491,10 @@ export class NetworkBridge {
     const roomCode = readRoomCodeFromUrl();
     const session = roomCode === null
       ? await createHostSession({ hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS })
-      : await joinHostSession(roomCode, { hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS });
+      : await joinHostSession(roomCode, {
+        hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
+        resumeToken: getOrCreateRoomResumeToken(roomCode),
+      });
     console.info(`[Netz] Raum ${session.roomCode} – Rolle ${session.room.isHost() ? 'Host' : 'Client'}`);
   }
 
@@ -529,6 +540,30 @@ export class NetworkBridge {
     for (const [type, scope] of this.registeredRpcTypes) this.bindRpcDispatcher(type, scope);
     this.setupTransportDiagnostics();
 
+    requireRoom().onReconnectStatus((status) => {
+      if (status.state === 'resumed') {
+        this.resetGameStateCache();
+        this.lastObservedRttSampleCount = 0;
+        this.lastSentInput = null;
+        this.lastInputSentAtMs = 0;
+        for (const state of this.playerStateMap.values()) {
+          this.connectedPlayers.set(state.id, this.extractProfile(state));
+        }
+        this.connectedPlayersCacheDirty = true;
+      }
+      if (status.state === 'player-disconnected' && isHost()) {
+        const previous = requireRoom().getPlayerState(status.playerId, KEY_INPUT) as PlayerInput | undefined;
+        requireRoom().setPlayerState(status.playerId, KEY_INPUT, {
+          dx: 0,
+          dy: 0,
+          aim: previous?.aim ?? 0,
+          dashHeld: false,
+          placementPreview: null,
+        } satisfies PlayerInput, true);
+      }
+      for (const callback of this.reconnectStatusCbs) callback(status);
+    });
+
     requireRoom().onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
       this.connectedPlayersCacheDirty = true;
@@ -562,6 +597,10 @@ export class NetworkBridge {
   /** Meldet den Abriss der Verbindung (Host weg, Broker weg, kein direkter Weg moeglich). */
   onNetworkFailure(callback: (message: string) => void): void {
     this.networkFailureCbs.push(callback);
+  }
+
+  onReconnectStatus(callback: (status: PeerReconnectStatus) => void): void {
+    this.reconnectStatusCbs.push(callback);
   }
 
   /** Aktuelle Transportkennzahlen je Verbindung. Fuer Debug-Overlay und Lobby-Anzeige. */
@@ -1262,7 +1301,7 @@ export class NetworkBridge {
     if (!raw || !raw.p) return this.cachedGameState;
     // Sequenznummer vergleichen: nur parsen wenn neue Daten vom Host eingetroffen sind
     const seq = raw._s as number | undefined;
-    if (seq !== undefined && seq === this.lastSeenSeq) return this.cachedGameState;
+    if (seq !== undefined && seq <= this.lastSeenSeq) return this.cachedGameState;
     if (seq !== undefined) this.lastSeenSeq = seq;
 
     const roundStartTime = (raw.rt as number | undefined) ?? 0;
@@ -2345,7 +2384,19 @@ export class NetworkBridge {
   getPlayerPing(playerId: string): number | null {
     if (playerId === this.getLocalPlayerId() && isHost()) return 0;
     const value = this.playerStateMap.get(playerId)?.getState(KEY_PING);
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (!value || typeof value !== 'object') return null;
+    const ping = (value as Partial<NetworkPingSample>).m;
+    return typeof ping === 'number' && Number.isFinite(ping) ? ping : null;
+  }
+
+  getPlayerPingSample(playerId: string): NetworkPingSample | null {
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_PING);
+    if (!value || typeof value !== 'object') return null;
+    const sample = value as Partial<NetworkPingSample>;
+    if (typeof sample.m !== 'number' || !Number.isFinite(sample.m)
+      || typeof sample.s !== 'number' || !Number.isSafeInteger(sample.s) || sample.s < 1) return null;
+    return { m: sample.m, s: sample.s };
   }
 
   publishRoomQuality(snapshot: RoomQualitySnapshot | null): void {
@@ -2441,12 +2492,12 @@ export class NetworkBridge {
   private publishLocalPing(): void {
     if (isHost()) return;
     const link = this.diagnostics?.getWorstSnapshot();
-    const ping = link?.medianRttMs ?? this.pingController.getAppPingMs();
-    if (ping === null) return;
-    const rounded = Math.round(ping);
-    if (rounded === this.lastPublishedPingMs) return;
-    this.lastPublishedPingMs = rounded;
-    myPlayer().setState(KEY_PING, rounded);
+    if (!link || link.medianRttMs === null || link.rttSampleCount <= this.lastObservedRttSampleCount) return;
+    this.lastObservedRttSampleCount = link.rttSampleCount;
+    myPlayer().setState(KEY_PING, {
+      m: Math.round(link.medianRttMs),
+      s: ++this.publishedPingSequence,
+    } satisfies NetworkPingSample);
   }
 
   /**

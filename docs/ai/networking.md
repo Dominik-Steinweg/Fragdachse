@@ -11,6 +11,8 @@ Die Datenebene gehört dem Projekt selbst. Zwei Kanäle je Verbindung:
 - **`rel`** – die PeerJS-DataConnection (`reliable: true`, `serialization: 'raw'`): geordnet und zuverlässig. Handshake, Roster, Commands, Events und alle ordnungs- oder startkritischen Zustände.
 - **`fast`** – ein eigener Kanal mit `{negotiated: true, id: PEER_FAST_CHANNEL_ID, ordered: false, maxRetransmits: 0}`: echte „neuester Stand gewinnt"-Semantik für Snapshots, Input und Ping.
 
+`fast` fällt niemals auf `rel` zurück: Solange der Zusatzkanal noch nicht offen oder bereits geschlossen ist, werden ersetzbare Nachrichten verworfen. Fast-Batches tragen eine monotone Sequenz pro Link; ältere und doppelte Batches werden ignoriert. `close`/`error` eines Fast-Kanals beendet deshalb den gesamten Link und startet denselben Resume-Pfad wie ein Abbruch des zuverlässigen Kanals.
+
 Zwei nicht offensichtliche Zwänge dahinter:
 
 1. PeerJS erzeugt seinen Kanal mit `{ordered: !!reliable}` und setzt **nie** `maxRetransmits`. `reliable: false` ist dort ungeordnet, aber weiterhin retransmittierend – ein echter unzuverlässiger Kanal ist über die PeerJS-API nicht ausdrückbar.
@@ -24,11 +26,15 @@ Zwei nicht offensichtliche Zwänge dahinter:
 
 ## Raumcode, Rollen, Abbruch
 
-Der Raumcode (`#r=ABC123`, Crockford-Base32 ohne I/L/O/U) ist zugleich die Broker-ID des Hosts. Ohne Code in der URL wird gehostet und der Code hineingeschrieben; mit Code wird beigetreten. Kollisionen auf dem geteilten öffentlichen Broker melden sich als `unavailable-id` und führen zu einem neuen Code.
+Der Raumcode (`#r=ABC123`, Crockford-Base32 ohne I/L/O/U) ist zugleich die Broker-ID des Hosts. Ohne Code in der URL wird gehostet; die Host-URL bleibt hashfrei und Einladungslink sowie sichtbarer Code werden aus dem aktiven Raum erzeugt. Mit gültigem Code wird beigetreten, ein ungültiger Code ist ein konkreter Boot-Fehler. Kollisionen auf dem geteilten öffentlichen Broker melden sich als `unavailable-id` und führen zu einem neuen Code.
 
 Der Host vergibt kurze Spieler-IDs (`p0`…`pb`). Broker-Peer-IDs bleiben transportintern – sie stünden sonst bei 20 Hz in jedem Snapshot-Key.
 
-**Es gibt keinen Hostwechsel.** Verlässt der Host den Raum, endet Runde bzw. Lobby mit einer Meldung. Da die URL den Raumcode auch beim Host trägt, würde ein Reload versuchen, dem eigenen toten Raum beizutreten; die Fehleranzeige bietet deshalb ausdrücklich „neuen Raum eröffnen" an.
+Ein Client-Boot gilt erst nach einem gültigen `welcome` als erfolgreich. Ab dem offenen Link läuft dafür ein Timeout von fünf Sekunden; `room-full` und `protocol-mismatch` werden als zuverlässige `reject`-Nachricht beantwortet. Ein fehlerhafter zusätzlicher Join betrifft ausschließlich diesen Link und beendet keine bestehende Partie.
+
+Nach einem Client-Linkabbruch hält der Host dessen Spieler-ID und Zustand zehn Sekunden anhand eines zufälligen, pro Raum in `sessionStorage` gespeicherten Tokens. Der Input wird sofort neutralisiert; die Figur bleibt stehen, verwundbar und im Roster. Der Client verbindet sofort und danach mit bis zu zwei Sekunden Backoff neu. Kommt dasselbe Token rechtzeitig zurück, erhält der neue Link den vorhandenen Slot und einen vollständigen Store; der Client verwirft seine Game-State-/Delta-Baseline. Erst nach Ablauf wird der Spieler genau einmal entfernt und `quit` verteilt.
+
+**Es gibt keinen Hostwechsel.** Scheitert Resume oder verlässt der Host den Raum, endet Runde bzw. Lobby mit einer Meldung sowie den Wegen „erneut beitreten" und „neuen Raum eröffnen".
 
 ## Host und Ownership
 
@@ -52,12 +58,12 @@ Nutzlast ist JSON. Ein Binärformat lohnt erst, wenn die Slice-Metriken (`NET_DE
 
 ## Zwei Latenzen, die nicht verwechselt werden dürfen
 
-**Ping (Netzwerk-RTT).** `RTCIceCandidatePairStats.currentRoundTripTime` des gewählten Kandidatenpaars. Der ICE-Stack misst sie per STUN **außerhalb unseres Main-Threads**, sie ist daher bildratenunabhängig und mit der Ping-Anzeige üblicher Shooter vergleichbar: auf einem Rechner bzw. im LAN einstellig. Das ist der Wert, der als `KEY_PING` veröffentlicht und in Lobby und Leaderboard angezeigt wird, und der den Raumtest speist.
+**Ping (Netzwerk-RTT).** `RTCIceCandidatePairStats.currentRoundTripTime` des gewählten Kandidatenpaars. Der ICE-Stack misst sie per STUN **außerhalb unseres Main-Threads**, sie ist daher bildratenunabhängig und mit der Ping-Anzeige üblicher Shooter vergleichbar: auf einem Rechner bzw. im LAN einstellig. `KEY_PING` veröffentlicht Messwert und monotonen Sample-Zähler; der Messwert erscheint in Lobby und Leaderboard, beide Felder speisen den Raumtest.
 
 Zwei Fallstricke:
 
 - **0 ms ist ein gültiges Ergebnis**, kein „noch nicht gemessen". Deshalb liefert `getPlayerPing()` `number | null` statt `?? 0` – ein `<= 0`-Filter würde eine LAN-Runde dauerhaft im Status `sampling` festhalten.
-- `currentRoundTripTime` aktualisiert nur alle **~2–5 s** (STUN-Consent-Checks). Ein neues Sample wird deshalb nur gezählt, wenn `responsesReceived` steigt; sonst ginge derselbe Messwert mehrfach in Median und Jitter ein.
+- `currentRoundTripTime` aktualisiert nur alle **~2–5 s** (STUN-Consent-Checks). Ein neues Sample wird deshalb nur gezählt, wenn `responsesReceived` steigt. Der veröffentlichte Ping enthält diesen monotonen Sample-Zähler; der Raumtest zählt denselben gecachten Wert dadurch nicht mehrfach.
 
 **Reaktion (Anwendungs-Ping).** `NetworkPingController` misst über den unzuverlässigen Kanal einen Umlauf durch **beide Spielschleifen**. Darin stecken rund vier Frame-Grenzen (Sende-Puffer bis Frame-Ende, Verarbeitung am Frame-Anfang – auf beiden Seiten), also bei 60 fps schon ohne Netz 30–60 ms; bei gedrosselten Hintergrund-Tabs deutlich mehr. Als angezeigter Ping ist der Wert unbrauchbar, als Maß für die gefühlte Reaktionszeit aussagekräftig. Er dient außerdem weiterhin der Host-Zeitsynchronisation für `getSynchronizedNow()` – dafür wird er gebraucht, die Netzwerk-RTT liefert keinen Zeitversatz.
 

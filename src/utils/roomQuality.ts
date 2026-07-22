@@ -8,7 +8,7 @@
  * einem Reload versuchen, seinem eigenen – gerade beendeten – Raum beizutreten, und landete
  * auf „Host nicht gefunden". Der Einladungslink wird stattdessen aus dem Raumcode gebaut.
  */
-import { isValidRoomCode } from '../network/peer/PeerSignaling';
+import { createPeerNetworkError, isValidRoomCode } from '../network/peer/PeerSignaling';
 
 const ROOM_HASH_PREFIX = '#r=';
 
@@ -17,7 +17,29 @@ export function readRoomCodeFromUrl(): string | null {
   const hash = window.location.hash;
   if (!hash.startsWith(ROOM_HASH_PREFIX)) return null;
   const code = hash.slice(ROOM_HASH_PREFIX.length).trim().toUpperCase();
-  return isValidRoomCode(code) ? code : null;
+  if (!isValidRoomCode(code)) throw createPeerNetworkError('invalid-room-code');
+  return code;
+}
+
+/** Stabiles Client-Token fuer Reload und kurze Link-Wiederaufnahme innerhalb eines Raums. */
+export function getOrCreateRoomResumeToken(roomCode: string): string {
+  const storageKey = `fragdachse:resume:${roomCode}`;
+  let existing: string | null = null;
+  try {
+    existing = window.sessionStorage.getItem(storageKey);
+  } catch {
+    // Some privacy modes deny storage. Runtime resume still works with the in-memory token.
+  }
+  if (existing && existing.length >= 16) return existing;
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const token = [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
+  try {
+    window.sessionStorage.setItem(storageKey, token);
+  } catch {
+    // A reload cannot resume without storage, but joining must remain usable.
+  }
+  return token;
 }
 
 /** Einladungslink zum angegebenen Raum – unabhängig davon, was gerade in der Adresszeile steht. */
@@ -47,5 +69,10 @@ export function restartWithNewRoom(): void {
   const target = new URL(window.location.href);
   target.hash = '';
   window.history.replaceState(null, '', target.toString());
+  window.location.reload();
+}
+
+/** Laedt denselben Einladungslink neu; der Host kann den gespeicherten Slot wieder zuordnen. */
+export function rejoinCurrentRoom(): void {
   window.location.reload();
 }
