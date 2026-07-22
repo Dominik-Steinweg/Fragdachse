@@ -1059,7 +1059,7 @@ export const WEAPON_CONFIGS = {
         acquireDelayMs:        50,
         searchRadius:          260,
         retargetIntervalMs:    220,
-        maxTurnDegreesPerStep: 12,
+        maxTurnDegreesPerStep: 8,
         targetTypes:           ['players'],
         requireLineOfSight:    true,
         excludeOwner:          true,

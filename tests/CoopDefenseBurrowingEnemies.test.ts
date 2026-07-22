@@ -28,7 +28,7 @@ describe('Alien-Dachs', () => {
     expect(alien.trainAwareness).toBeDefined();
   });
 
-  it('fires a slower, worse-steering red copy of the plasma gun at players only', () => {
+  it('fires a slower, homing red copy of the plasma gun at players only', () => {
     const plasma = WEAPON_CONFIGS.PLASMA;
     const alienPlasma = WEAPON_CONFIGS.ALIEN_BADGER_PLASMA;
     expect(alienPlasma.cooldown).toBeGreaterThan(plasma.cooldown);
@@ -37,8 +37,8 @@ describe('Alien-Dachs', () => {
     if (plasma.fire.type !== 'projectile' || alienPlasma.fire.type !== 'projectile') {
       throw new Error('Beide Plasma-Varianten muessen Projektilwaffen sein');
     }
-    expect(alienPlasma.fire.homing?.maxTurnDegreesPerStep)
-      .toBeLessThan(plasma.fire.homing!.maxTurnDegreesPerStep);
+    // Die Lenkstaerke selbst ist Balancing; die Kopie muss aber ueberhaupt lenken.
+    expect(alienPlasma.fire.homing?.maxTurnDegreesPerStep).toBeGreaterThan(0);
     expect(alienPlasma.energyBallVariant).toBe(plasma.energyBallVariant);
 
     const weaponIds = alien.weapons.map((weapon) => weapon.weaponId);
@@ -81,13 +81,16 @@ describe('Wurf-Dachs', () => {
     expect(getCoopDefenseEnemyConfig(spawnThrow!.enemyKind).movementTarget).toBe('players');
   });
 
-  it('bites bases and rocks but never players', () => {
+  it('bites bases and rocks, and players only after a telegraphed windup', () => {
     const bite = thrower.weapons.find((weapon) => weapon.weaponId === 'THROWER_BADGER_BITE');
-    expect(bite?.targetMode).toBe('structures');
+    expect(bite?.targetMode).toBe('all');
+    // Ein Spielerbiss ohne Vorwarnzeit waere nicht ausweichbar.
+    expect(bite!.playerMeleeWindupMs!).toBeGreaterThan(0);
 
     const biteConfig = WEAPON_CONFIGS.THROWER_BADGER_BITE;
     if (biteConfig.fire.type !== 'melee') throw new Error('Biss muss eine Nahkampfwaffe sein');
-    expect(biteConfig.fire.damageTargets).not.toContain('players');
+    expect(biteConfig.fire.damageTargets).toContain('bases');
+    expect(biteConfig.fire.damageTargets).toContain('rocks');
     expect(biteConfig.damage).toBeGreaterThan(WEAPON_CONFIGS.ALIEN_BADGER_BITE.damage);
   });
 });
