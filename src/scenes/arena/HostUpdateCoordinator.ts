@@ -641,7 +641,6 @@ export class HostUpdateCoordinator {
     // Gesammelte Treffer-/Todes-Effekte dieses Frames als ein einziges Batch-RPC senden, statt pro
     // Treffer ein eigenes RPC (vermeidet Host-step-Spikes bei flächigem Massen-Schaden).
     bridge.flushEffects();
-    bridge.flushGameplayTransport();
 
     // ── Network tick throttle ─────────────────────────────────────────────
     this.netTickAccumulator += delta;

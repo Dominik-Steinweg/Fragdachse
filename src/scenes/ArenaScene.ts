@@ -734,7 +734,6 @@ export class ArenaScene extends Phaser.Scene {
 
     this.lifecycle.initialize();
     this.registerArenaPanelHotkeys();
-    bridge.setupPingMeasurement();
     bridge.sendPingToHost();
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
@@ -747,7 +746,7 @@ export class ArenaScene extends Phaser.Scene {
     let primaryStepMs = 0;
     this.syncArenaMetrics();
     this.lifecycle.detectPhaseChange();
-    bridge.updateGameplayTransport();
+    bridge.updateNetwork();
 
     const phase           = bridge.getGamePhase();
     const enteredLobbyFromArena = this.lastObservedGamePhase === 'ARENA' && phase === 'LOBBY';

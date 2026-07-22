@@ -434,12 +434,11 @@ export type RoomQualityStatus = 'waiting' | 'sampling' | 'good' | 'bad';
 export type RoomQualityStartPolicy = 'warn' | 'block';
 
 /** Vom Host gewaehlter Transport fuer zeitkritische Arena-Aktionen. */
-export type GameplayTransportMode = 'fast' | 'rpc';
 
 export interface RoomQualitySnapshot {
   status: RoomQualityStatus;
   summary: string;
-  source: 'fast-ping' | 'rpc-ping';
+  source: 'webrtc';
   thresholdMs: number;
   worstPingMs: number | null;
   measuredPlayers: number;

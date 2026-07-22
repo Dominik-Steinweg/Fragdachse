@@ -1,4 +1,4 @@
-import type { GameMode, GamePhase, GameplayTransportMode, RoomQualityStartPolicy, TeamId } from './types';
+import type { GameMode, GamePhase, RoomQualityStartPolicy, TeamId } from './types';
 import { CAPTURE_THE_BEER_MODE, COOP_DEFENSE_MODE } from './gameModes';
 
 // ---- Display ----
@@ -748,11 +748,5 @@ export const PEER_DIAGNOSTICS_SAMPLE_WINDOW = 60;
  * Mitspielern vorliegen.
  */
 export const PEER_DIAGNOSTICS_BACKPRESSURE_BYTES = 64 * 1024;
-
-/** Neuer Raumstandard; der Host kann den Modus in der Lobby umschalten. */
-export const GAMEPLAY_TRANSPORT_DEFAULT: GameplayTransportMode = 'fast';
-/** Aggregierte Diagnosewerte fuer Fast-Path, Wiederholungen und RPC-Fallbacks. */
-export const NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS = true;
-export const NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS = 2000;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.

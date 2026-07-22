@@ -726,7 +726,7 @@ export class LobbyOverlay {
     if (!this.roomQuality) return 'Ping-Check wird vorbereitet…';
 
     if (this.roomQuality.status === 'sampling') {
-      return `Raumtest sammelt ${this.roomQuality.source === 'fast-ping' ? 'Schnellkanal' : 'RPC'}-Ping-Daten (${this.roomQuality.minSamplesCollected}/${this.roomQuality.requiredSamples}).`;
+      return `Raumtest sammelt Ping-Daten (${this.roomQuality.minSamplesCollected}/${this.roomQuality.requiredSamples}).`;
     }
 
     if (this.roomQuality.status === 'waiting') {

@@ -23,7 +23,7 @@ import {
   type PeerPlayerHandle,
 } from './peer';
 import { readRoomCodeFromUrl, writeRoomCodeToUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GameplayTransportMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -31,18 +31,8 @@ import {
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   TEAM_BLUE_COLOR,
   TEAM_RED_COLOR,
-  GAMEPLAY_TRANSPORT_DEFAULT,
-  NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS,
-  NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS,
 } from '../config';
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
-import {
-  GAMEPLAY_COMMAND_STATE_KEY,
-  GAMEPLAY_EVENT_ACK_STATE_KEY,
-  GameplayTransportChannel,
-  type GameplayCommandAck,
-  type GameplayCommandKind,
-} from './GameplayTransportChannel';
 import { countEnemyUpserts } from './enemySnapshotCodec';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import { sanitizePlayerName } from '../utils/playerName';
@@ -127,8 +117,6 @@ const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliabl
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
 const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
 
-const KEY_GAMEPLAY_TRANSPORT = 'gtm'; // global reliable: 'fast' | 'rpc'
-
 /**
  * Per-Spieler-Keys, die ausschliesslich der Host liest. Der Host reicht sie nicht an die
  * uebrigen Clients weiter, was bei voller Lobby den Grossteil des Relay-Verkehrs spart.
@@ -136,11 +124,7 @@ const KEY_GAMEPLAY_TRANSPORT = 'gtm'; // global reliable: 'fast' | 'rpc'
  * KEY_INPUT steht bewusst NICHT hier: PlacementPreviewRenderer liest `placementPreview` aus
  * dem Input fremder Spieler und laeuft auch auf Clients.
  */
-const HOST_ONLY_PLAYER_KEYS: readonly string[] = [
-  GAMEPLAY_COMMAND_STATE_KEY,
-  GAMEPLAY_EVENT_ACK_STATE_KEY,
-  KEY_FAST_PING_PROBE,
-];
+const HOST_ONLY_PLAYER_KEYS: readonly string[] = [KEY_FAST_PING_PROBE];
 
 interface EnemySyncMetricsWindow {
   startedAtMs: number;
@@ -382,6 +366,29 @@ function defaultPlayerName(playerId: string): string {
   return `Dachs ${playerId.toUpperCase()}`;
 }
 
+/** Spaetestens nach dieser Zeit wird die Eingabe auch unveraendert erneut gesendet. */
+const NET_INPUT_KEEPALIVE_MS = 100;
+
+function isSamePlacementPreview(
+  left: PlayerInput['placementPreview'],
+  right: PlayerInput['placementPreview'],
+): boolean {
+  if (!left || !right) return !left && !right;
+  return left.active === right.active
+    && left.kind === right.kind
+    && left.gridX === right.gridX
+    && left.gridY === right.gridY;
+}
+
+function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): boolean {
+  if (!previous) return false;
+  return input.dx === previous.dx
+    && input.dy === previous.dy
+    && input.aim === previous.aim
+    && input.dashHeld === previous.dashHeld
+    && isSamePlacementPreview(input.placementPreview, previous.placementPreview);
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -402,7 +409,6 @@ export class NetworkBridge {
   private readonly registeredRpcTypes = new Map<string, 'host' | 'all'>();
   private knownPlayerColors: readonly number[] = [];
   private pingController: NetworkPingController;
-  private gameplayTransport: GameplayTransportChannel;
   private hostRpcHandlers = new Map<string, (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown>();
   private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
 
@@ -438,48 +444,18 @@ export class NetworkBridge {
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void) | null = null;
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
-  private nextGameplayTransportMetricsAtMs = 0;
   private diagnostics: TransportDiagnostics | null = null;
   private networkFailureCbs: Array<(message: string) => void> = [];
+  private lastSentInput: PlayerInput | null = null;
+  private lastInputSentAtMs = 0;
 
   constructor() {
     this.pingController = new NetworkPingController({
       isHost: () => isHost(),
-      getMode: () => this.getGameplayTransportMode(),
       getLocalPlayerId: () => myPlayer().id,
       getLocalPlayer: () => myPlayer(),
       getPlayers: () => [...this.playerStateMap.values()],
       setLocalPing: (pingMs: number) => { myPlayer().setState(KEY_PING, pingMs); },
-      sendHostRpc: (type: string, payload: unknown) => this.sendHostRpc(type, payload),
-      broadcastRpc: (type: string, payload: unknown) => this.broadcastRpc(type, payload),
-      registerHostRpcHandler: (type, handler) => this.registerHostRpcHandler(type, handler),
-      registerAllRpcHandler: (type, handler) => this.registerAllRpcHandler(type, handler),
-    });
-
-    this.gameplayTransport = new GameplayTransportChannel({
-      isHost: () => isHost(),
-      getMode: () => this.getGameplayTransportMode(),
-      getLocalPlayer: () => myPlayer(),
-      getPlayers: () => [...this.playerStateMap.values()],
-      getGlobalState: key => getState(key),
-      setGlobalState: (key, value, reliable) => setState(key, value, reliable),
-      executeCommand: (kind, payload, caller) => this.executeGameplayCommand(kind, payload, caller as PlayerState),
-      callCommandFallback: async batch => {
-        const result = await this.callHostRpc('gcf', batch, 1200);
-        return result as GameplayCommandAck;
-      },
-      sendEventFallback: batch => this.broadcastRpc('gef', batch),
-      dispatchEvent: (kind, payload) => this.dispatchGameplayEvent(kind, payload),
-      now: () => this.pingController.getSynchronizedNow(),
-    });
-
-    this.registerHostRpcHandler('gcf', async (payload: unknown, caller: PlayerState): Promise<unknown> => {
-      if (!isHost()) return undefined;
-      return this.gameplayTransport.handleCommandFallback(payload, caller);
-    });
-    this.registerAllRpcHandler('gef', async (payload: unknown): Promise<unknown> => {
-      this.gameplayTransport.handleEventFallback(payload);
-      return undefined;
     });
 
     this.registerHostRpcHandler('tmr', async (payload: unknown, caller: PlayerState): Promise<unknown> => {
@@ -550,10 +526,6 @@ export class NetworkBridge {
     for (const [type, scope] of this.registeredRpcTypes) this.bindRpcDispatcher(type, scope);
     this.setupTransportDiagnostics();
 
-    if (isHost() && getState(KEY_GAMEPLAY_TRANSPORT) === undefined) {
-      setState(KEY_GAMEPLAY_TRANSPORT, GAMEPLAY_TRANSPORT_DEFAULT, true);
-    }
-
     requireRoom().onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
       this.connectedPlayersCacheDirty = true;
@@ -563,7 +535,6 @@ export class NetworkBridge {
         this.playerStateMap.delete(state.id);
         this.connectedPlayers.delete(state.id);
         this.connectedPlayersCacheDirty = true;
-        this.gameplayTransport.removePlayer(state.id);
         this.pingController.removePlayer(state.id);
         if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
@@ -640,7 +611,6 @@ export class NetworkBridge {
     setState(KEY_LOBBY_SYNC, {
       m: this.getGameMode(),
       c: this.getCoopDefenseMapId(),
-      n: this.getGameplayTransportMode(),
       p: [...this.connectedPlayers.keys()].sort(),
     }, true);
   }
@@ -656,7 +626,7 @@ export class NetworkBridge {
    * kein Snapshot angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
    */
   getLobbySyncConsistency(): { consistent: boolean; hostStatePresent: boolean; issues: string[] } {
-    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; n?: GameplayTransportMode; p?: string[] } | undefined;
+    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; p?: string[] } | undefined;
     if (!snapshot || !Array.isArray(snapshot.p)) {
       return { consistent: true, hostStatePresent: false, issues: [] };
     }
@@ -676,10 +646,6 @@ export class NetworkBridge {
     if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
       && snapshot.c !== undefined && snapshot.c !== this.getCoopDefenseMapId()) {
       issues.push(`Coop-Map: lokal=${this.getCoopDefenseMapId()} host=${snapshot.c}`);
-    }
-
-    if (snapshot.n !== undefined && snapshot.n !== this.getGameplayTransportMode()) {
-      issues.push(`Netzmodus: lokal=${this.getGameplayTransportMode()} host=${snapshot.n}`);
     }
 
     return { consistent: issues.length === 0, hostStatePresent: true, issues };
@@ -715,25 +681,6 @@ export class NetworkBridge {
 
   getGameMode(): GameMode {
     return (getState(KEY_GAME_MODE) as GameMode | undefined) ?? 'deathmatch';
-  }
-
-  getGameplayTransportMode(): GameplayTransportMode {
-    const mode = getState(KEY_GAMEPLAY_TRANSPORT) as GameplayTransportMode | undefined;
-    return mode === 'fast' || mode === 'rpc' ? mode : GAMEPLAY_TRANSPORT_DEFAULT;
-  }
-
-  setGameplayTransportMode(mode: GameplayTransportMode): void {
-    if (!isHost() || this.getGamePhase() !== 'LOBBY') return;
-    if (mode !== 'fast' && mode !== 'rpc') return;
-    if (this.getGameplayTransportMode() === mode) return;
-    this.gameplayTransport.reset();
-    setState(KEY_GAMEPLAY_TRANSPORT, mode, true);
-    this.hostInvalidateLobbyReadyStateForAllPlayers();
-    this.hostPublishLobbySync();
-  }
-
-  toggleGameplayTransportMode(): void {
-    this.setGameplayTransportMode(this.getGameplayTransportMode() === 'fast' ? 'rpc' : 'fast');
   }
 
   setGameMode(mode: GameMode): void {
@@ -938,7 +885,20 @@ export class NetworkBridge {
   }
 
   // ── Input: Client → Host (pro Spieler, unreliable) ────────────────────────
+
+  /**
+   * Eingabe des lokalen Spielers. Wird jeden Frame aufgerufen, geht aber nur raus, wenn sich
+   * etwas geaendert hat – plus ein Keepalive, damit ein verlorenes Paket den Host nicht auf
+   * einem alten Stand stehen laesst. Aenderungen gehen immer sofort raus; hier wird nichts
+   * verzoegert, was sich anfuehlbar auswirken koennte.
+   */
   sendLocalInput(input: PlayerInput): void {
+    const now = Date.now();
+    if (now - this.lastInputSentAtMs < NET_INPUT_KEEPALIVE_MS && isSamePlayerInput(input, this.lastSentInput)) {
+      return;
+    }
+    this.lastInputSentAtMs = now;
+    this.lastSentInput = input;
     myPlayer().setState(KEY_INPUT, input);
   }
 
@@ -1468,15 +1428,6 @@ export class NetworkBridge {
       return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
     }
     const payload = { slot, angle, tx: targetX, ty: targetY, sid: shotId, prm: params, px: clientX, py: clientY, ts: clientNow };
-    if (this.getGameplayTransportMode() === 'fast') {
-      const resultPromise = this.gameplayTransport.sendCommand('lu', payload, awaitResult);
-      if (!awaitResult) {
-        void resultPromise.catch(() => undefined);
-        return null;
-      }
-      const result = await resultPromise;
-      return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
-    }
     if (!awaitResult) {
       this.sendHostRpc('lu', payload);
       return null;
@@ -1542,10 +1493,6 @@ export class NetworkBridge {
       this.powerUpPickupHandler?.(uid, myPlayer().id);
       return;
     }
-    if (this.getGameplayTransportMode() === 'fast') {
-      void this.gameplayTransport.sendCommand('pup', { uid }).catch(() => undefined);
-      return;
-    }
     this.sendHostRpc('pup', { uid });
   }
 
@@ -1566,10 +1513,6 @@ export class NetworkBridge {
   sendDecoyStealthBreakRequest(): void {
     if (isHost()) {
       this.decoyStealthBreakHandler?.(myPlayer().id);
-      return;
-    }
-    if (this.getGameplayTransportMode() === 'fast') {
-      void this.gameplayTransport.sendCommand('dbr', {}).catch(() => undefined);
       return;
     }
     this.sendHostRpc('dbr', {});
@@ -1946,10 +1889,6 @@ export class NetworkBridge {
       this.dashHandler?.(myPlayer().id, dx, dy);
       return;
     }
-    if (this.getGameplayTransportMode() === 'fast') {
-      void this.gameplayTransport.sendCommand('dash', { dx, dy }).catch(() => undefined);
-      return;
-    }
     this.sendHostRpc('dash', { dx, dy });
   }
 
@@ -1972,10 +1911,6 @@ export class NetworkBridge {
   sendBurrowRequest(wantsBurrowed: boolean): void {
     if (isHost()) {
       this.burrowHandler?.(myPlayer().id, wantsBurrowed);
-      return;
-    }
-    if (this.getGameplayTransportMode() === 'fast') {
-      void this.gameplayTransport.sendCommand('burrow', { want: wantsBurrowed }).catch(() => undefined);
       return;
     }
     this.sendHostRpc('burrow', { want: wantsBurrowed });
@@ -2407,19 +2342,6 @@ export class NetworkBridge {
     this.pingController.sendPingToHost();
   }
 
-  /**
-   * Registriert die RPC-Handler für die Round-Trip-Ping-Messung.
-   * Muss einmalig in ArenaScene.create() aufgerufen werden.
-   *
-   * Ablauf:
-   *   Client → Host ('png'):  sendet { ts, id }
-   *   Host   → Alle ('pong'): broadcastet { ts, id } zurück
-   *   Client ('pong'):        misst RTT, schreibt per-player-State KEY_PING
-   */
-  setupPingMeasurement(): void {
-    this.pingController.setupPingMeasurement();
-  }
-
   // ── Rundenabschluss-Snapshot: Host → Alle (global, reliable) ─────────────
 
   /** Host-only: Speichert den Endstand der Runde für die Lobby-Anzeige. */
@@ -2479,51 +2401,19 @@ export class NetworkBridge {
     });
   }
 
-  /** Verarbeitet eingehende Fast-Path-Nachrichten und ausstehende Fallbacks. Pro Frame aufrufen. */
-  updateGameplayTransport(): void {
-    this.gameplayTransport.update();
-    this.pingController.updateFastPath();
+  /** Ping-Auswertung und Transportmessung. Am Anfang jedes Frames aufrufen. */
+  updateNetwork(): void {
+    this.pingController.update();
     this.diagnostics?.update();
-    if (NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS && Date.now() >= this.nextGameplayTransportMetricsAtMs) {
-      this.nextGameplayTransportMetricsAtMs = Date.now() + NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS;
-      const metrics = this.gameplayTransport.getMetrics();
-      if (metrics.commandFallbacks > 0 || metrics.eventFallbacks > 0 || metrics.commandTimeouts > 0) {
-        console.debug('[GameplayTransport]', this.getGameplayTransportMode(), metrics);
-      }
-    }
   }
 
-  /** Veröffentlicht die im aktuellen Frame gebündelten Host-Ereignisse. */
-  flushGameplayTransport(): void {
-    this.gameplayTransport.flush();
-  }
-
-  resetGameplayTransport(): void {
-    this.gameplayTransport.reset();
-  }
-
-  getGameplayTransportMetrics() {
-    return this.gameplayTransport.getMetrics();
-  }
-
-  private executeGameplayCommand(kind: GameplayCommandKind, payload: unknown, caller: PlayerState): Promise<unknown> | unknown {
-    const handler = this.hostRpcHandlers.get(kind);
-    if (!handler) return undefined;
-    return handler(payload, caller);
-  }
-
+  /**
+   * Kurzlebige Ereignisse an alle. Laeuft ueber den geordneten, zuverlaessigen Kanal:
+   * ein verlorener Killfeed-Eintrag oder eine ausgefallene Explosion waere sichtbar, und
+   * die Nachrichten sind klein genug, dass sie den Kanal nicht belasten.
+   */
   private broadcastGameplayEvent(type: string, payload: unknown): void {
-    if (this.getGameplayTransportMode() === 'fast') {
-      this.gameplayTransport.emitEvent(type, payload);
-      return;
-    }
     this.broadcastRpc(type, payload);
-  }
-
-  private dispatchGameplayEvent(type: string, payload: unknown): Promise<unknown> | unknown {
-    const handler = this.allRpcHandlers.get(type);
-    if (!handler) return undefined;
-    return handler(payload);
   }
 
   private sendHostRpc(type: string, payload: unknown): void {
@@ -2563,7 +2453,15 @@ export class NetworkBridge {
    * aus dieser Phase werden gesammelt und in `activate()` nachgezogen.
    */
   private ensureRpcDispatcherRegistered(type: string, scope: 'host' | 'all'): void {
-    if (this.registeredRpcTypes.has(type)) return;
+    const registeredScope = this.registeredRpcTypes.get(type);
+    if (registeredScope !== undefined) {
+      // Derselbe Name in beiden Richtungen waere ein stiller Fehler: das Substrat entscheidet
+      // anhand des Namens, ob eine Nachricht host-gerichtet oder ein Broadcast ist.
+      if (registeredScope !== scope) {
+        console.error(`[NetworkBridge] RPC-Name '${type}' ist bereits als '${registeredScope}' registriert.`);
+      }
+      return;
+    }
     this.registeredRpcTypes.set(type, scope);
     if (this.rpcDispatchersActive) this.bindRpcDispatcher(type, scope);
   }

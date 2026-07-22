@@ -1,4 +1,11 @@
-import type { GameplayTransportMode } from '../types';
+/**
+ * Anwendungs-Ping und Host-Zeitbasis.
+ *
+ * Läuft ausschließlich über den unzuverlässigen Kanal: Proben sind ersetzbar, eine verlorene
+ * ist ohne Bedeutung, und eine erneut zugestellte alte Probe würde die Messung sogar
+ * verfälschen. Gemessen wird bewusst der volle Anwendungspfad inklusive Frameverarbeitung –
+ * die reine Leitungs-RTT liefert daneben `TransportDiagnostics` aus den WebRTC-Statistiken.
+ */
 
 /** Client → Host. Nur der Host liest ihn, daher wird er nicht an andere Clients weitergereicht. */
 export const KEY_FAST_PING_PROBE = 'fpp';
@@ -12,15 +19,10 @@ interface PingPlayerState {
 
 interface NetworkPingControllerDeps {
   isHost: () => boolean;
-  getMode: () => GameplayTransportMode;
   getLocalPlayerId: () => string;
   getLocalPlayer: () => PingPlayerState;
   getPlayers: () => PingPlayerState[];
   setLocalPing: (pingMs: number) => void;
-  sendHostRpc: (type: string, payload: unknown) => void;
-  broadcastRpc: (type: string, payload: unknown) => void;
-  registerHostRpcHandler: (type: string, handler: (payload: unknown) => Promise<unknown> | unknown) => void;
-  registerAllRpcHandler: (type: string, handler: (payload: unknown) => Promise<unknown> | unknown) => void;
 }
 
 interface FastPingProbe {
@@ -51,7 +53,6 @@ export class NetworkPingController {
   private nextFastProbeSeq = 1;
   private lastFastAckSeq = 0;
   private handledHostProbeSeq = new Map<string, number>();
-  private activeMode: GameplayTransportMode | null = null;
 
   constructor(private deps: NetworkPingControllerDeps) {}
 
@@ -61,19 +62,14 @@ export class NetworkPingController {
 
   sendPingToHost(): void {
     if (this.deps.isHost()) return;
-    const mode = this.syncMode();
-    if (mode === 'fast') {
-      this.deps.getLocalPlayer().setState(KEY_FAST_PING_PROBE, {
-        seq: this.nextFastProbeSeq++,
-        ts: Date.now(),
-      } satisfies FastPingProbe, false);
-      return;
-    }
-    this.deps.sendHostRpc('png', { ts: Date.now(), id: this.deps.getLocalPlayerId() });
+    this.deps.getLocalPlayer().setState(KEY_FAST_PING_PROBE, {
+      seq: this.nextFastProbeSeq++,
+      ts: Date.now(),
+    } satisfies FastPingProbe, false);
   }
 
-  updateFastPath(): void {
-    if (this.syncMode() !== 'fast') return;
+  /** Host beantwortet offene Proben, Client wertet eingetroffene Antworten aus. */
+  update(): void {
     if (this.deps.isHost()) {
       const localId = this.deps.getLocalPlayerId();
       for (const player of this.deps.getPlayers()) {
@@ -96,30 +92,14 @@ export class NetworkPingController {
     this.handledHostProbeSeq.delete(playerId);
   }
 
-  setupPingMeasurement(): void {
-    this.deps.registerHostRpcHandler('png', async (data: unknown): Promise<unknown> => {
-      if (this.deps.isHost()) {
-        const { ts, id } = data as { ts: number; id: string };
-        this.deps.broadcastRpc('pong', { ts, id, hostTs: Date.now() });
-      }
-      return undefined;
-    });
-
-    this.deps.registerAllRpcHandler('pong', async (data: unknown): Promise<unknown> => {
-      if (this.deps.getMode() !== 'rpc') return undefined;
-      const { ts, id, hostTs } = data as { ts: number; id: string; hostTs?: number };
-      if (id !== this.deps.getLocalPlayerId()) return undefined;
-      this.applyMeasurement(ts, hostTs);
-      return undefined;
-    });
-  }
-
-  private applyMeasurement(sentAt: number, hostTs?: number): void {
+  private applyMeasurement(sentAt: number, hostTs: number): void {
     const now = Date.now();
     const rtt = Math.max(0, now - sentAt);
     this.deps.setLocalPing(rtt);
 
-    if (this.deps.isHost() || typeof hostTs !== 'number') return;
+    if (this.deps.isHost()) return;
+    // Nur die schnellsten Messungen zur Zeitsynchronisation heranziehen: bei ihnen ist die
+    // Annahme "Hinweg = Rueckweg = RTT/2" am wenigsten falsch.
     const estimatedOffset = hostTs - (sentAt + rtt / 2);
     if (!Number.isFinite(this.bestClockSyncRttMs)) {
       this.bestClockSyncRttMs = rtt;
@@ -130,16 +110,5 @@ export class NetworkPingController {
       this.bestClockSyncRttMs = Math.min(this.bestClockSyncRttMs, rtt);
       this.hostClockOffsetMs += (estimatedOffset - this.hostClockOffsetMs) * 0.35;
     }
-  }
-
-  private syncMode(): GameplayTransportMode {
-    const mode = this.deps.getMode();
-    if (mode === this.activeMode) return mode;
-    this.activeMode = mode;
-    this.bestClockSyncRttMs = Number.POSITIVE_INFINITY;
-    this.hostClockOffsetMs = 0;
-    this.lastFastAckSeq = 0;
-    if (!this.deps.isHost()) this.deps.setLocalPing(0);
-    return mode;
   }
 }

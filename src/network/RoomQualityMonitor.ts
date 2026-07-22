@@ -1,4 +1,4 @@
-import type { GameplayTransportMode, PlayerProfile, RoomQualitySnapshot, RoomQualityStatus } from '../types';
+import type { PlayerProfile, RoomQualitySnapshot, RoomQualityStatus } from '../types';
 import {
   ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS,
   ROOM_QUALITY_REQUIRED_SAMPLES,
@@ -9,7 +9,6 @@ import {
 interface RoomQualityBridge {
   isHost(): boolean;
   getLocalPlayerId(): string;
-  getGameplayTransportMode(): GameplayTransportMode;
   getPlayerPing(playerId: string): number;
   getRoomQuality(): RoomQualitySnapshot | null;
   publishRoomQuality(snapshot: RoomQualitySnapshot | null): void;
@@ -19,14 +18,12 @@ export class RoomQualityMonitor {
   private roomQualitySamples = new Map<string, number[]>();
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private nextRoomQualitySampleAt = 0;
-  private lastTransportMode: GameplayTransportMode | null = null;
 
   constructor(private readonly bridge: RoomQualityBridge) {}
 
   initialize(now: number): void {
     this.roomQualitySamples.clear();
     this.nextRoomQualitySampleAt = now;
-    this.lastTransportMode = this.bridge.getGameplayTransportMode();
     if (!this.bridge.isHost()) {
       this.roomQualitySnapshot = this.bridge.getRoomQuality();
       return;
@@ -41,12 +38,6 @@ export class RoomQualityMonitor {
     }
 
     const remotePlayers = players.filter(player => player.id !== this.bridge.getLocalPlayerId());
-    const transportMode = this.bridge.getGameplayTransportMode();
-    if (transportMode !== this.lastTransportMode) {
-      this.lastTransportMode = transportMode;
-      this.roomQualitySamples.clear();
-      this.nextRoomQualitySampleAt = now;
-    }
     const remoteIds = new Set(remotePlayers.map(player => player.id));
     for (const playerId of this.roomQualitySamples.keys()) {
       if (!remoteIds.has(playerId)) this.roomQualitySamples.delete(playerId);
@@ -121,7 +112,7 @@ export class RoomQualityMonitor {
     return {
       status,
       summary,
-      source: this.bridge.getGameplayTransportMode() === 'fast' ? 'fast-ping' : 'rpc-ping',
+      source: 'webrtc',
       thresholdMs: ROOM_QUALITY_MAX_ACCEPTABLE_PING_MS,
       worstPingMs,
       measuredPlayers,
