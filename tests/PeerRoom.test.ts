@@ -82,9 +82,14 @@ class FakeNetwork {
     host.links.push(hostSide);
     clientTransport.links.push(clientSide);
 
-    // Reihenfolge ist wichtig: der Host muss den Link kennen, bevor der Client sein 'hello' schickt.
-    host.handlers?.onLink(hostSide);
-    clientTransport.handlers?.onLink(clientSide);
+    // Bildet bewusst den ungünstigsten realen Ablauf nach: der Client ist zuerst fertig und
+    // schickt sein 'hello', während der Host seinen Link noch öffnet. Der Host muss den Link
+    // deshalb schon beim Anmelden kennen – sonst verpasst der neue Spieler alles, was der Host
+    // während des Handshakes veröffentlicht.
+    host.handlers?.onLinkRegistered(hostSide);
+    clientTransport.handlers?.onLinkRegistered(clientSide);
+    clientTransport.handlers?.onLinkReady(clientSide);
+    host.handlers?.onLinkReady(hostSide);
   }
 }
 
@@ -154,6 +159,23 @@ describe('PeerRoom handshake and roster', () => {
 
     expect(first.joined.sort()).toEqual(['p0', 'p1', 'p2']);
     expect(first.room.getPlayerIds().sort()).toEqual(['p0', 'p1', 'p2']);
+  });
+
+  it('delivers state the host writes while handling the join to the new client', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    // Genau das Muster von hostAssignColor/hostEnsureTeamAssignment: der Host schreibt einen
+    // Zustand des neuen Spielers, während er dessen Join verarbeitet.
+    host.room.onPlayerJoin((handle) => {
+      if (handle.id === host.room.getLocalPlayerId()) return;
+      host.room.setPlayerState(handle.id, 'clr', 0x33cc66, true);
+    });
+
+    const client = await addClientRoom(network);
+    const localId = client.room.getLocalPlayerId();
+
+    expect(host.room.getPlayerState(localId, 'clr')).toBe(0x33cc66);
+    expect(client.room.getPlayerState(localId, 'clr')).toBe(0x33cc66);
   });
 
   it('reuses the id of a player that left', async () => {

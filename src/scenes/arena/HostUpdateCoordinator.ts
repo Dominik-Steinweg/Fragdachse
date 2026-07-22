@@ -492,8 +492,6 @@ export class HostUpdateCoordinator {
       }
     }
 
-    const rocks = this.ctx.rockRegistry?.getNetSnapshot() ?? null;
-
     // Host-local visuals each frame
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       const hp    = this.ctx.combatSystem.getHP(player.id);
@@ -534,7 +532,6 @@ export class HostUpdateCoordinator {
     }
 
     const powerups    = this.ctx.powerUpSystem?.getWorldItemSnapshot() ?? [];
-    const powerupSnapshot = this.ctx.powerUpSystem?.getNetSnapshot()   ?? null;
     const pedestals   = this.ctx.powerUpSystem?.getPedestalSnapshot()  ?? [];
     const nukes       = this.ctx.powerUpSystem?.getNukeSnapshot()      ?? [];
     const airstrikes  = this.ctx.airstrikeSystem?.getSnapshot()        ?? [];
@@ -741,7 +738,10 @@ export class HostUpdateCoordinator {
       players,
       projectiles,
       enemies: this.ctx.enemyManager?.getNetSnapshot() ?? null,
-      rocks,
+      // Delta-Snapshot inline (einmal pro Net-Tick, nach dem Throttle): der Aufruf VERBRAUCHT
+      // die gesammelten Removals und HP-Änderungen. Weiter oben im Frame aufgerufen, würden
+      // sie auf den ~2 von 3 Frames ohne Net-Tick ersatzlos verfallen.
+      rocks: this.ctx.rockRegistry?.getNetSnapshot() ?? null,
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
       decoys,
       smokes,
@@ -753,9 +753,9 @@ export class HostUpdateCoordinator {
       guardianSpirits,
       slimeTrail,
       burningGround,
-      powerups: powerupSnapshot,
-      // Delta-Snapshot inline (einmal pro Net-Tick, nach dem Throttle); das volle Array oben
-      // (`pedestals`) dient nur der host-lokalen Darstellung.
+      // Ebenfalls verbrauchend – siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
+      // dient nur der host-lokalen Darstellung und dem eigenen Aufsammel-Check.
+      powerups: this.ctx.powerUpSystem?.getNetSnapshot() ?? null,
       pedestals: this.ctx.powerUpSystem?.getPedestalNetSnapshot() ?? null,
       nukes,
       airstrikes,

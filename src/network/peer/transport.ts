@@ -19,8 +19,17 @@ export interface PeerLinkLike {
 }
 
 export interface PeerTransportHandlers {
-  /** Ein Link ist vollständig offen (beide Kanäle) und benutzbar. */
-  onLink: (link: PeerLinkLike) => void;
+  /**
+   * Ein Link existiert und wird gleich geöffnet – so früh wie möglich gemeldet.
+   *
+   * Die Trennung von `onLinkReady` ist zwingend: Der Handshake der Gegenseite kann bereits
+   * verarbeitet werden, während dieser Link noch aufgeht. Wäre er dem Raum zu diesem Zeitpunkt
+   * unbekannt, gingen alle Zustände, die der Host während des Handshakes veröffentlicht
+   * (Farbe, Team, Lobby-Snapshot), an alle *anderen* Verbindungen – nur nicht an die neue.
+   */
+  onLinkRegistered: (link: PeerLinkLike) => void;
+  /** Beide Kanäle sind offen; erst jetzt darf gesendet werden. */
+  onLinkReady: (link: PeerLinkLike) => void;
   onMessage: (link: PeerLinkLike, message: PeerMessage, channel: PeerChannelKind) => void;
   onLinkClosed: (link: PeerLinkLike) => void;
   /** Nicht behebbarer Fehler; der Raum ist danach unbrauchbar. */

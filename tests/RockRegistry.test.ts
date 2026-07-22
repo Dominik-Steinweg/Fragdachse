@@ -26,4 +26,30 @@ describe('RockRegistry', () => {
     expect(recoveredFullSnapshot?.full).toBe(true);
     expect(recoveredFullSnapshot?.upserts).toContainEqual({ id: 0, hp: 0 });
   });
+
+  /**
+   * Der Aufruf ist verbrauchend: er leert die gesammelten Removals und HP-Änderungen und
+   * zählt den Full-Resync-Zyklus weiter. Wer ihn öfter als einmal pro Net-Tick aufruft,
+   * wirft genau die Deltas weg, die er nicht verschickt – die Gegenseite sieht dann bis zum
+   * nächsten Full-Snapshot einen veralteten Stand.
+   */
+  it('reports each change exactly once, so it must be called once per network tick', () => {
+    const registry = new RockRegistry(layoutWithOneRock());
+
+    registry.applyDamage(0, 10);
+    const first = registry.getNetSnapshot();
+    expect(first?.upserts).toContainEqual({ id: 0, hp: ROCK_HP_MAX - 10 });
+
+    // Zweiter Aufruf ohne neue Änderung: nichts mehr zu melden.
+    expect(registry.getNetSnapshot()).toBeNull();
+
+    registry.remove(0);
+    const removalSnapshot = registry.getNetSnapshot();
+    expect(removalSnapshot?.removals).toContain(0);
+
+    // Die Removal selbst wird genau einmal gemeldet; danach folgt nur noch der
+    // HP-0-Grabstein, bis auch der im Cache steht.
+    expect(registry.getNetSnapshot()?.removals ?? []).not.toContain(0);
+    expect(registry.getNetSnapshot()).toBeNull();
+  });
 });

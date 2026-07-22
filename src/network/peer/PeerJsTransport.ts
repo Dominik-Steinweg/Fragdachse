@@ -94,6 +94,11 @@ export class PeerJsTransport implements PeerRoomTransport {
 
   private async openLink(connection: DataConnection): Promise<void> {
     const link = new PeerLink(connection);
+    // Vor dem Oeffnen anmelden: link.open() verarbeitet bereits gepufferte Nachrichten der
+    // Gegenseite, und was der Raum dabei verschickt, muss diesen Link schon erreichen.
+    this.openLinks.add(link);
+    this.handlers?.onLinkRegistered(link);
+
     try {
       await link.open({
         onMessage: (message, channel) => this.handlers?.onMessage(link, message, channel),
@@ -103,15 +108,16 @@ export class PeerJsTransport implements PeerRoomTransport {
         },
       });
     } catch (error) {
+      if (this.openLinks.delete(link)) this.handlers?.onLinkClosed(link);
       link.close();
       throw error;
     }
+
     if (this.destroyed) {
       link.close();
       return;
     }
-    this.openLinks.add(link);
-    this.handlers?.onLink(link);
+    this.handlers?.onLinkReady(link);
   }
 }
 

@@ -623,7 +623,14 @@ export class LobbyOverlay {
   }
 
   private refreshPings(): void {
+    const hostId = this.bridge.getHostPlayerId();
     for (const [id, row] of this.playerRows) {
+      // Der Host misst sich nicht selbst. Statt einer nichtssagenden Null steht dort, wer den
+      // Raum haelt – das beantwortet fuer die Mitspieler gleich die wichtigere Frage.
+      if (id === hostId) {
+        row.ping.setText('Host').setColor(toCssColor(COLORS.GOLD_1));
+        continue;
+      }
       const ms = this.bridge.getPlayerPing(id);
       if (ms === null) {
         row.ping.setText('–').setColor(TEXT_COLOR);
@@ -712,6 +719,9 @@ export class LobbyOverlay {
     if (!readyDisabled) this.readyBtn.setInteractive({ useHandCursor: true });
     else this.readyBtn.disableInteractive();
 
+    // Raumcode sichtbar halten: seit der Host den Code nicht mehr in seiner Adresszeile traegt,
+    // waere er sonst nur ueber den Kopieren-Button erreichbar.
+    this.hostActionsLabel.setText(`— Host-Funktionen —   Raum ${this.bridge.getRoomCode()}`);
     this.hostActionsLabel.setVisible(canShowActions);
     this.copyBtn.setVisible(canShowActions).setAlpha(canShowActions && !copyDisabled ? 1 : 0.4);
     this.copyBtnLabel.setVisible(canShowActions);

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }         from './network/bridge';
 import { NetworkBridge }  from './network/NetworkBridge';
 import { PeerNetworkError } from './network/peer';
+import { restartWithNewRoom }  from './utils/roomQuality';
 import { ArenaScene }     from './scenes/ArenaScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 
@@ -29,21 +30,15 @@ function showBootError(message: string): void {
 
   panel.append(title, detail);
 
-  // Die URL traegt den Raumcode, auch beim Host. Nach einem Reload wuerde der Host sonst
-  // versuchen, seinem eigenen, gerade beendeten Raum beizutreten – deshalb hier immer ein
-  // ausdruecklicher Weg zurueck zu einem frischen Raum.
+  // Ausdruecklicher Weg zurueck zu einem frischen Raum – ein blosser Reload wuerde bei einem
+  // Client denselben, nicht mehr existierenden Raum erneut anwaehlen.
   const restart = document.createElement('button');
   restart.textContent = 'NEUEN RAUM ERÖFFNEN';
   restart.style.cssText = [
     'padding:10px 18px', 'font-family:monospace', 'font-size:15px', 'font-weight:bold',
     'cursor:pointer', 'color:#e8e2d4', 'background:#3c5a3c', 'border:1px solid #6f9a6f',
   ].join(';');
-  restart.onclick = () => {
-    const target = new URL(window.location.href);
-    target.hash = '';
-    window.location.replace(target.toString());
-    window.location.reload();
-  };
+  restart.onclick = () => restartWithNewRoom();
   panel.appendChild(restart);
 
   const hint = document.createElement('div');

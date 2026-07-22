@@ -39,7 +39,7 @@ import {
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
-import { copyCurrentRoomShareUrl, restartRoomForQualityRetry } from '../utils/roomQuality';
+import { copyRoomShareUrl, restartWithNewRoom } from '../utils/roomQuality';
 import {
   addStoredCoopDefenseXp,
   getStoredCoopDefenseProgress,
@@ -1156,12 +1156,13 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private async onCopyRoomLink(): Promise<void> {
-    const copied = await copyCurrentRoomShareUrl();
+    // Aus dem Raumcode gebaut, nicht aus der Adresszeile: die traegt beim Host keinen Code.
+    const copied = await copyRoomShareUrl(bridge.getRoomCode());
     if (copied) this.lobbyOverlay.showCopySuccess();
   }
 
   private onRetryRoom(): void {
-    restartRoomForQualityRetry();
+    restartWithNewRoom();
   }
 
   // ── Visual helpers ────────────────────────────────────────────────────────

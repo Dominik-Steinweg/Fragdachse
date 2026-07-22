@@ -22,7 +22,7 @@ import {
   type LinkDiagnostics,
   type PeerPlayerHandle,
 } from './peer';
-import { readRoomCodeFromUrl, writeRoomCodeToUrl } from '../utils/roomQuality';
+import { readRoomCodeFromUrl } from '../utils/roomQuality';
 import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
@@ -471,17 +471,20 @@ export class NetworkBridge {
   /**
    * Eröffnet einen Raum oder tritt dem Raum aus dem URL-Hash bei.
    *
-   * Ohne Code in der URL wird gehostet und der erzeugte Code in die URL geschrieben, sodass
-   * "Link kopieren" sofort funktioniert und ein Reload denselben Raum trifft. Scheitert der
-   * Aufbau, wirft die Methode einen `PeerNetworkError` mit verständlicher Meldung – es gibt
-   * bewusst keinen stillen Fallback auf einen anderen Transportweg.
+   * Die Adresszeile des Hosts bleibt bewusst ohne Raumcode: Er würde nach einem Reload sonst
+   * versuchen, seinem eigenen, gerade beendeten Raum beizutreten. Ein Reload eröffnet beim
+   * Host also einen neuen Raum, beim Client führt er zurück in denselben. Den Einladungslink
+   * baut `buildRoomShareUrl()` aus dem Raumcode.
+   *
+   * Scheitert der Aufbau, wirft die Methode einen `PeerNetworkError` mit verständlicher
+   * Meldung – es gibt bewusst keinen stillen Fallback auf einen anderen Transportweg.
    */
   static async connect(): Promise<void> {
     const roomCode = readRoomCodeFromUrl();
     const session = roomCode === null
       ? await createHostSession({ hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS })
       : await joinHostSession(roomCode, { hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS });
-    writeRoomCodeToUrl(session.roomCode);
+    console.info(`[Netz] Raum ${session.roomCode} – Rolle ${session.room.isHost() ? 'Host' : 'Client'}`);
   }
 
   // ── Callbacks registrieren ─────────────────────────────────────────────────
@@ -659,6 +662,12 @@ export class NetworkBridge {
 
   /** Menschenlesbarer Raumcode; identisch mit dem Hash-Teil der Einladungs-URL. */
   getRoomCode(): string { return getActiveSession()?.roomCode ?? '—'; }
+
+  /**
+   * Spieler-ID des Hosts. Anders als `getMatchHostId()` (erst ab Rundenstart gesetzt) steht
+   * dieser Wert ab dem Verbindungsaufbau bereit und gilt auch in der Lobby.
+   */
+  getHostPlayerId(): string { return requireRoom().getHostPlayerId(); }
 
   getConnectedPlayerIds(): string[] {
     return [...this.connectedPlayers.keys()];
@@ -2039,6 +2048,9 @@ export class NetworkBridge {
     if (!isHost()) return;
     this.knownPlayerColors = [...allColors];
     this.reconcileColorPool();
+    // Wer beitritt, bevor die Szene den Pool kennt, bekaeme sonst nie eine Farbe:
+    // hostAssignColor bricht bei leerem Pool ab und wird fuer ihn nie erneut aufgerufen.
+    for (const playerId of this.connectedPlayers.keys()) this.hostAssignColor(playerId);
   }
 
   /** Liest den aktuellen Farbpool (kann von allen Clients gelesen werden). */
@@ -2533,14 +2545,14 @@ export class NetworkBridge {
   }
 
   private syncConnectedPlayers(): void {
-    let changed = this.connectedPlayersCacheDirty;
-
     for (const state of this.playerStateMap.values()) {
-      const nextProfile = this.syncConnectedProfile(state);
-      if (this.connectedPlayers.get(state.id) !== nextProfile) changed = true;
+      this.syncConnectedProfile(state);
     }
 
-    if (!changed && this.cachedConnectedPlayers.length === this.connectedPlayers.size) return;
+    // Das Dirty-Flag erst NACH der Schleife lesen: syncConnectedProfile setzt es, wenn sich ein
+    // Profil geaendert hat. Frueher gelesen, haette der Cache jede Aenderung um einen Frame
+    // verzoegert – sichtbar z. B. als kurz weiss bleibender Name nach der Farbzuweisung.
+    if (!this.connectedPlayersCacheDirty && this.cachedConnectedPlayers.length === this.connectedPlayers.size) return;
 
     this.cachedConnectedPlayers = [...this.connectedPlayers.values()];
     this.connectedPlayersCacheDirty = false;

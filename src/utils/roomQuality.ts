@@ -3,6 +3,10 @@
  *
  * Der Code ist gleichzeitig die Broker-ID des Hosts (siehe `roomCodeToPeerId`). Wer die URL
  * mit Hash öffnet, tritt dem Raum bei; ohne Hash wird ein neuer Raum eröffnet.
+ *
+ * **Der Host trägt den Code bewusst NICHT in seine eigene URL ein.** Sonst würde er nach
+ * einem Reload versuchen, seinem eigenen – gerade beendeten – Raum beizutreten, und landete
+ * auf „Host nicht gefunden". Der Einladungslink wird stattdessen aus dem Raumcode gebaut.
  */
 import { isValidRoomCode } from '../network/peer/PeerSignaling';
 
@@ -16,33 +20,32 @@ export function readRoomCodeFromUrl(): string | null {
   return isValidRoomCode(code) ? code : null;
 }
 
-/**
- * Schreibt den Raumcode in die URL, ohne einen History-Eintrag zu erzeugen –
- * ein Reload soll denselben Raum treffen, der Zurück-Button aber nicht springen.
- */
-export function writeRoomCodeToUrl(roomCode: string): void {
+/** Einladungslink zum angegebenen Raum – unabhängig davon, was gerade in der Adresszeile steht. */
+export function buildRoomShareUrl(roomCode: string): string {
   const target = new URL(window.location.href);
   target.hash = `r=${roomCode}`;
-  window.history.replaceState(null, '', target.toString());
+  return target.toString();
 }
 
-export function getCurrentRoomShareUrl(): string {
-  return window.location.href;
-}
-
-export async function copyCurrentRoomShareUrl(): Promise<boolean> {
+export async function copyRoomShareUrl(roomCode: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(getCurrentRoomShareUrl());
+    await navigator.clipboard.writeText(buildRoomShareUrl(roomCode));
     return true;
   } catch {
     return false;
   }
 }
 
-/** Verlässt den aktuellen Raum und lädt die Seite ohne Code neu, damit ein neuer Raum entsteht. */
-export function restartRoomForQualityRetry(): void {
+/**
+ * Lädt die Seite ohne Raumcode neu, sodass ein frischer Raum entsteht.
+ *
+ * `location.assign`/`replace` auf eine URL, die sich nur im Fragment unterscheidet, ist eine
+ * **Same-Document-Navigation** – die Seite würde nicht neu laden und der Bildschirm bliebe
+ * stehen. Deshalb erst die Adresszeile über die History bereinigen und dann neu laden.
+ */
+export function restartWithNewRoom(): void {
   const target = new URL(window.location.href);
   target.hash = '';
-  window.location.assign(target.toString());
+  window.history.replaceState(null, '', target.toString());
   window.location.reload();
 }

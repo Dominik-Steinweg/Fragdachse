@@ -103,7 +103,8 @@ export class PeerRoom {
   constructor(private readonly transport: PeerRoomTransport, options: PeerRoomOptions = {}) {
     this.hostOnlyPlayerKeys = new Set(options.hostOnlyPlayerKeys ?? []);
     this.transport.setHandlers({
-      onLink: (link) => this.handleLinkOpened(link),
+      onLinkRegistered: (link) => this.handleLinkRegistered(link),
+      onLinkReady: (link) => this.handleLinkReady(link),
       onMessage: (link, message, channel) => this.handleMessage(link, message, channel),
       onLinkClosed: (link) => this.handleLinkClosed(link),
       onFatal: (error) => this.reportFatal(error),
@@ -462,11 +463,14 @@ export class PeerRoom {
 
   // ── Lebenszyklus ──────────────────────────────────────────────────────────
 
-  private handleLinkOpened(link: PeerLinkLike): void {
+  private handleLinkRegistered(link: PeerLinkLike): void {
     this.links.add(link);
     this.fastBuffers.set(link, new OutboundBuffer());
+    if (!this.transport.isHost) this.hostLink = link;
+  }
+
+  private handleLinkReady(link: PeerLinkLike): void {
     if (this.transport.isHost) return;
-    this.hostLink = link;
     link.send({ t: 'hello', v: PEER_PROTOCOL_VERSION }, 'rel');
   }
 
