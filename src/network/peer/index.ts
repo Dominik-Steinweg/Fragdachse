@@ -40,12 +40,19 @@ export { PeerJsTransport } from './PeerJsTransport';
 export { PeerLink } from './PeerLink';
 export {
   PeerNetworkError,
+  createPeerNetworkError,
   describePeerFailure,
   generateRoomCode,
   isValidRoomCode,
   roomCodeToPeerId,
   type PeerFailureKind,
 } from './PeerSignaling';
+export {
+  TransportDiagnostics,
+  type DiagnosableLink,
+  type IceCandidateType,
+  type LinkDiagnostics,
+} from './TransportDiagnostics';
 export { PEER_PROTOCOL_VERSION } from './protocol';
 export {
   clearActiveSession,

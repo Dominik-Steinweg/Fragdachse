@@ -22,6 +22,7 @@ import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
+import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
@@ -165,6 +166,8 @@ export class ArenaScene extends Phaser.Scene {
   private arenaPanelsHeld = false;
   private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private coopDefenseXpDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private netDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private netDebugOverlay: NetDebugOverlay | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
   private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
@@ -326,6 +329,12 @@ export class ArenaScene extends Phaser.Scene {
       () => this.localPlayerState?.burrowed ?? false,
     );
     this.enemyHoverNameLabel = new EnemyHoverNameLabel(this);
+    this.netDebugOverlay = new NetDebugOverlay(
+      () => bridge.getTransportDiagnostics(),
+      () => bridge.getRoomCode(),
+      () => (bridge.isHost() ? `Host ${bridge.getLocalPlayerId()}` : `Client ${bridge.getLocalPlayerId()}`),
+    );
+    this.events.once('shutdown', () => this.netDebugOverlay?.destroy());
     this.coopDefenseXpDebugOverlay = new CoopDefenseXpDebugOverlay(
       () => this.coopDefenseProgress.totalXp,
       () => this.coopDefenseProgress.earnedBossPoints,
@@ -694,7 +703,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.onReadyToggled(),
       () => { void this.onCopyRoomLink(); },
       () => this.onRetryRoom(),
-      () => bridge.toggleGameplayTransportMode(),
+      () => this.netDebugOverlay?.toggle(),
       () => this.openCoopDefenseUpgradesOverlay(),
     );
     this.lobbyOverlay.build();
@@ -788,6 +797,7 @@ export class ArenaScene extends Phaser.Scene {
       }
       this.updateRoomQuality(this.time.now, players);
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
+      this.lobbyOverlay.setTransportDiagnostics(bridge.getWorstTransportDiagnostics());
       this.lobbyOverlay.refreshPlayerList(players);
       this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
       this.processCoopDefenseRoundXp(enteredLobbyFromArena);
@@ -1309,7 +1319,24 @@ export class ArenaScene extends Phaser.Scene {
     };
 
     keyboard.on('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
+
+    if (this.netDebugHotkeyHandler) {
+      keyboard.off('keydown-P', this.netDebugHotkeyHandler);
+      this.netDebugHotkeyHandler = null;
+    }
+    // Transportdiagnose ist in jeder Phase erreichbar – gerade wenn etwas klemmt.
+    this.netDebugHotkeyHandler = (event: KeyboardEvent) => {
+      if (event.repeat || !this.ctx) return;
+      if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
+      this.netDebugOverlay?.toggle();
+    };
+    keyboard.on('keydown-P', this.netDebugHotkeyHandler);
+
     this.events.once('shutdown', () => {
+      if (this.netDebugHotkeyHandler) {
+        keyboard.off('keydown-P', this.netDebugHotkeyHandler);
+        this.netDebugHotkeyHandler = null;
+      }
       if (!this.optionsHotkeyHandler) return;
       keyboard.off('keydown-O', this.optionsHotkeyHandler);
       this.optionsHotkeyHandler = null;

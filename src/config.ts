@@ -738,6 +738,16 @@ export const PEER_FAST_CHANNEL_LABEL = 'fdx-fast';
 export const PEER_FAST_CHANNEL_TIMEOUT_MS = 3_000;
 /** Ab dieser Fuellung des Sendepuffers werden unzuverlaessige Nachrichten verworfen statt gestaut. */
 export const PEER_FAST_BUFFER_LIMIT_BYTES = 256 * 1024;
+/** Abstand zwischen zwei getStats()-Abfragen pro Verbindung. */
+export const PEER_DIAGNOSTICS_POLL_MS = 1_000;
+/** Groesse des gleitenden Fensters fuer Median, Maximum und Jitter. */
+export const PEER_DIAGNOSTICS_SAMPLE_WINDOW = 60;
+/**
+ * Schwelle, ab der ein wachsender Sendepuffer als Rueckstau gemeldet wird. Rein diagnostisch:
+ * ein echter Grenzwert wird erst festgelegt, wenn reale Messwerte mit den ueblichen
+ * Mitspielern vorliegen.
+ */
+export const PEER_DIAGNOSTICS_BACKPRESSURE_BYTES = 64 * 1024;
 
 /** Neuer Raumstandard; der Host kann den Modus in der Lobby umschalten. */
 export const GAMEPLAY_TRANSPORT_DEFAULT: GameplayTransportMode = 'fast';

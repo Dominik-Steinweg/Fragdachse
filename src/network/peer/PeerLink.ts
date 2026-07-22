@@ -42,6 +42,10 @@ export class PeerLink implements PeerLinkLike {
 
   playerId = '';
 
+  /** Zeitpunkte für die Messung der Verbindungsaufbauzeit. */
+  readonly createdAtMs = Date.now();
+  openedAtMs = 0;
+
   constructor(private readonly connection: DataConnection) {
     // Sofort lauschen, nicht erst nach open(): die Gegenseite kann ihr 'hello' schicken,
     // waehrend hier noch der schnelle Kanal aufgeht. Bis Handler gesetzt sind, wird gepuffert.
@@ -85,6 +89,7 @@ export class PeerLink implements PeerLinkLike {
   async open(handlers: PeerLinkHandlers): Promise<void> {
     await this.awaitReliableOpen();
     await this.openFastChannel();
+    this.openedAtMs = Date.now();
     this.handlers = handlers;
     const queued = this.inbox;
     this.inbox = [];

@@ -6,6 +6,7 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
+import type { LinkDiagnostics } from '../network/peer';
 import {
   GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor,
@@ -118,6 +119,8 @@ export class LobbyOverlay {
   private visible         = false;
   private btnLocked       = false;
   private roomQuality: RoomQualitySnapshot | null = null;
+  private transportDiagnostics: LinkDiagnostics | null = null;
+  private connectionEnded = false;
   private localIsHost = false;
 
   constructor(
@@ -126,12 +129,13 @@ export class LobbyOverlay {
     private onReadyToggled: () => void,
     private onCopyRoomLink: () => void,
     private onRetryRoom: () => void,
-    private onToggleGameplayTransport: () => void,
+    private onShowNetDiagnostics: () => void,
     private onOpenCoopDefenseUpgrades: () => void,
   ) {}
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
   build(): void {
+    this.connectionEnded = false;
     if (this.container) {
       this.container.destroy(true);
       this.container = null;
@@ -242,11 +246,11 @@ export class LobbyOverlay {
       ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_AUTO_COLOR, ACTION_BTN_W, ACTION_BTN_H), ACTION_BTN_W, ACTION_BTN_H, BTN_AUTO_COLOR),
     )
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => { if (!this.btnLocked) this.onToggleGameplayTransport(); })
+      .on('pointerdown', () => { if (!this.btnLocked) this.onShowNetDiagnostics(); })
       .setScrollFactor(0);
     objects.push(this.transportBtn);
 
-    this.transportBtnLabel = this.scene.add.text(TRANSPORT_BTN_X, ACTION_BTN_Y, 'NETZ: SCHNELL', {
+    this.transportBtnLabel = this.scene.add.text(TRANSPORT_BTN_X, ACTION_BTN_Y, 'NETZ-INFO', {
       fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.transportBtnLabel);
@@ -402,6 +406,15 @@ export class LobbyOverlay {
     this.updateRoomActionButtons();
   }
 
+  /**
+   * Zustand der direkten WebRTC-Verbindung. Hat Vorrang vor der Raumqualitaets-Zeile:
+   * ob die Verbindung ueberhaupt direkt zustande kam, ist wichtiger als ihr Ping.
+   */
+  setTransportDiagnostics(worst: LinkDiagnostics | null): void {
+    this.transportDiagnostics = worst;
+    this.updateStatus(this.playerRows.size);
+  }
+
   showCopySuccess(): void {
     this.copyBtnLabel.setText('KOPIERT');
     this.scene.time.delayedCall(1200, () => {
@@ -486,6 +499,7 @@ export class LobbyOverlay {
    * bis das Overlay neu gebaut wird (build()).
    */
   showHostDisconnectedMessage(message = 'Host hat das Spiel verlassen.'): void {
+    this.connectionEnded = true;
     this.statusText
       .setText(message)
       .setStyle({ color: toCssColor(COLORS.RED_2) });
@@ -618,6 +632,9 @@ export class LobbyOverlay {
   }
 
   private updateStatus(playerCount: number): void {
+    // Nach einem Verbindungsabbruch bleibt die Fehlermeldung stehen, bis build() das Overlay neu aufbaut.
+    if (this.connectionEnded) return;
+
     const minPlayers = getMinPlayersForMode(this.bridge.getGameMode());
     if (playerCount < minPlayers) {
       this.statusText.setText(this.getWaitingStatusText(playerCount)).setStyle({ color: ACCENT_COLOR });
@@ -627,9 +644,53 @@ export class LobbyOverlay {
       this.statusText.setText(`${readyCount} / ${playerCount} bereit`).setStyle({ color: ACCENT_COLOR });
     }
 
+    const transport = this.formatTransportText();
+    if (transport) {
+      this.roomQualityText.setText(transport.text).setStyle({ color: transport.color });
+      return;
+    }
+
     const roomSummary = this.formatRoomQualityText();
     const color = this.roomQuality ? this.getRoomQualityColor(this.roomQuality.status) : TEXT_COLOR;
     this.roomQualityText.setText(roomSummary).setStyle({ color });
+  }
+
+  /**
+   * Verbindungszustand in Klartext. `null` bedeutet: nichts zu melden, die Raumqualitaets-Zeile
+   * darf uebernehmen (typisch: allein in der Lobby, es gibt noch keine Verbindung zu messen).
+   */
+  private formatTransportText(): { text: string; color: string } | null {
+    const link = this.transportDiagnostics;
+    if (!link) return null;
+
+    if (link.usesRelay) {
+      return {
+        text: 'Verbindung laeuft ueber einen Relay-Server – abgelehnt (Konfigurationsfehler).',
+        color: toCssColor(COLORS.RED_2),
+      };
+    }
+
+    if (link.connectionState === 'failed' || link.iceConnectionState === 'failed') {
+      return {
+        text: 'Direkte Verbindung nicht moeglich. Netzwerk oder Firewall blockiert WebRTC.',
+        color: toCssColor(COLORS.RED_2),
+      };
+    }
+
+    if (link.localCandidateType === null || link.fastChannelState !== 'open') {
+      return { text: 'Verbindung wird aufgebaut…', color: TEXT_COLOR };
+    }
+
+    const path = `${link.localCandidateType}/${link.remoteCandidateType ?? '?'}`;
+    if (link.medianPingMs === null) {
+      return { text: `Direkte Verbindung (${path}) – Ping wird gemessen…`, color: toCssColor(COLORS.GREEN_2) };
+    }
+
+    const jitter = link.jitterMs === null ? '' : `, Jitter ${Math.round(link.jitterMs)}ms`;
+    return {
+      text: `Direkte Verbindung (${path}) – Ping ${Math.round(link.medianPingMs)}ms${jitter}`,
+      color: pingColor(link.medianPingMs),
+    };
   }
 
   private updateRoomActionButtons(): void {
@@ -650,7 +711,6 @@ export class LobbyOverlay {
     this.retryBtnLabel.setVisible(canShowActions);
     this.transportBtn.setVisible(canShowActions).setAlpha(canShowActions && !transportDisabled ? 1 : 0.4);
     this.transportBtnLabel.setVisible(canShowActions);
-    this.transportBtnLabel.setText(this.bridge.getGameplayTransportMode() === 'fast' ? 'NETZ: SCHNELL' : 'NETZ: RPC');
 
     if (canShowActions && !copyDisabled) this.copyBtn.setInteractive({ useHandCursor: true });
     else this.copyBtn.disableInteractive();

@@ -12,7 +12,16 @@
  * Der Transport liegt darunter in `src/network/peer/`: direkte WebRTC-Verbindungen
  * zwischen Client und Host, PeerJS ausschließlich als Signaling-Broker.
  */
-import { createHostSession, joinHostSession, requireRoom, type PeerPlayerHandle } from './peer';
+import {
+  createHostSession,
+  joinHostSession,
+  getActiveSession,
+  requireRoom,
+  TransportDiagnostics,
+  createPeerNetworkError,
+  type LinkDiagnostics,
+  type PeerPlayerHandle,
+} from './peer';
 import { readRoomCodeFromUrl, writeRoomCodeToUrl } from '../utils/roomQuality';
 import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GameplayTransportMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
@@ -430,6 +439,8 @@ export class NetworkBridge {
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void) | null = null;
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
   private nextGameplayTransportMetricsAtMs = 0;
+  private diagnostics: TransportDiagnostics | null = null;
+  private networkFailureCbs: Array<(message: string) => void> = [];
 
   constructor() {
     this.pingController = new NetworkPingController({
@@ -537,6 +548,7 @@ export class NetworkBridge {
 
     this.rpcDispatchersActive = true;
     for (const [type, scope] of this.registeredRpcTypes) this.bindRpcDispatcher(type, scope);
+    this.setupTransportDiagnostics();
 
     if (isHost() && getState(KEY_GAMEPLAY_TRANSPORT) === undefined) {
       setState(KEY_GAMEPLAY_TRANSPORT, GAMEPLAY_TRANSPORT_DEFAULT, true);
@@ -575,7 +587,40 @@ export class NetworkBridge {
 
   /** Meldet den Abriss der Verbindung (Host weg, Broker weg, kein direkter Weg moeglich). */
   onNetworkFailure(callback: (message: string) => void): void {
-    requireRoom().onFatal((error) => callback(error.message));
+    this.networkFailureCbs.push(callback);
+  }
+
+  /** Aktuelle Transportkennzahlen je Verbindung. Fuer Debug-Overlay und Lobby-Anzeige. */
+  getTransportDiagnostics(): LinkDiagnostics[] {
+    return this.diagnostics?.getSnapshots() ?? [];
+  }
+
+  /** Verbindung mit der hoechsten gemessenen Latenz, oder null ohne Mitspieler. */
+  getWorstTransportDiagnostics(): LinkDiagnostics | null {
+    return this.diagnostics?.getWorstSnapshot() ?? null;
+  }
+
+  private setupTransportDiagnostics(): void {
+    const session = getActiveSession();
+    if (!session) return;
+
+    this.diagnostics = new TransportDiagnostics({
+      getLinks: () => session.transport.getLinks(),
+      getAppPingMs: (playerId) => this.getPlayerPing(playerId),
+      // Ohne konfiguriertes TURN darf kein Relay-Kandidat gewaehlt werden. Passiert es doch,
+      // ist die ICE-Konfiguration kaputt: Verbindung trennen statt still ueber einen fremden
+      // Server weiterspielen.
+      onRelayDetected: (link) => {
+        link.close();
+        this.reportNetworkFailure(createPeerNetworkError('relay-rejected').message);
+      },
+    });
+
+    requireRoom().onFatal((error) => this.reportNetworkFailure(error.message));
+  }
+
+  private reportNetworkFailure(message: string): void {
+    for (const callback of this.networkFailureCbs) callback(message);
   }
 
   // ── Lobby-Sync-Konsistenz (Frühwarnung gegen Desync beim Bereit-Klick) ─────
@@ -643,6 +688,9 @@ export class NetworkBridge {
   // ── Identität ──────────────────────────────────────────────────────────────
   isHost(): boolean          { return isHost(); }
   getLocalPlayerId(): string { return myPlayer().id; }
+
+  /** Menschenlesbarer Raumcode; identisch mit dem Hash-Teil der Einladungs-URL. */
+  getRoomCode(): string { return getActiveSession()?.roomCode ?? '—'; }
 
   getConnectedPlayerIds(): string[] {
     return [...this.connectedPlayers.keys()];
@@ -2435,6 +2483,7 @@ export class NetworkBridge {
   updateGameplayTransport(): void {
     this.gameplayTransport.update();
     this.pingController.updateFastPath();
+    this.diagnostics?.update();
     if (NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS && Date.now() >= this.nextGameplayTransportMetricsAtMs) {
       this.nextGameplayTransportMetricsAtMs = Date.now() + NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS;
       const metrics = this.gameplayTransport.getMetrics();
