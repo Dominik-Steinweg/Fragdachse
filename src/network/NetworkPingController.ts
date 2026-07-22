@@ -1,6 +1,7 @@
 import type { GameplayTransportMode } from '../types';
 
-const KEY_FAST_PING_PROBE = 'fpp';
+/** Client → Host. Nur der Host liest ihn, daher wird er nicht an andere Clients weitergereicht. */
+export const KEY_FAST_PING_PROBE = 'fpp';
 const KEY_FAST_PING_ACK = 'fpa';
 
 interface PingPlayerState {

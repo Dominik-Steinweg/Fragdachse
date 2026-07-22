@@ -6,30 +6,25 @@
  */
 import { PeerJsTransport } from './PeerJsTransport';
 import { PeerRoom, type PeerRoomOptions } from './PeerRoom';
-
-export interface PeerSession {
-  room: PeerRoom;
-  transport: PeerJsTransport;
-  roomCode: string;
-}
+import { setActiveSession, type PeerSession } from './session';
 
 /** Eröffnet einen neuen Raum und belegt einen freien Raumcode auf dem Broker. */
 export async function createHostSession(options: PeerRoomOptions = {}): Promise<PeerSession> {
   const { transport, roomCode } = await PeerJsTransport.createHost();
-  const room = new PeerRoom(transport, options);
-  try {
-    await room.start();
-  } catch (error) {
-    room.destroy();
-    throw error;
-  }
-  return { room, transport, roomCode };
+  const session = await startSession(new PeerRoom(transport, options), transport, roomCode);
+  setActiveSession(session);
+  return session;
 }
 
 /** Betritt einen bestehenden Raum. Löst erst auf, wenn der Host-Zustand vollständig da ist. */
 export async function joinHostSession(roomCode: string, options: PeerRoomOptions = {}): Promise<PeerSession> {
   const transport = await PeerJsTransport.createClient(roomCode);
-  const room = new PeerRoom(transport, options);
+  const session = await startSession(new PeerRoom(transport, options), transport, roomCode);
+  setActiveSession(session);
+  return session;
+}
+
+async function startSession(room: PeerRoom, transport: PeerJsTransport, roomCode: string): Promise<PeerSession> {
   try {
     await room.start();
   } catch (error) {
@@ -52,3 +47,10 @@ export {
   type PeerFailureKind,
 } from './PeerSignaling';
 export { PEER_PROTOCOL_VERSION } from './protocol';
+export {
+  clearActiveSession,
+  getActiveSession,
+  hasActiveSession,
+  requireRoom,
+  type PeerSession,
+} from './session';

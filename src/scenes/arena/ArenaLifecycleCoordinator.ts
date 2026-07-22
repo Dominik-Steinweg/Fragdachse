@@ -303,7 +303,7 @@ export class ArenaLifecycleCoordinator {
     bridge.setGamePhase('LOBBY');
   }
 
-  terminateMatch(): void {
+  terminateMatch(reason?: string): void {
     if (this.matchTerminated) return;
     this.matchTerminated = true;
     this.arenaBuilt = false;
@@ -338,7 +338,7 @@ export class ArenaLifecycleCoordinator {
 
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
-    this.lobbyOverlay.showHostDisconnectedMessage();
+    this.lobbyOverlay.showHostDisconnectedMessage(reason);
   }
 
   // ── Arena build / teardown ────────────────────────────────────────────────

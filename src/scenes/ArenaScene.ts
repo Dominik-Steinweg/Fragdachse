@@ -719,6 +719,9 @@ export class ArenaScene extends Phaser.Scene {
 
     bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
+    // Verbindungsabbruch: es gibt keinen Hostwechsel und keinen Ersatztransport, die Partie
+    // endet mit der konkreten Ursache statt still weiterzulaufen.
+    bridge.onNetworkFailure(message => this.lifecycle.terminateMatch(message));
 
     this.lifecycle.initialize();
     this.registerArenaPanelHotkeys();
@@ -1004,6 +1007,10 @@ export class ArenaScene extends Phaser.Scene {
           : null,
       });
     }
+
+    // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
+    // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
+    bridge.flushNetwork();
   }
 
   // ── Network events ────────────────────────────────────────────────────────

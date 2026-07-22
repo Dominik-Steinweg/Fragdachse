@@ -481,15 +481,16 @@ export class LobbyOverlay {
   }
 
   /**
-   * Zeigt eine permanente Fehlermeldung wenn der Host das Spiel verlassen hat.
-   * Deaktiviert den BEREIT-Button, bis das Overlay neu gebaut wird (build()).
+   * Zeigt eine permanente Fehlermeldung, wenn die Partie nicht mehr weiterlaufen kann –
+   * Host weg, Verbindung verloren, kein direkter Weg. Deaktiviert den BEREIT-Button,
+   * bis das Overlay neu gebaut wird (build()).
    */
-  showHostDisconnectedMessage(): void {
+  showHostDisconnectedMessage(message = 'Host hat das Spiel verlassen.'): void {
     this.statusText
-      .setText('Host hat das Spiel verlassen.')
+      .setText(message)
       .setStyle({ color: toCssColor(COLORS.RED_2) });
     this.roomQualityText
-      .setText('Ping-Check nicht verfuegbar.')
+      .setText('Verbindung beendet – Seite neu laden für einen neuen Raum.')
       .setStyle({ color: toCssColor(COLORS.RED_2) });
     this.btnLocked = true;
     this.readyBtn.disableInteractive().setAlpha(0.4);

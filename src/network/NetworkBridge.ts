@@ -1,18 +1,21 @@
 /**
- * NetworkBridge – einzige Datei im Projekt, die 'playroomkit' importiert.
+ * NetworkBridge – die Grenze zwischen Spiellogik und Netzwerk.
  * Kapselt alle Netzwerkoperationen hinter einer spiellogik-agnostischen API.
  *
  * Nutzung:
- *   1. bridge.onPlayerJoin() / onPlayerQuit() beliebig oft registrieren
- *   2. bridge.activate() einmalig in main.ts aufrufen
- *   3. In der ArenaScene: bridge.clearPlayerCallbacks() aufrufen,
+ *   1. NetworkBridge.connect() einmalig im Boot aufrufen (erzeugt/betritt den Raum)
+ *   2. bridge.onPlayerJoin() / onPlayerQuit() beliebig oft registrieren
+ *   3. bridge.activate() einmalig in main.ts aufrufen
+ *   4. In der ArenaScene: bridge.clearPlayerCallbacks() aufrufen,
  *      dann neue join/quit-Callbacks registrieren
+ *
+ * Der Transport liegt darunter in `src/network/peer/`: direkte WebRTC-Verbindungen
+ * zwischen Client und Host, PeerJS ausschließlich als Signaling-Broker.
  */
-import { insertCoin, onPlayerJoin, isHost, myPlayer, setState, getState, RPC } from 'playroomkit';
-import type { PlayerState } from 'playroomkit';
+import { createHostSession, joinHostSession, requireRoom, type PeerPlayerHandle } from './peer';
+import { readRoomCodeFromUrl, writeRoomCodeToUrl } from '../utils/roomQuality';
 import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GameplayTransportMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
-  MAX_PLAYERS,
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
   NET_TICK_RATE_HZ,
@@ -23,8 +26,10 @@ import {
   NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS,
   NET_DEBUG_GAMEPLAY_TRANSPORT_METRICS_WINDOW_MS,
 } from '../config';
-import { NetworkPingController } from './NetworkPingController';
+import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import {
+  GAMEPLAY_COMMAND_STATE_KEY,
+  GAMEPLAY_EVENT_ACK_STATE_KEY,
   GameplayTransportChannel,
   type GameplayCommandAck,
   type GameplayCommandKind,
@@ -39,9 +44,34 @@ import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 
-const HOST_RPC_CHANNEL = 'rpc_host';
-const ALL_RPC_CHANNEL  = 'rpc_all';
-const OUTBOUND_RPC_BACKOFF_MS = 5000;
+/**
+ * Zustandsobjekt eines Spielers. Absichtlich schmal: nur `id`, `getState` und `setState`
+ * werden im Projekt gebraucht, deshalb ist der Handle des Substrats direkt der Typ.
+ */
+type PlayerState = PeerPlayerHandle;
+
+// ── Substrat-Zugriff ─────────────────────────────────────────────────────────
+// Diese Helfer entsprechen 1:1 den globalen Zustandsfunktionen der frueheren Bibliothek und
+// halten den Rest der Datei frei von Transportdetails.
+
+function isHost(): boolean {
+  return requireRoom().isHost();
+}
+
+function myPlayer(): PlayerState {
+  const room = requireRoom();
+  const handle = room.getPlayerHandle(room.getLocalPlayerId());
+  if (!handle) throw new Error('Lokaler Spieler ist im Raum nicht registriert.');
+  return handle;
+}
+
+function setState(key: string, value: unknown, reliable = false): void {
+  requireRoom().setGlobal(key, value, reliable);
+}
+
+function getState(key: string): unknown {
+  return requireRoom().getGlobal(key);
+}
 
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
 const KEY_INPUT        = 'inp';
@@ -89,6 +119,19 @@ const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualita
 const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
 
 const KEY_GAMEPLAY_TRANSPORT = 'gtm'; // global reliable: 'fast' | 'rpc'
+
+/**
+ * Per-Spieler-Keys, die ausschliesslich der Host liest. Der Host reicht sie nicht an die
+ * uebrigen Clients weiter, was bei voller Lobby den Grossteil des Relay-Verkehrs spart.
+ *
+ * KEY_INPUT steht bewusst NICHT hier: PlacementPreviewRenderer liest `placementPreview` aus
+ * dem Input fremder Spieler und laeuft auch auf Clients.
+ */
+const HOST_ONLY_PLAYER_KEYS: readonly string[] = [
+  GAMEPLAY_COMMAND_STATE_KEY,
+  GAMEPLAY_EVENT_ACK_STATE_KEY,
+  KEY_FAST_PING_PROBE,
+];
 
 interface EnemySyncMetricsWindow {
   startedAtMs: number;
@@ -318,13 +361,16 @@ type TrainDestroyedHandler = () => void;
 type TranslocatorFlashHandler = (x: number, y: number, color: number, type: 'start' | 'end') => void;
 type CaptureTheBeerFxHandler = (event: CaptureTheBeerFxEvent) => void;
 
-interface RpcEnvelope {
-  type: string;
-  payload: unknown;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
+}
+
+/** Farbe eines Spielers, solange der Host ihm noch keine aus dem Pool zugewiesen hat. */
+const DEFAULT_PLAYER_COLOR = 0xffffff;
+
+/** Platzhaltername, bis der Spieler seinen eigenen Namen setzt. */
+function defaultPlayerName(playerId: string): string {
+  return `Dachs ${playerId.toUpperCase()}`;
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -343,8 +389,8 @@ export class NetworkBridge {
   private quitCbs: Array<(id: string) => void>             = [];
 
   private activated = false;
-  private hostDispatcherRegistered = false;
-  private allDispatcherRegistered = false;
+  private rpcDispatchersActive = false;
+  private readonly registeredRpcTypes = new Map<string, 'host' | 'all'>();
   private knownPlayerColors: readonly number[] = [];
   private pingController: NetworkPingController;
   private gameplayTransport: GameplayTransportChannel;
@@ -383,8 +429,6 @@ export class NetworkBridge {
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
   private bfgLaserHandler: ((lines: { sx: number; sy: number; ex: number; ey: number }[], color: number, visualPreset?: HitscanVisualPreset) => void) | null = null;
   private enemySyncMetricsWindow: EnemySyncMetricsWindow | null = null;
-  private outboundRpcBlockedUntilMs = 0;
-  private lastOutboundRpcWarningAtMs = 0;
   private nextGameplayTransportMetricsAtMs = 0;
 
   constructor() {
@@ -435,12 +479,22 @@ export class NetworkBridge {
     });
   }
 
-  // ── Lobby-Initialisierung (einmalig vor activate()) ────────────────────────
-  static async initializeLobby(): Promise<void> {
-    // skipLobby:true überspringt PlayroomKits eigenes Lobby-UI für alle Spieler –
-    // auch für Late-Joiner, die sonst die Namensänderung verpassen würden.
-    // Die eigene LobbyOverlay in der ArenaScene übernimmt alle Vorspiel-UI.
-    await insertCoin({ maxPlayersPerRoom: MAX_PLAYERS, skipLobby: true });
+  // ── Verbindungsaufbau (einmalig vor activate()) ────────────────────────────
+
+  /**
+   * Eröffnet einen Raum oder tritt dem Raum aus dem URL-Hash bei.
+   *
+   * Ohne Code in der URL wird gehostet und der erzeugte Code in die URL geschrieben, sodass
+   * "Link kopieren" sofort funktioniert und ein Reload denselben Raum trifft. Scheitert der
+   * Aufbau, wirft die Methode einen `PeerNetworkError` mit verständlicher Meldung – es gibt
+   * bewusst keinen stillen Fallback auf einen anderen Transportweg.
+   */
+  static async connect(): Promise<void> {
+    const roomCode = readRoomCodeFromUrl();
+    const session = roomCode === null
+      ? await createHostSession({ hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS })
+      : await joinHostSession(roomCode, { hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS });
+    writeRoomCodeToUrl(session.roomCode);
   }
 
   // ── Callbacks registrieren ─────────────────────────────────────────────────
@@ -475,19 +529,20 @@ export class NetworkBridge {
   // ── Einmalige Aktivierung (in main.ts aufrufen) ────────────────────────────
 
   /**
-   * Startet den Playroom-Listener.
-   * Darf nur EINMAL aufgerufen werden (nach insertCoin).
+   * Startet den Roster-Listener. Darf nur EINMAL aufgerufen werden (nach `connect()`).
    */
   activate(): void {
     if (this.activated) return;
     this.activated = true;
-    this.ensureRpcDispatchersRegistered();
+
+    this.rpcDispatchersActive = true;
+    for (const [type, scope] of this.registeredRpcTypes) this.bindRpcDispatcher(type, scope);
 
     if (isHost() && getState(KEY_GAMEPLAY_TRANSPORT) === undefined) {
       setState(KEY_GAMEPLAY_TRANSPORT, GAMEPLAY_TRANSPORT_DEFAULT, true);
     }
 
-    onPlayerJoin((state: PlayerState) => {
+    requireRoom().onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
       this.connectedPlayersCacheDirty = true;
 
@@ -508,6 +563,19 @@ export class NetworkBridge {
       this.joinCbs.forEach(cb => cb(profile));
       this.hostPublishLobbySync();
     });
+  }
+
+  /**
+   * Verschickt die im Frame gesammelten ersetzbaren Zustaende. Am Ende jedes Frames aufrufen,
+   * damit Snapshots und Input noch im selben Frame rausgehen.
+   */
+  flushNetwork(): void {
+    requireRoom().update();
+  }
+
+  /** Meldet den Abriss der Verbindung (Host weg, Broker weg, kein direkter Weg moeglich). */
+  onNetworkFailure(callback: (message: string) => void): void {
+    requireRoom().onFatal((error) => callback(error.message));
   }
 
   // ── Lobby-Sync-Konsistenz (Frühwarnung gegen Desync beim Bereit-Klick) ─────
@@ -2410,57 +2478,15 @@ export class NetworkBridge {
   }
 
   private sendHostRpc(type: string, payload: unknown): void {
-    if (this.isOutboundRpcBlocked()) return;
-    this.ensureRpcDispatchersRegistered();
-    RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST).catch((error: unknown) => {
-      this.handleOutboundRpcError(type, error);
-    });
+    requireRoom().sendHost(type, payload);
   }
 
   private callHostRpc(type: string, payload: unknown, timeoutMs: number): Promise<unknown> {
-    if (this.isOutboundRpcBlocked()) {
-      return Promise.reject(new Error(`RPC temporarily unavailable: ${type}`));
-    }
-    this.ensureRpcDispatchersRegistered();
-    const rpcPromise = RPC.call(HOST_RPC_CHANNEL, { type, payload }, RPC.Mode.HOST).catch((error: unknown) => {
-      this.handleOutboundRpcError(type, error);
-      throw error;
-    });
-    return Promise.race([
-      rpcPromise,
-      new Promise((_, reject) => window.setTimeout(() => reject(new Error(`RPC timeout: ${type}`)), timeoutMs)),
-    ]);
+    return requireRoom().callHost(type, payload, timeoutMs);
   }
 
   private broadcastRpc(type: string, payload: unknown): void {
-    if (this.isOutboundRpcBlocked()) return;
-    this.ensureRpcDispatchersRegistered();
-    RPC.call(ALL_RPC_CHANNEL, { type, payload }, RPC.Mode.ALL).catch((error: unknown) => {
-      this.handleOutboundRpcError(type, error);
-    });
-  }
-
-  private isOutboundRpcBlocked(): boolean {
-    return Date.now() < this.outboundRpcBlockedUntilMs;
-  }
-
-  private handleOutboundRpcError(type: string, error: unknown): void {
-    if (this.isExpectedRpcTransportClose(error)) {
-      const now = Date.now();
-      this.outboundRpcBlockedUntilMs = Math.max(this.outboundRpcBlockedUntilMs, now + OUTBOUND_RPC_BACKOFF_MS);
-      if (now - this.lastOutboundRpcWarningAtMs >= OUTBOUND_RPC_BACKOFF_MS) {
-        this.lastOutboundRpcWarningAtMs = now;
-        console.warn(`[NetworkBridge] Suppressing outbound RPCs for ${OUTBOUND_RPC_BACKOFF_MS}ms after transport closed while sending '${type}'.`);
-      }
-      return;
-    }
-    console.error(error);
-  }
-
-  private isExpectedRpcTransportClose(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error ?? '');
-    return /websocket is already in closing or closed state/i.test(message)
-      || /socket.*closing|socket.*closed/i.test(message);
+    requireRoom().broadcast(type, payload);
   }
 
   private registerHostRpcHandler(
@@ -2468,6 +2494,7 @@ export class NetworkBridge {
     handler: (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown,
   ): void {
     this.hostRpcHandlers.set(type, handler);
+    this.ensureRpcDispatcherRegistered(type, 'host');
   }
 
   private registerAllRpcHandler(
@@ -2475,37 +2502,41 @@ export class NetworkBridge {
     handler: (payload: unknown) => Promise<unknown> | unknown,
   ): void {
     this.allRpcHandlers.set(type, handler);
+    this.ensureRpcDispatcherRegistered(type, 'all');
   }
 
-  private ensureRpcDispatchersRegistered(): void {
-    if (!this.hostDispatcherRegistered) {
-      this.hostDispatcherRegistered = true;
-      RPC.register(HOST_RPC_CHANNEL, async (data: unknown, caller: PlayerState): Promise<unknown> => {
-        const envelope = this.parseRpcEnvelope(data);
-        if (!envelope) return undefined;
-        const handler = this.hostRpcHandlers.get(envelope.type);
-        if (!handler) return undefined;
-        return await handler(envelope.payload, caller);
-      });
-    }
-
-    if (!this.allDispatcherRegistered) {
-      this.allDispatcherRegistered = true;
-      RPC.register(ALL_RPC_CHANNEL, async (data: unknown): Promise<unknown> => {
-        const envelope = this.parseRpcEnvelope(data);
-        if (!envelope) return undefined;
-        const handler = this.allRpcHandlers.get(envelope.type);
-        if (!handler) return undefined;
-        return await handler(envelope.payload);
-      });
-    }
+  /**
+   * Meldet den Nachrichtennamen beim Substrat an. Die Handler selbst bleiben in den Maps
+   * dieser Klasse, damit `executeGameplayCommand`/`dispatchGameplayEvent` denselben Einstieg
+   * behalten und Handler jederzeit ersetzt werden koennen.
+   *
+   * Der Konstruktor laeuft beim Modulladen, also vor dem Verbindungsaufbau. Registrierungen
+   * aus dieser Phase werden gesammelt und in `activate()` nachgezogen.
+   */
+  private ensureRpcDispatcherRegistered(type: string, scope: 'host' | 'all'): void {
+    if (this.registeredRpcTypes.has(type)) return;
+    this.registeredRpcTypes.set(type, scope);
+    if (this.rpcDispatchersActive) this.bindRpcDispatcher(type, scope);
   }
 
-  private parseRpcEnvelope(data: unknown): RpcEnvelope | null {
-    if (!data || typeof data !== 'object') return null;
-    const envelope = data as Partial<RpcEnvelope>;
-    if (typeof envelope.type !== 'string') return null;
-    return { type: envelope.type, payload: envelope.payload };
+  private bindRpcDispatcher(type: string, scope: 'host' | 'all'): void {
+    const room = requireRoom();
+    if (scope === 'host') {
+      room.registerHostHandler(type, (payload, senderId) => {
+        const handler = this.hostRpcHandlers.get(type);
+        if (!handler) return undefined;
+        const caller = room.getPlayerHandle(senderId);
+        if (!caller) return undefined;
+        return handler(payload, caller);
+      });
+      return;
+    }
+
+    room.registerAllHandler(type, (payload) => {
+      const handler = this.allRpcHandlers.get(type);
+      if (!handler) return undefined;
+      return handler(payload);
+    });
   }
 
   private computeAvailableColors(): number[] {
@@ -2563,26 +2594,20 @@ export class NetworkBridge {
   }
 
   // ── Interner Helfer: PlayerState → PlayerProfile ──────────────────────────
-  private extractProfile(state: PlayerState): PlayerProfile {
-    const profile    = state.getProfile();
-    const stateName  = state.getState(KEY_NAME)         as string | undefined;
-    const effectiveColor = this.getEffectivePlayerColor(state.id);
-    const teamId = this.getPlayerTeam(state.id);
 
-    let colorHex: number;
-    if (effectiveColor !== undefined) {
-      colorHex = effectiveColor;
-    } else {
-      const rawHex = (profile.color as unknown as Record<string, unknown> | undefined)?.hex ?? '#ffffff';
-      const parsed = parseInt(String(rawHex).replace('#', ''), 16);
-      colorHex = isNaN(parsed) ? 0xffffff : parsed;
-    }
+  /**
+   * Der Transport liefert kein Profil mehr. Bis ein Spieler seinen Namen setzt (KEY_NAME,
+   * beim Start aus den lokalen Einstellungen), traegt er einen aus seiner Spieler-ID
+   * abgeleiteten Platzhalter – stabil und ohne Kollisionen innerhalb eines Raums.
+   */
+  private extractProfile(state: PlayerState): PlayerProfile {
+    const stateName  = state.getState(KEY_NAME) as string | undefined;
 
     return {
       id:       state.id,
-      name:     sanitizePlayerName(stateName || profile.name || '') || 'Player',
-      colorHex,
-      teamId,
+      name:     sanitizePlayerName(stateName || '') || defaultPlayerName(state.id),
+      colorHex: this.getEffectivePlayerColor(state.id) ?? DEFAULT_PLAYER_COLOR,
+      teamId:   this.getPlayerTeam(state.id),
     };
   }
 

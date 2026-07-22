@@ -11,8 +11,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          // Packt Phaser und Playroom in eine eigene Datei namens "vendor"
-          vendor: ['phaser', 'playroomkit'] 
+          // Packt Phaser und PeerJS in eine eigene Datei namens "vendor"
+          vendor: ['phaser', 'peerjs']
         }
       }
     }
