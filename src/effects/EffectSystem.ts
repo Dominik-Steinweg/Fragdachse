@@ -1153,24 +1153,28 @@ export class EffectSystem implements EnemyBurrowVisualSink {
   ): void {
     if (!this.lighting) return;
 
+    // Heiße Kernfarben statt satter Flammentöne: unter dem MULTIPLY-Composite der Nacht
+    // begrenzt der schwächste Kanal, wie hell der Boden werden kann. Ein Feuerorange
+    // bliebe selbst bei voller Intensität ein rötlicher Schleier. Der Weißanteil ist
+    // aber nur so hoch wie nötig – darüber verliert die Detonation ihren warmen Ton.
     const lightColor = visualStyle === 'lightning'
-      ? 0x9fe8ff
+      ? 0xcdf1ff
       : visualStyle === 'energy'
-        ? 0xbfeaf7
+        ? 0xd4f2fc
         : visualStyle === 'holy'
-          ? 0xffeaa8
+          ? 0xffefbe
           : visualStyle === 'nuke'
-            ? 0xffd9a0
-            : mixColors(color ?? 0xff5a1e, 0xffffff, 0.45);
-
-    const intensity = visualStyle === 'nuke' ? 1 : visualStyle === 'holy' ? 0.95 : 0.85;
+            ? 0xffe4b8
+            : mixColors(color ?? 0xff5a1e, 0xffffff, 0.6);
 
     this.lighting.pulse('explosion', x, y, {
+      // Größe skaliert durchgehend mit der Detonation – auch bei sehr großen Radien,
+      // dort verzichtet das Licht stattdessen auf seinen Schattenwurf.
       radiusPx: radius * EXPLOSION_LIGHT_RADIUS_FACTOR,
       color: lightColor,
-      intensity,
-      // Größere Detonationen glühen länger nach.
-      durationMs: Phaser.Math.Clamp(180 + radius * 1.1, 180, 700),
+      intensity: 1,
+      // Größere Detonationen glühen deutlich länger nach.
+      durationMs: Phaser.Math.Clamp(300 + radius * 1.6, 320, 1100),
       occludes: radius >= EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
     });
   }

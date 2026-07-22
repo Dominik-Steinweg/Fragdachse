@@ -140,18 +140,27 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0,
     flickerHz: 0,
   },
+  /**
+   * Explosionen sind das hellste Ereignis der Szene und leuchten deutlich über ihren
+   * Wirkradius hinaus. Der flache Abklingexponent ist dabei fast wichtiger als die
+   * Intensität: mit einer steilen Kurve ist der Blitz nach zwei, drei Frames weg und
+   * liest sich als kurzes Zucken statt als Detonation.
+   */
   explosion: {
     enabled: true,
     shape: 'radial',
     radiusPx: 240,
-    color: 0xffb066,
-    intensity: 1.15,
-    durationMs: 320,
-    decayExponent: 2.2,
+    color: 0xffc49f,
+    intensity: 1,
+    durationMs: 520,
+    decayExponent: 1.35,
     occludes: true,
     priority: 10,
     flickerAmount: 0,
     flickerHz: 0,
+    // Am Tag wird additiv komponiert: die volle Intensität brennt das Zentrum auf
+    // hellem Boden zu einer weißen Fläche aus. Nachts bleibt sie unangetastet.
+    day: { intensityMult: 0.7 },
   },
   flashlight: {
     enabled: true,
@@ -337,8 +346,12 @@ export type LightPresetKey = keyof typeof LIGHT_PRESETS;
 
 /** Unterhalb dieses Radius bekommt eine Explosion Licht, aber keine Verdeckung. */
 export const EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS = 90;
-/** Explosionslicht reicht weiter als der Schadensradius. */
-export const EXPLOSION_LIGHT_RADIUS_FACTOR = 1.6;
+/**
+ * Explosionslicht reicht deutlich weiter als der Schadensradius. Der Faktor sorgt auch
+ * dafür, dass der Wirkradius selbst noch im helleren Teil der Abstandskurve liegt –
+ * bei Faktor 1 säße er genau dort, wo die Kurve schon auf null gelaufen ist.
+ */
+export const EXPLOSION_LIGHT_RADIUS_FACTOR = 2.4;
 
 /** Gröbere Cluster-Ebene über der 32-px-Blockkarte des brennenden Bodens. */
 export const GROUND_FIRE_LIGHT_BUCKET_SIZE = 96;

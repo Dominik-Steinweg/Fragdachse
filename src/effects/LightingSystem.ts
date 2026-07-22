@@ -400,9 +400,13 @@ export class LightingSystem {
     light.touchedAt = now;
     light.releasedAt = 0;
 
-    // Verdeckende Lichter müssen in die Scratch-Textur passen.
+    // Verdeckende Lichter müssen in die Scratch-Textur passen. Statt den Radius zu
+    // kappen – dann würde eine große Explosion kleiner leuchten als ihr Wirkradius und
+    // die Größenstaffelung bräche oben ab – verzichtet ein zu großes Licht lieber auf
+    // seinen Schattenwurf. Bei einem Blitz dieser Größe fällt der Schatten ohnehin
+    // weniger auf als eine zu kleine Lichtkugel.
     if (light.occludes && light.radiusPx > MAX_OCCLUDING_LIGHT_RADIUS) {
-      light.radiusPx = MAX_OCCLUDING_LIGHT_RADIUS;
+      light.occludes = false;
     }
   }
 
