@@ -91,7 +91,7 @@ export class DetonationSystem {
    * @param detonatorOwnerId  Spieler, dem die Detonation zugerechnet wird
    */
   detonateProjectile(projectileId: number, detonatorOwnerId: string): boolean {
-    const proj = this.projectileManager.getActiveProjectiles().find((p) => p.id === projectileId);
+    const proj = this.projectileManager.getProjectileById(projectileId);
     if (!proj?.detonable) return false;
 
     this.pendingDetonations.push({

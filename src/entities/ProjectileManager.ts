@@ -59,7 +59,12 @@ function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset):
 
 export class ProjectileManager {
   private scene:       Phaser.Scene;
-  private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile
+  private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile inkl. ausstehendem Cleanup
+  private readonly activeProjectiles = new Set<TrackedProjectile>();
+  private readonly projectilesById = new Map<number, TrackedProjectile>();
+  private readonly activeBurningProjectileIds = new Set<number>();
+  private readonly shadowSamples: ShadowProjectileSample[] = [];
+  private readonly lightSamples: ProjectileLightSample[] = [];
   private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals (ball-Stil)
   private nextId        = 0;
   private readonly scratchPoints: Phaser.Math.Vector2[] = [];
@@ -699,6 +704,8 @@ export class ProjectileManager {
     }
 
     this.projectiles.push(tracked);
+    this.activeProjectiles.add(tracked);
+    this.projectilesById.set(id, tracked);
     return id;
   }
 
@@ -1581,9 +1588,12 @@ export class ProjectileManager {
     proj.pendingDestroy = true;
     proj.body.setVelocity(0, 0);
     proj.body.enable = false;
+    this.removeActiveProjectile(proj);
   }
 
   private destroyTrackedProjectile(proj: TrackedProjectile): void {
+    this.removeActiveProjectile(proj);
+    this.projectilesById.delete(proj.id);
     this.projectileResolvedCallback?.(proj);
     const destroyX = proj.pendingHydraSplit?.x ?? proj.sprite.x;
     const destroyY = proj.pendingHydraSplit?.y ?? proj.sprite.y;
@@ -1619,6 +1629,10 @@ export class ProjectileManager {
     this.fireballRenderer?.destroyVisual(proj.id);
     this.sporeRenderer?.destroyVisual(proj.id);
     this.translocatorPuckRenderer?.destroyVisual(proj.id);
+  }
+
+  private removeActiveProjectile(proj: TrackedProjectile): void {
+    this.activeProjectiles.delete(proj);
   }
 
   private queueProjectileExplosion(
@@ -1756,16 +1770,14 @@ export class ProjectileManager {
     this.syncTimeBubbleDrag(proj);
   }
 
-  /**
-   * Host: Snapshot der aktiven Projektile (für Kollisionserkennung im CombatSystem).
-   */
-  getActiveProjectiles(): readonly TrackedProjectile[] {
-    return this.projectiles.filter(proj => !proj.pendingDestroy);
+  /** Host: stabile, allokationsfreie Sicht für Kollisionen und Host-Systeme. */
+  getActiveProjectiles(): ReadonlySet<TrackedProjectile> {
+    return this.activeProjectiles;
   }
 
   getDebugActiveProjectileCount(): number {
     return Math.max(
-      this.getActiveProjectiles().length,
+      this.activeProjectiles.size,
       this.clientProjStates.size,
       this.clientVisuals.size,
     );
@@ -1775,24 +1787,28 @@ export class ProjectileManager {
    * Host: Gibt ein aktives Projektil anhand seiner ID zurück.
    */
   getProjectileById(id: number): TrackedProjectile | undefined {
-    return this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+    const projectile = this.projectilesById.get(id);
+    return projectile?.pendingDestroy ? undefined : projectile;
   }
 
-  getShadowSamples(): ShadowProjectileSample[] {
-    if (this.projectiles.length > 0) {
-      return this.projectiles
-        .filter((projectile) => projectile.sprite.active && !projectile.pendingDestroy)
-        .map((projectile) => ({
+  getShadowSamples(): readonly ShadowProjectileSample[] {
+    const samples = this.shadowSamples;
+    samples.length = 0;
+    if (this.activeProjectiles.size > 0) {
+      for (const projectile of this.activeProjectiles) {
+        if (!projectile.sprite.active) continue;
+        samples.push({
           id: projectile.id,
           x: projectile.sprite.x,
           y: projectile.sprite.y,
           size: Math.max(projectile.sprite.displayWidth, projectile.sprite.displayHeight),
           style: projectile.projectileStyle,
-        }));
+        });
+      }
+      return samples;
     }
 
     const now = performance.now();
-    const samples: ShadowProjectileSample[] = [];
     for (const [id, state] of this.clientProjStates) {
       const extrapolated = this.extrapolateClientProjectileState(state, now);
       if (!extrapolated) continue;
@@ -1815,11 +1831,13 @@ export class ProjectileManager {
    * den Physik-Bodies, auf Clients aus den extrapolierten Snapshots. Damit ist der
    * Lichtpfad ohne eine zweite Fallunterscheidung auf beiden Seiten gleich.
    */
-  getLightSamples(): ProjectileLightSample[] {
-    if (this.projectiles.length > 0) {
-      return this.projectiles
-        .filter((projectile) => projectile.sprite.active && !projectile.pendingDestroy)
-        .map((projectile) => ({
+  getLightSamples(): readonly ProjectileLightSample[] {
+    const samples = this.lightSamples;
+    samples.length = 0;
+    if (this.activeProjectiles.size > 0) {
+      for (const projectile of this.activeProjectiles) {
+        if (!projectile.sprite.active) continue;
+        samples.push({
           id: projectile.id,
           x: projectile.sprite.x,
           y: projectile.sprite.y,
@@ -1828,11 +1846,12 @@ export class ProjectileManager {
           style: projectile.projectileStyle,
           energyBallVariant: projectile.energyBallVariant,
           grenadeVisualPreset: projectile.grenadeVisualPreset,
-        }));
+        });
+      }
+      return samples;
     }
 
     const now = performance.now();
-    const samples: ProjectileLightSample[] = [];
     for (const [id, state] of this.clientProjStates) {
       const extrapolated = this.extrapolateClientProjectileState(state, now);
       if (!extrapolated) continue;
@@ -1854,15 +1873,16 @@ export class ProjectileManager {
    * Host: Einzelnes Projektil sofort zerstören (z.B. nach Spielertreffer).
    */
   destroyProjectile(id: number): void {
-    const idx = this.projectiles.findIndex(p => p.id === id);
+    const projectile = this.projectilesById.get(id);
+    if (!projectile) return;
+    const idx = this.projectiles.indexOf(projectile);
     if (idx === -1) return;
-    const proj = this.projectiles[idx];
-    this.destroyTrackedProjectile(proj);
+    this.destroyTrackedProjectile(projectile);
     this.projectiles.splice(idx, 1);
   }
 
   triggerProjectileExplosion(id: number, impactTargetKey?: string): boolean {
-    const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+    const proj = this.getProjectileById(id);
     if (!proj?.explosion) return false;
     // Nur das Ziel, das die aktuelle Explosion ausgeloest hat, wird waehrend der
     // anschliessenden Geradeausphase ignoriert. Andere Ziele und alle Phaser-
@@ -1875,7 +1895,7 @@ export class ProjectileManager {
   }
 
   resumeMultiExplosionProjectile(id: number, excludedTargetKeys: readonly string[]): void {
-    const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+    const proj = this.getProjectileById(id);
     if (!proj || ((proj.multiExplosionsRemaining ?? 0) <= 0 && !proj.miniRocketSpent)) return;
     void excludedTargetKeys;
     proj.pendingExplosion = false;
@@ -1918,7 +1938,7 @@ export class ProjectileManager {
    * Explosivbolzen). Nutzt denselben Explosions-Pfad wie reguläre Projektil-Explosionen.
    */
   triggerEnemyImpactExplosion(id: number): boolean {
-    const proj = this.projectiles.find(p => p.id === id && !p.pendingDestroy);
+    const proj = this.getProjectileById(id);
     if (!proj?.enemyHitExplosion || proj.pendingExplosion) return false;
     proj.pendingExplosion = true;
     this.pendingProjectileExplosions.push({
@@ -1942,6 +1962,11 @@ export class ProjectileManager {
       this.destroyTrackedProjectile(proj);
     }
     this.projectiles = [];
+    this.activeProjectiles.clear();
+    this.projectilesById.clear();
+    this.activeBurningProjectileIds.clear();
+    this.shadowSamples.length = 0;
+    this.lightSamples.length = 0;
     this.bulletRenderer?.destroyAll();
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
@@ -1968,7 +1993,6 @@ export class ProjectileManager {
    * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurückgegeben.
    */
   hostUpdate(deltaMs = 16.67): {
-    synced: SyncedProjectile[];
     explodedProjectiles: ExplodedProjectile[];
     explodedGrenades: ExplodedGrenade[];
     countdownEvents: Array<{ x: number; y: number; value: number }>;
@@ -1977,14 +2001,22 @@ export class ProjectileManager {
     const explodedProjectiles = this.pendingProjectileExplosions.splice(0);
     const explodedGrenades: ExplodedGrenade[] = [];
     const countdownEvents: Array<{ x: number; y: number; value: number }> = [];
-    this.projectiles = this.projectiles.filter(proj =>
-      this.stepProjectile(proj, deltaMs, now, explodedProjectiles, explodedGrenades, countdownEvents),
-    );
+    for (let index = this.projectiles.length - 1; index >= 0; index--) {
+      if (!this.stepProjectile(
+        this.projectiles[index],
+        deltaMs,
+        now,
+        explodedProjectiles,
+        explodedGrenades,
+        countdownEvents,
+      )) {
+        this.projectiles.splice(index, 1);
+      }
+    }
 
     this.syncHostRenderers();
 
-    const synced = this.buildHostSyncSnapshot();
-    return { synced, explodedProjectiles, explodedGrenades, countdownEvents };
+    return { explodedProjectiles, explodedGrenades, countdownEvents };
   }
 
   /**
@@ -2023,9 +2055,7 @@ export class ProjectileManager {
             ownerId: proj.ownerId,
             effect: proj.grenadeEffect,
           });
-          this.scene.physics.world.off('worldbounds', proj.boundsListener);
-          for (const c of proj.colliders) c.destroy();
-          proj.sprite.destroy();
+          this.destroyTrackedProjectile(proj);
           return false;
         }
 
@@ -2388,7 +2418,7 @@ export class ProjectileManager {
     this.queueDestroyProjectile(proj);
   }
 
-  /** Host: alle Projektil-Renderer an die Physik-Bodies synchronisieren und verwaiste Visuals entfernen. */
+  /** Host: alle aktiven Projektil-Renderer an die Physik-Bodies synchronisieren. */
   private syncHostRenderers(): void {
     const renderer = this.bulletRenderer;
     // BulletRenderer-Visuals an Physik-Body synchronisieren (Bullet + AWP)
@@ -2401,16 +2431,10 @@ export class ProjectileManager {
           );
         }
       }
-      // Verwaiste Bullet/AWP-Visuals entfernen
-      const activeBulletIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'bullet' || p.projectileStyle === 'awp' || p.projectileStyle === 'gauss').map(p => p.id),
-      );
-      for (const id of renderer.getActiveIds()) {
-        if (!activeBulletIds.has(id)) renderer.destroyVisual(id);
-      }
     }
 
-    const burningProjectiles = new Set<number>();
+    const burningProjectiles = this.activeBurningProjectileIds;
+    burningProjectiles.clear();
     for (const proj of this.projectiles) {
       const burning = this.hasVisibleProjectileBurn(proj);
       this.projectileBurnRenderer?.sync(
@@ -2438,13 +2462,6 @@ export class ProjectileManager {
           );
         }
       }
-      // Verwaiste Flame-Visuals entfernen (Projektil wurde zerstört)
-      const activeFlameIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'flame').map(p => p.id),
-      );
-      for (const id of flames.getActiveIds()) {
-        if (!activeFlameIds.has(id)) flames.destroyVisual(id);
-      }
     }
 
     const leafBlowers = this.leafBlowerRenderer;
@@ -2464,12 +2481,6 @@ export class ProjectileManager {
           );
         }
       }
-      const activeLeafBlowerIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'leaf_blower').map(p => p.id),
-      );
-      for (const id of leafBlowers.getActiveIds()) {
-        if (!activeLeafBlowerIds.has(id)) leafBlowers.destroyVisual(id);
-      }
     }
 
     // BfgRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
@@ -2482,13 +2493,6 @@ export class ProjectileManager {
           }
           bfgR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
         }
-      }
-      // Verwaiste BFG-Visuals entfernen
-      const activeBfgIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'bfg').map(p => p.id),
-      );
-      for (const id of bfgR.getActiveIds()) {
-        if (!activeBfgIds.has(id)) bfgR.destroyVisual(id);
       }
     }
 
@@ -2509,12 +2513,6 @@ export class ProjectileManager {
             proj.color,
           );
         }
-      }
-      const activeGaussIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'gauss').map(p => p.id),
-      );
-      for (const id of gaussR.getActiveIds()) {
-        if (!activeGaussIds.has(id)) gaussR.destroyVisual(id);
       }
     }
 
@@ -2537,12 +2535,6 @@ export class ProjectileManager {
           );
         }
       }
-      const activeEnergyBallIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'energy_ball').map(p => p.id),
-      );
-      for (const id of energyBallR.getActiveIds()) {
-        if (!activeEnergyBallIds.has(id)) energyBallR.destroyVisual(id);
-      }
     }
 
     const hydraR = this.hydraRenderer;
@@ -2563,12 +2555,6 @@ export class ProjectileManager {
           );
         }
       }
-      const activeHydraIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'hydra').map(p => p.id),
-      );
-      for (const id of hydraR.getActiveIds()) {
-        if (!activeHydraIds.has(id)) hydraR.destroyVisual(id);
-      }
     }
 
     const holyGrenadeR = this.holyGrenadeRenderer;
@@ -2580,12 +2566,6 @@ export class ProjectileManager {
           }
           holyGrenadeR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
         }
-      }
-      const activeHolyGrenadeIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'holy_grenade').map(p => p.id),
-      );
-      for (const id of holyGrenadeR.getActiveIds()) {
-        if (!activeHolyGrenadeIds.has(id)) holyGrenadeR.destroyVisual(id);
       }
     }
 
@@ -2616,12 +2596,6 @@ export class ProjectileManager {
           );
         }
       }
-      const activeRocketIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'rocket').map(p => p.id),
-      );
-      for (const id of rocketR.getActiveIds()) {
-        if (!activeRocketIds.has(id)) rocketR.destroyVisual(id);
-      }
     }
 
     const fireballR = this.fireballRenderer;
@@ -2635,12 +2609,6 @@ export class ProjectileManager {
           proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth,
           proj.body.velocity.x, proj.body.velocity.y,
         );
-      }
-      const activeFireballIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'fireball').map(p => p.id),
-      );
-      for (const id of fireballR.getActiveIds()) {
-        if (!activeFireballIds.has(id)) fireballR.destroyVisual(id);
       }
     }
 
@@ -2662,12 +2630,6 @@ export class ProjectileManager {
           );
         }
       }
-      const activeSporeIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'spore').map(p => p.id),
-      );
-      for (const id of sporeR.getActiveIds()) {
-        if (!activeSporeIds.has(id)) sporeR.destroyVisual(id);
-      }
     }
 
     const grenadeR = this.grenadeRenderer;
@@ -2679,12 +2641,6 @@ export class ProjectileManager {
           }
           grenadeR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
         }
-      }
-      const activeGrenadeIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'grenade').map(p => p.id),
-      );
-      for (const id of grenadeR.getActiveIds()) {
-        if (!activeGrenadeIds.has(id)) grenadeR.destroyVisual(id);
       }
     }
 
@@ -2699,12 +2655,6 @@ export class ProjectileManager {
           tlPuckR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.ownerColor ?? proj.color);
         }
       }
-      const activePuckIds = new Set(
-        this.projectiles.filter(p => p.projectileStyle === 'translocator_puck').map(p => p.id),
-      );
-      for (const id of tlPuckR.getActiveIds()) {
-        if (!activePuckIds.has(id)) tlPuckR.destroyVisual(id);
-      }
     }
 
     // TracerRenderer-Visuals aktualisieren (Host rendert Tracer ebenfalls)
@@ -2716,45 +2666,42 @@ export class ProjectileManager {
             proj.body.velocity.x, proj.body.velocity.y);
         }
       }
-      // Verwaiste Tracer-Visuals entfernen
-      const activeTracerIds = new Set(
-        this.projectiles.filter(p => p.tracerConfig).map(p => p.id),
-      );
-      for (const id of tracerR.getActiveIds()) {
-        if (!activeTracerIds.has(id)) tracerR.destroyTracer(id);
-      }
     }
   }
 
-  /** Host: Netzwerk-Snapshot aller aktiven Projektile bauen. */
-  private buildHostSyncSnapshot(): SyncedProjectile[] {
-    return this.projectiles.map(p => ({
-      id:     p.id,
-      ownerId: p.ownerId,
-      x:      Math.round(p.sprite.x),
-      y:      Math.round(p.sprite.y),
-      vx:     Math.round(p.body.velocity.x),
-      vy:     Math.round(p.body.velocity.y),
-      size:   Math.round(p.sprite.displayWidth),
-      color:  p.color,
-      allowTeamDamage: p.allowTeamDamage,
-      ownerColor: p.ownerColor,
-      projectileVisualScale: p.projectileVisualScale,
-      smokeTrailColor: p.smokeTrailColor,
-      style:  p.projectileStyle,
-      bulletVisualPreset: p.bulletVisualPreset,
-      grenadeVisualPreset: p.grenadeVisualPreset,
-      energyBallVariant: p.energyBallVariant,
-      velocityDecay: p.velocityDecay,
-      miniRocketPhase: p.miniRocketPhase,
-      miniRocketCascadeStage: (p.miniRocketCascadeInitialDamageBonus ?? 0) > 0
-        ? p.miniRocketExplosionIndex
-        : undefined,
-      tracer: p.tracerConfig,
-      shotAudioKey: p.shotAudioKey,
-      suppressSpawnFx: p.suppressSpawnFx,
-      burning: this.hasVisibleProjectileBurn(p) || undefined,
-    }));
+  /** Host: Netzwerk-Snapshot nur bei einem tatsächlichen Network-Tick bauen. */
+  getHostSyncSnapshot(): SyncedProjectile[] {
+    const snapshot: SyncedProjectile[] = [];
+    for (const p of this.activeProjectiles) {
+      snapshot.push({
+        id:     p.id,
+        ownerId: p.ownerId,
+        x:      Math.round(p.sprite.x),
+        y:      Math.round(p.sprite.y),
+        vx:     Math.round(p.body.velocity.x),
+        vy:     Math.round(p.body.velocity.y),
+        size:   Math.round(p.sprite.displayWidth),
+        color:  p.color,
+        allowTeamDamage: p.allowTeamDamage,
+        ownerColor: p.ownerColor,
+        projectileVisualScale: p.projectileVisualScale,
+        smokeTrailColor: p.smokeTrailColor,
+        style:  p.projectileStyle,
+        bulletVisualPreset: p.bulletVisualPreset,
+        grenadeVisualPreset: p.grenadeVisualPreset,
+        energyBallVariant: p.energyBallVariant,
+        velocityDecay: p.velocityDecay,
+        miniRocketPhase: p.miniRocketPhase,
+        miniRocketCascadeStage: (p.miniRocketCascadeInitialDamageBonus ?? 0) > 0
+          ? p.miniRocketExplosionIndex
+          : undefined,
+        tracer: p.tracerConfig,
+        shotAudioKey: p.shotAudioKey,
+        suppressSpawnFx: p.suppressSpawnFx,
+        burning: this.hasVisibleProjectileBurn(p) || undefined,
+      });
+    }
+    return snapshot;
   }
 
   // ── Client ────────────────────────────────────────────────────────────────

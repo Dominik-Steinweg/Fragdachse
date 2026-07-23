@@ -58,9 +58,8 @@ export class CoopDefenseEnemyDodgeSystem {
 
   hostUpdate(now: number): void {
     const activeEnemyIds = new Set<string>();
-    // Einmal pro Tick abgefragt und an alle Gegner weitergereicht – getActiveProjectiles()
-    // erzeugt bei jedem Aufruf eine neue Liste.
-    let projectiles: readonly TrackedProjectile[] | null = null;
+    // Einmal pro Tick abgefragt und als stabile, allokationsfreie Sicht weitergereicht.
+    let projectiles: ReadonlySet<TrackedProjectile> | null = null;
 
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
@@ -98,7 +97,7 @@ export class CoopDefenseEnemyDodgeSystem {
   private findEvadeDirection(
     enemy: EnemyEntity,
     dodge: CoopDefenseEnemyDodgeConfig,
-    projectiles: readonly TrackedProjectile[],
+    projectiles: ReadonlySet<TrackedProjectile>,
   ): { x: number; y: number } | null {
     const hitRadius = enemy.getCollisionRadius() + dodge.evadeMissMarginPx;
     const leadTimeSeconds = dodge.evadeLeadTimeMs / 1000;

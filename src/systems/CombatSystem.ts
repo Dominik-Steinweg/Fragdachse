@@ -2611,7 +2611,7 @@ export class CombatSystem {
     weaponName:    string,
     allowDamage = true,
   ): void {
-    const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    const projectile = this.projectileManager.getProjectileById(projectileId);
     const leafBlowerImpulse = projectile ? this.createLeafBlowerImpulse(projectile, playerId) : null;
     const visualContext: DamageVisualContext | undefined = projectile
       ? {
@@ -2655,7 +2655,7 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName: string,
   ): void {
-    const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    const projectile = this.projectileManager.getProjectileById(projectileId);
     const leafBlowerImpulse = projectile ? this.createLeafBlowerImpulse(projectile, enemyId) : null;
     const projectileHitImpulse = projectile ? this.createProjectileHitImpulse(projectile, enemyId) : null;
     const visualContext = projectile
@@ -2706,7 +2706,7 @@ export class CombatSystem {
     adrenalinGain: number,
     weaponName: string,
   ): void {
-    const projectile = this.projectileManager.getActiveProjectiles().find(p => p.id === projectileId);
+    const projectile = this.projectileManager.getProjectileById(projectileId);
     const visualContext = projectile
       ? {
           sourceX: projectile.sprite.x,

@@ -30,6 +30,21 @@ Der Dirt-Boden ist rein statisch und macht den Großteil der Display-Liste aus (
 
 `ArenaBuilderResult` führt deshalb `dirtLayer` (das gebackene Objekt, für Teardown) und `dirtStamps` (die Kachel-Geometrie) statt einer Image-Liste. Der `ArenaTerrainColorSampler` zeichnet seine CPU-Canvas aus `dirtStamps`, nicht aus Live-Objekten – wer weitere statische Layer backt, muss deren Geometrie ebenso für den Sampler erhalten.
 
+## Projektil-Hotpath und Pooling
+
+Host-Systeme erhalten die aktiven Projektile als stabile `ReadonlySet`-Sicht und IDs werden
+über einen gepflegten Index aufgelöst. Projektil-Renderer werden beim zentralen
+Projektil-Cleanup freigegeben; deshalb dürfen sie nicht zusätzlich pro Frame aktive
+ID-Arrays und Orphan-Sets aus der gesamten Projektilmenge materialisieren. Der replizierte
+Projektil-Snapshot wird erst beim tatsächlichen Network-Tick gebaut.
+
+Pooling gehört an homogene, kurzlebige Visuals: Rocket-Smoke verwendet einen gemeinsamen,
+vorreservierten `ParticleEmitter`, dessen Partikel Phaser intern wiederverwendet. Die
+autoritativen Physik-Shapes werden bewusst nicht gepoolt. Rectangle-/Circle-Varianten,
+projektilspezifische Arcade-Collider, World-Bounds-Listener und umfangreicher optionaler
+Gameplay-State würden einen vollständigen und fehleranfälligen Reset erfordern, während
+ihre Spawn-Allokation nicht im gemessenen per-Frame-Hotpath liegt.
+
 ## Lokaler Messworkflow
 
 `T` öffnet die Performance-Diagnose. Die Live-Ansicht arbeitet ohne Telemetrie. Eine Aufzeichnung wird manuell gestartet und gestoppt, ist auf 30 Minuten begrenzt und kann danach als JSON heruntergeladen werden. Der Export enthält Browser-/Renderer-Metadaten und Qualitätswechsel, aber keine Raumcodes oder Spieler-IDs.

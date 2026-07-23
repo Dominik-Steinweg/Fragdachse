@@ -200,8 +200,8 @@ export class HostUpdateCoordinator {
       this.ctx.combatSystem.updateBurnEffects(now);
     }
 
-    const { synced: projectiles, explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
-      ? { synced: [], explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
+    const { explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
+      ? { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
       : this.ctx.projectileManager.hostUpdate(delta);
     const guardianSpirits = countdownActive
       ? []
@@ -801,6 +801,9 @@ export class HostUpdateCoordinator {
     }
 
     this.renderers.flamethrowerUpgrades.syncRings(players);
+    const projectiles = countdownActive
+      ? []
+      : this.ctx.projectileManager.getHostSyncSnapshot();
 
     bridge.publishGameState({
       roundStartTime: bridge.getArenaStartTime(),
