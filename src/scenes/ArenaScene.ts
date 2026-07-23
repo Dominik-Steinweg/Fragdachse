@@ -192,6 +192,7 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseUpgradeProfileSnapshot: CoopDefenseUpgradeProfile | null = null;
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
+  private lastLobbySidebarSignature: string | null = null;
   private runtimeProfiler: ArenaRuntimeProfiler | null = null;
   private graphicsQuality!: GraphicsQualityController;
   private lastScenePerformanceCountAtMs = Number.NEGATIVE_INFINITY;
@@ -864,8 +865,24 @@ export class ArenaScene extends Phaser.Scene {
       this.processCoopDefenseRoundXp(enteredLobbyFromArena);
       this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
-      if (localProfile) this.ctx.leftPanel.updateLocalName(localProfile.name);
-      this.ctx.leftPanel.refreshColorIndicator();
+      const localId = bridge.getLocalPlayerId();
+      const sidebarSignature = [
+        localProfile?.name ?? '',
+        localProfile?.colorHex ?? '',
+        localProfile?.teamId ?? '',
+        bridge.isHost(),
+        bridge.getGameMode(),
+        bridge.getCoopDefenseMapId(),
+        bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? '',
+        bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? '',
+        bridge.getPlayerLoadoutSlot(localId, 'utility') ?? '',
+        bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? '',
+      ].join('|');
+      if (sidebarSignature !== this.lastLobbySidebarSignature) {
+        this.lastLobbySidebarSignature = sidebarSignature;
+        if (localProfile) this.ctx.leftPanel.updateLocalName(localProfile.name);
+        this.ctx.leftPanel.refreshColorIndicator();
+      }
       this.ctx.leftPanel.refreshColorPickerIfOpen();
       this.ctx.leftPanel.updateLobby();
       if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
@@ -873,11 +890,13 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseXpDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
       this.lobbyOverlay.setCoopDefenseProgress(null);
+      this.lastLobbySidebarSignature = null;
       this.lobbyOverlay.hide();
     } else {
       this.coopDefenseXpDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
       this.lobbyOverlay.setCoopDefenseProgress(null);
+      this.lastLobbySidebarSignature = null;
     }
 
     this.lastObservedGamePhase = phase;
@@ -1006,12 +1025,12 @@ export class ArenaScene extends Phaser.Scene {
     const visualEffectsEndMs = performance.now();
 
     const aimPreviewStartedAt = performance.now();
-    const utilityTargeting    = this.ctx.inputSystem.getUtilityTargetingPreviewState();
-    const airstrikeTargeting  = this.ctx.inputSystem.getAirstrikeTargetingPreviewState();
-    const utilityPlacement    = this.getLocalPlacementPreview();
-    const ultimatePlacement   = this.getLocalUltimatePlacementPreview();
+    const utilityTargeting    = inArena ? this.ctx.inputSystem.getUtilityTargetingPreviewState() : undefined;
+    const airstrikeTargeting  = inArena ? this.ctx.inputSystem.getAirstrikeTargetingPreviewState() : undefined;
+    const utilityPlacement    = inArena ? this.getLocalPlacementPreview() : undefined;
+    const ultimatePlacement   = inArena ? this.getLocalUltimatePlacementPreview() : undefined;
     const activePlacement     = ultimatePlacement ?? utilityPlacement;
-    const ultimatePreview     = this.ctx.inputSystem.getUltimateChargePreviewState();
+    const ultimatePreview     = inArena ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
     const showAim = inArena
       && !optionsOpen
       && this.localPlayerState.alive
@@ -1038,7 +1057,7 @@ export class ArenaScene extends Phaser.Scene {
     // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
     const scopeStartedAt = performance.now();
     if (this.scopeOverlay) {
-      const scopeCfg = this.ctx.inputSystem.getWeapon2ScopeConfig();
+      const scopeCfg = inArena ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
       if (scopeCfg) {
         const pointer = this.input.activePointer;
         this.scopeOverlay.update(scopeProgress, pointer.x, pointer.y, delta, scopeCfg);
@@ -1050,7 +1069,7 @@ export class ArenaScene extends Phaser.Scene {
     const scopeMs = performance.now() - scopeStartedAt;
 
     const aimIndicatorsStartedAt = performance.now();
-    this.utilityChargeIndicator?.update(this.ctx.inputSystem.getUtilityChargePreviewState());
+    this.utilityChargeIndicator?.update(inArena ? this.ctx.inputSystem.getUtilityChargePreviewState() : undefined);
     this.ultimateChargeIndicator?.update(ultimatePreview);
     const aimIndicatorsMs = performance.now() - aimIndicatorsStartedAt;
     const visualAimEndMs = performance.now();

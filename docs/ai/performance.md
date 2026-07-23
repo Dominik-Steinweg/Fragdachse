@@ -15,6 +15,15 @@ Der Controller wird am Anfang von `ArenaScene.create()` an die Scene gebunden. D
 
 Filter werden über `utils/phaserFx.ts` registriert, damit ein Profilwechsel bestehende Handles sofort aktiviert oder deaktiviert. `LightingSystem` und `ShadowSystem` abonnieren das Profil und bauen nur ihre lokalen Renderressourcen neu auf; Spielzustand bleibt erhalten.
 
+## Lobby-UI
+
+Phaser-Canvas-Text wird bei `setText()`, `setStyle()` und `setColor()` neu gerastert und als
+Textur hochgeladen. Lobby-Panels synchronisieren deshalb unveränderte Netzwerkzustände nicht
+pro Frame, sondern nur bei einer geänderten Zustandssignatur. Aim-, Scope-, Placement- und
+Charge-Vorschauen lösen außerhalb einer aktiven Arena keine Loadout-Konfiguration auf; ohne
+Round-`LoadoutManager` würde dieser Fallback sonst wiederholt persistierte Auswahl- und
+Coop-Profildaten lesen.
+
 ## Statischer Boden als gebackene RenderTexture
 
 Der Dirt-Boden ist rein statisch und macht den Großteil der Display-Liste aus (mehrere tausend Kacheln). `ArenaBuilder.bakeDirt()` erzeugt die Kacheln mit Autotiling, backt sie einmalig in eine arenagroße RenderTexture (interne Kamera um den Arena-Offset gescrollt, damit weltpositionierte Bilder korrekt landen) und verwirft danach die Einzel-Images. So läuft pro Frame ein Objekt statt tausender durch Renderwalk und Transform-Schritt; die Kosten sind fix und qualitätsunabhängig. Zerstörbare Felsen bleiben bewusst außen vor und dynamisch.

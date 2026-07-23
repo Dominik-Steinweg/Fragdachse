@@ -126,6 +126,10 @@ export class LobbyOverlay {
   private transportDiagnostics: LinkDiagnostics | null = null;
   private connectionEnded = false;
   private localIsHost = false;
+  private playerListSignature: string | null = null;
+  private roomQualitySignature: string | null = null;
+  private transportDiagnosticsSignature: string | null = null;
+  private coopProgressSignature: string | null = null;
 
   constructor(
     private scene:          Phaser.Scene,
@@ -141,6 +145,10 @@ export class LobbyOverlay {
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
   build(): void {
     this.connectionEnded = false;
+    this.playerListSignature = null;
+    this.roomQualitySignature = null;
+    this.transportDiagnosticsSignature = null;
+    this.coopProgressSignature = null;
     if (this.container) {
       this.container.destroy(true);
       this.container = null;
@@ -373,9 +381,27 @@ export class LobbyOverlay {
     return this.visible;
   }
 
-  /** Aktualisiert die Spielerliste, Badges und den eigenen Namen. Jeden Frame aufrufen. */
+  /** Synchronisiert die Spielerliste; unveraenderter Zustand mutiert und rastert keine GameObjects neu. */
   refreshPlayerList(connectedPlayers: PlayerProfile[]): void {
     if (!this.container) return;
+
+    const mode = this.bridge.getGameMode();
+    const hostId = this.bridge.getHostPlayerId();
+    const signature = JSON.stringify([
+      mode,
+      hostId,
+      connectedPlayers.map(profile => [
+        profile.id,
+        profile.name,
+        profile.colorHex,
+        profile.teamId ?? null,
+        this.bridge.getPlayerReady(profile.id),
+        isCoopDefenseMode(mode) ? this.bridge.getPlayerCoopDefenseLevel(profile.id) : null,
+        profile.id === hostId ? 'host' : this.bridge.getPlayerPing(profile.id),
+      ]),
+    ]);
+    if (signature === this.playerListSignature) return;
+    this.playerListSignature = signature;
 
     const currentIds = new Set(connectedPlayers.map(p => p.id));
 
@@ -408,6 +434,20 @@ export class LobbyOverlay {
   }
 
   setRoomQuality(snapshot: RoomQualitySnapshot | null, localIsHost: boolean): void {
+    const signature = JSON.stringify([
+      localIsHost,
+      snapshot?.status ?? null,
+      snapshot?.summary ?? null,
+      snapshot?.thresholdMs ?? null,
+      snapshot?.worstPingMs ?? null,
+      snapshot?.measuredPlayers ?? null,
+      snapshot?.totalPlayers ?? null,
+      snapshot?.minSamplesCollected ?? null,
+      snapshot?.requiredSamples ?? null,
+      snapshot?.startBlocked ?? null,
+    ]);
+    if (signature === this.roomQualitySignature) return;
+    this.roomQualitySignature = signature;
     this.roomQuality = snapshot;
     this.localIsHost = localIsHost;
     this.updateStatus(this.playerRows.size);
@@ -419,6 +459,18 @@ export class LobbyOverlay {
    * ob die Verbindung ueberhaupt direkt zustande kam, ist wichtiger als ihr Ping.
    */
   setTransportDiagnostics(worst: LinkDiagnostics | null): void {
+    const signature = JSON.stringify([
+      worst?.usesRelay ?? null,
+      worst?.connectionState ?? null,
+      worst?.iceConnectionState ?? null,
+      worst?.fastChannelState ?? null,
+      worst?.localCandidateType ?? null,
+      worst?.remoteCandidateType ?? null,
+      worst?.medianRttMs ?? null,
+      worst?.jitterRttMs ?? null,
+    ]);
+    if (signature === this.transportDiagnosticsSignature) return;
+    this.transportDiagnosticsSignature = signature;
     this.transportDiagnostics = worst;
     this.updateStatus(this.playerRows.size);
   }
@@ -448,9 +500,28 @@ export class LobbyOverlay {
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
     if (!this.coopProgressContainer || !this.coopProgressLevelText) return;
 
+    const signature = progress
+      ? [
+        progress.level,
+        progress.levelProgressFraction,
+        progress.availableUpgradePoints,
+        progress.availableBossPoints,
+        progress.earnedBossPoints,
+      ].join('|')
+      : 'none';
+    const shouldBeVisible = this.visible && progress !== null;
+    if (
+      signature === this.coopProgressSignature
+      && this.coopProgressContainer.visible === shouldBeVisible
+    ) {
+      return;
+    }
+    this.coopProgressSignature = signature;
+
     if (!progress) {
       this.coopProgressContainer.setVisible(false);
       this.upgradeBtnEffect?.stop();
+      this.coopBarEffect?.stop();
       return;
     }
 

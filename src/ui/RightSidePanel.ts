@@ -159,6 +159,7 @@ export class RightSidePanel {
     frags: Phaser.GameObjects.Text;
   }[] = [];
   private resultsTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
+  private roundResultsSignature: string | null = null;
 
   constructor(private scene: Phaser.Scene) {}
 
@@ -314,6 +315,22 @@ export class RightSidePanel {
     * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
    */
   showRoundResults(results: RoundResult[] | null, roundState: RoundState | null = null): void {
+    const signature = JSON.stringify([
+      bridge.getGameMode(),
+      roundState?.status ?? null,
+      results?.map(result => [
+        result.id,
+        result.name,
+        result.colorHex,
+        result.frags,
+        result.teamId,
+        result.teamScore ?? null,
+        result.sharedXp ?? null,
+      ]) ?? null,
+    ]);
+    if (signature === this.roundResultsSignature) return;
+    this.roundResultsSignature = signature;
+
     this.syncLobbyLabels(results);
     if (results && results.some((result) => result.teamId === 'blue' || result.teamId === 'red')) {
       this.renderGroupedRoundResults(results, roundState);

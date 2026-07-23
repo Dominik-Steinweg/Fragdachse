@@ -307,9 +307,10 @@ export class InputSystem {
   }
 
   getUltimateChargePreviewState(): UltimateChargePreviewState | undefined {
+    if (!this.ultimateHoldActive) return undefined;
     const sprite = this.getLocalSprite();
     const cfg = this.getGaussUltimateConfig();
-    if (!this.ultimateHoldActive || !sprite || !cfg) return undefined;
+    if (!sprite || !cfg) return undefined;
 
     const pointer = this.scene.input.activePointer;
     const pointerWorld = this.getPointerWorldPoint(pointer);
@@ -333,9 +334,10 @@ export class InputSystem {
   }
 
   getUtilityChargePreviewState(): UtilityChargePreviewState | undefined {
+    if (!this.utilityHoldActive) return undefined;
     const sprite = this.getLocalSprite();
     const cfg = this.getChargeableUtilityConfig();
-    if (!this.utilityHoldActive || !sprite || !cfg) return undefined;
+    if (!sprite || !cfg) return undefined;
 
     const now = Date.now();
     const startedAt = this.utilityChargeStartedAt;
@@ -359,9 +361,10 @@ export class InputSystem {
   }
 
   getUtilityTargetingPreviewState(): UtilityTargetingPreviewState | undefined {
+    if (!this.utilityTargetingActive) return undefined;
     const sprite = this.getLocalSprite();
     const cfg = this.getTargetedUtilityConfig();
-    if (!this.utilityTargetingActive || !sprite || !cfg) return undefined;
+    if (!sprite || !cfg) return undefined;
 
     const pointer = this.scene.input.activePointer;
     const pointerWorld = this.getPointerWorldPoint(pointer);
@@ -375,8 +378,9 @@ export class InputSystem {
 
   /** Gibt den Zielmodus-Vorschau-Zustand für das Airstrike-Ultimate zurück. */
   getAirstrikeTargetingPreviewState(): UtilityTargetingPreviewState | undefined {
+    if (!this.ultimateTargetingActive) return undefined;
     const sprite = this.getLocalSprite();
-    if (!this.ultimateTargetingActive || !sprite) return undefined;
+    if (!sprite) return undefined;
     const cfg = this.getAirstrikeUltimateConfig();
     if (!cfg) return undefined;
 
