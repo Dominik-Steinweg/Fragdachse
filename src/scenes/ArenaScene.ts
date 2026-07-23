@@ -329,6 +329,7 @@ export class ArenaScene extends Phaser.Scene {
       getStoredEffectsVolume(),
       getStoredMusicVolume(),
     );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => gameAudioSystem.cleanup());
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);
     const stinkCloudSystem = new StinkCloudSystem(this);

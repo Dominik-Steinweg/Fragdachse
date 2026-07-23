@@ -7,7 +7,7 @@ import {
   toCssColor,
 } from '../config';
 import type { AudioAssetKey } from '../audio/AudioCatalog';
-import { GameAudioSystem } from '../audio/GameAudioSystem';
+import { GameAudioSystem, type MusicLoadState } from '../audio/GameAudioSystem';
 import type { LivingBarPalette } from './LivingBarEffect';
 import { LivingBarEffect } from './LivingBarEffect';
 import { ensureModalPanelTexture } from './uiTextures';
@@ -50,6 +50,9 @@ const TEX_VOLUME_FILL = '__options_volume_fill';
 const TEX_VOLUME_GLOSS = '__options_volume_gloss';
 const PREVIEW_SOUND_KEY: AudioAssetKey = 'sfx_options_preview';
 const PREVIEW_COOLDOWN_MS = 120;
+const MUSIC_LOAD_BAR_H = 8;
+const MUSIC_LOAD_BAR_Y = CY + 192;
+const MUSIC_LOAD_LABEL_Y = MUSIC_LOAD_BAR_Y + 17;
 
 type VolumeSliderKey = 'master' | 'effects' | 'music';
 
@@ -152,6 +155,11 @@ export class OptionsOverlay {
   private keyHandler: ((event: KeyboardEvent) => void) | null = null;
   private pointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
   private pointerUpHandler: (() => void) | null = null;
+  private musicLoadTrack: Phaser.GameObjects.Rectangle | null = null;
+  private musicLoadFill: Phaser.GameObjects.Rectangle | null = null;
+  private musicLoadLabel: Phaser.GameObjects.Text | null = null;
+  private musicLoadHideTimer: Phaser.Time.TimerEvent | null = null;
+  private unsubscribeMusicLoadState: (() => void) | null = null;
   private lastPreviewAt = -PREVIEW_COOLDOWN_MS;
 
   constructor(
@@ -161,6 +169,10 @@ export class OptionsOverlay {
   ) {}
 
   build(): void {
+    this.unsubscribeMusicLoadState?.();
+    this.unsubscribeMusicLoadState = null;
+    this.musicLoadHideTimer?.destroy();
+    this.musicLoadHideTimer = null;
     for (const slider of this.sliders.values()) {
       slider.fillEffect.destroy();
     }
@@ -169,6 +181,9 @@ export class OptionsOverlay {
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
+    this.musicLoadTrack = null;
+    this.musicLoadFill = null;
+    this.musicLoadLabel = null;
 
     ensureOptionsTextures(this.scene);
 
@@ -217,6 +232,7 @@ export class OptionsOverlay {
     for (const definition of SLIDER_DEFINITIONS) {
       this.buildSlider(definition, objects);
     }
+    this.buildMusicLoadingIndicator(objects);
 
     objects.push(
       this.scene.add.text(CX, FOOTER_Y, '[ O / ESC / Klick zum Schließen ]', {
@@ -225,6 +241,9 @@ export class OptionsOverlay {
     );
 
     this.container.add(objects);
+    this.unsubscribeMusicLoadState = this.audioSystem.subscribeMusicLoadState((state) => {
+      this.syncMusicLoadingIndicator(state);
+    });
 
     this.syncFromAudioSystem();
     this.syncQualityButtons();
@@ -307,6 +326,10 @@ export class OptionsOverlay {
 
   destroy(): void {
     this.hide();
+    this.unsubscribeMusicLoadState?.();
+    this.unsubscribeMusicLoadState = null;
+    this.musicLoadHideTimer?.destroy();
+    this.musicLoadHideTimer = null;
     for (const slider of this.sliders.values()) {
       slider.fillEffect.destroy();
     }
@@ -315,6 +338,9 @@ export class OptionsOverlay {
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
+    this.musicLoadTrack = null;
+    this.musicLoadFill = null;
+    this.musicLoadLabel = null;
   }
 
   private syncFromAudioSystem(): void {
@@ -436,6 +462,97 @@ export class OptionsOverlay {
       valueText,
       fillEffect,
       value: 0,
+    });
+  }
+
+  private buildMusicLoadingIndicator(objects: Phaser.GameObjects.GameObject[]): void {
+    this.musicLoadTrack = this.scene.add.rectangle(
+      CX,
+      MUSIC_LOAD_BAR_Y,
+      TRACK_W,
+      MUSIC_LOAD_BAR_H,
+      TRACK_BG,
+      0.95,
+    ).setStrokeStyle(1, COLORS.PURPLE_4)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.musicLoadFill = this.scene.add.rectangle(
+      TRACK_X,
+      MUSIC_LOAD_BAR_Y,
+      0.001,
+      MUSIC_LOAD_BAR_H - 2,
+      COLORS.PURPLE_2,
+      1,
+    ).setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.musicLoadLabel = this.scene.add.text(CX, MUSIC_LOAD_LABEL_Y, '', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      color: toCssColor(COLORS.PURPLE_1),
+    }).setOrigin(0.5)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    objects.push(this.musicLoadTrack, this.musicLoadFill, this.musicLoadLabel);
+  }
+
+  private syncMusicLoadingIndicator(state: MusicLoadState | null): void {
+    const track = this.musicLoadTrack;
+    const fill = this.musicLoadFill;
+    const label = this.musicLoadLabel;
+    if (!track || !fill || !label) return;
+
+    this.musicLoadHideTimer?.destroy();
+    this.musicLoadHideTimer = null;
+
+    if (!state) {
+      track.setVisible(false);
+      fill.setVisible(false);
+      label.setVisible(false);
+      return;
+    }
+
+    const progress = Phaser.Math.Clamp(state.progress, 0, 1);
+    track.setVisible(true);
+    fill.setVisible(true).setDisplaySize(Math.max(0.001, TRACK_W * progress), MUSIC_LOAD_BAR_H - 2);
+    label.setVisible(true);
+
+    if (state.status === 'loading') {
+      track.setStrokeStyle(1, COLORS.PURPLE_4);
+      fill.setFillStyle(COLORS.PURPLE_2, 1);
+      label
+        .setColor(toCssColor(COLORS.PURPLE_1))
+        .setText(`LOBBY-MUSIK WIRD GELADEN · ${Math.round(progress * 100)}%`);
+      return;
+    }
+
+    if (state.status === 'complete') {
+      fill.setDisplaySize(TRACK_W, MUSIC_LOAD_BAR_H - 2);
+      label
+        .setColor(toCssColor(COLORS.PURPLE_1))
+        .setText('LOBBY-MUSIK BEREIT');
+      this.scheduleMusicLoadingIndicatorHide(550);
+      return;
+    }
+
+    track.setStrokeStyle(1, COLORS.RED_3);
+    fill.setFillStyle(COLORS.RED_2, 1);
+    label
+      .setColor(toCssColor(COLORS.RED_1))
+      .setText('LOBBY-MUSIK KONNTE NICHT GELADEN WERDEN');
+    this.scheduleMusicLoadingIndicatorHide(1800);
+  }
+
+  private scheduleMusicLoadingIndicatorHide(delayMs: number): void {
+    this.musicLoadHideTimer = this.scene.time.delayedCall(delayMs, () => {
+      this.musicLoadHideTimer = null;
+      this.musicLoadTrack?.setVisible(false);
+      this.musicLoadFill?.setVisible(false);
+      this.musicLoadLabel?.setVisible(false);
     });
   }
 

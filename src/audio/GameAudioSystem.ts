@@ -11,7 +11,13 @@ import {
   SOUND_SFX_VOLUME,
 } from '../config';
 import type { AudioKey } from '../types';
-import { getSoundVolume, isMusicAudioKey } from './AudioCatalog';
+import {
+  getMusicAssetPath,
+  getSoundVolume,
+  isMusicAudioKey,
+  LAZY_MUSIC_ASSET_KEY,
+  type MusicAssetKey,
+} from './AudioCatalog';
 import { getHitFeedbackVolumeScale } from './HitFeedbackAudio';
 
 const HIT_FEEDBACK_MERGE_WINDOW_MS = 30;
@@ -29,6 +35,16 @@ interface ActiveLoop {
   pan: number;
 }
 
+export type MusicLoadStatus = 'loading' | 'complete' | 'error';
+
+export interface MusicLoadState {
+  readonly key: MusicAssetKey;
+  readonly progress: number;
+  readonly status: MusicLoadStatus;
+}
+
+type MusicLoadStateListener = (state: MusicLoadState | null) => void;
+
 /**
  * Zentrales Audio-System fuer alle Spielsounds: One-Shot SFX (spatial + lokal),
  * Loop-Sounds und Musik. Ersetzt das bisherige ShotAudioSystem.
@@ -44,7 +60,11 @@ export class GameAudioSystem {
   private loopCounter = 0;
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private currentMusic: Phaser.Sound.BaseSound | null = null;
-  private currentMusicKey: string | null = null;
+  private currentMusicKey: MusicAssetKey | null = null;
+  private requestedMusicKey: MusicAssetKey | null = null;
+  private musicLoadState: MusicLoadState | null = null;
+  private readonly musicLoadStateListeners = new Set<MusicLoadStateListener>();
+  private removeMusicLoaderListeners: (() => void) | null = null;
   private pendingHitFeedbackDamage = 0;
   private hitFeedbackTimer: Phaser.Time.TimerEvent | null = null;
   private pendingDamageFeedbackDamage = 0;
@@ -92,10 +112,20 @@ export class GameAudioSystem {
   setMusicVolume(volume: number): void {
     this.musicVolume = Phaser.Math.Clamp(volume, 0, 1);
     this.refreshMusicVolume();
+    if (this.musicVolume > 0.001) {
+      this.loadLobbyMusic();
+      this.startRequestedMusic();
+    }
   }
 
   getMusicVolume(): number {
     return this.musicVolume;
+  }
+
+  subscribeMusicLoadState(listener: MusicLoadStateListener): () => void {
+    this.musicLoadStateListeners.add(listener);
+    listener(this.musicLoadState ? { ...this.musicLoadState } : null);
+    return () => this.musicLoadStateListeners.delete(listener);
   }
 
   // ── One-Shot SFX (spatial) ────────────────────────────────────────────────
@@ -276,27 +306,20 @@ export class GameAudioSystem {
   playMusic(soundKey: AudioKey | undefined): void {
     if (!isMusicAudioKey(soundKey)) return;
     if (!SOUND_ENABLED || !soundKey) return;
-    if (this.currentMusicKey === soundKey && this.currentMusic?.isPlaying) return;
-
-    this.stopMusic();
-
-    if (!this.scene.cache.audio.exists(soundKey)) return;
-
-    const finalVolume = this.getMusicPlaybackVolume(soundKey);
-    if (finalVolume <= 0.001) return;
-
-    this.currentMusicKey = soundKey;
-    this.currentMusic = this.scene.sound.add(soundKey, {
-      volume: Phaser.Math.Clamp(finalVolume, 0, 1),
-      loop: true,
-    });
-    this.currentMusic.play();
+    this.requestedMusicKey = soundKey;
+    if (this.currentMusicKey !== soundKey) this.stopCurrentMusic();
+    this.startRequestedMusic();
   }
 
   /**
    * Stoppt die aktuelle Musik.
    */
   stopMusic(): void {
+    this.requestedMusicKey = null;
+    this.stopCurrentMusic();
+  }
+
+  private stopCurrentMusic(): void {
     if (this.currentMusic) {
       this.currentMusic.stop();
       this.currentMusic.destroy();
@@ -324,6 +347,10 @@ export class GameAudioSystem {
     }
     this.activeLoops.clear();
     this.stopMusic();
+    this.removeMusicLoaderListeners?.();
+    this.removeMusicLoaderListeners = null;
+    this.publishMusicLoadState(null);
+    this.musicLoadStateListeners.clear();
   }
 
   // ── Backward-compatible API ───────────────────────────────────────────────
@@ -376,5 +403,82 @@ export class GameAudioSystem {
   private getMusicPlaybackVolume(soundKey: AudioKey): number {
     const perSoundVolume = getSoundVolume(soundKey);
     return this.masterVolume * this.musicVolume * perSoundVolume;
+  }
+
+  private startRequestedMusic(): void {
+    const soundKey = this.requestedMusicKey;
+    if (!soundKey || this.musicVolume <= 0.001) return;
+    if (this.currentMusicKey === soundKey && this.currentMusic?.isPlaying) {
+      this.refreshMusicVolume();
+      return;
+    }
+    if (!this.scene.cache.audio.exists(soundKey)) {
+      if (soundKey === LAZY_MUSIC_ASSET_KEY) this.loadLobbyMusic();
+      return;
+    }
+
+    this.stopCurrentMusic();
+    this.currentMusicKey = soundKey;
+    this.currentMusic = this.scene.sound.add(soundKey, {
+      volume: Phaser.Math.Clamp(this.getMusicPlaybackVolume(soundKey), 0, 1),
+      loop: true,
+    });
+    this.currentMusic.play();
+  }
+
+  private loadLobbyMusic(): void {
+    const soundKey = LAZY_MUSIC_ASSET_KEY;
+    if (this.scene.cache.audio.exists(soundKey)) {
+      this.startRequestedMusic();
+      return;
+    }
+    if (this.musicLoadState?.status === 'loading') return;
+
+    const loader = this.scene.load;
+    const onProgress = (file: Phaser.Loader.File, progress: number) => {
+      if (file.key !== soundKey) return;
+      this.publishMusicLoadState({
+        key: soundKey,
+        progress: Phaser.Math.Clamp(progress, 0, 1),
+        status: 'loading',
+      });
+    };
+    const onComplete = (key: string, type: string) => {
+      if (key !== soundKey || type !== 'audio') return;
+      this.removeMusicLoaderListeners?.();
+      this.removeMusicLoaderListeners = null;
+      this.publishTransientMusicLoadState({ key: soundKey, progress: 1, status: 'complete' });
+      this.startRequestedMusic();
+    };
+    const onError = (file: Phaser.Loader.File) => {
+      if (file.key !== soundKey) return;
+      this.removeMusicLoaderListeners?.();
+      this.removeMusicLoaderListeners = null;
+      this.publishTransientMusicLoadState({ key: soundKey, progress: 0, status: 'error' });
+    };
+
+    loader.on(Phaser.Loader.Events.FILE_PROGRESS, onProgress);
+    loader.on(Phaser.Loader.Events.FILE_COMPLETE, onComplete);
+    loader.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+    this.removeMusicLoaderListeners = () => {
+      loader.off(Phaser.Loader.Events.FILE_PROGRESS, onProgress);
+      loader.off(Phaser.Loader.Events.FILE_COMPLETE, onComplete);
+      loader.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+    };
+
+    this.publishMusicLoadState({ key: soundKey, progress: 0, status: 'loading' });
+    loader.audio(soundKey, getMusicAssetPath(soundKey));
+    if (!loader.isLoading()) loader.start();
+  }
+
+  private publishTransientMusicLoadState(state: MusicLoadState): void {
+    this.publishMusicLoadState(state);
+    this.musicLoadState = null;
+  }
+
+  private publishMusicLoadState(state: MusicLoadState | null): void {
+    this.musicLoadState = state;
+    const snapshot = state ? { ...state } : null;
+    for (const listener of this.musicLoadStateListeners) listener(snapshot);
   }
 }

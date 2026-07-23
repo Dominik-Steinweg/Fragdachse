@@ -150,6 +150,7 @@ const MUSIC_ASSETS = {
 } as const;
 
 export type MusicAssetKey = keyof typeof MUSIC_ASSETS;
+export const LAZY_MUSIC_ASSET_KEY: MusicAssetKey = 'music_lobby';
 
 // ── Combined Catalog ────────────────────────────────────────────────────────
 export const AUDIO_ASSETS = {
@@ -165,6 +166,10 @@ export type AudioAssetKey = keyof typeof AUDIO_ASSETS;
 
 export function isMusicAudioKey(key: string | undefined): key is MusicAssetKey {
   return key === 'music_lobby' || key === 'music_arena';
+}
+
+export function getMusicAssetPath(key: MusicAssetKey): string {
+  return MUSIC_ASSETS[key];
 }
 
 // ── Per-Sound Volume Registry ───────────────────────────────────────────────
@@ -284,6 +289,7 @@ export type ShotAudioAssetKey = keyof typeof SHOT_ASSETS;
  */
 export function preloadAllAudio(loader: Phaser.Loader.LoaderPlugin): void {
   for (const [key, assetPath] of Object.entries(AUDIO_ASSETS)) {
+    if (key === LAZY_MUSIC_ASSET_KEY) continue;
     if (!isShippedAudioAsset(assetPath)) continue;
     loader.audio(key, assetPath);
   }

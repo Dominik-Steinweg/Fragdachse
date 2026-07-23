@@ -47,6 +47,7 @@ Die statische Kulisse entsteht über `ArenaBuilder.buildStatic()`. Runde-spezifi
 - Ein spät gestarteter Client kann bereits in `ARENA` eintreten. `initialize()` plant deshalb den Aufbau im nächsten Frame, nachdem Create-time-Callbacks und RPCs stehen.
 - Bei Rundenwechseln muss `NetworkBridge.resetGameStateCache()` die Merge-Baseline von Delta-Slices verwerfen, sonst könnten unveränderte Werte aus der Vorrunde weiterleben.
 - Phaser-4-WebGL verwendet hier keine `GeometryMask` für den Arena-Clip. `ArenaScene.ensureArenaClipMask()` lässt sie bewusst `null`; Bounds, Clamping und Sichtbarkeitslogik übernehmen die Begrenzung.
+- Die Lobby-Musik ist ein bewusst verzögertes Scene-Lifetime-Asset: `preloadAllAudio()` lässt `music_lobby` aus, solange Musik beim Standardwert `0` bleibt. Erst ein positiver Musikregler lädt den Track über `GameAudioSystem`; das Optionen-Overlay visualisiert lediglich dessen veröffentlichten Ladezustand.
 - Phaser lässt sich in den Vitest-Tests nicht importieren: `phaser.esm.js` greift beim Modul-Load auf das DOM zu und es gibt kein jsdom-Setup. Module, die testbar bleiben sollen, importieren Phaser deshalb nur als Typ (`import type * as Phaser`) und rufen Phaser-Funktionen ausschließlich über übergebene Objekte auf – siehe `src/effects/LightOccluderIndex.ts`.
 
 ## Wichtige Referenzpfade
