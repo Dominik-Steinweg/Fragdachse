@@ -136,6 +136,19 @@ interface TrainLightPlan {
   readonly windows: readonly TrainLamp[];
 }
 
+interface TransportPerformanceCounts {
+  linkCount: number;
+  backpressureLinkCount: number;
+  reliableBufferedBytes: number;
+  fastBufferedBytes: number;
+  droppedFastMessages: number;
+  sentBytesPerSec: number;
+  receivedBytesPerSec: number;
+  medianRttMs: number;
+  medianAppPingMs: number;
+  sampleMs: number;
+}
+
 export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
@@ -210,6 +223,22 @@ export class ArenaScene extends Phaser.Scene {
     cameraFilterCount: 0,
     scanMs: 0,
     filterBreakdown: null as string | null,
+  };
+  private lastTransportPerformanceSampleAtMs = Number.NEGATIVE_INFINITY;
+  private lastTransportByteSampleAtMs = Number.NEGATIVE_INFINITY;
+  private lastTransportBytesSent = 0;
+  private lastTransportBytesReceived = 0;
+  private transportPerformanceCounts: TransportPerformanceCounts = {
+    linkCount: 0,
+    backpressureLinkCount: 0,
+    reliableBufferedBytes: 0,
+    fastBufferedBytes: 0,
+    droppedFastMessages: 0,
+    sentBytesPerSec: 0,
+    receivedBytesPerSec: 0,
+    medianRttMs: 0,
+    medianAppPingMs: 0,
+    sampleMs: 0,
   };
 
   constructor() {
@@ -804,6 +833,11 @@ export class ArenaScene extends Phaser.Scene {
     const frameStartMs = performance.now();
     let primaryStepMs = 0;
     let clientRendererSyncMs = 0;
+    let inputCameraMs = 0;
+    let lobbyUiMs = 0;
+    let arenaHudMs = 0;
+    let leaderboardCanopyMs = 0;
+    let arenaPanelMs = 0;
     this.syncArenaMetrics();
     this.lifecycle.detectPhaseChange();
     const networkUpdateStartMs = performance.now();
@@ -845,8 +879,10 @@ export class ArenaScene extends Phaser.Scene {
     } else {
       this.ctx.inputSystem.setInputEnabled(false);
     }
+    inputCameraMs = performance.now() - (networkUpdateStartMs + networkUpdateMs);
 
     if (!terminated && phase === 'LOBBY') {
+      const lobbyUiStartedAt = performance.now();
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       const players = bridge.getConnectedPlayers();
       // Lokalen Ready-Stand an den autoritativen Netzwerkwert angleichen. Setzt der Host beim
@@ -886,6 +922,7 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.leftPanel.refreshColorPickerIfOpen();
       this.ctx.leftPanel.updateLobby();
       if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
+      lobbyUiMs = performance.now() - lobbyUiStartedAt;
     } else if (!terminated && this.lobbyOverlay.isVisible()) {
       this.coopDefenseXpDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
@@ -904,6 +941,7 @@ export class ArenaScene extends Phaser.Scene {
     const sceneStateMs = sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs);
 
     if (inGame && !terminated) {
+      const arenaHudStartedAt = performance.now();
       const secs = bridge.computeSecondsLeft();
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
         ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
@@ -931,6 +969,7 @@ export class ArenaScene extends Phaser.Scene {
           }
         }
       }
+      arenaHudMs = performance.now() - arenaHudStartedAt;
 
       if (bridge.isHost()) {
         const hostStepStartMs = performance.now();
@@ -977,6 +1016,7 @@ export class ArenaScene extends Phaser.Scene {
         primaryStepMs += performance.now() - clientStepStartMs;
       }
 
+      const leaderboardCanopyStartedAt = performance.now();
       this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
 
       if (this.ctx.arenaResult) {
@@ -987,9 +1027,12 @@ export class ArenaScene extends Phaser.Scene {
           (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
         );
       }
+      leaderboardCanopyMs = performance.now() - leaderboardCanopyStartedAt;
     }
 
+    const arenaPanelStartedAt = performance.now();
     this.syncArenaPanelOverlayState(inGame && !terminated);
+    arenaPanelMs = performance.now() - arenaPanelStartedAt;
 
     const visualsStartMs = performance.now();
     const postRoleMs = visualsStartMs - sceneStateEndMs - primaryStepMs;
@@ -1110,11 +1153,14 @@ export class ArenaScene extends Phaser.Scene {
     const role = bridge.isHost() ? 'host' : 'client';
     const runtimePhase = terminated ? 'terminated' : (inGame ? 'arena' : 'lobby');
     const clientMetricsActive = role === 'client' && runtimePhase === 'arena';
+    const hostMetricsActive = role === 'host' && runtimePhase === 'arena';
     const firePerformance = this.ctx.fireSystem.takePerformanceMetrics();
     const lightingPerformance = this.renderers.lighting.getPerformanceMetrics();
     const scopePerformance = this.scopeOverlay?.getPerformanceMetrics();
     const clientPerformance = this.clientUpdate.getPerformanceMetrics();
+    const hostPerformance = this.hostUpdate.getPerformanceMetrics();
     const sceneCounts = this.sampleScenePerformanceCounts(performance.now());
+    const transportCounts = this.sampleTransportPerformanceCounts(performance.now());
     let sceneBreakdown: string | null = null;
     let sceneBreakdownScanMs = 0;
     if (this.runtimeProfiler?.shouldCaptureSceneBreakdown(role, delta)) {
@@ -1125,6 +1171,110 @@ export class ArenaScene extends Phaser.Scene {
     const localId = bridge.getLocalPlayerId();
     const nowSynchronized = bridge.getSynchronizedNow();
     const rawDelta = this.game.loop.rawDelta;
+    const runtimeContext = {
+      localAlive: this.localPlayerState.alive,
+      aimVisible: showAim,
+      scopeActive: scopeProgress > 0.005,
+      utilityPlacementActive: utilityPlacement !== undefined,
+      ultimatePlacementActive: ultimatePlacement !== undefined,
+      optionsOpen,
+      pageVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
+      documentFocused: typeof document === 'undefined' || document.hasFocus(),
+      roundElapsedMs: runtimePhase === 'arena' ? nowSynchronized - bridge.getArenaStartTime() : null,
+      weapon1Id: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? null,
+      weapon2Id: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? null,
+      utilityId: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? null,
+      ultimateId: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? null,
+    };
+    const detailTimings = {
+      scenePreludeMs,
+      sceneStateMs,
+      postRoleMs,
+      diagnosticsMs: 0,
+      inputCameraMs,
+      lobbyUiMs,
+      arenaHudMs,
+      leaderboardCanopyMs,
+      arenaPanelMs,
+      hostCoordinatorMs: hostMetricsActive ? hostPerformance.totalMs : 0,
+      hostEnemyAiMs: hostMetricsActive ? hostPerformance.enemyAiMs : 0,
+      hostPlayerSystemsMs: hostMetricsActive ? hostPerformance.playerSystemsMs : 0,
+      hostPhysicsMs: hostMetricsActive ? hostPerformance.physicsMs : 0,
+      hostCombatProjectilesMs: hostMetricsActive ? hostPerformance.combatProjectilesMs : 0,
+      hostExplosionsMs: hostMetricsActive ? hostPerformance.explosionsMs : 0,
+      hostAreaEffectsMs: hostMetricsActive ? hostPerformance.areaEffectsMs : 0,
+      hostWorldVisualsMs: hostMetricsActive ? hostPerformance.worldVisualsMs : 0,
+      hostHudMs: hostMetricsActive ? hostPerformance.hudMs : 0,
+      hostEffectFlushMs: hostMetricsActive ? hostPerformance.effectFlushMs : 0,
+      hostSnapshotBuildMs: hostMetricsActive ? hostPerformance.snapshotBuildMs : 0,
+      clientCoordinatorMs: clientMetricsActive ? clientPerformance.totalMs : 0,
+      clientSnapshotMs: clientMetricsActive ? clientPerformance.snapshotMs : 0,
+      clientPlayersMs: clientMetricsActive ? clientPerformance.playersMs : 0,
+      clientProjectilesEffectsMs: clientMetricsActive ? clientPerformance.projectilesEffectsMs : 0,
+      clientWorldStateMs: clientMetricsActive ? clientPerformance.worldStateMs : 0,
+      clientInterpolationMs: clientMetricsActive ? clientPerformance.interpolationMs : 0,
+      clientHudMs: clientMetricsActive ? clientPerformance.hudMs : 0,
+      clientRendererSyncMs,
+      clientPostSyncMs: clientMetricsActive ? clientPerformance.postSyncMs : 0,
+      aimPreviewMs,
+      aimGraphicsMs,
+      scopeMs,
+      scopeRasterMs: scopePerformance?.rasterMs ?? 0,
+      scopeUploadMs: scopePerformance?.uploadMs ?? 0,
+      aimIndicatorsMs,
+      lightingExpireMs: lightingPerformance.expireMs,
+      lightingQueueMs: lightingPerformance.queueMs,
+      lightingCommandBuildMs: lightingPerformance.commandBuildMs,
+      lightingDirectMs: lightingPerformance.directMs,
+      lightingOcclusionMs: lightingPerformance.occlusionMs,
+      lightingShadowGeometryMs: lightingPerformance.shadowGeometryMs,
+      sceneCountScanMs: sceneCounts.scanMs,
+      sceneBreakdownScanMs,
+      transportSampleMs: transportCounts.sampleMs,
+    };
+    const detailCounts = {
+      willRenderObjectCount: sceneCounts.willRenderObjectCount,
+      inCameraBoundsObjectCount: sceneCounts.inCameraBoundsObjectCount,
+      hiddenObjectCount: sceneCounts.hiddenObjectCount,
+      internalFilterCount: sceneCounts.internalFilterCount,
+      externalFilterCount: sceneCounts.externalFilterCount,
+      filteredObjectCount: sceneCounts.filteredObjectCount,
+      cameraFilterCount: sceneCounts.cameraFilterCount,
+      aimGraphicsCommandCount: this.ctx.aimSystem?.getGraphicsCommandCount() ?? 0,
+      scopeRefreshCount: scopePerformance?.refreshed ? 1 : 0,
+      scopeTexturePixels: scopePerformance?.texturePixels ?? 0,
+      directLightCount: lightingPerformance.directLights,
+      occludingLightCount: lightingPerformance.occludingLights,
+      fallbackOccludingLightCount: lightingPerformance.fallbackOccludingLights,
+      radialLightCount: lightingPerformance.radialLights,
+      coneLightCount: lightingPerformance.coneLights,
+      lightShadowQuadCount: lightingPerformance.shadowQuads,
+      lightFalloffQuadCount: lightingPerformance.falloffQuads,
+      lightingCommandCount: lightingPerformance.commandCount,
+      lightMapPixelCount: lightingPerformance.lightMapPixels,
+      lightingScratchPixelCount: lightingPerformance.scratchPixels,
+      newNetworkSnapshotCount: clientMetricsActive && clientPerformance.newSnapshot ? 1 : 0,
+      hostNetworkTickCount: hostMetricsActive && hostPerformance.networkTick ? 1 : 0,
+      hostExplosionEventCount: hostMetricsActive ? hostPerformance.explosionEventCount : 0,
+      transportLinkCount: transportCounts.linkCount,
+      transportBackpressureLinkCount: transportCounts.backpressureLinkCount,
+      transportReliableBufferedBytes: transportCounts.reliableBufferedBytes,
+      transportFastBufferedBytes: transportCounts.fastBufferedBytes,
+      transportDroppedFastMessages: transportCounts.droppedFastMessages,
+      transportSentBytesPerSec: transportCounts.sentBytesPerSec,
+      transportReceivedBytesPerSec: transportCounts.receivedBytesPerSec,
+      transportMedianRttMs: transportCounts.medianRttMs,
+      transportMedianAppPingMs: transportCounts.medianAppPingMs,
+    };
+    detailTimings.diagnosticsMs = performance.now() - diagnosticsStartedAt;
+    const updateMs = performance.now() - frameStartMs;
+    const frameLifecycle = this.runtimeProfiler?.takeLastFrameLifecycleMetrics(updateMs) ?? {
+      gameStepMs: 0,
+      sceneManagerUpdateMs: 0,
+      sceneSystemsAndPluginsMs: 0,
+      rendererSetupMs: 0,
+      betweenFramesMs: 0,
+    };
     this.runtimeProfiler?.record({
       role,
       phase: runtimePhase,
@@ -1135,7 +1285,12 @@ export class ArenaScene extends Phaser.Scene {
         : null,
       rawDeltaMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
       deltaMs: delta,
-      updateMs: performance.now() - frameStartMs,
+      updateMs,
+      gameStepMs: frameLifecycle.gameStepMs,
+      phaserSceneUpdateMs: frameLifecycle.sceneManagerUpdateMs,
+      phaserSceneSystemsMs: frameLifecycle.sceneSystemsAndPluginsMs,
+      rendererSetupMs: frameLifecycle.rendererSetupMs,
+      betweenFramesMs: frameLifecycle.betweenFramesMs,
       renderSubmitMs: this.runtimeProfiler.takeLastRenderSubmitMs(),
       roleStepMs: primaryStepMs,
       networkUpdateMs,
@@ -1163,74 +1318,10 @@ export class ArenaScene extends Phaser.Scene {
       renderedLightCount: lightingPerformance.renderedLights,
       drawCallCount: this.runtimeProfiler.takeLastDrawCallCount(),
       details: {
-        timings: {
-          scenePreludeMs,
-          sceneStateMs,
-          postRoleMs,
-          diagnosticsMs: performance.now() - diagnosticsStartedAt,
-          clientCoordinatorMs: clientMetricsActive ? clientPerformance.totalMs : 0,
-          clientSnapshotMs: clientMetricsActive ? clientPerformance.snapshotMs : 0,
-          clientPlayersMs: clientMetricsActive ? clientPerformance.playersMs : 0,
-          clientProjectilesEffectsMs: clientMetricsActive ? clientPerformance.projectilesEffectsMs : 0,
-          clientWorldStateMs: clientMetricsActive ? clientPerformance.worldStateMs : 0,
-          clientInterpolationMs: clientMetricsActive ? clientPerformance.interpolationMs : 0,
-          clientHudMs: clientMetricsActive ? clientPerformance.hudMs : 0,
-          clientRendererSyncMs,
-          clientPostSyncMs: clientMetricsActive ? clientPerformance.postSyncMs : 0,
-          aimPreviewMs,
-          aimGraphicsMs,
-          scopeMs,
-          scopeRasterMs: scopePerformance?.rasterMs ?? 0,
-          scopeUploadMs: scopePerformance?.uploadMs ?? 0,
-          aimIndicatorsMs,
-          lightingExpireMs: lightingPerformance.expireMs,
-          lightingQueueMs: lightingPerformance.queueMs,
-          lightingCommandBuildMs: lightingPerformance.commandBuildMs,
-          lightingDirectMs: lightingPerformance.directMs,
-          lightingOcclusionMs: lightingPerformance.occlusionMs,
-          lightingShadowGeometryMs: lightingPerformance.shadowGeometryMs,
-          sceneCountScanMs: sceneCounts.scanMs,
-          sceneBreakdownScanMs,
-        },
-        counts: {
-          willRenderObjectCount: sceneCounts.willRenderObjectCount,
-          inCameraBoundsObjectCount: sceneCounts.inCameraBoundsObjectCount,
-          hiddenObjectCount: sceneCounts.hiddenObjectCount,
-          internalFilterCount: sceneCounts.internalFilterCount,
-          externalFilterCount: sceneCounts.externalFilterCount,
-          filteredObjectCount: sceneCounts.filteredObjectCount,
-          cameraFilterCount: sceneCounts.cameraFilterCount,
-          aimGraphicsCommandCount: this.ctx.aimSystem?.getGraphicsCommandCount() ?? 0,
-          scopeRefreshCount: scopePerformance?.refreshed ? 1 : 0,
-          scopeTexturePixels: scopePerformance?.texturePixels ?? 0,
-          directLightCount: lightingPerformance.directLights,
-          occludingLightCount: lightingPerformance.occludingLights,
-          fallbackOccludingLightCount: lightingPerformance.fallbackOccludingLights,
-          radialLightCount: lightingPerformance.radialLights,
-          coneLightCount: lightingPerformance.coneLights,
-          lightShadowQuadCount: lightingPerformance.shadowQuads,
-          lightFalloffQuadCount: lightingPerformance.falloffQuads,
-          lightingCommandCount: lightingPerformance.commandCount,
-          lightMapPixelCount: lightingPerformance.lightMapPixels,
-          lightingScratchPixelCount: lightingPerformance.scratchPixels,
-          newNetworkSnapshotCount: clientMetricsActive && clientPerformance.newSnapshot ? 1 : 0,
-        },
+        timings: detailTimings,
+        counts: detailCounts,
       },
-      context: {
-        localAlive: this.localPlayerState.alive,
-        aimVisible: showAim,
-        scopeActive: scopeProgress > 0.005,
-        utilityPlacementActive: utilityPlacement !== undefined,
-        ultimatePlacementActive: ultimatePlacement !== undefined,
-        optionsOpen,
-        pageVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
-        documentFocused: typeof document === 'undefined' || document.hasFocus(),
-        roundElapsedMs: runtimePhase === 'arena' ? nowSynchronized - bridge.getArenaStartTime() : null,
-        weapon1Id: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? null,
-        weapon2Id: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? null,
-        utilityId: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? null,
-        ultimateId: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? null,
-      },
+      context: runtimeContext,
       lightPresetCounts: lightingPerformance.presetCounts,
       filterBreakdown: sceneCounts.filterBreakdown,
       sceneBreakdown,
@@ -1992,6 +2083,47 @@ export class ArenaScene extends Phaser.Scene {
     };
     this.lastScenePerformanceCountAtMs = nowMs;
     return this.scenePerformanceCounts;
+  }
+
+  private sampleTransportPerformanceCounts(nowMs: number): TransportPerformanceCounts {
+    if (nowMs - this.lastTransportPerformanceSampleAtMs < 500) {
+      return { ...this.transportPerformanceCounts, sampleMs: 0 };
+    }
+
+    const startedAt = performance.now();
+    const links = bridge.getTransportDiagnostics();
+    const bytesSent = links.reduce((sum, link) => sum + link.bytesSent, 0);
+    const bytesReceived = links.reduce((sum, link) => sum + link.bytesReceived, 0);
+    const elapsedMs = nowMs - this.lastTransportByteSampleAtMs;
+    const canComputeRate = Number.isFinite(elapsedMs) && elapsedMs > 0;
+    const measuredRtts = links
+      .map(link => link.medianRttMs)
+      .filter((value): value is number => value !== null);
+    const measuredAppPings = links
+      .map(link => link.medianAppPingMs)
+      .filter((value): value is number => value !== null);
+
+    this.lastTransportPerformanceSampleAtMs = nowMs;
+    this.lastTransportByteSampleAtMs = nowMs;
+    this.transportPerformanceCounts = {
+      linkCount: links.length,
+      backpressureLinkCount: links.filter(link => link.backpressure).length,
+      reliableBufferedBytes: links.reduce((sum, link) => sum + link.reliableBufferedBytes, 0),
+      fastBufferedBytes: links.reduce((sum, link) => sum + link.fastBufferedBytes, 0),
+      droppedFastMessages: links.reduce((sum, link) => sum + link.droppedFastMessages, 0),
+      sentBytesPerSec: canComputeRate
+        ? Math.max(0, bytesSent - this.lastTransportBytesSent) * 1000 / elapsedMs
+        : 0,
+      receivedBytesPerSec: canComputeRate
+        ? Math.max(0, bytesReceived - this.lastTransportBytesReceived) * 1000 / elapsedMs
+        : 0,
+      medianRttMs: measuredRtts.length > 0 ? Math.max(...measuredRtts) : 0,
+      medianAppPingMs: measuredAppPings.length > 0 ? Math.max(...measuredAppPings) : 0,
+      sampleMs: performance.now() - startedAt,
+    };
+    this.lastTransportBytesSent = bytesSent;
+    this.lastTransportBytesReceived = bytesReceived;
+    return this.transportPerformanceCounts;
   }
 
   private describePerformanceEnvironment(): Record<string, unknown> {

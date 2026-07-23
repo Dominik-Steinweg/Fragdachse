@@ -50,19 +50,21 @@ Phaser 4 führt für WebGL keinen Draw-Call-Zähler: `drawCount` gibt es nur am 
 
 Objekte pro Draw-Call ist die Kennzahl für Batching. Bricht sie ein, während die Objektzahl gleich bleibt, wechseln zu viele Texturen oder Blend-Zustände innerhalb der Szene; große statische Flächen gehören dann in eine gemeinsame Textur oder einen GPU-Layer.
 
-Die Zeitschlüssel bilden zwei Ebenen: `rawDeltaMs` zerfällt näherungsweise in
-`updateMs`, `renderSubmitMs` und `unaccountedFrameMs`; `updateMs` zerfällt in
-`roleStepMs`, die beiden Netzwerkposten, `visualStepMs`, `shadowStepMs`,
-`lightingStepMs` und `unaccountedUpdateMs`. `visualStepMs` zerfällt lückenlos in
-`visualCameraMs`, `visualEnemyMs`, `visualEffectsMs`, `visualAimMs` und
-`visualHudMs`. Die `fire*`-Werte sind Teilkosten von `roleStepMs` und dürfen nicht zum
-Update-Budget addiert werden.
+Das CPU-Budget zerfällt in Phaser-SceneManager, Renderer-Setup, Render-Abgabe und einen
+echten unbekannten CPU-Rest. Innerhalb von `ArenaScene.update()` werden Prelude,
+Netzwerk-Update, Scene-/Lobby-Zustand, Rollen-Schritt, Nachbereitung, Visuals, Schatten,
+Licht, Netzwerk-Flush und Diagnose unterschieden. `visualStepMs` zerfällt lückenlos in
+`visualCameraMs`, `visualEnemyMs`, `visualEffectsMs`, `visualAimMs` und `visualHudMs`.
+Die `fire*`- und `host*`-Werte sind Teilkosten von `roleStepMs` und dürfen nicht erneut
+zum Update-Budget addiert werden. Positive `overaccounted*`-Werte zeigen überlappende
+oder zeitlich um einen Frame versetzte Messungen und müssen bei der Interpretation
+berücksichtigt werden.
 
 Vergleiche nach Möglichkeit dieselbe Map, Rolle, Spielerzahl und Kampfsituation. Erst ein Profil wechseln oder Code ändern, dann ein neues Messfenster beziehungsweise eine neue Aufzeichnung erzeugen. P95/P99 und der Anteil langsamer Frames sind für sporadische Hänger aussagekräftiger als nur der Mittelwert.
 
-## Trace-Schema v3
+## Trace-Schema v4
 
-Schema v3 zeichnet alle Scene-Phasen (`lobby`, `arena`, `terminated`) auf. `rawDeltaMs`
+Schema v4 zeichnet alle Scene-Phasen (`lobby`, `arena`, `terminated`) auf. `rawDeltaMs`
 ist die ungeglättete Zeit zwischen Phaser-Schritten und die Grundlage für `fps`, P95/P99
 und Slow-Frame-Anteile; `deltaMs` und `smoothedFps` bleiben nur als Vergleich mit Phasers
 geglätteter Spielzeit erhalten. `frameSeries` bewahrt die einzelnen Frames als
@@ -86,7 +88,27 @@ Samples (`performance.memory`) und GC-Einträge sind Browser-abhängig und dürf
 sein. `instrumentation.profilerRecordMs` macht die Eigenkosten der Aufzeichnung
 sichtbar.
 
-Der In-App-Trace liefert absichtlich keine JavaScript-Callstacks und keine
-GPU-Pass-Aufschlüsselung pro GameObject oder Filter. Wenn ein unbekannter Restposten,
-ein Long Task oder die GPU-Gesamtzeit auffällig bleibt, ist weiterhin ein Browser-
-Performance-Trace mit CPU-Sampling beziehungsweise ein GPU-Frame-Capture erforderlich.
+Schema v4 betrachtet das gesamte Frame-Budget. Die Phaser-Core-Ereignisse trennen den
+vollständigen CPU-Spielschritt, SceneManager-Update, Scene-Systeme/Plugins, Renderer-Setup
+und Render-Abgabe. Diese vollständigen Werte gehören jeweils zum vorherigen abgeschlossenen
+Frame, weil `ArenaScene.update()` vor `poststep` und `postrender` läuft. `betweenFramesMs`
+ist Zeit zwischen zwei Spielschritten und enthält typischerweise normales VSync-/FPS-Limit-
+Warten; sie ist für sich allein kein Optimierungsproblem. `unaccountedFrameMs` bezeichnet
+dagegen nur CPU-Zeit innerhalb des gemessenen Phaser-Schritts, die keinem bekannten
+Lifecycle-Abschnitt zugeordnet ist.
+
+Der Host-Schritt ist in Gegner-KI, Spielersysteme, Physik, Kampf/Projektile, Explosionen,
+Flächeneffekte, Welt-/Visual-Synchronisierung, HUD, Effekt-Flush und Snapshot-Bau geteilt.
+Der Client behält seine Aufteilung nach Snapshot, Spielern, Projektilen/FX, Weltzustand,
+Interpolation, HUD und Renderer-Sync. Lobby-/UI-Zustand, Input/Kamera, Rundenzustand und
+Diagnose-Eigenkosten sind ebenfalls eigene Reihen. Netzwerkdaten ergänzen CPU-Zeiten um
+Traffic-Raten, Sendepuffer, Backpressure, verworfene Fast-Nachrichten sowie RTT.
+
+`instrumentation.observability` sagt explizit, welche Browser-APIs verfügbar waren.
+Unterstützte Browser liefern Long Animation Frames mit Skript-/Invoker-Zuordnung und
+Forced-Layout-/Pause-Zeit sowie Event Timing mit Input-, Handler- und Presentation-Delay.
+Long Tasks, GC, Heap-Samples und GPU-Timer bleiben zusätzliche, browserabhängige Signale.
+Der In-App-Trace liefert weiterhin keine vollständigen JavaScript-Callstacks und keine
+GPU-Pass-Aufschlüsselung pro GameObject oder Filter. Wenn ein unbekannter CPU-Restposten
+oder die GPU-Gesamtzeit auffällig bleibt, ist ein Browser-Performance-Trace mit
+CPU-Sampling beziehungsweise ein GPU-Frame-Capture erforderlich.

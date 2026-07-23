@@ -10,6 +10,10 @@ const MAX_RAW_FRAME_SAMPLES = 60_000;
 const MEMORY_SAMPLE_INTERVAL_MS = 1000;
 const GPU_QUERY_INTERVAL_FRAMES = 4;
 const MAX_PENDING_GPU_QUERIES = 16;
+const MAX_EVENT_TIMING_SAMPLES = 5_000;
+const GAME_PRE_STEP_EVENT = 'prestep';
+const GAME_STEP_EVENT = 'step';
+const GAME_POST_STEP_EVENT = 'poststep';
 const GAME_PRE_RENDER_EVENT = 'prerender';
 const GAME_POST_RENDER_EVENT = 'postrender';
 
@@ -46,6 +50,22 @@ export type DetailTimingKey =
   | 'sceneStateMs'
   | 'postRoleMs'
   | 'diagnosticsMs'
+  | 'inputCameraMs'
+  | 'lobbyUiMs'
+  | 'arenaHudMs'
+  | 'leaderboardCanopyMs'
+  | 'arenaPanelMs'
+  | 'hostCoordinatorMs'
+  | 'hostEnemyAiMs'
+  | 'hostPlayerSystemsMs'
+  | 'hostPhysicsMs'
+  | 'hostCombatProjectilesMs'
+  | 'hostExplosionsMs'
+  | 'hostAreaEffectsMs'
+  | 'hostWorldVisualsMs'
+  | 'hostHudMs'
+  | 'hostEffectFlushMs'
+  | 'hostSnapshotBuildMs'
   | 'clientCoordinatorMs'
   | 'clientSnapshotMs'
   | 'clientPlayersMs'
@@ -68,7 +88,8 @@ export type DetailTimingKey =
   | 'lightingOcclusionMs'
   | 'lightingShadowGeometryMs'
   | 'sceneCountScanMs'
-  | 'sceneBreakdownScanMs';
+  | 'sceneBreakdownScanMs'
+  | 'transportSampleMs';
 
 export type DetailCountKey =
   | 'willRenderObjectCount'
@@ -96,7 +117,18 @@ export type DetailCountKey =
   | 'lightingCommandCount'
   | 'lightMapPixelCount'
   | 'lightingScratchPixelCount'
-  | 'newNetworkSnapshotCount';
+  | 'newNetworkSnapshotCount'
+  | 'hostNetworkTickCount'
+  | 'hostExplosionEventCount'
+  | 'transportLinkCount'
+  | 'transportBackpressureLinkCount'
+  | 'transportReliableBufferedBytes'
+  | 'transportFastBufferedBytes'
+  | 'transportDroppedFastMessages'
+  | 'transportSentBytesPerSec'
+  | 'transportReceivedBytesPerSec'
+  | 'transportMedianRttMs'
+  | 'transportMedianAppPingMs';
 
 export interface ArenaRuntimeDetails {
   timings?: Partial<Record<DetailTimingKey, number>>;
@@ -130,6 +162,12 @@ export interface ArenaRuntimeSample {
   /** Von Phaser geglaettetes Spiel-Delta. Nicht fuer echte FPS oder Hiccup-Spitzen verwenden. */
   deltaMs: number;
   updateMs: number;
+  /** Vorheriger vollstaendig abgeschlossener Phaser-Frame. */
+  gameStepMs: number;
+  phaserSceneUpdateMs: number;
+  phaserSceneSystemsMs: number;
+  rendererSetupMs: number;
+  betweenFramesMs: number;
   /** Vorheriger Frame: `update` laeuft vor `render`, der Wert stammt aus dem letzten postrender. */
   renderSubmitMs: number;
   roleStepMs: number;
@@ -171,8 +209,11 @@ export interface ArenaRuntimeSample {
 interface DerivedSampleTimings {
   /** `updateMs` minus aller instrumentierten Teilschritte des Frames. */
   unaccountedUpdateMs: number;
-  /** `rawDeltaMs` minus Update und Render-Abgabe: Phaser-Interna, Compositing, GC. */
+  /** Ueberlappende Teilmessungen, falls die Summe groesser als `updateMs` ist. */
+  overaccountedUpdateMs: number;
+  /** Gemessener CPU-Spielschritt minus SceneManager, Renderer-Setup und Render-Abgabe. */
   unaccountedFrameMs: number;
+  overaccountedFrameMs: number;
 }
 
 interface RecordedSample extends ArenaRuntimeSample, DerivedSampleTimings {
@@ -274,6 +315,38 @@ export interface PerformanceGcSample {
   kind: number | null;
 }
 
+export interface PerformanceLongAnimationFrame {
+  startMs: number;
+  durationMs: number;
+  blockingDurationMs: number;
+  renderStartMs: number | null;
+  styleAndLayoutStartMs: number | null;
+  firstUiEventMs: number | null;
+  frameIndex: number | null;
+  phase: RuntimePhase | null;
+  role: 'host' | 'client' | null;
+  scripts: Array<{
+    durationMs: number;
+    executionStartMs: number | null;
+    forcedStyleAndLayoutMs: number;
+    pauseMs: number;
+    invoker: string;
+    invokerType: string;
+    source: string;
+    functionName: string;
+  }>;
+}
+
+export interface PerformanceEventTimingSample {
+  startMs: number;
+  durationMs: number;
+  inputDelayMs: number;
+  processingMs: number;
+  presentationDelayMs: number;
+  name: string;
+  interactionId: number | null;
+}
+
 export interface PerformanceLifecycleEvent {
   atMs: number;
   type: 'visibility' | 'focus' | 'blur';
@@ -287,7 +360,7 @@ export interface PerformanceGpuSample {
 }
 
 export interface ArenaPerformanceReport {
-  schemaVersion: 3;
+  schemaVersion: 4;
   /** Laufende Nummer der Messung. Zwei Exporte derselben Messung tragen dieselbe Nummer. */
   recordingId: number;
   createdAt: string;
@@ -308,6 +381,8 @@ export interface ArenaPerformanceReport {
     truncated: boolean;
   };
   longTasks: PerformanceLongTask[];
+  longAnimationFrames: PerformanceLongAnimationFrame[];
+  eventTimings: PerformanceEventTimingSample[];
   memorySamples: PerformanceMemorySample[];
   gcSamples: PerformanceGcSample[];
   lifecycleEvents: PerformanceLifecycleEvent[];
@@ -322,7 +397,17 @@ export interface ArenaPerformanceReport {
     drawCallHooks: boolean;
     glDiagnosticHooks: boolean;
     rawFrameLimit: number;
+    eventTimingLimit: number;
+    eventTimingsTruncated: boolean;
     profilerRecordMs: MetricSummary;
+    observability: {
+      longTasks: 'supported' | 'unsupported' | 'unavailable';
+      longAnimationFrames: 'supported' | 'unsupported' | 'unavailable';
+      eventTiming: 'supported' | 'unsupported' | 'unavailable';
+      gc: 'supported' | 'unsupported' | 'unavailable';
+      memory: 'supported' | 'unsupported';
+      gpuTimer: 'supported' | 'unsupported' | 'unavailable';
+    };
   };
 }
 
@@ -330,6 +415,11 @@ export type TimingKey =
   | 'rawDeltaMs'
   | 'deltaMs'
   | 'updateMs'
+  | 'gameStepMs'
+  | 'phaserSceneUpdateMs'
+  | 'phaserSceneSystemsMs'
+  | 'rendererSetupMs'
+  | 'betweenFramesMs'
   | 'renderSubmitMs'
   | 'unaccountedFrameMs'
   | 'roleStepMs'
@@ -344,6 +434,8 @@ export type TimingKey =
   | 'shadowStepMs'
   | 'lightingStepMs'
   | 'unaccountedUpdateMs'
+  | 'overaccountedUpdateMs'
+  | 'overaccountedFrameMs'
   | 'fireSimulationMs'
   | 'fireCreationMs'
   | 'fireVisualMs';
@@ -362,21 +454,27 @@ export type CountKey =
   | 'drawCallCount';
 
 const TIMING_KEYS: readonly TimingKey[] = [
-  'rawDeltaMs', 'deltaMs', 'updateMs', 'renderSubmitMs', 'unaccountedFrameMs',
+  'rawDeltaMs', 'deltaMs', 'updateMs',
+  'gameStepMs', 'phaserSceneUpdateMs', 'phaserSceneSystemsMs', 'rendererSetupMs', 'betweenFramesMs',
+  'renderSubmitMs', 'unaccountedFrameMs',
   'roleStepMs', 'networkUpdateMs', 'networkFlushMs',
   'visualStepMs', 'visualCameraMs', 'visualEnemyMs', 'visualEffectsMs', 'visualAimMs', 'visualHudMs',
-  'shadowStepMs', 'lightingStepMs', 'unaccountedUpdateMs',
+  'shadowStepMs', 'lightingStepMs', 'unaccountedUpdateMs', 'overaccountedUpdateMs', 'overaccountedFrameMs',
   'fireSimulationMs', 'fireCreationMs', 'fireVisualMs',
 ];
 
 export const DETAIL_TIMING_KEYS: readonly DetailTimingKey[] = [
   'scenePreludeMs', 'sceneStateMs', 'postRoleMs', 'diagnosticsMs',
+  'inputCameraMs', 'lobbyUiMs', 'arenaHudMs', 'leaderboardCanopyMs', 'arenaPanelMs',
+  'hostCoordinatorMs', 'hostEnemyAiMs', 'hostPlayerSystemsMs', 'hostPhysicsMs',
+  'hostCombatProjectilesMs', 'hostExplosionsMs', 'hostAreaEffectsMs', 'hostWorldVisualsMs',
+  'hostHudMs', 'hostEffectFlushMs', 'hostSnapshotBuildMs',
   'clientCoordinatorMs', 'clientSnapshotMs', 'clientPlayersMs', 'clientProjectilesEffectsMs',
   'clientWorldStateMs', 'clientInterpolationMs', 'clientHudMs', 'clientRendererSyncMs', 'clientPostSyncMs',
   'aimPreviewMs', 'aimGraphicsMs', 'scopeMs', 'scopeRasterMs', 'scopeUploadMs', 'aimIndicatorsMs',
   'lightingExpireMs', 'lightingQueueMs', 'lightingCommandBuildMs', 'lightingDirectMs',
   'lightingOcclusionMs', 'lightingShadowGeometryMs',
-  'sceneCountScanMs', 'sceneBreakdownScanMs',
+  'sceneCountScanMs', 'sceneBreakdownScanMs', 'transportSampleMs',
 ];
 
 const COUNT_KEYS: readonly CountKey[] = [
@@ -393,6 +491,11 @@ export const DETAIL_COUNT_KEYS: readonly DetailCountKey[] = [
   'directLightCount', 'occludingLightCount', 'fallbackOccludingLightCount', 'radialLightCount', 'coneLightCount',
   'lightShadowQuadCount', 'lightFalloffQuadCount', 'lightingCommandCount',
   'lightMapPixelCount', 'lightingScratchPixelCount', 'newNetworkSnapshotCount',
+  'hostNetworkTickCount', 'hostExplosionEventCount',
+  'transportLinkCount', 'transportBackpressureLinkCount',
+  'transportReliableBufferedBytes', 'transportFastBufferedBytes', 'transportDroppedFastMessages',
+  'transportSentBytesPerSec', 'transportReceivedBytesPerSec',
+  'transportMedianRttMs', 'transportMedianAppPingMs',
 ];
 
 interface RuntimeWindow {
@@ -413,16 +516,30 @@ interface RuntimeWindow {
  * Restposten des Update-Budgets. `fire*` bleibt aussen vor: die Feuerkosten laufen innerhalb des
  * Host-Schritts und wuerden sonst doppelt zaehlen.
  */
-function deriveSampleTimings(sample: ArenaRuntimeSample): DerivedSampleTimings {
-  const accountedUpdateMs = sample.roleStepMs
+function deriveSampleTimings(
+  sample: ArenaRuntimeSample,
+  details: Readonly<Record<DetailTimingKey, number>>,
+): DerivedSampleTimings {
+  const accountedUpdateMs = details.scenePreludeMs
     + sample.networkUpdateMs
+    + details.sceneStateMs
+    + sample.roleStepMs
+    + details.postRoleMs
     + sample.networkFlushMs
     + sample.visualStepMs
     + sample.shadowStepMs
-    + sample.lightingStepMs;
+    + sample.lightingStepMs
+    + details.diagnosticsMs;
+  const updateDifferenceMs = sample.updateMs - accountedUpdateMs;
+  const frameDifferenceMs = sample.gameStepMs
+    - sample.phaserSceneUpdateMs
+    - sample.rendererSetupMs
+    - sample.renderSubmitMs;
   return {
-    unaccountedUpdateMs: sample.updateMs - accountedUpdateMs,
-    unaccountedFrameMs: sample.rawDeltaMs - sample.updateMs - sample.renderSubmitMs,
+    unaccountedUpdateMs: Math.max(0, updateDifferenceMs),
+    overaccountedUpdateMs: Math.max(0, -updateDifferenceMs),
+    unaccountedFrameMs: Math.max(0, frameDifferenceMs),
+    overaccountedFrameMs: Math.max(0, -frameDifferenceMs),
   };
 }
 
@@ -545,6 +662,44 @@ function estimateTextureUploadPixels(method: GlDiagnosticMethod, args: unknown[]
   return 0;
 }
 
+export interface PhaserFrameLifecycleMetrics {
+  gameStepMs: number;
+  sceneManagerUpdateMs: number;
+  sceneSystemsAndPluginsMs: number;
+  rendererSetupMs: number;
+  betweenFramesMs: number;
+}
+
+function emptyPhaserFrameLifecycleMetrics(): PhaserFrameLifecycleMetrics {
+  return {
+    gameStepMs: 0,
+    sceneManagerUpdateMs: 0,
+    sceneSystemsAndPluginsMs: 0,
+    rendererSetupMs: 0,
+    betweenFramesMs: 0,
+  };
+}
+
+type ObserverSupport = 'supported' | 'unsupported' | 'unavailable';
+
+function getObserverSupport(entryType: string): ObserverSupport {
+  if (typeof PerformanceObserver === 'undefined') return 'unavailable';
+  const supported = PerformanceObserver.supportedEntryTypes;
+  if (!Array.isArray(supported)) return 'unsupported';
+  return supported.includes(entryType) ? 'supported' : 'unsupported';
+}
+
+function sanitizeSourceUrl(sourceUrl: string): string {
+  if (!sourceUrl) return '';
+  try {
+    const parsed = new URL(sourceUrl, typeof document === 'undefined' ? 'http://local/' : document.baseURI);
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    return parts.slice(-2).join('/');
+  } catch {
+    return sourceUrl.split(/[?#]/, 1)[0].slice(-160);
+  }
+}
+
 export class ArenaRuntimeProfiler {
   private metricsWindow: RuntimeWindow | null = null;
   private latestSummary: ArenaRuntimeWindowSummary | null = null;
@@ -561,6 +716,9 @@ export class ArenaRuntimeProfiler {
   private readonly rawFrameRows: number[][] = [];
   private rawFrameRowsTruncated = false;
   private readonly longTasks: PerformanceLongTask[] = [];
+  private readonly longAnimationFrames: PerformanceLongAnimationFrame[] = [];
+  private readonly eventTimings: PerformanceEventTimingSample[] = [];
+  private eventTimingsTruncated = false;
   private readonly memorySamples: PerformanceMemorySample[] = [];
   private readonly gcSamples: PerformanceGcSample[] = [];
   private nextMemorySampleAtMs = 0;
@@ -568,10 +726,24 @@ export class ArenaRuntimeProfiler {
   private readonly gpuSamples: PerformanceGpuSample[] = [];
   private readonly profilerRecordCostsMs: number[] = [];
   private longTaskObserver: PerformanceObserver | null = null;
+  private longAnimationFrameObserver: PerformanceObserver | null = null;
+  private eventTimingObserver: PerformanceObserver | null = null;
   private gcObserver: PerformanceObserver | null = null;
   private latestRecordedSample: RecordedSample | null = null;
   private renderStartedAtMs = 0;
   private lastRenderSubmitMs = 0;
+  private preStepStartedAtMs = 0;
+  private sceneManagerStartedAtMs = 0;
+  private postStepAtMs = 0;
+  private lastPostRenderAtMs = 0;
+  private previousSceneUpdateMs = 0;
+  private currentBetweenFramesMs = 0;
+  private currentSceneManagerUpdateMs = 0;
+  private currentRendererSetupMs = 0;
+  private lastFrameLifecycle = emptyPhaserFrameLifecycleMetrics();
+  private originalLoopCallback: ((time: number, delta: number) => void) | null = null;
+  private wrappedLoopCallback: ((time: number, delta: number) => void) | null = null;
+  private lastLoopCallbackEndedAtMs = 0;
   private game: Phaser.Game | null = null;
   private glContext: GlContext | null = null;
   private drawCallHooksInstalled = false;
@@ -591,6 +763,24 @@ export class ArenaRuntimeProfiler {
   private pendingGpuQueriesDropped = 0;
   private disjointGpuSamplesDropped = 0;
 
+  private readonly onPreStep = (): void => {
+    const now = performance.now();
+    this.currentBetweenFramesMs = this.lastPostRenderAtMs > 0 ? Math.max(0, now - this.lastPostRenderAtMs) : 0;
+    this.preStepStartedAtMs = now;
+  };
+
+  private readonly onStep = (): void => {
+    this.sceneManagerStartedAtMs = performance.now();
+  };
+
+  private readonly onPostStep = (): void => {
+    const now = performance.now();
+    this.currentSceneManagerUpdateMs = this.sceneManagerStartedAtMs > 0
+      ? Math.max(0, now - this.sceneManagerStartedAtMs)
+      : 0;
+    this.postStepAtMs = now;
+  };
+
   private readonly onVisibilityChange = (): void => {
     this.recordLifecycleEvent('visibility', typeof document === 'undefined' ? 'unknown' : document.visibilityState);
   };
@@ -604,7 +794,9 @@ export class ArenaRuntimeProfiler {
   };
 
   private readonly onPreRender = (): void => {
-    this.renderStartedAtMs = performance.now();
+    const now = performance.now();
+    this.currentRendererSetupMs = this.postStepAtMs > 0 ? Math.max(0, now - this.postStepAtMs) : 0;
+    this.renderStartedAtMs = now;
     this.frameDrawCallCount = 0;
     this.frameGlDiagnostics = emptyGlFrameDiagnostics();
     this.renderFrame += 1;
@@ -613,11 +805,20 @@ export class ArenaRuntimeProfiler {
   };
 
   private readonly onPostRender = (): void => {
+    const now = performance.now();
     this.endGpuQuery();
     this.lastFrameDrawCallCount = this.frameDrawCallCount;
     this.lastFrameGlDiagnostics = { ...this.frameGlDiagnostics };
     if (this.renderStartedAtMs <= 0) return;
-    this.lastRenderSubmitMs = performance.now() - this.renderStartedAtMs;
+    this.lastRenderSubmitMs = now - this.renderStartedAtMs;
+    this.lastFrameLifecycle = {
+      gameStepMs: this.preStepStartedAtMs > 0 ? Math.max(0, now - this.preStepStartedAtMs) : 0,
+      sceneManagerUpdateMs: this.currentSceneManagerUpdateMs,
+      sceneSystemsAndPluginsMs: Math.max(0, this.currentSceneManagerUpdateMs - this.previousSceneUpdateMs),
+      rendererSetupMs: this.currentRendererSetupMs,
+      betweenFramesMs: this.currentBetweenFramesMs,
+    };
+    this.lastPostRenderAtMs = now;
     this.renderStartedAtMs = 0;
   };
 
@@ -626,9 +827,43 @@ export class ArenaRuntimeProfiler {
     this.detachGame();
     this.game = game;
     this.glContext = (game.renderer as { gl?: GlContext }).gl ?? null;
+    const loop = (game as Phaser.Game & {
+      loop?: { callback?: (time: number, delta: number) => void };
+    }).loop;
+    if (loop && typeof loop.callback === 'function') {
+      this.originalLoopCallback = loop.callback;
+      this.wrappedLoopCallback = (time: number, delta: number): void => {
+        const startedAt = performance.now();
+        const betweenFramesMs = this.lastLoopCallbackEndedAtMs > 0
+          ? Math.max(0, startedAt - this.lastLoopCallbackEndedAtMs)
+          : 0;
+        this.originalLoopCallback?.(time, delta);
+        const endedAt = performance.now();
+        this.lastFrameLifecycle = {
+          ...this.lastFrameLifecycle,
+          gameStepMs: Math.max(0, endedAt - startedAt),
+          betweenFramesMs,
+        };
+        this.lastLoopCallbackEndedAtMs = endedAt;
+      };
+      loop.callback = this.wrappedLoopCallback;
+    }
     this.setupGpuTimer();
+    game.events.on(GAME_PRE_STEP_EVENT, this.onPreStep);
+    game.events.on(GAME_STEP_EVENT, this.onStep);
+    game.events.on(GAME_POST_STEP_EVENT, this.onPostStep);
     game.events.on(GAME_PRE_RENDER_EVENT, this.onPreRender);
     game.events.on(GAME_POST_RENDER_EVENT, this.onPostRender);
+  }
+
+  /**
+   * Liefert den zuletzt vollstaendig abgeschlossenen Phaser-Frame. Der aktuelle Scene-Update-Wert
+   * wird fuer die Systems/Plugins-Restzeit des naechsten abgeschlossenen Frames vorgemerkt.
+   */
+  takeLastFrameLifecycleMetrics(currentSceneUpdateMs: number): PhaserFrameLifecycleMetrics {
+    const result = { ...this.lastFrameLifecycle };
+    this.previousSceneUpdateMs = currentSceneUpdateMs;
+    return result;
   }
 
   takeLastRenderSubmitMs(): number {
@@ -678,7 +913,7 @@ export class ArenaRuntimeProfiler {
     detailCounts.bufferUploadCount = this.lastFrameGlDiagnostics.bufferUploadCount;
     const recordedSample: RecordedSample = {
       ...sample,
-      ...deriveSampleTimings(sample),
+      ...deriveSampleTimings(sample, detailTimings),
       atMs: this.recording ? Math.max(0, now - this.recordingStartedAtMs) : now,
       detailTimings,
       detailCounts,
@@ -731,6 +966,9 @@ export class ArenaRuntimeProfiler {
     this.rawFrameRows.length = 0;
     this.rawFrameRowsTruncated = false;
     this.longTasks.length = 0;
+    this.longAnimationFrames.length = 0;
+    this.eventTimings.length = 0;
+    this.eventTimingsTruncated = false;
     this.memorySamples.length = 0;
     this.gcSamples.length = 0;
     this.lifecycleEvents.length = 0;
@@ -744,6 +982,8 @@ export class ArenaRuntimeProfiler {
     this.recordingUsedGlDiagnosticHooks = false;
     this.metricsWindow = null;
     this.startLongTaskObserver();
+    this.startLongAnimationFrameObserver();
+    this.startEventTimingObserver();
     this.startGcObserver();
     this.startLifecycleTracking();
     this.setupGpuTimer();
@@ -759,6 +999,8 @@ export class ArenaRuntimeProfiler {
     this.recordingEndedEpochMs = Date.now();
     this.autoStopped = autoStopped;
     this.stopLongTaskObserver();
+    this.stopLongAnimationFrameObserver();
+    this.stopEventTimingObserver();
     this.stopGcObserver();
     this.stopLifecycleTracking();
     this.finishGpuQueries();
@@ -792,7 +1034,7 @@ export class ArenaRuntimeProfiler {
   buildReport(): ArenaPerformanceReport | null {
     if (!this.canExport()) return null;
     return {
-      schemaVersion: 3,
+      schemaVersion: 4,
       recordingId: this.recordingId,
       createdAt: new Date().toISOString(),
       recordingStartedAt: new Date(this.recordingStartedEpochMs).toISOString(),
@@ -817,6 +1059,8 @@ export class ArenaRuntimeProfiler {
         truncated: this.rawFrameRowsTruncated,
       },
       longTasks: [...this.longTasks],
+      longAnimationFrames: [...this.longAnimationFrames],
+      eventTimings: [...this.eventTimings],
       memorySamples: [...this.memorySamples],
       gcSamples: [...this.gcSamples],
       lifecycleEvents: [...this.lifecycleEvents],
@@ -833,13 +1077,29 @@ export class ArenaRuntimeProfiler {
         drawCallHooks: this.recordingUsedDrawCallHooks,
         glDiagnosticHooks: this.recordingUsedGlDiagnosticHooks,
         rawFrameLimit: MAX_RAW_FRAME_SAMPLES,
+        eventTimingLimit: MAX_EVENT_TIMING_SAMPLES,
+        eventTimingsTruncated: this.eventTimingsTruncated,
         profilerRecordMs: summarizeMetric(this.profilerRecordCostsMs),
+        observability: {
+          longTasks: getObserverSupport('longtask'),
+          longAnimationFrames: getObserverSupport('long-animation-frame'),
+          eventTiming: getObserverSupport('event'),
+          gc: getObserverSupport('gc'),
+          memory: typeof (performance as Performance & { memory?: unknown }).memory === 'object'
+            ? 'supported'
+            : 'unsupported',
+          gpuTimer: this.glContext
+            ? (this.gpuTimer ? 'supported' : 'unsupported')
+            : 'unavailable',
+        },
       },
     };
   }
 
   destroy(): void {
     this.stopLongTaskObserver();
+    this.stopLongAnimationFrameObserver();
+    this.stopEventTimingObserver();
     this.stopGcObserver();
     this.stopLifecycleTracking();
     this.finishGpuQueries();
@@ -1004,6 +1264,108 @@ export class ArenaRuntimeProfiler {
   private stopLongTaskObserver(): void {
     this.longTaskObserver?.disconnect();
     this.longTaskObserver = null;
+  }
+
+  private startLongAnimationFrameObserver(): void {
+    if (getObserverSupport('long-animation-frame') !== 'supported') return;
+    try {
+      this.longAnimationFrameObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          const loaf = entry as PerformanceEntry & {
+            blockingDuration?: number;
+            renderStart?: number;
+            styleAndLayoutStart?: number;
+            firstUIEventTimestamp?: number;
+            scripts?: Array<{
+              duration?: number;
+              executionStart?: number;
+              forcedStyleAndLayoutDuration?: number;
+              pauseDuration?: number;
+              invoker?: string;
+              invokerType?: string;
+              sourceURL?: string;
+              sourceFunctionName?: string;
+            }>;
+          };
+          const sample = this.latestRecordedSample;
+          const relativeTime = (value: number | undefined): number | null => (
+            typeof value === 'number' && value > 0
+              ? Math.max(0, value - this.recordingStartedAtMs)
+              : null
+          );
+          this.longAnimationFrames.push({
+            startMs: Math.max(0, entry.startTime - this.recordingStartedAtMs),
+            durationMs: entry.duration,
+            blockingDurationMs: loaf.blockingDuration ?? 0,
+            renderStartMs: relativeTime(loaf.renderStart),
+            styleAndLayoutStartMs: relativeTime(loaf.styleAndLayoutStart),
+            firstUiEventMs: relativeTime(loaf.firstUIEventTimestamp),
+            frameIndex: sample ? Math.max(0, this.rawFrameRows.length - 1) : null,
+            phase: sample?.phase ?? null,
+            role: sample?.role ?? null,
+            scripts: (loaf.scripts ?? []).map((script) => ({
+              durationMs: script.duration ?? 0,
+              executionStartMs: relativeTime(script.executionStart),
+              forcedStyleAndLayoutMs: script.forcedStyleAndLayoutDuration ?? 0,
+              pauseMs: script.pauseDuration ?? 0,
+              invoker: script.invoker ?? '',
+              invokerType: script.invokerType ?? '',
+              source: sanitizeSourceUrl(script.sourceURL ?? ''),
+              functionName: script.sourceFunctionName ?? '',
+            })),
+          });
+        }
+      });
+      this.longAnimationFrameObserver.observe({ entryTypes: ['long-animation-frame'] });
+    } catch {
+      this.longAnimationFrameObserver = null;
+    }
+  }
+
+  private stopLongAnimationFrameObserver(): void {
+    this.longAnimationFrameObserver?.disconnect();
+    this.longAnimationFrameObserver = null;
+  }
+
+  private startEventTimingObserver(): void {
+    if (getObserverSupport('event') !== 'supported') return;
+    try {
+      this.eventTimingObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (this.eventTimings.length >= MAX_EVENT_TIMING_SAMPLES) {
+            this.eventTimingsTruncated = true;
+            return;
+          }
+          const event = entry as PerformanceEntry & {
+            processingStart?: number;
+            processingEnd?: number;
+            interactionId?: number;
+          };
+          const processingStart = event.processingStart ?? entry.startTime;
+          const processingEnd = event.processingEnd ?? processingStart;
+          this.eventTimings.push({
+            startMs: Math.max(0, entry.startTime - this.recordingStartedAtMs),
+            durationMs: entry.duration,
+            inputDelayMs: Math.max(0, processingStart - entry.startTime),
+            processingMs: Math.max(0, processingEnd - processingStart),
+            presentationDelayMs: Math.max(0, entry.startTime + entry.duration - processingEnd),
+            name: entry.name,
+            interactionId: typeof event.interactionId === 'number' ? event.interactionId : null,
+          });
+        }
+      });
+      this.eventTimingObserver.observe({
+        type: 'event',
+        durationThreshold: 16,
+      } as PerformanceObserverInit);
+    } catch {
+      this.eventTimingObserver = null;
+    }
+  }
+
+  private stopEventTimingObserver(): void {
+    this.eventTimingObserver?.disconnect();
+    this.eventTimingObserver = null;
   }
 
   private startGcObserver(): void {
@@ -1302,10 +1664,28 @@ export class ArenaRuntimeProfiler {
   private detachGame(): void {
     if (!this.game) return;
     this.finishGpuQueries();
+    const loop = (this.game as Phaser.Game & {
+      loop?: { callback?: (time: number, delta: number) => void };
+    }).loop;
+    if (loop && this.wrappedLoopCallback && loop.callback === this.wrappedLoopCallback && this.originalLoopCallback) {
+      loop.callback = this.originalLoopCallback;
+    }
+    this.game.events.off(GAME_PRE_STEP_EVENT, this.onPreStep);
+    this.game.events.off(GAME_STEP_EVENT, this.onStep);
+    this.game.events.off(GAME_POST_STEP_EVENT, this.onPostStep);
     this.game.events.off(GAME_PRE_RENDER_EVENT, this.onPreRender);
     this.game.events.off(GAME_POST_RENDER_EVENT, this.onPostRender);
     this.game = null;
     this.glContext = null;
     this.gpuTimer = null;
+    this.preStepStartedAtMs = 0;
+    this.sceneManagerStartedAtMs = 0;
+    this.postStepAtMs = 0;
+    this.lastPostRenderAtMs = 0;
+    this.previousSceneUpdateMs = 0;
+    this.lastFrameLifecycle = emptyPhaserFrameLifecycleMetrics();
+    this.originalLoopCallback = null;
+    this.wrappedLoopCallback = null;
+    this.lastLoopCallbackEndedAtMs = 0;
   }
 }

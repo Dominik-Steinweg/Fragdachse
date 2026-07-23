@@ -28,6 +28,21 @@ function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] 
   const detailCounts = summary.detailCounts;
   const roleLabel = summary.role === 'host' ? 'Host-Simulation' : 'Client-Synchronisierung';
   return [
+    `CPU-Frame ${ms(timings.gameStepMs.avg)} | Frame-Abstand ${ms(timings.betweenFramesMs.avg)} | raw Delta ${ms(timings.rawDeltaMs.avg)}`,
+    `SceneManager ${ms(timings.phaserSceneUpdateMs.avg)} (Systems/Plugins ${ms(timings.phaserSceneSystemsMs.avg)}) | Renderer-Setup ${ms(timings.rendererSetupMs.avg)} | unbekannte CPU ${ms(timings.unaccountedFrameMs.avg)}`,
+    `Messueberlappung CPU ${ms(timings.overaccountedFrameMs.avg)} | Update ${ms(timings.overaccountedUpdateMs.avg)} (sollte nahe 0 sein)`,
+    `Scene: Prelude ${ms(detailTimings.scenePreludeMs.avg)} | Zustand ${ms(detailTimings.sceneStateMs.avg)} | nach Rolle ${ms(detailTimings.postRoleMs.avg)} | Diagnose ${ms(detailTimings.diagnosticsMs.avg)}`,
+    `UI: Input/Kamera ${ms(detailTimings.inputCameraMs.avg)} | Lobby ${ms(detailTimings.lobbyUiMs.avg)} | Arena-HUD ${ms(detailTimings.arenaHudMs.avg)} | Rangliste/Canopy ${ms(detailTimings.leaderboardCanopyMs.avg)}`,
+    ...(summary.role === 'host'
+      ? [
+        `Host: KI ${ms(detailTimings.hostEnemyAiMs.avg)} | Spieler ${ms(detailTimings.hostPlayerSystemsMs.avg)} | Physik ${ms(detailTimings.hostPhysicsMs.avg)} | Kampf/Projektile ${ms(detailTimings.hostCombatProjectilesMs.avg)}`,
+        `Host: Explosionen ${ms(detailTimings.hostExplosionsMs.avg)} | Flaecheneffekte ${ms(detailTimings.hostAreaEffectsMs.avg)} | Welt/Visuals ${ms(detailTimings.hostWorldVisualsMs.avg)} | HUD ${ms(detailTimings.hostHudMs.avg)} | Snapshot ${ms(detailTimings.hostSnapshotBuildMs.avg)}`,
+      ]
+      : [
+        `Client: Snapshot ${ms(detailTimings.clientSnapshotMs.avg)} | Spieler ${ms(detailTimings.clientPlayersMs.avg)} | Projektile/FX ${ms(detailTimings.clientProjectilesEffectsMs.avg)} | Welt ${ms(detailTimings.clientWorldStateMs.avg)}`,
+        `Client: Interpolation ${ms(detailTimings.clientInterpolationMs.avg)} | HUD ${ms(detailTimings.clientHudMs.avg)} | Renderer-Sync ${ms(detailTimings.clientRendererSyncMs.avg)}`,
+      ]),
+    `Netz: ${count(detailCounts.transportSentBytesPerSec.avg / 1024)} / ${count(detailCounts.transportReceivedBytesPerSec.avg / 1024)} KiB/s raus/rein | Puffer ${count(detailCounts.transportReliableBufferedBytes.avg + detailCounts.transportFastBufferedBytes.avg)} B | Drops ${count(detailCounts.transportDroppedFastMessages.peak)}`,
     `Phase ${summary.phase.toUpperCase()} · raw FPS ${summary.fps.toFixed(1)} · raw p95 ${ms(timings.rawDeltaMs.p95)} · p99 ${ms(timings.rawDeltaMs.p99)} · geglättet ${summary.smoothedFps.toFixed(1)}`,
     `${summary.role.toUpperCase()} · ${summary.quality.toUpperCase()} · ${summary.mode}${summary.mapId ? ` · ${summary.mapId}` : ''}`,
     `FPS ${summary.fps.toFixed(1)} · Frame p95 ${ms(timings.deltaMs.p95)} · p99 ${ms(timings.deltaMs.p99)}`,
