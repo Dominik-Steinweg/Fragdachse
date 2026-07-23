@@ -3,6 +3,7 @@ import { COLORS, DEPTH } from '../config';
 import { addInternalBlur, setInternalFxPadding, type BlurHandle } from '../utils/phaserFx';
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import type { SmokeGrenadeEffect, SyncedSmokeCloud } from '../types';
+import type { LightingSystem } from './LightingSystem';
 
 const TAU = Math.PI * 2;
 
@@ -192,9 +193,14 @@ export class SmokeSystem {
   private readonly activeClouds: ActiveSmokeCloud[] = [];
   private readonly visuals = new Map<number, SmokeCloudVisual>();
   private nextId = 0;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.ensureSmokeTextures();
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   hostCreateCloud(x: number, y: number, config: SmokeGrenadeEffect, ownerId = ''): void {
@@ -564,6 +570,13 @@ export class SmokeSystem {
       for (let s = 1; s < points.length; s++) gfx.lineTo(points[s].x, points[s].y);
       gfx.strokePath();
     }
+
+    // Jeder Blitz wirft einen kurzen kalten Lichtimpuls – der Sturm zuckt so auch in der
+    // Lightmap auf, nicht nur in der Grafik. Intensität folgt dem Lifecycle-Alpha.
+    this.lighting?.pulse('electricArc', x, y, {
+      radiusPx: Math.max(radius * 1.15, 120),
+      intensity: Phaser.Math.Clamp(0.85 * lifeAlpha, 0, 1),
+    });
 
     // Kurzer heller Flash + Blitz-Ausblendung (gedimmt mit Lifecycle-Alpha).
     this.scene.tweens.killTweensOf(gfx);

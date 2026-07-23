@@ -192,6 +192,7 @@ export function createRendererBundle(
   flame.setLightingSystem(lighting);
   projectileBurn.setLightingSystem(lighting);
   flamethrowerUpgrades.setLightingSystem(lighting);
+  asmdPrimary.setLightingSystem(lighting);
   teslaDome.setLightingSystem(lighting);
   miniTeslaDome.setLightingSystem(lighting);
   energyShield.setLightingSystem(lighting);

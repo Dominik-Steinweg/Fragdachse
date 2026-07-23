@@ -47,6 +47,14 @@ export const TRAIN = {
   WINDOW_LIGHT_OFFSET_X: 28,
   /** Längsversatz der Fensterlichter zur Waggonmitte; die Enden bleiben dunkel. */
   WINDOW_LIGHT_OFFSETS_Y: [-78, 0, 78],
+  /** Querversatz der beiden Lok-Kabinenfenster – an der Seitenkante wie die Waggons. */
+  LOCO_WINDOW_LIGHT_OFFSET_X: 26,
+  /**
+   * Längsversatz der Lok-Kabinenfenster zur Lokmitte, in Fahrtrichtung. Die Kabine mit
+   * den seitlichen Fenstern sitzt vorne, direkt hinter den Scheinwerfern – wie beim
+   * Vorbild. Wert relativ zur Fahrtrichtung (siehe `frontRelative`).
+   */
+  LOCO_WINDOW_LIGHT_OFFSET_Y: 22,
 
   /**
    * Pseudo-Attacker-ID für Zug-Instakills.

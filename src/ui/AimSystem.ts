@@ -6,6 +6,7 @@ import {
   COLORS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,    ARENA_HEIGHT,
+  DEPTH_AIM,
   getTopDownMuzzleOrigin,
 } from '../config';
 import { LivingBarEffect, paletteFromColor } from './LivingBarEffect';
@@ -136,7 +137,7 @@ export class AimSystem {
     private readonly getPlayerColor:  () => number,
   ) {
     this.gfx = scene.add.graphics();
-    this.gfx.setDepth(14);
+    this.gfx.setDepth(DEPTH_AIM);
     this.spreadModel = new AimSpreadModel(getWeaponConfig);
   }
 
@@ -579,7 +580,7 @@ export class UtilityChargeIndicator {
       this.barEdge,
       this.barHatch,
     ]);
-    this.container.setDepth(14);
+    this.container.setDepth(DEPTH_AIM);
     this.container.setVisible(false);
   }
 

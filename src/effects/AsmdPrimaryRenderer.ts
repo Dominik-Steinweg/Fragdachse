@@ -3,6 +3,7 @@ import { COLORS, DEPTH_TRACE, clipPointToArenaRay, isPointInsideArena } from '..
 import type { HitscanImpactKind } from '../types';
 import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_ASMD_BEAM_GLOW = '__asmd_beam_glow';
 const TEX_ASMD_BEAM_CORE = '__asmd_beam_core';
@@ -10,13 +11,22 @@ const TEX_ASMD_SPARK = '__asmd_primary_spark';
 
 const ASMD_PRIMARY_LINGER_MULT = 1.7;
 
+/** Abstand der Lichtstützpunkte entlang eines ASMD-Strahls; hart gedeckelt. */
+const ASMD_LIGHT_SPACING_PX = 150;
+const ASMD_MAX_LIGHTS = 5;
+
 export class AsmdPrimaryRenderer {
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   setMuzzleFlashRenderer(renderer: MuzzleFlashRenderer | null): void {
     this.muzzleFlashRenderer = renderer;
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   generateTextures(): void {
@@ -154,7 +164,28 @@ export class AsmdPrimaryRenderer {
     }
 
     this.playBeamParticles(startX, startY, renderEndX, renderEndY, playerColor, beamThickness);
+    this.emitBeamLight(startX, startY, renderEndX, renderEndY);
     if (resolvedImpactKind !== 'none') this.playImpact(renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind);
+  }
+
+  /**
+   * Kalte Entladungs-Lichtpunkte entlang des Strahls. Deckt beide Aufrufer ab: das
+   * ASMD-Primärfeuer (über `EffectSystem.playHitscanTracer`) und die Kettenblitze des
+   * Kugelgewitter-Upgrades, die den Renderer direkt ansteuern. Der Mündungspunkt bleibt
+   * frei – dort sitzt bereits das Mündungsfeuer.
+   */
+  private emitBeamLight(startX: number, startY: number, endX: number, endY: number): void {
+    if (!this.lighting) return;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) return;
+
+    const steps = Phaser.Math.Clamp(Math.round(length / ASMD_LIGHT_SPACING_PX), 1, ASMD_MAX_LIGHTS);
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / steps;
+      this.lighting.pulse('electricArc', startX + dx * t, startY + dy * t);
+    }
   }
 
   private playImpact(

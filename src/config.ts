@@ -346,6 +346,13 @@ export const DEPTH_TRACE = 16;
 export const DEPTH_FX = 25;
 
 /**
+ * Die Zielhilfe ist ein reines HUD-Element und darf nicht vom Lightmap-Overlay
+ * verdunkelt werden – nachts wäre sie sonst kaum zu erkennen. Sie liegt deshalb knapp
+ * über `DEPTH_LIGHTING`, aber unter den Baumkronen (`DEPTH.CANOPY`).
+ */
+export const DEPTH_AIM = DEPTH.CANOPY - 0.4;
+
+/**
  * Lightmap-Overlay der dynamischen Beleuchtung: über Boden, Felsen, Baumstämmen und
  * Spielern, aber **unter** den Baumkronen (`DEPTH.CANOPY` = 20) und unter `DEPTH_FX` –
  * Explosions- und Feuer-Visuals sind emissiv und sollen auch nachts ungedimmt bleiben.

@@ -1,7 +1,19 @@
 import * as Phaser from 'phaser';
+import { TEAM_BLUE_COLOR } from '../config';
 import type { SyncedBaseState } from '../types';
 import { getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
 import { BaseEntity, type BaseTurretRuntimeState } from './BaseEntity';
+import { mixColors } from '../effects/EffectUtils';
+import type { LightingSystem } from '../effects/LightingSystem';
+import {
+  BaseDestructionRenderer,
+  type BaseDestructionHooks,
+} from '../effects/BaseDestructionRenderer';
+
+/** Aufgehellte Teamfarbe der Basis: als Licht braucht es alle drei Kanäle. */
+const BASE_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.5);
+/** Basistürme lesen sich mit einem helleren, konzentrierteren Kern klar vom Sockel ab. */
+const BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.72);
 
 /**
  * Verwaltet alle aktiven Coop-Defense-Basen einer Runde.
@@ -34,9 +46,17 @@ export class BaseManager {
   private readonly turretOwners = new Map<string, BaseEntity>();
   private onBaseDestroyed: ((spec: BaseSpec) => void) | null = null;
   private obstacleGeneration = 0;
+  private lighting: LightingSystem | null = null;
+  private readonly litBaseKeys = new Set<string>();
+  private readonly destructionRenderer: BaseDestructionRenderer;
 
-  constructor(scene: Phaser.Scene, baseSpecs: readonly BaseSpec[] = getCoopDefenseBases()) {
+  constructor(
+    scene: Phaser.Scene,
+    baseSpecs: readonly BaseSpec[] = getCoopDefenseBases(),
+    destructionHooks: BaseDestructionHooks = {},
+  ) {
     this.group = scene.physics.add.staticGroup();
+    this.destructionRenderer = new BaseDestructionRenderer(scene, destructionHooks);
     for (const spec of baseSpecs) {
       const entity = new BaseEntity(scene, spec);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
@@ -52,6 +72,54 @@ export class BaseManager {
   /** Registriert den Zerstörungs-Callback (vom ArenaLifecycleCoordinator). */
   setOnBaseDestroyed(callback: ((spec: BaseSpec) => void) | null): void {
     this.onBaseDestroyed = callback;
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
+
+  /**
+   * Pro Frame wenige große Standlichter je lebender Basis sowie ein kräftigeres Licht pro
+   * Basisturm. Wird aus der Beleuchtungsphase von `ArenaScene` aufgerufen. Zerstörte
+   * Basen geben ihre Lichter frei; ein `setLight` je Frame hält die keyed-Lichter am Leben.
+   */
+  syncLights(): void {
+    const lighting = this.lighting;
+    if (!lighting) return;
+
+    const seen = new Set<string>();
+    for (const entity of this.entities) {
+      const spots = entity.getLightSpots();
+      for (let index = 0; index < spots.length; index += 1) {
+        const spot = spots[index];
+        const key = baseLightKey(entity.id, index);
+        lighting.setLight(key, 'baseGlow', spot.x, spot.y, {
+          radiusPx: spot.radius,
+          color: BASE_LIGHT_COLOR,
+        });
+        seen.add(key);
+      }
+      for (const turret of entity.getTurrets()) {
+        const key = baseTurretLightKey(turret.id);
+        lighting.setLight(key, 'fliegenpilz', turret.x, turret.y, {
+          color: BASE_TURRET_LIGHT_COLOR,
+        });
+        seen.add(key);
+      }
+    }
+
+    for (const key of this.litBaseKeys) {
+      if (!seen.has(key)) lighting.releaseLight(key);
+    }
+    this.litBaseKeys.clear();
+    for (const key of seen) this.litBaseKeys.add(key);
+  }
+
+  /** Gibt alle Basislichter frei (Teardown). */
+  releaseLights(): void {
+    if (!this.lighting) return;
+    for (const key of this.litBaseKeys) this.lighting.releaseLight(key);
+    this.litBaseKeys.clear();
   }
 
   /** StaticGroup für Player/Projektil-Collider-Injection. */
@@ -125,6 +193,10 @@ export class BaseManager {
 
   private handleBaseDestroyed(entity: BaseEntity): void {
     this.obstacleGeneration += 1;
+    this.destructionRenderer.play(
+      entity.spec,
+      (cellIndex) => entity.destroyCellVisual(cellIndex),
+    );
     this.onBaseDestroyed?.(entity.spec);
   }
 
@@ -163,10 +235,20 @@ export class BaseManager {
   }
 
   destroy(): void {
+    this.releaseLights();
+    this.destructionRenderer.destroy();
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;
     this.byId.clear();
     this.turretOwners.clear();
     this.group.destroy(true);
   }
+}
+
+function baseLightKey(baseId: string, index: number): string {
+  return `base:${baseId}:${index}`;
+}
+
+function baseTurretLightKey(turretId: string): string {
+  return `baseturret:${turretId}`;
 }

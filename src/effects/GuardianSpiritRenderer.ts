@@ -134,11 +134,13 @@ export class GuardianSpiritRenderer {
       }
 
       // `phaseAlpha` blendet das Visual beim Aufschlag aus; das Licht folgt derselben
-      // Kurve, damit der Geist nicht als körperloses Leuchten stehen bleibt.
+      // Kurve, damit der Geist nicht als körperloses Leuchten stehen bleibt. Ein Geist
+      // ist eine helle, kompakte Lichtquelle – er leuchtet deutlich kräftiger als die
+      // flächigen `arcaneField`-Felder.
       this.lighting?.setLight(lightKey(id), 'arcaneField', visual.currentX, visual.currentY, {
-        radiusPx: 110,
-        color: mixColors(visual.color, 0xffffff, 0.66),
-        intensity: 0.42 * phaseAlpha,
+        radiusPx: 150,
+        color: mixColors(visual.color, 0xffffff, 0.72),
+        intensity: 0.9 * phaseAlpha,
       });
     }
   }

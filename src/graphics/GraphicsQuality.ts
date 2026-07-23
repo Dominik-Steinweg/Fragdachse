@@ -22,7 +22,11 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     level: 'high',
     particleFactors: { critical: 1, standard: 1, decorative: 1 },
     lightMapScale: 0.5,
-    maxLightsPerFrame: 48,
+    // Deutlich über der Zahl gleichzeitig sichtbarer Lichtquellen: sonst schneidet der
+    // Sortier-/Truncate-Schritt jeden Frame andere Lichter weg, und mit dem Flackern der
+    // Intensitäten springt der Grenzfall sichtbar an und aus. Ein reines Stamp-Licht ohne
+    // Verdeckung ist ein einzelner Draw, die Obergrenze darf deshalb großzügig sein.
+    maxLightsPerFrame: 200,
     maxOccludingLightsPerFrame: 6,
     shadowLayerFactor: 1,
     projectileShadows: true,
@@ -33,7 +37,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     level: 'medium',
     particleFactors: { critical: 0.8, standard: 0.65, decorative: 0.45 },
     lightMapScale: 0.375,
-    maxLightsPerFrame: 32,
+    maxLightsPerFrame: 120,
     maxOccludingLightsPerFrame: 2,
     shadowLayerFactor: 0.5,
     projectileShadows: true,
@@ -44,7 +48,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     level: 'low',
     particleFactors: { critical: 0.6, standard: 0.35, decorative: 0 },
     lightMapScale: 0.25,
-    maxLightsPerFrame: 16,
+    maxLightsPerFrame: 64,
     maxOccludingLightsPerFrame: 0,
     shadowLayerFactor: 0.25,
     projectileShadows: false,

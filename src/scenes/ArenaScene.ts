@@ -123,6 +123,12 @@ interface TrainLamp {
   readonly offsetY: number;
   /** Index in `TrainRenderer.computeSegYs()`: 0 = Lok, danach die Waggons. */
   readonly segment: number;
+  /**
+   * `offsetY` relativ zur Fahrtrichtung statt absolut. Für Lampen, die immer vorne am
+   * Segment sitzen (Lok-Kabinenfenster): + zeigt zur Nase, egal ob der Zug nach Norden
+   * oder Süden fährt.
+   */
+  readonly frontRelative?: boolean;
 }
 
 interface TrainLightPlan {
@@ -495,6 +501,8 @@ export class ArenaScene extends Phaser.Scene {
     // Spawn-Blitz und Brand hängen an der jeweiligen Entity, nicht an einem zentralen
     // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
     playerManager.setLightingSystem(this.renderers.lighting);
+    stinkCloudSystem.setLightingSystem(this.renderers.lighting);
+    smokeSystem.setLightingSystem(this.renderers.lighting);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
@@ -527,7 +535,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Shared state & helpers ─────────────────────────────────────────────
     this.localPlayerState = new LocalPlayerState();
-    this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow, this.renderers.rockDestruction);
+    this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
     this.tunnelRenderer    = new TunnelRenderer(this);
     this.gaussWarning      = new GaussWarningRenderer(this);
@@ -1584,6 +1592,10 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.syncProjectileLights(inArena);
+    this.rockVisualHelper.syncTurretLights(inArena);
+
+    if (inArena) this.ctx.baseManager?.syncLights();
+    else this.ctx.baseManager?.releaseLights();
 
     lighting.update();
   }
@@ -1675,11 +1687,12 @@ export class ArenaScene extends Phaser.Scene {
     for (const lamp of plan.windows) {
       // Waggons hinter dem sichtbaren Bereich fallen in `LightingSystem` durch das
       // Screen-Culling; hier bleibt es bei einem Upsert ohne Allokation.
+      const offsetY = lamp.frontRelative ? train.dir * lamp.offsetY : lamp.offsetY;
       lighting.setLight(
         lamp.key,
         'trainWindow',
         train.x + lamp.offsetX,
-        segmentYs[lamp.segment] + lamp.offsetY,
+        segmentYs[lamp.segment] + offsetY,
       );
     }
 
@@ -1702,6 +1715,15 @@ export class ArenaScene extends Phaser.Scene {
         offsetX: side * TRAIN.HEADLIGHT_OFFSET_X,
         offsetY: 0,
         segment: 0,
+      });
+      // Zwei Kabinenfenster an den Seiten der Lok, vorne wie beim Vorbild – leuchten wie
+      // die Waggonfenster (dasselbe `trainWindow`-Preset), sitzen aber am führenden Ende.
+      windows.push({
+        key: `trainlocowindow:${side}`,
+        offsetX: side * TRAIN.LOCO_WINDOW_LIGHT_OFFSET_X,
+        offsetY: TRAIN.LOCO_WINDOW_LIGHT_OFFSET_Y,
+        segment: 0,
+        frontRelative: true,
       });
       for (let wagon = 1; wagon <= TRAIN.WAGON_COUNT; wagon += 1) {
         for (let slot = 0; slot < TRAIN.WINDOW_LIGHT_OFFSETS_Y.length; slot += 1) {

@@ -226,11 +226,22 @@ export class EnergyShieldRenderer {
 
       // Ein Aufprall lässt das Schild kurz aufflammen; `currentFlashAlpha` hebt deshalb
       // auch das Licht an, statt es auf einer konstanten Grundhelligkeit zu belassen.
-      this.lighting?.setLight(lightKey(ownerId), 'shieldField', visual.currentX, visual.currentY, {
-        radiusPx: Math.max(visual.currentRadius * 1.4, 80),
+      //
+      // Die Kuppel (`isDome`, Energie-Kuppel-Upgrade) umschließt den Träger komplett und
+      // ist ein großes, dauerhaftes Objekt – sie leuchtet zentriert auf dem Spieler,
+      // heller und mit einer Helligkeitsuntergrenze, damit sie nachts nicht durch eine
+      // niedrige Schild-Deckkraft verschluckt wird. Das gerichtete Schild bleibt dezenter.
+      const isDome = visual.isDome;
+      const lightX = isDome && ownerPos ? ownerPos.x : visual.currentX;
+      const lightY = isDome && ownerPos ? ownerPos.y : visual.currentY;
+      const alphaFactor = isDome
+        ? Phaser.Math.Clamp(0.55 + visual.currentAlpha * 0.45, 0, 1)
+        : visual.currentAlpha;
+      this.lighting?.setLight(lightKey(ownerId), 'shieldField', lightX, lightY, {
+        radiusPx: Math.max(visual.currentRadius * (isDome ? 1.3 : 1.5), 90),
         color: mixColors(visual.color, 0xffffff, 0.6),
         intensity: Phaser.Math.Clamp(
-          (0.4 + visual.currentFlashAlpha * 0.55) * visual.currentAlpha,
+          ((isDome ? 1.0 : 0.72) + visual.currentFlashAlpha * 0.4) * alphaFactor,
           0,
           1,
         ),

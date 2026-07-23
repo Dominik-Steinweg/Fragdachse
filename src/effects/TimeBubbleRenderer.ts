@@ -302,10 +302,12 @@ export class TimeBubbleRenderer {
 
     // Dieselbe Herleitung wie bei der Zeitblasen-Granate im Flug: Besitzerfarbe Richtung
     // Weiß gemischt. Damit bleibt der Farbeindruck über Wurf, Detonation und Feld gleich.
+    // Die Blase leuchtet bewusst kräftiger als die übrigen `arcaneField`-Quellen – sie ist
+    // ein großes, gut sichtbares Spielfeldereignis, kein dezenter Begleiteffekt.
     this.lighting?.setLight(lightKey(bubble.id), 'arcaneField', bubble.x, bubble.y, {
-      radiusPx: Math.max(bubble.radius * 1.25, 90),
-      color: mixColors(bubble.color, 0xffffff, 0.55),
-      intensity: 0.52 * Phaser.Math.Clamp(bubble.alpha, 0, 1),
+      radiusPx: Math.max(bubble.radius * 1.45, 110),
+      color: mixColors(bubble.color, 0xffffff, 0.62),
+      intensity: 0.85 * Phaser.Math.Clamp(bubble.alpha, 0, 1),
     });
   }
 

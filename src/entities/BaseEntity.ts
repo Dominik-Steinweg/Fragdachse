@@ -14,6 +14,11 @@ import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
 import type { SyncedBaseTurretState } from '../types';
 
+const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
+const BASE_LIGHT_SPACING = CELL_SIZE * 4.5;
+const BASE_LIGHT_OVERHANG = CELL_SIZE * 1.25;
+const BASE_LIGHT_RADIUS = BASE_LIGHT_SPACING * 1.35;
+
 export interface BaseTurretRuntimeState {
   readonly id: string;
   readonly baseId: string;
@@ -33,7 +38,8 @@ export interface BaseTurretRuntimeState {
  *   - Eine HP-Bar unter der Bounding-Box der gesamten Basis.
  *
  * Zerstörung:
- *   - Bei HP-Übergang auf ≤ 0 werden Sprites, Bodies und HP-Bar entsorgt.
+ *   - Bei HP-Übergang auf ≤ 0 verschwinden Bodies, Türme und HP-Bar sofort.
+ *     Die Zell-Sprites werden vom BaseDestructionRenderer gestaffelt entsorgt.
  *   - Ein optionaler `onDestroyed`-Callback wird genau einmal aufgerufen,
  *     so dass der `BaseManager` Folgereaktionen anstoßen kann
  *     (insb. Flow-Field-Rebuild der Wegfindung).
@@ -50,6 +56,11 @@ export class BaseEntity {
   private readonly hpBarBg: Phaser.GameObjects.Rectangle;
   private readonly hpBarFg: Phaser.GameObjects.Rectangle;
   private readonly hpBarWidth: number;
+  /**
+   * Wenige große Lichtpunkte, die die gesamte Basisfläche plus einen Überhang gleichmäßig
+   * ausleuchten. Einmal aus den Bounds abgeleitet.
+   */
+  private readonly lightSpots: readonly { readonly x: number; readonly y: number; readonly radius: number }[];
   private currentHp: number;
   private maxHp: number;
   private destroyedBroadcasted = false;
@@ -124,11 +135,52 @@ export class BaseEntity {
     );
     this.hpBarFg.setOrigin(0, 0.5);
     this.hpBarFg.setDepth(DEPTH.BASES + 2);
+
+    this.lightSpots = BaseEntity.buildLightSpots(bounds);
+  }
+
+  /**
+   * Verteilt wenige große Lichtpunkte zentriert auf einem gleichmäßigen Raster. Durch die
+   * Zentrierung reichen für die üblichen Basen zwei bis vier Lichter statt eines dichten
+   * Gitters entlang der Außenkanten.
+   */
+  private static buildLightSpots(
+    bounds: { x: number; y: number; width: number; height: number },
+  ): { x: number; y: number; radius: number }[] {
+    const minX = bounds.x - BASE_LIGHT_OVERHANG;
+    const minY = bounds.y - BASE_LIGHT_OVERHANG;
+    const spanX = bounds.width + BASE_LIGHT_OVERHANG * 2;
+    const spanY = bounds.height + BASE_LIGHT_OVERHANG * 2;
+    const cols = Math.max(1, Math.ceil(spanX / BASE_LIGHT_SPACING));
+    const rows = Math.max(1, Math.ceil(spanY / BASE_LIGHT_SPACING));
+
+    const spots: { x: number; y: number; radius: number }[] = [];
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        spots.push({
+          x: minX + ((col + 0.5) / cols) * spanX,
+          y: minY + ((row + 0.5) / rows) * spanY,
+          radius: BASE_LIGHT_RADIUS,
+        });
+      }
+    }
+    return spots;
+  }
+
+  /** Lichtpunkte des Basisleuchtens, oder leer wenn zerstört. */
+  getLightSpots(): readonly { x: number; y: number; radius: number }[] {
+    return this.isDestroyed() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
   }
 
   /** Liefert alle Zell-Kollisions-Rectangles (für StaticGroup-Aufnahme & LoS). */
   getCellBodies(): readonly Phaser.GameObjects.Rectangle[] {
     return this.cellBodies;
+  }
+
+  /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */
+  destroyCellVisual(cellIndex: number): void {
+    const image = this.cellImages[cellIndex];
+    if (image?.active) image.destroy();
   }
 
   /**
@@ -231,15 +283,10 @@ export class BaseEntity {
     this.hpBarFg.setFillStyle(COOP_DEFENSE_BASE_HP_BAR_FILL);
   }
 
-  /** Entfernt alle Visuals & Bodies, feuert `onDestroyed` einmalig. */
+  /** Entfernt Gameplay-Bodies sofort; Zellbilder übernimmt die gestaffelte Zerstörung. */
   private handleDestruction(): void {
     if (this.destroyedBroadcasted) return;
     this.destroyedBroadcasted = true;
-
-    for (const image of this.cellImages) {
-      if (image.active) image.destroy();
-    }
-    this.cellImages.length = 0;
 
     for (const body of this.cellBodies) {
       if (body.active) body.destroy();
@@ -254,7 +301,14 @@ export class BaseEntity {
     if (this.hpBarBg.active) this.hpBarBg.setVisible(false);
     if (this.hpBarFg.active) this.hpBarFg.setVisible(false);
 
-    this.onDestroyed?.();
+    if (this.onDestroyed) {
+      this.onDestroyed();
+    } else {
+      // Defensive Direktnutzung außerhalb des BaseManager.
+      for (const image of this.cellImages) {
+        if (image.active) image.destroy();
+      }
+    }
   }
 
   destroy(): void {

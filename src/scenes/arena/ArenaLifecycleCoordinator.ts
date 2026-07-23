@@ -70,6 +70,12 @@ import type { RoundOutcome, RoundResult, RoundState } from '../../network/Networ
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { BaseManager } from '../../entities/BaseManager';
+import {
+  BASE_DESTRUCTION_GROUND_BURN_DAMAGE_PER_TICK,
+  BASE_DESTRUCTION_GROUND_BURN_DURATION_MS,
+  BASE_DESTRUCTION_GROUND_FIRE_DURATION_MS,
+  getBaseDestructionBlast,
+} from '../../effects/BaseDestructionPlan';
 import { EnemyManager } from '../../entities/EnemyManager';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { emitArenaMapGridChanged } from './ArenaEvents';
@@ -379,8 +385,37 @@ export class ArenaLifecycleCoordinator {
     // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry –
     // HP-Werte fließen über GameState.bases (Host → Client).
     this.ctx.baseManager = isCoopDefenseMode(bridge.getGameMode())
-      ? new BaseManager(this.scene, coopDefenseBases)
+      ? new BaseManager(this.scene, coopDefenseBases, {
+        playExplosion: (x, y, radius, color) => {
+          this.ctx.effectSystem.playExplosionEffect(x, y, radius, color);
+        },
+        playExplosionSound: (x, y, volumeScale) => {
+          this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);
+        },
+        playFireChunks: (x, y, targets, landsAt, now) => {
+          this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets, landsAt, now);
+        },
+        onFireChunksLanded: bridge.isHost()
+          ? (baseId, _cellIndex, targets, landedAt) => {
+            for (const target of targets) {
+              this.ctx.fireSystem.hostRefreshGroundCell(target.x, target.y, {
+                // Gleiche Rasterzellen frischen sich auf, statt pro Brocken
+                // separate Schadens-/Brandquellen zu stapeln.
+                sourceKey: `base-destruction:${baseId}`,
+                ownerId: COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+                durationMs: BASE_DESTRUCTION_GROUND_FIRE_DURATION_MS,
+                burn: {
+                  durationMs: BASE_DESTRUCTION_GROUND_BURN_DURATION_MS,
+                  damagePerTick: BASE_DESTRUCTION_GROUND_BURN_DAMAGE_PER_TICK,
+                },
+                weaponName: 'Basisbrand',
+              }, landedAt);
+            }
+          }
+          : undefined,
+      })
       : null;
+    this.ctx.baseManager?.setLightingSystem(this.renderers.lighting);
     this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
@@ -476,12 +511,22 @@ export class ArenaLifecycleCoordinator {
       const flowFieldService = this.ctx.enemyFlowFieldService;
       const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
       const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
-      if (baseManager && flowFieldService && playerFlowFieldService) {
+      if (baseManager) {
         baseManager.setOnBaseDestroyed((destroyedBase) => {
           this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
+          const blast = getBaseDestructionBlast(destroyedBase);
+          this.ctx.hostPhysics.applyRadialImpulse(
+            blast.x,
+            blast.y,
+            blast.radius,
+            blast.force,
+            undefined,
+            1,
+            blast.durationMs,
+          );
           const activeBaseIds = baseManager.getActiveBaseIds();
-          flowFieldService.setActiveBaseIds(activeBaseIds);
-          playerFlowFieldService.setActiveBaseIds(activeBaseIds);
+          flowFieldService?.setActiveBaseIds(activeBaseIds);
+          playerFlowFieldService?.setActiveBaseIds(activeBaseIds);
           bossFlowFieldService?.setActiveBaseIds(activeBaseIds);
         });
       }

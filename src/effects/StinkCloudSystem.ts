@@ -2,6 +2,8 @@ import * as Phaser from 'phaser';
 import { DEPTH, NET_SMOOTH_TIME_MS } from '../config';
 import { circleZone, edgeZone, ensureCanvasTexture } from './EffectUtils';
 import type { DamageZoneVisualStyle, SyncedStinkCloud } from '../types';
+import type { LightingSystem } from './LightingSystem';
+import type { LightPresetKey } from './LightingConfig';
 
 /* ── Texture keys ─────────────────────────────────────── */
 const TEX_STINK_GROUND = 'stink_ground';
@@ -197,13 +199,34 @@ interface StinkCloudVisual {
   lastCloud:      SyncedStinkCloud;
 }
 
+/**
+ * Beleuchtung je Wolkenvariante. Die Farben sind gegenüber den Partikeln aufgehellt: als
+ * Licht muss die Farbe alle drei Kanäle anheben. Stink und Sporen wabern leicht grün
+ * (das Flackern steckt im Preset), das Elektrofeld pulst kalt blau.
+ */
+const CLOUD_LIGHT: Record<DamageZoneVisualStyle, {
+  preset: LightPresetKey;
+  color: number;
+  radiusScale: number;
+  intensity: number;
+}> = {
+  stink:    { preset: 'slimeGlow',      color: 0xbfff9a, radiusScale: 1.4, intensity: 0.34 },
+  spore:    { preset: 'sporeProjectile', color: 0xd9ffb0, radiusScale: 1.5, intensity: 0.5 },
+  electric: { preset: 'electricField',  color: 0xcdf1ff, radiusScale: 1.6, intensity: 1.0 },
+};
+
 export class StinkCloudSystem {
   private readonly activeZones: ActiveStinkCloud[] = [];
   private readonly visuals = new Map<number, StinkCloudVisual>();
   private nextId = 0;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.ensureTextures();
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   // ── Host API ───────────────────────────────────────────────────────────────
@@ -707,6 +730,9 @@ export class StinkCloudSystem {
     /* ── Fairness circle ── */
     this.drawFairnessCircle(visual.fairnessCircle, x, y, radius, cloud.ownerColor, alpha, t, cloud.visualVariant);
 
+    /* ── Dynamisches Licht der Fläche ── */
+    this.syncCloudLight(cloud, x, y, radius, alpha);
+
     /* ── Emit-zone resize ── */
     const target = Math.max(radius * 0.86, 12);
     if (Math.abs(target - visual.zoneRadius) >= 5) {
@@ -720,6 +746,29 @@ export class StinkCloudSystem {
       visual.plumeEmitter.addEmitZone(circleZone(Math.max(target * 0.28, 6)));
       visual.zoneRadius = target;
     }
+  }
+
+  /**
+   * Eine Schadenszone leuchtet in ihrer Wolkenfarbe. Der Boden unter einer Sporen- oder
+   * Stinkwolke soll auch ohne andere Lichtquelle als betroffen erkennbar sein; das
+   * Elektrofeld pulst zusätzlich. Die Intensität folgt der Ein-/Ausblendung der Wolke.
+   */
+  private syncCloudLight(cloud: SyncedStinkCloud, x: number, y: number, radius: number, alpha: number): void {
+    const lighting = this.lighting;
+    if (!lighting) return;
+
+    const key = `stinkcloud:${cloud.id}`;
+    if (alpha <= 0.02) {
+      lighting.releaseLight(key);
+      return;
+    }
+
+    const spec = CLOUD_LIGHT[cloud.visualVariant ?? 'stink'] ?? CLOUD_LIGHT.stink;
+    lighting.setLight(key, spec.preset, x, y, {
+      radiusPx: Math.max(radius * spec.radiusScale, 60),
+      color: spec.color,
+      intensity: spec.intensity * alpha,
+    });
   }
 
   private drawFairnessCircle(
@@ -858,6 +907,7 @@ export class StinkCloudSystem {
   // ── Visual Destruction ──────────────────────────────────────────────────
 
   private destroyVisual(visual: StinkCloudVisual): void {
+    this.lighting?.releaseLight(`stinkcloud:${visual.lastCloud.id}`);
     visual.groundGlow.destroy();
     visual.damageAura.destroy();
     visual.reactionPulse.destroy();

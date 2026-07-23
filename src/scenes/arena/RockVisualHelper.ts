@@ -8,6 +8,7 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, ROCK_HP_MAX }
 import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../../effects/EffectUtils';
 import type { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import type { ShadowSystem } from '../../effects/ShadowSystem';
+import type { LightingSystem } from '../../effects/LightingSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
 import { addInternalGlow, setInternalFxPadding } from '../../utils/phaserFx';
@@ -35,6 +36,7 @@ export class RockVisualHelper {
     private readonly arenaClipMask: Phaser.Display.Masks.GeometryMask | null,
     private readonly shadowSystem: ShadowSystem | null,
     private readonly rockDestructionRenderer: RockDestructionRenderer,
+    private readonly lighting: LightingSystem | null = null,
   ) {
     this.ensureTurretTextures();
   }
@@ -280,7 +282,25 @@ export class RockVisualHelper {
       .setVisible(ratio < 1);
   }
 
+  /**
+   * Bestätigt die Dauerlichter aller sichtbaren Fliegenpilz-Türme pro Frame. Ein einmaliges
+   * Setzen beim Materialisieren reicht nicht, weil `LightingSystem` verwaiste keyed-Lichter
+   * nach kurzer Zeit absichtlich entfernt.
+   */
+  syncTurretLights(active: boolean): void {
+    if (!this.lighting) return;
+    for (const [id, visual] of this.turretVisuals) {
+      const key = turretLightKey(id);
+      if (!active || !visual.image.active || !visual.image.visible) {
+        this.lighting.releaseLight(key);
+        continue;
+      }
+      this.lighting.setLight(key, 'fliegenpilz', visual.image.x, visual.image.y);
+    }
+  }
+
   destroyTurretVisual(id: number): void {
+    this.lighting?.releaseLight(turretLightKey(id));
     const visual = this.turretVisuals.get(id);
     if (!visual) return;
     visual.image.destroy();
@@ -400,4 +420,8 @@ export class RockVisualHelper {
     );
     this.ctx.lightOccluderIndex?.markDirty();
   }
+}
+
+function turretLightKey(id: number): string {
+  return `fliegenpilz:${id}`;
 }

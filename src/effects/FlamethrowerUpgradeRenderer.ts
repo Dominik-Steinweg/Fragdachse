@@ -28,6 +28,12 @@ const RING_CORE_THICKNESS = 7;
 const RING_POINT_SPACING = 4;
 const RING_BAND_REFRESH_MS = 430;
 const RING_CORE_REFRESH_MS = 260;
+/**
+ * Der Flammenring leuchtet dort, wo das Feuer brennt – am Ring, nicht im Zentrum. Statt
+ * eines großen Lichts am Spieler verteilen sich mehrere kleine Lichter auf der
+ * Ringlinie; ihr Radius überlappt gerade so, dass die Linie durchgehend glüht.
+ */
+const RING_LIGHT_COUNT = 12;
 const RING_BAND_FREQUENCY_MS = 16;
 const RING_ACCENT_RATE_AT_BASE_RADIUS = 88;
 const RING_BASE_RADIUS = 64;
@@ -447,15 +453,11 @@ export class FlamethrowerUpgradeRenderer {
       visual.bandEmitter.emitting = visible;
       visual.coreEmitter.emitting = visible;
       if (!visible) {
-        this.lighting?.releaseLight(`flamering:${playerId}`);
+        this.releaseRingLights(playerId);
         continue;
       }
 
-      // Ein weiches Licht pro Ring – Radius folgt dem Ring, damit Upgrades sichtbar
-      // mehr Umgebung ausleuchten.
-      this.lighting?.setLight(`flamering:${playerId}`, 'flameRing', player.sprite.x, player.sprite.y, {
-        radiusPx: radius * 1.5,
-      });
+      this.syncRingLights(playerId, player.sprite.x, player.sprite.y, radius, visual.phase);
 
       this.emitRingAccents(visual, player.sprite.x, player.sprite.y, delta, now);
     }
@@ -655,8 +657,41 @@ export class FlamethrowerUpgradeRenderer {
     }
   }
 
+  /**
+   * Verteilt die Ringbeleuchtung auf `RING_LIGHT_COUNT` Punkte entlang der Ringlinie.
+   * Jedes Licht ist klein und deckt nur seinen Bogenabschnitt ab; zusammen glüht die
+   * Linie durchgehend, während die Spielermitte weitgehend dunkel bleibt. `phase` dreht
+   * die Punkte langsam mit, damit keine festen hellen Stellen entstehen.
+   */
+  private syncRingLights(playerId: string, cx: number, cy: number, radius: number, phase: number): void {
+    const lighting = this.lighting;
+    if (!lighting) return;
+
+    // Überlappung: der Abstand zweier Nachbarpunkte ist 2πr/N, der Lichtradius klar
+    // darüber, damit die Bögen breit ineinanderlaufen und der Ring durchgehend hell glüht.
+    const perLightRadius = Math.max(100, (TWO_PI * radius) / RING_LIGHT_COUNT * 1.15);
+    for (let index = 0; index < RING_LIGHT_COUNT; index += 1) {
+      const angle = phase + (index / RING_LIGHT_COUNT) * TWO_PI;
+      // Intensität knapp unter 1: lässt dem Flackern des `flameRing`-Presets Spielraum
+      // nach oben, statt es am Deckel abzuschneiden.
+      lighting.setLight(
+        `flamering:${playerId}:${index}`,
+        'flameRing',
+        cx + Math.cos(angle) * radius,
+        cy + Math.sin(angle) * radius,
+        { radiusPx: perLightRadius, intensity: 0.9 },
+      );
+    }
+  }
+
+  private releaseRingLights(playerId: string): void {
+    for (let index = 0; index < RING_LIGHT_COUNT; index += 1) {
+      this.lighting?.releaseLight(`flamering:${playerId}:${index}`);
+    }
+  }
+
   private destroyRingVisual(playerId: string, visual: RingVisual): void {
-    this.lighting?.releaseLight(`flamering:${playerId}`);
+    this.releaseRingLights(playerId);
     this.ringVisuals.delete(playerId);
     destroyEmitter(visual.bandEmitter);
     destroyEmitter(visual.coreEmitter);

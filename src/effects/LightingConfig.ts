@@ -559,6 +559,42 @@ export const LIGHT_PRESETS = {
     flickerHz: 9,
     day: { intensityMult: 0.4 },
   },
+  /**
+   * Ruhiges Standlicht einer Basis in ihrer Teamfarbe. Groß und schwach – es soll die
+   * Basis nachts erkennbar machen, nicht die Umgebung ausleuchten. Am Tag praktisch aus.
+   */
+  baseGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 150,
+    color: 0xffffff,
+    intensity: 0.9,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.04,
+    flickerHz: 0.8,
+    day: { intensityMult: 0.12 },
+  },
+  /**
+   * Der Fliegenpilz-Turret glüht mit seiner roten Kappe. Warmes, ruhiges Dauerlicht mit
+   * leichtem Pulsieren – ein platziertes Gefahrenobjekt, das nachts sichtbar bleibt.
+   */
+  fliegenpilz: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 150,
+    color: 0xffc2b0,
+    intensity: 0.95,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0.04,
+    flickerHz: 1.6,
+    day: { intensityMult: 0.3 },
+  },
   /** Translocator- und Spawn-Blitz: kurz, hell, kalt. */
   teleportFlash: {
     enabled: true,

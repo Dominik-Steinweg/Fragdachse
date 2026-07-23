@@ -1427,20 +1427,21 @@ export class EffectSystem implements EnemyBurrowVisualSink {
   ): void {
     if (!this.lighting) return;
 
+    // Das ASMD-Primärfeuer bringt sein eigenes (kaltes) Licht im AsmdPrimaryRenderer mit –
+    // derselbe Pfad, den auch die Kugelgewitter-Kettenblitze nehmen. Hier nur die warmen
+    // Projektilwaffen-Strahlen, sonst leuchtet der ASMD-Schuss doppelt.
+    if (visualPreset === 'asmd_primary') return;
+
     const dx = endX - startX;
     const dy = endY - startY;
     const length = Math.hypot(dx, dy);
     if (length < 1) return;
 
-    // ASMD ist eine Energiewaffe: kalte Entladung statt warmem Mündungslicht.
-    const isEnergyBeam = visualPreset === 'asmd_primary';
-    const preset = isEnergyBeam ? 'electricArc' : 'beamPulse';
-    const color = isEnergyBeam ? undefined : mixColors(playerColor, 0xffffff, 0.62);
-
+    const color = mixColors(playerColor, 0xffffff, 0.62);
     const steps = Phaser.Math.Clamp(Math.round(length / HITSCAN_LIGHT_SPACING_PX), 1, MAX_HITSCAN_LIGHTS);
     for (let step = 1; step <= steps; step += 1) {
       const t = step / steps;
-      this.lighting.pulse(preset, startX + dx * t, startY + dy * t, { color });
+      this.lighting.pulse('beamPulse', startX + dx * t, startY + dy * t, { color });
     }
   }
 
