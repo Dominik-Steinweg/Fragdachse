@@ -1,4 +1,8 @@
 import * as Phaser from 'phaser';
+import {
+  getGraphicsQualityController,
+  type VisualImportance,
+} from '../graphics/GraphicsQuality';
 
 type CanvasTextureDrawCallback = (
   ctx: CanvasRenderingContext2D,
@@ -70,9 +74,33 @@ export function createEmitter(
   texture: string,
   config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig,
   depth: number,
+  importance: VisualImportance = 'standard',
+): Phaser.GameObjects.Particles.ParticleEmitter {
+  const emitter = createQualityEmitter(scene, x, y, texture, config, importance);
+  emitter.setDepth(depth);
+  return emitter;
+}
+
+export function createQualityEmitter(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  texture: string,
+  config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig,
+  importance: VisualImportance = 'standard',
 ): Phaser.GameObjects.Particles.ParticleEmitter {
   const emitter = scene.add.particles(x, y, texture, config);
-  emitter.setDepth(depth);
+  getGraphicsQualityController(scene)?.setEmitterImportance(emitter, importance);
+  return emitter;
+}
+
+export function trackQualityEmitter(
+  scene: Phaser.Scene,
+  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
+  config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig,
+  importance: VisualImportance = 'standard',
+): Phaser.GameObjects.Particles.ParticleEmitter {
+  getGraphicsQualityController(scene)?.trackEmitter(emitter, config, importance);
   return emitter;
 }
 

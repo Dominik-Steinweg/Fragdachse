@@ -9,6 +9,8 @@ import {
   fillRadialGradientTexture,
   setCircleEmitZone,
 } from '../effects/EffectUtils';
+import { mixColors } from '../effects/EffectUtils';
+import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlow, setInternalFxPadding } from '../utils/phaserFx';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE } from './PowerUpConfig';
 
@@ -21,6 +23,8 @@ const TEX_POWERUP_PEDESTAL_FLASH     = '__powerup_pedestal_flash';
 interface ItemVisual {
   container: Phaser.GameObjects.Container;
   graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
+  /** Für das Dauerlicht: die Farbe wird pro Frame gebraucht, der Def-Lookup nicht. */
+  color: number;
 }
 
 interface PedestalVisual {
@@ -53,9 +57,14 @@ interface PedestalVisual {
 export class PowerUpRenderer {
   private sprites = new Map<number, ItemVisual>();
   private pedestals = new Map<number, PedestalVisual>();
+  private lighting: LightingSystem | null = null;
 
   constructor(private scene: Phaser.Scene) {
     this.ensureTextures();
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   /**
@@ -66,8 +75,10 @@ export class PowerUpRenderer {
 
     for (const pu of powerups) {
       activeUids.add(pu.uid);
-      if (this.sprites.has(pu.uid)) {
-        this.sprites.get(pu.uid)!.container.setPosition(pu.x, pu.y);
+      const known = this.sprites.get(pu.uid);
+      if (known) {
+        known.container.setPosition(pu.x, pu.y);
+        this.setItemLight(pu.uid, pu.x, pu.y, known.color);
         continue;
       }
 
@@ -112,17 +123,30 @@ export class PowerUpRenderer {
         graphic.once(Phaser.GameObjects.Events.DESTROY, () => glowTween.stop());
       }
 
-      this.sprites.set(pu.uid, { container, graphic });
+      this.sprites.set(pu.uid, { container, graphic, color: glowColor });
+      this.setItemLight(pu.uid, pu.x, pu.y, glowColor);
       this.playMaterializeEffect(pu.x, pu.y, glowColor, container, graphic);
     }
 
     // Entfernte Items aufräumen
     for (const [uid, visual] of this.sprites) {
       if (!activeUids.has(uid)) {
+        this.lighting?.releaseLight(itemLightKey(uid));
         visual.container.destroy(true); // Kinder (Arc, Grafik) + deren Tweens werden mitgelöscht
         this.sprites.delete(uid);
       }
     }
+  }
+
+  /**
+   * Ein liegendes Power-Up leuchtet aus sich heraus – nachts ist das der Unterschied
+   * zwischen "sichtbar" und "im Dunkeln übersehen". Die Item-Farbe wird stark Richtung
+   * Weiß gemischt, sonst trägt sie als Licht kaum.
+   */
+  private setItemLight(uid: number, x: number, y: number, color: number): void {
+    this.lighting?.setLight(itemLightKey(uid), 'pickupGlow', x, y, {
+      color: mixColors(color, 0xffffff, 0.6),
+    });
   }
 
   syncPedestals(pedestals: SyncedPowerUpPedestal[]): void {
@@ -225,6 +249,7 @@ export class PowerUpRenderer {
 
     for (const [id, visual] of this.pedestals) {
       if (!activeIds.has(id)) {
+        this.lighting?.releaseLight(pedestalLightKey(id));
         destroyEmitter(visual.ambientEmitter);
         destroyEmitter(visual.sparkEmitter);
         visual.container.destroy(true);
@@ -296,14 +321,33 @@ export class PowerUpRenderer {
       visual.core.setAlpha(coreAlpha).setScale(1 + breath * 0.05);
       visual.ambientEmitter.frequency = ambientFrequency;
       visual.sparkEmitter.frequency = sparkFrequency;
+
+      // `outerGlowAlpha` trägt bereits den kompletten Zustand des Podests – belegt,
+      // leer, oder blinkend kurz vor dem Respawn. Das Licht hängt sich daran, statt
+      // die drei Fälle ein zweites Mal auszuformulieren.
+      this.lighting?.setLight(
+        pedestalLightKey(id),
+        'pickupGlow',
+        visual.container.x,
+        visual.container.y,
+        {
+          radiusPx: POWERUP_PEDESTAL_CONFIG.renderBaseRadius * 3.4,
+          color: mixColors(POWERUP_DEFS[visual.state.defId]?.color ?? 0xffffff, 0xffffff, 0.55),
+          intensity: Phaser.Math.Clamp(outerGlowAlpha * 1.1, 0, 0.6),
+        },
+      );
     }
   }
 
   /** Alle Container aufräumen (Arena-Teardown). */
   clear(): void {
-    for (const visual of this.sprites.values()) visual.container.destroy(true);
+    for (const [uid, visual] of this.sprites) {
+      this.lighting?.releaseLight(itemLightKey(uid));
+      visual.container.destroy(true);
+    }
     this.sprites.clear();
-    for (const visual of this.pedestals.values()) {
+    for (const [id, visual] of this.pedestals) {
+      this.lighting?.releaseLight(pedestalLightKey(id));
       destroyEmitter(visual.ambientEmitter);
       destroyEmitter(visual.sparkEmitter);
       visual.container.destroy(true);
@@ -459,4 +503,12 @@ export class PowerUpRenderer {
       destroyEmitter(embers);
     });
   }
+}
+
+function itemLightKey(uid: number): string {
+  return `powerup:${uid}`;
+}
+
+function pedestalLightKey(id: number): string {
+  return `pedestal:${id}`;
 }

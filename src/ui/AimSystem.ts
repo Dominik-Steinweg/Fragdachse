@@ -81,6 +81,42 @@ const CHARGE_BAR_WIDTH = 52;
 const CHARGE_BAR_HEIGHT = 8;
 const CHARGE_BAR_START_X = CHARGE_ANCHOR_OFFSET_X + CHARGE_STEM_LENGTH + CHARGE_BAR_GAP;
 
+function smoothStep(edge0: number, edge1: number, value: number): number {
+  if (edge0 === edge1) return value < edge0 ? 0 : 1;
+  const t = Phaser.Math.Clamp((value - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+interface BeamRun {
+  startT: number;
+  endT: number;
+  fade: number;
+}
+
+/**
+ * Der Beam blendet nur an seinen Enden aus; dazwischen ist die Deckkraft konstant. Segmente mit
+ * gleicher Deckkraft ergeben zusammenhaengend dieselbe Linie und werden deshalb einmalig zu einem
+ * Strich zusammengefasst. Mit den aktuellen Fade-Grenzen bleiben aus 14 Segmenten drei Striche,
+ * und der Beam kostet pro Frame drei statt 42 Graphics-Aufrufe. Aendert man die Grenzen, faellt
+ * die Zusammenfassung automatisch feiner aus.
+ */
+const BEAM_RUNS: readonly BeamRun[] = (() => {
+  const runs: BeamRun[] = [];
+  for (let index = 0; index < BEAM_SEGMENTS; index += 1) {
+    const startT = index / BEAM_SEGMENTS;
+    const endT = (index + 1) / BEAM_SEGMENTS;
+    const midT = (startT + endT) * 0.5;
+    const fade = Math.min(
+      smoothStep(0, BEAM_START_FADE_AT, midT),
+      smoothStep(1, BEAM_END_FADE_AT, midT),
+    );
+    const previous = runs[runs.length - 1];
+    if (previous && Math.abs(previous.fade - fade) < 1e-6) previous.endT = endT;
+    else runs.push({ startT, endT, fade });
+  }
+  return runs;
+})();
+
 export class AimSystem {
   private readonly gfx: Phaser.GameObjects.Graphics;
   private readonly spreadModel: AimSpreadModel;
@@ -88,6 +124,7 @@ export class AimSystem {
   private prevX: number | null = null;
   private prevY: number | null = null;
   private prevShowAim = false;
+  private appliedCursor: string | null = null;
   private confirmedHitUntil = 0;
   private scopeProgress = 0;
   private weaponChargeProgress = 0;
@@ -138,7 +175,12 @@ export class AimSystem {
     utilityTargeting?: UtilityTargetingPreviewState,
     ultimatePreview?: UltimateChargePreviewState,
   ): void {
-    this.scene.input.setDefaultCursor(hideSystemCursor ? 'none' : 'default');
+    // Nur bei Wechsel setzen: der Aufruf schreibt in den Canvas-Style und ist kein No-Op.
+    const cursor = hideSystemCursor ? 'none' : 'default';
+    if (cursor !== this.appliedCursor) {
+      this.scene.input.setDefaultCursor(cursor);
+      this.appliedCursor = cursor;
+    }
 
     if (showAim && !this.prevShowAim) {
       this.prevX = null;
@@ -234,6 +276,7 @@ export class AimSystem {
 
   destroy(): void {
     this.scene.input.setDefaultCursor('default');
+    this.appliedCursor = 'default';
     this.gfx.destroy();
   }
 
@@ -413,29 +456,20 @@ export class AimSystem {
     const dx = x2 - x1;
     const dy = y2 - y1;
 
-    for (let index = 0; index < BEAM_SEGMENTS; index += 1) {
-      const startT = index / BEAM_SEGMENTS;
-      const endT = (index + 1) / BEAM_SEGMENTS;
-      const midT = (startT + endT) * 0.5;
-      const alpha = baseAlpha * this.getBeamFade(midT);
+    for (const run of BEAM_RUNS) {
+      const alpha = baseAlpha * run.fade;
       if (alpha <= 0.01) continue;
 
       this.strokeLine(
         width,
         color,
         alpha,
-        x1 + dx * startT,
-        y1 + dy * startT,
-        x1 + dx * endT,
-        y1 + dy * endT,
+        x1 + dx * run.startT,
+        y1 + dy * run.startT,
+        x1 + dx * run.endT,
+        y1 + dy * run.endT,
       );
     }
-  }
-
-  private getBeamFade(progress: number): number {
-    const fadeIn = this.smoothStep(0, BEAM_START_FADE_AT, progress);
-    const fadeOut = this.smoothStep(1, BEAM_END_FADE_AT, progress);
-    return Math.min(fadeIn, fadeOut);
   }
 
   private getAccentColor(): number {
@@ -456,15 +490,6 @@ export class AimSystem {
     const mixedGreen = Math.round(green + (255 - green) * mix);
     const mixedBlue = Math.round(blue + (255 - blue) * mix);
     return (mixedRed << 16) | (mixedGreen << 8) | mixedBlue;
-  }
-
-  private smoothStep(edge0: number, edge1: number, value: number): number {
-    if (edge0 === edge1) {
-      return value < edge0 ? 0 : 1;
-    }
-
-    const t = Phaser.Math.Clamp((value - edge0) / (edge1 - edge0), 0, 1);
-    return t * t * (3 - 2 * t);
   }
 
   private strokeLine(width: number, color: number, alpha: number, x1: number, y1: number, x2: number, y2: number): void {

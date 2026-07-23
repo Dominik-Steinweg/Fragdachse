@@ -22,6 +22,7 @@ import {
   mixColors,
   setCircleEmitZone,
 } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_BEER_OUTER_GLOW = '__ctb_beer_outer_glow';
 const TEX_BEER_INNER_GLOW = '__ctb_beer_inner_glow';
@@ -65,12 +66,17 @@ interface BeerVisual {
 export class CaptureTheBeerRenderer {
   private readonly visuals = new Map<TeamId, BeerVisual>();
   private arenaMask: Phaser.Display.Masks.GeometryMask | null;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene, arenaMask: Phaser.Display.Masks.GeometryMask | null = null) {
     this.arenaMask = arenaMask;
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clear();
     });
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   setArenaMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
@@ -175,6 +181,7 @@ export class CaptureTheBeerRenderer {
 
     for (const [teamId, visual] of this.visuals) {
       if (active.has(teamId)) continue;
+      this.lighting?.releaseLight(lightKey(teamId));
       this.destroyVisual(visual);
       this.visuals.delete(teamId);
     }
@@ -185,7 +192,7 @@ export class CaptureTheBeerRenderer {
     const lerp = 1 - Math.exp(-delta / 52);
     const dtSec = Math.max(delta, 1) / 1000;
 
-    for (const visual of this.visuals.values()) {
+    for (const [teamId, visual] of this.visuals) {
       visual.currentX = Phaser.Math.Linear(visual.currentX, visual.targetX, lerp);
       visual.currentY = Phaser.Math.Linear(visual.currentY, visual.targetY, lerp);
 
@@ -236,6 +243,15 @@ export class CaptureTheBeerRenderer {
         visual.trailCooldownMs = 0;
       }
 
+      // Das Bier ist im Spielmodus das wichtigste Objekt auf dem Feld und darf nachts
+      // nirgends verschwinden. `glowBoost` trägt bereits den Zustand (getragen, liegen
+      // gelassen, am Sockel), das Licht folgt derselben Kurve.
+      this.lighting?.setLight(lightKey(teamId), 'pickupGlow', visual.currentX, visual.currentY, {
+        radiusPx: 120,
+        color: mixColors(visual.palette.glow, 0xffffff, 0.5),
+        intensity: Phaser.Math.Clamp(0.4 * glowBoost, 0, 0.7),
+      });
+
       visual.prevX = visual.currentX;
       visual.prevY = visual.currentY;
     }
@@ -257,7 +273,8 @@ export class CaptureTheBeerRenderer {
   }
 
   clear(): void {
-    for (const visual of this.visuals.values()) {
+    for (const [teamId, visual] of this.visuals) {
+      this.lighting?.releaseLight(lightKey(teamId));
       this.destroyVisual(visual);
     }
     this.visuals.clear();
@@ -811,4 +828,8 @@ export class CaptureTheBeerRenderer {
       foam: mixColors(base, 0xffffff, 0.54),
     };
   }
+}
+
+function lightKey(teamId: TeamId): string {
+  return `beer:${teamId}`;
 }

@@ -16,6 +16,10 @@ import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 const HITSCAN_TRACER_FADE_MS = 320;
 const MELEE_SWING_FADE_MS    = 220;
 
+/** Abstand der Lichtstützpunkte entlang eines Hitscan-Strahls. */
+const HITSCAN_LIGHT_SPACING_PX = 190;
+const MAX_HITSCAN_LIGHTS = 4;
+
 const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
 const TEX_EXPLOSION_SPARK = '__explosion_spark';
@@ -1344,6 +1348,8 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     const resolvedImpactKind: HitscanImpactKind = impactKind === 'none' && clippedByArena ? 'environment' : impactKind;
     const palette = getBeamPaletteForPlayerColor(playerColor);
 
+    this.emitHitscanBeamLight(startX, startY, renderEndX, renderEndY, playerColor, visualPreset);
+
     if (visualPreset === 'asmd_primary' && this.asmdPrimaryRenderer) {
       this.asmdPrimaryRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind);
       return;
@@ -1398,6 +1404,44 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
     this.audioSystem?.playSound(shotAudioKey, startX, startY, shooterId);
     this.playHitscanTracer(startX, startY, endX, endY, color, thickness, impactKind ?? 'environment', visualPreset);
+  }
+
+  /**
+   * Lichtstützpunkte entlang eines Hitscan-Strahls.
+   *
+   * Ein Strahl ist eine Linie, die Lightmap kennt aber nur runde Lichter – der Strahl
+   * wird deshalb in gleichmäßigen Abständen abgetastet. Der Mündungspunkt bleibt bewusst
+   * ausgespart: dort sitzt bereits das Mündungsfeuer, ein zweites Licht an derselben
+   * Stelle würde nur den Kern ausbrennen.
+   *
+   * Die Zahl der Stützpunkte ist hart gedeckelt. Hitscan-Waffen feuern schnell, und jeder
+   * Impuls belegt bis zu seinem Abklingen einen Platz im Frame-Budget.
+   */
+  private emitHitscanBeamLight(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    playerColor: number,
+    visualPreset: HitscanVisualPreset,
+  ): void {
+    if (!this.lighting) return;
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) return;
+
+    // ASMD ist eine Energiewaffe: kalte Entladung statt warmem Mündungslicht.
+    const isEnergyBeam = visualPreset === 'asmd_primary';
+    const preset = isEnergyBeam ? 'electricArc' : 'beamPulse';
+    const color = isEnergyBeam ? undefined : mixColors(playerColor, 0xffffff, 0.62);
+
+    const steps = Phaser.Math.Clamp(Math.round(length / HITSCAN_LIGHT_SPACING_PX), 1, MAX_HITSCAN_LIGHTS);
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / steps;
+      this.lighting.pulse(preset, startX + dx * t, startY + dy * t, { color });
+    }
   }
 
   private playHitscanImpact(
@@ -1561,6 +1605,11 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     }
 
     if (swing.visualPreset === 'zeus_taser' && this.zeusTaserRenderer) {
+      // Nur der Taser leuchtet. Ein Biss und der Standard-Swing sind mechanische
+      // Nahkampfschläge ohne eigene Emission und bekommen bewusst kein Licht.
+      this.lighting?.pulse('electricArc', swing.x, swing.y, {
+        radiusPx: Math.max(swing.range * 1.6, 120),
+      });
       this.zeusTaserRenderer.playSwing(
         swing.x,
         swing.y,

@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
+import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle } from '../types';
 import { ProjectileHomingController } from './ProjectileHomingController';
 import type { HomingTargetCandidate } from './ProjectileHomingController';
@@ -1801,6 +1802,49 @@ export class ProjectileManager {
         y: extrapolated.y,
         size: state.size,
         style: state.style as ProjectileStyle | undefined,
+      });
+    }
+    return samples;
+  }
+
+  /**
+   * Projektile, die selbst leuchten könnten – die Auswahl trifft der Aufrufer über
+   * `getProjectileLightSpec()`.
+   *
+   * Aufbau bewusst identisch zu `getShadowSamples()`: auf dem Host stammen die Werte aus
+   * den Physik-Bodies, auf Clients aus den extrapolierten Snapshots. Damit ist der
+   * Lichtpfad ohne eine zweite Fallunterscheidung auf beiden Seiten gleich.
+   */
+  getLightSamples(): ProjectileLightSample[] {
+    if (this.projectiles.length > 0) {
+      return this.projectiles
+        .filter((projectile) => projectile.sprite.active && !projectile.pendingDestroy)
+        .map((projectile) => ({
+          id: projectile.id,
+          x: projectile.sprite.x,
+          y: projectile.sprite.y,
+          size: Math.max(projectile.sprite.displayWidth, projectile.sprite.displayHeight),
+          color: projectile.color,
+          style: projectile.projectileStyle,
+          energyBallVariant: projectile.energyBallVariant,
+          grenadeVisualPreset: projectile.grenadeVisualPreset,
+        }));
+    }
+
+    const now = performance.now();
+    const samples: ProjectileLightSample[] = [];
+    for (const [id, state] of this.clientProjStates) {
+      const extrapolated = this.extrapolateClientProjectileState(state, now);
+      if (!extrapolated) continue;
+      samples.push({
+        id,
+        x: extrapolated.x,
+        y: extrapolated.y,
+        size: state.size,
+        color: state.color,
+        style: state.style as ProjectileStyle | undefined,
+        energyBallVariant: state.energyBallVariant,
+        grenadeVisualPreset: state.grenadeVisualPreset,
       });
     }
     return samples;

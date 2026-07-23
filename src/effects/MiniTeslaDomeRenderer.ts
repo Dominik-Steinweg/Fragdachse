@@ -4,9 +4,13 @@ import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { configureAdditiveImage, fillRadialGradientTexture } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_MINI_DOME_FIELD = '__enemy_mini_tesla_field';
 const TEX_MINI_DOME_SPARK = '__enemy_mini_tesla_spark';
+
+/** Aufgehelltes Violett der Kuppel – die satte Feldfarbe trägt als Licht zu wenig Grün. */
+const MINI_DOME_LIGHT_COLOR = 0xdfb4ff;
 
 interface MiniDomeVisual {
   field: Phaser.GameObjects.Image;
@@ -21,8 +25,13 @@ interface MiniDomeVisual {
 export class MiniTeslaDomeRenderer {
   private readonly visuals = new Map<string, MiniDomeVisual>();
   private readonly particles = new Set<Phaser.GameObjects.Image>();
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_MINI_DOME_FIELD, 192, [
@@ -53,6 +62,7 @@ export class MiniTeslaDomeRenderer {
 
     for (const [enemyId, visual] of this.visuals) {
       if (activeIds.has(enemyId)) continue;
+      this.lighting?.releaseLight(lightKey(enemyId));
       visual.field.destroy();
       visual.ring.destroy();
       visual.arcs.destroy();
@@ -62,7 +72,7 @@ export class MiniTeslaDomeRenderer {
 
   update(_delta: number): void {
     const now = this.scene.time.now;
-    for (const visual of this.visuals.values()) {
+    for (const [enemyId, visual] of this.visuals) {
       const pulse = 1 + Math.sin(now * 0.005 + visual.phase) * 0.045;
       visual.field.setScale((visual.radius * 2 / 192) * pulse);
       visual.field.setAlpha(0.8 + Math.sin(now * 0.006 + visual.phase) * 0.12);
@@ -72,11 +82,18 @@ export class MiniTeslaDomeRenderer {
         visual.lastSparkAt = now;
         this.spawnRimSpark(visual);
       }
+
+      this.lighting?.setLight(lightKey(enemyId), 'electricField', visual.field.x, visual.field.y, {
+        radiusPx: Math.max(visual.radius * 1.5, 70),
+        color: MINI_DOME_LIGHT_COLOR,
+        intensity: 0.5,
+      });
     }
   }
 
   destroyAll(): void {
-    for (const visual of this.visuals.values()) {
+    for (const [enemyId, visual] of this.visuals) {
+      this.lighting?.releaseLight(lightKey(enemyId));
       visual.field.destroy();
       visual.ring.destroy();
       visual.arcs.destroy();
@@ -164,4 +181,8 @@ export class MiniTeslaDomeRenderer {
       },
     });
   }
+}
+
+function lightKey(enemyId: string): string {
+  return `minidome:${enemyId}`;
 }

@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { circleZone } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 import {
   ensureFlameTextures,
   FLAME_COLORS_CORE,
@@ -27,6 +28,13 @@ export class EntityBurnRenderer {
   private active = false;
   private lastStacks = -1;
   private lastBodySize = -1;
+  private lighting: LightingSystem | null = null;
+  /**
+   * Anders als die zentralen Renderer gehört eine Instanz zu genau einer Entity. Der
+   * Licht-Key ist deshalb fest und wird einmal von außen gesetzt, statt ihn bei jedem
+   * `sync()` mitzuschleppen.
+   */
+  private lightKey = '';
 
   constructor(private readonly scene: Phaser.Scene) {
     ensureFlameTextures(scene);
@@ -80,10 +88,16 @@ export class EntityBurnRenderer {
       .setVisible(false);
   }
 
+  setLightingSystem(lighting: LightingSystem | null, lightKey: string): void {
+    this.lighting = lighting;
+    this.lightKey = lightKey;
+  }
+
   sync(x: number, y: number, bodySize: number, stacks: number, visible: boolean): void {
     const activeStacks = Math.max(0, Math.floor(stacks));
     if (activeStacks <= 0 || !visible) {
       this.setActive(false);
+      this.releaseLight();
       return;
     }
 
@@ -125,9 +139,24 @@ export class EntityBurnRenderer {
       .setVisible(true)
       .setAlpha((0.18 + intensity * 0.38) * pulse)
       .setScale(Math.max(bodySize / 48 * (1.3 + intensity * 1.15) * pulse, 0.42));
+
+    // Ein brennender Körper leuchtet wie ein brennendes Projektil, nur größer und mit
+    // der Stack-Intensität als Regler. `visible` ist hier bereits geprüft – wer nicht
+    // sichtbar auf dem Feld steht, leuchtet auch nicht.
+    if (this.lightKey) {
+      this.lighting?.setLight(this.lightKey, 'entityBurn', x, y + bodySize * 0.05, {
+        radiusPx: 70 + bodySize * 1.1 + intensity * 40,
+        intensity: 0.55 + intensity * 0.45,
+      });
+    }
+  }
+
+  private releaseLight(): void {
+    if (this.lightKey) this.lighting?.releaseLight(this.lightKey);
   }
 
   destroy(): void {
+    this.releaseLight();
     this.coreEmitter.destroy();
     this.outerEmitter.destroy();
     this.sparkEmitter.destroy();

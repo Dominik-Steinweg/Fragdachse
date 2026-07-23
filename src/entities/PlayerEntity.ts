@@ -3,6 +3,7 @@ import type { BurrowPhase, PlayerProfile } from '../types';
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
+import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
@@ -50,6 +51,8 @@ export class PlayerEntity {
   private burnRenderer: EntityBurnRenderer | null = null;
   private rageRenderer: HoneyBadgerRageRenderer | null = null;
   private burnStacks = 0;
+  /** Für die an dieser Entity hängenden Lichtquellen (Brand, Spawn-Blitz). */
+  private lighting: LightingSystem | null = null;
 
   // Sterbeanimation
   private deathSprite: Phaser.GameObjects.Sprite | null = null;
@@ -70,7 +73,17 @@ export class PlayerEntity {
   private stealthShellRotation = 0;
   private stealthScanProgress = 0;
 
-  constructor(scene: Phaser.Scene, profile: PlayerProfile, x: number, y: number, isEnemy = false) {
+  // `lighting` gehört in den Konstruktor, nicht in einen nachgelagerten Setter: der
+  // Spawn-Blitz läuft bereits hier, ein später gesetztes System käme für ihn zu spät.
+  constructor(
+    scene: Phaser.Scene,
+    profile: PlayerProfile,
+    x: number,
+    y: number,
+    isEnemy = false,
+    lighting: LightingSystem | null = null,
+  ) {
+    this.lighting = lighting;
     this.id       = profile.id;
     this.colorHex = profile.colorHex;
     this.isEnemy  = isEnemy;
@@ -88,7 +101,7 @@ export class PlayerEntity {
     // Leuchtende Spielerfarb-Aura (vgl. PowerUpRenderer)
     // setPadding nötig, damit der Glow nicht an den Sprite-Grenzen abgeschnitten wird
     setInternalFxPadding(this.sprite, 20);
-    this.glowFx = addInternalGlow(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16);
+    this.glowFx = addInternalGlow(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
     this.startDefaultGlowTween();
 
     this.spawnShine = scene.add.image(x, y, 'badger');
@@ -298,9 +311,20 @@ export class PlayerEntity {
 
     if (!this.burnRenderer) {
       this.burnRenderer = new EntityBurnRenderer(this.sprite.scene);
+      this.burnRenderer.setLightingSystem(this.lighting, `entityburn:player:${this.id}`);
     }
 
     this.syncAttachedEffects();
+  }
+
+  /**
+   * Die Beleuchtung ist scene-lifetime, die Entity nicht. Der Setter wird deshalb vom
+   * `PlayerManager` direkt nach dem Anlegen aufgerufen und reicht die Referenz an einen
+   * bereits bestehenden Brand-Renderer weiter.
+   */
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+    this.burnRenderer?.setLightingSystem(lighting, `entityburn:player:${this.id}`);
   }
 
   /** Sprite und Balken ein-/ausblenden (Tod / Respawn). */
@@ -399,7 +423,9 @@ export class PlayerEntity {
     });
 
     // World-Space-Effekte (Ringe, Partikel, Lichtstrahl, Kern-Flash)
-    new SpawnEffectRenderer(scene).play(this.sprite.x, this.sprite.y, this.colorHex);
+    const spawnEffect = new SpawnEffectRenderer(scene);
+    spawnEffect.setLightingSystem(this.lighting);
+    spawnEffect.play(this.sprite.x, this.sprite.y, this.colorHex);
   }
 
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite). */

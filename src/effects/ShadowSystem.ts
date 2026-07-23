@@ -17,6 +17,11 @@ import {
   type ShadowProjectileSample,
   WORLD_SHADOW_CONFIG,
 } from './ShadowConfig';
+import {
+  getGraphicsQualityController,
+  getGraphicsQualityProfile,
+  type GraphicsQualityProfile,
+} from '../graphics/GraphicsQuality';
 
 interface ShadowWorldBounds {
   readonly minX: number;
@@ -64,6 +69,10 @@ export class ShadowSystem {
   private readonly layers = new Map<string, ShadowLayerBucket>();
   private worldBoundsOverride: ShadowWorldBounds | null = null;
   private profile: ShadowProfile = SHADOW_PROFILES.day;
+  private quality: GraphicsQualityProfile;
+  private unsubscribeQuality: (() => void) | null = null;
+  private lastStaticLayout: ArenaLayout | null = null;
+  private lastStaticOptions: StaticShadowLayoutBuildOptions = {};
 
   // Reusable point buffers — mutated in-place each draw call to avoid
   // allocating hundreds of Vector2 objects per frame.
@@ -75,7 +84,15 @@ export class ShadowSystem {
   constructor(
     private readonly scene: Phaser.Scene,
     private arenaMask: Phaser.Display.Masks.GeometryMask | null = null,
-  ) {}
+  ) {
+    this.quality = getGraphicsQualityProfile(scene);
+    this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
+      this.quality = profile;
+      if (this.lastStaticLayout) {
+        this.rebuildStaticLayoutShadows(this.lastStaticLayout, this.lastStaticOptions);
+      }
+    }) ?? null;
+  }
 
   setArenaMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
     this.arenaMask = mask;
@@ -109,6 +126,8 @@ export class ShadowSystem {
     layout: ArenaLayout | null,
     options: StaticShadowLayoutBuildOptions = {},
   ): void {
+    this.lastStaticLayout = layout;
+    this.lastStaticOptions = options;
     this.clearStatic();
     if (!layout) return;
 
@@ -183,6 +202,7 @@ export class ShadowSystem {
     }
 
     for (const projectile of projectiles) {
+      if (!this.quality.projectileShadows) break;
       const preset = getProjectileShadowConfig(projectile.style);
       if (!preset?.enabled) continue;
 
@@ -207,6 +227,8 @@ export class ShadowSystem {
       bucket.staticGraphics.clear();
       bucket.dynamicGraphics.clear();
     }
+    this.lastStaticLayout = null;
+    this.lastStaticOptions = {};
   }
 
   destroy(): void {
@@ -215,6 +237,10 @@ export class ShadowSystem {
       bucket.dynamicGraphics.destroy();
     }
     this.layers.clear();
+    this.unsubscribeQuality?.();
+    this.unsubscribeQuality = null;
+    this.lastStaticLayout = null;
+    this.lastStaticOptions = {};
   }
 
   private clearStatic(): void {
@@ -296,7 +322,7 @@ export class ShadowSystem {
       + 16;
     if (!this.isVisibleInArena(x, y, maxExtent)) return;
 
-    const steps = Math.max(1, preset.blurLayers);
+    const steps = Math.max(1, Math.round(preset.blurLayers * this.quality.shadowLayerFactor));
     const denominator = Math.max(1, steps - 1);
     const dir = WORLD_SHADOW_CONFIG.lightDirection;
     const airborneHeight = preset.airborneHeightPx ?? 0;

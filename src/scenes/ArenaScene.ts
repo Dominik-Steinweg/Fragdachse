@@ -11,6 +11,8 @@ import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
 import { CombatSystem }          from '../systems/CombatSystem';
 import { DecoySystem }           from '../systems/DecoySystem';
 import { EffectSystem }          from '../effects/EffectSystem';
+import { getProjectileLightSpec } from '../effects/LightingConfig';
+import { mixColors }             from '../effects/EffectUtils';
 import { SmokeSystem }           from '../effects/SmokeSystem';
 import { FireSystem }            from '../effects/FireSystem';
 import { StinkCloudSystem }      from '../effects/StinkCloudSystem';
@@ -44,6 +46,7 @@ import {
   addStoredCoopDefenseXp,
   getStoredCoopDefenseProgress,
   getStoredEffectsVolume,
+  getStoredGraphicsQuality,
   getStoredMasterVolume,
   getStoredMusicVolume,
   markStoredCoopDefenseBossMapCompleted,
@@ -52,6 +55,7 @@ import {
   setStoredLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
 } from '../utils/localPreferences';
+import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
@@ -72,6 +76,7 @@ import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
+import { PerformanceDiagnosticsOverlay } from '../ui/PerformanceDiagnosticsOverlay';
 
 import {
   type ArenaContext,
@@ -148,6 +153,9 @@ export class ArenaScene extends Phaser.Scene {
   private static readonly TRAIN_LIGHT_SIDES = [-1, 1] as const;
   private trainLightPlan: TrainLightPlan | null = null;
   private trainLightsActive = false;
+  /** Zwei getauschte Sets statt Neuallokation pro Frame: Projektile wechseln schnell. */
+  private activeProjectileLightIds = new Set<number>();
+  private projectileLightScratch = new Set<number>();
   private placementPreview!: PlacementPreviewRenderer;
   private tunnelRenderer!: TunnelRenderer;
   private gaussWarning!: GaussWarningRenderer;
@@ -167,7 +175,9 @@ export class ArenaScene extends Phaser.Scene {
   private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private coopDefenseXpDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private netDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private performanceHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private netDebugOverlay: NetDebugOverlay | null = null;
+  private performanceDiagnosticsOverlay: PerformanceDiagnosticsOverlay | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
   private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
@@ -177,6 +187,14 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
   private runtimeProfiler: ArenaRuntimeProfiler | null = null;
+  private graphicsQuality!: GraphicsQualityController;
+  private lastScenePerformanceCountAtMs = Number.NEGATIVE_INFINITY;
+  private scenePerformanceCounts = {
+    visibleObjectCount: 0,
+    particleEmitterCount: 0,
+    aliveParticleCount: 0,
+    activeFilterCount: 0,
+  };
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -237,6 +255,25 @@ export class ArenaScene extends Phaser.Scene {
 
   create(): void {
     applyArenaMetricsForMode(bridge.getGameMode(), bridge.getGamePhase());
+    this.graphicsQuality = new GraphicsQualityController(getStoredGraphicsQuality());
+    this.graphicsQuality.attach(this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.graphicsQuality.destroy());
+    this.runtimeProfiler = new ArenaRuntimeProfiler();
+    this.runtimeProfiler.attachGame(this.game);
+    const unsubscribePerformanceQuality = this.graphicsQuality.subscribe((profile, previous) => {
+      this.runtimeProfiler?.recordQualityChange(previous, profile.level);
+    });
+    this.performanceDiagnosticsOverlay = new PerformanceDiagnosticsOverlay(
+      this.runtimeProfiler,
+      () => this.describePerformanceEnvironment(),
+    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      unsubscribePerformanceQuality();
+      this.performanceDiagnosticsOverlay?.destroy();
+      this.performanceDiagnosticsOverlay = null;
+      this.runtimeProfiler?.destroy();
+      this.runtimeProfiler = null;
+    });
 
     this.anims.create({
       key:       'player_death',
@@ -297,7 +334,7 @@ export class ArenaScene extends Phaser.Scene {
     effectSystem.setAudioSystem(gameAudioSystem);
 
     // ── UI (scene-lifetime) ────────────────────────────────────────────────
-    const leftPanel  = new LeftSidePanel(this, bridge, gameAudioSystem);
+    const leftPanel  = new LeftSidePanel(this, bridge, gameAudioSystem, this.graphicsQuality);
     leftPanel.build();
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
@@ -455,6 +492,9 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, playerManager, this.arenaClipMask);
+    // Spawn-Blitz und Brand hängen an der jeweiligen Entity, nicht an einem zentralen
+    // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
+    playerManager.setLightingSystem(this.renderers.lighting);
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
@@ -495,7 +535,6 @@ export class ArenaScene extends Phaser.Scene {
     // ── Coordinators ──────────────────────────────────────────────────────
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
     this.clientUpdate = new ClientUpdateCoordinator(this, this.ctx, this.localPlayerState, this.rockVisualHelper);
-    this.runtimeProfiler = new ArenaRuntimeProfiler();
 
     // ── Input setup ───────────────────────────────────────────────────────
     inputSystem.setup();
@@ -747,7 +786,9 @@ export class ArenaScene extends Phaser.Scene {
     let primaryStepMs = 0;
     this.syncArenaMetrics();
     this.lifecycle.detectPhaseChange();
+    const networkUpdateStartMs = performance.now();
     bridge.updateNetwork();
+    const networkUpdateMs = performance.now() - networkUpdateStartMs;
 
     const phase           = bridge.getGamePhase();
     const enteredLobbyFromArena = this.lastObservedGamePhase === 'ARENA' && phase === 'LOBBY';
@@ -920,11 +961,15 @@ export class ArenaScene extends Phaser.Scene {
       this.enemyHoverNameLabel?.clear(true);
     }
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inArena, countdownActive);
+    const visualCameraEndMs = performance.now();
+
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
     this.renderers.teslaDome.update(delta);
+    const visualEnemyStartMs = performance.now();
     const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
     this.ctx.enemyManager?.syncHostVisuals();
+    const visualEnemyMs = performance.now() - visualEnemyStartMs;
     this.renderers.healingAura.syncEnemies(auraEnemies);
     this.renderers.healingAura.update(delta);
     this.renderers.miniTeslaDome.syncEnemies(auraEnemies);
@@ -933,6 +978,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.guardianSpirit.update(delta);
     this.renderers.slimeTrail.update(delta);
     this.renderers.flamethrowerUpgrades.update(bridge.getSynchronizedNow());
+    const visualEffectsEndMs = performance.now();
 
     const utilityTargeting    = this.ctx.inputSystem.getUtilityTargetingPreviewState();
     const airstrikeTargeting  = this.ctx.inputSystem.getAirstrikeTargetingPreviewState();
@@ -974,6 +1020,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.utilityChargeIndicator?.update(this.ctx.inputSystem.getUtilityChargePreviewState());
     this.ultimateChargeIndicator?.update(ultimatePreview);
+    const visualAimEndMs = performance.now();
 
     this.gaussWarning.update(inArena);
     this.placementPreview.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
@@ -987,22 +1034,50 @@ export class ArenaScene extends Phaser.Scene {
     this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
     this.tunnelRenderer.update(this.time.now);
 
-    const visualStepMs = performance.now() - visualsStartMs;
-    const shadowStepStartMs = performance.now();
+    const visualsEndMs = performance.now();
+    const visualStepMs   = visualsEndMs - visualsStartMs;
+    const visualCameraMs = visualCameraEndMs - visualsStartMs;
+    // Der Gegner-Sync liegt mitten im Effektblock und wird deshalb wieder herausgerechnet.
+    const visualEffectsMs = visualEffectsEndMs - visualCameraEndMs - visualEnemyMs;
+    const visualAimMs = visualAimEndMs - visualEffectsEndMs;
+    const visualHudMs = visualsEndMs - visualAimEndMs;
+
+    const shadowStepStartMs = visualsEndMs;
     this.syncWorldShadows(inArena);
     const shadowStepMs = performance.now() - shadowStepStartMs;
     this.syncWorldLighting(inArena);
     const lightingStepMs = this.renderers.lighting.getLastUpdateCostMs();
-    const frameCostMs = performance.now() - frameStartMs;
+
+    // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
+    // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
+    const networkFlushStartMs = performance.now();
+    bridge.flushNetwork();
+    const networkFlushMs = performance.now() - networkFlushStartMs;
+
     if (inGame) {
       const role = bridge.isHost() ? 'host' : 'client';
       const firePerformance = this.ctx.fireSystem.takePerformanceMetrics();
+      const lightStats = this.renderers.lighting.getDebugStats();
+      const sceneCounts = this.sampleScenePerformanceCounts(performance.now());
       this.runtimeProfiler?.record({
         role,
+        quality: this.graphicsQuality.getLevel(),
+        mode: bridge.getGameMode(),
+        mapId: isCoopDefenseMode(bridge.getGameMode())
+          ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+          : null,
         deltaMs: delta,
-        frameCostMs,
-        primaryStepMs,
+        updateMs: performance.now() - frameStartMs,
+        renderSubmitMs: this.runtimeProfiler.takeLastRenderSubmitMs(),
+        roleStepMs: primaryStepMs,
+        networkUpdateMs,
+        networkFlushMs,
         visualStepMs,
+        visualCameraMs,
+        visualEnemyMs,
+        visualEffectsMs,
+        visualAimMs,
+        visualHudMs,
         shadowStepMs,
         lightingStepMs,
         fireSimulationMs: firePerformance.simulationMs,
@@ -1012,15 +1087,18 @@ export class ArenaScene extends Phaser.Scene {
         projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
         playerCount: this.ctx.playerManager.getAllPlayers().length,
         displayObjectCount: this.children.list.length,
+        visibleObjectCount: sceneCounts.visibleObjectCount,
+        particleEmitterCount: sceneCounts.particleEmitterCount,
+        aliveParticleCount: sceneCounts.aliveParticleCount,
+        activeFilterCount: sceneCounts.activeFilterCount,
+        activeLightCount: lightStats.activeLights,
+        renderedLightCount: lightStats.renderedLights,
+        drawCallCount: this.runtimeProfiler.takeLastDrawCallCount(),
         sceneBreakdown: this.runtimeProfiler?.shouldCaptureSceneBreakdown(role, delta)
           ? this.describeSceneObjectBreakdown()
           : null,
       });
     }
-
-    // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
-    // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
-    bridge.flushNetwork();
   }
 
   // ── Network events ────────────────────────────────────────────────────────
@@ -1333,14 +1411,31 @@ export class ArenaScene extends Phaser.Scene {
     };
     keyboard.on('keydown-P', this.netDebugHotkeyHandler);
 
+    if (this.performanceHotkeyHandler) {
+      keyboard.off('keydown-T', this.performanceHotkeyHandler);
+      this.performanceHotkeyHandler = null;
+    }
+    this.performanceHotkeyHandler = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      // T ist ein Schreibzeichen: nicht auslösen, während ein Textfeld den Fokus hat.
+      if (this.ctx?.leftPanel.isHotkeyInputBlocked()) return;
+      this.performanceDiagnosticsOverlay?.toggle();
+    };
+    keyboard.on('keydown-T', this.performanceHotkeyHandler);
+
     this.events.once('shutdown', () => {
       if (this.netDebugHotkeyHandler) {
         keyboard.off('keydown-P', this.netDebugHotkeyHandler);
         this.netDebugHotkeyHandler = null;
       }
-      if (!this.optionsHotkeyHandler) return;
-      keyboard.off('keydown-O', this.optionsHotkeyHandler);
-      this.optionsHotkeyHandler = null;
+      if (this.performanceHotkeyHandler) {
+        keyboard.off('keydown-T', this.performanceHotkeyHandler);
+        this.performanceHotkeyHandler = null;
+      }
+      if (this.optionsHotkeyHandler) {
+        keyboard.off('keydown-O', this.optionsHotkeyHandler);
+        this.optionsHotkeyHandler = null;
+      }
       if (this.coopDefenseXpDebugHotkeyHandler) {
         keyboard.off('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
         this.coopDefenseXpDebugHotkeyHandler = null;
@@ -1488,7 +1583,60 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
+    this.syncProjectileLights(inArena);
+
     lighting.update();
+  }
+
+  /**
+   * Eigenleuchten der Projektile.
+   *
+   * Bewusst ein zentraler Pass statt einer Anmeldung in jedem der zwölf
+   * Projektil-Renderer: `ProjectileManager.getLightSamples()` deckt Host und Client aus
+   * einer Methode ab – genau wie `getShadowSamples()` beim dynamischen Schatten – und die
+   * Zuordnung Stil → Licht bleibt an einer Stelle steuerbar.
+   *
+   * Der Brand eines Projektils ist davon unabhängig: `ProjectileBurnRenderer` meldet ihn
+   * unter einem eigenen Key an, ein brennendes Geschoss trägt also beide Lichter.
+   */
+  private syncProjectileLights(inArena: boolean): void {
+    const lighting = this.renderers.lighting;
+    const active = this.activeProjectileLightIds;
+
+    if (!inArena) {
+      for (const id of active) lighting.releaseLight(`proj:${id}`);
+      active.clear();
+      return;
+    }
+
+    const seen = this.projectileLightScratch;
+    seen.clear();
+
+    for (const sample of this.ctx.projectileManager.getLightSamples()) {
+      const spec = getProjectileLightSpec(
+        sample.style,
+        sample.energyBallVariant,
+        sample.grenadeVisualPreset,
+      );
+      if (!spec) continue;
+
+      lighting.setLight(`proj:${sample.id}`, spec.preset, sample.x, sample.y, {
+        radiusPx: spec.baseRadiusPx + sample.size * spec.radiusPerSizePx,
+        color: spec.whitenFromColor === undefined
+          ? undefined
+          : mixColors(sample.color, 0xffffff, spec.whitenFromColor),
+      });
+      seen.add(sample.id);
+    }
+
+    // Freigabe statt Verlass auf das Stale-Notnetz: das blendet sauber aus, statt das
+    // Licht eines längst zerstörten Projektils noch 400 ms stehen zu lassen.
+    for (const id of active) {
+      if (!seen.has(id)) lighting.releaseLight(`proj:${id}`);
+    }
+
+    this.activeProjectileLightIds = seen;
+    this.projectileLightScratch = active;
   }
 
   /**
@@ -1602,6 +1750,70 @@ export class ArenaScene extends Phaser.Scene {
       .join(', ');
 
     return `visible=${visibleCount} active=${activeCount} top=${topEntries}`;
+  }
+
+  private sampleScenePerformanceCounts(nowMs: number): typeof this.scenePerformanceCounts {
+    if (nowMs - this.lastScenePerformanceCountAtMs < 250) return this.scenePerformanceCounts;
+
+    let visibleObjectCount = 0;
+    let particleEmitterCount = 0;
+    let aliveParticleCount = 0;
+    let activeFilterCount = 0;
+    for (const child of this.children.list) {
+      const gameObject = child as Phaser.GameObjects.GameObject & {
+        visible?: boolean;
+        type?: string;
+        getAliveParticleCount?: () => number;
+        filters?: {
+          internal?: { getActive?: () => unknown[] };
+          external?: { getActive?: () => unknown[] };
+        };
+      };
+      if (gameObject.visible !== false) visibleObjectCount += 1;
+      if (gameObject.type === 'ParticleEmitter' || gameObject.getAliveParticleCount) {
+        particleEmitterCount += 1;
+        aliveParticleCount += gameObject.getAliveParticleCount?.() ?? 0;
+      }
+      activeFilterCount += gameObject.filters?.internal?.getActive?.().length ?? 0;
+      activeFilterCount += gameObject.filters?.external?.getActive?.().length ?? 0;
+    }
+
+    this.scenePerformanceCounts = {
+      visibleObjectCount,
+      particleEmitterCount,
+      aliveParticleCount,
+      activeFilterCount,
+    };
+    this.lastScenePerformanceCountAtMs = nowMs;
+    return this.scenePerformanceCounts;
+  }
+
+  private describePerformanceEnvironment(): Record<string, unknown> {
+    const canvas = this.game.canvas;
+    const renderer = this.game.renderer as typeof this.game.renderer & { gl?: WebGLRenderingContext };
+    const gl = renderer.gl;
+    const debugRendererInfo = gl?.getExtension('WEBGL_debug_renderer_info');
+    const gpuRenderer = gl && debugRendererInfo
+      ? gl.getParameter(debugRendererInfo.UNMASKED_RENDERER_WEBGL)
+      : null;
+    const gpuVendor = gl && debugRendererInfo
+      ? gl.getParameter(debugRendererInfo.UNMASKED_VENDOR_WEBGL)
+      : null;
+    const nav = typeof navigator === 'undefined' ? null : navigator as Navigator & { deviceMemory?: number };
+
+    // Nur Geraete- und Renderer-Daten. Rolle, Qualitaet, Modus und Map wechseln waehrend einer
+    // Messung und stehen deshalb pro Fenster sowie gebuendelt in `recordingScope` des Reports.
+    return {
+      renderer: this.game.renderer.type === Phaser.WEBGL ? 'webgl' : 'canvas',
+      gpuRenderer,
+      gpuVendor,
+      canvas: { width: canvas.width, height: canvas.height },
+      devicePixelRatio: typeof window === 'undefined' ? 1 : window.devicePixelRatio,
+      userAgent: nav?.userAgent ?? null,
+      platform: nav?.platform ?? null,
+      hardwareConcurrency: nav?.hardwareConcurrency ?? null,
+      deviceMemoryGb: nav?.deviceMemory ?? null,
+    };
   }
 
   private initializeRoomQuality(): void {

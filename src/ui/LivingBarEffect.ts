@@ -7,6 +7,7 @@
  */
 import * as Phaser from 'phaser';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import { getGraphicsQualityController } from '../graphics/GraphicsQuality';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -156,6 +157,7 @@ export class LivingBarEffect {
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
     });
+    getGraphicsQualityController(scene)?.setEmitterImportance(this.idleCore, 'decorative');
     this.idleCore.addEmitZone(zoneData);
     if (opts?.scrollFactor !== undefined) this.idleCore.setScrollFactor(opts.scrollFactor);
     container.add(this.idleCore);
@@ -172,6 +174,7 @@ export class LivingBarEffect {
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
     });
+    getGraphicsQualityController(scene)?.setEmitterImportance(this.idleOuter, 'decorative');
     this.idleOuter.addEmitZone(zoneData);
     if (opts?.scrollFactor !== undefined) this.idleOuter.setScrollFactor(opts.scrollFactor);
     container.add(this.idleOuter);

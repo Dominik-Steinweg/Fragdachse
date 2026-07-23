@@ -36,7 +36,11 @@ Vor `npm run build` nicht zusätzlich typechecken; der Build enthält TypeScript
 
 ## Browserprüfung
 
-Nur bei sichtbar geändertem Verhalten: `npm run dev:browser`, dann erst nach HTTP 200 von `http://127.0.0.1:8080/` genau diese URL öffnen. Höchstens ein Verbindungs- und ein Seitenlade-Retry; bei blockiertem Verbindungsaufbau abbrechen und melden. Für Mehrspielerprüfungen einen zweiten Tab mit der `#r=`-URL des ersten öffnen. Bekannte Meldungen zu noch fehlenden Loadout-/Upgrade-/Gegner-Sprites ignorieren, wenn das Zielbild rendert. Server und Browser danach beenden.
+Nur bei sichtbar geändertem Verhalten: `npm run dev:browser`, dann erst nach HTTP 200 von `http://127.0.0.1:8090/` genau diese URL öffnen. Höchstens ein Verbindungs- und ein Seitenlade-Retry; bei blockiertem Verbindungsaufbau abbrechen und melden. Für Mehrspielerprüfungen einen zweiten Tab mit der `#r=`-URL des ersten öffnen. Bekannte Meldungen zu noch fehlenden Loadout-/Upgrade-/Gegner-Sprites ignorieren, wenn das Zielbild rendert. Server und Browser danach beenden.
+
+Port 8090 gehört exklusiv dem Agenten, Port 8080 exklusiv dem Menschen (`npm run dev`). Niemals einen fremden Prozess auf 8080 beenden und niemals `localhost` statt `127.0.0.1` verwenden. Details und Begründung: [`docs/ai/local-dev-environment.md`](docs/ai/local-dev-environment.md).
+
+Schlägt der Screenshot mit „Browser pane is not displayed / not compositing frames" fehl, ist der Browser-Pane verborgen: Dann läuft auch Phasers Game-Loop nicht und es gibt kein Bild zum Prüfen. Das ist ein Umgebungszustand, kein Anwendungsfehler. Die Sichtprüfung nicht als bestanden melden und kein Ergebnis erfinden, sondern offen berichten und auf Konsole/Netzwerk/`read_page` ausweichen. Siehe dieselbe Seite.
 
 ## Definition of Done und Knowledge Writeback
 

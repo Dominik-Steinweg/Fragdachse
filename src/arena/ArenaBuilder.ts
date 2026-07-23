@@ -35,10 +35,30 @@ export interface ArenaBuilderResult {
   canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }>;
   /** Gleis-TileSprites (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
   trackObjects: Phaser.GameObjects.TileSprite[];
-  /** Dirt-Sprites (rein visuell, keine Kollision, keine HP) */
-  dirtObjects: Phaser.GameObjects.Image[];
+  /**
+   * Der statische Dirt-Boden, einmalig in eine RenderTexture gebacken. Ersetzt bis zu ~2000
+   * Einzel-Images in der Display-Liste durch ein Objekt und senkt so die fixen Render-Kosten pro
+   * Frame. `null`, wenn die Map keinen Dirt hat.
+   */
+  dirtLayer: Phaser.GameObjects.RenderTexture | null;
+  /**
+   * Geometrie der gebackenen Dirt-Kacheln. Der Terrain-Farb-Sampler zeichnet daraus seine eigene
+   * CPU-Canvas; die Live-Images existieren dafür nicht mehr.
+   */
+  dirtStamps: DirtStamp[];
   /** Decal-Sprites (rein visuell, keine Kollision, keine HP) */
   decalObjects: Phaser.GameObjects.Image[];
+}
+
+/** Was der Terrain-Sampler von einer gebackenen Dirt-Kachel braucht (siehe ArenaTerrainColorSampler). */
+export interface DirtStamp {
+  textureKey: string;
+  frameName: string | number;
+  x: number;
+  y: number;
+  displayWidth: number;
+  displayHeight: number;
+  alpha: number;
 }
 
 export class ArenaBuilder {
@@ -120,8 +140,9 @@ export class ArenaBuilder {
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
     const trackObjects = this.buildTracks(layout.tracks ?? []);
 
-    // Dirt (rein visuell, keine Physik)
-    const dirtObjects = this.buildDirt(layout.dirt ?? []);
+    // Dirt (rein visuell, keine Physik) – einmalig in eine RenderTexture backen, dann die
+    // Einzel-Images verwerfen, damit sie nicht jeden Frame durch die Display-Liste laufen.
+    const { dirtLayer, dirtStamps } = this.bakeDirt(layout.dirt ?? []);
 
     // Decals (rein visuell, oberhalb von Gleisen/Dirt, unter Felsen)
     const decalObjects = this.buildDecals(layout.decals ?? []);
@@ -166,7 +187,8 @@ export class ArenaBuilder {
       trunkObjects,
       canopyObjects,
       trackObjects,
-      dirtObjects,
+      dirtLayer,
+      dirtStamps,
       decalObjects,
     };
   }
@@ -344,11 +366,10 @@ export class ArenaBuilder {
     }
     result.trackObjects.length = 0;
 
-    // Dirt
-    for (const img of result.dirtObjects) {
-      if (img.active) img.destroy();
-    }
-    result.dirtObjects.length = 0;
+    // Dirt (gebackene RenderTexture + Kachel-Geometrie)
+    if (result.dirtLayer?.active) result.dirtLayer.destroy();
+    result.dirtLayer = null;
+    result.dirtStamps.length = 0;
 
     // Decals
     for (const img of result.decalObjects) {
@@ -400,16 +421,6 @@ export class ArenaBuilder {
     return ArenaVisualFactory.createCanopy(this.scene, worldX, worldY);
   }
 
-  /**
-   * Erstellt einen Dirt-Sprite aus dem Autotile-Spritesheet.
-   */
-  private createDirtVisual(worldX: number, worldY: number, frame: number): Phaser.GameObjects.Image {
-    const img = this.scene.add.image(worldX, worldY, 'dirt', frame);
-    img.setDisplaySize(CELL_SIZE, CELL_SIZE);
-    img.setDepth(DEPTH.DIRT);
-    return img;
-  }
-
   private createDecalVisual(
     worldX: number,
     worldY: number,
@@ -458,10 +469,39 @@ export class ArenaBuilder {
   // ── Dirt ───────────────────────────────────────────────────────────────────
 
   /**
-   * Baut Dirt-Sprites mit Autotiling (rein visuell, keine Physik/Kollision).
+   * Baut die Dirt-Kacheln mit Autotiling, backt sie einmalig in eine arenagroße RenderTexture und
+   * verwirft danach die Einzel-Images. Ergebnis ist ein einziges Display-Objekt plus die
+   * Kachel-Geometrie für den Terrain-Sampler.
+   *
+   * Die Bilder tragen ihre Weltkoordinaten; die interne Kamera der RenderTexture wird um den
+   * Arena-Offset gescrollt, damit `draw()` sie an der richtigen Stelle in die (am Offset
+   * positionierte) Textur legt. Die Bilder existieren nur zwischen Erzeugung und Backen innerhalb
+   * dieses synchronen Aufrufs, rendern also nie einzeln sichtbar.
    */
-  private buildDirt(dirtCells: DirtCell[]): Phaser.GameObjects.Image[] {
-    return ArenaVisualFactory.createDirt(this.scene, dirtCells);
+  private bakeDirt(dirtCells: DirtCell[]): { dirtLayer: Phaser.GameObjects.RenderTexture | null; dirtStamps: DirtStamp[] } {
+    const images = ArenaVisualFactory.createDirt(this.scene, dirtCells);
+    if (images.length === 0) return { dirtLayer: null, dirtStamps: [] };
+
+    const dirtStamps: DirtStamp[] = images.map((img) => ({
+      textureKey: img.texture.key,
+      frameName: img.frame.name,
+      x: img.x,
+      y: img.y,
+      displayWidth: img.displayWidth,
+      displayHeight: img.displayHeight,
+      alpha: img.alpha,
+    }));
+
+    const dirtLayer = this.scene.add.renderTexture(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+    dirtLayer.setOrigin(0, 0);
+    dirtLayer.setDepth(DEPTH.DIRT);
+    dirtLayer.camera.setScroll(ARENA_OFFSET_X, ARENA_OFFSET_Y);
+    dirtLayer.draw(images);
+    dirtLayer.render();
+
+    for (const img of images) img.destroy();
+
+    return { dirtLayer, dirtStamps };
   }
 
   private buildDecals(decals: DecalCell[]): Phaser.GameObjects.Image[] {

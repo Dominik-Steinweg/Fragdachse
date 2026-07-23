@@ -20,6 +20,7 @@ import {
   enemyNumToId,
 } from '../network/enemySnapshotCodec';
 import { EnemyEntity, type EnemyFaction } from './EnemyEntity';
+import type { LightingSystem } from '../effects/LightingSystem';
 import {
   resolveCoopDefenseEnemyConfigs,
   type CoopDefenseEnemyKind,
@@ -93,10 +94,17 @@ export class EnemyManager {
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
   private onEnemySpawned: ((enemy: EnemyEntity) => void) | null = null;
   private burrowVisualSink: EnemyBurrowVisualSink | null = null;
+  private lighting: LightingSystem | null = null;
 
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
     this.resolvedConfigs = resolvedConfigs;
+  }
+
+  /** Reicht die scene-lifetime Beleuchtung an neue und bestehende Gegner durch. */
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+    for (const enemy of this.enemies.values()) enemy.setLightingSystem(lighting);
   }
 
   /**
@@ -163,6 +171,7 @@ export class EnemyManager {
   ): EnemyEntity {
     const id = this.generateEnemyId(kind);
     const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind], faction, ownerId, ownerColor);
+    enemy.setLightingSystem(this.lighting);
     this.enemies.set(id, enemy);
     this.onEnemySpawned?.(enemy);
     return enemy;
@@ -846,6 +855,7 @@ export class EnemyManager {
         remote.ownerId,
         remote.ownerColor,
       );
+      enemy.setLightingSystem(this.lighting);
       const rotation = remote.rot ?? 0;
       enemy.faceAngle(rotation);
       enemy.setTargetRotation(rotation);

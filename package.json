@@ -7,7 +7,7 @@
     "ai:sync": "node scripts/sync-ai-skills.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
     "dev": "vite",
-    "dev:browser": "vite --host 127.0.0.1 --port 8080 --strictPort",
+    "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc && vite build",

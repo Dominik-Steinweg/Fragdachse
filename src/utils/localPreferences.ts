@@ -8,9 +8,10 @@ import {
   sanitizeCoopDefenseUpgradeProfile,
 } from './coopDefenseUpgrades';
 import { sanitizePlayerName } from './playerName';
+import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 12;
+const LOCAL_PREFERENCES_VERSION = 13;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 interface LocalPreferencesV2 {
@@ -50,8 +51,8 @@ interface LocalPreferencesV3 {
   };
 }
 
-interface LocalPreferencesV12 {
-  version: 12;
+interface LocalPreferencesV13 {
+  version: 13;
   audio: {
     masterVolume: number;
     effectsVolume: number;
@@ -61,17 +62,23 @@ interface LocalPreferencesV12 {
     playerName: string | null;
   };
   loadout: Partial<Record<LoadoutSlot, string>>;
+  graphics: {
+    quality: GraphicsQuality;
+  };
   progression: {
     coopDefense: CoopDefenseProgressPreferences;
   };
 }
 
-type LocalPreferences = LocalPreferencesV12;
+type LocalPreferences = LocalPreferencesV13;
 
 interface ParsedLocalPreferences {
   audio?: Partial<LocalPreferences['audio']>;
   profile?: Partial<LocalPreferences['profile']>;
   loadout?: Partial<Record<LoadoutSlot, unknown>>;
+  graphics?: {
+    quality?: unknown;
+  };
   progression?: {
     coopDefense?: Partial<CoopDefenseProgressPreferences> & {
       profile?: unknown;
@@ -98,6 +105,9 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
     playerName: null,
   },
   loadout: {},
+  graphics: {
+    quality: 'high',
+  },
   progression: {
     coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS, completedBossMapIds: [] },
   },
@@ -139,6 +149,7 @@ function buildDefaultPreferences(): LocalPreferences {
     audio: { ...DEFAULT_PREFERENCES.audio },
     profile: { ...DEFAULT_PREFERENCES.profile },
     loadout: {},
+    graphics: { ...DEFAULT_PREFERENCES.graphics },
     progression: {
       coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS, completedBossMapIds: [] },
     },
@@ -191,6 +202,9 @@ function parsePreferences(raw: string | null): LocalPreferences {
         weapon2: typeof loadout.weapon2 === 'string' ? loadout.weapon2 : undefined,
         utility: typeof loadout.utility === 'string' ? loadout.utility : undefined,
         ultimate: typeof loadout.ultimate === 'string' ? loadout.ultimate : undefined,
+      },
+      graphics: {
+        quality: isGraphicsQuality(parsed.graphics?.quality) ? parsed.graphics.quality : 'high',
       },
       progression: {
         coopDefense: {
@@ -377,6 +391,17 @@ export function markStoredCoopDefenseRoundProcessed(endedAt: number | null): voi
         lastProcessedRoundEndedAt: nextEndedAt,
       },
     },
+  }));
+}
+
+export function getStoredGraphicsQuality(): GraphicsQuality {
+  return readPreferences().graphics.quality;
+}
+
+export function setStoredGraphicsQuality(quality: GraphicsQuality): void {
+  updatePreferences((current) => ({
+    ...current,
+    graphics: { quality },
   }));
 }
 

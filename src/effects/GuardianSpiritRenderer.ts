@@ -9,6 +9,7 @@ import {
   fillRadialGradientTexture,
   mixColors,
 } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_GUARDIAN_HALO = '__guardian_spirit_halo';
 const TEX_GUARDIAN_CORE = '__guardian_spirit_core';
@@ -34,8 +35,13 @@ interface GuardianSpiritVisual {
 /** Kleine, additive Glühwürmchen-Visuals mit lebendigem Schweif und Funkenstaub. */
 export class GuardianSpiritRenderer {
   private readonly visuals = new Map<number, GuardianSpiritVisual>();
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_GUARDIAN_HALO, 64, [
@@ -77,6 +83,7 @@ export class GuardianSpiritRenderer {
     const activeIds = new Set(snapshots.map(snapshot => snapshot.id));
     for (const [id, visual] of this.visuals) {
       if (activeIds.has(id)) continue;
+      this.lighting?.releaseLight(lightKey(id));
       this.destroyVisual(visual);
       this.visuals.delete(id);
     }
@@ -125,11 +132,22 @@ export class GuardianSpiritRenderer {
         visual.trail.stop();
         visual.motes.stop();
       }
+
+      // `phaseAlpha` blendet das Visual beim Aufschlag aus; das Licht folgt derselben
+      // Kurve, damit der Geist nicht als körperloses Leuchten stehen bleibt.
+      this.lighting?.setLight(lightKey(id), 'arcaneField', visual.currentX, visual.currentY, {
+        radiusPx: 110,
+        color: mixColors(visual.color, 0xffffff, 0.66),
+        intensity: 0.42 * phaseAlpha,
+      });
     }
   }
 
   destroyAll(): void {
-    for (const visual of this.visuals.values()) this.destroyVisual(visual);
+    for (const [id, visual] of this.visuals) {
+      this.lighting?.releaseLight(lightKey(id));
+      this.destroyVisual(visual);
+    }
     this.visuals.clear();
   }
 
@@ -243,4 +261,8 @@ export class GuardianSpiritRenderer {
     destroyEmitter(visual.trail);
     destroyEmitter(visual.motes);
   }
+}
+
+function lightKey(id: number): string {
+  return `spirit:${id}`;
 }

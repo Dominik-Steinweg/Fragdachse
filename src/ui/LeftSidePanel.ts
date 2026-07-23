@@ -15,6 +15,7 @@ import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { HelpOverlay } from './HelpOverlay';
 import { OptionsOverlay } from './OptionsOverlay';
+import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { ensureGlossyButtonTexture } from './uiTextures';
@@ -167,6 +168,7 @@ export class LeftSidePanel {
     private scene:  Phaser.Scene,
     private bridge: NetworkBridge,
     private audioSystem: GameAudioSystem,
+    private graphicsQuality: GraphicsQualityController,
   ) {}
 
   // ── Aufbau ─────────────────────────────────────────────────────────────────
@@ -434,7 +436,7 @@ export class LeftSidePanel {
     // ── Hilfe-Overlay (world-space, über allem) ───────────────────────────────
     this.helpOverlay = new HelpOverlay(this.scene);
     this.helpOverlay.build();
-    this.optionsOverlay = new OptionsOverlay(this.scene, this.audioSystem);
+    this.optionsOverlay = new OptionsOverlay(this.scene, this.audioSystem, this.graphicsQuality);
     this.optionsOverlay.build();
     this.setLobbyFieldsLocked(false);
     this.refreshColorIndicator();

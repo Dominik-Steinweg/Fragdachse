@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { getGraphicsQualityController, type VisualImportance } from '../graphics/GraphicsQuality';
 
 type FilterListLike = {
   addGlow?: (
@@ -46,6 +47,8 @@ export interface GlowHandle {
 }
 
 export interface FxHandle {
+  active?: boolean;
+  setActive?: (active: boolean) => unknown;
   renderNode?: string;
   destroy?: () => void;
 }
@@ -130,10 +133,13 @@ export function addInternalGlow(
   knockout: boolean,
   quality: number,
   distance: number,
+  importance: VisualImportance = 'standard',
 ): GlowHandle | null {
   const legacyFx = getLegacyInternalFx(target);
   if (legacyFx?.addGlow) {
-    return (legacyFx.addGlow(color, outerStrength, innerStrength, knockout, quality, distance) ?? null) as GlowHandle | null;
+    const legacyGlow = (legacyFx.addGlow(color, outerStrength, innerStrength, knockout, quality, distance) ?? null) as GlowHandle | null;
+    trackFilter(target, legacyGlow, false, importance);
+    return legacyGlow;
   }
 
   ensureFilters(target);
@@ -149,6 +155,7 @@ export function addInternalGlow(
 
   applyInternalPadding(target, glow);
   if (glow) {
+    trackFilter(target, glow, false, importance);
     attachDestroyCleanup(target, () => {
       removeInternalFx(target, glow);
     });
@@ -164,14 +171,17 @@ export function addExternalGlow(
   knockout: boolean,
   quality: number,
   distance: number,
+  importance: VisualImportance = 'standard',
 ): GlowHandle | null {
   const legacyFx = getLegacyExternalFx(target);
   if (legacyFx?.addGlow) {
-    return (legacyFx.addGlow(color, outerStrength, innerStrength, knockout, quality, distance) ?? null) as GlowHandle | null;
+    const legacyGlow = (legacyFx.addGlow(color, outerStrength, innerStrength, knockout, quality, distance) ?? null) as GlowHandle | null;
+    trackFilter(target, legacyGlow, true, importance);
+    return legacyGlow;
   }
 
   ensureFilters(target);
-  return (getExternalFilters(target)?.addGlow?.(
+  const glow = (getExternalFilters(target)?.addGlow?.(
     color,
     outerStrength,
     innerStrength,
@@ -180,6 +190,8 @@ export function addExternalGlow(
     normalizeGlowQuality(quality),
     distance,
   ) ?? null) as GlowHandle | null;
+  trackFilter(target, glow, true, importance);
+  return glow;
 }
 
 export function addInternalShine(
@@ -206,6 +218,7 @@ export function addInternalShine(
 export function removeInternalFx(target: object, fx: FxHandle | null | undefined): void {
   if (!fx) return;
   if (markFxRemoved(fx)) return;
+  getTargetQualityController(target)?.untrackFilter(fx);
 
   const legacyFx = getLegacyInternalFx(target);
   if (legacyFx?.remove) {
@@ -237,9 +250,12 @@ export function addInternalBlur(
   strength: number,
   color: number,
   steps: number,
+  importance: VisualImportance = 'standard',
 ): BlurHandle | null {
   ensureFilters(target);
-  return (getInternalFilters(target)?.addBlur?.(quality, x, y, strength, color, steps) ?? null) as BlurHandle | null;
+  const blur = (getInternalFilters(target)?.addBlur?.(quality, x, y, strength, color, steps) ?? null) as BlurHandle | null;
+  trackFilter(target, blur, false, importance);
+  return blur;
 }
 
 export function addInternalMask(target: object, maskKey: string): FxHandle | null {
@@ -250,6 +266,7 @@ export function addInternalMask(target: object, maskKey: string): FxHandle | nul
 export function removeExternalFx(target: object, fx: FxHandle | null | undefined): void {
   if (!fx) return;
   if (markFxRemoved(fx)) return;
+  getTargetQualityController(target)?.untrackFilter(fx);
 
   const legacyFx = getLegacyExternalFx(target);
   if (legacyFx?.remove) {
@@ -264,4 +281,19 @@ export function removeExternalFx(target: object, fx: FxHandle | null | undefined
   }
 
   fx.destroy?.();
+}
+
+function getTargetQualityController(target: object) {
+  const scene = (target as { scene?: Phaser.Scene }).scene;
+  return scene ? getGraphicsQualityController(scene) : null;
+}
+
+function trackFilter(
+  target: object,
+  handle: FxHandle | null,
+  external: boolean,
+  importance: VisualImportance,
+): void {
+  if (!handle) return;
+  getTargetQualityController(target)?.trackFilter(target, handle, external, importance);
 }

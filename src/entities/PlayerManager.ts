@@ -10,6 +10,7 @@ import type {
   SyncedTeslaDome,
 } from '../types';
 import { PlayerEntity }       from './PlayerEntity';
+import type { LightingSystem } from '../effects/LightingSystem';
 import {
   ARENA_HEIGHT,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
@@ -129,6 +130,7 @@ export class PlayerManager {
   private spawnContextProvider: SpawnContextProvider | null = null;
   private relationshipResolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null = null;
   private teamResolver: ((playerId: string) => TeamId | null) | null = null;
+  private lighting: LightingSystem | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -136,6 +138,12 @@ export class PlayerManager {
 
   setLocalPlayerId(id: string): void {
     this.localPlayerId = id;
+  }
+
+  /** Reicht die scene-lifetime Beleuchtung an neue und bestehende Entities durch. */
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+    for (const entity of this.players.values()) entity.setLightingSystem(lighting);
   }
 
   setRelationshipResolver(resolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null): void {
@@ -168,6 +176,7 @@ export class PlayerManager {
       ARENA_OFFSET_X + spawn.x,
       ARENA_OFFSET_Y + spawn.y,
       this.localPlayerId !== null && this.resolveIsEnemy(profile.id),
+      this.lighting,
     );
     this.players.set(profile.id, entity);
   }

@@ -4,9 +4,13 @@ import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import { WEAPON_CONFIGS, type HealingAuraWeaponFireConfig } from '../loadout/LoadoutConfig';
 import { configureAdditiveImage, fillRadialGradientTexture } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_HEAL_FIELD = '__enemy_heal_aura_field';
 const TEX_HEAL_PARTICLE = '__enemy_heal_aura_particle';
+
+/** Aufgehelltes Aura-Grün: als Licht muss die Farbe alle drei Kanäle anheben. */
+const HEAL_AURA_LIGHT_COLOR = 0xc8ffd6;
 
 interface HealingAuraVisual {
   field: Phaser.GameObjects.Image;
@@ -20,8 +24,13 @@ export class HealingAuraRenderer {
   private readonly visuals = new Map<string, HealingAuraVisual>();
   private readonly knownHp = new Map<string, number>();
   private readonly particles = new Set<Phaser.GameObjects.Image>();
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_HEAL_FIELD, 256, [
@@ -63,6 +72,7 @@ export class HealingAuraRenderer {
 
     for (const [enemyId, visual] of this.visuals) {
       if (activeAuraIds.has(enemyId)) continue;
+      this.lighting?.releaseLight(lightKey(enemyId));
       visual.field.destroy();
       visual.ring.destroy();
       this.visuals.delete(enemyId);
@@ -74,17 +84,23 @@ export class HealingAuraRenderer {
 
   update(_delta: number): void {
     const now = this.scene.time.now;
-    for (const visual of this.visuals.values()) {
+    for (const [enemyId, visual] of this.visuals) {
       const pulse = 1 + Math.sin(now * 0.004 + visual.phase) * 0.035;
       visual.field.setScale((visual.radius * 2 / 256) * pulse);
       visual.field.setAlpha(0.72 + Math.sin(now * 0.005 + visual.phase) * 0.1);
       visual.ring.setScale(pulse);
       visual.ring.setAlpha(0.62 + Math.sin(now * 0.006 + visual.phase) * 0.18);
+
+      this.lighting?.setLight(lightKey(enemyId), 'arcaneField', visual.field.x, visual.field.y, {
+        radiusPx: Math.max(visual.radius * 1.3, 80),
+        color: HEAL_AURA_LIGHT_COLOR,
+      });
     }
   }
 
   destroyAll(): void {
-    for (const visual of this.visuals.values()) {
+    for (const [enemyId, visual] of this.visuals) {
+      this.lighting?.releaseLight(lightKey(enemyId));
       visual.field.destroy();
       visual.ring.destroy();
     }
@@ -145,4 +161,8 @@ export class HealingAuraRenderer {
       });
     }
   }
+}
+
+function lightKey(enemyId: string): string {
+  return `healaura:${enemyId}`;
 }

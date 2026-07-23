@@ -19,6 +19,7 @@ import {
 } from '../config/coopDefenseEnemies';
 import type { SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
+import type { LightingSystem } from '../effects/LightingSystem';
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -62,6 +63,8 @@ export class EnemyEntity {
   private burnRenderer: EntityBurnRenderer | null = null;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
+  /** Für die an dieser Entity hängenden Lichtquellen (aktuell: Brand). */
+  private lighting: LightingSystem | null = null;
   private moveSpeedMultiplier = 1;
   private burrowed = false;
   private dashPhase: 0 | 1 | 2 = 0;
@@ -224,8 +227,24 @@ export class EnemyEntity {
       this.burnRenderer = null;
       return;
     }
-    if (!this.burnRenderer) this.burnRenderer = new EntityBurnRenderer(this.sprite.scene);
+    if (!this.burnRenderer) {
+      this.burnRenderer = new EntityBurnRenderer(this.sprite.scene);
+      this.burnRenderer.setLightingSystem(this.lighting, this.burnLightKey());
+    }
     this.syncBurnEffect();
+  }
+
+  /**
+   * Die Beleuchtung ist scene-lifetime, die Entity nicht. Der `EnemyManager` reicht die
+   * Referenz direkt nach dem Anlegen durch.
+   */
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+    this.burnRenderer?.setLightingSystem(lighting, this.burnLightKey());
+  }
+
+  private burnLightKey(): string {
+    return `entityburn:enemy:${this.id}`;
   }
 
   getMoveSpeed(): number {

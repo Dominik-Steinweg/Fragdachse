@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { EnergyBallVariant, GrenadeVisualPreset, ProjectileStyle } from '../types';
 
 export type LightProfileId = 'day' | 'night';
 
@@ -340,6 +341,238 @@ export const LIGHT_PRESETS = {
     flickerHz: 11,
     day: { intensityMult: 0.35 },
   },
+  // ── Energie und Projektile ───────────────────────────────────────────────────
+  /**
+   * Kaltweiß-blauer Kern für Energie-, Plasma-, Gauss- und Hydra-Geschosse.
+   *
+   * Die Farbe ist deutlich heller als die Partikel des jeweiligen Renderers. Der Grund
+   * ist derselbe wie bei `projectileBurn`: unter dem MULTIPLY-Composite der Nacht deckelt
+   * der schwächste Kanal die erreichbare Bodenhelligkeit. Wo ein Aufrufer die Waffenfarbe
+   * durchreichen will, mischt `getProjectileLightSpec().whitenFromColor` sie erst Richtung
+   * Weiß, statt sie roh zu übernehmen.
+   */
+  energyProjectile: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 128,
+    color: 0xd8f0ff,
+    intensity: 0.95,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 6,
+    flickerAmount: 0,
+    flickerHz: 0,
+    day: { intensityMult: 0.4 },
+  },
+  /**
+   * Die BFG-Kugel ist das einzige neue Preset mit Verdeckung: sie ist selten, fliegt
+   * langsam und leuchtet über einen so großen Radius, dass ein fehlender Felsschatten
+   * sofort auffällt. Die Priorität liegt unter Taschenlampe und Explosion, damit sie
+   * deren knappe Verdeckungs-Slots nicht wegnimmt.
+   */
+  bfgOrb: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 260,
+    color: 0xdcffd0,
+    intensity: 1,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: true,
+    priority: 6,
+    flickerAmount: 0.06,
+    flickerHz: 5,
+    day: { intensityMult: 0.45 },
+  },
+  /** Triebwerksfeuer einer Rakete: klein, warm, hinter dem Geschoss. */
+  rocketThruster: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 96,
+    color: 0xffc98a,
+    intensity: 0.8,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 5,
+    flickerAmount: 0.18,
+    flickerHz: 13,
+    day: { intensityMult: 0.35 },
+  },
+  /** Heilige Granate – der einzige Wurfkörper mit gelbem Eigenleuchten. */
+  holyProjectile: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 150,
+    color: 0xffeaa0,
+    intensity: 0.9,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 6,
+    flickerAmount: 0.08,
+    flickerHz: 4,
+    day: { intensityMult: 0.4 },
+  },
+  /** Sporen glimmen nur schwach; sie sollen die Szene nicht mitbeleuchten. */
+  sporeProjectile: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 72,
+    color: 0xd6ffc4,
+    intensity: 0.42,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 3,
+    flickerAmount: 0.14,
+    flickerHz: 6,
+    day: { intensityMult: 0.15 },
+  },
+  // ── Strahlen und Entladungen ─────────────────────────────────────────────────
+  /**
+   * Stützpunkt entlang eines Hitscan-Strahls. Sehr kurz, dafür ein heller Kern – ein
+   * Schuss ist im Bild vorbei, bevor ein langsameres Abklingen überhaupt lesbar würde.
+   */
+  beamPulse: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 120,
+    color: 0xfff0d8,
+    intensity: 0.75,
+    durationMs: 90,
+    decayExponent: 1.6,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
+  /** Elektrische Entladung: Zeus-Taser, ASMD, Tesla-Treffer. Kalt und hart. */
+  electricArc: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 165,
+    color: 0xcdf1ff,
+    intensity: 0.9,
+    durationMs: 150,
+    decayExponent: 1.8,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
+  // ── Dauerhafte Felder ────────────────────────────────────────────────────────
+  // Felder stehen lange und sind zahlreich; alle ohne Verdeckung. Am Tag sind sie stark
+  // gedämpft: dort komponiert das Overlay additiv, ein Dauerfeld würde den Boden
+  // permanent aufhellen, ohne dass es als Effekt gelesen wird.
+  electricField: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 190,
+    color: 0xbfe9ff,
+    intensity: 0.62,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0.2,
+    flickerHz: 14,
+    day: { intensityMult: 0.25 },
+  },
+  shieldField: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 160,
+    color: 0xc8e4ff,
+    intensity: 0.5,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 3,
+    flickerAmount: 0,
+    flickerHz: 0,
+    day: { intensityMult: 0.15 },
+  },
+  /** Zeitblase, Heilaura, Schutzgeist – blass, die Farbe kommt vom Aufrufer. */
+  arcaneField: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 170,
+    color: 0xd6d0ff,
+    intensity: 0.52,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 3,
+    flickerAmount: 0.07,
+    flickerHz: 2.5,
+    day: { intensityMult: 0.18 },
+  },
+  /** Schleimspur: nur ein Schimmer. Am Tag bewusst ganz aus. */
+  slimeGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 110,
+    color: 0xc9ffb0,
+    intensity: 0.3,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.1,
+    flickerHz: 3,
+    day: { intensityMult: 0 },
+  },
+  // ── Welt und Entities ────────────────────────────────────────────────────────
+  /**
+   * PowerUp-Kugeln, Podeste und das Bier. Dekorativ, deshalb die niedrigste Priorität:
+   * bei Überlast sollen zuerst diese Lichter fallen, nicht die des Kampfgeschehens.
+   * Am Tag ganz aus – ein Pickup am helllichten Tag beleuchtet nichts.
+   */
+  pickupGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 88,
+    color: 0xffffff,
+    intensity: 0.45,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 1,
+    flickerAmount: 0.06,
+    flickerHz: 1.6,
+    day: { intensityMult: 0 },
+  },
+  /** Brennende Spieler und Gegner. Etwas weiter als `projectileBurn`, gleiche Kernfarbe. */
+  entityBurn: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 128,
+    color: 0xffb060,
+    intensity: 0.9,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 5,
+    flickerAmount: 0.14,
+    flickerHz: 9,
+    day: { intensityMult: 0.4 },
+  },
+  /** Translocator- und Spawn-Blitz: kurz, hell, kalt. */
+  teleportFlash: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 175,
+    color: 0xe4f4ff,
+    intensity: 0.85,
+    durationMs: 260,
+    decayExponent: 1.7,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
 } as const satisfies Record<string, LightPreset>;
 
 export type LightPresetKey = keyof typeof LIGHT_PRESETS;
@@ -364,9 +597,120 @@ export const MAX_GROUND_FIRE_LIGHTS = 12;
  */
 export const FLAME_LIGHT_ID_STRIDE = 4;
 
+/**
+ * Schleimspur: dasselbe Cluster-Verfahren wie beim brennenden Boden. Eine Spur besteht
+ * aus vielen kleinen Zellen; ohne Bucketing würde allein sie das Frame-Budget füllen,
+ * obwohl das Ergebnis optisch eine zusammenhängende Fläche ist. Die Buckets sind gröber
+ * und deutlich seltener als beim Feuer – der Schimmer ist Beiwerk, kein Leitlicht.
+ */
+export const SLIME_LIGHT_BUCKET_SIZE = 128;
+export const MAX_SLIME_LIGHTS = 6;
+
 export function resolvePresetOverride(
   preset: LightPreset,
   profileId: LightProfileId,
 ): LightPresetOverride | undefined {
   return profileId === 'night' ? preset.night : preset.day;
+}
+
+/**
+ * Wie ein Projektil eines bestimmten Stils leuchtet.
+ *
+ * Der Radius wächst mit der Trefferfläche, damit ein aufgeladener Schuss auch heller
+ * wirkt als ein normaler, ohne dass es dafür ein eigenes Preset braucht.
+ */
+export interface ProjectileLightSpec {
+  readonly preset: LightPresetKey;
+  readonly baseRadiusPx: number;
+  readonly radiusPerSizePx: number;
+  /**
+   * Fehlt das Feld, gilt die Presetfarbe. Sonst kommt die Lichtfarbe aus der
+   * Projektilfarbe, um diesen Anteil Richtung Weiß gemischt – rohe Waffenfarben sind für
+   * Licht meist zu gesättigt (siehe Kommentar bei `projectileBurn`).
+   */
+  readonly whitenFromColor?: number;
+}
+
+/**
+ * Ein Projektil, wie es die Beleuchtung sieht. Gegenstück zu `ShadowProjectileSample`:
+ * `ProjectileManager` liefert die Liste pro Frame für Host und Client aus derselben
+ * Methode, der Aufrufer meldet daraus die Lichter an.
+ */
+export interface ProjectileLightSample {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly size: number;
+  readonly color: number;
+  readonly style?: ProjectileStyle;
+  readonly energyBallVariant?: EnergyBallVariant;
+  readonly grenadeVisualPreset?: GrenadeVisualPreset;
+}
+
+const ENERGY_PROJECTILE_LIGHT: ProjectileLightSpec = {
+  preset: 'energyProjectile',
+  baseRadiusPx: 58,
+  radiusPerSizePx: 2.6,
+  whitenFromColor: 0.62,
+};
+
+/**
+ * Lichtprofil eines Projektils, oder `null`, wenn es nicht selbst leuchtet.
+ *
+ * Bewusst nicht abgedeckt:
+ * - `bullet`, `awp`, `leaf_blower` – ein Geschoss ohne eigene Emission; das sichtbare
+ *   Licht eines Schusses ist das Mündungsfeuer, und das hat sein eigenes Preset.
+ * - `flame` – `FlameRenderer` meldet sein Licht selbst an, mit einem Stride über die IDs,
+ *   damit ein einzelner Strahl nicht das gesamte Frame-Budget belegt.
+ *
+ * Granaten leuchten grundsätzlich nicht: das Licht gehört ihrer Explosion. Ausnahmen sind
+ * nur die Wurfkörper, die selbst eine Emissionsquelle sind – der brennende Molotow, die
+ * Zeitblasen-Granate und die Heilige Granate.
+ */
+export function getProjectileLightSpec(
+  style?: ProjectileStyle,
+  energyBallVariant?: EnergyBallVariant,
+  grenadeVisualPreset?: GrenadeVisualPreset,
+): ProjectileLightSpec | null {
+  switch (style) {
+    case 'energy_ball':
+      // Plasma glüht heißer und enger als der normale Energieball.
+      return energyBallVariant === 'plasma'
+        ? { preset: 'energyProjectile', baseRadiusPx: 66, radiusPerSizePx: 2.9, whitenFromColor: 0.78 }
+        : ENERGY_PROJECTILE_LIGHT;
+    case 'gauss':
+    case 'hydra':
+      return ENERGY_PROJECTILE_LIGHT;
+    case 'bfg':
+      return { preset: 'bfgOrb', baseRadiusPx: 150, radiusPerSizePx: 3.4 };
+    case 'rocket':
+      return { preset: 'rocketThruster', baseRadiusPx: 54, radiusPerSizePx: 2.2 };
+    case 'fireball':
+      return { preset: 'projectileBurn', baseRadiusPx: 60, radiusPerSizePx: 2.6 };
+    case 'spore':
+      return { preset: 'sporeProjectile', baseRadiusPx: 42, radiusPerSizePx: 1.8 };
+    case 'holy_grenade':
+      return { preset: 'holyProjectile', baseRadiusPx: 78, radiusPerSizePx: 2.4 };
+    case 'translocator_puck':
+      return { preset: 'teleportFlash', baseRadiusPx: 52, radiusPerSizePx: 1.6 };
+    case 'grenade':
+      if (grenadeVisualPreset === 'molotov') {
+        // Brennt im Flug bereits sichtbar. `ProjectileBurnRenderer` überspringt Granaten,
+        // das Licht muss also von hier kommen.
+        return { preset: 'projectileBurn', baseRadiusPx: 52, radiusPerSizePx: 2.2 };
+      }
+      if (grenadeVisualPreset === 'time_bubble') {
+        // Dieselbe Herleitung wie beim Feld, das nach der Detonation daraus entsteht:
+        // Besitzerfarbe Richtung Weiß gemischt.
+        return { preset: 'energyProjectile', baseRadiusPx: 46, radiusPerSizePx: 2, whitenFromColor: 0.55 };
+      }
+      return null;
+    case 'bullet':
+    case 'awp':
+    case 'flame':
+    case 'leaf_blower':
+    case 'ball':
+    default:
+      return null;
+  }
 }

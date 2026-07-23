@@ -4,6 +4,7 @@ import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { SyncedTeslaDome, TeslaDomeTargetType } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import type { LightingSystem } from './LightingSystem';
 import {
   configureAdditiveImage,
   createEmitter,
@@ -77,11 +78,16 @@ export class TeslaDomeRenderer {
   private readonly visuals = new Map<string, TeslaDomeVisual>();
   private readonly configs = new Map<string, WeaponConfig & { fire: TeslaDomeWeaponFireConfig }>();
   private audioSystem: GameAudioSystem | null = null;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   setAudioSystem(system: GameAudioSystem): void {
     this.audioSystem = system;
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   generateTextures(): void {
@@ -194,6 +200,7 @@ export class TeslaDomeRenderer {
 
     for (const [ownerId, visual] of this.visuals) {
       if (activeIds.has(ownerId)) continue;
+      this.lighting?.releaseLight(lightKey(ownerId));
       this.destroyVisual(visual);
       this.visuals.delete(ownerId);
     }
@@ -244,11 +251,27 @@ export class TeslaDomeRenderer {
       }
 
       this.updateVisual(ownerId, visual, this.configs.get(ownerId));
+
+      // Dauerlicht am Lebenszyklus des Visuals. Die Kuppel steht sichtbar unter Strom,
+      // muss also auch ihre Umgebung beleuchten. Farbe deutlich aufgehellt: eine rohe
+      // Spielerfarbe wäre für Licht zu gesättigt.
+      this.lighting?.setLight(
+        lightKey(ownerId),
+        'electricField',
+        visual.currentX,
+        visual.currentY,
+        {
+          radiusPx: Math.max(visual.currentRadius * 1.25, 90),
+          color: mixColors(visual.ownerColor, 0xffffff, 0.62),
+          intensity: 0.62 * Phaser.Math.Clamp(visual.currentAlpha, 0, 1),
+        },
+      );
     }
   }
 
   destroyAll(): void {
-    for (const visual of this.visuals.values()) {
+    for (const [ownerId, visual] of this.visuals) {
+      this.lighting?.releaseLight(lightKey(ownerId));
       this.destroyVisual(visual);
     }
     this.visuals.clear();
@@ -872,4 +895,8 @@ export class TeslaDomeRenderer {
     }
     return Math.abs(hash) + 1;
   }
+}
+
+function lightKey(ownerId: string): string {
+  return `tesladome:${ownerId}`;
 }

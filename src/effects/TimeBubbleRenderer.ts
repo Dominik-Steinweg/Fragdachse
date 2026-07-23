@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedTimeBubble } from '../types';
 import { ensureCanvasTexture, mixColors } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 const TEX_TIME_BUBBLE_MEMBRANE = '__time_bubble_membrane';
@@ -123,8 +124,13 @@ function drawRadiusRing(ctx: CanvasRenderingContext2D, center: number, ring: Rad
 
 export class TimeBubbleRenderer {
   private readonly visuals = new Map<number, TimeBubbleVisual>();
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   generateTextures(): void {
     ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_MEMBRANE, 320, 320, (ctx) => {
@@ -293,9 +299,18 @@ export class TimeBubbleRenderer {
       visual.shellGlow.outerStrength = 0.56 + bubble.distortion * 0.24 + pulse * 0.18;
       visual.shellGlow.innerStrength = 0.04 + counterPulse * 0.03;
     }
+
+    // Dieselbe Herleitung wie bei der Zeitblasen-Granate im Flug: Besitzerfarbe Richtung
+    // Weiß gemischt. Damit bleibt der Farbeindruck über Wurf, Detonation und Feld gleich.
+    this.lighting?.setLight(lightKey(bubble.id), 'arcaneField', bubble.x, bubble.y, {
+      radiusPx: Math.max(bubble.radius * 1.25, 90),
+      color: mixColors(bubble.color, 0xffffff, 0.55),
+      intensity: 0.52 * Phaser.Math.Clamp(bubble.alpha, 0, 1),
+    });
   }
 
   private destroyVisual(id: number): void {
+    this.lighting?.releaseLight(lightKey(id));
     const visual = this.visuals.get(id);
     if (!visual) return;
 
@@ -305,4 +320,8 @@ export class TimeBubbleRenderer {
     visual.interferenceB.destroy();
     this.visuals.delete(id);
   }
+}
+
+function lightKey(id: number): string {
+  return `timebubble:${id}`;
 }

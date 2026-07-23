@@ -11,10 +11,16 @@ import { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { LivingBarPalette } from './LivingBarEffect';
 import { LivingBarEffect } from './LivingBarEffect';
 import { ensureModalPanelTexture } from './uiTextures';
-import { setStoredEffectsVolume, setStoredMasterVolume, setStoredMusicVolume } from '../utils/localPreferences';
+import {
+  setStoredEffectsVolume,
+  setStoredGraphicsQuality,
+  setStoredMasterVolume,
+  setStoredMusicVolume,
+} from '../utils/localPreferences';
+import type { GraphicsQuality, GraphicsQualityController } from '../graphics/GraphicsQuality';
 
 const PANEL_W = 680;
-const PANEL_H = 460;
+const PANEL_H = 680;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
@@ -25,6 +31,10 @@ const TRACK_H = 18;
 const TRACK_X = CX - TRACK_W / 2;
 const PERCENT_X = TRACK_X + TRACK_W;
 const FOOTER_Y = CY + PANEL_H / 2 - 28;
+const QUALITY_BUTTON_Y = CY - 184;
+const QUALITY_BUTTON_W = 150;
+const QUALITY_BUTTON_H = 44;
+const QUALITY_BUTTON_GAP = 12;
 
 const DIM_COLOR = COLORS.GREY_10;
 const DIM_ALPHA = 0.78;
@@ -62,6 +72,17 @@ interface SliderState {
   fillEffect: LivingBarEffect;
   value: number;
 }
+
+interface QualityButtonState {
+  readonly background: Phaser.GameObjects.Rectangle;
+  readonly label: Phaser.GameObjects.Text;
+}
+
+const QUALITY_OPTIONS: readonly { level: GraphicsQuality; label: string }[] = [
+  { level: 'low', label: 'NIEDRIG' },
+  { level: 'medium', label: 'MITTEL' },
+  { level: 'high', label: 'HOCH' },
+] as const;
 
 const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
   {
@@ -124,6 +145,7 @@ export class OptionsOverlay {
   private container: Phaser.GameObjects.Container | null = null;
   private dimRect: Phaser.GameObjects.Rectangle | null = null;
   private readonly sliders = new Map<VolumeSliderKey, SliderState>();
+  private readonly qualityButtons = new Map<GraphicsQuality, QualityButtonState>();
   private visible = false;
   private draggingSliderKey: VolumeSliderKey | null = null;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
@@ -135,6 +157,7 @@ export class OptionsOverlay {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly audioSystem: GameAudioSystem,
+    private readonly graphicsQuality: GraphicsQualityController,
   ) {}
 
   build(): void {
@@ -142,6 +165,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
+    this.qualityButtons.clear();
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
@@ -171,7 +195,7 @@ export class OptionsOverlay {
     );
 
     objects.push(
-      this.scene.add.text(CX, SUBTITLE_Y, 'Audio', {
+      this.scene.add.text(CX, SUBTITLE_Y, 'Grafikqualit\u00e4t', {
         fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -179,6 +203,15 @@ export class OptionsOverlay {
     objects.push(
       this.scene.add.rectangle(CX, SUBTITLE_Y + 26, PANEL_W - 60, 2, ACCENT)
         .setScrollFactor(0),
+    );
+
+    this.buildQualitySelector(objects);
+
+    objects.push(
+      this.scene.add.text(CX, CY - 130, 'Audio', {
+        fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
+      }).setOrigin(0.5).setScrollFactor(0),
+      this.scene.add.rectangle(CX, CY - 104, PANEL_W - 60, 2, ACCENT).setScrollFactor(0),
     );
 
     for (const definition of SLIDER_DEFINITIONS) {
@@ -194,12 +227,14 @@ export class OptionsOverlay {
     this.container.add(objects);
 
     this.syncFromAudioSystem();
+    this.syncQualityButtons();
   }
 
   show(): void {
     if (this.visible || !this.container) return;
     this.visible = true;
     this.syncFromAudioSystem();
+    this.syncQualityButtons();
 
     this.container.setVisible(true);
     this.container.setAlpha(0);
@@ -276,6 +311,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
+    this.qualityButtons.clear();
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
@@ -285,6 +321,48 @@ export class OptionsOverlay {
     this.setSliderValue('master', this.audioSystem.getMasterVolume(), false, false);
     this.setSliderValue('effects', this.audioSystem.getEffectsVolume(), false, false);
     this.setSliderValue('music', this.audioSystem.getMusicVolume(), false, false);
+  }
+
+  private buildQualitySelector(objects: Phaser.GameObjects.GameObject[]): void {
+    const totalWidth = QUALITY_OPTIONS.length * QUALITY_BUTTON_W
+      + (QUALITY_OPTIONS.length - 1) * QUALITY_BUTTON_GAP;
+    const startX = CX - totalWidth / 2 + QUALITY_BUTTON_W / 2;
+
+    QUALITY_OPTIONS.forEach((option, index) => {
+      const x = startX + index * (QUALITY_BUTTON_W + QUALITY_BUTTON_GAP);
+      const background = this.scene.add.rectangle(
+        x, QUALITY_BUTTON_Y, QUALITY_BUTTON_W, QUALITY_BUTTON_H, TRACK_BG, 0.96,
+      ).setStrokeStyle(2, TRACK_BORDER)
+        .setScrollFactor(0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          this.graphicsQuality.setLevel(option.level);
+          setStoredGraphicsQuality(option.level);
+          this.syncQualityButtons();
+        });
+      const label = this.scene.add.text(x, QUALITY_BUTTON_Y, option.label, {
+        fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
+      }).setOrigin(0.5).setScrollFactor(0);
+      this.qualityButtons.set(option.level, { background, label });
+      objects.push(background, label);
+    });
+
+    objects.push(
+      this.scene.add.text(CX, QUALITY_BUTTON_Y + 42, 'Nur Darstellung \u2013 Physik und Netzwerk bleiben unver\u00e4ndert.', {
+        fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+      }).setOrigin(0.5).setScrollFactor(0),
+    );
+  }
+
+  private syncQualityButtons(): void {
+    const selected = this.graphicsQuality.getLevel();
+    for (const [level, state] of this.qualityButtons) {
+      const active = level === selected;
+      state.background
+        .setFillStyle(active ? COLORS.GREY_5 : TRACK_BG, active ? 1 : 0.96)
+        .setStrokeStyle(active ? 3 : 2, active ? ACCENT : TRACK_BORDER);
+      state.label.setColor(toCssColor(active ? ACCENT : COLORS.GREY_2));
+    }
   }
 
   private buildSlider(definition: SliderDefinition, objects: Phaser.GameObjects.GameObject[]): void {

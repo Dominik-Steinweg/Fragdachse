@@ -2,6 +2,8 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SlimeBloomTarget, SyncedSlimeTrailCell, SyncedSlimeTrailSnapshot, SyncedSlimedEnemy } from '../types';
 import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import { MAX_SLIME_LIGHTS, SLIME_LIGHT_BUCKET_SIZE } from './LightingConfig';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_SLIME_BUBBLE = '__slime_trail_bubble';
 const TEX_SLIME_GLOW = '__slime_trail_glow';
@@ -55,6 +57,10 @@ export class SlimeTrailRenderer {
   private trailCursor = 0;
   private glintCursor = 0;
   private rippleCursor = 0;
+  private lighting: LightingSystem | null = null;
+  private readonly lightBuckets = new Map<string, { x: number; y: number; weight: number }>();
+  private readonly lightRanking: { key: string; x: number; y: number; weight: number }[] = [];
+  private readonly activeLightKeys = new Set<string>();
 
   constructor(private readonly scene: Phaser.Scene) {
     this.generateTextures();
@@ -151,10 +157,73 @@ export class SlimeTrailRenderer {
         .setAlpha(0.48 * visual.alpha);
       index += 1;
     }
+
+    this.syncPuddleLights();
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
+
+  /**
+   * Schimmer der Schleimfläche, geclustert wie der brennende Boden.
+   *
+   * Eine Spur besteht aus vielen kleinen Pfützen. Ein Licht pro Pfütze wäre weder
+   * bezahlbar noch richtig – optisch ist die Spur eine zusammenhängende Fläche. Die
+   * Zellen werden deshalb in ein grobes Raster einsortiert, pro Rasterfeld entsteht ein
+   * Licht, und nur die hellsten Felder bekommen eines.
+   */
+  private syncPuddleLights(): void {
+    const lighting = this.lighting;
+    if (!lighting) return;
+
+    const buckets = this.lightBuckets;
+    buckets.clear();
+
+    for (const visual of this.puddleVisuals.values()) {
+      if (visual.alpha <= 0.02) continue;
+      const bucketX = Math.floor(visual.image.x / SLIME_LIGHT_BUCKET_SIZE);
+      const bucketY = Math.floor(visual.image.y / SLIME_LIGHT_BUCKET_SIZE);
+      const key = `${bucketX}:${bucketY}`;
+
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.weight += visual.alpha;
+      } else {
+        buckets.set(key, {
+          x: (bucketX + 0.5) * SLIME_LIGHT_BUCKET_SIZE,
+          y: (bucketY + 0.5) * SLIME_LIGHT_BUCKET_SIZE,
+          weight: visual.alpha,
+        });
+      }
+    }
+
+    this.lightRanking.length = 0;
+    for (const [key, bucket] of buckets) {
+      this.lightRanking.push({ key, x: bucket.x, y: bucket.y, weight: bucket.weight });
+    }
+    this.lightRanking.sort((left, right) => right.weight - left.weight);
+    if (this.lightRanking.length > MAX_SLIME_LIGHTS) {
+      this.lightRanking.length = MAX_SLIME_LIGHTS;
+    }
+
+    const stale = this.activeLightKeys;
+    for (const entry of this.lightRanking) {
+      lighting.setLight(`slime:${entry.key}`, 'slimeGlow', entry.x, entry.y, {
+        intensity: Phaser.Math.Clamp(0.16 + entry.weight * 0.08, 0, 0.34),
+      });
+      stale.delete(entry.key);
+    }
+    for (const staleKey of stale) lighting.releaseLight(`slime:${staleKey}`);
+
+    stale.clear();
+    for (const entry of this.lightRanking) stale.add(entry.key);
   }
 
   clear(): void {
     this.cells = [];
+    for (const key of this.activeLightKeys) this.lighting?.releaseLight(`slime:${key}`);
+    this.activeLightKeys.clear();
     for (const [id, visual] of this.puddleVisuals) {
       this.releasePuddleVisual(id, visual);
     }

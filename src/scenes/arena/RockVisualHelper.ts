@@ -246,7 +246,7 @@ export class RockVisualHelper {
         .setDisplaySize(CELL_SIZE, CELL_SIZE)
         .setDepth(DEPTH.ROCKS + 0.2);
       setInternalFxPadding(image, 12);
-      addInternalGlow(image, rock.ownerColor, 5, 0, false, 0.12, 10);
+      addInternalGlow(image, rock.ownerColor, 5, 0, false, 0.12, 10, 'critical');
 
       const rangeCircle = this.scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
       if (this.arenaClipMask) {

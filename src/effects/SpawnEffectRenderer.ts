@@ -1,14 +1,20 @@
 import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
-import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import { ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 
 const TEX_SPAWN_SPARK = '_spawn_spark';
 const TEX_SPAWN_GLOW  = '_spawn_glow';
 
 export class SpawnEffectRenderer {
   private texturesReady = false;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   private ensureTextures(): void {
     if (this.texturesReady) return;
@@ -40,6 +46,10 @@ export class SpawnEffectRenderer {
    */
   play(x: number, y: number, colorHex: number): void {
     this.ensureTextures();
+
+    this.lighting?.pulse('teleportFlash', x, y, {
+      color: mixColors(colorHex, 0xffffff, 0.6),
+    });
 
     this.playCoreBurst(x, y, colorHex);
     this.playRings(x, y, colorHex);

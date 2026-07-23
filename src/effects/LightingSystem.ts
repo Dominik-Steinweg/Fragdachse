@@ -9,10 +9,7 @@ import type { LightOccluderIndex } from './LightOccluderIndex';
 import {
   DEFAULT_LIGHT_PROFILE_ID,
   LIGHTING_PROFILES,
-  LIGHTMAP_SCALE,
   LIGHT_PRESETS,
-  MAX_LIGHTS_PER_FRAME,
-  MAX_OCCLUDING_LIGHTS_PER_FRAME,
   MAX_OCCLUDING_LIGHT_RADIUS,
   OCCLUDER_SCRATCH_SIZE,
   OCCLUDER_SHADE_FALLOFF_PX,
@@ -22,6 +19,11 @@ import {
   type LightPresetKey,
   type LightProfileId,
 } from './LightingConfig';
+import {
+  getGraphicsQualityController,
+  getGraphicsQualityProfile,
+  type GraphicsQualityProfile,
+} from '../graphics/GraphicsQuality';
 import {
   ShadowQuadBuffer,
   SHADOW_QUAD_STRIDE,
@@ -121,8 +123,14 @@ export class LightingSystem {
 
   private enabled = false;
   private lastCostMs = 0;
+  private quality: GraphicsQualityProfile;
+  private unsubscribeQuality: (() => void) | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
+    this.quality = getGraphicsQualityProfile(scene);
+    this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
+      this.setGraphicsQuality(profile);
+    }) ?? null;
     this.ensureTextures();
   }
 
@@ -164,6 +172,14 @@ export class LightingSystem {
 
   getLastUpdateCostMs(): number {
     return this.lastCostMs;
+  }
+
+  getDebugStats(): { activeLights: number; renderedLights: number; occlusionSlots: number } {
+    return {
+      activeLights: this.lights.length,
+      renderedLights: this.renderQueue.length,
+      occlusionSlots: this.slots.length,
+    };
   }
 
   /**
@@ -225,6 +241,18 @@ export class LightingSystem {
 
   destroy(): void {
     this.clear();
+    this.destroyRenderTargets();
+    this.unsubscribeQuality?.();
+    this.unsubscribeQuality = null;
+  }
+
+  private setGraphicsQuality(profile: GraphicsQualityProfile): void {
+    if (this.quality.level === profile.level) return;
+    this.quality = profile;
+    this.destroyRenderTargets();
+  }
+
+  private destroyRenderTargets(): void {
     this.lightMap?.destroy();
     this.lightMap = null;
     for (const slot of this.slots) {
@@ -321,7 +349,7 @@ export class LightingSystem {
     for (const light of this.renderQueue) {
       const useOcclusion = light.occludes
         && this.occluders !== null
-        && occludingUsed < MAX_OCCLUDING_LIGHTS_PER_FRAME
+        && occludingUsed < this.quality.maxOccludingLightsPerFrame
         && occludingUsed < this.slots.length;
 
       if (useOcclusion) {
@@ -330,7 +358,8 @@ export class LightingSystem {
       } else {
         // Überzählige verdeckende Lichter fallen weich auf den einfachen Pfad zurück:
         // weniger Schatten statt fehlendem Licht.
-        this.stampLight(overlay, light, (light.x - scrollX) * LIGHTMAP_SCALE, (light.y - scrollY) * LIGHTMAP_SCALE);
+        const scale = this.quality.lightMapScale;
+        this.stampLight(overlay, light, (light.x - scrollX) * scale, (light.y - scrollY) * scale);
       }
     }
 
@@ -464,8 +493,8 @@ export class LightingSystem {
     // Verdeckende Lichter zuerst, damit sie die Scratch-Slots bekommen; innerhalb
     // gleicher Priorität gewinnt das hellere Licht.
     this.renderQueue.sort(compareLightImportance);
-    if (this.renderQueue.length > MAX_LIGHTS_PER_FRAME) {
-      this.renderQueue.length = MAX_LIGHTS_PER_FRAME;
+    if (this.renderQueue.length > this.quality.maxLightsPerFrame) {
+      this.renderQueue.length = this.quality.maxLightsPerFrame;
     }
   }
 
@@ -477,7 +506,7 @@ export class LightingSystem {
     x: number,
     y: number,
   ): void {
-    const radiusLm = light.radiusPx * LIGHTMAP_SCALE;
+    const radiusLm = light.radiusPx * this.quality.lightMapScale;
     if (light.shape === 'cone') {
       target.stamp(this.ensureConeTexture(light.coneAngle), undefined, x, y, {
         alpha: light.effectiveIntensity,
@@ -514,8 +543,8 @@ export class LightingSystem {
     slot.renderTexture.erase([slot.graphics]);
 
     slot.image.setPosition(
-      (light.x - scrollX) * LIGHTMAP_SCALE,
-      (light.y - scrollY) * LIGHTMAP_SCALE,
+      (light.x - scrollX) * this.quality.lightMapScale,
+      (light.y - scrollY) * this.quality.lightMapScale,
     );
     this.lightMap?.draw([slot.image]);
   }
@@ -576,17 +605,18 @@ export class LightingSystem {
     center: number,
   ): void {
     const data = quads.data;
+    const scale = this.quality.lightMapScale;
     for (let quad = 0; quad < quads.length; quad += 1) {
       const offset = quad * SHADOW_QUAD_STRIDE;
       graphics.beginPath();
       graphics.moveTo(
-        (data[offset] - light.x) * LIGHTMAP_SCALE + center,
-        (data[offset + 1] - light.y) * LIGHTMAP_SCALE + center,
+        (data[offset] - light.x) * scale + center,
+        (data[offset + 1] - light.y) * scale + center,
       );
       for (let point = 1; point < 4; point += 1) {
         graphics.lineTo(
-          (data[offset + point * 2] - light.x) * LIGHTMAP_SCALE + center,
-          (data[offset + point * 2 + 1] - light.y) * LIGHTMAP_SCALE + center,
+          (data[offset + point * 2] - light.x) * scale + center,
+          (data[offset + point * 2 + 1] - light.y) * scale + center,
         );
       }
       graphics.closePath();
@@ -606,17 +636,18 @@ export class LightingSystem {
     center: number,
   ): void {
     const data = quads.data;
+    const scale = this.quality.lightMapScale;
     for (let quad = 0; quad < quads.length; quad += 1) {
       const offset = quad * SHADOW_QUAD_STRIDE;
       // Punktreihenfolge aus pushProjectedEdge: 0/1 an der Kante, 2/3 am Streifenende.
-      const x0 = (data[offset] - light.x) * LIGHTMAP_SCALE + center;
-      const y0 = (data[offset + 1] - light.y) * LIGHTMAP_SCALE + center;
-      const x1 = (data[offset + 2] - light.x) * LIGHTMAP_SCALE + center;
-      const y1 = (data[offset + 3] - light.y) * LIGHTMAP_SCALE + center;
-      const x2 = (data[offset + 4] - light.x) * LIGHTMAP_SCALE + center;
-      const y2 = (data[offset + 5] - light.y) * LIGHTMAP_SCALE + center;
-      const x3 = (data[offset + 6] - light.x) * LIGHTMAP_SCALE + center;
-      const y3 = (data[offset + 7] - light.y) * LIGHTMAP_SCALE + center;
+      const x0 = (data[offset] - light.x) * scale + center;
+      const y0 = (data[offset + 1] - light.y) * scale + center;
+      const x1 = (data[offset + 2] - light.x) * scale + center;
+      const y1 = (data[offset + 3] - light.y) * scale + center;
+      const x2 = (data[offset + 4] - light.x) * scale + center;
+      const y2 = (data[offset + 5] - light.y) * scale + center;
+      const x3 = (data[offset + 6] - light.x) * scale + center;
+      const y3 = (data[offset + 7] - light.y) * scale + center;
 
       // Alpha-Zuordnung von fillGradientStyle auf fillTriangle: TL→Ecke A, TR→B, BL→C.
       graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0, 0, 1, 1);
@@ -636,12 +667,12 @@ export class LightingSystem {
   private ensureLightMap(): Phaser.GameObjects.RenderTexture {
     if (this.lightMap) return this.lightMap;
 
-    const width = Math.ceil(GAME_WIDTH * LIGHTMAP_SCALE);
-    const height = Math.ceil(GAME_HEIGHT * LIGHTMAP_SCALE);
+    const width = Math.ceil(GAME_WIDTH * this.quality.lightMapScale);
+    const height = Math.ceil(GAME_HEIGHT * this.quality.lightMapScale);
 
     // Scratch-Slots liegen knapp unter der Lightmap: die Display-List-Reihenfolge
     // garantiert, dass ihre Command-Buffer vor dem der Lightmap ausgeführt werden.
-    for (let slot = 0; slot < MAX_OCCLUDING_LIGHTS_PER_FRAME; slot += 1) {
+    for (let slot = 0; slot < this.quality.maxOccludingLightsPerFrame; slot += 1) {
       this.slots.push(this.createOccluderSlot(slot));
     }
 

@@ -192,6 +192,17 @@ export function createRendererBundle(
   flame.setLightingSystem(lighting);
   projectileBurn.setLightingSystem(lighting);
   flamethrowerUpgrades.setLightingSystem(lighting);
+  teslaDome.setLightingSystem(lighting);
+  miniTeslaDome.setLightingSystem(lighting);
+  energyShield.setLightingSystem(lighting);
+  timeBubble.setLightingSystem(lighting);
+  healingAura.setLightingSystem(lighting);
+  guardianSpirit.setLightingSystem(lighting);
+  slimeTrail.setLightingSystem(lighting);
+  powerUp.setLightingSystem(lighting);
+  beer.setLightingSystem(lighting);
+  // Projektil-Eigenleuchten läuft nicht hier, sondern zentral über
+  // `ProjectileManager.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   return {
     bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, slimeTrail, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, holyGrenade,

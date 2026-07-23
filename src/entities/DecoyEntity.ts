@@ -62,7 +62,7 @@ export class DecoyEntity {
     }
 
     setInternalFxPadding(this.sprite, 20);
-    this.glowFx = addInternalGlow(this.sprite, colorHex, 4, 0, false, 0.08, 16);
+    this.glowFx = addInternalGlow(this.sprite, colorHex, 4, 0, false, 0.08, 16, 'critical');
 
     this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
     this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);

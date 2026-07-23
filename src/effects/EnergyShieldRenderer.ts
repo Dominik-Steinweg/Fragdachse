@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedEnergyShield } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import type { LightingSystem } from './LightingSystem';
 import {
   configureAdditiveImage,
   createEmitter,
@@ -67,11 +68,16 @@ export class EnergyShieldRenderer {
   private readonly visuals = new Map<string, ShieldVisual>();
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
   private audioSystem: GameAudioSystem | null = null;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   setAudioSystem(system: GameAudioSystem): void {
     this.audioSystem = system;
+  }
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
   }
 
   setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
@@ -163,6 +169,7 @@ export class EnergyShieldRenderer {
 
     for (const [ownerId, visual] of this.visuals) {
       if (activeIds.has(ownerId)) continue;
+      this.lighting?.releaseLight(lightKey(ownerId));
       this.disposeVisual(visual);
       this.visuals.delete(ownerId);
     }
@@ -216,11 +223,24 @@ export class EnergyShieldRenderer {
         visual.lastBurstAt = now;
       }
       this.redrawVisual(visual, now);
+
+      // Ein Aufprall lässt das Schild kurz aufflammen; `currentFlashAlpha` hebt deshalb
+      // auch das Licht an, statt es auf einer konstanten Grundhelligkeit zu belassen.
+      this.lighting?.setLight(lightKey(ownerId), 'shieldField', visual.currentX, visual.currentY, {
+        radiusPx: Math.max(visual.currentRadius * 1.4, 80),
+        color: mixColors(visual.color, 0xffffff, 0.6),
+        intensity: Phaser.Math.Clamp(
+          (0.4 + visual.currentFlashAlpha * 0.55) * visual.currentAlpha,
+          0,
+          1,
+        ),
+      });
     }
   }
 
   destroyAll(): void {
-    for (const visual of this.visuals.values()) {
+    for (const [ownerId, visual] of this.visuals) {
+      this.lighting?.releaseLight(lightKey(ownerId));
       this.disposeVisual(visual);
     }
     this.visuals.clear();
@@ -553,4 +573,8 @@ export class EnergyShieldRenderer {
     visual.sparkEmitter.setPosition(burstX, burstY);
     visual.sparkEmitter.explode(10, 0, 0);
   }
+}
+
+function lightKey(ownerId: string): string {
+  return `shield:${ownerId}`;
 }

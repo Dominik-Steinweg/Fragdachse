@@ -32,8 +32,10 @@ export function createArenaTerrainColorSampler(
     ARENA_HEIGHT,
   );
 
-  for (const dirt of arenaResult.dirtObjects) {
-    drawDisplayObjectFrame(scene, ctx, dirt.texture.key, dirt.frame.name as string | number, dirt);
+  // Der Dirt-Layer ist als RenderTexture gebacken; der Sampler zeichnet stattdessen aus der
+  // erhaltenen Kachel-Geometrie in seine eigene CPU-Canvas.
+  for (const stamp of arenaResult.dirtStamps) {
+    drawDisplayObjectFrame(scene, ctx, stamp.textureKey, stamp.frameName, stamp);
   }
 
   for (const track of arenaResult.trackObjects) {

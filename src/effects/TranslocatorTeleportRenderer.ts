@@ -1,11 +1,25 @@
 import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
+import { mixColors } from './EffectUtils';
+import type { LightingSystem } from './LightingSystem';
 
 export class TranslocatorTeleportRenderer {
+  private lighting: LightingSystem | null = null;
+
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+  }
 
   playFlash(x: number, y: number, color: number, type: 'start' | 'end'): void {
     const isStart = type === 'start';
+
+    // Die Ankunft ist der auffälligere der beiden Blitze und leuchtet entsprechend weiter.
+    this.lighting?.pulse('teleportFlash', x, y, {
+      color: mixColors(color, 0xffffff, 0.55),
+      radiusPx: isStart ? 150 : 195,
+    });
 
     // Vertikaler Strahl / Säule
     const columnHeight = isStart ? 128 : 160;

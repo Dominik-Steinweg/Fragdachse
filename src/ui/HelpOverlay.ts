@@ -53,6 +53,7 @@ const CONTROLS: [string, string][] = [
   ['Q',              'Ultimate  (füllt sich durch Schaden)'],
   ['SHIFT',          'Einbuddeln  (kostet Adrenalin)'],
   ['O',              'Optionen'],
+  ['T',              'Performance-Diagnose'],
 ];
 
 export class HelpOverlay {

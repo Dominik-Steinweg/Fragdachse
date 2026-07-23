@@ -387,6 +387,9 @@ export class ArenaLifecycleCoordinator {
     // Eingebuddelte Gegner nutzen dieselben Buddel-Partikel wie eingebuddelte Spieler –
     // auf Host und Client, da beide Seiten den Einbuddel-Zustand über den Snapshot kennen.
     this.ctx.enemyManager?.setBurrowVisualSink(this.ctx.effectSystem);
+    // Brennende Gegner leuchten wie brennende Projektile; das Licht hängt am
+    // EntityBurnRenderer der jeweiligen Entity.
+    this.ctx.enemyManager?.setLightingSystem(this.renderers.lighting);
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost() && this.ctx.baseManager && isCoopDefenseMode(bridge.getGameMode())
       ? new CoopDefenseRoundStateSystem(
         this.ctx.baseManager,
@@ -1258,6 +1261,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.train = new TrainRenderer(this.scene);
     this.renderers.train.setAudioSystem(this.ctx.gameAudioSystem);
     this.renderers.translocatorTeleport = new TranslocatorTeleportRenderer(this.scene);
+    this.renderers.translocatorTeleport.setLightingSystem(this.renderers.lighting);
     // Beleuchtungsprofil vor dem Schattenaufbau setzen: nachts werden die statischen
     // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.
     const lightProfileId = resolveLightProfileId(coopDefenseMapConfig);
