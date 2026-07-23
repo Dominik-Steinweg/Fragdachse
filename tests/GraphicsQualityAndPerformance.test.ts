@@ -21,9 +21,11 @@ class MemoryStorage implements Storage {
 function sample(overrides: Partial<ArenaRuntimeSample> = {}): ArenaRuntimeSample {
   return {
     role: 'host',
+    phase: 'arena',
     quality: 'medium',
     mode: 'coop_defense',
     mapId: 'test-map',
+    rawDeltaMs: 16,
     deltaMs: 16,
     updateMs: 7,
     renderSubmitMs: 3,
@@ -59,8 +61,14 @@ function sample(overrides: Partial<ArenaRuntimeSample> = {}): ArenaRuntimeSample
 /** Minimaler GL-Kontext: die Zeichenmethoden liegen wie im Browser auf dem Prototyp. */
 class FakeGlContext {
   drawnVertices = 0;
+  framebufferBinds = 0;
+  textureUploads = 0;
   drawArrays(count: number): void { this.drawnVertices += count; }
   drawElements(count: number): void { this.drawnVertices += count; }
+  bindFramebuffer(): void { this.framebufferBinds += 1; }
+  useProgram(_program?: unknown): void {}
+  texImage2D(..._args: unknown[]): void { this.textureUploads += 1; }
+  bufferData(): void {}
 }
 
 function fakeGame(gl: unknown): { events: { on: (e: string, l: () => void) => void; off: () => void }; renderer: { gl: unknown }; emit: (event: string) => void } {
@@ -128,13 +136,13 @@ describe('ArenaRuntimeProfiler', () => {
     profiler.startRecording({ renderer: 'webgl' });
     profiler.record(sample());
     now = 200;
-    profiler.record(sample({ deltaMs: 34, updateMs: 11, renderSubmitMs: 5, roleStepMs: 8 }));
+    profiler.record(sample({ rawDeltaMs: 34, deltaMs: 34, updateMs: 11, renderSubmitMs: 5, roleStepMs: 8 }));
     profiler.recordQualityChange('medium', 'low');
     now = 300;
     profiler.stopRecording();
 
     const report = profiler.buildReport();
-    expect(report?.schemaVersion).toBe(2);
+    expect(report?.schemaVersion).toBe(3);
     expect(report?.environment).toEqual({ renderer: 'webgl' });
     expect(report?.qualityChanges).toEqual([{ atMs: 100, from: 'medium', to: 'low' }]);
     expect(report?.windows).toHaveLength(1);
@@ -184,7 +192,7 @@ describe('ArenaRuntimeProfiler', () => {
     profiler.startRecording();
     for (let index = 0; index < 10; index += 1) {
       now = index * 20;
-      profiler.record(sample({ deltaMs: 20, updateMs: 8, renderSubmitMs: 9 }));
+      profiler.record(sample({ rawDeltaMs: 20, deltaMs: 20, updateMs: 8, renderSubmitMs: 9 }));
     }
     // Sampling bricht ab, das Fenster laeuft aber noch eine Sekunde Wallclock weiter.
     now = 1180;
@@ -229,6 +237,10 @@ describe('ArenaRuntimeProfiler', () => {
     // Der naechste Frame zaehlt wieder bei null los.
     game.emit('prerender');
     gl.drawArrays(6);
+    gl.bindFramebuffer();
+    gl.useProgram({});
+    gl.texImage2D(0, 0, 0, 64, 32);
+    gl.bufferData();
     game.emit('postrender');
     expect(profiler.takeLastDrawCallCount()).toBe(1);
 
@@ -238,9 +250,16 @@ describe('ArenaRuntimeProfiler', () => {
     profiler.stopRecording();
 
     expect(profiler.buildReport()?.windows[0].counts.drawCallCount.avg).toBe(1);
+    const detailCounts = profiler.buildReport()?.windows[0].detailCounts;
+    expect(detailCounts?.framebufferBindCount.avg).toBe(1);
+    expect(detailCounts?.programSwitchCount.avg).toBe(1);
+    expect(detailCounts?.textureUploadCount.avg).toBe(1);
+    expect(detailCounts?.textureUploadPixels.avg).toBe(64 * 32);
+    expect(detailCounts?.bufferUploadCount.avg).toBe(1);
     expect(profiler.isCountingDrawCalls()).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(gl, 'drawArrays')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(gl, 'drawElements')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(gl, 'bindFramebuffer')).toBe(false);
   });
 
   it('keeps counting draw calls while the live view is open without a recording', () => {
@@ -298,5 +317,75 @@ describe('ArenaRuntimeProfiler', () => {
 
     expect(profiler.buildReport()?.windows.map((window) => [window.role, window.quality]))
       .toEqual([['host', 'medium'], ['client', 'low']]);
+  });
+
+  it('uses raw frame deltas and keeps the smoothed Phaser FPS separate', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    vi.stubGlobal('PerformanceObserver', undefined);
+    const profiler = new ArenaRuntimeProfiler();
+
+    profiler.startRecording();
+    profiler.record(sample({ rawDeltaMs: 40, deltaMs: 20 }));
+    now = 140;
+    profiler.record(sample({ rawDeltaMs: 60, deltaMs: 20 }));
+    now = 200;
+    profiler.stopRecording();
+
+    const window = profiler.buildReport()?.windows[0];
+    expect(window?.fps).toBe(20);
+    expect(window?.smoothedFps).toBe(50);
+    expect(window?.timings.rawDeltaMs.p95).toBe(60);
+    expect(window?.over33msPercent).toBe(100);
+  });
+
+  it('exports phase-separated raw frames, context changes and fine-grained details', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    vi.stubGlobal('PerformanceObserver', undefined);
+    const profiler = new ArenaRuntimeProfiler();
+    const context = {
+      localAlive: true,
+      aimVisible: true,
+      scopeActive: false,
+      utilityPlacementActive: false,
+      ultimatePlacementActive: false,
+      optionsOpen: false,
+      pageVisible: true,
+      documentFocused: true,
+      roundElapsedMs: null,
+      weapon1Id: 'GLOCK',
+      weapon2Id: 'AWP',
+      utilityId: 'HE_GRENADE',
+      ultimateId: 'HONEY_BADGER_RAGE',
+    };
+
+    profiler.startRecording();
+    profiler.record(sample({
+      phase: 'lobby',
+      context,
+      details: {
+        timings: { scopeUploadMs: 1.5, lightingShadowGeometryMs: 0.75 },
+        counts: { scopeRefreshCount: 1, lightShadowQuadCount: 12 },
+      },
+      lightPresetCounts: { muzzleFlash: 2 },
+      filterBreakdown: 'GlowFilter:2',
+    }));
+    now = 120;
+    profiler.record(sample({ phase: 'arena', context: { ...context, roundElapsedMs: 20 } }));
+    now = 140;
+    profiler.stopRecording();
+
+    const report = profiler.buildReport();
+    expect(report?.recordingScope.phases).toEqual(['lobby', 'arena']);
+    expect(report?.windows.map((window) => window.phase)).toEqual(['lobby', 'arena']);
+    expect(report?.windows[0].detailTimings.scopeUploadMs.avg).toBe(1.5);
+    expect(report?.windows[0].detailCounts.lightShadowQuadCount.peak).toBe(12);
+    expect(report?.windows[0].lightingPresets.muzzleFlash.peak).toBe(2);
+    expect(report?.windows[0].filterBreakdown).toBe('GlowFilter:2');
+    expect(report?.contextChanges).toHaveLength(2);
+    expect(report?.frameSeries.rows).toHaveLength(2);
+    expect(report?.frameSeries.columns).toContain('detail.scopeUploadMs');
+    expect(report?.frameSeries.columns).toContain('context.scopeActive');
   });
 });

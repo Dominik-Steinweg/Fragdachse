@@ -31,12 +31,53 @@ Messfenster trennen Frame-Delta, Scene-Update, CPU-Render-Abgabe, Netzwerk-Updat
 
 Nur Werte, die sich während einer Messung nicht ändern können, dürfen in den Reportkopf. `environment` wird deshalb bei `startRecording()` erfasst, nicht beim Export; Rolle, Qualität, Modus und Map stehen pro Fenster und gebündelt in `recordingScope`. Ein Kopf, der beim Klick auf Export gefüllt wird, beschreibt sonst den Zustand des Klicks und nicht den der Messung. `recordedWindows` überlebt den Export, ein zweiter Export derselben Messung ist also möglich und an gleicher `recordingId` sowie gleichem Dateinamen erkennbar.
 
-`fps` folgt aus der mittleren Frame-Zeit und beschreibt nur die tatsächlich erfassten Frames. `record()` läuft ausschließlich im laufenden Spiel, ein Fenster sammelt aber weiter Wallclock-Zeit. Fenster ohne `coveragePercent` nahe 100 oder mit großem `maxSampleGapMs` sind Randfenster einer Runde und tragen keine belastbare Bildrate.
+`fps` folgt ab Schema v3 aus dem mittleren ungeglätteten `rawDeltaMs` und beschreibt nur
+die tatsächlich erfassten Frames. `record()` läuft in Lobby, Arena und beendetem Match;
+ein Phasenwechsel schließt das aktuelle Fenster. Fenster ohne `coveragePercent` nahe 100
+oder mit großem `maxSampleGapMs` weisen auf pausierte/fehlende Scene-Updates oder einen
+inaktiven Tab hin und tragen keine belastbare Bildrate.
 
 Phaser 4 führt für WebGL keinen Draw-Call-Zähler: `drawCount` gibt es nur am `CanvasRenderer`, und der `RenderNodeManager` bietet nur einen Debug-Graphen für einen Einzelframe. `drawCallCount` entsteht deshalb aus Wrappern auf den Zeichenmethoden des GL-Kontexts, die als eigene Eigenschaft die Prototyp-Methode verdecken. Sie liegen nur an, solange die Diagnose offen ist oder eine Aufzeichnung läuft, und werden per `delete` wieder entfernt; im normalen Spiel ist der Kontext unberührt. Ein Wert von 0 kann daher auch bedeuten, dass nicht gezählt wurde. Wie die Render-Abgabe beschreibt der Wert den vorherigen Frame.
 
 Objekte pro Draw-Call ist die Kennzahl für Batching. Bricht sie ein, während die Objektzahl gleich bleibt, wechseln zu viele Texturen oder Blend-Zustände innerhalb der Szene; große statische Flächen gehören dann in eine gemeinsame Textur oder einen GPU-Layer.
 
-Die Zeitschlüssel bilden zwei Ebenen: `deltaMs` zerfällt in `updateMs`, `renderSubmitMs` und `unaccountedFrameMs`; `updateMs` zerfällt in `roleStepMs`, die beiden Netzwerkposten, `visualStepMs`, `shadowStepMs`, `lightingStepMs` und `unaccountedUpdateMs`. `visualStepMs` zerfällt lückenlos in `visualCameraMs`, `visualEnemyMs`, `visualEffectsMs`, `visualAimMs` und `visualHudMs`. Die `fire*`-Werte sind Teilkosten von `roleStepMs` und dürfen nicht zum Update-Budget addiert werden.
+Die Zeitschlüssel bilden zwei Ebenen: `rawDeltaMs` zerfällt näherungsweise in
+`updateMs`, `renderSubmitMs` und `unaccountedFrameMs`; `updateMs` zerfällt in
+`roleStepMs`, die beiden Netzwerkposten, `visualStepMs`, `shadowStepMs`,
+`lightingStepMs` und `unaccountedUpdateMs`. `visualStepMs` zerfällt lückenlos in
+`visualCameraMs`, `visualEnemyMs`, `visualEffectsMs`, `visualAimMs` und
+`visualHudMs`. Die `fire*`-Werte sind Teilkosten von `roleStepMs` und dürfen nicht zum
+Update-Budget addiert werden.
 
 Vergleiche nach Möglichkeit dieselbe Map, Rolle, Spielerzahl und Kampfsituation. Erst ein Profil wechseln oder Code ändern, dann ein neues Messfenster beziehungsweise eine neue Aufzeichnung erzeugen. P95/P99 und der Anteil langsamer Frames sind für sporadische Hänger aussagekräftiger als nur der Mittelwert.
+
+## Trace-Schema v3
+
+Schema v3 zeichnet alle Scene-Phasen (`lobby`, `arena`, `terminated`) auf. `rawDeltaMs`
+ist die ungeglättete Zeit zwischen Phaser-Schritten und die Grundlage für `fps`, P95/P99
+und Slow-Frame-Anteile; `deltaMs` und `smoothedFps` bleiben nur als Vergleich mit Phasers
+geglätteter Spielzeit erhalten. `frameSeries` bewahrt die einzelnen Frames als
+spaltenbeschriebene Zahlenreihen auf. `contextChanges` ordnet ihnen Phase, Rolle,
+Loadout, Aim-/Scope-/Placement-Zustand, Fokus und Rundendauer zu, ohne diese
+Zeichenketten in jedem Frame zu duplizieren.
+
+`detailTimings` und `detailCounts` zerlegen insbesondere Aim/Scope, Client-Snapshot-
+Verarbeitung und Lighting. Bei Lighting sind Queue-Aufbau, direkte und verdeckende
+Lichter, Schattengeometrie, RenderTexture-Befehle, Licht-Presets, Lightmap-/Scratch-
+Pixel und Schattenquads getrennt. Diese CPU-Zeiten messen den Aufbau der Phaser-
+Command-Buffer; RenderTexture-Befehle werden erst im Render-Schritt ausgeführt. Der
+asynchron und nur stichprobenartig verwendete
+`EXT_disjoint_timer_query_webgl2`-Timer liefert deshalb zusätzlich die GPU-Zeit des
+gesamten Frames, sofern Browser und GPU ihn bereitstellen. Er wird nie blockierend
+ausgelesen.
+
+WebGL-Wrapper erfassen während einer Aufzeichnung neben Draw-Calls auch
+Framebuffer-Binds, echte Programmwechsel sowie Textur- und Buffer-Uploads. Speicher-
+Samples (`performance.memory`) und GC-Einträge sind Browser-abhängig und dürfen leer
+sein. `instrumentation.profilerRecordMs` macht die Eigenkosten der Aufzeichnung
+sichtbar.
+
+Der In-App-Trace liefert absichtlich keine JavaScript-Callstacks und keine
+GPU-Pass-Aufschlüsselung pro GameObject oder Filter. Wenn ein unbekannter Restposten,
+ein Long Task oder die GPU-Gesamtzeit auffällig bleibt, ist weiterhin ein Browser-
+Performance-Trace mit CPU-Sampling beziehungsweise ein GPU-Frame-Capture erforderlich.

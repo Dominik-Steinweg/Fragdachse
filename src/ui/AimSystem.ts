@@ -275,6 +275,10 @@ export class AimSystem {
     }
   }
 
+  getGraphicsCommandCount(): number {
+    return this.gfx.commandBuffer.length;
+  }
+
   destroy(): void {
     this.scene.input.setDefaultCursor('default');
     this.appliedCursor = 'default';

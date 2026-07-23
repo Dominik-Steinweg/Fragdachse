@@ -24,8 +24,11 @@ function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] 
   if (!summary) return ['Noch kein vollständiges Messfenster vorhanden.'];
   const timings = summary.timings;
   const counts = summary.counts;
+  const detailTimings = summary.detailTimings;
+  const detailCounts = summary.detailCounts;
   const roleLabel = summary.role === 'host' ? 'Host-Simulation' : 'Client-Synchronisierung';
   return [
+    `Phase ${summary.phase.toUpperCase()} · raw FPS ${summary.fps.toFixed(1)} · raw p95 ${ms(timings.rawDeltaMs.p95)} · p99 ${ms(timings.rawDeltaMs.p99)} · geglättet ${summary.smoothedFps.toFixed(1)}`,
     `${summary.role.toUpperCase()} · ${summary.quality.toUpperCase()} · ${summary.mode}${summary.mapId ? ` · ${summary.mapId}` : ''}`,
     `FPS ${summary.fps.toFixed(1)} · Frame p95 ${ms(timings.deltaMs.p95)} · p99 ${ms(timings.deltaMs.p99)}`,
     summary.coveragePercent < 95
@@ -36,8 +39,12 @@ function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] 
     `${roleLabel} ${ms(timings.roleStepMs.avg)} · Visuals ${ms(timings.visualStepMs.avg)} · Rest/Update ${ms(timings.unaccountedUpdateMs.avg)}`,
     `  Kamera ${ms(timings.visualCameraMs.avg)} · Gegner ${ms(timings.visualEnemyMs.avg)} · Effekte ${ms(timings.visualEffectsMs.avg)}`,
     `  Zielen ${ms(timings.visualAimMs.avg)} · HUD ${ms(timings.visualHudMs.avg)}`,
+    `    Aim: Preview ${ms(detailTimings.aimPreviewMs.avg)} · Graphics ${ms(detailTimings.aimGraphicsMs.avg)} · Scope ${ms(detailTimings.scopeMs.avg)} (Raster ${ms(detailTimings.scopeRasterMs.avg)}, Upload ${ms(detailTimings.scopeUploadMs.avg)})`,
+    `    Scope-Refresh ${count(detailCounts.scopeRefreshCount.avg)}/Frame · Aim-Befehle ${count(detailCounts.aimGraphicsCommandCount.avg)}`,
     `Netz Update ${ms(timings.networkUpdateMs.avg)} · Flush ${ms(timings.networkFlushMs.avg)}`,
     `Schatten ${ms(timings.shadowStepMs.avg)} · Licht ${ms(timings.lightingStepMs.avg)}`,
+    `  Licht: Queue ${ms(detailTimings.lightingQueueMs.avg)} · Befehle ${ms(detailTimings.lightingCommandBuildMs.avg)} · Occlusion ${ms(detailTimings.lightingOcclusionMs.avg)} · Geometrie ${ms(detailTimings.lightingShadowGeometryMs.avg)}`,
+    `  Direkt/verdeckt/fallback ${count(detailCounts.directLightCount.avg)}/${count(detailCounts.occludingLightCount.avg)}/${count(detailCounts.fallbackOccludingLightCount.avg)} · Schattenquads ${count(detailCounts.lightShadowQuadCount.avg)}`,
     `Feuer Sim ${ms(timings.fireSimulationMs.avg)} · Erzeugung ${ms(timings.fireCreationMs.avg)} · Visuals ${ms(timings.fireVisualMs.avg)}`,
     `Objekte ${count(counts.displayObjectCount.avg)} · sichtbar ${count(counts.visibleObjectCount.avg)} · Filter ${count(counts.activeFilterCount.avg)}`,
     `Draw-Calls ${count(counts.drawCallCount.avg)} · Spitze ${counts.drawCallCount.peak} · ${count(counts.visibleObjectCount.avg / Math.max(1, counts.drawCallCount.avg))} Objekte/Call`,

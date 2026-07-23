@@ -17,6 +17,14 @@ const TEX_KEY = '__scope_overlay_canvas';
  */
 const CANVAS_DOWNSCALE = 4;
 
+export interface ScopePerformanceMetrics {
+  totalMs: number;
+  rasterMs: number;
+  uploadMs: number;
+  refreshed: boolean;
+  texturePixels: number;
+}
+
 export class ScopeOverlay {
   private readonly image:      Phaser.GameObjects.Image;
   private readonly canvasTex:  Phaser.Textures.CanvasTexture;
@@ -32,6 +40,13 @@ export class ScopeOverlay {
   private drawnInnerR = Number.NaN;
   private drawnOuterR = Number.NaN;
   private drawnProgress = Number.NaN;
+  private lastPerformance: ScopePerformanceMetrics = {
+    totalMs: 0,
+    rasterMs: 0,
+    uploadMs: 0,
+    refreshed: false,
+    texturePixels: 0,
+  };
 
   constructor(private readonly scene: Phaser.Scene) {
     this.W = Math.ceil(scene.scale.width / CANVAS_DOWNSCALE);
@@ -77,6 +92,14 @@ export class ScopeOverlay {
     delta:          number,
     config:         ScopeModeConfig,
   ): void {
+    const startedAt = performance.now();
+    this.lastPerformance = {
+      totalMs: 0,
+      rasterMs: 0,
+      uploadMs: 0,
+      refreshed: false,
+      texturePixels: 0,
+    };
     // Animiertes Annähern: Einscopen mit scopeInMs, Entscopen mit unscopeSpeedMs
     if (targetProgress > this.displayProgress) {
       this.displayProgress = Math.min(targetProgress, this.displayProgress + delta / config.scopeInMs);
@@ -86,6 +109,7 @@ export class ScopeOverlay {
 
     if (this.displayProgress <= 0.005) {
       this.image.setVisible(false);
+      this.lastPerformance.totalMs = performance.now() - startedAt;
       return;
     }
     this.image.setVisible(true);
@@ -110,9 +134,11 @@ export class ScopeOverlay {
       && outerR === this.drawnOuterR
       && this.displayProgress === this.drawnProgress
     ) {
+      this.lastPerformance.totalMs = performance.now() - startedAt;
       return;
     }
 
+    const rasterStartedAt = performance.now();
     const ctx = this.canvasTex.context;
 
     // 1. Canvas leeren und schwarzes Overlay zeichnen
@@ -139,13 +165,23 @@ export class ScopeOverlay {
     ctx.globalCompositeOperation = 'source-over'; // Blend-Mode zurücksetzen
 
     // GPU-Textur aus dem Canvas-Inhalt aktualisieren
+    this.lastPerformance.rasterMs = performance.now() - rasterStartedAt;
+    const uploadStartedAt = performance.now();
     this.canvasTex.refresh();
+    this.lastPerformance.uploadMs = performance.now() - uploadStartedAt;
+    this.lastPerformance.refreshed = true;
+    this.lastPerformance.texturePixels = W * H;
 
     this.drawnX = cx;
     this.drawnY = cy;
     this.drawnInnerR = innerR;
     this.drawnOuterR = outerR;
     this.drawnProgress = this.displayProgress;
+    this.lastPerformance.totalMs = performance.now() - startedAt;
+  }
+
+  getPerformanceMetrics(): ScopePerformanceMetrics {
+    return this.lastPerformance;
   }
 
   destroy(): void {

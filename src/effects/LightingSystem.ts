@@ -47,6 +47,7 @@ const KEYED_LIGHT_STALE_MS = 400;
 
 interface ActiveLight {
   key: string | null;
+  presetKey: LightPresetKey;
   shape: 'radial' | 'cone';
   x: number;
   y: number;
@@ -83,6 +84,39 @@ interface OccluderSlot {
   readonly renderTexture: Phaser.GameObjects.RenderTexture;
   readonly image: Phaser.GameObjects.Image;
   readonly graphics: Phaser.GameObjects.Graphics;
+}
+
+export interface LightingPerformanceMetrics {
+  totalMs: number;
+  expireMs: number;
+  queueMs: number;
+  commandBuildMs: number;
+  directMs: number;
+  occlusionMs: number;
+  shadowGeometryMs: number;
+  activeLights: number;
+  renderedLights: number;
+  directLights: number;
+  occludingLights: number;
+  fallbackOccludingLights: number;
+  radialLights: number;
+  coneLights: number;
+  shadowQuads: number;
+  falloffQuads: number;
+  commandCount: number;
+  lightMapPixels: number;
+  scratchPixels: number;
+  presetCounts: Readonly<Record<string, number>>;
+}
+
+function emptyPerformanceMetrics(): LightingPerformanceMetrics {
+  return {
+    totalMs: 0, expireMs: 0, queueMs: 0, commandBuildMs: 0, directMs: 0, occlusionMs: 0,
+    shadowGeometryMs: 0, activeLights: 0, renderedLights: 0, directLights: 0,
+    occludingLights: 0, fallbackOccludingLights: 0, radialLights: 0, coneLights: 0,
+    shadowQuads: 0, falloffQuads: 0, commandCount: 0, lightMapPixels: 0, scratchPixels: 0,
+    presetCounts: {},
+  };
 }
 
 /**
@@ -123,6 +157,7 @@ export class LightingSystem {
 
   private enabled = false;
   private lastCostMs = 0;
+  private lastPerformance = emptyPerformanceMetrics();
   private quality: GraphicsQualityProfile;
   private unsubscribeQuality: (() => void) | null = null;
 
@@ -172,6 +207,10 @@ export class LightingSystem {
 
   getLastUpdateCostMs(): number {
     return this.lastCostMs;
+  }
+
+  getPerformanceMetrics(): LightingPerformanceMetrics {
+    return this.lastPerformance;
   }
 
   getDebugStats(): { activeLights: number; renderedLights: number; occlusionSlots: number } {
@@ -271,7 +310,7 @@ export class LightingSystem {
     if (!this.enabled || !preset.enabled) return;
 
     const light = this.acquire();
-    this.applyPreset(light, preset, x, y, overrides);
+    this.applyPreset(light, presetKey, preset, x, y, overrides);
     light.key = null;
     light.flickerPhase = Math.random() * Math.PI * 2;
     this.lights.push(light);
@@ -303,7 +342,7 @@ export class LightingSystem {
       this.keyed.set(key, light);
     }
     const bornAt = light.key === key ? light.bornAt : this.now();
-    this.applyPreset(light, preset, x, y, overrides);
+    this.applyPreset(light, presetKey, preset, x, y, overrides);
     light.key = key;
     light.bornAt = bornAt;
     light.durationMs = 0;
@@ -322,10 +361,18 @@ export class LightingSystem {
     const startMs = performance.now();
     const now = this.now();
 
+    const expireStartedAt = performance.now();
     this.expireLights(now);
+    const expireMs = performance.now() - expireStartedAt;
 
     if (!this.enabled) {
       this.lastCostMs = performance.now() - startMs;
+      this.lastPerformance = {
+        ...emptyPerformanceMetrics(),
+        totalMs: this.lastCostMs,
+        expireMs,
+        activeLights: this.lights.length,
+      };
       return;
     }
 
@@ -333,12 +380,21 @@ export class LightingSystem {
     const scrollX = this.scene.cameras.main.scrollX;
     const scrollY = this.scene.cameras.main.scrollY;
 
+    const queueStartedAt = performance.now();
     this.collectRenderQueue(now, scrollX, scrollY);
+    const queueMs = performance.now() - queueStartedAt;
 
     if (this.profileId === 'day' && this.renderQueue.length === 0) {
       // Reines Tageslicht ohne aktive Lichtquelle: kein Renderpass, kein Overlay.
       overlay.setVisible(false);
       this.lastCostMs = performance.now() - startMs;
+      this.lastPerformance = {
+        ...emptyPerformanceMetrics(),
+        totalMs: this.lastCostMs,
+        expireMs,
+        queueMs,
+        activeLights: this.lights.length,
+      };
       return;
     }
     overlay.setVisible(true);
@@ -346,24 +402,72 @@ export class LightingSystem {
     overlay.fill(this.profile.ambientColor, 1);
 
     let occludingUsed = 0;
+    let directLights = 0;
+    let fallbackOccludingLights = 0;
+    let directMs = 0;
+    let occlusionMs = 0;
+    let shadowGeometryMs = 0;
+    let shadowQuads = 0;
+    let falloffQuads = 0;
+    let commandCount = 1;
+    let radialLights = 0;
+    let coneLights = 0;
+    const presetCounts: Record<string, number> = {};
     for (const light of this.renderQueue) {
+      presetCounts[light.presetKey] = (presetCounts[light.presetKey] ?? 0) + 1;
+      if (light.shape === 'radial') radialLights += 1;
+      else coneLights += 1;
       const useOcclusion = light.occludes
         && this.occluders !== null
         && occludingUsed < this.quality.maxOccludingLightsPerFrame
         && occludingUsed < this.slots.length;
 
       if (useOcclusion) {
-        this.renderOccludingLight(light, this.slots[occludingUsed], scrollX, scrollY);
+        const occlusionStartedAt = performance.now();
+        const geometry = this.renderOccludingLight(light, this.slots[occludingUsed], scrollX, scrollY);
+        occlusionMs += performance.now() - occlusionStartedAt;
+        shadowGeometryMs += geometry.durationMs;
+        shadowQuads += geometry.shadowQuads;
+        falloffQuads += geometry.falloffQuads;
+        commandCount += 4 + geometry.graphicsCommands;
         occludingUsed += 1;
       } else {
         // Überzählige verdeckende Lichter fallen weich auf den einfachen Pfad zurück:
         // weniger Schatten statt fehlendem Licht.
         const scale = this.quality.lightMapScale;
+        const directStartedAt = performance.now();
         this.stampLight(overlay, light, (light.x - scrollX) * scale, (light.y - scrollY) * scale);
+        directMs += performance.now() - directStartedAt;
+        directLights += 1;
+        commandCount += 1;
+        if (light.occludes) fallbackOccludingLights += 1;
       }
     }
 
     this.lastCostMs = performance.now() - startMs;
+    this.lastPerformance = {
+      totalMs: this.lastCostMs,
+      expireMs,
+      queueMs,
+      commandBuildMs: Math.max(0, this.lastCostMs - expireMs - queueMs),
+      directMs,
+      occlusionMs,
+      shadowGeometryMs,
+      activeLights: this.lights.length,
+      renderedLights: this.renderQueue.length,
+      directLights,
+      occludingLights: occludingUsed,
+      fallbackOccludingLights,
+      radialLights,
+      coneLights,
+      shadowQuads,
+      falloffQuads,
+      commandCount,
+      lightMapPixels: Math.round(GAME_WIDTH * this.quality.lightMapScale)
+        * Math.round(GAME_HEIGHT * this.quality.lightMapScale),
+      scratchPixels: occludingUsed * OCCLUDER_SCRATCH_SIZE * OCCLUDER_SCRATCH_SIZE,
+      presetCounts,
+    };
   }
 
   // ── Intern: Lichtverwaltung ────────────────────────────────────────────────
@@ -377,6 +481,7 @@ export class LightingSystem {
     if (light) return light;
     return {
       key: null,
+      presetKey: 'muzzleFlash',
       shape: 'radial',
       x: 0,
       y: 0,
@@ -401,6 +506,7 @@ export class LightingSystem {
 
   private applyPreset(
     light: ActiveLight,
+    presetKey: LightPresetKey,
     preset: LightPreset,
     x: number,
     y: number,
@@ -409,6 +515,7 @@ export class LightingSystem {
     const profileOverride = resolvePresetOverride(preset, this.profileId);
     const now = this.now();
 
+    light.presetKey = presetKey;
     light.shape = preset.shape;
     light.x = x;
     light.y = y;
@@ -533,13 +640,17 @@ export class LightingSystem {
     slot: OccluderSlot,
     scrollX: number,
     scrollY: number,
-  ): void {
+  ): { durationMs: number; shadowQuads: number; falloffQuads: number; graphicsCommands: number } {
     const center = OCCLUDER_SCRATCH_SIZE * 0.5;
 
     slot.renderTexture.clear();
     this.stampLight(slot.renderTexture, light, center, center);
 
+    const geometryStartedAt = performance.now();
     this.buildShadowGraphics(light, slot.graphics, center);
+    const durationMs = performance.now() - geometryStartedAt;
+    const shadowQuads = this.shadowQuads.length;
+    const falloffQuads = this.falloffQuads.length;
     slot.renderTexture.erase([slot.graphics]);
 
     slot.image.setPosition(
@@ -547,6 +658,12 @@ export class LightingSystem {
       (light.y - scrollY) * this.quality.lightMapScale,
     );
     this.lightMap?.draw([slot.image]);
+    return {
+      durationMs,
+      shadowQuads,
+      falloffQuads,
+      graphicsCommands: slot.graphics.commandBuffer.length,
+    };
   }
 
   /**

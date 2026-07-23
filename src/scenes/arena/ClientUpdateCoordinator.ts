@@ -20,6 +20,18 @@ import { getStoredCoopDefenseProgress } from '../../utils/localPreferences';
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
+export interface ClientUpdatePerformanceMetrics {
+  totalMs: number;
+  snapshotMs: number;
+  playersMs: number;
+  projectilesEffectsMs: number;
+  worldStateMs: number;
+  interpolationMs: number;
+  hudMs: number;
+  postSyncMs: number;
+  newSnapshot: boolean;
+}
+
 /**
  * Runs every frame on non-host clients.
  *
@@ -41,6 +53,10 @@ export class ClientUpdateCoordinator {
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
   private moveLoopHandle: string | null = null;
+  private lastPerformance: ClientUpdatePerformanceMetrics = {
+    totalMs: 0, snapshotMs: 0, playersMs: 0, projectilesEffectsMs: 0,
+    worldStateMs: 0, interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
+  };
 
   /** Client-side prediction for utility override (BFG / Holy Hand Grenade pickup). */
   clientUtilityOverride: UtilityConfig | null = null;
@@ -64,16 +80,30 @@ export class ClientUpdateCoordinator {
   }
 
   runClientUpdate(delta: number): void {
+    const startedAt = performance.now();
     const state = bridge.getLatestGameState();
-    if (!state) return;
+    if (!state) {
+      this.lastPerformance = {
+        totalMs: performance.now() - startedAt,
+        snapshotMs: performance.now() - startedAt,
+        playersMs: 0, projectilesEffectsMs: 0, worldStateMs: 0,
+        interpolationMs: 0, hudMs: 0, postSyncMs: 0, newSnapshot: false,
+      };
+      return;
+    }
 
     const lerpFactor = 1 - Math.exp(-delta / NET_SMOOTH_TIME_MS);
 
     const currentVersion = bridge.getGameStateVersion();
     const isNewData = currentVersion !== this.lastGameStateVersion;
     if (isNewData) this.lastGameStateVersion = currentVersion;
+    const snapshotMs = performance.now() - startedAt;
+    let playersMs = 0;
+    let projectilesEffectsMs = 0;
+    let worldStateMs = 0;
 
     if (isNewData) {
+      const playersStartedAt = performance.now();
       const localId = bridge.getLocalPlayerId();
       for (const [id, ps] of Object.entries(state.players)) {
         let player = this.ctx.playerManager.getPlayer(id);
@@ -125,15 +155,19 @@ export class ClientUpdateCoordinator {
         this.applyBurrowVisual(player, ps.burrowPhase);
       }
 
+      playersMs = performance.now() - playersStartedAt;
+      const effectsStartedAt = performance.now();
       this.ctx.projectileManager.clientSyncVisuals(state.projectiles, bridge.getLocalPlayerId());
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
       this.ctx.smokeSystem.syncVisuals(state.smokes);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
       this.ctx.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
+      projectilesEffectsMs = performance.now() - effectsStartedAt;
 
       // teslaDomeRenderer is accessed via the bundle (passed from ArenaScene)
       // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
 
+      const worldStartedAt = performance.now();
       if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
         const nextDamagedStaticRockIds = new Set<number>();
         for (const rockId of state.rockRemovals) {
@@ -192,8 +226,10 @@ export class ClientUpdateCoordinator {
       this.ctx.enemyManager?.applySnapshot(state.enemies);
 
       this.checkLocalPickup(state.powerups ?? []);
+      worldStateMs = performance.now() - worldStartedAt;
     }
 
+    const interpolationStartedAt = performance.now();
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       player.lerpStep(lerpFactor);
       const dashPhase = this.prevDashPhases.get(player.id) ?? 0;
@@ -219,7 +255,9 @@ export class ClientUpdateCoordinator {
     if (localPlayerClient) {
       localPlayerClient.setRotation(this.ctx.inputSystem.getAimAngle());
     }
+    const interpolationMs = performance.now() - interpolationStartedAt;
 
+    const hudStartedAt = performance.now();
     const localState = state.players[localId2];
     if (localState) {
       this.ctx.aimSystem?.setAuthoritativeState(localState.aim);
@@ -277,10 +315,28 @@ export class ClientUpdateCoordinator {
       );
       this.ctx.playerStatusRing?.update(hudData);
     }
+    const hudMs = performance.now() - hudStartedAt;
 
+    const postSyncStartedAt = performance.now();
     if (state.projectiles.some(p => p.style === 'bfg')) {
       this.scene.cameras.main.shake(100, 0.003);
     }
+    const postSyncMs = performance.now() - postSyncStartedAt;
+    this.lastPerformance = {
+      totalMs: performance.now() - startedAt,
+      snapshotMs,
+      playersMs,
+      projectilesEffectsMs,
+      worldStateMs,
+      interpolationMs,
+      hudMs,
+      postSyncMs,
+      newSnapshot: isNewData,
+    };
+  }
+
+  getPerformanceMetrics(): ClientUpdatePerformanceMetrics {
+    return this.lastPerformance;
   }
 
   /**

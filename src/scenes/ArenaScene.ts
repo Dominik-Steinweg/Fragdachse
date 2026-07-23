@@ -197,9 +197,18 @@ export class ArenaScene extends Phaser.Scene {
   private lastScenePerformanceCountAtMs = Number.NEGATIVE_INFINITY;
   private scenePerformanceCounts = {
     visibleObjectCount: 0,
+    willRenderObjectCount: 0,
+    inCameraBoundsObjectCount: 0,
+    hiddenObjectCount: 0,
     particleEmitterCount: 0,
     aliveParticleCount: 0,
     activeFilterCount: 0,
+    internalFilterCount: 0,
+    externalFilterCount: 0,
+    filteredObjectCount: 0,
+    cameraFilterCount: 0,
+    scanMs: 0,
+    filterBreakdown: null as string | null,
   };
 
   constructor() {
@@ -793,9 +802,11 @@ export class ArenaScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     const frameStartMs = performance.now();
     let primaryStepMs = 0;
+    let clientRendererSyncMs = 0;
     this.syncArenaMetrics();
     this.lifecycle.detectPhaseChange();
     const networkUpdateStartMs = performance.now();
+    const scenePreludeMs = networkUpdateStartMs - frameStartMs;
     bridge.updateNetwork();
     const networkUpdateMs = performance.now() - networkUpdateStartMs;
 
@@ -870,6 +881,8 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.lastObservedGamePhase = phase;
+    const sceneStateEndMs = performance.now();
+    const sceneStateMs = sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs);
 
     if (inGame && !terminated) {
       const secs = bridge.computeSecondsLeft();
@@ -920,6 +933,7 @@ export class ArenaScene extends Phaser.Scene {
         this.clientUpdate.runClientUpdate(delta);
 
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
+        const clientRendererSyncStartedAt = performance.now();
         const state = bridge.getLatestGameState();
         if (state) {
           this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
@@ -940,6 +954,7 @@ export class ArenaScene extends Phaser.Scene {
         }
         this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
         this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
+        clientRendererSyncMs = performance.now() - clientRendererSyncStartedAt;
         primaryStepMs += performance.now() - clientStepStartMs;
       }
 
@@ -958,6 +973,7 @@ export class ArenaScene extends Phaser.Scene {
     this.syncArenaPanelOverlayState(inGame && !terminated);
 
     const visualsStartMs = performance.now();
+    const postRoleMs = visualsStartMs - sceneStateEndMs - primaryStepMs;
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
@@ -989,6 +1005,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.flamethrowerUpgrades.update(bridge.getSynchronizedNow());
     const visualEffectsEndMs = performance.now();
 
+    const aimPreviewStartedAt = performance.now();
     const utilityTargeting    = this.ctx.inputSystem.getUtilityTargetingPreviewState();
     const airstrikeTargeting  = this.ctx.inputSystem.getAirstrikeTargetingPreviewState();
     const utilityPlacement    = this.getLocalPlacementPreview();
@@ -1003,6 +1020,8 @@ export class ArenaScene extends Phaser.Scene {
       && !this.ctx.inputSystem.isUtilityPlacementActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
+    const aimPreviewMs = performance.now() - aimPreviewStartedAt;
+    const aimGraphicsStartedAt = performance.now();
     this.ctx.aimSystem?.setScopeProgress(scopeProgress);
     this.ctx.aimSystem?.setScoping(this.ctx.inputSystem.isScoping());
     this.ctx.aimSystem?.setWeaponChargeProgress(this.ctx.inputSystem.getScopeChargeProgress());
@@ -1014,8 +1033,10 @@ export class ArenaScene extends Phaser.Scene {
       optionsOpen ? undefined : targetingForReticle,
       optionsOpen ? undefined : ultimatePreview,
     );
+    const aimGraphicsMs = performance.now() - aimGraphicsStartedAt;
 
     // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
+    const scopeStartedAt = performance.now();
     if (this.scopeOverlay) {
       const scopeCfg = this.ctx.inputSystem.getWeapon2ScopeConfig();
       if (scopeCfg) {
@@ -1026,9 +1047,12 @@ export class ArenaScene extends Phaser.Scene {
         this.scopeOverlay.update(0, 0, 0, delta, { scopeInMs: 1, fullScopeViewRadius: 0, edgeSoftnessPx: 0, unscopedSpreadDeg: 0, unscopeSpeedMs: 200 });
       }
     }
+    const scopeMs = performance.now() - scopeStartedAt;
 
+    const aimIndicatorsStartedAt = performance.now();
     this.utilityChargeIndicator?.update(this.ctx.inputSystem.getUtilityChargePreviewState());
     this.ultimateChargeIndicator?.update(ultimatePreview);
+    const aimIndicatorsMs = performance.now() - aimIndicatorsStartedAt;
     const visualAimEndMs = performance.now();
 
     this.gaussWarning.update(inArena);
@@ -1063,51 +1087,135 @@ export class ArenaScene extends Phaser.Scene {
     bridge.flushNetwork();
     const networkFlushMs = performance.now() - networkFlushStartMs;
 
-    if (inGame) {
-      const role = bridge.isHost() ? 'host' : 'client';
-      const firePerformance = this.ctx.fireSystem.takePerformanceMetrics();
-      const lightStats = this.renderers.lighting.getDebugStats();
-      const sceneCounts = this.sampleScenePerformanceCounts(performance.now());
-      this.runtimeProfiler?.record({
-        role,
-        quality: this.graphicsQuality.getLevel(),
-        mode: bridge.getGameMode(),
-        mapId: isCoopDefenseMode(bridge.getGameMode())
-          ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
-          : null,
-        deltaMs: delta,
-        updateMs: performance.now() - frameStartMs,
-        renderSubmitMs: this.runtimeProfiler.takeLastRenderSubmitMs(),
-        roleStepMs: primaryStepMs,
-        networkUpdateMs,
-        networkFlushMs,
-        visualStepMs,
-        visualCameraMs,
-        visualEnemyMs,
-        visualEffectsMs,
-        visualAimMs,
-        visualHudMs,
-        shadowStepMs,
-        lightingStepMs,
-        fireSimulationMs: firePerformance.simulationMs,
-        fireCreationMs: firePerformance.creationMs,
-        fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
-        enemyCount: this.ctx.enemyManager?.getAllEnemies().length ?? 0,
-        projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
-        playerCount: this.ctx.playerManager.getAllPlayers().length,
-        displayObjectCount: this.children.list.length,
-        visibleObjectCount: sceneCounts.visibleObjectCount,
-        particleEmitterCount: sceneCounts.particleEmitterCount,
-        aliveParticleCount: sceneCounts.aliveParticleCount,
-        activeFilterCount: sceneCounts.activeFilterCount,
-        activeLightCount: lightStats.activeLights,
-        renderedLightCount: lightStats.renderedLights,
-        drawCallCount: this.runtimeProfiler.takeLastDrawCallCount(),
-        sceneBreakdown: this.runtimeProfiler?.shouldCaptureSceneBreakdown(role, delta)
-          ? this.describeSceneObjectBreakdown()
-          : null,
-      });
+    const diagnosticsStartedAt = performance.now();
+    const role = bridge.isHost() ? 'host' : 'client';
+    const runtimePhase = terminated ? 'terminated' : (inGame ? 'arena' : 'lobby');
+    const clientMetricsActive = role === 'client' && runtimePhase === 'arena';
+    const firePerformance = this.ctx.fireSystem.takePerformanceMetrics();
+    const lightingPerformance = this.renderers.lighting.getPerformanceMetrics();
+    const scopePerformance = this.scopeOverlay?.getPerformanceMetrics();
+    const clientPerformance = this.clientUpdate.getPerformanceMetrics();
+    const sceneCounts = this.sampleScenePerformanceCounts(performance.now());
+    let sceneBreakdown: string | null = null;
+    let sceneBreakdownScanMs = 0;
+    if (this.runtimeProfiler?.shouldCaptureSceneBreakdown(role, delta)) {
+      const breakdownStartedAt = performance.now();
+      sceneBreakdown = this.describeSceneObjectBreakdown();
+      sceneBreakdownScanMs = performance.now() - breakdownStartedAt;
     }
+    const localId = bridge.getLocalPlayerId();
+    const nowSynchronized = bridge.getSynchronizedNow();
+    const rawDelta = this.game.loop.rawDelta;
+    this.runtimeProfiler?.record({
+      role,
+      phase: runtimePhase,
+      quality: this.graphicsQuality.getLevel(),
+      mode: bridge.getGameMode(),
+      mapId: isCoopDefenseMode(bridge.getGameMode())
+        ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+        : null,
+      rawDeltaMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
+      deltaMs: delta,
+      updateMs: performance.now() - frameStartMs,
+      renderSubmitMs: this.runtimeProfiler.takeLastRenderSubmitMs(),
+      roleStepMs: primaryStepMs,
+      networkUpdateMs,
+      networkFlushMs,
+      visualStepMs,
+      visualCameraMs,
+      visualEnemyMs,
+      visualEffectsMs,
+      visualAimMs,
+      visualHudMs,
+      shadowStepMs,
+      lightingStepMs,
+      fireSimulationMs: firePerformance.simulationMs,
+      fireCreationMs: firePerformance.creationMs,
+      fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
+      enemyCount: this.ctx.enemyManager?.getAllEnemies().length ?? 0,
+      projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
+      playerCount: this.ctx.playerManager.getAllPlayers().length,
+      displayObjectCount: this.children.list.length,
+      visibleObjectCount: sceneCounts.visibleObjectCount,
+      particleEmitterCount: sceneCounts.particleEmitterCount,
+      aliveParticleCount: sceneCounts.aliveParticleCount,
+      activeFilterCount: sceneCounts.activeFilterCount,
+      activeLightCount: lightingPerformance.activeLights,
+      renderedLightCount: lightingPerformance.renderedLights,
+      drawCallCount: this.runtimeProfiler.takeLastDrawCallCount(),
+      details: {
+        timings: {
+          scenePreludeMs,
+          sceneStateMs,
+          postRoleMs,
+          diagnosticsMs: performance.now() - diagnosticsStartedAt,
+          clientCoordinatorMs: clientMetricsActive ? clientPerformance.totalMs : 0,
+          clientSnapshotMs: clientMetricsActive ? clientPerformance.snapshotMs : 0,
+          clientPlayersMs: clientMetricsActive ? clientPerformance.playersMs : 0,
+          clientProjectilesEffectsMs: clientMetricsActive ? clientPerformance.projectilesEffectsMs : 0,
+          clientWorldStateMs: clientMetricsActive ? clientPerformance.worldStateMs : 0,
+          clientInterpolationMs: clientMetricsActive ? clientPerformance.interpolationMs : 0,
+          clientHudMs: clientMetricsActive ? clientPerformance.hudMs : 0,
+          clientRendererSyncMs,
+          clientPostSyncMs: clientMetricsActive ? clientPerformance.postSyncMs : 0,
+          aimPreviewMs,
+          aimGraphicsMs,
+          scopeMs,
+          scopeRasterMs: scopePerformance?.rasterMs ?? 0,
+          scopeUploadMs: scopePerformance?.uploadMs ?? 0,
+          aimIndicatorsMs,
+          lightingExpireMs: lightingPerformance.expireMs,
+          lightingQueueMs: lightingPerformance.queueMs,
+          lightingCommandBuildMs: lightingPerformance.commandBuildMs,
+          lightingDirectMs: lightingPerformance.directMs,
+          lightingOcclusionMs: lightingPerformance.occlusionMs,
+          lightingShadowGeometryMs: lightingPerformance.shadowGeometryMs,
+          sceneCountScanMs: sceneCounts.scanMs,
+          sceneBreakdownScanMs,
+        },
+        counts: {
+          willRenderObjectCount: sceneCounts.willRenderObjectCount,
+          inCameraBoundsObjectCount: sceneCounts.inCameraBoundsObjectCount,
+          hiddenObjectCount: sceneCounts.hiddenObjectCount,
+          internalFilterCount: sceneCounts.internalFilterCount,
+          externalFilterCount: sceneCounts.externalFilterCount,
+          filteredObjectCount: sceneCounts.filteredObjectCount,
+          cameraFilterCount: sceneCounts.cameraFilterCount,
+          aimGraphicsCommandCount: this.ctx.aimSystem?.getGraphicsCommandCount() ?? 0,
+          scopeRefreshCount: scopePerformance?.refreshed ? 1 : 0,
+          scopeTexturePixels: scopePerformance?.texturePixels ?? 0,
+          directLightCount: lightingPerformance.directLights,
+          occludingLightCount: lightingPerformance.occludingLights,
+          fallbackOccludingLightCount: lightingPerformance.fallbackOccludingLights,
+          radialLightCount: lightingPerformance.radialLights,
+          coneLightCount: lightingPerformance.coneLights,
+          lightShadowQuadCount: lightingPerformance.shadowQuads,
+          lightFalloffQuadCount: lightingPerformance.falloffQuads,
+          lightingCommandCount: lightingPerformance.commandCount,
+          lightMapPixelCount: lightingPerformance.lightMapPixels,
+          lightingScratchPixelCount: lightingPerformance.scratchPixels,
+          newNetworkSnapshotCount: clientMetricsActive && clientPerformance.newSnapshot ? 1 : 0,
+        },
+      },
+      context: {
+        localAlive: this.localPlayerState.alive,
+        aimVisible: showAim,
+        scopeActive: scopeProgress > 0.005,
+        utilityPlacementActive: utilityPlacement !== undefined,
+        ultimatePlacementActive: ultimatePlacement !== undefined,
+        optionsOpen,
+        pageVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
+        documentFocused: typeof document === 'undefined' || document.hasFocus(),
+        roundElapsedMs: runtimePhase === 'arena' ? nowSynchronized - bridge.getArenaStartTime() : null,
+        weapon1Id: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? null,
+        weapon2Id: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? null,
+        utilityId: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? null,
+        ultimateId: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? null,
+      },
+      lightPresetCounts: lightingPerformance.presetCounts,
+      filterBreakdown: sceneCounts.filterBreakdown,
+      sceneBreakdown,
+    });
   }
 
   // ── Network events ────────────────────────────────────────────────────────
@@ -1776,16 +1884,29 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private sampleScenePerformanceCounts(nowMs: number): typeof this.scenePerformanceCounts {
-    if (nowMs - this.lastScenePerformanceCountAtMs < 250) return this.scenePerformanceCounts;
+    if (nowMs - this.lastScenePerformanceCountAtMs < 250) {
+      return { ...this.scenePerformanceCounts, scanMs: 0 };
+    }
 
+    const scanStartedAt = performance.now();
     let visibleObjectCount = 0;
+    let willRenderObjectCount = 0;
+    let inCameraBoundsObjectCount = 0;
+    let hiddenObjectCount = 0;
     let particleEmitterCount = 0;
     let aliveParticleCount = 0;
     let activeFilterCount = 0;
+    let internalFilterCount = 0;
+    let externalFilterCount = 0;
+    let filteredObjectCount = 0;
+    const filterTypes = new Map<string, number>();
+    const camera = this.cameras.main;
     for (const child of this.children.list) {
       const gameObject = child as Phaser.GameObjects.GameObject & {
         visible?: boolean;
         type?: string;
+        willRender?: (camera: Phaser.Cameras.Scene2D.Camera) => boolean;
+        getBounds?: () => Phaser.Geom.Rectangle;
         getAliveParticleCount?: () => number;
         filters?: {
           internal?: { getActive?: () => unknown[] };
@@ -1793,19 +1914,62 @@ export class ArenaScene extends Phaser.Scene {
         };
       };
       if (gameObject.visible !== false) visibleObjectCount += 1;
+      else hiddenObjectCount += 1;
+      if (gameObject.willRender?.(camera) ?? gameObject.visible !== false) willRenderObjectCount += 1;
+      if (gameObject.getBounds) {
+        try {
+          if (Phaser.Geom.Intersects.RectangleToRectangle(gameObject.getBounds(), camera.worldView)) {
+            inCameraBoundsObjectCount += 1;
+          }
+        } catch {
+          // Einzelne Spezialobjekte koennen waehrend ihres Abbaus keine Bounds mehr liefern.
+        }
+      }
       if (gameObject.type === 'ParticleEmitter' || gameObject.getAliveParticleCount) {
         particleEmitterCount += 1;
         aliveParticleCount += gameObject.getAliveParticleCount?.() ?? 0;
       }
-      activeFilterCount += gameObject.filters?.internal?.getActive?.().length ?? 0;
-      activeFilterCount += gameObject.filters?.external?.getActive?.().length ?? 0;
+      const internal = gameObject.filters?.internal?.getActive?.() ?? [];
+      const external = gameObject.filters?.external?.getActive?.() ?? [];
+      internalFilterCount += internal.length;
+      externalFilterCount += external.length;
+      if (internal.length + external.length > 0) filteredObjectCount += 1;
+      for (const filter of [...internal, ...external]) {
+        const typedFilter = filter as { type?: string; constructor?: { name?: string } };
+        const label = typedFilter.type ?? typedFilter.constructor?.name ?? 'UnknownFilter';
+        filterTypes.set(label, (filterTypes.get(label) ?? 0) + 1);
+      }
     }
+    const cameraFilters = (camera as typeof camera & {
+      filters?: {
+        internal?: { getActive?: () => unknown[] };
+        external?: { getActive?: () => unknown[] };
+      };
+    }).filters;
+    const cameraFilterCount = (cameraFilters?.internal?.getActive?.().length ?? 0)
+      + (cameraFilters?.external?.getActive?.().length ?? 0);
+    activeFilterCount = internalFilterCount + externalFilterCount + cameraFilterCount;
+    const filterBreakdown = filterTypes.size > 0
+      ? [...filterTypes.entries()]
+        .sort((left, right) => right[1] - left[1])
+        .map(([name, count]) => `${name}:${count}`)
+        .join(', ')
+      : null;
 
     this.scenePerformanceCounts = {
       visibleObjectCount,
+      willRenderObjectCount,
+      inCameraBoundsObjectCount,
+      hiddenObjectCount,
       particleEmitterCount,
       aliveParticleCount,
       activeFilterCount,
+      internalFilterCount,
+      externalFilterCount,
+      filteredObjectCount,
+      cameraFilterCount,
+      scanMs: performance.now() - scanStartedAt,
+      filterBreakdown,
     };
     this.lastScenePerformanceCountAtMs = nowMs;
     return this.scenePerformanceCounts;
@@ -1823,6 +1987,14 @@ export class ArenaScene extends Phaser.Scene {
       ? gl.getParameter(debugRendererInfo.UNMASKED_VENDOR_WEBGL)
       : null;
     const nav = typeof navigator === 'undefined' ? null : navigator as Navigator & { deviceMemory?: number };
+    const glLimits = gl ? {
+      maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+      maxTextureImageUnits: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS),
+      maxVertexTextureImageUnits: gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS),
+      maxCombinedTextureImageUnits: gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS),
+      maxViewportDims: Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array),
+    } : null;
 
     // Nur Geraete- und Renderer-Daten. Rolle, Qualitaet, Modus und Map wechseln waehrend einer
     // Messung und stehen deshalb pro Fenster sowie gebuendelt in `recordingScope` des Reports.
@@ -1830,8 +2002,22 @@ export class ArenaScene extends Phaser.Scene {
       renderer: this.game.renderer.type === Phaser.WEBGL ? 'webgl' : 'canvas',
       gpuRenderer,
       gpuVendor,
+      webglVersion: gl?.getParameter(gl.VERSION) ?? null,
+      shadingLanguageVersion: gl?.getParameter(gl.SHADING_LANGUAGE_VERSION) ?? null,
+      supportedExtensions: gl?.getSupportedExtensions() ?? [],
+      glLimits,
       canvas: { width: canvas.width, height: canvas.height },
+      screen: typeof window === 'undefined'
+        ? null
+        : {
+          width: window.screen.width,
+          height: window.screen.height,
+          availWidth: window.screen.availWidth,
+          availHeight: window.screen.availHeight,
+        },
       devicePixelRatio: typeof window === 'undefined' ? 1 : window.devicePixelRatio,
+      pageVisibility: typeof document === 'undefined' ? null : document.visibilityState,
+      documentFocused: typeof document === 'undefined' ? null : document.hasFocus(),
       userAgent: nav?.userAgent ?? null,
       platform: nav?.platform ?? null,
       hardwareConcurrency: nav?.hardwareConcurrency ?? null,
