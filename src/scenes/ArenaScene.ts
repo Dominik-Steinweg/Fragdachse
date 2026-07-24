@@ -76,6 +76,7 @@ import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
+import { PerformanceAblationController } from './arena/PerformanceAblation';
 import { PerformanceDiagnosticsOverlay } from '../ui/PerformanceDiagnosticsOverlay';
 
 import {
@@ -207,6 +208,7 @@ export class ArenaScene extends Phaser.Scene {
   private lastObservedGamePhase: GamePhase | null = null;
   private lastLobbySidebarSignature: string | null = null;
   private runtimeProfiler: ArenaRuntimeProfiler | null = null;
+  private performanceAblation: PerformanceAblationController | null = null;
   private graphicsQuality!: GraphicsQualityController;
   private lastScenePerformanceCountAtMs = Number.NEGATIVE_INFINITY;
   private scenePerformanceCounts = {
@@ -305,12 +307,18 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.graphicsQuality.destroy());
     this.runtimeProfiler = new ArenaRuntimeProfiler();
     this.runtimeProfiler.attachGame(this.game);
+    this.performanceAblation = new PerformanceAblationController(this, {
+      getQualityController: () => this.graphicsQuality,
+      getShadowSystem: () => this.renderers?.shadow ?? null,
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.performanceAblation?.destroy());
     const unsubscribePerformanceQuality = this.graphicsQuality.subscribe((profile, previous) => {
       this.runtimeProfiler?.recordQualityChange(previous, profile.level);
     });
     this.performanceDiagnosticsOverlay = new PerformanceDiagnosticsOverlay(
       this.runtimeProfiler,
       () => this.describePerformanceEnvironment(),
+      this.performanceAblation,
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       unsubscribePerformanceQuality();
@@ -831,6 +839,9 @@ export class ArenaScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const frameStartMs = performance.now();
+    // Vor allem anderen, damit die Diagnose-Zaehlungen weiter unten den abgeschalteten
+    // Zustand sehen und nicht den des Vorframes.
+    this.performanceAblation?.update();
     let primaryStepMs = 0;
     let clientRendererSyncMs = 0;
     let inputCameraMs = 0;
@@ -1283,6 +1294,7 @@ export class ArenaScene extends Phaser.Scene {
       mapId: isCoopDefenseMode(bridge.getGameMode())
         ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
         : null,
+      ablation: this.performanceAblation?.getCurrentCategory() ?? 'baseline',
       rawDeltaMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
       deltaMs: delta,
       updateMs,

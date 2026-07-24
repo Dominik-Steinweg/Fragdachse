@@ -29,6 +29,7 @@ interface TurretVisualState {
  */
 export class RockVisualHelper {
   private readonly turretVisuals = new Map<number, TurretVisualState>();
+  private obstaclesDirty = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -103,7 +104,7 @@ export class RockVisualHelper {
     }
 
     this.updateRockVisualById(rock.id, rock.hp);
-    if (refreshStaticShadows) this.refreshObstacleVisuals();
+    if (refreshStaticShadows) this.markObstaclesDirty();
 
     if (playSpawnFx) {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
@@ -140,7 +141,7 @@ export class RockVisualHelper {
       ArenaBuilder.destroyRock(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.rockGroup, rock.id);
       this.ctx.arenaResult.rockGrid.remove(rock.gridX, rock.gridY);
       this.destroyTurretVisual(rock.id);
-      this.refreshObstacleVisuals();
+      this.markObstaclesDirty();
       return;
     }
     ArenaBuilder.destroyRockAndRetile(
@@ -150,7 +151,7 @@ export class RockVisualHelper {
       this.ctx.currentLayout.rocks,
       rock.id,
     );
-    this.refreshObstacleVisuals();
+    this.markObstaclesDirty();
   }
 
   updateRockVisualById(rockId: number, hp: number): void {
@@ -228,7 +229,7 @@ export class RockVisualHelper {
       rockId,
     );
     this.ctx.rockRegistry?.remove(rockId);
-    this.refreshObstacleVisuals();
+    this.markObstaclesDirty();
     this.ctx.powerUpSystem?.onRockDestroyed(rockId);
     const rockCell = this.ctx.currentLayout.rocks[rockId];
     emitArenaMapGridChanged(this.scene.game.events, {
@@ -317,7 +318,7 @@ export class RockVisualHelper {
   }
 
   rebuildStaticShadows(): void {
-    this.refreshObstacleVisuals();
+    this.markObstaclesDirty();
   }
 
   spawnTurretDeathCloud(rock: SyncedPlaceableRock): void {
@@ -412,6 +413,23 @@ export class RockVisualHelper {
    * (`arenaResult.rockObjects`, `placementSystem.getAllRuntimeRocks()`), es gibt keine
    * zweite Liste zerstörbarer Felsen.
    */
+  /**
+   * Sammelstelle statt Sofortaufruf: Eine Explosion zerstoert typischerweise mehrere Felsen
+   * und wuerde sonst pro Fels einen vollstaendigen Rebuild aller statischen Schatten
+   * ausloesen. Der Rebuild laeuft deshalb einmal am Ende des laufenden Frames.
+   *
+   * Bewusst ein Frame-Sammelpunkt und kein Zeit-Timer: Eine Verzoegerung von z.B. 200 ms
+   * wuerde den Schatten sichtbar laenger stehen lassen als den zerstoerten Fels.
+   */
+  private markObstaclesDirty(): void {
+    if (this.obstaclesDirty) return;
+    this.obstaclesDirty = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.obstaclesDirty = false;
+      this.refreshObstacleVisuals();
+    });
+  }
+
   private refreshObstacleVisuals(): void {
     this.shadowSystem?.rebuildArenaStaticShadows(
       this.ctx.currentLayout,

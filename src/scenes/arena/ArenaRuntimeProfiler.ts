@@ -4,6 +4,7 @@ import {
   DEBUG_RUNTIME_PERF_METRICS_WINDOW_MS,
 } from '../../config';
 import type { GraphicsQuality } from '../../graphics/GraphicsQuality';
+import { ABLATION_CODES, ABLATION_LABELS, type AblationCategory, type AblationSegment } from './PerformanceAblation';
 
 const MAX_RECORDING_MS = 30 * 60 * 1000;
 const MAX_RAW_FRAME_SAMPLES = 60_000;
@@ -157,6 +158,11 @@ export interface ArenaRuntimeSample {
   quality: GraphicsQuality;
   mode: string;
   mapId: string | null;
+  /**
+   * Aktives Ablations-Segment des Diagnosemodus. Teil der Fenster-Metadaten, damit ein Fenster
+   * nie zwei Segmente mischt und die Statistik je Segment direkt auswertbar ist.
+   */
+  ablation: AblationCategory;
   /** Unglaettete reale Zeit seit dem vorherigen Phaser-Step. */
   rawDeltaMs: number;
   /** Von Phaser geglaettetes Spiel-Delta. Nicht fuer echte FPS oder Hiccup-Spitzen verwenden. */
@@ -237,6 +243,8 @@ export interface ArenaRuntimeWindowSummary {
   quality: GraphicsQuality;
   mode: string;
   mapId: string | null;
+  /** Ablations-Segment dieses Fensters; `baseline`, wenn der Diagnosemodus aus ist. */
+  ablation: AblationCategory;
   sampleCount: number;
   /** Aus dem unglaetteten Phaser-`rawDelta`. */
   fps: number;
@@ -371,6 +379,16 @@ export interface ArenaPerformanceReport {
   environment: Record<string, unknown>;
   recordingScope: PerformanceRecordingScope;
   qualityChanges: PerformanceQualityChange[];
+  /**
+   * Ablations-Diagnose. `segments` ist leer, wenn der Modus nicht lief; dann ist die gesamte
+   * Aufzeichnung `baseline`.
+   */
+  ablation: {
+    segments: AblationSegment[];
+    segmentMs: number;
+    codes: Record<AblationCategory, number>;
+    labels: Record<AblationCategory, string>;
+  };
   windows: ArenaRuntimeWindowSummary[];
   contextChanges: PerformanceContextChange[];
   frameSeries: {
@@ -505,6 +523,7 @@ interface RuntimeWindow {
   quality: GraphicsQuality;
   mode: string;
   mapId: string | null;
+  ablation: AblationCategory;
   samples: RecordedSample[];
   latestSceneBreakdown: string | null;
   latestFilterBreakdown: string | null;
@@ -552,6 +571,7 @@ const PHASE_CODES: Record<RuntimePhase, number> = {
 const FRAME_SERIES_COLUMNS = [
   'atMs',
   'phaseCode',
+  'ablationCode',
   ...TIMING_KEYS,
   ...COUNT_KEYS,
   ...DETAIL_TIMING_KEYS.map((key) => `detail.${key}`),
@@ -712,6 +732,8 @@ export class ArenaRuntimeProfiler {
   private autoStopped = false;
   private readonly recordedWindows: ArenaRuntimeWindowSummary[] = [];
   private readonly qualityChanges: PerformanceQualityChange[] = [];
+  private ablationSegments: AblationSegment[] = [];
+  private ablationSegmentMs = 0;
   private readonly contextChanges: PerformanceContextChange[] = [];
   private readonly rawFrameRows: number[][] = [];
   private rawFrameRowsTruncated = false;
@@ -896,7 +918,8 @@ export class ArenaRuntimeProfiler {
       && this.metricsWindow.phase === sample.phase
       && this.metricsWindow.quality === sample.quality
       && this.metricsWindow.mode === sample.mode
-      && this.metricsWindow.mapId === sample.mapId;
+      && this.metricsWindow.mapId === sample.mapId
+      && this.metricsWindow.ablation === sample.ablation;
     if (this.metricsWindow && !metadataMatches) this.finishWindow(now);
     const window = metadataMatches && this.metricsWindow
       ? this.metricsWindow
@@ -962,6 +985,8 @@ export class ArenaRuntimeProfiler {
     this.autoStopped = false;
     this.recordedWindows.length = 0;
     this.qualityChanges.length = 0;
+    this.ablationSegments = [];
+    this.ablationSegmentMs = 0;
     this.contextChanges.length = 0;
     this.rawFrameRows.length = 0;
     this.rawFrameRowsTruncated = false;
@@ -1012,6 +1037,19 @@ export class ArenaRuntimeProfiler {
     this.qualityChanges.push({ atMs: performance.now() - this.recordingStartedAtMs, from, to });
   }
 
+  /**
+   * Uebernimmt die abgeschlossenen Ablations-Segmente in den Export. Die Segmentgrenzen sind
+   * relativ zum Aufzeichnungsstart, passend zu `frameSeries.rows[].atMs`.
+   */
+  setAblationSegments(segments: readonly AblationSegment[], segmentMs: number): void {
+    this.ablationSegments = segments.map((segment) => ({
+      atMs: Math.max(0, segment.atMs - this.recordingStartedAtMs),
+      durationMs: segment.durationMs,
+      category: segment.category,
+    }));
+    this.ablationSegmentMs = segmentMs;
+  }
+
   isRecording(): boolean {
     return this.recording;
   }
@@ -1049,6 +1087,12 @@ export class ArenaRuntimeProfiler {
         mapIds: uniqueInOrder(this.recordedWindows.map((window) => window.mapId)),
       },
       qualityChanges: [...this.qualityChanges],
+      ablation: {
+        segments: [...this.ablationSegments],
+        segmentMs: this.ablationSegmentMs,
+        codes: { ...ABLATION_CODES },
+        labels: { ...ABLATION_LABELS },
+      },
       windows: [...this.recordedWindows],
       contextChanges: [...this.contextChanges],
       frameSeries: {
@@ -1164,6 +1208,7 @@ export class ArenaRuntimeProfiler {
       quality: window.quality,
       mode: window.mode,
       mapId: window.mapId,
+      ablation: window.ablation,
       sampleCount: window.samples.length,
       fps: rawDelta.avg > 0 ? 1000 / rawDelta.avg : 0,
       smoothedFps: timings.deltaMs.avg > 0 ? 1000 / timings.deltaMs.avg : 0,
@@ -1212,6 +1257,7 @@ export class ArenaRuntimeProfiler {
       quality: sample.quality,
       mode: sample.mode,
       mapId: sample.mapId,
+      ablation: sample.ablation,
       samples: [],
       latestSceneBreakdown: null,
       latestFilterBreakdown: null,
@@ -1446,6 +1492,7 @@ export class ArenaRuntimeProfiler {
     this.rawFrameRows.push([
       sample.atMs,
       PHASE_CODES[sample.phase],
+      ABLATION_CODES[sample.ablation],
       ...TIMING_KEYS.map((key) => sample[key]),
       ...COUNT_KEYS.map((key) => sample[key]),
       ...DETAIL_TIMING_KEYS.map((key) => sample.detailTimings[key]),

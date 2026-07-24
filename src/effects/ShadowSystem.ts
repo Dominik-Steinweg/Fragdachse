@@ -37,9 +37,26 @@ interface StaticShadowLayoutBuildOptions {
   readonly rockVisibilityPredicate?: (index: number) => boolean;
 }
 
+/** Welche Quelle die statischen Footprints einer Ebene liefert – bestimmt, wann neu gebacken wird. */
+type StaticShadowGroup = 'rocks' | 'trees';
+
 interface ShadowLayerBucket {
   readonly staticGraphics: Phaser.GameObjects.Graphics;
   readonly dynamicGraphics: Phaser.GameObjects.Graphics;
+  /**
+   * Die statischen Footprints werden einmalig in diese RenderTexture gebacken; `staticGraphics`
+   * dient danach nur noch als Zeichenpuffer und bleibt unsichtbar. Ohne das Backen rastert die
+   * GPU pro Frame alle gestapelten Alpha-Fuellungen neu – bei Fels 8 und Krone 32 Lagen je
+   * Schattenwerfer ist das der groesste gemessene Einzelposten im Frame.
+   */
+  baked: Phaser.GameObjects.RenderTexture | null;
+  group: StaticShadowGroup | null;
+  /**
+   * Ob die gebackene Textur gerade Schatten enthaelt. Eine geleerte Textur ist rein weiss und
+   * damit fuer MULTIPLY wirkungslos – sie wird dennoch ausgeblendet, damit sie keine
+   * Vollflaechen-Blendpass pro Frame kostet.
+   */
+  bakedHasContent: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +90,8 @@ export class ShadowSystem {
   private unsubscribeQuality: (() => void) | null = null;
   private lastStaticLayout: ArenaLayout | null = null;
   private lastStaticOptions: StaticShadowLayoutBuildOptions = {};
+  /** Von aussen gesetzte Sichtbarkeit; kombiniert sich mit dem Inhalt der gebackenen Layer. */
+  private shadowsVisible = true;
 
   // Reusable point buffers — mutated in-place each draw call to avoid
   // allocating hundreds of Vector2 objects per frame.
@@ -97,7 +116,8 @@ export class ShadowSystem {
   setArenaMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
     this.arenaMask = mask;
     for (const bucket of this.layers.values()) {
-      this.applyMask(bucket.staticGraphics);
+      // `staticGraphics` rendert nie selbst; die Maske traegt die gebackene Textur.
+      if (bucket.baked) this.applyMask(bucket.baked);
       this.applyMask(bucket.dynamicGraphics);
     }
   }
@@ -116,10 +136,16 @@ export class ShadowSystem {
   }
 
   setVisible(visible: boolean): void {
+    this.shadowsVisible = visible;
     for (const bucket of this.layers.values()) {
-      bucket.staticGraphics.setVisible(visible);
+      // `staticGraphics` bleibt dauerhaft unsichtbar – sichtbar ist die gebackene Textur.
+      this.syncBakedVisibility(bucket);
       bucket.dynamicGraphics.setVisible(visible);
     }
+  }
+
+  private syncBakedVisibility(bucket: ShadowLayerBucket): void {
+    bucket.baked?.setVisible(this.shadowsVisible && bucket.bakedHasContent);
   }
 
   rebuildStaticLayoutShadows(
@@ -128,8 +154,20 @@ export class ShadowSystem {
   ): void {
     this.lastStaticLayout = layout;
     this.lastStaticOptions = options;
-    this.clearStatic();
-    if (!layout) return;
+    if (!layout) {
+      this.clearStatic();
+      return;
+    }
+    this.rebuildStaticRockShadows(layout, options);
+    this.rebuildStaticTreeShadows(layout, options);
+  }
+
+  /**
+   * Fels- und Turret-Schatten. Als einzige statische Gruppe veraenderlich, weil Felsen
+   * zerstoert und Turrets gesetzt werden – deshalb eine eigene Gruppe mit eigenem Bake.
+   */
+  private rebuildStaticRockShadows(layout: ArenaLayout, options: StaticShadowLayoutBuildOptions): void {
+    this.clearStaticGroup('rocks');
 
     const runtimeById = new Map<number, SyncedPlaceableRock>();
     for (const rock of options.runtimeRocks ?? []) {
@@ -148,15 +186,31 @@ export class ShadowSystem {
       const preset = runtime?.kind === 'turret' ? SHADOW_CASTERS.turret : SHADOW_CASTERS.rock;
       const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      this.drawFootprint(this.getLayer(preset.layerDepth).staticGraphics, worldX, worldY, preset);
+      this.drawFootprint(this.getLayer(preset.layerDepth, 'rocks').staticGraphics, worldX, worldY, preset);
     }
+
+    this.bakeStaticGroup('rocks');
+  }
+
+  /**
+   * Baum-Schatten. `layout.trees` kennt kein Sichtbarkeits-Praedikat – Baeume werden nie
+   * entfernt, die Gruppe ist also unveraenderlich und wird nach dem Aufbau nie neu gebacken.
+   * Gleichzeitig ist sie die teuerste: die Krone stapelt 32 Lagen.
+   */
+  private rebuildStaticTreeShadows(layout: ArenaLayout, options: StaticShadowLayoutBuildOptions): void {
+    this.clearStaticGroup('trees');
+
+    const offsetX = options.offsetX ?? ARENA_OFFSET_X;
+    const offsetY = options.offsetY ?? ARENA_OFFSET_Y;
 
     for (const tree of layout.trees) {
       const worldX = offsetX + tree.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = offsetY + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
-      this.drawFootprint(this.getLayer(SHADOW_CASTERS.trunk.layerDepth).staticGraphics, worldX, worldY, SHADOW_CASTERS.trunk);
-      this.drawFootprint(this.getLayer(SHADOW_CASTERS.canopy.layerDepth).staticGraphics, worldX, worldY, SHADOW_CASTERS.canopy);
+      this.drawFootprint(this.getLayer(SHADOW_CASTERS.trunk.layerDepth, 'trees').staticGraphics, worldX, worldY, SHADOW_CASTERS.trunk);
+      this.drawFootprint(this.getLayer(SHADOW_CASTERS.canopy.layerDepth, 'trees').staticGraphics, worldX, worldY, SHADOW_CASTERS.canopy);
     }
+
+    this.bakeStaticGroup('trees');
   }
 
   rebuildArenaStaticShadows(
@@ -169,12 +223,25 @@ export class ShadowSystem {
       return;
     }
 
-    this.rebuildStaticLayoutShadows(layout, {
+    const options: StaticShadowLayoutBuildOptions = {
       offsetX: ARENA_OFFSET_X,
       offsetY: ARENA_OFFSET_Y,
       runtimeRocks,
       rockVisibilityPredicate: (index) => Boolean(arenaResult.rockObjects[index]?.active),
-    });
+    };
+
+    // Dies ist der Invalidierungspfad: Er laeuft, wenn sich die Hindernisse geaendert haben.
+    // Solange dasselbe Layout gilt, koennen die Baum-Schatten stehen bleiben – sie sind
+    // unveraenderlich und mit 32 Lagen je Krone der teuerste Teil des Bakes.
+    const sameLayout = this.lastStaticLayout === layout;
+    this.lastStaticLayout = layout;
+    this.lastStaticOptions = options;
+    if (sameLayout) {
+      this.rebuildStaticRockShadows(layout, options);
+      return;
+    }
+    this.rebuildStaticRockShadows(layout, options);
+    this.rebuildStaticTreeShadows(layout, options);
   }
 
   syncDynamicShadows(
@@ -223,10 +290,8 @@ export class ShadowSystem {
   }
 
   clear(): void {
-    for (const bucket of this.layers.values()) {
-      bucket.staticGraphics.clear();
-      bucket.dynamicGraphics.clear();
-    }
+    this.clearStatic();
+    this.clearDynamic();
     this.lastStaticLayout = null;
     this.lastStaticOptions = {};
   }
@@ -235,6 +300,7 @@ export class ShadowSystem {
     for (const bucket of this.layers.values()) {
       bucket.staticGraphics.destroy();
       bucket.dynamicGraphics.destroy();
+      bucket.baked?.destroy();
     }
     this.layers.clear();
     this.unsubscribeQuality?.();
@@ -243,9 +309,21 @@ export class ShadowSystem {
     this.lastStaticOptions = {};
   }
 
+  /**
+   * Leert Zeichenpuffer **und** gebackene Texturen. Beides muss zusammen passieren: Der Puffer
+   * allein zu leeren liesse die gebackenen Schatten stehen – sie ueberlebten dann den
+   * Arena-Teardown und blieben als Raster in der Lobby sichtbar.
+   */
   private clearStatic(): void {
     for (const bucket of this.layers.values()) {
       bucket.staticGraphics.clear();
+      if (bucket.baked) {
+        bucket.baked.clear();
+        bucket.baked.fill(0xffffff, 1);
+        bucket.baked.render();
+      }
+      bucket.bakedHasContent = false;
+      this.syncBakedVisibility(bucket);
     }
   }
 
@@ -453,31 +531,88 @@ export class ShadowSystem {
     }
   }
 
-  private getLayer(depth: number): ShadowLayerBucket {
+  private getLayer(depth: number, group: StaticShadowGroup | null = null): ShadowLayerBucket {
     const key = depth.toFixed(3);
     const existing = this.layers.get(key);
-    if (existing) return existing;
+    if (existing) {
+      if (group) existing.group = group;
+      return existing;
+    }
 
+    // Der statische Puffer wird gebacken und nie selbst gerendert: keine Maske noetig, die
+    // traegt stattdessen die RenderTexture.
     const staticGraphics = this.scene.add.graphics();
     staticGraphics.setDepth(depth);
     staticGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
-    this.applyMask(staticGraphics);
+    staticGraphics.setVisible(false);
 
     const dynamicGraphics = this.scene.add.graphics();
     dynamicGraphics.setDepth(depth + 0.001);
     dynamicGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.applyMask(dynamicGraphics);
 
-    const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics };
+    const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics, baked: null, group, bakedHasContent: false };
     this.layers.set(key, bucket);
     return bucket;
   }
 
-  private applyMask(graphics: Phaser.GameObjects.Graphics): void {
+  /**
+   * Backt den statischen Puffer einer Ebene in eine RenderTexture.
+   *
+   * Die Textur startet **deckend weiss** und die Footprints werden mit ihrem
+   * MULTIPLY-Blendmode hineingezeichnet. Damit enthaelt sie exakt das Produkt der gestapelten
+   * Lagen, und ein abschliessendes MULTIPLY der Textur auf die Szene ergibt dasselbe Bild wie
+   * das bisherige Stapeln direkt auf die Szene. Weiss ist dabei das neutrale Element – ausserhalb
+   * der Schatten aendert die Textur nichts. Normales Alpha-Blending waere hier *nicht*
+   * gleichwertig, weil die Schattenfarbe (0x05070b) nicht exakt schwarz ist.
+   */
+  private bakeLayer(depth: number, bucket: ShadowLayerBucket): void {
+    const bounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
+    const width = Math.max(1, Math.ceil(bounds.maxX - bounds.minX));
+    const height = Math.max(1, Math.ceil(bounds.maxY - bounds.minY));
+
+    let baked = bucket.baked;
+    if (!baked) {
+      baked = this.scene.add.renderTexture(bounds.minX, bounds.minY, width, height);
+      baked.setOrigin(0, 0);
+      baked.setDepth(depth);
+      baked.setBlendMode(Phaser.BlendModes.MULTIPLY);
+      baked.camera.setScroll(bounds.minX, bounds.minY);
+      this.applyMask(baked);
+      bucket.baked = baked;
+    }
+
+    baked.clear();
+    baked.fill(0xffffff, 1);
+    // draw() rendert das Objekt mit seinem eigenen Blendmode; sichtbar muss es dafuer sein.
+    bucket.staticGraphics.setVisible(true);
+    baked.draw(bucket.staticGraphics);
+    bucket.staticGraphics.setVisible(false);
+    baked.render();
+    bucket.bakedHasContent = true;
+    this.syncBakedVisibility(bucket);
+  }
+
+  /** Zeichenpuffer und gebackene Textur einer Gruppe zuruecksetzen. */
+  private clearStaticGroup(group: StaticShadowGroup): void {
+    for (const bucket of this.layers.values()) {
+      if (bucket.group !== group) continue;
+      bucket.staticGraphics.clear();
+    }
+  }
+
+  private bakeStaticGroup(group: StaticShadowGroup): void {
+    for (const [key, bucket] of this.layers) {
+      if (bucket.group !== group) continue;
+      this.bakeLayer(Number(key), bucket);
+    }
+  }
+
+  private applyMask(target: Phaser.GameObjects.Graphics | Phaser.GameObjects.RenderTexture): void {
     if (this.arenaMask) {
-      graphics.setMask(this.arenaMask);
+      target.setMask(this.arenaMask);
     } else {
-      graphics.clearMask(false);
+      target.clearMask(false);
     }
   }
 

@@ -4,6 +4,7 @@ import type {
   ArenaRuntimeProfiler,
   ArenaRuntimeWindowSummary,
 } from '../scenes/arena/ArenaRuntimeProfiler';
+import { ABLATION_LABELS, type PerformanceAblationController } from '../scenes/arena/PerformanceAblation';
 
 const REFRESH_INTERVAL_MS = 500;
 
@@ -77,9 +78,12 @@ export class PerformanceDiagnosticsOverlay {
   private exportButton: HTMLButtonElement | null = null;
   private timer: number | null = null;
 
+  private ablationButton: HTMLButtonElement | null = null;
+
   constructor(
     private readonly profiler: ArenaRuntimeProfiler,
     private readonly getEnvironment: () => Record<string, unknown>,
+    private readonly ablation: PerformanceAblationController | null = null,
   ) {}
 
   toggle(): void {
@@ -118,9 +122,15 @@ export class PerformanceDiagnosticsOverlay {
     controls.style.gap = '8px';
     controls.style.marginBottom = '8px';
     this.startButton = this.createButton('Messung starten', () => this.profiler.startRecording(this.getEnvironment()));
-    this.stopButton = this.createButton('Messung stoppen', () => this.profiler.stopRecording());
+    this.stopButton = this.createButton('Messung stoppen', () => this.stopRecording());
     this.exportButton = this.createButton('JSON exportieren', () => this.exportJson());
     controls.append(this.startButton, this.stopButton, this.exportButton);
+    if (this.ablation) {
+      this.ablationButton = this.createButton('Diagnose-Trace starten', () => this.startAblationRecording());
+      this.ablationButton.title = 'Startet Messung + Ablationsmodus: schaltet reihum einzelne '
+        + 'Darstellungsaspekte ab. Das Spiel ist dabei absichtlich nicht normal spielbar.';
+      controls.append(this.ablationButton);
+    }
 
     this.status = document.createElement('div');
     this.status.style.color = '#b7c7b7';
@@ -150,6 +160,7 @@ export class PerformanceDiagnosticsOverlay {
     this.startButton = null;
     this.stopButton = null;
     this.exportButton = null;
+    this.ablationButton = null;
   }
 
   destroy(): void {
@@ -176,6 +187,12 @@ export class PerformanceDiagnosticsOverlay {
   private render(): void {
     if (!this.output || !this.status) return;
     const recording = this.profiler.isRecording();
+    // Der Profiler stoppt nach 30 Minuten selbst. Dann die Ablation mitbeenden und ihre
+    // Segmente noch in den Report uebernehmen, damit der Export vollstaendig bleibt.
+    if (!recording && this.ablation?.isActive()) {
+      this.ablation.stop();
+      this.profiler.setAblationSegments(this.ablation.getSegments(), this.ablation.getSegmentMs());
+    }
     this.status.textContent = recording
       ? `● Messung läuft ${formatDuration(this.profiler.getRecordingDurationMs())} (max. 30:00)`
       : this.profiler.canExport() ? 'Messung beendet · JSON kann exportiert werden.' : 'Live-Ansicht · Messung noch nicht gestartet.';
@@ -183,7 +200,35 @@ export class PerformanceDiagnosticsOverlay {
     if (this.startButton) this.startButton.disabled = recording;
     if (this.stopButton) this.stopButton.disabled = !recording;
     if (this.exportButton) this.exportButton.disabled = !this.profiler.canExport();
-    this.output.textContent = buildSummaryLines(this.profiler.getLatestSummary()).join('\n');
+    if (this.ablationButton) this.ablationButton.disabled = recording;
+    const lines = buildSummaryLines(this.profiler.getLatestSummary());
+    if (this.ablation?.isActive()) {
+      const category = this.ablation.getCurrentCategory();
+      lines.unshift(
+        `◆ ABLATION: ${ABLATION_LABELS[category]}`
+        + (category === 'baseline' ? '' : ' — AUS')
+        + ` · Segment ${(this.ablation.getSegmentMs() / 1000).toFixed(0)}s`
+        + ` · voller Zyklus ${(this.ablation.getCycleDurationMs() / 1000).toFixed(0)}s`,
+        '',
+      );
+    }
+    this.output.textContent = lines.join('\n');
+  }
+
+  /** Ablation und Aufzeichnung starten immer gemeinsam – ohne Trace hat die Ablation keinen Zweck. */
+  private startAblationRecording(): void {
+    if (!this.ablation) return;
+    this.profiler.startRecording(this.getEnvironment());
+    this.ablation.start();
+  }
+
+  /** Beim Stoppen die Segmentliste in den Report uebernehmen, bevor die Aufzeichnung endet. */
+  private stopRecording(): void {
+    if (this.ablation?.isActive()) {
+      this.ablation.stop();
+      this.profiler.setAblationSegments(this.ablation.getSegments(), this.ablation.getSegmentMs());
+    }
+    this.profiler.stopRecording();
   }
 
   private exportJson(): void {

@@ -60,6 +60,16 @@ unsichtbar geschaltet wird – sonst laufen sie durch das ganze Match weiter und
 Filter jeden Frame neu. `BadgerPreview.setVisible()` kapselt das; Aufrufer dürfen die
 Sichtbarkeit deshalb nicht am Sprite vorbei setzen.
 
+Scene-lifetime-Renderer mit Objekt-Pools müssen ihren Pool beim Runden-Teardown auf einen
+Grundstock trimmen. Der Pool darf innerhalb einer Runde bis zum Spitzenbedarf wachsen – sonst
+allokiert er mitten im Gefecht nach –, aber ohne Trimmen bleibt die Spitze einer Runde für die
+gesamte Sitzung als unsichtbare Objekte in der Display-Liste liegen und wird auch in der Lobby
+jeden Frame durch Update- und Depth-Sort-Pässe gezogen. Betroffen waren der Heat-Haze-Pool des
+`FlamethrowerUpgradeRenderer` und der Pfützen-Pool des `SlimeTrailRenderer`; beide trimmen jetzt
+in ihrem `clear()`, das der `ArenaLifecycleCoordinator` beim Teardown aufruft. Nur `train` und
+`translocatorTeleport` im `RendererBundle` sind round-scoped, alle anderen Renderer überleben die
+Runde – bei ihnen ist dieses Muster zu prüfen.
+
 Pooling gehört an homogene, kurzlebige Visuals: Rocket-Smoke verwendet einen gemeinsamen,
 vorreservierten `ParticleEmitter`, dessen Partikel Phaser intern wiederverwendet. Die
 autoritativen Physik-Shapes werden bewusst nicht gepoolt. Rectangle-/Circle-Varianten,
@@ -73,7 +83,129 @@ ihre Spawn-Allokation nicht im gemessenen per-Frame-Hotpath liegt.
 
 Messfenster trennen Frame-Delta, Scene-Update, CPU-Render-Abgabe, Netzwerk-Update/-Flush, Visuals sowie Host-Simulation beziehungsweise Client-Synchronisierung. Dadurch darf ein langsamer Host nicht vorschnell der Grafik zugeschrieben werden. Die Render-Abgabe misst CPU-Zeit zwischen Phasers Pre-/Post-Render-Ereignissen, nicht die vollständige GPU-Zeit, und stammt aus dem vorherigen Frame, weil `update` vor `render` läuft.
 
+## Diagnose-Trace (Ablationsmodus)
+
+Ein normaler Trace zeigt, *wieviel* ein Frame kostet, nicht *wodurch*. Über eine gespielte Runde
+steigen und fallen Partikel, Lichter, Blut und Objektzahl gemeinsam, ihre Korrelationen bleiben
+deshalb schwach (typisch 0,2–0,5) und taugen nicht zur Ursachenzuordnung.
+
+Der Ablationsmodus schaltet stattdessen während der Aufzeichnung reihum je einen
+Darstellungsaspekt für ein Zeitfenster ab und vergleicht ihn mit dem unmittelbar davor
+liegenden Baseline-Fenster. Das Spiel ist dabei absichtlich nicht normal spielbar – es ist ein
+reines Messwerkzeug.
+
+Start über den Knopf **„Diagnose-Trace starten"** in der `T`-Diagnose; er startet Aufzeichnung
+und Ablation gemeinsam. Kategorien: Filter/Glow, Partikel, Lichter, Schatten, Blut, Felsen,
+Bodenfeuer, Projektile, statische Deko, HUD.
+
+Zwei Eigenschaften machen die Zahlen belastbar:
+
+- **Baseline zwischen jeder Ablation.** Die Abfolge ist `baseline → Kategorie → baseline → …`,
+  jede Messung hat also einen frischen Nachbarn und ist gegen langsame Drift (Gegnerzahl,
+  Blutmenge, Rundenfortschritt) robust. Nie zwei Ablationen direkt miteinander vergleichen.
+- **Der Display-Listen-Scan läuft in jedem Segment**, auch in der Baseline und auch dort, wo
+  über Systemschalter abgeschaltet wird. Seine Kosten sind damit in allen Segmenten gleich und
+  fallen aus der Differenz heraus.
+
+`ablation` gehört zu den Fenster-Metadaten, ein Fenster mischt also nie zwei Segmente. Zur
+Auswertung reichen `windows[].ablation` mit den zugehörigen `timings`; `frameSeries` trägt
+zusätzlich die Spalte `ablationCode`, die Legende steht in `ablation.codes`/`ablation.labels`.
+
+### Durchführung
+
+1. Stabile Ausgangslage herstellen: gewünschte Qualitätsstufe wählen, Fenster im Vordergrund
+   lassen und die Auflösung während der Messung nicht ändern.
+2. Für Arena-Zahlen eine Runde mit **gleichbleibender** Action laufen lassen. Nicht mitten in
+   der Messung die Spielsituation grundlegend wechseln – die Baseline-Nachbarschaft fängt
+   Drift ab, aber keine Sprünge.
+3. Mindestdauer: ein voller Zyklus ist `Segmentlänge × (Kategorien × 2 + 1)`, bei 4 s Segmenten
+   also gut **90 Sekunden pro Phase**. Für die Lobby und die Arena getrennt jeweils einen
+   vollen Zyklus abwarten, zusammen also mindestens **3–4 Minuten**.
+4. Besser zwei bis drei Zyklen aufzeichnen. Erst dann lässt sich an der Streuung gleicher
+   Kategorien erkennen, ob ein Unterschied echt oder Rauschen ist.
+5. Stoppen und als JSON exportieren.
+
+### Auswertung
+
+Je Kategorie `gameStepMs`/`renderSubmitMs` des Ablations-Fensters gegen die benachbarte
+Baseline stellen. Die Differenz ist die **obere Schranke** dessen, was diese Kategorie kostet –
+sie enthält immer auch das Wegfallen abhängiger Arbeit. Eine Kategorie ist erst dann ein
+lohnendes Optimierungsziel, wenn ihre Differenz über mehrere Zyklen stabil und deutlich
+größer als die Streuung der Baselines untereinander ist.
+
+Grenzen, die bei der Interpretation gelten:
+
+- `lights` blendet den Lightmap-Composite aus, verhindert aber nicht dessen Erzeugung; der Wert
+  ist die Composite-Kostenschranke, nicht die gesamte Beleuchtung.
+- Die Zuordnung der Objekte läuft heuristisch über Texturschlüssel, Typ und Tiefenband, damit
+  der Produktionscode keine Diagnose-Marker tragen muss. Fehlzuordnungen kosten Messschärfe.
+- Ablation ändert nur die Darstellung, nicht die Simulation. Host-Logik, Physik und Netzwerk
+  laufen unverändert weiter.
+
+## Gebackene statische Schatten
+
+Die statischen Sonnenschatten liegen als gebackene RenderTexture je Tiefenband vor;
+`staticGraphics` dient nur noch als Zeichenpuffer und bleibt dauerhaft unsichtbar. Ohne das
+Backen rastert die GPU pro Frame alle gestapelten Alpha-Lagen neu – das war der größte
+gemessene Einzelposten im Frame.
+
+Beim Backen gelten zwei nicht offensichtliche Regeln:
+
+- Die Textur startet **deckend weiß**, die Footprints werden mit ihrem MULTIPLY-Blendmode
+  hineingezeichnet, und die fertige Textur wird selbst per MULTIPLY komponiert. Weiß ist das
+  neutrale Element, dadurch enthält die Textur exakt das Produkt der gestapelten Lagen.
+  Normales Alpha-Blending wäre **nicht** gleichwertig, weil die Schattenfarbe (`0x05070b`)
+  nicht exakt schwarz ist. Phasers WebGL-Pfad übernimmt beim Zeichnen in eine DynamicTexture
+  den Blendmode des Objekts, die Rechnung geht also auf.
+- Die Arena-Maske trägt die gebackene Textur, nicht der Zeichenpuffer.
+- Zeichenpuffer und gebackene Textur müssen **immer gemeinsam** geleert werden. Nur den Puffer
+  zu leeren lässt die gebackenen Schatten stehen; sie überleben dann den Arena-Teardown und
+  bleiben als Raster in der Lobby sichtbar. `clear()` leert deshalb über `clearStatic()`.
+  Eine geleerte Textur wird zusätzlich ausgeblendet, damit sie keine wirkungslose
+  Vollflächen-Blendpass pro Frame kostet.
+
+Die statischen Schatten sind nach Veränderlichkeit getrennt: **Fels- und Turret-Schatten**
+(`rocks`) werden bei jeder Hindernisänderung neu gebacken, **Baum-Schatten** (`trees`) nie –
+`layout.trees` kennt kein Sichtbarkeits-Prädikat, Bäume werden also nie entfernt. Das ist die
+teurere Gruppe: Eine Krone stapelt 32 Lagen, ein Fels 8. Ein neues Layout-Objekt baut beide
+Gruppen neu auf, derselbe Layout-Bezeichner nur die Felsen.
+
+`RockVisualHelper` sammelt Hindernisänderungen über ein Dirty-Flag und stößt den Rebuild
+einmal am Ende des Frames an (`POST_UPDATE`). Eine Explosion zerstört typischerweise mehrere
+Felsen und löste sonst pro Fels einen vollständigen Rebuild aus. Bewusst ein Frame-Sammelpunkt
+und kein Zeit-Timer: Eine Verzögerung ließe den Schatten sichtbar länger stehen als den Fels.
+Im Extremfall – jeder Frame eine Zerstörung – fällt das Verfahren damit auf höchstens einen
+Bake pro Frame zurück, also auf die Rasterisierung, die vorher ohnehin jeden Frame lief.
+
+### Gemessene Kostenverteilung (Ablations-Trace, RTX 3080, high, Map 14)
+
+Der erste vollständige Diagnose-Trace ordnet die Frame-Zeit so zu:
+
+- **Schatten sind der mit Abstand größte Posten: rund 7 ms eines 21,7-ms-Arena-Frames.** In
+  beiden Messpaaren war die Szene während der Ablation sogar voller als in der Baseline, der
+  Effekt ist also eher unterschätzt. Ursache ist Overdraw, nicht Geometrie: `drawFootprint()`
+  stapelt pro Schattenwerfer `blurLayers` alphagefüllte Formen, um Weichheit zu erzeugen –
+  Fels 8, **Baumkrone 32**. Entsprechend sinkt beim Abschalten die Render-Zeit stark, während
+  Draw-Calls und Buffer-Uploads praktisch unverändert bleiben.
+- **HUD/UI kostet rund 4,5 ms in der Arena** und erzeugt dabei ~82 Draw-Calls mit ~82
+  Programmwechseln – ein Wechsel pro Draw-Call, also praktisch kein Batching.
+- **Glow-Filter kosten nur ~0,3 ms.** Sie verursachen zwar ~30 Framebuffer-Bindings, die sind
+  auf dieser Klasse GPU aber billig. Framebuffer-Bindings taugen hier nicht als Kostenindikator.
+- **Die Zahl der Display-Objekte ist nicht mehr der Hebel.** Das Ausblenden von über 1200
+  sichtbaren Objekten (Felsen bzw. statische Deko) ändert die Frame-Zeit nicht messbar. Wer
+  Objekte einspart, spart deshalb vor allem Szenen-Walk, nicht Renderzeit.
+
+Rauschband beachten: Die Streuung der Arena-Baselines liegt bei etwa ±4,4 ms (2σ). In der
+Arena sind damit nur Effekte ab rund 5 ms sicher auflösbar; die ruhigere Lobby löst kleinere
+Effekte auf. Nullbefunde sind nur so viel wert wie der Wirksamkeitsnachweis der Ablation:
+Für Felsen und statische Deko ist er über die entfernten Objektzahlen belegt, für Partikel,
+Lichter und Bodenfeuer war er im ersten Trace uneindeutig.
+
 ## Verträge des Report-Schemas
+
+`ablation.segments` ist leer, wenn der Diagnosemodus nicht lief; die Aufzeichnung ist dann
+durchgehend `baseline`. Die Segmentgrenzen sind wie `frameSeries.rows[].atMs` relativ zum
+Aufzeichnungsstart.
 
 Nur Werte, die sich während einer Messung nicht ändern können, dürfen in den Reportkopf. `environment` wird deshalb bei `startRecording()` erfasst, nicht beim Export; Rolle, Qualität, Modus und Map stehen pro Fenster und gebündelt in `recordingScope`. Ein Kopf, der beim Klick auf Export gefüllt wird, beschreibt sonst den Zustand des Klicks und nicht den der Messung. `recordedWindows` überlebt den Export, ein zweiter Export derselben Messung ist also möglich und an gleicher `recordingId` sowie gleichem Dateinamen erkennbar.
 

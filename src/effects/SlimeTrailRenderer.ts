@@ -18,6 +18,13 @@ const TRAIL_RIPPLE_INTERVAL_MS = 390;
 const ENEMY_BUBBLE_INTERVAL_MS = 125;
 const SMOOTH_TIME_MS = 55;
 const PUDDLE_ALPHA_MULTIPLIER = 0.62;
+/**
+ * Grundstock des Pfuetzen-Pools ueber ein Rundenende hinaus. Wie beim Heat-Haze-Pool des
+ * {@link FlamethrowerUpgradeRenderer} waechst der Pool innerhalb einer Runde bis zum
+ * Spitzenbedarf; ohne Trimmen bliebe diese Spitze als unsichtbare Objekte fuer die ganze
+ * Sitzung in der Display-Liste, weil der Renderer scene-lifetime ist.
+ */
+const PUDDLE_IMAGE_POOL_RETAINED = 32;
 const PUDDLE_TINT_PALETTE = [0x3f7d45, 0x36743d, 0x47733a, 0x2e693e] as const;
 
 interface SlimePuddleVisual {
@@ -244,6 +251,20 @@ export class SlimeTrailRenderer {
     this.activeBloomChunks.clear();
     for (const visual of this.affectedVisuals.values()) visual.halo.destroy();
     this.affectedVisuals.clear();
+    this.trimPuddleImagePool();
+  }
+
+  /**
+   * Gibt den ueber den Grundstock hinausgehenden Teil des Pfuetzen-Pools frei. Betrifft nur
+   * unsichtbare, inaktive Bilder und laeuft nie waehrend einer aktiven Runde.
+   */
+  private trimPuddleImagePool(): void {
+    for (let i = this.puddleImagePool.length - 1; i >= PUDDLE_IMAGE_POOL_RETAINED; i--) {
+      this.puddleImagePool[i].destroy();
+    }
+    if (this.puddleImagePool.length > PUDDLE_IMAGE_POOL_RETAINED) {
+      this.puddleImagePool.length = PUDDLE_IMAGE_POOL_RETAINED;
+    }
   }
 
   destroyAll(): void {

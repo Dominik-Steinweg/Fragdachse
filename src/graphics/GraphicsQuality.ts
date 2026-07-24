@@ -91,6 +91,7 @@ export class GraphicsQualityController {
   private readonly listeners = new Set<QualityListener>();
   private readonly emitters = new Map<Phaser.GameObjects.Particles.ParticleEmitter, TrackedEmitter>();
   private readonly filters = new Set<TrackedFilter>();
+  private ablationFiltersDisabled = false;
   private particleFactory: Phaser.GameObjects.GameObjectFactory['particles'] | null = null;
   private attachedScene: Phaser.Scene | null = null;
 
@@ -122,6 +123,18 @@ export class GraphicsQualityController {
 
   getProfile(): GraphicsQualityProfile {
     return GRAPHICS_QUALITY_PROFILES[this.level];
+  }
+
+  /**
+   * Diagnose-Schalter des Ablationsmodus: schaltet **alle** getrackten Filter ab, unabhaengig
+   * von Qualitaetsstufe und Wichtigkeit. Nur fuer Messungen gedacht; im Normalbetrieb immer
+   * `false`. Der Qualitaets-Pfad bleibt unveraendert und greift wieder, sobald zurueckgesetzt
+   * wird (siehe {@link PerformanceAblationController}).
+   */
+  setAblationFiltersDisabled(disabled: boolean): void {
+    if (this.ablationFiltersDisabled === disabled) return;
+    this.ablationFiltersDisabled = disabled;
+    for (const tracked of this.filters) this.applyFilterProfile(tracked);
   }
 
   setLevel(level: GraphicsQuality): void {
@@ -268,8 +281,9 @@ export class GraphicsQualityController {
 
   private applyFilterProfile(tracked: TrackedFilter): void {
     const profile = this.getProfile();
-    const active = tracked.importance === 'critical'
-      || (profile.decorativeFilters && (!tracked.external || profile.externalDecorativeFilters));
+    const active = !this.ablationFiltersDisabled
+      && (tracked.importance === 'critical'
+        || (profile.decorativeFilters && (!tracked.external || profile.externalDecorativeFilters)));
     if (tracked.handle.setActive) tracked.handle.setActive(active);
     else tracked.handle.active = active;
   }

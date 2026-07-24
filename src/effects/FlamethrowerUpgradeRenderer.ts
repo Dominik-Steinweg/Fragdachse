@@ -23,6 +23,17 @@ const GROUND_DEPTH = DEPTH.ROCKS - 0.24;
 const GROUND_PARTICLE_DEPTH = DEPTH.FIRE - 0.18;
 const RING_PARTICLE_DEPTH = DEPTH.FIRE + 0.12;
 const MAX_GROUND_EMISSIONS_PER_SECOND = 720;
+/**
+ * Wie viele Heat-Haze-Bilder ueber ein Rundenende hinaus vorgehalten werden.
+ *
+ * Der Pool waechst innerhalb einer Runde bis zum Spitzenbedarf – das ist gewollt, damit
+ * Bodenfeuer nicht mitten im Gefecht nachallokiert. Er wurde bisher aber nie wieder
+ * verkleinert: Da der Renderer scene-lifetime ist, blieb die Spitze einer Runde fuer die
+ * gesamte Sitzung als unsichtbare Objekte in der Display-Liste liegen und wurde auch in der
+ * Lobby jeden Frame mit durch Update- und Depth-Sort-Paesse gezogen. Beim Teardown bleibt
+ * deshalb nur noch ein Grundstock stehen.
+ */
+const GROUND_IMAGE_POOL_RETAINED = 32;
 const RING_BAND_THICKNESS = 16;
 const RING_CORE_THICKNESS = 7;
 const RING_POINT_SPACING = 4;
@@ -388,6 +399,21 @@ export class FlamethrowerUpgradeRenderer {
     this.activeGroundLightKeys.clear();
     this.groundLightBuckets.clear();
     this.groundLightRanking.length = 0;
+    this.trimGroundImagePool();
+  }
+
+  /**
+   * Gibt den ueber den Grundstock hinausgehenden Teil des Heat-Haze-Pools frei. Rein
+   * unsichtbare, inaktive Bilder – optisch aendert sich dadurch nichts, und innerhalb einer
+   * laufenden Runde wird nie getrimmt.
+   */
+  private trimGroundImagePool(): void {
+    for (let i = this.groundImagePool.length - 1; i >= GROUND_IMAGE_POOL_RETAINED; i--) {
+      this.groundImagePool[i].destroy();
+    }
+    if (this.groundImagePool.length > GROUND_IMAGE_POOL_RETAINED) {
+      this.groundImagePool.length = GROUND_IMAGE_POOL_RETAINED;
+    }
   }
 
   destroyAll(): void {
