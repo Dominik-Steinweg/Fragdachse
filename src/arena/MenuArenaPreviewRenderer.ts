@@ -19,7 +19,7 @@ export class MenuArenaPreviewRenderer {
   private arenaShade: Phaser.GameObjects.Rectangle | null = null;
   private screenShade: Phaser.GameObjects.Rectangle | null = null;
   private tracks: Phaser.GameObjects.TileSprite[] = [];
-  private dirt: Phaser.GameObjects.Image[] = [];
+  private dirtLayer: Phaser.GameObjects.RenderTexture | null = null;
   private decals: Phaser.GameObjects.Image[] = [];
   private rocks: Phaser.GameObjects.Image[] = [];
   private trees: ArenaTreeVisual[] = [];
@@ -73,13 +73,13 @@ export class MenuArenaPreviewRenderer {
       offsetY: bounds.offsetY,
     });
     this.tracks = ArenaVisualFactory.createTracks(this.scene, layout.tracks ?? [], metrics);
-    this.dirt = ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics);
+    this.dirtLayer = this.bakeDirt(layout, metrics);
     this.decals = ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics);
     this.rocks = this.createRocks(layout);
     this.trees = ArenaVisualFactory.createTrees(this.scene, layout.trees ?? [], metrics);
 
     this.applyLayerStyle(this.tracks, view.tracks);
-    this.applyLayerStyle(this.dirt, view.dirt);
+    if (this.dirtLayer) this.applyLayerStyle([this.dirtLayer], view.dirt);
     this.applyLayerStyle(this.decals, view.decals);
     this.applyLayerStyle(this.rocks, view.rocks);
     this.applyLayerStyle(this.trees.map((tree) => tree.trunk), view.trunks);
@@ -110,7 +110,7 @@ export class MenuArenaPreviewRenderer {
     this.arenaShade?.setVisible(visible);
     this.screenShade?.setVisible(visible);
     for (const obj of this.tracks) obj.setVisible(visible && this.config.view.tracks.visible);
-    for (const obj of this.dirt) obj.setVisible(visible && this.config.view.dirt.visible);
+    this.dirtLayer?.setVisible(visible && this.config.view.dirt.visible);
     for (const obj of this.decals) obj.setVisible(visible && this.config.view.decals.visible);
     for (const obj of this.rocks) obj.setVisible(visible && this.config.view.rocks.visible);
     for (const tree of this.trees) {
@@ -133,7 +133,8 @@ export class MenuArenaPreviewRenderer {
     this.screenShade = null;
     this.shadows = null;
     for (const obj of this.tracks) obj.destroy();
-    for (const obj of this.dirt) obj.destroy();
+    this.dirtLayer?.destroy();
+    this.dirtLayer = null;
     for (const obj of this.decals) obj.destroy();
     for (const obj of this.rocks) obj.destroy();
     for (const tree of this.trees) {
@@ -141,10 +142,32 @@ export class MenuArenaPreviewRenderer {
       tree.canopy.destroy();
     }
     this.tracks = [];
-    this.dirt = [];
     this.decals = [];
     this.rocks = [];
     this.trees = [];
+  }
+
+  /**
+   * Backt den statischen Dirt-Boden einmalig in eine RenderTexture – analog zur Arena
+   * ({@link ArenaBuilder}). Ohne das Backen läge der gesamte Autotile-Boden als mehrere
+   * hundert bis über tausend Einzel-Images in der Display-Liste, die Phaser in der Lobby
+   * jeden Frame durch Update-/Depth-Sort-Pässe zieht, obwohl dort keine Dynamik herrscht.
+   */
+  private bakeDirt(layout: ArenaLayout, metrics: { offsetX: number; offsetY: number; gridCols: number; gridRows: number }): Phaser.GameObjects.RenderTexture | null {
+    const images = ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics);
+    if (images.length === 0) return null;
+
+    const { bounds } = this.config.view;
+    const dirtLayer = this.scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
+    dirtLayer.setOrigin(0, 0);
+    dirtLayer.setDepth(DEPTH.DIRT);
+    dirtLayer.camera.setScroll(bounds.offsetX, bounds.offsetY);
+    dirtLayer.draw(images);
+    dirtLayer.render();
+
+    for (const img of images) img.destroy();
+
+    return dirtLayer;
   }
 
   private createRocks(layout: ArenaLayout): Phaser.GameObjects.Image[] {

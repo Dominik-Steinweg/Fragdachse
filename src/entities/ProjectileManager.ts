@@ -2418,255 +2418,142 @@ export class ProjectileManager {
     this.queueDestroyProjectile(proj);
   }
 
-  /** Host: alle aktiven Projektil-Renderer an die Physik-Bodies synchronisieren. */
+  /**
+   * Host: alle aktiven Projektil-Renderer an die Physik-Bodies synchronisieren.
+   *
+   * Ein einziger Durchlauf über die Projektilliste statt eines Durchlaufs pro Renderer-Typ:
+   * Jedes Projektil hat genau einen `projectileStyle`, daher wird pro Projektil nur der
+   * passende Renderer angesprochen. Style-unabhängige Renderer (Burn, Tracer) und der
+   * Bullet-Body-Sync für die kugelartigen Stile laufen im selben Durchlauf mit. `gauss` wird
+   * bewusst weiterhin sowohl vom BulletRenderer (Body-Sync) als auch vom GaussRenderer bedient.
+   */
   private syncHostRenderers(): void {
-    const renderer = this.bulletRenderer;
-    // BulletRenderer-Visuals an Physik-Body synchronisieren (Bullet + AWP)
-    if (renderer) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp' || proj.projectileStyle === 'gauss') {
-          renderer.syncToBody(
-            proj.id, proj.sprite.x, proj.sprite.y,
-            proj.body.velocity.x, proj.body.velocity.y,
-          );
-        }
-      }
-    }
+    const bulletR = this.bulletRenderer;
+    const flames = this.flameRenderer;
+    const leafBlowers = this.leafBlowerRenderer;
+    const bfgR = this.bfgRenderer;
+    const gaussR = this.gaussRenderer;
+    const energyBallR = this.energyBallRenderer;
+    const hydraR = this.hydraRenderer;
+    const holyGrenadeR = this.holyGrenadeRenderer;
+    const rocketR = this.rocketRenderer;
+    const fireballR = this.fireballRenderer;
+    const sporeR = this.sporeRenderer;
+    const grenadeR = this.grenadeRenderer;
+    const tlPuckR = this.translocatorPuckRenderer;
+    const tracerR = this.tracerRenderer;
+    const burnR = this.projectileBurnRenderer;
 
     const burningProjectiles = this.activeBurningProjectileIds;
     burningProjectiles.clear();
+
     for (const proj of this.projectiles) {
+      const id = proj.id;
+      const x = proj.sprite.x;
+      const y = proj.sprite.y;
+      const w = proj.sprite.displayWidth;
+      const vx = proj.body.velocity.x;
+      const vy = proj.body.velocity.y;
+      const style = proj.projectileStyle;
+
+      // Burn läuft style-unabhängig für jedes Projektil.
       const burning = this.hasVisibleProjectileBurn(proj);
-      this.projectileBurnRenderer?.sync(
-        proj.id,
-        proj.sprite.x,
-        proj.sprite.y,
-        proj.sprite.displayWidth,
-        burning,
-      );
-      if (burning) burningProjectiles.add(proj.id);
-    }
-    this.projectileBurnRenderer?.retain(burningProjectiles);
+      burnR?.sync(id, x, y, w, burning);
+      if (burning) burningProjectiles.add(id);
 
-    // FlameRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
-    const flames = this.flameRenderer;
-    if (flames) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'flame') {
-          if (!flames.has(proj.id)) {
-            flames.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
-          }
-          flames.updateVisual(
-            proj.id, proj.sprite.x, proj.sprite.y,
-            proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y,
-          );
-        }
+      // Tracer hängt an der tracerConfig, nicht am Style.
+      if (proj.tracerConfig) tracerR?.updateTracer(id, x, y, vx, vy);
+
+      // Kugelartige Stile werden zusätzlich per Body-Sync bewegt (inkl. gauss).
+      if (style === 'bullet' || style === 'awp' || style === 'gauss') {
+        bulletR?.syncToBody(id, x, y, vx, vy);
       }
-    }
 
-    const leafBlowers = this.leafBlowerRenderer;
-    if (leafBlowers) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'leaf_blower') {
-          if (!leafBlowers.has(proj.id)) {
-            leafBlowers.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+      switch (style) {
+        case 'flame':
+          if (flames) {
+            if (!flames.has(id)) flames.createVisual(id, x, y, w);
+            flames.updateVisual(id, x, y, w, vx, vy);
           }
-          leafBlowers.updateVisual(
-            proj.id,
-            proj.sprite.x,
-            proj.sprite.y,
-            proj.sprite.displayWidth,
-            proj.body.velocity.x,
-            proj.body.velocity.y,
-          );
-        }
-      }
-    }
-
-    // BfgRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
-    const bfgR = this.bfgRenderer;
-    if (bfgR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'bfg') {
-          if (!bfgR.has(proj.id)) {
-            bfgR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+          break;
+        case 'leaf_blower':
+          if (leafBlowers) {
+            if (!leafBlowers.has(id)) leafBlowers.createVisual(id, x, y, w);
+            leafBlowers.updateVisual(id, x, y, w, vx, vy);
           }
-          bfgR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
-        }
-      }
-    }
-
-    const gaussR = this.gaussRenderer;
-    if (gaussR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'gauss') {
-          if (!gaussR.has(proj.id)) {
-            gaussR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          break;
+        case 'bfg':
+          if (bfgR) {
+            if (!bfgR.has(id)) bfgR.createVisual(id, x, y, w);
+            bfgR.updateVisual(id, x, y, w);
           }
-          gaussR.updateVisual(
-            proj.id,
-            proj.sprite.x,
-            proj.sprite.y,
-            proj.sprite.displayWidth,
-            proj.body.velocity.x,
-            proj.body.velocity.y,
-            proj.color,
-          );
-        }
-      }
-    }
-
-    const energyBallR = this.energyBallRenderer;
-    if (energyBallR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'energy_ball') {
-          if (!energyBallR.has(proj.id)) {
-            energyBallR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color, proj.energyBallVariant);
+          break;
+        case 'gauss':
+          if (gaussR) {
+            if (!gaussR.has(id)) gaussR.createVisual(id, x, y, w, proj.color);
+            gaussR.updateVisual(id, x, y, w, vx, vy, proj.color);
           }
-          energyBallR.updateVisual(
-            proj.id,
-            proj.sprite.x,
-            proj.sprite.y,
-            proj.sprite.displayWidth,
-            proj.body.velocity.x,
-            proj.body.velocity.y,
-            proj.color,
-            proj.energyBallVariant,
-          );
-        }
-      }
-    }
-
-    const hydraR = this.hydraRenderer;
-    if (hydraR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'hydra') {
-          if (!hydraR.has(proj.id)) {
-            hydraR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          break;
+        case 'energy_ball':
+          if (energyBallR) {
+            if (!energyBallR.has(id)) energyBallR.createVisual(id, x, y, w, proj.color, proj.energyBallVariant);
+            energyBallR.updateVisual(id, x, y, w, vx, vy, proj.color, proj.energyBallVariant);
           }
-          hydraR.updateVisual(
-            proj.id,
-            proj.sprite.x,
-            proj.sprite.y,
-            proj.sprite.displayWidth,
-            proj.body.velocity.x,
-            proj.body.velocity.y,
-            proj.color,
-          );
-        }
-      }
-    }
-
-    const holyGrenadeR = this.holyGrenadeRenderer;
-    if (holyGrenadeR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'holy_grenade') {
-          if (!holyGrenadeR.has(proj.id)) {
-            holyGrenadeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
+          break;
+        case 'hydra':
+          if (hydraR) {
+            if (!hydraR.has(id)) hydraR.createVisual(id, x, y, w, proj.color);
+            hydraR.updateVisual(id, x, y, w, vx, vy, proj.color);
           }
-          holyGrenadeR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
-        }
-      }
-    }
-
-    const rocketR = this.rocketRenderer;
-    if (rocketR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'rocket') {
-          if (!rocketR.has(proj.id)) {
-            rocketR.createVisual(
-              proj.id,
-              proj.sprite.x,
-              proj.sprite.y,
-              proj.sprite.displayWidth,
-              proj.color,
-              proj.ownerColor ?? proj.color,
-              proj.smokeTrailColor ?? proj.color,
+          break;
+        case 'holy_grenade':
+          if (holyGrenadeR) {
+            if (!holyGrenadeR.has(id)) holyGrenadeR.createVisual(id, x, y, w);
+            holyGrenadeR.updateVisual(id, x, y, w, vx, vy);
+          }
+          break;
+        case 'rocket':
+          if (rocketR) {
+            if (!rocketR.has(id)) {
+              rocketR.createVisual(id, x, y, w, proj.color, proj.ownerColor ?? proj.color, proj.smokeTrailColor ?? proj.color);
+            }
+            rocketR.updateVisual(
+              id, x, y, w, vx, vy,
+              proj.miniRocketPhase,
+              (proj.miniRocketCascadeInitialDamageBonus ?? 0) > 0 ? proj.miniRocketExplosionIndex : undefined,
             );
           }
-          rocketR.updateVisual(
-            proj.id,
-            proj.sprite.x,
-            proj.sprite.y,
-            proj.sprite.displayWidth,
-            proj.body.velocity.x,
-            proj.body.velocity.y,
-            proj.miniRocketPhase,
-            (proj.miniRocketCascadeInitialDamageBonus ?? 0) > 0 ? proj.miniRocketExplosionIndex : undefined,
-          );
-        }
-      }
-    }
-
-    const fireballR = this.fireballRenderer;
-    if (fireballR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle !== 'fireball') continue;
-        if (!fireballR.has(proj.id)) {
-          fireballR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth);
-        }
-        fireballR.updateVisual(
-          proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth,
-          proj.body.velocity.x, proj.body.velocity.y,
-        );
-      }
-    }
-
-    const sporeR = this.sporeRenderer;
-    if (sporeR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'spore') {
-          if (!sporeR.has(proj.id)) {
-            sporeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.color);
+          break;
+        case 'fireball':
+          if (fireballR) {
+            if (!fireballR.has(id)) fireballR.createVisual(id, x, y, w);
+            fireballR.updateVisual(id, x, y, w, vx, vy);
           }
-          sporeR.updateVisual(
-            proj.id,
-            proj.sprite.x,
-            proj.sprite.y,
-            proj.sprite.displayWidth,
-            proj.body.velocity.x,
-            proj.body.velocity.y,
-            proj.color,
-          );
-        }
-      }
-    }
-
-    const grenadeR = this.grenadeRenderer;
-    if (grenadeR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'grenade') {
-          if (!grenadeR.has(proj.id)) {
-            grenadeR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.grenadeVisualPreset ?? 'he', proj.ownerColor ?? proj.color);
+          break;
+        case 'spore':
+          if (sporeR) {
+            if (!sporeR.has(id)) sporeR.createVisual(id, x, y, w, proj.color);
+            sporeR.updateVisual(id, x, y, w, vx, vy, proj.color);
           }
-          grenadeR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.sprite.displayWidth, proj.body.velocity.x, proj.body.velocity.y);
-        }
-      }
-    }
-
-    // TranslocatorPuckRenderer-Visuals an Physik-Body synchronisieren (Host rendert ebenfalls)
-    const tlPuckR = this.translocatorPuckRenderer;
-    if (tlPuckR) {
-      for (const proj of this.projectiles) {
-        if (proj.projectileStyle === 'translocator_puck') {
-          if (!tlPuckR.has(proj.id)) {
-            tlPuckR.createVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.ownerColor ?? proj.color);
+          break;
+        case 'grenade':
+          if (grenadeR) {
+            if (!grenadeR.has(id)) grenadeR.createVisual(id, x, y, w, proj.grenadeVisualPreset ?? 'he', proj.ownerColor ?? proj.color);
+            grenadeR.updateVisual(id, x, y, w, vx, vy);
           }
-          tlPuckR.updateVisual(proj.id, proj.sprite.x, proj.sprite.y, proj.ownerColor ?? proj.color);
-        }
+          break;
+        case 'translocator_puck':
+          if (tlPuckR) {
+            if (!tlPuckR.has(id)) tlPuckR.createVisual(id, x, y, proj.ownerColor ?? proj.color);
+            tlPuckR.updateVisual(id, x, y, proj.ownerColor ?? proj.color);
+          }
+          break;
+        default:
+          break;
       }
     }
 
-    // TracerRenderer-Visuals aktualisieren (Host rendert Tracer ebenfalls)
-    const tracerR = this.tracerRenderer;
-    if (tracerR) {
-      for (const proj of this.projectiles) {
-        if (proj.tracerConfig) {
-          tracerR.updateTracer(proj.id, proj.sprite.x, proj.sprite.y,
-            proj.body.velocity.x, proj.body.velocity.y);
-        }
-      }
-    }
+    burnR?.retain(burningProjectiles);
   }
 
   /** Host: Netzwerk-Snapshot nur bei einem tatsächlichen Network-Tick bauen. */

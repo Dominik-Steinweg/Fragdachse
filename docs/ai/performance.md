@@ -30,6 +30,8 @@ Der Dirt-Boden ist rein statisch und macht den Großteil der Display-Liste aus (
 
 `ArenaBuilderResult` führt deshalb `dirtLayer` (das gebackene Objekt, für Teardown) und `dirtStamps` (die Kachel-Geometrie) statt einer Image-Liste. Der `ArenaTerrainColorSampler` zeichnet seine CPU-Canvas aus `dirtStamps`, nicht aus Live-Objekten – wer weitere statische Layer backt, muss deren Geometrie ebenso für den Sampler erhalten.
 
+Dieselbe Backregel gilt für die Lobby-/Menü-Vorschau: `MenuArenaPreviewRenderer.bakeDirt()` backt den Vorschau-Dirt an den Vorschau-Bounds (Kamera-Scroll auf `bounds.offsetX/offsetY`) in eine einzelne RenderTexture. Ohne das lag der gesamte Autotile-Boden als über tausend Einzel-Images in der Display-Liste und drückte selbst die statische Lobby an das 60-fps-Limit, obwohl dort keine Dynamik herrscht. Der Vorschau-Dirt hat uniforme Alpha/Sichtbarkeit (`view.dirt`), die direkt auf die RenderTexture angewendet werden; ein CPU-Sampler wie in der Arena ist hier nicht nötig, daher entfallen `dirtStamps`.
+
 ## Projektil-Hotpath und Pooling
 
 Host-Systeme erhalten die aktiven Projektile als stabile `ReadonlySet`-Sicht und IDs werden
@@ -37,6 +39,12 @@ Host-Systeme erhalten die aktiven Projektile als stabile `ReadonlySet`-Sicht und
 Projektil-Cleanup freigegeben; deshalb dürfen sie nicht zusätzlich pro Frame aktive
 ID-Arrays und Orphan-Sets aus der gesamten Projektilmenge materialisieren. Der replizierte
 Projektil-Snapshot wird erst beim tatsächlichen Network-Tick gebaut.
+
+`syncHostRenderers()` läuft in genau einem Durchlauf über die Projektilliste und verteilt
+jedes Projektil per `switch (projectileStyle)` an seinen Renderer statt eines Durchlaufs pro
+Renderer-Typ. Style-unabhängige Pfade (Burn für jedes Projektil, Tracer nach `tracerConfig`)
+und der Bullet-Body-Sync der kugelartigen Stile laufen im selben Durchlauf mit; `gauss` wird
+weiterhin bewusst von BulletRenderer (Body-Sync) **und** GaussRenderer bedient.
 
 Pooling gehört an homogene, kurzlebige Visuals: Rocket-Smoke verwendet einen gemeinsamen,
 vorreservierten `ParticleEmitter`, dessen Partikel Phaser intern wiederverwendet. Die
