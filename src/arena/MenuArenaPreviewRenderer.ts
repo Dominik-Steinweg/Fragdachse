@@ -7,7 +7,7 @@ import {
 } from '../config';
 import type { ArenaLayout } from '../types';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
-import { ArenaVisualFactory, type ArenaTreeVisual } from './ArenaVisualFactory';
+import { ArenaVisualFactory } from './ArenaVisualFactory';
 import type { MenuArenaPreviewConfig, MenuArenaPreviewLayerConfig } from './MenuArenaPreviewConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
@@ -19,10 +19,12 @@ export class MenuArenaPreviewRenderer {
   private arenaShade: Phaser.GameObjects.Rectangle | null = null;
   private screenShade: Phaser.GameObjects.Rectangle | null = null;
   private tracks: Phaser.GameObjects.TileSprite[] = [];
-  private dirtLayer: Phaser.GameObjects.RenderTexture | null = null;
-  private decals: Phaser.GameObjects.Image[] = [];
-  private rocks: Phaser.GameObjects.Image[] = [];
-  private trees: ArenaTreeVisual[] = [];
+  /**
+   * Die statische Deko der Vorschau liegt als gebackene Layer vor – ein Objekt je Tiefenband
+   * statt mehrerer hundert Einzel-Images. Die Bänder bleiben getrennt, damit die
+   * Schatten-Graphics des `ShadowSystem` weiterhin zwischen Boden, Felsen und Kronen liegen.
+   */
+  private bakedLayers: Array<{ layer: Phaser.GameObjects.RenderTexture; config: MenuArenaPreviewLayerConfig }> = [];
   private shadows: ShadowSystem | null = null;
 
   constructor(
@@ -72,18 +74,23 @@ export class MenuArenaPreviewRenderer {
       offsetX: bounds.offsetX,
       offsetY: bounds.offsetY,
     });
-    this.tracks = ArenaVisualFactory.createTracks(this.scene, layout.tracks ?? [], metrics);
-    this.dirtLayer = this.bakeDirt(layout, metrics);
-    this.decals = ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics);
-    this.rocks = this.createRocks(layout);
-    this.trees = ArenaVisualFactory.createTrees(this.scene, layout.trees ?? [], metrics);
-
+    // Unsichtbare Layer werden gar nicht erst erzeugt: Sie wuerden sonst als Objekte in der
+    // Display-Liste liegen und jeden Frame durch Update- und Depth-Sort-Paesse laufen,
+    // ohne je ein Pixel beizutragen.
+    this.tracks = view.tracks.visible
+      ? ArenaVisualFactory.createTracks(this.scene, layout.tracks ?? [], metrics)
+      : [];
     this.applyLayerStyle(this.tracks, view.tracks);
-    if (this.dirtLayer) this.applyLayerStyle([this.dirtLayer], view.dirt);
-    this.applyLayerStyle(this.decals, view.decals);
-    this.applyLayerStyle(this.rocks, view.rocks);
-    this.applyLayerStyle(this.trees.map((tree) => tree.trunk), view.trunks);
-    this.applyLayerStyle(this.trees.map((tree) => tree.canopy), view.canopies);
+
+    // Reihenfolge der Tiefenbaender bleibt exakt erhalten: Boden < Decals < Fels-Schatten
+    // < Felsen < Kronen-Schatten < Kronen. Die Schatten liegen als eigene Graphics dazwischen.
+    this.bakeLayer(ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics), DEPTH.DIRT, view.dirt);
+    this.bakeLayer(ArenaVisualFactory.createDecals(this.scene, layout.decals ?? [], metrics), DEPTH.DECALS, view.decals);
+    this.bakeLayer(this.createRocks(layout), DEPTH.ROCKS, view.rocks);
+
+    const trees = ArenaVisualFactory.createTrees(this.scene, layout.trees ?? [], metrics);
+    this.bakeLayer(trees.map((tree) => tree.trunk), DEPTH.CANOPY - 0.01, view.trunks);
+    this.bakeLayer(trees.map((tree) => tree.canopy), DEPTH.CANOPY, view.canopies);
 
     this.arenaShade = this.scene.add
       .rectangle(
@@ -110,13 +117,7 @@ export class MenuArenaPreviewRenderer {
     this.arenaShade?.setVisible(visible);
     this.screenShade?.setVisible(visible);
     for (const obj of this.tracks) obj.setVisible(visible && this.config.view.tracks.visible);
-    this.dirtLayer?.setVisible(visible && this.config.view.dirt.visible);
-    for (const obj of this.decals) obj.setVisible(visible && this.config.view.decals.visible);
-    for (const obj of this.rocks) obj.setVisible(visible && this.config.view.rocks.visible);
-    for (const tree of this.trees) {
-      tree.trunk.setVisible(visible && this.config.view.trunks.visible);
-      tree.canopy.setVisible(visible && this.config.view.canopies.visible);
-    }
+    for (const { layer, config } of this.bakedLayers) layer.setVisible(visible && config.visible);
   }
 
   destroy(): void {
@@ -133,41 +134,50 @@ export class MenuArenaPreviewRenderer {
     this.screenShade = null;
     this.shadows = null;
     for (const obj of this.tracks) obj.destroy();
-    this.dirtLayer?.destroy();
-    this.dirtLayer = null;
-    for (const obj of this.decals) obj.destroy();
-    for (const obj of this.rocks) obj.destroy();
-    for (const tree of this.trees) {
-      tree.trunk.destroy();
-      tree.canopy.destroy();
-    }
+    for (const { layer } of this.bakedLayers) layer.destroy();
     this.tracks = [];
-    this.decals = [];
-    this.rocks = [];
-    this.trees = [];
+    this.bakedLayers = [];
   }
 
   /**
-   * Backt den statischen Dirt-Boden einmalig in eine RenderTexture – analog zur Arena
-   * ({@link ArenaBuilder}). Ohne das Backen läge der gesamte Autotile-Boden als mehrere
-   * hundert bis über tausend Einzel-Images in der Display-Liste, die Phaser in der Lobby
-   * jeden Frame durch Update-/Depth-Sort-Pässe zieht, obwohl dort keine Dynamik herrscht.
+   * Backt ein statisches Deko-Tiefenband einmalig in eine RenderTexture – analog zur Arena
+   * ({@link ArenaBuilder}). Ohne das Backen laegen Boden, Decals, Felsen und Kronen als
+   * mehrere hundert bis ueber tausend Einzel-Images in der Display-Liste, die Phaser jeden
+   * Frame durch Update-, Cull- und Depth-Sort-Paesse zieht, obwohl die Vorschau vollstaendig
+   * statisch ist. Da die Vorschau auch waehrend eines laufenden Matches nur unsichtbar
+   * geschaltet und nicht abgebaut wird, entlastet das die Arena ebenso.
+   *
+   * Die Layer-Alpha wird bewusst auf die Einzelbilder angewendet und die RenderTexture selbst
+   * bleibt bei Alpha 1. Nur so bleibt das Ergebnis auch bei einander ueberlappenden Bildern
+   * pixelgleich zum ungebackenen Zustand ("over" ist assoziativ); eine Alpha auf dem
+   * fertigen Layer wuerde Ueberlappungen anders gewichten.
    */
-  private bakeDirt(layout: ArenaLayout, metrics: { offsetX: number; offsetY: number; gridCols: number; gridRows: number }): Phaser.GameObjects.RenderTexture | null {
-    const images = ArenaVisualFactory.createDirt(this.scene, layout.dirt ?? [], metrics);
-    if (images.length === 0) return null;
+  private bakeLayer(
+    images: Array<Phaser.GameObjects.GameObject & { setAlpha(alpha: number): unknown; destroy(): void }>,
+    depth: number,
+    layer: MenuArenaPreviewLayerConfig,
+  ): void {
+    if (images.length === 0) return;
+
+    // Dauerhaft unsichtbare Baender tragen kein Pixel bei und werden komplett verworfen.
+    if (!layer.visible || layer.alpha <= 0) {
+      for (const img of images) img.destroy();
+      return;
+    }
+
+    for (const img of images) img.setAlpha(layer.alpha);
 
     const { bounds } = this.config.view;
-    const dirtLayer = this.scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-    dirtLayer.setOrigin(0, 0);
-    dirtLayer.setDepth(DEPTH.DIRT);
-    dirtLayer.camera.setScroll(bounds.offsetX, bounds.offsetY);
-    dirtLayer.draw(images);
-    dirtLayer.render();
+    const baked = this.scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
+    baked.setOrigin(0, 0);
+    baked.setDepth(depth);
+    baked.camera.setScroll(bounds.offsetX, bounds.offsetY);
+    baked.draw(images);
+    baked.render();
 
     for (const img of images) img.destroy();
 
-    return dirtLayer;
+    this.bakedLayers.push({ layer: baked, config: layer });
   }
 
   private createRocks(layout: ArenaLayout): Phaser.GameObjects.Image[] {

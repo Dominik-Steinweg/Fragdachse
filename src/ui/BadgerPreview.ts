@@ -68,6 +68,18 @@ export class BadgerPreview {
     this.sprite.setPosition(x, y);
   }
 
+  /**
+   * Sichtbarkeit inklusive Glow-Puls. Der Puls-Tween laeuft mit `repeat: -1` und wuerde sonst
+   * waehrend eines ganzen Matches weiterlaufen und den Glow-Filter jeden Frame neu als dirty
+   * markieren, obwohl die Vorschau unsichtbar ist. Rein optisch aendert das nichts: Der Puls
+   * wird nur pausiert, solange ohnehin nichts zu sehen ist, und beim Einblenden fortgesetzt.
+   */
+  setVisible(visible: boolean): void {
+    this.sprite.setVisible(visible);
+    if (visible) this.glowTween?.resume();
+    else this.glowTween?.pause();
+  }
+
   destroy(): void {
     this.glowTween?.stop();
     removeInternalFx(this.sprite, this.glowFx);

@@ -473,7 +473,7 @@ export class LeftSidePanel {
     this.optionsOverlay?.hide();
     this.nameEditEnabled = false;
     this.loadoutEnabled  = false;
-    this.badgerPreview?.sprite.setVisible(false);
+    this.badgerPreview?.setVisible(false);
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.pendingDelay?.remove();
@@ -501,7 +501,7 @@ export class LeftSidePanel {
 
     this.arenaHUD.reset();
     this.arenaOverlayVisible = false;
-    this.badgerPreview?.sprite.setVisible(true);
+    this.badgerPreview?.setVisible(true);
     this.puContainer.setVisible(false);
 
     this.scene.tweens.add({

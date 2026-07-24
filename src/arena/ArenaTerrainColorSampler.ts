@@ -52,8 +52,10 @@ export function createArenaTerrainColorSampler(
     ctx.restore();
   }
 
-  for (const decal of arenaResult.decalObjects) {
-    drawDisplayObjectFrame(scene, ctx, decal.texture.key, decal.frame.name as string | number, decal);
+  // Der Decal-Layer ist wie der Dirt-Boden gebacken; auch hier zeichnet der Sampler aus der
+  // erhaltenen Stamp-Geometrie statt aus Live-Objekten.
+  for (const stamp of arenaResult.decalStamps) {
+    drawDisplayObjectFrame(scene, ctx, stamp.textureKey, stamp.frameName, stamp);
   }
 
   canvasTexture.refresh();

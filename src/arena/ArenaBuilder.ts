@@ -46,8 +46,17 @@ export interface ArenaBuilderResult {
    * CPU-Canvas; die Live-Images existieren dafür nicht mehr.
    */
   dirtStamps: DirtStamp[];
-  /** Decal-Sprites (rein visuell, keine Kollision, keine HP) */
-  decalObjects: Phaser.GameObjects.Image[];
+  /**
+   * Die statischen Decals, ebenfalls einmalig in eine RenderTexture gebacken. Decals sind rein
+   * visuell und zur Laufzeit unveränderlich (keine Kollision, keine HP), deshalb gilt für sie
+   * dieselbe Backregel wie für den Dirt-Boden. `null`, wenn die Map keine Decals hat.
+   */
+  decalLayer: Phaser.GameObjects.RenderTexture | null;
+  /**
+   * Geometrie der gebackenen Decals – aus demselben Grund erhalten wie `dirtStamps`: Der
+   * Terrain-Farb-Sampler braucht sie, weil die Live-Images nicht mehr existieren.
+   */
+  decalStamps: DirtStamp[];
 }
 
 /** Was der Terrain-Sampler von einer gebackenen Dirt-Kachel braucht (siehe ArenaTerrainColorSampler). */
@@ -144,8 +153,9 @@ export class ArenaBuilder {
     // Einzel-Images verwerfen, damit sie nicht jeden Frame durch die Display-Liste laufen.
     const { dirtLayer, dirtStamps } = this.bakeDirt(layout.dirt ?? []);
 
-    // Decals (rein visuell, oberhalb von Gleisen/Dirt, unter Felsen)
-    const decalObjects = this.buildDecals(layout.decals ?? []);
+    // Decals (rein visuell, oberhalb von Gleisen/Dirt, unter Felsen) – zur Laufzeit
+    // unveraenderlich und deshalb wie der Dirt-Boden gebacken.
+    const { decalLayer, decalStamps } = this.bakeDecals(layout.decals ?? []);
 
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
@@ -189,7 +199,8 @@ export class ArenaBuilder {
       trackObjects,
       dirtLayer,
       dirtStamps,
-      decalObjects,
+      decalLayer,
+      decalStamps,
     };
   }
 
@@ -371,11 +382,10 @@ export class ArenaBuilder {
     result.dirtLayer = null;
     result.dirtStamps.length = 0;
 
-    // Decals
-    for (const img of result.decalObjects) {
-      if (img.active) img.destroy();
-    }
-    result.decalObjects.length = 0;
+    // Decals (gebackene RenderTexture + Stamp-Geometrie)
+    if (result.decalLayer?.active) result.decalLayer.destroy();
+    result.decalLayer = null;
+    result.decalStamps.length = 0;
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────
@@ -502,6 +512,39 @@ export class ArenaBuilder {
     for (const img of images) img.destroy();
 
     return { dirtLayer, dirtStamps };
+  }
+
+  /**
+   * Backt die statischen Decals nach demselben Muster wie {@link bakeDirt}. Decals sind rein
+   * visuell und werden zur Laufzeit nie verändert, getintet oder entfernt – die einzige
+   * Live-Abhängigkeit war der Terrain-Farb-Sampler, der stattdessen die Stamps erhält.
+   * Blut-Decals sind davon nicht betroffen: Sie entstehen dynamisch im Kampf und bleiben
+   * eigene Objekte.
+   */
+  private bakeDecals(decals: DecalCell[]): { decalLayer: Phaser.GameObjects.RenderTexture | null; decalStamps: DirtStamp[] } {
+    const images = this.buildDecals(decals);
+    if (images.length === 0) return { decalLayer: null, decalStamps: [] };
+
+    const decalStamps: DirtStamp[] = images.map((img) => ({
+      textureKey: img.texture.key,
+      frameName: img.frame.name,
+      x: img.x,
+      y: img.y,
+      displayWidth: img.displayWidth,
+      displayHeight: img.displayHeight,
+      alpha: img.alpha,
+    }));
+
+    const decalLayer = this.scene.add.renderTexture(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
+    decalLayer.setOrigin(0, 0);
+    decalLayer.setDepth(DEPTH.DECALS);
+    decalLayer.camera.setScroll(ARENA_OFFSET_X, ARENA_OFFSET_Y);
+    decalLayer.draw(images);
+    decalLayer.render();
+
+    for (const img of images) img.destroy();
+
+    return { decalLayer, decalStamps };
   }
 
   private buildDecals(decals: DecalCell[]): Phaser.GameObjects.Image[] {

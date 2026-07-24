@@ -30,7 +30,16 @@ Der Dirt-Boden ist rein statisch und macht den Großteil der Display-Liste aus (
 
 `ArenaBuilderResult` führt deshalb `dirtLayer` (das gebackene Objekt, für Teardown) und `dirtStamps` (die Kachel-Geometrie) statt einer Image-Liste. Der `ArenaTerrainColorSampler` zeichnet seine CPU-Canvas aus `dirtStamps`, nicht aus Live-Objekten – wer weitere statische Layer backt, muss deren Geometrie ebenso für den Sampler erhalten.
 
-Dieselbe Backregel gilt für die Lobby-/Menü-Vorschau: `MenuArenaPreviewRenderer.bakeDirt()` backt den Vorschau-Dirt an den Vorschau-Bounds (Kamera-Scroll auf `bounds.offsetX/offsetY`) in eine einzelne RenderTexture. Ohne das lag der gesamte Autotile-Boden als über tausend Einzel-Images in der Display-Liste und drückte selbst die statische Lobby an das 60-fps-Limit, obwohl dort keine Dynamik herrscht. Der Vorschau-Dirt hat uniforme Alpha/Sichtbarkeit (`view.dirt`), die direkt auf die RenderTexture angewendet werden; ein CPU-Sampler wie in der Arena ist hier nicht nötig, daher entfallen `dirtStamps`.
+Auch die Arena-Decals sind zur Laufzeit unveränderlich (rein visuell, keine Kollision, keine HP) und werden von `ArenaBuilder.bakeDecals()` nach demselben Muster gebacken; `decalStamps` erhält ihre Geometrie für den Sampler. Dynamische Blut-Decals stammen aus `BloodEffectShared` und sind davon nicht betroffen – sie bleiben eigene Objekte.
+
+Dieselbe Backregel gilt für die gesamte Lobby-/Menü-Vorschau, nicht nur für ihren Boden: `MenuArenaPreviewRenderer.bakeLayer()` backt Dirt, Decals, Felsen und Kronen je als ein Tiefenband an den Vorschau-Bounds (Kamera-Scroll auf `bounds.offsetX/offsetY`). Die Bänder bleiben getrennt, weil die Schatten-Graphics des `ShadowSystem` zwischen ihnen liegen (Fels-Schatten unter `DEPTH.ROCKS`, Kronen-Schatten unter `DEPTH.CANOPY`).
+
+Zwei nicht offensichtliche Regeln dabei:
+
+- Die Layer-Alpha wird auf die **Einzelbilder vor dem Backen** angewendet, die RenderTexture bleibt bei Alpha 1. Nur so bleibt das Ergebnis bei einander überlappenden Bildern pixelgleich (der „over"-Operator ist assoziativ); eine Alpha auf dem fertigen Layer würde Überlappungen anders gewichten.
+- Dauerhaft unsichtbar konfigurierte Bänder (`visible: false` bzw. `alpha: 0`, aktuell Tracks und Baumstämme) werden gar nicht erst erzeugt.
+
+Das wirkt über die Lobby hinaus: Die Vorschau wird beim Match-Start nur unsichtbar geschaltet und nicht abgebaut, lag also während der gesamten Runde als über tausend unsichtbare Objekte in der Display-Liste der Arena. Wer Vorschau-Objekte hinzufügt, zahlt sie deshalb in beiden Phasen.
 
 ## Projektil-Hotpath und Pooling
 
@@ -45,6 +54,11 @@ jedes Projektil per `switch (projectileStyle)` an seinen Renderer statt eines Du
 Renderer-Typ. Style-unabhängige Pfade (Burn für jedes Projektil, Tracer nach `tracerConfig`)
 und der Bullet-Body-Sync der kugelartigen Stile laufen im selben Durchlauf mit; `gauss` wird
 weiterhin bewusst von BulletRenderer (Body-Sync) **und** GaussRenderer bedient.
+
+Endlos laufende Puls-Tweens auf Filtern (`repeat: -1`) gehören pausiert, sobald ihr Ziel
+unsichtbar geschaltet wird – sonst laufen sie durch das ganze Match weiter und markieren den
+Filter jeden Frame neu. `BadgerPreview.setVisible()` kapselt das; Aufrufer dürfen die
+Sichtbarkeit deshalb nicht am Sprite vorbei setzen.
 
 Pooling gehört an homogene, kurzlebige Visuals: Rocket-Smoke verwendet einen gemeinsamen,
 vorreservierten `ParticleEmitter`, dessen Partikel Phaser intern wiederverwendet. Die
