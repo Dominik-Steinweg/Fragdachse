@@ -553,6 +553,10 @@ export class LobbyOverlay {
         : ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_UPGRADES_COLOR, COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H), COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H, BTN_UPGRADES_COLOR);
       this.coopProgressUpgradesBtn.setTexture(btnTex);
     }
+    // Label auf dem hellen Button dunkler faerben, damit es lesbar bleibt.
+    this.coopProgressUpgradesBtnLabel?.setColor(toCssColor(
+      upgradesAvailable ? COLORS.GOLD_6 : COLORS.GOLD_3,
+    ));
 
     // Aktiver Living-Bar-Effekt nur, wenn der Spieler noch freie Punkte hat.
     if (upgradesAvailable && this.visible) {
