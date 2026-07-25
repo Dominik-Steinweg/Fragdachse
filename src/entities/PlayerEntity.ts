@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import type { BurrowPhase, PlayerProfile } from '../types';
+import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types';
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
@@ -51,6 +51,7 @@ export class PlayerEntity {
   private burnRenderer: EntityBurnRenderer | null = null;
   private rageRenderer: HoneyBadgerRageRenderer | null = null;
   private burnStacks = 0;
+  private burnVisualStyle: GroundFireVisualStyle = 'normal';
   /** Für die an dieser Entity hängenden Lichtquellen (Brand, Spawn-Blitz). */
   private lighting: LightingSystem | null = null;
 
@@ -299,9 +300,10 @@ export class PlayerEntity {
     this.armorBarFg.setVisible(visible);
   }
 
-  updateBurnStacks(stacks: number): void {
+  updateBurnStacks(stacks: number, visualStyle: GroundFireVisualStyle = 'normal'): void {
     const nextStacks = Math.max(0, Math.floor(stacks));
     this.burnStacks = nextStacks;
+    this.burnVisualStyle = visualStyle;
 
     if (nextStacks <= 0) {
       this.burnRenderer?.destroy();
@@ -765,7 +767,14 @@ export class PlayerEntity {
   }
 
   private syncAttachedEffects(): void {
-    this.burnRenderer?.sync(this.sprite.x, this.sprite.y, PLAYER_SIZE, this.burnStacks, this.sprite.visible);
+    this.burnRenderer?.sync(
+      this.sprite.x,
+      this.sprite.y,
+      PLAYER_SIZE,
+      this.burnStacks,
+      this.sprite.visible,
+      this.burnVisualStyle,
+    );
     this.rageRenderer?.sync(this.sprite.x, this.sprite.y, PLAYER_SIZE, this.sprite.visible);
   }
 

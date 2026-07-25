@@ -407,6 +407,7 @@ export class HostUpdateCoordinator {
         if (!this.ctx.combatSystem.isAlive(player.id)) continue;
         const radius = Math.max(player.sprite.displayWidth, player.sprite.displayHeight) * 0.5;
         for (const contact of this.ctx.fireSystem.collectContacts(player.sprite.x, player.sprite.y, radius, now)) {
+          if (contact.damageTarget === 'enemies') continue;
           if (contact.damagePerTick > 0 && player.id !== contact.ownerId) {
             this.ctx.combatSystem.applyDamage(
               player.id,
@@ -433,6 +434,7 @@ export class HostUpdateCoordinator {
               contact.sourceId,
               contact.weaponName,
               'ground_fire',
+              contact.visualStyle,
             );
           }
         }
@@ -446,6 +448,7 @@ export class HostUpdateCoordinator {
           enemy.getCollisionRadius(),
           now,
         )) {
+          if (contact.damageTarget === 'players') continue;
           if (contact.damagePerTick > 0) {
             this.ctx.combatSystem.applyDamage(
               enemy.id,
@@ -466,6 +469,7 @@ export class HostUpdateCoordinator {
               contact.sourceId,
               contact.weaponName,
               'ground_fire',
+              contact.visualStyle,
             );
           }
         }
@@ -563,7 +567,8 @@ export class HostUpdateCoordinator {
       this.prevAliveStates.set(player.id, alive);
       player.updateHP(hp, maxHp);
       player.updateArmor(armor);
-      player.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(player.id));
+      const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
+      player.updateBurnStacks(burn.stackCount, burn.visualStyle);
       player.setVisible(alive);
       player.setRageTint(this.ctx.loadoutManager?.isUltimateActive(player.id) ?? false);
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
@@ -584,7 +589,8 @@ export class HostUpdateCoordinator {
     }
 
     for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
-      enemy.updateBurnStacks(this.ctx.combatSystem.getBurnStackCount(enemy.id));
+      const burn = this.ctx.combatSystem.getBurnVisualState(enemy.id);
+      enemy.updateBurnStacks(burn.stackCount, burn.visualStyle);
       // Die Hitbox-Skalierung besorgt die Physik; hier fehlen nur Trail-Geister und Dash-Sound.
       this.enemyDashVisuals.sync(enemy);
     }
@@ -741,7 +747,7 @@ export class HostUpdateCoordinator {
       const burrowPhase = this.ctx.burrowSystem?.getPhase(player.id) ?? 'idle';
       const isRaging   = this.ctx.loadoutManager?.isUltimateActive(player.id) ?? false;
       const activeUltimateId = this.ctx.loadoutManager?.getActiveUltimateId(player.id) ?? undefined;
-      const burnStacks = this.ctx.combatSystem.getBurnStackCount(player.id);
+      const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
       const isChargingUltimate = this.ctx.loadoutManager?.isUltimateCharging(player.id) ?? false;
       const ultimateChargeFraction = this.ctx.loadoutManager?.getUltimateChargeFraction(player.id, now) ?? 0;
       const ultimateChargeRange    = this.ctx.loadoutManager?.getUltimateChargeRange(player.id) ?? 0;
@@ -783,7 +789,8 @@ export class HostUpdateCoordinator {
         burrowPhase,
         isRaging,
         activeUltimateId,
-        burnStacks,
+        burnStacks: burn.stackCount,
+        burnVisualStyle: burn.visualStyle,
         isChargingUltimate,
         ultimateChargeFraction,
         ultimateChargeRange,

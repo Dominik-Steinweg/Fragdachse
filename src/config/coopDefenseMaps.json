@@ -465,12 +465,11 @@
         { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 0 },
-        { "enemyKind": "demon-badger", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 0 },
-        { "enemyKind": "spore-warden", "intervalMs": 15000, "countPerWave": 2, "startAtMs": 0 },
-        { "enemyKind": "plague-medic", "intervalMs": 15000, "countPerWave": 1, "startAtMs": 0 }
+        { "enemyKind": "zombie-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "spore-warden", "intervalMs": 15000, "countPerWave": 2, "startAtMs": 0 }
       ],
-      "boss": { "enemyKind": "inferno-colossus", "spawnAtMs": 0 }
+      "boss": { "enemyKind": "inferno-colossus", "spawnAtMs": 5000 }
     },
     {
       "mapId": "11",

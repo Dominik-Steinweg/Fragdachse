@@ -914,7 +914,13 @@ export class ArenaLifecycleCoordinator {
           (firstPlayerId, secondPlayerId) => !bridge.isEnemyPair(firstPlayerId, secondPlayerId),
           (x, y, radius) => bridge.broadcastExplosionEffect(x, y, radius, 0xff6600),
           (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
-          (x, y, targets, landsAt) => bridge.broadcastFireChunkEffect(x, y, targets, landsAt),
+          (x, y, targets, landsAt, visualStyle) => bridge.broadcastFireChunkEffect(
+            x,
+            y,
+            targets,
+            landsAt,
+            visualStyle,
+          ),
         )
         : null;
       this.ctx.weaponUpgradeSystem = this.ctx.enemyManager
@@ -1078,6 +1084,8 @@ export class ArenaLifecycleCoordinator {
           this.ctx.combatSystem,
           this.ctx.energyShieldSystem,
           this.ctx.stinkCloudSystem,
+          this.ctx.flamethrowerUpgradeSystem,
+          this.ctx.fireSystem,
         );
         this.ctx.coopDefenseEnemyAttackSystem = new CoopDefenseEnemyAttackSystem(
           this.ctx.enemyManager,

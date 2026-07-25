@@ -1,5 +1,6 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
 import type { UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
+import type { FireChunkBurstConfig, GroundFireCellEffect } from '../types';
 
 export type CoopDefenseEnemyKind = string;
 
@@ -157,6 +158,15 @@ export interface CoopDefenseEnemySpawnThrowConfig {
   readonly color: number;
 }
 
+/** Unregelmaessiger Boss-Auswurf von lila Brandbrocken, die ausschliesslich Spieler treffen. */
+export interface CoopDefenseEnemyVoidFireChunkConfig extends FireChunkBurstConfig {
+  readonly intervalMinMs: number;
+  readonly intervalMaxMs: number;
+}
+
+/** Lila, nur fuer Spieler gefaehrliche Brandspur unter dem gesamten Boss-Koerper. */
+export interface CoopDefenseEnemyVoidFireTrailConfig extends GroundFireCellEffect {}
+
 export interface CoopDefenseEnemyPlayerScaling {
   readonly maxHpFactorPerAdditionalPlayer?: number;
   readonly moveSpeedFactorPerAdditionalPlayer?: number;
@@ -193,6 +203,8 @@ export interface CoopDefenseEnemyConfig {
   readonly dodge?: CoopDefenseEnemyDodgeConfig;
   readonly combatPositioning?: CoopDefenseEnemyCombatPositioningConfig;
   readonly spawnThrow?: CoopDefenseEnemySpawnThrowConfig;
+  readonly voidFireChunks?: CoopDefenseEnemyVoidFireChunkConfig;
+  readonly voidFireTrail?: CoopDefenseEnemyVoidFireTrailConfig;
   readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
   readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
   readonly trainAwareness?: CoopDefenseEnemyTrainAwarenessConfig;
@@ -283,6 +295,8 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         dodge: config.dodge,
         combatPositioning: config.combatPositioning,
         spawnThrow: config.spawnThrow,
+        voidFireChunks: config.voidFireChunks,
+        voidFireTrail: config.voidFireTrail,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
         trainAwareness: config.trainAwareness,
@@ -369,6 +383,8 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     dodge: normalizeDodgeConfig(enemy.dodge),
     combatPositioning: normalizeCombatPositioningConfig(enemy.combatPositioning),
     spawnThrow: normalizeSpawnThrowConfig(enemy.spawnThrow, enemy.id),
+    voidFireChunks: normalizeVoidFireChunkConfig(enemy.voidFireChunks),
+    voidFireTrail: normalizeVoidFireTrailConfig(enemy.voidFireTrail),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
     trainAwareness: normalizeTrainAwareness(enemy.trainAwareness),
@@ -492,6 +508,41 @@ function normalizeSpawnThrowConfig(
     projectileSize: Math.max(1, config.projectileSize),
     maxBounces: Math.max(0, Math.floor(config.maxBounces)),
     color: Math.max(0, Math.floor(config.color)),
+  };
+}
+
+function normalizeVoidFireChunkConfig(
+  config: CoopDefenseEnemyVoidFireChunkConfig | undefined,
+): CoopDefenseEnemyVoidFireChunkConfig | undefined {
+  if (!config) return undefined;
+  const intervalMinMs = Math.max(1, Math.floor(config.intervalMinMs));
+  return {
+    count: Math.max(0, Math.floor(config.count)),
+    searchRadius: Math.max(0, config.searchRadius),
+    flightMs: Math.max(1, Math.floor(config.flightMs)),
+    igniteCenter: config.igniteCenter === true,
+    durationMs: Math.max(0, Math.floor(config.durationMs)),
+    burnDurationMs: Math.max(0, Math.floor(config.burnDurationMs)),
+    burnDamagePerTick: Math.max(0, config.burnDamagePerTick),
+    weaponName: config.weaponName,
+    visualStyle: 'void',
+    damageTarget: 'players',
+    intervalMinMs,
+    intervalMaxMs: Math.max(intervalMinMs, Math.floor(config.intervalMaxMs)),
+  };
+}
+
+function normalizeVoidFireTrailConfig(
+  config: CoopDefenseEnemyVoidFireTrailConfig | undefined,
+): CoopDefenseEnemyVoidFireTrailConfig | undefined {
+  if (!config) return undefined;
+  return {
+    durationMs: Math.max(0, Math.floor(config.durationMs)),
+    burnDurationMs: Math.max(0, Math.floor(config.burnDurationMs)),
+    burnDamagePerTick: Math.max(0, config.burnDamagePerTick),
+    weaponName: config.weaponName,
+    visualStyle: 'void',
+    damageTarget: 'players',
   };
 }
 

@@ -3,6 +3,8 @@ import { BURN_TICK_INTERVAL_MS, isPointInsideArena } from '../config';
 import type {
   BurnOnHitConfig,
   FireGrenadeEffect,
+  GroundFireDamageTarget,
+  GroundFireVisualStyle,
   SyncedBurningGroundSnapshot,
   SyncedFireZone,
 } from '../types';
@@ -38,6 +40,8 @@ export interface GroundFireContact {
   allowTeamDamage: boolean;
   burn?: BurnOnHitConfig;
   weaponName: string;
+  visualStyle: GroundFireVisualStyle;
+  damageTarget: GroundFireDamageTarget;
 }
 
 export interface GroundFireProjectileIgniter {
@@ -70,6 +74,8 @@ export interface GroundFireCellOptions {
   burn?: BurnOnHitConfig;
   igniteProjectiles?: boolean;
   weaponName?: string;
+  visualStyle?: GroundFireVisualStyle;
+  damageTarget?: GroundFireDamageTarget;
 }
 
 interface ActiveGroundSource {
@@ -88,6 +94,8 @@ interface ActiveGroundSource {
   rockDamageMult: number;
   trainDamageMult: number;
   weaponName: string;
+  visualStyle: GroundFireVisualStyle;
+  damageTarget: GroundFireDamageTarget;
   exposeAsZone: boolean;
   cells: Set<string>;
   wildfire?: FireGrenadeEffect['wildfire'];
@@ -95,11 +103,16 @@ interface ActiveGroundSource {
 }
 
 interface ActiveGroundCell {
-  id: number;
   key: string;
   gridX: number;
   gridY: number;
   sourceKeys: Set<string>;
+  visuals: Map<GroundFireVisualStyle, ActiveGroundCellVisual>;
+}
+
+interface ActiveGroundCellVisual {
+  id: number;
+  visualStyle: GroundFireVisualStyle;
   expiresAt: number;
   intensity: number;
 }
@@ -178,6 +191,8 @@ export class FireSystem {
       rockDamageMult: config.rockDamageMult ?? 1,
       trainDamageMult: config.trainDamageMult ?? 1,
       weaponName: config.weaponName ?? 'Molotov',
+      visualStyle: 'normal',
+      damageTarget: 'all',
       exposeAsZone: true,
       cells: new Set(),
       wildfire: config.wildfire ? { ...config.wildfire } : undefined,
@@ -225,6 +240,8 @@ export class FireSystem {
         rockDamageMult: 0,
         trainDamageMult: 0,
         weaponName: options.weaponName ?? 'Brennender Boden',
+        visualStyle: options.visualStyle ?? 'normal',
+        damageTarget: options.damageTarget ?? 'all',
         exposeAsZone: false,
         cells: new Set(),
         wildfireEscapeVectors: new Map(),
@@ -237,6 +254,8 @@ export class FireSystem {
       source.burn = options.burn ? { ...options.burn } : undefined;
       source.igniteProjectiles = options.igniteProjectiles === true;
       source.weaponName = options.weaponName ?? source.weaponName;
+      source.visualStyle = options.visualStyle ?? source.visualStyle;
+      source.damageTarget = options.damageTarget ?? source.damageTarget;
       this.refreshCellAggregate(gridX, gridY);
     }
   }
@@ -257,6 +276,35 @@ export class FireSystem {
         now,
       );
     });
+  }
+
+  /**
+   * Frischt jede Rasterzelle auf, die ein bewegter Kreis beruehrt. Die Abtastung entlang des
+   * Segments ist enger als eine halbe Zelle; dadurch bleiben auch bei groesseren Frame-Spruengen
+   * keine Luecken zwischen den Kreis-Fussabdruecken.
+   */
+  hostRefreshGroundCellsAlongSweptCircle(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    radius: number,
+    options: GroundFireCellOptions,
+    now = Date.now(),
+  ): void {
+    const safeRadius = Math.max(0, radius);
+    const distance = Phaser.Math.Distance.Between(fromX, fromY, toX, toY);
+    const stepCount = Math.max(1, Math.ceil(distance / (GROUND_FIRE_CELL_SIZE * 0.5)));
+    for (let step = 0; step <= stepCount; step += 1) {
+      const progress = step / stepCount;
+      this.refreshGroundCellsTouchingCircle(
+        Phaser.Math.Linear(fromX, toX, progress),
+        Phaser.Math.Linear(fromY, toY, progress),
+        safeRadius,
+        options,
+        now,
+      );
+    }
   }
 
   canPlaceGroundCell(x: number, y: number): boolean {
@@ -374,6 +422,8 @@ export class FireSystem {
           allowTeamDamage: source.allowTeamDamage,
           burn: source.burn ? { ...source.burn } : undefined,
           weaponName: source.weaponName,
+          visualStyle: source.visualStyle,
+          damageTarget: source.damageTarget,
         });
       }
     });
@@ -551,7 +601,7 @@ export class FireSystem {
     const key = this.cellKey(gridX, gridY);
     let cell = this.cells.get(key);
     if (!cell) {
-      cell = { id: this.nextCellId++, key, gridX, gridY, sourceKeys: new Set(), expiresAt: 0, intensity: 0 };
+      cell = { key, gridX, gridY, sourceKeys: new Set(), visuals: new Map() };
       this.cells.set(key, cell);
     }
     cell.sourceKeys.add(source.key);
@@ -581,14 +631,15 @@ export class FireSystem {
     if (!this.groundSnapshotDirty) return this.cachedGroundSnapshot;
     this.cachedGroundSnapshot = {
       cells: [...this.cells.values()]
-        .sort((left, right) => left.id - right.id)
-        .map(cell => ({
-          id: cell.id,
+        .flatMap(cell => [...cell.visuals.values()].map(visual => ({
+          id: visual.id,
           gridX: cell.gridX,
           gridY: cell.gridY,
-          expiresAt: cell.expiresAt,
-          intensity: Math.max(1, cell.intensity),
-        })),
+          expiresAt: visual.expiresAt,
+          intensity: Math.max(1, visual.intensity),
+          visualStyle: visual.visualStyle,
+        })))
+        .sort((left, right) => left.id - right.id),
     };
     this.groundSnapshotDirty = false;
     return this.cachedGroundSnapshot;
@@ -597,16 +648,35 @@ export class FireSystem {
   private refreshCellAggregate(gridX: number, gridY: number): void {
     const cell = this.cells.get(this.cellKey(gridX, gridY));
     if (!cell) return;
-    let expiresAt = 0;
-    let intensity = 0;
+    const aggregates = new Map<GroundFireVisualStyle, { expiresAt: number; intensity: number }>();
     for (const sourceKey of cell.sourceKeys) {
       const source = this.sources.get(sourceKey);
       if (!source) continue;
-      expiresAt = Math.max(expiresAt, source.expiresAt);
-      intensity += 1;
+      const aggregate = aggregates.get(source.visualStyle);
+      if (aggregate) {
+        aggregate.expiresAt = Math.max(aggregate.expiresAt, source.expiresAt);
+        aggregate.intensity += 1;
+      } else {
+        aggregates.set(source.visualStyle, { expiresAt: source.expiresAt, intensity: 1 });
+      }
     }
-    cell.expiresAt = expiresAt;
-    cell.intensity = intensity;
+    for (const visualStyle of cell.visuals.keys()) {
+      if (!aggregates.has(visualStyle)) cell.visuals.delete(visualStyle);
+    }
+    for (const [visualStyle, aggregate] of aggregates) {
+      const visual = cell.visuals.get(visualStyle);
+      if (visual) {
+        visual.expiresAt = aggregate.expiresAt;
+        visual.intensity = aggregate.intensity;
+      } else {
+        cell.visuals.set(visualStyle, {
+          id: this.nextCellId++,
+          visualStyle,
+          expiresAt: aggregate.expiresAt,
+          intensity: aggregate.intensity,
+        });
+      }
+    }
     this.groundSnapshotDirty = true;
   }
 
@@ -631,6 +701,31 @@ export class FireSystem {
         const dx = x - nearestX;
         const dy = y - nearestY;
         if (dx * dx + dy * dy <= radiusSq) visitor(cell);
+      }
+    }
+  }
+
+  private refreshGroundCellsTouchingCircle(
+    x: number,
+    y: number,
+    radius: number,
+    options: GroundFireCellOptions,
+    now: number,
+  ): void {
+    const minGridX = Math.floor((x - radius) / GROUND_FIRE_CELL_SIZE);
+    const maxGridX = Math.floor((x + radius) / GROUND_FIRE_CELL_SIZE);
+    const minGridY = Math.floor((y - radius) / GROUND_FIRE_CELL_SIZE);
+    const maxGridY = Math.floor((y + radius) / GROUND_FIRE_CELL_SIZE);
+    const radiusSq = radius * radius;
+    for (let gridY = minGridY; gridY <= maxGridY; gridY += 1) {
+      for (let gridX = minGridX; gridX <= maxGridX; gridX += 1) {
+        const bounds = this.cellBounds(gridX, gridY);
+        const nearestX = Phaser.Math.Clamp(x, bounds.left, bounds.right);
+        const nearestY = Phaser.Math.Clamp(y, bounds.top, bounds.bottom);
+        const dx = x - nearestX;
+        const dy = y - nearestY;
+        if (dx * dx + dy * dy > radiusSq) continue;
+        this.hostRefreshGroundCell(bounds.centerX, bounds.centerY, options, now);
       }
     }
   }

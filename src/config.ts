@@ -153,6 +153,9 @@ export const COLORS = {
   CANOPY_ALPHA: 0.4
 } as const;
 
+/** Kanonischer VFX-Akzent fuer die lila Boss-Feuerfamilie. */
+export const VOID_FIRE_COLOR = 0xb347ff;
+
 export interface BeamPalette {
   shadow: number;
   glow: number;

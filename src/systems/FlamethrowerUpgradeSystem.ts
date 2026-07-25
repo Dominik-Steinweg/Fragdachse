@@ -9,7 +9,7 @@ import {
   type FlamethrowerWeaponFireConfig,
   type MolotovUtilityConfig,
 } from '../loadout/LoadoutConfig';
-import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkTarget, FireGrenadeEffect, GroundFireCellEffect, TrackedProjectile } from '../types';
+import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkTarget, FireGrenadeEffect, GroundFireCellEffect, GroundFireVisualStyle, TrackedProjectile } from '../types';
 import type { FireSystem } from '../effects/FireSystem';
 import { BURN_TICK_INTERVAL_MS } from '../config';
 import type { ActiveBurnSource, CombatSystem } from './CombatSystem';
@@ -58,7 +58,13 @@ export class FlamethrowerUpgradeSystem {
     private readonly areFriendly: FlamethrowerFriendlyResolver,
     private readonly playKamikazeExplosion: (x: number, y: number, radius: number) => void,
     private readonly resolvePlayerStat: FireUpgradeStatResolver,
-    private readonly playFireChunkBurst: (x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number) => void,
+    private readonly playFireChunkBurst: (
+      x: number,
+      y: number,
+      targets: readonly FireChunkTarget[],
+      landsAt: number,
+      visualStyle: GroundFireVisualStyle,
+    ) => void,
   ) {}
 
   /** Must run before CombatSystem.update so a swept projectile is imbued before a same-frame hit. */
@@ -283,6 +289,8 @@ export class FlamethrowerUpgradeSystem {
       burnDurationMs: burst.burnDurationMs,
       burnDamagePerTick: burst.burnDamagePerTick,
       weaponName: burst.weaponName,
+      visualStyle: burst.visualStyle,
+      damageTarget: burst.damageTarget,
     };
     if (burst.igniteCenter) this.refreshGenericGround(ownerId, x, y, effect, now, `${sourceKey}:center`);
     const count = Math.max(0, Math.floor(burst.count));
@@ -293,7 +301,7 @@ export class FlamethrowerUpgradeSystem {
     for (const target of targets) {
       this.pendingChunkLandings.push({ ownerId, target, landsAt, effect, sourceKey });
     }
-    this.playFireChunkBurst(x, y, targets, landsAt);
+    this.playFireChunkBurst(x, y, targets, landsAt, effect.visualStyle ?? 'normal');
   }
 
   private landPendingFireChunks(now: number): void {
@@ -326,6 +334,8 @@ export class FlamethrowerUpgradeSystem {
       durationMs: effect.durationMs,
       burn: { durationMs: effect.burnDurationMs, damagePerTick: effect.burnDamagePerTick },
       weaponName: effect.weaponName,
+      visualStyle: effect.visualStyle,
+      damageTarget: effect.damageTarget,
     }, now);
   }
 

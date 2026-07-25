@@ -4,12 +4,15 @@ import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemySpawnThrowConfig,
   type CoopDefenseEnemyTranslocatorConfig,
+  type CoopDefenseEnemyVoidFireChunkConfig,
+  type CoopDefenseEnemyVoidFireTrailConfig,
 } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
+import type { FireSystem } from '../effects/FireSystem';
 import {
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
@@ -22,11 +25,17 @@ import {
 import { bridge } from '../network/bridge';
 import type { CombatSystem } from './CombatSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
+import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
 
 interface EnemyTeleportState {
   nextReadyAt: number;
   puckId?: number;
   teleportAt?: number;
+}
+
+interface EnemyVoidFireTrailState {
+  x: number;
+  y: number;
 }
 
 const ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER = 2;
@@ -51,6 +60,8 @@ export class CoopDefenseEnemyAbilitySystem {
   private readonly lastMiniDomeTickAt = new Map<string, number>();
   private readonly teleportStates = new Map<string, EnemyTeleportState>();
   private readonly spawnThrowReadyAt = new Map<string, number>();
+  private readonly voidFireChunkReadyAt = new Map<string, number>();
+  private readonly voidFireTrailStates = new Map<string, EnemyVoidFireTrailState>();
   private readonly activeStinkAuraEnemyIds = new Set<string>();
 
   constructor(
@@ -60,6 +71,8 @@ export class CoopDefenseEnemyAbilitySystem {
     private readonly combatSystem: CombatSystem,
     private readonly energyShieldSystem: EnergyShieldSystem | null,
     private readonly stinkCloudSystem: StinkCloudSystem,
+    private readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null,
+    private readonly fireSystem: FireSystem,
   ) {}
 
   hostUpdate(now: number): void {
@@ -69,7 +82,10 @@ export class CoopDefenseEnemyAbilitySystem {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       activeEnemyIds.add(enemy.id);
       // Eingebuddelte Gegner setzen – wie eingebuddelte Spieler – keine Faehigkeiten ein.
-      if (enemy.isBurrowed()) continue;
+      if (enemy.isBurrowed()) {
+        this.voidFireTrailStates.delete(enemy.id);
+        continue;
+      }
 
       const healingAura = this.getWeaponConfig(enemy, 'HEALING_AURA');
       if (healingAura?.fire.type === 'healing_aura') {
@@ -91,6 +107,12 @@ export class CoopDefenseEnemyAbilitySystem {
 
       const spawnThrow = getCoopDefenseEnemyConfig(enemy.kind).spawnThrow;
       if (spawnThrow) this.updateSpawnThrow(enemy, spawnThrow, now);
+
+      const voidFireChunks = getCoopDefenseEnemyConfig(enemy.kind).voidFireChunks;
+      if (voidFireChunks) this.updateVoidFireChunks(enemy, voidFireChunks, now);
+
+      const voidFireTrail = getCoopDefenseEnemyConfig(enemy.kind).voidFireTrail;
+      if (voidFireTrail) this.updateVoidFireTrail(enemy, voidFireTrail, now);
     }
 
     this.pruneInactiveEnemies(activeEnemyIds);
@@ -104,6 +126,8 @@ export class CoopDefenseEnemyAbilitySystem {
     this.lastMiniDomeTickAt.clear();
     this.teleportStates.clear();
     this.spawnThrowReadyAt.clear();
+    this.voidFireChunkReadyAt.clear();
+    this.voidFireTrailStates.clear();
     this.activeStinkAuraEnemyIds.clear();
   }
 
@@ -307,6 +331,64 @@ export class CoopDefenseEnemyAbilitySystem {
     this.spawnThrowReadyAt.set(enemy.id, now + ability.cooldownMs);
   }
 
+  private updateVoidFireChunks(
+    enemy: EnemyEntity,
+    ability: CoopDefenseEnemyVoidFireChunkConfig,
+    now: number,
+  ): void {
+    const nextReadyAt = this.voidFireChunkReadyAt.get(enemy.id);
+    if (nextReadyAt === undefined) {
+      this.voidFireChunkReadyAt.set(enemy.id, now + this.sampleVoidFireChunkInterval(ability));
+      return;
+    }
+    if (now < nextReadyAt) return;
+
+    this.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
+      enemy.id,
+      enemy.sprite.x,
+      enemy.sprite.y,
+      ability,
+      `void-fire-chunks:${enemy.id}:${now}`,
+      now,
+    );
+    this.voidFireChunkReadyAt.set(enemy.id, now + this.sampleVoidFireChunkInterval(ability));
+  }
+
+  private updateVoidFireTrail(
+    enemy: EnemyEntity,
+    ability: CoopDefenseEnemyVoidFireTrailConfig,
+    now: number,
+  ): void {
+    const previous = this.voidFireTrailStates.get(enemy.id) ?? {
+      x: enemy.sprite.x,
+      y: enemy.sprite.y,
+    };
+    this.fireSystem.hostRefreshGroundCellsAlongSweptCircle(
+      previous.x,
+      previous.y,
+      enemy.sprite.x,
+      enemy.sprite.y,
+      enemy.getCollisionRadius(),
+      {
+        sourceKey: `void-fire-trail:${enemy.id}`,
+        ownerId: enemy.id,
+        durationMs: ability.durationMs,
+        burn: {
+          durationMs: ability.burnDurationMs,
+          damagePerTick: ability.burnDamagePerTick,
+        },
+        weaponName: ability.weaponName,
+        visualStyle: ability.visualStyle,
+        damageTarget: ability.damageTarget,
+      },
+      now,
+    );
+    this.voidFireTrailStates.set(enemy.id, {
+      x: enemy.sprite.x,
+      y: enemy.sprite.y,
+    });
+  }
+
   /** Naechstes gueltiges Wurfziel innerhalb der Reichweite (Spieler bzw. gegnerische Fraktion). */
   private findThrowTarget(
     enemy: EnemyEntity,
@@ -444,6 +526,12 @@ export class CoopDefenseEnemyAbilitySystem {
     for (const enemyId of this.spawnThrowReadyAt.keys()) {
       if (!activeEnemyIds.has(enemyId)) this.spawnThrowReadyAt.delete(enemyId);
     }
+    for (const enemyId of this.voidFireChunkReadyAt.keys()) {
+      if (!activeEnemyIds.has(enemyId)) this.voidFireChunkReadyAt.delete(enemyId);
+    }
+    for (const enemyId of this.voidFireTrailStates.keys()) {
+      if (!activeEnemyIds.has(enemyId)) this.voidFireTrailStates.delete(enemyId);
+    }
     for (const [enemyId, state] of this.teleportStates) {
       if (activeEnemyIds.has(enemyId)) continue;
       if (state.puckId !== undefined) this.projectileManager.destroyProjectile(state.puckId);
@@ -452,5 +540,11 @@ export class CoopDefenseEnemyAbilitySystem {
     for (const enemyId of this.activeStinkAuraEnemyIds) {
       if (!activeEnemyIds.has(enemyId)) this.activeStinkAuraEnemyIds.delete(enemyId);
     }
+  }
+
+  private sampleVoidFireChunkInterval(ability: CoopDefenseEnemyVoidFireChunkConfig): number {
+    const min = Math.max(1, Math.floor(ability.intervalMinMs));
+    const max = Math.max(min, Math.floor(ability.intervalMaxMs));
+    return min + Math.floor(Math.random() * (max - min + 1));
   }
 }

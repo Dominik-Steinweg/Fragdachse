@@ -142,8 +142,15 @@ export class RpcCoordinator {
   }
 
   private registerFireChunkEffectHandler(): void {
-    bridge.registerFireChunkEffectHandler((x, y, targets, landsAt) => {
-      this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets, landsAt, bridge.getSynchronizedNow());
+    bridge.registerFireChunkEffectHandler((x, y, targets, landsAt, visualStyle) => {
+      this.renderers.flamethrowerUpgrades.playFireChunkBurst(
+        x,
+        y,
+        targets,
+        landsAt,
+        bridge.getSynchronizedNow(),
+        visualStyle,
+      );
     });
   }
 

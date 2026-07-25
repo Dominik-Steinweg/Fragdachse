@@ -8,7 +8,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, GroundFireVisualStyle, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   type GeometryHit,
   findNearestRectangleHit as geomNearestRectangleHit,
@@ -100,6 +100,7 @@ interface BurnSourceState {
   stacks: BurnStackBucket[];
   weaponName: string;
   origin: BurnOrigin;
+  visualStyle: GroundFireVisualStyle;
 }
 
 export interface ActiveBurnSource {
@@ -107,6 +108,7 @@ export interface ActiveBurnSource {
   sourceId: string;
   weaponName: string;
   origin: BurnOrigin;
+  visualStyle: GroundFireVisualStyle;
   stackCount: number;
   damagePerTick: number;
   tickIntervalMs: number;
@@ -355,18 +357,27 @@ export class CombatSystem {
     if (enemy) return enemy.isBurrowed();
     return this.burrowSystem?.isBurrowed(id) ?? false;
   }
-  getBurnStackCount(id: string): number {
+  getBurnVisualState(
+    id: string,
+    now = Date.now(),
+  ): { stackCount: number; visualStyle: GroundFireVisualStyle } {
     const sourceStates = this.burnStates.get(id);
-    if (!sourceStates) return 0;
+    if (!sourceStates) return { stackCount: 0, visualStyle: 'normal' };
 
-    const now = Date.now();
     let totalStacks = 0;
+    let visualStyle: GroundFireVisualStyle = 'normal';
     for (const state of sourceStates.values()) {
       for (const bucket of state.stacks) {
-        if (bucket.expiresAt > now) totalStacks += bucket.stackCount;
+        if (bucket.expiresAt <= now) continue;
+        totalStacks += bucket.stackCount;
+        if (state.visualStyle === 'void') visualStyle = 'void';
       }
     }
-    return totalStacks;
+    return { stackCount: totalStacks, visualStyle };
+  }
+
+  getBurnStackCount(id: string): number {
+    return this.getBurnVisualState(id).stackCount;
   }
 
   getActiveBurnSources(id: string, now = Date.now()): ActiveBurnSource[] {
@@ -386,6 +397,7 @@ export class CombatSystem {
         sourceId: state.sourceId,
         weaponName: state.weaponName,
         origin: state.origin,
+        visualStyle: state.visualStyle,
         stackCount,
         damagePerTick: totalDamagePerTick / stackCount,
         tickIntervalMs: BURN_TICK_INTERVAL_MS,
@@ -493,6 +505,7 @@ export class CombatSystem {
     sourceId: string,
     weaponName: string,
     origin: BurnOrigin = 'generic',
+    visualStyle: GroundFireVisualStyle = 'normal',
   ): void {
     if (!this.isAlive(targetId)) return;
     if (!this.canDamageTarget(attackerId, targetId)) return;
@@ -516,8 +529,11 @@ export class CombatSystem {
         stacks: [],
         weaponName,
         origin,
+        visualStyle,
       };
       targetState.set(sourceKey, sourceState);
+    } else {
+      sourceState.visualStyle = visualStyle;
     }
 
     // Ablaufzeiten werden auf den globalen Brandtick gebündelt. Treffer desselben

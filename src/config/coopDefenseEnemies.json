@@ -268,7 +268,7 @@
       "knockbackFactor": 0.1,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "FLAMETHROWER", "targetMode": "players", "minimumFireDurationMs": 1000 },
+        { "weaponId": "INFERNO_COLOSSUS_FLAMETHROWER", "targetMode": "players", "minimumFireDurationMs": 1000 },
         { "weaponId": "INFERNO_COLOSSUS_BITE", "targetMode": "rocks" }
       ],
       "attackScanIntervalMs": 70,
@@ -277,7 +277,25 @@
       "imageKey": "enemy_inferno_colossus",
       "isBoss": true,
       "displayName": "Flammenkoloss",
-      "glow": { "color": 16742942, "sizeFactor": 1.5, "alpha": 0.62, "lightRadiusPx": 130, "lightIntensity": 1 },
+      "glow": { "color": 12799231, "sizeFactor": 1.65, "alpha": 1, "lightRadiusPx": 265, "lightIntensity": 1 },
+      "voidFireChunks": {
+        "count": 20,
+        "searchRadius": 160,
+        "flightMs": 320,
+        "igniteCenter": false,
+        "durationMs": 6000,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "Lila Höllenbrand",
+        "intervalMinMs": 4000,
+        "intervalMaxMs": 6000
+      },
+      "voidFireTrail": {
+        "durationMs": 6000,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "Lila Höllenspur"
+      },
       "trainAwareness": {
         "safetyDistancePx": 48,
         "timeSafetyMarginMs": 750

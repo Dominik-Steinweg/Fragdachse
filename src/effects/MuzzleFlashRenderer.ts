@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, VOID_FIRE_COLOR } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
-import { createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
@@ -155,8 +155,12 @@ export class MuzzleFlashRenderer {
     // Kurzer Lichtimpuls in der Mündungsfarbe. Bewusst ohne Lichtverdeckung: Schüsse
     // sind die mit Abstand häufigste Lichtquelle, und der Impuls ist zu kurz, als dass
     // ein Schlagschatten überhaupt lesbar wäre.
+    const isVoidFlame = preset === 'flame' && color === VOID_FIRE_COLOR;
+    const lightColor = isVoidFlame
+      ? mixColors(color, 0xffffff, 0.58)
+      : color ?? cfg.tint;
     this.lighting?.pulse('muzzleFlash', x, y, {
-      color: color ?? cfg.tint,
+      color: lightColor,
       radiusPx: 170 * (0.8 + cfg.scaleX * 0.4),
       intensity: Phaser.Math.Clamp(cfg.alpha * 1.35, 0.45, 1),
     });
@@ -190,7 +194,9 @@ export class MuzzleFlashRenderer {
       scale: { start: 0.6, end: 0.04 },
       // Emitter pro Schuss, nicht geteilt: der Faktor darf hier bei der Erzeugung wirken.
       alpha: { start: emissiveAlpha(0.82), end: 0 },
-      tint: [...cfg.sparkTints],
+      tint: isVoidFlame
+        ? [0xffffff, mixColors(color, 0xffffff, 0.58), color]
+        : [...cfg.sparkTints],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH.PROJECTILES + 1.5);

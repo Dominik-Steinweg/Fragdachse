@@ -1,26 +1,36 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { FireChunkTarget, PlayerNetState, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
+import type { FireChunkTarget, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
 import { createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';
 import { addInternalBlur, addInternalGlow, setInternalFxPadding } from '../utils/phaserFx';
 import {
   ensureFlameTextures,
+  ensureVoidFlameTextures,
   FLAME_COLORS_CORE,
   FLAME_COLORS_OUTER,
   FLAME_COLORS_SPARK,
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
   TEX_FLAME_SPARK,
+  TEX_VOID_FLAME_CORE,
+  TEX_VOID_FLAME_EMBER,
+  TEX_VOID_FLAME_SPARK,
+  VOID_FLAME_COLORS_CORE,
+  VOID_FLAME_COLORS_OUTER,
+  VOID_FLAME_COLORS_SPARK,
 } from './FlameShared';
 import { GROUND_FIRE_CELL_SIZE } from './FireSystem';
 import { GROUND_FIRE_LIGHT_BUCKET_SIZE, MAX_GROUND_FIRE_LIGHTS } from './LightingConfig';
 import type { LightingSystem } from './LightingSystem';
 
 const TEX_GROUND_HEAT = '__ground_fire_heat_haze';
+const TEX_VOID_GROUND_HEAT = '__void_ground_fire_heat_haze';
 const TEX_GROUND_SMOKE = '__ground_fire_smoke';
 const GROUND_DEPTH = DEPTH.ROCKS - 0.24;
-const GROUND_PARTICLE_DEPTH = DEPTH.FIRE - 0.18;
+// Bodenfeuer liegt vollständig zwischen Weltgeometrie und Figuren. Auch die höchsten
+// Funken bleiben damit unter Spieler-, Gegner- und Boss-Visuals.
+const GROUND_PARTICLE_DEPTH = DEPTH.ROCKS + 0.2;
 const RING_PARTICLE_DEPTH = DEPTH.FIRE + 0.12;
 const MAX_GROUND_EMISSIONS_PER_SECOND = 720;
 /**
@@ -56,6 +66,7 @@ interface GroundVisual {
   expiresAt: number;
   intensity: number;
   phase: number;
+  visualStyle: GroundFireVisualStyle;
 }
 
 interface RingVisual {
@@ -138,6 +149,9 @@ export class FlamethrowerUpgradeRenderer {
   private readonly groundOuter: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly groundSparks: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly groundSmoke: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly voidGroundCore: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly voidGroundOuter: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly voidGroundSparks: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly ringFlames: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly ringSparks: Phaser.GameObjects.Particles.ParticleEmitter;
   private cells: readonly SyncedBurningGroundCell[] = [];
@@ -150,9 +164,20 @@ export class FlamethrowerUpgradeRenderer {
    * ein Flächenbrand soll wenige große warme Lichter werfen statt hunderter kleiner.
    * Wiederverwendete Puffer, damit pro Frame nichts allokiert wird.
    */
-  private readonly groundLightBuckets = new Map<string, { x: number; y: number; weight: number }>();
+  private readonly groundLightBuckets = new Map<string, {
+    x: number;
+    y: number;
+    weight: number;
+    visualStyle: GroundFireVisualStyle;
+  }>();
   private readonly activeGroundLightKeys = new Set<string>();
-  private readonly groundLightRanking: Array<{ key: string; x: number; y: number; weight: number }> = [];
+  private readonly groundLightRanking: Array<{
+    key: string;
+    x: number;
+    y: number;
+    weight: number;
+    visualStyle: GroundFireVisualStyle;
+  }> = [];
   private nextChunkLightId = 0;
   private readonly activeChunkLightKeys = new Set<string>();
 
@@ -161,12 +186,30 @@ export class FlamethrowerUpgradeRenderer {
     private readonly playerManager: PlayerManager,
   ) {
     ensureFlameTextures(scene);
+    ensureVoidFlameTextures(scene);
     this.ensureHeatTexture();
+    this.ensureVoidHeatTexture();
     this.ensureSmokeTexture();
     this.groundCore = this.createCoreEmitter(GROUND_PARTICLE_DEPTH + 0.05);
     this.groundOuter = this.createOuterEmitter(GROUND_PARTICLE_DEPTH);
     this.groundSparks = this.createSparkEmitter(GROUND_PARTICLE_DEPTH + 0.1, false);
     this.groundSmoke = this.createSmokeEmitter(GROUND_PARTICLE_DEPTH - 0.08);
+    this.voidGroundCore = this.createCoreEmitter(
+      GROUND_PARTICLE_DEPTH + 0.07,
+      TEX_VOID_FLAME_CORE,
+      VOID_FLAME_COLORS_CORE,
+    );
+    this.voidGroundOuter = this.createOuterEmitter(
+      GROUND_PARTICLE_DEPTH + 0.02,
+      TEX_VOID_FLAME_EMBER,
+      VOID_FLAME_COLORS_OUTER,
+    );
+    this.voidGroundSparks = this.createSparkEmitter(
+      GROUND_PARTICLE_DEPTH + 0.12,
+      false,
+      TEX_VOID_FLAME_SPARK,
+      VOID_FLAME_COLORS_SPARK,
+    );
     this.ringFlames = this.createRingFlameEmitter(RING_PARTICLE_DEPTH + 0.04);
     this.ringSparks = this.createSparkEmitter(RING_PARTICLE_DEPTH + 0.1, true);
     this.ringFlames.addParticleProcessor(new RingTurbulenceProcessor(32));
@@ -177,11 +220,18 @@ export class FlamethrowerUpgradeRenderer {
 
   syncGround(snapshot: SyncedBurningGroundSnapshot): void {
     this.cells = snapshot.cells;
-    const blocks = new Map<string, { x: number; y: number; expiresAt: number; intensity: number; seed: number }>();
+    const blocks = new Map<string, {
+      x: number;
+      y: number;
+      expiresAt: number;
+      intensity: number;
+      seed: number;
+      visualStyle: GroundFireVisualStyle;
+    }>();
     for (const cell of snapshot.cells) {
       const blockX = Math.floor(cell.gridX / 2);
       const blockY = Math.floor(cell.gridY / 2);
-      const key = `${blockX}:${blockY}`;
+      const key = `${cell.visualStyle}:${blockX}:${blockY}`;
       const current = blocks.get(key);
       if (current) {
         current.expiresAt = Math.max(current.expiresAt, cell.expiresAt);
@@ -192,7 +242,8 @@ export class FlamethrowerUpgradeRenderer {
           y: (blockY * 2 + 1) * GROUND_FIRE_CELL_SIZE,
           expiresAt: cell.expiresAt,
           intensity: Math.max(1, cell.intensity),
-          seed: (blockX * 73856093) ^ (blockY * 19349663),
+          seed: (blockX * 73856093) ^ (blockY * 19349663) ^ (cell.visualStyle === 'void' ? 83492791 : 0),
+          visualStyle: cell.visualStyle,
         });
       }
     }
@@ -207,6 +258,7 @@ export class FlamethrowerUpgradeRenderer {
           ?? this.scene.add.image(0, 0, TEX_GROUND_HEAT);
         const phase = this.seededUnit(block.seed, 17) * Math.PI * 2;
         image
+          .setTexture(block.visualStyle === 'void' ? TEX_VOID_GROUND_HEAT : TEX_GROUND_HEAT)
           .setPosition(
             block.x + (this.seededUnit(block.seed, 31) - 0.5) * GROUND_FIRE_CELL_SIZE * 0.65,
             block.y + (this.seededUnit(block.seed, 47) - 0.5) * GROUND_FIRE_CELL_SIZE * 0.6,
@@ -216,7 +268,13 @@ export class FlamethrowerUpgradeRenderer {
           .setRotation(phase)
           .setVisible(true)
           .setActive(true);
-        visual = { image, expiresAt: block.expiresAt, intensity: block.intensity, phase };
+        visual = {
+          image,
+          expiresAt: block.expiresAt,
+          intensity: block.intensity,
+          phase,
+          visualStyle: block.visualStyle,
+        };
         this.ground.set(key, visual);
       }
       visual.expiresAt = block.expiresAt;
@@ -224,16 +282,26 @@ export class FlamethrowerUpgradeRenderer {
     }
   }
 
-  playFireChunkBurst(x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number, now = Date.now()): void {
+  playFireChunkBurst(
+    x: number,
+    y: number,
+    targets: readonly FireChunkTarget[],
+    landsAt: number,
+    now = Date.now(),
+    visualStyle: GroundFireVisualStyle = 'normal',
+  ): void {
     const duration = Phaser.Math.Clamp(landsAt - now, 80, 420);
     for (const target of targets) {
       // Ein Follow-Light je fliegendem Brocken; freigegeben beim Aufschlag.
       const lightKey = `firechunk:${this.nextChunkLightId++}`;
       this.activeChunkLightKeys.add(lightKey);
-      const chunk = this.scene.add.image(x, y, TEX_FLAME_EMBER)
+      const isVoid = visualStyle === 'void';
+      const chunk = this.scene.add.image(x, y, isVoid ? TEX_VOID_FLAME_EMBER : TEX_FLAME_EMBER)
         .setDepth(DEPTH.PROJECTILES + 0.4)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(Phaser.Utils.Array.GetRandom([...FLAME_COLORS_OUTER]))
+        .setTint(Phaser.Utils.Array.GetRandom([
+          ...(isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER),
+        ]))
         .setScale(0.72);
       this.flyingChunks.add(chunk);
       const arc = Phaser.Math.Between(22, 46);
@@ -251,7 +319,7 @@ export class FlamethrowerUpgradeRenderer {
           );
           chunk.setRotation(t * Math.PI * 4);
           chunk.setScale(0.72 + Math.sin(t * Math.PI) * 0.28);
-          this.lighting?.setLight(lightKey, 'fireChunk', chunk.x, chunk.y);
+          this.lighting?.setLight(lightKey, isVoid ? 'voidFireChunk' : 'fireChunk', chunk.x, chunk.y);
         },
         onComplete: () => {
           const shouldLand = chunk.active;
@@ -260,10 +328,13 @@ export class FlamethrowerUpgradeRenderer {
           this.lighting?.releaseLight(lightKey);
           chunk.destroy();
           if (!shouldLand) return;
-          this.lighting?.pulse('fireChunkImpact', target.x, target.y);
-          this.groundOuter.emitParticleAt(target.x, target.y, 3);
-          this.groundCore.emitParticleAt(target.x, target.y, 2);
-          this.groundSparks.emitParticleAt(target.x, target.y, 3);
+          this.lighting?.pulse(isVoid ? 'voidFireChunkImpact' : 'fireChunkImpact', target.x, target.y);
+          const outer = isVoid ? this.voidGroundOuter : this.groundOuter;
+          const core = isVoid ? this.voidGroundCore : this.groundCore;
+          const sparks = isVoid ? this.voidGroundSparks : this.groundSparks;
+          outer.emitParticleAt(target.x, target.y, 3);
+          core.emitParticleAt(target.x, target.y, 2);
+          sparks.emitParticleAt(target.x, target.y, 3);
         },
       });
     }
@@ -301,7 +372,11 @@ export class FlamethrowerUpgradeRenderer {
         .setScale(baseScale * breathe, baseScale * (0.88 + Math.cos(now * 0.0017 + visual.phase) * 0.045))
         .setRotation(visual.phase + Math.sin(now * 0.00045 + visual.phase) * 0.08)
         .setAlpha((0.12 + intensity * 0.24) * fade)
-        .setTint(intensity > 0.72 ? 0xff9a32 : 0xd94a1f);
+        .setTint(
+          visual.visualStyle === 'void'
+            ? (intensity > 0.72 ? 0xd989ff : 0x9b3ce0)
+            : (intensity > 0.72 ? 0xff9a32 : 0xd94a1f),
+        );
     }
 
     this.emitGroundParticles(delta);
@@ -327,7 +402,7 @@ export class FlamethrowerUpgradeRenderer {
       if (remaining <= 0) continue;
       const bucketX = Math.floor(visual.image.x / GROUND_FIRE_LIGHT_BUCKET_SIZE);
       const bucketY = Math.floor(visual.image.y / GROUND_FIRE_LIGHT_BUCKET_SIZE);
-      const key = `${bucketX}:${bucketY}`;
+      const key = `${visual.visualStyle}:${bucketX}:${bucketY}`;
       const weight = Phaser.Math.Clamp(Math.log2(visual.intensity + 1) / 3, 0.28, 1)
         * Phaser.Math.Clamp(remaining / 420, 0, 1);
 
@@ -339,13 +414,20 @@ export class FlamethrowerUpgradeRenderer {
           x: (bucketX + 0.5) * GROUND_FIRE_LIGHT_BUCKET_SIZE,
           y: (bucketY + 0.5) * GROUND_FIRE_LIGHT_BUCKET_SIZE,
           weight,
+          visualStyle: visual.visualStyle,
         });
       }
     }
 
     this.groundLightRanking.length = 0;
     for (const [key, bucket] of buckets) {
-      this.groundLightRanking.push({ key, x: bucket.x, y: bucket.y, weight: bucket.weight });
+      this.groundLightRanking.push({
+        key,
+        x: bucket.x,
+        y: bucket.y,
+        weight: bucket.weight,
+        visualStyle: bucket.visualStyle,
+      });
     }
     this.groundLightRanking.sort((left, right) => right.weight - left.weight);
     if (this.groundLightRanking.length > MAX_GROUND_FIRE_LIGHTS) {
@@ -355,7 +437,7 @@ export class FlamethrowerUpgradeRenderer {
     const stillActive = this.activeGroundLightKeys;
     for (const entry of this.groundLightRanking) {
       const strength = Phaser.Math.Clamp(entry.weight, 0.25, 2.2);
-      lighting.setLight(`groundfire:${entry.key}`, 'groundFire', entry.x, entry.y, {
+      lighting.setLight(`groundfire:${entry.key}`, entry.visualStyle === 'void' ? 'voidGroundFire' : 'groundFire', entry.x, entry.y, {
         radiusPx: GROUND_FIRE_LIGHT_BUCKET_SIZE * (1.1 + Math.min(strength, 1.6) * 0.6),
         intensity: 0.45 + Math.min(strength, 1.6) * 0.3,
       });
@@ -385,6 +467,9 @@ export class FlamethrowerUpgradeRenderer {
     this.groundOuter.killAll();
     this.groundSparks.killAll();
     this.groundSmoke.killAll();
+    this.voidGroundCore.killAll();
+    this.voidGroundOuter.killAll();
+    this.voidGroundSparks.killAll();
     this.ringFlames.killAll();
     this.ringSparks.killAll();
     for (const chunk of this.flyingChunks) {
@@ -424,6 +509,9 @@ export class FlamethrowerUpgradeRenderer {
     destroyEmitter(this.groundOuter);
     destroyEmitter(this.groundSparks);
     destroyEmitter(this.groundSmoke);
+    destroyEmitter(this.voidGroundCore);
+    destroyEmitter(this.voidGroundOuter);
+    destroyEmitter(this.voidGroundSparks);
     destroyEmitter(this.ringFlames);
     destroyEmitter(this.ringSparks);
   }
@@ -447,10 +535,13 @@ export class FlamethrowerUpgradeRenderer {
         + Phaser.Math.FloatBetween(-GROUND_FIRE_CELL_SIZE * 0.72, GROUND_FIRE_CELL_SIZE * 0.72);
       const y = (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE
         + Phaser.Math.FloatBetween(-GROUND_FIRE_CELL_SIZE * 0.58, GROUND_FIRE_CELL_SIZE * 0.58);
-      this.groundOuter.emitParticleAt(x, y, intensity >= 3 ? 2 : 1);
-      if (Math.random() < 0.55 || intensity >= 2) this.groundCore.emitParticleAt(x, y + 2, 1);
+      const outer = cell.visualStyle === 'void' ? this.voidGroundOuter : this.groundOuter;
+      const core = cell.visualStyle === 'void' ? this.voidGroundCore : this.groundCore;
+      const sparks = cell.visualStyle === 'void' ? this.voidGroundSparks : this.groundSparks;
+      outer.emitParticleAt(x, y, intensity >= 3 ? 2 : 1);
+      if (Math.random() < 0.55 || intensity >= 2) core.emitParticleAt(x, y + 2, 1);
       if (Math.random() < Math.min(0.42, 0.08 + intensity * 0.07)) {
-        this.groundSparks.emitParticleAt(x, y, 1);
+        sparks.emitParticleAt(x, y, 1);
       }
       if (Math.random() < 0.12) this.groundSmoke.emitParticleAt(x, y - 3, 1);
     }
@@ -754,8 +845,12 @@ export class FlamethrowerUpgradeRenderer {
     return Math.ceil(this.getRingBandPointCount(radius) * 1.8);
   }
 
-  private createCoreEmitter(depth: number): Phaser.GameObjects.Particles.ParticleEmitter {
-    return createEmitter(this.scene, 0, 0, TEX_FLAME_CORE, {
+  private createCoreEmitter(
+    depth: number,
+    texture = TEX_FLAME_CORE,
+    colors: readonly number[] = FLAME_COLORS_CORE,
+  ): Phaser.GameObjects.Particles.ParticleEmitter {
+    return createEmitter(this.scene, 0, 0, texture, {
       lifespan: { min: 250, max: 520 },
       frequency: -1,
       quantity: 1,
@@ -764,7 +859,7 @@ export class FlamethrowerUpgradeRenderer {
       gravityY: -18,
       scale: { start: 0.52, end: 0.035 },
       alpha: { start: 0.96, end: 0 },
-      tint: [...FLAME_COLORS_CORE],
+      tint: [...colors],
       rotate: { min: -35, max: 35 },
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: 920,
@@ -773,8 +868,12 @@ export class FlamethrowerUpgradeRenderer {
     }, depth);
   }
 
-  private createOuterEmitter(depth: number): Phaser.GameObjects.Particles.ParticleEmitter {
-    return createEmitter(this.scene, 0, 0, TEX_FLAME_EMBER, {
+  private createOuterEmitter(
+    depth: number,
+    texture = TEX_FLAME_EMBER,
+    colors: readonly number[] = FLAME_COLORS_OUTER,
+  ): Phaser.GameObjects.Particles.ParticleEmitter {
+    return createEmitter(this.scene, 0, 0, texture, {
       lifespan: { min: 390, max: 780 },
       frequency: -1,
       quantity: 1,
@@ -783,7 +882,7 @@ export class FlamethrowerUpgradeRenderer {
       gravityY: -10,
       scale: { start: 0.67, end: 0.055 },
       alpha: { start: 0.82, end: 0 },
-      tint: [...FLAME_COLORS_OUTER],
+      tint: [...colors],
       rotate: { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: 1300,
@@ -813,8 +912,13 @@ export class FlamethrowerUpgradeRenderer {
     }, depth);
   }
 
-  private createSparkEmitter(depth: number, ring: boolean): Phaser.GameObjects.Particles.ParticleEmitter {
-    return createEmitter(this.scene, 0, 0, TEX_FLAME_SPARK, {
+  private createSparkEmitter(
+    depth: number,
+    ring: boolean,
+    texture = TEX_FLAME_SPARK,
+    colors: readonly number[] = FLAME_COLORS_SPARK,
+  ): Phaser.GameObjects.Particles.ParticleEmitter {
+    return createEmitter(this.scene, 0, 0, texture, {
       lifespan: ring ? { min: 260, max: 560 } : { min: 300, max: 680 },
       frequency: -1,
       quantity: 1,
@@ -823,7 +927,7 @@ export class FlamethrowerUpgradeRenderer {
       gravityY: ring ? 0 : -36,
       scale: { start: ring ? 0.9 : 0.75, end: 0.04 },
       alpha: { start: 1, end: 0 },
-      tint: [...FLAME_COLORS_SPARK],
+      tint: [...colors],
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: ring ? 360 : 520,
       reserve: ring ? 100 : 150,
@@ -871,6 +975,37 @@ export class FlamethrowerUpgradeRenderer {
           pixels.data[offset] = 255;
           pixels.data[offset + 1] = 116;
           pixels.data[offset + 2] = 24;
+          pixels.data[offset + 3] = Math.round(Phaser.Math.Clamp(alpha * 82, 0, 82));
+        }
+      }
+      ctx.putImageData(pixels, 0, 0);
+    });
+  }
+
+  private ensureVoidHeatTexture(): void {
+    ensureCanvasTexture(this.scene.textures, TEX_VOID_GROUND_HEAT, 96, 96, (ctx) => {
+      const size = 96;
+      const center = size * 0.5;
+      const pixels = ctx.createImageData(size, size);
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const nx = (x + 0.5 - center) / center;
+          const ny = (y + 0.5 - center) / center;
+          const radius = Math.hypot(nx, ny);
+          const angle = Math.atan2(ny, nx);
+          const contour = 0.73
+            + Math.sin(angle * 3 + 0.8) * 0.09
+            + Math.sin(angle * 7 - 1.5) * 0.045;
+          const edge = Phaser.Math.Clamp((contour - radius) / 0.56, 0, 1);
+          const turbulence = 0.78
+            + Math.sin(nx * 8.1 + ny * 5.7) * 0.09
+            + Math.sin(nx * 17.3 - ny * 11.2) * 0.05;
+          const alpha = Math.pow(edge, 1.28) * turbulence;
+          if (alpha <= 0.002) continue;
+          const offset = (y * size + x) * 4;
+          pixels.data[offset] = 255;
+          pixels.data[offset + 1] = 255;
+          pixels.data[offset + 2] = 255;
           pixels.data[offset + 3] = Math.round(Phaser.Math.Clamp(alpha * 82, 0, 82));
         }
       }

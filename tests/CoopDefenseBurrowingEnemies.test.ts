@@ -170,6 +170,7 @@ describe('Enemy snapshot codec', () => {
       hp: 90,
       maxHp: 150,
       burnStacks: 2,
+      burnVisualStyle: 'void',
       faction: 'hostile',
       burrowed: true,
       dashPhase: 1,
@@ -192,6 +193,19 @@ describe('Enemy snapshot codec', () => {
     const stream: Array<number | string> = [];
     encodeEnemyUpsert(stream, { id: 'e2a', x: 10, y: 20 });
     expect(decodeEnemyUpserts(stream)[0].burrowed).toBeUndefined();
+  });
+
+  it('packs void burn into the existing burn value without changing the stream shape', () => {
+    const normal: Array<number | string> = [];
+    const voidFire: Array<number | string> = [];
+    encodeEnemyUpsert(normal, { id: 'e2a', burnStacks: 3, burnVisualStyle: 'normal' });
+    encodeEnemyUpsert(voidFire, { id: 'e2a', burnStacks: 3, burnVisualStyle: 'void' });
+
+    expect(voidFire).toHaveLength(normal.length);
+    expect(decodeEnemyUpserts(voidFire)[0]).toMatchObject({
+      burnStacks: 3,
+      burnVisualStyle: 'void',
+    });
   });
 
   it('keeps every enemy kind addressable by its wire index', () => {

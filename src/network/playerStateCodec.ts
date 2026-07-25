@@ -31,6 +31,7 @@ interface CompactPlayerState {
   d: number;   // adrenaline
   g: number;   // rage
   b: number;   // burnStacks
+  bv?: number; // burnVisualStyle: 1 = void, fehlt = normal
   p: number;   // dashPhase
   w: number;   // burrowPhase als Index
   f: number;   // Bitfeld (siehe FLAG_*)
@@ -73,6 +74,7 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   };
 
   if (state.activeUltimateId !== undefined) compact.k = state.activeUltimateId;
+  if (state.burnVisualStyle === 'void') compact.bv = 1;
   if (state.ultimateChargeFraction) compact.cf = state.ultimateChargeFraction;
   if (state.ultimateChargeRange) compact.cr = state.ultimateChargeRange;
   if (state.decoyStealthRemainingFrac) compact.sf = state.decoyStealthRemainingFrac;
@@ -106,6 +108,7 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
     isRaging: (flags & FLAG_RAGING) !== 0,
     activeUltimateId: compact.k,
     burnStacks: compact.b,
+    burnVisualStyle: compact.bv === 1 ? 'void' : 'normal',
     isChargingUltimate: (flags & FLAG_CHARGING_ULT) !== 0,
     ultimateChargeFraction: compact.cf ?? 0,
     ultimateChargeRange: compact.cr ?? 0,

@@ -17,7 +17,7 @@ import {
   type CoopDefenseEnemyWeaponTargetMode,
   type ResolvedCoopDefenseEnemyConfig,
 } from '../config/coopDefenseEnemies';
-import type { SyncedEnemyState } from '../types';
+import type { GroundFireVisualStyle, SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
@@ -68,6 +68,7 @@ export class EnemyEntity {
   private burnRenderer: EntityBurnRenderer | null = null;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
+  private burnVisualStyle: GroundFireVisualStyle = 'normal';
   /** Für die an dieser Entity hängenden Lichtquellen (aktuell: Brand). */
   private lighting: LightingSystem | null = null;
   private moveSpeedMultiplier = 1;
@@ -227,9 +228,10 @@ export class EnemyEntity {
     return this.maxHp;
   }
 
-  updateBurnStacks(stacks: number): void {
+  updateBurnStacks(stacks: number, visualStyle: GroundFireVisualStyle = 'normal'): void {
     const nextStacks = Math.max(0, Math.floor(stacks));
     this.burnStacks = nextStacks;
+    this.burnVisualStyle = visualStyle;
     if (nextStacks <= 0) {
       this.burnRenderer?.destroy();
       this.burnRenderer = null;
@@ -441,6 +443,7 @@ export class EnemyEntity {
       hp: this.currentHp,
       maxHp: this.getMaxHp(),
       burnStacks: Math.min(this.burnStacks, MAX_VISUAL_BURN_STACKS),
+      burnVisualStyle: this.burnVisualStyle,
       faction: this.faction,
       burrowed: this.burrowed,
       dashPhase: this.dashPhase,
@@ -474,6 +477,7 @@ export class EnemyEntity {
       this.config.size,
       this.burnStacks,
       this.sprite.visible && this.currentHp > 0,
+      this.burnVisualStyle,
     );
   }
 

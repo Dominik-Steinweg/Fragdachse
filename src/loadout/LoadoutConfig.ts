@@ -1,4 +1,4 @@
-import { COLORS, RAGE_MAX } from '../config';
+import { COLORS, RAGE_MAX, VOID_FIRE_COLOR } from '../config';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
@@ -1943,6 +1943,47 @@ export const WEAPON_CONFIGS = {
       successKey: 'shot_flame',
       failureKey: 'shot_dry_trigger',
     },      
+  } as WeaponConfig,
+
+  /**
+   * Boss-exklusive Leerenflamme. Sie teilt die Treffermechanik des Spieler-Flammenwerfers,
+   * besitzt aber eine etwas groessere Reichweite und eine eigene lila VFX-/Lichtfamilie.
+   */
+  INFERNO_COLOSSUS_FLAMETHROWER: {
+    id:                   'INFERNO_COLOSSUS_FLAMETHROWER',
+    displayName:          'Lila Höllenwerfer',
+    cooldown:             70,
+    damage:               2,
+    range:                300,
+    fire: {
+      type:               'flamethrower',
+      projectileSpeed:    400,
+      hitboxStartSize:    14,
+      hitboxEndSize:      120,
+      hitboxGrowRate:     60,
+      velocityDecay:      0.82,
+      burnDurationMs:     2000,
+      burnDamagePerTick:  0.25,
+      piercingCount:      0,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       8,
+    spreadMoving:         12,
+    spreadPerShot:        0.3,
+    maxDynamicSpread:     6,
+    spreadRecoveryDelay:  300,
+    spreadRecoveryRate:   4,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'flame' as ProjectileStyle,
+    projectileColor:      VOID_FIRE_COLOR,
+    rockDamageMult:       0,
+    trainDamageMult:      1,
+    shotAudio: {
+      successKey: 'shot_flame',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   LAUBBLAESER: {

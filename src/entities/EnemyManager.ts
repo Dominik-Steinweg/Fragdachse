@@ -841,8 +841,12 @@ export class EnemyManager {
       delta.maxHp = current.maxHp;
     }
 
-    if (current.burnStacks !== previous.burnStacks) {
+    if (
+      current.burnStacks !== previous.burnStacks
+      || current.burnVisualStyle !== previous.burnVisualStyle
+    ) {
       delta.burnStacks = current.burnStacks;
+      delta.burnVisualStyle = current.burnVisualStyle;
     }
     if (current.faction !== previous.faction || current.ownerId !== previous.ownerId || current.ownerColor !== previous.ownerColor) {
       delta.faction = current.faction;
@@ -882,7 +886,7 @@ export class EnemyManager {
       enemy.faceAngle(rotation);
       enemy.setTargetRotation(rotation);
       enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
-      enemy.updateBurnStacks(remote.burnStacks ?? 0);
+      enemy.updateBurnStacks(remote.burnStacks ?? 0, remote.burnVisualStyle ?? 'normal');
       enemy.setDashPhase(remote.dashPhase ?? 0);
       this.enemies.set(remote.id, enemy);
       if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy);
@@ -896,7 +900,13 @@ export class EnemyManager {
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp());
     }
-    if (remote.burnStacks !== undefined) enemy.updateBurnStacks(remote.burnStacks);
+    if (remote.burnStacks !== undefined || remote.burnVisualStyle !== undefined) {
+      const currentBurn = enemy.getNetSnapshot();
+      enemy.updateBurnStacks(
+        remote.burnStacks ?? currentBurn.burnStacks,
+        remote.burnVisualStyle ?? currentBurn.burnVisualStyle ?? 'normal',
+      );
+    }
     if (remote.dashPhase !== undefined) enemy.setDashPhase(remote.dashPhase);
     if (remote.x !== undefined || remote.y !== undefined) {
       enemy.setTargetPosition(remote.x ?? enemy.sprite.x, remote.y ?? enemy.sprite.y);

@@ -1,9 +1,10 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, VOID_FIRE_COLOR } from '../config';
 import { circleZone, makeAdditive } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import {
   ensureFlameTextures,
+  ensureVoidFlameTextures,
   FLAME_COLORS_CORE,
   FLAME_COLORS_OUTER,
   FLAME_COLORS_SPARK,
@@ -11,6 +12,13 @@ import {
   TEX_FLAME_EMBER,
   TEX_FLAME_SPARK,
   TEX_FLAME_GLOW,
+  TEX_VOID_FLAME_CORE,
+  TEX_VOID_FLAME_EMBER,
+  TEX_VOID_FLAME_SPARK,
+  TEX_VOID_FLAME_GLOW,
+  VOID_FLAME_COLORS_CORE,
+  VOID_FLAME_COLORS_OUTER,
+  VOID_FLAME_COLORS_SPARK,
 } from './FlameShared';
 import { FLAME_LIGHT_ID_STRIDE } from './LightingConfig';
 import type { LightingSystem } from './LightingSystem';
@@ -29,6 +37,7 @@ interface FlameVisual {
   outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   glowImage:    Phaser.GameObjects.Image;
+  isVoid:       boolean;
 }
 
 /**
@@ -63,18 +72,27 @@ export class FlameRenderer {
    */
   generateTextures(): void {
     ensureFlameTextures(this.scene);
+    ensureVoidFlameTextures(this.scene);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /** Registriert eine neue Flammen-Hitbox für die visuelle Darstellung. */
-  createVisual(id: number, x: number, y: number, size: number): void {
+  createVisual(id: number, x: number, y: number, size: number, color: number): void {
     if (this.flames.has(id)) return;
 
     const spread = Math.max(size * 0.4, 4);
+    const isVoid = color === VOID_FIRE_COLOR;
+    const coreTexture = isVoid ? TEX_VOID_FLAME_CORE : TEX_FLAME_CORE;
+    const emberTexture = isVoid ? TEX_VOID_FLAME_EMBER : TEX_FLAME_EMBER;
+    const sparkTexture = isVoid ? TEX_VOID_FLAME_SPARK : TEX_FLAME_SPARK;
+    const glowTexture = isVoid ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW;
+    const coreColors = isVoid ? VOID_FLAME_COLORS_CORE : FLAME_COLORS_CORE;
+    const outerColors = isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER;
+    const sparkColors = isVoid ? VOID_FLAME_COLORS_SPARK : FLAME_COLORS_SPARK;
 
     // Kern-Flamme: heller, kleinerer Bereich
-    const coreEmitter = this.scene.add.particles(x, y, TEX_FLAME_CORE, {
+    const coreEmitter = this.scene.add.particles(x, y, coreTexture, {
       lifespan:  CORE_LIFESPAN,
       frequency: 16,
       quantity:  2,
@@ -82,14 +100,14 @@ export class FlameRenderer {
       speedY:    { min: -30, max: -8 },
       scale:     { start: 0.3 + size * 0.01, end: 0.05 },
       alpha:     { start: 0.9, end: 0 },
-      tint:      FLAME_COLORS_CORE,
+      tint:      [...coreColors],
       rotate:    { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
     });
     coreEmitter.setDepth(DEPTH_FLAME + 0.05);
     coreEmitter.addEmitZone(circleZone(spread * 0.4, 2));
-    const outerEmitter = this.scene.add.particles(x, y, TEX_FLAME_EMBER, {
+    const outerEmitter = this.scene.add.particles(x, y, emberTexture, {
       lifespan:  OUTER_LIFESPAN,
       frequency: 20,
       quantity:  2,
@@ -97,14 +115,14 @@ export class FlameRenderer {
       speedY:    { min: -40, max: -5 },
       scale:     { start: 0.4 + size * 0.015, end: 0.05 },
       alpha:     { start: 0.7, end: 0 },
-      tint:      FLAME_COLORS_OUTER,
+      tint:      [...outerColors],
       rotate:    { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
     });
     outerEmitter.setDepth(DEPTH_FLAME);
     outerEmitter.addEmitZone(circleZone(spread, 2));
-    const sparkEmitter = this.scene.add.particles(x, y, TEX_FLAME_SPARK, {
+    const sparkEmitter = this.scene.add.particles(x, y, sparkTexture, {
       lifespan:  SPARK_LIFESPAN,
       frequency: 50,
       quantity:  1,
@@ -112,7 +130,7 @@ export class FlameRenderer {
       speedY:    { min: -50, max: -15 },
       scale:     { start: 0.6, end: 0.1 },
       alpha:     { start: 1.0, end: 0 },
-      tint:      FLAME_COLORS_SPARK,
+      tint:      [...sparkColors],
       gravityY:  -30,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  true,
@@ -121,15 +139,15 @@ export class FlameRenderer {
     sparkEmitter.addEmitZone(circleZone(spread * 0.6, 1));
 
     // Glow: additiver Leucht-Halo der mit der Hitbox wächst
-    const glowImage = this.scene.add.image(x, y, TEX_FLAME_GLOW);
+    const glowImage = this.scene.add.image(x, y, glowTexture);
     glowImage.setBlendMode(Phaser.BlendModes.ADD);
     glowImage.setDepth(DEPTH_FLAME - 0.1);
-    glowImage.setAlpha(emissiveAlpha(0.55));
+    glowImage.setAlpha(emissiveAlpha(isVoid ? 0.82 : 0.55));
     const glowScale = Math.max(size / 48 * 2.5, 0.5);
     glowImage.setScale(glowScale);
-    glowImage.setTint(0xffaa44);
+    glowImage.setTint(isVoid ? VOID_FIRE_COLOR : 0xffaa44);
 
-    this.flames.set(id, { coreEmitter, outerEmitter, sparkEmitter, glowImage });
+    this.flames.set(id, { coreEmitter, outerEmitter, sparkEmitter, glowImage, isVoid });
   }
 
   /** Aktualisiert Position, Größe und Richtung einer Flammen-Hitbox. */
@@ -170,8 +188,8 @@ export class FlameRenderer {
     // Nur jede n-te Hitbox trägt Licht – sonst überstrahlt ein einzelner Strahl das
     // gesamte Frame-Budget. Freigabe läuft über destroyVisual().
     if (id % FLAME_LIGHT_ID_STRIDE === 0) {
-      this.lighting?.setLight(`flame:${id}`, 'flameProjectile', x, y, {
-        radiusPx: 80 + size * 2.2,
+      this.lighting?.setLight(`flame:${id}`, visual.isVoid ? 'voidFlameProjectile' : 'flameProjectile', x, y, {
+        radiusPx: visual.isVoid ? 96 + size * 2.55 : 80 + size * 2.2,
       });
     }
   }

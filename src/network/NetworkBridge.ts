@@ -24,7 +24,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -293,7 +293,7 @@ function decodeSlimeTrailSnapshot(raw: unknown): SyncedSlimeTrailSnapshot {
   };
 }
 
-type EncodedBurningGroundCell = [number, number, number, number, number];
+type EncodedBurningGroundCell = [number, number, number, number, number, number];
 interface EncodedBurningGroundDelta {
   f?: EncodedBurningGroundCell[];
   u?: EncodedBurningGroundCell[];
@@ -301,11 +301,18 @@ interface EncodedBurningGroundDelta {
 }
 
 function encodeBurningGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {
-  return [cell.id, cell.gridX, cell.gridY, cell.expiresAt, cell.intensity];
+  return [cell.id, cell.gridX, cell.gridY, cell.expiresAt, cell.intensity, cell.visualStyle === 'void' ? 1 : 0];
 }
 
-function decodeBurningGroundCell([id, gridX, gridY, expiresAt, intensity]: EncodedBurningGroundCell) {
-  return { id, gridX, gridY, expiresAt, intensity: Math.max(1, intensity ?? 1) };
+function decodeBurningGroundCell([id, gridX, gridY, expiresAt, intensity, visualStyle]: EncodedBurningGroundCell) {
+  return {
+    id,
+    gridX,
+    gridY,
+    expiresAt,
+    intensity: Math.max(1, intensity ?? 1),
+    visualStyle: visualStyle === 1 ? 'void' as const : 'normal' as const,
+  };
 }
 
 type LoadoutUseHandler = (
@@ -323,7 +330,13 @@ type LoadoutUseHandler = (
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type SlimeBloomEffectHandler = (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
-type FireChunkEffectHandler = (x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number) => void;
+type FireChunkEffectHandler = (
+  x: number,
+  y: number,
+  targets: readonly FireChunkTarget[],
+  landsAt: number,
+  visualStyle: GroundFireVisualStyle,
+) => void;
 type BlackHoleEffectHandler = (x: number, y: number, radius: number, durationMs: number) => void;
 type MiniRocketCollectionEffectHandler = (x: number, y: number, color: number) => void;
 type MiniRocketDestructionEffectHandler = (x: number, y: number, color: number) => void;
@@ -1688,8 +1701,20 @@ export class NetworkBridge {
     });
   }
 
-  broadcastFireChunkEffect(x: number, y: number, targets: readonly FireChunkTarget[], landsAt: number): void {
-    this.broadcastGameplayEvent('fcfx', { x, y, t: landsAt, p: targets.flatMap(target => [target.x, target.y]) });
+  broadcastFireChunkEffect(
+    x: number,
+    y: number,
+    targets: readonly FireChunkTarget[],
+    landsAt: number,
+    visualStyle: GroundFireVisualStyle = 'normal',
+  ): void {
+    this.broadcastGameplayEvent('fcfx', {
+      x,
+      y,
+      t: landsAt,
+      p: targets.flatMap(target => [target.x, target.y]),
+      ...(visualStyle === 'void' ? { v: 1 } : {}),
+    });
   }
 
   registerFireChunkEffectHandler(handler: FireChunkEffectHandler): void {
@@ -1697,10 +1722,10 @@ export class NetworkBridge {
     this.registerAllRpcHandler('fcfx', async (data: unknown): Promise<unknown> => {
       const fireChunkEffectHandler = this.fireChunkEffectHandler;
       if (!fireChunkEffectHandler) return undefined;
-      const { x, y, t, p } = data as { x: number; y: number; t: number; p: number[] };
+      const { x, y, t, p, v } = data as { x: number; y: number; t: number; p: number[]; v?: number };
       const targets: FireChunkTarget[] = [];
       for (let index = 0; index + 1 < p.length; index += 2) targets.push({ x: p[index], y: p[index + 1] });
-      fireChunkEffectHandler(x, y, targets, t);
+      fireChunkEffectHandler(x, y, targets, t, v === 1 ? 'void' : 'normal');
       return undefined;
     });
   }

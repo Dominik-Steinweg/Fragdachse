@@ -1,9 +1,11 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, VOID_FIRE_COLOR } from '../config';
 import { circleZone } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
+import type { GroundFireVisualStyle } from '../types';
 import {
   ensureFlameTextures,
+  ensureVoidFlameTextures,
   FLAME_COLORS_CORE,
   FLAME_COLORS_OUTER,
   FLAME_COLORS_SPARK,
@@ -11,12 +13,20 @@ import {
   TEX_FLAME_EMBER,
   TEX_FLAME_SPARK,
   TEX_FLAME_GLOW,
+  TEX_VOID_FLAME_CORE,
+  TEX_VOID_FLAME_EMBER,
+  TEX_VOID_FLAME_SPARK,
+  TEX_VOID_FLAME_GLOW,
+  VOID_FLAME_COLORS_CORE,
+  VOID_FLAME_COLORS_OUTER,
+  VOID_FLAME_COLORS_SPARK,
 } from './FlameShared';
 
 const DEPTH_BURN_GLOW = DEPTH.PLAYERS + 0.18;
 const DEPTH_BURN_OUTER = DEPTH.PLAYERS + 0.23;
 const DEPTH_BURN_CORE = DEPTH.PLAYERS + 0.27;
 const DEPTH_BURN_SPARK = DEPTH.PLAYERS + 0.32;
+const VOID_ENTITY_BURN_LIGHT_COLOR = 0xe8c8ff;
 export const MAX_VISUAL_BURN_STACKS = 32;
 
 /** Gemeinsamer, stackabhängiger Brand-Partikeleffekt für Spieler und Gegner. */
@@ -28,6 +38,7 @@ export class EntityBurnRenderer {
   private active = false;
   private lastStacks = -1;
   private lastBodySize = -1;
+  private visualStyle: GroundFireVisualStyle = 'normal';
   private lighting: LightingSystem | null = null;
   /**
    * Anders als die zentralen Renderer gehört eine Instanz zu genau einer Entity. Der
@@ -38,6 +49,7 @@ export class EntityBurnRenderer {
 
   constructor(private readonly scene: Phaser.Scene) {
     ensureFlameTextures(scene);
+    ensureVoidFlameTextures(scene);
 
     this.coreEmitter = scene.add.particles(0, 0, TEX_FLAME_CORE, {
       lifespan: { min: 190, max: 360 },
@@ -93,7 +105,15 @@ export class EntityBurnRenderer {
     this.lightKey = lightKey;
   }
 
-  sync(x: number, y: number, bodySize: number, stacks: number, visible: boolean): void {
+  sync(
+    x: number,
+    y: number,
+    bodySize: number,
+    stacks: number,
+    visible: boolean,
+    visualStyle: GroundFireVisualStyle = 'normal',
+  ): void {
+    this.applyVisualStyle(visualStyle);
     const activeStacks = Math.max(0, Math.floor(stacks));
     if (activeStacks <= 0 || !visible) {
       this.setActive(false);
@@ -147,8 +167,34 @@ export class EntityBurnRenderer {
       this.lighting?.setLight(this.lightKey, 'entityBurn', x, y + bodySize * 0.05, {
         radiusPx: 70 + bodySize * 1.1 + intensity * 40,
         intensity: 0.55 + intensity * 0.45,
+        color: this.visualStyle === 'void' ? VOID_ENTITY_BURN_LIGHT_COLOR : undefined,
       });
     }
+  }
+
+  private applyVisualStyle(visualStyle: GroundFireVisualStyle): void {
+    if (this.visualStyle === visualStyle) return;
+    this.visualStyle = visualStyle;
+
+    // Bereits lebende Partikel behalten ihre Texture-Frames. Beim seltenen Stilwechsel
+    // werden sie deshalb entfernt, bevor die drei gepoolten Emitter umgefaerbt werden.
+    this.coreEmitter.killAll();
+    this.outerEmitter.killAll();
+    this.sparkEmitter.killAll();
+
+    const isVoid = visualStyle === 'void';
+    this.coreEmitter
+      .setTexture(isVoid ? TEX_VOID_FLAME_CORE : TEX_FLAME_CORE)
+      .setParticleTint([...(isVoid ? VOID_FLAME_COLORS_CORE : FLAME_COLORS_CORE)]);
+    this.outerEmitter
+      .setTexture(isVoid ? TEX_VOID_FLAME_EMBER : TEX_FLAME_EMBER)
+      .setParticleTint([...(isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER)]);
+    this.sparkEmitter
+      .setTexture(isVoid ? TEX_VOID_FLAME_SPARK : TEX_FLAME_SPARK)
+      .setParticleTint([...(isVoid ? VOID_FLAME_COLORS_SPARK : FLAME_COLORS_SPARK)]);
+    this.glowImage
+      .setTexture(isVoid ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
+      .setTint(isVoid ? VOID_FIRE_COLOR : 0xff8a24);
   }
 
   private releaseLight(): void {

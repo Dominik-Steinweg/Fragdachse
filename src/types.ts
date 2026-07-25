@@ -73,6 +73,8 @@ export interface PlayerNetState {
   isRaging:   boolean;  // Ultimate aktiv
   activeUltimateId?: string;
   burnStacks: number;
+  /** Optische Familie des aktiven Entitaetsbrands; fehlt in aelteren Snapshots = normal. */
+  burnVisualStyle?: GroundFireVisualStyle;
   isChargingUltimate?: boolean;
   ultimateChargeFraction?: number;
   ultimateChargeRange?: number;
@@ -198,11 +200,19 @@ export interface BurnOnHitConfig {
 /** Herkunft eines Brand-Stacks. Direkte Flammenwerfer-Quellen duerfen Todeseffekte ausloesen. */
 export type BurnOrigin = 'generic' | 'flamethrower_direct' | 'ground_fire' | 'fire_ring';
 
+/** Optische Familie einer Brandquelle; Varianten koennen dieselbe Rasterzelle belegen. */
+export type GroundFireVisualStyle = 'normal' | 'void';
+
+/** Entitaetsgruppe, die eine Brandquelle beschaedigen und entzuenden darf. */
+export type GroundFireDamageTarget = 'all' | 'players' | 'enemies';
+
 export interface GroundFireCellEffect {
   readonly durationMs: number;
   readonly burnDurationMs: number;
   readonly burnDamagePerTick: number;
   readonly weaponName: string;
+  readonly visualStyle?: GroundFireVisualStyle;
+  readonly damageTarget?: GroundFireDamageTarget;
 }
 
 export interface FireChunkBurstConfig extends GroundFireCellEffect {
@@ -1127,6 +1137,8 @@ export interface SyncedBurningGroundCell {
   expiresAt: number;
   /** Anzahl gleichzeitig aktiver, eigenstaendiger Brandquellen in dieser Zelle. */
   intensity: number;
+  /** Optische Familie; pro Rasterposition darf je Familie eine Zelle repliziert werden. */
+  visualStyle: GroundFireVisualStyle;
 }
 
 export interface SyncedBurningGroundSnapshot {
@@ -1239,6 +1251,8 @@ export interface SyncedEnemyState {
   hp:     number;
   maxHp:  number;
   burnStacks: number;
+  /** Optische Familie des aktiven Entitaetsbrands. */
+  burnVisualStyle?: GroundFireVisualStyle;
   faction: 'hostile' | 'allied';
   /** True: Gegner ist eingebuddelt (unverwundbar, ohne Kollisionen, unsichtbar bis auf Buddel-Partikel). */
   burrowed: boolean;
@@ -1258,6 +1272,7 @@ export interface SyncedEnemyDeltaState {
   hp?:    number;
   maxHp?: number;
   burnStacks?: number;
+  burnVisualStyle?: GroundFireVisualStyle;
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
   dashPhase?: 0 | 1 | 2;

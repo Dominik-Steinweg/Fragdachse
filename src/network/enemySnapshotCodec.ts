@@ -21,7 +21,8 @@ const FIELD_POS = 1;   // x + y
 const FIELD_ROT = 2;   // rot (quantisiert × ROT_QUANT)
 const FIELD_HP = 4;    // hp + maxHp
 const FIELD_KIND = 8;  // kindIndex
-const FIELD_BURN = 16; // visuelle Brand-Stackzahl
+// Visuelle Brand-Stackzahl; `.5` kodiert lila Feuer rueckwaertskompatibel im selben Wert.
+const FIELD_BURN = 16;
 const FIELD_FACTION = 32; // Fraktion und optionale Besitzerdarstellung
 const FIELD_BURROW = 64;  // Einbuddel-Zustand
 const FIELD_DASH = 128;   // Ausweichschritt-Phase (0/1/2)
@@ -56,7 +57,9 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (mask & FIELD_ROT) out.push(Math.round((entry.rot as number) * ROT_QUANT));
   if (mask & FIELD_HP) out.push(entry.hp as number, entry.maxHp as number);
   if (mask & FIELD_KIND) out.push(getCoopDefenseEnemyKindIndex(entry.kind as string));
-  if (mask & FIELD_BURN) out.push(entry.burnStacks as number);
+  if (mask & FIELD_BURN) {
+    out.push((entry.burnStacks as number) + (entry.burnVisualStyle === 'void' ? 0.5 : 0));
+  }
   if (mask & FIELD_FACTION) {
     out.push(entry.faction === 'allied' ? 1 : 0, entry.ownerId ?? '', entry.ownerColor ?? 0);
   }
@@ -76,7 +79,11 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
     if (mask & FIELD_ROT) { entry.rot = (stream[i++] as number) / ROT_QUANT; }
     if (mask & FIELD_HP) { entry.hp = stream[i++] as number; entry.maxHp = stream[i++] as number; }
     if (mask & FIELD_KIND) { entry.kind = getCoopDefenseEnemyKindByIndex(stream[i++] as number); }
-    if (mask & FIELD_BURN) { entry.burnStacks = stream[i++] as number; }
+    if (mask & FIELD_BURN) {
+      const packedBurn = stream[i++] as number;
+      entry.burnStacks = Math.floor(packedBurn);
+      entry.burnVisualStyle = packedBurn - entry.burnStacks >= 0.5 ? 'void' : 'normal';
+    }
     if (mask & FIELD_FACTION) {
       entry.faction = (stream[i++] as number) === 1 ? 'allied' : 'hostile';
       const ownerId = stream[i++] as string;
