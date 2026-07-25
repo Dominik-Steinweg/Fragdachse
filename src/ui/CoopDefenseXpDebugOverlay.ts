@@ -1,4 +1,5 @@
 import { COLORS, toCssColor } from '../config';
+import { COOP_DEFENSE_MAP_CONFIGS } from '../config/coopDefenseMaps';
 import { getCoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 
 function sanitizeNumberInput(value: string): number {
@@ -14,7 +15,8 @@ export class CoopDefenseXpDebugOverlay {
   constructor(
     private readonly getCurrentXp: () => number,
     private readonly getCurrentBossPoints: () => number,
-    private readonly onSubmit: (totalXp: number, bossPoints: number) => void,
+    private readonly getCurrentHighestUnlockedMapId: () => string,
+    private readonly onSubmit: (totalXp: number, bossPoints: number, highestUnlockedMapId: string) => void,
   ) {}
 
   show(): void {
@@ -53,7 +55,7 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     const subtitle = document.createElement('div');
-    subtitle.innerText = 'Nur lokal. Ueberschreibt Erfahrung und Bosspunkte dieser Browser-Instanz.';
+    subtitle.innerText = 'Nur lokal. Ueberschreibt Erfahrung, Bosspunkte und Map-Freischaltung dieser Browser-Instanz.';
     Object.assign(subtitle.style, {
       fontSize: '12px',
       color: toCssColor(COLORS.GREY_4),
@@ -107,6 +109,30 @@ export class CoopDefenseXpDebugOverlay {
       marginBottom: '12px',
     });
 
+    const unlockLabel = createInputLabel('FREIGESCHALTET BIS MAP');
+    const unlockSelect = document.createElement('select');
+    Object.assign(unlockSelect.style, {
+      width: '100%',
+      padding: '8px 10px',
+      boxSizing: 'border-box',
+      border: `1px solid ${toCssColor(COLORS.GREY_5)}`,
+      backgroundColor: toCssColor(COLORS.GREY_9),
+      color: toCssColor(COLORS.GREY_1),
+      outline: 'none',
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      fontWeight: 'bold',
+      textAlign: 'center',
+      marginBottom: '12px',
+    });
+    for (const mapConfig of COOP_DEFENSE_MAP_CONFIGS) {
+      const option = document.createElement('option');
+      option.value = mapConfig.mapId;
+      option.innerText = mapConfig.displayName;
+      unlockSelect.appendChild(option);
+    }
+    unlockSelect.value = this.getCurrentHighestUnlockedMapId();
+
     const preview = document.createElement('div');
     Object.assign(preview.style, {
       fontSize: '14px',
@@ -154,7 +180,9 @@ export class CoopDefenseXpDebugOverlay {
       if (String(totalXp) !== xpInput.value) xpInput.value = String(totalXp);
       if (String(bossPoints) !== bossPointsInput.value) bossPointsInput.value = String(bossPoints);
       const progress = getCoopDefenseProgressSnapshot(totalXp);
-      preview.innerText = `Level ${progress.level}\n${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}  |  ★ ${bossPoints} Bosspunkte`;
+      const unlockedMapName = COOP_DEFENSE_MAP_CONFIGS
+        .find((mapConfig) => mapConfig.mapId === unlockSelect.value)?.displayName ?? unlockSelect.value;
+      preview.innerText = `Level ${progress.level}\n${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}  |  ★ ${bossPoints} Bosspunkte\nFreigeschaltet bis: ${unlockedMapName}`;
     };
 
     const closePopup = () => {
@@ -169,6 +197,7 @@ export class CoopDefenseXpDebugOverlay {
       this.onSubmit(
         sanitizeNumberInput(xpInput.value),
         sanitizeNumberInput(bossPointsInput.value),
+        unlockSelect.value,
       );
       closePopup();
     };
@@ -180,6 +209,11 @@ export class CoopDefenseXpDebugOverlay {
         if (event.key === 'Escape') closePopup();
       });
     }
+    unlockSelect.addEventListener('change', updatePreview);
+    unlockSelect.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key === 'Enter') save();
+      if (event.key === 'Escape') closePopup();
+    });
     confirmBtn.onclick = save;
     cancelBtn.onclick = closePopup;
     backdrop.addEventListener('pointerdown', (event: PointerEvent) => {
@@ -194,6 +228,8 @@ export class CoopDefenseXpDebugOverlay {
       xpInput,
       bossPointsLabel,
       bossPointsInput,
+      unlockLabel,
+      unlockSelect,
       preview,
       buttonRow,
     );

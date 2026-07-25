@@ -14,11 +14,20 @@ import {
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import {
+  COOP_DEFENSE_TUTORIAL_CONTROLS_BODY_H,
+  COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X,
+  COOP_DEFENSE_TUTORIAL_CONTROLS_HEADING_H,
+  COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X,
+  COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H,
+  COOP_DEFENSE_TUTORIAL_PAD_TOP,
+  COOP_DEFENSE_TUTORIAL_PAD_X,
   COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X,
-  COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT,
   COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
   COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
+  COOP_DEFENSE_TUTORIAL_TITLE_H,
+  getCoopDefenseTutorialPanelHeight,
 } from '../config/coopDefenseTutorial';
+import { HELP_CONTROLS } from '../config/helpControls';
 
 const CENTER_X       = GAME_WIDTH / 2;
 const PANEL_WIDTH    = 200;
@@ -30,12 +39,16 @@ const TIMER_BG_H          = 44;
 const TIMER_COLOR_NORMAL  = '#e0e0e0';
 const TIMER_COLOR_WARNING = '#ff4444';
 
-const TUTORIAL_PAD_X      = 28;
-const TUTORIAL_PAD_TOP    = 18;
-const TUTORIAL_TITLE_H    = 22;
+const TUTORIAL_PAD_X      = COOP_DEFENSE_TUTORIAL_PAD_X;
+const TUTORIAL_PAD_TOP    = COOP_DEFENSE_TUTORIAL_PAD_TOP;
+const TUTORIAL_TITLE_H    = COOP_DEFENSE_TUTORIAL_TITLE_H;
 const TUTORIAL_FADE_MS    = 220;
 const TUTORIAL_BG_COLOR   = 0x07131f;
 const TUTORIAL_ACCENT     = COLORS.GOLD_2;
+// Steuerungstabelle im Tutorial-Fenster – bewusst identisch formatiert zum Hilfe-Fenster.
+const TUTORIAL_CONTROLS_TOP    = TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H + COOP_DEFENSE_TUTORIAL_CONTROLS_BODY_H;
+const TUTORIAL_CONTROLS_ROWS_Y = TUTORIAL_CONTROLS_TOP + COOP_DEFENSE_TUTORIAL_CONTROLS_HEADING_H;
+const TUTORIAL_CONTROLS_SEP_Y  = TUTORIAL_CONTROLS_TOP + 26;
 
 const ANNOUNCEMENT_Y          = GAME_HEIGHT / 2;
 const ANNOUNCEMENT_MAX_TEXT_W = 560;
@@ -104,6 +117,12 @@ const TUTORIAL_BODY_FONT = {
   lineSpacing: 5,
   wordWrap: { width: COOP_DEFENSE_TUTORIAL_PANEL_WIDTH - TUTORIAL_PAD_X * 2 },
 };
+const TUTORIAL_CONTROLS_KEY_FONT = {
+  fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
+};
+const TUTORIAL_CONTROLS_DESC_FONT = {
+  fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2),
+};
 
 function ensureBarBgTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
   if (scene.textures.exists(key)) return;
@@ -164,8 +183,11 @@ export class CenterHUD {
   private tutorialGraphics!: Phaser.GameObjects.Graphics;
   private tutorialTitle!: Phaser.GameObjects.Text;
   private tutorialBody!: Phaser.GameObjects.Text;
+  private tutorialControlsHeading!: Phaser.GameObjects.Text;
+  private tutorialControlsTexts: Phaser.GameObjects.Text[] = [];
   private tutorialTween: Phaser.Tweens.Tween | null = null;
   private tutorialValue: string | null = null;
+  private tutorialControlsValue = false;
   private announcementContainer!: Phaser.GameObjects.Container;
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
@@ -247,6 +269,25 @@ export class CenterHUD {
     this.tutorialBody = this.scene.add.text(0, TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H, '', TUTORIAL_BODY_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
+
+    // Steuerungstabelle: einmal aufgebaut, nur in der Steuerungs-Variante sichtbar.
+    // Pro Zeile zwei Text-Objekte statt eines mehrzeiligen Textes, weil Tasten- und
+    // Beschreibungsspalte unterschiedliche Schriftgrößen und damit Zeilenhöhen haben.
+    const left = -COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
+    this.tutorialControlsHeading = this.scene.add.text(0, TUTORIAL_CONTROLS_TOP, 'STEUERUNG', TUTORIAL_TITLE_FONT)
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    this.tutorialControlsTexts = HELP_CONTROLS.flatMap(([key, desc], i) => {
+      const y = TUTORIAL_CONTROLS_ROWS_Y + i * COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H
+        + COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H / 2;
+      return [
+        this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X, y, key, TUTORIAL_CONTROLS_KEY_FONT)
+          .setOrigin(0, 0.5).setScrollFactor(0),
+        this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X, y, desc, TUTORIAL_CONTROLS_DESC_FONT)
+          .setOrigin(0, 0.5).setScrollFactor(0),
+      ];
+    });
+
     this.tutorialContainer = this.scene.add.container(
       COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X,
       COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
@@ -254,6 +295,8 @@ export class CenterHUD {
       this.tutorialGraphics,
       this.tutorialTitle,
       this.tutorialBody,
+      this.tutorialControlsHeading,
+      ...this.tutorialControlsTexts,
       ],
     );
     this.tutorialContainer.setScrollFactor(0).setVisible(false).setAlpha(0);
@@ -452,10 +495,15 @@ export class CenterHUD {
     }
   }
 
-  updateTutorial(text: string | null): void {
+  /**
+   * @param showControls True: Unter dem Fließtext erscheint die Steuerungstabelle des
+   *   Hilfe-Fensters; das Fenster wächst entsprechend (Einstiegs-Map).
+   */
+  updateTutorial(text: string | null, showControls = false): void {
     const nextText = text?.trim() || null;
-    if (nextText === this.tutorialValue) return;
+    if (nextText === this.tutorialValue && showControls === this.tutorialControlsValue) return;
     this.tutorialValue = nextText;
+    this.tutorialControlsValue = showControls;
     this.tutorialTween?.destroy();
     this.tutorialTween = null;
 
@@ -465,8 +513,11 @@ export class CenterHUD {
     }
 
     this.tutorialBody.setText(nextText);
+    this.tutorialControlsHeading.setVisible(showControls);
+    for (const entry of this.tutorialControlsTexts) entry.setVisible(showControls);
+
     const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
-    const height = COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT;
+    const height = getCoopDefenseTutorialPanelHeight(showControls);
     const left = -width / 2;
 
     this.tutorialGraphics.clear();
@@ -478,6 +529,21 @@ export class CenterHUD {
     this.tutorialGraphics.strokeRoundedRect(left, 0, width, height, 12);
     this.tutorialGraphics.fillStyle(TUTORIAL_ACCENT, 0.9);
     this.tutorialGraphics.fillRoundedRect(left, 10, 4, height - 20, 2);
+
+    if (showControls) {
+      // Trennlinie unter der Überschrift + Zeilen-Alternierung wie im Hilfe-Fenster.
+      this.tutorialGraphics.fillStyle(TUTORIAL_ACCENT, 0.55);
+      this.tutorialGraphics.fillRect(left + TUTORIAL_PAD_X, TUTORIAL_CONTROLS_SEP_Y, width - TUTORIAL_PAD_X * 2, 1);
+      this.tutorialGraphics.fillStyle(COLORS.GREY_8, 0.3);
+      for (let i = 0; i < HELP_CONTROLS.length; i += 2) {
+        this.tutorialGraphics.fillRect(
+          left + TUTORIAL_PAD_X,
+          TUTORIAL_CONTROLS_ROWS_Y + i * COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H + 2,
+          width - TUTORIAL_PAD_X * 2,
+          COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H - 4,
+        );
+      }
+    }
 
     this.tutorialContainer.setVisible(true).setAlpha(0);
     this.tutorialTween = this.scene.tweens.add({

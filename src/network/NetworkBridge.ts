@@ -330,6 +330,14 @@ type LoadoutUseHandler = (
 
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type SlimeBloomEffectHandler = (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
+/** `lifetimeMs <= 0` bedeutet: Leiche verbraucht, Marker sofort entfernen. */
+type CorpseMarkerHandler = (
+  corpseId: number,
+  x: number,
+  y: number,
+  enemySize: number,
+  lifetimeMs: number,
+) => void;
 type FireChunkEffectHandler = (
   x: number,
   y: number,
@@ -443,6 +451,7 @@ export class NetworkBridge {
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
   private slimeBloomEffectHandler: SlimeBloomEffectHandler | null = null;
+  private corpseMarkerHandler: CorpseMarkerHandler | null = null;
   private fireChunkEffectHandler: FireChunkEffectHandler | null = null;
   private blackHoleEffectHandler: BlackHoleEffectHandler | null = null;
   private miniRocketCollectionEffectHandler: MiniRocketCollectionEffectHandler | null = null;
@@ -1697,6 +1706,29 @@ export class NetworkBridge {
         targets.push({ x: p[index], y: p[index + 1] });
       }
       slimeBloomEffectHandler(x, y, targets);
+      return undefined;
+    });
+  }
+
+  /**
+   * Repliziert die Leichen-Marker der Nekromantie. Der Host ist die einzige Stelle, die weiß,
+   * welche Leichen überhaupt verwertbar sind; Clients zeichnen nur nach.
+   */
+  broadcastCorpseMarker(corpseId: number, x: number, y: number, enemySize: number, lifetimeMs: number): void {
+    this.broadcastGameplayEvent('ncfx', { i: corpseId, x, y, s: enemySize, t: lifetimeMs });
+  }
+
+  broadcastCorpseMarkerRemoval(corpseId: number): void {
+    this.broadcastGameplayEvent('ncfx', { i: corpseId, x: 0, y: 0, s: 0, t: 0 });
+  }
+
+  registerCorpseMarkerHandler(handler: CorpseMarkerHandler): void {
+    this.corpseMarkerHandler = handler;
+    this.registerAllRpcHandler('ncfx', async (data: unknown): Promise<unknown> => {
+      const corpseMarkerHandler = this.corpseMarkerHandler;
+      if (!corpseMarkerHandler) return undefined;
+      const { i, x, y, s, t } = data as { i: number; x: number; y: number; s: number; t: number };
+      corpseMarkerHandler(i, x, y, s, t);
       return undefined;
     });
   }

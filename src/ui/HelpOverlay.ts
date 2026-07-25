@@ -9,6 +9,7 @@ import {
   DEPTH, COLORS, toCssColor,
 } from '../config';
 import { ensureModalPanelTexture } from './uiTextures';
+import { HELP_CONTROLS } from '../config/helpControls';
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const PANEL_W = 660;
@@ -43,18 +44,6 @@ const DESC_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'monospace',
   color:      toCssColor(COLORS.GREY_2),
 };
-
-const CONTROLS: [string, string][] = [
-  ['W A S D',        'Bewegen'],
-  ['LEERTASTE',      'Dash'],
-  ['LINKE MAUST.',     'Weapon 1  (Treffer → Adrenalin)'],
-  ['RECHTE MAUST.',    'Weapon 2  (kostet Adrenalin)'],
-  ['E  (halten)',    'Utility'],
-  ['Q',              'Ultimate  (füllt sich durch Schaden)'],
-  ['SHIFT',          'Einbuddeln  (kostet Adrenalin)'],
-  ['O',              'Optionen'],
-  ['T',              'Performance-Diagnose'],
-];
 
 export class HelpOverlay {
   private container: Phaser.GameObjects.Container | null = null;
@@ -103,7 +92,7 @@ export class HelpOverlay {
     );
 
     // ── Steuerungs-Einträge ───────────────────────────────────────────────
-    CONTROLS.forEach(([key, desc], i) => {
+    HELP_CONTROLS.forEach(([key, desc], i) => {
       const y = LIST_START_Y + i * ROW_H;
 
       // Dezente Zeilen-Hintergrund-Alternierung

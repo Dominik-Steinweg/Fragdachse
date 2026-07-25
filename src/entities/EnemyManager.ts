@@ -37,9 +37,18 @@ export interface EnemyDeathInfo {
   readonly kind: CoopDefenseEnemyKind;
   readonly x: number;
   readonly y: number;
+  /** Volle Kantenlänge des gestorbenen Gegners – Maßstab für Leichen-Visuals. */
+  readonly size: number;
   readonly faction: EnemyFaction;
   readonly ownerId?: string;
 }
+
+/**
+ * Letzte Instanz vor dem Tod eines Gegners. Gibt der Wächter `true` zurück, hat er den Gegner
+ * bereits wieder mit HP versorgt und der Tod entfällt – genutzt von der Nekromantie, damit die
+ * stärksten Wiederbelebten einen tödlichen Treffer überstehen.
+ */
+export type EnemyLethalDamageGuard = (enemy: EnemyEntity) => boolean;
 
 /**
  * Minimal-Schnittstelle des Gegner-Einbuddel-Systems für die Bewegung – als lokaler Typ gehalten,
@@ -94,6 +103,7 @@ export class EnemyManager {
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
   private onEnemySpawned: ((enemy: EnemyEntity) => void) | null = null;
+  private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
   private lighting: LightingSystem | null = null;
   /**
@@ -120,6 +130,11 @@ export class EnemyManager {
    */
   setEnemySpawnedCallback(callback: ((enemy: EnemyEntity) => void) | null): void {
     this.onEnemySpawned = callback;
+  }
+
+  /** Host-seitiger Wächter, der einen tödlichen Treffer abfangen darf. */
+  setLethalDamageGuard(guard: EnemyLethalDamageGuard | null): void {
+    this.lethalDamageGuard = guard;
   }
 
   /** Registriert die Effekt-Schicht für Buddel- und Spawn-Visuals (Host wie Client). */
@@ -681,6 +696,13 @@ export class EnemyManager {
       return { died: false, remainingHp };
     }
 
+    // Der Wächter setzt die HP selbst neu. Zurückgemeldet wird trotzdem der tatsächlich
+    // zugefügte Schaden (`remainingHp` 0), denn die Rettung ist eine eigene Heilung – sonst
+    // fiele der Treffer für Trefferfeedback und Lifeleech ersatzlos aus.
+    if (this.lethalDamageGuard?.(enemy)) {
+      return { died: false, remainingHp: 0 };
+    }
+
     const deathX = enemy.sprite.x;
     const deathY = enemy.sprite.y;
     const death: EnemyDeathInfo = {
@@ -688,6 +710,7 @@ export class EnemyManager {
       kind: enemy.kind,
       x: deathX,
       y: deathY,
+      size: enemy.getSize(),
       faction: enemy.faction,
       ownerId: enemy.ownerId,
     };

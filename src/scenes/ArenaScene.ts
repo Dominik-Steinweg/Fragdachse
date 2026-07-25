@@ -57,6 +57,7 @@ import {
   setStoredCoopDefenseCheatProgress,
   setStoredLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
+  unlockStoredCoopDefenseMapAfterVictory,
 } from '../utils/localPreferences';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
@@ -75,6 +76,7 @@ import type { GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, P
 import { TRAIN } from '../train/TrainConfig';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
@@ -211,6 +213,7 @@ export class ArenaScene extends Phaser.Scene {
   // Profil-Stand beim Oeffnen des Upgrade-Overlays – fuer "Abbruch" (Wiederherstellen).
   private coopDefenseUpgradeProfileSnapshot: CoopDefenseUpgradeProfile | null = null;
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
+  private coopDefenseHighestUnlockedMapId: string = INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
   private lastObservedGamePhase: GamePhase | null = null;
   private lastLobbySidebarSignature: string | null = null;
   private runtimeProfiler: ArenaRuntimeProfiler | null = null;
@@ -436,9 +439,11 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseXpDebugOverlay = new CoopDefenseXpDebugOverlay(
       () => this.coopDefenseProgress.totalXp,
       () => this.coopDefenseProgress.earnedBossPoints,
-      (totalXp, bossPoints) => {
-        setStoredCoopDefenseCheatProgress(totalXp, bossPoints);
+      () => this.coopDefenseHighestUnlockedMapId,
+      (totalXp, bossPoints, highestUnlockedMapId) => {
+        setStoredCoopDefenseCheatProgress(totalXp, bossPoints, highestUnlockedMapId);
         this.refreshStoredCoopDefenseProgress();
+        this.applyDefaultCoopDefenseMapSelection();
         this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       },
     );
@@ -836,6 +841,7 @@ export class ArenaScene extends Phaser.Scene {
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
     this.refreshStoredCoopDefenseProgress();
+    this.applyDefaultCoopDefenseMapSelection();
     this.lastObservedGamePhase = bridge.getGamePhase();
   }
 
@@ -887,9 +893,12 @@ export class ArenaScene extends Phaser.Scene {
     this.menuArenaPreview?.setVisible(phase === 'LOBBY');
 
     if (inGame) {
+      // Drehen ist während des Countdowns erlaubt, alles andere bleibt gesperrt.
+      this.ctx.inputSystem.setAimEnabled(!optionsOpen);
       this.ctx.inputSystem.setInputEnabled(!countdownActive && !optionsOpen);
       this.ctx.inputSystem.update();
     } else {
+      this.ctx.inputSystem.setAimEnabled(false);
       this.ctx.inputSystem.setInputEnabled(false);
     }
     inputCameraMs = performance.now() - (networkUpdateStartMs + networkUpdateMs);
@@ -962,10 +971,13 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.centerHUD.updateTimer(secs, secs <= 0 && !!activeMapConfig?.boss);
       const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
       const tutorialDurationMs = activeMapConfig?.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;
+      // `tutorialPersistent` blendet das Fenster über die gesamte Rundendauer ein.
+      const tutorialVisible = !!activeMapConfig?.tutorialText
+        && roundElapsedMs >= 0
+        && (activeMapConfig.tutorialPersistent === true || roundElapsedMs < tutorialDurationMs);
       this.ctx.centerHUD.updateTutorial(
-        activeMapConfig?.tutorialText && roundElapsedMs >= 0 && roundElapsedMs < tutorialDurationMs
-          ? activeMapConfig.tutorialText
-          : null,
+        tutorialVisible ? activeMapConfig!.tutorialText! : null,
+        activeMapConfig?.tutorialShowControls === true,
       );
 
       // Train widget
@@ -2260,8 +2272,18 @@ export class ArenaScene extends Phaser.Scene {
       stored.completedBossMapIds.length,
     );
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
+    this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;
     bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
     this.coopDefenseUpgradesOverlay?.refresh();
+  }
+
+  /**
+   * Stellt die Lobby-Auswahl auf die hoechste freigeschaltete Map. Nur der Host besitzt die
+   * Map-Auswahl; Clients folgen dem replizierten Wert und ihr eigener Freischaltstand zaehlt nicht.
+   */
+  private applyDefaultCoopDefenseMapSelection(): void {
+    if (!bridge.isHost()) return;
+    bridge.setCoopDefenseMapId(this.coopDefenseHighestUnlockedMapId);
   }
 
   private processCoopDefenseRoundXp(enteredLobbyFromArena: boolean): void {
@@ -2287,14 +2309,16 @@ export class ArenaScene extends Phaser.Scene {
       addStoredCoopDefenseXp(sharedRoundXp);
     }
     const completedMapId = roundState?.coopDefenseMapId;
-    if (
-      roundState?.status === 'victory'
-      && completedMapId
-      && getCoopDefenseMapConfig(completedMapId).boss
-    ) {
-      markStoredCoopDefenseBossMapCompleted(completedMapId);
+    let unlockedNewMap = false;
+    if (roundState?.status === 'victory' && completedMapId) {
+      if (getCoopDefenseMapConfig(completedMapId).boss) {
+        markStoredCoopDefenseBossMapCompleted(completedMapId);
+      }
+      unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
     }
     markStoredCoopDefenseRoundProcessed(endedAt);
     this.refreshStoredCoopDefenseProgress();
+    // Neu freigeschaltete Map ist die Standardauswahl der naechsten Runde.
+    if (unlockedNewMap) this.applyDefaultCoopDefenseMapSelection();
   }
 }

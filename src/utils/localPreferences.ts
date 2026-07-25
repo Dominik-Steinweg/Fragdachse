@@ -7,6 +7,12 @@ import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
   sanitizeCoopDefenseUpgradeProfile,
 } from './coopDefenseUpgrades';
+import {
+  getCoopDefenseMapUnlockedByVictoryOn,
+  INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
+  maxHighestUnlockedCoopDefenseMapId,
+  sanitizeHighestUnlockedCoopDefenseMapId,
+} from '../config/coopDefenseMapUnlocks';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 
@@ -32,6 +38,8 @@ export interface CoopDefenseProgressPreferences {
   totalXp: number;
   lastProcessedRoundEndedAt: number | null;
   completedBossMapIds: string[];
+  /** Hoechste freigeschaltete Map der linearen Kampagne; alles davor ist ebenfalls offen. */
+  highestUnlockedMapId: string;
   profile: CoopDefenseUpgradeProfile;
 }
 
@@ -91,6 +99,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
   completedBossMapIds: [],
+  highestUnlockedMapId: INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
   profile: buildDefaultCoopDefenseUpgradeProfile(),
 };
 
@@ -141,6 +150,24 @@ function sanitizeCompletedBossMapIds(value: unknown): string[] {
     .filter((entry): entry is string => typeof entry === 'string')
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0))];
+}
+
+/**
+ * Staende ohne gespeicherten Freischaltstand stammen aus der Zeit vor der Map-Freischaltung: dort
+ * ist die Sieg-Historie der Bossmaps der einzige Beleg fuer bereits geschaffte Maps.
+ */
+function resolveStoredHighestUnlockedMapId(
+  storedMapId: unknown,
+  completedBossMapIds: readonly string[],
+): string {
+  if (storedMapId !== undefined) return sanitizeHighestUnlockedCoopDefenseMapId(storedMapId);
+  return completedBossMapIds.reduce(
+    (highestMapId, completedMapId) => maxHighestUnlockedCoopDefenseMapId(
+      highestMapId,
+      getCoopDefenseMapUnlockedByVictoryOn(completedMapId) ?? completedMapId,
+    ),
+    INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
+  );
 }
 
 function buildDefaultPreferences(): LocalPreferences {
@@ -212,6 +239,10 @@ function parsePreferences(raw: string | null): LocalPreferences {
           totalXp,
           lastProcessedRoundEndedAt,
           completedBossMapIds,
+          highestUnlockedMapId: resolveStoredHighestUnlockedMapId(
+            parsed.progression?.coopDefense?.highestUnlockedMapId,
+            completedBossMapIds,
+          ),
           profile: storedProfile,
         },
       },
@@ -325,8 +356,53 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     totalXp: progress.totalXp,
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
     completedBossMapIds: [...progress.completedBossMapIds],
+    highestUnlockedMapId: progress.highestUnlockedMapId,
     profile: cloneCoopDefenseUpgradeProfile(progress.profile),
   };
+}
+
+export function getStoredHighestUnlockedCoopDefenseMapId(): string {
+  return readPreferences().progression.coopDefense.highestUnlockedMapId;
+}
+
+export function setStoredHighestUnlockedCoopDefenseMapId(mapId: string): void {
+  const nextMapId = sanitizeHighestUnlockedCoopDefenseMapId(mapId);
+  updatePreferences((current) => ({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        highestUnlockedMapId: nextMapId,
+      },
+    },
+  }));
+}
+
+/**
+ * Schaltet nach einem Sieg die Folgemap frei und meldet, ob dadurch neuer Fortschritt entstand.
+ * Ein Sieg auf einer bereits geschafften Map senkt den Stand nie.
+ */
+export function unlockStoredCoopDefenseMapAfterVictory(completedMapId: string): boolean {
+  const unlockedMapId = getCoopDefenseMapUnlockedByVictoryOn(completedMapId.trim());
+  if (!unlockedMapId) return false;
+
+  const current = readPreferences();
+  const currentMapId = current.progression.coopDefense.highestUnlockedMapId;
+  const nextMapId = maxHighestUnlockedCoopDefenseMapId(currentMapId, unlockedMapId);
+  if (nextMapId === currentMapId) return false;
+
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        highestUnlockedMapId: nextMapId,
+      },
+    },
+  });
+  return true;
 }
 
 export function getStoredCoopDefenseUpgradeProfile(): CoopDefenseUpgradeProfile {
@@ -405,10 +481,15 @@ export function setStoredGraphicsQuality(quality: GraphicsQuality): void {
   }));
 }
 
-/** Overrides the locally stored XP and earned boss points for the cheat/debug menu. */
-export function setStoredCoopDefenseCheatProgress(totalXp: number, earnedBossPoints: number): void {
+/** Overrides the locally stored XP, boss points and map unlock level for the cheat/debug menu. */
+export function setStoredCoopDefenseCheatProgress(
+  totalXp: number,
+  earnedBossPoints: number,
+  highestUnlockedMapId: string,
+): void {
   const nextTotalXp = sanitizeStoredXp(totalXp);
   const nextBossPointCount = sanitizeStoredXp(earnedBossPoints);
+  const nextHighestUnlockedMapId = sanitizeHighestUnlockedCoopDefenseMapId(highestUnlockedMapId);
 
   updatePreferences((current) => {
     const storedProgress = current.progression.coopDefense;
@@ -428,6 +509,7 @@ export function setStoredCoopDefenseCheatProgress(totalXp: number, earnedBossPoi
           ...storedProgress,
           totalXp: nextTotalXp,
           completedBossMapIds,
+          highestUnlockedMapId: nextHighestUnlockedMapId,
           profile: constrainCoopDefenseUpgradeProfileToBossPoints(
             storedProgress.profile,
             nextBossPointCount,

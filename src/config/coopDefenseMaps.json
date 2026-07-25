@@ -23,6 +23,8 @@
       "displayName": "Map 1 - Feuertaufe",
       "timeOfDay": "12:00",
       "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
+      "tutorialShowControls": true,
+      "tutorialPersistent": true,
       "rockFillRatio": 0.3,
       "roundDurationSec": 40,
       "bases": [
@@ -41,7 +43,7 @@
     {
       "mapId": "2",
       "displayName": "Map 2 - Zweite Front",
-      "timeOfDay": "03:00",
+      "timeOfDay": "05:00",
       "tutorialText": "Auf dieser Map hat die Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
       "rockFillRatio": 0.15,
       "roundDurationSec": 60,
@@ -149,7 +151,7 @@
     {
       "mapId": "5",
       "displayName": "Map 5 - Grufttitan",
-      "timeOfDay": "22:00",
+      "timeOfDay": "22:30",
       "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Wenn ein Boss erstmalig erledigt wird, erhält man einen Boss-Punkt für spezielle Upgrades.",
       "rockFillRatio": 0.2,
       "roundDurationSec": 45,
@@ -255,7 +257,7 @@
     },
     {
       "mapId": "7",
-      "displayName": "Map 7 - MEDIC!",
+      "displayName": "Map 7 - Medic!",
       "timeOfDay": "15:00",
       "rockFillRatio": 0.3,
       "roundDurationSec": 70,

@@ -18,9 +18,32 @@ const DEFAULT_TELEPORT_DISTANCE = 1200;
 const TELEPORT_SEARCH_RADIUS_CELLS = 3;
 const STEER_RESPONSIVENESS = 9;
 
+/**
+ * Gefolge-Ring um den Besitzer. Die Wiederbelebten laufen nicht auf den Spieler, sondern auf
+ * ihren eigenen Platz auf diesem Ring – sonst stapeln sie sich exakt auf seiner Position.
+ */
+const FOLLOW_RADIUS_BASE_PX = 56;
+const FOLLOW_RADIUS_PER_ALLY_PX = 14;
+const FOLLOW_RADIUS_MAX_PX = 140;
+/**
+ * Innerhalb dieser Distanz zum eigenen Platz übernimmt die direkte Steuerung. Das Flowfield kennt
+ * nur ein gemeinsames Ziel (den Besitzer) und würde die Gruppe sonst wieder zusammenziehen.
+ */
+const FOLLOW_DIRECT_STEER_PX = 96;
+const FOLLOW_ARRIVAL_PX = 10;
+/** Goldener Winkel: verteilt neue Plätze auch bei wachsender Schar gleichmäßig. */
+const FOLLOW_SLOT_ANGLE_STEP = Math.PI * (3 - Math.sqrt(5));
+
 export type NecromancyStatResolver = (playerId: string, stat: string, baseValue: number) => number;
 
+/** Meldet Entstehen und Verschwinden einer Leiche an die Darstellungsschicht. */
+export interface NecromancyCorpseSink {
+  onCorpseAdded(corpseId: number, x: number, y: number, enemySize: number, lifetimeMs: number): void;
+  onCorpseRemoved(corpseId: number): void;
+}
+
 interface CorpseRecord {
+  readonly id: number;
   readonly kind: CoopDefenseEnemyKind;
   readonly x: number;
   readonly y: number;
@@ -45,12 +68,20 @@ interface NecromancyConfig {
   targetRadius: number;
   leashRadius: number;
   teleportDistance: number;
+  undyingCount: number;
+  replaceWeakest: boolean;
 }
 
 /** Host-authoritative summons for the Nekromantie boss upgrade. */
 export class NecromancySystem {
   private readonly corpses: CorpseRecord[] = [];
   private readonly owners = new Map<string, OwnerState>();
+  /** Feste Ringplätze der Wiederbelebten, damit ihre Position nicht bei jedem Frame springt. */
+  private readonly followSlots = new Map<string, number>();
+  private readonly undyingAllyIds = new Set<string>();
+  private corpseSink: NecromancyCorpseSink | null = null;
+  private nextCorpseId = 1;
+  private nextFollowSlot = 0;
 
   constructor(
     private readonly playerManager: PlayerManager,
@@ -61,16 +92,34 @@ export class NecromancySystem {
     private readonly resolveStat: NecromancyStatResolver,
   ) {}
 
+  /** Registriert die Leichen-Darstellung; ohne Sink bleibt das System rein mechanisch. */
+  setCorpseSink(sink: NecromancyCorpseSink | null): void {
+    this.corpseSink = sink;
+  }
+
   recordEnemyDeath(death: EnemyDeathInfo, now = Date.now()): void {
     if (death.faction !== 'hostile') return;
-    this.corpses.push({
+    const corpse: CorpseRecord = {
+      id: this.nextCorpseId++,
       kind: death.kind,
       x: death.x,
       y: death.y,
       xp: getCoopDefenseEnemyXp(death.kind),
       diedAt: now,
       expiresAt: now + DEFAULT_CORPSE_LIFETIME_MS,
-    });
+    };
+    this.corpses.push(corpse);
+    this.corpseSink?.onCorpseAdded(corpse.id, corpse.x, corpse.y, death.size, DEFAULT_CORPSE_LIFETIME_MS);
+  }
+
+  /**
+   * Fängt den Tod der stärksten Wiederbelebten ab (Upgrade „Untote Wiederkehr"). Der Gegner wird
+   * dabei vollständig geheilt; der Rang wird einmal pro Frame in `hostUpdate` bestimmt.
+   */
+  handleLethalDamage(enemy: EnemyEntity): boolean {
+    if (enemy.faction !== 'allied' || !this.undyingAllyIds.has(enemy.id)) return false;
+    enemy.setHp(enemy.getMaxHp());
+    return true;
   }
 
   /**
@@ -90,6 +139,8 @@ export class NecromancySystem {
   hostUpdate(now: number, deltaMs: number): void {
     this.pruneExpiredCorpses(now);
     const activeOwners = new Set<string>();
+    const knownAllyIds = new Set<string>();
+    this.undyingAllyIds.clear();
 
     for (const player of this.playerManager.getAllPlayers()) {
       const cfg = this.resolveConfig(player.id);
@@ -106,18 +157,18 @@ export class NecromancySystem {
       const owner = this.owners.get(player.id) ?? { nextRaiseAt: now };
       this.owners.set(player.id, owner);
 
-      if (cfg.enabled && now >= owner.nextRaiseAt && this.enemyManager.getAlliedEnemies(player.id).length < cfg.maxAllies) {
-        const corpseIndex = this.findBestCorpseIndex(player.sprite.x, player.sprite.y, cfg.reviveRadius);
-        if (corpseIndex >= 0) {
-          const [corpse] = this.corpses.splice(corpseIndex, 1);
-          this.enemyManager.hostSpawnAllyAtWorld(corpse.x, corpse.y, corpse.kind, player.id, player.color, cfg.hpMultiplier);
-        }
+      if (cfg.enabled && now >= owner.nextRaiseAt
+        && this.raiseForOwner(player.id, player.color, player.sprite.x, player.sprite.y, cfg)) {
         owner.nextRaiseAt = now + cfg.intervalMs;
       }
 
       const allies = this.enemyManager.getAlliedEnemies(player.id);
       for (const ally of allies) {
+        knownAllyIds.add(ally.id);
         this.prepareAlly(ally, player.id, player.sprite.x, player.sprite.y, cfg, deltaMs);
+      }
+      for (const ally of this.selectStrongestAllies(allies, cfg.undyingCount)) {
+        this.undyingAllyIds.add(ally.id);
       }
 
       const target = this.findTarget(player.sprite.x, player.sprite.y, cfg.targetRadius);
@@ -135,8 +186,12 @@ export class NecromancySystem {
         : { x: target.sprite.x, y: target.sprite.y, target };
 
       this.updateFlowFieldGoal(player.id, destination.x, destination.y, now);
+      const followRadius = Math.min(
+        FOLLOW_RADIUS_MAX_PX,
+        FOLLOW_RADIUS_BASE_PX + FOLLOW_RADIUS_PER_ALLY_PX * Math.max(0, allies.length - 1),
+      );
       for (const ally of allies) {
-        this.updateAlly(ally, player.id, player.color, destination, now, deltaMs);
+        this.updateAlly(ally, player.id, player.color, destination, followRadius, now, deltaMs);
       }
     }
 
@@ -144,12 +199,101 @@ export class NecromancySystem {
       if (activeOwners.has(ownerId)) continue;
       this.clearOwner(ownerId);
     }
+    for (const allyId of [...this.followSlots.keys()]) {
+      if (!knownAllyIds.has(allyId)) this.followSlots.delete(allyId);
+    }
   }
 
   clear(): void {
+    for (const corpse of this.corpses) this.corpseSink?.onCorpseRemoved(corpse.id);
     this.corpses.length = 0;
     for (const ownerId of [...this.owners.keys()]) this.clearOwner(ownerId);
     this.owners.clear();
+    this.followSlots.clear();
+    this.undyingAllyIds.clear();
+  }
+
+  /**
+   * Ein Wiederbelebungsversuch für einen Besitzer. Unterhalb des Limits wird schlicht die beste
+   * Leiche in Reichweite gehoben. Mit „Herrschaft der Toten" darf am Limit zusätzlich der
+   * schwächste Wiederbelebte einer stärkeren Leiche weichen.
+   *
+   * @returns true, wenn der Versuch das Intervall verbraucht. Am Limit ohne Ersetzung bleibt der
+   *   Zeitpunkt offen, damit ein frei werdender Platz sofort nachbesetzt wird.
+   */
+  private raiseForOwner(
+    ownerId: string,
+    ownerColor: number,
+    ownerX: number,
+    ownerY: number,
+    cfg: NecromancyConfig,
+  ): boolean {
+    const allies = this.enemyManager.getAlliedEnemies(ownerId);
+    const atLimit = allies.length >= cfg.maxAllies;
+    if (atLimit && (!cfg.replaceWeakest || allies.length === 0)) return false;
+
+    const corpseIndex = this.findBestCorpseIndex(ownerX, ownerY, cfg.reviveRadius);
+    if (corpseIndex < 0) return !atLimit;
+
+    if (atLimit) {
+      const weakest = this.findWeakestAlly(allies);
+      if (!weakest || this.corpses[corpseIndex].xp <= getCoopDefenseEnemyXp(weakest.kind)) return false;
+      this.enemyManager.hostRemoveEnemy(weakest.id);
+      this.followSlots.delete(weakest.id);
+      this.undyingAllyIds.delete(weakest.id);
+    }
+
+    const [corpse] = this.corpses.splice(corpseIndex, 1);
+    this.corpseSink?.onCorpseRemoved(corpse.id);
+    this.enemyManager.hostSpawnAllyAtWorld(corpse.x, corpse.y, corpse.kind, ownerId, ownerColor, cfg.hpMultiplier);
+    return true;
+  }
+
+  /** Rangfolge der Wiederbelebten: XP der Gattung zuerst, dann tatsächliche maximale HP. */
+  private selectStrongestAllies(allies: readonly EnemyEntity[], count: number): EnemyEntity[] {
+    if (count <= 0 || allies.length === 0) return [];
+    return [...allies]
+      .sort((left, right) => (
+        getCoopDefenseEnemyXp(right.kind) - getCoopDefenseEnemyXp(left.kind)
+        || right.getMaxHp() - left.getMaxHp()
+        || left.id.localeCompare(right.id)
+      ))
+      .slice(0, count);
+  }
+
+  private findWeakestAlly(allies: readonly EnemyEntity[]): EnemyEntity | null {
+    let weakest: EnemyEntity | null = null;
+    for (const ally of allies) {
+      if (!weakest) {
+        weakest = ally;
+        continue;
+      }
+      const candidateXp = getCoopDefenseEnemyXp(ally.kind);
+      const weakestXp = getCoopDefenseEnemyXp(weakest.kind);
+      if (candidateXp < weakestXp || (candidateXp === weakestXp && ally.getMaxHp() < weakest.getMaxHp())) {
+        weakest = ally;
+      }
+    }
+    return weakest;
+  }
+
+  /**
+   * Persönlicher Platz im Gefolge-Ring. Die Wiederbelebten suchen damit die Nähe des Besitzers,
+   * ohne auf seiner Position zu stehen.
+   */
+  private resolveFollowAnchor(
+    allyId: string,
+    ownerX: number,
+    ownerY: number,
+    followRadius: number,
+  ): { x: number; y: number } {
+    let slot = this.followSlots.get(allyId);
+    if (slot === undefined) {
+      slot = this.nextFollowSlot++;
+      this.followSlots.set(allyId, slot);
+    }
+    const angle = slot * FOLLOW_SLOT_ANGLE_STEP;
+    return { x: ownerX + Math.cos(angle) * followRadius, y: ownerY + Math.sin(angle) * followRadius };
   }
 
   private updateAlly(
@@ -157,20 +301,30 @@ export class NecromancySystem {
     ownerId: string,
     ownerColor: number,
     destination: { x: number; y: number; target?: EnemyEntity },
+    followRadius: number,
     now: number,
     deltaMs: number,
   ): void {
     if (!ally.isAttackMovementPaused(now)) {
-      const dx = destination.x - ally.sprite.x;
-      const dy = destination.y - ally.sprite.y;
+      // Beim Angriff zählt das Ziel selbst, beim Rückweg der eigene Platz im Gefolge-Ring.
+      const anchor = destination.target
+        ? { x: destination.x, y: destination.y }
+        : this.resolveFollowAnchor(ally.id, destination.x, destination.y, followRadius);
+      const dx = anchor.x - ally.sprite.x;
+      const dy = anchor.y - ally.sprite.y;
       const length = Math.hypot(dx, dy);
-      if (length > 8) {
+      if (length > FOLLOW_ARRIVAL_PX) {
         const flowDirection = this.getFlowDirection(ownerId, ally);
         if (flowDirection === null) {
           ally.stopMovement();
         } else {
-          const desiredVx = (flowDirection?.x ?? dx / length) * ally.getMoveSpeed();
-          const desiredVy = (flowDirection?.y ?? dy / length) * ally.getMoveSpeed();
+          // Das Flowfield kennt nur das gemeinsame Ziel; die letzten Meter zum eigenen Platz
+          // laufen deshalb direkt.
+          const steerDirectly = flowDirection === undefined || length <= FOLLOW_DIRECT_STEER_PX;
+          const directionX = steerDirectly ? dx / length : flowDirection.x;
+          const directionY = steerDirectly ? dy / length : flowDirection.y;
+          const desiredVx = directionX * ally.getMoveSpeed();
+          const desiredVy = directionY * ally.getMoveSpeed();
           const current = ally.getDesiredVelocity();
           const lerp = 1 - Math.exp(-STEER_RESPONSIVENESS * Math.min(100, Math.max(0, deltaMs)) / 1000);
           ally.setDesiredVelocity(
@@ -322,12 +476,17 @@ export class NecromancySystem {
 
   private pruneExpiredCorpses(now: number): void {
     for (let index = this.corpses.length - 1; index >= 0; index -= 1) {
+      // Der Marker blendet in der Darstellung selbst aus; hier fällt nur der Datensatz weg.
       if (now >= this.corpses[index].expiresAt) this.corpses.splice(index, 1);
     }
   }
 
   private clearOwner(ownerId: string): void {
-    for (const ally of this.enemyManager.getAlliedEnemies(ownerId)) this.enemyManager.hostRemoveEnemy(ally.id);
+    for (const ally of this.enemyManager.getAlliedEnemies(ownerId)) {
+      this.enemyManager.hostRemoveEnemy(ally.id);
+      this.followSlots.delete(ally.id);
+      this.undyingAllyIds.delete(ally.id);
+    }
     this.owners.delete(ownerId);
   }
 
@@ -348,6 +507,8 @@ export class NecromancySystem {
         leashRadius,
         this.resolveStat(playerId, `${STAT_PREFIX}.teleportDistance`, DEFAULT_TELEPORT_DISTANCE),
       ),
+      undyingCount: Math.max(0, Math.floor(this.resolveStat(playerId, `${STAT_PREFIX}.undyingCount`, 0))),
+      replaceWeakest: this.resolveStat(playerId, `${STAT_PREFIX}.replaceWeakest`, 0) > 0,
     };
   }
 }

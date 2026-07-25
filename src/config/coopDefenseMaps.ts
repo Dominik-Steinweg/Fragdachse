@@ -160,6 +160,17 @@ export interface CoopDefenseMapConfig {
   readonly tutorialText?: string;
   /** Anzeigedauer des Tutorial-Fensters; Standard ist COOP_DEFENSE_TUTORIAL_DURATION_MS. */
   readonly tutorialDurationMs?: number;
+  /**
+   * True: Das Tutorial-Fenster bleibt die komplette Runde stehen; `tutorialDurationMs`
+   * wird dann ignoriert. Gedacht für die Einstiegs-Map, deren Text als Nachschlagewerk dient.
+   */
+  readonly tutorialPersistent?: boolean;
+  /**
+   * True: Unter dem Fließtext erscheint zusätzlich die Steuerungstabelle des Hilfe-Fensters.
+   * Das Fenster wird dadurch deutlich höher (siehe `getCoopDefenseTutorialPanelHeight`) und
+   * die Felsformation darunter entsprechend größer.
+   */
+  readonly tutorialShowControls?: boolean;
   /** True/Konfiguration: Die Zombie-Fraktion führt auf dieser Map eigene Luftangriffe durch. */
   readonly enemyAirstrikes?: boolean | CoopDefenseMapAirstrikeConfig;
   /**
@@ -300,6 +311,8 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     tutorialDurationMs: typeof mapConfig.tutorialDurationMs === 'number' && Number.isFinite(mapConfig.tutorialDurationMs)
       ? Math.max(1000, Math.floor(mapConfig.tutorialDurationMs))
       : undefined,
+    tutorialPersistent: mapConfig.tutorialPersistent === true,
+    tutorialShowControls: mapConfig.tutorialShowControls === true,
     enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),

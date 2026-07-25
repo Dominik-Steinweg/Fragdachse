@@ -3,7 +3,7 @@
 Diese Seiten sind ein kleiner Router für langlebiges Projektwissen. Der Quellcode ist immer die technische Wahrheit. Vor einer Aufgabe nur die fachlich relevanten Seiten lesen und Aussagen bei Änderungen gegen reale Codepfade verifizieren.
 
 - [`architecture.md`](architecture.md): Systemgrenzen, Einstiegspunkte und Scene-/Round-Lifecycle.
-- [`local-dev-environment.md`](local-dev-environment.md): Portvertrag für parallel arbeitende Agenten und Menschen sowie Fehlerbilder bei Browserprüfungen.
+- [`local-dev-environment.md`](local-dev-environment.md): Browserprüfung nur auf ausdrückliche Aufforderung, Portvertrag für parallel arbeitende Agenten und Menschen sowie Fehlerbilder bei Browserprüfungen.
 - [`gameplay.md`](gameplay.md): Spielidee, Modi sowie Trennung von Lobby und Arena.
 - [`networking.md`](networking.md): WebRTC-Transport, Host-Autorität, Kanalzuordnung, Replikation und Diagnose.
 - [`performance.md`](performance.md): Grafikqualitäts-Vertrag, visuelle Budgets und lokaler Messworkflow (Taste T).

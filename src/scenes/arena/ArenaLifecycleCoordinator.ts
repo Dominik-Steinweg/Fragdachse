@@ -539,6 +539,11 @@ export class ArenaLifecycleCoordinator {
           flowFieldService?.setActiveBaseIds(activeBaseIds);
           playerFlowFieldService?.setActiveBaseIds(activeBaseIds);
           bossFlowFieldService?.setActiveBaseIds(activeBaseIds);
+          // Die Wiederbelebten navigieren um Basen herum wie alle anderen Einheiten; ohne diese
+          // Aktualisierung blieben zerstoerte Basen fuer sie dauerhaft blockiert.
+          for (const allyFlowField of this.ctx.allyFlowFieldServices.values()) {
+            allyFlowField.setActiveBaseIds(activeBaseIds);
+          }
         });
       }
     }
@@ -962,6 +967,19 @@ export class ArenaLifecycleCoordinator {
           (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
         )
         : null;
+      if (this.ctx.necromancySystem) {
+        // Leichen-Marker laufen ueber denselben Weg wie andere Host-Effekte: lokal ueber den
+        // Broadcast-Loopback, damit Host und Clients dieselbe Darstellung zeigen.
+        this.ctx.necromancySystem.setCorpseSink({
+          onCorpseAdded: (corpseId, x, y, enemySize, lifetimeMs) => {
+            bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs);
+          },
+          onCorpseRemoved: (corpseId) => bridge.broadcastCorpseMarkerRemoval(corpseId),
+        });
+        this.ctx.enemyManager?.setLethalDamageGuard(
+          (enemy) => this.ctx.necromancySystem?.handleLethalDamage(enemy) ?? false,
+        );
+      }
       this.ctx.projectileManager.setProjectileResolvedCallback((projectile) => {
         this.ctx.loadoutManager?.resolveAk47Projectile(projectile);
       });
@@ -1381,6 +1399,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.energyShield.destroyAll();
     this.renderers.guardianSpirit.destroyAll();
     this.renderers.slimeTrail.clear();
+    this.renderers.corpseMarker.clearAll();
     this.renderers.flamethrowerUpgrades.clear();
     this.ctx.effectSystem.clearAllBurrowStates();
     this.placementPreview.clearForTeardown();
@@ -1394,8 +1413,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.captureTheBeerSystem = null;
     this.ctx.baseManager?.destroy();
     this.ctx.baseManager = null;
+    this.ctx.necromancySystem?.setCorpseSink(null);
     this.ctx.necromancySystem?.clear();
     this.ctx.necromancySystem = null;
+    this.ctx.enemyManager?.setLethalDamageGuard(null);
     this.ctx.enemyManager?.setEnemySpawnedCallback(null);
     this.ctx.enemyManager?.destroy();
     this.ctx.enemyManager?.setVisualSink(null);

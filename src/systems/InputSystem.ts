@@ -97,6 +97,7 @@ export class InputSystem {
   private localIsBurrowed = false;
   private localBurrowPhase: BurrowPhase = 'idle';
   private inputEnabled    = true;
+  private aimEnabled      = true;
 
   constructor(
     scene:          Phaser.Scene,
@@ -214,6 +215,16 @@ export class InputSystem {
       this.cancelUltimatePlacement();
       this.ultimateTargetingActive = false;
     }
+  }
+
+  /**
+   * Blickrichtung getrennt vom übrigen Input schalten. Das Drehen ist ein echtes
+   * Obermenge-Recht: Es darf aktiv bleiben, während {@link setInputEnabled} sperrt
+   * (Arena-Countdown), aber niemals umgekehrt. Bei gesperrtem Aim friert der zuletzt
+   * gesendete Winkel ein, damit der Spieler etwa im Optionsmenü nicht der Maus folgt.
+   */
+  setAimEnabled(enabled: boolean): void {
+    this.aimEnabled = enabled;
   }
 
   setInputEnabled(enabled: boolean): void {
@@ -419,7 +430,12 @@ export class InputSystem {
     // Process debug hotkeys first (regardless of input enabled state)
     this.updateDebugHotkeys();
 
-    // ── 1. Bewegungs-Input (immer gesendet) ────────────────────────────────
+    // ── 1. Blickrichtung (auch bei gesperrter Eingabe) ─────────────────────
+    // Drehen bleibt während des Arena-Countdowns erlaubt und wird über den
+    // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
+    const aimTarget = this.updateAimFromPointer();
+
+    // ── 2. Bewegungs-Input (immer gesendet) ────────────────────────────────
     let dx = 0, dy = 0;
     if (this.inputEnabled) {
       if (this.keyA.isDown) dx -= 1;
@@ -439,7 +455,7 @@ export class InputSystem {
 
     if (!this.inputEnabled) return;
 
-    // ── 2. Stun: keine weiteren Aktionen ───────────────────────────────────
+    // ── 3. Stun: keine weiteren Aktionen ───────────────────────────────────
     if (this.localIsStunned) {
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
@@ -447,7 +463,7 @@ export class InputSystem {
       return;
     }
 
-    // ── 3. Dash (Flanke, einmalig auslösen) ────────────────────────────────
+    // ── 4. Dash (Flanke, einmalig auslösen) ────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
       const now = Date.now();
       if (now >= this.dashCooldownUntil) {
@@ -456,7 +472,7 @@ export class InputSystem {
       }
     }
 
-    // ── 4. Burrow-Toggle (Flanke) ───────────────────────────────────────────
+    // ── 5. Burrow-Toggle (Flanke) ───────────────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
       if (this.localBurrowPhase === 'idle') {
         this.bridge.sendBurrowRequest(true);
@@ -465,22 +481,19 @@ export class InputSystem {
       }
     }
 
-    // ── 5. Loadout-Aktionen ────────────────────────────────────────────────
+    // ── 6. Loadout-Aktionen ────────────────────────────────────────────────
     if (!this.onLoadoutUse) return;
 
     const pointer = this.scene.input.activePointer;
-    const sprite  = this.getLocalSprite();
     const now     = Date.now();
 
-    if (!sprite) {
+    // Ohne aimTarget gibt es keinen lokalen Sprite – dann auch keine Loadout-Aktionen.
+    if (!aimTarget) {
       this.cancelUtilityInteraction();
       this.placementPreviewState = null;
       return;
     }
 
-    const pointerWorld = this.getPointerWorldPoint(pointer);
-    const px    = pointerWorld.x;
-    const py    = pointerWorld.y;
     const leftPointerDown = pointer.leftButtonDown();
     const rightPointerDown = pointer.rightButtonDown();
     const leftInputStarted = leftPointerDown && !this.prevLeftPointerDown;
@@ -490,9 +503,9 @@ export class InputSystem {
     if (!leftPointerDown) {
       this.suppressWeapon1UntilLeftRelease = false;
     }
-    const clampedTarget = clampPointToArena(px, py);
-    const angle = Phaser.Math.Angle.Between(sprite.x, sprite.y, clampedTarget.x, clampedTarget.y);
-    this.currentAimAngle = angle;
+    // Zielpunkt und Winkel stammen aus Schritt 1 und sind bereits auf die Arena geclampt.
+    const clampedTarget = aimTarget;
+    const angle = this.currentAimAngle;
     const ultimateCharging = this.ultimateHoldActive;
     const weaponsBlocked = this.localBurrowPhase !== 'idle' || ultimateCharging || this.utilityPlacementActive || this.ultimatePlacementActive;
     const primaryWeaponSuppressed = this.suppressWeapon1UntilLeftRelease && leftPointerDown;
@@ -508,9 +521,8 @@ export class InputSystem {
       if (!targetedCfg) {
         this.cancelUtilityTargeting();
       } else {
-        const target = clampPointToArena(px, py);
-        const targetAngle = Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y);
-        this.currentAimAngle = targetAngle;
+        const target = clampedTarget;
+        const targetAngle = angle;
 
         if (pointer.rightButtonDown() || Phaser.Input.Keyboard.JustDown(this.keyE)) {
           this.cancelUtilityTargeting();
@@ -535,9 +547,8 @@ export class InputSystem {
       if (!asCfg) {
         this.ultimateTargetingActive = false;
       } else {
-        const target = clampPointToArena(px, py);
-        const targetAngle = Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y);
-        this.currentAimAngle = targetAngle;
+        const target = clampedTarget;
+        const targetAngle = angle;
 
         // Rage prüfen: bei zu wenig Rage automatisch verlassen
         const rage = this.getLocalRage?.() ?? 0;
@@ -831,6 +842,24 @@ export class InputSystem {
 
   private getPointerWorldPoint(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
     return this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+  }
+
+  /**
+   * Setzt {@link currentAimAngle} aus Zeiger- und Spielerposition und liefert das auf
+   * die Arena geclampte Ziel. Läuft bewusst vor jedem Input-Gate: Die Blickrichtung ist
+   * der einzige Input, der auch bei gesperrter Eingabe (Arena-Countdown) weiterläuft und
+   * repliziert wird. Ohne lokalen Sprite oder Aim-Recht bleibt der letzte Winkel stehen.
+   */
+  private updateAimFromPointer(): { x: number; y: number } | undefined {
+    if (!this.aimEnabled) return undefined;
+
+    const sprite = this.getLocalSprite();
+    if (!sprite) return undefined;
+
+    const pointerWorld = this.getPointerWorldPoint(this.scene.input.activePointer);
+    const target = clampPointToArena(pointerWorld.x, pointerWorld.y);
+    this.currentAimAngle = Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y);
+    return target;
   }
 
   private beginTargetedUtilityAim(now: number): boolean {

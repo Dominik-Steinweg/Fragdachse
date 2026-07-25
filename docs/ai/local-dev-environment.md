@@ -2,6 +2,12 @@
 
 Diese Seite beschreibt einen nicht offensichtlichen Vertrag: Ein Agent (Claude Code, Codex) und ein Mensch arbeiten regelmäßig **gleichzeitig** an diesem Repository, jeder mit einem eigenen Vite-Dev-Server und einem eigenen Browser. Ohne saubere Trennung scheitern Agenten-Browserprüfungen reproduzierbar.
 
+## Grundregel: Browserprüfung nur auf ausdrückliche Aufforderung
+
+Agenten führen **standardmäßig keine** Browser- oder Sichtprüfung durch, auch nicht bei sichtbaren Änderungen. Der Grund steht unten unter [Verborgener Browser-Pane](#verborgener-browser-pane-keine-frames-kein-screenshot-keine-sichtprüfung): Der Pane rechnet nur Frames, solange er angezeigt wird, und ob er angezeigt wird, kann der Agent weder erkennen noch beeinflussen. Der Normalfall ist deshalb ein verborgener Pane, eine stehende Game-Loop und ein Screenshot-Timeout — also Aufwand ohne Ergebnis.
+
+Alles Weitere auf dieser Seite gilt nur für den Ausnahmefall, dass der Prompt eine Browser-, Sicht- oder Screenshot-Prüfung ausdrücklich verlangt. Ohne diese Aufforderung: kein `dev:browser`, kein Tab, kein Screenshot; abschließen mit Build, Tests und Codeargumentation und im Ergebnis vermerken, dass visuell nicht geprüft wurde.
+
 ## Portvertrag
 
 | Port | Besitzer | Start | Bindung |
@@ -56,6 +62,7 @@ Was **weiterhin** funktioniert, weil es DOM-/JS-Zustand statt Frames liest: `jav
 
 Konsequenzen für Agenten:
 
-- Jede **Sichtprüfung** (Boden, Sprites, Effekte, Kamera-Feedback) setzt einen **angezeigten und fokussierten** Browser-Pane voraus. Fehlt der Screenshot mit obiger Meldung, ist der Pane verborgen — das ist ein Umgebungszustand, kein Anwendungsfehler.
-- In diesem Fall die Sichtprüfung **nicht als bestanden melden** und kein Ergebnis erfinden. Stattdessen knapp berichten, dass visuell nicht verifiziert werden konnte, und auf das ausweichen, was ohne Frames belegbar ist: Konsolenfehler, Netzwerk, `read_page`, sowie Code-Argumentation.
-- Wenn der Screenshot der einzige verbleibende Schritt ist, kann der Mensch gebeten werden, den Browser-Pane sichtbar zu lassen; der Pane-Sichtbarkeit ist über die App-Oberfläche gesteuert, nicht aus dem Repo oder per Skript schaltbar.
+- Jede **Sichtprüfung** (Boden, Sprites, Effekte, Kamera-Feedback) setzt einen **angezeigten** Browser-Pane voraus. Ob er angezeigt wird, entscheidet allein der Mensch über die App-Oberfläche; die Sichtbarkeit ist weder aus dem Repo noch per Skript schaltbar und für den Agenten vorab nicht erkennbar. Genau deshalb ist die Sichtprüfung **opt-in**: ohne ausdrückliche Aufforderung im Prompt gar nicht erst starten.
+- Fehlt der Screenshot mit obiger Meldung, ist der Pane verborgen — das ist ein Umgebungszustand, kein Anwendungsfehler. Dann die Sichtprüfung **nicht als bestanden melden** und kein Ergebnis erfinden. Stattdessen knapp berichten, dass visuell nicht verifiziert werden konnte, und auf das ausweichen, was ohne Frames belegbar ist: Konsolenfehler, Netzwerk, `read_page`, sowie Code-Argumentation.
+- Nicht mehrfach nachfassen: Ein zweiter Screenshot-Versuch, ein Reload oder ein Serverneustart ändern nichts an einem verborgenen Pane. Nach dem ersten Fehlschlag abbrechen und den Zustand melden, statt weitere Versuche zu unternehmen.
+- Wenn der Screenshot der einzige verbleibende Schritt ist, kann der Mensch gebeten werden, den Browser-Pane sichtbar zu lassen und die Prüfung erneut anzufordern.

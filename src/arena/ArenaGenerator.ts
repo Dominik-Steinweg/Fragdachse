@@ -101,7 +101,9 @@ export class ArenaGenerator {
       if (coopMapConfig?.rockField) {
         ArenaGenerator.applyRockField(map, coopMapConfig.rockField, rng);
       } else if (coopMapConfig?.tutorialText) {
-        tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(map, trackCols, rng);
+        tutorialRockCells = ArenaGenerator.applyTutorialRockFormation(
+          map, trackCols, rng, coopMapConfig.tutorialShowControls === true,
+        );
       }
 
       // 3. map auf blocked übertragen und rocks-Array befüllen
@@ -442,9 +444,10 @@ export class ArenaGenerator {
     map: boolean[][],
     trackCols: ReadonlySet<number>,
     rng: () => number,
+    tutorialShowControls: boolean,
   ): Set<string> {
     const tutorialRockCells = new Set<string>();
-    const panelRegion = getCoopDefenseTutorialRockRegion();
+    const panelRegion = getCoopDefenseTutorialRockRegion(tutorialShowControls);
     // Bis zum oberen Arenarand auffüllen, damit oberhalb des HUD-Blocks keine
     // kleinen, vom restlichen Spielfeld abgeschnittenen Bodentaschen entstehen.
     const region = { ...panelRegion, minGridY: 0 };

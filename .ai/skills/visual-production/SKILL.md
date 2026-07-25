@@ -16,6 +16,6 @@ Follow this workflow for every triggered visual task:
 7. Do not generate or introduce a new asset unless the request explicitly asks for asset creation or the user first approves it. Reusing an existing asset does not require approval.
 8. For every generated or edited gameplay asset, validate direct orthographic 90° top-down perspective, transparent background where required, scale, orientation and in-game readability. Reject isometric, three-quarter, oblique, horizon-bearing, perspective-tapered or side-revealing assets.
 9. Verify complete cleanup for emitters, timers, tweens, filters, masks, temporary textures and Game Objects. Prefer bounded counts, reuse and pooling for frequent effects.
-10. Run the proportional repository checks from `AGENTS.md`; for visible behavior, build and perform one focused browser check at the end.
+10. Run the proportional repository checks from `AGENTS.md`; for visible behavior, build. Do **not** start a dev server, open the browser or attempt a screenshot unless the prompt explicitly asks for a browser or visual check — the in-app browser pane only renders while it is displayed, so a hidden pane freezes Phaser's game loop and produces no image. Without such a request, close out with build, tests and code reasoning and state plainly that the result was not verified visually.
 
 When requirements conflict with an existing reference, preserve gameplay readability and the verified project contracts, then document the deliberate deviation in the handoff.

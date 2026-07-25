@@ -17,6 +17,18 @@ describe('Coop defense tutorial arena formation', () => {
     }
   });
 
+  it('grows the footprint only for the map that shows the controls table', () => {
+    const standard = getCoopDefenseTutorialRockRegion(false);
+    const withControls = getCoopDefenseTutorialRockRegion(true);
+    expect(withControls.maxGridY).toBeGreaterThan(standard.maxGridY);
+    expect(withControls.minGridX).toBe(standard.minGridX);
+    expect(withControls.maxGridX).toBe(standard.maxGridX);
+    expect(getCoopDefenseMapConfig('1').tutorialShowControls).toBe(true);
+    for (let mapId = 2; mapId <= 5; mapId++) {
+      expect(getCoopDefenseMapConfig(String(mapId)).tutorialShowControls).toBe(false);
+    }
+  });
+
   it('fills the tutorial footprint with rocks except for railway cells', () => {
     const layout = ArenaGenerator.generate(42_424, getCoopDefenseMapConfig('1'));
     const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
@@ -25,7 +37,7 @@ describe('Coop defense tutorial arena formation', () => {
       trackColumns.add(track.gridX);
       trackColumns.add(track.gridX + 1);
     }
-    const region = getCoopDefenseTutorialRockRegion();
+    const region = getCoopDefenseTutorialRockRegion(true);
     for (let gy = region.minGridY; gy <= region.maxGridY; gy++) {
       for (let gx = region.minGridX; gx <= region.maxGridX; gx++) {
         if (!trackColumns.has(gx)) expect(rocks.has(`${gx}:${gy}`)).toBe(true);

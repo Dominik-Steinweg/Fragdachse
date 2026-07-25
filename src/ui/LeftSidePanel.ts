@@ -23,9 +23,10 @@ import { attachHoverEffect } from './uiHover';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
-import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
-import { getStoredCoopDefenseUpgradeProfile, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
+import { getStoredCoopDefenseUpgradeProfile, getStoredHighestUnlockedCoopDefenseMapId, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
+import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { isCoopDefenseLoadoutItemSelectable } from '../utils/coopDefenseUpgrades';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
@@ -1052,14 +1053,17 @@ export class LeftSidePanel {
     this.refreshColorIndicator();
   }
 
+  /** Blaettert nur durch die lokal freigeschalteten Maps – gesperrte Maps sind nicht erreichbar. */
   private stepCoopDefenseMap(delta: -1 | 1): void {
     const mode = this.bridge.getGameMode();
     if (this.lobbyFieldsLocked || !this.bridge.isHost() || !isCoopDefenseMode(mode)) return;
+    const selectableMaps = getUnlockedCoopDefenseMapConfigs(getStoredHighestUnlockedCoopDefenseMapId());
+    if (selectableMaps.length === 0) return;
     const currentMapId = this.bridge.getCoopDefenseMapId();
-    const currentIndex = COOP_DEFENSE_MAP_CONFIGS.findIndex((mapConfig) => mapConfig.mapId === currentMapId);
+    const currentIndex = selectableMaps.findIndex((mapConfig) => mapConfig.mapId === currentMapId);
     const normalizedIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = (normalizedIndex + delta + COOP_DEFENSE_MAP_CONFIGS.length) % COOP_DEFENSE_MAP_CONFIGS.length;
-    this.bridge.setCoopDefenseMapId(COOP_DEFENSE_MAP_CONFIGS[nextIndex].mapId);
+    const nextIndex = (normalizedIndex + delta + selectableMaps.length) % selectableMaps.length;
+    this.bridge.setCoopDefenseMapId(selectableMaps[nextIndex].mapId);
     this.refreshColorIndicator();
   }
 
