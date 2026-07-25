@@ -30,6 +30,13 @@ export interface GraphicsQualityProfile {
   readonly livingBarEffects: boolean;
   readonly externalDecorativeFilters: boolean;
   readonly decorativeFilters: boolean;
+  /**
+   * Obergrenze für die Renderauflösung relativ zum 1920x1080-Designraum (siehe
+   * `graphics/RenderResolution`). Ein hochauflösender Monitor kostet quadratisch Fill-Rate:
+   * WQHD bedeutet 1,78-mal so viele Fragmente wie 1080p. `low` bleibt deshalb bewusst beim
+   * Designraum und nimmt die weichere CSS-Skalierung des Browsers in Kauf.
+   */
+  readonly maxRenderScale: number;
 }
 
 export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, GraphicsQualityProfile>> = {
@@ -49,6 +56,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     livingBarEffects: true,
     externalDecorativeFilters: true,
     decorativeFilters: true,
+    maxRenderScale: 2,
   },
   medium: {
     level: 'medium',
@@ -62,6 +70,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     livingBarEffects: true,
     externalDecorativeFilters: false,
     decorativeFilters: true,
+    maxRenderScale: 1.5,
   },
   low: {
     level: 'low',
@@ -75,6 +84,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     livingBarEffects: false,
     externalDecorativeFilters: false,
     decorativeFilters: false,
+    maxRenderScale: 1,
   },
 };
 

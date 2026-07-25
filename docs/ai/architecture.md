@@ -41,6 +41,17 @@ Abhängigkeiten laufen grob von Scene/Coordinators zu Systems/Manager/Renderer. 
 
 Die statische Kulisse entsteht über `ArenaBuilder.buildStatic()`. Runde-spezifische Inhalte werden separat gebaut und über `ArenaBuilder.destroyDynamic()` entfernt.
 
+## Designraum und Renderauflösung
+
+Gameplay, HUD und alle Konstanten rechnen ausschließlich im Designraum `GAME_WIDTH x GAME_HEIGHT` (1920x1080). Die Canvas rendert davon unabhängig in der Pixelzahl, die der Browser tatsächlich darstellt (`src/graphics/RenderResolution.ts`); `src/main.ts` setzt die Startgröße, ein Controller hält sie bei Fenster-, Vollbild- und Zoomwechseln nach. Die Umrechnung leistet allein der Kamera-Zoom in `ArenaScene.bindCameraToDesignSpace()`.
+
+- Die Hauptkamera braucht dafür zwingend `setOrigin(0, 0)`. Phaser 4 bildet in `Camera.preRender` `Screen = zoom * (Welt - scroll * scrollFactor - originPx) + originPx` ab; nur ohne `originPx` behandelt der Zoom Weltobjekte und bildschirmfestes HUD (`scrollFactor 0`) gleich. Mit Phasers Default `originX = 0.5` driften beide bei `zoom != 1` auseinander.
+- `clampX`/`clampY` gehen weiterhin von mittiger Verankerung aus und verrechnen `width` gegen `displayWidth = width / zoom`. `syncMainCameraBounds()` rechnet diese Differenz vorweg aus den Kamera-Grenzen heraus, sonst klemmt die Kamera oberhalb von Renderauflösung 1 dauerhaft versetzt fest.
+- `pointer.x`/`pointer.y` zählen Renderpixel. Wo roh damit gerechnet wird, ist `toDesignSpace()` nötig; `camera.getWorldPoint()` und die Treffererkennung interaktiver Objekte invertieren die Kameramatrix bereits selbst und brauchen nichts.
+- `Text` rastert Glyphen in Designpixeln. `src/graphics/TextResolution.ts` überlagert `scene.add.text` (dasselbe Muster wie `GraphicsQualityController` bei `scene.add.particles`) und hebt `Text.setResolution()` an, sonst bleiben kleine Labels beim Hochskalieren weich.
+- Die Obergrenze steht als `maxRenderScale` im Grafikqualitätsprofil: hochauflösende Monitore kosten quadratisch Fill-Rate, `low` bleibt deshalb beim Designraum.
+- Die Canvas trägt bewusst kein `image-rendering: pixelated`. Es widerspricht dem `smoothPixelArt`-Shader und rastert krumme Skalierungsfaktoren hart statt gefiltert.
+
 ## Nicht offensichtliche Entscheidungen
 
 - Der Host publiziert vor `LOBBY → ARENA` Layout, Zeitbasen und Round-State zuverlässig; der Phasenwechsel ist das nachgelagerte Gate.

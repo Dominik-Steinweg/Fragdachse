@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config';
 import type { ScopeModeConfig } from '../loadout/LoadoutConfig';
 
 // Start-Sichtradius in Screen-Pixeln bei scope=0 (muss die Screen-Diagonale übersteigen)
@@ -49,8 +49,10 @@ export class ScopeOverlay {
   };
 
   constructor(private readonly scene: Phaser.Scene) {
-    this.W = Math.ceil(scene.scale.width / CANVAS_DOWNSCALE);
-    this.H = Math.ceil(scene.scale.height / CANVAS_DOWNSCALE);
+    // Designraum, nicht Renderauflösung: das Overlay hängt mit `scrollFactor 0` an der Kamera
+    // und wird von deren Zoom mitskaliert (siehe `graphics/RenderResolution`).
+    this.W = Math.ceil(GAME_WIDTH / CANVAS_DOWNSCALE);
+    this.H = Math.ceil(GAME_HEIGHT / CANVAS_DOWNSCALE);
 
     // Vorhandene Textur ggf. aus einem vorigen Round-Start entfernen
     if (scene.textures.exists(TEX_KEY)) {

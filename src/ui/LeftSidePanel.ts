@@ -895,8 +895,10 @@ export class LeftSidePanel {
     // Position relativ zum Canvas berechnen ([ ÄNDERN ] Button)
     const canvas = this.scene.game.canvas;
     const canvasRect = canvas.getBoundingClientRect();
-    const scaleX = canvasRect.width / this.scene.scale.width;
-    const scaleY = canvasRect.height / this.scene.scale.height;
+    // Bezugsgröße ist der Designraum, nicht die Renderauflösung der Canvas: CENTER_X und
+    // NAME_VALUE_Y sind Designkoordinaten (siehe `graphics/RenderResolution`).
+    const scaleX = canvasRect.width / GAME_WIDTH;
+    const scaleY = canvasRect.height / GAME_HEIGHT;
     const popupLeft = canvasRect.left + (CENTER_X + 80) * scaleX;
     const popupTop  = canvasRect.top  + NAME_VALUE_Y * scaleY;
 

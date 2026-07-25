@@ -4,7 +4,7 @@ import { NetworkBridge }  from './network/NetworkBridge';
 import { PeerNetworkError } from './network/peer';
 import { rejoinCurrentRoom, restartWithNewRoom }  from './utils/roomQuality';
 import { ArenaScene }     from './scenes/ArenaScene';
-import { GAME_WIDTH, GAME_HEIGHT } from './config';
+import { initialRenderSize, installRenderResolution } from './graphics/RenderResolution';
 
 /**
  * Zeigt einen Verbindungsfehler an, statt ein Spiel zu starten, das nicht spielbar waere.
@@ -88,10 +88,15 @@ async function boot(): Promise<void> {
   installReconnectNotice();
 
   // 3. Phaser-Spiel starten – ERST nach stehender Verbindung
-  new Phaser.Game({
+  //
+  //    Breite/Höhe sind die *Render*auflösung, nicht der Designraum: sie folgen der Fläche,
+  //    die der Browser tatsächlich darstellt (siehe `graphics/RenderResolution`). Der
+  //    Designraum bleibt GAME_WIDTH x GAME_HEIGHT und wird über den Kamera-Zoom hergestellt.
+  const renderSize = initialRenderSize();
+  const game = new Phaser.Game({
     type:            Phaser.AUTO,
-    width:           GAME_WIDTH,
-    height:          GAME_HEIGHT,
+    width:           renderSize.width,
+    height:          renderSize.height,
     parent:          'game-container',
     backgroundColor: '#000000',
     smoothPixelArt: true,
@@ -108,6 +113,11 @@ async function boot(): Promise<void> {
       createContainer: true
     }
   });
+
+  // 4. Renderauflösung an die dargestellte Fläche binden und dort halten (Fenstergröße,
+  //    Vollbild, Zoomstufe des Browsers). Erst ab READY – vorher hat der ScaleManager weder
+  //    Canvas noch vermessene Eltern-Box, seine Anzeigegröße wäre also 0.
+  game.events.once(Phaser.Core.Events.READY, () => installRenderResolution(game));
 }
 
 boot().catch((error: unknown) => {

@@ -37,7 +37,7 @@ import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC,
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, GAME_WIDTH, CELL_SIZE, COLORS, DEPTH,
+  ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, GAME_WIDTH, GAME_HEIGHT, CELL_SIZE, COLORS, DEPTH,
   NET_SMOOTH_TIME_MS,
   applyArenaMetricsForMode,
 } from '../config';
@@ -60,6 +60,8 @@ import {
   unlockStoredCoopDefenseMapAfterVictory,
 } from '../utils/localPreferences';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
+import { getRenderResolutionController, toDesignSpace } from '../graphics/RenderResolution';
+import { installTextResolution } from '../graphics/TextResolution';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
@@ -311,9 +313,24 @@ export class ArenaScene extends Phaser.Scene {
 
   create(): void {
     applyArenaMetricsForMode(bridge.getGameMode(), bridge.getGamePhase());
+
+    // Muss vor allem anderen laufen: ab hier gilt der 1920x1080-Designraum unabhängig davon,
+    // wie viele Pixel die Canvas tatsächlich hat. Alles Folgende platziert Objekte darin.
+    this.bindCameraToDesignSpace();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.bindCameraToDesignSpace, this);
+    const uninstallTextResolution = installTextResolution(this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.bindCameraToDesignSpace, this);
+      uninstallTextResolution();
+    });
+
     this.graphicsQuality = new GraphicsQualityController(getStoredGraphicsQuality());
     this.graphicsQuality.attach(this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.graphicsQuality.destroy());
+    this.graphicsQuality.subscribe((profile) => {
+      getRenderResolutionController()?.setMaxRenderScale(profile.maxRenderScale);
+    });
+    getRenderResolutionController()?.setMaxRenderScale(this.graphicsQuality.getProfile().maxRenderScale);
     this.runtimeProfiler = new ArenaRuntimeProfiler();
     this.runtimeProfiler.attachGame(this.game);
     this.performanceAblation = new PerformanceAblationController(this, {
@@ -1132,8 +1149,15 @@ export class ArenaScene extends Phaser.Scene {
     if (this.scopeOverlay) {
       const scopeCfg = inArena ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
       if (scopeCfg) {
+        // `pointer.x/y` zählen Renderpixel; das Overlay rechnet im Designraum.
         const pointer = this.input.activePointer;
-        this.scopeOverlay.update(scopeProgress, pointer.x, pointer.y, delta, scopeCfg);
+        this.scopeOverlay.update(
+          scopeProgress,
+          toDesignSpace(this.scale, pointer.x),
+          toDesignSpace(this.scale, pointer.y),
+          delta,
+          scopeCfg,
+        );
       } else {
         // Keine Scope-Waffe ausgerüstet – Overlay ausblenden
         this.scopeOverlay.update(0, 0, 0, delta, { scopeInMs: 1, fullScopeViewRadius: 0, edgeSoftnessPx: 0, unscopedSpreadDeg: 0, unscopeSpeedMs: 200 });
@@ -1774,8 +1798,46 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaBuilder?.syncStaticBackdrop(bridge.getGameMode(), bridge.getGamePhase());
     this.redrawArenaClipMask();
     this.physics.world.setBounds(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
-    this.cameras.main.setBounds(0, 0, Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X), this.scale.height);
+    this.syncMainCameraBounds();
     this.ctx?.combatSystem.syncArenaBounds();
+  }
+
+  /**
+   * Koppelt die Hauptkamera an den 1920x1080-Designraum, egal wie groß der Backing-Store der
+   * Canvas gerade ist (siehe `graphics/RenderResolution`). Der Zoom stellt die Vergrößerung
+   * her, `origin = (0, 0)` sorgt dafür, dass sie Welt und bildschirmfestes HUD gleich
+   * behandelt. Bei Renderauflösung 1:1 ist beides ein No-op.
+   *
+   * Läuft bei jedem RESIZE erneut: Vollbild und Fenstergröße verändern die Auflösung mitten
+   * im Spiel, und der CameraManager setzt die Kamera dabei auf die neue Canvas-Größe.
+   */
+  private bindCameraToDesignSpace(): void {
+    const camera = this.cameras.main;
+    if (!camera) return;
+    camera.setOrigin(0, 0);
+    // Nicht auf den Viewport verlassen, den der CameraManager beim RESIZE gesetzt hat: die
+    // Kamera soll den gesamten Backing-Store abdecken, damit Zoom und Fläche zusammenpassen.
+    camera.setSize(this.scale.width, this.scale.height);
+    camera.setZoom(this.scale.width / GAME_WIDTH, this.scale.height / GAME_HEIGHT);
+    this.syncMainCameraBounds();
+  }
+
+  /**
+   * Kamera-Grenzen in Designkoordinaten. Phasers `clampX`/`clampY` gehen von einer mittig
+   * verankerten Kamera aus und verrechnen die Differenz zwischen Viewport- und Sichtfeldgröße
+   * (`width` gegen `displayWidth = width / zoom`) selbst. Bei `origin = (0, 0)` ist diese
+   * Differenz falsch, deshalb wird sie hier vorweg herausgerechnet – ohne das würde die
+   * Kamera bei Renderauflösungen über 1 dauerhaft nach links versetzt festklemmen.
+   */
+  private syncMainCameraBounds(): void {
+    const camera = this.cameras.main;
+    if (!camera) return;
+    camera.setBounds(
+      (camera.width  - camera.displayWidth)  / 2,
+      (camera.height - camera.displayHeight) / 2,
+      Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X),
+      GAME_HEIGHT,
+    );
   }
 
   private syncMainCamera(delta: number, inArena: boolean): void {
