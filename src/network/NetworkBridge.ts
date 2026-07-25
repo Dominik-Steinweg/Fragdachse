@@ -203,8 +203,15 @@ export interface RoundResult {
 
 export type RoundOutcome = 'victory' | 'defeat';
 
+/**
+ * Wie eine Runde geendet hat. `aborted` ist der host-seitige Abbruch über das Optionsmenü und
+ * damit kein Spielausgang: Er zählt weder als Sieg noch als Niederlage, beendet die Runde aber
+ * in jedem Modus regulär (inklusive Endstand und – im Coop – der bis dahin erspielten XP).
+ */
+export type RoundConclusion = RoundOutcome | 'aborted';
+
 export interface RoundState {
-  status: 'active' | RoundOutcome;
+  status: 'active' | RoundConclusion;
   roundStartTime: number;
   coopDefenseHumanPlayerCount?: number;
   // Authoritative Coop-Defense-Map dieser Runde. Bewusst Teil des (reliable) RoundState, damit der

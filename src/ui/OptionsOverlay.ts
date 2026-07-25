@@ -10,7 +10,8 @@ import type { AudioAssetKey } from '../audio/AudioCatalog';
 import { GameAudioSystem, type MusicLoadState } from '../audio/GameAudioSystem';
 import type { LivingBarPalette } from './LivingBarEffect';
 import { LivingBarEffect } from './LivingBarEffect';
-import { ensureModalPanelTexture } from './uiTextures';
+import { ensureGlossyButtonTexture, ensureModalPanelTexture } from './uiTextures';
+import { attachHoverEffect } from './uiHover';
 import {
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
@@ -54,6 +55,15 @@ const MUSIC_LOAD_BAR_H = 8;
 const MUSIC_LOAD_BAR_Y = CY + 192;
 const MUSIC_LOAD_LABEL_Y = MUSIC_LOAD_BAR_Y + 17;
 
+// Partie-Abbruch (nur Host, nur waehrend einer laufenden Runde sichtbar)
+const ABORT_DIVIDER_Y = CY + 224;
+const ABORT_BUTTON_Y = CY + 258;
+const ABORT_BUTTON_W = 320;
+const ABORT_BUTTON_H = 44;
+const ABORT_HINT_Y = CY + 290;
+/** Fenster, in dem der zweite Klick als Bestaetigung zaehlt; danach faellt der Button zurueck. */
+const ABORT_CONFIRM_TIMEOUT_MS = 5000;
+
 type VolumeSliderKey = 'master' | 'effects' | 'music';
 
 interface SliderDefinition {
@@ -79,6 +89,15 @@ interface SliderState {
 interface QualityButtonState {
   readonly background: Phaser.GameObjects.Rectangle;
   readonly label: Phaser.GameObjects.Text;
+}
+
+/**
+ * Host-Abbruch der laufenden Partie. Die Sichtbarkeit wird ueber {@link canAbort} bei jedem
+ * Oeffnen neu erfragt, damit das Overlay selbst nichts ueber Phase oder Hostrolle wissen muss.
+ */
+export interface AbortMatchBinding {
+  canAbort: () => boolean;
+  abort: () => void;
 }
 
 const QUALITY_OPTIONS: readonly { level: GraphicsQuality; label: string }[] = [
@@ -161,6 +180,13 @@ export class OptionsOverlay {
   private musicLoadHideTimer: Phaser.Time.TimerEvent | null = null;
   private unsubscribeMusicLoadState: (() => void) | null = null;
   private lastPreviewAt = -PREVIEW_COOLDOWN_MS;
+  private abortBinding: AbortMatchBinding | null = null;
+  private abortDivider: Phaser.GameObjects.Rectangle | null = null;
+  private abortButton: Phaser.GameObjects.Image | null = null;
+  private abortLabel: Phaser.GameObjects.Text | null = null;
+  private abortHint: Phaser.GameObjects.Text | null = null;
+  private abortConfirmPending = false;
+  private abortConfirmTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -168,11 +194,20 @@ export class OptionsOverlay {
     private readonly graphicsQuality: GraphicsQualityController,
   ) {}
 
+  /** Verbindet den Host-Abbruch; ohne Bindung bleibt der Abschnitt dauerhaft unsichtbar. */
+  setAbortMatchBinding(binding: AbortMatchBinding | null): void {
+    this.abortBinding = binding;
+    this.syncAbortSection();
+  }
+
   build(): void {
     this.unsubscribeMusicLoadState?.();
     this.unsubscribeMusicLoadState = null;
     this.musicLoadHideTimer?.destroy();
     this.musicLoadHideTimer = null;
+    this.abortConfirmTimer?.destroy();
+    this.abortConfirmTimer = null;
+    this.abortConfirmPending = false;
     for (const slider of this.sliders.values()) {
       slider.fillEffect.destroy();
     }
@@ -184,6 +219,10 @@ export class OptionsOverlay {
     this.musicLoadTrack = null;
     this.musicLoadFill = null;
     this.musicLoadLabel = null;
+    this.abortDivider = null;
+    this.abortButton = null;
+    this.abortLabel = null;
+    this.abortHint = null;
 
     ensureOptionsTextures(this.scene);
 
@@ -233,6 +272,7 @@ export class OptionsOverlay {
       this.buildSlider(definition, objects);
     }
     this.buildMusicLoadingIndicator(objects);
+    this.buildAbortSection(objects);
 
     objects.push(
       this.scene.add.text(CX, FOOTER_Y, '[ O / ESC / Klick zum Schließen ]', {
@@ -247,6 +287,7 @@ export class OptionsOverlay {
 
     this.syncFromAudioSystem();
     this.syncQualityButtons();
+    this.syncAbortSection();
   }
 
   show(): void {
@@ -254,6 +295,8 @@ export class OptionsOverlay {
     this.visible = true;
     this.syncFromAudioSystem();
     this.syncQualityButtons();
+    this.resetAbortConfirm();
+    this.syncAbortSection();
 
     this.container.setVisible(true);
     this.container.setAlpha(0);
@@ -290,6 +333,7 @@ export class OptionsOverlay {
     if (!this.visible || !this.container) return;
     this.visible = false;
     this.draggingSliderKey = null;
+    this.resetAbortConfirm();
     this.dismissDelay?.destroy();
     this.dismissDelay = null;
     this.dimRect?.disableInteractive().removeAllListeners();
@@ -330,6 +374,14 @@ export class OptionsOverlay {
     this.unsubscribeMusicLoadState = null;
     this.musicLoadHideTimer?.destroy();
     this.musicLoadHideTimer = null;
+    this.abortConfirmTimer?.destroy();
+    this.abortConfirmTimer = null;
+    this.abortConfirmPending = false;
+    this.abortBinding = null;
+    this.abortDivider = null;
+    this.abortButton = null;
+    this.abortLabel = null;
+    this.abortHint = null;
     for (const slider of this.sliders.values()) {
       slider.fillEffect.destroy();
     }
@@ -498,6 +550,102 @@ export class OptionsOverlay {
       .setVisible(false);
 
     objects.push(this.musicLoadTrack, this.musicLoadFill, this.musicLoadLabel);
+  }
+
+  private buildAbortSection(objects: Phaser.GameObjects.GameObject[]): void {
+    this.abortDivider = this.scene.add.rectangle(CX, ABORT_DIVIDER_Y, PANEL_W - 60, 2, ACCENT)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.abortButton = this.scene.add.image(
+      CX,
+      ABORT_BUTTON_Y,
+      ensureGlossyButtonTexture(
+        this.scene,
+        `_options_abort_btn_${ABORT_BUTTON_W}x${ABORT_BUTTON_H}`,
+        ABORT_BUTTON_W,
+        ABORT_BUTTON_H,
+        COLORS.RED_4,
+        COLORS.RED_1,
+      ),
+    ).setScrollFactor(0)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.onAbortButtonPressed());
+
+    this.abortLabel = this.scene.add.text(CX, ABORT_BUTTON_Y, '', {
+      fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+    this.abortHint = this.scene.add.text(CX, ABORT_HINT_Y, '', {
+      fontSize: '12px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+    attachHoverEffect(this.scene, this.abortButton, this.abortLabel);
+    objects.push(this.abortDivider, this.abortButton, this.abortLabel, this.abortHint);
+  }
+
+  /**
+   * Blendet den Abbruch-Abschnitt passend zur aktuellen Bindung ein oder aus. Ohne laufende
+   * Partie (oder als Client) bleibt der komplette Abschnitt unsichtbar, damit sich das Layout
+   * der uebrigen Optionen nicht veraendert.
+   */
+  private syncAbortSection(): void {
+    const available = this.abortBinding?.canAbort() === true;
+    // Der Hover-Effekt skaliert Button und Beschriftung; beim Aus-/Einblenden feuert kein
+    // pointerout mehr, deshalb hier den Ruhezustand explizit wiederherstellen.
+    this.scene.tweens.killTweensOf([this.abortButton, this.abortLabel].filter((o) => !!o));
+    this.abortButton?.setScale(1);
+    this.abortLabel?.setScale(1);
+    this.abortDivider?.setVisible(available);
+    this.abortButton?.setVisible(available);
+    this.abortLabel?.setVisible(available);
+    this.abortHint?.setVisible(available);
+    if (!available) {
+      this.abortButton?.disableInteractive();
+      return;
+    }
+
+    this.abortButton?.setInteractive({ useHandCursor: true });
+    this.abortLabel
+      ?.setText(this.abortConfirmPending ? 'WIRKLICH BEENDEN?' : 'PARTIE BEENDEN')
+      .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_1));
+    this.abortHint
+      ?.setText(this.abortConfirmPending
+        ? 'Erneut klicken zum Bestätigen'
+        : 'Beendet die laufende Runde für alle Spieler')
+      .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_4));
+  }
+
+  private onAbortButtonPressed(): void {
+    const binding = this.abortBinding;
+    if (!binding?.canAbort()) {
+      this.resetAbortConfirm();
+      this.syncAbortSection();
+      return;
+    }
+
+    if (!this.abortConfirmPending) {
+      this.abortConfirmPending = true;
+      this.abortConfirmTimer?.destroy();
+      this.abortConfirmTimer = this.scene.time.delayedCall(ABORT_CONFIRM_TIMEOUT_MS, () => {
+        this.abortConfirmTimer = null;
+        this.abortConfirmPending = false;
+        this.syncAbortSection();
+      });
+      this.syncAbortSection();
+      return;
+    }
+
+    this.resetAbortConfirm();
+    this.hide();
+    binding.abort();
+  }
+
+  private resetAbortConfirm(): void {
+    this.abortConfirmTimer?.destroy();
+    this.abortConfirmTimer = null;
+    this.abortConfirmPending = false;
   }
 
   private syncMusicLoadingIndicator(state: MusicLoadState | null): void {

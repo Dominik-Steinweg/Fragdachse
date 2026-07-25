@@ -335,7 +335,11 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
   'weapon.ASMD_SEC.damage': {
     kind: 'weapon',
     itemId: 'ASMD_SEC',
-    targets: [{ path: ['damage'], operation: 'scale' }],
+    targets: [
+      { path: ['damage'], operation: 'scale' },
+      { path: ['detonable', 'aoeDamage'], operation: 'scale' },
+      { path: ['detonable', 'damageFalloff', 'minDamage'], operation: 'scale' },
+    ],
   },
   'weapon.ASMD_SEC.dotArea.durationMs': {
     kind: 'weapon',

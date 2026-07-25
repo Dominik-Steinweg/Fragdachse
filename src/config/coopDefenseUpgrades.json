@@ -1455,7 +1455,7 @@
           "id": "asmd_secondary_damage",
           "code": "C-W5-4",
           "label": "Upgrade ASMD Sekundaer: Schaden",
-          "description": "+50% Schaden fuer ASMD Sekundaer.",
+          "description": "+50% Direkttreffer- und Combo-Explosionsschaden fuer ASMD Sekundaer.",
           "kind": "upgrade",
           "maxLevel": 1,
           "startingLevel": 0,

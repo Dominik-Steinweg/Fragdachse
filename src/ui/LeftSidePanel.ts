@@ -14,7 +14,7 @@ import { configureArenaHudLayout } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
 import { HelpOverlay } from './HelpOverlay';
-import { OptionsOverlay } from './OptionsOverlay';
+import { OptionsOverlay, type AbortMatchBinding } from './OptionsOverlay';
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
@@ -164,6 +164,8 @@ export class LeftSidePanel {
   private lobbyFieldsLocked = false;
   private helpOverlay:      HelpOverlay | null = null;
   private optionsOverlay:   OptionsOverlay | null = null;
+  // Wird vor dem Bau gesetzt, wenn der Lifecycle-Koordinator frueher fertig ist als das Panel.
+  private abortMatchBinding: AbortMatchBinding | null = null;
 
   constructor(
     private scene:  Phaser.Scene,
@@ -439,11 +441,18 @@ export class LeftSidePanel {
     this.helpOverlay.build();
     this.optionsOverlay = new OptionsOverlay(this.scene, this.audioSystem, this.graphicsQuality);
     this.optionsOverlay.build();
+    this.optionsOverlay.setAbortMatchBinding(this.abortMatchBinding);
     this.setLobbyFieldsLocked(false);
     this.refreshColorIndicator();
   }
 
   getPuContainer(): Phaser.GameObjects.Container { return this.puContainer; }
+
+  /** Reicht den Host-Abbruch der laufenden Partie an das Optionsmenue durch. */
+  setAbortMatchBinding(binding: AbortMatchBinding | null): void {
+    this.abortMatchBinding = binding;
+    this.optionsOverlay?.setAbortMatchBinding(binding);
+  }
 
   toggleOptionsOverlay(): void {
     this.optionsOverlay?.toggle();

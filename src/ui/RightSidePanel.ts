@@ -878,6 +878,15 @@ export class RightSidePanel {
       return;
     }
 
+    // Ein Host-Abbruch ist kein Spielausgang – daher weder Sieg- noch Niederlagenfarbe.
+    if (roundState.status === 'aborted') {
+      this.resultsOutcome
+        .setText('VOM HOST BEENDET')
+        .setColor(toCssColor(COLORS.GOLD_1))
+        .setVisible(true);
+      return;
+    }
+
     const isVictory = roundState.status === 'victory';
     this.resultsOutcome
       .setText(isVictory ? 'SIEG' : 'NIEDERLAGE')

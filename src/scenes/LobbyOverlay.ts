@@ -18,6 +18,7 @@ import {
   ensureGlossyButtonTexture,
   ensureFlatPanelTexture,
   ensureTintedSectionTexture,
+  ensureFullscreenIconTexture,
 } from '../ui/uiTextures';
 import {
   LivingBarEffect,
@@ -39,6 +40,8 @@ const BTN_RETRY_COLOR = COLORS.BROWN_4;
 const BTN_AUTO_COLOR  = COLORS.GREEN_4;
 const BTN_UPGRADES_COLOR = COLORS.GOLD_4;
 const BTN_UPGRADES_AVAILABLE_COLOR = COLORS.GOLD_2;
+const BTN_FULLSCREEN_COLOR = COLORS.GREY_6;
+const FULLSCREEN_ICON_COLOR = COLORS.GOLD_1;
 
 const PANEL_W  = 800;
 const PANEL_H  = 600;
@@ -68,6 +71,14 @@ const ROW_LEVEL_X = PANEL_X + PANEL_W - 150;
 const ROW_PING_X = PANEL_X + PANEL_W - 28; // 1332 – Ping rechts-bündig in Spielerzeile
 const TEAM_HEADER_ROW_H = 20;
 const TEAM_SECTION_GAP = 10;
+
+const FULLSCREEN_BTN_W      = 168;
+const FULLSCREEN_BTN_H      = 40;
+const FULLSCREEN_BTN_MARGIN = 28;
+const FULLSCREEN_ICON_SIZE  = 20;
+const FULLSCREEN_CONTENT_GAP = 8;
+const FULLSCREEN_BTN_X = GAME_WIDTH  - FULLSCREEN_BTN_MARGIN - FULLSCREEN_BTN_W / 2;
+const FULLSCREEN_BTN_Y = GAME_HEIGHT - FULLSCREEN_BTN_MARGIN - FULLSCREEN_BTN_H / 2;
 
 const READY_BTN_X = GAME_WIDTH / 2;
 const COPY_BTN_X = GAME_WIDTH / 2 - (ACTION_BTN_W + ACTION_BTN_GAP);
@@ -113,6 +124,8 @@ export class LobbyOverlay {
   private retryBtnLabel!: Phaser.GameObjects.Text;
   private transportBtn!:       Phaser.GameObjects.Image;
   private transportBtnLabel!:  Phaser.GameObjects.Text;
+  private fullscreenBtn!:      Phaser.GameObjects.Image;
+  private fullscreenIcon!:     Phaser.GameObjects.Image;
   private coopProgressContainer: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
@@ -145,6 +158,8 @@ export class LobbyOverlay {
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
   build(): void {
+    this.scene.scale.off(Phaser.Scale.Events.ENTER_FULLSCREEN, this.updateFullscreenIcon, this);
+    this.scene.scale.off(Phaser.Scale.Events.LEAVE_FULLSCREEN, this.updateFullscreenIcon, this);
     this.connectionEnded = false;
     this.playerListSignature = null;
     this.roomQualitySignature = null;
@@ -272,6 +287,37 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.transportBtnLabel);
     this.attachHoverEffect(this.transportBtn, this.transportBtnLabel);
+
+    // ── Vollbild-Button (unten rechts, unabhaengig vom Lobby-Panel) ────────
+    // Gleicher Grey/Gold-Stil wie OPTIONEN/HILFE im linken Panel, damit der Button
+    // wie ein Teil der bestehenden UI wirkt statt wie ein fremdes Overlay-Element.
+    this.fullscreenBtn = this.scene.add.image(
+      FULLSCREEN_BTN_X, FULLSCREEN_BTN_Y,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_FULLSCREEN_COLOR, FULLSCREEN_BTN_W, FULLSCREEN_BTN_H), FULLSCREEN_BTN_W, FULLSCREEN_BTN_H, BTN_FULLSCREEN_COLOR, COLORS.GOLD_1),
+    )
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => this.scene.scale.toggleFullscreen())
+      .setScrollFactor(0);
+    objects.push(this.fullscreenBtn);
+
+    const fullscreenLabel = this.scene.add.text(0, 0, 'VOLLBILD', {
+      fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
+    }).setOrigin(0, 0.5);
+    const fullscreenContentW = FULLSCREEN_ICON_SIZE + FULLSCREEN_CONTENT_GAP + fullscreenLabel.width;
+    const fullscreenIconX = -fullscreenContentW / 2 + FULLSCREEN_ICON_SIZE / 2;
+    fullscreenLabel.setPosition(-fullscreenContentW / 2 + FULLSCREEN_ICON_SIZE + FULLSCREEN_CONTENT_GAP, 0);
+
+    this.fullscreenIcon = this.scene.add.image(fullscreenIconX, 0, this.fullscreenIconTexture())
+      .setDisplaySize(FULLSCREEN_ICON_SIZE, FULLSCREEN_ICON_SIZE);
+
+    const fullscreenContent = this.scene.add.container(
+      FULLSCREEN_BTN_X, FULLSCREEN_BTN_Y, [this.fullscreenIcon, fullscreenLabel],
+    ).setScrollFactor(0);
+    objects.push(fullscreenContent);
+    this.attachHoverEffect(this.fullscreenBtn, fullscreenContent);
+
+    this.scene.scale.on(Phaser.Scale.Events.ENTER_FULLSCREEN, this.updateFullscreenIcon, this);
+    this.scene.scale.on(Phaser.Scale.Events.LEAVE_FULLSCREEN, this.updateFullscreenIcon, this);
 
     const coopProgressBg = this.scene.add.image(
       READY_BTN_X, COOP_PROGRESS_PANEL_Y,
@@ -607,8 +653,18 @@ export class LobbyOverlay {
 
   // ── Interne Hilfsmethoden ─────────────────────────────────────────────────
 
-  private attachHoverEffect(btn: Phaser.GameObjects.Image, label: Phaser.GameObjects.Text): void {
+  private attachHoverEffect(btn: Phaser.GameObjects.Image, label: Phaser.GameObjects.GameObject): void {
     attachHoverEffect(this.scene, btn, label);
+  }
+
+  private fullscreenIconTexture(): string {
+    const expand = !this.scene.scale.isFullscreen;
+    const key = `_lobby_fullscreen_icon_${expand ? 'enter' : 'exit'}`;
+    return ensureFullscreenIconTexture(this.scene, key, FULLSCREEN_ICON_SIZE * 2, FULLSCREEN_ICON_COLOR, expand);
+  }
+
+  private updateFullscreenIcon(): void {
+    this.fullscreenIcon?.setTexture(this.fullscreenIconTexture());
   }
 
   private addPlayerRow(profile: PlayerProfile): void {

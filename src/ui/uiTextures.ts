@@ -145,6 +145,47 @@ export function ensureFlatPanelTexture(
   });
 }
 
+/**
+ * Vier Eck-Klammern als Vollbild-Icon. `expand`: Klammern an den Aussenecken, Arme zeigen zur
+ * Mitte (Vollbild betreten). `!expand`: Klammern nahe der Mitte, Arme zeigen zu den Ecken
+ * (Vollbild verlassen) – das uebliche Symmetrie-Paar fuer einen Vollbild-Toggle-Button.
+ */
+export function ensureFullscreenIconTexture(
+  scene: Phaser.Scene, key: string, size: number, color: number, expand: boolean,
+): string {
+  if (scene.textures.exists(key)) return key;
+
+  const s = Math.max(1, Math.round(size));
+  const ct = scene.textures.createCanvas(key, s, s);
+  if (!ct) return key;
+  const ctx = ct.context;
+  ctx.clearRect(0, 0, s, s);
+  ctx.strokeStyle = rgbStr(color, 1);
+  ctx.lineWidth = Math.max(2, s * 0.1);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const arm = s * 0.24;
+  const outerPad = s * 0.16;
+  const innerPad = s * 0.38;
+  const drawCorner = (vx: number, vy: number, armX: number, armY: number) => {
+    ctx.beginPath();
+    ctx.moveTo(vx + armX * arm, vy);
+    ctx.lineTo(vx, vy);
+    ctx.lineTo(vx, vy + armY * arm);
+    ctx.stroke();
+  };
+
+  const pad = expand ? outerPad : innerPad;
+  drawCorner(pad, pad, expand ? 1 : -1, expand ? 1 : -1);
+  drawCorner(s - pad, pad, expand ? -1 : 1, expand ? 1 : -1);
+  drawCorner(pad, s - pad, expand ? 1 : -1, expand ? -1 : 1);
+  drawCorner(s - pad, s - pad, expand ? -1 : 1, expand ? -1 : 1);
+
+  ct.refresh();
+  return key;
+}
+
 /** Sektions-Panel mit dezenter Farb-Toenung + farbigem Rand (wie der Upgrade-Inhaltsbereich). */
 export function ensureTintedSectionTexture(
   scene: Phaser.Scene, key: string, w: number, h: number,

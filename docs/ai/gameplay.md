@@ -11,6 +11,8 @@ Fragdachse ist ein actionlastiger 2D-Arena-Shooter für PvP und PvE. Schnelle Re
 
 Der Host startet erst, wenn alle verbundenen Spieler bereit sind, ein gültiges committed Loadout vorliegt und der Qualitäts-Startschutz nicht blockiert. Beim Rundenende setzt der Host Ready-Zustände zurück, speichert Ergebnisse und wechselt zurück in die Lobby.
 
+Jedes vorzeitige Rundenende läuft über `ArenaLifecycleCoordinator.hostCompleteRound(conclusion)`; der `RoundConclusion` (`victory` | `defeat` | `aborted`) landet im replizierten `RoundState` und steuert allein die Beschriftung im Lobby-Panel. Auslöser für die Coop-XP-Gutschrift ist nicht der Ausgang, sondern das gesetzte `RoundState.endedAt` – abgebrochene Runden schreiben deshalb dieselben XP gut wie gewonnene, während die Map-Freischaltung explizit an `victory` hängt. Für Nicht-Coop-Modi ist `RoundState` sonst `null`; ein Host-Abbruch ist der einzige Fall, in dem dort ein Status publiziert wird.
+
 ## Spielmodi
 
 Die tatsächlichen Modus-IDs stehen in `src/types.ts`, die Modusregeln in `src/gameModes.ts`:

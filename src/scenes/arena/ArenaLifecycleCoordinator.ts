@@ -67,7 +67,7 @@ import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
 import type { ArenaLayout, LoadoutCommitSnapshot, LoadoutUseParams, RoomQualitySnapshot } from '../../types';
-import type { RoundOutcome, RoundResult, RoundState } from '../../network/NetworkBridge';
+import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { BaseManager } from '../../entities/BaseManager';
@@ -294,13 +294,13 @@ export class ArenaLifecycleCoordinator {
     bridge.publishRoundResults(results);
   }
 
-  hostCompleteRound(roundOutcome: RoundOutcome | null = null): void {
+  hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
 
-    if (roundOutcome) {
+    if (roundConclusion) {
       const currentRoundState = bridge.getRoundState();
       bridge.publishRoundState({
-        status: roundOutcome,
+        status: roundConclusion,
         roundStartTime: bridge.getArenaStartTime(),
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
@@ -316,6 +316,23 @@ export class ArenaLifecycleCoordinator {
     // zurücksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
+  }
+
+  /**
+   * Host: beendet die laufende Partie vorzeitig über das Optionsmenü – in jedem Modus. Läuft
+   * bewusst durch {@link hostCompleteRound}, damit Endstand, Ready-Reset und Phasenwechsel exakt
+   * dem regulären Rundenende entsprechen; der abweichende Status `aborted` steuert allein die
+   * Beschriftung im Lobby-Panel. Im Coop-Modus trägt der publizierte RoundState damit auch ein
+   * `endedAt`, wodurch die bis dahin erspielten XP wie nach Sieg/Niederlage gutgeschrieben werden.
+   */
+  hostAbortRound(): void {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
+    this.hostCompleteRound('aborted');
+  }
+
+  /** True, wenn der lokale Spieler die laufende Partie gerade abbrechen darf. */
+  canHostAbortRound(): boolean {
+    return bridge.isHost() && bridge.getGamePhase() === 'ARENA' && !this.matchTerminated;
   }
 
   terminateMatch(reason?: string): void {

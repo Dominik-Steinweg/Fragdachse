@@ -824,6 +824,11 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.rpcCoordinator.setLifecycle(this.lifecycle);
     this.rpcCoordinator.registerAll();
+    // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
+    leftPanel.setAbortMatchBinding({
+      canAbort: () => this.lifecycle.canHostAbortRound(),
+      abort: () => this.lifecycle.hostAbortRound(),
+    });
 
     if (bridge.isHost()) {
       bridge.initColorPool(PLAYER_COLORS);
