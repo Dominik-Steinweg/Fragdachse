@@ -3,7 +3,7 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STAIN, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
-import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
+import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { BiteRenderer } from './BiteRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -413,7 +413,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
     const coreFlash = this.scene.add.circle(x, y, 12, 0xe7c59a, 0.65);
     coreFlash.setDepth(DEPTH_FX + 0.3);
-    coreFlash.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(coreFlash);
     this.scene.tweens.add({
       targets:    coreFlash,
       scaleX:     2.6,
@@ -504,7 +504,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     const particleCount = revealing ? 28 : 22;
     const core = this.scene.add.circle(x, y, revealing ? 16 : 12, color, revealing ? 0.34 : 0.24);
     core.setDepth(DEPTH_FX + 0.2);
-    core.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(core);
     this.scene.tweens.add({
       targets: core,
       scaleX: revealing ? 3.2 : 2.3,
@@ -518,7 +518,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     const ring = this.scene.add.circle(x, y, revealing ? 16 : 12, 0, 0);
     ring.setDepth(DEPTH_FX + 0.16);
     ring.setStrokeStyle(revealing ? 6 : 5, color, revealing ? 0.7 : 0.54);
-    ring.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(ring);
     this.scene.tweens.add({
       targets: ring,
       scaleX: revealing ? 3.8 : 2.6,
@@ -549,7 +549,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       const pixel = this.scene.add.rectangle(x, y, size, size, color, revealing ? 0.82 : 0.6);
       pixel.setDepth(DEPTH_FX + 0.1);
       pixel.setRotation(Math.random() * Math.PI);
-      pixel.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(pixel);
 
       this.scene.tweens.add({
         targets: pixel,
@@ -740,7 +740,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xfff1cf, 0.24);
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
-      skyFlash.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(skyFlash);
       this.scene.tweens.add({
         targets:    skyFlash,
         alpha:      0,
@@ -766,7 +766,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     if (isEnergy || isNuke || isHoly) {
       const halo = this.scene.add.circle(x, y, startRadius, haloColor, isNuke ? 0.55 : 0.4);
       halo.setDepth(DEPTH_FX + 0.5);
-      halo.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(halo);
       this.scene.tweens.add({
         targets:    halo,
         scaleX:     (radius * (isNuke ? 1.3 : (isHoly ? 1.05 : 0.9))) / startRadius,
@@ -781,7 +781,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     const blast = this.scene.add.circle(x, y, startRadius, fillColor, isEnergy ? 0.5 : (isNuke ? 0.88 : 0.7));
     blast.setDepth(DEPTH_FX);
     if (isEnergy || isNuke || isHoly) {
-      blast.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(blast);
     }
     this.scene.tweens.add({
       targets:    blast,
@@ -797,7 +797,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xffefc4, 0.18);
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
-      skyFlash.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(skyFlash);
       this.scene.tweens.add({
         targets:    skyFlash,
         alpha:      0,
@@ -808,7 +808,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
       const coreCorona = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.72);
       coreCorona.setDepth(DEPTH_FX + 0.45);
-      coreCorona.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(coreCorona);
       this.scene.tweens.add({
         targets:    coreCorona,
         scaleX:     (radius * 0.58) / startRadius,
@@ -821,7 +821,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
       const blastOuter = this.scene.add.circle(x, y, startRadius, 0xffb11f, 0.52);
       blastOuter.setDepth(DEPTH_FX + 0.15);
-      blastOuter.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(blastOuter);
       this.scene.tweens.add({
         targets:    blastOuter,
         scaleX:     (radius * 1.28) / startRadius,
@@ -836,7 +836,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     if (isNuke) {
       const secondaryBlast = this.scene.add.circle(x, y, startRadius, 0xff7a2f, 0.55);
       secondaryBlast.setDepth(DEPTH_FX + 0.2);
-      secondaryBlast.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(secondaryBlast);
       this.scene.tweens.add({
         targets:    secondaryBlast,
         scaleX:     (radius * 1.22) / startRadius,
@@ -849,7 +849,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
       const heatHalo = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.25);
       heatHalo.setDepth(DEPTH_FX + 0.3);
-      heatHalo.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(heatHalo);
       this.scene.tweens.add({
         targets:    heatHalo,
         scaleX:     (radius * 1.7) / startRadius,
@@ -867,7 +867,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_FX);
     if (isEnergy || isNuke || isHoly) {
-      ring.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(ring);
     }
     this.scene.tweens.add({
       targets:    ring,
@@ -885,7 +885,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       // Schadensradius bleibt weiterhin der uebergebene Radius.
       const cascadeCore = this.scene.add.circle(x, y, startRadius, 0xffffff, 0.62);
       cascadeCore.setDepth(DEPTH_FX + 0.35);
-      cascadeCore.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(cascadeCore);
       this.scene.tweens.add({
         targets: cascadeCore,
         scaleX: (radius * 0.48) / startRadius,
@@ -901,7 +901,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       pressureRing.setFillStyle(0, 0);
       pressureRing.setStrokeStyle(3, this.mixColor(fillColor, 0xffffff, 0.34), 0.72);
       pressureRing.setDepth(DEPTH_FX + 0.08);
-      pressureRing.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(pressureRing);
       this.scene.tweens.add({
         targets: pressureRing,
         scaleX: (radius * 1.28) / pressureStartRadius,
@@ -932,7 +932,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       outerRing.setStrokeStyle(2, fillColor, 0.9);
       outerRing.setFillStyle(0, 0);
       outerRing.setDepth(DEPTH_FX + 0.2);
-      outerRing.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(outerRing);
       this.scene.tweens.add({
         targets:    outerRing,
         scaleX:     (radius * 1.45) / outerRingRadius,
@@ -949,7 +949,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       shockRingA.setStrokeStyle(6, 0xfff0b8, 0.92);
       shockRingA.setFillStyle(0, 0);
       shockRingA.setDepth(DEPTH_FX + 0.1);
-      shockRingA.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(shockRingA);
       this.scene.tweens.add({
         targets:    shockRingA,
         scaleX:     6.2,
@@ -964,7 +964,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       shockRingB.setStrokeStyle(3, 0xff7a2f, 0.8);
       shockRingB.setFillStyle(0, 0);
       shockRingB.setDepth(DEPTH_FX + 0.12);
-      shockRingB.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(shockRingB);
       this.scene.tweens.add({
         targets:    shockRingB,
         scaleX:     9.5,
@@ -1072,7 +1072,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       holyRing.setStrokeStyle(6, 0xffe8a3, 0.85);
       holyRing.setFillStyle(0, 0);
       holyRing.setDepth(DEPTH_FX + 0.25);
-      holyRing.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(holyRing);
       this.scene.tweens.add({
         targets:    holyRing,
         scaleX:     holyRingEndScale,
@@ -1087,7 +1087,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       holyRingInner.setStrokeStyle(3, 0xffffff, 0.72);
       holyRingInner.setFillStyle(0, 0);
       holyRingInner.setDepth(DEPTH_FX + 0.26);
-      holyRingInner.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(holyRingInner);
       this.scene.tweens.add({
         targets:    holyRingInner,
         scaleX:     6.1,
@@ -1100,10 +1100,10 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
       const verticalBeam = this.scene.add.rectangle(x, y, Math.max(radius * 0.16, 20), radius * 0.95, 0xfff4d0, 0.24);
       verticalBeam.setDepth(DEPTH_FX + 0.3);
-      verticalBeam.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(verticalBeam);
       const horizontalBeam = this.scene.add.rectangle(x, y, radius * 0.95, Math.max(radius * 0.16, 20), 0xffe0a4, 0.2);
       horizontalBeam.setDepth(DEPTH_FX + 0.31);
-      horizontalBeam.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(horizontalBeam);
       this.scene.tweens.add({
         targets:    [verticalBeam, horizontalBeam],
         scaleX:     1.25,
@@ -1189,7 +1189,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
     const flash = this.scene.add.circle(x, y, Math.max(5, radius * 0.12), 0xffffff, 0.92);
     flash.setDepth(DEPTH_FX + 0.45);
-    flash.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(flash);
     this.scene.tweens.add({
       targets: flash,
       scale: 2.8,
@@ -1205,7 +1205,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       ring.setFillStyle(0, 0);
       ring.setStrokeStyle(ringIndex === 0 ? 4 : 2, ringIndex === 0 ? coreColor : outerColor, 0.95);
       ring.setDepth(DEPTH_FX + 0.25 - ringIndex * 0.03);
-      ring.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(ring);
       this.scene.tweens.add({
         targets: ring,
         scale: (radius * (ringIndex === 0 ? 1.12 : 1.42)) / startRadius,
@@ -1218,7 +1218,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
     const arcs = this.scene.add.graphics();
     arcs.setDepth(DEPTH_FX + 0.35);
-    arcs.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(arcs);
     const arcCount = Math.max(8, Math.ceil(radius / 7));
     for (let arcIndex = 0; arcIndex < arcCount; arcIndex += 1) {
       const angle = (arcIndex / arcCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18);
@@ -1460,7 +1460,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
     const haloRadius = Math.max(thickness * 2.4, 7);
     const halo = this.scene.add.circle(x, y, haloRadius, baseColor, 0.24);
     halo.setDepth(DEPTH_TRACE + 0.1);
-    halo.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(halo);
     this.scene.tweens.add({
       targets: halo,
       alpha: 0,

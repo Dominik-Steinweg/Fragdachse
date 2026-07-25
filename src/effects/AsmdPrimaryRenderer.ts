@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE, clipPointToArenaRay, isPointInsideArena } from '../config';
 import type { HitscanImpactKind } from '../types';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors } from './EffectUtils';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import type { LightingSystem } from './LightingSystem';
 
@@ -201,7 +201,7 @@ export class AsmdPrimaryRenderer {
     const haloRadius = Math.max(thickness * (impactKind === 'player' ? 2.6 : 3.4), impactKind === 'player' ? 7 : 9);
     const halo = this.scene.add.circle(x, y, haloRadius, baseColor, 0.42);
     halo.setDepth(DEPTH_TRACE + 0.1);
-    halo.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(halo);
     this.scene.tweens.add({
       targets: halo,
       alpha: 0,
@@ -215,7 +215,7 @@ export class AsmdPrimaryRenderer {
     const flashColor = mixColors(playerColor, 0xffffff, impactKind === 'player' ? 0.58 : 0.42);
     const flash = this.scene.add.circle(x, y, Math.max(thickness * (impactKind === 'player' ? 1.8 : 1.35), 3), flashColor, 0.72);
     flash.setDepth(DEPTH_TRACE + 0.13);
-    flash.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(flash);
     this.scene.tweens.add({
       targets: flash,
       alpha: 0,
@@ -271,7 +271,7 @@ export class AsmdPrimaryRenderer {
 
     const bloom = this.scene.add.circle(x, y, Math.max(beamThickness * 1.18, 7), glowColor, 0.28);
     bloom.setDepth(DEPTH_TRACE + 0.1);
-    bloom.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(bloom);
 
     const flare = this.scene.add.image(flashX, flashY, TEX_ASMD_BEAM_GLOW)
       .setDepth(DEPTH_TRACE + 0.11)
@@ -395,7 +395,7 @@ export class AsmdPrimaryRenderer {
     turbulence: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
-    gfx.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(gfx);
     const halfLength = segmentLength * 0.52;
     const lineCount = turbulence > 1 ? 3 : 2;
 
@@ -441,7 +441,7 @@ export class AsmdPrimaryRenderer {
     const gfx = this.scene.add.graphics();
     gfx.setPosition(x, y);
     gfx.setDepth(DEPTH_TRACE + 0.14);
-    gfx.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(gfx);
 
     for (let bolt = 0; bolt < boltCount; bolt++) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);

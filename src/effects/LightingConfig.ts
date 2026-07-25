@@ -1,61 +1,16 @@
 import * as Phaser from 'phaser';
 import type { EnergyBallVariant, GrenadeVisualPreset, ProjectileStyle } from '../types';
 
-export type LightProfileId = 'day' | 'night';
-
 export type LightShape = 'radial' | 'cone';
 
 /**
- * Ein Beleuchtungsprofil. Tag und Nacht laufen über denselben Codepfad; sie
- * unterscheiden sich nur darin, was in die Lightmap eingefärbt wird und wie das
- * Overlay komponiert wird:
+ * Globaler Regler auf alle Lichtintensitäten.
  *
- * - `day`: Ambient schwarz, Overlay ADD → nur der *zusätzliche* Lichtanteil wird
- *   addiert. Hinter einem Felsen fehlt die Addition, dort bleibt normales Tageslicht.
- * - `night`: Ambient sehr dunkel, Overlay MULTIPLY → unbeleuchtet fast schwarz,
- *   beleuchtet nahe der Originalfarbe. Hinter einem Felsen bleibt das Ambient stehen.
+ * Die Tageszeit skaliert bereits über `SkyState.lightFactor`; dieser Wert bleibt als
+ * einzelner Notausgang bestehen, um die Gesamtstärke zu verschieben, ohne die
+ * Keyframe-Tabelle in `TimeOfDay.ts` anzufassen.
  */
-export interface LightProfile {
-  readonly ambientColor: number;
-  readonly compositeBlendMode: number;
-  /** Skaliert alle Lichtintensitäten des Profils (Feinabstimmung Tag/Nacht). */
-  readonly lightIntensityMult: number;
-  /**
-   * Künstliche Lichter, die man nur nachts einschaltet: Taschenlampen der Spieler und
-   * der Scheinwerfer des Zugs. Am Tag existieren sie gar nicht.
-   */
-  readonly nightLightsEnabled: boolean;
-  /**
-   * Baumkronen liegen über dem Lightmap-Overlay und werden einzeln eingefärbt. Dieser
-   * Faktor dämpft, wie stark Lichtquellen sie erreichen – eine einfache Näherung dafür,
-   * dass die Krone deutlich höher liegt als die bodennahen Lichtquellen. 0 = die Krone
-   * bleibt immer auf Umgebungsniveau, 1 = so hell wie der Boden.
-   */
-  readonly canopyLightFactor: number;
-}
-
-export const LIGHTING_PROFILES: Readonly<Record<LightProfileId, LightProfile>> = {
-  day: {
-    ambientColor: 0x000000,
-    compositeBlendMode: Phaser.BlendModes.ADD,
-    lightIntensityMult: 1,
-    nightLightsEnabled: false,
-    // Am Tag additiv komponiert: eine Krone kann über einen Tint nicht heller als ihre
-    // eigene Textur werden, deshalb bleibt sie hier unverändert.
-    canopyLightFactor: 0,
-  },
-  night: {
-    // ~11 % Helligkeit mit kaltem Blaustich: ohne Lichtquelle sieht man praktisch nichts,
-    // Silhouetten bleiben nur erahnbar.
-    ambientColor: 0x161a24,
-    compositeBlendMode: Phaser.BlendModes.MULTIPLY,
-    lightIntensityMult: 1,
-    nightLightsEnabled: true,
-    canopyLightFactor: 0.45,
-  },
-};
-
-export const DEFAULT_LIGHT_PROFILE_ID: LightProfileId = 'day';
+export const GLOBAL_LIGHT_INTENSITY_MULT = 1;
 
 /** Halbe Auflösung: Licht ist niederfrequent, das kostet ein Viertel Füllrate. */
 export const LIGHTMAP_SCALE = 0.5;
@@ -94,11 +49,6 @@ export const SHADOW_EXTEND_FACTOR = 2.2;
  */
 export const OCCLUDER_SHADE_FALLOFF_PX = 14;
 
-export interface LightPresetOverride {
-  readonly intensityMult?: number;
-  readonly radiusMult?: number;
-}
-
 export interface LightPreset {
   readonly enabled: boolean;
   readonly shape: LightShape;
@@ -117,13 +67,14 @@ export interface LightPreset {
   readonly flickerHz: number;
   /** Voller Öffnungswinkel des Kegels in Radiant; nur für `shape: 'cone'`. */
   readonly coneAngle?: number;
-  readonly day?: LightPresetOverride;
-  readonly night?: LightPresetOverride;
 }
 
 /**
  * Presets pro Lichtquelle. Verdeckung ist bewusst die Ausnahme: sie kostet einen
  * eigenen Renderpass und lohnt nur bei großen, seltenen oder dauerhaften Lichtern.
+ *
+ * Die Werte gelten für volle Dunkelheit. Zum Tag hin dämpft `SkyState.lightFactor` sie
+ * gemeinsam – ein Preset braucht deshalb keine eigene Tag-/Nachtunterscheidung mehr.
  */
 export const LIGHT_PRESETS = {
   muzzleFlash: {
@@ -159,9 +110,6 @@ export const LIGHT_PRESETS = {
     priority: 10,
     flickerAmount: 0,
     flickerHz: 0,
-    // Am Tag wird additiv komponiert: die volle Intensität brennt das Zentrum auf
-    // hellem Boden zu einer weißen Fläche aus. Nachts bleibt sie unangetastet.
-    day: { intensityMult: 0.7 },
   },
   flashlight: {
     enabled: true,
@@ -202,7 +150,7 @@ export const LIGHT_PRESETS = {
   /**
    * Scheinwerfer an der Front der Lokomotive, strahlt in Fahrtrichtung. Die Lok trägt
    * zwei davon, links und rechts wie beim Vorbild; jeder ist deshalb schmaler als ein
-   * einzelner Strahl es wäre. Wie die Taschenlampe nur im Nachtprofil aktiv, und mit
+   * einzelner Strahl es wäre. Wie die Taschenlampe nur bei Dunkelheit aktiv, und mit
    * Verdeckung, weil der Strahl über die halbe Arena läuft und ohne Felsschatten
    * unglaubwürdig wirkt.
    */
@@ -242,8 +190,7 @@ export const LIGHT_PRESETS = {
   },
   // ── Feuer ────────────────────────────────────────────────────────────────────
   // Alle Feuerlichter sind klein, zahlreich und bodennah – Verdeckung wäre teuer und
-  // optisch kaum wahrnehmbar. Am Tag deutlich gedämpft, damit Feuer den Boden wärmt
-  // statt ihn zu überstrahlen.
+  // optisch kaum wahrnehmbar.
   groundFire: {
     enabled: true,
     shape: 'radial',
@@ -256,7 +203,6 @@ export const LIGHT_PRESETS = {
     priority: 5,
     flickerAmount: 0.22,
     flickerHz: 7.5,
-    day: { intensityMult: 0.35 },
   },
   flameRing: {
     enabled: true,
@@ -270,7 +216,6 @@ export const LIGHT_PRESETS = {
     priority: 6,
     flickerAmount: 0.16,
     flickerHz: 6,
-    day: { intensityMult: 0.4 },
   },
   fireChunk: {
     enabled: true,
@@ -284,7 +229,6 @@ export const LIGHT_PRESETS = {
     priority: 3,
     flickerAmount: 0.25,
     flickerHz: 9,
-    day: { intensityMult: 0.35 },
   },
   fireChunkImpact: {
     enabled: true,
@@ -298,7 +242,6 @@ export const LIGHT_PRESETS = {
     priority: 3,
     flickerAmount: 0,
     flickerHz: 0,
-    day: { intensityMult: 0.4 },
   },
   /**
    * Brennendes Projektil: kleiner Radius, dafür ein heller Kern.
@@ -325,7 +268,6 @@ export const LIGHT_PRESETS = {
     // abgeschnitten, ein starkes Flackern würde das Licht im Mittel nur dunkler machen.
     flickerAmount: 0.12,
     flickerHz: 11,
-    day: { intensityMult: 0.45 },
   },
   flameProjectile: {
     enabled: true,
@@ -339,7 +281,6 @@ export const LIGHT_PRESETS = {
     priority: 4,
     flickerAmount: 0.24,
     flickerHz: 11,
-    day: { intensityMult: 0.35 },
   },
   // ── Energie und Projektile ───────────────────────────────────────────────────
   /**
@@ -363,7 +304,6 @@ export const LIGHT_PRESETS = {
     priority: 6,
     flickerAmount: 0,
     flickerHz: 0,
-    day: { intensityMult: 0.4 },
   },
   /**
    * Die BFG-Kugel ist das einzige neue Preset mit Verdeckung: sie ist selten, fliegt
@@ -383,7 +323,6 @@ export const LIGHT_PRESETS = {
     priority: 6,
     flickerAmount: 0.06,
     flickerHz: 5,
-    day: { intensityMult: 0.45 },
   },
   /** Triebwerksfeuer einer Rakete: klein, warm, hinter dem Geschoss. */
   rocketThruster: {
@@ -398,7 +337,6 @@ export const LIGHT_PRESETS = {
     priority: 5,
     flickerAmount: 0.18,
     flickerHz: 13,
-    day: { intensityMult: 0.35 },
   },
   /** Heilige Granate – der einzige Wurfkörper mit gelbem Eigenleuchten. */
   holyProjectile: {
@@ -413,7 +351,6 @@ export const LIGHT_PRESETS = {
     priority: 6,
     flickerAmount: 0.08,
     flickerHz: 4,
-    day: { intensityMult: 0.4 },
   },
   /** Sporen glimmen nur schwach; sie sollen die Szene nicht mitbeleuchten. */
   sporeProjectile: {
@@ -428,7 +365,6 @@ export const LIGHT_PRESETS = {
     priority: 3,
     flickerAmount: 0.14,
     flickerHz: 6,
-    day: { intensityMult: 0.15 },
   },
   // ── Strahlen und Entladungen ─────────────────────────────────────────────────
   /**
@@ -463,9 +399,7 @@ export const LIGHT_PRESETS = {
     flickerHz: 0,
   },
   // ── Dauerhafte Felder ────────────────────────────────────────────────────────
-  // Felder stehen lange und sind zahlreich; alle ohne Verdeckung. Am Tag sind sie stark
-  // gedämpft: dort komponiert das Overlay additiv, ein Dauerfeld würde den Boden
-  // permanent aufhellen, ohne dass es als Effekt gelesen wird.
+  // Felder stehen lange und sind zahlreich; alle ohne Verdeckung.
   electricField: {
     enabled: true,
     shape: 'radial',
@@ -478,7 +412,6 @@ export const LIGHT_PRESETS = {
     priority: 4,
     flickerAmount: 0.2,
     flickerHz: 14,
-    day: { intensityMult: 0.25 },
   },
   shieldField: {
     enabled: true,
@@ -492,7 +425,6 @@ export const LIGHT_PRESETS = {
     priority: 3,
     flickerAmount: 0,
     flickerHz: 0,
-    day: { intensityMult: 0.15 },
   },
   /** Zeitblase, Heilaura, Schutzgeist – blass, die Farbe kommt vom Aufrufer. */
   arcaneField: {
@@ -507,9 +439,8 @@ export const LIGHT_PRESETS = {
     priority: 3,
     flickerAmount: 0.07,
     flickerHz: 2.5,
-    day: { intensityMult: 0.18 },
   },
-  /** Schleimspur: nur ein Schimmer. Am Tag bewusst ganz aus. */
+  /** Schleimspur: nur ein Schimmer. */
   slimeGlow: {
     enabled: true,
     shape: 'radial',
@@ -522,13 +453,11 @@ export const LIGHT_PRESETS = {
     priority: 2,
     flickerAmount: 0.1,
     flickerHz: 3,
-    day: { intensityMult: 0 },
   },
   // ── Welt und Entities ────────────────────────────────────────────────────────
   /**
    * PowerUp-Kugeln, Podeste und das Bier. Dekorativ, deshalb die niedrigste Priorität:
    * bei Überlast sollen zuerst diese Lichter fallen, nicht die des Kampfgeschehens.
-   * Am Tag ganz aus – ein Pickup am helllichten Tag beleuchtet nichts.
    */
   pickupGlow: {
     enabled: true,
@@ -542,7 +471,6 @@ export const LIGHT_PRESETS = {
     priority: 1,
     flickerAmount: 0.06,
     flickerHz: 1.6,
-    day: { intensityMult: 0 },
   },
   /** Brennende Spieler und Gegner. Etwas weiter als `projectileBurn`, gleiche Kernfarbe. */
   entityBurn: {
@@ -557,11 +485,10 @@ export const LIGHT_PRESETS = {
     priority: 5,
     flickerAmount: 0.14,
     flickerHz: 9,
-    day: { intensityMult: 0.4 },
   },
   /**
    * Ruhiges Standlicht einer Basis in ihrer Teamfarbe. Groß und schwach – es soll die
-   * Basis nachts erkennbar machen, nicht die Umgebung ausleuchten. Am Tag praktisch aus.
+   * Basis bei Dunkelheit erkennbar machen, nicht die Umgebung ausleuchten.
    */
   baseGlow: {
     enabled: true,
@@ -575,7 +502,6 @@ export const LIGHT_PRESETS = {
     priority: 2,
     flickerAmount: 0.04,
     flickerHz: 0.8,
-    day: { intensityMult: 0.12 },
   },
   /**
    * Der Fliegenpilz-Turret glüht mit seiner roten Kappe. Warmes, ruhiges Dauerlicht mit
@@ -593,7 +519,6 @@ export const LIGHT_PRESETS = {
     priority: 4,
     flickerAmount: 0.04,
     flickerHz: 1.6,
-    day: { intensityMult: 0.3 },
   },
   /** Translocator- und Spawn-Blitz: kurz, hell, kalt. */
   teleportFlash: {
@@ -641,13 +566,6 @@ export const FLAME_LIGHT_ID_STRIDE = 4;
  */
 export const SLIME_LIGHT_BUCKET_SIZE = 128;
 export const MAX_SLIME_LIGHTS = 6;
-
-export function resolvePresetOverride(
-  preset: LightPreset,
-  profileId: LightProfileId,
-): LightPresetOverride | undefined {
-  return profileId === 'night' ? preset.night : preset.day;
-}
 
 /**
  * Wie ein Projektil eines bestimmten Stils leuchtet.

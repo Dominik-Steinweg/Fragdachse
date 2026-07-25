@@ -6,7 +6,7 @@ import {
   ABLATION_CATEGORIES,
   PerformanceAblationController,
 } from '../src/scenes/arena/PerformanceAblation';
-import { DEPTH } from '../src/config';
+import { DEPTH, DEPTH_LIGHTING } from '../src/config';
 
 interface FakeObject {
   type?: string;
@@ -30,6 +30,7 @@ function makeController(children: FakeObject[]) {
   const filterCalls: boolean[] = [];
   const staticShadowCalls: boolean[] = [];
   const dynamicShadowCalls: boolean[] = [];
+  const lightCompositeCalls: boolean[] = [];
   const scene = { children: { list: children } } as never;
   const controller = new PerformanceAblationController(scene, {
     getQualityController: () => ({
@@ -39,8 +40,11 @@ function makeController(children: FakeObject[]) {
       setStaticVisible: (visible: boolean) => { staticShadowCalls.push(visible); },
       setDynamicVisible: (visible: boolean) => { dynamicShadowCalls.push(visible); },
     }),
+    getLightingSystem: () => ({
+      setCompositeSuppressed: (suppressed: boolean) => { lightCompositeCalls.push(suppressed); },
+    }),
   });
-  return { controller, filterCalls, staticShadowCalls, dynamicShadowCalls };
+  return { controller, filterCalls, staticShadowCalls, dynamicShadowCalls, lightCompositeCalls };
 }
 
 describe('performance ablation', () => {
@@ -125,6 +129,37 @@ describe('performance ablation', () => {
     expect(filterCalls[filterCalls.length - 1]).toBe(false);
     expect(staticShadowCalls[staticShadowCalls.length - 1]).toBe(true);
     expect(dynamicShadowCalls[dynamicShadowCalls.length - 1]).toBe(true);
+  });
+
+  it('suppresses the lightmap composite through its own switch', () => {
+    // Über den generischen Sichtbarkeits-Scan ist das Composite nicht abzuschalten:
+    // `LightingSystem.update()` setzt die Sichtbarkeit des Overlays jeden Frame neu.
+    const { controller, lightCompositeCalls } = makeController([]);
+    controller.start(1000, 0);
+
+    const lightStep = ABLATION_CATEGORIES.indexOf('lights') * 2 + 1;
+    for (let step = 1; step <= lightStep; step++) controller.update(step * 1000);
+    expect(lightCompositeCalls).toContain(true);
+
+    controller.stop((lightStep + 1) * 1000);
+    expect(lightCompositeCalls[lightCompositeCalls.length - 1]).toBe(false);
+  });
+
+  it('keeps the baked canopy shadow out of the lights category', () => {
+    // Der Kronenschatten liegt auf DEPTH_LIGHTING - 0.1 und gehört zu `staticShadows`;
+    // läge er im Lichtband, würde das Segment teils den falschen Aufwand messen.
+    const canopyShadow = fakeObject({ depth: DEPTH_LIGHTING - 0.1 });
+    const occluderScratch = fakeObject({ depth: DEPTH_LIGHTING - 0.01 });
+    const { controller } = makeController([canopyShadow, occluderScratch]);
+    controller.start(1000, 0);
+
+    const lightStep = ABLATION_CATEGORIES.indexOf('lights') * 2 + 1;
+    for (let step = 1; step <= lightStep; step++) controller.update(step * 1000);
+
+    expect(canopyShadow.visible).toBe(true);
+    expect(occluderScratch.visible).toBe(false);
+
+    controller.stop((lightStep + 1) * 1000);
   });
 
   it('records one segment per elapsed slice for the export', () => {

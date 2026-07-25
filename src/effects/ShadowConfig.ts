@@ -51,11 +51,13 @@ export const WORLD_SHADOW_CONFIG = {
 };
 
 /**
- * Tag-/Nachtvariante der statischen Schatten.
+ * Tageszeitabhängige Ausprägung der statischen Schatten.
  *
  * Die Lichtrichtung bleibt bewusst unangetastet: `ShadowSystem` berechnet daraus beim
- * Modul-Load feste Bogentabellen, eine Laufzeitänderung würde sie ungültig machen.
- * Der Mondschatten entsteht deshalb allein über Länge, Deckkraft und Weichheit.
+ * Modul-Load feste Bogentabellen, eine Laufzeitänderung würde sie ungültig machen. Das
+ * ist hier kein Kompromiss, sondern richtig – die Sprites sind mit fester Lichtrichtung
+ * gezeichnet; nur den Wurfschatten mitzudrehen sähe falscher aus, nicht besser. Uhrzeit
+ * steuert deshalb allein Länge, Deckkraft und Weichheit.
  */
 export interface ShadowProfile {
   readonly opacityMult: number;
@@ -63,6 +65,14 @@ export interface ShadowProfile {
   readonly softnessMult: number;
 }
 
+/**
+ * Referenzwerte für Mittag und Mitternacht.
+ *
+ * Die laufenden Werte kommen aus `TimeOfDay.resolveSkyState()`; diese beiden Tupel
+ * bleiben als Anker bestehen, gegen die `tests/TimeOfDay.test.ts` festhält, dass die
+ * Umstellung auf eine kontinuierliche Uhrzeit genau diese zwei Zeitpunkte unverändert
+ * lässt.
+ */
 export const SHADOW_PROFILES: Readonly<Record<'day' | 'night', ShadowProfile>> = {
   day: { opacityMult: 1, lengthMult: 1, softnessMult: 1 },
   night: { opacityMult: 0.35, lengthMult: 0.5, softnessMult: 1.8 },

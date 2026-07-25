@@ -6,6 +6,7 @@ import {
 } from '../src/config/coopDefenseMaps';
 import { getCoopDefenseEnemyConfig, getCoopDefenseEnemyXp } from '../src/config/coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
+import { formatTimeOfDay, parseTimeOfDay, resolveSkyState } from '../src/effects/TimeOfDay';
 
 function getShapeBounds(shape: CoopBaseShape): { width: number; height: number } {
   if (shape.kind === 'rectangle') return { width: shape.widthCells, height: shape.heightCells };
@@ -132,6 +133,26 @@ describe('Coop defense map progression', () => {
         'ADRENALINE',
         'ARMOR',
       ]);
+    }
+  });
+
+  it('gives every map a valid time of day', () => {
+    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+      // Der Normalisierer schreibt den Wert immer aus, auch wenn die JSON ihn weglässt.
+      expect(map.timeOfDay).toBeDefined();
+      const minutes = parseTimeOfDay(map.timeOfDay!);
+      expect(minutes, `map ${map.mapId} has an unparsable timeOfDay: ${map.timeOfDay}`).not.toBeNull();
+      expect(formatTimeOfDay(minutes!)).toBe(map.timeOfDay);
+    }
+  });
+
+  it('keeps the maps with the least forgiving telegraphs out of the dark hours', () => {
+    // Map 11 lebt von Luftangriffs-Telegraphen, 5 und 10 von Boss-Telegraphen. Sie dürfen
+    // dämmrig sein, aber nicht in der tiefen Nacht liegen, in der ohne Taschenlampe kaum
+    // etwas zu erkennen ist.
+    for (const mapId of ['5', '10', '11']) {
+      const sky = resolveSkyState(parseTimeOfDay(getCoopDefenseMapConfig(mapId).timeOfDay!)!);
+      expect(sky.ambientColor, `map ${mapId} sits in the deep-night ambient`).not.toBe(0x161a24);
     }
   });
 

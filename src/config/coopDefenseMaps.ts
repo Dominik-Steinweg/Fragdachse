@@ -6,6 +6,10 @@ import {
 } from './coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
 import { ROCK_FILL_RATIO } from '../config';
+import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '../effects/TimeOfDay';
+
+/** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
+const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
 
 /** Obergrenze für `rockFillRatio` – darüber lässt die Konnektivitätsprüfung kaum noch Gänge übrig. */
 const MAX_ROCK_FILL_RATIO = 0.85;
@@ -168,15 +172,15 @@ export interface CoopDefenseMapConfig {
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /**
-   * Beleuchtungsprofil der Map (Standard `'day'`). `'night'` verdunkelt die Arena stark,
-   * schwächt die statischen Sonnenschatten zu Mondschatten ab und gibt den Spielern eine
-   * Taschenlampe. Dynamische Lichtquellen und deren Verdeckung durch Felsen funktionieren
-   * in beiden Profilen identisch – nur die Komposition unterscheidet sich.
+   * Uhrzeit, zu der die Map spielt, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
+   * Grundhelligkeit und Färbung der Arena, Länge und Deckkraft der statischen Schatten
+   * sowie ob Spieler eine Taschenlampe tragen – stufenlos, ohne Sprung zwischen Tag und
+   * Nacht und ohne Wechsel während der Runde. Die Kurve liegt in `effects/TimeOfDay.ts`.
    *
    * Wird auf Host und Clients lokal aus der bereits replizierten Map-ID abgeleitet und
    * braucht deshalb keinen eigenen Netzwerkpfad.
    */
-  readonly lighting?: 'day' | 'night';
+  readonly timeOfDay?: string;
   /**
    * Multiplikator (0…1) auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (siehe
    * `tutorialText`). Nur relevant, wenn die Map eine Tutorial-Formation erzeugt. Standard:
@@ -299,7 +303,7 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
-    lighting: mapConfig.lighting === 'night' ? 'night' : 'day',
+    timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
@@ -307,6 +311,21 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     waves: mapConfig.waves.map(normalizeWaveConfig),
     boss: normalizeBossConfig(mapConfig),
   };
+}
+
+/**
+ * Prüft `"HH:MM"` und schreibt den Standard aus, wenn nichts gesetzt ist.
+ *
+ * Bewusst mit Wurf statt stillem Rückfall: eine vertippte Uhrzeit wäre sonst als
+ * unauffällig helle Map kaum von einer bewusst hellen zu unterscheiden.
+ */
+function normalizeTimeOfDayValue(mapId: string, timeOfDay: string | undefined): string {
+  if (timeOfDay === undefined) return DEFAULT_MAP_TIME_OF_DAY;
+  const minutes = parseTimeOfDay(timeOfDay);
+  if (minutes === null) {
+    throw new Error(`[coopDefenseMaps] Invalid timeOfDay in map ${mapId}: ${timeOfDay} (expected "HH:MM")`);
+  }
+  return formatTimeOfDay(minutes);
 }
 
 function normalizeAirstrikeConfig(

@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { SyncedAirstrikeStrike } from '../types';
 import { DEPTH }                      from '../config';
-import { circleZone }                 from './EffectUtils';
+import { circleZone, makeAdditive }   from './EffectUtils';
 import type { EffectSystem }          from './EffectSystem';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
@@ -191,6 +191,10 @@ export class AirstrikeRenderer {
 
   private createVisual(strike: SyncedAirstrikeStrike): AirstrikeVisual {
     const { x, y, radius } = strike;
+
+    // Die Marker der Gefahrenzone bleiben bewusst ungedämpft (`setBlendMode` statt
+    // `makeAdditive`): sie sind ein Telegraph, keine Impact-Grafik, und müssen zu jeder
+    // Tageszeit voll lesbar bleiben. Der Einschlag weiter unten wird dagegen gedämpft.
 
     // Großer Warnkreis (gefüllt)
     const warningFill = this.scene.add.circle(x, y, radius, COL_WARNING, 0.08);

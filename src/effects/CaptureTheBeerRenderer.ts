@@ -13,15 +13,7 @@ import {
   getBeamPaletteForPlayerColor,
 } from '../config';
 import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, TeamId } from '../types';
-import {
-  configureAdditiveImage,
-  createEmitter,
-  destroyEmitter,
-  ensureCanvasTexture,
-  fillRadialGradientTexture,
-  mixColors,
-  setCircleEmitZone,
-} from './EffectUtils';
+import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, setCircleEmitZone } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 
 const TEX_BEER_OUTER_GLOW = '__ctb_beer_outer_glow';
@@ -604,12 +596,12 @@ export class CaptureTheBeerRenderer {
     const colorWash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, palette.glow, 0.24);
     colorWash.setScrollFactor(0);
     colorWash.setDepth(DEPTH_FX + 1.75);
-    colorWash.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(colorWash);
 
     const whiteWash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.18);
     whiteWash.setScrollFactor(0);
     whiteWash.setDepth(DEPTH_FX + 1.8);
-    whiteWash.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(whiteWash);
 
     const centerHalo = configureAdditiveImage(
       this.scene.add.image(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, TEX_BEER_OUTER_GLOW),
@@ -669,7 +661,7 @@ export class CaptureTheBeerRenderer {
     for (const spec of beamSpecs) {
       const beam = this.scene.add.rectangle(x, y, spec.width, spec.height, beamColor, spec.alpha);
       beam.setDepth(DEPTH_FX + 0.95);
-      beam.setBlendMode(Phaser.BlendModes.ADD);
+      makeAdditive(beam);
       beam.setAngle(spec.angle);
       this.applyArenaMask(beam);
       this.scene.tweens.add({
@@ -774,7 +766,7 @@ export class CaptureTheBeerRenderer {
     ring.setStrokeStyle(lineWidth, color, 0.9);
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_FX + 0.6);
-    ring.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(ring);
     this.applyArenaMask(ring);
     this.scene.tweens.add({
       targets: ring,

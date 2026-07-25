@@ -37,7 +37,7 @@ import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingControl
 import { countEnemyUpserts } from './enemySnapshotCodec';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import { sanitizePlayerName } from '../utils/playerName';
-import { getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
+import { COOP_DEFENSE_MODE, getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
@@ -739,7 +739,7 @@ export class NetworkBridge {
   }
 
   getGameMode(): GameMode {
-    return (getState(KEY_GAME_MODE) as GameMode | undefined) ?? 'deathmatch';
+    return (getState(KEY_GAME_MODE) as GameMode | undefined) ?? COOP_DEFENSE_MODE;
   }
 
   setGameMode(mode: GameMode): void {

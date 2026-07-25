@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, isPointInsideArena } from '../config';
 import type { BulletVisualPreset } from '../types';
-import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, setEmitterAngleRange } from './EffectUtils';
+import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, makeAdditive, setEmitterAngleRange } from './EffectUtils';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_TRAIL = '__bullet_trail';
@@ -888,7 +888,7 @@ export class BulletRenderer {
     trail.setScale((size * config.trailLengthMult) / TRAIL_TEX_W, scaleFactor * config.trailScaleYMult);
     trail.setTint(config.trailTint ?? accentColor);
     trail.setAlpha(config.trailAlpha);
-    trail.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(trail);
     trail.setDepth(DEPTH_TRAIL);
 
     const glow = configureAdditiveImage(

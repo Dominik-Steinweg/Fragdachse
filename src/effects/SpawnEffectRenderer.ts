@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
-import { ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
+import { ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors } from './EffectUtils';
+import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
 const TEX_SPAWN_SPARK = '_spawn_spark';
@@ -65,7 +66,7 @@ export class SpawnEffectRenderer {
     const core = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
     core.setDisplaySize(20, 20);
     core.setDepth(DEPTH_FX + 1.5);
-    core.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(core);
     core.setTint(0xffffff);
 
     this.scene.tweens.add({
@@ -84,7 +85,7 @@ export class SpawnEffectRenderer {
     halo.setDepth(DEPTH_FX + 1);
     halo.setBlendMode(Phaser.BlendModes.ADD);
     halo.setTint(colorHex);
-    halo.setAlpha(0.85);
+    halo.setAlpha(emissiveAlpha(0.85));
 
     this.scene.tweens.add({
       targets:  halo,
@@ -126,7 +127,7 @@ export class SpawnEffectRenderer {
     ring.strokeColor  = color;
     ring.lineWidth    = lineWidth;
     ring.strokeAlpha  = 0.9;
-    ring.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(ring);
 
     this.scene.tweens.add({
       targets:  ring,
@@ -145,7 +146,7 @@ export class SpawnEffectRenderer {
   private playBeam(x: number, y: number, colorHex: number): void {
     const beam = this.scene.add.rectangle(x, y - 56, 10, 112, colorHex, 0.75);
     beam.setDepth(DEPTH_FX - 0.5);
-    beam.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(beam);
 
     this.scene.tweens.add({
       targets:  beam,
@@ -160,7 +161,7 @@ export class SpawnEffectRenderer {
     // Weicher weißer Überschuss am Strahl
     const beamGlow = this.scene.add.rectangle(x, y - 56, 28, 112, 0xffffff, 0.25);
     beamGlow.setDepth(DEPTH_FX - 0.6);
-    beamGlow.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(beamGlow);
 
     this.scene.tweens.add({
       targets:  beamGlow,

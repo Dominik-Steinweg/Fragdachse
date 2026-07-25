@@ -22,6 +22,7 @@ import {
   getGraphicsQualityProfile,
   type GraphicsQualityProfile,
 } from '../graphics/GraphicsQuality';
+import { resolveSkyState } from './TimeOfDay';
 
 interface ShadowWorldBounds {
   readonly minX: number;
@@ -127,12 +128,31 @@ export class ShadowSystem {
   }
 
   /**
-   * Wählt die Tag- oder Nachtvariante. Nachts bleiben die Sonnenschatten erhalten,
+   * Setzt die Uhrzeit der Runde. Zur Nacht hin bleiben die Sonnenschatten erhalten,
    * werden aber zu kurzen, weichen und blassen Mondschatten. Vor einem Rebuild der
    * statischen Layer setzen – dynamische Schatten übernehmen es ab dem nächsten Frame.
    */
-  setProfile(profileId: 'day' | 'night'): void {
-    this.profile = SHADOW_PROFILES[profileId];
+  setTimeOfDay(minutes: number): void {
+    const sky = resolveSkyState(minutes);
+    this.profile = {
+      opacityMult: sky.shadowOpacityMult,
+      lengthMult: sky.shadowLengthMult,
+      softnessMult: sky.shadowSoftnessMult,
+    };
+  }
+
+  /**
+   * Backt alle statischen Layer mit dem aktuellen Profil neu.
+   *
+   * Nicht ueber `rebuildArenaStaticShadows()` erreichbar: das ist der
+   * Hindernis-Invalidierungspfad und laesst bei unveraendertem Layout die Baum-Schatten
+   * bewusst stehen (siehe dort). Ein Profilwechsel aendert aber Laenge, Deckkraft und
+   * Weichheit *aller* Caster, Stamm und Krone eingeschlossen – und die Krone ist mit
+   * `softnessPx: 98` und 32 Lagen der auffaelligste Schatten im Bild.
+   */
+  rebuildStaticShadowsForProfileChange(): void {
+    if (!this.lastStaticLayout) return;
+    this.rebuildStaticLayoutShadows(this.lastStaticLayout, this.lastStaticOptions);
   }
 
   setVisible(visible: boolean): void {

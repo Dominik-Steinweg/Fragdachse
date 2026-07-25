@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { makeAdditive } from '../effects/EffectUtils';
 import type { SyncedNukeStrike } from '../types';
 import { DEPTH, COLORS } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';
@@ -144,6 +145,8 @@ export class NukeRenderer {
   }
 
   private createVisual(nuke: SyncedNukeStrike): NukeVisual {
+    // Ungedämpft (`setBlendMode` statt `makeAdditive`): die Zielmarkierung ist ein
+    // Telegraph und muss zu jeder Tageszeit voll lesbar bleiben.
     const radius = this.scene.add.circle(nuke.x, nuke.y, nuke.radius, NUKE_CONFIG.warningColor, NUKE_CONFIG.circleFillAlpha);
     radius.setDepth(DEPTH.CANOPY - 1);
     radius.setBlendMode(Phaser.BlendModes.ADD);

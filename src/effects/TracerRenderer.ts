@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { TracerConfig } from '../types';
+import { emissiveAlpha } from './EmissiveScale';
 
 const DEPTH_TRACER = DEPTH.PROJECTILES - 2;
 
@@ -141,11 +142,11 @@ export class TracerRenderer {
       const x1 = drawSx + (ex - drawSx) * t1,  y1 = drawSy + (ey - drawSy) * t1;
 
       // Äußerer Glow
-      g.lineStyle(cfg.widthGlow, colorGlow, alpha * cfg.alphaGlow);
+      g.lineStyle(cfg.widthGlow, colorGlow, emissiveAlpha(alpha * cfg.alphaGlow));
       g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.strokePath();
 
       // Innerer heller Kern
-      g.lineStyle(cfg.widthCore, colorCore, alpha * cfg.alphaCore);
+      g.lineStyle(cfg.widthCore, colorCore, emissiveAlpha(alpha * cfg.alphaCore));
       g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.strokePath();
     }
   }

@@ -3,6 +3,7 @@ import {
   getGraphicsQualityController,
   type VisualImportance,
 } from '../graphics/GraphicsQuality';
+import { emissiveAlpha } from './EmissiveScale';
 
 type CanvasTextureDrawCallback = (
   ctx: CanvasRenderingContext2D,
@@ -117,6 +118,34 @@ export function setCircleEmitZone(
   emitter.addEmitZone(circleZone(radius, quantity));
 }
 
+/**
+ * Schaltet ein Objekt additiv und dämpft es dabei um den Tagesfaktor.
+ *
+ * Ersetzt ein blosses `setBlendMode(Phaser.BlendModes.ADD)`. Der Umweg über die
+ * Objekt-Alpha statt über die einzelnen Alphawerte ist Absicht: Phaser rechnet bei Shapes
+ * `fillAlpha * alpha` und `strokeAlpha * alpha`, ein einziger Aufruf erfasst also Füllung
+ * und Kontur gemeinsam – und bei Images ist es ohnehin dieselbe Zahl. Damit bleibt die
+ * Umstellung an jeder Aufrufstelle ein Ein-Wort-Tausch, ohne Argumente umzuschreiben.
+ *
+ * **Nach** dem Setzen von Alpha, Füll- und Konturstil aufrufen und **vor** einem Tween,
+ * der die Alpha animiert – der startet dann beim gedämpften Wert.
+ */
+export function makeAdditive<T extends Phaser.GameObjects.GameObject>(object: T): T {
+  const target = object as T & {
+    alpha: number;
+    setBlendMode(mode: number): unknown;
+    setAlpha(alpha: number): unknown;
+  };
+  target.setBlendMode(Phaser.BlendModes.ADD);
+  target.setAlpha(emissiveAlpha(target.alpha));
+  return object;
+}
+
+/**
+ * Der zentrale Weg zu einer additiven Effektgrafik – und damit die Stelle, an der die
+ * Tagesdämpfung greift. Ein ADD-Layer über hellem Mittagsboden klippt sonst zu einer
+ * weißen Fläche; nachts (Faktor 1) bleibt der Wert unangetastet.
+ */
 export function configureAdditiveImage(
   image: Phaser.GameObjects.Image,
   depth: number,
@@ -126,7 +155,7 @@ export function configureAdditiveImage(
   return image
     .setBlendMode(Phaser.BlendModes.ADD)
     .setDepth(depth)
-    .setAlpha(alpha)
+    .setAlpha(emissiveAlpha(alpha))
     .setTint(tint);
 }
 

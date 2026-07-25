@@ -112,6 +112,15 @@ export interface PerformanceAblationDeps {
     setStaticVisible(visible: boolean): void;
     setDynamicVisible(visible: boolean): void;
   } | null;
+  /**
+   * Das Lightmap-Composite braucht einen eigenen Schalter. Über den generischen Scan ist
+   * es nicht abzuschalten: `LightingSystem.update()` setzt die Sichtbarkeit des Overlays
+   * jeden Frame neu, ein `setVisible(false)` von aussen wäre einen Frame später wieder
+   * überschrieben und das Segment würde nichts messen. `null` ausserhalb einer Runde.
+   */
+  getLightingSystem: () => {
+    setCompositeSuppressed(suppressed: boolean): void;
+  } | null;
 }
 
 const BLOOD_TEXTURE_PREFIX = '__blood';
@@ -144,8 +153,11 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
     case 'particles':
       return object.type === 'ParticleEmitter';
     case 'lights':
-      // Der LightingSystem-Composite liegt exakt im schmalen Band um DEPTH_LIGHTING.
-      return depth > DEPTH_LIGHTING - 0.2 && depth <= DEPTH_LIGHTING + 0.01;
+      // Das Composite selbst läuft über `setCompositeSuppressed`, nicht über den Scan.
+      // Hier bleiben nur die Scratch-Texturen der verdeckenden Lichter, die knapp
+      // darunter liegen. Die Untergrenze schliesst bewusst den gebackenen Kronenschatten
+      // auf `DEPTH_LIGHTING - 0.1` aus – der gehört zu `staticShadows`.
+      return depth > DEPTH_LIGHTING - 0.05 && depth < DEPTH_LIGHTING;
     case 'blood':
       return key.startsWith(BLOOD_TEXTURE_PREFIX);
     case 'rocks':
@@ -192,6 +204,7 @@ export class PerformanceAblationController {
   private filtersSuppressed = false;
   private staticShadowsSuppressed = false;
   private dynamicShadowsSuppressed = false;
+  private lightCompositeSuppressed = false;
   private readonly segments: AblationSegment[] = [];
 
   constructor(
@@ -283,6 +296,7 @@ export class PerformanceAblationController {
     this.setFiltersSuppressed(category === 'filters');
     this.setStaticShadowsSuppressed(category === 'staticShadows');
     this.setDynamicShadowsSuppressed(category === 'dynamicShadows');
+    this.setLightCompositeSuppressed(category === 'lights');
 
     // Der Scan laeuft in JEDEM Segment inklusive Baseline und wertet immer das Praedikat aus,
     // damit seine Kosten in allen Segmenten gleich sind und aus der Differenz
@@ -328,6 +342,14 @@ export class PerformanceAblationController {
     this.dynamicShadowsSuppressed = suppressed;
   }
 
+  private setLightCompositeSuppressed(suppressed: boolean): void {
+    if (this.lightCompositeSuppressed === suppressed) return;
+    const lighting = this.deps.getLightingSystem();
+    if (!lighting) return;
+    lighting.setCompositeSuppressed(suppressed);
+    this.lightCompositeSuppressed = suppressed;
+  }
+
   private restoreAll(): void {
     for (const object of this.hidden) {
       // Zwischenzeitlich zerstoerte Objekte verlieren ihre setVisible-Bindung nicht, das
@@ -345,6 +367,7 @@ export class PerformanceAblationController {
     this.setFiltersSuppressed(false);
     this.setStaticShadowsSuppressed(false);
     this.setDynamicShadowsSuppressed(false);
+    this.setLightCompositeSuppressed(false);
   }
 
   destroy(): void {

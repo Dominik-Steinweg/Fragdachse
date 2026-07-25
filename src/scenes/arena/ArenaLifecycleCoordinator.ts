@@ -47,7 +47,8 @@ import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
 import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
-import { DEFAULT_LIGHT_PROFILE_ID, type LightProfileId } from '../../effects/LightingConfig';
+import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
+import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
@@ -89,6 +90,7 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
  */
 export class ArenaLifecycleCoordinator {
   private matchTerminated   = false;
+  private roundTimeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
   private roundStartPending = false;
   private isLocalReady      = false;
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
@@ -114,6 +116,14 @@ export class ArenaLifecycleCoordinator {
   // ── Public state accessors ────────────────────────────────────────────────
 
   isMatchTerminated(): boolean { return this.matchTerminated; }
+
+  /**
+   * Die von der Map vorgegebene Uhrzeit der laufenden Runde – der Wert, auf den der
+   * Debug-Regler zurücksetzt. Unabhängig davon, was gerade lokal eingestellt ist.
+   */
+  getRoundTimeOfDayMinutes(): number {
+    return this.roundTimeOfDayMinutes;
+  }
   getIsLocalReady(): boolean   { return this.isLocalReady; }
   isTrainDestroyedShown(): boolean { return this.trainDestroyedShown; }
 
@@ -1307,10 +1317,11 @@ export class ArenaLifecycleCoordinator {
     this.renderers.train.setAudioSystem(this.ctx.gameAudioSystem);
     this.renderers.translocatorTeleport = new TranslocatorTeleportRenderer(this.scene);
     this.renderers.translocatorTeleport.setLightingSystem(this.renderers.lighting);
-    // Beleuchtungsprofil vor dem Schattenaufbau setzen: nachts werden die statischen
+    // Uhrzeit vor dem Schattenaufbau setzen: zur Nacht hin werden die statischen
     // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.
-    const lightProfileId = resolveLightProfileId(coopDefenseMapConfig);
-    this.renderers.shadow.setProfile(lightProfileId);
+    const timeOfDayMinutes = resolveTimeOfDayMinutes(coopDefenseMapConfig);
+    this.roundTimeOfDayMinutes = timeOfDayMinutes;
+    this.renderers.shadow.setTimeOfDay(timeOfDayMinutes);
     this.renderers.shadow.rebuildArenaStaticShadows(
       this.ctx.currentLayout,
       this.ctx.arenaResult,
@@ -1326,8 +1337,11 @@ export class ArenaLifecycleCoordinator {
       baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
     });
     this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
-    this.renderers.lighting.setProfile(lightProfileId);
+    this.renderers.lighting.setTimeOfDay(timeOfDayMinutes);
     this.renderers.lighting.setActive(true);
+    // Additive Effektgrafiken liegen teils über dem Lightmap-Overlay und werden vom
+    // Ambient gar nicht erfasst; über hellem Boden brennen sie ohne diese Dämpfung aus.
+    setEmissiveScale(resolveSkyState(timeOfDayMinutes).emissiveScale);
 
     // Reset per-round state in coordinators
     this.hostUpdate.resetPerRound();
@@ -1336,6 +1350,9 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(): void {
+    // Ausserhalb einer Runde gibt es keine Tageszeit; neutral zurücksetzen, damit die
+    // Lobby nicht die Dämpfung der letzten Map erbt.
+    setEmissiveScale(1);
     this.ctx.coopDefenseEnemyAbilitySystem?.clear();
     this.ctx.coopDefenseEnemyBurrowSystem?.clear();
     this.ctx.coopDefenseEnemyDodgeSystem?.clear();
@@ -1849,10 +1866,16 @@ export class ArenaLifecycleCoordinator {
 }
 
 /**
- * Beleuchtungsprofil der Runde. Nur Coop-Defense-Maps können ein Profil setzen; alle
- * übrigen Modi bleiben beim Tagprofil. Host und Client lösen dieselbe Map-Konfiguration
- * auf, deshalb ist kein eigener Netzwerkpfad nötig.
+ * Uhrzeit der Runde. Nur Coop-Defense-Maps setzen eine eigene; alle übrigen Modi bleiben
+ * beim Mittag und damit exakt bei den bisherigen Kosten und der bisherigen Optik. Host
+ * und Client lösen dieselbe Map-Konfiguration auf, deshalb ist kein eigener Netzwerkpfad
+ * nötig – das gilt auch für den lokalen Debug-Regler, der bewusst nur den eigenen Client
+ * betrifft.
  */
-function resolveLightProfileId(mapConfig: CoopDefenseMapConfig | null): LightProfileId {
-  return mapConfig?.lighting === 'night' ? 'night' : DEFAULT_LIGHT_PROFILE_ID;
+function resolveTimeOfDayMinutes(mapConfig: CoopDefenseMapConfig | null): number {
+  const configured = mapConfig?.timeOfDay;
+  if (configured === undefined) return DEFAULT_TIME_OF_DAY_MINUTES;
+  // Die Konfiguration ist beim Laden validiert worden; der Rückfall deckt nur den Fall
+  // ab, dass jemand die Registry zur Laufzeit umgeht.
+  return parseTimeOfDay(configured) ?? DEFAULT_TIME_OF_DAY_MINUTES;
 }

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
-import { mixColors } from './EffectUtils';
+import { makeAdditive, mixColors } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 
 export class TranslocatorTeleportRenderer {
@@ -25,7 +25,7 @@ export class TranslocatorTeleportRenderer {
     const columnHeight = isStart ? 128 : 160;
     const column = this.scene.add.rectangle(x, y - columnHeight / 2 + 16, 24, columnHeight, color, 0.8);
     column.setDepth(DEPTH_FX);
-    column.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(column);
 
     this.scene.tweens.add({
       targets: column,
@@ -39,7 +39,7 @@ export class TranslocatorTeleportRenderer {
     // Expandiender Ring an der Basis
     const ring = this.scene.add.circle(x, y, 16, color, 0.7);
     ring.setDepth(DEPTH_FX - 0.1);
-    ring.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(ring);
     // Nur der Rand soll sichtbar sein, nicht gefüllt? 
     // circle(x,y,r,color,a) zeichnet gefüllt. Wir können isStroked auf true setzen
     ring.isStroked = true;
@@ -61,7 +61,7 @@ export class TranslocatorTeleportRenderer {
     // Kern-Blitz (weiß)
     const core = this.scene.add.circle(x, y, 20, 0xffffff, 1.0);
     core.setDepth(DEPTH_FX + 0.1);
-    core.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(core);
     
     this.scene.tweens.add({
       targets: core,

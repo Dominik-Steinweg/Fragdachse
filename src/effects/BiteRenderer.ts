@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH_TRACE, isPointInsideArena } from '../config';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive } from './EffectUtils';
 
 const TEX_BITE_HAZE = '__bite_haze';
 const TEX_BITE_DROPLET = '__bite_droplet';
@@ -206,7 +206,7 @@ export class BiteRenderer {
     offsetFactor: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
-    gfx.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(gfx);
 
     for (const claw of clawPaths) {
       gfx.lineStyle(Math.max(0.8, claw.widthMid * widthScale), color, alpha);

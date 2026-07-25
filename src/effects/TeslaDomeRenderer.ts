@@ -5,16 +5,7 @@ import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../loadout/Loadout
 import type { SyncedTeslaDome, TeslaDomeTargetType } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { LightingSystem } from './LightingSystem';
-import {
-  configureAdditiveImage,
-  createEmitter,
-  destroyEmitter,
-  edgeZone,
-  ensureCanvasTexture,
-  fillRadialGradientTexture,
-  mixColors,
-  setCircleEmitZone,
-} from './EffectUtils';
+import { configureAdditiveImage, createEmitter, destroyEmitter, edgeZone, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, setCircleEmitZone } from './EffectUtils';
 
 const TEX_DOME_CORE = '__tesla_dome_core';
 const TEX_DOME_FIELD = '__tesla_dome_field';
@@ -641,7 +632,7 @@ export class TeslaDomeRenderer {
     const radius = Math.max(visual.currentRadius * 0.06 * intensity, 7);
     const halo = this.scene.add.circle(target.currentX, target.currentY, radius, accentColor, profile.haloAlpha * alphaScale);
     halo.setDepth(DEPTH.FIRE + 0.21);
-    halo.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(halo);
     this.scene.tweens.add({
       targets: halo,
       alpha: 0,

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
 import { createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';
+import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
 const TEX_FLASH = '__muzzle_flash';
@@ -166,7 +167,7 @@ export class MuzzleFlashRenderer {
       .setDepth(DEPTH.PROJECTILES + 2)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setTint(color ?? cfg.tint)
-      .setAlpha(cfg.alpha)
+      .setAlpha(emissiveAlpha(cfg.alpha))
       .setRotation(angle)
       .setScale(cfg.scaleX, cfg.scaleY);
 
@@ -187,7 +188,8 @@ export class MuzzleFlashRenderer {
       angle: { min: Phaser.Math.RadToDeg(angle) - cfg.sparkSpread, max: Phaser.Math.RadToDeg(angle) + cfg.sparkSpread },
       speed: { min: cfg.sparkSpeed * 0.35, max: cfg.sparkSpeed },
       scale: { start: 0.6, end: 0.04 },
-      alpha: { start: 0.82, end: 0 },
+      // Emitter pro Schuss, nicht geteilt: der Faktor darf hier bei der Erzeugung wirken.
+      alpha: { start: emissiveAlpha(0.82), end: 0 },
       tint: [...cfg.sparkTints],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,

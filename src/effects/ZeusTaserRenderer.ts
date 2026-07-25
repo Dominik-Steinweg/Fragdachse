@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH_TRACE, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
+import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors } from './EffectUtils';
 
 const TEX_ZEUS_HAZE = '__zeus_taser_haze';
 const TEX_ZEUS_STREAK = '__zeus_taser_streak';
@@ -112,7 +112,7 @@ export class ZeusTaserRenderer {
     hotColor: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
-    gfx.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(gfx);
 
     gfx.fillStyle(glowColor, 0.12);
     gfx.beginPath();
@@ -152,7 +152,7 @@ export class ZeusTaserRenderer {
     hotColor: number,
   ): Phaser.GameObjects.Graphics {
     const gfx = this.scene.add.graphics();
-    gfx.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(gfx);
 
     const boltCount = Phaser.Math.Clamp(Math.round(range / 18), 7, 12);
     for (let bolt = 0; bolt < boltCount; bolt++) {
@@ -360,7 +360,7 @@ export class ZeusTaserRenderer {
 
     const chain = this.scene.add.graphics();
     chain.setDepth(DEPTH_TRACE + 0.13);
-    chain.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(chain);
     const points = this.createLightningPath(startX, startY, impactX, impactY, 5, 10);
 
     chain.lineStyle(4.2, mixColors(playerColor, COLORS.BLUE_1, 0.48), 0.18);
@@ -426,7 +426,7 @@ export class ZeusTaserRenderer {
 
     const branches = this.scene.add.graphics();
     branches.setDepth(DEPTH_TRACE + 0.15);
-    branches.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(branches);
     for (let bolt = 0; bolt < 5; bolt++) {
       const branchAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const branchLength = Phaser.Math.FloatBetween(12, 28);

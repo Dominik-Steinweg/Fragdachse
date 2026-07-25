@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { circleZone } from './EffectUtils';
+import { circleZone, makeAdditive } from './EffectUtils';
+import { emissiveAlpha } from './EmissiveScale';
 import {
   ensureFlameTextures,
   FLAME_COLORS_CORE,
@@ -123,7 +124,7 @@ export class FlameRenderer {
     const glowImage = this.scene.add.image(x, y, TEX_FLAME_GLOW);
     glowImage.setBlendMode(Phaser.BlendModes.ADD);
     glowImage.setDepth(DEPTH_FLAME - 0.1);
-    glowImage.setAlpha(0.55);
+    glowImage.setAlpha(emissiveAlpha(0.55));
     const glowScale = Math.max(size / 48 * 2.5, 0.5);
     glowImage.setScale(glowScale);
     glowImage.setTint(0xffaa44);

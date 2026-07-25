@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
 import type { SyncedMeteorStrike } from '../types';
 import { DEPTH, DEPTH_FX } from '../config';
-import { circleZone } from './EffectUtils';
+import { circleZone, makeAdditive } from './EffectUtils';
+import { emissiveAlpha } from './EmissiveScale';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
@@ -202,6 +203,8 @@ export class MeteorRenderer {
 
     // Meteor-Glow (Kern) – startet klein, skaliert hoch
     const meteorGlow = this.scene.add.image(m.x, m.y, TEX_METEOR_GLOW);
+    // Alpha wird unten auf 0 gesetzt und anschliessend animiert; die Dämpfung sitzt
+    // deshalb dort, nicht hier.
     meteorGlow.setBlendMode(Phaser.BlendModes.ADD);
     meteorGlow.setDepth(DEPTH_METEOR);
     meteorGlow.setScale(0.1);
@@ -252,7 +255,7 @@ export class MeteorRenderer {
       const meteorProgress = (progress - 0.2) / 0.8;
       const meteorScale = 0.3 + 2.2 * Phaser.Math.Easing.Quadratic.In(meteorProgress);
       visual.meteorGlow.setScale(meteorScale * visual.sizeFactor);
-      visual.meteorGlow.setAlpha(0.4 + 0.6 * meteorProgress);
+      visual.meteorGlow.setAlpha(emissiveAlpha(0.4 + 0.6 * meteorProgress));
       // Schweif-Emitter aktiv
       visual.trailEmitter.emitting = true;
     } else {
@@ -278,7 +281,7 @@ export class MeteorRenderer {
     // 1. Heller Blitz (weiß, expandiert schnell)
     const flash = this.scene.add.circle(x, y, 6, 0xffffff, 1);
     flash.setDepth(DEPTH_IMPACT + 1);
-    flash.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(flash);
     const flashEndScale = (radius * 0.6) / 6;
     this.scene.tweens.add({
       targets:    flash,
@@ -293,7 +296,7 @@ export class MeteorRenderer {
     // 2. Feurige Explosionsfüllung
     const blast = this.scene.add.circle(x, y, 4, 0xff6622, 0.75);
     blast.setDepth(DEPTH_IMPACT);
-    blast.setBlendMode(Phaser.BlendModes.ADD);
+    makeAdditive(blast);
     const blastEndScale = radius / 4;
     this.scene.tweens.add({
       targets:    blast,

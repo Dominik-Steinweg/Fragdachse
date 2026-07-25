@@ -11,7 +11,7 @@ import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
 import { CombatSystem }          from '../systems/CombatSystem';
 import { DecoySystem }           from '../systems/DecoySystem';
 import { EffectSystem }          from '../effects/EffectSystem';
-import { getProjectileLightSpec } from '../effects/LightingConfig';
+import { getProjectileLightSpec, LIGHT_PRESETS } from '../effects/LightingConfig';
 import { mixColors }             from '../effects/EffectUtils';
 import { SmokeSystem }           from '../effects/SmokeSystem';
 import { FireSystem }            from '../effects/FireSystem';
@@ -24,6 +24,9 @@ import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
+import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
+import { resolveSkyState } from '../effects/TimeOfDay';
+import { setEmissiveScale } from '../effects/EmissiveScale';
 import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
@@ -173,6 +176,7 @@ export class ArenaScene extends Phaser.Scene {
   private static readonly TRAIN_LIGHT_SIDES = [-1, 1] as const;
   private trainLightPlan: TrainLightPlan | null = null;
   private trainLightsActive = false;
+  private flashlightsActive = false;
   /** Zwei getauschte Sets statt Neuallokation pro Frame: Projektile wechseln schnell. */
   private activeProjectileLightIds = new Set<number>();
   private projectileLightScratch = new Set<number>();
@@ -196,6 +200,8 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseXpDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private netDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private performanceHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private timeOfDayHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
   private netDebugOverlay: NetDebugOverlay | null = null;
   private performanceDiagnosticsOverlay: PerformanceDiagnosticsOverlay | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
@@ -310,6 +316,7 @@ export class ArenaScene extends Phaser.Scene {
     this.performanceAblation = new PerformanceAblationController(this, {
       getQualityController: () => this.graphicsQuality,
       getShadowSystem: () => this.renderers?.shadow ?? null,
+      getLightingSystem: () => this.renderers?.lighting ?? null,
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.performanceAblation?.destroy());
     const unsubscribePerformanceQuality = this.graphicsQuality.subscribe((profile, previous) => {
@@ -434,6 +441,11 @@ export class ArenaScene extends Phaser.Scene {
         this.refreshStoredCoopDefenseProgress();
         this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       },
+    );
+    this.timeOfDayDebugOverlay = new TimeOfDayDebugOverlay(
+      () => this.renderers.lighting.getTimeOfDayMinutes(),
+      () => this.lifecycle.getRoundTimeOfDayMinutes(),
+      (minutes) => this.applyDebugTimeOfDay(minutes),
     );
     this.coopDefenseUpgradesOverlay = new CoopDefenseUpgradesOverlay(
       this,
@@ -602,16 +614,6 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Debug Hotkeys ─────────────────────────────────────────────────────
     inputSystem.setupDebugHotkeys((type) => {
-      // Rein lokales Umschalten des Beleuchtungsprofils zum Tunen, ohne eine
-      // Nachtkarte anlegen zu müssen. Bewusst auch für Clients erlaubt.
-      if (type === 'lighting_profile') {
-        const profileId = this.renderers.lighting.toggleProfile();
-        this.renderers.shadow.setProfile(profileId);
-        this.rockVisualHelper.rebuildStaticShadows();
-        console.log(`[ArenaScene] Lighting profile → ${profileId}`);
-        return;
-      }
-
       if (!bridge.isHost()) return;
 
       const service = type === 'flowfield_players'
@@ -1662,7 +1664,25 @@ export class ArenaScene extends Phaser.Scene {
     };
     keyboard.on('keydown-T', this.performanceHotkeyHandler);
 
+    if (this.timeOfDayHotkeyHandler) {
+      keyboard.off('keydown-M', this.timeOfDayHotkeyHandler);
+      this.timeOfDayHotkeyHandler = null;
+    }
+    this.timeOfDayHotkeyHandler = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      // M ist ein Schreibzeichen: nicht auslösen, während ein Textfeld den Fokus hat.
+      if (this.ctx?.leftPanel.isHotkeyInputBlocked()) return;
+      this.timeOfDayDebugOverlay?.toggle();
+    };
+    keyboard.on('keydown-M', this.timeOfDayHotkeyHandler);
+
     this.events.once('shutdown', () => {
+      if (this.timeOfDayHotkeyHandler) {
+        keyboard.off('keydown-M', this.timeOfDayHotkeyHandler);
+        this.timeOfDayHotkeyHandler = null;
+      }
+      this.timeOfDayDebugOverlay?.destroy();
+      this.timeOfDayDebugOverlay = null;
       if (this.netDebugHotkeyHandler) {
         keyboard.off('keydown-P', this.netDebugHotkeyHandler);
         this.netDebugHotkeyHandler = null;
@@ -1684,6 +1704,23 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseUpgradesOverlay?.destroy();
       this.coopDefenseUpgradesOverlay = null;
     });
+  }
+
+  /**
+   * Übernimmt eine per Debug-Regler gewählte Uhrzeit.
+   *
+   * Rein lokal – die Runde leitet ihre Uhrzeit auf jedem Client aus der replizierten
+   * Map-ID ab, hier wird also nur die eigene Ansicht verstellt.
+   *
+   * Reihenfolge wie beim Rundenaufbau: Schattenprofil setzen, *dann* die statischen Layer
+   * neu backen. Kurzlebige Effekte übernehmen den Emissive-Faktor von selbst, langlebige
+   * additive Grafiken erst bei ihrer Neuerzeugung.
+   */
+  private applyDebugTimeOfDay(minutes: number): void {
+    this.renderers.lighting.setTimeOfDay(minutes);
+    this.renderers.shadow.setTimeOfDay(minutes);
+    this.renderers.shadow.rebuildStaticShadowsForProfileChange();
+    setEmissiveScale(resolveSkyState(minutes).emissiveScale);
   }
 
   private syncArenaPanelOverlay(visible: boolean, immediate = false): void {
@@ -1785,11 +1822,12 @@ export class ArenaScene extends Phaser.Scene {
    */
   private syncWorldLighting(inArena: boolean): void {
     const lighting = this.renderers.lighting;
-    const nightLights = inArena && lighting.areNightLightsEnabled();
+    const artificialFactor = inArena ? lighting.getArtificialLightFactor() : 0;
+    const artificialLights = artificialFactor > 0;
 
-    this.syncTrainLights(nightLights);
+    this.syncTrainLights(artificialLights, artificialFactor);
 
-    if (nightLights) {
+    if (artificialLights) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         const key = `flashlight:${player.id}`;
         const sprite = player.sprite;
@@ -1816,10 +1854,23 @@ export class ArenaScene extends Phaser.Scene {
         }
         lighting.setLight(key, 'flashlight', sprite.x, sprite.y, {
           angle: player.getAimAngle(),
+          intensity: LIGHT_PRESETS.flashlight.intensity * artificialFactor,
         });
         // Nimmt dem Kegelansatz die harte Kante an der Spielerlinie.
-        lighting.setLight(spillKey, 'flashlightSpill', sprite.x, sprite.y);
+        lighting.setLight(spillKey, 'flashlightSpill', sprite.x, sprite.y, {
+          intensity: LIGHT_PRESETS.flashlightSpill.intensity * artificialFactor,
+        });
       }
+      this.flashlightsActive = true;
+    } else if (this.flashlightsActive) {
+      // Ausdrückliche Freigabe statt Verlass auf das Stale-Notnetz: das blendet über
+      // `RELEASE_FADE_MS` aus, während der Stale-Pfad die Lampen 400 ms stehen lässt und
+      // dann hart abschaltet. Wird sichtbar, sobald der Debug-Regler in den Tag zieht.
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        lighting.releaseLight(`flashlight:${player.id}`);
+        lighting.releaseLight(`flashlightspill:${player.id}`);
+      }
+      this.flashlightsActive = false;
     }
 
     this.syncProjectileLights(inArena);
@@ -1892,10 +1943,10 @@ export class ArenaScene extends Phaser.Scene {
    * ihrem Mittelpunkt. Die Segmentmitten kommen aus `TrainRenderer.computeSegYs()` –
    * dieselbe Rechnung, aus der auch die Zuggrafik entsteht.
    */
-  private syncTrainLights(nightLights: boolean): void {
+  private syncTrainLights(artificialLights: boolean, artificialFactor: number): void {
     const lighting = this.renderers.lighting;
     const trainRenderer = this.renderers.train;
-    const train = nightLights ? this.resolveTrainState() : null;
+    const train = artificialLights ? this.resolveTrainState() : null;
 
     if (!train?.alive || !trainRenderer) {
       if (this.trainLightsActive) {
@@ -1913,7 +1964,10 @@ export class ArenaScene extends Phaser.Scene {
     const plan = this.getTrainLightPlan();
 
     for (const lamp of plan.headlights) {
-      lighting.setLight(lamp.key, 'trainHeadlight', train.x + lamp.offsetX, noseY, { angle: beamAngle });
+      lighting.setLight(lamp.key, 'trainHeadlight', train.x + lamp.offsetX, noseY, {
+        angle: beamAngle,
+        intensity: LIGHT_PRESETS.trainHeadlight.intensity * artificialFactor,
+      });
     }
     for (const lamp of plan.windows) {
       // Waggons hinter dem sichtbaren Bereich fallen in `LightingSystem` durch das
@@ -1924,6 +1978,7 @@ export class ArenaScene extends Phaser.Scene {
         'trainWindow',
         train.x + lamp.offsetX,
         segmentYs[lamp.segment] + offsetY,
+        { intensity: LIGHT_PRESETS.trainWindow.intensity * artificialFactor },
       );
     }
 

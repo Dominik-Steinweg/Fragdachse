@@ -7,18 +7,22 @@ import {
 import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
 import type { LightOccluderIndex } from './LightOccluderIndex';
 import {
-  DEFAULT_LIGHT_PROFILE_ID,
-  LIGHTING_PROFILES,
+  GLOBAL_LIGHT_INTENSITY_MULT,
   LIGHT_PRESETS,
   MAX_OCCLUDING_LIGHT_RADIUS,
   OCCLUDER_SCRATCH_SIZE,
   OCCLUDER_SHADE_FALLOFF_PX,
   SHADOW_EXTEND_FACTOR,
-  resolvePresetOverride,
   type LightPreset,
   type LightPresetKey,
-  type LightProfileId,
 } from './LightingConfig';
+import {
+  DEFAULT_TIME_OF_DAY_MINUTES,
+  NEUTRAL_AMBIENT_COLOR,
+  normalizeTimeOfDay,
+  resolveSkyState,
+  type SkyState,
+} from './TimeOfDay';
 import {
   getGraphicsQualityController,
   getGraphicsQualityProfile,
@@ -128,9 +132,12 @@ function emptyPerformanceMetrics(): LightingPerformanceMetrics {
  * Lighting, das `setLighting(true)` pro Objekt braucht, Render-Batches bricht und
  * keinerlei geometrische Verdeckung kennt.
  *
- * Tag und Nacht nutzen denselben Pfad und unterscheiden sich nur im Profil:
- * Tag füllt die Lightmap schwarz und komponiert additiv (nur Zusatzlicht),
- * Nacht füllt sie dunkel und komponiert multiplikativ (Grunddunkelheit).
+ * Es gibt genau einen Rechenweg, unabhängig von der Uhrzeit: die Lightmap wird mit dem
+ * Ambient der Tageszeit gefüllt, Lichter werden additiv hineingestempelt, das Ergebnis
+ * komponiert MULTIPLY über die Welt. Zum Mittag hin ist das Ambient weiß und das
+ * Composite damit ein bit-exakter No-Op – der Renderpass entfällt dann komplett. Zur
+ * Nacht hin wird es dunkel, und dieselben Lichter tragen entsprechend mehr bei. Siehe
+ * `TimeOfDay.ts`.
  *
  * Verdeckende Lichter werden einzeln in eine eigene Scratch-RenderTexture gezeichnet,
  * dort um ihre Schattenpolygone erleichtert und anschließend additiv in die Lightmap
@@ -139,8 +146,8 @@ function emptyPerformanceMetrics(): LightingPerformanceMetrics {
  * sind, bevor die Lightmap ihre eigenen Zeichenbefehle ausführt.
  */
 export class LightingSystem {
-  private profileId: LightProfileId = DEFAULT_LIGHT_PROFILE_ID;
-  private profile = LIGHTING_PROFILES[DEFAULT_LIGHT_PROFILE_ID];
+  private timeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
+  private sky: SkyState = resolveSkyState(DEFAULT_TIME_OF_DAY_MINUTES);
 
   private lightMap: Phaser.GameObjects.RenderTexture | null = null;
   private readonly slots: OccluderSlot[] = [];
@@ -156,6 +163,14 @@ export class LightingSystem {
   private readonly coneTextureKeys = new Map<number, string>();
 
   private enabled = false;
+  private compositeSuppressed = false;
+  /**
+   * Merker für die Fill-Ersparnis: solange das Ambient gleich bleibt und weder in diesem
+   * noch im vorigen Frame ein Licht gerendert wurde, steht in der Lightmap bereits genau
+   * das, was hineingehört. Dann werden gar keine Zeichenbefehle erzeugt und
+   * `DynamicTexture.render()` steigt bei leerem Command-Buffer sofort aus.
+   */
+  private lightMapHoldsAmbientOnly = false;
   private lastCostMs = 0;
   private lastPerformance = emptyPerformanceMetrics();
   private quality: GraphicsQualityProfile;
@@ -183,26 +198,42 @@ export class LightingSystem {
     this.occluders = index;
   }
 
-  setProfile(profileId: LightProfileId): void {
-    if (this.profileId === profileId) return;
-    this.profileId = profileId;
-    this.profile = LIGHTING_PROFILES[profileId];
-    this.lightMap?.setBlendMode(this.profile.compositeBlendMode);
+  /**
+   * Uhrzeit der Runde. Ändert ausschließlich Werte, nie den Rechenweg – siehe
+   * {@link resolveSkyState}. Vor `setActive(true)` setzen, damit der erste Frame schon
+   * mit dem richtigen Ambient läuft.
+   */
+  setTimeOfDay(minutes: number): void {
+    const normalized = normalizeTimeOfDay(minutes);
+    if (this.timeOfDayMinutes === normalized) return;
+    this.timeOfDayMinutes = normalized;
+    this.sky = resolveSkyState(normalized);
+    // Das gemerkte Ambient in der Lightmap ist damit veraltet.
+    this.lightMapHoldsAmbientOnly = false;
     this.syncOverlayVisibility();
   }
 
-  getProfileId(): LightProfileId {
-    return this.profileId;
+  getTimeOfDayMinutes(): number {
+    return this.timeOfDayMinutes;
   }
 
-  /** Taschenlampen und Zugscheinwerfer gibt es nur im Nachtprofil. */
-  areNightLightsEnabled(): boolean {
-    return this.enabled && this.profile.nightLightsEnabled;
+  /**
+   * Stärke der künstlichen Lichter (Taschenlampen, Zugbeleuchtung). 0 heißt: gar nicht
+   * erst anmelden – tagsüber existieren sie wie bisher überhaupt nicht.
+   */
+  getArtificialLightFactor(): number {
+    return this.enabled ? this.sky.artificialLightFactor : 0;
   }
 
-  toggleProfile(): LightProfileId {
-    this.setProfile(this.profileId === 'night' ? 'day' : 'night');
-    return this.profileId;
+  /**
+   * Diagnose-Schalter des Ablationsmodus: unterdrückt das Composite, ohne den
+   * Lichtzustand anzutasten. Ohne diesen Weg lässt sich das Overlay nicht ausblenden –
+   * `update()` würde es im nächsten Frame sofort wieder sichtbar schalten.
+   */
+  setCompositeSuppressed(suppressed: boolean): void {
+    if (this.compositeSuppressed === suppressed) return;
+    this.compositeSuppressed = suppressed;
+    this.syncOverlayVisibility();
   }
 
   getLastUpdateCostMs(): number {
@@ -233,11 +264,17 @@ export class LightingSystem {
    * Verdeckung wird bewusst ignoriert: eine Krone liegt über Felsen und Stämmen.
    */
   resolveCanopyTint(x: number, y: number): number {
-    const factor = this.profile.canopyLightFactor;
-    if (!this.enabled || factor <= 0) return 0xffffff;
+    if (!this.enabled) return 0xffffff;
+
+    // Ohne Licht bleibt die Krone auf Umgebungsniveau – nicht auf Weiß. Sonst leuchten
+    // die Kronen bei dunklem Ambient auf voller Helligkeit über einem dunklen Boden.
+    // Der Kurzschluss bei leerer Lichtliste spart zugleich `sampleLightAmount()`, das
+    // pro Krone über alle aktiven Lichter läuft.
+    const factor = this.sky.canopyLightFactor;
+    if (factor <= 0 || this.lights.length === 0) return this.sky.ambientColor;
 
     const lit = Phaser.Math.Clamp(this.sampleLightAmount(x, y) * factor, 0, 1);
-    return mixChannels(this.profile.ambientColor, 0xffffff, lit);
+    return mixChannels(this.sky.ambientColor, 0xffffff, lit);
   }
 
   /**
@@ -294,6 +331,8 @@ export class LightingSystem {
   private destroyRenderTargets(): void {
     this.lightMap?.destroy();
     this.lightMap = null;
+    // Die neue Textur startet leer, das gemerkte Ambient gilt nicht mehr.
+    this.lightMapHoldsAmbientOnly = false;
     for (const slot of this.slots) {
       slot.renderTexture.destroy();
       slot.image.destroy();
@@ -384,9 +423,19 @@ export class LightingSystem {
     this.collectRenderQueue(now, scrollX, scrollY);
     const queueMs = performance.now() - queueStartedAt;
 
-    if (this.profileId === 'day' && this.renderQueue.length === 0) {
-      // Reines Tageslicht ohne aktive Lichtquelle: kein Renderpass, kein Overlay.
+    const ambientColor = this.sky.ambientColor;
+    const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
+    const queueEmpty = this.renderQueue.length === 0;
+
+    // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
+    // `setRenderMode('all')` leert den Command-Buffer am Platz des Objekts in der
+    // Display-List – ein unsichtbares Objekt mit gefülltem Buffer ließe ihn auflaufen.
+    if ((ambientIsNeutral && queueEmpty) || this.compositeSuppressed) {
+      // Weißes Ambient ohne Licht multipliziert die Szene mit 1: kein Renderpass, kein
+      // Overlay. Der Vergleich ist bewusst exakt – eine Toleranz wie „fast weiß" wäre
+      // optisch unsichtbar, würde die Kostenschwelle aber unvorhersehbar verschieben.
       overlay.setVisible(false);
+      this.lightMapHoldsAmbientOnly = false;
       this.lastCostMs = performance.now() - startMs;
       this.lastPerformance = {
         ...emptyPerformanceMetrics(),
@@ -399,7 +448,32 @@ export class LightingSystem {
     }
     overlay.setVisible(true);
 
-    overlay.fill(this.profile.ambientColor, 1);
+    // Getöntes Ambient ohne Licht: in der Textur steht bereits genau dieses Ambient vom
+    // letzten Frame. Keine Befehle erzeugen – `DynamicTexture.render()` steigt bei leerem
+    // Command-Buffer aus, es bleibt allein das Composite. Bit-identisch, weil sich der
+    // Texturinhalt nachweislich nicht ändert.
+    if (queueEmpty && this.lightMapHoldsAmbientOnly) {
+      this.lastCostMs = performance.now() - startMs;
+      this.lastPerformance = {
+        ...emptyPerformanceMetrics(),
+        totalMs: this.lastCostMs,
+        expireMs,
+        queueMs,
+        activeLights: this.lights.length,
+      };
+      return;
+    }
+    this.lightMapHoldsAmbientOnly = queueEmpty;
+
+    // Deckend füllen, niemals mit Alpha < 1 und niemals nur teilweise: das Composite
+    // rechnet `src.rgb * dst.rgb + dst.rgb * (1 - src.a)`. Bei `src.a = 1` bleibt davon
+    // die reine Multiplikation übrig; jedes Pixel mit `src.a < 1` würde stattdessen
+    // *aufhellen*. Die additiven Stempel darunter erhalten das Alpha (`ADD` ist
+    // `[ONE, DST_ALPHA]`, bei `dst.a = 1` also schlicht `src + dst`).
+    //
+    // Nebenbei: `lightMap.setAlpha(k)` wäre ein exakter Lerp des gesamten Composites
+    // Richtung No-Op – der kostenlose Weg zu einer globalen Lichtstärke.
+    overlay.fill(ambientColor, 1);
 
     let occludingUsed = 0;
     let directLights = 0;
@@ -512,18 +586,21 @@ export class LightingSystem {
     y: number,
     overrides?: LightOverrides,
   ): void {
-    const profileOverride = resolvePresetOverride(preset, this.profileId);
     const now = this.now();
 
     light.presetKey = presetKey;
     light.shape = preset.shape;
     light.x = x;
     light.y = y;
-    light.radiusPx = (overrides?.radiusPx ?? preset.radiusPx) * (profileOverride?.radiusMult ?? 1);
+    light.radiusPx = overrides?.radiusPx ?? preset.radiusPx;
     light.color = overrides?.color ?? preset.color;
+    // `lightFactor` ist die eine Regel, die früher zwanzig `day`-Overrides je Preset
+    // waren: zum Mittag hin lässt das helle Ambient ohnehin keinen Spielraum mehr, ein
+    // Licht dort voll zu stempeln wäre reine Füllrate ohne Bildwirkung. Bei 0 fällt das
+    // Licht durch die Sichtbarkeitsschwelle in `collectRenderQueue()` und kostet nichts.
     light.intensity = (overrides?.intensity ?? preset.intensity)
-      * (profileOverride?.intensityMult ?? 1)
-      * this.profile.lightIntensityMult;
+      * this.sky.lightFactor
+      * GLOBAL_LIGHT_INTENSITY_MULT;
     light.angle = overrides?.angle ?? 0;
     light.coneAngle = preset.coneAngle ?? Math.PI * 0.5;
     light.occludes = overrides?.occludes ?? preset.occludes;
@@ -778,7 +855,9 @@ export class LightingSystem {
 
   private syncOverlayVisibility(): void {
     if (!this.lightMap) return;
-    this.lightMap.setVisible(this.enabled && this.profileId !== 'day');
+    // Der Fall „weißes Ambient ohne Licht" wird bewusst nur in `update()` entschieden,
+    // damit beide Stellen nicht auseinanderlaufen können.
+    this.lightMap.setVisible(this.enabled && !this.compositeSuppressed);
   }
 
   private ensureLightMap(): Phaser.GameObjects.RenderTexture {
@@ -798,7 +877,8 @@ export class LightingSystem {
       .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
       .setScrollFactor(0)
       .setDepth(DEPTH_LIGHTING)
-      .setBlendMode(this.profile.compositeBlendMode);
+      // Konstant MULTIPLY: die Uhrzeit steckt allein im Ambient, mit dem gefüllt wird.
+      .setBlendMode(Phaser.BlendModes.MULTIPLY);
     lightMap.setRenderMode('all');
     this.lightMap = lightMap;
     this.syncOverlayVisibility();
