@@ -1047,8 +1047,8 @@ export const WEAPON_CONFIGS = {
   ALIEN_BADGER_PLASMA: {
     id:                   'ALIEN_BADGER_PLASMA',
     displayName:          'Alien-Plasma',
-    cooldown:             500,
-    damage:               18,
+    cooldown:             450,
+    damage:               16,
     range:                520,
     fire: {
       type:                 'projectile',
