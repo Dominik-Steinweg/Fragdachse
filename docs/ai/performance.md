@@ -118,12 +118,19 @@ zusätzlich die Spalte `ablationCode`, die Legende steht in `ablation.codes`/`ab
 2. Für Arena-Zahlen eine Runde mit **gleichbleibender** Action laufen lassen. Nicht mitten in
    der Messung die Spielsituation grundlegend wechseln – die Baseline-Nachbarschaft fängt
    Drift ab, aber keine Sprünge.
-3. Mindestdauer: ein voller Zyklus ist `Segmentlänge × (Kategorien × 2 + 1)`, bei 4 s Segmenten
-   also gut **90 Sekunden pro Phase**. Für die Lobby und die Arena getrennt jeweils einen
-   vollen Zyklus abwarten, zusammen also mindestens **3–4 Minuten**.
-4. Besser zwei bis drei Zyklen aufzeichnen. Erst dann lässt sich an der Streuung gleicher
-   Kategorien erkennen, ob ein Unterschied echt oder Rauschen ist.
+3. **Nur eine Map je Aufzeichnung.** Ein Kartenwechsel verschiebt die Baseline; über drei Maps
+   hinweg war in der Arena nichts unterhalb von ±4 bis ±6 ms auflösbar. Reicht die reguläre
+   Rundenlaufzeit nicht für einen vollen Zyklus, die Rundendauer für die Messung temporär
+   erhöhen – lieber eine lange Runde als drei kurze auf verschiedenen Maps.
+4. Mindestdauer: ein voller Zyklus ist `Segmentlänge × (Kategorien × 2 + 1)`. Bei 11 Kategorien
+   und 4 s Segmenten sind das ~92 s, bei 8 s Segmenten ~184 s je Phase. Für belastbare Zahlen
+   **zwei bis drei Zyklen** aufzeichnen: erst die Streuung gleicher Kategorien zeigt, ob ein
+   Unterschied echt ist.
 5. Stoppen und als JSON exportieren.
+
+Rolle und Maschine sind eigene Variablen. Wer Host und Client vergleichen will, muss beide auf
+**derselben** Maschine messen – sonst lässt sich ein Rollenunterschied nicht von einem
+Hardwareunterschied trennen.
 
 ### Auswertung
 
@@ -195,11 +202,40 @@ Der erste vollständige Diagnose-Trace ordnet die Frame-Zeit so zu:
   sichtbaren Objekten (Felsen bzw. statische Deko) ändert die Frame-Zeit nicht messbar. Wer
   Objekte einspart, spart deshalb vor allem Szenen-Walk, nicht Renderzeit.
 
+Nach dem Backen der statischen Schatten sank die Arena von 55 auf 83 fps und die Lobby von 83
+auf 164 fps (RTX 3080, high); `renderSubmitMs` halbierte sich, und die `shadows`-Ablation fiel
+von −7,2 ms auf −2,0 ms. Damit ist auf dem Host nicht mehr die Render-Abgabe der größte Posten,
+sondern `phaserSceneSystemsMs` – Phaser-interne Arbeit, die keine Ablationskategorie abdeckt.
+
+Zwei Regeln für aussagekräftige Diagnose-Traces:
+
+- **Eine Map je Trace.** Ein Kartenwechsel verschiebt die Baseline und bläht das Rauschband auf;
+  über drei Maps hinweg war in der Arena nichts unterhalb von ±4 bis ±6 ms auflösbar.
+- **`ΔgameStep` auswerten, nicht `ΔFPS`.** Die Frame-Rate ist durch VSync gequantelt, kleine
+  Zeitunterschiede springen dort um ganze Stufen.
+
 Rauschband beachten: Die Streuung der Arena-Baselines liegt bei etwa ±4,4 ms (2σ). In der
 Arena sind damit nur Effekte ab rund 5 ms sicher auflösbar; die ruhigere Lobby löst kleinere
 Effekte auf. Nullbefunde sind nur so viel wert wie der Wirksamkeitsnachweis der Ablation:
 Für Felsen und statische Deko ist er über die entfernten Objektzahlen belegt, für Partikel,
 Lichter und Bodenfeuer war er im ersten Trace uneindeutig.
+
+### Ergänzend mit Chrome profilieren
+
+Der eigene Profiler misst Zeit je Bucket, aber nicht, **welche Funktion** sie verbraucht. Dafür
+gibt es Chrome DevTools → Performance. Der Produktions-Build erzeugt deshalb Source-Maps
+(`build.sourcemap`); ohne sie lösen sowohl Chrome als auch die Long-Animation-Frame-Attribution
+im eigenen Export nur bis zum minifizierten Bundle auf und sind für die Ursachensuche wertlos.
+
+Beide Werkzeuge **nicht gleichzeitig** laufen lassen: Der Chrome-Profiler kostet selbst spürbar
+Zeit und würde die Ablationsdifferenzen verfälschen. Sinnvoll ist nacheinander – erst der
+Diagnose-Trace für die Kostenverteilung, danach ein kurzer Chrome-Mitschnitt (20–30 s reicht)
+für die Zuordnung auf Funktionsebene.
+
+Chrome liefert zusätzlich, was der eigene Profiler prinzipiell nicht kann: Self-Time je Funktion
+(trennt eigenen Code von Phaser-Interna), GC-Aktivität und – über `chrome://tracing` mit
+`disabled-by-default-gpu.service` – echte GPU-Zeiten. `EXT_disjoint_timer_query` ist auf den
+bisher gemessenen Maschinen nicht verfügbar, `gpu.status` im Export bleibt deshalb `unsupported`.
 
 ## Verträge des Report-Schemas
 

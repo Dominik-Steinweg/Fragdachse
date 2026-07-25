@@ -8,6 +8,11 @@ export default defineConfig({
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 3000,
+    // Ohne Source-Maps lösen Chrome-Profile und die Long-Animation-Frame-Attribution des
+    // eigenen Profilers nur bis zum minifizierten Bundle auf ("vendor-*.js", leerer
+    // Funktionsname) und sind damit für die Ursachensuche wertlos. Die .map-Dateien werden
+    // nur bei Bedarf nachgeladen und kosten zur Laufzeit nichts.
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {

@@ -31,7 +31,8 @@ export type AblationCategory =
   | 'filters'
   | 'particles'
   | 'lights'
-  | 'shadows'
+  | 'staticShadows'
+  | 'dynamicShadows'
   | 'blood'
   | 'rocks'
   | 'groundFire'
@@ -44,13 +45,14 @@ export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
   filters: 1,
   particles: 2,
   lights: 3,
-  shadows: 4,
+  staticShadows: 4,
   blood: 5,
   rocks: 6,
   groundFire: 7,
   projectiles: 8,
   staticDecor: 9,
   hud: 10,
+  dynamicShadows: 11,
 };
 
 /** Was in einem Segment abgeschaltet wird – erscheint so auch in der Anleitung und im Overlay. */
@@ -59,7 +61,8 @@ export const ABLATION_LABELS: Readonly<Record<AblationCategory, string>> = {
   filters: 'Glow-/PostFX-Filter',
   particles: 'Alle Partikel-Emitter',
   lights: 'Dynamische Beleuchtung (Composite)',
-  shadows: 'Schatten',
+  staticShadows: 'Statische Schatten (gebackene Layer)',
+  dynamicShadows: 'Schatten bewegter Werfer',
   blood: 'Blut-Decals',
   rocks: 'Felsen',
   groundFire: 'Bodenfeuer, Flammen, Hitzeflimmern',
@@ -78,7 +81,8 @@ export const ABLATION_CATEGORIES: readonly AblationCategory[] = [
   'filters',
   'particles',
   'lights',
-  'shadows',
+  'staticShadows',
+  'dynamicShadows',
   'blood',
   'rocks',
   'groundFire',
@@ -96,8 +100,14 @@ export interface AblationSegment {
 export interface PerformanceAblationDeps {
   /** Filter laufen über den Quality-Controller, der sie ohnehin schon alle kennt. */
   getQualityController: () => GraphicsQualityController | null;
-  /** Schatten haben eine eigene Sichtbarkeits-API; `null` ausserhalb einer Runde. */
-  getShadowSystem: () => { setVisible(visible: boolean): void } | null;
+  /**
+   * Schatten haben eine eigene Sichtbarkeits-API, getrennt nach gebackenen statischen Layern
+   * und den pro Frame gezeichneten dynamischen. `null` ausserhalb einer Runde.
+   */
+  getShadowSystem: () => {
+    setStaticVisible(visible: boolean): void;
+    setDynamicVisible(visible: boolean): void;
+  } | null;
 }
 
 const BLOOD_TEXTURE_PREFIX = '__blood';
@@ -147,7 +157,8 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
     case 'hud':
       return isScreenFixed(object) || depth >= DEPTH.LOCAL_UI;
     case 'filters':
-    case 'shadows':
+    case 'staticShadows':
+    case 'dynamicShadows':
     case 'baseline':
     default:
       // Diese Kategorien laufen ueber Systemschalter, nicht ueber die Display-Liste.
@@ -164,7 +175,8 @@ export class PerformanceAblationController {
   /** Genau die Objekte, die *wir* versteckt haben – nie vom Spiel versteckte mitrestaurieren. */
   private readonly hidden = new Set<Phaser.GameObjects.GameObject>();
   private filtersSuppressed = false;
-  private shadowsSuppressed = false;
+  private staticShadowsSuppressed = false;
+  private dynamicShadowsSuppressed = false;
   private readonly segments: AblationSegment[] = [];
 
   constructor(
@@ -254,11 +266,12 @@ export class PerformanceAblationController {
 
     // Systemschalter
     this.setFiltersSuppressed(category === 'filters');
-    this.setShadowsSuppressed(category === 'shadows');
+    this.setStaticShadowsSuppressed(category === 'staticShadows');
+    this.setDynamicShadowsSuppressed(category === 'dynamicShadows');
 
     // Der Scan laeuft in JEDEM Segment inklusive Baseline und wertet immer das Praedikat aus,
     // damit seine Kosten in allen Segmenten gleich sind und aus der Differenz
-    // Baseline<->Ablation herausfallen. Fuer `baseline`, `filters` und `shadows` liefert
+    // Baseline<->Ablation herausfallen. Fuer `baseline`, `filters` und die Schatten-Kategorien liefert
     // `matchesCategory` grundsaetzlich `false`, es wird dort also nichts versteckt.
     for (const child of this.scene.children.list) {
       const visible = (child as Phaser.GameObjects.GameObject & { visible?: boolean }).visible;
@@ -277,12 +290,20 @@ export class PerformanceAblationController {
     this.filtersSuppressed = suppressed;
   }
 
-  private setShadowsSuppressed(suppressed: boolean): void {
-    if (this.shadowsSuppressed === suppressed) return;
+  private setStaticShadowsSuppressed(suppressed: boolean): void {
+    if (this.staticShadowsSuppressed === suppressed) return;
     const shadows = this.deps.getShadowSystem();
     if (!shadows) return;
-    shadows.setVisible(!suppressed);
-    this.shadowsSuppressed = suppressed;
+    shadows.setStaticVisible(!suppressed);
+    this.staticShadowsSuppressed = suppressed;
+  }
+
+  private setDynamicShadowsSuppressed(suppressed: boolean): void {
+    if (this.dynamicShadowsSuppressed === suppressed) return;
+    const shadows = this.deps.getShadowSystem();
+    if (!shadows) return;
+    shadows.setDynamicVisible(!suppressed);
+    this.dynamicShadowsSuppressed = suppressed;
   }
 
   private restoreAll(): void {
@@ -295,7 +316,8 @@ export class PerformanceAblationController {
     }
     this.hidden.clear();
     this.setFiltersSuppressed(false);
-    this.setShadowsSuppressed(false);
+    this.setStaticShadowsSuppressed(false);
+    this.setDynamicShadowsSuppressed(false);
   }
 
   destroy(): void {

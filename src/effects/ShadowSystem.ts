@@ -136,12 +136,23 @@ export class ShadowSystem {
   }
 
   setVisible(visible: boolean): void {
+    this.setStaticVisible(visible);
+    this.setDynamicVisible(visible);
+  }
+
+  /**
+   * Nur die gebackenen statischen Layer. Getrennt schaltbar, damit der Ablationsmodus den
+   * Composite der gebackenen Texturen von den pro Frame gezeichneten dynamischen Schatten
+   * unterscheiden kann – ohne die Trennung ist der Restbetrag nicht zuzuordnen.
+   */
+  setStaticVisible(visible: boolean): void {
     this.shadowsVisible = visible;
-    for (const bucket of this.layers.values()) {
-      // `staticGraphics` bleibt dauerhaft unsichtbar – sichtbar ist die gebackene Textur.
-      this.syncBakedVisibility(bucket);
-      bucket.dynamicGraphics.setVisible(visible);
-    }
+    // `staticGraphics` bleibt dauerhaft unsichtbar – sichtbar ist die gebackene Textur.
+    for (const bucket of this.layers.values()) this.syncBakedVisibility(bucket);
+  }
+
+  setDynamicVisible(visible: boolean): void {
+    for (const bucket of this.layers.values()) bucket.dynamicGraphics.setVisible(visible);
   }
 
   private syncBakedVisibility(bucket: ShadowLayerBucket): void {
@@ -250,6 +261,11 @@ export class ShadowSystem {
     train: SyncedTrainState | null,
   ): void {
     this.clearDynamic();
+
+    // In `low` entfallen die Schatten bewegter Werfer komplett. Sie sind der einzige
+    // Schattenanteil, der sich nicht backen laesst, und werden jeden Frame als gestapelte
+    // Alpha-Fuellungen neu gezeichnet. `clearDynamic()` lief bereits – der Layer ist also leer.
+    if (!this.quality.dynamicShadows) return;
 
     for (const player of players) {
       const sprite = player.sprite;

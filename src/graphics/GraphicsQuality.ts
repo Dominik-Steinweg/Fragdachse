@@ -13,6 +13,13 @@ export interface GraphicsQualityProfile {
   readonly maxOccludingLightsPerFrame: number;
   readonly shadowLayerFactor: number;
   readonly projectileShadows: boolean;
+  /**
+   * Schatten bewegter Werfer (Spieler, Gegner, Zug, Projektile). Sie werden – anders als die
+   * statischen – jeden Frame als gestapelte Alpha-Fuellungen neu gezeichnet und lassen sich
+   * nicht backen. In `low` bewusst abgeschaltet: dort zaehlt Bildrate mehr als die Plastik
+   * bewegter Objekte.
+   */
+  readonly dynamicShadows: boolean;
   readonly externalDecorativeFilters: boolean;
   readonly decorativeFilters: boolean;
 }
@@ -30,6 +37,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     maxOccludingLightsPerFrame: 6,
     shadowLayerFactor: 1,
     projectileShadows: true,
+    dynamicShadows: true,
     externalDecorativeFilters: true,
     decorativeFilters: true,
   },
@@ -41,6 +49,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     maxOccludingLightsPerFrame: 2,
     shadowLayerFactor: 0.5,
     projectileShadows: true,
+    dynamicShadows: true,
     externalDecorativeFilters: false,
     decorativeFilters: true,
   },
@@ -52,6 +61,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     maxOccludingLightsPerFrame: 0,
     shadowLayerFactor: 0.25,
     projectileShadows: false,
+    dynamicShadows: false,
     externalDecorativeFilters: false,
     decorativeFilters: false,
   },

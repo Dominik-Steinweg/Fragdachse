@@ -28,17 +28,19 @@ function fakeObject(partial: Partial<FakeObject> & { texture?: { key: string } }
 
 function makeController(children: FakeObject[]) {
   const filterCalls: boolean[] = [];
-  const shadowCalls: boolean[] = [];
+  const staticShadowCalls: boolean[] = [];
+  const dynamicShadowCalls: boolean[] = [];
   const scene = { children: { list: children } } as never;
   const controller = new PerformanceAblationController(scene, {
     getQualityController: () => ({
       setAblationFiltersDisabled: (disabled: boolean) => { filterCalls.push(disabled); },
     }) as never,
     getShadowSystem: () => ({
-      setVisible: (visible: boolean) => { shadowCalls.push(visible); },
+      setStaticVisible: (visible: boolean) => { staticShadowCalls.push(visible); },
+      setDynamicVisible: (visible: boolean) => { dynamicShadowCalls.push(visible); },
     }),
   });
-  return { controller, filterCalls, shadowCalls };
+  return { controller, filterCalls, staticShadowCalls, dynamicShadowCalls };
 }
 
 describe('performance ablation', () => {
@@ -99,22 +101,30 @@ describe('performance ablation', () => {
     expect(alreadyHidden.visible).toBe(false);
   });
 
-  it('drives filters and shadows through their system switches', () => {
-    const { controller, filterCalls, shadowCalls } = makeController([]);
+  it('drives filters and both shadow groups through their system switches', () => {
+    const { controller, filterCalls, staticShadowCalls, dynamicShadowCalls } = makeController([]);
     controller.start(1000, 0);
 
     const filterStep = ABLATION_CATEGORIES.indexOf('filters') * 2 + 1;
     for (let step = 1; step <= filterStep; step++) controller.update(step * 1000);
     expect(filterCalls).toContain(true);
 
-    const shadowStep = ABLATION_CATEGORIES.indexOf('shadows') * 2 + 1;
-    for (let step = filterStep + 1; step <= shadowStep; step++) controller.update(step * 1000);
-    expect(shadowCalls).toContain(false);
+    // Statische und dynamische Schatten sind getrennt schaltbar: Im staticShadows-Segment
+    // darf ausschliesslich der statische Schalter fallen, sonst ist der Rest nicht zuzuordnen.
+    const staticStep = ABLATION_CATEGORIES.indexOf('staticShadows') * 2 + 1;
+    for (let step = filterStep + 1; step <= staticStep; step++) controller.update(step * 1000);
+    expect(staticShadowCalls).toContain(false);
+    expect(dynamicShadowCalls).not.toContain(false);
 
-    controller.stop((shadowStep + 1) * 1000);
+    const dynamicStep = ABLATION_CATEGORIES.indexOf('dynamicShadows') * 2 + 1;
+    for (let step = staticStep + 1; step <= dynamicStep; step++) controller.update(step * 1000);
+    expect(dynamicShadowCalls).toContain(false);
+
+    controller.stop((dynamicStep + 1) * 1000);
     // Nach dem Stopp ist alles wieder eingeschaltet.
     expect(filterCalls[filterCalls.length - 1]).toBe(false);
-    expect(shadowCalls[shadowCalls.length - 1]).toBe(true);
+    expect(staticShadowCalls[staticShadowCalls.length - 1]).toBe(true);
+    expect(dynamicShadowCalls[dynamicShadowCalls.length - 1]).toBe(true);
   });
 
   it('records one segment per elapsed slice for the export', () => {
