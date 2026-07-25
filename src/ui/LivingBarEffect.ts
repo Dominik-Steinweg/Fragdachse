@@ -7,7 +7,7 @@
  */
 import * as Phaser from 'phaser';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
-import { getGraphicsQualityController } from '../graphics/GraphicsQuality';
+import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -116,9 +116,22 @@ export interface LivingBarEffectOpts {
   intensity?: number;
 }
 
+/**
+ * Lebendiger Balken-Effekt für HUD, Menüs und Overlays.
+ *
+ * Kostenhinweis: Jede Instanz erzeugt **zwei** Emitter mit `frequency: 10` – also je 100
+ * Partikel pro Sekunde – und animiert an jedem davon `scale` **und** `alpha` über die
+ * Lebenszeit. Beides zusammen ergibt im eingeschwungenen Zustand mehrere hundert lebende
+ * Partikel pro Instanz, deren Ease-Callbacks pro Partikel und Frame laufen. Wer den Effekt
+ * vervielfacht (etwa je Upgrade-Knoten), vervielfacht diese Kosten linear.
+ *
+ * Im `low`-Profil ist der Effekt vollständig abgeschaltet: Ohne den Schalter blieben zwar die
+ * Partikel über `particleFactors.decorative` aus, die Emitter-Objekte, der PostFX-Glow und
+ * dessen Endlos-Tween liefen aber weiter.
+ */
 export class LivingBarEffect {
-  readonly idleCore:  Phaser.GameObjects.Particles.ParticleEmitter;
-  readonly idleOuter: Phaser.GameObjects.Particles.ParticleEmitter;
+  idleCore:  Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  idleOuter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   readonly emitZone:  Phaser.Geom.Rectangle;
 
   breathGlow:  GlowHandle | null = null;
@@ -126,6 +139,11 @@ export class LivingBarEffect {
 
   private active = true;
   private glowTarget: Phaser.GameObjects.Image | null;
+  private enabled: boolean;
+  private readonly container: Phaser.GameObjects.Container;
+  private readonly barHeight: number;
+  private readonly opts: LivingBarEffectOpts | undefined;
+  private unsubscribeQuality: (() => void) | null = null;
 
   constructor(
     private scene: Phaser.Scene,
@@ -134,12 +152,49 @@ export class LivingBarEffect {
     private palette: LivingBarPalette,
     opts?: LivingBarEffectOpts,
   ) {
-    ensureLivingBarTextures(scene);
+    this.container = container;
+    this.barHeight = h;
+    this.opts = opts;
+    this.enabled = getGraphicsQualityProfile(scene).livingBarEffects;
     this.glowTarget = opts?.glowTarget ?? null;
-    const intensity = opts?.intensity ?? 1.0;
-
-    // Shared emit zone
+    // Die Zone wird auch im abgeschalteten Zustand gefuehrt: `setFilledWidth()` schreibt
+    // weiterhin hinein, und die Aufrufer sollen keine Fallunterscheidung brauchen.
     this.emitZone = new Phaser.Geom.Rectangle(x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
+
+    // Der Effekt muss auf Qualitaetswechsel zur Laufzeit reagieren: Die Instanzen leben so
+    // lange wie ihr HUD-Element und wuerden sonst nach einem Wechsel von `low` auf `high`
+    // dauerhaft abgeschaltet bleiben.
+    this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
+      this.applyEnabled(profile.livingBarEffects);
+    }) ?? null;
+
+    if (this.enabled) this.createEmitters();
+  }
+
+  private applyEnabled(enabled: boolean): void {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    if (enabled) {
+      this.createEmitters();
+      if (this.active) this.setFilledWidth(this.emitZone.width + 2);
+      return;
+    }
+    this.removeGlow();
+    this.idleCore?.destroy();
+    this.idleOuter?.destroy();
+    this.idleCore = null;
+    this.idleOuter = null;
+  }
+
+  private createEmitters(): void {
+    const scene = this.scene;
+    const container = this.container;
+    const opts = this.opts;
+    const palette = this.palette;
+    const h = this.barHeight;
+
+    ensureLivingBarTextures(scene);
+    const intensity = opts?.intensity ?? 1.0;
     const zoneData = randomEmitZoneData(this.emitZone as unknown as Phaser.Types.GameObjects.Particles.RandomZoneSource);
 
     // Scale particle sizes relative to bar height (reference = 14px)
@@ -200,14 +255,14 @@ export class LivingBarEffect {
     if (w > 4) {
       this.emitZone.width = w - 2;
       if (this.active) {
-        if (!this.idleCore.emitting) this.idleCore.start();
-        if (!this.idleOuter.emitting) this.idleOuter.start();
+        if (this.idleCore && !this.idleCore.emitting) this.idleCore.start();
+        if (this.idleOuter && !this.idleOuter.emitting) this.idleOuter.start();
         this.ensureGlow();
       }
     } else {
       this.emitZone.width = 0;
-      this.idleCore.stop();
-      this.idleOuter.stop();
+      this.idleCore?.stop();
+      this.idleOuter?.stop();
       this.removeGlow();
     }
   }
@@ -215,8 +270,8 @@ export class LivingBarEffect {
   /** Pause the effect (particles stop, glow removed). */
   stop(): void {
     this.active = false;
-    this.idleCore.stop();
-    this.idleOuter.stop();
+    this.idleCore?.stop();
+    this.idleOuter?.stop();
     this.removeGlow();
   }
 
@@ -224,13 +279,16 @@ export class LivingBarEffect {
   start(): void {
     this.active = true;
     if (this.emitZone.width > 2) {
-      this.idleCore.start();
-      this.idleOuter.start();
+      this.idleCore?.start();
+      this.idleOuter?.start();
       this.ensureGlow();
     }
   }
 
   private ensureGlow(): void {
+    // Auch der Glow haengt am Schalter: `setFilledWidth()` und `start()` rufen hier spaeter
+    // erneut an und wuerden ihn sonst nachtraeglich doch noch anlegen.
+    if (!this.enabled) return;
     if (!this.glowTarget || this.breathGlow || this.emitZone.width <= 2) return;
     this.breathGlow = addExternalGlow(this.glowTarget, this.palette.mid, 0, 0, false, 0.1, 6);
     if (!this.breathGlow) return;
@@ -256,8 +314,12 @@ export class LivingBarEffect {
   }
 
   destroy(): void {
+    this.unsubscribeQuality?.();
+    this.unsubscribeQuality = null;
     this.stop();
-    this.idleCore.destroy();
-    this.idleOuter.destroy();
+    this.idleCore?.destroy();
+    this.idleOuter?.destroy();
+    this.idleCore = null;
+    this.idleOuter = null;
   }
 }

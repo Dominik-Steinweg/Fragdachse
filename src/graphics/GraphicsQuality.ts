@@ -20,6 +20,14 @@ export interface GraphicsQualityProfile {
    * bewegter Objekte.
    */
   readonly dynamicShadows: boolean;
+  /**
+   * Der lebendige Balken-Effekt (LivingBarEffect) in HUD, Menues und Overlays. Jede Instanz
+   * traegt zwei Partikel-Emitter mit hoher Emissionsrate sowie einen dauerhaft pulsierenden
+   * PostFX-Glow. In `low` komplett aus: Die Partikel werden zwar bereits ueber
+   * `particleFactors.decorative` auf null gesetzt, die Emitter-Objekte, der Glow und der
+   * Puls-Tween liefen aber weiter.
+   */
+  readonly livingBarEffects: boolean;
   readonly externalDecorativeFilters: boolean;
   readonly decorativeFilters: boolean;
 }
@@ -38,6 +46,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     shadowLayerFactor: 1,
     projectileShadows: true,
     dynamicShadows: true,
+    livingBarEffects: true,
     externalDecorativeFilters: true,
     decorativeFilters: true,
   },
@@ -50,6 +59,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     shadowLayerFactor: 0.5,
     projectileShadows: true,
     dynamicShadows: true,
+    livingBarEffects: true,
     externalDecorativeFilters: false,
     decorativeFilters: true,
   },
@@ -62,6 +72,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     shadowLayerFactor: 0.25,
     projectileShadows: false,
     dynamicShadows: false,
+    livingBarEffects: false,
     externalDecorativeFilters: false,
     decorativeFilters: false,
   },

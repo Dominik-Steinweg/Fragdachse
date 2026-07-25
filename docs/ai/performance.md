@@ -184,6 +184,112 @@ und kein Zeit-Timer: Eine Verzögerung ließe den Schatten sichtbar länger steh
 Im Extremfall – jeder Frame eine Zerstörung – fällt das Verfahren damit auf höchstens einen
 Bake pro Frame zurück, also auf die Rasterisierung, die vorher ohnehin jeden Frame lief.
 
+## Coop-Profil-Auflösung war der Client-Engpass
+
+Ein Chrome-Profil des Clients (low, Map 4) zeigte rund **59 % der Nicht-Idle-CPU** in der
+Coop-Upgrade-Auflösung: `buildProfileFromRequestedLevels` (9,6 %),
+`sanitizeCoopDefenseUpgradeProfile` (5,4 %), `applyConfiguredStats` (3,9 %) und deren Helfer.
+Host und Client unterschieden sich dabei ausschließlich in `updateMs` (1,1 ms gegen 8,1 ms) –
+`renderSubmitMs` und `phaserSceneSystemsMs` waren identisch.
+
+Ursache war `NetworkBridge.getPlayerCommittedLoadout()`: Die Methode baute bei **jedem** Aufruf
+ein neues Snapshot-Objekt und sanitisierte dabei das Coop-Profil, was intern alle
+Upgrade-Definitionen durchläuft. Sie wird pro Frame mehrfach aufgerufen (HUD, Loadout-Getter,
+Platzierungs-Vorschau), und weil sie jedes Mal eine neue Referenz lieferte, konnten
+referenzbasierte Caches der Aufrufer grundsätzlich nie treffen.
+
+Zwei Ebenen greifen jetzt ineinander:
+
+- `getPlayerCommittedLoadout()` cacht pro Spieler, geschlüsselt auf die Referenz des rohen
+  Netzwerk-Zustands. Ein Snapshot ersetzt den Wert im State-Map wholesale, die Referenz wechselt
+  also genau bei echter Änderung.
+- `sanitizeCoopDefenseUpgradeProfile()` ist über eine `WeakMap` auf die Eingabereferenz
+  memoisiert und deckt damit alle übrigen Aufrufpfade ab. **Vertrag:** Das Ergebnis wird geteilt
+  und darf nicht verändert werden – alle Profil-Operationen bauen bereits neue Objekte.
+
+## Client-Pfad: Loadout-Auflösung memoisieren
+
+Auf dem Client ist `ctx.loadoutManager` `null` – das Loadout ist host-autoritativ. Damit fallen
+**alle** `getLocal*Config`-Getter des `ClientUpdateCoordinator` auf
+`resolveCommittedLoadoutSelection()` zurück, das die Auswahl sanitisiert und die
+Coop-Upgrade-Modifikatoren neu durchrechnet. Dasselbe gilt für `getLocalEffectTotals()`, dessen
+Fallback `getStoredCoopDefenseProgress()` sogar aus dem `localStorage` liest und tief klont.
+
+HUD-Aufbau und Platzierungs-Vorschau rufen diese Getter mehrfach pro Frame. Ungecacht war das
+auf dem Client ein messbarer Teil des Update-Budgets, während der Host bei identischem Code nur
+einen Map-Zugriff macht. Beide Ergebnisse sind deshalb über die **Objektreferenz** ihrer Eingabe
+memoisiert (committed Loadout bzw. Coop-Profil): Die Referenz wechselt genau dann, wenn ein
+neuer Snapshot andere Daten bringt, der Cache kann also nicht veralten und braucht keine
+Frame-Invalidierung.
+
+Wer weitere `getLocal*`-Helfer ergänzt, muss denselben Weg gehen – der teure Fallback ist auf
+dem Client nicht die Ausnahme, sondern der Normalfall.
+
+## LivingBarEffect: Kosten skalieren mit der Zahl der Instanzen
+
+Jede `LivingBarEffect`-Instanz erzeugt **zwei** Emitter mit `frequency: 10` (je 100 Partikel pro
+Sekunde) und animiert an beiden `scale` **und** `alpha` über die Lebenszeit. Bei Lebensdauern von
+1200–2500 ms ergibt das im eingeschwungenen Zustand mehrere hundert lebende Partikel pro
+Instanz, deren Ease-Callbacks pro Partikel und Frame laufen.
+
+Der Effekt wird an vielen Stellen gleichzeitig verwendet – Arena-HUD (eine Instanz je Balken),
+Power-Up-Anzeige, Center-HUD, Seitenpanel, Lobby – und im Coop-Upgrade-Overlay **einmal pro
+Upgrade-Knoten**. Dort multipliziert sich der Aufwand entsprechend; wer den Effekt in einer
+Schleife anlegt, sollte das bewusst tun.
+
+Im `low`-Profil ist er über `livingBarEffects` vollständig abgeschaltet. Der Schalter ist nötig,
+weil `particleFactors.decorative = 0` zwar die Partikel unterdrückt, die Emitter-Objekte, der
+PostFX-Glow und dessen Endlos-Tween aber weiterliefen.
+
+Zwei Dinge gehören dabei zusammen und dürfen nicht getrennt werden:
+
+- **Der Schalter muss zur Laufzeit greifen.** Die Instanzen leben so lange wie ihr HUD-Element;
+  wer die Qualität nur im Konstruktor liest, lässt sie nach einem Wechsel von `low` auf `high`
+  dauerhaft abgeschaltet. `LivingBarEffect` und `PlayerStatusRing` abonnieren deshalb den
+  Quality-Controller.
+- **`PlayerStatusRing` baut dasselbe Muster nach, ohne die Klasse zu benutzen** – vier Bundles zu
+  je zwei Emittern (HP, Adrenalin, Rage, Armor) mit Lebensdauern bis 7 s, also die mit Abstand
+  größte Instanz davon. Er hängt am selben Schalter und meldet seine Emitter als `decorative`;
+  ohne das liefen sie als `standard` und wurden in den niedrigen Stufen nur gedrosselt.
+
+## Upgrade-Overlay: Baum-Neuaufbau sammeln
+
+`refresh()` verwirft den kompletten Kategoriebaum (`upgradesContainer.removeAll(true)`) und baut
+ihn neu auf – inklusive Zerstören und Neuanlegen eines `LivingBarEffect` und eines PostFX-Glows
+**je Knoten**. Beim schnellen Vergeben mehrerer Punkte lief das pro Klick. Klicks setzen deshalb
+nur noch ein Dirty-Flag (`requestRefresh()`), der Neuaufbau läuft höchstens einmal pro Frame.
+
+Unabhängig davon schreibt jeder Punkt-Klick den Fortschritt sofort in den `localStorage`
+(`setStoredCoopDefenseUpgradeProfile`) und liest ihn mehrfach zurück. Das ist ein synchroner
+Browser-Zugriff im Klickpfad und wäre besser bis „Übernehmen" aufgeschoben – dafür müsste die
+Änderung im Speicher gehalten und der Abbruch-Pfad darauf umgestellt werden.
+
+### Partikel sind der dominante CPU-Posten (Chrome-Profil, RTX 3080, high, Map 4)
+
+Ein Chrome-CPU-Profil über eine gespielte Arena-Runde ordnet die Zeit so zu:
+
+| Anteil an Nicht-Idle-CPU | Was |
+|---|---|
+| ~42 % | Partikel gesamt |
+| 16,3 % | `Particle.update` – Position, Geschwindigkeit, Lebenszeit je Partikel |
+| 6,5 % | `EmitterOp.easeValueUpdate` – je Partikel **und je animierter Eigenschaft** |
+| 3,8 % | `ParticleEmitter.preUpdate` – Emitter-Overhead |
+| 3,4 % | `ParticleEmitterWebGLRenderer` – das Zeichnen selbst |
+
+Nur 4,8 % der Gesamt-CPU entfallen auf eigenen Anwendungscode; 61,6 % liegen in Phaser. Wer
+hier optimieren will, muss an der **Partikelmenge** ansetzen, nicht am eigenen Code.
+
+`easeValueUpdate` läuft einmal je Partikel, Frame **und** `{start, end}`-Eigenschaft. Im Projekt
+sind das aktuell rund 270 solcher Eigenschaften, praktisch jeder Emitter animiert `alpha` **und**
+`scale`. Eigenschaften, die sich über die Lebenszeit nicht ändern müssen, gehören deshalb als
+Skalar oder `{min, max}` konfiguriert – das wird nur beim Emittieren ausgewertet und kostet pro
+Frame nichts.
+
+**Fallstrick bei der Messung:** Phasers `UpdateList` prüft `active`, nicht `visible`. Ein bloß
+unsichtbar geschalteter Emitter simuliert unverändert weiter. Die Ablationskategorie `particles`
+maß deshalb anfangs nur die Renderkosten (~1,5 ms) statt der tatsächlichen Partikelkosten und
+unterschätzte sie um ein Vielfaches; sie deaktiviert Emitter jetzt zusätzlich.
+
 ### Gemessene Kostenverteilung (Ablations-Trace, RTX 3080, high, Map 14)
 
 Der erste vollständige Diagnose-Trace ordnet die Frame-Zeit so zu:

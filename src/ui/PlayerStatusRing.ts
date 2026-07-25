@@ -6,6 +6,7 @@ import {
   PLAYER_SIZE,
 } from '../config';
 import { ensureLivingBarTextures } from './LivingBarEffect';
+import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import type { LocalArenaHudData } from './LocalArenaHudData';
 
 type SegmentKey = 'hp' | 'adrenaline' | 'rage';
@@ -144,6 +145,8 @@ export class PlayerStatusRing {
 
   private readonly livingEmitters = new Map<SegmentKey, SegmentEmitterBundle>();
   private armorEmitter: SegmentEmitterBundle | null = null;
+  private livingEnabled = true;
+  private unsubscribeQuality: (() => void) | null = null;
 
   private active = false;
   private latestData: LocalArenaHudData | null = null;
@@ -193,6 +196,18 @@ export class PlayerStatusRing {
       this.livingEmitters.set(segment.key, this.createLivingEmitters(segment));
     }
     this.armorEmitter = this.createArmorEmitters();
+
+    // Der Ring baut dasselbe Partikelmuster wie der LivingBarEffect nach – vier Bundles zu je
+    // zwei Emittern mit langer Lebensdauer, also mit Abstand die groesste Instanz davon. Er
+    // haengt deshalb am selben Qualitaetsschalter und wird bei Bedarf zur Laufzeit
+    // aus- und wieder eingeschaltet.
+    this.livingEnabled = getGraphicsQualityProfile(scene).livingBarEffects;
+    if (!this.livingEnabled) this.stopLivingEmitters();
+    this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
+      if (profile.livingBarEffects === this.livingEnabled) return;
+      this.livingEnabled = profile.livingBarEffects;
+      if (!this.livingEnabled) this.stopLivingEmitters();
+    }) ?? null;
 
     this.container = scene.add.container(0, 0, [
       this.shadowGraphics,
@@ -294,6 +309,7 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    this.markDecorative(core);
     core.addEmitZone(coreZone);
     core.setDepth(LIVING_EMITTER_DEPTH);
 
@@ -309,10 +325,20 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    this.markDecorative(outer);
     outer.addEmitZone(outerZone);
     outer.setDepth(LIVING_EMITTER_DEPTH);
 
     return { core, outer, coreSource, outerSource, activeMode: false };
+  }
+
+  /**
+   * Registriert einen Ring-Emitter als rein dekorativ. Ohne das laufen die acht Emitter des
+   * Rings als `standard` und werden in den niedrigeren Qualitaetsstufen nur gedrosselt statt
+   * abgeschaltet.
+   */
+  private markDecorative(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
+    getGraphicsQualityController(this.scene)?.setEmitterImportance(emitter, 'decorative');
   }
 
   private stopLivingEmitters(): void {
@@ -547,7 +573,7 @@ export class PlayerStatusRing {
     bundle.coreSource.set(RING_INNER_RADIUS + 0.8, RING_INNER_RADIUS + RING_THICKNESS * 0.72, section);
     bundle.outerSource.set(RING_INNER_RADIUS + 0.2, RING_OUTER_RADIUS - 0.4, section);
 
-    if (fraction > 0.03 && section) {
+    if (this.livingEnabled && fraction > 0.03 && section) {
       if (!bundle.core.emitting) bundle.core.start();
       if (!bundle.outer.emitting) bundle.outer.start();
     } else {
@@ -617,6 +643,7 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    this.markDecorative(core);
     core.addEmitZone(coreZone);
     core.setDepth(LIVING_EMITTER_DEPTH);
 
@@ -632,6 +659,7 @@ export class PlayerStatusRing {
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     });
+    this.markDecorative(outer);
     outer.addEmitZone(outerZone);
     outer.setDepth(LIVING_EMITTER_DEPTH);
 
@@ -660,7 +688,7 @@ export class PlayerStatusRing {
     bundle.coreSource.set(rimInner, rimOuter, section);
     bundle.outerSource.set(rimInner - 0.4, rimOuter + 0.8, section);
 
-    if (this.armorFrac > 0.03 && section) {
+    if (this.livingEnabled && this.armorFrac > 0.03 && section) {
       if (!bundle.core.emitting) bundle.core.start();
       if (!bundle.outer.emitting) bundle.outer.start();
     } else {

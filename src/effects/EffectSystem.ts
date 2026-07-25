@@ -495,7 +495,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
       quantity:  7,
     });
     sparks.setDepth(DEPTH_FX + 0.35);
-    sparks.explode(7, x, y);
+    sparks.explode(7);
     this.scene.time.delayedCall(400, () => { if (sparks.active) sparks.destroy(); });
   }
 

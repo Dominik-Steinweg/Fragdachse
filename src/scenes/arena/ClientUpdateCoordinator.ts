@@ -20,6 +20,9 @@ import { getStoredCoopDefenseProgress } from '../../utils/localPreferences';
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
+/** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
+const EMPTY_EFFECT_TOTALS = { additive: {}, percentage: {} } as ReturnType<typeof getCoopDefenseResolvedEffectTotals>;
+
 export interface ClientUpdatePerformanceMetrics {
   totalMs: number;
   snapshotMs: number;
@@ -49,6 +52,22 @@ export class ClientUpdateCoordinator {
   private readonly dashPhase2StartTimes = new Map<string, number>();
   private readonly dashTrailTimers      = new Map<string, number>();
   private weaponLastFired: Record<'weapon1' | 'weapon2', number> = { weapon1: 0, weapon2: 0 };
+  /**
+   * Caches fuer die Loadout-Aufloesung. Beide sind ueber die Objektreferenz ihrer Eingabe
+   * geschluesselt und damit selbstinvalidierend – ein neuer Snapshot liefert eine neue
+   * Referenz. Siehe {@link resolveCommittedLoadoutSelection}.
+   */
+  private committedSelectionCache: {
+    key: object;
+    mode: ReturnType<typeof bridge.getGameMode>;
+    playerId: string;
+    value: ReturnType<typeof resolveEffectiveLoadoutSelection>;
+  } | null = null;
+  private effectTotalsCache: {
+    key: object;
+    value: ReturnType<typeof getCoopDefenseResolvedEffectTotals>;
+  } | null = null;
+  private storedProfileFallback: ReturnType<typeof getStoredCoopDefenseProgress>['profile'] | null = null;
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = { weapon1: 0, weapon2: 0 };
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
@@ -497,20 +516,43 @@ export class ClientUpdateCoordinator {
     return Math.max(0, (baseValue + (totals.additive[stat] ?? 0)) * (1 + (totals.percentage[stat] ?? 0)));
   }
 
+  /**
+   * Memoisiert wie {@link resolveCommittedLoadoutSelection} ueber die Profilreferenz. Die
+   * Max-Werte des HUD (HP, Armor, Adrenalin, Rage) rufen das pro Frame mehrfach auf, und der
+   * Fallback in {@link getLocalCoopDefenseProfile} liest dabei aus dem `localStorage`.
+   */
   private getLocalEffectTotals() {
     const profile = this.getLocalCoopDefenseProfile();
-    return profile
-      ? getCoopDefenseResolvedEffectTotals(profile)
-      : { additive: {}, percentage: {} };
+    if (!profile) return EMPTY_EFFECT_TOTALS;
+    const cached = this.effectTotalsCache;
+    if (cached && cached.key === profile) return cached.value;
+    const value = getCoopDefenseResolvedEffectTotals(profile);
+    this.effectTotalsCache = { key: profile, value };
+    return value;
   }
 
+  /**
+   * Der Fallback liest aus dem `localStorage` und liefert dabei **bei jedem Aufruf einen frisch
+   * geklonten** Profil-Baum. Ohne eigenen Cache traefe der referenzbasierte Cache in
+   * {@link getLocalEffectTotals} deshalb nie zu und der teure Pfad liefe pro Frame mehrfach.
+   * Der geklonte Stand aendert sich nur ueber das Upgrade-Menue, also ausserhalb der Runde;
+   * {@link resetPerRound} verwirft ihn.
+   */
   private getLocalCoopDefenseProfile() {
     const localId = bridge.getLocalPlayerId();
-    return bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile ?? getStoredCoopDefenseProgress().profile;
+    const committed = bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile;
+    if (committed) return committed;
+    this.storedProfileFallback ??= getStoredCoopDefenseProgress().profile;
+    return this.storedProfileFallback;
   }
 
   resetPerRound(): void {
     this.lastGameStateVersion = -1;
+    // Loadout-Caches verwerfen: Zwischen zwei Runden kann das Upgrade-Menue das gespeicherte
+    // Profil geaendert haben, und der Fallback-Klon traegt keine neue Referenz.
+    this.committedSelectionCache = null;
+    this.effectTotalsCache = null;
+    this.storedProfileFallback = null;
     this.damagedStaticRockIds.clear();
     this.prevAliveStates.clear();
     this.prevDashPhases.clear();
@@ -654,15 +696,41 @@ export class ClientUpdateCoordinator {
     return 1 - elapsed / config.cooldown;
   }
 
+  /**
+   * Loesst das effektive Loadout auf – memoisiert ueber die Referenz des committed Loadouts.
+   *
+   * Auf dem Client ist `loadoutManager` null (das Loadout ist host-autoritativ), deshalb faellt
+   * *jeder* der `getLocal*Config`-Getter auf diesen Pfad zurueck. Er sanitisiert die Auswahl und
+   * rechnet die Coop-Upgrade-Modifikatoren neu durch; ohne Cache lief das mehrfach pro Frame und
+   * war auf dem Client ein messbarer Teil des Update-Budgets.
+   *
+   * Der Cache-Schluessel ist die Objektreferenz des committed Loadouts (plus Spielmodus). Sie
+   * wechselt genau dann, wenn ein neuer Snapshot ein anderes Loadout liefert – der Cache kann
+   * also nie veralten und braucht keine Frame-Invalidierung.
+   */
   private resolveCommittedLoadoutSelection(playerId: string) {
     const committed = bridge.getPlayerCommittedLoadout(playerId);
     if (!committed) return this.resolveLoadoutSelection(playerId);
+    const mode = bridge.getGameMode();
+    const cached = this.committedSelectionCache;
+    if (cached && cached.key === committed && cached.mode === mode && cached.playerId === playerId) {
+      return cached.value;
+    }
+    const value = this.buildCommittedLoadoutSelection(committed, mode);
+    this.committedSelectionCache = { key: committed, mode, playerId, value };
+    return value;
+  }
+
+  private buildCommittedLoadoutSelection(
+    committed: NonNullable<ReturnType<typeof bridge.getPlayerCommittedLoadout>>,
+    mode: ReturnType<typeof bridge.getGameMode>,
+  ) {
     return resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
       weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],
       utility:  UTILITY_CONFIGS[committed.utility as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, bridge.getGameMode(), committed.coopDefenseProfile);
+    }, mode, committed.coopDefenseProfile);
   }
 
   private resolveLoadoutSelection(playerId: string) {

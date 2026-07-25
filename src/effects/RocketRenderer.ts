@@ -347,7 +347,9 @@ export class RocketRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }).setDepth(DEPTH.PROJECTILES + 1);
-    burst.explode(18, x, y);
+    // Partikelkoordinaten sind emitterlokal: Der Emitter steht bereits auf (x, y),
+    // ein zusaetzliches explode(count, x, y) wuerde die Weltposition verdoppeln.
+    burst.explode(18);
     this.scene.time.delayedCall(520, () => burst.destroy());
   }
 
@@ -375,7 +377,7 @@ export class RocketRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }).setDepth(DEPTH.PROJECTILES + 1);
-    sparks.explode(8, x, y);
+    sparks.explode(8);
     this.spawnSmokePuff(x, y, 6, color);
     this.scene.time.delayedCall(320, () => sparks.destroy());
   }

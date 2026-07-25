@@ -418,7 +418,32 @@ export function isCoopDefenseUpgradeProfileEqual(
   return true;
 }
 
+/**
+ * Memo fuer {@link sanitizeCoopDefenseUpgradeProfile}.
+ *
+ * Die Funktion ist rein, laeuft aber ueber alle Upgrade-Definitionen und war in Messungen der
+ * teuerste Einzelposten im Client-Frame – sie haengt an mehreren Pfaden, die pro Frame
+ * mehrfach durchlaufen werden. Der Schluessel ist die Objektreferenz der Eingabe; eine
+ * `WeakMap` haelt dabei nichts am Leben.
+ *
+ * Vertrag: Das zurueckgegebene Profil wird zwischen Aufrufern **geteilt** und darf deshalb
+ * nicht veraendert werden. Alle Profil-Operationen hier bauen bereits neue Objekte
+ * (siehe `buildProfileFromRequestedLevels`); wer das aufweicht, muss den Memo entfernen.
+ */
+const sanitizedProfileMemo = new WeakMap<object, CoopDefenseUpgradeProfile>();
+
 export function sanitizeCoopDefenseUpgradeProfile(raw: unknown): CoopDefenseUpgradeProfile {
+  const memoKey = raw && typeof raw === 'object' ? (raw as object) : null;
+  if (memoKey) {
+    const cached = sanitizedProfileMemo.get(memoKey);
+    if (cached) return cached;
+  }
+  const result = buildSanitizedCoopDefenseUpgradeProfile(raw);
+  if (memoKey) sanitizedProfileMemo.set(memoKey, result);
+  return result;
+}
+
+function buildSanitizedCoopDefenseUpgradeProfile(raw: unknown): CoopDefenseUpgradeProfile {
   const requestedLevels = getDefaultRequestedLevels();
   const input = raw && typeof raw === 'object' && 'upgrades' in raw
     ? (raw as { upgrades?: unknown }).upgrades

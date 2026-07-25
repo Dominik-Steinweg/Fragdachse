@@ -403,6 +403,15 @@ const TEAM_IDS: readonly TeamId[] = ['blue', 'red'];
 
 export class NetworkBridge {
   private playerStateMap   = new Map<string, PlayerState>();
+  /**
+   * Cache fuer {@link getPlayerCommittedLoadout}, geschluesselt auf die Referenz des rohen
+   * Netzwerk-Zustands. Ein neuer Snapshot bringt ein neues Rohobjekt und invalidiert den
+   * Eintrag damit von selbst.
+   */
+  private committedLoadoutCache = new Map<string, {
+    raw: Partial<LoadoutCommitSnapshot> | null | undefined;
+    value: LoadoutCommitSnapshot | null;
+  }>();
   private connectedPlayers = new Map<string, PlayerProfile>();
   private cachedConnectedPlayers: PlayerProfile[] = [];
   private connectedPlayersCacheDirty = true;
@@ -986,9 +995,26 @@ export class NetworkBridge {
     return (this.playerStateMap.get(playerId)?.getState(KEY_READY) as boolean | undefined) ?? false;
   }
 
-  /** Liest den verbindlichen Ready-Loadout-Snapshot eines Spielers. */
+  /**
+   * Liest den verbindlichen Ready-Loadout-Snapshot eines Spielers.
+   *
+   * Das Ergebnis wird pro Spieler zwischengespeichert und ueber die Referenz des rohen
+   * Netzwerk-Zustands invalidiert. Der Aufbau ist teuer – er sanitisiert das Coop-Profil, was
+   * intern alle Upgrade-Definitionen durchlaeuft – und die Methode wird pro Frame mehrfach
+   * aufgerufen (HUD, Loadout-Getter, Platzierungs-Vorschau). Ohne Cache war das der groesste
+   * Einzelposten im Client-Frame; zusaetzlich lieferte jeder Aufruf ein neues Objekt, wodurch
+   * referenzbasierte Caches der Aufrufer grundsaetzlich nie trafen.
+   */
   getPlayerCommittedLoadout(playerId: string): LoadoutCommitSnapshot | null {
     const raw = this.playerStateMap.get(playerId)?.getState(KEY_LOADOUT_COMMITTED) as Partial<LoadoutCommitSnapshot> | null | undefined;
+    const cached = this.committedLoadoutCache.get(playerId);
+    if (cached && cached.raw === raw) return cached.value;
+    const value = this.buildCommittedLoadout(raw);
+    this.committedLoadoutCache.set(playerId, { raw, value });
+    return value;
+  }
+
+  private buildCommittedLoadout(raw: Partial<LoadoutCommitSnapshot> | null | undefined): LoadoutCommitSnapshot | null {
     if (!raw || typeof raw !== 'object') return null;
     if (
       typeof raw.weapon1 !== 'string'

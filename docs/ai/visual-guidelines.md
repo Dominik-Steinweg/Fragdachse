@@ -69,6 +69,13 @@ Es gibt drei getrennte Aufgaben, die nicht vermischt werden dürfen: statische S
 
 Weltpositionen, Aimwinkel und visuelle Anhänge nicht mit Sprite-Frame-Offsets vermischen.
 
+- **Partikelkoordinaten sind emitterlokal, nicht global.** Ein `ParticleEmitter` ist seit Phaser 3.60 ein eigenes Game Object; `Particle.fire()` addiert die an `explode(count, x, y)` bzw. `emitParticleAt(x, y, count)` übergebenen Werte auf die Emitter-Transformation. Weltkoordinaten an beide Methoden zu übergeben, während der Emitter schon auf derselben Position steht, verdoppelt die Weltposition und verschiebt den Effekt um genau diese Position nach unten rechts – bei Arenamitte also weit aus dem Bild. Es gibt genau drei erlaubte Muster:
+
+  1. Emitter auf der Weltposition (`scene.add.particles(x, y, …)`) plus `explode(count)` **ohne** Koordinaten – Einmal-Burst an einer festen Stelle.
+  2. Emitter dauerhaft im Ursprung (`createEmitter(scene, 0, 0, …)`) plus `emitParticleAt(worldX, worldY, count)` bzw. `explode(count, worldX, worldY)` – ein geteilter Emitter für viele Positionen, siehe `RocketRenderer.ensureSmokeEmitter()`, `BulletRenderer`, `FlamethrowerUpgradeRenderer.emitGroundParticles()`.
+  3. Emitter im Ursprung plus **weltbasierte Emit-Zone** und `explode(count)` ohne Koordinaten – für Formen entlang einer Weltgeometrie, siehe `AsmdPrimaryRenderer` (Strahllinie als `Phaser.Geom.Line` in Weltkoordinaten).
+
+  Ein bewegter Emitter wird über `setPosition()` bzw. `startFollow()` nachgeführt, niemals über Koordinaten in der Emit-Methode; seine Emit-Zone bleibt dann emitterlokal (Ringmuster in `FlamethrowerUpgradeRenderer.createRingVisual()`, `EntityBurnRenderer`). Beim Übergeben von `x`/`y` an die Emit-Methode werden zusätzlich die `x`/`y`-`EmitterOp`s der Konfiguration übersprungen – Emit-Zonen bleiben aber wirksam.
 - Die kanonische Mündungslogik liegt in `getTopDownMuzzleOrigin()` und `getTopDownMuzzleOriginFromVector()` in `src/config.ts`: Weltursprung plus normalisierte Schussrichtung mal `MUZZLE_FORWARD_OFFSET` (`PLAYER_SIZE * 0.7`). Hitscan, lokale Prediction, Aim-Telegraphen, Audio und Mündungsfeuer teilen diese Logik.
 - `MuzzleFlashRenderer` erwartet bereits die berechnete Mündungsposition. Dort keinen zweiten Vorwärts-Offset hinzufügen.
 - Wenn ein Client beim ersten Projektil-Snapshot keine Owner-Position hat, rekonstruiert `ProjectileManager` einen Ursprung durch Backtracking entlang der Geschwindigkeit und wendet danach denselben Mündungsoffset an. Diesen Fallback nicht durch stilabhängige Ad-hoc-Offets ersetzen.

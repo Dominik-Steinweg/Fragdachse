@@ -38,6 +38,7 @@ export type AblationCategory =
   | 'groundFire'
   | 'projectiles'
   | 'staticDecor'
+  | 'train'
   | 'hud';
 
 export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
@@ -53,6 +54,7 @@ export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
   staticDecor: 9,
   hud: 10,
   dynamicShadows: 11,
+  train: 12,
 };
 
 /** Was in einem Segment abgeschaltet wird – erscheint so auch in der Anleitung und im Overlay. */
@@ -68,6 +70,7 @@ export const ABLATION_LABELS: Readonly<Record<AblationCategory, string>> = {
   groundFire: 'Bodenfeuer, Flammen, Hitzeflimmern',
   projectiles: 'Projektil-Visuals',
   staticDecor: 'Statische Deko (Boden, Decals, Kronen)',
+  train: 'Zug (Lok, Waggons, Zug-Schatten)',
   hud: 'HUD und bildschirmfeste UI',
 };
 
@@ -88,6 +91,7 @@ export const ABLATION_CATEGORIES: readonly AblationCategory[] = [
   'groundFire',
   'projectiles',
   'staticDecor',
+  'train',
   'hud',
 ];
 
@@ -154,6 +158,9 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
       return STATIC_DECOR_TEXTURE_HINTS.some((hint) => key.includes(hint))
         || depth === DEPTH.DIRT
         || depth === DEPTH.DECALS;
+    case 'train':
+      // Lok, Waggons und ihre Schatten liegen im schmalen Band um DEPTH.TRAIN.
+      return depth >= DEPTH.TRAIN - 0.2 && depth <= DEPTH.TRAIN + 0.2;
     case 'hud':
       return isScreenFixed(object) || depth >= DEPTH.LOCAL_UI;
     case 'filters':
@@ -174,6 +181,14 @@ export class PerformanceAblationController {
   private segmentMs = 4000;
   /** Genau die Objekte, die *wir* versteckt haben – nie vom Spiel versteckte mitrestaurieren. */
   private readonly hidden = new Set<Phaser.GameObjects.GameObject>();
+  /**
+   * Zusaetzlich deaktivierte Objekte (nur Partikel-Emitter).
+   *
+   * Phasers `UpdateList` prueft `active`, nicht `visible` – ein bloss unsichtbarer Emitter
+   * simuliert seine Partikel unveraendert weiter. `setVisible(false)` allein misst deshalb nur
+   * die Renderkosten und unterschlaegt die deutlich groessere Simulation.
+   */
+  private readonly deactivated = new Set<Phaser.GameObjects.GameObject>();
   private filtersSuppressed = false;
   private staticShadowsSuppressed = false;
   private dynamicShadowsSuppressed = false;
@@ -279,6 +294,13 @@ export class PerformanceAblationController {
       if (!matchesCategory(child, category)) continue;
       (child as Phaser.GameObjects.GameObject & { setVisible?: (v: boolean) => unknown }).setVisible?.(false);
       this.hidden.add(child);
+      // Partikel zusaetzlich stilllegen: Ihre Simulation haengt an `active`, nicht an
+      // `visible`. Ohne das misst die Kategorie nur das Rendern und unterschaetzt die
+      // tatsaechlichen Partikelkosten um ein Vielfaches.
+      if (category === 'particles' && child.active) {
+        (child as Phaser.GameObjects.GameObject & { setActive?: (v: boolean) => unknown }).setActive?.(false);
+        this.deactivated.add(child);
+      }
     }
   }
 
@@ -315,6 +337,11 @@ export class PerformanceAblationController {
       if (typeof target.setVisible === 'function') target.setVisible(true);
     }
     this.hidden.clear();
+    for (const object of this.deactivated) {
+      const target = object as Phaser.GameObjects.GameObject & { setActive?: (v: boolean) => unknown };
+      if (typeof target.setActive === 'function') target.setActive(true);
+    }
+    this.deactivated.clear();
     this.setFiltersSuppressed(false);
     this.setStaticShadowsSuppressed(false);
     this.setDynamicShadowsSuppressed(false);

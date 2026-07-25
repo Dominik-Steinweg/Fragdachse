@@ -230,6 +230,7 @@ export class CoopDefenseUpgradesOverlay {
 
   // Per-render decoration tracking (must be torn down before each re-render).
   private nodeEffects: LivingBarEffect[] = [];
+  private refreshPending = false;
   private nodeGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
   private decorationTweens: Phaser.Tweens.Tween[] = [];
   private tabGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
@@ -370,7 +371,7 @@ export class CoopDefenseUpgradesOverlay {
       .setInteractive({ useHandCursor: true });
     this.respecButton.on('pointerdown', () => {
       if (!this.respecEnabled) return;
-      if (this.onFullRespec()) this.refresh();
+      if (this.onFullRespec()) this.requestRefresh();
     });
     objects.push(this.respecButton);
 
@@ -1574,7 +1575,24 @@ export class CoopDefenseUpgradesOverlay {
   private handleUpgradePointerDown(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
     if (pointer.rightButtonDown()) this.onLevelDownUpgrade(node.id);
     else this.onLevelUpUpgrade(node.id);
-    this.refresh();
+    this.requestRefresh();
+  }
+
+  /**
+   * Sammelt Refreshes bis zum Frame-Ende.
+   *
+   * `refresh()` baut den gesamten Kategoriebaum neu auf – inklusive Zerstoeren und Neuanlegen
+   * eines {@link LivingBarEffect} (zwei Partikel-Emitter) und eines PostFX-Glows **je Knoten**.
+   * Beim schnellen Vergeben mehrerer Punkte lief das pro Klick und war deutlich spuerbar; so
+   * laeuft es hoechstens einmal pro Frame.
+   */
+  private requestRefresh(): void {
+    if (this.refreshPending) return;
+    this.refreshPending = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.refreshPending = false;
+      if (this.visible) this.refresh();
+    });
   }
 
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {

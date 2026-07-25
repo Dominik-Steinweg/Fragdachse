@@ -139,6 +139,30 @@ describe('performance ablation', () => {
     expect(segments[1].category).toBe(ABLATION_CATEGORIES[0]);
   });
 
+  it('deactivates particle emitters, not just hides them', () => {
+    // Phasers UpdateList prueft `active`, nicht `visible`: Ein nur unsichtbarer Emitter
+    // simuliert weiter, und die Kategorie wuerde ausschliesslich die Renderkosten messen.
+    const emitter = fakeObject({ type: 'ParticleEmitter' });
+    let active = true;
+    (emitter as unknown as { active: boolean }).active = active;
+    (emitter as unknown as { setActive: (v: boolean) => void }).setActive = (v: boolean) => {
+      active = v;
+      (emitter as unknown as { active: boolean }).active = v;
+    };
+    const { controller } = makeController([emitter]);
+
+    controller.start(1000, 0);
+    const step = ABLATION_CATEGORIES.indexOf('particles') * 2 + 1;
+    for (let s = 1; s <= step; s++) controller.update(s * 1000);
+
+    expect(emitter.visible).toBe(false);
+    expect(active).toBe(false);
+
+    controller.stop((step + 1) * 1000);
+    expect(emitter.visible).toBe(true);
+    expect(active).toBe(true);
+  });
+
   it('classifies HUD by screen-fixed scroll factor and depth', () => {
     const hudFixed = fakeObject({ scrollFactorX: 0, texture: { key: 'hud' } });
     const hudDeep = fakeObject({ depth: DEPTH.LOCAL_UI, texture: { key: 'panel' } });

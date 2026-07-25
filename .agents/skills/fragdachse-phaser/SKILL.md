@@ -22,4 +22,5 @@ Use the project rules from `/AGENTS.md` and keep investigation proportional to t
 - Prefer `src/utils/phaserFx.ts` for filters and FX behavior.
 - Prefer crop, bounds or visibility checks over scene-wide WebGL geometry-mask assumptions.
 - Preserve established texture keys, depth ordering, pixel-art settings and cleanup in destroy/teardown paths.
+- Particle coordinates are emitter-local. Either place the emitter at the world position and call `explode(count)` without coordinates, or keep the emitter at `(0, 0)` and pass world coordinates to `emitParticleAt()`/`explode()`. Doing both doubles the world position. See `docs/ai/visual-guidelines.md`, section "Offsets und Ausrichtung".
 

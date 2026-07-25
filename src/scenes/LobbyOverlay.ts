@@ -38,6 +38,7 @@ const BTN_COPY_COLOR  = COLORS.BLUE_4;
 const BTN_RETRY_COLOR = COLORS.BROWN_4;
 const BTN_AUTO_COLOR  = COLORS.GREEN_4;
 const BTN_UPGRADES_COLOR = COLORS.GOLD_4;
+const BTN_UPGRADES_AVAILABLE_COLOR = COLORS.GOLD_2;
 
 const PANEL_W  = 800;
 const PANEL_H  = 600;
@@ -535,17 +536,26 @@ export class LobbyOverlay {
     else this.coopBarEffect?.stop();
 
     const freePoints = progress.availableUpgradePoints;
+    const upgradesAvailable = freePoints > 0 || progress.availableBossPoints > 0;
     if (this.coopProgressPointsText) {
       this.coopProgressPointsText.setText(
         `${freePoints} Upgrade-P.  |  ★ ${progress.availableBossPoints}/${progress.earnedBossPoints} Boss-P.`,
       );
       this.coopProgressPointsText.setColor(toCssColor(
-        freePoints > 0 || progress.availableBossPoints > 0 ? COLORS.GOLD_1 : COLORS.GREY_4,
+        upgradesAvailable ? COLORS.GOLD_1 : COLORS.GREY_4,
       ));
     }
 
+    // Button-Farbe zeigt freie Punkte auch ohne den Living-Bar-Effekt an.
+    if (this.coopProgressUpgradesBtn) {
+      const btnTex = upgradesAvailable
+        ? ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_UPGRADES_AVAILABLE_COLOR, COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H), COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H, BTN_UPGRADES_AVAILABLE_COLOR, COLORS.GOLD_1)
+        : ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_UPGRADES_COLOR, COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H), COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H, BTN_UPGRADES_COLOR);
+      this.coopProgressUpgradesBtn.setTexture(btnTex);
+    }
+
     // Aktiver Living-Bar-Effekt nur, wenn der Spieler noch freie Punkte hat.
-    if ((freePoints > 0 || progress.availableBossPoints > 0) && this.visible) {
+    if (upgradesAvailable && this.visible) {
       this.upgradeBtnEffect?.setFilledWidth(COOP_UPGRADE_BTN_W);
       this.upgradeBtnEffect?.start();
     } else {
