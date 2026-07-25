@@ -520,6 +520,44 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.04,
     flickerHz: 1.6,
   },
+  /**
+   * Nachleuchten eines Spawnpunkts. Der Blitz (`teleportFlash`) ist nach einem Sechstel dieser
+   * Zeit vorbei; dieses Licht hält die Stelle knapp eine Sekunde markiert und klingt fast linear
+   * ab, damit es als ruhiges Verglimmen liest und nicht als zweiter Blitz.
+   */
+  spawnAfterglow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 150,
+    color: 0xe8f2ff,
+    intensity: 0.6,
+    durationMs: 1000,
+    decayExponent: 1.15,
+    occludes: false,
+    priority: 3,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
+  /**
+   * Eigenleuchten einer Entity (Bosse, besonders markierte Gegner). Klein und intensiv: es soll
+   * den Träger hervorheben, nicht die Umgebung ausleuchten. Farbe, Radius und Intensität kommen
+   * grundsätzlich vom Aufrufer aus der Gegner-Konfiguration.
+   */
+  entityGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 110,
+    color: 0xffffff,
+    intensity: 0.9,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    // Über den dekorativen Lichtern, unter Feuer und Explosionen: die Markierung eines
+    // gefährlichen Gegners darf nicht als Erstes aus dem Frame-Budget fallen.
+    priority: 5,
+    flickerAmount: 0.05,
+    flickerHz: 2.2,
+  },
   /** Translocator- und Spawn-Blitz: kurz, hell, kalt. */
   teleportFlash: {
     enabled: true,

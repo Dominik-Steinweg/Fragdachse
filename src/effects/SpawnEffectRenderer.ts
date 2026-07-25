@@ -7,6 +7,13 @@ import type { LightingSystem } from './LightingSystem';
 const TEX_SPAWN_SPARK = '_spawn_spark';
 const TEX_SPAWN_GLOW  = '_spawn_glow';
 
+/**
+ * Dauer des Nachleuchtens am Spawnpunkt. Deutlich länger als der Blitz selbst: der Blitz sagt
+ * "hier ist gerade etwas passiert", das Nachleuchten "hier steht jetzt jemand" – und gibt einem
+ * hinsehenden Spieler die Zeit, die Stelle überhaupt zu finden.
+ */
+const AFTERGLOW_DURATION_MS = 1800;
+
 export class SpawnEffectRenderer {
   private texturesReady = false;
   private lighting: LightingSystem | null = null;
@@ -57,6 +64,110 @@ export class SpawnEffectRenderer {
     this.playBeam(x, y, colorHex);
     this.playParticleBurst(x, y, colorHex);
     this.playSecondaryRipple(x, y, colorHex);
+    this.playAfterglow(x, y, colorHex, 1);
+  }
+
+  /**
+   * Gegner-Variante des Spawns. Bewusst zurückhaltender als der Spielerspawn: kein Lichtstrahl,
+   * ein einzelner Ring, weniger Funken. Bei bis zu einem Gegner pro Sekunde muss der Effekt die
+   * Stelle markieren, ohne das Gefecht zu überstrahlen – der Spielerspawn bleibt das lautere
+   * Ereignis, weil er selten ist und die eigene Aufmerksamkeit verdient.
+   */
+  playEnemy(x: number, y: number, colorHex: number): void {
+    this.ensureTextures();
+
+    this.lighting?.pulse('teleportFlash', x, y, {
+      color: mixColors(colorHex, 0xffffff, 0.35),
+      radiusPx: 105,
+      intensity: 0.5,
+    });
+
+    this.playEnemyCoreBurst(x, y, colorHex);
+    this.spawnRing(x, y, colorHex, 0, 300, 3, 26);
+    this.spawnRing(x, y, colorHex, 90, 420, 1.5, 40);
+    this.playEnemyParticleBurst(x, y, colorHex);
+    this.playAfterglow(x, y, colorHex, 0.62);
+  }
+
+  // ─── Nachleuchten am Spawnpunkt ─────────────────────────────────────────────
+
+  /**
+   * Weicher Schein, der nach dem Blitz eine knappe Sekunde am Spawnpunkt stehen bleibt.
+   * `scale` skaliert Größe und Deckkraft gemeinsam, damit Gegner denselben Effekt eine Nummer
+   * kleiner bekommen, ohne dafür eigene Werte zu pflegen.
+   */
+  private playAfterglow(x: number, y: number, colorHex: number, scale: number): void {
+    const glow = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
+    glow.setDisplaySize(196 * scale, 196 * scale);
+    glow.setDepth(DEPTH_FX - 0.7);
+    makeAdditive(glow);
+    glow.setTint(colorHex);
+    glow.setAlpha(0);
+
+    // Kurz aufblenden, dann über den Rest der Sekunde auslaufen: ein sofort startendes
+    // Abklingen würde im Blitz untergehen und wäre erst sichtbar, wenn es fast weg ist.
+    this.scene.tweens.add({
+      targets:  glow,
+      alpha:    emissiveAlpha(0.5 * scale),
+      duration: 140,
+      ease:     'Quad.easeOut',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets:  glow,
+          alpha:    0,
+          scaleX:   glow.scaleX * 1.25,
+          scaleY:   glow.scaleY * 1.25,
+          duration: AFTERGLOW_DURATION_MS - 140,
+          ease:     'Sine.easeIn',
+          onComplete: () => glow.destroy(),
+        });
+      },
+    });
+
+    this.lighting?.pulse('spawnAfterglow', x, y, {
+      color:      mixColors(colorHex, 0xffffff, 0.45),
+      radiusPx:   250 * scale,
+      intensity:  0.6 * scale,
+      durationMs: AFTERGLOW_DURATION_MS,
+    });
+  }
+
+  private playEnemyCoreBurst(x: number, y: number, colorHex: number): void {
+    const core = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
+    core.setDisplaySize(18, 18);
+    core.setDepth(DEPTH_FX + 1);
+    makeAdditive(core);
+    core.setTint(mixColors(colorHex, 0xffffff, 0.5));
+    core.setAlpha(emissiveAlpha(0.9));
+
+    this.scene.tweens.add({
+      targets:  core,
+      scaleX:   3.4,
+      scaleY:   3.4,
+      alpha:    0,
+      duration: 300,
+      ease:     'Expo.easeOut',
+      onComplete: () => core.destroy(),
+    });
+  }
+
+  private playEnemyParticleBurst(x: number, y: number, colorHex: number): void {
+    const emitter = this.scene.add.particles(x, y, TEX_SPAWN_SPARK, {
+      quantity:  12,
+      lifespan:  { min: 260, max: 460 },
+      speedX:    { min: -110, max: 110 },
+      speedY:    { min: -110, max: 110 },
+      scale:     { start: 0.6, end: 0 },
+      alpha:     { start: 0.9, end: 0 },
+      tint:      [colorHex, brightenColor(colorHex, 60)],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting:  false,
+      gravityY:  40,
+    });
+    emitter.setDepth(DEPTH_FX + 0.5);
+    emitter.explode(12);
+
+    this.scene.time.delayedCall(600, () => emitter.destroy());
   }
 
   // ─── Zentraler Licht-Burst ──────────────────────────────────────────────────

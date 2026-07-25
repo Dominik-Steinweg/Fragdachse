@@ -20,6 +20,10 @@ import {
 import type { SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
+import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
+import { emissiveAlpha } from '../effects/EmissiveScale';
+
+const TEX_ENEMY_GLOW = '_enemy_glow';
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -46,6 +50,7 @@ export class EnemyEntity {
   private readonly attackWeapons: readonly EnemyAttackWeapon[];
   private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
   private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
+  private glowHalo: Phaser.GameObjects.Image | null = null;
   private bossAura: Phaser.GameObjects.Ellipse | null = null;
   private bossRing: Phaser.GameObjects.Ellipse | null = null;
   private bossLabel: Phaser.GameObjects.Text | null = null;
@@ -106,7 +111,10 @@ export class EnemyEntity {
     } else if (this.config.color !== undefined) {
       this.sprite.setTint(this.config.color);
     }
-    if (faction === 'hostile') this.createBossDecorations(scene);
+    if (faction === 'hostile') {
+      this.createGlowHalo(scene);
+      this.createBossDecorations(scene);
+    }
 
     if (authoritative) {
       scene.physics.add.existing(this.sprite);
@@ -278,6 +286,16 @@ export class EnemyEntity {
     return this.config.color ?? 0xffffff;
   }
 
+  /**
+   * Farbe des Spawn-Effekts. Verbündete tragen die Farbe ihres Beschwörers, Gegner ihr
+   * Eigenleuchten oder ihre Einfärbung – ohne beides ein neutrales Feindrot, damit der Effekt
+   * nicht mit einem Spielerspawn verwechselt wird.
+   */
+  getSpawnEffectColor(): number {
+    if (this.faction === 'allied') return this.ownerColor ?? 0x89d66d;
+    return this.config.glow?.color ?? this.config.color ?? 0xd8483c;
+  }
+
   getDashPhase(): 0 | 1 | 2 {
     return this.dashPhase;
   }
@@ -312,6 +330,7 @@ export class EnemyEntity {
     this.burrowed = burrowed;
     this.sprite.setVisible(!burrowed);
     this.ownerRing?.setVisible(!burrowed);
+    this.glowHalo?.setVisible(!burrowed);
     this.bossAura?.setVisible(!burrowed);
     this.bossRing?.setVisible(!burrowed);
     this.bossLabel?.setVisible(!burrowed);
@@ -396,6 +415,7 @@ export class EnemyEntity {
 
   syncBar(): void {
     this.syncBossDecorations();
+    this.syncGlow();
     this.syncBurnEffect();
     if (!this.shouldShowHpBars()) {
       this.destroyHpBars();
@@ -435,6 +455,12 @@ export class EnemyEntity {
     this.burnRenderer = null;
     this.ownerRing?.destroy();
     this.ownerRing = null;
+    if (this.glowHalo) {
+      this.sprite.scene.tweens.killTweensOf(this.glowHalo);
+      this.glowHalo.destroy();
+      this.glowHalo = null;
+    }
+    this.lighting?.releaseLight(this.glowLightKey());
     this.bossAura?.destroy();
     this.bossRing?.destroy();
     this.bossLabel?.destroy();
@@ -484,6 +510,68 @@ export class EnemyEntity {
 
   private getHpBarOffsetY(): number {
     return this.faction === 'hostile' && this.config.isBoss ? this.config.size * 0.5 + 12 : HP_BAR_OFFSET_Y;
+  }
+
+  /**
+   * Additiver Halo aus der `glow`-Konfiguration. Bewusst rund und ohne Perspektive: die Arena
+   * wird orthografisch von oben gesehen, ein gestauchter Kreis würde eine Schrägsicht andeuten,
+   * die es nicht gibt. Der Bosssockel (`bossAura`) ist die Ausnahme – er liegt am Boden.
+   */
+  private createGlowHalo(scene: Phaser.Scene): void {
+    const glow = this.config.glow;
+    if (!glow) return;
+
+    fillRadialGradientTexture(scene.textures, TEX_ENEMY_GLOW, 96, [
+      [0,    'rgba(255,255,255,1)'],
+      [0.32, 'rgba(255,255,255,0.55)'],
+      [0.68, 'rgba(255,255,255,0.16)'],
+      [1,    'rgba(255,255,255,0)'],
+    ]);
+
+    const diameter = this.config.size * glow.sizeFactor;
+    this.glowHalo = scene.add.image(this.sprite.x, this.sprite.y, TEX_ENEMY_GLOW);
+    this.glowHalo.setDisplaySize(diameter, diameter);
+    this.glowHalo.setDepth(DEPTH.PLAYERS - 0.09);
+    makeAdditive(this.glowHalo);
+    this.glowHalo.setTint(glow.color);
+    this.glowHalo.setAlpha(emissiveAlpha(glow.alpha));
+
+    // Leichtes Atmen, damit der Halo nicht als aufgeklebte Scheibe liest.
+    scene.tweens.add({
+      targets:  this.glowHalo,
+      scaleX:   this.glowHalo.scaleX * 1.12,
+      scaleY:   this.glowHalo.scaleY * 1.12,
+      alpha:    emissiveAlpha(glow.alpha * 0.72),
+      duration: 900,
+      yoyo:     true,
+      repeat:   -1,
+      ease:     'Sine.easeInOut',
+    });
+  }
+
+  /** Folgt dem Sprite und meldet die zugehörige Lichtquelle für dieses Frame an. */
+  private syncGlow(): void {
+    const glow = this.config.glow;
+    if (!glow) return;
+
+    const visible = !this.burrowed && this.currentHp > 0;
+    this.glowHalo?.setVisible(visible);
+    this.glowHalo?.setPosition(this.sprite.x, this.sprite.y);
+
+    if (!this.lighting) return;
+    if (!visible) {
+      this.lighting.releaseLight(this.glowLightKey());
+      return;
+    }
+    this.lighting.setLight(this.glowLightKey(), 'entityGlow', this.sprite.x, this.sprite.y, {
+      color:     glow.color,
+      radiusPx:  glow.lightRadiusPx,
+      intensity: glow.lightIntensity,
+    });
+  }
+
+  private glowLightKey(): string {
+    return `enemyglow:${this.id}`;
   }
 
   private createBossDecorations(scene: Phaser.Scene): void {

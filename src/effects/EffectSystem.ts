@@ -7,7 +7,8 @@ import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, makeAddi
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { BiteRenderer } from './BiteRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
-import type { EnemyBurrowVisualSink } from '../entities/EnemyManager';
+import type { EnemyVisualSink } from '../entities/EnemyManager';
+import { SpawnEffectRenderer } from './SpawnEffectRenderer';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import type { LightingSystem } from './LightingSystem';
 import { EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS, EXPLOSION_LIGHT_RADIUS_FACTOR } from './LightingConfig';
@@ -51,7 +52,7 @@ interface DeathPixelChunk {
  * Die Buddel-Effekte werden nicht nur für Spieler, sondern auch für eingebuddelte Coop-Defense-
  * Gegner genutzt; `implements` hält die dafür erwartete Signatur kompilierzeit-fest.
  */
-export class EffectSystem implements EnemyBurrowVisualSink {
+export class EffectSystem implements EnemyVisualSink {
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
@@ -61,6 +62,7 @@ export class EffectSystem implements EnemyBurrowVisualSink {
   private biteRenderer: BiteRenderer | null = null;
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
   private lighting: LightingSystem | null = null;
+  private spawnEffectRenderer: SpawnEffectRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
@@ -83,6 +85,16 @@ export class EffectSystem implements EnemyBurrowVisualSink {
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+    this.spawnEffectRenderer?.setLightingSystem(lighting);
+  }
+
+  /** Gegner-Spawn: dieselbe Effektfamilie wie beim Spielerspawn, nur zurückhaltender. */
+  playEnemySpawnEffect(x: number, y: number, colorHex: number): void {
+    if (!this.spawnEffectRenderer) {
+      this.spawnEffectRenderer = new SpawnEffectRenderer(this.scene);
+      this.spawnEffectRenderer.setLightingSystem(this.lighting);
+    }
+    this.spawnEffectRenderer.playEnemy(x, y, colorHex);
   }
 
   setAsmdPrimaryRenderer(renderer: AsmdPrimaryRenderer | null): void {

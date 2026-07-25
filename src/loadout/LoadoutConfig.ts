@@ -1093,14 +1093,14 @@ export const WEAPON_CONFIGS = {
    * Fliegenpilz-Plasma – Kopie der Plasma Gun fuer das Boss-Upgrade "Plasmapilz". Leeres
    * `allowedSlots` haelt die Waffe komplett aus der Spieler-Waffenwahl heraus; sie wird
    * ausschliesslich vom Fliegenpilz-Turret abgefeuert und ersetzt dort die Sporen-Waffe.
-   * Einziger Balance-Unterschied zur Spieler-Plasma-Gun: halbe Feuerrate (doppelter Cooldown).
+   * Einziger Balance-Unterschied zur Spieler-Plasma-Gun: langsamere Feuerrate 
    * Spread-Werte sind wie bei allen Turret-Waffen 0, weil automatisiertes Feuer den Bloom-Pfad
    * in `fireWeapon` gar nicht durchlaeuft.
    */
   FLIEGENPILZ_PLASMA: {
     id:                   'FLIEGENPILZ_PLASMA',
     displayName:          'Fliegenpilz-Plasma',
-    cooldown:             240,
+    cooldown:             180,
     damage:               3,
     range:                500,
     fire: {

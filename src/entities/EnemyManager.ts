@@ -62,14 +62,15 @@ export interface EnemyCombatPositioningSource {
 }
 
 /**
- * Buddel-Visuals (Erd-/Staubpartikel und Ein-/Austauch-Effekt). Strukturell erfüllt vom
- * EffectSystem, das dieselben Effekte für eingebuddelte Spieler zeichnet – als lokaler Typ
- * gehalten, damit der EnemyManager nicht auf die Effekt-Schicht importieren muss.
+ * Gegner-Visuals, die nicht an der Entity selbst hängen: Buddel-Partikel und der Spawn-Effekt.
+ * Strukturell erfüllt vom EffectSystem, das dieselben Effekte für Spieler zeichnet – als lokaler
+ * Typ gehalten, damit der EnemyManager nicht auf die Effekt-Schicht importieren muss.
  */
-export interface EnemyBurrowVisualSink {
+export interface EnemyVisualSink {
   syncBurrowState(id: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void;
   clearBurrowState(id: string): void;
   playBurrowPhaseEffect(x: number, y: number, phase: BurrowPhase): void;
+  playEnemySpawnEffect(x: number, y: number, colorHex: number): void;
 }
 
 interface WildfirePanicState extends WildfireSourceInfo {
@@ -93,8 +94,14 @@ export class EnemyManager {
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
   private onEnemySpawned: ((enemy: EnemyEntity) => void) | null = null;
-  private burrowVisualSink: EnemyBurrowVisualSink | null = null;
+  private visualSink: EnemyVisualSink | null = null;
   private lighting: LightingSystem | null = null;
+  /**
+   * True, sobald der erste Snapshot verarbeitet wurde. Die Gegner daraus existieren beim Host
+   * bereits seit Längerem – ein Client, der mitten in die Runde kommt, würde sonst für das
+   * gesamte laufende Feld gleichzeitig Spawn-Effekte zünden.
+   */
+  private remoteSnapshotSeen = false;
 
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
@@ -115,9 +122,9 @@ export class EnemyManager {
     this.onEnemySpawned = callback;
   }
 
-  /** Registriert die Effekt-Schicht für die Buddel-Visuals (Host wie Client). */
-  setBurrowVisualSink(sink: EnemyBurrowVisualSink | null): void {
-    this.burrowVisualSink = sink;
+  /** Registriert die Effekt-Schicht für Buddel- und Spawn-Visuals (Host wie Client). */
+  setVisualSink(sink: EnemyVisualSink | null): void {
+    this.visualSink = sink;
   }
 
   /**
@@ -129,7 +136,7 @@ export class EnemyManager {
     const enemy = this.enemies.get(enemyId);
     if (!enemy || !enemy.setBurrowed(burrowed)) return;
 
-    const sink = this.burrowVisualSink;
+    const sink = this.visualSink;
     if (!sink) return;
     sink.playBurrowPhaseEffect(enemy.sprite.x, enemy.sprite.y, burrowed ? 'windup' : 'recovery');
     if (burrowed) sink.syncBurrowState(enemyId, 'underground', enemy.sprite);
@@ -173,8 +180,21 @@ export class EnemyManager {
     const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind], faction, ownerId, ownerColor);
     enemy.setLightingSystem(this.lighting);
     this.enemies.set(id, enemy);
+    this.playSpawnEffect(enemy);
     this.onEnemySpawned?.(enemy);
     return enemy;
+  }
+
+  /**
+   * Spawn-Effekt am Erscheinungsort. Host und Client zünden ihn jeweils lokal beim Anlegen der
+   * Entity – derselbe Weg wie bei den Buddel-Visuals, also ohne eigenen Netzwerkpfad.
+   *
+   * Gegner, die eingebuddelt am Spielfeldrand starten, bleiben aussen vor: sie sind beim Spawn
+   * unsichtbar, und ihr Auftauchen hat mit dem Buddel-Effekt bereits seine eigene Ankündigung.
+   */
+  private playSpawnEffect(enemy: EnemyEntity): void {
+    if (this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtLeftEdge) return;
+    this.visualSink?.playEnemySpawnEffect(enemy.sprite.x, enemy.sprite.y, enemy.getSpawnEffectColor());
   }
 
   hostUpdateMovement(
@@ -704,7 +724,7 @@ export class EnemyManager {
    * müssen sie vor dessen Zerstörung abgeräumt werden.
    */
   private destroyEnemyEntity(id: string, enemy: EnemyEntity): void {
-    this.burrowVisualSink?.clearBurrowState(id);
+    this.visualSink?.clearBurrowState(id);
     enemy.destroy();
     this.enemies.delete(id);
   }
@@ -740,6 +760,7 @@ export class EnemyManager {
     for (const remote of upserts) {
       this.applyRemoteSnapshot(remote);
     }
+    this.remoteSnapshotSeen = true;
   }
 
   updateClientInterpolation(factor: number): void {
@@ -750,7 +771,7 @@ export class EnemyManager {
 
   destroy(): void {
     for (const [id, enemy] of this.enemies) {
-      this.burrowVisualSink?.clearBurrowState(id);
+      this.visualSink?.clearBurrowState(id);
       enemy.destroy();
     }
     this.enemies.clear();
@@ -758,6 +779,7 @@ export class EnemyManager {
     this.netSnapshotCache.clear();
     this.pendingRemovals.clear();
     this.nextEnemyIdSeq = 1;
+    this.remoteSnapshotSeen = false;
     this.ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
     this.refreshCursor = 0;
   }
@@ -863,6 +885,7 @@ export class EnemyManager {
       enemy.updateBurnStacks(remote.burnStacks ?? 0);
       enemy.setDashPhase(remote.dashPhase ?? 0);
       this.enemies.set(remote.id, enemy);
+      if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy);
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);
       return;

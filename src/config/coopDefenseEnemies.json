@@ -74,6 +74,7 @@
       "imageKey": "enemy_grave_titan",
       "isBoss": true,
       "displayName": "Grufttitan",
+      "glow": { "color": 8191882, "sizeFactor": 1.55, "alpha": 0.9, "lightRadiusPx": 240, "lightIntensity": 0.95 },
       "trainAwareness": {
         "safetyDistancePx": 48,
         "timeSafetyMarginMs": 750
@@ -276,6 +277,7 @@
       "imageKey": "enemy_inferno_colossus",
       "isBoss": true,
       "displayName": "Flammenkoloss",
+      "glow": { "color": 16742942, "sizeFactor": 1.5, "alpha": 0.62, "lightRadiusPx": 130, "lightIntensity": 1 },
       "trainAwareness": {
         "safetyDistancePx": 48,
         "timeSafetyMarginMs": 750
@@ -305,7 +307,8 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_alien_badger",
       "displayName": "Pyro-Dachs",
-      "color": 16747069,
+      "color": 16734720,
+      "glow": { "color": 16738816, "sizeFactor": 1.7, "alpha": 0.85, "lightRadiusPx": 85, "lightIntensity": 1 },
       "burrow": {
         "maxDurationMs": 2000,
         "speedFactor": 1.6,

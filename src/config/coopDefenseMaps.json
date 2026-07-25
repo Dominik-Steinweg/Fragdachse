@@ -371,7 +371,7 @@
       "waves": [
         { "enemyKind": "spore-warden", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 0 },
         { "enemyKind": "demon-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 5000 },
-        { "enemyKind": "void-stalker", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 0 }
+        { "enemyKind": "void-stalker", "intervalMs": 10000, "countPerWave": 1, "startAtMs": 10000 }
       ]
     },
     {
@@ -427,7 +427,7 @@
     {
       "mapId": "10",
       "displayName": "Map 10 - Flammenkoloss",
-      "timeOfDay": "19:45",
+      "timeOfDay": "22:45",
       "rockFillRatio": 0.1,
       "roundDurationSec": 90,
       "bases": [

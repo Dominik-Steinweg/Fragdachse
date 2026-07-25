@@ -429,9 +429,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyManager = isCoopDefenseMode(bridge.getGameMode()) && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
-    // Eingebuddelte Gegner nutzen dieselben Buddel-Partikel wie eingebuddelte Spieler –
-    // auf Host und Client, da beide Seiten den Einbuddel-Zustand über den Snapshot kennen.
-    this.ctx.enemyManager?.setBurrowVisualSink(this.ctx.effectSystem);
+    // Buddel- und Spawn-Visuals der Gegner laufen über dieselbe Effekt-Schicht wie die der
+    // Spieler – auf Host und Client, da beide Seiten Entstehung und Einbuddel-Zustand aus dem
+    // Snapshot kennen.
+    this.ctx.enemyManager?.setVisualSink(this.ctx.effectSystem);
     // Brennende Gegner leuchten wie brennende Projektile; das Licht hängt am
     // EntityBurnRenderer der jeweiligen Entity.
     this.ctx.enemyManager?.setLightingSystem(this.renderers.lighting);
@@ -1389,7 +1390,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.necromancySystem = null;
     this.ctx.enemyManager?.setEnemySpawnedCallback(null);
     this.ctx.enemyManager?.destroy();
-    this.ctx.enemyManager?.setBurrowVisualSink(null);
+    this.ctx.enemyManager?.setVisualSink(null);
     this.ctx.enemyManager = null;
     this.ctx.coopDefenseEnemyAbilitySystem = null;
     this.ctx.coopDefenseEnemyBurrowSystem = null;

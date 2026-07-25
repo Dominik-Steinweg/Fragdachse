@@ -42,6 +42,24 @@ export interface CoopDefenseEnemyTrainCollisionConfig {
   readonly destroysTrain: boolean;
 }
 
+/**
+ * Eigenleuchten eines Gegners: ein additiver Halo um das Sprite plus eine Lichtquelle gleicher
+ * Farbe. Der Halo trägt die Wirkung bei Tag (die Lightmap ist dann fast wirkungslos), das Licht
+ * bei Nacht – deshalb immer beides.
+ *
+ * Gedacht als Lesbarkeitswerkzeug für Gegner, die im Getümmel sofort erkennbar sein müssen
+ * (Bosse, besonders gefährliche Einheiten), nicht als allgemeine Dekoration.
+ */
+export interface CoopDefenseEnemyGlowConfig {
+  readonly color: number;
+  /** Durchmesser des Halos als Vielfaches der Gegnergröße. */
+  readonly sizeFactor: number;
+  /** Deckkraft des Halos (0…1) vor der Emissive-Dämpfung. */
+  readonly alpha: number;
+  readonly lightRadiusPx: number;
+  readonly lightIntensity: number;
+}
+
 export interface CoopDefenseEnemyTranslocatorConfig {
   readonly utilityId: 'TRANSLOCATOR';
   readonly flightTimeMs: number;
@@ -169,6 +187,7 @@ export interface CoopDefenseEnemyConfig {
   readonly isBoss?: boolean;
   readonly displayName?: string;
   readonly color?: number;
+  readonly glow?: CoopDefenseEnemyGlowConfig;
   readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
   readonly burrow?: CoopDefenseEnemyBurrowConfig;
   readonly dodge?: CoopDefenseEnemyDodgeConfig;
@@ -258,6 +277,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         isBoss: config.isBoss,
         displayName: config.displayName,
         color: config.color,
+        glow: config.glow,
         translocator: config.translocator,
         burrow: config.burrow,
         dodge: config.dodge,
@@ -343,6 +363,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     color: typeof enemy.color === 'number' && Number.isFinite(enemy.color)
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
+    glow: normalizeGlowConfig(enemy.glow),
     translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
     burrow: normalizeBurrowConfig(enemy.burrow),
     dodge: normalizeDodgeConfig(enemy.dodge),
@@ -374,6 +395,19 @@ function normalizeTrainCollision(
   return {
     damageToEnemy: Math.max(0, config.damageToEnemy),
     destroysTrain: config.destroysTrain === true,
+  };
+}
+
+function normalizeGlowConfig(
+  config: CoopDefenseEnemyGlowConfig | undefined,
+): CoopDefenseEnemyGlowConfig | undefined {
+  if (!config) return undefined;
+  return {
+    color: Math.max(0, Math.floor(config.color)),
+    sizeFactor: Math.max(1, config.sizeFactor),
+    alpha: Math.max(0, Math.min(1, config.alpha)),
+    lightRadiusPx: Math.max(1, config.lightRadiusPx),
+    lightIntensity: Math.max(0, Math.min(1, config.lightIntensity)),
   };
 }
 
