@@ -18,8 +18,11 @@ const FADE_MS = 900;
 const CROSS_ALPHA = 0.92;
 const SHADOW_ALPHA = 0.3;
 
-/** Leichen liegen unter Spielern und Gegnern, aber über Boden-Decals und Blutflecken. */
-const DEPTH_CORPSE_CROSS = DEPTH.PLAYERS - 0.04;
+/**
+ * Leichen gehören zum Boden: knapp über Gras, Dirt und den gebackenen Decals, aber unter Felsen,
+ * Spielern, Gegnern, Projektilen und allen Effekten.
+ */
+const DEPTH_CORPSE_CROSS = DEPTH.DECALS + 0.1;
 const DEPTH_CORPSE_CROSS_SHADOW = DEPTH_CORPSE_CROSS - 0.01;
 
 interface CorpseMarkerVisual {

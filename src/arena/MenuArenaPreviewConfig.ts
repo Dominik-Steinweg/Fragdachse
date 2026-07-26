@@ -11,6 +11,9 @@ interface GridRect {
 
 const MENU_GRID_COLS = Math.floor(MENU_PREVIEW_WIDTH / CELL_SIZE);
 const MENU_PREVIEW_SEED = 20260524;
+const OVERLAY_BORDER_TOP_Y = 8;
+const OVERLAY_BORDER_BOTTOM_Y = 28;
+const LEFT_OVERLAY_BORDER_X = 10;
 
 export interface MenuArenaPreviewLayerConfig {
   visible: boolean;
@@ -438,18 +441,18 @@ function generatePreviewDecals(
 const TITLE_TEXT = 'FRAGDACHSE';
 const TITLE_GAP = 1;
 const TITLE_START_X = Math.floor((MENU_GRID_COLS - textWidth(TITLE_TEXT, TITLE_GAP)) * 0.5);
-const RIGHT_OVERLAY_BORDER_X = MENU_GRID_COLS - 9;
-const RIGHT_OVERLAY_INFO_MIN_X = MENU_GRID_COLS - 8;
+const RIGHT_OVERLAY_BORDER_X = MENU_GRID_COLS - 11;
+const RIGHT_OVERLAY_INFO_MIN_X = RIGHT_OVERLAY_BORDER_X + 1;
 const titleRocks = textRocks(TITLE_TEXT, TITLE_START_X, 1, TITLE_GAP);
 const leftOverlayBorderRocks = mergeUnique<RockCell>(
-  rockRow(0, 8, 8),
-  rockRow(0, 8, 27),
-  rockColumn(8, 27, 8),
+  rockRow(0, LEFT_OVERLAY_BORDER_X, OVERLAY_BORDER_TOP_Y),
+  rockRow(0, LEFT_OVERLAY_BORDER_X, OVERLAY_BORDER_BOTTOM_Y),
+  rockColumn(OVERLAY_BORDER_TOP_Y, OVERLAY_BORDER_BOTTOM_Y, LEFT_OVERLAY_BORDER_X),
 );
 const rightOverlayBorderRocks = mergeUnique<RockCell>(
-  rockRow(RIGHT_OVERLAY_BORDER_X, MENU_GRID_COLS - 1, 8),
-  rockRow(RIGHT_OVERLAY_BORDER_X, MENU_GRID_COLS - 1, 27),
-  rockColumn(8, 27, RIGHT_OVERLAY_BORDER_X),
+  rockRow(RIGHT_OVERLAY_BORDER_X, MENU_GRID_COLS - 1, OVERLAY_BORDER_TOP_Y),
+  rockRow(RIGHT_OVERLAY_BORDER_X, MENU_GRID_COLS - 1, OVERLAY_BORDER_BOTTOM_Y),
+  rockColumn(OVERLAY_BORDER_TOP_Y, OVERLAY_BORDER_BOTTOM_Y, RIGHT_OVERLAY_BORDER_X),
 );
 
 const ambientRockAnchors: readonly RockClusterAnchor[] = [
@@ -472,13 +475,13 @@ const ambientRockAnchors: readonly RockClusterAnchor[] = [
 const ambientRocks = createOrganicRockClusters(ambientRockAnchors, MENU_PREVIEW_SEED + 101);
 
 const trees = points<TreeCell>([
-  [1, 4],  [2, 29],  [12, 18], [15, 31], [57, 4], [47, 17], [50, 25], [51, 31], [57, 29],
+  [1, 4],  [2, 29],  [12, 18], [15, 31], [57, 4], [47, 17], [46, 25], [51, 31], [57, 29],
 ]);
 
 const overlayClearZones: readonly GridRect[] = [
-  { minX: 0, maxX: 7, minY: 9, maxY: 26 },
+  { minX: 0, maxX: LEFT_OVERLAY_BORDER_X - 1, minY: 9, maxY: OVERLAY_BORDER_BOTTOM_Y - 1 },
   { minX: 16, maxX: 42, minY: 7, maxY: 26 },
-  { minX: RIGHT_OVERLAY_INFO_MIN_X, maxX: MENU_GRID_COLS - 1, minY: 9, maxY: 26 },
+  { minX: RIGHT_OVERLAY_INFO_MIN_X, maxX: MENU_GRID_COLS - 1, minY: 9, maxY: OVERLAY_BORDER_BOTTOM_Y - 1 },
 ];
 
 const titleTreeClearZone: GridRect = {
@@ -497,16 +500,16 @@ const titleRockGapZone: GridRect = {
 
 const leftOverlayInfoQuietZone: GridRect = {
   minX: 0,
-  maxX: 7,
+  maxX: LEFT_OVERLAY_BORDER_X - 1,
   minY: 9,
-  maxY: 26,
+  maxY: OVERLAY_BORDER_BOTTOM_Y - 1,
 };
 
 const rightOverlayInfoQuietZone: GridRect = {
   minX: RIGHT_OVERLAY_INFO_MIN_X,
   maxX: MENU_GRID_COLS - 1,
   minY: 9,
-  maxY: 26,
+  maxY: OVERLAY_BORDER_BOTTOM_Y - 1,
 };
 
 const decalQuietZones: readonly GridRect[] = [
@@ -522,16 +525,16 @@ const dirtQuietZones: readonly GridRect[] = [
 
 const leftOverlayBorderReserveZone: GridRect = {
   minX: 0,
-  maxX: 10,
-  minY: 8,
-  maxY: 27,
+  maxX: LEFT_OVERLAY_BORDER_X + 2,
+  minY: OVERLAY_BORDER_TOP_Y,
+  maxY: OVERLAY_BORDER_BOTTOM_Y,
 };
 
 const rightOverlayBorderReserveZone: GridRect = {
   minX: RIGHT_OVERLAY_BORDER_X - 1,
   maxX: MENU_GRID_COLS - 1,
-  minY: 8,
-  maxY: 27,
+  minY: OVERLAY_BORDER_TOP_Y,
+  maxY: OVERLAY_BORDER_BOTTOM_Y,
 };
 
 const tracks: TrackCell[] = [];

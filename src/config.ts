@@ -371,6 +371,10 @@ export const DEPTH_LIGHTING = DEPTH.CANOPY - 0.5;
 
 // ---- Prozedurales Arena-Grid ----
 export const CELL_SIZE           = 32;
+/** Lobby side menus extend two grid cells farther toward the screen centre than the arena HUD. */
+export const LOBBY_SIDE_MENU_WIDTH = DEFAULT_ARENA_OFFSET_X + CELL_SIZE * 2;
+/** The lobby rock frames gain one grid row at their lower edge. */
+export const LOBBY_SIDE_MENU_EXTRA_HEIGHT = CELL_SIZE;
 export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 / 135
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
 export const ROCK_FILL_RATIO     = 0.30;

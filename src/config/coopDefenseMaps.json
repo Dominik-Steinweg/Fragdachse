@@ -198,7 +198,7 @@
     {
       "mapId": "6",
       "displayName": "Map 6 - Sporenfront",
-      "timeOfDay": "09:00",
+      "timeOfDay": "08:00",
       "rockFillRatio": 0.1,
       "roundDurationSec": 60,
       "bases": [
@@ -258,7 +258,7 @@
     {
       "mapId": "7",
       "displayName": "Map 7 - Medic!",
-      "timeOfDay": "15:00",
+      "timeOfDay": "17:00",
       "rockFillRatio": 0.3,
       "roundDurationSec": 70,
       "bases": [

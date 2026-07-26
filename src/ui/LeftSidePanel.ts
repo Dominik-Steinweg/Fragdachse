@@ -1,5 +1,5 @@
 /**
- * LeftSidePanel – linker Seitenbereich (x=0..240) für Lobby- und Arena-Phase.
+ * LeftSidePanel – linker Seitenbereich für Lobby- und Arena-Phase.
  *
  * lobbyContainer (y=0):      Namensanzeige, Farbauswahl
  * gameContainer  (y=−H):     ArenaHUD (initial off-screen oben)
@@ -12,7 +12,17 @@ import { GameAudioSystem } from '../audio/GameAudioSystem';
 import { ArenaHUD } from './ArenaHUD';
 import { configureArenaHudLayout } from './ArenaHUD';
 import type { ArenaHUDData } from './ArenaHUD';
-import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, PLAYER_COLORS, toCssColor } from '../config';
+import {
+  GAME_WIDTH,
+  GAME_HEIGHT,
+  DEFAULT_ARENA_OFFSET_X,
+  DEPTH,
+  COLORS,
+  PLAYER_COLORS,
+  LOBBY_SIDE_MENU_EXTRA_HEIGHT,
+  LOBBY_SIDE_MENU_WIDTH,
+  toCssColor,
+} from '../config';
 import { HelpOverlay } from './HelpOverlay';
 import { OptionsOverlay, type AbortMatchBinding } from './OptionsOverlay';
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
@@ -30,30 +40,31 @@ import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlock
 import { isCoopDefenseLoadoutItemSelectable } from '../utils/coopDefenseUpgrades';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
-const LOBBY_PANEL_W = 240;
-const ARENA_PANEL_W = Math.round(LOBBY_PANEL_W * 1.5);
+const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
+const ARENA_PANEL_W = Math.round(DEFAULT_ARENA_OFFSET_X * 1.5);
 const CENTER_X     = LOBBY_PANEL_W / 2;
 const ARENA_CENTER_X = ARENA_PANEL_W / 2;
 const LOBBY_TOP_OFFSET_Y = 246;
+const UPPER_INFO_SPACING_STEP = LOBBY_SIDE_MENU_EXTRA_HEIGHT / 8;
 const NAME_LABEL_Y = 60 + LOBBY_TOP_OFFSET_Y;
 const NAME_VALUE_Y = 80 + LOBBY_TOP_OFFSET_Y;
-const EDIT_BTN_Y   = 114 + LOBBY_TOP_OFFSET_Y;
-const MODE_LABEL_Y = 132 + LOBBY_TOP_OFFSET_Y;
-const MODE_ROW_Y   = 150 + LOBBY_TOP_OFFSET_Y;
-const MAP_LABEL_Y  = 174 + LOBBY_TOP_OFFSET_Y;
-const MAP_ROW_Y    = 192 + LOBBY_TOP_OFFSET_Y;
-const DIVIDER1_Y   = 218 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Name-/Modus-/Map-Sektion und Dachs
-const BADGER_Y     = 264 + LOBBY_TOP_OFFSET_Y;  // Dachs-Sprite-Mitte
-const DIVIDER2_Y   = 328 + LOBBY_TOP_OFFSET_Y;  // Trennlinie zwischen Dachs und Loadout
+const EDIT_BTN_Y   = 114 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP;
+const MODE_LABEL_Y = 132 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 2;
+const MODE_ROW_Y   = 150 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 3;
+const MAP_LABEL_Y  = 174 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 4;
+const MAP_ROW_Y    = 192 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 5;
+const DIVIDER1_Y   = 218 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 6;
+const BADGER_Y     = 264 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 7;
+const DIVIDER2_Y   = 328 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
 const BADGER_SIZE        = 48;   // Anzeigegröße
 const BADGER_CLICK_SIZE  = 56;   // Klickbare Fläche
 const TEAM_SELECT_Y      = BADGER_Y + BADGER_SIZE / 2 + 6;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
-const PICKER_WORLD_X  = 12;
-const PICKER_WORLD_Y  = 280 + LOBBY_TOP_OFFSET_Y;
 const PICKER_W        = 188;
 const PICKER_H        = 148;
+const PICKER_WORLD_X  = (LOBBY_PANEL_W - PICKER_W) / 2;
+const PICKER_WORLD_Y  = BADGER_Y + 16;
 const PICKER_PADDING  = 10;
 const SWATCH_SIZE     = 32;
 const SWATCH_GAP      = 4;
@@ -66,21 +77,21 @@ const NAME_FONT  = { fontSize: '26px', fontFamily: 'monospace', color: toCssColo
 const EDIT_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_1) };
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = 354 + LOBBY_TOP_OFFSET_Y;   // Y des "Loadout:"-Labels
+const CAROUSEL_START_Y  = 354 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
 const CAROUSEL_ROW_STEP = 52;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
 const CAROUSEL_GROUP_DY = 20;    // Offset erste Karussell-Zeile unter "Loadout:"
 const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const DIVIDER3_Y  = 578 + LOBBY_TOP_OFFSET_Y;  // Trennlinie unter Loadout
-const MENU_BTN_Y  = 608 + LOBBY_TOP_OFFSET_Y;
+const DIVIDER3_Y  = 578 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
+const MENU_BTN_Y  = 608 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
 const MENU_BTN_W  = 92;
 const MENU_BTN_H  = 34;
-const OPTIONS_BTN_X = 70;
-const HELP_BTN_X = 170;
+const OPTIONS_BTN_X = CENTER_X - 50;
+const HELP_BTN_X = CENTER_X + 50;
 const ARROW_X_LEFT      = 9;
-const ARROW_X_RIGHT     = 189;   // leicht nach links versetzt, bleibt mit sauberem Rand im 240px-Sidebar
-const ITEM_NAME_X       = 120;   // zentriert in 240px Sidebar
+const ARROW_X_RIGHT     = LOBBY_PANEL_W - 51;
+const ITEM_NAME_X       = CENTER_X;
 
 const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense'];
 const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
@@ -280,7 +291,7 @@ export class LeftSidePanel {
     divider.lineStyle(1, COLORS.GREY_6, 0.5);
     divider.beginPath();
     divider.moveTo(20, DIVIDER1_Y);
-    divider.lineTo(220, DIVIDER1_Y);
+    divider.lineTo(LOBBY_PANEL_W - 20, DIVIDER1_Y);
     divider.strokePath();
     divider.setScrollFactor(0);
     objects.push(divider);
@@ -325,7 +336,7 @@ export class LeftSidePanel {
     divider2.lineStyle(1, COLORS.GREY_6, 0.5);
     divider2.beginPath();
     divider2.moveTo(20, DIVIDER2_Y);
-    divider2.lineTo(220, DIVIDER2_Y);
+    divider2.lineTo(LOBBY_PANEL_W - 20, DIVIDER2_Y);
     divider2.strokePath();
     divider2.setScrollFactor(0);
     objects.push(divider2);
@@ -391,7 +402,7 @@ export class LeftSidePanel {
     divider3.lineStyle(1, COLORS.GREY_6, 0.5);
     divider3.beginPath();
     divider3.moveTo(20, DIVIDER3_Y);
-    divider3.lineTo(220, DIVIDER3_Y);
+    divider3.lineTo(LOBBY_PANEL_W - 20, DIVIDER3_Y);
     divider3.strokePath();
     divider3.setScrollFactor(0);
     objects.push(divider3);

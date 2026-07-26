@@ -8,22 +8,31 @@
  * Gleiche Public API wie LeftSidePanel: build(), transitionToGame(), transitionToLobby().
  */
 import * as Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, ARENA_OFFSET_X, DEPTH, COLORS, toCssColor } from '../config';
+import {
+  GAME_WIDTH,
+  GAME_HEIGHT,
+  ARENA_OFFSET_X,
+  DEFAULT_ARENA_OFFSET_X,
+  LOBBY_SIDE_MENU_WIDTH,
+  DEPTH,
+  COLORS,
+  toCssColor,
+} from '../config';
 import { getTeamLabel, isCoopDefenseMode } from '../gameModes';
 import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
-const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_OFFSET_X / 2;
-const LOBBY_SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_OFFSET_X + 8;
+const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH / 2;
+const LOBBY_SIDEBAR_LEFT_X   = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH + 8;
 const LOBBY_SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;
-const LOBBY_PANEL_WIDTH      = 200;
+const LOBBY_PANEL_WIDTH      = LOBBY_SIDE_MENU_WIDTH - 40;
 const ARENA_SIDEBAR_WIDTH    = Math.round(ARENA_OFFSET_X * 1.5);
 const ARENA_SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_SIDEBAR_WIDTH / 2;
 const ARENA_SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_SIDEBAR_WIDTH + 8;
 const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
-const ARENA_PANEL_WIDTH      = Math.round(LOBBY_PANEL_WIDTH * 1.5);
+const ARENA_PANEL_WIDTH      = Math.round((DEFAULT_ARENA_OFFSET_X - 40) * 1.5);
 const LOBBY_TOP_OFFSET_Y = 246;
 const RESULTS_EXTRA_OFFSET_Y = 32;
 
