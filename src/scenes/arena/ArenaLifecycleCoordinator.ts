@@ -124,6 +124,15 @@ export class ArenaLifecycleCoordinator {
   getRoundTimeOfDayMinutes(): number {
     return this.roundTimeOfDayMinutes;
   }
+
+  /** Hält die Lobby-Beleuchtung auf der host-autoritativen Slider-Uhrzeit. */
+  syncLobbyTimeOfDay(): void {
+    if (bridge.getGamePhase() !== 'LOBBY') return;
+    const minutes = bridge.getLobbyTimeOfDayMinutes();
+    this.renderers.lighting.setTimeOfDay(minutes);
+    this.renderers.lighting.setActive(true);
+    setEmissiveScale(resolveSkyState(minutes).emissiveScale);
+  }
   getIsLocalReady(): boolean   { return this.isLocalReady; }
   isTrainDestroyedShown(): boolean { return this.trainDestroyedShown; }
 
@@ -145,6 +154,7 @@ export class ArenaLifecycleCoordinator {
     // Start lobby music on initial load
     if (this.lastPhase === 'LOBBY') {
       this.ctx.gameAudioSystem.playMusic('music_lobby');
+      this.syncLobbyTimeOfDay();
     }
 
     // If the scene was created after the host already transitioned to ARENA,
@@ -219,19 +229,23 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
       : null;
+    const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
     const roundDurationSec = coopDefenseMapConfig?.roundDurationSec ?? ARENA_DURATION_SEC;
     const layout = ArenaGenerator.generate(Date.now(), coopDefenseMapConfig ?? undefined);
     bridge.publishArenaLayout(ArenaGenerator.stripVisualOnlyFields(layout));
     bridge.setArenaStartTime(arenaStartTime);
     bridge.setRoundEndTime(arenaStartTime + roundDurationSec * 1000);
-    const roundState: RoundState | null = isCoopDefenseMode(bridge.getGameMode())
-      ? {
-        status: 'active',
-        roundStartTime: arenaStartTime,
-        coopDefenseHumanPlayerCount: Math.max(1, bridge.getConnectedPlayers().length),
-        coopDefenseMapId: bridge.getCoopDefenseMapId(),
-      }
-      : null;
+    const roundState: RoundState = {
+      status: 'active',
+      roundStartTime: arenaStartTime,
+      timeOfDayMinutes,
+      coopDefenseHumanPlayerCount: isCoopDefenseMode(bridge.getGameMode())
+        ? Math.max(1, bridge.getConnectedPlayers().length)
+        : undefined,
+      coopDefenseMapId: isCoopDefenseMode(bridge.getGameMode())
+        ? bridge.getCoopDefenseMapId()
+        : undefined,
+    };
     bridge.publishRoundState(roundState);
     bridge.setGamePhase('ARENA');
   }
@@ -302,6 +316,7 @@ export class ArenaLifecycleCoordinator {
       bridge.publishRoundState({
         status: roundConclusion,
         roundStartTime: bridge.getArenaStartTime(),
+        timeOfDayMinutes: currentRoundState?.timeOfDayMinutes,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
         endedAt: Date.now(),
@@ -386,12 +401,12 @@ export class ArenaLifecycleCoordinator {
     // Map-ID bevorzugt aus dem (gegateten) RoundState lesen – derselbe reliable-Snapshot, der auch die
     // Spielerzahl trägt. So bauen Host und Client garantiert dieselben Basen aus EINEM Objekt. Fallback
     // auf den separaten Key für Alt-/Edge-Fälle (z. B. RoundState-Updates ohne Map-ID).
-    const coopRoundState = bridge.getRoundState();
+    const roundState = bridge.getRoundState();
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(coopRoundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+      ? getCoopDefenseMapConfig(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
       : null;
     const coopDefenseHumanPlayerCount = isCoopDefenseMode(bridge.getGameMode())
-      ? Math.max(1, Math.floor(coopRoundState?.coopDefenseHumanPlayerCount ?? 1))
+      ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
       : 1;
     const coopDefenseEnemyConfigs = isCoopDefenseMode(bridge.getGameMode())
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
@@ -1365,7 +1380,8 @@ export class ArenaLifecycleCoordinator {
     this.renderers.translocatorTeleport.setLightingSystem(this.renderers.lighting);
     // Uhrzeit vor dem Schattenaufbau setzen: zur Nacht hin werden die statischen
     // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.
-    const timeOfDayMinutes = resolveTimeOfDayMinutes(coopDefenseMapConfig);
+    const timeOfDayMinutes = roundState?.timeOfDayMinutes
+      ?? resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
     this.roundTimeOfDayMinutes = timeOfDayMinutes;
     this.renderers.shadow.setTimeOfDay(timeOfDayMinutes);
     this.renderers.shadow.rebuildArenaStaticShadows(
@@ -1590,9 +1606,10 @@ export class ArenaLifecycleCoordinator {
     // aus denen Basen/Wellen/Gegner deterministisch gebaut werden. Ohne dieses Gate kann der Client
     // bauen, bevor diese Keys angekommen sind → fehlende/falsche Basis. Das 3-s-Countdown-Fenster
     // (ARENA_COUNTDOWN_SEC) bietet reichlich Zeit für die Retries.
-    const needsCoopRoundState = isCoopDefenseMode(bridge.getGameMode());
-    const coopRoundStateReady = !needsCoopRoundState || bridge.getRoundState() !== null;
-    if (!layout || !coopRoundStateReady) {
+    const roundState = bridge.getRoundState();
+    const roundStateReady = roundState?.status === 'active'
+      && roundState.roundStartTime === bridge.getArenaStartTime();
+    if (!layout || !roundStateReady) {
       this.layoutRetryCount++;
       if (this.layoutRetryCount >= ArenaLifecycleCoordinator.LAYOUT_RETRY_LIMIT) {
         this.layoutRetryCount = 0;
@@ -1658,6 +1675,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     this.tearDownArena();
+    this.syncLobbyTimeOfDay();
 
     this.ctx.leftPanel.transitionToLobby();
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
@@ -1923,9 +1941,9 @@ export class ArenaLifecycleCoordinator {
  * nötig – das gilt auch für den lokalen Debug-Regler, der bewusst nur den eigenen Client
  * betrifft.
  */
-function resolveTimeOfDayMinutes(mapConfig: CoopDefenseMapConfig | null): number {
+function resolveRoundTimeOfDayMinutes(mapConfig: CoopDefenseMapConfig | null, lobbyMinutes: number): number {
   const configured = mapConfig?.timeOfDay;
-  if (configured === undefined) return DEFAULT_TIME_OF_DAY_MINUTES;
+  if (configured === undefined) return lobbyMinutes;
   // Die Konfiguration ist beim Laden validiert worden; der Rückfall deckt nur den Fall
   // ab, dass jemand die Registry zur Laufzeit umgeht.
   return parseTimeOfDay(configured) ?? DEFAULT_TIME_OF_DAY_MINUTES;

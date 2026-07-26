@@ -937,6 +937,8 @@ export class ArenaScene extends Phaser.Scene {
 
     if (!terminated && phase === 'LOBBY') {
       const lobbyUiStartedAt = performance.now();
+      this.lifecycle.syncLobbyTimeOfDay();
+      this.menuArenaPreview?.setTreeTint(this.renderers.lighting.resolveCanopyTint(0, 0));
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
       const players = bridge.getConnectedPlayers();
       // Lokalen Ready-Stand an den autoritativen Netzwerkwert angleichen. Setzt der Host beim

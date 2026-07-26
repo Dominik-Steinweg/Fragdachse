@@ -25,6 +25,8 @@ export class MenuArenaPreviewRenderer {
    * Schatten-Graphics des `ShadowSystem` weiterhin zwischen Boden, Felsen und Kronen liegen.
    */
   private bakedLayers: Array<{ layer: Phaser.GameObjects.RenderTexture; config: MenuArenaPreviewLayerConfig }> = [];
+  private trunkLayer: Phaser.GameObjects.RenderTexture | null = null;
+  private canopyLayer: Phaser.GameObjects.RenderTexture | null = null;
   private shadows: ShadowSystem | null = null;
 
   constructor(
@@ -89,8 +91,8 @@ export class MenuArenaPreviewRenderer {
     this.bakeLayer(this.createRocks(layout), DEPTH.ROCKS, view.rocks);
 
     const trees = ArenaVisualFactory.createTrees(this.scene, layout.trees ?? [], metrics);
-    this.bakeLayer(trees.map((tree) => tree.trunk), DEPTH.CANOPY - 0.01, view.trunks);
-    this.bakeLayer(trees.map((tree) => tree.canopy), DEPTH.CANOPY, view.canopies);
+    this.trunkLayer = this.bakeLayer(trees.map((tree) => tree.trunk), DEPTH.CANOPY - 0.01, view.trunks);
+    this.canopyLayer = this.bakeLayer(trees.map((tree) => tree.canopy), DEPTH.CANOPY, view.canopies);
 
     this.arenaShade = this.scene.add
       .rectangle(
@@ -120,6 +122,12 @@ export class MenuArenaPreviewRenderer {
     for (const { layer, config } of this.bakedLayers) layer.setVisible(visible && config.visible);
   }
 
+  /** Applies the same ambient tint used by live arena tree visuals to the baked lobby trees. */
+  setTreeTint(tint: number): void {
+    this.trunkLayer?.setTint(tint);
+    this.canopyLayer?.setTint(tint);
+  }
+
   destroy(): void {
     this.background?.destroy();
     this.leftSidebar?.destroy();
@@ -133,6 +141,8 @@ export class MenuArenaPreviewRenderer {
     this.arenaShade = null;
     this.screenShade = null;
     this.shadows = null;
+    this.trunkLayer = null;
+    this.canopyLayer = null;
     for (const obj of this.tracks) obj.destroy();
     for (const { layer } of this.bakedLayers) layer.destroy();
     this.tracks = [];
@@ -156,13 +166,13 @@ export class MenuArenaPreviewRenderer {
     images: Array<Phaser.GameObjects.GameObject & { setAlpha(alpha: number): unknown; destroy(): void }>,
     depth: number,
     layer: MenuArenaPreviewLayerConfig,
-  ): void {
-    if (images.length === 0) return;
+  ): Phaser.GameObjects.RenderTexture | null {
+    if (images.length === 0) return null;
 
     // Dauerhaft unsichtbare Baender tragen kein Pixel bei und werden komplett verworfen.
     if (!layer.visible || layer.alpha <= 0) {
       for (const img of images) img.destroy();
-      return;
+      return null;
     }
 
     for (const img of images) img.setAlpha(layer.alpha);
@@ -178,6 +188,7 @@ export class MenuArenaPreviewRenderer {
     for (const img of images) img.destroy();
 
     this.bakedLayers.push({ layer: baked, config: layer });
+    return baked;
   }
 
   private createRocks(layout: ArenaLayout): Phaser.GameObjects.Image[] {

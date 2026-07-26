@@ -43,6 +43,7 @@ import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/Lo
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 
 /**
  * Zustandsobjekt eines Spielers. Absichtlich schmal: nur `id`, `getState` und `setState`
@@ -82,6 +83,7 @@ const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeige
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
 const KEY_COOP_MAP_ID  = 'cmd';   // global: string (ausgewaehlte Coop-Defense-Map)
+const KEY_TIME_OF_DAY  = 'tod';   // global reliable: number (Lobby-Uhrzeit in Minuten seit Mitternacht)
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
 const KEY_HOST_ID      = 'hid';   // global: string (Player-ID des Match-Hosts)
@@ -213,6 +215,9 @@ export type RoundConclusion = RoundOutcome | 'aborted';
 export interface RoundState {
   status: 'active' | RoundConclusion;
   roundStartTime: number;
+  // Autoritative Uhrzeit dieser Runde. Coop Defense nutzt weiterhin die Map-Vorgabe;
+  // alle anderen Modi uebernehmen die Host-Auswahl aus der Lobby.
+  timeOfDayMinutes?: number;
   coopDefenseHumanPlayerCount?: number;
   // Authoritative Coop-Defense-Map dieser Runde. Bewusst Teil des (reliable) RoundState, damit der
   // Client Basen/Map race-frei aus EINEM Objekt baut, statt den separaten KEY_COOP_MAP_ID parallel
@@ -680,7 +685,7 @@ export class NetworkBridge {
 
   /**
    * Host-only: Veröffentlicht einen autoritativen Lobby-Snapshot (reliable, ein Objekt):
-   * verbundene Spieler-IDs, aktueller Game-Mode und Coop-Map.
+   * verbundene Spieler-IDs, aktueller Game-Mode, Coop-Map und Lobby-Uhrzeit.
    *
    * Clients vergleichen beim "Bereit"-Klick ihren *separat* propagierten Stand gegen diesen
    * gebündelten Snapshot. Da die Einzel-Keys (Roster via Join-Callbacks, KEY_GAME_MODE, KEY_COOP_MAP_ID)
@@ -690,9 +695,15 @@ export class NetworkBridge {
    */
   private hostPublishLobbySync(): void {
     if (!isHost()) return;
+    // Alte/neu erstellte Raeume besitzen den optionalen Key noch nicht. Einmalig mit dem
+    // Default anlegen, damit auch Clients den Slider sofort als autoritativen Zustand sehen.
+    if (getState(KEY_TIME_OF_DAY) === undefined) {
+      setState(KEY_TIME_OF_DAY, DEFAULT_TIME_OF_DAY_MINUTES, true);
+    }
     setState(KEY_LOBBY_SYNC, {
       m: this.getGameMode(),
       c: this.getCoopDefenseMapId(),
+      t: this.getLobbyTimeOfDayMinutes(),
       p: [...this.connectedPlayers.keys()].sort(),
     }, true);
   }
@@ -708,7 +719,7 @@ export class NetworkBridge {
    * kein Snapshot angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
    */
   getLobbySyncConsistency(): { consistent: boolean; hostStatePresent: boolean; issues: string[] } {
-    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; p?: string[] } | undefined;
+    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; t?: number; p?: string[] } | undefined;
     if (!snapshot || !Array.isArray(snapshot.p)) {
       return { consistent: true, hostStatePresent: false, issues: [] };
     }
@@ -728,6 +739,12 @@ export class NetworkBridge {
     if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
       && snapshot.c !== undefined && snapshot.c !== this.getCoopDefenseMapId()) {
       issues.push(`Coop-Map: lokal=${this.getCoopDefenseMapId()} host=${snapshot.c}`);
+    }
+
+    if (!isCoopDefenseMode(snapshot.m ?? this.getGameMode())
+      && snapshot.t !== undefined
+      && normalizeTimeOfDay(snapshot.t) !== this.getLobbyTimeOfDayMinutes()) {
+      issues.push(`Uhrzeit: lokal=${this.getLobbyTimeOfDayMinutes()} host=${normalizeTimeOfDay(snapshot.t)}`);
     }
 
     return { consistent: issues.length === 0, hostStatePresent: true, issues };
@@ -790,6 +807,22 @@ export class NetworkBridge {
       return DEFAULT_COOP_DEFENSE_MAP_ID;
     }
     return getCoopDefenseMapConfig(stateValue).mapId;
+  }
+
+  /** Host-gesteuerte Uhrzeit der Lobby, in Minuten seit Mitternacht. */
+  getLobbyTimeOfDayMinutes(): number {
+    const stateValue = getState(KEY_TIME_OF_DAY);
+    return normalizeTimeOfDay(typeof stateValue === 'number' ? stateValue : DEFAULT_TIME_OF_DAY_MINUTES);
+  }
+
+  /** Setzt die Lobby-Uhrzeit und macht sie fuer alle Clients reliable sichtbar. */
+  setLobbyTimeOfDayMinutes(minutes: number): void {
+    if (!isHost()) return;
+    const normalized = normalizeTimeOfDay(minutes);
+    if (this.getLobbyTimeOfDayMinutes() === normalized && getState(KEY_TIME_OF_DAY) !== undefined) return;
+    setState(KEY_TIME_OF_DAY, normalized, true);
+    this.hostInvalidateLobbyReadyStateForAllPlayers();
+    this.hostPublishLobbySync();
   }
 
   setCoopDefenseMapId(mapId: string): void {

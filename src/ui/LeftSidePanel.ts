@@ -39,6 +39,7 @@ import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from
 import { getStoredCoopDefenseUpgradeProfile, getStoredHighestUnlockedCoopDefenseMapId, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { isCoopDefenseLoadoutItemSelectable } from '../utils/coopDefenseUpgrades';
+import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
 const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
@@ -74,6 +75,10 @@ const CONTROL_LABEL_OFFSET_Y = 1.5;
 const ARROW_BUTTON_W     = 24;
 const ARROW_BUTTON_H     = 24;
 const TEAM_SELECT_ARROW_OFFSET_X = NAME_COLOR_BUTTON_W / 2 - ARROW_BUTTON_W / 2;
+const TIME_SLIDER_TRACK_W = 192;
+const TIME_SLIDER_TRACK_X = CENTER_X - TIME_SLIDER_TRACK_W / 2;
+const TIME_SLIDER_TRACK_Y = MAP_ROW_Y + 8;
+const TIME_SLIDER_STEP_MINUTES = 15;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_W        = 188;
@@ -170,6 +175,14 @@ export class LeftSidePanel {
   private mapLabelText:    Phaser.GameObjects.Text | null = null;
   private mapNameText:     Phaser.GameObjects.Text | null = null;
   private mapArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
+  private timeSliderLabel: Phaser.GameObjects.Text | null = null;
+  private timeSliderTrack: Phaser.GameObjects.Rectangle | null = null;
+  private timeSliderFill: Phaser.GameObjects.Rectangle | null = null;
+  private timeSliderThumb: Phaser.GameObjects.Arc | null = null;
+  private timeSliderHitArea: Phaser.GameObjects.Rectangle | null = null;
+  private timeSliderDragging = false;
+  private timeSliderPointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
+  private timeSliderPointerUpHandler: (() => void) | null = null;
   private colorEditBtn:   Phaser.GameObjects.Image | null = null;
   private colorEditText:   Phaser.GameObjects.Text | null = null;
   private teamArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
@@ -328,6 +341,74 @@ export class LeftSidePanel {
     );
     objects.push(mapRightBtn.button, mapRightBtn.label);
     this.mapArrowButtons = { left: mapLeftBtn, right: mapRightBtn };
+
+    const timeSliderLabel = this.scene.add.text(
+      CENTER_X,
+      MAP_LABEL_Y,
+      `Uhrzeit: ${formatTimeOfDay(this.bridge.getLobbyTimeOfDayMinutes())}`,
+      LABEL_FONT,
+    )
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+    this.timeSliderLabel = timeSliderLabel;
+    objects.push(timeSliderLabel);
+
+    const timeSliderTrack = this.scene.add.rectangle(
+      TIME_SLIDER_TRACK_X,
+      TIME_SLIDER_TRACK_Y,
+      TIME_SLIDER_TRACK_W,
+      7,
+      COLORS.GREY_8,
+      0.95,
+    ).setOrigin(0, 0.5).setStrokeStyle(1, COLORS.GREY_6, 0.8).setScrollFactor(0);
+    this.timeSliderTrack = timeSliderTrack;
+    objects.push(timeSliderTrack);
+
+    const timeSliderFill = this.scene.add.rectangle(
+      TIME_SLIDER_TRACK_X,
+      TIME_SLIDER_TRACK_Y,
+      1,
+      5,
+      COLORS.BLUE_4,
+      0.9,
+    ).setOrigin(0, 0.5).setScrollFactor(0);
+    this.timeSliderFill = timeSliderFill;
+    objects.push(timeSliderFill);
+
+    const timeSliderThumb = this.scene.add.circle(
+      TIME_SLIDER_TRACK_X,
+      TIME_SLIDER_TRACK_Y,
+      7,
+      COLORS.GREY_3,
+      1,
+    ).setStrokeStyle(1, COLORS.BLUE_2, 1).setScrollFactor(0);
+    this.timeSliderThumb = timeSliderThumb;
+    objects.push(timeSliderThumb);
+
+    const timeSliderHitArea = this.scene.add.rectangle(
+      TIME_SLIDER_TRACK_X,
+      TIME_SLIDER_TRACK_Y,
+      TIME_SLIDER_TRACK_W,
+      28,
+      0x000000,
+      0,
+    ).setOrigin(0, 0.5).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    timeSliderHitArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (!this.isTimeSliderEnabled()) return;
+      this.timeSliderDragging = true;
+      this.applyTimeSliderPointer(pointer.x);
+    });
+    this.timeSliderHitArea = timeSliderHitArea;
+    objects.push(timeSliderHitArea);
+
+    this.timeSliderPointerMoveHandler = (pointer: Phaser.Input.Pointer) => {
+      if (this.timeSliderDragging) this.applyTimeSliderPointer(pointer.x);
+    };
+    this.timeSliderPointerUpHandler = () => {
+      this.timeSliderDragging = false;
+    };
+    this.scene.input.on('pointermove', this.timeSliderPointerMoveHandler);
+    this.scene.input.on('pointerup', this.timeSliderPointerUpHandler);
 
     // ── Trennlinie ──
     const divider = this.scene.add.graphics();
@@ -650,14 +731,16 @@ export class LeftSidePanel {
 
   /** Per-frame lobby update: rotate badger towards mouse. */
   updateLobby(): void {
-    if (!this.badgerPreview) return;
-    const pointer = this.scene.input.activePointer;
-    // Sprite is scrollFactor(0), so compare with screen coords directly
-    const angle = Phaser.Math.Angle.Between(
-      CENTER_X, BADGER_Y,
-      pointer.x, pointer.y,
-    );
-    this.badgerPreview.setRotation(angle);
+    if (this.badgerPreview) {
+      const pointer = this.scene.input.activePointer;
+      // Sprite is scrollFactor(0), so compare with screen coords directly
+      const angle = Phaser.Math.Angle.Between(
+        CENTER_X, BADGER_Y,
+        pointer.x, pointer.y,
+      );
+      this.badgerPreview.setRotation(angle);
+    }
+    this.refreshTimeSlider();
   }
 
   /** Aktualisiert den Picker live, solange er offen ist (jeden Lobby-Frame). */
@@ -704,6 +787,15 @@ export class LeftSidePanel {
   }
 
   destroy(): void {
+    if (this.timeSliderPointerMoveHandler) {
+      this.scene.input.off('pointermove', this.timeSliderPointerMoveHandler);
+      this.timeSliderPointerMoveHandler = null;
+    }
+    if (this.timeSliderPointerUpHandler) {
+      this.scene.input.off('pointerup', this.timeSliderPointerUpHandler);
+      this.timeSliderPointerUpHandler = null;
+    }
+    this.timeSliderDragging = false;
     this.closeNameEditPopup();
     this.cleanupPickerDismissListener();
     this.badgerPreview?.destroy();
@@ -1253,6 +1345,54 @@ export class LeftSidePanel {
       this.setCompactButtonState(this.mapArrowButtons.right, showMapSelector && isHost, enabled, alpha);
     }
     this.mapNameText?.setVisible(showMapSelector).setAlpha(1);
+
+    const showTimeHeader = !showMapSelector;
+    const showTimeSlider = showTimeHeader && isHost;
+    const timeEnabled = showTimeSlider && !this.lobbyFieldsLocked;
+    const timeAlpha = timeEnabled ? 1 : 0.42;
+    this.timeSliderLabel?.setVisible(showTimeHeader).setAlpha(showTimeHeader ? 1 : 0);
+    this.timeSliderTrack?.setVisible(showTimeSlider).setAlpha(timeAlpha);
+    this.timeSliderFill?.setVisible(showTimeSlider).setAlpha(timeAlpha);
+    this.timeSliderThumb?.setVisible(showTimeSlider).setAlpha(timeAlpha);
+    this.timeSliderHitArea?.setVisible(showTimeSlider);
+    if (timeEnabled) this.timeSliderHitArea?.setInteractive({ useHandCursor: true });
+    else this.timeSliderHitArea?.disableInteractive();
+    if (!timeEnabled) this.timeSliderDragging = false;
+    this.refreshTimeSlider();
+  }
+
+  private isTimeSliderEnabled(): boolean {
+    return !this.lobbyFieldsLocked
+      && this.bridge.isHost()
+      && !isCoopDefenseMode(this.bridge.getGameMode());
+  }
+
+  private refreshTimeSlider(): void {
+    const minutes = this.bridge.getLobbyTimeOfDayMinutes();
+    const fraction = minutes / MINUTES_PER_DAY;
+    this.timeSliderLabel?.setText(`Uhrzeit: ${formatTimeOfDay(minutes)}`);
+    this.timeSliderFill?.setDisplaySize(Math.max(1, TIME_SLIDER_TRACK_W * fraction), 5);
+    this.timeSliderThumb?.setPosition(
+      TIME_SLIDER_TRACK_X + TIME_SLIDER_TRACK_W * fraction,
+      TIME_SLIDER_TRACK_Y,
+    );
+  }
+
+  private applyTimeSliderPointer(pointerX: number): void {
+    if (!this.isTimeSliderEnabled()) return;
+    const fraction = Phaser.Math.Clamp(
+      (pointerX - TIME_SLIDER_TRACK_X) / TIME_SLIDER_TRACK_W,
+      0,
+      1,
+    );
+    const maxStep = Math.floor((MINUTES_PER_DAY - TIME_SLIDER_STEP_MINUTES) / TIME_SLIDER_STEP_MINUTES);
+    const step = Phaser.Math.Clamp(
+      Math.round(fraction * maxStep),
+      0,
+      maxStep,
+    );
+    this.bridge.setLobbyTimeOfDayMinutes(step * TIME_SLIDER_STEP_MINUTES);
+    this.refreshTimeSlider();
   }
 
   private updateTeamSelectorState(mode: GameMode, teamId: TeamId | null): void {
