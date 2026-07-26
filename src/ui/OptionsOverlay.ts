@@ -26,7 +26,6 @@ const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
 const TITLE_Y = CY - PANEL_H / 2 + 38;
-const SUBTITLE_Y = TITLE_Y + 36;
 const TRACK_W = 430;
 const TRACK_H = 18;
 const TRACK_X = CX - TRACK_W / 2;
@@ -54,6 +53,15 @@ const PREVIEW_COOLDOWN_MS = 120;
 const MUSIC_LOAD_BAR_H = 8;
 const MUSIC_LOAD_BAR_Y = CY + 192;
 const MUSIC_LOAD_LABEL_Y = MUSIC_LOAD_BAR_Y + 17;
+const SECTION_BLOCK_W = PANEL_W - 60;
+const GRAPHICS_HEADING_CONTENT_GAP = 44;
+const AUDIO_HEADING_CONTENT_GAP = 18;
+const GRAPHICS_HEADER_Y = QUALITY_BUTTON_Y - GRAPHICS_HEADING_CONTENT_GAP;
+const AUDIO_HEADER_Y = CY - 84 - AUDIO_HEADING_CONTENT_GAP;
+const GRAPHICS_BLOCK_TOP = GRAPHICS_HEADER_Y - 20;
+const GRAPHICS_BLOCK_BOTTOM = QUALITY_BUTTON_Y + QUALITY_BUTTON_H + 10;
+const AUDIO_BLOCK_TOP = GRAPHICS_BLOCK_BOTTOM + 8;
+const AUDIO_BLOCK_BOTTOM = MUSIC_LOAD_BAR_Y + 16;
 
 // Partie-Abbruch (nur Host, nur waehrend einer laufenden Runde sichtbar)
 const ABORT_DIVIDER_Y = CY + 224;
@@ -117,7 +125,7 @@ const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
   },
   {
     key: 'effects',
-    label: 'Effects',
+    label: 'Effekte',
     labelY: CY + 12,
     trackY: CY + 62,
     palette: { dark: COLORS.BLUE_5, mid: COLORS.BLUE_3, light: COLORS.BLUE_1 },
@@ -125,7 +133,7 @@ const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
   },
   {
     key: 'music',
-    label: 'Music',
+    label: 'Musik',
     labelY: CY + 108,
     trackY: CY + 158,
     palette: { dark: COLORS.PURPLE_5, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
@@ -171,7 +179,6 @@ export class OptionsOverlay {
   private visible = false;
   private draggingSliderKey: VolumeSliderKey | null = null;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
-  private keyHandler: ((event: KeyboardEvent) => void) | null = null;
   private pointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
   private pointerUpHandler: (() => void) | null = null;
   private musicLoadTrack: Phaser.GameObjects.Rectangle | null = null;
@@ -248,25 +255,17 @@ export class OptionsOverlay {
       }).setOrigin(0.5).setScrollFactor(0),
     );
 
-    objects.push(
-      this.scene.add.text(CX, SUBTITLE_Y, 'Grafikqualit\u00e4t', {
-        fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
-      }).setOrigin(0.5).setScrollFactor(0),
-    );
-
-    objects.push(
-      this.scene.add.rectangle(CX, SUBTITLE_Y + 26, PANEL_W - 60, 2, ACCENT)
-        .setScrollFactor(0),
+    this.buildSectionBlock(
+      'Grafikqualit\u00e4t',
+      GRAPHICS_BLOCK_TOP,
+      GRAPHICS_BLOCK_BOTTOM,
+      GRAPHICS_HEADER_Y,
+      objects,
     );
 
     this.buildQualitySelector(objects);
 
-    objects.push(
-      this.scene.add.text(CX, CY - 130, 'Audio', {
-        fontSize: '16px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
-      }).setOrigin(0.5).setScrollFactor(0),
-      this.scene.add.rectangle(CX, CY - 104, PANEL_W - 60, 2, ACCENT).setScrollFactor(0),
-    );
+    this.buildSectionBlock('Audio', AUDIO_BLOCK_TOP, AUDIO_BLOCK_BOTTOM, AUDIO_HEADER_Y, objects);
 
     for (const definition of SLIDER_DEFINITIONS) {
       this.buildSlider(definition, objects);
@@ -275,7 +274,7 @@ export class OptionsOverlay {
     this.buildAbortSection(objects);
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ O / ESC / Klick zum Schließen ]', {
+      this.scene.add.text(CX, FOOTER_Y, '[ O / Klick zum Schließen ]', {
         fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -313,9 +312,6 @@ export class OptionsOverlay {
       this.dimRect?.setInteractive().once('pointerdown', () => this.hide());
     });
 
-    this.keyHandler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') this.hide();
-    };
     this.pointerMoveHandler = (pointer: Phaser.Input.Pointer) => {
       if (!this.draggingSliderKey) return;
       this.applyPointerValue(this.draggingSliderKey, pointer.x, true);
@@ -324,7 +320,6 @@ export class OptionsOverlay {
       this.draggingSliderKey = null;
     };
 
-    this.scene.input.keyboard?.on('keydown', this.keyHandler);
     this.scene.input.on('pointermove', this.pointerMoveHandler);
     this.scene.input.on('pointerup', this.pointerUpHandler);
   }
@@ -337,10 +332,6 @@ export class OptionsOverlay {
     this.dismissDelay?.destroy();
     this.dismissDelay = null;
     this.dimRect?.disableInteractive().removeAllListeners();
-    if (this.keyHandler) {
-      this.scene.input.keyboard?.off('keydown', this.keyHandler);
-      this.keyHandler = null;
-    }
     if (this.pointerMoveHandler) {
       this.scene.input.off('pointermove', this.pointerMoveHandler);
       this.pointerMoveHandler = null;
@@ -401,6 +392,36 @@ export class OptionsOverlay {
     this.setSliderValue('music', this.audioSystem.getMusicVolume(), false, false);
   }
 
+  private buildSectionBlock(
+    label: string,
+    top: number,
+    bottom: number,
+    headingY: number,
+    objects: Phaser.GameObjects.GameObject[],
+  ): void {
+    const background = this.scene.add.rectangle(
+      CX,
+      (top + bottom) / 2,
+      SECTION_BLOCK_W,
+      bottom - top,
+      COLORS.GREY_8,
+      0.28,
+    ).setStrokeStyle(1, COLORS.GREY_5, 0.9).setScrollFactor(0);
+    const heading = this.scene.add.text(
+      CX,
+      headingY,
+      label,
+      {
+        fontSize: '16px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(ACCENT),
+      },
+    ).setOrigin(0.5).setScrollFactor(0);
+
+    objects.push(background, heading);
+  }
+
   private buildQualitySelector(objects: Phaser.GameObjects.GameObject[]): void {
     const totalWidth = QUALITY_OPTIONS.length * QUALITY_BUTTON_W
       + (QUALITY_OPTIONS.length - 1) * QUALITY_BUTTON_GAP;
@@ -425,11 +446,6 @@ export class OptionsOverlay {
       objects.push(background, label);
     });
 
-    objects.push(
-      this.scene.add.text(CX, QUALITY_BUTTON_Y + 42, 'Nur Darstellung \u2013 Physik und Netzwerk bleiben unver\u00e4ndert.', {
-        fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
-      }).setOrigin(0.5).setScrollFactor(0),
-    );
   }
 
   private syncQualityButtons(): void {

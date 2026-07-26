@@ -45,27 +45,41 @@ const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
 const ARENA_PANEL_W = Math.round(DEFAULT_ARENA_OFFSET_X * 1.5);
 const CENTER_X     = LOBBY_PANEL_W / 2;
 const ARENA_CENTER_X = ARENA_PANEL_W / 2;
+const LOBBY_CONTROL_COLOR = COLORS.GREY_7;
+const LOBBY_CONTROL_STROKE = COLORS.GREY_5;
+const LOBBY_CONTROL_TEXT = toCssColor(COLORS.GREY_2);
 const LOBBY_TOP_OFFSET_Y = 246;
 const UPPER_INFO_SPACING_STEP = LOBBY_SIDE_MENU_EXTRA_HEIGHT / 8;
 const NAME_LABEL_Y = 60 + LOBBY_TOP_OFFSET_Y;
 const NAME_VALUE_Y = 80 + LOBBY_TOP_OFFSET_Y;
 const EDIT_BTN_Y   = 114 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP;
-const MODE_LABEL_Y = 132 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 2;
-const MODE_ROW_Y   = 150 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 3;
-const MAP_LABEL_Y  = 174 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 4;
-const MAP_ROW_Y    = 192 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 5;
-const DIVIDER1_Y   = 218 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 6;
-const BADGER_Y     = 264 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 7;
-const DIVIDER2_Y   = 328 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
+const MODE_LABEL_Y = 162 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 2;
+const MODE_ROW_Y   = 180 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 3;
+const MAP_LABEL_Y  = 204 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 4;
+const MAP_ROW_Y    = 222 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 5;
+const DIVIDER1_Y   = 248 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 6;
+const BADGER_Y     = 294 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 7;
 const BADGER_SIZE        = 48;   // Anzeigegröße
 const BADGER_CLICK_SIZE  = 56;   // Klickbare Fläche
-const TEAM_SELECT_Y      = BADGER_Y + BADGER_SIZE / 2 + 6;
+const DIVIDER2_Y         = BADGER_Y + BADGER_SIZE / 2 + 14;
+const CONTROL_BUTTON_DY  = 8;
+const NAME_COLOR_BUTTON_W = 128;
+const NAME_COLOR_BUTTON_H = 28;
+const NAME_COLOR_BUTTON_GAP = 8;
+const NAME_BUTTON_X      = CENTER_X - (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
+const COLOR_BUTTON_X     = CENTER_X + (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
+const NAME_COLOR_ROW_Y   = EDIT_BTN_Y + CONTROL_BUTTON_DY;
+const NAME_MODE_DIVIDER_Y = NAME_COLOR_ROW_Y + NAME_COLOR_BUTTON_H / 2 + 12;
+const CONTROL_LABEL_OFFSET_Y = 1.5;
+const ARROW_BUTTON_W     = 24;
+const ARROW_BUTTON_H     = 24;
+const TEAM_SELECT_ARROW_OFFSET_X = NAME_COLOR_BUTTON_W / 2 - ARROW_BUTTON_W / 2;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_W        = 188;
 const PICKER_H        = 148;
 const PICKER_WORLD_X  = (LOBBY_PANEL_W - PICKER_W) / 2;
-const PICKER_WORLD_Y  = BADGER_Y + 16;
+const PICKER_WORLD_Y  = NAME_COLOR_ROW_Y + NAME_COLOR_BUTTON_H / 2 + 10;
 const PICKER_PADDING  = 10;
 const SWATCH_SIZE     = 32;
 const SWATCH_GAP      = 4;
@@ -75,23 +89,22 @@ const TEX_SWATCH_PREFIX = '__picker_swatch_';
 
 const LABEL_FONT = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2) };
 const NAME_FONT  = { fontSize: '26px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), fontStyle: 'bold' as const };
-const EDIT_FONT  = { fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_1) };
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
-const CAROUSEL_START_Y  = 354 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
-const CAROUSEL_ROW_STEP = 52;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
-const CAROUSEL_GROUP_DY = 20;    // Offset erste Karussell-Zeile unter "Loadout:"
+const CAROUSEL_START_Y  = DIVIDER2_Y + 18;
+const CAROUSEL_ROW_STEP = 46;    // Abstand zwischen Slot-Gruppen (Pfeile + Label unten)
+const CAROUSEL_GROUP_DY = 28;    // Offset erste Karussell-Zeile unter "Loadout:"
 const CAROUSEL_LABEL_DY = 20;    // Slot-Label-Offset UNTER den Pfeilen
 
 // ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const DIVIDER3_Y  = 578 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
-const MENU_BTN_Y  = 608 + LOBBY_TOP_OFFSET_Y + LOBBY_SIDE_MENU_EXTRA_HEIGHT;
+const DIVIDER3_Y  = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 3 * CAROUSEL_ROW_STEP + CAROUSEL_LABEL_DY + 28;
+const MENU_BTN_Y  = DIVIDER3_Y + 30;
 const MENU_BTN_W  = 92;
 const MENU_BTN_H  = 34;
 const OPTIONS_BTN_X = CENTER_X - 50;
 const HELP_BTN_X = CENTER_X + 50;
-const ARROW_X_LEFT      = 9;
-const ARROW_X_RIGHT     = LOBBY_PANEL_W - 51;
+const ARROW_X_LEFT      = 20;
+const ARROW_X_RIGHT     = LOBBY_PANEL_W - 20;
 const ITEM_NAME_X       = CENTER_X;
 
 const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense'];
@@ -106,6 +119,14 @@ function getTeamLabel(teamId: TeamId | null): string {
 type LoadoutCarouselItem = {
   id: string;
   displayName: string;
+};
+
+type CompactLabel = Phaser.GameObjects.Text | Phaser.GameObjects.Graphics;
+
+type CompactButton = {
+  button: Phaser.GameObjects.Image;
+  label: CompactLabel;
+  text?: Phaser.GameObjects.Text;
 };
 
 // Item-Arrays nach Slot gefiltert
@@ -142,14 +163,16 @@ export class LeftSidePanel {
   private arenaHUD!:       ArenaHUD;
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
-  private editBtn:         Phaser.GameObjects.Text | null = null;
+  private editBtn:         Phaser.GameObjects.Image | null = null;
+  private editBtnLabel:    Phaser.GameObjects.Text | null = null;
   private modeNameText:    Phaser.GameObjects.Text | null = null;
-  private modeArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
+  private modeArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
   private mapLabelText:    Phaser.GameObjects.Text | null = null;
   private mapNameText:     Phaser.GameObjects.Text | null = null;
-  private mapArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
+  private mapArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
+  private colorEditBtn:   Phaser.GameObjects.Image | null = null;
   private colorEditText:   Phaser.GameObjects.Text | null = null;
-  private teamArrowButtons: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text } | null = null;
+  private teamArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
   private nameEditEnabled  = true;
   private nameEditOpen     = false;
   private nameEditPopup:   HTMLDivElement | null = null;
@@ -171,7 +194,7 @@ export class LeftSidePanel {
   // Loadout-Karussell
   private loadoutIndices:   Record<LoadoutSlot, number> = { weapon1: 0, weapon2: 0, utility: 0, ultimate: 0 };
   private loadoutNameTexts: Partial<Record<LoadoutSlot, Phaser.GameObjects.Text>> = {};
-  private loadoutArrowButtons: Partial<Record<LoadoutSlot, { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text }>> = {};
+  private loadoutArrowButtons: Partial<Record<LoadoutSlot, { left: CompactButton; right: CompactButton }>> = {};
   private loadoutEnabled    = true;
   private lobbyFieldsLocked = false;
   private helpOverlay:      HelpOverlay | null = null;
@@ -219,15 +242,34 @@ export class LeftSidePanel {
       .setScrollFactor(0);
     objects.push(this.localNameText);
 
-    const editBtn = this.scene.add.text(CENTER_X, EDIT_BTN_Y, '[ ÄNDERN ]', EDIT_FONT)
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.openNameEdit())
-      .on('pointerover',  () => editBtn.setAlpha(0.85))
-      .on('pointerout',   () => editBtn.setAlpha(1.0));
-    this.editBtn = editBtn;
-    objects.push(editBtn);
+    const editControl = this.createCompactButton(
+      NAME_BUTTON_X,
+      NAME_COLOR_ROW_Y,
+      'NAME \u00c4NDERN',
+      NAME_COLOR_BUTTON_W,
+      NAME_COLOR_BUTTON_H,
+      () => this.openNameEdit(),
+    );
+    this.editBtn = editControl.button;
+    this.editBtnLabel = editControl.text ?? null;
+    objects.push(editControl.button, editControl.label);
+
+    const colorEditBtn = this.createCompactButton(
+      COLOR_BUTTON_X,
+      NAME_COLOR_ROW_Y,
+      'FARBE \u00c4NDERN',
+      NAME_COLOR_BUTTON_W,
+      NAME_COLOR_BUTTON_H,
+      () => this.toggleColorPicker(),
+    );
+    this.colorEditBtn = colorEditBtn.button;
+    this.colorEditText = colorEditBtn.text ?? null;
+    objects.push(colorEditBtn.button, colorEditBtn.label);
+
+    objects.push(
+      this.scene.add.rectangle(CENTER_X, NAME_MODE_DIVIDER_Y, LOBBY_PANEL_W - 40, 1, COLORS.GREY_6, 0.5)
+        .setScrollFactor(0),
+    );
 
     objects.push(
       this.scene.add.text(CENTER_X, MODE_LABEL_Y, 'Spielmodus:', LABEL_FONT)
@@ -235,13 +277,13 @@ export class LeftSidePanel {
         .setScrollFactor(0),
     );
 
-    const modeLeftBtn = this.scene.add.text(ARROW_X_LEFT, MODE_ROW_Y, '[ < ]', EDIT_FONT)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.stepGameMode(-1))
-      .on('pointerover', () => modeLeftBtn.setAlpha(0.85))
-      .on('pointerout', () => modeLeftBtn.setAlpha(1.0));
-    objects.push(modeLeftBtn);
+    const modeLeftBtn = this.createChevronButton(
+      ARROW_X_LEFT,
+      MODE_ROW_Y + CONTROL_BUTTON_DY,
+      'left',
+      () => this.stepGameMode(-1),
+    );
+    objects.push(modeLeftBtn.button, modeLeftBtn.label);
 
     const modeNameText = this.scene.add.text(ITEM_NAME_X, MODE_ROW_Y, '', {
       fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
@@ -249,13 +291,13 @@ export class LeftSidePanel {
     this.modeNameText = modeNameText;
     objects.push(modeNameText);
 
-    const modeRightBtn = this.scene.add.text(ARROW_X_RIGHT, MODE_ROW_Y, '[ > ]', EDIT_FONT)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.stepGameMode(+1))
-      .on('pointerover', () => modeRightBtn.setAlpha(0.85))
-      .on('pointerout', () => modeRightBtn.setAlpha(1.0));
-    objects.push(modeRightBtn);
+    const modeRightBtn = this.createChevronButton(
+      ARROW_X_RIGHT,
+      MODE_ROW_Y + CONTROL_BUTTON_DY,
+      'right',
+      () => this.stepGameMode(+1),
+    );
+    objects.push(modeRightBtn.button, modeRightBtn.label);
     this.modeArrowButtons = { left: modeLeftBtn, right: modeRightBtn };
 
     const mapLabelText = this.scene.add.text(CENTER_X, MAP_LABEL_Y, 'Map:', LABEL_FONT)
@@ -264,13 +306,13 @@ export class LeftSidePanel {
     this.mapLabelText = mapLabelText;
     objects.push(mapLabelText);
 
-    const mapLeftBtn = this.scene.add.text(ARROW_X_LEFT, MAP_ROW_Y, '[ < ]', EDIT_FONT)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.stepCoopDefenseMap(-1))
-      .on('pointerover', () => mapLeftBtn.setAlpha(0.85))
-      .on('pointerout', () => mapLeftBtn.setAlpha(1.0));
-    objects.push(mapLeftBtn);
+    const mapLeftBtn = this.createChevronButton(
+      ARROW_X_LEFT,
+      MAP_ROW_Y + CONTROL_BUTTON_DY,
+      'left',
+      () => this.stepCoopDefenseMap(-1),
+    );
+    objects.push(mapLeftBtn.button, mapLeftBtn.label);
 
     const mapNameText = this.scene.add.text(ITEM_NAME_X, MAP_ROW_Y, '', {
       fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
@@ -278,13 +320,13 @@ export class LeftSidePanel {
     this.mapNameText = mapNameText;
     objects.push(mapNameText);
 
-    const mapRightBtn = this.scene.add.text(ARROW_X_RIGHT, MAP_ROW_Y, '[ > ]', EDIT_FONT)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.stepCoopDefenseMap(+1))
-      .on('pointerover', () => mapRightBtn.setAlpha(0.85))
-      .on('pointerout', () => mapRightBtn.setAlpha(1.0));
-    objects.push(mapRightBtn);
+    const mapRightBtn = this.createChevronButton(
+      ARROW_X_RIGHT,
+      MAP_ROW_Y + CONTROL_BUTTON_DY,
+      'right',
+      () => this.stepCoopDefenseMap(+1),
+    );
+    objects.push(mapRightBtn.button, mapRightBtn.label);
     this.mapArrowButtons = { left: mapLeftBtn, right: mapRightBtn };
 
     // ── Trennlinie ──
@@ -305,31 +347,25 @@ export class LeftSidePanel {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.toggleColorPicker());
     objects.push(this.badgerClickZone);
-    const colorEditText = this.scene.add.text(CENTER_X, BADGER_Y + BADGER_SIZE / 2 + 6, '[ Farbe ändern ]', EDIT_FONT)
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.toggleColorPicker());
-    this.colorEditText = colorEditText;
-    objects.push(colorEditText);
+    const teamLeftBtn = this.createChevronButton(
+      COLOR_BUTTON_X - TEAM_SELECT_ARROW_OFFSET_X,
+      NAME_COLOR_ROW_Y,
+      'left',
+      () => this.stepTeam(-1),
+    );
+    teamLeftBtn.button.setVisible(false);
+    teamLeftBtn.label.setVisible(false);
+    objects.push(teamLeftBtn.button, teamLeftBtn.label);
 
-    const teamLeftBtn = this.scene.add.text(ARROW_X_LEFT, TEAM_SELECT_Y, '[ < ]', EDIT_FONT)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.stepTeam(-1))
-      .on('pointerover', () => teamLeftBtn.setAlpha(0.85))
-      .on('pointerout', () => teamLeftBtn.setAlpha(1.0));
-    teamLeftBtn.setVisible(false);
-    objects.push(teamLeftBtn);
-
-    const teamRightBtn = this.scene.add.text(ARROW_X_RIGHT, TEAM_SELECT_Y, '[ > ]', EDIT_FONT)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.stepTeam(+1))
-      .on('pointerover', () => teamRightBtn.setAlpha(0.85))
-      .on('pointerout', () => teamRightBtn.setAlpha(1.0));
-    teamRightBtn.setVisible(false);
-    objects.push(teamRightBtn);
+    const teamRightBtn = this.createChevronButton(
+      COLOR_BUTTON_X + TEAM_SELECT_ARROW_OFFSET_X,
+      NAME_COLOR_ROW_Y,
+      'right',
+      () => this.stepTeam(+1),
+    );
+    teamRightBtn.button.setVisible(false);
+    teamRightBtn.label.setVisible(false);
+    objects.push(teamRightBtn.button, teamRightBtn.label);
     this.teamArrowButtons = { left: teamLeftBtn, right: teamRightBtn };
 
     // ── Trennlinie 2 ──
@@ -344,7 +380,9 @@ export class LeftSidePanel {
 
     // ── Loadout-Karussell ──
     objects.push(
-      this.scene.add.text(20, CAROUSEL_START_Y, 'Loadout:', LABEL_FONT).setScrollFactor(0),
+      this.scene.add.text(CENTER_X, CAROUSEL_START_Y, 'Loadout:', LABEL_FONT)
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0),
     );
 
     this.applyStoredPlayerNamePreference();
@@ -354,13 +392,13 @@ export class LeftSidePanel {
       const arrowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + i * CAROUSEL_ROW_STEP;
       const labelY = arrowY + CAROUSEL_LABEL_DY;
 
-      const leftBtn = this.scene.add.text(ARROW_X_LEFT, arrowY, '[ < ]', EDIT_FONT)
-        .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.stepCarousel(slot, -1))
-        .on('pointerover',  () => leftBtn.setAlpha(0.85))
-        .on('pointerout',   () => leftBtn.setAlpha(1.0));
-      objects.push(leftBtn);
+      const leftBtn = this.createChevronButton(
+        ARROW_X_LEFT,
+        arrowY + CONTROL_BUTTON_DY,
+        'left',
+        () => this.stepCarousel(slot, -1),
+      );
+      objects.push(leftBtn.button, leftBtn.label);
 
       const nameText = this.scene.add.text(ITEM_NAME_X, arrowY, '', {
         fontSize: '15px', fontFamily: 'monospace', color: '#e0e0e0', fontStyle: 'bold',
@@ -368,13 +406,13 @@ export class LeftSidePanel {
       this.loadoutNameTexts[slot] = nameText;
       objects.push(nameText);
 
-      const rightBtn = this.scene.add.text(ARROW_X_RIGHT, arrowY, '[ > ]', EDIT_FONT)
-        .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.stepCarousel(slot, +1))
-        .on('pointerover',  () => rightBtn.setAlpha(0.85))
-        .on('pointerout',   () => rightBtn.setAlpha(1.0));
-      objects.push(rightBtn);
+      const rightBtn = this.createChevronButton(
+        ARROW_X_RIGHT,
+        arrowY + CONTROL_BUTTON_DY,
+        'right',
+        () => this.stepCarousel(slot, +1),
+      );
+      objects.push(rightBtn.button, rightBtn.label);
       this.loadoutArrowButtons[slot] = { left: leftBtn, right: rightBtn };
 
       // Slot-Label zentriert UNTER den Pfeilen
@@ -430,7 +468,7 @@ export class LeftSidePanel {
       .setScrollFactor(0);
     objects.push(helpBtn);
     const helpLabel = this.scene.add.text(HELP_BTN_X, MENU_BTN_Y, 'HILFE', {
-      fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold',
+      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold',
       color: toCssColor(COLORS.GOLD_1),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(helpLabel);
@@ -1018,17 +1056,110 @@ export class LeftSidePanel {
     });
   }
 
+  private createCompactButton(
+    x: number,
+    y: number,
+    labelText: string,
+    width: number,
+    height: number,
+    onClick: () => void,
+    fontSize = '13px',
+    labelOffsetY = CONTROL_LABEL_OFFSET_Y,
+    iconDirection: 'left' | 'right' | null = null,
+  ): CompactButton {
+    const textureKey = `_lsp_compact_btn_${width}x${height}`;
+    const button = this.scene.add.image(
+      x,
+      y,
+      ensureGlossyButtonTexture(
+        this.scene,
+        textureKey,
+        width,
+        height,
+        LOBBY_CONTROL_COLOR,
+        LOBBY_CONTROL_STROKE,
+      ),
+    )
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', onClick)
+      .setScrollFactor(0);
+    const label: CompactLabel = iconDirection
+      ? this.createChevronIcon(x, y, iconDirection)
+      : this.scene.add.text(x, y + labelOffsetY, labelText, {
+        fontSize,
+        fontFamily: 'monospace',
+        color: LOBBY_CONTROL_TEXT,
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0);
+    attachHoverEffect(this.scene, button, label);
+    return { button, label, text: iconDirection ? undefined : label as Phaser.GameObjects.Text };
+  }
+
+  private createChevronButton(
+    x: number,
+    y: number,
+    direction: 'left' | 'right',
+    onClick: () => void,
+  ): CompactButton {
+    return this.createCompactButton(
+      x,
+      y,
+      '',
+      ARROW_BUTTON_W,
+      ARROW_BUTTON_H,
+      onClick,
+      '13px',
+      0,
+      direction,
+    );
+  }
+
+  private createChevronIcon(
+    x: number,
+    y: number,
+    direction: 'left' | 'right',
+  ): Phaser.GameObjects.Graphics {
+    const icon = this.scene.add.graphics();
+    icon.lineStyle(1.8, COLORS.GREY_2, 1);
+    icon.beginPath();
+    if (direction === 'left') {
+      icon.moveTo(3, -4);
+      icon.lineTo(-2, 0);
+      icon.lineTo(3, 4);
+    } else {
+      icon.moveTo(-3, -4);
+      icon.lineTo(2, 0);
+      icon.lineTo(-3, 4);
+    }
+    icon.strokePath();
+    icon.setPosition(x, y).setScrollFactor(0);
+    return icon;
+  }
+
+  private setCompactButtonState(
+    control: CompactButton,
+    visible: boolean,
+    enabled: boolean,
+    alpha = 1,
+  ): void {
+    control.button.setVisible(visible).setAlpha(alpha);
+    control.label.setVisible(visible).setAlpha(alpha);
+    if (enabled) control.button.setInteractive({ useHandCursor: true });
+    else control.button.disableInteractive();
+  }
+
   private closeNameEditPopup(): void {
     this.closeNameEditPopupFn?.();
   }
 
   private updateNameEditButtonVisibility(): void {
-    this.editBtn?.setVisible(!this.lobbyFieldsLocked);
-    if (this.lobbyFieldsLocked) {
-      this.editBtn?.disableInteractive();
-      return;
+    const enabled = !this.lobbyFieldsLocked;
+    if (this.editBtn) {
+      this.editBtn.setVisible(enabled).setAlpha(enabled ? 1 : 0);
+      if (enabled) this.editBtn.setInteractive({ useHandCursor: true });
+      else this.editBtn.disableInteractive();
     }
-    this.editBtn?.setInteractive({ useHandCursor: true });
+    this.editBtnLabel?.setVisible(enabled).setAlpha(enabled ? 1 : 0);
   }
 
   private updateColorEditState(): void {
@@ -1038,11 +1169,15 @@ export class LeftSidePanel {
     if (enabled) this.badgerClickZone.setInteractive({ useHandCursor: true });
     else this.badgerClickZone.disableInteractive();
 
-    this.colorEditText?.setVisible(!usesTeamColors(mode) && !this.lobbyFieldsLocked);
-    if (!this.colorEditText) return;
-    this.colorEditText.setText('[ Farbe aendern ]');
-    if (enabled) this.colorEditText.setInteractive({ useHandCursor: true });
-    else this.colorEditText.disableInteractive();
+    const visible = !usesTeamColors(mode) && !this.lobbyFieldsLocked;
+    this.colorEditBtn?.setVisible(visible).setAlpha(visible ? 1 : 0);
+    this.colorEditText
+      ?.setPosition(COLOR_BUTTON_X, NAME_COLOR_ROW_Y + CONTROL_LABEL_OFFSET_Y)
+      .setVisible(visible)
+      .setAlpha(visible ? 1 : 0)
+      .setText('FARBE \u00c4NDERN');
+    if (enabled) this.colorEditBtn?.setInteractive({ useHandCursor: true });
+    else this.colorEditBtn?.disableInteractive();
   }
 
   private updateLoadoutArrowVisibility(): void {
@@ -1056,15 +1191,8 @@ export class LeftSidePanel {
     const buttons = this.loadoutArrowButtons[slot];
     if (!buttons) return;
     const enabled = !this.lobbyFieldsLocked && this.getSlotItems(slot).length > 1;
-    buttons.left.setVisible(enabled);
-    buttons.right.setVisible(enabled);
-    if (enabled) {
-      buttons.left.setInteractive({ useHandCursor: true });
-      buttons.right.setInteractive({ useHandCursor: true });
-    } else {
-      buttons.left.disableInteractive();
-      buttons.right.disableInteractive();
-    }
+    this.setCompactButtonState(buttons.left, enabled, enabled);
+    this.setCompactButtonState(buttons.right, enabled, enabled);
   }
 
   private stepGameMode(delta: -1 | 1): void {
@@ -1107,14 +1235,9 @@ export class LeftSidePanel {
     const isHost = this.bridge.isHost();
     const enabled = !this.lobbyFieldsLocked && isHost;
     const alpha = enabled ? 1 : 0.35;
-    this.modeArrowButtons?.left.setVisible(isHost).setAlpha(alpha);
-    this.modeArrowButtons?.right.setVisible(isHost).setAlpha(alpha);
-    if (enabled) {
-      this.modeArrowButtons?.left.setInteractive({ useHandCursor: true });
-      this.modeArrowButtons?.right.setInteractive({ useHandCursor: true });
-    } else {
-      this.modeArrowButtons?.left.disableInteractive();
-      this.modeArrowButtons?.right.disableInteractive();
+    if (this.modeArrowButtons) {
+      this.setCompactButtonState(this.modeArrowButtons.left, isHost, enabled, alpha);
+      this.setCompactButtonState(this.modeArrowButtons.right, isHost, enabled, alpha);
     }
   }
 
@@ -1125,17 +1248,11 @@ export class LeftSidePanel {
     const alpha = enabled ? 1 : 0.35;
 
     this.mapLabelText?.setVisible(showMapSelector);
-    this.mapArrowButtons?.left.setVisible(showMapSelector && isHost).setAlpha(alpha);
-    this.mapArrowButtons?.right.setVisible(showMapSelector && isHost).setAlpha(alpha);
-    this.mapNameText?.setVisible(showMapSelector).setAlpha(1);
-
-    if (enabled) {
-      this.mapArrowButtons?.left.setInteractive({ useHandCursor: true });
-      this.mapArrowButtons?.right.setInteractive({ useHandCursor: true });
-    } else {
-      this.mapArrowButtons?.left.disableInteractive();
-      this.mapArrowButtons?.right.disableInteractive();
+    if (this.mapArrowButtons) {
+      this.setCompactButtonState(this.mapArrowButtons.left, showMapSelector && isHost, enabled, alpha);
+      this.setCompactButtonState(this.mapArrowButtons.right, showMapSelector && isHost, enabled, alpha);
     }
+    this.mapNameText?.setVisible(showMapSelector).setAlpha(1);
   }
 
   private updateTeamSelectorState(mode: GameMode, teamId: TeamId | null): void {
@@ -1147,21 +1264,18 @@ export class LeftSidePanel {
       this.closeColorPicker();
     }
 
-    this.teamArrowButtons?.left.setVisible(showTeamSelect).setAlpha(alpha);
-    this.teamArrowButtons?.right.setVisible(showTeamSelect).setAlpha(alpha);
-    if (canChangeTeam) {
-      this.teamArrowButtons?.left.setInteractive({ useHandCursor: true });
-      this.teamArrowButtons?.right.setInteractive({ useHandCursor: true });
-    } else {
-      this.teamArrowButtons?.left.disableInteractive();
-      this.teamArrowButtons?.right.disableInteractive();
+    if (this.teamArrowButtons) {
+      this.setCompactButtonState(this.teamArrowButtons.left, showTeamSelect, canChangeTeam, alpha);
+      this.setCompactButtonState(this.teamArrowButtons.right, showTeamSelect, canChangeTeam, alpha);
     }
 
     if (!this.colorEditText) return;
     if (showTeamSelect) {
-      this.colorEditText.setVisible(true);
+      this.colorEditBtn?.setVisible(false).disableInteractive();
+      this.colorEditText
+        .setPosition(COLOR_BUTTON_X, NAME_COLOR_ROW_Y + CONTROL_LABEL_OFFSET_Y)
+        .setVisible(true);
       this.colorEditText.setText(getTeamLabel(teamId));
-      this.colorEditText.disableInteractive();
     } else {
       this.updateColorEditState();
     }
