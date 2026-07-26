@@ -2440,9 +2440,9 @@ export const UTILITY_CONFIGS = {
     projectileSize:      32,
     fuseTime:            0,             // kein Zünder
     maxBounces:          0,
-    directDamage:        200,           // massiver Direkttreffer-Schaden
-    laserDamage:         10,            // Schaden pro Laser-Treffer
-    laserRadius:         256,           // Laser-Reichweite in px
+    directDamage:        300,           // massiver Direkttreffer-Schaden
+    laserDamage:         20,            // Schaden pro Laser-Treffer
+    laserRadius:         184,           // Laser-Reichweite in px
     laserInterval:       100,           // alle 100ms Laser-Salve
     allowedSlots:        [],            // NICHT im Loadout-Menü wählbar
     skipCooldownPublish: true,          // kein Cooldown-Publish (Ammo-basiert, Rollback stellt alten CD her)
