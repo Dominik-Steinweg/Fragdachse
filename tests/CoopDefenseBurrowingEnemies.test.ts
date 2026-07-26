@@ -5,7 +5,7 @@ import {
   getCoopDefenseEnemyKindIndex,
 } from '../src/config/coopDefenseEnemies';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
-import { DASH_F_MIN, DASH_F_START, DASH_T1_S, DASH_T2_S } from '../src/config';
+import { DASH_F_MIN, DASH_F_START, DASH_T1_S, DASH_T2_S, VOID_FIRE_COLOR } from '../src/config';
 import { decodeEnemyUpserts, encodeEnemyUpsert } from '../src/network/enemySnapshotCodec';
 import type { SyncedEnemyDeltaState } from '../src/types';
 
@@ -28,11 +28,12 @@ describe('Alien-Dachs', () => {
     expect(alien.trainAwareness).toBeDefined();
   });
 
-  it('fires a slower, homing red copy of the plasma gun at players only', () => {
+  it('fires a slower, homing purple copy of the plasma gun at players only', () => {
     const plasma = WEAPON_CONFIGS.PLASMA;
     const alienPlasma = WEAPON_CONFIGS.ALIEN_BADGER_PLASMA;
     expect(alienPlasma.cooldown).toBeGreaterThan(plasma.cooldown);
     expect(alienPlasma.projectileColor).not.toBe(plasma.projectileColor);
+    expect(alienPlasma.projectileColor).toBe(VOID_FIRE_COLOR);
 
     if (plasma.fire.type !== 'projectile' || alienPlasma.fire.type !== 'projectile') {
       throw new Error('Beide Plasma-Varianten muessen Projektilwaffen sein');
@@ -105,6 +106,8 @@ describe('Pyro-Dachs', () => {
     expect(pyro.knockbackFactor!).toBeLessThan(alien.knockbackFactor!);
     expect(pyro.movementTarget).toBe('players');
     expect(pyro.xp).toBeGreaterThan(alien.xp);
+    expect(pyro.color).toBe(VOID_FIRE_COLOR);
+    expect(pyro.glow?.color).toBe(0xc34cff);
   });
 
   it('always fires burning bullets from its glock variant, but aims worse than a player', () => {
@@ -115,6 +118,7 @@ describe('Pyro-Dachs', () => {
     expect(WEAPON_CONFIGS.GLOCK.burnOnHit?.damagePerTick).toBe(0);
     expect(glock.burnOnHit!.durationMs).toBe(2000);
     expect(glock.burnOnHit!.damagePerTick).toBeGreaterThan(0);
+    expect(glock.projectileBurnVisualStyle).toBe('void');
     expect(glock.bulletVisualPreset).toBe(WEAPON_CONFIGS.GLOCK.bulletVisualPreset);
     expect(glock.cooldown).toBeGreaterThan(WEAPON_CONFIGS.GLOCK.cooldown);
     expect(glock.spreadStanding).toBeGreaterThan(WEAPON_CONFIGS.GLOCK.spreadStanding);
@@ -156,6 +160,15 @@ describe('Pyro-Dachs', () => {
     expect(dodge.evadeScanRadiusPx).toBeGreaterThan(stepDistancePx);
     // Ein Satz darf nicht weiter reichen als der Bereich, in dem nachgesetzt wird.
     expect(stepDistancePx).toBeLessThan(dodge.approachMaxDistancePx);
+  });
+});
+
+describe('Purple enemy weapon VFX', () => {
+  it('uses the purple spore projectile and impact cloud for the Warden', () => {
+    const warden = WEAPON_CONFIGS.WARDEN_SPOREN;
+    expect(warden.projectileColor).toBe(VOID_FIRE_COLOR);
+    if (warden.fire.type !== 'projectile') throw new Error('Warden-Sporen muessen eine Projektilwaffe sein');
+    expect(warden.fire.impactCloud?.visualVariant).toBe('spore_void');
   });
 });
 

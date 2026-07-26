@@ -27,6 +27,7 @@ import {
   type LivingBarPalette,
 } from '../ui/LivingBarEffect';
 import { attachHoverEffect } from '../ui/uiHover';
+import { isFullscreen, onFullscreenChange, toggleFullscreen } from '../ui/fullscreen';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const ACCENT = COLORS.GOLD_1;
@@ -79,6 +80,8 @@ const FULLSCREEN_ICON_SIZE  = 20;
 const FULLSCREEN_CONTENT_GAP = 8;
 const FULLSCREEN_BTN_X = GAME_WIDTH  - FULLSCREEN_BTN_MARGIN - FULLSCREEN_BTN_W / 2;
 const FULLSCREEN_BTN_Y = GAME_HEIGHT - FULLSCREEN_BTN_MARGIN - FULLSCREEN_BTN_H / 2;
+const FULLSCREEN_LABEL   = 'VOLLBILD';
+const FULLSCREEN_HINT_MS = 2200;
 
 const READY_BTN_X = GAME_WIDTH / 2;
 const COPY_BTN_X = GAME_WIDTH / 2 - (ACTION_BTN_W + ACTION_BTN_GAP);
@@ -126,6 +129,9 @@ export class LobbyOverlay {
   private transportBtnLabel!:  Phaser.GameObjects.Text;
   private fullscreenBtn!:      Phaser.GameObjects.Image;
   private fullscreenIcon!:     Phaser.GameObjects.Image;
+  private fullscreenLabel!:    Phaser.GameObjects.Text;
+  private fullscreenHintEvent: Phaser.Time.TimerEvent | null = null;
+  private fullscreenUnsubscribe: (() => void) | null = null;
   private coopProgressContainer: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
@@ -158,8 +164,10 @@ export class LobbyOverlay {
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
   build(): void {
-    this.scene.scale.off(Phaser.Scale.Events.ENTER_FULLSCREEN, this.updateFullscreenIcon, this);
-    this.scene.scale.off(Phaser.Scale.Events.LEAVE_FULLSCREEN, this.updateFullscreenIcon, this);
+    this.fullscreenUnsubscribe?.();
+    this.fullscreenUnsubscribe = null;
+    this.fullscreenHintEvent?.remove();
+    this.fullscreenHintEvent = null;
     this.connectionEnded = false;
     this.playerListSignature = null;
     this.roomQualitySignature = null;
@@ -296,28 +304,27 @@ export class LobbyOverlay {
       ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_FULLSCREEN_COLOR, FULLSCREEN_BTN_W, FULLSCREEN_BTN_H), FULLSCREEN_BTN_W, FULLSCREEN_BTN_H, BTN_FULLSCREEN_COLOR, COLORS.GOLD_1),
     )
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.scene.scale.toggleFullscreen())
+      .on('pointerup', () => this.onFullscreenClicked())
       .setScrollFactor(0);
     objects.push(this.fullscreenBtn);
 
-    const fullscreenLabel = this.scene.add.text(0, 0, 'VOLLBILD', {
+    this.fullscreenLabel = this.scene.add.text(0, 0, FULLSCREEN_LABEL, {
       fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
     }).setOrigin(0, 0.5);
-    const fullscreenContentW = FULLSCREEN_ICON_SIZE + FULLSCREEN_CONTENT_GAP + fullscreenLabel.width;
-    const fullscreenIconX = -fullscreenContentW / 2 + FULLSCREEN_ICON_SIZE / 2;
-    fullscreenLabel.setPosition(-fullscreenContentW / 2 + FULLSCREEN_ICON_SIZE + FULLSCREEN_CONTENT_GAP, 0);
 
-    this.fullscreenIcon = this.scene.add.image(fullscreenIconX, 0, this.fullscreenIconTexture())
+    this.fullscreenIcon = this.scene.add.image(0, 0, this.fullscreenIconTexture())
       .setDisplaySize(FULLSCREEN_ICON_SIZE, FULLSCREEN_ICON_SIZE);
+    this.layoutFullscreenContent();
 
     const fullscreenContent = this.scene.add.container(
-      FULLSCREEN_BTN_X, FULLSCREEN_BTN_Y, [this.fullscreenIcon, fullscreenLabel],
+      FULLSCREEN_BTN_X, FULLSCREEN_BTN_Y, [this.fullscreenIcon, this.fullscreenLabel],
     ).setScrollFactor(0);
     objects.push(fullscreenContent);
     this.attachHoverEffect(this.fullscreenBtn, fullscreenContent);
 
-    this.scene.scale.on(Phaser.Scale.Events.ENTER_FULLSCREEN, this.updateFullscreenIcon, this);
-    this.scene.scale.on(Phaser.Scale.Events.LEAVE_FULLSCREEN, this.updateFullscreenIcon, this);
+    // Nicht an ENTER/LEAVE_FULLSCREEN des ScaleManagers: die kennen nur das API-Vollbild und
+    // schweigen bei F11-Vollbild. Siehe `ui/fullscreen`.
+    this.fullscreenUnsubscribe = onFullscreenChange(() => this.updateFullscreenIcon());
 
     const coopProgressBg = this.scene.add.image(
       READY_BTN_X, COOP_PROGRESS_PANEL_Y,
@@ -658,13 +665,40 @@ export class LobbyOverlay {
   }
 
   private fullscreenIconTexture(): string {
-    const expand = !this.scene.scale.isFullscreen;
+    const expand = !isFullscreen();
     const key = `_lobby_fullscreen_icon_${expand ? 'enter' : 'exit'}`;
     return ensureFullscreenIconTexture(this.scene, key, FULLSCREEN_ICON_SIZE * 2, FULLSCREEN_ICON_COLOR, expand);
   }
 
   private updateFullscreenIcon(): void {
     this.fullscreenIcon?.setTexture(this.fullscreenIconTexture());
+  }
+
+  /** Zentriert Symbol und Beschriftung gemeinsam im Button – die Beschriftung wechselt. */
+  private layoutFullscreenContent(): void {
+    const contentW = FULLSCREEN_ICON_SIZE + FULLSCREEN_CONTENT_GAP + this.fullscreenLabel.width;
+    this.fullscreenIcon.setX(-contentW / 2 + FULLSCREEN_ICON_SIZE / 2);
+    this.fullscreenLabel.setX(-contentW / 2 + FULLSCREEN_ICON_SIZE + FULLSCREEN_CONTENT_GAP);
+  }
+
+  private onFullscreenClicked(): void {
+    const result = toggleFullscreen();
+    if (result === 'entered' || result === 'exited') return;
+
+    // Vom Browser selbst hergestelltes Vollbild (Browsermenue oder ein F11, das der Browser
+    // nicht durchreicht) kann nur der Browser wieder beenden – dann bleibt nur der Hinweis.
+    this.showFullscreenHint(result === 'browser-locked' ? 'MIT F11 RAUS' : 'NICHT MÖGLICH');
+  }
+
+  private showFullscreenHint(text: string): void {
+    this.fullscreenHintEvent?.remove();
+    this.fullscreenLabel.setText(text);
+    this.layoutFullscreenContent();
+    this.fullscreenHintEvent = this.scene.time.delayedCall(FULLSCREEN_HINT_MS, () => {
+      this.fullscreenHintEvent = null;
+      this.fullscreenLabel.setText(FULLSCREEN_LABEL);
+      this.layoutFullscreenContent();
+    });
   }
 
   private addPlayerRow(profile: PlayerProfile): void {

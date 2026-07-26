@@ -1,13 +1,22 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, VOID_FIRE_COLOR } from '../config';
+import type { GroundFireVisualStyle } from '../types';
 import { createEmitter, destroyEmitter } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 import {
   ensureFlameTextures,
+  ensureVoidFlameTextures,
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
   TEX_FLAME_GLOW,
   TEX_FLAME_SPARK,
+  TEX_VOID_FLAME_CORE,
+  TEX_VOID_FLAME_EMBER,
+  TEX_VOID_FLAME_GLOW,
+  TEX_VOID_FLAME_SPARK,
+  VOID_FLAME_COLORS_CORE,
+  VOID_FLAME_COLORS_OUTER,
+  VOID_FLAME_COLORS_SPARK,
 } from './FlameShared';
 
 interface BurningProjectileVisual {
@@ -18,6 +27,7 @@ interface BurningProjectileVisual {
   lastEmitY: number;
   lastEmitAt: number;
   size: number;
+  visualStyle: GroundFireVisualStyle;
 }
 
 const MAX_TRAIL_SAMPLES_PER_SYNC = 7;
@@ -32,9 +42,13 @@ export class ProjectileBurnRenderer {
   private readonly outer: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly core: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly sparks: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly voidOuter: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly voidCore: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly voidSparks: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor(private readonly scene: Phaser.Scene) {
     ensureFlameTextures(scene);
+    ensureVoidFlameTextures(scene);
     this.outer = createEmitter(scene, 0, 0, TEX_FLAME_EMBER, {
       lifespan: { min: 170, max: 360 },
       frequency: -1,
@@ -76,6 +90,48 @@ export class ProjectileBurnRenderer {
       reserve: 128,
       emitting: false,
     }, DEPTH.PROJECTILES + 0.43);
+
+    this.voidOuter = createEmitter(scene, 0, 0, TEX_VOID_FLAME_EMBER, {
+      lifespan: { min: 170, max: 360 },
+      frequency: -1,
+      speedX: { min: -25, max: 25 },
+      speedY: { min: -55, max: -15 },
+      gravityY: -24,
+      scale: { start: 0.72, end: 0.04 },
+      alpha: { start: 0.94, end: 0 },
+      tint: [...VOID_FLAME_COLORS_OUTER],
+      blendMode: Phaser.BlendModes.ADD,
+      maxAliveParticles: 900,
+      reserve: 260,
+      emitting: false,
+    }, DEPTH.PROJECTILES + 0.34);
+    this.voidCore = createEmitter(scene, 0, 0, TEX_VOID_FLAME_CORE, {
+      lifespan: { min: 120, max: 250 },
+      frequency: -1,
+      speedX: { min: -15, max: 15 },
+      speedY: { min: -42, max: -9 },
+      scale: { start: 0.52, end: 0.025 },
+      alpha: { start: 1, end: 0 },
+      tint: [...VOID_FLAME_COLORS_CORE],
+      blendMode: Phaser.BlendModes.ADD,
+      maxAliveParticles: 720,
+      reserve: 220,
+      emitting: false,
+    }, DEPTH.PROJECTILES + 0.39);
+    this.voidSparks = createEmitter(scene, 0, 0, TEX_VOID_FLAME_SPARK, {
+      lifespan: { min: 170, max: 380 },
+      frequency: -1,
+      speedX: { min: -52, max: 52 },
+      speedY: { min: -105, max: -36 },
+      gravityY: -30,
+      scale: { start: 0.9, end: 0.04 },
+      alpha: { start: 1, end: 0 },
+      tint: [...VOID_FLAME_COLORS_SPARK],
+      blendMode: Phaser.BlendModes.ADD,
+      maxAliveParticles: 420,
+      reserve: 128,
+      emitting: false,
+    }, DEPTH.PROJECTILES + 0.43);
   }
 
   sync(
@@ -85,6 +141,7 @@ export class ProjectileBurnRenderer {
     size: number,
     burning: boolean,
     emitTrail = true,
+    visualStyle: GroundFireVisualStyle = 'normal',
   ): void {
     if (!burning) {
       this.destroyVisual(id);
@@ -93,10 +150,11 @@ export class ProjectileBurnRenderer {
 
     let visual = this.visuals.get(id);
     if (!visual) {
-      const glow = this.scene.add.image(x, y, TEX_FLAME_GLOW)
+      const isVoid = visualStyle === 'void';
+      const glow = this.scene.add.image(x, y, isVoid ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
         .setDepth(DEPTH.PROJECTILES + 0.28)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(0xff4d18)
+        .setTint(isVoid ? VOID_FIRE_COLOR : 0xff4d18)
         .setAlpha(0.78);
       visual = {
         glow,
@@ -106,9 +164,18 @@ export class ProjectileBurnRenderer {
         lastEmitY: y,
         lastEmitAt: this.scene.time.now,
         size,
+        visualStyle,
       };
       this.visuals.set(id, visual);
-      this.emitAt(x, y, size, 3);
+      this.emitAt(x, y, size, 3, visualStyle);
+    }
+
+    if (visual.visualStyle !== visualStyle) {
+      visual.visualStyle = visualStyle;
+      const isVoid = visualStyle === 'void';
+      visual.glow
+        .setTexture(isVoid ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
+        .setTint(isVoid ? VOID_FIRE_COLOR : 0xff4d18);
     }
 
     const now = this.scene.time.now;
@@ -140,7 +207,7 @@ export class ProjectileBurnRenderer {
         const samples = Math.min(Math.ceil(distance / spacing), sampleBudget);
         for (let sample = 1; sample <= samples; sample++) {
           const t = sample / samples;
-          this.emitAt(visual.lastEmitX + dx * t, visual.lastEmitY + dy * t, size, 1);
+          this.emitAt(visual.lastEmitX + dx * t, visual.lastEmitY + dy * t, size, 1, visual.visualStyle);
         }
         visual.lastEmitX = x;
         visual.lastEmitY = y;
@@ -160,7 +227,7 @@ export class ProjectileBurnRenderer {
     // Dauerlicht am selben Lebenszyklus wie das Glow-Visual: erzeugt in `sync()`,
     // freigegeben in `destroyVisual()`. Der Radius bleibt eng – die Helligkeit kommt
     // aus Intensität und Kernfarbe des Presets, nicht aus der Reichweite.
-    this.lighting?.setLight(`projburn:${id}`, 'projectileBurn', x, y, {
+    this.lighting?.setLight(`projburn:${id}`, visual.visualStyle === 'void' ? 'voidFlameProjectile' : 'projectileBurn', x, y, {
       radiusPx: 45 + size * 2.4,
     });
   }
@@ -188,6 +255,9 @@ export class ProjectileBurnRenderer {
     this.outer.killAll();
     this.core.killAll();
     this.sparks.killAll();
+    this.voidOuter.killAll();
+    this.voidCore.killAll();
+    this.voidSparks.killAll();
   }
 
   shutdown(): void {
@@ -195,16 +265,22 @@ export class ProjectileBurnRenderer {
     destroyEmitter(this.outer);
     destroyEmitter(this.core);
     destroyEmitter(this.sparks);
+    destroyEmitter(this.voidOuter);
+    destroyEmitter(this.voidCore);
+    destroyEmitter(this.voidSparks);
   }
 
-  private emitAt(x: number, y: number, size: number, strength: number): void {
+  private emitAt(x: number, y: number, size: number, strength: number, visualStyle: GroundFireVisualStyle): void {
     const jitter = Math.max(1.5, size * 0.35);
     const px = x + Phaser.Math.FloatBetween(-jitter, jitter);
     const py = y + Phaser.Math.FloatBetween(-jitter, jitter);
-    this.outer.emitParticleAt(px, py, Math.max(1, strength));
-    this.core.emitParticleAt(px, py + 1, 1);
+    const outer = visualStyle === 'void' ? this.voidOuter : this.outer;
+    const core = visualStyle === 'void' ? this.voidCore : this.core;
+    const sparks = visualStyle === 'void' ? this.voidSparks : this.sparks;
+    outer.emitParticleAt(px, py, Math.max(1, strength));
+    core.emitParticleAt(px, py + 1, 1);
     if ((Math.floor(this.scene.time.now) + Math.round(x + y)) % 3 === 0) {
-      this.sparks.emitParticleAt(px, py, 1);
+      sparks.emitParticleAt(px, py, 1);
     }
   }
 }

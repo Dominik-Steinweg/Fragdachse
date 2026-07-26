@@ -52,6 +52,15 @@ Gameplay, HUD und alle Konstanten rechnen ausschließlich im Designraum `GAME_WI
 - Die Obergrenze steht als `maxRenderScale` im Grafikqualitätsprofil: hochauflösende Monitore kosten quadratisch Fill-Rate, `low` bleibt deshalb beim Designraum.
 - Die Canvas trägt bewusst kein `image-rendering: pixelated`. Es widerspricht dem `smoothPixelArt`-Shader und rastert krumme Skalierungsfaktoren hart statt gefiltert.
 
+## Vollbild und DOM-Overlays
+
+Vollbild läuft ausschließlich über `src/ui/fullscreen.ts`; der ScaleManager wird dafür nicht mehr direkt angesprochen.
+
+- `#game-container` ist zugleich `parent` und `scale.fullscreenTarget`. Ohne gesetztes Ziel legt Phaser einen eigenen `<div>` an und verschiebt **nur die Canvas** hinein (`ScaleManager.getFullscreenTarget`); der Browser zeigt im Vollbild ausschließlich diesen Teilbaum, sodass jedes andere DOM-Element unsichtbar wird, obwohl es weiter im Dokument hängt.
+- DOM-Overlays hängen sich deshalb an `getOverlayRoot()` statt an `document.body`. Sie positionieren sich per `position: fixed` am Viewport, der Elternwechsel ändert also nichts an der Darstellung.
+- Browser-Vollbild (F11, Browsermenü) ist für die Seite nicht dasselbe wie API-Vollbild: `document.fullscreenElement` bleibt `null`, `fullscreenchange` feuert nicht, `exitFullscreen()` bleibt wirkungslos, und Chrome verlangt zum Verlassen ein langes ESC statt eines kurzen. Erkennbar ist es nur über `matchMedia('(display-mode: fullscreen)')`. Damit beide Wege denselben Zustand ergeben, fängt das Modul F11 ab und stellt stattdessen API-Vollbild her; nur wenn bereits Browser-Vollbild aktiv ist, bleibt F11 unangetastet, weil es dort der einzige Ausweg ist.
+- UI, die den Vollbildzustand anzeigt, hört auf `onFullscreenChange()`, nicht auf `Phaser.Scale.Events.ENTER_FULLSCREEN`/`LEAVE_FULLSCREEN` – die kennen nur das API-Vollbild.
+
 ## Nicht offensichtliche Entscheidungen
 
 - Der Host publiziert vor `LOBBY → ARENA` Layout, Zeitbasen und Round-State zuverlässig; der Phasenwechsel ist das nachgelagerte Gate.

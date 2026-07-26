@@ -1875,6 +1875,7 @@ export class LoadoutManager {
       // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
       burnDurationMs:     config.burnOnHit?.durationMs,
       burnDamagePerTick:  config.burnOnHit?.damagePerTick,
+      projectileBurnVisualStyle: config.projectileBurnVisualStyle,
       canReceiveFireImbue: sourceSlot === 'weapon1' || sourceSlot === 'weapon2',
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,
@@ -2095,6 +2096,7 @@ export class LoadoutManager {
       velocityDecay:   fireConfig.velocityDecay,
       burnDurationMs:    fireConfig.burnDurationMs,
       burnDamagePerTick: fireConfig.burnDamagePerTick,
+      projectileBurnVisualStyle: config.projectileBurnVisualStyle,
       flamePiercing:     (fireConfig.piercingCount ?? 0) > 0,
       sourceSlot,
       shotAudioKey:    config.shotAudio?.successKey,

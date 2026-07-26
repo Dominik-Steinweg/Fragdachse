@@ -5,6 +5,7 @@ import { PeerNetworkError } from './network/peer';
 import { rejoinCurrentRoom, restartWithNewRoom }  from './utils/roomQuality';
 import { ArenaScene }     from './scenes/ArenaScene';
 import { initialRenderSize, installRenderResolution } from './graphics/RenderResolution';
+import { FULLSCREEN_TARGET_ID, installFullscreenSupport } from './ui/fullscreen';
 
 /**
  * Zeigt einen Verbindungsfehler an, statt ein Spiel zu starten, das nicht spielbar waere.
@@ -97,7 +98,7 @@ async function boot(): Promise<void> {
     type:            Phaser.AUTO,
     width:           renderSize.width,
     height:          renderSize.height,
-    parent:          'game-container',
+    parent:          FULLSCREEN_TARGET_ID,
     backgroundColor: '#000000',
     smoothPixelArt: true,
     physics: {
@@ -108,6 +109,9 @@ async function boot(): Promise<void> {
     scale: {
       mode:       Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
+      // Der gesamte Container statt nur der Canvas – sonst bleiben alle DOM-Overlays im
+      // Vollbild unsichtbar. Begruendung: `ui/fullscreen`.
+      fullscreenTarget: FULLSCREEN_TARGET_ID,
     },
     dom: {
       createContainer: true
@@ -117,7 +121,10 @@ async function boot(): Promise<void> {
   // 4. Renderauflösung an die dargestellte Fläche binden und dort halten (Fenstergröße,
   //    Vollbild, Zoomstufe des Browsers). Erst ab READY – vorher hat der ScaleManager weder
   //    Canvas noch vermessene Eltern-Box, seine Anzeigegröße wäre also 0.
-  game.events.once(Phaser.Core.Events.READY, () => installRenderResolution(game));
+  game.events.once(Phaser.Core.Events.READY, () => {
+    installRenderResolution(game);
+    installFullscreenSupport(game);
+  });
 }
 
 boot().catch((error: unknown) => {

@@ -1,4 +1,5 @@
 import { COLORS, toCssColor } from '../config';
+import { getOverlayRoot } from './fullscreen';
 import { COOP_DEFENSE_MAP_CONFIGS } from '../config/coopDefenseMaps';
 import { getCoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 
@@ -234,7 +235,7 @@ export class CoopDefenseXpDebugOverlay {
       buttonRow,
     );
     backdrop.appendChild(popup);
-    document.body.appendChild(backdrop);
+    getOverlayRoot().appendChild(backdrop);
 
     this.popup = backdrop;
     this.closePopupFn = closePopup;

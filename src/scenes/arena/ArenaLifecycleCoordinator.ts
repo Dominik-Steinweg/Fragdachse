@@ -1857,6 +1857,7 @@ export class ArenaLifecycleCoordinator {
       proj.impactCloud.tickInterval,
       proj.impactCloud.rockDamageMult ?? 1,
       proj.impactCloud.trainDamageMult ?? 1,
+      proj.impactCloud.visualVariant,
     );
   }
 

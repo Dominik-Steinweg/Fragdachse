@@ -30,6 +30,7 @@ import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimate
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { ensureGlossyButtonTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
+import { getOverlayRoot } from './fullscreen';
 import { BadgerPreview } from './BadgerPreview';
 import type { GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
@@ -978,7 +979,7 @@ export class LeftSidePanel {
     popup.appendChild(confirmBtn);
     popup.appendChild(cancelBtn);
 
-    document.body.appendChild(popup);
+    getOverlayRoot().appendChild(popup);
     this.nameEditPopup = popup;
     inputElement.focus();
     inputElement.select();

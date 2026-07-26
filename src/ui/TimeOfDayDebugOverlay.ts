@@ -1,4 +1,5 @@
 import { COLORS, toCssColor } from '../config';
+import { getOverlayRoot } from './fullscreen';
 import { MINUTES_PER_DAY, formatTimeOfDay } from '../effects/TimeOfDay';
 
 /**
@@ -140,7 +141,7 @@ export class TimeOfDayDebugOverlay {
 
     footer.append(mapHint, resetBtn, closeBtn);
     panel.append(title, readout, slider, footer);
-    document.body.appendChild(panel);
+    getOverlayRoot().appendChild(panel);
 
     this.panel = panel;
     this.closePanelFn = closePanel;

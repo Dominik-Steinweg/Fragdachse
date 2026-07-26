@@ -2004,6 +2004,7 @@ export class ArenaScene extends Phaser.Scene {
         sample.style,
         sample.energyBallVariant,
         sample.grenadeVisualPreset,
+        sample.color,
       );
       if (!spec) continue;
 

@@ -8,6 +8,7 @@
  * wenn reale Zahlen mit den üblichen Mitspielern vorliegen.
  */
 import { COLORS, toCssColor } from '../config';
+import { getOverlayRoot } from './fullscreen';
 import type { LinkDiagnostics } from '../network/peer';
 
 const REFRESH_INTERVAL_MS = 500;
@@ -71,7 +72,7 @@ export class NetDebugOverlay {
       zIndex: '4000',
       pointerEvents: 'none',
     });
-    document.body.appendChild(panel);
+    getOverlayRoot().appendChild(panel);
     this.panel = panel;
 
     this.render();

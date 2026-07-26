@@ -1,4 +1,5 @@
 import { COLORS, toCssColor } from '../config';
+import { getOverlayRoot } from './fullscreen';
 import type {
   ArenaPerformanceReport,
   ArenaRuntimeProfiler,
@@ -139,7 +140,7 @@ export class PerformanceDiagnosticsOverlay {
     this.output = document.createElement('pre');
     Object.assign(this.output.style, { margin: '0', whiteSpace: 'pre-wrap', font: 'inherit' });
     panel.append(title, controls, this.status, this.output);
-    document.body.appendChild(panel);
+    getOverlayRoot().appendChild(panel);
     this.panel = panel;
     this.profiler.setLiveDrawCallTracking(true);
     this.render();

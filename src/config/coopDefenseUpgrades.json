@@ -553,8 +553,8 @@
         {
           "id": "hydra_range",
           "code": "B-W5-2",
-          "label": "Upgrade Hydra Gun: Reichweite",
-          "description": "+20% Reichweite fuer Hydra Gun je Stufe.",
+          "label": "Upgrade Hydra Gun: Reichweite und Geschwindigkeit",
+          "description": "+20% Reichweite und +10% Fluggeschwindigkeit fuer Hydra Gun je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -572,14 +572,19 @@
               "stat": "weapon.HYDRA.range",
               "mode": "add_percent_per_level",
               "value": 0.2
+            },
+            {
+              "stat": "weapon.HYDRA.projectileSpeed",
+              "mode": "add_percent_per_level",
+              "value": 0.1
             }
           ]
         },
         {
-          "id": "hydra_projectile_speed",
+          "id": "hydra_damage_split",
           "code": "B-W5-3",
-          "label": "Upgrade Hydra Gun: Fluggeschwindigkeit",
-          "description": "+10% Projektilgeschwindigkeit fuer Hydra Gun je Stufe.",
+          "label": "Upgrade Hydra Gun: Spaltkraft",
+          "description": "+30% initialer Schaden und 10% weniger Schadensverlust beim Aufteilen je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -594,7 +599,12 @@
           ],
           "effects": [
             {
-              "stat": "weapon.HYDRA.projectileSpeed",
+              "stat": "weapon.HYDRA.damage",
+              "mode": "add_percent_per_level",
+              "value": 0.3
+            },
+            {
+              "stat": "weapon.HYDRA.splitFactor",
               "mode": "add_percent_per_level",
               "value": 0.1
             }

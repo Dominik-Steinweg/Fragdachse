@@ -630,6 +630,7 @@ export class CombatSystem {
       `weapon:${proj.weaponName}`,
       proj.weaponName,
       proj.isFlame ? 'flamethrower_direct' : 'generic',
+      proj.projectileBurnVisualStyle,
     );
     const supplemental = proj.supplementalBurnOnHit;
     if (supplemental) {
@@ -963,6 +964,7 @@ export class CombatSystem {
       grenadeEffect:        proj.grenadeEffect,
       burnDurationMs:       proj.burnDurationMs,
       burnDamagePerTick:    proj.burnDamagePerTick,
+      projectileBurnVisualStyle: proj.projectileBurnVisualStyle,
       supplementalBurnOnHit: proj.supplementalBurnOnHit,
       canReceiveFireImbue:  proj.canReceiveFireImbue,
       fireTrail:            proj.fireTrail,

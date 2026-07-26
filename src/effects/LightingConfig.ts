@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { VOID_FIRE_COLOR } from '../config';
 import type { EnergyBallVariant, GrenadeVisualPreset, ProjectileStyle } from '../types';
 
 export type LightShape = 'radial' | 'cone';
@@ -418,6 +419,19 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.14,
     flickerHz: 6,
   },
+  sporeVoidProjectile: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 84,
+    color: 0xe9c6ff,
+    intensity: 0.72,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 5,
+    flickerAmount: 0.12,
+    flickerHz: 6,
+  },
   // ── Strahlen und Entladungen ─────────────────────────────────────────────────
   /**
    * Stützpunkt entlang eines Hitscan-Strahls. Sehr kurz, dafür ein heller Kern – ein
@@ -715,6 +729,7 @@ export function getProjectileLightSpec(
   style?: ProjectileStyle,
   energyBallVariant?: EnergyBallVariant,
   grenadeVisualPreset?: GrenadeVisualPreset,
+  color?: number,
 ): ProjectileLightSpec | null {
   switch (style) {
     case 'energy_ball':
@@ -732,7 +747,9 @@ export function getProjectileLightSpec(
     case 'fireball':
       return { preset: 'projectileBurn', baseRadiusPx: 60, radiusPerSizePx: 2.6 };
     case 'spore':
-      return { preset: 'sporeProjectile', baseRadiusPx: 42, radiusPerSizePx: 1.8 };
+      return color === VOID_FIRE_COLOR
+        ? { preset: 'sporeVoidProjectile', baseRadiusPx: 48, radiusPerSizePx: 2.0 }
+        : { preset: 'sporeProjectile', baseRadiusPx: 42, radiusPerSizePx: 1.8 };
     case 'holy_grenade':
       return { preset: 'holyProjectile', baseRadiusPx: 78, radiusPerSizePx: 2.4 };
     case 'translocator_puck':

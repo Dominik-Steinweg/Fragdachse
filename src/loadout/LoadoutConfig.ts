@@ -1,4 +1,5 @@
 import { COLORS, RAGE_MAX, VOID_FIRE_COLOR } from '../config';
+import type { GroundFireVisualStyle } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
@@ -258,6 +259,7 @@ export interface WeaponConfig {
   readonly projectileVisualScale?: number;   // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   readonly bulletVisualPreset?: BulletVisualPreset;
   readonly energyBallVariant?: EnergyBallVariant;
+  readonly projectileBurnVisualStyle?: GroundFireVisualStyle;
   readonly rocketSmokeTrailColor?: number;   // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
 
   // Detonations-System
@@ -1042,7 +1044,7 @@ export const WEAPON_CONFIGS = {
 
   /**
    * Alien-Plasma – Kopie der Plasma Gun fuer den Alien-Dachs: deutlich niedrigere Schussrate,
-   * traegere Lenkung der Projektile und rote Einfaerbung.
+   * traegere Lenkung der Projektile und lila Gefahrenfarbe.
    */
   ALIEN_BADGER_PLASMA: {
     id:                   'ALIEN_BADGER_PLASMA',
@@ -1079,7 +1081,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     projectileStyle:      'energy_ball' satisfies ProjectileStyle,
     energyBallVariant:    'plasma' satisfies EnergyBallVariant,
-    projectileColor:      COLORS.RED_3,
+    projectileColor:      VOID_FIRE_COLOR,
     showCrosshair:        false,
     rockDamageMult:       0,
     trainDamageMult:      0,
@@ -1175,6 +1177,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   5,
     spreadRecoverySpeed:  100,
     projectileColor:      COLORS.RED_1,
+    projectileBurnVisualStyle: 'void' satisfies GroundFireVisualStyle,
     projectileStyle:      'bullet' as ProjectileStyle,
     bulletVisualPreset:   'glock' as BulletVisualPreset,
     burnOnHit: {
@@ -1761,7 +1764,7 @@ export const WEAPON_CONFIGS = {
         tickInterval:    150,
         rockDamageMult:  1,
         trainDamageMult: 1,
-        visualVariant:   'spore',
+        visualVariant:   'spore_void',
       } satisfies ImpactCloudConfig,
       homing: {
         acquireDelayMs:        80,
@@ -1786,7 +1789,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoveryRate:   0,
     spreadRecoverySpeed:  100,
     projectileStyle:      'spore' as ProjectileStyle,
-    projectileColor:      0xe7f28b,
+    projectileColor:      VOID_FIRE_COLOR,
     showCrosshair:        false,
     rockDamageMult:       1,
     trainDamageMult:      1,
@@ -1978,6 +1981,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     projectileStyle:      'flame' as ProjectileStyle,
     projectileColor:      VOID_FIRE_COLOR,
+    projectileBurnVisualStyle: 'void' satisfies GroundFireVisualStyle,
     rockDamageMult:       0,
     trainDamageMult:      1,
     shotAudio: {

@@ -116,6 +116,7 @@ describe('Inferno Colossus void fire chunks', () => {
     expect(WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER).toMatchObject({
       range: 300,
       projectileColor: VOID_FIRE_COLOR,
+      projectileBurnVisualStyle: 'void',
       allowedSlots: [],
       fire: { type: 'flamethrower' },
     });

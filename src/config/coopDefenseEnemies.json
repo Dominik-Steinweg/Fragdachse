@@ -325,8 +325,8 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_alien_badger",
       "displayName": "Pyro-Dachs",
-      "color": 16734720,
-      "glow": { "color": 16738816, "sizeFactor": 1.7, "alpha": 0.85, "lightRadiusPx": 85, "lightIntensity": 1 },
+      "color": 11749375,
+      "glow": { "color": 12799231, "sizeFactor": 1.7, "alpha": 0.85, "lightRadiusPx": 85, "lightIntensity": 1 },
       "burrow": {
         "maxDurationMs": 2000,
         "speedFactor": 1.6,

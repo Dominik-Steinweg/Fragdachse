@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
-import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle } from '../types';
 import { ProjectileHomingController } from './ProjectileHomingController';
 import type { HomingTargetProvider } from './ProjectileHomingController';
 import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
@@ -49,6 +49,7 @@ interface ClientProjectileState {
   velocityDecay: number;
   miniRocketPhase?: import('../types').MiniRocketFlightPhase;
   miniRocketCascadeStage?: number;
+  projectileBurnVisualStyle?: GroundFireVisualStyle;
   burning: boolean;
 }
 
@@ -641,6 +642,7 @@ export class ProjectileManager {
       velocityDecay:   cfg.velocityDecay,
       burnDurationMs:    cfg.burnDurationMs,
       burnDamagePerTick: cfg.burnDamagePerTick,
+      projectileBurnVisualStyle: cfg.projectileBurnVisualStyle,
       flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
       canReceiveFireImbue: cfg.canReceiveFireImbue,
       supplementalBurnOnHit: cfg.supplementalBurnOnHit,
@@ -1591,6 +1593,7 @@ export class ProjectileManager {
         velocityDecay: proj.velocityDecay,
         burnDurationMs: proj.burnDurationMs,
         burnDamagePerTick: proj.burnDamagePerTick,
+        projectileBurnVisualStyle: proj.projectileBurnVisualStyle,
         leafBlowerMinKnockback: proj.leafBlowerMinKnockback,
         leafBlowerMaxKnockback: proj.leafBlowerMaxKnockback,
         leafBlowerSelfPush: proj.leafBlowerSelfPush,
@@ -2497,7 +2500,7 @@ export class ProjectileManager {
 
       // Burn läuft style-unabhängig für jedes Projektil.
       const burning = this.hasVisibleProjectileBurn(proj);
-      burnR?.sync(id, x, y, w, burning);
+      burnR?.sync(id, x, y, w, burning, true, proj.projectileBurnVisualStyle);
       if (burning) burningProjectiles.add(id);
 
       // Tracer hängt an der tracerConfig, nicht am Style.
@@ -2624,6 +2627,7 @@ export class ProjectileManager {
         tracer: p.tracerConfig,
         shotAudioKey: p.shotAudioKey,
         suppressSpawnFx: p.suppressSpawnFx,
+        projectileBurnVisualStyle: p.projectileBurnVisualStyle,
         burning: this.hasVisibleProjectileBurn(p) || undefined,
       });
     }
@@ -2701,6 +2705,7 @@ export class ProjectileManager {
         velocityDecay: proj.velocityDecay ?? 1,
         miniRocketPhase: proj.miniRocketPhase,
         miniRocketCascadeStage: proj.miniRocketCascadeStage,
+        projectileBurnVisualStyle: proj.projectileBurnVisualStyle,
         burning: proj.burning === true,
       });
 
@@ -2849,6 +2854,7 @@ export class ProjectileManager {
         proj.size,
         proj.burning === true,
         false,
+        proj.projectileBurnVisualStyle,
       );
       if (proj.burning) burningIds.add(proj.id);
     }
@@ -3079,7 +3085,7 @@ export class ProjectileManager {
       if (tracerRe && tracerRe.has(id)) {
         tracerRe.updateTracer(id, ex, ey, velocityX, velocityY);
       }
-      this.projectileBurnRenderer?.sync(id, ex, ey, state.size, state.burning);
+      this.projectileBurnRenderer?.sync(id, ex, ey, state.size, state.burning, true, state.projectileBurnVisualStyle);
     }
   }
 

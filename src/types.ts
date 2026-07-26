@@ -260,7 +260,7 @@ export interface ImpactCloudConfig {
 }
 
 /** Visueller Stil einer Schaden-über-Zeit-Fläche (DoT-Zone). */
-export type DamageZoneVisualStyle = 'stink' | 'spore' | 'electric';
+export type DamageZoneVisualStyle = 'stink' | 'spore' | 'spore_void' | 'electric';
 
 /**
  * Generische Konfiguration für eine Schaden-über-Zeit-Fläche, die am Explosions-
@@ -324,6 +324,7 @@ export interface SyncedProjectile {
   gaussChainDamageFactor?: number;
   miniRocketPhase?: MiniRocketFlightPhase;
   miniRocketCascadeStage?: number;
+  projectileBurnVisualStyle?: GroundFireVisualStyle;
   /** Aktiver Brand auf dem Projektil (Waffen-Upgrade oder Feuerflaechen-Imbue). */
   burning?: boolean;
 }
@@ -611,6 +612,8 @@ export interface ProjectileSpawnConfig {
   velocityDecay?:   number;     // Geschwindigkeits-Multiplikator pro Sekunde (0-1, kleiner = schnellerer Abbau)
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
+  /** Visuelle Brandfamilie des Projektilschweifs; ohne Wert = normale orange Flamme. */
+  projectileBurnVisualStyle?: GroundFireVisualStyle;
   flamePiercing?:     boolean;   // true = Projektil zerstört sich nicht bei Treffern (piercing)
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;
@@ -930,6 +933,7 @@ export interface TrackedProjectile {
   initialSpeed?:    number;     // Geschwindigkeit bei Spawn (für Decay-Berechnung)
   burnDurationMs?:    number;
   burnDamagePerTick?: number;
+  projectileBurnVisualStyle?: GroundFireVisualStyle;
   flamePierceHitIds?: Set<string>; // Pierce: bereits getroffene Ziel-IDs (kein Mehrfachtreffer)
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;

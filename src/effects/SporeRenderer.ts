@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH, isPointInsideArena } from '../config';
+import { DEPTH, isPointInsideArena, VOID_FIRE_COLOR } from '../config';
 import {
   configureAdditiveImage,
   createEmitter,
@@ -14,6 +14,11 @@ const TEX_SPORE_GLOW = '__spore_glow';
 const TEX_SPORE_CLUSTER = '__spore_cluster';
 const TEX_SPORE_MOTE = '__spore_mote';
 const TEX_SPORE_TRAIL = '__spore_trail';
+
+const VOID_SPORE_CORE_TINTS = [0xffffff, 0xf2c8ff, VOID_FIRE_COLOR, 0x6717a8];
+const VOID_SPORE_WAKE_TINTS = [0xffffff, 0xd477ff, 0x9d35ee, 0x4b176f];
+const VOID_SPORE_IMPACT_TINTS = [0xffffff, 0xf4d4ff, 0xb347ff, 0x6717a8];
+const VOID_SPORE_HAZE_TINTS = [0xf0dcff, 0xd887ff, 0xb347ff, 0x8b2fc5];
 
 interface SporeVisual {
   glow: Phaser.GameObjects.Image;
@@ -104,6 +109,7 @@ export class SporeRenderer {
 
   createVisual(id: number, x: number, y: number, size: number, color: number): void {
     if (this.visuals.has(id)) return;
+    const isVoid = color === VOID_FIRE_COLOR;
 
     const glow = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_SPORE_GLOW),
@@ -111,9 +117,9 @@ export class SporeRenderer {
       0.62,
       Phaser.Display.Color.Interpolate.ColorWithColor(
         Phaser.Display.Color.ValueToColor(color),
-        Phaser.Display.Color.ValueToColor(0x95d85b),
+        Phaser.Display.Color.ValueToColor(isVoid ? 0xffffff : 0x95d85b),
         100,
-        42,
+        isVoid ? 34 : 42,
       ).color,
     );
 
@@ -132,7 +138,7 @@ export class SporeRenderer {
       speedY: { min: -10, max: 10 },
       scale: { start: 0.62, end: 0.08 },
       alpha: { start: 0.95, end: 0 },
-      tint: [0xf5ffdf, color, 0x7db749],
+      tint: isVoid ? VOID_SPORE_CORE_TINTS : [0xf5ffdf, color, 0x7db749],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, DEPTH.PROJECTILES + 1);
@@ -145,7 +151,7 @@ export class SporeRenderer {
       speedY: { min: -18, max: 18 },
       scale: { start: 0.54, end: 0.05 },
       alpha: { start: 0.72, end: 0 },
-      tint: [0xe8ffbf, 0xa2dd61, 0x5c8b32],
+      tint: isVoid ? VOID_SPORE_WAKE_TINTS : [0xe8ffbf, 0xa2dd61, 0x5c8b32],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, DEPTH.PROJECTILES + 0.2);
@@ -165,6 +171,7 @@ export class SporeRenderer {
   updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number, color: number): void {
     const visual = this.visuals.get(id);
     if (!visual) return;
+    const isVoid = color === VOID_FIRE_COLOR;
 
     const speed = Math.max(1, Math.hypot(vx, vy));
     const nx = vx / speed;
@@ -180,9 +187,9 @@ export class SporeRenderer {
     visual.glow.setAlpha(0.52 + pulse * 0.08);
     visual.glow.setTint(Phaser.Display.Color.Interpolate.ColorWithColor(
       Phaser.Display.Color.ValueToColor(color),
-      Phaser.Display.Color.ValueToColor(0x83cc4a),
+      Phaser.Display.Color.ValueToColor(isVoid ? 0xffffff : 0x83cc4a),
       100,
-      40,
+      isVoid ? 30 : 40,
     ).color);
 
     visual.cluster.setPosition(x, y);
@@ -201,7 +208,7 @@ export class SporeRenderer {
     const now = this.scene.time.now;
     const distance = Phaser.Math.Distance.Between(visual.lastTrailX, visual.lastTrailY, trailX, trailY);
     if (distance >= Math.max(size * 0.48, 6) || now - visual.lastTrailAt >= 24) {
-      this.spawnTrailPuff(trailX, trailY, size, rotation + Math.PI);
+      this.spawnTrailPuff(trailX, trailY, size, rotation + Math.PI, isVoid);
       visual.lastTrailX = trailX;
       visual.lastTrailY = trailY;
       visual.lastTrailAt = now;
@@ -238,6 +245,7 @@ export class SporeRenderer {
 
   playImpact(x: number, y: number, color: number, scale = 1): void {
     if (!isPointInsideArena(x, y)) return;
+    const isVoid = color === VOID_FIRE_COLOR;
 
     const glow = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_SPORE_GLOW),
@@ -260,7 +268,7 @@ export class SporeRenderer {
       angle: { min: 0, max: 360 },
       scale: { start: 0.9, end: 0.08 },
       alpha: { start: 0.95, end: 0 },
-      tint: [0xf2ffd8, color, 0x74ab3c],
+      tint: isVoid ? VOID_SPORE_IMPACT_TINTS : [0xf2ffd8, color, 0x74ab3c],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH.PROJECTILES + 1.7);
@@ -274,7 +282,7 @@ export class SporeRenderer {
       angle: { min: 0, max: 360 },
       scale: { start: 0.95, end: 0.2 },
       alpha: { start: 0.5, end: 0 },
-      tint: [0xd7ff9d, 0x98d65a, 0x577d30],
+      tint: isVoid ? VOID_SPORE_HAZE_TINTS : [0xd7ff9d, 0x98d65a, 0x577d30],
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH.FIRE + 0.2);
@@ -305,11 +313,11 @@ export class SporeRenderer {
     });
   }
 
-  private spawnTrailPuff(x: number, y: number, size: number, rotation: number): void {
+  private spawnTrailPuff(x: number, y: number, size: number, rotation: number, isVoid: boolean): void {
     const puff = this.scene.add.image(x, y, TEX_SPORE_TRAIL)
       .setDepth(DEPTH.PROJECTILES - 0.3)
       .setAlpha(0.44)
-      .setTint(0x9ad85c)
+      .setTint(isVoid ? VOID_FIRE_COLOR : 0x9ad85c)
       .setScale(Math.max(size / 20, 0.5), Math.max(size / 28, 0.32))
       .setRotation(rotation + Phaser.Math.FloatBetween(-0.28, 0.28));
 
