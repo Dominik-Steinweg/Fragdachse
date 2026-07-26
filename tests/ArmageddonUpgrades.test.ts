@@ -25,18 +25,18 @@ describe('Armageddon coop-defense upgrades', () => {
     expect(getCoopDefenseUpgradeDefinition('armageddon_duration')?.requires)
       .toEqual([{ upgradeId: 'unlock_armageddon', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('armageddon_damage')?.requires)
-      .toEqual([{ upgradeId: 'armageddon_duration', minLevel: 3 }]);
+      .toEqual([{ upgradeId: 'armageddon_duration', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('armageddon_meteor_count')?.requires)
-      .toEqual([{ upgradeId: 'armageddon_damage', minLevel: 3 }]);
+      .toEqual([{ upgradeId: 'armageddon_damage', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('armageddon_rage_required')?.requires)
       .toEqual([{ upgradeId: 'unlock_armageddon', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('armageddon_radius')?.requires)
-      .toEqual([{ upgradeId: 'armageddon_rage_required', minLevel: 3 }]);
+      .toEqual([{ upgradeId: 'armageddon_rage_required', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('armageddon_fire_chunks')?.requires)
-      .toEqual([{ upgradeId: 'armageddon_radius', minLevel: 3 }]);
+      .toEqual([{ upgradeId: 'armageddon_radius', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('armageddon_comet_storm')?.requires).toEqual([
-      { upgradeId: 'armageddon_meteor_count', minLevel: 3 },
-      { upgradeId: 'armageddon_fire_chunks', minLevel: 3 },
+      { upgradeId: 'armageddon_meteor_count', minLevel: 1 },
+      { upgradeId: 'armageddon_fire_chunks', minLevel: 1 },
     ]);
   });
 

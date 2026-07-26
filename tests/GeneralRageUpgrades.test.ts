@@ -9,11 +9,11 @@ describe('general Rage upgrades', () => {
   it('forms the Rage gain, maximum Rage, and armored Rage chain', () => {
     expect(getCoopDefenseUpgradeDefinition('ultimate_rage_gain')?.requires).toEqual([]);
     expect(getCoopDefenseUpgradeDefinition('ultimate_max_rage')?.requires).toEqual([
-      { upgradeId: 'ultimate_rage_gain', minLevel: 3 },
+      { upgradeId: 'ultimate_rage_gain', minLevel: 1 },
     ]);
     expect(getCoopDefenseUpgradeDefinition('ultimate_armor_rage')).toMatchObject({
       maxLevel: 1,
-      requires: [{ upgradeId: 'ultimate_max_rage', minLevel: 3 }],
+      requires: [{ upgradeId: 'ultimate_max_rage', minLevel: 1 }],
     });
 
     const totals = getCoopDefenseResolvedEffectTotals({

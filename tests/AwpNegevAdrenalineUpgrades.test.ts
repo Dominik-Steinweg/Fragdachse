@@ -26,9 +26,9 @@ describe('AWP coop-defense upgrades', () => {
     expect(getCoopDefenseUpgradeDefinition('awp_adrenaline_cost')?.requires)
       .toEqual([{ upgradeId: 'unlock_awp', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('awp_aim_duration')?.requires)
-      .toEqual([{ upgradeId: 'awp_adrenaline_cost', minLevel: 3 }]);
+      .toEqual([{ upgradeId: 'awp_adrenaline_cost', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('awp_moving_precision')?.requires)
-      .toEqual([{ upgradeId: 'awp_aim_duration', minLevel: 3 }]);
+      .toEqual([{ upgradeId: 'awp_aim_duration', minLevel: 1 }]);
     expect(getCoopDefenseUpgradeDefinition('awp_destruction_corridor')?.requires).toEqual([
       { upgradeId: 'awp_moving_precision', minLevel: 1 },
       { upgradeId: 'awp_fire_trail', minLevel: 1 },
@@ -118,7 +118,7 @@ describe('Adrenaline syringe drops', () => {
   it('follows the completed existing adrenaline branches and exposes two follow-ups', () => {
     expect(getCoopDefenseUpgradeDefinition('adrenaline_syringe_drops')?.requires).toEqual([
       { upgradeId: 'adrenaline_spawn_full', minLevel: 1 },
-      { upgradeId: 'adrenaline_cost', minLevel: 3 },
+      { upgradeId: 'adrenaline_cost', minLevel: 1 },
     ]);
     expect(getCoopDefenseUpgradeDefinition('adrenaline_syringe_drop_chance')?.maxLevel).toBe(3);
     expect(getCoopDefenseUpgradeDefinition('adrenaline_syringe_duration')?.maxLevel).toBe(3);

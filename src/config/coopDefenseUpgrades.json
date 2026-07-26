@@ -7,54 +7,54 @@
       "sortOrder": 10,
       "upgrades": [
         { "id": "hp", "code": "A1", "label": "Vitalitaet", "description": "+20 maximale HP je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 10, "effects": [{ "stat": "player.maxHp", "mode": "add_per_level", "value": 20 }] },
-        { "id": "hp_regeneration", "code": "A2", "label": "HP-Regeneration", "description": "+5 HP pro Sekunde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 20, "requires": [{ "upgradeId": "hp", "minLevel": 3 }], "effects": [{ "stat": "player.hpRegenPerSecond", "mode": "add_per_level", "value": 5 }] },
-        { "id": "life_leech", "code": "A2-C", "label": "Lifeleech", "description": "Heilt 5% des tatsaechlich verursachten Schadens als Leben.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 25, "requires": [{ "upgradeId": "hp_regeneration", "minLevel": 3 }], "effects": [{ "stat": "player.lifeLeechFraction", "mode": "add_per_level", "value": 0.05 }] },
+        { "id": "hp_regeneration", "code": "A2", "label": "HP-Regeneration", "description": "+5 HP pro Sekunde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 20, "requires": [{ "upgradeId": "hp", "minLevel": 1 }], "effects": [{ "stat": "player.hpRegenPerSecond", "mode": "add_per_level", "value": 5 }] },
+        { "id": "life_leech", "code": "A2-C", "label": "Lifeleech", "description": "Heilt 5% des tatsaechlich verursachten Schadens als Leben.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 25, "requires": [{ "upgradeId": "hp_regeneration", "minLevel": 1 }], "effects": [{ "stat": "player.lifeLeechFraction", "mode": "add_per_level", "value": 0.05 }] },
         { "id": "max_armor", "code": "A3", "label": "Ruestungsmaximum", "description": "+20 maximale Ruestung je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 30, "effects": [{ "stat": "player.maxArmor", "mode": "add_per_level", "value": 20 }] },
-        { "id": "armor_gain", "code": "A4", "label": "Ruestungsgewinn", "description": "+10% positiver Ruestungsgewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 40, "requires": [{ "upgradeId": "max_armor", "minLevel": 3 }], "effects": [{ "stat": "player.armorGain", "mode": "add_percent_per_level", "value": 0.1 }] },
-        { "id": "armor_regeneration", "code": "A4-C", "label": "Ruestungsregeneration", "description": "Stellt 10 Ruestung pro Sekunde bis zum Ruestungsmaximum wieder her.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 45, "requires": [{ "upgradeId": "armor_gain", "minLevel": 3 }], "effects": [{ "stat": "player.armorRegenPerSecond", "mode": "add_per_level", "value": 10 }] },
+        { "id": "armor_gain", "code": "A4", "label": "Ruestungsgewinn", "description": "+10% positiver Ruestungsgewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 40, "requires": [{ "upgradeId": "max_armor", "minLevel": 1 }], "effects": [{ "stat": "player.armorGain", "mode": "add_percent_per_level", "value": 0.1 }] },
+        { "id": "armor_regeneration", "code": "A4-C", "label": "Ruestungsregeneration", "description": "Stellt 10 Ruestung pro Sekunde bis zum Ruestungsmaximum wieder her.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 45, "requires": [{ "upgradeId": "armor_gain", "minLevel": 1 }], "effects": [{ "stat": "player.armorRegenPerSecond", "mode": "add_per_level", "value": 10 }] },
         { "id": "max_adrenaline", "code": "A5", "label": "Adrenalinmaximum", "description": "+10 maximales Adrenalin je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 50, "effects": [{ "stat": "player.maxAdrenaline", "mode": "add_per_level", "value": 10 }] },
-        { "id": "adrenaline_regeneration", "code": "A6", "label": "Adrenalin-Regeneration", "description": "+5% Regeneration je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 60, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineRegenRate", "mode": "add_percent_per_level", "value": 0.05 }] },
-        { "id": "adrenaline_spawn_full", "code": "A6-1", "label": "Adrenalinschub", "description": "Startet beim Spawn und bei Wiederbelebung mit 100% Adrenalin.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 65, "requires": [{ "upgradeId": "adrenaline_regeneration", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineSpawnFull", "mode": "add_per_level", "value": 1 }] },
-        { "id": "adrenaline_gain", "code": "A7", "label": "Adrenalingewinn", "description": "+10% Adrenalingewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 70, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineGain", "mode": "add_percent_per_level", "value": 0.1 }] },
-        { "id": "adrenaline_cost", "code": "A8", "label": "Adrenalinverbrauch", "description": "-5% Adrenalinverbrauch je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 80, "requires": [{ "upgradeId": "adrenaline_gain", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineCost", "mode": "add_percent_per_level", "value": -0.05 }] },
-        { "id": "adrenaline_syringe_drops", "code": "A8-C", "label": "Adrenalin-Ernte", "description": "Getoetete Gegner koennen anhand ihres XP-Anteils an der aktuellen Map eine Adrenalin-Spritze hinterlassen; im Mittel entstehen zwei Spritzen pro Map.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 81, "requires": [{ "upgradeId": "adrenaline_spawn_full", "minLevel": 1 }, { "upgradeId": "adrenaline_cost", "minLevel": 3 }], "effects": [{ "stat": "player.adrenalineDropEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "adrenaline_regeneration", "code": "A6", "label": "Adrenalin-Regeneration", "description": "+5% Regeneration je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 60, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineRegenRate", "mode": "add_percent_per_level", "value": 0.05 }] },
+        { "id": "adrenaline_spawn_full", "code": "A6-1", "label": "Adrenalinschub", "description": "Startet beim Spawn und bei Wiederbelebung mit 100% Adrenalin.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 65, "requires": [{ "upgradeId": "adrenaline_regeneration", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineSpawnFull", "mode": "add_per_level", "value": 1 }] },
+        { "id": "adrenaline_gain", "code": "A7", "label": "Adrenalingewinn", "description": "+10% Adrenalingewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 70, "requires": [{ "upgradeId": "max_adrenaline", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineGain", "mode": "add_percent_per_level", "value": 0.1 }] },
+        { "id": "adrenaline_cost", "code": "A8", "label": "Adrenalinverbrauch", "description": "-5% Adrenalinverbrauch je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 80, "requires": [{ "upgradeId": "adrenaline_gain", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineCost", "mode": "add_percent_per_level", "value": -0.05 }] },
+        { "id": "adrenaline_syringe_drops", "code": "A8-C", "label": "Adrenalin-Ernte", "description": "Getoetete Gegner koennen anhand ihres XP-Anteils an der aktuellen Map eine Adrenalin-Spritze hinterlassen; im Mittel entstehen zwei Spritzen pro Map.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 81, "requires": [{ "upgradeId": "adrenaline_spawn_full", "minLevel": 1 }, { "upgradeId": "adrenaline_cost", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineDropEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "adrenaline_syringe_drop_chance", "code": "A8-1", "label": "Reiche Adrenalin-Ernte", "description": "+100% Wahrscheinlichkeit auf eine Adrenalin-Spritze je Stufe; bei Stufe 3 entstehen im Mittel acht Spritzen pro Map.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 82, "requires": [{ "upgradeId": "adrenaline_syringe_drops", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineDropChance", "mode": "add_percent_per_level", "value": 1 }] },
         { "id": "adrenaline_syringe_duration", "code": "A8-2", "label": "Langzeit-Adrenalin", "description": "+50% Dauer eingesammelter Adrenalin-Spritzen je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 83, "requires": [{ "upgradeId": "adrenaline_syringe_drops", "minLevel": 1 }], "effects": [{ "stat": "player.adrenalineSyringeDuration", "mode": "add_percent_per_level", "value": 0.5 }] },
         { "id": "ultimate_rage_gain", "code": "A9", "label": "Rage-Gewinn", "description": "+10% Rage-Gewinn je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 90, "effects": [{ "stat": "ultimate.rageGainPerDamage", "mode": "add_percent_per_level", "value": 0.1 }] },
-        { "id": "ultimate_max_rage", "code": "A10", "label": "Max. Rage", "description": "+20% maximales Rage je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 100, "requires": [{ "upgradeId": "ultimate_rage_gain", "minLevel": 3 }], "effects": [{ "stat": "ultimate.maxRage", "mode": "add_percent_per_level", "value": 0.2 }] },
-        { "id": "ultimate_armor_rage", "code": "A10-C", "label": "Gepanzerte Wut", "description": "Gewaehrt Rage auch fuer Schaden, den die Ruestung absorbiert.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 105, "requires": [{ "upgradeId": "ultimate_max_rage", "minLevel": 3 }], "effects": [{ "stat": "ultimate.rageGainFromArmorDamage", "mode": "add_per_level", "value": 1 }] },
+        { "id": "ultimate_max_rage", "code": "A10", "label": "Max. Rage", "description": "+20% maximales Rage je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 100, "requires": [{ "upgradeId": "ultimate_rage_gain", "minLevel": 1 }], "effects": [{ "stat": "ultimate.maxRage", "mode": "add_percent_per_level", "value": 0.2 }] },
+        { "id": "ultimate_armor_rage", "code": "A10-C", "label": "Gepanzerte Wut", "description": "Gewaehrt Rage auch fuer Schaden, den die Ruestung absorbiert.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 105, "requires": [{ "upgradeId": "ultimate_max_rage", "minLevel": 1 }], "effects": [{ "stat": "ultimate.rageGainFromArmorDamage", "mode": "add_per_level", "value": 1 }] },
         { "id": "run_speed", "code": "A11", "label": "Laufgeschwindigkeit", "description": "+5% Laufgeschwindigkeit je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 110, "effects": [{ "stat": "player.runSpeed", "mode": "add_percent_per_level", "value": 0.05 }] },
         { "id": "burrow_speed", "code": "A12", "label": "Einbuddeltempo", "description": "+10% Tempo unter der Erde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 120, "effects": [{ "stat": "player.burrowSpeed", "mode": "add_percent_per_level", "value": 0.1 }] },
-        { "id": "burrow_cost", "code": "A13", "label": "Effizientes Graben", "description": "-10% Adrenalinverbrauch unter der Erde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 130, "requires": [{ "upgradeId": "burrow_speed", "minLevel": 3 }], "effects": [{ "stat": "player.burrowCost", "mode": "add_percent_per_level", "value": -0.1 }] },
-        { "id": "unburrow_shockwave", "code": "A14", "label": "Auftauchschockwelle", "description": "+15% Schaden und Radius je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 140, "requires": [{ "upgradeId": "burrow_cost", "minLevel": 3 }], "effects": [{ "stat": "player.unburrowShockwaveDamage", "mode": "add_percent_per_level", "value": 0.15 }, { "stat": "player.unburrowShockwaveRadius", "mode": "add_percent_per_level", "value": 0.15 }] },
+        { "id": "burrow_cost", "code": "A13", "label": "Effizientes Graben", "description": "-10% Adrenalinverbrauch unter der Erde je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 130, "requires": [{ "upgradeId": "burrow_speed", "minLevel": 1 }], "effects": [{ "stat": "player.burrowCost", "mode": "add_percent_per_level", "value": -0.1 }] },
+        { "id": "unburrow_shockwave", "code": "A14", "label": "Auftauchschockwelle", "description": "+15% Schaden und Radius je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 140, "requires": [{ "upgradeId": "burrow_cost", "minLevel": 1 }], "effects": [{ "stat": "player.unburrowShockwaveDamage", "mode": "add_percent_per_level", "value": 0.15 }, { "stat": "player.unburrowShockwaveRadius", "mode": "add_percent_per_level", "value": 0.15 }] },
         { "id": "dash_range", "code": "A15", "label": "Dash-Reichweite", "description": "+10% Dash-Reichweite je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 150, "effects": [{ "stat": "player.dashRange", "mode": "add_percent_per_level", "value": 0.1 }] },
-        { "id": "dash_recovery", "code": "A16", "label": "Dash-Erholung", "description": "-20% Dauer der zweiten Dash-Phase je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 151, "requires": [{ "upgradeId": "dash_range", "minLevel": 3 }], "effects": [{ "stat": "player.dashRecovery", "mode": "add_percent_per_level", "value": -0.2 }] },
-        { "id": "dash_impact", "code": "A16-C", "label": "Dash-Aufprall", "description": "Der Dash verursacht 30 Schaden und 400 Rueckstoss.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "dash_recovery", "minLevel": 3 }], "effects": [{ "stat": "player.dashImpactDamage", "mode": "add_per_level", "value": 30 }, { "stat": "player.dashImpactKnockback", "mode": "add_per_level", "value": 400 }] },
+        { "id": "dash_recovery", "code": "A16", "label": "Dash-Erholung", "description": "-20% Dauer der zweiten Dash-Phase je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 151, "requires": [{ "upgradeId": "dash_range", "minLevel": 1 }], "effects": [{ "stat": "player.dashRecovery", "mode": "add_percent_per_level", "value": -0.2 }] },
+        { "id": "dash_impact", "code": "A16-C", "label": "Dash-Aufprall", "description": "Der Dash verursacht 30 Schaden und 400 Rueckstoss.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "dash_recovery", "minLevel": 1 }], "effects": [{ "stat": "player.dashImpactDamage", "mode": "add_per_level", "value": 30 }, { "stat": "player.dashImpactKnockback", "mode": "add_per_level", "value": 400 }] },
         { "id": "dash_fire_trail", "code": "A16-1", "label": "Brennende Spur", "description": "Der Dash setzt den Boden unter dem Spieler je Stufe 1 Sekunde lang in Brand.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 153, "requires": [{ "upgradeId": "dash_impact", "minLevel": 1 }], "effects": [{ "stat": "player.dashGroundFireDurationMs", "mode": "add_per_level", "value": 1000 }] },
         { "id": "dash_impact_damage", "code": "A16-2", "label": "Wuchtiger Aufprall", "description": "+25% direkter Schaden des Dash-Aufpralls je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 154, "requires": [{ "upgradeId": "dash_impact", "minLevel": 1 }], "effects": [{ "stat": "player.dashImpactDamage", "mode": "add_percent_per_level", "value": 0.25 }] },
-        { "id": "dash_overdrive", "code": "A16-D", "label": "Dash-Uebersteuerung", "description": "Haelt die Leertaste gedrueckt, um bis zur doppelten normalen Dauer in der schnellen, schusslosen Dash-Phase zu bleiben.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "dash_fire_trail", "minLevel": 3 }, { "upgradeId": "dash_impact_damage", "minLevel": 3 }], "effects": [{ "stat": "player.dashHoldEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "dash_overdrive", "code": "A16-D", "label": "Dash-Uebersteuerung", "description": "Haelt die Leertaste gedrueckt, um bis zur doppelten normalen Dauer in der schnellen, schusslosen Dash-Phase zu bleiben.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "dash_fire_trail", "minLevel": 1 }, { "upgradeId": "dash_impact_damage", "minLevel": 1 }], "effects": [{ "stat": "player.dashHoldEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "guardian_spirits", "code": "A17-C", "label": "Schutzgeister", "description": "Alle 2 Sekunden erscheint ein Schutzgeist. Er umkreist den Spieler und greift Gegner innerhalb von 200 px fuer 50 Schaden an.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 170, "effects": [{ "stat": "player.guardianSpirit.maxCount", "mode": "add_per_level", "value": 1 }, { "stat": "player.guardianSpirit.damage", "mode": "add_per_level", "value": 50 }, { "stat": "player.guardianSpirit.spawnIntervalMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.guardianSpirit.scanRadius", "mode": "add_per_level", "value": 200 }, { "stat": "player.guardianSpirit.attackSpeed", "mode": "add_per_level", "value": 620 }, { "stat": "player.guardianSpirit.returnSpeed", "mode": "add_per_level", "value": 720 }, { "stat": "player.guardianSpirit.orbitRadius", "mode": "add_per_level", "value": 48 }, { "stat": "player.guardianSpirit.attackStaggerMs", "mode": "add_per_level", "value": 300 }] },
         { "id": "guardian_spirit_damage", "code": "A17-1", "label": "Geisterzorn", "description": "+20% Schaden der Schutzgeister je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 171, "requires": [{ "upgradeId": "guardian_spirits", "minLevel": 1 }], "effects": [{ "stat": "player.guardianSpirit.damage", "mode": "add_percent_per_level", "value": 0.2 }] },
         { "id": "guardian_spirit_cooldown", "code": "A17-2", "label": "Geisterruf", "description": "-20% Spawnintervall der Schutzgeister je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 172, "requires": [{ "upgradeId": "guardian_spirits", "minLevel": 1 }], "effects": [{ "stat": "player.guardianSpirit.spawnIntervalMs", "mode": "add_percent_per_level", "value": -0.2 }] },
-        { "id": "guardian_spirit_trinity", "code": "A17-D", "label": "Geistertrias", "description": "Erhoeht die maximale Anzahl gleichzeitig aktiver Schutzgeister auf drei. Angriffe starten um 300 ms versetzt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 173, "requires": [{ "upgradeId": "guardian_spirit_damage", "minLevel": 3 }, { "upgradeId": "guardian_spirit_cooldown", "minLevel": 3 }], "effects": [{ "stat": "player.guardianSpirit.maxCount", "mode": "add_per_level", "value": 2 }] },
+        { "id": "guardian_spirit_trinity", "code": "A17-D", "label": "Geistertrias", "description": "Erhoeht die maximale Anzahl gleichzeitig aktiver Schutzgeister auf drei. Angriffe starten um 300 ms versetzt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 173, "requires": [{ "upgradeId": "guardian_spirit_damage", "minLevel": 1 }, { "upgradeId": "guardian_spirit_cooldown", "minLevel": 1 }], "effects": [{ "stat": "player.guardianSpirit.maxCount", "mode": "add_per_level", "value": 2 }] },
         { "id": "slime_trail", "code": "A18-C", "label": "Die Schleimspur", "description": "Normales Laufen hinterlaesst 5 Sekunden lang gruenen Schleim. Kontakt verlangsamt Gegner um 20% und verursacht 2 Sekunden lang alle 200 ms 2 Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 180, "effects": [{ "stat": "player.slimeTrail.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.slimeTrail.cellSize", "mode": "add_per_level", "value": 16 }, { "stat": "player.slimeTrail.lingerDurationMs", "mode": "add_per_level", "value": 5000 }, { "stat": "player.slimeTrail.effectDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.slimeTrail.tickIntervalMs", "mode": "add_per_level", "value": 200 }, { "stat": "player.slimeTrail.damagePerTick", "mode": "add_per_level", "value": 2 }, { "stat": "player.slimeTrail.slowFraction", "mode": "add_per_level", "value": 0.2 }] },
         { "id": "slime_trail_slow", "code": "A18-1", "label": "Laehmender Schleim", "description": "+20 Prozentpunkte Verlangsamung je Stufe, bis maximal 80%.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 181, "requires": [{ "upgradeId": "slime_trail", "minLevel": 1 }], "effects": [{ "stat": "player.slimeTrail.slowFraction", "mode": "add_per_level", "value": 0.2 }] },
         { "id": "slime_trail_duration", "code": "A18-2", "label": "Zaehes Sekret", "description": "+20% Lebensdauer der Schleimlachen je Stufe, bis maximal 8 Sekunden.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 182, "requires": [{ "upgradeId": "slime_trail", "minLevel": 1 }], "effects": [{ "stat": "player.slimeTrail.lingerDurationMs", "mode": "add_percent_per_level", "value": 0.2 }] },
-        { "id": "slime_trail_bloom", "code": "A18-D", "label": "Schleimbluete", "description": "Befallene Gegner schleudern beim Tod einen Schleimbrocken auf eine zufaellige Rasterzelle innerhalb von 96 px. Bestehender Schleim wird erneuert, aber nicht gestapelt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 183, "requires": [{ "upgradeId": "slime_trail_slow", "minLevel": 3 }, { "upgradeId": "slime_trail_duration", "minLevel": 3 }], "effects": [{ "stat": "player.slimeTrail.deathBurstSearchRadius", "mode": "add_per_level", "value": 96 }, { "stat": "player.slimeTrail.deathBurstPatchCount", "mode": "add_per_level", "value": 1 }] },
+        { "id": "slime_trail_bloom", "code": "A18-D", "label": "Schleimbluete", "description": "Befallene Gegner schleudern beim Tod einen Schleimbrocken auf eine zufaellige Rasterzelle innerhalb von 96 px. Bestehender Schleim wird erneuert, aber nicht gestapelt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 183, "requires": [{ "upgradeId": "slime_trail_slow", "minLevel": 1 }, { "upgradeId": "slime_trail_duration", "minLevel": 1 }], "effects": [{ "stat": "player.slimeTrail.deathBurstSearchRadius", "mode": "add_per_level", "value": 96 }, { "stat": "player.slimeTrail.deathBurstPatchCount", "mode": "add_per_level", "value": 1 }] },
         { "id": "necromancy", "code": "A19-C", "label": "Nekromantie", "description": "Alle 4 Sekunden wird der staerkste, in 300 px gestorbene Gegner wiederbelebt. Wiederbelebte kaempfen fuer dich und bleiben in deiner Naehe.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 190, "effects": [{ "stat": "player.necromancy.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.necromancy.maxAllies", "mode": "add_per_level", "value": 1 }] },
         { "id": "necromancy_count", "code": "A19-1", "label": "Untote Schar", "description": "+1 maximaler wiederbelebter Gegner je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 191, "requires": [{ "upgradeId": "necromancy", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.maxAllies", "mode": "add_per_level", "value": 1 }] },
         { "id": "necromancy_hp", "code": "A19-2", "label": "Knochenpanzer", "description": "+100% maximale HP wiederbelebter Gegner je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 192, "requires": [{ "upgradeId": "necromancy", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.hpMultiplier", "mode": "add_per_level", "value": 1 }] },
-        { "id": "necromancy_vitality", "code": "A19-D", "label": "Unheilige Vitalitaet", "description": "Wiederbelebte Gegner bewegen sich 50% schneller und regenerieren 20 HP pro Sekunde.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 193, "requires": [{ "upgradeId": "necromancy_count", "minLevel": 3 }, { "upgradeId": "necromancy_hp", "minLevel": 3 }], "effects": [{ "stat": "player.necromancy.moveSpeedMultiplier", "mode": "add_per_level", "value": 0.5 }, { "stat": "player.necromancy.hpRegenPerSecond", "mode": "add_per_level", "value": 20 }] },
+        { "id": "necromancy_vitality", "code": "A19-D", "label": "Unheilige Vitalitaet", "description": "Wiederbelebte Gegner bewegen sich 50% schneller und regenerieren 20 HP pro Sekunde.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 193, "requires": [{ "upgradeId": "necromancy_count", "minLevel": 1 }, { "upgradeId": "necromancy_hp", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.moveSpeedMultiplier", "mode": "add_per_level", "value": 0.5 }, { "stat": "player.necromancy.hpRegenPerSecond", "mode": "add_per_level", "value": 20 }] },
         { "id": "necromancy_undying", "code": "A19-3", "label": "Untote Wiederkehr", "description": "Je Stufe bleibt ein weiterer Wiederbelebter beim Tod am Leben und wird stattdessen vollstaendig geheilt. Es zaehlen immer die staerksten Wiederbelebten zuerst.", "kind": "upgrade", "maxLevel": 4, "costPerLevel": 1, "sortOrder": 194, "requires": [{ "upgradeId": "necromancy_vitality", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.undyingCount", "mode": "add_per_level", "value": 1 }] },
         { "id": "necromancy_revive_radius", "code": "A19-4", "label": "Weiter Totenruf", "description": "+100% Reichweite, in der Leichen wiederbelebt werden, je Stufe.", "kind": "upgrade", "maxLevel": 2, "costPerLevel": 1, "sortOrder": 195, "requires": [{ "upgradeId": "necromancy_vitality", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.reviveRadius", "mode": "add_percent_per_level", "value": 1 }] },
-        { "id": "necromancy_dominance", "code": "A19-E", "label": "Herrschaft der Toten", "description": "Ist das Limit erreicht und liegt in Reichweite die Leiche eines staerkeren Gegners, wird der schwaechste Wiederbelebte geopfert und die staerkere Leiche stattdessen wiederbelebt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 196, "requires": [{ "upgradeId": "necromancy_undying", "minLevel": 4 }, { "upgradeId": "necromancy_revive_radius", "minLevel": 2 }], "effects": [{ "stat": "player.necromancy.replaceWeakest", "mode": "add_per_level", "value": 1 }] },
+        { "id": "necromancy_dominance", "code": "A19-E", "label": "Herrschaft der Toten", "description": "Ist das Limit erreicht und liegt in Reichweite die Leiche eines staerkeren Gegners, wird der schwaechste Wiederbelebte geopfert und die staerkere Leiche stattdessen wiederbelebt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 196, "requires": [{ "upgradeId": "necromancy_undying", "minLevel": 1 }, { "upgradeId": "necromancy_revive_radius", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.replaceWeakest", "mode": "add_per_level", "value": 1 }] },
         { "id": "flamethrower_fire_ring", "code": "A21-C", "label": "Flammenring", "description": "Ein Flammenring umgibt den Spieler und setzt beruehrte Gegner in Brand.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 210, "effects": [{ "stat": "player.fire.ring.radius", "mode": "add_per_level", "value": 64 }, { "stat": "player.fire.ring.thickness", "mode": "add_per_level", "value": 16 }, { "stat": "player.fire.ring.burnDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.ring.burnDamagePerTick", "mode": "add_per_level", "value": 1 }] },
         { "id": "flamethrower_fire_ring_damage", "code": "A21-1", "label": "Lodernder Flammenring", "description": "+20% Brandschaden des Flammenrings je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 211, "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.burnDamagePerTick", "mode": "add_percent_per_level", "value": 0.2 }] },
         { "id": "flamethrower_fire_ring_radius", "code": "A21-2", "label": "Weiter Flammenkreis", "description": "+20% Radius des Flammenrings je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 212, "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.radius", "mode": "add_percent_per_level", "value": 0.2 }] },
-        { "id": "flamethrower_fire_ring_projectiles", "code": "A21-D", "label": "Flammenring-Munition", "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten beim Durchqueren des Flammenrings dauerhaft einen zusaetzlichen Brand.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 213, "requires": [{ "upgradeId": "flamethrower_fire_ring_damage", "minLevel": 3 }, { "upgradeId": "flamethrower_fire_ring_radius", "minLevel": 3 }], "effects": [{ "stat": "player.fire.ring.igniteProjectiles", "mode": "add_per_level", "value": 1 }] },
+        { "id": "flamethrower_fire_ring_projectiles", "code": "A21-D", "label": "Flammenring-Munition", "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten beim Durchqueren des Flammenrings dauerhaft einen zusaetzlichen Brand.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 213, "requires": [{ "upgradeId": "flamethrower_fire_ring_damage", "minLevel": 1 }, { "upgradeId": "flamethrower_fire_ring_radius", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.igniteProjectiles", "mode": "add_per_level", "value": 1 }] },
         { "id": "flamethrower_burning_ground", "code": "A22-C", "label": "Brennender Boden", "description": "Jeder Gegner, der durch einen von dir verursachten Brand brennt und stirbt, entzuendet seine 16-Pixel-Rasterzelle fuer 2 Sekunden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 220, "effects": [{ "stat": "player.fire.deathGround.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.deathGround.burnDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.deathGround.burnDamagePerTick", "mode": "add_per_level", "value": 0.25 }, { "stat": "player.fire.deathGround.burstRadius", "mode": "add_per_level", "value": 96 }] },
         { "id": "flamethrower_death_fire_burst", "code": "A22-1", "label": "Brandexplosion", "description": "Brennende Gegner schleudern beim Tod einen Brandbrocken je Stufe auf einzigartige Bodenstellen in bis zu 96 Pixel Entfernung.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 221, "requires": [{ "upgradeId": "flamethrower_burning_ground", "minLevel": 1 }], "effects": [{ "stat": "player.fire.deathGround.burstCount", "mode": "add_per_level", "value": 1 }] },
-        { "id": "general_burning_projectiles", "code": "A22-D", "label": "Brennende Projektile", "description": "Eigene Projektilwaffen-Geschosse erhalten dauerhaft einen zusaetzlichen 2-Sekunden-Brand, wenn sie eigene oder verbuendete Brandflaechen durchqueren.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 222, "requires": [{ "upgradeId": "flamethrower_death_fire_burst", "minLevel": 3 }], "effects": [{ "stat": "player.fire.burningProjectiles.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.fire.burningProjectiles.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.burningProjectiles.damagePerTick", "mode": "add_per_level", "value": 0.25 }] }
+        { "id": "general_burning_projectiles", "code": "A22-D", "label": "Brennende Projektile", "description": "Eigene Projektilwaffen-Geschosse erhalten dauerhaft einen zusaetzlichen 2-Sekunden-Brand, wenn sie eigene oder verbuendete Brandflaechen durchqueren.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 222, "requires": [{ "upgradeId": "flamethrower_death_fire_burst", "minLevel": 1 }], "effects": [{ "stat": "player.fire.burningProjectiles.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.fire.burningProjectiles.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.burningProjectiles.damagePerTick", "mode": "add_per_level", "value": 0.25 }] }
       ]
     },
     {
@@ -118,7 +118,7 @@
           "requires": [
             {
               "upgradeId": "glock_adrenaline_gain",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -407,7 +407,7 @@
           "requires": [
             {
               "upgradeId": "asmd_primary_range",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -788,10 +788,10 @@
             }
           ]
         },
-        { "id": "plasma_swarm", "code": "B-W2-C", "label": "Plasmaschwarm", "description": "Toedliche Treffer erzeugen zwei nicht weiter teilbare Homing-Splitter bei -30 und +30 Grad mit vollem Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 165, "requires": [{ "upgradeId": "plasma_homing_turn", "minLevel": 3 }], "effects": [{ "stat": "weapon.PLASMA.killSplitCount", "mode": "add_per_level", "value": 2 }, { "stat": "weapon.PLASMA.killSplitDamageFactor", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.PLASMA.killSplitAngleDegrees", "mode": "add_per_level", "value": 30 }] },
+        { "id": "plasma_swarm", "code": "B-W2-C", "label": "Plasmaschwarm", "description": "Toedliche Treffer erzeugen zwei nicht weiter teilbare Homing-Splitter bei -30 und +30 Grad mit vollem Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 165, "requires": [{ "upgradeId": "plasma_homing_turn", "minLevel": 1 }], "effects": [{ "stat": "weapon.PLASMA.killSplitCount", "mode": "add_per_level", "value": 2 }, { "stat": "weapon.PLASMA.killSplitDamageFactor", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.PLASMA.killSplitAngleDegrees", "mode": "add_per_level", "value": 30 }] },
         { "id": "bite_blood_bite", "code": "B-W4-C", "label": "Blutbiss", "description": "Jeder Biss-Treffer heilt 20 HP und gibt 10 Adrenalin. Der Bluteffekt ist 50% staerker.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "bite_damage_reduction", "minLevel": 1 }], "effects": [{ "stat": "weapon.BITE.hitHeal", "mode": "add_per_level", "value": 20 }, { "stat": "weapon.BITE.hitAdrenaline", "mode": "add_per_level", "value": 10 }, { "stat": "weapon.BITE.bloodEffectMultiplier", "mode": "add_percent_per_level", "value": 0.5 }] },
         { "id": "hydra_hunting_instinct", "code": "B-W5-C", "label": "Jagdinstinkt", "description": "Hydra-Splitter verfolgen waehrend ihrer Restflugzeit das naechste Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "hydra_split_count", "minLevel": 1 }], "effects": [{ "stat": "weapon.HYDRA.splitHomingEnabled", "mode": "add_per_level", "value": 1 }] },
-        { "id": "laubblaeser_pressure_damage", "code": "B-W7-C", "label": "Druckluftschaden", "description": "Erhoeht den Direktschaden pro Treffer von 1 auf 10.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 305, "requires": [{ "upgradeId": "laubblaeser_knockback", "minLevel": 3 }], "effects": [{ "stat": "weapon.LAUBBLAESER.directDamageOverride", "mode": "add_per_level", "value": 9 }] }
+        { "id": "laubblaeser_pressure_damage", "code": "B-W7-C", "label": "Druckluftschaden", "description": "Erhoeht den Direktschaden pro Treffer von 1 auf 10.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 305, "requires": [{ "upgradeId": "laubblaeser_knockback", "minLevel": 1 }], "effects": [{ "stat": "weapon.LAUBBLAESER.directDamageOverride", "mode": "add_per_level", "value": 9 }] }
       ]
     },
     {
@@ -1163,7 +1163,7 @@
           "requires": [
             {
               "upgradeId": "ak47_accuracy",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1188,7 +1188,7 @@
           "requires": [
             {
               "upgradeId": "ak47_range",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1295,11 +1295,11 @@
           "requires": [
             {
               "upgradeId": "ak47_adrenaline_cost",
-              "minLevel": 3
+              "minLevel": 1
             },
             {
               "upgradeId": "ak47_focus_damage",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1377,12 +1377,12 @@
           }
         },
         { "id": "shotgun_brake_load", "code": "C-W4-1", "label": "Bremsladung", "description": "Getroffene Gegner werden 1 Sekunde lang um 20% je Stufe verlangsamt. Der Effekt wird aktualisiert, aber nicht gestapelt.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 191, "requires": [{ "upgradeId": "unlock_shotgun", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunSlowFraction", "mode": "add_per_level", "value": 0.2 }] },
-        { "id": "shotgun_lightning_blast", "code": "C-W4-C1", "label": "Blitzschrot", "description": "Von einem Pellet getoetete Gegner entladen eine kleine Blitzexplosion mit 20 Schaden in 64 px Radius.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 0, "bossPointCostPerLevel": 1, "refundable": true, "sortOrder": 192, "requires": [{ "upgradeId": "shotgun_brake_load", "minLevel": 3 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningRadius", "mode": "add_per_level", "value": 64 }, { "stat": "weapon.SHOTGUN.shotgunLightningDamage", "mode": "add_per_level", "value": 20 }] },
+        { "id": "shotgun_lightning_blast", "code": "C-W4-C1", "label": "Blitzschrot", "description": "Von einem Pellet getoetete Gegner entladen eine kleine Blitzexplosion mit 20 Schaden in 64 px Radius.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 0, "bossPointCostPerLevel": 1, "refundable": true, "sortOrder": 192, "requires": [{ "upgradeId": "shotgun_brake_load", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningRadius", "mode": "add_per_level", "value": 64 }, { "stat": "weapon.SHOTGUN.shotgunLightningDamage", "mode": "add_per_level", "value": 20 }] },
         { "id": "shotgun_lightning_slow", "code": "C-W4-3", "label": "Geladene Druckwelle", "description": "Blitzexplosionen loesen zusaetzlich den voll ausgebauten Bremsladungseffekt aus.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 193, "requires": [{ "upgradeId": "shotgun_lightning_blast", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningAppliesSlow", "mode": "add_per_level", "value": 1 }] },
         { "id": "shotgun_round_shot", "code": "C-W4-2", "label": "Rundumschrot", "description": "Erhoeht Pelletzahl und Halbwinkel je Stufe um 8 beziehungsweise 32 Grad. Auf Stufe 5 fliegen 45 Pellets mit konstanter 8-Grad-Dichte fast vollstaendig im Kreis.", "kind": "upgrade", "maxLevel": 5, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 194, "requires": [{ "upgradeId": "unlock_shotgun", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.pelletCount", "mode": "add_per_level", "value": 8 }, { "stat": "weapon.SHOTGUN.pelletSpreadAngle", "mode": "add_per_level", "value": 32 }] },
-        { "id": "shotgun_proximity_damage", "code": "C-W4-4", "label": "Zerreissende Naehe", "description": "Erhoeht den Schaden kontinuierlich mit der Naehe. Der maximale Bonus direkt am Spieler betraegt 30% je Stufe; an der maximalen Reichweite bleibt der Schaden unveraendert.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 195, "requires": [{ "upgradeId": "shotgun_round_shot", "minLevel": 5 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunProximityMaxDamageBonus", "mode": "add_per_level", "value": 0.3 }] },
-        { "id": "shotgun_range", "code": "C-W4-5", "label": "Weitraeumige Zerreissung", "description": "Erhoeht die maximale Reichweite der Schrotflinte um 10% je Stufe und streckt damit auch die Entfernungskurve von Zerreissende Naehe.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 196, "requires": [{ "upgradeId": "shotgun_proximity_damage", "minLevel": 3 }], "effects": [{ "stat": "weapon.SHOTGUN.range", "mode": "add_percent_per_level", "value": 0.1 }] },
-        { "id": "shotgun_thunder_avalanche", "code": "C-W4-C2", "label": "Donnerlawine", "description": "Von Blitzexplosionen getoetete Gegner entladen weitere Blitze. Jede Generation behaelt 70% Schaden und 85% Radius.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 0, "bossPointCostPerLevel": 1, "refundable": true, "sortOrder": 197, "requires": [{ "upgradeId": "shotgun_lightning_slow", "minLevel": 1 }, { "upgradeId": "shotgun_range", "minLevel": 3 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunChainEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.SHOTGUN.shotgunChainDamageRetention", "mode": "add_per_level", "value": 0.7 }, { "stat": "weapon.SHOTGUN.shotgunChainRadiusRetention", "mode": "add_per_level", "value": 0.85 }] },
+        { "id": "shotgun_proximity_damage", "code": "C-W4-4", "label": "Zerreissende Naehe", "description": "Erhoeht den Schaden kontinuierlich mit der Naehe. Der maximale Bonus direkt am Spieler betraegt 30% je Stufe; an der maximalen Reichweite bleibt der Schaden unveraendert.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 195, "requires": [{ "upgradeId": "shotgun_round_shot", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunProximityMaxDamageBonus", "mode": "add_per_level", "value": 0.3 }] },
+        { "id": "shotgun_range", "code": "C-W4-5", "label": "Weitraeumige Zerreissung", "description": "Erhoeht die maximale Reichweite der Schrotflinte um 10% je Stufe und streckt damit auch die Entfernungskurve von Zerreissende Naehe.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 196, "requires": [{ "upgradeId": "shotgun_proximity_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.range", "mode": "add_percent_per_level", "value": 0.1 }] },
+        { "id": "shotgun_thunder_avalanche", "code": "C-W4-C2", "label": "Donnerlawine", "description": "Von Blitzexplosionen getoetete Gegner entladen weitere Blitze. Jede Generation behaelt 70% Schaden und 85% Radius.", "kind": "upgrade", "maxLevel": 1, "startingLevel": 0, "costPerLevel": 0, "bossPointCostPerLevel": 1, "refundable": true, "sortOrder": 197, "requires": [{ "upgradeId": "shotgun_lightning_slow", "minLevel": 1 }, { "upgradeId": "shotgun_range", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunChainEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.SHOTGUN.shotgunChainDamageRetention", "mode": "add_per_level", "value": 0.7 }, { "stat": "weapon.SHOTGUN.shotgunChainRadiusRetention", "mode": "add_per_level", "value": 0.85 }] },
         { "id": "shotgun_lightning_radius", "code": "C-W4-6", "label": "Breitbandentladung", "description": "Erhoeht den Radius aller Schrotflinten-Blitzexplosionen um 20% je Stufe.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 198, "requires": [{ "upgradeId": "shotgun_thunder_avalanche", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningRadius", "mode": "add_percent_per_level", "value": 0.2 }] },
         { "id": "shotgun_lightning_damage", "code": "C-W4-7", "label": "Hochenergieentladung", "description": "Erhoeht den Schaden aller Schrotflinten-Blitzexplosionen um 30% je Stufe.", "kind": "upgrade", "maxLevel": 3, "startingLevel": 0, "costPerLevel": 1, "refundable": true, "sortOrder": 199, "requires": [{ "upgradeId": "shotgun_thunder_avalanche", "minLevel": 1 }], "effects": [{ "stat": "weapon.SHOTGUN.shotgunLightningDamage", "mode": "add_percent_per_level", "value": 0.3 }] },
         {
@@ -1440,7 +1440,7 @@
           "requires": [
             {
               "upgradeId": "asmd_secondary_combo_adrenaline",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1491,7 +1491,7 @@
           "requires": [
             {
               "upgradeId": "asmd_secondary_explosion_radius",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1576,7 +1576,7 @@
             },
             {
               "upgradeId": "asmd_secondary_dot_field_damage",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1708,7 +1708,7 @@
           "requires": [
             {
               "upgradeId": "mini_rocket_thermobaric_charge",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1733,7 +1733,7 @@
           "requires": [
             {
               "upgradeId": "mini_rocket_launcher_homing_turn",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1799,7 +1799,7 @@
           "requires": [
             {
               "upgradeId": "awp_adrenaline_cost",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1829,7 +1829,7 @@
           "requires": [
             {
               "upgradeId": "awp_aim_duration",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -1905,7 +1905,7 @@
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 317,
-          "requires": [{ "upgradeId": "flamethrower_adrenalin_efficiency", "minLevel": 3 }],
+          "requires": [{ "upgradeId": "flamethrower_adrenalin_efficiency", "minLevel": 1 }],
           "effects": [{ "stat": "weapon.FLAMETHROWER.range", "mode": "add_percent_per_level", "value": 0.1 }]
         },
         {
@@ -1975,7 +1975,7 @@
           "sortOrder": 360,
           "requires": [
             { "upgradeId": "flamethrower_kamikaze_molotov_bonuses", "minLevel": 1 },
-            { "upgradeId": "flamethrower_range", "minLevel": 3 }
+            { "upgradeId": "flamethrower_range", "minLevel": 1 }
           ],
           "effects": [
             { "stat": "weapon.FLAMETHROWER.cooldown", "mode": "add_per_level", "value": 1430 },
@@ -2098,7 +2098,7 @@
           "requires": [
             {
               "upgradeId": "negev_range",
-              "minLevel": 2
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2123,7 +2123,7 @@
           "requires": [
             {
               "upgradeId": "negev_hold_speed",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2149,7 +2149,7 @@
           "requires": [
             {
               "upgradeId": "negev_warmup_duration",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2181,7 +2181,7 @@
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 366,
-          "requires": [{ "upgradeId": "negev_adrenaline_cost", "minLevel": 3 }],
+          "requires": [{ "upgradeId": "negev_adrenaline_cost", "minLevel": 1 }],
           "effects": [{ "stat": "weapon.NEGEV.rockDamageMult", "mode": "add_percent_per_level", "value": 5 }]
         },
         {
@@ -2281,7 +2281,7 @@
           "requires": [
             {
               "upgradeId": "tesla_dome_radius",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2331,7 +2331,7 @@
           "requires": [
             {
               "upgradeId": "tesla_dome_movement_slow",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2364,7 +2364,7 @@
         { "id": "energy_shield_overcharge", "code": "C-W11-3", "label": "Upgrade Energie-Schild: Ueberladung", "description": "+50% maximaler Schadensbonus je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 420, "requires": [{ "upgradeId": "unlock_energy_shield", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.buffMaxBonus", "mode": "add_per_level", "value": 0.5 }] },
         { "id": "energy_shield_sustain", "code": "C-W11-4", "label": "Upgrade Energie-Schild: Anhaltende Ladung", "description": "+20% Verzoegerung bis zum Abbau und -20% Abbaugeschwindigkeit des Schadensbonus je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 422, "requires": [{ "upgradeId": "energy_shield_overcharge", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.buffDecayDelayMs", "mode": "add_percent_per_level", "value": 0.2 }, { "stat": "weapon.ENERGY_SHIELD.fire.buffDecayPerSecond", "mode": "add_percent_per_level", "value": -0.2 }] },
         { "id": "energy_shield_efficiency", "code": "C-W11-5", "label": "Upgrade Energie-Schild: Effizienz", "description": "-10% Adrenalinverbrauch des Schilds je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 424, "requires": [{ "upgradeId": "energy_shield_sustain", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.adrenalineDrainPerSecond", "mode": "add_percent_per_level", "value": -0.1 }] },
-        { "id": "energy_shield_autonomous", "code": "C-W11-D", "label": "Autonome Kuppel", "description": "Die Kuppel wird per Rechtsklick an- und ausgeschaltet, statt gehalten zu werden. Waffe 1, Utility und Ultimate bleiben nutzbar. Der Adrenalinverbrauch bleibt bestehen; die Kuppel erlischt bei leerem Adrenalin oder in Zustaenden ohne Waffennutzung und startet nicht automatisch neu.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 430, "requires": [{ "upgradeId": "energy_shield_dome_heal", "minLevel": 3 }, { "upgradeId": "energy_shield_efficiency", "minLevel": 3 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeToggleEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "energy_shield_autonomous", "code": "C-W11-D", "label": "Autonome Kuppel", "description": "Die Kuppel wird per Rechtsklick an- und ausgeschaltet, statt gehalten zu werden. Waffe 1, Utility und Ultimate bleiben nutzbar. Der Adrenalinverbrauch bleibt bestehen; die Kuppel erlischt bei leerem Adrenalin oder in Zustaenden ohne Waffennutzung und startet nicht automatisch neu.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 430, "requires": [{ "upgradeId": "energy_shield_dome_heal", "minLevel": 1 }, { "upgradeId": "energy_shield_efficiency", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeToggleEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "energy_shield_dome_size", "code": "C-W11-6", "label": "Upgrade Energie-Schild: Groessere Kuppel", "description": "+15% Kuppelradius je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 432, "requires": [{ "upgradeId": "energy_shield_autonomous", "minLevel": 1 }], "effects": [{ "stat": "weapon.ENERGY_SHIELD.fire.domeRadius", "mode": "add_percent_per_level", "value": 0.15 }] },
         { "id": "p90_bullet_storm", "code": "C-W1-C", "label": "Kugelhagel", "description": "Jeder Schuss feuert drei Projektile mit vollem Schaden bei -15, 0 und +15 Grad.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 150, "requires": [{ "upgradeId": "unlock_p90", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.pelletCount", "mode": "add_per_level", "value": 2 }] },
         { "id": "p90_homing_overdrive", "code": "C-W1-D", "label": "Zielsuchender Kugelhagel", "description": "Alle P90-Geschosse verfolgen Ziele, verursachen vierfachen Schaden und feuern mit einem Viertel der bisherigen Rate.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 152, "requires": [{ "upgradeId": "p90_accuracy", "minLevel": 1 }, { "upgradeId": "p90_range", "minLevel": 1 }], "effects": [{ "stat": "weapon.P90.homingEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "weapon.P90.damage", "mode": "add_percent_per_level", "value": 3 }, { "stat": "weapon.P90.cooldown", "mode": "add_percent_per_level", "value": 3 }] },
@@ -2375,7 +2375,7 @@
         { "id": "rocket_launcher_black_hole_pull", "code": "C-W2-8", "label": "Upgrade Rocket Launcher: Gravitationssog", "description": "+30% Sogstaerke des Schwarzen Lochs je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 178, "requires": [{ "upgradeId": "rocket_launcher_black_hole", "minLevel": 1 }], "effects": [{ "stat": "weapon.ROCKET_LAUNCHER.blackHolePullStrength", "mode": "add_percent_per_level", "value": 0.3 }] },
         { "id": "mini_rocket_triple_detonation", "code": "C-W6-5", "label": "Upgrade Mini-Raketen: Dreifachzuendung", "description": "Erhoeht die maximale Zahl der Explosionen von zwei auf drei.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 260, "requires": [{ "upgradeId": "mini_rocket_long_range_drive", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.multiExplosionCount", "mode": "add_per_level", "value": 1 }] },
         { "id": "mini_rocket_cascade_charge", "code": "C-W6-6", "label": "Upgrade Mini-Raketen: Kaskadenladung", "description": "Erhoeht Explosionsschaden und Explosionsradius um jeweils 20% je Stufe, insgesamt auf 20%, 40% oder 60% Bonus.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 265, "requires": [{ "upgradeId": "mini_rocket_triple_detonation", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeInitialDamageBonus", "mode": "add_per_level", "value": 0.2 }, { "stat": "weapon.MINI_ROCKET_LAUNCHER.impactExplosion.radius", "mode": "add_percent_per_level", "value": 0.2 }] },
-        { "id": "mini_rocket_homecoming_protocol", "code": "C-W6-C2", "label": "Heimkehrprotokoll", "description": "Findet eine Rakete kein Ziel mehr, kann sie zum Spieler zurueckkehren und unterwegs weiter nach Gegnern suchen. Nach ihrer letzten Explosion kehrt sie verbraucht mit 40% Tempo zurueck und kann nur noch eingesammelt werden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 270, "requires": [{ "upgradeId": "mini_rocket_cascade_charge", "minLevel": 3 }, { "upgradeId": "mini_rocket_launcher_explosion_damage", "minLevel": 3 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketReturnEnabled", "mode": "add_per_level", "value": 1 }] },
+        { "id": "mini_rocket_homecoming_protocol", "code": "C-W6-C2", "label": "Heimkehrprotokoll", "description": "Findet eine Rakete kein Ziel mehr, kann sie zum Spieler zurueckkehren und unterwegs weiter nach Gegnern suchen. Nach ihrer letzten Explosion kehrt sie verbraucht mit 40% Tempo zurueck und kann nur noch eingesammelt werden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 270, "requires": [{ "upgradeId": "mini_rocket_cascade_charge", "minLevel": 1 }, { "upgradeId": "mini_rocket_launcher_explosion_damage", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketReturnEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "mini_rocket_adrenaline_recovery", "code": "C-W6-6", "label": "Upgrade Mini-Raketen: Adrenalinrueckgewinnung", "description": "Erstattet beim Einsammeln 50% der tatsaechlich bezahlten Adrenalinkosten je Stufe, bis zu 150%.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 272, "requires": [{ "upgradeId": "mini_rocket_homecoming_protocol", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupAdrenalineRefundFraction", "mode": "add_per_level", "value": 0.5 }] },
         { "id": "mini_rocket_armor_recovery", "code": "C-W6-7", "label": "Upgrade Mini-Raketen: Panzerungsbergung", "description": "Gewaehrt beim Einsammeln +1 Ruestung je Stufe. Kein interner Cooldown.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 274, "requires": [{ "upgradeId": "mini_rocket_homecoming_protocol", "minLevel": 1 }], "effects": [{ "stat": "weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupArmor", "mode": "add_per_level", "value": 1 }] },
         { "id": "awp_charge_damage", "code": "C-W7-4", "label": "Geduldiger Tod", "description": "Erhoeht den AWP-Schaden stetig mit der Zielzeit bis auf +100% nach 3 Sekunden. Ein Kreisbalken um das Fadenkreuz zeigt die Ladung.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 291, "requires": [{ "upgradeId": "unlock_awp", "minLevel": 1 }], "effects": [{ "stat": "weapon.AWP.awpCharge.maxDamageBonus", "mode": "add_per_level", "value": 1 }] },
@@ -2449,7 +2449,7 @@
           "requires": [
             {
               "upgradeId": "he_grenade_damage",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2540,7 +2540,7 @@
           "requires": [
             {
               "upgradeId": "time_bubble_radius",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2591,7 +2591,7 @@
           "requires": [
             {
               "upgradeId": "time_bubble_slow_strength",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2749,7 +2749,7 @@
           "requires": [
             {
               "upgradeId": "molotov_grenade_radius",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -2799,7 +2799,7 @@
           "requires": [
             {
               "upgradeId": "molotov_burn_damage",
-              "minLevel": 3
+              "minLevel": 1
             }
           ],
           "effects": [
@@ -3232,14 +3232,14 @@
           ]
         },
         { "id": "he_grenade_cluster", "code": "D-U1-C", "label": "Clusterladung", "description": "Erzeugt drei Folgeexplosionen mit 50% Radius und je 30% Schaden; keine Rekursion.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 127, "requires": [{ "upgradeId": "he_grenade_radius", "minLevel": 1 }], "effects": [{ "stat": "utility.HE_GRENADE.clusterCount", "mode": "add_per_level", "value": 3 }, { "stat": "utility.HE_GRENADE.clusterRadiusFactor", "mode": "add_per_level", "value": 0.5 }, { "stat": "utility.HE_GRENADE.clusterDamageFactor", "mode": "add_per_level", "value": 0.3 }] },
-        { "id": "molotov_wildfire", "code": "D-U4-C", "label": "Lauffeuer", "description": "Vom Molotov brennende Gegner fliehen mit 50% mehr Tempo zum naechsten Ausgang der Feuerflaeche, laufen bis zum Ende des Brands in dieser Richtung weiter und entzuenden dabei den Boden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "molotov_grenade_duration", "minLevel": 3 }, { "upgradeId": "molotov_burn_duration", "minLevel": 3 }], "effects": [{ "stat": "utility.MOLOTOV_GRENADE.wildfireEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "utility.MOLOTOV_GRENADE.wildfirePanicSpeedMultiplier", "mode": "add_per_level", "value": 1.5 }, { "stat": "utility.MOLOTOV_GRENADE.wildfireTrailDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "utility.MOLOTOV_GRENADE.wildfireTrailDamagePerTick", "mode": "add_per_level", "value": 2 }] },
-        { "id": "stinkdruesen_aftercloud", "code": "D-U5-C", "label": "Nachwolke", "description": "Bei natuerlichem Ablauf bleibt 3 Sekunden eine stationaere Wolke mit 70% Radius und 50% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "stinkdruesen_damage", "minLevel": 3 }], "effects": [{ "stat": "utility.STINKDRUESEN.afterCloudDurationMs", "mode": "add_per_level", "value": 3000 }, { "stat": "utility.STINKDRUESEN.afterCloudRadiusFactor", "mode": "add_per_level", "value": 0.7 }, { "stat": "utility.STINKDRUESEN.afterCloudDamageFactor", "mode": "add_per_level", "value": 0.5 }] },
-        { "id": "translocator_telefrag", "code": "D-U6-C", "label": "Telefrag", "description": "Die Ankunft verursacht 50 Schaden und 650 Rueckstoss in 80 px, ohne Eigen- oder Teamschaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 285, "requires": [{ "upgradeId": "translocator_projectile_speed", "minLevel": 3 }], "effects": [{ "stat": "utility.TRANSLOCATOR.telefragRadius", "mode": "add_per_level", "value": 80 }, { "stat": "utility.TRANSLOCATOR.telefragDamage", "mode": "add_per_level", "value": 50 }, { "stat": "utility.TRANSLOCATOR.telefragKnockback", "mode": "add_per_level", "value": 650 }] },
-        { "id": "felsbau_explosive_collapse", "code": "D-U7-C", "label": "Explosiver Einsturz", "description": "Nur gegnerisch zerstoerte Felsen verursachen 50 Schaden und 700 Rueckstoss in 100 px.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 315, "requires": [{ "upgradeId": "felsbau_hp", "minLevel": 3 }], "effects": [{ "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionRadius", "mode": "add_per_level", "value": 100 }, { "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionDamage", "mode": "add_per_level", "value": 50 }, { "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionKnockback", "mode": "add_per_level", "value": 700 }] },
+        { "id": "molotov_wildfire", "code": "D-U4-C", "label": "Lauffeuer", "description": "Vom Molotov brennende Gegner fliehen mit 50% mehr Tempo zum naechsten Ausgang der Feuerflaeche, laufen bis zum Ende des Brands in dieser Richtung weiter und entzuenden dabei den Boden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "molotov_grenade_duration", "minLevel": 1 }, { "upgradeId": "molotov_burn_duration", "minLevel": 1 }], "effects": [{ "stat": "utility.MOLOTOV_GRENADE.wildfireEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "utility.MOLOTOV_GRENADE.wildfirePanicSpeedMultiplier", "mode": "add_per_level", "value": 1.5 }, { "stat": "utility.MOLOTOV_GRENADE.wildfireTrailDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "utility.MOLOTOV_GRENADE.wildfireTrailDamagePerTick", "mode": "add_per_level", "value": 2 }] },
+        { "id": "stinkdruesen_aftercloud", "code": "D-U5-C", "label": "Nachwolke", "description": "Bei natuerlichem Ablauf bleibt 3 Sekunden eine stationaere Wolke mit 70% Radius und 50% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "stinkdruesen_damage", "minLevel": 1 }], "effects": [{ "stat": "utility.STINKDRUESEN.afterCloudDurationMs", "mode": "add_per_level", "value": 3000 }, { "stat": "utility.STINKDRUESEN.afterCloudRadiusFactor", "mode": "add_per_level", "value": 0.7 }, { "stat": "utility.STINKDRUESEN.afterCloudDamageFactor", "mode": "add_per_level", "value": 0.5 }] },
+        { "id": "translocator_telefrag", "code": "D-U6-C", "label": "Telefrag", "description": "Die Ankunft verursacht 50 Schaden und 650 Rueckstoss in 80 px, ohne Eigen- oder Teamschaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 285, "requires": [{ "upgradeId": "translocator_projectile_speed", "minLevel": 1 }], "effects": [{ "stat": "utility.TRANSLOCATOR.telefragRadius", "mode": "add_per_level", "value": 80 }, { "stat": "utility.TRANSLOCATOR.telefragDamage", "mode": "add_per_level", "value": 50 }, { "stat": "utility.TRANSLOCATOR.telefragKnockback", "mode": "add_per_level", "value": 650 }] },
+        { "id": "felsbau_explosive_collapse", "code": "D-U7-C", "label": "Explosiver Einsturz", "description": "Nur gegnerisch zerstoerte Felsen verursachen 50 Schaden und 700 Rueckstoss in 100 px.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 315, "requires": [{ "upgradeId": "felsbau_hp", "minLevel": 1 }], "effects": [{ "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionRadius", "mode": "add_per_level", "value": 100 }, { "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionDamage", "mode": "add_per_level", "value": 50 }, { "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionKnockback", "mode": "add_per_level", "value": 700 }] },
         { "id": "fliegenpilz_double_spore", "code": "D-U8-C", "label": "Doppelspore", "description": "Feuert ein zweites Projektil mit vollem Schaden auf ein anderes Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 345, "requires": [{ "upgradeId": "fliegenpilz_hp", "minLevel": 1 }], "effects": [{ "stat": "utility.FLIEGENPILZ.placeable.secondProjectileDamageFactor", "mode": "add_per_level", "value": 1 }] },
         { "id": "fliegenpilz_plasma_gun", "code": "D-U8-C2", "label": "Plasmapilz", "description": "Der Fliegenpilz ruestet statt der Sporen-Waffe eine Plasma-Gun mit halber Feuerrate aus.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 346, "requires": [{ "upgradeId": "fliegenpilz_double_spore", "minLevel": 1 }, { "upgradeId": "fliegenpilz_range", "minLevel": 1 }], "effects": [{ "stat": "utility.FLIEGENPILZ.placeable.plasmaWeaponEnabled", "mode": "add_per_level", "value": 1 }] },
-        { "id": "zeus_chain_lightning", "code": "D-U9-C", "label": "Kettenblitz", "description": "Trifft zwei weitere Gegner innerhalb 120 px mit jeweils 50% Restschaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 375, "requires": [{ "upgradeId": "zeus_taser_arc", "minLevel": 3 }], "effects": [{ "stat": "utility.ZEUS_TASER.chainCount", "mode": "add_per_level", "value": 2 }, { "stat": "utility.ZEUS_TASER.chainRadius", "mode": "add_per_level", "value": 120 }, { "stat": "utility.ZEUS_TASER.chainDamageFactor", "mode": "add_per_level", "value": 0.5 }] },
-        { "id": "decoy_explosive_dummy", "code": "D-U10-C", "label": "Sprengattrappe", "description": "Zerstoerung oder natuerlicher Ablauf verursacht 60 Schaden und 500 Rueckstoss in 100 px.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 395, "requires": [{ "upgradeId": "decoy_duration", "minLevel": 3 }], "effects": [{ "stat": "utility.DECOY.explosionRadius", "mode": "add_per_level", "value": 100 }, { "stat": "utility.DECOY.explosionDamage", "mode": "add_per_level", "value": 60 }, { "stat": "utility.DECOY.explosionKnockback", "mode": "add_per_level", "value": 500 }] }
+        { "id": "zeus_chain_lightning", "code": "D-U9-C", "label": "Kettenblitz", "description": "Trifft zwei weitere Gegner innerhalb 120 px mit jeweils 50% Restschaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 375, "requires": [{ "upgradeId": "zeus_taser_arc", "minLevel": 1 }], "effects": [{ "stat": "utility.ZEUS_TASER.chainCount", "mode": "add_per_level", "value": 2 }, { "stat": "utility.ZEUS_TASER.chainRadius", "mode": "add_per_level", "value": 120 }, { "stat": "utility.ZEUS_TASER.chainDamageFactor", "mode": "add_per_level", "value": 0.5 }] },
+        { "id": "decoy_explosive_dummy", "code": "D-U10-C", "label": "Sprengattrappe", "description": "Zerstoerung oder natuerlicher Ablauf verursacht 60 Schaden und 500 Rueckstoss in 100 px.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 395, "requires": [{ "upgradeId": "decoy_duration", "minLevel": 1 }], "effects": [{ "stat": "utility.DECOY.explosionRadius", "mode": "add_per_level", "value": 100 }, { "stat": "utility.DECOY.explosionDamage", "mode": "add_per_level", "value": 60 }, { "stat": "utility.DECOY.explosionKnockback", "mode": "add_per_level", "value": 500 }] }
       ]
     },
     {
@@ -3300,7 +3300,7 @@
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 111,
-          "requires": [{ "upgradeId": "armageddon_duration", "minLevel": 3 }],
+          "requires": [{ "upgradeId": "armageddon_duration", "minLevel": 1 }],
           "effects": [{ "stat": "ultimate.ARMAGEDDON.damage", "mode": "add_percent_per_level", "value": 0.1 }]
         },
         {
@@ -3314,7 +3314,7 @@
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 112,
-          "requires": [{ "upgradeId": "armageddon_damage", "minLevel": 3 }],
+          "requires": [{ "upgradeId": "armageddon_damage", "minLevel": 1 }],
           "effects": [{ "stat": "ultimate.ARMAGEDDON.meteorCount", "mode": "add_percent_per_level", "value": 0.1 }]
         },
         {
@@ -3342,7 +3342,7 @@
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 114,
-          "requires": [{ "upgradeId": "armageddon_rage_required", "minLevel": 3 }],
+          "requires": [{ "upgradeId": "armageddon_rage_required", "minLevel": 1 }],
           "effects": [{ "stat": "ultimate.ARMAGEDDON.radius", "mode": "add_percent_per_level", "value": 0.15 }]
         },
         {
@@ -3356,7 +3356,7 @@
           "costPerLevel": 1,
           "refundable": true,
           "sortOrder": 115,
-          "requires": [{ "upgradeId": "armageddon_radius", "minLevel": 3 }],
+          "requires": [{ "upgradeId": "armageddon_radius", "minLevel": 1 }],
           "effects": [{ "stat": "ultimate.ARMAGEDDON.fireChunks", "mode": "add_per_level", "value": 3 }]
         },
         {
@@ -3557,10 +3557,10 @@
             }
           ]
         },
-        { "id": "armageddon_comet_storm", "code": "E-U1-C", "label": "Kometenhagel", "description": "Wandelt Armageddon in einen gezielten Kometenhagel um: ein Drittel der aufgewerteten Spawnrate, 75% kuerzere Fallzeit, doppelter Radius, dreifacher Schaden und dreifache Brockenmenge.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 116, "requires": [{ "upgradeId": "armageddon_meteor_count", "minLevel": 3 }, { "upgradeId": "armageddon_fire_chunks", "minLevel": 3 }], "effects": [{ "stat": "ultimate.ARMAGEDDON.armageddon.cometStormEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometSpawnRateDivisor", "mode": "add_per_level", "value": 2 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometFallDurationFactor", "mode": "add_percent_per_level", "value": -0.75 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometRadiusFactor", "mode": "add_percent_per_level", "value": 1 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometDamageFactor", "mode": "add_percent_per_level", "value": 2 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometChunkCountFactor", "mode": "add_percent_per_level", "value": 2 }] },
-        { "id": "gauss_magnetic_discharge", "code": "E-U2-C", "label": "Magnetische Entladung", "description": "Jeder durchschlagene Gegner loest einmalig einen 40%-Kettenblitz innerhalb 140 px aus.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "gauss_rifle_damage", "minLevel": 3 }], "effects": [{ "stat": "ultimate.GAUSS_RIFLE.chainRadius", "mode": "add_per_level", "value": 140 }, { "stat": "ultimate.GAUSS_RIFLE.chainDamageFactor", "mode": "add_per_level", "value": 0.4 }] },
-        { "id": "airstrike_carpet_bombing", "code": "E-U3-C", "label": "Teppichbombardement", "description": "Drei um 120 px versetzte Einschlaege im Abstand von 150 ms mit 80% Radius und 55% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 185, "requires": [{ "upgradeId": "airstrike_radius", "minLevel": 3 }], "effects": [{ "stat": "ultimate.AIRSTRIKE.carpetStrikeCount", "mode": "add_per_level", "value": 3 }, { "stat": "ultimate.AIRSTRIKE.carpetOffset", "mode": "add_per_level", "value": 120 }, { "stat": "ultimate.AIRSTRIKE.carpetIntervalMs", "mode": "add_per_level", "value": 150 }, { "stat": "ultimate.AIRSTRIKE.carpetRadiusFactor", "mode": "add_per_level", "value": 0.8 }, { "stat": "ultimate.AIRSTRIKE.carpetDamageFactor", "mode": "add_per_level", "value": 0.55 }] },
-        { "id": "honey_badger_pack_rage", "code": "E-U4-C", "label": "Rudelwut", "description": "Verbuendete erhalten +25% Laufgeschwindigkeit, +25% Schaden und 2 Ruestung je Ruestungstick; 500 ms Nachlauf.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 215, "requires": [{ "upgradeId": "honey_badger_rage_radius", "minLevel": 3 }], "effects": [{ "stat": "ultimate.HONEY_BADGER_RAGE.aura.allySpeedMultiplier", "mode": "add_per_level", "value": 1.25 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.allyDamageMultiplier", "mode": "add_per_level", "value": 1.25 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.allyArmorPerTick", "mode": "add_per_level", "value": 2 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.lingerMs", "mode": "add_per_level", "value": 500 }] }
+        { "id": "armageddon_comet_storm", "code": "E-U1-C", "label": "Kometenhagel", "description": "Wandelt Armageddon in einen gezielten Kometenhagel um: ein Drittel der aufgewerteten Spawnrate, 75% kuerzere Fallzeit, doppelter Radius, dreifacher Schaden und dreifache Brockenmenge.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 116, "requires": [{ "upgradeId": "armageddon_meteor_count", "minLevel": 1 }, { "upgradeId": "armageddon_fire_chunks", "minLevel": 1 }], "effects": [{ "stat": "ultimate.ARMAGEDDON.armageddon.cometStormEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometSpawnRateDivisor", "mode": "add_per_level", "value": 2 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometFallDurationFactor", "mode": "add_percent_per_level", "value": -0.75 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometRadiusFactor", "mode": "add_percent_per_level", "value": 1 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometDamageFactor", "mode": "add_percent_per_level", "value": 2 }, { "stat": "ultimate.ARMAGEDDON.armageddon.cometChunkCountFactor", "mode": "add_percent_per_level", "value": 2 }] },
+        { "id": "gauss_magnetic_discharge", "code": "E-U2-C", "label": "Magnetische Entladung", "description": "Jeder durchschlagene Gegner loest einmalig einen 40%-Kettenblitz innerhalb 140 px aus.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 155, "requires": [{ "upgradeId": "gauss_rifle_damage", "minLevel": 1 }], "effects": [{ "stat": "ultimate.GAUSS_RIFLE.chainRadius", "mode": "add_per_level", "value": 140 }, { "stat": "ultimate.GAUSS_RIFLE.chainDamageFactor", "mode": "add_per_level", "value": 0.4 }] },
+        { "id": "airstrike_carpet_bombing", "code": "E-U3-C", "label": "Teppichbombardement", "description": "Drei um 120 px versetzte Einschlaege im Abstand von 150 ms mit 80% Radius und 55% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 185, "requires": [{ "upgradeId": "airstrike_radius", "minLevel": 1 }], "effects": [{ "stat": "ultimate.AIRSTRIKE.carpetStrikeCount", "mode": "add_per_level", "value": 3 }, { "stat": "ultimate.AIRSTRIKE.carpetOffset", "mode": "add_per_level", "value": 120 }, { "stat": "ultimate.AIRSTRIKE.carpetIntervalMs", "mode": "add_per_level", "value": 150 }, { "stat": "ultimate.AIRSTRIKE.carpetRadiusFactor", "mode": "add_per_level", "value": 0.8 }, { "stat": "ultimate.AIRSTRIKE.carpetDamageFactor", "mode": "add_per_level", "value": 0.55 }] },
+        { "id": "honey_badger_pack_rage", "code": "E-U4-C", "label": "Rudelwut", "description": "Verbuendete erhalten +25% Laufgeschwindigkeit, +25% Schaden und 2 Ruestung je Ruestungstick; 500 ms Nachlauf.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 215, "requires": [{ "upgradeId": "honey_badger_rage_radius", "minLevel": 1 }], "effects": [{ "stat": "ultimate.HONEY_BADGER_RAGE.aura.allySpeedMultiplier", "mode": "add_per_level", "value": 1.25 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.allyDamageMultiplier", "mode": "add_per_level", "value": 1.25 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.allyArmorPerTick", "mode": "add_per_level", "value": 2 }, { "stat": "ultimate.HONEY_BADGER_RAGE.aura.lingerMs", "mode": "add_per_level", "value": 500 }] }
       ]
     }
   ]

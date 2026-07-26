@@ -1502,6 +1502,8 @@ export class ArenaScene extends Phaser.Scene {
     setStoredCoopDefenseUpgradeProfile(nextProfile);
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    // Ein Downgrade kann eine aktuell ausgewaehlte Waffe/Utility/Ultimate wieder sperren.
+    this.ctx.leftPanel.refreshColorIndicator();
     return true;
   }
 
@@ -1513,6 +1515,8 @@ export class ArenaScene extends Phaser.Scene {
     setStoredCoopDefenseUpgradeProfile(nextProfile);
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    // Nach Full Respec sind alle Loadout-Unlocks zurueckgesetzt; Auswahl neu abgleichen.
+    this.ctx.leftPanel.refreshColorIndicator();
     return true;
   }
 

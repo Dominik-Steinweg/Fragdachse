@@ -10,13 +10,13 @@ describe('general Dash upgrades', () => {
     expect(getCoopDefenseUpgradeDefinition('dash_range')).toMatchObject({ maxLevel: 3, requires: [] });
     expect(getCoopDefenseUpgradeDefinition('dash_recovery')).toMatchObject({
       maxLevel: 3,
-      requires: [{ upgradeId: 'dash_range', minLevel: 3 }],
+      requires: [{ upgradeId: 'dash_range', minLevel: 1 }],
     });
     expect(getCoopDefenseUpgradeDefinition('dash_impact')).toMatchObject({
       maxLevel: 1,
       costPerLevel: 0,
       bossPointCostPerLevel: 1,
-      requires: [{ upgradeId: 'dash_recovery', minLevel: 3 }],
+      requires: [{ upgradeId: 'dash_recovery', minLevel: 1 }],
     });
     expect(getCoopDefenseUpgradeDefinition('dash_fire_trail')).toMatchObject({
       maxLevel: 3,
@@ -31,8 +31,8 @@ describe('general Dash upgrades', () => {
       costPerLevel: 0,
       bossPointCostPerLevel: 1,
       requires: [
-        { upgradeId: 'dash_fire_trail', minLevel: 3 },
-        { upgradeId: 'dash_impact_damage', minLevel: 3 },
+        { upgradeId: 'dash_fire_trail', minLevel: 1 },
+        { upgradeId: 'dash_impact_damage', minLevel: 1 },
       ],
     });
   });
