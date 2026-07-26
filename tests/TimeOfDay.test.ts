@@ -68,7 +68,7 @@ describe('sky state', () => {
     expect(sky.canopyLightFactor).toBe(0.45);
     expect(sky.artificialLightFactor).toBe(1);
     expect(sky.emissiveScale).toBe(1);
-    expect(shadowTuple(0)).toEqual(SHADOW_PROFILES.night);
+    expect(shadowTuple(0)).toEqual({ opacityMult: 0.15, lengthMult: 1.9, softnessMult: 1.8 });
   });
 
   it('interpolates across the midnight wrap without a jump', () => {

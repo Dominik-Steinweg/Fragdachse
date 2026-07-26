@@ -104,7 +104,7 @@ describe('Negev coop-defense upgrades', () => {
     expect(resolved.hitSlowDurationMs).toBe(1000);
     expect(resolved.warmupSpeedMultiplier).toBe(4);
     expect(resolved.warmupBurnThreshold).toBe(0.99);
-    expect(resolved.burnOnHit).toEqual({ durationMs: 2000, damagePerTick: 0.25 });
+    expect(resolved.burnOnHit).toEqual({ durationMs: 2000, damagePerTick: 1 });
     expect(resolved.negevKillstreak).toMatchObject({
       damageBonusPerKill: 0.1,
       healPerKill: 15,

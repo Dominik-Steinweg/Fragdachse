@@ -360,9 +360,9 @@
     {
       "id": "void-hunter",
       "maxHp": 3000,
-      "xp": 300,
+      "xp": 400,
       "size": 52,
-      "moveSpeed": 140,
+      "moveSpeed": 120,
       "knockbackFactor": 0.25,
       "movementTarget": "players",
       "weapons": [
@@ -380,14 +380,14 @@
         "color": 11219711,
         "sizeFactor": 1.7,
         "alpha": 0.82,
-        "lightRadiusPx": 105,
+        "lightRadiusPx": 185,
         "lightIntensity": 1
       },
       "phaseTwoGlow": {
         "color": 13459711,
         "sizeFactor": 2.45,
         "alpha": 1,
-        "lightRadiusPx": 175,
+        "lightRadiusPx": 275,
         "lightIntensity": 1
       },
       "burrow": {
@@ -399,7 +399,7 @@
         "crossesTrainTracks": false
       },
       "combatPositioning": {
-        "preferredDistancePx": 190,
+        "preferredDistancePx": 140,
         "toleranceP": 32,
         "retreatSpeedFactor": 0.85,
         "requireLineOfSight": true
@@ -410,31 +410,31 @@
         "evadeScanRadiusPx": 300,
         "evadeLeadTimeMs": 420,
         "evadeMissMarginPx": 24,
-        "approachMinDistancePx": 222,
+        "approachMinDistancePx": 122,
         "approachMaxDistancePx": 430
       },
       "voidHunterBoss": {
         "phaseTwoHpRatio": 0.5,
         "phaseTwoSpeedMultiplier": 1.2,
-        "shotgunRangePx": 300,
+        "shotgunRangePx": 350,
         "gauss": {
           "weaponId": "VOID_HUNTER_GAUSS",
           "initialDelayMs": 10000,
-          "cooldownMs": 20000,
-          "chargeDurationMs": 1800,
-          "aimUpdateIntervalMs": 100,
-          "maxAimTurnDegreesPerSecond": 60
+          "cooldownMs": 10000,
+          "chargeDurationMs": 2000,
+          "aimUpdateIntervalMs": 50,
+          "maxAimTurnDegreesPerSecond": 50
         },
         "nuke": {
           "countdownMs": 5000,
-          "emergeDelayMs": 2000,
+          "emergeDelayMs": 1000,
           "radiusPx": 600,
           "maxDamage": 1000,
           "minDamage": 50,
           "fireChunkBurst": {
             "count": 150,
             "searchRadius": 600,
-            "flightMs": 600,
+            "flightMs": 1600,
             "igniteCenter": false,
             "durationMs": 6000,
             "burnDurationMs": 2000,
@@ -442,14 +442,14 @@
             "weaponName": "Leeren-Nuklearbrand"
           }
         },
-        "armageddonDurationMs": 10000,
+        "armageddonDurationMs": 7500,
         "armageddonCooldownMs": 15000,
         "armageddon": {
           "meteorSpawnRadius": 350,
           "meteorDamageRadius": 96,
-          "meteorDamage": 120,
-          "meteorDamageFalloff": { "minDamage": 80 },
-          "meteorFallDuration": 1200,
+          "meteorDamage": 10,
+          "meteorDamageFalloff": { "minDamage": 10 },
+          "meteorFallDuration": 2000,
           "meteorsPerSecond": 3,
           "meteorRadiusJitter": 0.1,
           "selfDamageMult": 0,

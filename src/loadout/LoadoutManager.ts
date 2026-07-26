@@ -1938,7 +1938,6 @@ export class LoadoutManager {
           )
         : undefined,
       miniRocketSafetyLifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : undefined,
-      miniRocketCascadeInitialDamageBonus: isMiniRocket ? config.miniRocketCascadeInitialDamageBonus : undefined,
       miniRocketCascadeDamageBonusPerExplosion: isMiniRocket ? config.miniRocketCascadeDamageBonusPerExplosion : undefined,
       shotgunOriginX: (config.pelletCount ?? 1) > 1 ? x : undefined,
       shotgunOriginY: (config.pelletCount ?? 1) > 1 ? y : undefined,

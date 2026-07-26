@@ -238,7 +238,6 @@ export interface WeaponConfig {
   readonly miniRocketPickupAdrenalineRefundFraction?: number;
   readonly miniRocketPickupArmor?: number;
   readonly miniRocketSafetyLifetimeMs?: number;
-  readonly miniRocketCascadeInitialDamageBonus?: number;
   readonly miniRocketCascadeDamageBonusPerExplosion?: number;
   readonly matchPrimaryRange?: number;
   readonly ak47Focus?: {
@@ -916,11 +915,11 @@ export const WEAPON_CONFIGS = {
     id:                   'VOID_HUNTER_SHOTGUN',
     displayName:          'Leeren-Schrotflinte',
     cooldown:             850,
-    damage:               6,
-    range:                300,
+    damage:               12,
+    range:                350,
     fire: {
       type:                 'projectile',
-      projectileSpeed:      1200,
+      projectileSpeed:      500,
       projectileSize:       4,
       projectileMaxBounces: 1,
     },
@@ -936,7 +935,7 @@ export const WEAPON_CONFIGS = {
     spreadRecoverySpeed:  100,
     pelletCount:          5,
     pelletCountMultiplier: 1,
-    pelletSpreadAngle:    16,
+    pelletSpreadAngle:    12,
     projectileColor:      VOID_PALETTE.primary,
     projectileStyle:      'bullet' as ProjectileStyle,
     bulletVisualPreset:   'shotgun' as BulletVisualPreset,
@@ -1719,7 +1718,6 @@ export const WEAPON_CONFIGS = {
     miniRocketPickupAdrenalineRefundFraction: 0,
     miniRocketPickupArmor: 0,
     miniRocketSafetyLifetimeMs: 12_000,
-    miniRocketCascadeInitialDamageBonus: 0,
     miniRocketCascadeDamageBonusPerExplosion: 0,
     spreadRecoveryDelay:  180,
     spreadRecoveryRate:   3,

@@ -431,7 +431,7 @@
       "displayName": "Map 10 - Flammenkoloss",
       "timeOfDay": "22:45",
       "rockFillRatio": 0.1,
-      "roundDurationSec": 90,
+      "roundDurationSec": 45,
       "bases": [
         {
           "id": "coop-base-rear",
@@ -749,14 +749,14 @@
       "permanentGroundFire": {
         "randomPatchCount": 6,
         "minPatchRadiusCells": 2,
-        "maxPatchRadiusCells": 3,
+        "maxPatchRadiusCells": 5,
         "baseClearanceCells": 2,
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
         "weaponName": "Lila Leerenbrand"
       },
       "rockFillRatio": 0.08,
-      "roundDurationSec": 60,
+      "roundDurationSec": 45,
       "bases": [
         {
           "id": "coop-base-rear",
@@ -792,14 +792,14 @@
         { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true }
       ],
       "waves": [
-        { "enemyKind": "zombie-badger", "intervalMs": 2500, "countPerWave": 2, "startAtMs": 5000 },
+        { "enemyKind": "zombie-badger", "intervalMs": 2000, "countPerWave": 1, "startAtMs": 5000 },
         { "enemyKind": "demon-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 5000 },
         { "enemyKind": "alien-badger", "intervalMs": 15000, "countPerWave": 1, "startAtMs": 15000 },
-        { "enemyKind": "thrower-badger", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 15000 }
+        { "enemyKind": "thrower-badger", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 20000 }
       ],
       "boss": {
         "enemyKind": "void-hunter",
-        "spawnAtMs": 5000
+        "spawnAtMs": 2000
       }
     }
   ]

@@ -23,6 +23,7 @@ import type { RocketRenderer }  from '../effects/RocketRenderer';
 import type { FireballRenderer } from '../effects/FireballRenderer';
 import type { SporeRenderer }  from '../effects/SporeRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
+import { getMiniRocketCascadeMultiplier } from '../utils/miniRocketCascade';
 
 /** Minimale Body-Länge (px) entlang der Flugrichtung – Anti-Tunneling. */
 const MIN_BODY_LEN = 10;
@@ -618,7 +619,6 @@ export class ProjectileManager {
       miniRocketPickupArmor: cfg.miniRocketPickupArmor,
       miniRocketAdrenalineCostPaid: cfg.miniRocketAdrenalineCostPaid,
       miniRocketSafetyLifetimeMs: cfg.miniRocketSafetyLifetimeMs,
-      miniRocketCascadeInitialDamageBonus: cfg.miniRocketCascadeInitialDamageBonus,
       miniRocketCascadeDamageBonusPerExplosion: cfg.miniRocketCascadeDamageBonusPerExplosion,
       miniRocketExplosionIndex: 0,
       ak47ShotId: cfg.ak47ShotId,
@@ -1708,15 +1708,17 @@ export class ProjectileManager {
     proj.miniRocketDeferredExplosionStopsAtObstacle = false;
     const remaining = Math.max(1, proj.multiExplosionsRemaining ?? 1);
     const explosionIndex = Math.max(0, proj.miniRocketExplosionIndex ?? 0);
-    const cascadeMultiplier = 1
-      + Math.max(0, proj.miniRocketCascadeInitialDamageBonus ?? 0)
-      + explosionIndex * Math.max(0, proj.miniRocketCascadeDamageBonusPerExplosion ?? 0);
+    const cascadeMultiplier = getMiniRocketCascadeMultiplier(
+      explosionIndex,
+      proj.miniRocketCascadeDamageBonusPerExplosion ?? 0,
+    );
     const cascadeColor = proj.explosion.color === undefined
       ? undefined
       : this.resolveMiniRocketCascadeColor(proj.explosion.color, explosionIndex);
     const resolvedEffect = cascadeMultiplier > 1.0001
       ? {
           ...proj.explosion,
+          radius: proj.explosion.radius * cascadeMultiplier,
           maxDamage: proj.explosion.maxDamage * cascadeMultiplier,
           minDamage: proj.explosion.minDamage === undefined
             ? undefined
@@ -2562,7 +2564,7 @@ export class ProjectileManager {
             rocketR.updateVisual(
               id, x, y, w, vx, vy,
               proj.miniRocketPhase,
-              (proj.miniRocketCascadeInitialDamageBonus ?? 0) > 0 ? proj.miniRocketExplosionIndex : undefined,
+              (proj.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0 ? proj.miniRocketExplosionIndex : undefined,
             );
           }
           break;
@@ -2621,7 +2623,7 @@ export class ProjectileManager {
         energyBallVariant: p.energyBallVariant,
         velocityDecay: p.velocityDecay,
         miniRocketPhase: p.miniRocketPhase,
-        miniRocketCascadeStage: (p.miniRocketCascadeInitialDamageBonus ?? 0) > 0
+        miniRocketCascadeStage: (p.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
           ? p.miniRocketExplosionIndex
           : undefined,
         tracer: p.tracerConfig,

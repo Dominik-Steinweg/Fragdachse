@@ -22,14 +22,14 @@ describe('Map 15 - Leerenjäger', () => {
       roundDurationSec: 60,
       rockFillRatio: 0.08,
       trackMode: 'void-fire',
-      boss: { enemyKind: 'void-hunter', spawnAtMs: 5000 },
+      boss: { enemyKind: 'void-hunter', spawnAtMs: 2000 },
     });
     expect(map.bases.reduce((sum, base) => sum + base.hpMax, 0)).toBe(6000);
     expect(map.waves).toEqual(expect.arrayContaining([
-      expect.objectContaining({ enemyKind: 'zombie-badger', countPerWave: 2, intervalMs: 2500 }),
-      expect.objectContaining({ enemyKind: 'demon-badger', countPerWave: 1, intervalMs: 5000, startAtMs: 2000 }),
-      expect.objectContaining({ enemyKind: 'alien-badger', countPerWave: 1, intervalMs: 15000, startAtMs: 5000 }),
-      expect.objectContaining({ enemyKind: 'thrower-badger', countPerWave: 1, intervalMs: 20000, startAtMs: 8000 }),
+      expect.objectContaining({ enemyKind: 'zombie-badger', countPerWave: 1, intervalMs: 2500, startAtMs: 5000 }),
+      expect.objectContaining({ enemyKind: 'demon-badger', countPerWave: 1, intervalMs: 5000, startAtMs: 5000 }),
+      expect.objectContaining({ enemyKind: 'alien-badger', countPerWave: 1, intervalMs: 15000, startAtMs: 15000 }),
+      expect.objectContaining({ enemyKind: 'thrower-badger', countPerWave: 1, intervalMs: 20000, startAtMs: 20000 }),
     ]));
   });
 

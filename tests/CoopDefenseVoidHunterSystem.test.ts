@@ -102,15 +102,15 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
 describe('Leerenjäger', () => {
   it('owns separate NPC weapons with the fixed balance values', () => {
     expect(WEAPON_CONFIGS.VOID_HUNTER_SHOTGUN).toMatchObject({
-      damage: 10,
-      range: 300,
+      damage: 12,
+      range: 350,
       cooldown: 850,
       pelletCount: 5,
-      pelletSpreadAngle: 16,
+      pelletSpreadAngle: 12,
       burnOnHit: { durationMs: 2000, damagePerTick: 2 },
     });
     expect(WEAPON_CONFIGS.VOID_HUNTER_GAUSS).toMatchObject({
-      damage: 140,
+      damage: 100,
       range: 1500,
       fire: { projectileSpeed: 1350, projectileSize: 16 },
     });
@@ -121,9 +121,9 @@ describe('Leerenjäger', () => {
     });
     expect(getCoopDefenseEnemyConfig('void-hunter')).toMatchObject({
       maxHp: 3000,
-      xp: 300,
+      xp: 400,
       size: 52,
-      moveSpeed: 140,
+      moveSpeed: 120,
       spriteRotationOffsetDegrees: 180,
       playerScaling: { maxHpFactorPerAdditionalPlayer: 0.5 },
     });
@@ -132,7 +132,7 @@ describe('Leerenjäger', () => {
       phaseTwoGlow: { sizeFactor: 2.45 },
       voidHunterBoss: {
         phaseTwoHpRatio: 0.5,
-        gauss: { maxAimTurnDegreesPerSecond: 60 },
+        gauss: { maxAimTurnDegreesPerSecond: 50 },
       },
     });
   });
@@ -199,7 +199,7 @@ describe('Leerenjäger', () => {
     expect(fixture.armageddon.activate).toHaveBeenCalledTimes(1);
   });
 
-  it('waits 10 s for Gauss, samples targets every 100 ms but turns smoothly at at most 60 degrees/s', () => {
+  it('waits 10 s for Gauss, samples targets every 50 ms but turns smoothly at at most 50 degrees/s', () => {
     const fixture = createFixture([{ x: 100, y: 700 }]);
     fixture.system.hostUpdate(0);
     fixture.system.hostUpdate(9999);
@@ -208,11 +208,12 @@ describe('Leerenjäger', () => {
     fixture.system.hostUpdate(10000);
     expect(fixture.enemy.aim).toBe(0);
     fixture.system.hostUpdate(10050);
-    expect(fixture.enemy.aim).toBeCloseTo(Math.PI / 60, 5);
-    expect(fixture.playerManager.getPlayer).not.toHaveBeenCalled();
+    expect(fixture.enemy.aim).toBeCloseTo(Math.PI / 72, 5);
+    expect(fixture.playerManager.getPlayer).toHaveBeenCalledTimes(1);
     fixture.system.hostUpdate(10100);
-    expect(fixture.enemy.aim).toBeCloseTo(Math.PI / 30, 5);
-    fixture.system.hostUpdate(11800);
+    expect(fixture.enemy.aim).toBeCloseTo(Math.PI / 36, 5);
+    expect(fixture.playerManager.getPlayer).toHaveBeenCalledTimes(2);
+    fixture.system.hostUpdate(12000);
 
     expect(fixture.loadout.fireAutomatedWeapon).toHaveBeenCalledTimes(1);
     expect(fixture.loadout.fireAutomatedWeapon.mock.calls[0][3]).toBeCloseTo(Math.PI / 2, 5);

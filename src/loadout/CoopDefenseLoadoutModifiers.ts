@@ -399,11 +399,6 @@ const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = 
     itemId: 'MINI_ROCKET_LAUNCHER',
     targets: [{ path: ['miniRocketPickupArmor'], operation: 'add' }],
   },
-  'weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeInitialDamageBonus': {
-    kind: 'weapon',
-    itemId: 'MINI_ROCKET_LAUNCHER',
-    targets: [{ path: ['miniRocketCascadeInitialDamageBonus'], operation: 'add' }],
-  },
   'weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeDamageBonusPerExplosion': {
     kind: 'weapon',
     itemId: 'MINI_ROCKET_LAUNCHER',
@@ -936,7 +931,25 @@ export function applyCoopDefenseModifiersToWeaponConfig(
   slot: 'weapon1' | 'weapon2',
   totals: CoopDefenseEffectTotalsSource,
 ): WeaponConfig {
-  return applyConfiguredStats(config, 'weapon', slot, totals);
+  const resolved = applyConfiguredStats(config, 'weapon', slot, totals);
+  if (
+    config.id !== 'FLAMETHROWER'
+    || config.fire.type !== 'flamethrower'
+    || resolved.fire.type !== 'flamethrower'
+    || (resolved.fire.fireball?.enabled ?? 0) <= 0
+    || config.cooldown <= 0
+  ) {
+    return resolved;
+  }
+
+  // Der Feuerball feuert langsamer, soll bei Dauerfeuer aber denselben
+  // Adrenalinverbrauch pro Zeit haben. Den Faktor aus den effektiven und
+  // ursprünglichen Cooldowns ableiten, damit spätere Feuerratenänderungen
+  // automatisch mitgezogen werden.
+  return {
+    ...resolved,
+    adrenalinCost: resolved.adrenalinCost * (resolved.cooldown / config.cooldown),
+  };
 }
 
 export function applyCoopDefenseModifiersToUtilityConfig(

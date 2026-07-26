@@ -114,7 +114,7 @@ describe('Inferno Colossus void fire chunks', () => {
     const bossConfig = getCoopDefenseEnemyConfig('inferno-colossus');
     expect(bossConfig.weapons[0]?.weaponId).toBe('INFERNO_COLOSSUS_FLAMETHROWER');
     expect(WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER).toMatchObject({
-      range: 300,
+      range: 350,
       projectileColor: VOID_FIRE_COLOR,
       projectileBurnVisualStyle: 'void',
       allowedSlots: [],

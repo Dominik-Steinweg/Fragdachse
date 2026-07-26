@@ -22,9 +22,9 @@ import { PlayerManager } from '../src/entities/PlayerManager';
 import type { ArenaLayout } from '../src/types';
 
 describe('PlayerManager permanent ground fire spawns', () => {
-  it('never selects a permanent fire cell as an initial or respawn position', () => {
+  it('keeps one full grid cell between an initial or respawn position and permanent fire', () => {
     const fireCell = { gridX: 0, gridY: 0 };
-    const safeCell = { gridX: 1, gridY: 0 };
+    const safeCell = { gridX: 2, gridY: 0 };
     const rocks: ArenaLayout['rocks'] = [];
     for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
       for (let gridX = 0; gridX < GRID_COLS; gridX += 1) {
@@ -55,6 +55,11 @@ describe('PlayerManager permanent ground fire spawns', () => {
     };
     const manager = new PlayerManager({} as never);
     manager.setLayout(layout);
+    const fireExclusion = (
+      manager as unknown as { getPermanentFireSpawnExclusionCells(): Set<string> }
+    ).getPermanentFireSpawnExclusionCells();
+    expect(fireExclusion).toEqual(new Set(['0_0', '1_0', '0_1', '1_1']));
+    expect(fireExclusion.has(`${safeCell.gridX}_${safeCell.gridY}`)).toBe(false);
 
     expect(manager.getSpawnPoint('player-1')).toEqual({
       x: safeCell.gridX * CELL_SIZE + CELL_SIZE / 2,

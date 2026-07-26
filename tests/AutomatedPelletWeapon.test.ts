@@ -32,7 +32,7 @@ describe('automated pellet weapons', () => {
     const anglesInDegrees = dispatchWeaponFire.mock.calls.map(
       (call) => (call[3] as number) * 180 / Math.PI,
     );
-    expect(anglesInDegrees).toEqual([-16, -8, 0, 8, 16]);
+    expect(anglesInDegrees).toEqual([-12, -6, 0, 6, 12]);
     expect(dispatchWeaponFire.mock.calls[0][0].shotAudio).toBeDefined();
     for (const call of dispatchWeaponFire.mock.calls.slice(1)) {
       expect(call[0].shotAudio).toBeUndefined();

@@ -666,7 +666,6 @@ export interface ProjectileSpawnConfig {
   miniRocketPickupArmor?: number;
   miniRocketAdrenalineCostPaid?: number;
   miniRocketSafetyLifetimeMs?: number;
-  miniRocketCascadeInitialDamageBonus?: number;
   miniRocketCascadeDamageBonusPerExplosion?: number;
   ak47ShotId?: number;
   ak47DamageMultiplier?: number;
@@ -1019,7 +1018,6 @@ export interface TrackedProjectile {
   miniRocketPickupArmor?: number;
   miniRocketAdrenalineCostPaid?: number;
   miniRocketSafetyLifetimeMs?: number;
-  miniRocketCascadeInitialDamageBonus?: number;
   miniRocketCascadeDamageBonusPerExplosion?: number;
   miniRocketExplosionIndex?: number;
   ak47ShotId?: number;

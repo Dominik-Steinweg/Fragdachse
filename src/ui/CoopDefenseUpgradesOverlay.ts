@@ -21,6 +21,7 @@ import {
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { getCoopDefenseUpgradeTextureKey } from '../utils/coopDefenseUpgrades';
+import { toDesignSpace } from '../graphics/RenderResolution';
 import { attachHoverEffect } from './uiHover';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
@@ -1639,8 +1640,12 @@ export class CoopDefenseUpgradesOverlay {
 
     const width = this.tooltipBackground.width;
     const height = this.tooltipBackground.height;
-    const x = Phaser.Math.Clamp(pointer.x + TOOLTIP_OFFSET_X, 12, GAME_WIDTH - width - 12);
-    const y = Phaser.Math.Clamp(pointer.y + TOOLTIP_OFFSET_Y, 12, GAME_HEIGHT - height - 12);
+    // Pointer coordinates are render pixels after the pixel-perfect render-resolution
+    // setup, while this overlay is positioned in the 1920x1080 design space.
+    const pointerX = toDesignSpace(this.scene.scale, pointer.x);
+    const pointerY = toDesignSpace(this.scene.scale, pointer.y);
+    const x = Phaser.Math.Clamp(pointerX + TOOLTIP_OFFSET_X, 12, GAME_WIDTH - width - 12);
+    const y = Phaser.Math.Clamp(pointerY + TOOLTIP_OFFSET_Y, 12, GAME_HEIGHT - height - 12);
 
     this.tooltipContainer.setPosition(x, y);
   }
