@@ -75,6 +75,10 @@ export class EnemyEntity {
   private burrowed = false;
   private dashPhase: 0 | 1 | 2 = 0;
   private pathBlocked = false;
+  private specialAction: SyncedEnemyState['specialAction'] = 'none';
+  private specialActionEndsAt = 0;
+  private gaussChargeProgress = 0;
+  private gaussAimAngle = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -193,7 +197,7 @@ export class EnemyEntity {
     this.sprite.y = Phaser.Math.Linear(this.sprite.y, this.targetY, factor);
     const diff = Phaser.Math.Angle.Wrap(this.targetAimAngle - this.currentAimAngle);
     this.currentAimAngle = this.currentAimAngle + diff * factor;
-    this.sprite.setRotation(this.currentAimAngle + EnemyEntity.ROTATION_OFFSET);
+    this.sprite.setRotation(this.currentAimAngle + this.getSpriteRotationOffset());
     this.syncBar();
   }
 
@@ -408,11 +412,32 @@ export class EnemyEntity {
   faceAngle(angle: number): void {
     this.currentAimAngle = angle;
     this.targetAimAngle = angle;
-    this.sprite.setRotation(angle + EnemyEntity.ROTATION_OFFSET);
+    this.sprite.setRotation(angle + this.getSpriteRotationOffset());
+  }
+
+  private getSpriteRotationOffset(): number {
+    const configuredOffset = (this.config.spriteRotationOffsetDegrees ?? 0) * Math.PI / 180;
+    return EnemyEntity.ROTATION_OFFSET + configuredOffset;
   }
 
   getAimAngle(): number {
     return this.currentAimAngle;
+  }
+
+  getSpecialAction(): SyncedEnemyState['specialAction'] {
+    return this.specialAction;
+  }
+
+  setSpecialAction(
+    action: SyncedEnemyState['specialAction'],
+    endsAt = 0,
+    gaussChargeProgress = 0,
+    gaussAimAngle = this.currentAimAngle,
+  ): void {
+    this.specialAction = action;
+    this.specialActionEndsAt = endsAt;
+    this.gaussChargeProgress = Phaser.Math.Clamp(gaussChargeProgress, 0, 1);
+    this.gaussAimAngle = gaussAimAngle;
   }
 
   syncBar(): void {
@@ -447,6 +472,10 @@ export class EnemyEntity {
       faction: this.faction,
       burrowed: this.burrowed,
       dashPhase: this.dashPhase,
+      specialAction: this.specialAction,
+      specialActionEndsAt: this.specialActionEndsAt,
+      gaussChargeProgress: this.gaussChargeProgress,
+      gaussAimAngle: this.gaussAimAngle,
       ownerId: this.ownerId,
       ownerColor: this.ownerColor,
     };
@@ -555,12 +584,20 @@ export class EnemyEntity {
 
   /** Folgt dem Sprite und meldet die zugehörige Lichtquelle für dieses Frame an. */
   private syncGlow(): void {
-    const glow = this.config.glow;
+    const phaseTwo = this.config.phaseTwoGlow !== undefined
+      && this.currentHp / this.maxHp <= (this.config.voidHunterBoss?.phaseTwoHpRatio ?? 0.5);
+    const glow = phaseTwo ? this.config.phaseTwoGlow : this.config.glow;
     if (!glow) return;
 
     const visible = !this.burrowed && this.currentHp > 0;
     this.glowHalo?.setVisible(visible);
     this.glowHalo?.setPosition(this.sprite.x, this.sprite.y);
+    this.glowHalo?.setDisplaySize(
+      this.config.size * glow.sizeFactor,
+      this.config.size * glow.sizeFactor,
+    );
+    this.glowHalo?.setTint(glow.color);
+    if (phaseTwo) this.glowHalo?.setAlpha(emissiveAlpha(glow.alpha));
 
     if (!this.lighting) return;
     if (!visible) {
@@ -586,7 +623,7 @@ export class EnemyEntity {
       this.sprite.y + this.config.size * 0.2,
       this.config.size * 1.45,
       this.config.size * 0.72,
-      0x6d1026,
+      this.config.voidHunterBoss ? 0x6f16a8 : 0x6d1026,
       0.38,
     ).setDepth(DEPTH.PLAYERS - 0.08);
     this.bossRing = scene.add.ellipse(
@@ -617,6 +654,14 @@ export class EnemyEntity {
     if (!this.config.isBoss) return;
     const auraY = this.sprite.y + this.config.size * 0.2;
     this.bossAura?.setPosition(this.sprite.x, auraY);
+    if (this.config.voidHunterBoss) {
+      const phaseTwo = this.currentHp / this.maxHp <= this.config.voidHunterBoss.phaseTwoHpRatio;
+      this.bossAura?.setDisplaySize(
+        this.config.size * (phaseTwo ? 2.25 : 1.45),
+        this.config.size * (phaseTwo ? 1.12 : 0.72),
+      );
+      this.bossAura?.setFillStyle(phaseTwo ? 0xb82fff : 0x6f16a8, phaseTwo ? 0.56 : 0.38);
+    }
     this.bossRing?.setPosition(this.sprite.x, auraY);
     this.bossLabel?.setPosition(this.sprite.x, this.sprite.y - this.config.size * 0.5 - 11);
   }

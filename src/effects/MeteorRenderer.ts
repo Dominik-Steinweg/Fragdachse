@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { SyncedMeteorStrike } from '../types';
-import { DEPTH, DEPTH_FX } from '../config';
+import { DEPTH, DEPTH_FX, VOID_PALETTE } from '../config';
 import { circleZone, makeAdditive } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -36,6 +36,7 @@ interface MeteorWarningVisual {
   meteorGlow:     Phaser.GameObjects.Image;      // Leuchtender Kern (skaliert hoch)
   trailEmitter:   Phaser.GameObjects.Particles.ParticleEmitter;  // Schweif-Partikel
   sizeFactor:     number;
+  isVoid:         boolean;
 }
 
 /**
@@ -175,15 +176,17 @@ export class MeteorRenderer {
 
   private createWarningVisual(m: SyncedMeteorStrike): MeteorWarningVisual {
     const sizeFactor = Math.max(0.5, m.radius / BASE_METEOR_RADIUS);
+    const isVoid = m.variant === 'void';
+    const warningColor = isVoid ? VOID_PALETTE.primary : WARNING_COLOR;
     // Boden-Warnkreis (Stroke)
     const warningCircle = this.scene.add.circle(m.x, m.y, m.radius);
-    warningCircle.setStrokeStyle(2, WARNING_COLOR, WARNING_STROKE_ALPHA);
+    warningCircle.setStrokeStyle(2, warningColor, WARNING_STROKE_ALPHA);
     warningCircle.setFillStyle(0, 0);
     warningCircle.setDepth(DEPTH_WARNING);
     warningCircle.setScale(0);
 
     // Boden-Füllung (semi-transparent)
-    const warningFill = this.scene.add.circle(m.x, m.y, m.radius, WARNING_COLOR, WARNING_FILL_ALPHA);
+    const warningFill = this.scene.add.circle(m.x, m.y, m.radius, warningColor, WARNING_FILL_ALPHA);
     warningFill.setDepth(DEPTH_WARNING - 0.01);
     warningFill.setScale(0);
 
@@ -209,6 +212,7 @@ export class MeteorRenderer {
     meteorGlow.setDepth(DEPTH_METEOR);
     meteorGlow.setScale(0.1);
     meteorGlow.setAlpha(0);
+    if (isVoid) meteorGlow.setTint(VOID_PALETTE.primary);
 
     // Schweif-Partikel (fallen nach oben/hinten = "Annäherung von oben")
     const trailEmitter = this.scene.add.particles(m.x, m.y, TEX_METEOR_EMBER, {
@@ -219,14 +223,16 @@ export class MeteorRenderer {
       speedY:    { min: -50, max: -10 },
       scale:     { start: 0.5, end: 0.05 },
       alpha:     { start: 0.8, end: 0 },
-      tint:      METEOR_COLORS_OUTER,
+      tint:      isVoid
+        ? [VOID_PALETTE.core, VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep]
+        : METEOR_COLORS_OUTER,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     });
     trailEmitter.setDepth(DEPTH_METEOR + 0.05);
     trailEmitter.setScale(sizeFactor);
 
-    return { warningCircle, warningFill, shadow, meteorGlow, trailEmitter, sizeFactor };
+    return { warningCircle, warningFill, shadow, meteorGlow, trailEmitter, sizeFactor, isVoid };
   }
 
   // ── Warning-Visual aktualisieren ──────────────────────────────────────────
@@ -294,7 +300,7 @@ export class MeteorRenderer {
     });
 
     // 2. Feurige Explosionsfüllung
-    const blast = this.scene.add.circle(x, y, 4, 0xff6622, 0.75);
+    const blast = this.scene.add.circle(x, y, 4, visual.isVoid ? VOID_PALETTE.primary : 0xff6622, 0.75);
     blast.setDepth(DEPTH_IMPACT);
     makeAdditive(blast);
     const blastEndScale = radius / 4;
@@ -312,7 +318,7 @@ export class MeteorRenderer {
     const ringStartR = radius * 0.4;
     const ringEndScale = (radius * 1.2) / ringStartR;
     const ring = this.scene.add.circle(x, y, ringStartR);
-    ring.setStrokeStyle(2, 0xff8800, 0.7);
+    ring.setStrokeStyle(2, visual.isVoid ? VOID_PALETTE.bright : 0xff8800, 0.7);
     ring.setFillStyle(0, 0);
     ring.setDepth(DEPTH_IMPACT);
     this.scene.tweens.add({
@@ -331,7 +337,9 @@ export class MeteorRenderer {
       speed:     { min: 60, max: radius * 2 },
       scale:     { start: 1.5, end: 0 },
       alpha:     { start: 1, end: 0 },
-      tint:      METEOR_IMPACT_TINTS,
+      tint:      visual.isVoid
+        ? [VOID_PALETTE.core, VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep]
+        : METEOR_IMPACT_TINTS,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     });
@@ -346,7 +354,9 @@ export class MeteorRenderer {
       speed:     { min: 15, max: radius * 0.9 },
       scale:     { start: 0.9, end: 0.15 },
       alpha:     { start: 0.75, end: 0 },
-      tint:      METEOR_EMBER_TINTS,
+      tint:      visual.isVoid
+        ? [VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep]
+        : METEOR_EMBER_TINTS,
       gravityY:  30,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
@@ -356,7 +366,13 @@ export class MeteorRenderer {
     this.scene.time.delayedCall(1100, () => emberEmitter.destroy());
 
     // 6. Boden-Scorch (dunkler Kreis, fadet langsam)
-    const scorch = this.scene.add.circle(x, y, radius * 0.8, 0x1a0a00, 0.2);
+    const scorch = this.scene.add.circle(
+      x,
+      y,
+      radius * 0.8,
+      visual.isVoid ? VOID_PALETTE.shadow : 0x1a0a00,
+      0.2,
+    );
     scorch.setDepth(DEPTH_WARNING - 0.1);
     this.scene.tweens.add({
       targets:    scorch,

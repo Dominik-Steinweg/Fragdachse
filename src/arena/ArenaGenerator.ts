@@ -1,7 +1,7 @@
 import { GRID_COLS, GRID_ROWS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, TREE_COUNT, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, TRACK_COUNT, TRACK_SPAWN_MIN_COL, TRACK_SPAWN_MAX_COL, getCaptureTheBeerMiddleThirdRegion, isCaptureTheBeerBaseModeActive, isGridCellInArenaRegion } from '../config';
 import { isReservedBaseObstacleCell, isReservedBaseSurfaceCell, resolveCoopDefenseBases, usesCenteredTrackSpawn } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey } from './DecalConfig';
-import type { ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
+import type { ArenaGroundFireZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type {
   CoopDefenseMapConfig,
@@ -51,7 +51,9 @@ export class ArenaGenerator {
       );
 
       // --- Gleise zuerst generieren (vor Felsen) ---
-      const { trackCols, tracks } = ArenaGenerator.generateTracks(rng);
+      const generatedTrackLayout = ArenaGenerator.generateTracks(rng);
+      const trackCols = generatedTrackLayout.trackCols;
+      const tracks = coopMapConfig?.trackMode === 'void-fire' ? [] : generatedTrackLayout.tracks;
 
       // --- Cellular Automata Felsen-Platzierung ---
 
@@ -232,6 +234,14 @@ export class ArenaGenerator {
       // prozedurale Versuch in einem Bereich keinen freien Platz lässt, wird die Arena
       // mit dem nächsten Seed-Versuch neu erzeugt.
       if (powerUpPedestals === null) continue;
+      const permanentGroundFireZones = ArenaGenerator.generatePermanentGroundFireZones(
+        rng,
+        blocked,
+        trees,
+        trackCols,
+        powerUpPedestals,
+        coopMapConfig,
+      );
       const decals = ArenaGenerator.generateDecals(
         ArenaGenerator.makeDecalPrng(seed + attempt),
         rocks,
@@ -239,9 +249,19 @@ export class ArenaGenerator {
         tracks,
         dirtSet,
         powerUpPedestals,
+        permanentGroundFireZones,
       );
 
-      return { seed: seed + attempt, rocks, trees, tracks, dirt, decals, powerUpPedestals };
+      return {
+        seed: seed + attempt,
+        rocks,
+        trees,
+        tracks,
+        dirt,
+        decals,
+        powerUpPedestals,
+        permanentGroundFireZones,
+      };
     }
 
     throw new Error(
@@ -271,6 +291,7 @@ export class ArenaGenerator {
         layout.tracks,
         dirtSet,
         layout.powerUpPedestals,
+        layout.permanentGroundFireZones ?? [],
       ),
     };
   }
@@ -630,6 +651,7 @@ export class ArenaGenerator {
     tracks: readonly TrackCell[],
     dirtSet: ReadonlySet<number>,
     powerUpPedestals: ArenaLayout['powerUpPedestals'],
+    permanentGroundFireZones: readonly ArenaGroundFireZone[],
   ): DecalCell[] {
     const blockedCells = new Set<number>();
     for (const { gridX, gridY } of rocks) {
@@ -646,6 +668,11 @@ export class ArenaGenerator {
     }
     for (const { gridX, gridY } of powerUpPedestals) {
       blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+    }
+    for (const zone of permanentGroundFireZones) {
+      for (const { gridX, gridY } of zone.cells) {
+        blockedCells.add(ArenaGenerator.cellKey(gridX, gridY));
+      }
     }
 
     const decals: DecalCell[] = [];
@@ -675,6 +702,86 @@ export class ArenaGenerator {
     }
 
     return decals;
+  }
+
+  private static generatePermanentGroundFireZones(
+    rng: () => number,
+    blocked: readonly boolean[][],
+    trees: readonly TreeCell[],
+    trackCols: ReadonlySet<number>,
+    powerUpPedestals: ArenaLayout['powerUpPedestals'],
+    mapConfig?: CoopDefenseMapConfig,
+  ): ArenaGroundFireZone[] {
+    const config = mapConfig?.permanentGroundFire;
+    if (!config || mapConfig?.trackMode !== 'void-fire') return [];
+
+    const occupied = new Set<string>();
+    for (const tree of trees) occupied.add(`${tree.gridX}_${tree.gridY}`);
+    for (const pedestal of powerUpPedestals) occupied.add(`${pedestal.gridX}_${pedestal.gridY}`);
+
+    const baseClearance = new Set<string>();
+    for (const base of resolveCoopDefenseBases(mapConfig)) {
+      for (const cell of base.cells) {
+        for (let offsetY = -config.baseClearanceCells; offsetY <= config.baseClearanceCells; offsetY += 1) {
+          for (let offsetX = -config.baseClearanceCells; offsetX <= config.baseClearanceCells; offsetX += 1) {
+            const gridX = cell.gridX + offsetX;
+            const gridY = cell.gridY + offsetY;
+            if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_ROWS) continue;
+            baseClearance.add(`${gridX}_${gridY}`);
+          }
+        }
+      }
+    }
+
+    const makeZone = (id: string, cells: ArenaGroundFireZone['cells']): ArenaGroundFireZone => ({
+      id,
+      cells,
+      burnDurationMs: config.burnDurationMs,
+      burnDamagePerTick: config.burnDamagePerTick,
+      weaponName: config.weaponName,
+      visualStyle: 'void',
+      damageTarget: 'players',
+    });
+
+    const used = new Set<string>();
+    const centerCells: ArenaGroundFireZone['cells'] = [];
+    for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+      for (const gridX of trackCols) {
+        const key = `${gridX}_${gridY}`;
+        if (baseClearance.has(key)) continue;
+        used.add(key);
+        centerCells.push({ gridX, gridY });
+      }
+    }
+
+    const zones = [makeZone('void-track-corridor', centerCells)];
+    for (let patchIndex = 0; patchIndex < config.randomPatchCount; patchIndex += 1) {
+      let selected: ArenaGroundFireZone['cells'] | null = null;
+      for (let attempt = 0; attempt < 120 && !selected; attempt += 1) {
+        const radius = config.minPatchRadiusCells
+          + rng() * (config.maxPatchRadiusCells - config.minPatchRadiusCells);
+        const centerX = Math.floor(rng() * GRID_COLS);
+        const centerY = Math.floor(rng() * GRID_ROWS);
+        const cells: ArenaGroundFireZone['cells'] = [];
+        const radiusSq = radius * radius;
+        for (let gridY = Math.max(0, Math.floor(centerY - radius)); gridY <= Math.min(GRID_ROWS - 1, Math.ceil(centerY + radius)); gridY += 1) {
+          for (let gridX = Math.max(0, Math.floor(centerX - radius)); gridX <= Math.min(GRID_COLS - 1, Math.ceil(centerX + radius)); gridX += 1) {
+            const dx = gridX - centerX;
+            const dy = gridY - centerY;
+            if (dx * dx + dy * dy > radiusSq) continue;
+            const key = `${gridX}_${gridY}`;
+            if (used.has(key) || occupied.has(key) || blocked[gridY][gridX]) continue;
+            if (baseClearance.has(key) || isReservedBaseSurfaceCell(gridX, gridY)) continue;
+            cells.push({ gridX, gridY });
+          }
+        }
+        if (cells.length >= 4) selected = cells;
+      }
+      if (!selected) continue;
+      for (const cell of selected) used.add(`${cell.gridX}_${cell.gridY}`);
+      zones.push(makeZone(`void-patch-${patchIndex + 1}`, selected));
+    }
+    return zones;
   }
 
   private static pickDistributedPedestalCells(

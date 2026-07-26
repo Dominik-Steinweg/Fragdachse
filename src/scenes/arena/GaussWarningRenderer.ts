@@ -2,6 +2,8 @@ import * as Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { dequantizeAngle }   from '../../utils/angle';
 import { DEPTH, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, getTopDownMuzzleOrigin } from '../../config';
+import { VOID_PALETTE } from '../../config';
+import type { EnemyEntity } from '../../entities/EnemyEntity';
 
 /**
  * Draws the Gauss charge beam for every remote player currently charging
@@ -12,7 +14,10 @@ import { DEPTH, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, getTo
 export class GaussWarningRenderer {
   private readonly gfx: Phaser.GameObjects.Graphics;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(
+    scene: Phaser.Scene,
+    private readonly getEnemies: () => readonly EnemyEntity[] = () => [],
+  ) {
     this.gfx = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
   }
 
@@ -67,6 +72,52 @@ export class GaussWarningRenderer {
       this.gfx.fillStyle(0xffffff, 0.5 * alpha);
       this.gfx.fillCircle(sx, sy, Math.max(2, emitterRadius * 0.55));
     }
+
+    for (const enemy of this.getEnemies()) {
+      const snapshot = enemy.getNetSnapshot();
+      if (!enemy.sprite.active || snapshot.specialAction !== 'gauss-charge') continue;
+      const chargeFraction = Phaser.Math.Clamp(snapshot.gaussChargeProgress, 0, 1);
+      const aimAngle = snapshot.gaussAimAngle;
+      const muzzle = getTopDownMuzzleOrigin(enemy.sprite.x, enemy.sprite.y, aimAngle);
+      const beamEnd = this.clipBeamToArena(
+        muzzle.x,
+        muzzle.y,
+        muzzle.x + Math.cos(aimAngle) * 1500,
+        muzzle.y + Math.sin(aimAngle) * 1500,
+      );
+      const pulse = 0.9 + 0.1 * Math.sin(time * 0.022);
+      const alpha = 0.35 + chargeFraction * 0.65;
+      this.drawVoidBeam(muzzle.x, muzzle.y, beamEnd.x, beamEnd.y, chargeFraction, pulse, alpha);
+    }
+  }
+
+  private drawVoidBeam(
+    sx: number,
+    sy: number,
+    ex: number,
+    ey: number,
+    progress: number,
+    pulse: number,
+    alpha: number,
+  ): void {
+    this.gfx.lineStyle(18, VOID_PALETTE.shadow, 0.12 * alpha);
+    this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
+    this.gfx.lineStyle(12, VOID_PALETTE.deep, 0.22 * alpha * pulse);
+    this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
+    this.gfx.lineStyle(7, VOID_PALETTE.primary, 0.4 * alpha * pulse);
+    this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
+    this.gfx.lineStyle(3, VOID_PALETTE.bright, 0.7 * alpha);
+    this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
+    this.gfx.lineStyle(1, VOID_PALETTE.core, 0.96 * alpha);
+    this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
+
+    const coreRadius = 7 + progress * 11;
+    this.gfx.fillStyle(VOID_PALETTE.deep, 0.2 * alpha * pulse);
+    this.gfx.fillCircle(sx, sy, coreRadius * 2.1);
+    this.gfx.fillStyle(VOID_PALETTE.primary, 0.42 * alpha);
+    this.gfx.fillCircle(sx, sy, coreRadius * 1.25);
+    this.gfx.fillStyle(VOID_PALETTE.core, 0.82 * alpha);
+    this.gfx.fillCircle(sx, sy, Math.max(3, coreRadius * 0.48));
   }
 
   private clipBeamToArena(sx: number, sy: number, ex: number, ey: number): { x: number; y: number } {

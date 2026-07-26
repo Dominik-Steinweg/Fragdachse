@@ -155,6 +155,14 @@ export const COLORS = {
 
 /** Kanonischer VFX-Akzent fuer die lila Boss-Feuerfamilie. */
 export const VOID_FIRE_COLOR = 0xb347ff;
+/** Gemeinsame Palette aller Leerenjäger-Warnungen, Projektile und Einschläge. */
+export const VOID_PALETTE = {
+  core: 0xf9e8ff,
+  bright: 0xd98cff,
+  primary: VOID_FIRE_COLOR,
+  deep: 0x6f16a8,
+  shadow: 0x240a38,
+} as const;
 
 export interface BeamPalette {
   shadow: number;

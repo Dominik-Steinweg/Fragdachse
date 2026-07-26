@@ -163,7 +163,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch';
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -206,6 +206,9 @@ export type GroundFireVisualStyle = 'normal' | 'void';
 /** Entitaetsgruppe, die eine Brandquelle beschaedigen und entzuenden darf. */
 export type GroundFireDamageTarget = 'all' | 'players' | 'enemies';
 
+/** Zielseite einer Explosion; `player-side` umfasst Spieler und wiederbelebte Verbündete. */
+export type ExplosionDamageTarget = GroundFireDamageTarget | 'player-side';
+
 export interface GroundFireCellEffect {
   readonly durationMs: number;
   readonly burnDurationMs: number;
@@ -236,6 +239,7 @@ export interface ProjectileExplosionConfig {
   readonly knockback: number;
   readonly selfDamageMult: number;
   readonly allowTeamDamage?: boolean;
+  readonly damageTarget?: ExplosionDamageTarget;
   readonly selfKnockbackMult?: number;
   readonly rockDamageMult?: number;
   readonly trainDamageMult?: number;
@@ -1145,6 +1149,22 @@ export interface SyncedBurningGroundCell {
   visualStyle: GroundFireVisualStyle;
 }
 
+export interface ArenaGroundFireCell {
+  gridX: number;
+  gridY: number;
+}
+
+/** Permanente, map-definierte Brandfläche auf dem Arena-Raster. */
+export interface ArenaGroundFireZone {
+  id: string;
+  cells: ArenaGroundFireCell[];
+  burnDurationMs: number;
+  burnDamagePerTick: number;
+  weaponName: string;
+  visualStyle: GroundFireVisualStyle;
+  damageTarget: GroundFireDamageTarget;
+}
+
 export interface SyncedBurningGroundSnapshot {
   cells: SyncedBurningGroundCell[];
 }
@@ -1164,6 +1184,7 @@ export interface ArenaLayout {
   dirt:   DirtCell[];
   decals?: DecalCell[];
   powerUpPedestals: PowerUpPedestalCell[];
+  permanentGroundFireZones?: ArenaGroundFireZone[];
 }
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */
@@ -1262,6 +1283,11 @@ export interface SyncedEnemyState {
   burrowed: boolean;
   /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
   dashPhase: 0 | 1 | 2;
+  /** Replizierte Boss-Spezialaktion; `none` löscht einen zuvor sichtbaren Zustand. */
+  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon';
+  specialActionEndsAt: number;
+  gaussChargeProgress: number;
+  gaussAimAngle: number;
   ownerId?: string;
   ownerColor?: number;
 }
@@ -1280,6 +1306,10 @@ export interface SyncedEnemyDeltaState {
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
   dashPhase?: 0 | 1 | 2;
+  specialAction?: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon';
+  specialActionEndsAt?: number;
+  gaussChargeProgress?: number;
+  gaussAimAngle?: number;
   ownerId?: string;
   ownerColor?: number;
 }
@@ -1362,6 +1392,7 @@ export interface SyncedNukeStrike {
   armedAt:     number;   // Date.now()-Zeitpunkt des Spawns
   explodeAt:   number;   // Date.now()-Zeitpunkt der Explosion
   triggeredBy: string;
+  variant: 'normal' | 'void';
 }
 
 /** Aktiver Luftangriff-Strike (Host → Clients via GameState) */
@@ -1384,6 +1415,7 @@ export interface SyncedMeteorStrike {
   spawnedAt: number;   // Date.now()-Zeitpunkt des Spawns (Warnkreis erscheint)
   impactAt:  number;   // Date.now()-Zeitpunkt des Einschlags
   ownerId:   string;   // Spieler-ID des Casters
+  variant: 'normal' | 'void';
 }
 
 export interface SyncedCaptureTheBeerBeer {

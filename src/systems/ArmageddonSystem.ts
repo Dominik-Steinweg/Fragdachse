@@ -17,6 +17,7 @@ export interface MeteorImpactEvent {
   rockDamageMult: number;
   trainDamageMult: number;
   fireChunkBurst: FireChunkBurstConfig;
+  variant: 'normal' | 'void';
 }
 
 interface ActiveMeteor {
@@ -33,6 +34,7 @@ interface ActiveMeteor {
   rockDamageMult: number;
   trainDamageMult: number;
   fireChunkBurst: FireChunkBurstConfig;
+  variant: 'normal' | 'void';
 }
 
 interface ArmageddonSession {
@@ -119,6 +121,7 @@ export class ArmageddonSystem {
           rockDamageMult:  m.rockDamageMult,
           trainDamageMult: m.trainDamageMult,
           fireChunkBurst:  m.fireChunkBurst,
+          variant:         m.variant,
         });
       } else {
         remaining.push(m);
@@ -147,6 +150,7 @@ export class ArmageddonSystem {
       spawnedAt: m.spawnedAt,
       impactAt:  m.impactAt,
       ownerId:   m.ownerId,
+      variant:   m.variant,
     }));
   }
 
@@ -166,6 +170,16 @@ export class ArmageddonSystem {
     const base = 1000 / Math.max(0.0001, config.meteorsPerSecond / rateDivisor);
     if (cometStorm) return base;
     return base * (0.8 + Math.random() * 0.4);
+  }
+
+  /** Bricht eine Session samt noch fliegender Meteore ab (Tod/Teardown eines NPC-Casters). */
+  cancel(ownerId: string): void {
+    this.sessions.delete(ownerId);
+    this.meteors = this.meteors.filter((meteor) => meteor.ownerId !== ownerId);
+  }
+
+  isActive(ownerId: string): boolean {
+    return this.sessions.get(ownerId)?.spawning === true;
   }
 
   /** Versucht einen Meteor auf einem freien Feld zu spawnen (bis zu 5 Versuche). */
@@ -240,6 +254,7 @@ export class ArmageddonSystem {
         ...cfg.fireChunkBurst,
         count: Math.max(0, Math.floor(cfg.fireChunkBurst.count * chunkCountFactor)),
       },
+      variant: cfg.variant ?? 'normal',
     });
   }
 }

@@ -478,7 +478,48 @@ export class LoadoutManager {
     playerColor: number,
     options?: { ignoreBaseCollisions?: boolean },
   ): boolean {
-    return this.dispatchWeaponFire(config, x, y, angle, targetX, targetY, playerId, playerColor, undefined, undefined, options);
+    const pelletCount = Math.max(
+      1,
+      Math.round((config.pelletCount ?? 1) * (config.pelletCountMultiplier ?? 1)),
+    );
+    if (pelletCount <= 1) {
+      return this.dispatchWeaponFire(
+        config,
+        x,
+        y,
+        angle,
+        targetX,
+        targetY,
+        playerId,
+        playerColor,
+        undefined,
+        undefined,
+        options,
+      );
+    }
+
+    const pelletOffsets = calcPelletAngles(pelletCount, config.pelletSpreadAngle ?? 0);
+    let didFire = false;
+    for (let pelletIndex = 0; pelletIndex < pelletOffsets.length; pelletIndex += 1) {
+      const pelletConfig = pelletIndex === 0
+        ? config
+        : { ...config, shotAudio: undefined };
+      const pelletFired = this.dispatchWeaponFire(
+        pelletConfig,
+        x,
+        y,
+        angle + pelletOffsets[pelletIndex],
+        targetX,
+        targetY,
+        playerId,
+        playerColor,
+        undefined,
+        undefined,
+        options,
+      );
+      didFire = pelletFired || didFire;
+    }
+    return didFire;
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
@@ -1899,12 +1940,12 @@ export class LoadoutManager {
       miniRocketSafetyLifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : undefined,
       miniRocketCascadeInitialDamageBonus: isMiniRocket ? config.miniRocketCascadeInitialDamageBonus : undefined,
       miniRocketCascadeDamageBonusPerExplosion: isMiniRocket ? config.miniRocketCascadeDamageBonusPerExplosion : undefined,
-      shotgunOriginX: config.id === 'SHOTGUN' ? x : undefined,
-      shotgunOriginY: config.id === 'SHOTGUN' ? y : undefined,
-      shotgunResolvedRange: config.id === 'SHOTGUN' ? effectiveRange : undefined,
-      shotgunProximityMaxDamageBonus: config.id === 'SHOTGUN' ? config.shotgunProximityMaxDamageBonus : undefined,
-      shotgunSlowFraction: config.id === 'SHOTGUN' ? config.shotgunSlowFraction : undefined,
-      shotgunSlowDurationMs: config.id === 'SHOTGUN' ? config.shotgunSlowDurationMs : undefined,
+      shotgunOriginX: (config.pelletCount ?? 1) > 1 ? x : undefined,
+      shotgunOriginY: (config.pelletCount ?? 1) > 1 ? y : undefined,
+      shotgunResolvedRange: (config.pelletCount ?? 1) > 1 ? effectiveRange : undefined,
+      shotgunProximityMaxDamageBonus: (config.pelletCount ?? 1) > 1 ? config.shotgunProximityMaxDamageBonus : undefined,
+      shotgunSlowFraction: (config.pelletCount ?? 1) > 1 ? config.shotgunSlowFraction : undefined,
+      shotgunSlowDurationMs: (config.pelletCount ?? 1) > 1 ? config.shotgunSlowDurationMs : undefined,
       hitSlowFraction: config.hitSlowFraction,
       hitSlowDurationMs: config.hitSlowDurationMs,
       hitKnockback: config.hitKnockback,

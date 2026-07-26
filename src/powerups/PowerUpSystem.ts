@@ -5,7 +5,7 @@ import {
   ARENA_WIDTH, ARENA_HEIGHT,
   POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
 } from '../config';
-import type { ArenaLayout, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot } from '../types';
+import type { ArenaLayout, ExplosionDamageTarget, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem }  from '../systems/CombatSystem';
 import {
@@ -53,11 +53,31 @@ interface ActiveNukeStrike {
   armedAt:     number;
   explodeAt:   number;
   triggeredBy: string;
+  variant: 'normal' | 'void';
+  maxDamage: number;
+  minDamage: number;
+  allowTeamDamage: boolean;
+  damageTarget?: ExplosionDamageTarget;
+  damageOwnerId: string;
+  weaponName: string;
+}
+
+export interface ConfiguredNukeStrike {
+  readonly countdownMs: number;
+  readonly radius: number;
+  readonly maxDamage: number;
+  readonly minDamage: number;
+  readonly allowTeamDamage: boolean;
+  readonly damageTarget?: ExplosionDamageTarget;
+  readonly damageOwnerId?: string;
+  readonly weaponName?: string;
+  readonly variant?: 'normal' | 'void';
 }
 
 interface PowerUpSystemOptions {
   onNukePickup?: (playerId: string) => void;
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
+  onConfiguredNukeExploded?: (strike: SyncedNukeStrike) => void;
   onHolyHandGrenadePickup?: (playerId: string) => void;
   onBfgPickup?: (playerId: string) => void;
   coopDefenseMapXpTotal?: number;
@@ -355,17 +375,39 @@ export class PowerUpSystem {
   scheduleNukeStrike(playerId: string, targetX: number, targetY: number): boolean {
     const owner = this.playerManager.getPlayer(playerId);
     if (!owner || !this.combat.isAlive(playerId)) return false;
+    return this.scheduleConfiguredNukeStrike(playerId, targetX, targetY, {
+      countdownMs: NUKE_CONFIG.countdownMs,
+      radius: NUKE_CONFIG.radius,
+      maxDamage: NUKE_CONFIG.maxDamage,
+      minDamage: NUKE_CONFIG.minDamage,
+      allowTeamDamage: NUKE_CONFIG.allowTeamDamage,
+      weaponName: 'Atombombe',
+    });
+  }
 
+  scheduleConfiguredNukeStrike(
+    triggeredBy: string,
+    targetX: number,
+    targetY: number,
+    config: ConfiguredNukeStrike,
+    armedAt = Date.now(),
+  ): boolean {
     const spawn = this.clampNukePoint(targetX, targetY);
-    const armedAt = Date.now();
     const strike: ActiveNukeStrike = {
       id:          this.nextNukeId++,
       x:           spawn.x,
       y:           spawn.y,
-      radius:      NUKE_CONFIG.radius,
+      radius:      config.radius,
       armedAt,
-      explodeAt:   armedAt + NUKE_CONFIG.countdownMs,
-      triggeredBy: playerId,
+      explodeAt:   armedAt + config.countdownMs,
+      triggeredBy,
+      variant: config.variant ?? 'normal',
+      maxDamage: config.maxDamage,
+      minDamage: config.minDamage,
+      allowTeamDamage: config.allowTeamDamage,
+      damageTarget: config.damageTarget,
+      damageOwnerId: config.damageOwnerId ?? triggeredBy,
+      weaponName: config.weaponName ?? 'Atombombe',
     };
 
     this.activeNukes.set(strike.id, strike);
@@ -375,14 +417,27 @@ export class PowerUpSystem {
   private explodeNuke(strike: ActiveNukeStrike): void {
     this.combat.applyExplosionDamage(strike.x, strike.y, {
       radius: strike.radius,
-      maxDamage: NUKE_CONFIG.maxDamage,
-      minDamage: NUKE_CONFIG.minDamage,
+      maxDamage: strike.maxDamage,
+      minDamage: strike.minDamage,
       knockback: 0,
       selfDamageMult: 1,
-      allowTeamDamage: NUKE_CONFIG.allowTeamDamage,
-    }, strike.triggeredBy, 'utility', 'Atombombe');
+      allowTeamDamage: strike.allowTeamDamage,
+      damageTarget: strike.damageTarget,
+    }, strike.damageOwnerId, 'utility', strike.weaponName);
 
-    this.options.onNukeExploded?.(strike.x, strike.y, strike.radius, strike.triggeredBy);
+    if (strike.variant === 'normal') {
+      this.options.onNukeExploded?.(strike.x, strike.y, strike.radius, strike.triggeredBy);
+    }
+    this.options.onConfiguredNukeExploded?.({
+      id: strike.id,
+      x: strike.x,
+      y: strike.y,
+      radius: strike.radius,
+      armedAt: strike.armedAt,
+      explodeAt: strike.explodeAt,
+      triggeredBy: strike.triggeredBy,
+      variant: strike.variant,
+    });
   }
 
   // ── Buff-Abfragen (von anderen Systemen aufgerufen) ─────────────────────
@@ -544,6 +599,7 @@ export class PowerUpSystem {
         armedAt:     strike.armedAt,
         explodeAt:   strike.explodeAt,
         triggeredBy: strike.triggeredBy,
+        variant:     strike.variant,
       });
     }
     return result;

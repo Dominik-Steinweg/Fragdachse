@@ -111,6 +111,19 @@ export interface CoopDefenseMapPowerUpConfig {
   readonly spawnOnArenaStart?: boolean;
 }
 
+export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
+
+export interface CoopDefenseMapPermanentGroundFireConfig {
+  readonly randomPatchCount: number;
+  readonly minPatchRadiusCells: number;
+  readonly maxPatchRadiusCells: number;
+  /** Freier Chebyshev-Abstand um jede Basiszelle, damit Dauerfeuer keine Basis einschliesst. */
+  readonly baseClearanceCells: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerTick: number;
+  readonly weaponName: string;
+}
+
 export interface CoopDefenseMapCorridorPoint {
   readonly gridX: number;
   readonly gridY: number;
@@ -182,6 +195,9 @@ export interface CoopDefenseMapConfig {
   readonly rockFillRatio?: number;
   /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
+  /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
+  readonly trackMode?: CoopDefenseMapTrackMode;
+  readonly permanentGroundFire?: CoopDefenseMapPermanentGroundFireConfig;
   /**
    * Uhrzeit, zu der die Map spielt, als `"HH:MM"` (Standard `"12:00"`). Sie steuert
    * Grundhelligkeit und Färbung der Arena, Länge und Deckkraft der statischen Schatten
@@ -316,6 +332,8 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
+    trackMode: mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails',
+    permanentGroundFire: normalizePermanentGroundFire(mapConfig.permanentGroundFire),
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
@@ -323,6 +341,22 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     waves: mapConfig.waves.map(normalizeWaveConfig),
     boss: normalizeBossConfig(mapConfig),
+  };
+}
+
+function normalizePermanentGroundFire(
+  config: CoopDefenseMapPermanentGroundFireConfig | undefined,
+): CoopDefenseMapPermanentGroundFireConfig | undefined {
+  if (!config) return undefined;
+  const minPatchRadiusCells = Math.max(0.5, config.minPatchRadiusCells);
+  return {
+    randomPatchCount: Math.max(0, Math.floor(config.randomPatchCount)),
+    minPatchRadiusCells,
+    maxPatchRadiusCells: Math.max(minPatchRadiusCells, config.maxPatchRadiusCells),
+    baseClearanceCells: Math.max(1, Math.floor(config.baseClearanceCells ?? 2)),
+    burnDurationMs: Math.max(1, Math.floor(config.burnDurationMs)),
+    burnDamagePerTick: Math.max(0, config.burnDamagePerTick),
+    weaponName: config.weaponName || 'Leerenbrand',
   };
 }
 

@@ -157,6 +157,7 @@ export class HostUpdateCoordinator {
     );
     if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
     if (!countdownActive) {
+      this.ctx.coopDefenseVoidHunterSystem?.hostUpdate(now);
       this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
       this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
     }
@@ -510,23 +511,36 @@ export class HostUpdateCoordinator {
 
     const meteorImpacts = countdownActive ? [] : (this.ctx.armageddonSystem?.update(Date.now(), delta) ?? []);
     for (const mi of meteorImpacts) {
-      this.ctx.combatSystem.applyAoeDamage(
-        mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
-        mi.selfDamageMult > 0,
-        {
-          category: 'explosion',
-          weaponName: 'Meteor',
-          sourceSlot: 'ultimate',
-          damageFalloff: mi.damageFalloff,
-          selfDamageMult: mi.selfDamageMult,
-        },
-      );
-      this.applyAoeEnvironmentDamage(
-        mi.x, mi.y, mi.radius, mi.damage,
-        mi.rockDamageMult, mi.trainDamageMult, mi.ownerId,
-        mi.damageFalloff,
-      );
-      bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622);
+      if (mi.variant === 'void') {
+        this.ctx.combatSystem.applyExplosionDamage(mi.x, mi.y, {
+          radius: mi.radius,
+          maxDamage: mi.damage,
+          minDamage: mi.damageFalloff?.minDamage ?? mi.damage,
+          knockback: 0,
+          selfDamageMult: 0,
+          allowTeamDamage: true,
+          damageTarget: 'player-side',
+        }, `void-armageddon:${mi.ownerId}`, 'ultimate', 'Leeren-Meteor');
+        bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xa631ff, 'energy');
+      } else {
+        this.ctx.combatSystem.applyAoeDamage(
+          mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
+          mi.selfDamageMult > 0,
+          {
+            category: 'explosion',
+            weaponName: 'Meteor',
+            sourceSlot: 'ultimate',
+            damageFalloff: mi.damageFalloff,
+            selfDamageMult: mi.selfDamageMult,
+          },
+        );
+        this.applyAoeEnvironmentDamage(
+          mi.x, mi.y, mi.radius, mi.damage,
+          mi.rockDamageMult, mi.trainDamageMult, mi.ownerId,
+          mi.damageFalloff,
+        );
+        bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622);
+      }
       this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
         mi.ownerId,
         mi.x,

@@ -20,6 +20,7 @@ import { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseE
 import { CoopDefenseEnemyBurrowSystem } from '../../systems/CoopDefenseEnemyBurrowSystem';
 import { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodgeSystem';
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
+import { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
@@ -673,6 +674,38 @@ export class ArenaLifecycleCoordinator {
         return true;
       },
     );
+    if (bridge.isHost()) {
+      const permanentFireDurationMs = ((coopDefenseMapConfig?.roundDurationSec ?? 120) * 1000) + 30_000;
+      const createdAt = Date.now();
+      for (const zone of layout.permanentGroundFireZones ?? []) {
+        for (const cell of zone.cells) {
+          const cellLeft = ARENA_OFFSET_X + cell.gridX * CELL_SIZE;
+          const cellTop = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE;
+          for (let subY = 0; subY < CELL_SIZE; subY += GROUND_FIRE_CELL_SIZE) {
+            for (let subX = 0; subX < CELL_SIZE; subX += GROUND_FIRE_CELL_SIZE) {
+              this.ctx.fireSystem.hostRefreshGroundCell(
+                cellLeft + subX + GROUND_FIRE_CELL_SIZE * 0.5,
+                cellTop + subY + GROUND_FIRE_CELL_SIZE * 0.5,
+                {
+                  sourceKey: `map:${zone.id}`,
+                  ownerId: `map-hazard:${coopDefenseMapConfig?.mapId ?? 'arena'}`,
+                  durationMs: permanentFireDurationMs,
+                  damagePerTick: 0,
+                  burn: {
+                    durationMs: zone.burnDurationMs,
+                    damagePerTick: zone.burnDamagePerTick,
+                  },
+                  weaponName: zone.weaponName,
+                  visualStyle: zone.visualStyle,
+                  damageTarget: zone.damageTarget,
+                },
+                createdAt,
+              );
+            }
+          }
+        }
+      }
+    }
     this.ctx.combatSystem.setBaseManager(this.ctx.baseManager);
     this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
@@ -1208,6 +1241,11 @@ export class ArenaLifecycleCoordinator {
           bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a, 'nuke');
           this.hostUpdate.applyNukeEnvironmentDamage(x, y, radius, triggeredBy);
         },
+        onConfiguredNukeExploded: (strike) => {
+          if (strike.variant !== 'void') return;
+          bridge.broadcastExplosionEffect(strike.x, strike.y, strike.radius, 0xa631ff, 'void_nuke');
+          this.ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike);
+        },
         onHolyHandGrenadePickup: (playerId) => {
           this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1);
         },
@@ -1237,6 +1275,25 @@ export class ArenaLifecycleCoordinator {
       this.ctx.armageddonSystem = new ArmageddonSystem();
       this.ctx.armageddonSystem.setRockGrid(this.ctx.arenaResult.rockGrid);
       this.ctx.loadoutManager.setArmageddonSystem(this.ctx.armageddonSystem);
+      if (
+        this.ctx.enemyManager
+        && this.ctx.coopDefenseEnemyBurrowSystem
+        && this.ctx.flamethrowerUpgradeSystem
+      ) {
+        this.ctx.coopDefenseVoidHunterSystem = new CoopDefenseVoidHunterSystem(
+          this.ctx.enemyManager,
+          this.ctx.playerManager,
+          this.ctx.combatSystem,
+          this.ctx.loadoutManager,
+          this.ctx.powerUpSystem,
+          this.ctx.armageddonSystem,
+          this.ctx.coopDefenseEnemyBurrowSystem,
+          this.ctx.flamethrowerUpgradeSystem,
+        );
+        this.ctx.coopDefenseEnemyAttackSystem?.setActionBlockedChecker(
+          (enemyId) => this.ctx.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false,
+        );
+      }
 
       this.ctx.airstrikeSystem = new AirstrikeSystem();
       this.ctx.airstrikeSystem.setExplodedCallback((x, y, radius, triggeredBy, cfg) => {
@@ -1419,6 +1476,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyBurrowSystem?.clear();
     this.ctx.coopDefenseEnemyDodgeSystem?.clear();
     this.ctx.coopDefenseEnemyCombatPositioningSystem?.clear();
+    this.ctx.coopDefenseVoidHunterSystem?.clear();
     this.ctx.coopDefenseEnemyTrainAwarenessSystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
@@ -1460,6 +1518,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyBurrowSystem = null;
     this.ctx.coopDefenseEnemyDodgeSystem = null;
     this.ctx.coopDefenseEnemyCombatPositioningSystem = null;
+    this.ctx.coopDefenseVoidHunterSystem = null;
     this.ctx.coopDefenseEnemyTrainAwarenessSystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;

@@ -62,6 +62,7 @@ export class CoopDefenseEnemyAttackSystem {
   private readonly meleeWindups = new Map<string, MeleeWindupState>();
   private readonly movementProgress = new Map<string, EnemyMovementProgressState>();
   private readonly obstacleContacts = new Map<string, EnemyObstacleContactState>();
+  private actionBlockedChecker: ((enemyId: string) => boolean) | null = null;
 
   constructor(
     private readonly enemyManager: EnemyManager,
@@ -72,6 +73,10 @@ export class CoopDefenseEnemyAttackSystem {
     private readonly getRockObjects: () => readonly (Phaser.GameObjects.Image | null)[] | null,
     private readonly trainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null = null,
   ) {}
+
+  setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
+    this.actionBlockedChecker = checker;
+  }
 
   recordObstacleContact(enemyId: string, obstacle: Phaser.GameObjects.Image, now: number): void {
     if (!obstacle.active || !this.enemyManager.hasEnemy(enemyId)) return;
@@ -85,6 +90,13 @@ export class CoopDefenseEnemyAttackSystem {
       if (enemy.faction !== 'hostile') continue;
       activeEnemyIds.add(enemy.id);
       enemy.decayWeaponSpread(delta, now);
+
+      if (this.actionBlockedChecker?.(enemy.id)) {
+        this.sustainedAttacks.delete(enemy.id);
+        this.meleeWindups.delete(enemy.id);
+        enemy.stopMovement();
+        continue;
+      }
 
       // Eingebuddelt gilt dieselbe Waffensperre wie beim Spieler.
       if (enemy.isBurrowed()) {

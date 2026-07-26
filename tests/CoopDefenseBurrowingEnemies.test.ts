@@ -208,6 +208,27 @@ describe('Enemy snapshot codec', () => {
     expect(decodeEnemyUpserts(stream)[0].burrowed).toBeUndefined();
   });
 
+  it('round-trips the Void Hunter Gauss telegraph without affecting ordinary enemies', () => {
+    const stream: Array<number | string> = [];
+    encodeEnemyUpsert(stream, {
+      id: 'e2a',
+      specialAction: 'gauss-charge',
+      specialActionEndsAt: 12_345,
+      gaussChargeProgress: 0.625,
+      gaussAimAngle: 1.23,
+    });
+    expect(decodeEnemyUpserts(stream)[0]).toMatchObject({
+      specialAction: 'gauss-charge',
+      specialActionEndsAt: 12_345,
+      gaussChargeProgress: 0.625,
+      gaussAimAngle: 1.23,
+    });
+
+    const ordinary: Array<number | string> = [];
+    encodeEnemyUpsert(ordinary, { id: 'e2b', x: 10, y: 20 });
+    expect(decodeEnemyUpserts(ordinary)[0].specialAction).toBeUndefined();
+  });
+
   it('packs void burn into the existing burn value without changing the stream shape', () => {
     const normal: Array<number | string> = [];
     const voidFire: Array<number | string> = [];

@@ -1,4 +1,4 @@
-import { COLORS, RAGE_MAX, VOID_FIRE_COLOR } from '../config';
+import { COLORS, RAGE_MAX, VOID_FIRE_COLOR, VOID_PALETTE } from '../config';
 import type { GroundFireVisualStyle } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
@@ -585,6 +585,7 @@ const STANDARD_GRENADE_CHARGE = {
 } as const satisfies ChargedThrowUtilityActivationConfig;
 
 export interface ArmageddonMeteorConfig {
+  readonly variant?: 'normal' | 'void';
   readonly meteorSpawnRadius: number;   // px – Radius um den Spieler, in dem Meteore spawnen
   readonly meteorDamageRadius: number;  // px – AoE-Schadensradius beim Einschlag
   readonly meteorDamage: number;        // HP-Schaden pro Einschlag
@@ -909,6 +910,104 @@ export const WEAPON_CONFIGS = {
   // Kurzer Belagerungsbiss auf Dachsbiss-Reichweite: der Pyro-Dachs muss direkt an Fels oder
   // Basis stehen, um zuzubeissen – sein eigentlicher Angriff ist die Brand-Glock.
   PYRO_BADGER_BITE: createEnemyStructureBiteConfig('PYRO_BADGER_BITE', 'Pyro-Dachsbiss', 75, 4, 50),
+  VOID_HUNTER_BITE: createEnemyStructureBiteConfig('VOID_HUNTER_BITE', 'Leerenjäger-Biss', 75, 4, 50),
+
+  VOID_HUNTER_SHOTGUN: {
+    id:                   'VOID_HUNTER_SHOTGUN',
+    displayName:          'Leeren-Schrotflinte',
+    cooldown:             850,
+    damage:               6,
+    range:                300,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1200,
+      projectileSize:       4,
+      projectileMaxBounces: 1,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       5,
+    spreadMoving:         10,
+    spreadPerShot:        5,
+    maxDynamicSpread:     20,
+    spreadRecoveryDelay:  500,
+    spreadRecoveryRate:   3,
+    spreadRecoverySpeed:  100,
+    pelletCount:          5,
+    pelletCountMultiplier: 1,
+    pelletSpreadAngle:    16,
+    projectileColor:      VOID_PALETTE.primary,
+    projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'shotgun' as BulletVisualPreset,
+    projectileBurnVisualStyle: 'void',
+    burnOnHit: {
+      durationMs: 2000,
+      damagePerTick: 2,
+    } satisfies BurnOnHitConfig,
+    tracerConfig: {
+      widthCore:  1.5,
+      widthGlow:  5,
+      alphaCore:  0.55,
+      alphaGlow:  0.38,
+      segments:   4,
+      fadeMs:     260,
+      maxLength:  170,
+      colorCore:  VOID_PALETTE.core,
+      colorGlow:  VOID_PALETTE.deep,
+    } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_shotgun',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  /**
+   * Vollständig eigene NPC-Waffe. Die Lade- und Taktlogik liegt im Leerenjäger-System;
+   * diese Config beschreibt ausschließlich das tatsächlich erzeugte Projektil.
+   */
+  VOID_HUNTER_GAUSS: {
+    id:                   'VOID_HUNTER_GAUSS',
+    displayName:          'Leeren-Gauss',
+    cooldown:             0,
+    damage:               100,
+    range:                1500,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1350,
+      projectileSize:       16,
+      projectileMaxBounces: 0,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileColor:      VOID_PALETTE.primary,
+    projectileStyle:      'bullet' as ProjectileStyle,
+    projectileVisualScale: 1.25,
+    bulletVisualPreset:   'gauss' as BulletVisualPreset,
+    tracerConfig: {
+      widthCore:  8,
+      widthGlow:  24,
+      alphaCore:  0.96,
+      alphaGlow:  0.76,
+      segments:   12,
+      fadeMs:     1400,
+      maxLength:  340,
+      colorCore:  VOID_PALETTE.core,
+      colorGlow:  VOID_PALETTE.primary,
+    } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_gauss',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
 
   GRAVE_TITAN_BITE: {
     id:                   'GRAVE_TITAN_BITE',

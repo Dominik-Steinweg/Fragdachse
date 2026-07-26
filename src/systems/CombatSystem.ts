@@ -806,7 +806,16 @@ export class CombatSystem {
     weaponName = 'Explosion',
   ): string[] {
     const damagedTargetKeys: string[] = [];
-    for (const player of this.playerManager.getAllPlayers()) {
+    const damagePlayers = effect.damageTarget === undefined
+      || effect.damageTarget === 'all'
+      || effect.damageTarget === 'players'
+      || effect.damageTarget === 'player-side';
+    const damageHostileEnemies = effect.damageTarget === undefined
+      || effect.damageTarget === 'all'
+      || effect.damageTarget === 'enemies';
+    const damageAlliedEnemies = damageHostileEnemies || effect.damageTarget === 'player-side';
+
+    for (const player of damagePlayers ? this.playerManager.getAllPlayers() : []) {
       if (!this.isAlive(player.id)) continue;
 
       const dist = Phaser.Math.Distance.Between(x, y, player.sprite.x, player.sprite.y);
@@ -830,6 +839,7 @@ export class CombatSystem {
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (enemy.faction === 'hostile' ? !damageHostileEnemies : !damageAlliedEnemies) continue;
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > effect.radius) continue;
 

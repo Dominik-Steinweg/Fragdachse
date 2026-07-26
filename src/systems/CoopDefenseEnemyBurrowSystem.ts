@@ -6,8 +6,9 @@ import type { EnemyBurrowMovementSource, EnemyManager } from '../entities/EnemyM
  * Grund, aus dem ein Gegner gerade eingebuddelt ist.
  * - `spawn-tunnel`: Anfahrt vom linken Spielfeldrand, bis ein freies Feld erreicht ist.
  * - `train-crossing`: kurzes Untertauchen, um die Gleise trotz fahrendem Zug zu queren.
+ * - `scripted-phase`: zeitlich exakt festgelegtes Untertauchen einer Bossphase.
  */
-type EnemyBurrowReason = 'spawn-tunnel' | 'train-crossing';
+type EnemyBurrowReason = 'spawn-tunnel' | 'train-crossing' | 'scripted-phase';
 
 interface EnemyBurrowState {
   readonly reason: EnemyBurrowReason;
@@ -74,6 +75,14 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
     if (!enemy || !burrow?.crossesTrainTracks) return false;
 
     this.startBurrow(enemy, 'train-crossing', now + burrow.maxDurationMs);
+    return true;
+  }
+
+  /** Startet ein nicht vorzeitig abbrechbares, geskriptetes Untertauchen bis `endsAt`. */
+  startScriptedBurrow(enemyId: string, endsAt: number): boolean {
+    const enemy = this.enemyManager.getEnemy(enemyId);
+    if (!enemy?.sprite.active || !this.getBurrowConfig(enemy)) return false;
+    this.startBurrow(enemy, 'scripted-phase', endsAt);
     return true;
   }
 

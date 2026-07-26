@@ -227,7 +227,7 @@ export class PlayerManager {
     const free = this.collectFreeCells(blocked);
 
     if (free.length === 0) {
-      return { x: CELL_SIZE / 2, y: CELL_SIZE / 2 }; // Notfall-Fallback
+      return this.getEmergencySpawnOutsidePermanentFire();
     }
 
     const coopDefenseBase = this.resolveCoopDefenseSpawnBase(spawnContext);
@@ -247,7 +247,7 @@ export class PlayerManager {
     const globalChoice = focusedEvaluations === evaluations
       ? null
       : this.pickSpawnWithFallbacks(evaluations);
-    return globalChoice ?? { x: CELL_SIZE / 2, y: CELL_SIZE / 2 };
+    return globalChoice ?? this.getEmergencySpawnOutsidePermanentFire();
   }
 
   private pickSpawnWithFallbacks(
@@ -311,6 +311,11 @@ export class PlayerManager {
       for (const pedestal of this.layout.powerUpPedestals) {
         blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
       }
+      for (const zone of this.layout.permanentGroundFireZones ?? []) {
+        for (const cell of zone.cells) {
+          blocked.add(`${cell.gridX}_${cell.gridY}`);
+        }
+      }
     }
 
     // Coop-Defense: Spieler dürfen nicht auf der Basis oder am Rand spawnen –
@@ -341,6 +346,28 @@ export class PlayerManager {
     }
 
     return blocked;
+  }
+
+  /**
+   * Nur fuer den praktisch unerreichbaren Fall eines vollstaendig blockierten Layouts:
+   * Dauerfeuer bleibt auch im Notfall tabu, selbst wenn dafuer ein anderes Hindernis
+   * als letzte Rueckfallposition in Kauf genommen werden muss.
+   */
+  private getEmergencySpawnOutsidePermanentFire(): { x: number; y: number } {
+    const permanentFireCells = new Set<string>();
+    for (const zone of this.layout?.permanentGroundFireZones ?? []) {
+      for (const cell of zone.cells) permanentFireCells.add(`${cell.gridX}_${cell.gridY}`);
+    }
+    for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+      for (let gridX = 0; gridX < GRID_COLS; gridX += 1) {
+        if (permanentFireCells.has(`${gridX}_${gridY}`)) continue;
+        return {
+          x: gridX * CELL_SIZE + CELL_SIZE / 2,
+          y: gridY * CELL_SIZE + CELL_SIZE / 2,
+        };
+      }
+    }
+    return { x: CELL_SIZE / 2, y: CELL_SIZE / 2 };
   }
 
   private collectFreeCells(blocked: ReadonlySet<string>, region?: ArenaGridRegion): SpawnCandidate[] {

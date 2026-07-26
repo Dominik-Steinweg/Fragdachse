@@ -18,7 +18,13 @@ describe('ArmageddonSystem', () => {
     system.update(1000, 1);
 
     const [warning] = system.getSnapshot();
-    expect(warning).toMatchObject({ ownerId: 'player', radius: 96, spawnedAt: 1000, impactAt: 2200 });
+    expect(warning).toMatchObject({
+      ownerId: 'player',
+      radius: 96,
+      spawnedAt: 1000,
+      impactAt: 2200,
+      variant: 'normal',
+    });
     expect(system.update(2199, 0)).toEqual([]);
 
     const impacts = system.update(2200, 0);
@@ -39,6 +45,15 @@ describe('ArmageddonSystem', () => {
       },
     });
     expect(system.getSnapshot()).toEqual([]);
+  });
+
+  it('keeps the Void variant on warning and impact snapshots', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const system = new ArmageddonSystem();
+    system.activate('void-boss', { ...BASE_CONFIG, variant: 'void' }, () => ({ x: 500, y: 400 }));
+    system.update(1000, 334);
+    expect(system.getSnapshot()[0].variant).toBe('void');
+    expect(system.update(2200, 0)[0].variant).toBe('void');
   });
 
   it('spawns upgraded comet storm meteors regularly at the captured player position', () => {

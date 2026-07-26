@@ -30,6 +30,7 @@ export class PlacementSystem {
   private readonly treeCells = new Set<string>();
   private readonly trackCells = new Set<string>();
   private readonly pedestalCells = new Set<string>();
+  private readonly hazardCells = new Set<string>();
   private nextRockId: number;
 
   constructor(layout: ArenaLayout, rockGrid: RockGridIndex, playerManager: PlayerManager) {
@@ -47,6 +48,9 @@ export class PlacementSystem {
     }
     for (const pedestal of layout.powerUpPedestals) {
       this.pedestalCells.add(this.key(pedestal.gridX, pedestal.gridY));
+    }
+    for (const zone of layout.permanentGroundFireZones ?? []) {
+      for (const cell of zone.cells) this.hazardCells.add(this.key(cell.gridX, cell.gridY));
     }
   }
 
@@ -331,6 +335,7 @@ export class PlacementSystem {
       if (this.treeCells.has(this.key(tx, ty))) return false;
       if (this.trackCells.has(this.key(tx, ty))) return false;
       if (this.pedestalCells.has(this.key(tx, ty))) return false;
+      if (this.hazardCells.has(this.key(tx, ty))) return false;
       if (this.isPlayerOccupyingCell(tx, ty)) return false;
     }
 

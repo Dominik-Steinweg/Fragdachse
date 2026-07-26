@@ -835,6 +835,10 @@ export class EnemyManager {
       faction: snapshot.faction,
       burrowed: snapshot.burrowed,
       dashPhase: snapshot.dashPhase,
+      specialAction: snapshot.specialAction,
+      specialActionEndsAt: snapshot.specialActionEndsAt,
+      gaussChargeProgress: Math.round(snapshot.gaussChargeProgress * 1000) / 1000,
+      gaussAimAngle: Math.round(snapshot.gaussAimAngle * 100) / 100,
       ownerId: snapshot.ownerId,
       ownerColor: snapshot.ownerColor,
     };
@@ -884,6 +888,17 @@ export class EnemyManager {
     if (current.dashPhase !== previous.dashPhase) {
       delta.dashPhase = current.dashPhase;
     }
+    if (
+      current.specialAction !== previous.specialAction
+      || current.specialActionEndsAt !== previous.specialActionEndsAt
+      || current.gaussChargeProgress !== previous.gaussChargeProgress
+      || current.gaussAimAngle !== previous.gaussAimAngle
+    ) {
+      delta.specialAction = current.specialAction;
+      delta.specialActionEndsAt = current.specialActionEndsAt;
+      delta.gaussChargeProgress = current.gaussChargeProgress;
+      delta.gaussAimAngle = current.gaussAimAngle;
+    }
 
     return Object.keys(delta).length > 1 ? delta : null;
   }
@@ -911,6 +926,12 @@ export class EnemyManager {
       enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
       enemy.updateBurnStacks(remote.burnStacks ?? 0, remote.burnVisualStyle ?? 'normal');
       enemy.setDashPhase(remote.dashPhase ?? 0);
+      enemy.setSpecialAction(
+        remote.specialAction ?? 'none',
+        remote.specialActionEndsAt ?? 0,
+        remote.gaussChargeProgress ?? 0,
+        remote.gaussAimAngle ?? rotation,
+      );
       this.enemies.set(remote.id, enemy);
       if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy);
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
@@ -931,6 +952,15 @@ export class EnemyManager {
       );
     }
     if (remote.dashPhase !== undefined) enemy.setDashPhase(remote.dashPhase);
+    if (remote.specialAction !== undefined) {
+      const current = enemy.getNetSnapshot();
+      enemy.setSpecialAction(
+        remote.specialAction,
+        remote.specialActionEndsAt ?? current.specialActionEndsAt,
+        remote.gaussChargeProgress ?? current.gaussChargeProgress,
+        remote.gaussAimAngle ?? current.gaussAimAngle,
+      );
+    }
     if (remote.x !== undefined || remote.y !== undefined) {
       enemy.setTargetPosition(remote.x ?? enemy.sprite.x, remote.y ?? enemy.sprite.y);
     }

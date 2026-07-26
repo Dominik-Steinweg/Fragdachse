@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS, DEPTH } from '../config';
+import { COLORS, DEPTH, VOID_FIRE_COLOR, VOID_PALETTE } from '../config';
 import {
   configureAdditiveImage,
   createEmitter,
@@ -20,6 +20,7 @@ interface GaussVisual {
   halo: Phaser.GameObjects.Image;
   core: Phaser.GameObjects.Image;
   arcEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
+  isVoid: boolean;
 }
 
 export class GaussRenderer {
@@ -51,7 +52,13 @@ export class GaussRenderer {
   createVisual(id: number, x: number, y: number, size: number, color: number): void {
     if (this.visuals.has(id)) return;
 
-    const halo = configureAdditiveImage(this.scene.add.image(x, y, TEX_GAUSS_HALO), DEPTH_GAUSS_HALO, 0.55, COLORS.BLUE_2);
+    const isVoid = color === VOID_FIRE_COLOR;
+    const halo = configureAdditiveImage(
+      this.scene.add.image(x, y, TEX_GAUSS_HALO),
+      DEPTH_GAUSS_HALO,
+      0.55,
+      isVoid ? VOID_PALETTE.primary : COLORS.BLUE_2,
+    );
     const core = configureAdditiveImage(this.scene.add.image(x, y, TEX_GAUSS_CORE), DEPTH_GAUSS_CORE, 0.95, color);
     halo.setScale(Math.max(0.9, size / 18));
     core.setScale(Math.max(0.65, size / 20));
@@ -64,13 +71,13 @@ export class GaussRenderer {
       speedY: { min: -20, max: 20 },
       scale: { start: 0.9, end: 0 },
       alpha: { start: 0.9, end: 0 },
-      tint: [0xffffff, color, COLORS.BLUE_1],
+      tint: isVoid ? [VOID_PALETTE.core, color, VOID_PALETTE.deep] : [0xffffff, color, COLORS.BLUE_1],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
     }, DEPTH_GAUSS_ARC);
     setCircleEmitZone(arcEmitter, Math.max(6, size * 0.45), 2);
 
-    this.visuals.set(id, { halo, core, arcEmitter });
+    this.visuals.set(id, { halo, core, arcEmitter, isVoid });
   }
 
   updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number, color: number): void {
@@ -81,14 +88,20 @@ export class GaussRenderer {
     const pulse = 0.78 + 0.22 * Math.sin(this.scene.time.now * 0.03 + id);
     const rotation = Math.atan2(vy, vx);
 
-    visual.halo.setPosition(x, y).setRotation(rotation).setScale(Math.max(1.0, size / 16) * (1.5 + speed / 1800 * 0.7)).setAlpha(0.28 + pulse * 0.22).setTint(COLORS.BLUE_2);
+    visual.halo.setPosition(x, y).setRotation(rotation).setScale(Math.max(1.0, size / 16) * (1.5 + speed / 1800 * 0.7)).setAlpha(0.28 + pulse * 0.22).setTint(
+      visual.isVoid ? VOID_PALETTE.primary : COLORS.BLUE_2,
+    );
     visual.core.setPosition(x, y).setRotation(rotation).setScale(
       Math.max(0.8, size / 14) * (1.4 + speed / 2200),
       Math.max(0.65, size / 20) * (0.8 + pulse * 0.2),
     ).setAlpha(0.82 + pulse * 0.18).setTint(color);
     visual.arcEmitter.setPosition(x, y);
     visual.arcEmitter.setParticleSpeed(Math.max(22, 18 + speed * 0.03), Math.max(12, 10 + speed * 0.015));
-    visual.arcEmitter.setParticleTint([0xffffff, color, COLORS.BLUE_1]);
+    visual.arcEmitter.setParticleTint(
+      visual.isVoid
+        ? [VOID_PALETTE.core, color, VOID_PALETTE.deep]
+        : [0xffffff, color, COLORS.BLUE_1],
+    );
     setCircleEmitZone(visual.arcEmitter, Math.max(7, size * 0.5), 2, true);
   }
 

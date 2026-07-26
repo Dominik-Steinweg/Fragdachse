@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { makeAdditive } from '../effects/EffectUtils';
 import type { SyncedNukeStrike } from '../types';
-import { DEPTH, COLORS } from '../config';
+import { DEPTH, COLORS, VOID_PALETTE } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';
 import type { EffectSystem } from '../effects/EffectSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -19,6 +19,7 @@ interface NukeVisual {
   shadow:        Phaser.GameObjects.Ellipse;
   sparks:        Phaser.GameObjects.Particles.ParticleEmitter;
   lastCountdown: number | null;
+  variant: 'normal' | 'void';
 }
 
 export class NukeRenderer {
@@ -116,7 +117,8 @@ export class NukeRenderer {
         this.emitCountdownText(nuke.x, nuke.y, remainingSeconds);
       }
 
-      const progress = Phaser.Math.Clamp(1 - ((nuke.explodeAt - now) / NUKE_CONFIG.countdownMs), 0, 1);
+      const countdownMs = Math.max(1, nuke.explodeAt - nuke.armedAt);
+      const progress = Phaser.Math.Clamp(1 - ((nuke.explodeAt - now) / countdownMs), 0, 1);
       const pulse = 1 + 0.09 * Math.sin(now / 95 + nuke.id) + progress * 0.12;
       visual.icon.setScale(pulse);
       visual.ring.setAlpha(NUKE_CONFIG.circleStrokeAlpha + 0.16 * Math.sin(now / 135));
@@ -145,28 +147,32 @@ export class NukeRenderer {
   }
 
   private createVisual(nuke: SyncedNukeStrike): NukeVisual {
+    const isVoid = nuke.variant === 'void';
+    const warningColor = isVoid ? VOID_PALETTE.primary : NUKE_CONFIG.warningColor;
+    const ringColor = isVoid ? VOID_PALETTE.bright : COLORS.GOLD_1;
+    const outerColor = isVoid ? VOID_PALETTE.deep : COLORS.RED_2;
     // Ungedämpft (`setBlendMode` statt `makeAdditive`): die Zielmarkierung ist ein
     // Telegraph und muss zu jeder Tageszeit voll lesbar bleiben.
-    const radius = this.scene.add.circle(nuke.x, nuke.y, nuke.radius, NUKE_CONFIG.warningColor, NUKE_CONFIG.circleFillAlpha);
+    const radius = this.scene.add.circle(nuke.x, nuke.y, nuke.radius, warningColor, NUKE_CONFIG.circleFillAlpha);
     radius.setDepth(DEPTH.CANOPY - 1);
     radius.setBlendMode(Phaser.BlendModes.ADD);
 
     const ring = this.scene.add.circle(nuke.x, nuke.y, nuke.radius);
-    ring.setStrokeStyle(4, COLORS.GOLD_1, NUKE_CONFIG.circleStrokeAlpha);
+    ring.setStrokeStyle(4, ringColor, NUKE_CONFIG.circleStrokeAlpha);
     ring.setDepth(DEPTH.CANOPY);
     ring.setBlendMode(Phaser.BlendModes.ADD);
 
     const outerRing = this.scene.add.circle(nuke.x, nuke.y, nuke.radius * 0.84);
-    outerRing.setStrokeStyle(2, COLORS.RED_2, 0.28);
+    outerRing.setStrokeStyle(2, outerColor, 0.28);
     outerRing.setDepth(DEPTH.CANOPY);
     outerRing.setBlendMode(Phaser.BlendModes.ADD);
 
-    const coreGlow = this.scene.add.circle(nuke.x, nuke.y, 30, COLORS.RED_2, 0.24);
+    const coreGlow = this.scene.add.circle(nuke.x, nuke.y, 30, outerColor, 0.24);
     coreGlow.setDepth(DEPTH.PLAYERS - 2);
     coreGlow.setBlendMode(Phaser.BlendModes.ADD);
 
     const targetRing = this.scene.add.circle(nuke.x, nuke.y, 44);
-    targetRing.setStrokeStyle(3, COLORS.GREY_1, 0.68);
+    targetRing.setStrokeStyle(3, isVoid ? VOID_PALETTE.core : COLORS.GREY_1, 0.68);
     targetRing.setDepth(DEPTH.PLAYERS - 1);
     targetRing.setBlendMode(Phaser.BlendModes.ADD);
 
@@ -176,13 +182,16 @@ export class NukeRenderer {
     const icon = this.scene.add.image(nuke.x, nuke.y, TEX_NUKE_ICON);
     icon.setDisplaySize(36, 36);
     icon.setDepth(DEPTH.PLAYERS - 1);
+    if (isVoid) icon.setTint(VOID_PALETTE.primary);
 
     const sparks = this.scene.add.particles(nuke.x, nuke.y, TEX_NUKE_WARN, {
       lifespan:  { min: 260, max: 620 },
       speed:     { min: 18, max: 48 },
       scale:     { start: 0.8, end: 0 },
       alpha:     { start: 0.85, end: 0 },
-      tint:      [0xffffff, COLORS.GOLD_1, COLORS.RED_2],
+      tint:      isVoid
+        ? [VOID_PALETTE.core, VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep]
+        : [0xffffff, COLORS.GOLD_1, COLORS.RED_2],
       blendMode: Phaser.BlendModes.ADD,
       frequency: 90,
       quantity:  1,
@@ -230,6 +239,7 @@ export class NukeRenderer {
       shadow,
       sparks,
       lastCountdown: null,
+      variant: nuke.variant,
     };
   }
 

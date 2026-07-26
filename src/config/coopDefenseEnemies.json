@@ -356,6 +356,126 @@
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.5
       }
+    },
+    {
+      "id": "void-hunter",
+      "maxHp": 3000,
+      "xp": 300,
+      "size": 52,
+      "moveSpeed": 140,
+      "knockbackFactor": 0.25,
+      "movementTarget": "players",
+      "weapons": [
+        { "weaponId": "VOID_HUNTER_BITE", "targetMode": "structures" },
+        { "weaponId": "VOID_HUNTER_SHOTGUN", "targetMode": "players" }
+      ],
+      "attackScanIntervalMs": 100,
+      "attackStopDurationMs": 120,
+      "obstacleAttackDelayMs": 400,
+      "imageKey": "enemy_void_hunter",
+      "spriteRotationOffsetDegrees": 180,
+      "isBoss": true,
+      "displayName": "Leerenjäger",
+      "glow": {
+        "color": 11219711,
+        "sizeFactor": 1.7,
+        "alpha": 0.82,
+        "lightRadiusPx": 105,
+        "lightIntensity": 1
+      },
+      "phaseTwoGlow": {
+        "color": 13459711,
+        "sizeFactor": 2.45,
+        "alpha": 1,
+        "lightRadiusPx": 175,
+        "lightIntensity": 1
+      },
+      "burrow": {
+        "maxDurationMs": 8000,
+        "speedFactor": 1,
+        "spawnBurrowedAtLeftEdge": false,
+        "spawnTunnelMinDistancePx": 0,
+        "spawnTunnelTimeoutMs": 8000,
+        "crossesTrainTracks": false
+      },
+      "combatPositioning": {
+        "preferredDistancePx": 190,
+        "toleranceP": 32,
+        "retreatSpeedFactor": 0.85,
+        "requireLineOfSight": true
+      },
+      "dodge": {
+        "enabledBelowHpRatio": 0.5,
+        "cooldownMs": 1400,
+        "evadeScanRadiusPx": 300,
+        "evadeLeadTimeMs": 420,
+        "evadeMissMarginPx": 24,
+        "approachMinDistancePx": 222,
+        "approachMaxDistancePx": 430
+      },
+      "voidHunterBoss": {
+        "phaseTwoHpRatio": 0.5,
+        "phaseTwoSpeedMultiplier": 1.2,
+        "shotgunRangePx": 300,
+        "gauss": {
+          "weaponId": "VOID_HUNTER_GAUSS",
+          "initialDelayMs": 10000,
+          "cooldownMs": 20000,
+          "chargeDurationMs": 1800,
+          "aimUpdateIntervalMs": 100,
+          "maxAimTurnDegreesPerSecond": 60
+        },
+        "nuke": {
+          "countdownMs": 5000,
+          "emergeDelayMs": 2000,
+          "radiusPx": 600,
+          "maxDamage": 1000,
+          "minDamage": 50,
+          "fireChunkBurst": {
+            "count": 150,
+            "searchRadius": 600,
+            "flightMs": 600,
+            "igniteCenter": false,
+            "durationMs": 6000,
+            "burnDurationMs": 2000,
+            "burnDamagePerTick": 0.5,
+            "weaponName": "Leeren-Nuklearbrand"
+          }
+        },
+        "armageddonDurationMs": 10000,
+        "armageddonCooldownMs": 15000,
+        "armageddon": {
+          "meteorSpawnRadius": 350,
+          "meteorDamageRadius": 96,
+          "meteorDamage": 120,
+          "meteorDamageFalloff": { "minDamage": 80 },
+          "meteorFallDuration": 1200,
+          "meteorsPerSecond": 3,
+          "meteorRadiusJitter": 0.1,
+          "selfDamageMult": 0,
+          "rockDamageMult": 0,
+          "trainDamageMult": 0,
+          "fireChunkBurst": {
+            "count": 8,
+            "searchRadius": 96,
+            "flightMs": 320,
+            "igniteCenter": true,
+            "durationMs": 2000,
+            "burnDurationMs": 2000,
+            "burnDamagePerTick": 0.5,
+            "weaponName": "Leeren-Armageddon"
+          },
+          "cometStormEnabled": 0,
+          "cometSpawnRateDivisor": 1,
+          "cometFallDurationFactor": 1,
+          "cometRadiusFactor": 1,
+          "cometDamageFactor": 1,
+          "cometChunkCountFactor": 1
+        }
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.5
+      }
     }
   ]
 }

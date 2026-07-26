@@ -124,6 +124,18 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     expect(system.isBurrowed(enemy.id)).toBe(false);
   });
 
+  it('keeps a scripted boss phase underground until its exact end timestamp', () => {
+    const enemy = createEnemy('void-hunter', 400);
+    const { system } = createSystem(enemy, () => true);
+
+    expect(system.startScriptedBurrow(enemy.id, 7000)).toBe(true);
+    expect(system.getForcedDirection(enemy.id)).toBeNull();
+    system.hostUpdate(6999);
+    expect(system.isBurrowed(enemy.id)).toBe(true);
+    system.hostUpdate(7000);
+    expect(system.isBurrowed(enemy.id)).toBe(false);
+  });
+
   it('surfaces everything on clear so a torn-down round leaves no ghost state', () => {
     const enemy = createEnemy('alien-badger');
     const { system, collisionCalls } = createSystem(enemy, () => false);

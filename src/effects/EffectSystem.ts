@@ -736,12 +736,13 @@ export class EffectSystem implements EnemyVisualSink {
 
     const isHoly = visualStyle === 'holy';
     const isEnergy = visualStyle === 'energy';
-    const isNuke = visualStyle === 'nuke';
+    const isVoidNuke = visualStyle === 'void_nuke';
+    const isNuke = visualStyle === 'nuke' || isVoidNuke;
     const isMiniRocketCascade = visualStyle === 'mini_rocket_cascade';
     const fillColor = isHoly
       ? 0xf0c53a
-      : (color ?? (isEnergy ? 0x73bed3 : (isNuke ? 0xffb347 : 0xff2200)));
-    const flashColor = isEnergy ? 0xe8fbff : (isHoly ? 0xfff8de : (isNuke ? 0xfff2cc : 0xffffcc));
+      : (color ?? (isEnergy ? 0x73bed3 : (isVoidNuke ? 0xa631ff : (isNuke ? 0xffb347 : 0xff2200))));
+    const flashColor = isEnergy ? 0xe8fbff : (isHoly ? 0xfff8de : (isVoidNuke ? 0xf4dcff : (isNuke ? 0xfff2cc : 0xffffcc)));
     const haloColor = isEnergy
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
@@ -749,7 +750,14 @@ export class EffectSystem implements EnemyVisualSink {
     const endScale = radius / startRadius;
 
     if (isNuke) {
-      const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xfff1cf, 0.24);
+      const skyFlash = this.scene.add.rectangle(
+        GAME_WIDTH * 0.5,
+        GAME_HEIGHT * 0.5,
+        GAME_WIDTH,
+        GAME_HEIGHT,
+        isVoidNuke ? 0xc76cff : 0xfff1cf,
+        0.24,
+      );
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
       makeAdditive(skyFlash);
@@ -1179,8 +1187,8 @@ export class EffectSystem implements EnemyVisualSink {
         ? 0xd4f2fc
         : visualStyle === 'holy'
           ? 0xffefbe
-          : visualStyle === 'nuke'
-            ? 0xffe4b8
+          : visualStyle === 'nuke' || visualStyle === 'void_nuke'
+            ? (visualStyle === 'void_nuke' ? 0xe0b8ff : 0xffe4b8)
             : mixColors(color ?? 0xff5a1e, 0xffffff, 0.6);
 
     this.lighting.pulse('explosion', x, y, {

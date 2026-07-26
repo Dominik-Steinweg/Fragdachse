@@ -1,5 +1,5 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
-import type { UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
+import type { ArmageddonMeteorConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { FireChunkBurstConfig, GroundFireCellEffect } from '../types';
 
 export type CoopDefenseEnemyKind = string;
@@ -120,6 +120,8 @@ export interface CoopDefenseEnemyCombatPositioningConfig {
  * konfigurierbar. Konfiguriert wird nur, *wann* der Gegner ausweicht.
  */
 export interface CoopDefenseEnemyDodgeConfig {
+  /** Optionaler HP-Schwellwert; oberhalb davon bleibt der Dodge vollständig deaktiviert. */
+  readonly enabledBelowHpRatio?: number;
   /** Wartezeit nach dem Ende eines Ausweichschritts, bevor der naechste starten darf. */
   readonly cooldownMs: number;
   /** Suchradius fuer bedrohende Projektile. */
@@ -158,6 +160,31 @@ export interface CoopDefenseEnemySpawnThrowConfig {
   readonly color: number;
 }
 
+export interface CoopDefenseVoidHunterBossConfig {
+  readonly phaseTwoHpRatio: number;
+  readonly phaseTwoSpeedMultiplier: number;
+  readonly shotgunRangePx: number;
+  readonly gauss: {
+    readonly weaponId: 'VOID_HUNTER_GAUSS';
+    readonly initialDelayMs: number;
+    readonly cooldownMs: number;
+    readonly chargeDurationMs: number;
+    readonly aimUpdateIntervalMs: number;
+    readonly maxAimTurnDegreesPerSecond: number;
+  };
+  readonly nuke: {
+    readonly countdownMs: number;
+    readonly emergeDelayMs: number;
+    readonly radiusPx: number;
+    readonly maxDamage: number;
+    readonly minDamage: number;
+    readonly fireChunkBurst: FireChunkBurstConfig;
+  };
+  readonly armageddonDurationMs: number;
+  readonly armageddonCooldownMs: number;
+  readonly armageddon: ArmageddonMeteorConfig;
+}
+
 /** Unregelmaessiger Boss-Auswurf von lila Brandbrocken, die ausschliesslich Spieler treffen. */
 export interface CoopDefenseEnemyVoidFireChunkConfig extends FireChunkBurstConfig {
   readonly intervalMinMs: number;
@@ -194,14 +221,18 @@ export interface CoopDefenseEnemyConfig {
   readonly attackStopDurationMs: number;
   readonly obstacleAttackDelayMs: number;
   readonly imageKey: string;
+  /** Rein visuelle Zusatzdrehung des Sprites; Bewegung, Zielen und Netzwerkrotation bleiben unveraendert. */
+  readonly spriteRotationOffsetDegrees?: number;
   readonly isBoss?: boolean;
   readonly displayName?: string;
   readonly color?: number;
   readonly glow?: CoopDefenseEnemyGlowConfig;
+  readonly phaseTwoGlow?: CoopDefenseEnemyGlowConfig;
   readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
   readonly burrow?: CoopDefenseEnemyBurrowConfig;
   readonly dodge?: CoopDefenseEnemyDodgeConfig;
   readonly combatPositioning?: CoopDefenseEnemyCombatPositioningConfig;
+  readonly voidHunterBoss?: CoopDefenseVoidHunterBossConfig;
   readonly spawnThrow?: CoopDefenseEnemySpawnThrowConfig;
   readonly voidFireChunks?: CoopDefenseEnemyVoidFireChunkConfig;
   readonly voidFireTrail?: CoopDefenseEnemyVoidFireTrailConfig;
@@ -286,14 +317,17 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         attackStopDurationMs: config.attackStopDurationMs,
         obstacleAttackDelayMs: config.obstacleAttackDelayMs,
         imageKey: config.imageKey,
+        spriteRotationOffsetDegrees: config.spriteRotationOffsetDegrees,
         isBoss: config.isBoss,
         displayName: config.displayName,
         color: config.color,
         glow: config.glow,
+        phaseTwoGlow: config.phaseTwoGlow,
         translocator: config.translocator,
         burrow: config.burrow,
         dodge: config.dodge,
         combatPositioning: config.combatPositioning,
+        voidHunterBoss: config.voidHunterBoss,
         spawnThrow: config.spawnThrow,
         voidFireChunks: config.voidFireChunks,
         voidFireTrail: config.voidFireTrail,
@@ -370,6 +404,10 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     attackStopDurationMs: Math.max(0, Math.floor(enemy.attackStopDurationMs)),
     obstacleAttackDelayMs: Math.max(0, Math.floor(enemy.obstacleAttackDelayMs)),
     imageKey: enemy.imageKey,
+    spriteRotationOffsetDegrees: typeof enemy.spriteRotationOffsetDegrees === 'number'
+      && Number.isFinite(enemy.spriteRotationOffsetDegrees)
+      ? enemy.spriteRotationOffsetDegrees
+      : undefined,
     isBoss: enemy.isBoss === true,
     displayName: typeof enemy.displayName === 'string' && enemy.displayName.trim().length > 0
       ? enemy.displayName.trim()
@@ -378,10 +416,12 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
     glow: normalizeGlowConfig(enemy.glow),
+    phaseTwoGlow: normalizeGlowConfig(enemy.phaseTwoGlow),
     translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
     burrow: normalizeBurrowConfig(enemy.burrow),
     dodge: normalizeDodgeConfig(enemy.dodge),
     combatPositioning: normalizeCombatPositioningConfig(enemy.combatPositioning),
+    voidHunterBoss: normalizeVoidHunterBossConfig(enemy.voidHunterBoss, enemy.id),
     spawnThrow: normalizeSpawnThrowConfig(enemy.spawnThrow, enemy.id),
     voidFireChunks: normalizeVoidFireChunkConfig(enemy.voidFireChunks),
     voidFireTrail: normalizeVoidFireTrailConfig(enemy.voidFireTrail),
@@ -462,6 +502,9 @@ function normalizeDodgeConfig(
 ): CoopDefenseEnemyDodgeConfig | undefined {
   if (!config) return undefined;
   return {
+    enabledBelowHpRatio: config.enabledBelowHpRatio === undefined
+      ? undefined
+      : Math.max(0, Math.min(1, config.enabledBelowHpRatio)),
     cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
     evadeScanRadiusPx: Math.max(0, config.evadeScanRadiusPx),
     evadeLeadTimeMs: Math.max(0, Math.floor(config.evadeLeadTimeMs)),
@@ -529,6 +572,59 @@ function normalizeVoidFireChunkConfig(
     damageTarget: 'players',
     intervalMinMs,
     intervalMaxMs: Math.max(intervalMinMs, Math.floor(config.intervalMaxMs)),
+  };
+}
+
+function normalizeVoidHunterBossConfig(
+  config: CoopDefenseVoidHunterBossConfig | undefined,
+  enemyId: string,
+): CoopDefenseVoidHunterBossConfig | undefined {
+  if (!config) return undefined;
+  if (config.gauss.weaponId !== 'VOID_HUNTER_GAUSS') {
+    throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} must use VOID_HUNTER_GAUSS`);
+  }
+  return {
+    phaseTwoHpRatio: Math.max(0, Math.min(1, config.phaseTwoHpRatio)),
+    phaseTwoSpeedMultiplier: Math.max(1, config.phaseTwoSpeedMultiplier),
+    shotgunRangePx: Math.max(0, config.shotgunRangePx),
+    gauss: {
+      weaponId: 'VOID_HUNTER_GAUSS',
+      initialDelayMs: Math.max(0, Math.floor(config.gauss.initialDelayMs)),
+      cooldownMs: Math.max(1, Math.floor(config.gauss.cooldownMs)),
+      chargeDurationMs: Math.max(1, Math.floor(config.gauss.chargeDurationMs)),
+      aimUpdateIntervalMs: Math.max(1, Math.floor(config.gauss.aimUpdateIntervalMs)),
+      maxAimTurnDegreesPerSecond: Math.max(1, config.gauss.maxAimTurnDegreesPerSecond),
+    },
+    nuke: {
+      countdownMs: Math.max(1, Math.floor(config.nuke.countdownMs)),
+      emergeDelayMs: Math.max(0, Math.floor(config.nuke.emergeDelayMs)),
+      radiusPx: Math.max(1, config.nuke.radiusPx),
+      maxDamage: Math.max(0, config.nuke.maxDamage),
+      minDamage: Math.max(0, Math.min(config.nuke.maxDamage, config.nuke.minDamage)),
+      fireChunkBurst: {
+        ...config.nuke.fireChunkBurst,
+        count: Math.max(0, Math.floor(config.nuke.fireChunkBurst.count)),
+        visualStyle: 'void',
+        damageTarget: 'players',
+      },
+    },
+    armageddonDurationMs: Math.max(1, Math.floor(config.armageddonDurationMs)),
+    armageddonCooldownMs: Math.max(1, Math.floor(config.armageddonCooldownMs)),
+    armageddon: {
+      ...config.armageddon,
+      variant: 'void',
+      meteorSpawnRadius: Math.max(0, config.armageddon.meteorSpawnRadius),
+      meteorDamageRadius: Math.max(1, config.armageddon.meteorDamageRadius),
+      meteorDamage: Math.max(0, config.armageddon.meteorDamage),
+      meteorFallDuration: Math.max(1, Math.floor(config.armageddon.meteorFallDuration)),
+      meteorsPerSecond: Math.max(0.1, config.armageddon.meteorsPerSecond),
+      fireChunkBurst: {
+        ...config.armageddon.fireChunkBurst,
+        count: Math.max(0, Math.floor(config.armageddon.fireChunkBurst.count)),
+        visualStyle: 'void',
+        damageTarget: 'players',
+      },
+    },
   };
 }
 
