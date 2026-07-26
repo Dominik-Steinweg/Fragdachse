@@ -9,7 +9,28 @@ export interface HomingTargetCandidate {
   y: number;
 }
 
-export type HomingTargetProvider = (config: ProjectileHomingConfig, ownerId: string) => HomingTargetCandidate[];
+/**
+ * Nimmt einen Zielkandidaten entgegen. Der Controller schreibt in einen eigenen Pool –
+ * der Provider darf sich das übergebene Objekt deshalb **nicht** merken.
+ */
+export type HomingTargetSink = (id: string, type: HomingTargetType, x: number, y: number) => void;
+
+/**
+ * Meldet alle Zielkandidaten für ein Projektil.
+ *
+ * `originX`/`originY`/`searchRadius` beschreiben den Suchkreis: Kandidaten außerhalb darf
+ * der Provider weglassen. Der Controller prüft den Radius selbst noch einmal, ein Provider
+ * ohne Vorauswahl bleibt also korrekt – nur teurer.
+ */
+export type HomingTargetProvider = (
+  config: ProjectileHomingConfig,
+  ownerId: string,
+  originX: number,
+  originY: number,
+  searchRadius: number,
+  emit: HomingTargetSink,
+) => void;
+
 export type HomingLineOfSightChecker = (sx: number, sy: number, ex: number, ey: number) => boolean;
 
 const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
@@ -22,6 +43,26 @@ const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 export class ProjectileHomingController {
   private targetProvider: HomingTargetProvider | null = null;
   private lineOfSightChecker: HomingLineOfSightChecker | null = null;
+
+  // Kandidaten-Pool: bei vielen zielsuchenden Projektilen läuft die Zielsuche mehrfach
+  // pro Frame, ein frisches Array mit einem Objekt je Gegner wäre reiner GC-Druck.
+  private readonly candidatePool: HomingTargetCandidate[] = [];
+  private candidateCount = 0;
+  /** Kandidaten, deren Sichtlinie in dieser Suche bereits durchgefallen ist. */
+  private rejected = new Uint8Array(0);
+
+  private readonly emitCandidate: HomingTargetSink = (id, type, x, y) => {
+    const slot = this.candidatePool[this.candidateCount];
+    if (slot) {
+      slot.id = id;
+      slot.type = type;
+      slot.x = x;
+      slot.y = y;
+    } else {
+      this.candidatePool[this.candidateCount] = { id, type, x, y };
+    }
+    this.candidateCount += 1;
+  };
 
   setTargetProvider(provider: HomingTargetProvider | null): void {
     this.targetProvider = provider;
@@ -69,61 +110,102 @@ export class ProjectileHomingController {
     return true;
   }
 
+  /**
+   * Wählt das Ziel mit der besten Bewertung, das eine freie Sichtlinie hat.
+   *
+   * Die Sichtlinienprüfung ist der mit Abstand teuerste Teil des Host-Frames, deshalb wird
+   * sie so selten wie möglich ausgeführt: zuerst nur für das bereits gelockte Ziel, und
+   * danach entlang der Bewertungsreihenfolge, bis das erste Ziel besteht. Das Ergebnis ist
+   * dasselbe wie "alle Kandidaten filtern, dann den besten nehmen" – nur ohne die Prüfungen
+   * für Kandidaten, die ohnehin nicht gewinnen.
+   */
   private selectTarget(proj: TrackedProjectile, homing: ProjectileHomingConfig): HomingTargetCandidate | null {
     if (!this.targetProvider) return null;
 
     const targetTypes = homing.targetTypes ?? DEFAULT_HOMING_TARGET_TYPES;
-    const requireLineOfSight = homing.requireLineOfSight === true;
+    const requireLineOfSight = homing.requireLineOfSight === true && this.lineOfSightChecker !== null;
     const excludeOwner = homing.excludeOwner !== false;
     const searchRadius = Math.max(1, homing.searchRadius);
+    const searchRadiusSq = searchRadius * searchRadius;
     const distanceWeight = Math.max(0, homing.distanceWeight ?? 1);
     const forwardWeight = Math.max(0, homing.forwardWeight ?? 1);
+    const originX = proj.sprite.x;
+    const originY = proj.sprite.y;
     const velocity = proj.body.velocity;
     const speed = velocity.length();
     const dirX = speed > 0.001 ? velocity.x / speed : 0;
     const dirY = speed > 0.001 ? velocity.y / speed : 0;
 
-    const candidates = this.targetProvider(homing, proj.ownerId).filter(candidate => {
-      if (!targetTypes.includes(candidate.type)) return false;
-      if (excludeOwner && candidate.id === proj.ownerId) return false;
-      if (proj.multiExplosionExcludedTargetKeys?.has(`${candidate.type}:${candidate.id}`)) return false;
+    this.candidateCount = 0;
+    this.targetProvider(homing, proj.ownerId, originX, originY, searchRadius, this.emitCandidate);
+    const count = this.candidateCount;
+    if (count === 0) return null;
 
-      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
-      if (distance > searchRadius) return false;
-      if (requireLineOfSight && this.lineOfSightChecker) {
-        return this.lineOfSightChecker(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
-      }
-      return true;
-    });
+    if (this.rejected.length < count) this.rejected = new Uint8Array(count);
+    // Kandidaten, die schon an einer der billigen Prüfungen scheitern, gelten sofort als
+    // erledigt – der Auswahlschleife bleibt dann nur noch die Bewertung.
+    let eligible = 0;
+    for (let i = 0; i < count; i += 1) {
+      const candidate = this.candidatePool[i];
+      const dx = candidate.x - originX;
+      const dy = candidate.y - originY;
+      const ineligible = !targetTypes.includes(candidate.type)
+        || (excludeOwner && candidate.id === proj.ownerId)
+        || dx * dx + dy * dy > searchRadiusSq
+        || proj.multiExplosionExcludedTargetKeys?.has(`${candidate.type}:${candidate.id}`) === true;
+      this.rejected[i] = ineligible ? 1 : 0;
+      if (!ineligible) eligible += 1;
+    }
+    if (eligible === 0) return null;
 
-    if (candidates.length === 0) return null;
-
+    // Gelocktes Ziel zuerst: bleibt es gültig, kostet die Suche genau eine Sichtlinie.
     if (proj.lockedTargetId) {
-      const locked = candidates.find(candidate => candidate.id === proj.lockedTargetId && candidate.type === proj.lockedTargetType);
-      if (locked) return locked;
-    }
-
-    let bestTarget: HomingTargetCandidate | null = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    for (const candidate of candidates) {
-      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, candidate.x, candidate.y);
-      const distanceScore = 1 - Phaser.Math.Clamp(distance / searchRadius, 0, 1);
-      let forwardScore = 0.5;
-
-      if (speed > 0.001) {
-        const toTargetX = (candidate.x - proj.sprite.x) / distance;
-        const toTargetY = (candidate.y - proj.sprite.y) / distance;
-        forwardScore = Phaser.Math.Clamp((dirX * toTargetX + dirY * toTargetY + 1) * 0.5, 0, 1);
-      }
-
-      const score = distanceScore * distanceWeight + forwardScore * forwardWeight;
-      if (score > bestScore) {
-        bestScore = score;
-        bestTarget = candidate;
+      for (let i = 0; i < count; i += 1) {
+        if (this.rejected[i]) continue;
+        const candidate = this.candidatePool[i];
+        if (candidate.id !== proj.lockedTargetId || candidate.type !== proj.lockedTargetType) continue;
+        if (!requireLineOfSight || this.lineOfSightChecker!(originX, originY, candidate.x, candidate.y)) {
+          return candidate;
+        }
+        this.rejected[i] = 1;
+        eligible -= 1;
+        break;
       }
     }
 
-    return bestTarget;
+    // Immer den bestbewerteten verbleibenden Kandidaten prüfen; fällt er an der Sichtlinie
+    // durch, rückt der nächstbeste nach.
+    while (eligible > 0) {
+      let bestIndex = -1;
+      let bestScore = Number.NEGATIVE_INFINITY;
+
+      for (let i = 0; i < count; i += 1) {
+        if (this.rejected[i]) continue;
+        const candidate = this.candidatePool[i];
+        const dx = candidate.x - originX;
+        const dy = candidate.y - originY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distanceScore = 1 - Phaser.Math.Clamp(distance / searchRadius, 0, 1);
+        let forwardScore = 0.5;
+
+        if (speed > 0.001 && distance > 0) {
+          forwardScore = Phaser.Math.Clamp((dirX * (dx / distance) + dirY * (dy / distance) + 1) * 0.5, 0, 1);
+        }
+
+        const score = distanceScore * distanceWeight + forwardScore * forwardWeight;
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = i;
+        }
+      }
+
+      if (bestIndex < 0) return null;
+      const best = this.candidatePool[bestIndex];
+      if (!requireLineOfSight || this.lineOfSightChecker!(originX, originY, best.x, best.y)) return best;
+      this.rejected[bestIndex] = 1;
+      eligible -= 1;
+    }
+
+    return null;
   }
 }

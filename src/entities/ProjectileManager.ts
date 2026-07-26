@@ -4,7 +4,8 @@ import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle } from '../types';
 import { ProjectileHomingController } from './ProjectileHomingController';
-import type { HomingTargetCandidate } from './ProjectileHomingController';
+import type { HomingTargetProvider } from './ProjectileHomingController';
+import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { type GeometryHit, findNearestRectangleHit as geomNearestRectangleHit } from '../utils/geometry';
 import type { BulletRenderer }  from '../effects/BulletRenderer';
@@ -139,6 +140,11 @@ export class ProjectileManager {
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private rockObjects: (Phaser.GameObjects.Image | null)[] | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
+  /** Geteilte räumliche Vorauswahl aus dem `CombatSystem` (siehe `setObstacleIndex`). */
+  private obstacleIndex: ArenaObstacleIndex | null = null;
+  /** Ziel der Kandidaten-Bounds bzw. des bislang besten Treffers (keine Allokation pro Fels). */
+  private readonly scratchObstacleRect = new Phaser.Geom.Rectangle();
+  private readonly bestRockRect        = new Phaser.Geom.Rectangle();
   /**
    * Coop-Defense-Basis-Gruppe. Wird vom ProjectileManager wie trunkGroup
    * behandelt: physische Kollision/Impact, kein Schaden. Basen können erst
@@ -169,6 +175,14 @@ export class ProjectileManager {
     this.rockGroup   = group;
     this.rockObjects = objects;
     this.trunkGroup  = trunkGroup;
+  }
+
+  /**
+   * Übernimmt den Hindernis-Index des `CombatSystem` für die kontinuierliche
+   * Fels-Kollision. Ohne Index fällt die Prüfung auf den vollständigen Scan zurück.
+   */
+  setObstacleIndex(index: ArenaObstacleIndex | null): void {
+    this.obstacleIndex = index;
   }
 
   /**
@@ -333,7 +347,7 @@ export class ProjectileManager {
   }
 
   /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
-  setHomingTargetProvider(cb: ((config: ProjectileHomingConfig, ownerId: string) => HomingTargetCandidate[]) | null): void {
+  setHomingTargetProvider(cb: HomingTargetProvider | null): void {
     this.homingController.setTargetProvider(cb);
   }
 
@@ -1316,24 +1330,49 @@ export class ProjectileManager {
     const segmentLength = Phaser.Geom.Line.Length(line);
     if (segmentLength <= 0.5) return;
 
-    let bestRockIndex = -1;
-    let bestRect: Phaser.Geom.Rectangle | null = null;
-    let bestHit: { distance: number; x: number; y: number } | null = null;
+    // Als Objekt statt als lokale Variablen: der Besucher unten ist eine Closure, und
+    // TypeScript verfolgt Zuweisungen aus einer Closure heraus nicht für die Narrowing-
+    // Analyse – über Objektfelder bleiben die Typen nach der Abfrage erhalten.
+    const best: {
+      rockIndex: number;
+      hit: GeometryHit | null;
+    } = { rockIndex: -1, hit: null };
 
-    for (let i = 0; i < this.rockObjects.length; i++) {
-      const rock = this.rockObjects[i];
-      if (!rock?.active) continue;
-      const rect = rock.getBounds();
+    const scanRock = (rockIndex: number, left: number, top: number, right: number, bottom: number): void => {
+      const rect = this.scratchObstacleRect.setTo(left, top, right - left, bottom - top);
       const hit = this.findNearestRectangleHit(line, rect);
-      if (!hit) continue;
-      if (!bestHit || hit.distance < bestHit.distance) {
-        bestHit = hit;
-        bestRockIndex = i;
-        bestRect = rect;
+      if (!hit) return;
+      if (!best.hit || hit.distance < best.hit.distance) {
+        best.hit = hit;
+        best.rockIndex = rockIndex;
+        // Das Scratch-Rechteck wird beim nächsten Kandidaten überschrieben, der
+        // Aufprallwinkel braucht die Kanten aber noch – deshalb eine eigene Kopie.
+        this.bestRockRect.setTo(left, top, right - left, bottom - top);
+      }
+    };
+
+    if (this.obstacleIndex) {
+      this.obstacleIndex.querySegment(
+        line.x1, line.y1, line.x2, line.y2,
+        (kind, rockIndex, left, top, right, bottom) => {
+          if (kind === OBSTACLE_ROCK) scanRock(rockIndex, left, top, right, bottom);
+          return false;
+        },
+        () => false,
+      );
+    } else {
+      for (let i = 0; i < this.rockObjects.length; i++) {
+        const rock = this.rockObjects[i];
+        if (!rock?.active) continue;
+        const bounds = rock.getBounds();
+        scanRock(i, bounds.left, bounds.top, bounds.right, bounds.bottom);
       }
     }
 
-    if (!bestHit || !bestRect || bestRockIndex < 0) return;
+    const bestHit = best.hit;
+    const bestRockIndex = best.rockIndex;
+    if (!bestHit || bestRockIndex < 0) return;
+    const bestRect = this.bestRockRect;
 
     let nextVx = proj.body.velocity.x;
     let nextVy = proj.body.velocity.y;

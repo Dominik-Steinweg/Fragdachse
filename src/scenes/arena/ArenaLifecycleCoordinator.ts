@@ -587,6 +587,8 @@ export class ArenaLifecycleCoordinator {
     );
     this.ctx.combatSystem.setArenaObstacles(this.ctx.arenaResult.rockObjects, this.ctx.arenaResult.trunkObjects);
     this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+    // Dieselbe Index-Instanz, damit Sichtlinie und Projektil-Kollision denselben Stand sehen.
+    this.ctx.projectileManager.setObstacleIndex(this.ctx.combatSystem.getObstacleIndex());
     // Brandraster-Hindernisse werden einmalig in 16-px-Zellen projiziert und bei
     // platzierten/zerstoerten Felsen periodisch aktualisiert. Damit ist sowohl die
     // Zellpruefung als auch der Sichtstrahl unabhaengig von der Felsanzahl.
@@ -1529,6 +1531,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.setCooldownStarter(null);
     this.ctx.decoySystem.setObstacleGroups(null, null);
     this.ctx.projectileManager.setRockGroup(null, null, null);
+    this.ctx.projectileManager.setObstacleIndex(null);
     this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
     this.ctx.projectileManager.setProjectileImpactCallback(null);

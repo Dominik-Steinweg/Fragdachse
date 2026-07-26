@@ -15,6 +15,11 @@ import {
   findNearestCircleHit as geomNearestCircleHit,
 } from '../utils/geometry';
 import {
+  ArenaObstacleIndex,
+  OBSTACLE_ROCK,
+  type ObstacleCircleVisitor,
+} from './ArenaObstacleIndex';
+import {
   ARENA_HEIGHT,
   ARMOR_MAX,
   BURN_TICK_INTERVAL_MS,
@@ -35,6 +40,9 @@ import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/
 import { getRageGeneratingDamage } from '../utils/rageDamage';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
+
+/** Für Abfragen, die nur Rechteck-Hindernisse auswerten (Baumstämme nehmen keinen Schaden). */
+const IGNORE_CIRCLE_OBSTACLES: ObstacleCircleVisitor = () => false;
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
@@ -166,10 +174,23 @@ export class CombatSystem {
   private readonly hitscanLine       = new Phaser.Geom.Line();
   private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
+  private readonly losLine           = new Phaser.Geom.Line();  // Scratch-Linie für `hasLineOfSight`
   private readonly arenaBounds       = new Phaser.Geom.Rectangle(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
   private readonly scratchCircle     = new Phaser.Geom.Circle();
   private readonly scratchPoints:    Phaser.Math.Vector2[] = [];
   private readonly scratchTrainRect  = new Phaser.Geom.Rectangle();
+  /** Ziel der aus dem Index gelieferten Hindernis-Bounds, damit kein Rechteck pro Kandidat entsteht. */
+  private readonly scratchObstacleRect = new Phaser.Geom.Rectangle();
+  /**
+   * Räumliche Vorauswahl für alle segmentbasierten Hindernisprüfungen (Sichtlinie,
+   * Hitscan, Melee, Projektilpfad). Liest dieselben Arrays, die `setArenaObstacles` und
+   * `setBaseObstacles` setzen – es gibt keinen zweiten Bestand.
+   */
+  private readonly obstacleIndex = new ArenaObstacleIndex({
+    rocks:  () => this.rockObjects,
+    trunks: () => this.trunkObjects,
+    bases:  () => this.baseObstacles,
+  });
   private meleeSwingIdCounter = 0;
   private effectSeedCounter = 1;
 
@@ -255,6 +276,25 @@ export class CombatSystem {
   ): void {
     this.rockObjects = rockObjects;
     this.trunkObjects = trunkObjects;
+    this.obstacleIndex.markDirty();
+  }
+
+  /**
+   * Nach jeder Änderung der Hindernis-*Geometrie* aufrufen – also wenn ein Fels gesetzt
+   * oder entfernt wurde. Der `active`-Zustand allein braucht das nicht: den liest der
+   * Index bei jeder Abfrage direkt am Objekt.
+   */
+  invalidateObstacleIndex(): void {
+    this.obstacleIndex.markDirty();
+  }
+
+  /**
+   * Gibt den Hindernis-Index zur Mitbenutzung frei. Bewusst dieselbe Instanz statt eines
+   * zweiten Index: sie hängt an denselben Arrays und an derselben Invalidierung, damit
+   * Sichtlinie und Projektil-Kollision nie auseinanderlaufen können.
+   */
+  getObstacleIndex(): ArenaObstacleIndex {
+    return this.obstacleIndex;
   }
 
   /**
@@ -265,6 +305,7 @@ export class CombatSystem {
     baseObstacles: readonly Phaser.GameObjects.Rectangle[] | null,
   ): void {
     this.baseObstacles = baseObstacles;
+    this.obstacleIndex.markDirty();
   }
 
   setTrainSegments(segments: readonly Phaser.GameObjects.Rectangle[] | null): void {
@@ -1447,35 +1488,24 @@ export class CombatSystem {
   ): number | null {
     let bestDistance: number | null = null;
 
-    if (!ignoreRocks && this.rockObjects) {
-      for (const rock of this.rockObjects) {
-        if (!rock?.active) continue;
-        const hit = this.findNearestRectangleHit(line, rock.getBounds());
+    this.obstacleIndex.querySegment(
+      line.x1, line.y1, line.x2, line.y2,
+      (kind, _rockIndex, left, top, right, bottom) => {
+        if (ignoreRocks && kind === OBSTACLE_ROCK) return false;
+        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
         if (hit && (bestDistance === null || hit.distance < bestDistance)) {
           bestDistance = hit.distance;
         }
-      }
-    }
-
-    if (this.trunkObjects) {
-      for (const trunk of this.trunkObjects) {
-        if (!trunk.active) continue;
-        const hit = this.findNearestCircleHit(line, trunk.x, trunk.y, trunk.radius);
+        return false;
+      },
+      (centerX, centerY, radius) => {
+        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
         if (hit && (bestDistance === null || hit.distance < bestDistance)) {
           bestDistance = hit.distance;
         }
-      }
-    }
-
-    if (this.baseObstacles) {
-      for (const base of this.baseObstacles) {
-        if (!base.active) continue;
-        const hit = this.findNearestRectangleHit(line, base.getBounds());
-        if (hit && (bestDistance === null || hit.distance < bestDistance)) {
-          bestDistance = hit.distance;
-        }
-      }
-    }
+        return false;
+      },
+    );
 
     const trainBounds = this.computeTrainBounds();
     if (trainBounds) {
@@ -1814,15 +1844,19 @@ export class CombatSystem {
     if (rockMult !== 0 && this.rockObjects && this.onRockDamage) {
       let bestRockIdx = -1;
       let bestRockDist = Infinity;
-      for (let i = 0; i < this.rockObjects.length; i++) {
-        const rock = this.rockObjects[i];
-        if (!rock?.active) continue;
-        const hit = this.findNearestRectangleHit(hitLine, rock.getBounds());
-        if (hit && Math.abs(hit.distance - endDist) < EPSILON && hit.distance < bestRockDist) {
-          bestRockDist = hit.distance;
-          bestRockIdx = i;
-        }
-      }
+      this.obstacleIndex.querySegment(
+        startX, startY, endX, endY,
+        (kind, rockIndex, left, top, right, bottom) => {
+          if (kind !== OBSTACLE_ROCK) return false;
+          const hit = this.findNearestRectangleHit(hitLine, this.obstacleRect(left, top, right, bottom));
+          if (hit && Math.abs(hit.distance - endDist) < EPSILON && hit.distance < bestRockDist) {
+            bestRockDist = hit.distance;
+            bestRockIdx = rockIndex;
+          }
+          return false;
+        },
+        IGNORE_CIRCLE_OBSTACLES,
+      );
       if (bestRockIdx >= 0) {
         this.onRockDamage(bestRockIdx, damage * rockMult, shooterId);
         return; // Fels blockiert – kein Zug dahinter
@@ -2295,36 +2329,28 @@ export class CombatSystem {
     endX: number, endY: number,
     skipRockIndex?: number,
   ): boolean {
-    const line = new Phaser.Geom.Line(startX, startY, endX, endY);
-    const targetDist = Phaser.Geom.Line.Length(line);
+    const line = this.losLine.setTo(startX, startY, endX, endY);
+    const blockDist = Phaser.Geom.Line.Length(line) - 2;
 
-    if (this.rockObjects) {
-      for (let i = 0; i < this.rockObjects.length; i++) {
-        if (i === skipRockIndex) continue;
-        const rock = this.rockObjects[i];
-        if (!rock?.active) continue;
-        const hit = this.findNearestRectangleHit(line, rock.getBounds());
-        if (hit && hit.distance < targetDist - 2) return false;
-      }
-    }
+    // Heißester Pfad des Host-Frames (zielsuchende Projektile prüfen pro Kandidat eine
+    // Sichtlinie), deshalb über den Hindernis-Index statt über alle Felsen der Karte.
+    let blocked = false;
+    this.obstacleIndex.querySegment(
+      startX, startY, endX, endY,
+      (kind, rockIndex, left, top, right, bottom) => {
+        if (kind === OBSTACLE_ROCK && rockIndex === skipRockIndex) return false;
+        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
+        if (hit && hit.distance < blockDist) { blocked = true; return true; }
+        return false;
+      },
+      (centerX, centerY, radius) => {
+        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
+        if (hit && hit.distance < blockDist) { blocked = true; return true; }
+        return false;
+      },
+    );
 
-    if (this.trunkObjects) {
-      for (const trunk of this.trunkObjects) {
-        if (!trunk.active) continue;
-        const hit = this.findNearestCircleHit(line, trunk.x, trunk.y, trunk.radius);
-        if (hit && hit.distance < targetDist - 2) return false;
-      }
-    }
-
-    if (this.baseObstacles) {
-      for (const base of this.baseObstacles) {
-        if (!base.active) continue;
-        const hit = this.findNearestRectangleHit(line, base.getBounds());
-        if (hit && hit.distance < targetDist - 2) return false;
-      }
-    }
-
-    return true;
+    return !blocked;
   }
 
   // ── Privat: Treffer, Tod, Respawn ──────────────────────────────────────────
@@ -2350,28 +2376,22 @@ export class CombatSystem {
    * da Ziele immer innerhalb der Arena stehen).
    */
   private isMeleePathBlocked(maxDist: number): boolean {
-    if (this.rockObjects) {
-      for (const rock of this.rockObjects) {
-        if (!rock?.active) continue;
-        const hit = this.findNearestRectangleHit(this.meleeLine, rock.getBounds());
-        if (hit && hit.distance < maxDist) return true;
-      }
-    }
-    if (this.trunkObjects) {
-      for (const trunk of this.trunkObjects) {
-        if (!trunk.active) continue;
-        const hit = this.findNearestCircleHit(this.meleeLine, trunk.x, trunk.y, trunk.radius);
-        if (hit && hit.distance < maxDist) return true;
-      }
-    }
-    if (this.baseObstacles) {
-      for (const base of this.baseObstacles) {
-        if (!base.active) continue;
-        const hit = this.findNearestRectangleHit(this.meleeLine, base.getBounds());
-        if (hit && hit.distance < maxDist) return true;
-      }
-    }
-    return false;
+    const line = this.meleeLine;
+    let blocked = false;
+    this.obstacleIndex.querySegment(
+      line.x1, line.y1, line.x2, line.y2,
+      (_kind, _rockIndex, left, top, right, bottom) => {
+        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
+        if (hit && hit.distance < maxDist) { blocked = true; return true; }
+        return false;
+      },
+      (centerX, centerY, radius) => {
+        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
+        if (hit && hit.distance < maxDist) { blocked = true; return true; }
+        return false;
+      },
+    );
+    return blocked;
   }
 
   private isMeleeTargetCandidate(playerId: string, shooterId: string): boolean {
@@ -2417,29 +2437,19 @@ export class CombatSystem {
   ): { distance: number; x: number; y: number } | null {
     let bestHit = this.findNearestRectangleHit(line, this.arenaBounds);
 
-    if (this.rockObjects) {
-      for (const rock of this.rockObjects) {
-        if (!rock?.active) continue;
-        const hit = this.findNearestRectangleHit(line, rock.getBounds());
+    this.obstacleIndex.querySegment(
+      line.x1, line.y1, line.x2, line.y2,
+      (_kind, _rockIndex, left, top, right, bottom) => {
+        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
         if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
-      }
-    }
-
-    if (this.trunkObjects) {
-      for (const trunk of this.trunkObjects) {
-        if (!trunk.active) continue;
-        const hit = this.findNearestCircleHit(line, trunk.x, trunk.y, trunk.radius);
+        return false;
+      },
+      (centerX, centerY, radius) => {
+        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
         if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
-      }
-    }
-
-    if (this.baseObstacles) {
-      for (const base of this.baseObstacles) {
-        if (!base.active) continue;
-        const hit = this.findNearestRectangleHit(line, base.getBounds());
-        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
-      }
-    }
+        return false;
+      },
+    );
 
     const trainBounds = this.computeTrainBounds();
     if (trainBounds) {
@@ -2510,6 +2520,11 @@ export class CombatSystem {
     rect: Phaser.Geom.Rectangle,
   ): GeometryHit | null {
     return geomNearestRectangleHit(line, rect, this.scratchPoints);
+  }
+
+  /** Übernimmt die vom Hindernis-Index gelieferten Kanten in das Scratch-Rechteck. */
+  private obstacleRect(left: number, top: number, right: number, bottom: number): Phaser.Geom.Rectangle {
+    return this.scratchObstacleRect.setTo(left, top, right - left, bottom - top);
   }
 
   private findNearestCircleHit(

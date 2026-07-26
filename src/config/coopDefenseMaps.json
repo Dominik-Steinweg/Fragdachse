@@ -108,7 +108,7 @@
       "timeOfDay": "06:00",
       "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
       "rockFillRatio": 0.3,
-      "roundDurationSec": 60,
+      "roundDurationSec": 360,
       "bases": [
         {
           "id": "coop-base-rear",

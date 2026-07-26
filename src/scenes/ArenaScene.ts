@@ -590,24 +590,34 @@ export class ArenaScene extends Phaser.Scene {
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
 
     // Homing providers (closed over ctx, read at call-time → safe after teardown)
-    projectileManager.setHomingTargetProvider((_config, ownerId) => {
-      if (!bridge.isHost()) return [];
-      const targets = [];
+    // Der Suchradius wird hier bereits ausgewertet: bei vielen Splitter-Projektilen läuft
+    // dieser Provider mehrfach pro Frame, und die Gegner außerhalb des Radius sind der
+    // Großteil der Liste. Die Kandidaten gehen per `emit` in den Pool des Controllers,
+    // es entsteht also kein Array und kein Objekt pro Aufruf.
+    projectileManager.setHomingTargetProvider((_config, ownerId, originX, originY, searchRadius, emit) => {
+      if (!bridge.isHost()) return;
+      const radiusSq = searchRadius * searchRadius;
+      const inRange = (x: number, y: number): boolean => {
+        const dx = x - originX;
+        const dy = y - originY;
+        return dx * dx + dy * dy <= radiusSq;
+      };
       for (const player of playerManager.getAllPlayers()) {
         if (player.id === ownerId) continue;
         if (!player.sprite.active) continue;
+        if (!inRange(player.sprite.x, player.sprite.y)) continue;
         if (!combatSystem.isAlive(player.id)) continue;
         if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
         if (!combatSystem.canDamageTarget(ownerId, player.id)) continue;
-        targets.push({ id: player.id, type: 'players' as const, x: player.sprite.x, y: player.sprite.y });
+        emit(player.id, 'players', player.sprite.x, player.sprite.y);
       }
       for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
         if (!enemy.sprite.active) continue;
+        if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
         if (!combatSystem.isAlive(enemy.id)) continue;
         if (!combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
-        targets.push({ id: enemy.id, type: 'enemies' as const, x: enemy.sprite.x, y: enemy.sprite.y });
+        emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
       }
-      return targets;
     });
     projectileManager.setHomingLineOfSightChecker((sx, sy, ex, ey) => {
       return combatSystem.hasLineOfSight(sx, sy, ex, ey);

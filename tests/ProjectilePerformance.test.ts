@@ -4,6 +4,16 @@ vi.mock('phaser', () => ({
   BlendModes: {
     ADD: 1,
   },
+  // Der ProjectileManager legt Scratch-Geometrie schon im Feld-Initialisierer an.
+  Geom: {
+    Rectangle: class {
+      x = 0; y = 0; width = 0; height = 0;
+      setTo(x: number, y: number, width: number, height: number) {
+        this.x = x; this.y = y; this.width = width; this.height = height;
+        return this;
+      }
+    },
+  },
   Math: {
     Easing: {
       Quadratic: {

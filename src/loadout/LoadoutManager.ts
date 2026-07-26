@@ -1847,7 +1847,9 @@ export class LoadoutManager {
       splitHoming:     (config.splitHomingEnabled ?? 0) > 0 ? {
         acquireDelayMs: 0,
         searchRadius: 500,
-        retargetIntervalMs: 50,
+        // Wie die Basis-Waffen: Splitter treten in großer Zahl auf, und jede Zielsuche
+        // kostet eine Sichtlinienprüfung je geprüftem Kandidaten.
+        retargetIntervalMs: 100,
         maxTurnDegreesPerStep: 20,
         targetTypes: ['players', 'enemies'],
         requireLineOfSight: true,

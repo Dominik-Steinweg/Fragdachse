@@ -422,6 +422,10 @@ export class RockVisualHelper {
    * wuerde den Schatten sichtbar laenger stehen lassen als den zerstoerten Fels.
    */
   private markObstaclesDirty(): void {
+    // Der Kollisions-Index darf nicht auf den Frame-Sammelpunkt warten: ein neu gesetzter
+    // Fels muss noch im selben Frame blockieren, sonst schoessen Projektile hindurch.
+    // Der Aufruf ist nur ein Dirty-Flag, der Neubau passiert erst bei der naechsten Abfrage.
+    this.ctx.combatSystem.invalidateObstacleIndex();
     if (this.obstaclesDirty) return;
     this.obstaclesDirty = true;
     this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {

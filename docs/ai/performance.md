@@ -77,6 +77,58 @@ projektilspezifische Arcade-Collider, World-Bounds-Listener und umfangreicher op
 Gameplay-State würden einen vollständigen und fehleranfälligen Reset erfordern, während
 ihre Spawn-Allokation nicht im gemessenen per-Frame-Hotpath liegt.
 
+## Hindernis-Scans laufen über den räumlichen Index, nie über `getBounds()`
+
+Alle segmentbasierten Hindernisprüfungen – Sichtlinie, Hitscan, Melee, Projektilpfad,
+kontinuierliche Fels-Kollision – gehen über `ArenaObstacleIndex.querySegment()`. Der Index
+cacht die Bounds von Felsen, Basen und Baumstämmen als flache Typed Arrays und siebt
+Kandidaten über ein 128-px-Bucket-Raster vor; der exakte Schnitttest bleibt beim Aufrufer.
+
+Zwei Gründe, beide gemessen:
+
+- `Phaser.GameObjects.getBounds()` allokiert ein `Rectangle` und rechnet vier Eckpunkte über
+  die Transform-Komponente neu aus. In einer Schleife über alle Felsen einer Karte ist das
+  der teuerste Einzelposten des Host-Frames – bei zielsuchenden Projektilen, die pro
+  Kandidat eine Sichtlinie prüfen, dominierte es das gesamte Frame-Budget. Hindernisse
+  bewegen sich nie; ihre Geometrie gehört gecacht.
+- Ohne Vorauswahl skaliert jede Prüfung mit der vollen Felszahl der Karte. Die Kosten sind
+  `Projektile × Kandidaten × Hindernisse` und damit genau in den Größen kubisch, die
+  Splitter- und Homing-Upgrades gleichzeitig hochtreiben.
+
+Verträge des Index:
+
+- Es gibt **eine** Instanz je Runde. `CombatSystem` besitzt sie, `ProjectileManager` bekommt
+  sie über `setObstacleIndex(combatSystem.getObstacleIndex())`. Kein zweiter Index – sonst
+  können Sichtlinie und Kollision auseinanderlaufen.
+- Der `active`-Zustand wird bei **jeder** Abfrage live am Objekt gelesen, nicht gecacht. Ein
+  zerstörter Fels blockiert deshalb sofort nicht mehr, ohne Invalidierung.
+- Invalidiert wird nur bei geänderter *Geometrie* (Fels gesetzt oder entfernt), über
+  `RockVisualHelper.markObstaclesDirty()`. Dieser Trichter ruft
+  `CombatSystem.invalidateObstacleIndex()` **synchron**, vor dem auf `POST_UPDATE`
+  gesammelten Visual-Rebuild: ein neu gesetzter Fels muss im selben Frame blockieren.
+- Das Bucket-Raster spannt die Arena **und** jedes vorhandene Hindernis auf. Nur `ARENA_WIDTH`
+  zu nehmen wäre eine stille Falle – der Wert ist zur Laufzeit veränderlich, und ein
+  Hindernis außerhalb des Rasters würde beim Einsortieren weggeklemmt und verschwände
+  lautlos aus jeder Kollisionsprüfung.
+
+Die Vorauswahl ist konservativ: sie darf zu viele Kandidaten liefern, aber niemals einen
+auslassen, den das Segment schneidet. `tests/ArenaObstacleIndex.test.ts` prüft das mit
+zufälligen Segmenten gegen einen vollständigen Scan; diese Eigenschaft ist bei Änderungen am
+Raster oder an der Invalidierung zu erhalten.
+
+## Zielsuche: Sichtlinien so spät wie möglich
+
+`ProjectileHomingController.selectTarget()` bewertet Kandidaten zuerst und prüft die
+Sichtlinie erst für den jeweils besten – zuerst für das bereits gelockte Ziel, danach
+entlang der Bewertungsreihenfolge, bis eines besteht. Das Ergebnis ist identisch zu "alle
+Kandidaten filtern, dann den besten nehmen", kostet im Normalfall aber genau **eine**
+Sichtlinienprüfung statt einer pro Kandidat.
+
+Der Zielprovider bekommt Suchmittelpunkt und -radius übergeben und siebt bereits selbst vor;
+Kandidaten gehen per `emit`-Callback in einen Pool des Controllers, damit weder Array noch
+Objekte pro Aufruf entstehen. Bei vielen Splitter-Projektilen läuft dieser Pfad mehrfach pro
+Frame – ein frisches Array mit einem Objekt je Gegner wäre reiner GC-Druck.
+
 ## Lokaler Messworkflow
 
 `T` öffnet die Performance-Diagnose. Die Live-Ansicht arbeitet ohne Telemetrie. Eine Aufzeichnung wird manuell gestartet und gestoppt, ist auf 30 Minuten begrenzt und kann danach als JSON heruntergeladen werden. Der Export enthält Browser-/Renderer-Metadaten und Qualitätswechsel, aber keine Raumcodes oder Spieler-IDs.
