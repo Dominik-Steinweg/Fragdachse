@@ -8,15 +8,19 @@
   <style>
     * { margin: 0; padding: 0; }
     body { background: #000; overflow: hidden; }
-    canvas {
-        image-rendering: -moz-crisp-edges;
-        image-rendering: -webkit-crisp-edges;
-        image-rendering: pixelated;
-        image-rendering: crisp-edges;
-    }
+    /*
+      Bewusst kein `image-rendering: pixelated` auf der Canvas. Das Spiel laeuft mit
+      `smoothPixelArt`, dessen Shader blockige Pixel bereits im Renderer erhaelt und nur
+      deren Kanten glaettet; eine zusaetzliche Nearest-Neighbor-Skalierung im Browser
+      wuerde das wieder zunichte machen. Vor allem aber ist die Canvas-Aufloesung an die
+      dargestellte Flaeche gekoppelt (siehe src/graphics/RenderResolution.ts) - der Browser
+      skaliert also im Regelfall gar nicht mehr, und wo doch, sind krumme Faktoren
+      gefiltert deutlich sauberer als hart gerastert.
+    */
+
   </style>
-  <script type="module" crossorigin src="./assets/index-C8PjA-QS.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/vendor-CfTQTrXV.js">
+  <script type="module" crossorigin src="./assets/index-ImpjnXVC.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/vendor-uvAEO9F1.js">
 </head>
 <body>
   <div id="game-container"></div>
