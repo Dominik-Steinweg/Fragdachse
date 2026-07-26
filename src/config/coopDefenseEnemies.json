@@ -59,7 +59,7 @@
     },
     {
       "id": "grave-titan",
-      "maxHp": 600,
+      "maxHp": 750,
       "xp": 100,
       "size": 56,
       "moveSpeed": 48,
@@ -261,7 +261,7 @@
     },
     {
       "id": "inferno-colossus",
-      "maxHp": 1200,
+      "maxHp": 1800,
       "xp": 200,
       "size": 68,
       "moveSpeed": 36,
@@ -273,7 +273,7 @@
       ],
       "attackScanIntervalMs": 70,
       "attackStopDurationMs": 110,
-      "obstacleAttackDelayMs": 500,
+      "obstacleAttackDelayMs": 250,
       "imageKey": "enemy_inferno_colossus",
       "isBoss": true,
       "displayName": "Flammenkoloss",
@@ -301,7 +301,7 @@
         "timeSafetyMarginMs": 750
       },
       "trainCollision": {
-        "damageToEnemy": 1250,
+        "damageToEnemy": 300,
         "destroysTrain": true
       },
       "playerScaling": {

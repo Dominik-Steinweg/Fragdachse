@@ -2176,7 +2176,7 @@
             {
               "stat": "weapon.NEGEV.burnOnHit.damagePerTick",
               "mode": "add_per_level",
-              "value": 0.25
+              "value": 1
             }
           ]
         },
