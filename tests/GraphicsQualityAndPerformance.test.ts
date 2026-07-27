@@ -4,7 +4,11 @@ import {
   GraphicsQualityController,
   isGraphicsQuality,
 } from '../src/graphics/GraphicsQuality';
-import { getStoredGraphicsQuality, setStoredGraphicsQuality } from '../src/utils/localPreferences';
+import {
+  getStoredCoopDefenseProgress,
+  getStoredGraphicsQuality,
+  setStoredGraphicsQuality,
+} from '../src/utils/localPreferences';
 import { ArenaRuntimeProfiler, type ArenaRuntimeSample } from '../src/scenes/arena/ArenaRuntimeProfiler';
 
 class MemoryStorage implements Storage {
@@ -128,6 +132,31 @@ describe('graphics quality preferences and profiles', () => {
     expect(getStoredGraphicsQuality()).toBe('high');
     setStoredGraphicsQuality('low');
     expect(getStoredGraphicsQuality()).toBe('low');
+  });
+
+  it('migrates the legacy coop profile into Nukem and Steel while keeping Inspector fresh', () => {
+    storage.setItem('fragdachse_local_preferences', JSON.stringify({
+      version: 13,
+      progression: {
+        coopDefense: {
+          upgradeTreeVersion: 13,
+          totalXp: 1000,
+          completedBossMapIds: [],
+          profile: {
+            upgrades: {
+              hp: { unlocked: true, level: 2 },
+            },
+          },
+        },
+      },
+    }));
+
+    const progress = getStoredCoopDefenseProgress();
+    expect(progress.selectedClassId).toBe('dachs_nukem');
+    expect(progress.profilesByClass.dachs_nukem.upgrades.hp.level).toBe(2);
+    expect(progress.profilesByClass.dachs_of_steel.upgrades.hp.level).toBe(2);
+    expect(progress.profilesByClass.inspector_gadachs.upgrades.hp.level).toBe(0);
+    expect(progress.profilesByClass.inspector_gadachs.upgrades.unlock_rocket_turret.level).toBe(1);
   });
 
   it('defines progressively smaller visual budgets without changing gameplay state', () => {

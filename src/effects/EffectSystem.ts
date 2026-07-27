@@ -305,6 +305,40 @@ export class EffectSystem implements EnemyVisualSink {
       onComplete: () => coreSplash.destroy(),
     });
 
+    if (effect.isCritical) {
+      const criticalRing = this.scene.add.circle(effect.x, effect.y, 9, 0xffd15c, 0.2)
+        .setStrokeStyle(2.5, 0xfff3b0, 0.95)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(DEPTH_FX + 0.35);
+      const criticalLabel = this.scene.add.text(effect.x, effect.y - 18, 'KRIT!', {
+        fontFamily: 'Arial Black, Arial, sans-serif',
+        fontSize: '12px',
+        color: '#fff3b0',
+        stroke: '#7a3200',
+        strokeThickness: 3,
+      })
+        .setOrigin(0.5)
+        .setDepth(DEPTH_FX + 0.4);
+      this.scene.tweens.add({
+        targets: criticalRing,
+        radius: 25,
+        alpha: 0,
+        duration: 260,
+        ease: 'Cubic.easeOut',
+        onComplete: () => criticalRing.destroy(),
+      });
+      this.scene.tweens.add({
+        targets: criticalLabel,
+        y: criticalLabel.y - 14,
+        alpha: 0,
+        scaleX: 1.15,
+        scaleY: 1.15,
+        duration: 480,
+        ease: 'Cubic.easeOut',
+        onComplete: () => criticalLabel.destroy(),
+      });
+    }
+
     const streakCount = this.randomInt(rng, band.streakCountMin, band.streakCountMax);
     const dropletCount = this.randomInt(rng, band.dropletCountMin, band.dropletCountMax);
     const stainCount = this.randomInt(rng, band.stainCountMin, band.stainCountMax);

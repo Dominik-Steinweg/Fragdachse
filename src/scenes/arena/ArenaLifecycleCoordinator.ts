@@ -23,6 +23,7 @@ import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefen
 import { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
+import { RepairDroneSystem } from '../../systems/RepairDroneSystem';
 import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
 import { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
 import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
@@ -81,6 +82,13 @@ import {
 import { EnemyManager } from '../../entities/EnemyManager';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { emitArenaMapGridChanged } from './ArenaEvents';
+import {
+  COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
+  getCoopDefenseConstructionDefinition,
+  isConstructionId,
+} from '../../config/coopDefenseConstructions';
+import { getUnlockedCoopDefenseConstructionIds } from '../../utils/coopDefenseUpgrades';
+import type { ConstructionId, LoadoutUseResult } from '../../types';
 
 /**
  * Manages the arena round lifecycle.
@@ -732,12 +740,38 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.armorRegenPerSecond') ?? 0;
     });
+    this.ctx.combatSystem.setPlayerOutgoingDamageResolver((attackerId, targetId, amount, allowCritical) => {
+      return this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
+        attackerId,
+        targetId,
+        amount,
+        allowCritical,
+      ) ?? { amount, isCritical: false };
+    });
     this.ctx.guardianSpiritSystem = bridge.isHost() && this.ctx.enemyManager && this.ctx.coopDefensePlayerModifierSystem
       ? new GuardianSpiritSystem(
         this.ctx.playerManager,
         this.ctx.enemyManager,
         this.ctx.combatSystem,
         (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
+      )
+      : null;
+    this.ctx.repairDroneSystem = bridge.isHost() && this.ctx.coopDefensePlayerModifierSystem
+      ? new RepairDroneSystem(
+        this.ctx.playerManager,
+        this.ctx.combatSystem,
+        this.ctx.placementSystem!,
+        (playerId) => {
+          if (this.ctx.coopDefensePlayerModifierSystem?.getClassId(playerId) !== 'inspector_gadachs') {
+            return false;
+          }
+          return (
+            this.ctx.coopDefensePlayerModifierSystem
+              .getCommittedProfile(playerId)
+              ?.upgrades[COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID]
+              ?.level ?? 0
+          ) > 0;
+        },
       )
       : null;
     this.ctx.slimeTrailSystem = bridge.isHost() && this.ctx.enemyManager && this.ctx.coopDefensePlayerModifierSystem
@@ -770,11 +804,23 @@ export class ArenaLifecycleCoordinator {
     });
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
-      const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, damage, attackerId);
-      if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockIndex, 'damage');
+      const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
+        attackerId,
+        `rock:${rockIndex}`,
+        damage,
+        false,
+      ).amount ?? damage;
+      const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, resolvedDamage, attackerId);
+      if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockIndex, 'damage', attackerId);
     });
     this.ctx.combatSystem.setTrainDamageCallback((damage, attackerId) => {
-      this.ctx.trainManager?.applyDamage(damage, attackerId);
+      const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
+        attackerId,
+        'train',
+        damage,
+        false,
+      ).amount ?? damage;
+      this.ctx.trainManager?.applyDamage(resolvedDamage, attackerId);
     });
     this.ctx.combatSystem.setProjectileImpactCallback((projectileId, x, y) => {
       const projectile = this.ctx.projectileManager.getProjectileById(projectileId);
@@ -889,6 +935,9 @@ export class ArenaLifecycleCoordinator {
               skipRockIndex: rock.id,
               secondProjectileDamageFactor: rock.secondProjectileDamageFactor,
               targetRange: rock.targetRange,
+              muzzleOffset: rock.constructionId
+                ? getCoopDefenseConstructionDefinition(rock.constructionId).muzzleOffset
+                : undefined,
               weaponId: rock.turretWeaponId ?? ('SPOREN' as const),
             }));
           const baseTurrets = (this.ctx.baseManager?.getTurrets() ?? []).map((turret) => ({
@@ -1354,6 +1403,13 @@ export class ArenaLifecycleCoordinator {
         this.ctx.loadoutManager?.handleKill(killerId, weapon, x, y, source);
         if (isCoopDefenseMode(bridge.getGameMode()) && (source?.enemyXp ?? 0) > 0) {
           this.ctx.powerUpSystem?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
+          for (const profile of bridge.getConnectedPlayers()) {
+            const classDefinition = this.ctx.coopDefensePlayerModifierSystem?.getClassDefinition(profile.id);
+            const adrenalineGain = classDefinition?.adrenalinePerEnemyDeath ?? 0;
+            if (adrenalineGain > 0) {
+              this.ctx.resourceSystem?.addAdrenaline(profile.id, adrenalineGain);
+            }
+          }
         }
         const allowKillDrop = !isCoopDefenseMode(bridge.getGameMode());
         if (killerId === TRAIN.TRAIN_KILLER_ID) {
@@ -1416,7 +1472,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
         if (!this.ctx.arenaResult) return;
         const newHp = this.rockVisualHelper.applyObstacleDamageById(rockId, damage, attackerId);
-        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockId, 'damage');
+        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockId, 'damage', attackerId);
       });
 
       const trackCell = layout.tracks?.[0];
@@ -1491,6 +1547,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.miniTeslaDome.destroyAll();
     this.renderers.energyShield.destroyAll();
     this.renderers.guardianSpirit.destroyAll();
+    this.renderers.repairDrone.destroyAll();
     this.renderers.slimeTrail.clear();
     this.renderers.corpseMarker.clearAll();
     this.renderers.flamethrowerUpgrades.clear();
@@ -1524,6 +1581,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefensePlayerModifierSystem = null;
     this.ctx.guardianSpiritSystem?.clear();
     this.ctx.guardianSpiritSystem = null;
+    this.ctx.repairDroneSystem?.clear();
+    this.ctx.repairDroneSystem = null;
     this.ctx.slimeTrailSystem?.clear();
     this.ctx.slimeTrailSystem = null;
     this.ctx.flamethrowerUpgradeSystem?.clear();
@@ -1541,6 +1600,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerArmorDamageGrantsRageResolver(null);
     this.ctx.combatSystem.setPlayerLifeLeechFractionResolver(null);
     this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver(null);
+    this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     this.ctx.placementSystem = null;
@@ -1895,6 +1955,70 @@ export class ArenaLifecycleCoordinator {
     return true;
   }
 
+  placeInspectorConstruction(
+    playerId: string,
+    constructionId: ConstructionId,
+    targetX: number,
+    targetY: number,
+  ): LoadoutUseResult {
+    if (!bridge.isHost() || !isConstructionId(constructionId)) {
+      return { ok: false, reason: 'invalid' };
+    }
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    if (
+      !committed
+      || committed.coopDefenseClassId !== 'inspector_gadachs'
+      || !committed.coopDefenseProfile
+    ) {
+      return { ok: false, reason: 'blocked' };
+    }
+    if (!getUnlockedCoopDefenseConstructionIds(committed.coopDefenseProfile).includes(constructionId)) {
+      return { ok: false, reason: 'invalid' };
+    }
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    if (
+      !player
+      || !player.sprite.active
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)
+    ) {
+      return { ok: false, reason: 'blocked' };
+    }
+    const definition = getCoopDefenseConstructionDefinition(constructionId);
+    const cost = this.ctx.resourceSystem?.resolveAdrenalineCost(
+      playerId,
+      definition.adrenalineCost,
+    ) ?? definition.adrenalineCost;
+    if ((this.ctx.resourceSystem?.getAdrenaline(playerId) ?? 0) < cost) {
+      return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
+    }
+    const hpMultiplier = 1 + (
+      this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
+    );
+    const construction = this.ctx.placementSystem?.tryPlaceConstruction(
+      definition,
+      definition.maxHp * hpMultiplier,
+      playerId,
+      player.color,
+      player.sprite.x,
+      player.sprite.y,
+      targetX,
+      targetY,
+    );
+    if (!construction) return { ok: false, reason: 'blocked' };
+
+    this.ctx.resourceSystem?.drainAdrenaline(playerId, definition.adrenalineCost);
+    this.rockVisualHelper.materializePlaceableRock(construction, true);
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_added',
+      source: 'placeable_turret',
+      obstacleId: construction.id,
+      gridX: construction.gridX,
+      gridY: construction.gridY,
+    });
+    return { ok: true };
+  }
+
   private placeTunnel(
     cfg: import('../../loadout/LoadoutConfig').TunnelUltimateConfig,
     playerId: string,
@@ -1973,10 +2097,12 @@ export class ArenaLifecycleCoordinator {
     }
     return resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
-      weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],
+      weapon2:  committed.weapon2
+        ? WEAPON_CONFIGS[committed.weapon2 as keyof typeof WEAPON_CONFIGS]
+        : undefined,
       utility:  UTILITY_CONFIGS[committed.utility  as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, bridge.getGameMode(), committed.coopDefenseProfile);
+    }, bridge.getGameMode(), committed.coopDefenseProfile, committed.coopDefenseClassId);
   }
 
   private resolveLoadoutSelection(playerId: string): LoadoutSelection {

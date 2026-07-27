@@ -16,6 +16,7 @@ export interface AutomatedTurret {
   readonly secondProjectileDamageFactor?: number;
   /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
   readonly targetRange?: number;
+  readonly muzzleOffset?: number;
 }
 type TurretProvider = () => readonly AutomatedTurret[];
 type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
@@ -80,25 +81,28 @@ export class TurretSystem {
       // gleiche Faktor streckt die Waffenreichweite mit, sonst sterben Projektile vor dem Ziel.
       const baseTargetRange = config.placeable.targetRange;
       const targetRange = turret.targetRange ?? baseTargetRange;
-      const rangeFactor = baseTargetRange > 0 ? targetRange / baseTargetRange : 1;
+      const turretWeaponId = turret.weaponId ?? 'SPOREN';
+      const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
+      const rangeFactor = turret.muzzleOffset === undefined
+        ? (baseTargetRange > 0 ? targetRange / baseTargetRange : 1)
+        : Math.max(1, targetRange / Math.max(1, turretWeaponConfig.range));
+      const muzzleOffset = turret.muzzleOffset ?? config.placeable.muzzleOffset;
       const target = this.findNearestTarget(
         turret,
         turretX,
         turretY,
         targetRange,
-        config.placeable.muzzleOffset,
+        muzzleOffset,
       );
       if (!target) continue;
 
       const angle = Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y);
       this.turretAngleUpdater?.(turret.id, angle);
 
-      const turretWeaponId = turret.weaponId ?? 'SPOREN';
-      const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
       this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
 
-      const muzzleDistance = config.placeable.muzzleOffset;
+      const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
       this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, 1, rangeFactor);
@@ -108,7 +112,7 @@ export class TurretSystem {
           turretX,
           turretY,
           targetRange,
-          config.placeable.muzzleOffset,
+          muzzleOffset,
           target,
         );
         if (secondTarget) {

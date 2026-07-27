@@ -208,6 +208,14 @@ export class HostUpdateCoordinator {
       ? []
       : (this.ctx.guardianSpiritSystem?.hostUpdate(now, delta) ?? []);
     this.renderers.guardianSpirit.syncVisuals(guardianSpirits);
+    if (!countdownActive) this.ctx.repairDroneSystem?.update(delta);
+    const repairDrones = countdownActive
+      ? []
+      : (this.ctx.repairDroneSystem?.getSnapshot() ?? []);
+    this.renderers.repairDrone.syncVisuals(
+      repairDrones,
+      this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+    );
     const slimeTrail = countdownActive
       ? { cells: [], affectedEnemies: [] }
       : (this.ctx.slimeTrailSystem?.hostUpdate(now) ?? { cells: [], affectedEnemies: [] });
@@ -844,6 +852,7 @@ export class HostUpdateCoordinator {
       teslaDomes,
       energyShields,
       guardianSpirits,
+      repairDrones,
       slimeTrail,
       burningGround,
       // Ebenfalls verbrauchend – siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)

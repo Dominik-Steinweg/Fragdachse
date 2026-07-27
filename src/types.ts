@@ -33,6 +33,7 @@ export interface PlacementPreviewNetState {
   anchorGridY?: number;
   anchorX?: number;
   anchorY?: number;
+  constructionId?: ConstructionId;
 }
 
 /** Waffen-Slots mit Spread/Crosshair-Relevanz. */
@@ -361,6 +362,7 @@ export interface SyncedHitEffect {
   hpLost:      number;
   armorLost:   number;
   isKill:      boolean;
+  isCritical?: boolean;
   dirX:        number;
   dirY:        number;
   seed:        number;
@@ -483,6 +485,12 @@ export interface CoopDefenseUpgradeProfile {
   upgrades: Record<string, CoopDefenseUpgradeState>;
 }
 
+/** Dauerhafte Coop-Defense-Klassenspezialisierung. */
+export type CoopDefenseClassId = 'dachs_nukem' | 'dachs_of_steel' | 'inspector_gadachs';
+
+/** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
+export type ConstructionId = 'rocket_turret' | 'machine_gun_turret' | 'flame_turret';
+
 /** Audio-Metadaten fuer schussbezogene Loadout-Aktionen. */
 export interface LoadoutShotAudioConfig {
   readonly successKey: ShotAudioKey;
@@ -492,9 +500,10 @@ export interface LoadoutShotAudioConfig {
 /** Vollstaendiger, verbindlicher Lobby-Snapshot eines Spieler-Loadouts. */
 export interface LoadoutCommitSnapshot {
   weapon1: string;
-  weapon2: string;
+  weapon2: string | null;
   utility: string;
   ultimate: string;
+  coopDefenseClassId: CoopDefenseClassId | null;
   coopDefenseProfile: CoopDefenseUpgradeProfile | null;
 }
 
@@ -512,6 +521,7 @@ export interface LoadoutUseParams {
   tunnelStartY?: number;
   tunnelStartGridX?: number;
   tunnelStartGridY?: number;
+  constructionId?: ConstructionId;
 }
 
 export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid';
@@ -570,7 +580,8 @@ export interface UtilityPlacementPreviewState {
   anchorY?: number;
   anchorGridX?: number;
   anchorGridY?: number;
-  sourceSlot?: 'utility' | 'ultimate';
+  sourceSlot?: 'weapon2' | 'utility' | 'ultimate';
+  constructionId?: ConstructionId;
 }
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
@@ -1220,10 +1231,27 @@ export interface SyncedPlaceableRock {
    */
   targetRange?: number;
   turretWeaponId?: TurretWeaponId;
+  constructionId?: ConstructionId;
 }
 
 /** Waffen, die ein platzierbares Turret fuehren kann. */
-export type TurretWeaponId = 'SPOREN' | 'FLIEGENPILZ_PLASMA';
+export type TurretWeaponId =
+  | 'SPOREN'
+  | 'FLIEGENPILZ_PLASMA'
+  | 'ROCKET_LAUNCHER'
+  | 'AK47'
+  | 'FLAMETHROWER';
+
+export type RepairDronePhase = 'orbiting' | 'travelling' | 'repairing' | 'returning';
+
+export interface SyncedRepairDrone {
+  ownerId: string;
+  ownerColor: number;
+  x: number;
+  y: number;
+  phase: RepairDronePhase;
+  targetConstructionId?: number;
+}
 
 export interface SyncedTunnelEndpoint {
   gridX: number;

@@ -24,7 +24,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -44,6 +44,7 @@ import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
+import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
 
 /**
  * Zustandsobjekt eines Spielers. Absichtlich schmal: nur `id`, `getState` und `setState`
@@ -166,6 +167,7 @@ const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
   td: 'teslaDomes',
   es: 'energyShields',
   g: 'guardianSpirits',
+  rd: 'repairDrones',
   sl: 'slimeTrail',
   fg: 'burningGround',
   u: 'powerups',
@@ -251,6 +253,7 @@ export interface GameState {
   teslaDomes:   SyncedTeslaDome[];
   energyShields: SyncedEnergyShield[];
   guardianSpirits: SyncedGuardianSpirit[];
+  repairDrones: SyncedRepairDrone[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   burningGround: SyncedBurningGroundSnapshot;
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
@@ -280,6 +283,7 @@ interface OutboundGameState {
   teslaDomes:   SyncedTeslaDome[];
   energyShields: SyncedEnergyShield[];
   guardianSpirits: SyncedGuardianSpirit[];
+  repairDrones: SyncedRepairDrone[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   burningGround: SyncedBurningGroundSnapshot;
 }
@@ -855,7 +859,7 @@ export class NetworkBridge {
 
       if (slotChanged) {
         this.hostSetPlayerLoadoutSlot(playerId, 'weapon1', snapshot.weapon1);
-        this.hostSetPlayerLoadoutSlot(playerId, 'weapon2', snapshot.weapon2);
+        if (snapshot.weapon2) this.hostSetPlayerLoadoutSlot(playerId, 'weapon2', snapshot.weapon2);
         this.hostSetPlayerLoadoutSlot(playerId, 'utility', snapshot.utility);
         this.hostSetPlayerLoadoutSlot(playerId, 'ultimate', snapshot.ultimate);
       }
@@ -1080,24 +1084,30 @@ export class NetworkBridge {
     if (!raw || typeof raw !== 'object') return null;
     if (
       typeof raw.weapon1 !== 'string'
-      || typeof raw.weapon2 !== 'string'
+      || (raw.weapon2 !== null && typeof raw.weapon2 !== 'string')
       || typeof raw.utility !== 'string'
       || typeof raw.ultimate !== 'string'
     ) {
       return null;
     }
+    const coopDefenseClassId = isCoopDefenseClassId(raw.coopDefenseClassId)
+      ? raw.coopDefenseClassId
+      : null;
     return {
       weapon1: raw.weapon1,
       weapon2: raw.weapon2,
       utility: raw.utility,
       ultimate: raw.ultimate,
-      coopDefenseProfile: raw.coopDefenseProfile == null ? null : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile),
+      coopDefenseClassId,
+      coopDefenseProfile: raw.coopDefenseProfile == null
+        ? null
+        : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId ?? undefined),
     };
   }
 
   /** Liest eine committed Loadout-Slot-ID eines Spielers. */
   getPlayerCommittedLoadoutSlot(playerId: string, slot: LoadoutSlot): string | undefined {
-    return this.getPlayerCommittedLoadout(playerId)?.[slot];
+    return this.getPlayerCommittedLoadout(playerId)?.[slot] ?? undefined;
   }
 
   /** True, wenn ein Spieler einen vollstaendigen verbindlichen Ready-Snapshot hat. */
@@ -1106,7 +1116,14 @@ export class NetworkBridge {
   }
 
   hasCommittedCoopDefenseProfile(playerId: string): boolean {
-    return this.getPlayerCommittedLoadout(playerId)?.coopDefenseProfile !== null;
+    const committed = this.getPlayerCommittedLoadout(playerId);
+    return committed?.coopDefenseProfile != null
+      && committed.coopDefenseClassId != null
+      && (
+        committed.coopDefenseClassId === 'inspector_gadachs'
+          ? committed.weapon2 === null
+          : committed.weapon2 !== null
+      );
   }
 
   /** Gibt zurück ob ALLE aktuell verbundenen Spieler bereit sind (modusabhängige Mindestspielerzahl). */
@@ -1262,6 +1279,7 @@ export class NetworkBridge {
     if (state.teslaDomes.length > 0)   payload.td = state.teslaDomes;
     if (state.energyShields.length > 0) payload.es = state.energyShields;
     if (state.guardianSpirits.length > 0) payload.g = state.guardianSpirits;
+    if (state.repairDrones.length > 0) payload.rd = state.repairDrones;
     if (state.slimeTrail.cells.length > 0 || state.slimeTrail.affectedEnemies.length > 0) {
       payload.sl = encodeSlimeTrailSnapshot(state.slimeTrail);
     }
@@ -1433,6 +1451,7 @@ export class NetworkBridge {
       teslaDomes:    (raw.td as SyncedTeslaDome[]    | undefined) ?? [],
       energyShields: (raw.es as SyncedEnergyShield[] | undefined) ?? [],
       guardianSpirits: (raw.g as SyncedGuardianSpirit[] | undefined) ?? [],
+      repairDrones: (raw.rd as SyncedRepairDrone[] | undefined) ?? [],
       slimeTrail: decodeSlimeTrailSnapshot(raw.sl),
       burningGround: nextBurningGround,
       powerups:      nextPowerUps,

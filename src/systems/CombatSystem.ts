@@ -70,6 +70,7 @@ interface AoeDamageOptions {
 
 interface DamageApplicationOptions {
   allowTeamDamage?: boolean;
+  allowCritical?: boolean;
 }
 
 interface DamageVisualContext {
@@ -239,6 +240,12 @@ export class CombatSystem {
   private playerArmorDamageGrantsRageResolver: ((playerId: string) => boolean) | null = null;
   private playerLifeLeechFractionResolver: ((playerId: string) => number) | null = null;
   private playerArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
+  private playerOutgoingDamageResolver: ((
+    attackerId: string | undefined,
+    targetId: string,
+    amount: number,
+    allowCritical: boolean,
+  ) => { amount: number; isCritical: boolean }) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -270,6 +277,16 @@ export class CombatSystem {
   setPlayerArmorDamageGrantsRageResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerArmorDamageGrantsRageResolver = resolver; }
   setPlayerLifeLeechFractionResolver(resolver: ((playerId: string) => number) | null): void { this.playerLifeLeechFractionResolver = resolver; }
   setPlayerArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorRegenPerSecondResolver = resolver; }
+  setPlayerOutgoingDamageResolver(
+    resolver: ((
+      attackerId: string | undefined,
+      targetId: string,
+      amount: number,
+      allowCritical: boolean,
+    ) => { amount: number; isCritical: boolean }) | null,
+  ): void {
+    this.playerOutgoingDamageResolver = resolver;
+  }
   setArenaObstacles(
     rockObjects: readonly (Phaser.GameObjects.Image | null)[] | null,
     trunkObjects: readonly Phaser.GameObjects.Arc[] | null,
@@ -474,6 +491,13 @@ export class CombatSystem {
     if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
     if (!skipBurrowCheck && this.burrowSystem?.isBurrowed(targetId)) return;
     this.decoySystem?.breakStealth(targetId, Date.now());
+    const outgoing = this.playerOutgoingDamageResolver?.(
+      attackerId,
+      targetId,
+      amount,
+      options?.allowCritical ?? true,
+    ) ?? { amount, isCritical: false };
+    amount = outgoing.amount;
 
     // Letzten Angreifer tracken (Selbstschaden ausgenommen)
     if (attackerId && attackerId !== targetId) {
@@ -532,6 +556,7 @@ export class CombatSystem {
         newHp === 0,
         visualContext,
         hitSeed,
+        outgoing.isCritical,
       ));
     }
 
@@ -696,9 +721,15 @@ export class CombatSystem {
         if (!this.isAlive(targetId)) break;
         const { state, damage } = contribution;
         const attacker = this.playerManager.getPlayer(state.attackerId);
-        this.applyDamage(targetId, damage, false, state.attackerId, state.weaponName, attacker
-          ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y }
-          : undefined);
+        this.applyDamage(
+          targetId,
+          damage,
+          false,
+          state.attackerId,
+          state.weaponName,
+          attacker ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y } : undefined,
+          { allowCritical: false },
+        );
       }
 
       if (sourceStates.size === 0) {
@@ -2564,6 +2595,7 @@ export class CombatSystem {
     isKill: boolean,
     visualContext: DamageVisualContext | undefined,
     seed: number,
+    isCritical = false,
   ): SyncedHitEffect {
     const target = this.playerManager.getPlayer(targetId);
     const direction = this.resolveDamageDirection(targetId, attackerId, visualContext, seed, x, y);
@@ -2579,6 +2611,7 @@ export class CombatSystem {
       hpLost,
       armorLost,
       isKill,
+      isCritical,
       dirX: direction.dirX,
       dirY: direction.dirY,
       seed,
@@ -2850,6 +2883,14 @@ export class CombatSystem {
     if (enemy.isBurrowed()) return;
     if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
 
+    const outgoing = this.playerOutgoingDamageResolver?.(
+      attackerId,
+      targetId,
+      amount,
+      options?.allowCritical ?? true,
+    ) ?? { amount, isCritical: false };
+    amount = outgoing.amount;
+
     if (attackerId && attackerId !== targetId) {
       this.lastAttacker.set(targetId, attackerId);
       if (weaponName) this.lastWeapon.set(targetId, weaponName);
@@ -2888,6 +2929,7 @@ export class CombatSystem {
       hpLost,
       armorLost: 0,
       isKill: result.died,
+      isCritical: outgoing.isCritical,
       dirX: direction.dirX,
       dirY: direction.dirY,
       seed: hitSeed,

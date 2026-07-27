@@ -13,12 +13,14 @@ import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
 import { addInternalGlow, setInternalFxPadding } from '../../utils/phaserFx';
 import { emitArenaMapGridChanged } from './ArenaEvents';
+import { isCoopDefenseMode } from '../../gameModes';
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
   rangeCircle: Phaser.GameObjects.Graphics;
   hpBarBg:   Phaser.GameObjects.Rectangle;
   hpBarFg:   Phaser.GameObjects.Rectangle;
+  constructionId?: SyncedPlaceableRock['constructionId'];
 }
 
 /**
@@ -59,12 +61,51 @@ export class RockVisualHelper {
       g.generateTexture('placeable_turret', 32, 32);
       g.destroy();
     }
+    this.ensureConstructionTexture('construction_rocket_turret', (g) => {
+      g.fillStyle(0x16202a, 1); g.fillCircle(16, 16, 12);
+      g.lineStyle(2, 0x5f7485, 1); g.strokeCircle(16, 16, 11);
+      g.fillStyle(0x314657, 1); g.fillRoundedRect(10, 9, 15, 14, 3);
+      g.fillStyle(0xd9e4eb, 1); g.fillRoundedRect(17, 10, 10, 4, 2);
+      g.fillStyle(0xff8a3d, 1); g.fillTriangle(27, 10, 31, 12, 27, 14);
+      g.fillStyle(0xd9e4eb, 1); g.fillRoundedRect(17, 18, 10, 4, 2);
+      g.fillStyle(0xff8a3d, 1); g.fillTriangle(27, 18, 31, 20, 27, 22);
+      g.fillStyle(0x9ec7d8, 0.8); g.fillCircle(13, 16, 3);
+    });
+    this.ensureConstructionTexture('construction_machine_gun_turret', (g) => {
+      g.fillStyle(0x17201e, 1); g.fillCircle(16, 16, 12);
+      g.lineStyle(2, 0x708077, 1); g.strokeCircle(16, 16, 11);
+      g.fillStyle(0x3e4b46, 1); g.fillCircle(15, 16, 7);
+      g.fillStyle(0xc2ab72, 1); g.fillRoundedRect(15, 13, 15, 6, 2);
+      g.fillStyle(0x1c2422, 1); g.fillRect(27, 14, 5, 4);
+      g.fillStyle(0xf5d37a, 0.9); g.fillCircle(12, 16, 2);
+    });
+    this.ensureConstructionTexture('construction_flame_turret', (g) => {
+      g.fillStyle(0x241a18, 1); g.fillCircle(16, 16, 12);
+      g.lineStyle(2, 0x8a6251, 1); g.strokeCircle(16, 16, 11);
+      g.fillStyle(0x7d3424, 1); g.fillCircle(12, 12, 4); g.fillCircle(12, 20, 4);
+      g.fillStyle(0x4a4540, 1); g.fillCircle(17, 16, 6);
+      g.fillStyle(0xb66b3d, 1); g.fillRoundedRect(17, 12, 12, 8, 3);
+      g.fillStyle(0xffb347, 1); g.fillTriangle(28, 12, 32, 16, 28, 20);
+      g.fillStyle(0xff6a2a, 0.95); g.fillTriangle(27, 14, 31, 16, 27, 18);
+    });
     if (!this.scene.textures.exists('placeable_turret_proxy')) {
       const g = this.scene.make.graphics({ x: 0, y: 0 });
       g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 32, 32);
       g.generateTexture('placeable_turret_proxy', 32, 32);
       g.destroy();
     }
+  }
+
+  private ensureConstructionTexture(
+    key: string,
+    draw: (graphics: Phaser.GameObjects.Graphics) => void,
+  ): void {
+    if (this.scene.textures.exists(key)) return;
+    const graphics = this.scene.make.graphics({ x: 0, y: 0 });
+    graphics.clear();
+    draw(graphics);
+    graphics.generateTexture(key, 32, 32);
+    graphics.destroy();
   }
 
   materializePlaceableRock(rock: SyncedPlaceableRock, playSpawnFx: boolean): void {
@@ -110,7 +151,12 @@ export class RockVisualHelper {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
       if (rock.kind === 'turret') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
-        this.ctx.gameAudioSystem.playSound('sfx_place_fliegenpilz', world.x, world.y, rock.ownerId);
+        this.ctx.gameAudioSystem.playSound(
+          rock.constructionId ? 'sfx_place_rock' : 'sfx_place_fliegenpilz',
+          world.x,
+          world.y,
+          rock.ownerId,
+        );
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
         this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
@@ -192,7 +238,7 @@ export class RockVisualHelper {
     return newHp;
   }
 
-  handleDestroyedRock(rockId: number, reason: 'damage' | 'decay'): void {
+  handleDestroyedRock(rockId: number, reason: 'damage' | 'decay', attackerId?: string): void {
     const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock) {
       if (runtimeRock.kind === 'turret') {
@@ -230,7 +276,12 @@ export class RockVisualHelper {
     );
     this.ctx.rockRegistry?.remove(rockId);
     this.markObstaclesDirty();
-    this.ctx.powerUpSystem?.onRockDestroyed(rockId);
+    const dropsArmor = !isCoopDefenseMode(bridge.getGameMode())
+      || (
+        reason === 'damage'
+        && this.ctx.coopDefensePlayerModifierSystem?.getClassId(attackerId ?? '') === 'dachs_of_steel'
+      );
+    if (dropsArmor) this.ctx.powerUpSystem?.onRockDestroyed(rockId);
     const rockCell = this.ctx.currentLayout.rocks[rockId];
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'static_rock_destroyed',
@@ -245,7 +296,7 @@ export class RockVisualHelper {
     const world = this.gridToWorld(rock.gridX, rock.gridY);
     let visual = this.turretVisuals.get(rock.id);
     if (!visual) {
-      const image = this.scene.add.image(world.x, world.y, 'placeable_turret')
+      const image = this.scene.add.image(world.x, world.y, this.getTurretTextureKey(rock))
         .setDisplaySize(CELL_SIZE, CELL_SIZE)
         .setDepth(DEPTH.ROCKS + 0.2);
       setInternalFxPadding(image, 12);
@@ -261,12 +312,16 @@ export class RockVisualHelper {
         .setOrigin(0, 0.5)
         .setDepth(DEPTH.ROCKS + 0.4);
 
-      visual = { image, rangeCircle, hpBarBg, hpBarFg };
+      visual = { image, rangeCircle, hpBarBg, hpBarFg, constructionId: rock.constructionId };
       this.turretVisuals.set(rock.id, visual);
     }
 
     const ratio = Phaser.Math.Clamp(rock.hp / Math.max(1, rock.maxHp), 0, 1);
-    visual.image.setPosition(world.x, world.y).setRotation(rock.angle);
+    visual.image
+      .setTexture(this.getTurretTextureKey(rock))
+      .setPosition(world.x, world.y)
+      .setRotation(rock.angle);
+    visual.constructionId = rock.constructionId;
     visual.rangeCircle.clear();
     visual.rangeCircle.lineStyle(1.4, rock.ownerColor, 0.48);
     visual.rangeCircle.strokeCircle(
@@ -274,6 +329,7 @@ export class RockVisualHelper {
       world.y,
       rock.targetRange ?? (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable.targetRange,
     );
+    visual.rangeCircle.setVisible(!rock.constructionId);
 
     visual.hpBarBg.setPosition(world.x, world.y + 22).setVisible(ratio < 1);
     visual.hpBarFg
@@ -296,7 +352,11 @@ export class RockVisualHelper {
         this.lighting.releaseLight(key);
         continue;
       }
-      this.lighting.setLight(key, 'fliegenpilz', visual.image.x, visual.image.y);
+      if (visual.constructionId) {
+        this.lighting.releaseLight(key);
+      } else {
+        this.lighting.setLight(key, 'fliegenpilz', visual.image.x, visual.image.y);
+      }
     }
   }
 
@@ -322,7 +382,7 @@ export class RockVisualHelper {
   }
 
   spawnTurretDeathCloud(rock: SyncedPlaceableRock): void {
-    if (rock.kind !== 'turret') return;
+    if (rock.kind !== 'turret' || rock.constructionId) return;
     const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
     const weaponCfg = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
     if (weaponCfg.fire.type !== 'projectile' || !weaponCfg.fire.impactCloud) return;
@@ -341,6 +401,10 @@ export class RockVisualHelper {
       cloud.rockDamageMult ?? 1,
       cloud.trainDamageMult ?? 1,
     );
+  }
+
+  private getTurretTextureKey(rock: SyncedPlaceableRock): string {
+    return rock.constructionId ? `construction_${rock.constructionId}` : 'placeable_turret';
   }
 
   gridToWorld(gridX: number, gridY: number): { x: number; y: number } {

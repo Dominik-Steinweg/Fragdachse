@@ -1,5 +1,10 @@
 import { SOUND_MASTER_VOLUME, SOUND_MUSIC_VOLUME, SOUND_SFX_VOLUME } from '../config';
-import type { CoopDefenseUpgradeProfile, LoadoutSlot } from '../types';
+import {
+  COOP_DEFENSE_CLASS_IDS,
+  DEFAULT_COOP_DEFENSE_CLASS_ID,
+  sanitizeCoopDefenseClassId,
+} from '../config/coopDefenseClasses';
+import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, LoadoutSlot } from '../types';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   cloneCoopDefenseUpgradeProfile,
@@ -17,7 +22,7 @@ import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 13;
+const LOCAL_PREFERENCES_VERSION = 14;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 interface LocalPreferencesV2 {
@@ -40,7 +45,8 @@ export interface CoopDefenseProgressPreferences {
   completedBossMapIds: string[];
   /** Hoechste freigeschaltete Map der linearen Kampagne; alles davor ist ebenfalls offen. */
   highestUnlockedMapId: string;
-  profile: CoopDefenseUpgradeProfile;
+  selectedClassId: CoopDefenseClassId;
+  profilesByClass: Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
 }
 
 interface LocalPreferencesV3 {
@@ -59,8 +65,8 @@ interface LocalPreferencesV3 {
   };
 }
 
-interface LocalPreferencesV13 {
-  version: 13;
+interface LocalPreferencesV14 {
+  version: 14;
   audio: {
     masterVolume: number;
     effectsVolume: number;
@@ -78,7 +84,7 @@ interface LocalPreferencesV13 {
   };
 }
 
-type LocalPreferences = LocalPreferencesV13;
+type LocalPreferences = LocalPreferencesV14;
 
 interface ParsedLocalPreferences {
   audio?: Partial<LocalPreferences['audio']>;
@@ -90,17 +96,24 @@ interface ParsedLocalPreferences {
   progression?: {
     coopDefense?: Partial<CoopDefenseProgressPreferences> & {
       profile?: unknown;
+      profilesByClass?: unknown;
+      selectedClassId?: unknown;
     };
   };
 }
 
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
-  upgradeTreeVersion: 12,
+  upgradeTreeVersion: 13,
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
   completedBossMapIds: [],
   highestUnlockedMapId: INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
-  profile: buildDefaultCoopDefenseUpgradeProfile(),
+  selectedClassId: DEFAULT_COOP_DEFENSE_CLASS_ID,
+  profilesByClass: {
+    dachs_nukem: buildDefaultCoopDefenseUpgradeProfile('dachs_nukem'),
+    dachs_of_steel: buildDefaultCoopDefenseUpgradeProfile('dachs_of_steel'),
+    inspector_gadachs: buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs'),
+  },
 };
 
 const DEFAULT_PREFERENCES: LocalPreferences = {
@@ -118,9 +131,23 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
     quality: 'high',
   },
   progression: {
-    coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS, completedBossMapIds: [] },
+    coopDefense: {
+      ...DEFAULT_COOP_DEFENSE_PROGRESS,
+      completedBossMapIds: [],
+      profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
+    },
   },
 };
+
+function cloneProfilesByClass(
+  profiles: Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>,
+): Record<CoopDefenseClassId, CoopDefenseUpgradeProfile> {
+  return {
+    dachs_nukem: cloneCoopDefenseUpgradeProfile(profiles.dachs_nukem, 'dachs_nukem'),
+    dachs_of_steel: cloneCoopDefenseUpgradeProfile(profiles.dachs_of_steel, 'dachs_of_steel'),
+    inspector_gadachs: cloneCoopDefenseUpgradeProfile(profiles.inspector_gadachs, 'inspector_gadachs'),
+  };
+}
 
 function getLocalStorage(): Storage | null {
   try {
@@ -178,7 +205,11 @@ function buildDefaultPreferences(): LocalPreferences {
     loadout: {},
     graphics: { ...DEFAULT_PREFERENCES.graphics },
     progression: {
-      coopDefense: { ...DEFAULT_COOP_DEFENSE_PROGRESS, completedBossMapIds: [] },
+      coopDefense: {
+        ...DEFAULT_COOP_DEFENSE_PROGRESS,
+        completedBossMapIds: [],
+        profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
+      },
     },
   };
 }
@@ -207,18 +238,38 @@ function parsePreferences(raw: string | null): LocalPreferences {
     const lastProcessedRoundEndedAt = sanitizeStoredRoundEndedAt(parsed.progression?.coopDefense?.lastProcessedRoundEndedAt);
     const completedBossMapIds = sanitizeCompletedBossMapIds(parsed.progression?.coopDefense?.completedBossMapIds);
     const sourceTreeVersion = sanitizeStoredXp(parsed.progression?.coopDefense?.upgradeTreeVersion);
-    const migratedProfile = sanitizeCoopDefenseUpgradeProfile(parsed.progression?.coopDefense?.profile);
-    if (sourceTreeVersion < 2) {
-      for (const [upgradeId, definition] of Object.entries(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
-        if (definition.bossPointCostPerLevel <= 0 || upgradeId === 'smoke_grenade_storm') continue;
-        const state = migratedProfile.upgrades[upgradeId];
-        if (state) state.level = 0;
-      }
-    }
-    const storedProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
-      sanitizeCoopDefenseUpgradeProfile(migratedProfile),
-      completedBossMapIds.length,
+    const selectedClassId = sanitizeCoopDefenseClassId(
+      parsed.progression?.coopDefense?.selectedClassId,
     );
+    const rawProfiles = parsed.progression?.coopDefense?.profilesByClass;
+    const storedProfiles = (rawProfiles && typeof rawProfiles === 'object')
+      ? rawProfiles as Partial<Record<CoopDefenseClassId, unknown>>
+      : {};
+    const legacyProfile = parsed.progression?.coopDefense?.profile;
+    const profilesByClass = {} as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
+
+    for (const classId of COOP_DEFENSE_CLASS_IDS) {
+      const rawProfile = storedProfiles[classId]
+        ?? (classId === 'inspector_gadachs' ? undefined : legacyProfile);
+      const migratedProfile = cloneCoopDefenseUpgradeProfile(
+        rawProfile === undefined
+          ? buildDefaultCoopDefenseUpgradeProfile(classId)
+          : sanitizeCoopDefenseUpgradeProfile(rawProfile, classId),
+        classId,
+      );
+      if (sourceTreeVersion < 2) {
+        for (const [upgradeId, definition] of Object.entries(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
+          if (definition.bossPointCostPerLevel <= 0 || upgradeId === 'smoke_grenade_storm') continue;
+          const state = migratedProfile.upgrades[upgradeId];
+          if (state) state.level = 0;
+        }
+      }
+      profilesByClass[classId] = constrainCoopDefenseUpgradeProfileToBossPoints(
+        sanitizeCoopDefenseUpgradeProfile(migratedProfile, classId),
+        completedBossMapIds.length,
+        classId,
+      );
+    }
 
     return {
       version: LOCAL_PREFERENCES_VERSION,
@@ -235,7 +286,7 @@ function parsePreferences(raw: string | null): LocalPreferences {
       },
       progression: {
         coopDefense: {
-          upgradeTreeVersion: 12,
+          upgradeTreeVersion: 13,
           totalXp,
           lastProcessedRoundEndedAt,
           completedBossMapIds,
@@ -243,7 +294,8 @@ function parsePreferences(raw: string | null): LocalPreferences {
             parsed.progression?.coopDefense?.highestUnlockedMapId,
             completedBossMapIds,
           ),
-          profile: storedProfile,
+          selectedClassId,
+          profilesByClass,
         },
       },
     };
@@ -357,7 +409,8 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
     completedBossMapIds: [...progress.completedBossMapIds],
     highestUnlockedMapId: progress.highestUnlockedMapId,
-    profile: cloneCoopDefenseUpgradeProfile(progress.profile),
+    selectedClassId: progress.selectedClassId,
+    profilesByClass: cloneProfilesByClass(progress.profilesByClass),
   };
 }
 
@@ -405,21 +458,53 @@ export function unlockStoredCoopDefenseMapAfterVictory(completedMapId: string): 
   return true;
 }
 
-export function getStoredCoopDefenseUpgradeProfile(): CoopDefenseUpgradeProfile {
-  return cloneCoopDefenseUpgradeProfile(readPreferences().progression.coopDefense.profile);
+export function getStoredCoopDefenseClassId(): CoopDefenseClassId {
+  return readPreferences().progression.coopDefense.selectedClassId;
 }
 
-export function setStoredCoopDefenseUpgradeProfile(profile: CoopDefenseUpgradeProfile): void {
+export function setStoredCoopDefenseClassId(classId: CoopDefenseClassId): void {
   updatePreferences((current) => ({
     ...current,
     progression: {
       ...current.progression,
       coopDefense: {
         ...current.progression.coopDefense,
-        profile: constrainCoopDefenseUpgradeProfileToBossPoints(
-          sanitizeCoopDefenseUpgradeProfile(profile),
-          current.progression.coopDefense.completedBossMapIds.length,
-        ),
+        selectedClassId: sanitizeCoopDefenseClassId(classId),
+      },
+    },
+  }));
+}
+
+export function getStoredCoopDefenseUpgradeProfile(
+  classId?: CoopDefenseClassId,
+): CoopDefenseUpgradeProfile {
+  const progress = readPreferences().progression.coopDefense;
+  const resolvedClassId = classId ?? progress.selectedClassId;
+  return cloneCoopDefenseUpgradeProfile(progress.profilesByClass[resolvedClassId], resolvedClassId);
+}
+
+export function setStoredCoopDefenseUpgradeProfile(
+  profile: CoopDefenseUpgradeProfile,
+  classId?: CoopDefenseClassId,
+): void {
+  updatePreferences((current) => ({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        profilesByClass: {
+          ...current.progression.coopDefense.profilesByClass,
+          [classId ?? current.progression.coopDefense.selectedClassId]:
+            constrainCoopDefenseUpgradeProfileToBossPoints(
+              sanitizeCoopDefenseUpgradeProfile(
+                profile,
+                classId ?? current.progression.coopDefense.selectedClassId,
+              ),
+              current.progression.coopDefense.completedBossMapIds.length,
+              classId ?? current.progression.coopDefense.selectedClassId,
+            ),
+        },
       },
     },
   }));
@@ -510,10 +595,16 @@ export function setStoredCoopDefenseCheatProgress(
           totalXp: nextTotalXp,
           completedBossMapIds,
           highestUnlockedMapId: nextHighestUnlockedMapId,
-          profile: constrainCoopDefenseUpgradeProfileToBossPoints(
-            storedProgress.profile,
-            nextBossPointCount,
-          ),
+          profilesByClass: Object.fromEntries(
+            COOP_DEFENSE_CLASS_IDS.map((classId) => [
+              classId,
+              constrainCoopDefenseUpgradeProfileToBossPoints(
+                storedProgress.profilesByClass[classId],
+                nextBossPointCount,
+                classId,
+              ),
+            ]),
+          ) as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>,
         },
       },
     };

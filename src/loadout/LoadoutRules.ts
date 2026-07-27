@@ -1,4 +1,4 @@
-import type { CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
+import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
 import { isCoopDefenseMode } from '../gameModes';
 import { getCoopDefenseResolvedEffectTotals, isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { applyCoopDefenseModifiersToLoadoutSelection } from './CoopDefenseLoadoutModifiers';
@@ -52,12 +52,16 @@ export function resolveEffectiveLoadoutSelection(
   selection: LoadoutSelection | undefined,
   mode: GameMode,
   coopDefenseProfile: CoopDefenseUpgradeProfile | null = null,
+  coopDefenseClassId: CoopDefenseClassId | null = null,
 ): ResolvedLoadoutSelection {
   const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
   if (!isCoopDefenseMode(mode) || !coopDefenseProfile) return sanitized;
   return applyCoopDefenseModifiersToLoadoutSelection(
     sanitized,
-    getCoopDefenseResolvedEffectTotals(sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile)),
+    getCoopDefenseResolvedEffectTotals(
+      sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile, coopDefenseClassId ?? undefined),
+      coopDefenseClassId ?? undefined,
+    ),
   );
 }
 
@@ -65,16 +69,20 @@ export function resolveLoadoutSelectionIds(
   selection: LoadoutSelection | undefined,
   mode: GameMode,
   coopDefenseProfile: CoopDefenseUpgradeProfile | null = null,
+  coopDefenseClassId: CoopDefenseClassId | null = null,
 ): LoadoutCommitSnapshot {
   const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
   const committedCoopDefenseProfile = isCoopDefenseMode(mode) && coopDefenseProfile
-    ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile)
+    ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile, coopDefenseClassId ?? undefined)
     : null;
   return {
     weapon1: sanitized.weapon1.id,
-    weapon2: sanitized.weapon2.id,
+    weapon2: isCoopDefenseMode(mode) && coopDefenseClassId === 'inspector_gadachs'
+      ? null
+      : sanitized.weapon2.id,
     utility: sanitized.utility.id,
     ultimate: sanitized.ultimate.id,
+    coopDefenseClassId: isCoopDefenseMode(mode) ? coopDefenseClassId : null,
     coopDefenseProfile: committedCoopDefenseProfile,
   };
 }
@@ -86,11 +94,18 @@ export function sanitizeCommittedLoadoutForMode(
   if (!snapshot) return null;
   const selection: LoadoutSelection = {
     weapon1: WEAPON_CONFIGS[snapshot.weapon1 as keyof typeof WEAPON_CONFIGS],
-    weapon2: WEAPON_CONFIGS[snapshot.weapon2 as keyof typeof WEAPON_CONFIGS],
+    weapon2: snapshot.weapon2
+      ? WEAPON_CONFIGS[snapshot.weapon2 as keyof typeof WEAPON_CONFIGS]
+      : undefined,
     utility: UTILITY_CONFIGS[snapshot.utility as keyof typeof UTILITY_CONFIGS],
     ultimate: ULTIMATE_CONFIGS[snapshot.ultimate as keyof typeof ULTIMATE_CONFIGS],
   };
-  return resolveLoadoutSelectionIds(selection, mode, snapshot.coopDefenseProfile);
+  return resolveLoadoutSelectionIds(
+    selection,
+    mode,
+    snapshot.coopDefenseProfile,
+    snapshot.coopDefenseClassId,
+  );
 }
 
 export function isCommittedLoadoutEqual(
@@ -103,5 +118,10 @@ export function isCommittedLoadoutEqual(
     && left.weapon2 === right.weapon2
     && left.utility === right.utility
     && left.ultimate === right.ultimate
-    && isCoopDefenseUpgradeProfileEqual(left.coopDefenseProfile, right.coopDefenseProfile);
+    && left.coopDefenseClassId === right.coopDefenseClassId
+    && isCoopDefenseUpgradeProfileEqual(
+      left.coopDefenseProfile,
+      right.coopDefenseProfile,
+      left.coopDefenseClassId ?? undefined,
+    );
 }

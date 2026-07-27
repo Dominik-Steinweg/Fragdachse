@@ -38,6 +38,7 @@ import type { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/Coop
 import type { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
 import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
+import type { RepairDroneSystem } from '../../systems/RepairDroneSystem';
 import type { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
 import type { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
 import type { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
@@ -122,6 +123,7 @@ export interface ArenaContext {
   turretSystem:      TurretSystem      | null;
   coopDefensePlayerModifierSystem: CoopDefensePlayerModifierSystem | null;
   guardianSpiritSystem: GuardianSpiritSystem | null;
+  repairDroneSystem: RepairDroneSystem | null;
   slimeTrailSystem: SlimeTrailSystem | null;
   flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
   weaponUpgradeSystem: WeaponUpgradeSystem | null;

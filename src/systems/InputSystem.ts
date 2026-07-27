@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, ConstructionId, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
@@ -45,6 +45,7 @@ export class InputSystem {
   private keyQ!:     Phaser.Input.Keyboard.Key;
   private keyB!:     Phaser.Input.Keyboard.Key;
   private keyN!:     Phaser.Input.Keyboard.Key;
+  private constructionKeys: Phaser.Input.Keyboard.Key[] = [];
 
   // Lokaler Dash-Cooldown (nur für HUD-Visualisierung, kein Gameplay-Impact)
   private dashCooldownUntil = 0;  // ms-Timestamp
@@ -77,6 +78,12 @@ export class InputSystem {
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
   private suppressWeapon1UntilLeftRelease = false;
+  private selectedConstructionId: ConstructionId = 'rocket_turret';
+  private getAvailableConstructionIds: (() => readonly ConstructionId[]) | null = null;
+  private getConstructionPlacementPreviewProvider: ((
+    constructionId: ConstructionId,
+  ) => UtilityPlacementPreviewState | undefined) | null = null;
+  private constructionWheelHandler: ((event: WheelEvent) => void) | null = null;
 
   // Audio
   private audioSystem: GameAudioSystem | null = null;
@@ -121,9 +128,65 @@ export class InputSystem {
     this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
     this.keyB     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B, false);
     this.keyN     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N, false);
+    this.constructionKeys = [
+      Phaser.Input.Keyboard.KeyCodes.ONE,
+      Phaser.Input.Keyboard.KeyCodes.TWO,
+      Phaser.Input.Keyboard.KeyCodes.THREE,
+      Phaser.Input.Keyboard.KeyCodes.FOUR,
+      Phaser.Input.Keyboard.KeyCodes.FIVE,
+    ].map((keyCode) => kb.addKey(keyCode, false));
 
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
+    this.constructionWheelHandler = (event: WheelEvent) => {
+      const available = this.getAvailableConstructionIds?.() ?? [];
+      if (!this.inputEnabled || available.length < 2) return;
+      event.preventDefault();
+      const current = Math.max(0, available.indexOf(this.getSelectedConstructionId()));
+      const direction = event.deltaY >= 0 ? 1 : -1;
+      this.selectedConstructionId = available[
+        (current + direction + available.length) % available.length
+      ];
+    };
+    this.scene.game.canvas.addEventListener('wheel', this.constructionWheelHandler, { passive: false });
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (this.constructionWheelHandler) {
+        this.scene.game.canvas.removeEventListener('wheel', this.constructionWheelHandler);
+        this.constructionWheelHandler = null;
+      }
+    });
+  }
+
+  setupConstructionProviders(
+    getAvailable: () => readonly ConstructionId[],
+    getPreview: (constructionId: ConstructionId) => UtilityPlacementPreviewState | undefined,
+  ): void {
+    this.getAvailableConstructionIds = getAvailable;
+    this.getConstructionPlacementPreviewProvider = getPreview;
+  }
+
+  getSelectedConstructionId(): ConstructionId {
+    const available = this.getAvailableConstructionIds?.() ?? [];
+    if (available.length > 0 && !available.includes(this.selectedConstructionId)) {
+      this.selectedConstructionId = available[0];
+    }
+    return this.selectedConstructionId;
+  }
+
+  getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
+    const available = this.getAvailableConstructionIds?.() ?? [];
+    if (available.length === 0) return undefined;
+    return this.getConstructionPlacementPreviewProvider?.(this.getSelectedConstructionId());
+  }
+
+  private updateConstructionHotkeys(): void {
+    const available = this.getAvailableConstructionIds?.() ?? [];
+    if (available.length === 0) return;
+    for (let index = 0; index < this.constructionKeys.length; index += 1) {
+      if (Phaser.Input.Keyboard.JustDown(this.constructionKeys[index]) && available[index]) {
+        this.selectedConstructionId = available[index];
+      }
+    }
   }
 
   /**
@@ -429,11 +492,14 @@ export class InputSystem {
   update(): void {
     // Process debug hotkeys first (regardless of input enabled state)
     this.updateDebugHotkeys();
+    this.updateConstructionHotkeys();
 
     // ── 1. Blickrichtung (auch bei gesperrter Eingabe) ─────────────────────
     // Drehen bleibt während des Arena-Countdowns erlaubt und wird über den
     // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
     const aimTarget = this.updateAimFromPointer();
+    const constructionPreview = this.getConstructionPlacementPreviewState();
+    if (constructionPreview) this.syncPlacementPreviewState(constructionPreview);
 
     // ── 2. Bewegungs-Input (immer gesendet) ────────────────────────────────
     let dx = 0, dy = 0;
@@ -655,8 +721,21 @@ export class InputSystem {
     } else if (!weaponsBlocked) {
       // RMB → weapon2: Scope-Waffen (z.B. AWP) nutzen fire-on-release Mechanik,
       // andere Waffen feuern weiterhin per Dauerfeuer.
-      const scopeCfg = this.getWeapon2Config?.()?.scopeConfig;
-      if (scopeCfg) {
+      const scopeCfg = constructionPreview ? undefined : this.getWeapon2Config?.()?.scopeConfig;
+      if (constructionPreview) {
+        if (rightInputStarted && constructionPreview.isValid) {
+          this.onLoadoutUse(
+            'weapon2',
+            constructionPreview.angle,
+            constructionPreview.targetX,
+            constructionPreview.targetY,
+            {
+              inputStarted: true,
+              constructionId: constructionPreview.constructionId,
+            },
+          );
+        }
+      } else if (scopeCfg) {
         if (rightPointerDown) {
           // Scope-In: Fortschritt berechnen, nur holdSpeedFactor aktiv halten (kein Schuss)
           if (rightInputStarted) {
@@ -738,7 +817,7 @@ export class InputSystem {
       this.cancelUtilityCharge();
     }
 
-    this.syncPlacementPreviewState(undefined);
+    if (!constructionPreview) this.syncPlacementPreviewState(undefined);
 
     const gaussCfg     = ultimateCfg?.type === 'gauss'     ? ultimateCfg as GaussUltimateConfig     : undefined;
     const airstrikeCfg = ultimateCfg?.type === 'airstrike' ? ultimateCfg as AirstrikeUltimateConfig : undefined;
@@ -1007,6 +1086,7 @@ export class InputSystem {
       anchorGridY: preview.anchorGridY,
       anchorX: preview.anchorX,
       anchorY: preview.anchorY,
+      constructionId: preview.constructionId,
     };
   }
 

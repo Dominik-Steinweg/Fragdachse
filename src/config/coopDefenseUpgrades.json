@@ -54,7 +54,10 @@
         { "id": "flamethrower_fire_ring_projectiles", "code": "A21-D", "label": "Flammenring-Munition", "description": "Eigene und verbuendete Projektilwaffen-Geschosse erhalten beim Durchqueren des Flammenrings dauerhaft einen zusaetzlichen Brand.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 213, "requires": [{ "upgradeId": "flamethrower_fire_ring_damage", "minLevel": 1 }, { "upgradeId": "flamethrower_fire_ring_radius", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.igniteProjectiles", "mode": "add_per_level", "value": 1 }] },
         { "id": "flamethrower_burning_ground", "code": "A22-C", "label": "Brennender Boden", "description": "Jeder Gegner, der durch einen von dir verursachten Brand brennt und stirbt, entzuendet seine 16-Pixel-Rasterzelle fuer 2 Sekunden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 220, "effects": [{ "stat": "player.fire.deathGround.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.deathGround.burnDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.deathGround.burnDamagePerTick", "mode": "add_per_level", "value": 0.25 }, { "stat": "player.fire.deathGround.burstRadius", "mode": "add_per_level", "value": 96 }] },
         { "id": "flamethrower_death_fire_burst", "code": "A22-1", "label": "Brandexplosion", "description": "Brennende Gegner schleudern beim Tod einen Brandbrocken je Stufe auf einzigartige Bodenstellen in bis zu 96 Pixel Entfernung.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 221, "requires": [{ "upgradeId": "flamethrower_burning_ground", "minLevel": 1 }], "effects": [{ "stat": "player.fire.deathGround.burstCount", "mode": "add_per_level", "value": 1 }] },
-        { "id": "general_burning_projectiles", "code": "A22-D", "label": "Brennende Projektile", "description": "Eigene Projektilwaffen-Geschosse erhalten dauerhaft einen zusaetzlichen 2-Sekunden-Brand, wenn sie eigene oder verbuendete Brandflaechen durchqueren.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 222, "requires": [{ "upgradeId": "flamethrower_death_fire_burst", "minLevel": 1 }], "effects": [{ "stat": "player.fire.burningProjectiles.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.fire.burningProjectiles.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.burningProjectiles.damagePerTick", "mode": "add_per_level", "value": 0.25 }] }
+        { "id": "general_burning_projectiles", "code": "A22-D", "label": "Brennende Projektile", "description": "Eigene Projektilwaffen-Geschosse erhalten dauerhaft einen zusaetzlichen 2-Sekunden-Brand, wenn sie eigene oder verbuendete Brandflaechen durchqueren.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 222, "requires": [{ "upgradeId": "flamethrower_death_fire_burst", "minLevel": 1 }], "effects": [{ "stat": "player.fire.burningProjectiles.enabled", "mode": "add_per_level", "value": 1 }, { "stat": "player.fire.burningProjectiles.durationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.burningProjectiles.damagePerTick", "mode": "add_per_level", "value": 0.25 }] },
+        { "id": "inspector_construction_slots", "code": "A-I1", "label": "Zusaetzliche Konstruktionsplaetze", "description": "+1 gleichzeitig ausruestbarer Konstruktionstyp je Stufe, bis maximal fuenf.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 900, "effects": [{ "stat": "construction.slots", "mode": "add_per_level", "value": 1 }] },
+        { "id": "inspector_construction_hp", "code": "A-I2", "label": "Verstaerkte Konstruktionen", "description": "+25% maximale Lebenspunkte eigener Konstruktionen je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 910, "effects": [{ "stat": "construction.maxHp", "mode": "add_percent_per_level", "value": 0.25 }] },
+        { "id": "inspector_repair_drone", "code": "A-I3", "label": "Reparaturdrohne", "description": "Eine unzerstoerbare Drohne repariert nahe eigene Konstruktionen mit 10 HP pro Sekunde.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 1, "sortOrder": 920, "effects": [{ "stat": "construction.repairDrone", "mode": "add_per_level", "value": 1 }] }
       ]
     },
     {
@@ -810,6 +813,38 @@
       "description": "Slot-weite und waffenspezifische Upgrades fuer Waffe 2.",
       "sortOrder": 30,
       "upgrades": [
+        {
+          "id": "unlock_rocket_turret",
+          "code": "C-I1",
+          "label": "Raketenturm",
+          "description": "Standardkonstruktion mit automatisch zielenden Flaechenraketen.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 10
+        },
+        {
+          "id": "unlock_machine_gun_turret",
+          "code": "C-I2",
+          "label": "Maschinengewehrturm",
+          "description": "Schaltet einen schnell feuernden Einzelturm mit AK-47 frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "costPerLevel": 1,
+          "sortOrder": 20
+        },
+        {
+          "id": "unlock_flame_turret",
+          "code": "C-I3",
+          "label": "Flammenwerferturm",
+          "description": "Schaltet einen kurzreichweitigen Turm mit kontinuierlicher Brandwirkung frei.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "costPerLevel": 1,
+          "sortOrder": 30
+        },
         {
           "id": "unlock_p90",
           "code": "C-W1",

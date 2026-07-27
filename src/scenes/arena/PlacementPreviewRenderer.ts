@@ -87,7 +87,7 @@ export class PlacementPreviewRenderer {
       this.drawTunnelPreview(this.localTunnelPreview, preview, ownerColor, this.getPlacementPreviewAlpha(preview.kind), true);
     } else {
       this.hideTunnelPreview(this.localTunnelPreview);
-      const image = this.ensurePlacementPreviewImage(undefined, preview.kind);
+      const image = this.ensurePlacementPreviewImage(undefined, preview.kind, preview.constructionId);
       image
         .setPosition(preview.targetX, preview.targetY)
         .setTint(ownerColor)
@@ -150,7 +150,11 @@ export class PlacementPreviewRenderer {
           anchorGridY: preview.anchorGridY,
         }, ownerColor, 0.38, false);
       } else {
-        const image = this.ensurePlacementPreviewImage(playerId, preview.kind);
+        const image = this.ensurePlacementPreviewImage(
+          playerId,
+          preview.kind,
+          preview.constructionId,
+        );
         image
           .setPosition(preview.x, preview.y)
           .setTint(ownerColor)
@@ -239,8 +243,9 @@ export class PlacementPreviewRenderer {
   private ensurePlacementPreviewImage(
     playerId: string | undefined,
     kind: PlacementPreviewNetState['kind'],
+    constructionId?: PlacementPreviewNetState['constructionId'],
   ): Phaser.GameObjects.Image {
-    const texture = this.getPlaceableTextureKey(kind);
+    const texture = this.getPlaceableTextureKey(kind, constructionId);
     if (playerId === undefined) {
       if (!this.localPlacementPreviewImage) {
         this.localPlacementPreviewImage = this.scene.add.image(0, 0, texture, 0)
@@ -275,7 +280,11 @@ export class PlacementPreviewRenderer {
       : (UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig).placeable.previewAlpha;
   }
 
-  private getPlaceableTextureKey(kind: PlacementPreviewNetState['kind']): string {
+  private getPlaceableTextureKey(
+    kind: PlacementPreviewNetState['kind'],
+    constructionId?: PlacementPreviewNetState['constructionId'],
+  ): string {
+    if (constructionId) return `construction_${constructionId}`;
     return kind === 'turret' ? 'placeable_turret' : 'rocks';
   }
 

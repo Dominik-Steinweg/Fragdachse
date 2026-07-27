@@ -12,7 +12,7 @@ import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseUpgradeProfile, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
@@ -67,7 +67,7 @@ export class ClientUpdateCoordinator {
     key: object;
     value: ReturnType<typeof getCoopDefenseResolvedEffectTotals>;
   } | null = null;
-  private storedProfileFallback: ReturnType<typeof getStoredCoopDefenseProgress>['profile'] | null = null;
+  private storedProfileFallback: CoopDefenseUpgradeProfile | null = null;
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = { weapon1: 0, weapon2: 0 };
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
@@ -526,7 +526,7 @@ export class ClientUpdateCoordinator {
     if (!profile) return EMPTY_EFFECT_TOTALS;
     const cached = this.effectTotalsCache;
     if (cached && cached.key === profile) return cached.value;
-    const value = getCoopDefenseResolvedEffectTotals(profile);
+    const value = getCoopDefenseResolvedEffectTotals(profile, this.getLocalCoopDefenseClassId() ?? undefined);
     this.effectTotalsCache = { key: profile, value };
     return value;
   }
@@ -542,8 +542,15 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile;
     if (committed) return committed;
-    this.storedProfileFallback ??= getStoredCoopDefenseProgress().profile;
+    const progress = getStoredCoopDefenseProgress();
+    this.storedProfileFallback ??= progress.profilesByClass[progress.selectedClassId];
     return this.storedProfileFallback;
+  }
+
+  private getLocalCoopDefenseClassId() {
+    const localId = bridge.getLocalPlayerId();
+    return bridge.getPlayerCommittedLoadout(localId)?.coopDefenseClassId
+      ?? getStoredCoopDefenseProgress().selectedClassId;
   }
 
   resetPerRound(): void {
@@ -727,13 +734,16 @@ export class ClientUpdateCoordinator {
   ) {
     return resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
-      weapon2:  WEAPON_CONFIGS[committed.weapon2  as keyof typeof WEAPON_CONFIGS],
+      weapon2:  committed.weapon2
+        ? WEAPON_CONFIGS[committed.weapon2 as keyof typeof WEAPON_CONFIGS]
+        : undefined,
       utility:  UTILITY_CONFIGS[committed.utility as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, mode, committed.coopDefenseProfile);
+    }, mode, committed.coopDefenseProfile, committed.coopDefenseClassId);
   }
 
   private resolveLoadoutSelection(playerId: string) {
+    const localProgress = playerId === bridge.getLocalPlayerId() ? getStoredCoopDefenseProgress() : null;
     const w1Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon1');
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
@@ -743,6 +753,8 @@ export class ClientUpdateCoordinator {
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, bridge.getGameMode(), playerId === bridge.getLocalPlayerId() ? getStoredCoopDefenseProgress().profile : null);
+    }, bridge.getGameMode(), localProgress
+      ? localProgress.profilesByClass[localProgress.selectedClassId]
+      : null, localProgress?.selectedClassId ?? null);
   }
 }

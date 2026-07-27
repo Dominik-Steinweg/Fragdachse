@@ -36,7 +36,7 @@ import type { GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
-import { getStoredCoopDefenseUpgradeProfile, getStoredHighestUnlockedCoopDefenseMapId, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
+import { getStoredCoopDefenseProgress, getStoredCoopDefenseUpgradeProfile, getStoredHighestUnlockedCoopDefenseMapId, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { isCoopDefenseLoadoutItemSelectable } from '../utils/coopDefenseUpgrades';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
@@ -981,8 +981,20 @@ export class LeftSidePanel {
 
     if (!isCoopDefenseMode(mode)) return base;
 
-    const profile = getStoredCoopDefenseUpgradeProfile();
-    const filtered = base.filter((item) => isCoopDefenseLoadoutItemSelectable(profile, slot, item.id));
+    const storedProgress = getStoredCoopDefenseProgress();
+    if (storedProgress.selectedClassId === 'inspector_gadachs' && slot === 'weapon2') {
+      return [{
+        id: DEFAULT_LOADOUT.weapon2.id,
+        displayName: 'Konstruktionen (1-5)',
+      }];
+    }
+    const profile = getStoredCoopDefenseUpgradeProfile(storedProgress.selectedClassId);
+    const filtered = base.filter((item) => isCoopDefenseLoadoutItemSelectable(
+      profile,
+      slot,
+      item.id,
+      storedProgress.selectedClassId,
+    ));
     if (filtered.length > 0) return filtered;
 
     // Sicherheits-Fallback: Liste nie leer — Default-Item des Slots erzwingen.

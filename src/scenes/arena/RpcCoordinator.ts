@@ -113,6 +113,14 @@ export class RpcCoordinator {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
+      if (slot === 'weapon2' && params?.constructionId) {
+        return this.lifecycle?.placeInspectorConstruction(
+          senderId,
+          params.constructionId,
+          targetX,
+          targetY,
+        ) ?? { ok: false, reason: 'blocked' };
+      }
       return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, params, clientX, clientY)
         ?? { ok: false, reason: 'blocked' };
     });

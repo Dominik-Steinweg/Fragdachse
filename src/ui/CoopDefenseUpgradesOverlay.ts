@@ -23,6 +23,11 @@ import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/pha
 import { getCoopDefenseUpgradeTextureKey } from '../utils/coopDefenseUpgrades';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { attachHoverEffect } from './uiHover';
+import {
+  COOP_DEFENSE_CLASS_DEFINITIONS,
+  COOP_DEFENSE_CLASS_IDS,
+} from '../config/coopDefenseClasses';
+import type { CoopDefenseClassId } from '../types';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
 
@@ -77,7 +82,11 @@ const ACTION_BTN_GAP = 40;
 const ACTION_BTN_Y = CY + PANEL_H / 2 - 60;
 const FOOTER_Y = CY + PANEL_H / 2 - 22;
 
-const TAB_TOP = POINTS_Y + 48;
+const CLASS_ROW_Y = POINTS_Y + 50;
+const CLASS_BUTTON_W = 210;
+const CLASS_BUTTON_H = 30;
+const CLASS_BUTTON_GAP = 14;
+const TAB_TOP = CLASS_ROW_Y + 28;
 const TAB_H = 36;
 const TAB_GAP = 12;
 const TAB_MAX_W = 240;
@@ -218,6 +227,7 @@ export class CoopDefenseUpgradesOverlay {
   private progressLabelText: Phaser.GameObjects.Text | null = null;
   private contentBg: Phaser.GameObjects.Image | null = null;
   private tabsContainer: Phaser.GameObjects.Container | null = null;
+  private classContainer: Phaser.GameObjects.Container | null = null;
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
   private tooltipContainer: Phaser.GameObjects.Container | null = null;
   private tooltipBackground: Phaser.GameObjects.Rectangle | null = null;
@@ -243,6 +253,7 @@ export class CoopDefenseUpgradesOverlay {
     private readonly onLevelUpUpgrade: (upgradeId: string) => boolean,
     private readonly onLevelDownUpgrade: (upgradeId: string) => boolean,
     private readonly onFullRespec: () => boolean,
+    private readonly onSelectClass: (classId: CoopDefenseClassId) => void,
     private readonly onCancel: () => void,
     private readonly onApply: () => void,
   ) {}
@@ -261,6 +272,7 @@ export class CoopDefenseUpgradesOverlay {
     this.progressLabelText = null;
     this.contentBg = null;
     this.tabsContainer = null;
+    this.classContainer = null;
     this.upgradesContainer = null;
     this.tooltipContainer = null;
     this.tooltipBackground = null;
@@ -382,6 +394,9 @@ export class CoopDefenseUpgradesOverlay {
     objects.push(this.respecLabel);
     attachHoverEffect(this.scene, this.respecButton, this.respecLabel, { isEnabled: () => this.respecEnabled });
 
+    this.classContainer = this.scene.add.container(0, 0).setScrollFactor(0);
+    objects.push(this.classContainer);
+
     this.tabsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.tabsContainer);
 
@@ -451,6 +466,7 @@ export class CoopDefenseUpgradesOverlay {
       || !this.progressLabelText
       || !this.upgradesContainer
       || !this.tabsContainer
+      || !this.classContainer
     ) {
       return;
     }
@@ -489,6 +505,7 @@ export class CoopDefenseUpgradesOverlay {
       this.activeCategoryIndex = Phaser.Math.Clamp(this.activeCategoryIndex, 0, categoryCount - 1);
     }
 
+    this.renderClasses(progress.classId);
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
   }
@@ -580,6 +597,62 @@ export class CoopDefenseUpgradesOverlay {
     const progress = this.getProgress();
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
+  }
+
+  private renderClasses(activeClassId: CoopDefenseClassId): void {
+    if (!this.classContainer) return;
+    this.classContainer.removeAll(true);
+    const totalWidth = COOP_DEFENSE_CLASS_IDS.length * CLASS_BUTTON_W
+      + (COOP_DEFENSE_CLASS_IDS.length - 1) * CLASS_BUTTON_GAP;
+    const startX = CX - totalWidth / 2;
+
+    COOP_DEFENSE_CLASS_IDS.forEach((classId, index) => {
+      const definition = COOP_DEFENSE_CLASS_DEFINITIONS[classId];
+      const active = classId === activeClassId;
+      const centerX = startX + CLASS_BUTTON_W / 2 + index * (CLASS_BUTTON_W + CLASS_BUTTON_GAP);
+      const background = this.scene.add.rectangle(
+        centerX,
+        CLASS_ROW_Y,
+        CLASS_BUTTON_W,
+        CLASS_BUTTON_H,
+        active ? COLORS.GOLD_5 : COLORS.GREY_8,
+        active ? 0.98 : 0.82,
+      )
+        .setStrokeStyle(active ? 2 : 1, active ? COLORS.GOLD_1 : COLORS.GREY_5)
+        .setScrollFactor(0)
+        .setInteractive({ useHandCursor: true });
+      const label = this.scene.add.text(centerX, CLASS_ROW_Y, definition.displayName, {
+        fontSize: '13px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(active ? COLORS.GOLD_1 : COLORS.GREY_2),
+      }).setOrigin(0.5).setScrollFactor(0);
+      background.on('pointerdown', () => {
+        if (classId === this.getProgress().classId) return;
+        this.onSelectClass(classId);
+        this.activeCategoryIndex = 0;
+        this.requestRefresh();
+      });
+      background.on('pointerover', () => {
+        this.scene.tweens.add({
+          targets: [background, label],
+          scaleX: 1.04,
+          scaleY: 1.04,
+          duration: 90,
+          ease: 'Sine.easeOut',
+        });
+      });
+      background.on('pointerout', () => {
+        this.scene.tweens.add({
+          targets: [background, label],
+          scaleX: 1,
+          scaleY: 1,
+          duration: 110,
+          ease: 'Sine.easeOut',
+        });
+      });
+      this.classContainer!.add([background, label]);
+    });
   }
 
   private clearTabDecorations(): void {

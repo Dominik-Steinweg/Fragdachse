@@ -1,4 +1,5 @@
-import type { CoopDefenseUpgradeProfile } from '../types';
+import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
+import type { CoopDefenseClassId, CoopDefenseUpgradeProfile } from '../types';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   canLevelDownCoopDefenseUpgrade,
@@ -24,6 +25,7 @@ const FIRST_LEVEL_UP_XP = 10;
 const XP_INCREASE_PER_LEVEL = 25;
 
 export interface CoopDefenseProgressSnapshot {
+  classId: CoopDefenseClassId;
   totalXp: number;
   level: number;
   currentLevelStartXp: number;
@@ -104,23 +106,25 @@ export function getCoopDefenseProgressSnapshot(
   totalXp: number,
   profile: CoopDefenseUpgradeProfile = buildDefaultCoopDefenseUpgradeProfile(),
   earnedBossPoints = 0,
+  classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
 ): CoopDefenseProgressSnapshot {
   const safeXp = sanitizeXp(totalXp);
-  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile);
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, classId);
   const level = getCoopDefenseLevelForXp(safeXp);
   const currentLevelStartXp = getCoopDefenseXpThresholdForLevel(level);
   const nextLevelXp = getCoopDefenseXpThresholdForLevel(level + 1);
   const xpSpan = Math.max(1, nextLevelXp - currentLevelStartXp);
-  const spentUpgradePoints = getSpentCoopDefenseUpgradePoints(safeProfile);
-  const availableUpgradePoints = getAvailableCoopDefenseUpgradePoints(level, safeProfile);
+  const spentUpgradePoints = getSpentCoopDefenseUpgradePoints(safeProfile, classId);
+  const availableUpgradePoints = getAvailableCoopDefenseUpgradePoints(level, safeProfile, classId);
   const safeEarnedBossPoints = Math.max(0, Math.floor(earnedBossPoints));
-  const spentBossPoints = getSpentCoopDefenseBossPoints(safeProfile);
-  const availableBossPoints = getAvailableCoopDefenseBossPoints(safeEarnedBossPoints, safeProfile);
-  const hpUpgradeState = getCoopDefenseUpgradeState(safeProfile, COOP_DEFENSE_HP_UPGRADE_ID);
+  const spentBossPoints = getSpentCoopDefenseBossPoints(safeProfile, classId);
+  const availableBossPoints = getAvailableCoopDefenseBossPoints(safeEarnedBossPoints, safeProfile, classId);
+  const hpUpgradeState = getCoopDefenseUpgradeState(safeProfile, COOP_DEFENSE_HP_UPGRADE_ID, classId);
   const hpUpgradeMaxLevel = getCoopDefenseUpgradeDefinition(COOP_DEFENSE_HP_UPGRADE_ID)?.maxLevel ?? hpUpgradeState.level;
-  const upgradeCategories = buildUpgradeCategorySnapshots(safeProfile, level, safeEarnedBossPoints);
+  const upgradeCategories = buildUpgradeCategorySnapshots(safeProfile, level, safeEarnedBossPoints, classId);
 
   return {
+    classId,
     totalXp: safeXp,
     level,
     currentLevelStartXp,
@@ -144,13 +148,14 @@ function buildUpgradeCategorySnapshots(
   profile: CoopDefenseUpgradeProfile,
   playerLevel: number,
   earnedBossPoints: number,
+  classId: CoopDefenseClassId,
 ): readonly CoopDefenseUpgradeCategorySnapshot[] {
-  return getCoopDefenseUpgradeCategories().map((category) => ({
+  return getCoopDefenseUpgradeCategories(classId).map((category) => ({
     id: category.id,
     label: category.label,
     description: category.description,
     upgrades: category.upgrades.map((definition) => (
-      buildUpgradeNodeSnapshot(profile, playerLevel, earnedBossPoints, category, definition)
+      buildUpgradeNodeSnapshot(profile, playerLevel, earnedBossPoints, classId, category, definition)
     )),
   }));
 }
@@ -159,11 +164,12 @@ function buildUpgradeNodeSnapshot(
   profile: CoopDefenseUpgradeProfile,
   playerLevel: number,
   earnedBossPoints: number,
+  classId: CoopDefenseClassId,
   category: CoopDefenseUpgradeCategoryDefinition,
   definition: CoopDefenseUpgradeDefinition,
 ): CoopDefenseUpgradeNodeSnapshot {
-  const state = getCoopDefenseUpgradeState(profile, definition.id);
-  const availableBossPoints = getAvailableCoopDefenseBossPoints(earnedBossPoints, profile);
+  const state = getCoopDefenseUpgradeState(profile, definition.id, classId);
+  const availableBossPoints = getAvailableCoopDefenseBossPoints(earnedBossPoints, profile, classId);
 
   return {
     id: definition.id,
@@ -180,18 +186,19 @@ function buildUpgradeNodeSnapshot(
     costPerLevel: definition.costPerLevel,
     bossPointCostPerLevel: definition.bossPointCostPerLevel,
     bossPointRequirementMet: availableBossPoints >= definition.bossPointCostPerLevel,
-    canLevelUp: canLevelUpCoopDefenseUpgrade(profile, definition.id, playerLevel, earnedBossPoints),
-    canLevelDown: canLevelDownCoopDefenseUpgrade(profile, definition.id),
-    requires: definition.requires.map((requirement) => buildRequirementSnapshot(profile, requirement)),
+    canLevelUp: canLevelUpCoopDefenseUpgrade(profile, definition.id, playerLevel, earnedBossPoints, classId),
+    canLevelDown: canLevelDownCoopDefenseUpgrade(profile, definition.id, classId),
+    requires: definition.requires.map((requirement) => buildRequirementSnapshot(profile, classId, requirement)),
     loadoutUnlock: definition.loadoutUnlock ?? null,
   };
 }
 
 function buildRequirementSnapshot(
   profile: CoopDefenseUpgradeProfile,
+  classId: CoopDefenseClassId,
   requirement: CoopDefenseUpgradeRequirementDefinition,
 ): CoopDefenseUpgradeRequirementSnapshot {
-  const state = getCoopDefenseUpgradeState(profile, requirement.upgradeId);
+  const state = getCoopDefenseUpgradeState(profile, requirement.upgradeId, classId);
   const definition = getCoopDefenseUpgradeDefinition(requirement.upgradeId);
 
   return {

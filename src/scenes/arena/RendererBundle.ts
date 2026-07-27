@@ -14,6 +14,7 @@ import { EnergyShieldRenderer } from '../../effects/EnergyShieldRenderer';
 import { TeslaDomeRenderer }   from '../../effects/TeslaDomeRenderer';
 import { HealingAuraRenderer } from '../../effects/HealingAuraRenderer';
 import { GuardianSpiritRenderer } from '../../effects/GuardianSpiritRenderer';
+import { RepairDroneRenderer } from '../../effects/RepairDroneRenderer';
 import { SlimeTrailRenderer } from '../../effects/SlimeTrailRenderer';
 import { CorpseMarkerRenderer } from '../../effects/CorpseMarkerRenderer';
 import { FlamethrowerUpgradeRenderer } from '../../effects/FlamethrowerUpgradeRenderer';
@@ -60,6 +61,7 @@ export interface RendererBundle {
   teslaDome:           TeslaDomeRenderer;
   healingAura:         HealingAuraRenderer;
   guardianSpirit:      GuardianSpiritRenderer;
+  repairDrone:         RepairDroneRenderer;
   slimeTrail:          SlimeTrailRenderer;
   corpseMarker:        CorpseMarkerRenderer;
   flamethrowerUpgrades: FlamethrowerUpgradeRenderer;
@@ -137,6 +139,8 @@ export function createRendererBundle(
 
   const guardianSpirit = new GuardianSpiritRenderer(scene);
   guardianSpirit.generateTextures();
+  const repairDrone = new RepairDroneRenderer(scene);
+  repairDrone.generateTextures();
 
   const slimeTrail = new SlimeTrailRenderer(scene);
   const corpseMarker = new CorpseMarkerRenderer(scene);
@@ -209,7 +213,7 @@ export function createRendererBundle(
   // `ProjectileManager.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   return {
-    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, holyGrenade,
+    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow, lighting,
     train: null,

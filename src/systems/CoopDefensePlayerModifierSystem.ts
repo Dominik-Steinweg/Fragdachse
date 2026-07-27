@@ -1,5 +1,9 @@
 import { HP_MAX } from '../config';
-import type { CoopDefenseUpgradeProfile, LoadoutCommitSnapshot } from '../types';
+import {
+  getCoopDefenseClassDefinition,
+  type CoopDefenseClassDefinition,
+} from '../config/coopDefenseClasses';
+import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot } from '../types';
 import {
   cloneCoopDefenseUpgradeProfile,
   COOP_DEFENSE_PLAYER_STAT_HP_REGEN_PER_SECOND,
@@ -9,6 +13,7 @@ import {
 } from '../utils/coopDefenseUpgrades';
 
 export interface CoopDefensePlayerRuntimeModifiers {
+  classId: CoopDefenseClassId;
   additiveStats: Readonly<Record<string, number>>;
   percentageStats: Readonly<Record<string, number>>;
   maxHp: number;
@@ -16,6 +21,7 @@ export interface CoopDefensePlayerRuntimeModifiers {
 }
 
 const DEFAULT_RUNTIME_MODIFIERS: CoopDefensePlayerRuntimeModifiers = {
+  classId: 'dachs_nukem',
   additiveStats: Object.freeze({}),
   percentageStats: Object.freeze({}),
   maxHp: HP_MAX,
@@ -44,24 +50,59 @@ export class CoopDefensePlayerModifierSystem {
 
   syncPlayer(playerId: string, snapshot: LoadoutCommitSnapshot | null): void {
     const rawProfile = snapshot?.coopDefenseProfile;
-    if (!rawProfile) {
+    const classId = snapshot?.coopDefenseClassId;
+    if (!rawProfile || !classId) {
       this.committedProfiles.delete(playerId);
       this.runtimeModifiers.delete(playerId);
       return;
     }
 
-    const profile = sanitizeCoopDefenseUpgradeProfile(rawProfile);
-    this.committedProfiles.set(playerId, cloneCoopDefenseUpgradeProfile(profile));
-    this.runtimeModifiers.set(playerId, this.resolveRuntimeModifiers(profile));
+    const profile = sanitizeCoopDefenseUpgradeProfile(rawProfile, classId);
+    this.committedProfiles.set(playerId, cloneCoopDefenseUpgradeProfile(profile, classId));
+    this.runtimeModifiers.set(playerId, this.resolveRuntimeModifiers(profile, classId));
   }
 
   getCommittedProfile(playerId: string): CoopDefenseUpgradeProfile | null {
     const profile = this.committedProfiles.get(playerId);
-    return profile ? cloneCoopDefenseUpgradeProfile(profile) : null;
+    const classId = this.runtimeModifiers.get(playerId)?.classId;
+    return profile ? cloneCoopDefenseUpgradeProfile(profile, classId) : null;
   }
 
   getModifiers(playerId: string): CoopDefensePlayerRuntimeModifiers {
     return this.runtimeModifiers.get(playerId) ?? DEFAULT_RUNTIME_MODIFIERS;
+  }
+
+  getClassId(playerId: string): CoopDefenseClassId | null {
+    return this.runtimeModifiers.get(playerId)?.classId ?? null;
+  }
+
+  getClassDefinition(playerId: string): CoopDefenseClassDefinition | null {
+    const classId = this.getClassId(playerId);
+    return classId ? getCoopDefenseClassDefinition(classId) : null;
+  }
+
+  resolveOutgoingDamage(
+    attackerId: string | undefined,
+    targetId: string,
+    amount: number,
+    allowCritical: boolean,
+    random: () => number = Math.random,
+  ): { amount: number; isCritical: boolean } {
+    if (!attackerId || attackerId === targetId || amount <= 0) {
+      return { amount, isCritical: false };
+    }
+    const definition = this.getClassDefinition(attackerId);
+    if (!definition) return { amount, isCritical: false };
+
+    const isCritical = allowCritical
+      && definition.criticalChance > 0
+      && random() < definition.criticalChance;
+    return {
+      amount: amount
+        * definition.outgoingDamageMultiplier
+        * (isCritical ? definition.criticalDamageMultiplier : 1),
+      isCritical,
+    };
   }
 
   getNumericStat(playerId: string, stat: string): number {
@@ -73,9 +114,16 @@ export class CoopDefensePlayerModifierSystem {
   }
 
   getResolvedStat(playerId: string, stat: string, baseValue: number): number {
+    const classDefinition = this.getClassDefinition(playerId);
+    const resolvedBase = stat === 'player.adrenalineRegenRate'
+      ? (classDefinition?.adrenalineRegenPerSecond ?? baseValue)
+      : baseValue;
     const additive = this.getNumericStat(playerId, stat);
     const percentage = this.getPercentageStat(playerId, stat);
-    return Math.max(0, (baseValue + additive) * (1 + percentage));
+    let value = Math.max(0, (resolvedBase + additive) * (1 + percentage));
+    if (stat === 'player.runSpeed') value *= classDefinition?.runSpeedMultiplier ?? 1;
+    if (stat === 'player.maxArmor') value *= classDefinition?.maxArmorMultiplier ?? 1;
+    return value;
   }
 
   getMaxHp(playerId: string): number {
@@ -91,13 +139,23 @@ export class CoopDefensePlayerModifierSystem {
     this.runtimeModifiers.clear();
   }
 
-  private resolveRuntimeModifiers(profile: CoopDefenseUpgradeProfile): CoopDefensePlayerRuntimeModifiers {
-    const totals = getCoopDefenseResolvedEffectTotals(profile);
+  private resolveRuntimeModifiers(
+    profile: CoopDefenseUpgradeProfile,
+    classId: CoopDefenseClassId,
+  ): CoopDefensePlayerRuntimeModifiers {
+    const totals = getCoopDefenseResolvedEffectTotals(profile, classId);
+    const classDefinition = getCoopDefenseClassDefinition(classId);
     return {
+      classId,
       additiveStats: totals.additive,
       percentageStats: totals.percentage,
-      maxHp: HP_MAX + (totals.additive[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0),
-      hpRegenPerSecond: totals.additive[COOP_DEFENSE_PLAYER_STAT_HP_REGEN_PER_SECOND] ?? 0,
+      maxHp: (
+        HP_MAX + (totals.additive[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0)
+      ) * (1 + (totals.percentage[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0))
+        * classDefinition.maxHpMultiplier,
+      hpRegenPerSecond: (
+        totals.additive[COOP_DEFENSE_PLAYER_STAT_HP_REGEN_PER_SECOND] ?? 0
+      ) + classDefinition.hpRegenBonusPerSecond,
     };
   }
 }

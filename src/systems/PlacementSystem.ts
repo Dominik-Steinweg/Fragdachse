@@ -13,6 +13,7 @@ import {
   isPointInsideArena,
 } from '../config';
 import type { ArenaLayout, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
+import type { CoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 
 interface RuntimeRockRecord extends SyncedPlaceableRock { lastAttackerId?: string }
 
@@ -75,6 +76,7 @@ export class PlacementSystem {
   update(now: number): SyncedPlaceableRock[] {
     const expired: SyncedPlaceableRock[] = [];
     for (const rock of this.runtimeRocks.values()) {
+      if (rock.expiresAt <= 0) continue;
       if (now < rock.expiresAt) continue;
       this.runtimeRocks.delete(rock.id);
       this.rockGrid.remove(rock.gridX, rock.gridY);
@@ -103,6 +105,78 @@ export class PlacementSystem {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return;
     rock.angle = angle;
+  }
+
+  repairRock(id: number, amount: number): SyncedPlaceableRock | undefined {
+    const rock = this.runtimeRocks.get(id);
+    if (!rock || amount <= 0 || rock.hp <= 0 || rock.hp >= rock.maxHp) return undefined;
+    rock.hp = Math.min(rock.maxHp, rock.hp + amount);
+    return { ...rock };
+  }
+
+  getOwnedConstructions(ownerId: string): readonly SyncedPlaceableRock[] {
+    return [...this.runtimeRocks.values()].filter((rock) => (
+      rock.ownerId === ownerId && rock.constructionId !== undefined
+    ));
+  }
+
+  tryPlaceConstruction(
+    cfg: CoopDefenseConstructionDefinition,
+    maxHp: number,
+    playerId: string,
+    ownerColor: number,
+    originX: number,
+    originY: number,
+    targetX: number,
+    targetY: number,
+  ): SyncedPlaceableRock | null {
+    const preview = this.getConstructionPlacementPreview(cfg, originX, originY, targetX, targetY);
+    if (!preview?.isValid) return null;
+    const resolvedMaxHp = Math.max(1, maxHp);
+    const rock: RuntimeRockRecord = {
+      id: this.nextRockId++,
+      kind: 'turret',
+      constructionId: cfg.id,
+      gridX: preview.gridX,
+      gridY: preview.gridY,
+      hp: resolvedMaxHp,
+      maxHp: resolvedMaxHp,
+      ownerId: playerId,
+      ownerColor,
+      expiresAt: 0,
+      warningStartsAt: 0,
+      angle: preview.angle,
+      targetRange: cfg.targetRange,
+      turretWeaponId: cfg.weaponId,
+    };
+    this.runtimeRocks.set(rock.id, rock);
+    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    return { ...rock };
+  }
+
+  getConstructionPlacementPreview(
+    cfg: CoopDefenseConstructionDefinition,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined {
+    const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, cfg.placementRange);
+    if (!targetCell) return undefined;
+    const targetWorld = this.gridToWorld(targetCell.gridX, targetCell.gridY);
+    return {
+      angle: Phaser.Math.Angle.Between(originX, originY, targetWorld.x, targetWorld.y),
+      targetX: targetWorld.x,
+      targetY: targetWorld.y,
+      gridX: targetCell.gridX,
+      gridY: targetCell.gridY,
+      isValid: this.canPlaceSingleCell(targetCell.gridX, targetCell.gridY),
+      frame: 0,
+      range: cfg.placementRange,
+      kind: 'turret',
+      sourceSlot: 'weapon2',
+      constructionId: cfg.id,
+    };
   }
 
   tryPlaceRock(
@@ -182,6 +256,9 @@ export class PlacementSystem {
         || current.warningStartsAt !== incoming.warningStartsAt
         || current.kind !== incoming.kind
         || current.angle !== incoming.angle
+        || current.constructionId !== incoming.constructionId
+        || current.turretWeaponId !== incoming.turretWeaponId
+        || current.targetRange !== incoming.targetRange
       ) {
         this.runtimeRocks.set(incoming.id, { ...incoming });
         if (current.gridX !== incoming.gridX || current.gridY !== incoming.gridY) {
