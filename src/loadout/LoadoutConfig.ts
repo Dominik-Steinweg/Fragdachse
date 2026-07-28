@@ -425,6 +425,8 @@ interface BaseUtilityConfig {
   readonly displayName: string;
   readonly type: UtilityType;
   readonly cooldown: number;        // ms
+  /** Verbrauch beim Inspector Gadachs; andere Klassen verwenden keine Utility-Adrenalinkosten. */
+  readonly inspectorAdrenalineCost?: number;
   readonly activation: UtilityActivationConfig;
   readonly projectileSpeed: number; // px/s maximale Wurfgeschwindigkeit
   readonly projectileSize: number;  // px
@@ -2378,6 +2380,7 @@ export const UTILITY_CONFIGS = {
     displayName:     'HE Granate',
     type:            'explosive',
     cooldown:        3000,
+    inspectorAdrenalineCost: 20,
     activation:      STANDARD_GRENADE_CHARGE,
     projectileSpeed: 800,
     projectileSize:  10,
@@ -2405,6 +2408,7 @@ export const UTILITY_CONFIGS = {
     displayName:            'Smoke Granate',
     type:                   'smoke',
     cooldown:               6000,
+    inspectorAdrenalineCost: 40,
     activation:             STANDARD_GRENADE_CHARGE,
     projectileSpeed:        800,
     projectileSize:         10,
@@ -2436,6 +2440,7 @@ export const UTILITY_CONFIGS = {
     displayName:        'Molotov',
     type:               'molotov',
     cooldown:           5000,
+    inspectorAdrenalineCost: 30,
     activation:         STANDARD_GRENADE_CHARGE,
     projectileSpeed:    800,
     projectileSize:     10,
@@ -2470,6 +2475,7 @@ export const UTILITY_CONFIGS = {
     displayName:         'Time-Bubble',
     type:                'time_bubble',
     cooldown:            5000,
+    inspectorAdrenalineCost: 30,
     activation:          STANDARD_GRENADE_CHARGE,
     projectileSpeed:     760,
     projectileSize:      12,
@@ -2569,6 +2575,7 @@ export const UTILITY_CONFIGS = {
     displayName:         'Stinkdrüsen',
     type:                'stinkcloud',
     cooldown:            8000,
+    inspectorAdrenalineCost: 40,
     activation:          { type: 'instant' } as InstantUtilityActivationConfig,
     projectileSpeed:     0,             // Kein Projektil – Sofortaktivierung
     projectileSize:      0,
@@ -2608,6 +2615,7 @@ export const UTILITY_CONFIGS = {
     displayName:          'Translocator',
     type:                 'translocator',
     cooldown:             3000,
+    inspectorAdrenalineCost: 20,
     activation:           STANDARD_GRENADE_CHARGE,
     projectileSpeed:      600, 
     projectileSize:       16,
@@ -2632,6 +2640,7 @@ export const UTILITY_CONFIGS = {
     displayName:         'Felsbau',
     type:                'placeable_rock',
     cooldown:            100,
+    inspectorAdrenalineCost: 20,
     activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
     projectileSpeed:     0,
     projectileSize:      0,
@@ -2657,6 +2666,7 @@ export const UTILITY_CONFIGS = {
     displayName:         'Fliegenpilz',
     type:                'placeable_turret',
     cooldown:            10000,
+    inspectorAdrenalineCost: 50,
     activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
     projectileSpeed:     0,
     projectileSize:      0,
@@ -2686,6 +2696,7 @@ export const UTILITY_CONFIGS = {
     displayName:     'Zeus',
     type:            'taser',
     cooldown:        4000,
+    inspectorAdrenalineCost: 30,
     activation:      { type: 'instant' } as InstantUtilityActivationConfig,
     damage:          200,
     range:           80,
@@ -2709,6 +2720,7 @@ export const UTILITY_CONFIGS = {
     displayName:               'Decoy',
     type:                      'decoy',
     cooldown:                  12000,
+    inspectorAdrenalineCost:   50,
     activation:                { type: 'instant' } as InstantUtilityActivationConfig,
     projectileSpeed:           0,
     projectileSize:            0,

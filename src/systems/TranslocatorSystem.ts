@@ -137,7 +137,7 @@ export class TranslocatorSystem {
 
     // 6. Utility-Cooldown starten
     const cd = cfg.cooldown;
-    bridge.publishUtilityCooldownUntil(playerId, now + cd);
+    bridge.publishUtilityCooldownUntil(playerId, now + cd, cfg.id);
 
     return true;
   }

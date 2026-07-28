@@ -483,6 +483,10 @@ export interface CoopDefenseUpgradeState {
 /** Persistentes lokales Upgrade-Profil fuer Coop-Defense. */
 export interface CoopDefenseUpgradeProfile {
   upgrades: Record<string, CoopDefenseUpgradeState>;
+  /** Gemeinsame Utility-Slots (Konstrukte und Utilities), pro Klassenprofil gespeichert. */
+  toolLoadout?: LoadoutToolRef[];
+  /** Zuletzt gewaehlte Utility fuer die E-Taste. */
+  selectedTool?: LoadoutToolRef | null;
 }
 
 /** Dauerhafte Coop-Defense-Klassenspezialisierung. */
@@ -490,6 +494,14 @@ export type CoopDefenseClassId = 'dachs_nukem' | 'dachs_of_steel' | 'inspector_g
 
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
 export type ConstructionId = 'rocket_turret' | 'machine_gun_turret' | 'flame_turret';
+
+/**
+ * Eintrag in den gemeinsamen Utility-Slots eines Loadouts. Konstruktionen und Utilities
+ * sind hier gleichwertig; nur der Inspector besitzt derzeit solche Slots.
+ */
+export type LoadoutToolRef =
+  | { kind: 'construction'; id: ConstructionId }
+  | { kind: 'utility'; id: string };
 
 /** Audio-Metadaten fuer schussbezogene Loadout-Aktionen. */
 export interface LoadoutShotAudioConfig {
@@ -505,6 +517,8 @@ export interface LoadoutCommitSnapshot {
   ultimate: string;
   coopDefenseClassId: CoopDefenseClassId | null;
   coopDefenseProfile: CoopDefenseUpgradeProfile | null;
+  /** Autoritativ ausgeruestete Utility-Slots (derzeit nur Inspector). */
+  tools?: LoadoutToolRef[];
 }
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
@@ -522,6 +536,7 @@ export interface LoadoutUseParams {
   tunnelStartGridX?: number;
   tunnelStartGridY?: number;
   constructionId?: ConstructionId;
+  toolRef?: LoadoutToolRef;
 }
 
 export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid';
@@ -1232,6 +1247,7 @@ export interface SyncedPlaceableRock {
   targetRange?: number;
   turretWeaponId?: TurretWeaponId;
   constructionId?: ConstructionId;
+  toolRef?: LoadoutToolRef;
 }
 
 /** Waffen, die ein platzierbares Turret fuehren kann. */

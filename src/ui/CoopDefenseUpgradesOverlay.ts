@@ -20,14 +20,28 @@ import {
   type LivingBarPalette,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
-import { getCoopDefenseUpgradeTextureKey } from '../utils/coopDefenseUpgrades';
+import {
+  getCoopDefenseUpgradeTextureKey,
+  isCoopDefenseToolCategory,
+} from '../utils/coopDefenseUpgrades';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { attachHoverEffect } from './uiHover';
 import {
   COOP_DEFENSE_CLASS_DEFINITIONS,
   COOP_DEFENSE_CLASS_IDS,
 } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId } from '../types';
+import type { CoopDefenseClassId, LoadoutSlot, LoadoutToolRef } from '../types';
+import {
+  describeLoadoutItem,
+  describeLoadoutTool,
+  loadoutToolKey,
+  type LoadoutItemPresentation,
+} from '../loadout/LoadoutCatalog';
+import {
+  LoadoutSlotPicker,
+  type LoadoutPickerEntry,
+  type LoadoutPickerGroup,
+} from './LoadoutSlotPicker';
 
 // ── Canvas helpers for modern node textures ──────────────────────────────────
 
@@ -66,9 +80,8 @@ const SUBTITLE_Y = TITLE_Y + 32;
 const BAR_W = PANEL_W - 140;
 const BAR_H = 18;
 const BAR_X = CX - BAR_W / 2;
-const BAR_Y = SUBTITLE_Y + 48;
-const PROGRESS_LABEL_Y = BAR_Y + 22;
-const HEADER_DIVIDER_Y = PROGRESS_LABEL_Y + 30;
+const BAR_Y = SUBTITLE_Y + 36;
+const HEADER_DIVIDER_Y = BAR_Y + 26;
 const HEADER_DIVIDER_W = 360;
 const POINTS_Y = HEADER_DIVIDER_Y + 32;
 const POINTS_CHIP_W = 520;
@@ -82,11 +95,19 @@ const ACTION_BTN_GAP = 40;
 const ACTION_BTN_Y = CY + PANEL_H / 2 - 60;
 const FOOTER_Y = CY + PANEL_H / 2 - 22;
 
-const CLASS_ROW_Y = POINTS_Y + 50;
+const CLASS_ROW_Y = POINTS_Y + 52;
 const CLASS_BUTTON_W = 210;
 const CLASS_BUTTON_H = 30;
 const CLASS_BUTTON_GAP = 14;
-const TAB_TOP = CLASS_ROW_Y + 28;
+// Loadout-Block: Jede Kategorie bekommt eine Spaltenkarte, die Slot und Tab zusammenfasst.
+// Deshalb liegt die Kartenoberkante ueber der Slot-Zeile und die Unterkante unter den Tabs.
+const LOADOUT_LABEL_Y = CLASS_ROW_Y + 32;
+const LOADOUT_CARD_TOP = CLASS_ROW_Y + 46;
+const LOADOUT_SLOT_SIZE = 56;
+const LOADOUT_SLOT_GAP = 8;
+const LOADOUT_ROW_Y = LOADOUT_CARD_TOP + 12 + LOADOUT_SLOT_SIZE / 2;
+const LOADOUT_CARD_RADIUS = 12;
+const TAB_TOP = LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 14;
 const TAB_H = 36;
 const TAB_GAP = 12;
 const TAB_MAX_W = 240;
@@ -146,6 +167,11 @@ type PlacedNode = {
   x: number;
   y: number;
 };
+
+/** Was ein Node im Baum ins Loadout uebernehmen kann. */
+type NodeEquipTarget =
+  | { kind: 'tool'; tool: LoadoutToolRef }
+  | { kind: 'slot'; slot: LoadoutSlot; itemId: string };
 
 type PlacedItemLane = {
   x: number;
@@ -216,7 +242,6 @@ export class CoopDefenseUpgradesOverlay {
   private container: Phaser.GameObjects.Container | null = null;
   private dimRect: Phaser.GameObjects.Rectangle | null = null;
   private levelText: Phaser.GameObjects.Text | null = null;
-  private xpText: Phaser.GameObjects.Text | null = null;
   private pointsText: Phaser.GameObjects.Text | null = null;
   private pointsChip: Phaser.GameObjects.Image | null = null;
   private respecButton: Phaser.GameObjects.Image | null = null;
@@ -224,10 +249,13 @@ export class CoopDefenseUpgradesOverlay {
   private respecEnabled = false;
   private progressFill: Phaser.GameObjects.Image | null = null;
   private xpBarEffect: LivingBarEffect | null = null;
-  private progressLabelText: Phaser.GameObjects.Text | null = null;
   private contentBg: Phaser.GameObjects.Image | null = null;
   private tabsContainer: Phaser.GameObjects.Container | null = null;
   private classContainer: Phaser.GameObjects.Container | null = null;
+  private loadoutContainer: Phaser.GameObjects.Container | null = null;
+  private loadoutHeaderText: Phaser.GameObjects.Text | null = null;
+  private loadoutHintTimer: Phaser.Time.TimerEvent | null = null;
+  private picker: LoadoutSlotPicker | null = null;
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
   private tooltipContainer: Phaser.GameObjects.Container | null = null;
   private tooltipBackground: Phaser.GameObjects.Rectangle | null = null;
@@ -254,6 +282,10 @@ export class CoopDefenseUpgradesOverlay {
     private readonly onLevelDownUpgrade: (upgradeId: string) => boolean,
     private readonly onFullRespec: () => boolean,
     private readonly onSelectClass: (classId: CoopDefenseClassId) => void,
+    private readonly onToggleLoadoutTool: (tool: LoadoutToolRef) => boolean,
+    private readonly onSetLoadoutTools: (tools: readonly LoadoutToolRef[]) => boolean,
+    private readonly getLoadoutSelection: () => Record<LoadoutSlot, string | null>,
+    private readonly onSelectLoadoutItem: (slot: LoadoutSlot, itemId: string) => boolean,
     private readonly onCancel: () => void,
     private readonly onApply: () => void,
   ) {}
@@ -263,16 +295,16 @@ export class CoopDefenseUpgradesOverlay {
     this.container = null;
     this.dimRect = null;
     this.levelText = null;
-    this.xpText = null;
     this.pointsText = null;
     this.pointsChip = null;
     this.respecButton = null;
     this.respecLabel = null;
     this.progressFill = null;
-    this.progressLabelText = null;
     this.contentBg = null;
     this.tabsContainer = null;
     this.classContainer = null;
+    this.loadoutContainer = null;
+    this.loadoutHeaderText = null;
     this.upgradesContainer = null;
     this.tooltipContainer = null;
     this.tooltipBackground = null;
@@ -323,21 +355,30 @@ export class CoopDefenseUpgradesOverlay {
       }).setOrigin(0.5).setScrollFactor(0),
     );
 
+    // Level und XP-Balken tragen ihre Zahlen im Mouse-over, damit der Kopfbereich schmal bleibt.
     this.levelText = this.scene.add.text(CX, SUBTITLE_Y, 'Level 1', {
       fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0);
+    this.attachInfoTooltip(
+      this.levelText,
+      () => `Level ${this.getProgress().level}`,
+      () => `${this.getProgress().totalXp} XP gesamt gesammelt.`,
+    );
     objects.push(this.levelText);
 
-    this.xpText = this.scene.add.text(CX, SUBTITLE_Y + 28, '0 XP gesamt', {
-      fontSize: '15px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_2),
-    }).setOrigin(0.5).setScrollFactor(0);
-    objects.push(this.xpText);
-
-    objects.push(
-      this.scene.add.rectangle(CX, BAR_Y, BAR_W, BAR_H, COLORS.GREY_9, 0.95)
-        .setStrokeStyle(1, COLORS.GREY_4)
-        .setScrollFactor(0),
+    const barBackground = this.scene.add.rectangle(CX, BAR_Y, BAR_W, BAR_H, COLORS.GREY_9, 0.95)
+      .setStrokeStyle(1, COLORS.GREY_4)
+      .setScrollFactor(0);
+    this.attachInfoTooltip(
+      barBackground,
+      () => 'Level-Fortschritt',
+      () => {
+        const progress = this.getProgress();
+        const remaining = Math.max(0, progress.nextLevelXp - progress.totalXp);
+        return `${remaining} XP bis Level ${progress.level + 1}.`;
+      },
     );
+    objects.push(barBackground);
 
     // Modern XP bar: gradient image cropped to fill width + living particle/glow effect.
     ensureLivingBarTextures(this.scene);
@@ -353,11 +394,6 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0);
     this.progressFill.setCrop(0, 0, BAR_W, BAR_H);
     objects.push(this.progressFill);
-
-    this.progressLabelText = this.scene.add.text(CX, PROGRESS_LABEL_Y, '500 XP bis Level 26', {
-      fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
-    }).setOrigin(0.5, 0).setScrollFactor(0);
-    objects.push(this.progressLabelText);
 
     // Schlichte Trennlinie zwischen Level-Fortschritt und Upgrade-Punkten.
     objects.push(
@@ -397,6 +433,9 @@ export class CoopDefenseUpgradesOverlay {
     this.classContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.classContainer);
 
+    this.loadoutContainer = this.scene.add.container(0, 0).setScrollFactor(0);
+    objects.push(this.loadoutContainer);
+
     this.tabsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.tabsContainer);
 
@@ -428,12 +467,13 @@ export class CoopDefenseUpgradesOverlay {
       this.tooltipDivider,
       this.tooltipBodyText,
     ])
-      .setDepth(DEPTH.OVERLAY + 2)
+      // Ueber dem Auswahl-Popup (OVERLAY + 2), damit Slot-Erklaerungen sichtbar bleiben.
+      .setDepth(DEPTH.OVERLAY + 3)
       .setVisible(false);
     objects.push(this.tooltipContainer);
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurueck]', {
+      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurueck | ✓ am Symbol oder Klick auf einen Loadout-Slot ruestet aus ]', {
         fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -441,6 +481,7 @@ export class CoopDefenseUpgradesOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
+    this.picker = new LoadoutSlotPicker(this.scene, this.container, DEPTH.OVERLAY + 2);
 
     // Living breathing effect for the XP bar (particles confined to the fill region + glow).
     this.xpBarEffect = new LivingBarEffect(
@@ -460,24 +501,22 @@ export class CoopDefenseUpgradesOverlay {
   refresh(): void {
     if (
       !this.levelText
-      || !this.xpText
       || !this.pointsText
       || !this.progressFill
-      || !this.progressLabelText
       || !this.upgradesContainer
       || !this.tabsContainer
       || !this.classContainer
+      || !this.loadoutContainer
     ) {
       return;
     }
 
     this.hideTooltip();
+    this.picker?.close();
 
     const progress = this.getProgress();
-    const levelXpSpan = Math.max(1, progress.nextLevelXp - progress.currentLevelStartXp);
 
     this.levelText.setText(`Level ${progress.level}`);
-    this.xpText.setText(`${progress.totalXp} XP gesamt`);
 
     const hasPoints = progress.availableUpgradePoints > 0 || progress.availableBossPoints > 0;
     this.pointsText.setText(
@@ -497,8 +536,6 @@ export class CoopDefenseUpgradesOverlay {
     const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
     this.progressFill.setCrop(0, 0, fillW, BAR_H);
     this.xpBarEffect?.setFilledWidth(fillW);
-    const remainingXp = Math.max(0, levelXpSpan - progress.xpIntoLevel);
-    this.progressLabelText.setText(`${remainingXp} XP bis Level ${progress.level + 1}`);
 
     const categoryCount = progress.upgradeCategories.length;
     if (categoryCount > 0) {
@@ -506,6 +543,7 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     this.renderClasses(progress.classId);
+    this.renderLoadoutRow(progress);
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
   }
@@ -550,6 +588,7 @@ export class CoopDefenseUpgradesOverlay {
     this.visible = false;
     this.dismissDelay?.destroy();
     this.dismissDelay = null;
+    this.picker?.close();
     this.dimRect?.disableInteractive().removeAllListeners();
 
     this.clearNodeDecorations();
@@ -576,6 +615,10 @@ export class CoopDefenseUpgradesOverlay {
 
   destroy(): void {
     this.dismissDelay?.destroy();
+    this.loadoutHintTimer?.destroy();
+    this.loadoutHintTimer = null;
+    this.picker?.close();
+    this.picker = null;
     if (this.keyHandler) {
       this.scene.input.keyboard?.off('keydown', this.keyHandler);
       this.keyHandler = null;
@@ -590,10 +633,26 @@ export class CoopDefenseUpgradesOverlay {
     this.progressFill = null;
   }
 
+  /**
+   * Haengt ein reines Erklaer-Mouse-over an ein sonst nicht anklickbares Element. Titel und
+   * Text werden erst beim Ueberfahren erzeugt, damit sie immer den aktuellen Stand zeigen.
+   */
+  private attachInfoTooltip(
+    target: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text,
+    title: () => string,
+    body: () => string,
+  ): void {
+    target.setInteractive()
+      .on('pointerover', (pointer: Phaser.Input.Pointer) => this.showTooltip(title(), body(), pointer))
+      .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
+      .on('pointerout', () => this.hideTooltip());
+  }
+
   private setActiveCategory(index: number): void {
     if (index === this.activeCategoryIndex) return;
     this.activeCategoryIndex = index;
     this.hideTooltip();
+    this.picker?.close();
     const progress = this.getProgress();
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
@@ -633,7 +692,7 @@ export class CoopDefenseUpgradesOverlay {
         this.activeCategoryIndex = 0;
         this.requestRefresh();
       });
-      background.on('pointerover', () => {
+      background.on('pointerover', (pointer: Phaser.Input.Pointer) => {
         this.scene.tweens.add({
           targets: [background, label],
           scaleX: 1.04,
@@ -641,8 +700,15 @@ export class CoopDefenseUpgradesOverlay {
           duration: 90,
           ease: 'Sine.easeOut',
         });
+        this.showTooltip(
+          definition.displayName,
+          [definition.role, '', definition.description, ...definition.tooltipLines].join('\n'),
+          pointer,
+        );
       });
+      background.on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer));
       background.on('pointerout', () => {
+        this.hideTooltip();
         this.scene.tweens.add({
           targets: [background, label],
           scaleX: 1,
@@ -655,6 +721,332 @@ export class CoopDefenseUpgradesOverlay {
     });
   }
 
+  /**
+   * Zeichnet das komplette Loadout als Slot-Zeile. Jeder Slot steht ueber der Kategorie-Spalte,
+   * aus der seine Items stammen; die Utility-Slots des Inspectors teilen sich die Spannweite
+   * der beiden gleichwertigen Utility-Kategorien.
+   */
+  private renderLoadoutRow(progress: CoopDefenseProgressSnapshot): void {
+    if (!this.loadoutContainer) return;
+    this.loadoutContainer.removeAll(true);
+    this.loadoutHeaderText = null;
+
+    const categories = progress.upgradeCategories;
+    if (categories.length === 0) return;
+
+    const layout = this.getTabLayout(categories.length);
+    const isInspector = progress.classId === 'inspector_gadachs';
+
+    this.loadoutHeaderText = this.scene.add.text(layout.startX, LOADOUT_LABEL_Y, 'LOADOUT', {
+      fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
+    }).setOrigin(0, 0.5).setScrollFactor(0);
+    this.loadoutContainer.add(this.loadoutHeaderText);
+
+    const selection = this.getLoadoutSelection();
+    const utilityCategoryIndices: number[] = [];
+    const cards = this.scene.add.graphics().setScrollFactor(0);
+    this.loadoutContainer.add(cards);
+
+    categories.forEach((category, index) => {
+      const accentColor = this.getCategoryVisuals(category.id, progress.classId).connector;
+      if (isInspector && isCoopDefenseToolCategory(category.id, progress.classId)) {
+        utilityCategoryIndices.push(index);
+        return;
+      }
+      // "Allgemein" hat keinen Loadout-Slot; seine Karte beginnt deshalb erst kurz ueber dem Tab.
+      const cardTop = category.id === 'general' ? TAB_TOP - 10 : LOADOUT_CARD_TOP;
+      this.drawCategoryCard(cards, this.getTabCenterX(layout, index), layout.tabW, accentColor, cardTop);
+      if (category.id === 'general') return;
+
+      const slot = category.id as LoadoutSlot;
+      const itemId = selection[slot];
+      this.renderLoadoutSlot({
+        centerX: this.getTabCenterX(layout, index),
+        accentColor,
+        presentation: itemId ? describeLoadoutItem(slot, itemId) : null,
+        tooltipTitle: category.label,
+        tooltipBody: () => this.buildSlotTooltipBody(category.label, itemId ? describeLoadoutItem(slot, itemId) : null),
+        onOpenPicker: (anchorX) => this.openSlotPicker(progress, category.label, slot, anchorX),
+      });
+    });
+
+    if (utilityCategoryIndices.length > 0) {
+      this.renderUtilitySlots(progress, layout, utilityCategoryIndices, cards);
+    }
+  }
+
+  /**
+   * Spaltenkarte hinter Slot und Tab. Sie reicht von der Loadout-Zeile bis unter die Tabs,
+   * damit beide als eine Einheit in Kategoriefarbe gelesen werden.
+   */
+  private drawCategoryCard(
+    cards: Phaser.GameObjects.Graphics,
+    centerX: number,
+    width: number,
+    accentColor: number,
+    top: number,
+  ): void {
+    const height = TAB_TOP + TAB_H - top;
+    cards.fillStyle(accentColor, 0.14);
+    cards.fillRoundedRect(centerX - width / 2, top, width, height, LOADOUT_CARD_RADIUS);
+    cards.lineStyle(1.5, accentColor, 0.45);
+    cards.strokeRoundedRect(centerX - width / 2, top, width, height, LOADOUT_CARD_RADIUS);
+  }
+
+  /** Geteilte Utility-Slots des Inspectors, verteilt ueber beide gleichwertigen Utility-Spalten. */
+  private renderUtilitySlots(
+    progress: CoopDefenseProgressSnapshot,
+    layout: { tabW: number; startX: number },
+    categoryIndices: readonly number[],
+    cards: Phaser.GameObjects.Graphics,
+  ): void {
+    if (!this.loadoutContainer) return;
+
+    const capacity = Math.max(1, progress.toolSlotCapacity);
+    const tools = progress.toolLoadout;
+    const firstIndex = categoryIndices[0];
+    const lastIndex = categoryIndices[categoryIndices.length - 1];
+    const spanLeft = this.getTabCenterX(layout, firstIndex) - layout.tabW / 2;
+    const spanRight = this.getTabCenterX(layout, lastIndex) + layout.tabW / 2;
+    const spanCenter = (spanLeft + spanRight) / 2;
+    const accentColor = CATEGORY_VISUALS.utility.connector;
+
+    // Eine gemeinsame Karte ueber beide Utility-Spalten zeigt, dass sich die Slots teilen.
+    this.drawCategoryCard(cards, spanCenter, spanRight - spanLeft, accentColor, LOADOUT_CARD_TOP);
+
+    const totalW = capacity * LOADOUT_SLOT_SIZE + (capacity - 1) * LOADOUT_SLOT_GAP;
+    const startX = spanCenter - totalW / 2 + LOADOUT_SLOT_SIZE / 2;
+
+    for (let index = 0; index < capacity; index += 1) {
+      const tool = tools[index] ?? null;
+      this.renderLoadoutSlot({
+        centerX: startX + index * (LOADOUT_SLOT_SIZE + LOADOUT_SLOT_GAP),
+        accentColor,
+        presentation: tool ? describeLoadoutTool(tool) : null,
+        tooltipTitle: `Utility-Slot ${index + 1}`,
+        tooltipBody: () => this.buildUtilitySlotTooltipBody(progress, tool),
+        onOpenPicker: (anchorX) => this.openUtilitySlotPicker(progress, index, anchorX),
+      });
+    }
+  }
+
+  private renderLoadoutSlot(params: {
+    centerX: number;
+    accentColor: number;
+    presentation: LoadoutItemPresentation | null;
+    tooltipTitle: string;
+    tooltipBody: () => string;
+    onOpenPicker: (anchorX: number) => void;
+  }): void {
+    if (!this.loadoutContainer) return;
+
+    const { centerX, presentation } = params;
+    const group = this.scene.add.container(centerX, LOADOUT_ROW_Y).setScrollFactor(0);
+
+    const frame = this.scene.add.image(0, 0, this.ensureLoadoutSlotTexture(
+      presentation ? params.accentColor : COLORS.GREY_5,
+      presentation !== null,
+    )).setScrollFactor(0);
+    group.add(frame);
+
+    if (presentation && this.scene.textures.exists(presentation.textureKey)) {
+      group.add(this.scene.add.image(0, 0, presentation.textureKey)
+        .setDisplaySize(LOADOUT_SLOT_SIZE - 12, LOADOUT_SLOT_SIZE - 12)
+        .setScrollFactor(0));
+    } else if (presentation) {
+      // Ohne Icon bleibt der Slot sonst leer und wirkt unbelegt.
+      group.add(this.scene.add.text(0, 0, presentation.displayName, {
+        fontSize: '9px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(COLORS.GREY_1),
+        align: 'center',
+        wordWrap: { width: LOADOUT_SLOT_SIZE - 6, useAdvancedWrap: true },
+      }).setOrigin(0.5).setScrollFactor(0));
+    } else {
+      group.add(this.scene.add.text(0, 0, '+', {
+        fontSize: '20px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
+      }).setOrigin(0.5).setScrollFactor(0));
+    }
+
+    const hitArea = this.scene.add.rectangle(0, 0, LOADOUT_SLOT_SIZE, LOADOUT_SLOT_SIZE, 0x000000, 0.001)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', (pointer: Phaser.Input.Pointer) => {
+        this.scene.tweens.add({ targets: group, scaleX: 1.08, scaleY: 1.08, duration: 90, ease: 'Sine.easeOut' });
+        this.showTooltip(params.tooltipTitle, params.tooltipBody(), pointer);
+      })
+      .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
+      .on('pointerout', () => {
+        this.scene.tweens.add({ targets: group, scaleX: 1, scaleY: 1, duration: 120, ease: 'Sine.easeOut' });
+        this.hideTooltip();
+      })
+      .on('pointerdown', (_pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
+        event.stopPropagation();
+        this.hideTooltip();
+        params.onOpenPicker(centerX);
+      });
+    group.add(hitArea);
+
+    this.loadoutContainer.add(group);
+  }
+
+  private buildSlotTooltipBody(categoryLabel: string, presentation: LoadoutItemPresentation | null): string {
+    return [
+      presentation ? `Ausgeruestet: ${presentation.displayName}` : 'Leer',
+      `Items aus der Kategorie "${categoryLabel}".`,
+      '',
+      'Klick oeffnet die Auswahl der freigeschalteten Items.',
+    ].join('\n');
+  }
+
+  private buildUtilitySlotTooltipBody(
+    progress: CoopDefenseProgressSnapshot,
+    tool: LoadoutToolRef | null,
+  ): string {
+    return [
+      tool ? `Ausgeruestet: ${describeLoadoutTool(tool).displayName}` : 'Leer',
+      `${progress.toolLoadout.length}/${Math.max(1, progress.toolSlotCapacity)} Utility-Slots belegt.`,
+      'Utilities aus Utility 1 und Utility 2 sind gleichwertig und teilen sich diese Slots.',
+      '',
+      'Klick oeffnet die Auswahl der freigeschalteten Utilities.',
+    ].join('\n');
+  }
+
+  private openSlotPicker(
+    progress: CoopDefenseProgressSnapshot,
+    categoryLabel: string,
+    slot: LoadoutSlot,
+    anchorX: number,
+  ): void {
+    const currentId = this.getLoadoutSelection()[slot];
+    const entries: LoadoutPickerEntry[] = progress.unlockedItemsBySlot[slot].map((item) => {
+      const presentation = describeLoadoutItem(slot, item.id);
+      return {
+        key: item.id,
+        displayName: item.displayName,
+        textureKey: presentation.textureKey,
+        accentColor: presentation.accentColor,
+        selected: item.id === currentId,
+        disabled: false,
+        onPick: () => {
+          if (this.onSelectLoadoutItem(slot, item.id)) this.requestRefresh();
+        },
+      };
+    });
+
+    this.picker?.open({
+      anchorX,
+      anchorY: LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 8,
+      title: categoryLabel,
+      groups: [{ label: null, entries }],
+    });
+  }
+
+  private openUtilitySlotPicker(progress: CoopDefenseProgressSnapshot, slotIndex: number, anchorX: number): void {
+    const equipped = progress.toolLoadout;
+    const currentTool = equipped[slotIndex] ?? null;
+    const currentKey = loadoutToolKey(currentTool);
+    const equippedKeys = new Set(equipped.map((tool) => loadoutToolKey(tool)));
+
+    const buildEntry = (tool: LoadoutToolRef): LoadoutPickerEntry => {
+      const presentation = describeLoadoutTool(tool);
+      const key = loadoutToolKey(tool);
+      return {
+        key,
+        displayName: presentation.displayName,
+        textureKey: presentation.textureKey,
+        accentColor: presentation.accentColor,
+        selected: key === currentKey,
+        // In einem anderen Slot liegende Utilities sind hier nicht noch einmal waehlbar.
+        disabled: key !== currentKey && equippedKeys.has(key),
+        onPick: () => this.assignToolToSlot(progress, slotIndex, tool),
+      };
+    };
+
+    const groups: LoadoutPickerGroup[] = [];
+    for (const category of progress.upgradeCategories) {
+      if (!isCoopDefenseToolCategory(category.id, progress.classId)) continue;
+      const entries = category.upgrades
+        .filter((node) => node.toolRef !== null && node.level > 0)
+        .map((node) => buildEntry(node.toolRef!));
+      groups.push({ label: category.label, entries });
+    }
+
+    this.picker?.open({
+      anchorX,
+      anchorY: LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 8,
+      title: `Utility-Slot ${slotIndex + 1}`,
+      groups,
+      clearLabel: currentTool ? 'Slot leeren' : undefined,
+      onClear: currentTool
+        ? () => this.applyToolSlots(progress.toolLoadout.filter((_, index) => index !== slotIndex))
+        : undefined,
+    });
+  }
+
+  /**
+   * Belegt genau den angeklickten Slot. Die Utility-Liste ist luecklos gespeichert, deshalb
+   * landet eine Auswahl jenseits des letzten belegten Slots am Ende.
+   */
+  private assignToolToSlot(
+    progress: CoopDefenseProgressSnapshot,
+    slotIndex: number,
+    tool: LoadoutToolRef,
+  ): void {
+    const next = [...progress.toolLoadout];
+    if (slotIndex < next.length) next[slotIndex] = tool;
+    else next.push(tool);
+    this.applyToolSlots(next);
+  }
+
+  private applyToolSlots(tools: readonly LoadoutToolRef[]): void {
+    if (this.onSetLoadoutTools(tools)) {
+      this.requestRefresh();
+      return;
+    }
+    this.showLoadoutHint('Utility konnte nicht ausgeruestet werden.');
+  }
+
+  private toggleTool(tool: LoadoutToolRef): void {
+    if (this.onToggleLoadoutTool(tool)) {
+      this.requestRefresh();
+      return;
+    }
+    this.showLoadoutHint('Keine freien Utility-Slots — erst eine Utility abwaehlen.');
+  }
+
+  /**
+   * Ein abgelehntes Ausruesten blieb bisher unkommentiert. Der Hinweis ersetzt kurzzeitig die
+   * Ueberschrift der Loadout-Zeile, damit er ohne zusaetzlichen Platzbedarf sichtbar wird.
+   */
+  private showLoadoutHint(message: string): void {
+    const header = this.loadoutHeaderText;
+    if (!header || !header.active) return;
+    header.setText(message).setColor(toCssColor(COLORS.RED_2));
+    this.loadoutHintTimer?.destroy();
+    this.loadoutHintTimer = this.scene.time.delayedCall(2200, () => {
+      this.loadoutHintTimer = null;
+      if (header.active) header.setText('LOADOUT').setColor(toCssColor(COLORS.GREY_2));
+    });
+  }
+
+  private ensureLoadoutSlotTexture(accentColor: number, filled: boolean): string {
+    return this.ensureRoundedTexture({
+      key: `_ccdslot_${LOADOUT_SLOT_SIZE}_${accentColor.toString(16)}_${filled ? 'on' : 'off'}`,
+      w: LOADOUT_SLOT_SIZE,
+      h: LOADOUT_SLOT_SIZE,
+      radius: 10,
+      topColor: filled ? lerpColor(COLORS.GREY_8, accentColor, 0.35) : COLORS.GREY_8,
+      bottomColor: filled ? lerpColor(COLORS.GREY_9, accentColor, 0.22) : COLORS.GREY_9,
+      fillAlpha: 0.95,
+      strokeColor: accentColor,
+      strokeAlpha: filled ? 0.95 : 0.5,
+      strokeWidth: filled ? 2 : 1.5,
+      highlightAlpha: filled ? 0.14 : 0.05,
+    });
+  }
+
   private clearTabDecorations(): void {
     for (const tween of this.tabTweens) tween.destroy();
     this.tabTweens = [];
@@ -662,6 +1054,30 @@ export class CoopDefenseUpgradesOverlay {
       if (target.active) removeExternalFx(target, glow);
     }
     this.tabGlows = [];
+  }
+
+  /** Spaltenraster der Kategorie-Tabs; die Loadout-Slots richten sich daran aus. */
+  private getTabLayout(categoryCount: number): { tabW: number; startX: number } {
+    const tabW = Math.min(TAB_MAX_W, (CONTENT_W - TAB_GAP * (categoryCount - 1)) / categoryCount);
+    const totalW = tabW * categoryCount + TAB_GAP * (categoryCount - 1);
+    return { tabW, startX: CX - totalW / 2 };
+  }
+
+  private getTabCenterX(layout: { tabW: number; startX: number }, index: number): number {
+    return layout.startX + layout.tabW / 2 + index * (layout.tabW + TAB_GAP);
+  }
+
+  /**
+   * Beim Inspector sind `weapon2` und `utility` gleichwertige Utility-Kategorien und teilen
+   * sich deshalb dieselbe Gold-Farbgebung.
+   */
+  private getCategoryVisuals(
+    categoryId: CoopDefenseUpgradeCategorySnapshot['id'],
+    classId: CoopDefenseClassId,
+  ): CategoryVisuals {
+    return isCoopDefenseToolCategory(categoryId, classId)
+      ? CATEGORY_VISUALS.utility
+      : CATEGORY_VISUALS[categoryId];
   }
 
   private renderTabs(progress: CoopDefenseProgressSnapshot): void {
@@ -672,14 +1088,13 @@ export class CoopDefenseUpgradesOverlay {
     const categories = progress.upgradeCategories;
     if (categories.length === 0) return;
 
-    const tabW = Math.min(TAB_MAX_W, (CONTENT_W - TAB_GAP * (categories.length - 1)) / categories.length);
-    const totalW = tabW * categories.length + TAB_GAP * (categories.length - 1);
-    const startX = CX - totalW / 2;
+    const layout = this.getTabLayout(categories.length);
+    const tabW = layout.tabW;
 
     categories.forEach((category, index) => {
-      const visuals = CATEGORY_VISUALS[category.id];
+      const visuals = this.getCategoryVisuals(category.id, progress.classId);
       const isActive = index === this.activeCategoryIndex;
-      const centerX = startX + tabW / 2 + index * (tabW + TAB_GAP);
+      const centerX = this.getTabCenterX(layout, index);
 
       const tabTexKey = this.ensureTabTexture(tabW, visuals, isActive);
       const restAlpha = isActive ? 1 : 0.7;
@@ -774,7 +1189,7 @@ export class CoopDefenseUpgradesOverlay {
     const category = progress.upgradeCategories[this.activeCategoryIndex];
     if (!category) return;
 
-    const visuals = CATEGORY_VISUALS[category.id];
+    const visuals = this.getCategoryVisuals(category.id, progress.classId);
     this.contentBg?.setTexture(this.ensureContentBgTexture(visuals.connector));
     const tree = this.buildCategoryTree(category.upgrades);
     const columnCache = new Map<string, number>();
@@ -1293,7 +1708,7 @@ export class CoopDefenseUpgradesOverlay {
         this.scene.tweens.add({
           targets: nodeGroup, scaleX: 1.06, scaleY: 1.06, duration: 90, ease: 'Sine.easeOut',
         });
-        this.showTooltip(node, pointer);
+        this.showTooltip(node.label, this.buildNodeTooltipBody(node), pointer);
       })
       .on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer))
       .on('pointerout', () => {
@@ -1306,7 +1721,54 @@ export class CoopDefenseUpgradesOverlay {
       .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.handleUpgradePointerDown(node, pointer));
     nodeGroup.add(hitArea);
 
+    const equipTarget = node.level > 0 ? this.getNodeEquipTarget(node) : null;
+    if (equipTarget) {
+      const equipped = this.isEquipTargetActive(equipTarget);
+      // Einzel-Slots muessen immer belegt bleiben: dort ist das Haekchen nur ein Zustand,
+      // Utility-Slots lassen sich dagegen ab- und wieder anwaehlen.
+      const interactive = equipTarget.kind === 'tool' || !equipped;
+      const toggle = this.scene.add.rectangle(NODE_W / 2 - 4, -NODE_H / 2 + 4, 15, 15,
+        equipped ? COLORS.GREEN_2 : COLORS.GREY_5, 0.98)
+        .setStrokeStyle(1, equipped ? COLORS.GREEN_1 : COLORS.GREY_2)
+        .setScrollFactor(0);
+      const toggleLabel = this.scene.add.text(toggle.x, toggle.y, equipped ? '✓' : '+', {
+        fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold',
+        color: toCssColor(equipped ? COLORS.GREY_10 : COLORS.GREY_1),
+      }).setOrigin(0.5).setScrollFactor(0);
+      if (interactive) {
+        toggle.setInteractive({ useHandCursor: true });
+        toggle.on('pointerdown', (pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
+          event.stopPropagation();
+          if (!pointer.leftButtonDown()) return;
+          if (equipTarget.kind === 'tool') {
+            this.toggleTool(equipTarget.tool);
+          } else if (this.onSelectLoadoutItem(equipTarget.slot, equipTarget.itemId)) {
+            this.requestRefresh();
+          }
+        });
+      }
+      nodeGroup.add(toggle);
+      nodeGroup.add(toggleLabel);
+    }
+
     this.upgradesContainer.add(nodeGroup);
+  }
+
+  /** Liefert das Loadout-Ziel eines Knotens, sofern er ueberhaupt ein Item freischaltet. */
+  private getNodeEquipTarget(node: CoopDefenseUpgradeNodeSnapshot): NodeEquipTarget | null {
+    if (node.toolRef) return { kind: 'tool', tool: node.toolRef };
+    if (node.loadoutUnlock) {
+      return { kind: 'slot', slot: node.loadoutUnlock.slot, itemId: node.loadoutUnlock.itemId };
+    }
+    return null;
+  }
+
+  private isEquipTargetActive(target: NodeEquipTarget): boolean {
+    if (target.kind === 'tool') {
+      const key = loadoutToolKey(target.tool);
+      return this.getProgress().toolLoadout.some((entry) => loadoutToolKey(entry) === key);
+    }
+    return this.getLoadoutSelection()[target.slot] === target.itemId;
   }
 
   private ensureNodeBaseTexture(fillColor: number, strokeColor: number): string {
@@ -1670,12 +2132,13 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
+    if (node.toolRef) return describeLoadoutTool(node.toolRef).textureKey;
     if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
     if (node.kind === 'upgrade') return getCoopDefenseUpgradeTextureKey(node.id);
     return null;
   }
 
-  private showTooltip(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
+  private showTooltip(title: string, body: string, pointer: Phaser.Input.Pointer): void {
     if (
       !this.tooltipContainer
       || !this.tooltipBackground
@@ -1684,8 +2147,8 @@ export class CoopDefenseUpgradesOverlay {
       || !this.tooltipBodyText
     ) return;
 
-    this.tooltipTitleText.setText(node.label);
-    this.tooltipBodyText.setText(this.buildTooltipBody(node));
+    this.tooltipTitleText.setText(title);
+    this.tooltipBodyText.setText(body);
 
     const contentWidth = Math.max(this.tooltipTitleText.width, this.tooltipBodyText.width);
     const width = contentWidth + TOOLTIP_PADDING * 2;
@@ -1731,7 +2194,7 @@ export class CoopDefenseUpgradesOverlay {
     this.tooltipBodyText?.setVisible(false);
   }
 
-  private buildTooltipBody(node: CoopDefenseUpgradeNodeSnapshot): string {
+  private buildNodeTooltipBody(node: CoopDefenseUpgradeNodeSnapshot): string {
     const lines = [`Stufe ${node.level}/${node.maxLevel}`];
 
     if (node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable) {

@@ -1,5 +1,6 @@
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId, CoopDefenseUpgradeProfile } from '../types';
+import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, GameMode, LoadoutSlot, LoadoutToolRef } from '../types';
+import { getSelectableLoadoutItems, type LoadoutItemRef } from '../loadout/LoadoutCatalog';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   canLevelDownCoopDefenseUpgrade,
@@ -13,6 +14,8 @@ import {
   getSpentCoopDefenseUpgradePoints,
   getSpentCoopDefenseBossPoints,
   sanitizeCoopDefenseUpgradeProfile,
+  getCoopDefenseToolCapacity,
+  getLoadoutToolRefForUpgrade,
   type CoopDefenseLoadoutUnlockDefinition,
   type CoopDefenseUpgradeCategoryDefinition,
   type CoopDefenseUpgradeCategoryId,
@@ -42,6 +45,11 @@ export interface CoopDefenseProgressSnapshot {
   hpUpgradeLevel: number;
   hpUpgradeMaxLevel: number;
   upgradeCategories: readonly CoopDefenseUpgradeCategorySnapshot[];
+  /** Freigeschaltete und damit im Overlay auswaehlbare Items je Loadout-Slot. */
+  unlockedItemsBySlot: Readonly<Record<LoadoutSlot, readonly LoadoutItemRef[]>>;
+  toolSlotCapacity: number;
+  toolLoadout: readonly LoadoutToolRef[];
+  selectedTool: LoadoutToolRef | null;
 }
 
 export interface CoopDefenseUpgradeRequirementSnapshot {
@@ -71,6 +79,7 @@ export interface CoopDefenseUpgradeNodeSnapshot {
   canLevelDown: boolean;
   requires: readonly CoopDefenseUpgradeRequirementSnapshot[];
   loadoutUnlock: CoopDefenseLoadoutUnlockDefinition | null;
+  toolRef: LoadoutToolRef | null;
 }
 
 export interface CoopDefenseUpgradeCategorySnapshot {
@@ -141,7 +150,26 @@ export function getCoopDefenseProgressSnapshot(
     hpUpgradeLevel: hpUpgradeState.level,
     hpUpgradeMaxLevel,
     upgradeCategories,
+    unlockedItemsBySlot: buildUnlockedItemsBySlot(safeProfile, classId),
+    toolSlotCapacity: classId === 'inspector_gadachs' ? getCoopDefenseToolCapacity(safeProfile) : 0,
+    toolLoadout: classId === 'inspector_gadachs' ? (safeProfile.toolLoadout ?? []) : [],
+    selectedTool: classId === 'inspector_gadachs' ? (safeProfile.selectedTool ?? null) : null,
   };
+}
+
+const COOP_DEFENSE_MODE = 'coop_defense' as GameMode;
+const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
+
+function buildUnlockedItemsBySlot(
+  profile: CoopDefenseUpgradeProfile,
+  classId: CoopDefenseClassId,
+): Readonly<Record<LoadoutSlot, readonly LoadoutItemRef[]>> {
+  return Object.fromEntries(
+    LOADOUT_SLOTS.map((slot) => [
+      slot,
+      getSelectableLoadoutItems(slot, COOP_DEFENSE_MODE, profile, classId),
+    ]),
+  ) as Record<LoadoutSlot, readonly LoadoutItemRef[]>;
 }
 
 function buildUpgradeCategorySnapshots(
@@ -190,6 +218,9 @@ function buildUpgradeNodeSnapshot(
     canLevelDown: canLevelDownCoopDefenseUpgrade(profile, definition.id, classId),
     requires: definition.requires.map((requirement) => buildRequirementSnapshot(profile, classId, requirement)),
     loadoutUnlock: definition.loadoutUnlock ?? null,
+    toolRef: classId === 'inspector_gadachs'
+      ? getLoadoutToolRefForUpgrade(definition.id)
+      : null,
   };
 }
 

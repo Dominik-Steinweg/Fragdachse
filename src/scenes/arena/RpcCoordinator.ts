@@ -113,6 +113,44 @@ export class RpcCoordinator {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
+      const committed = bridge.getPlayerCommittedLoadout(senderId);
+      if (committed?.coopDefenseClassId === 'inspector_gadachs') {
+        if (slot === 'weapon2') return { ok: false, reason: 'blocked' };
+        // A regular utility packet is only valid for a temporary special-pickup
+        // override; normal Inspector utilities must carry their typed ref.
+        if (slot === 'utility' && !params?.toolRef
+          && bridge.getPlayerUtilityOverrideName(senderId) === '') {
+          return { ok: false, reason: 'blocked' };
+        }
+      }
+      if (params?.toolRef) {
+        if (slot !== 'utility' || committed?.coopDefenseClassId !== 'inspector_gadachs') {
+          return { ok: false, reason: 'invalid' };
+        }
+        if (params.toolRef.kind === 'construction') {
+          if (!params.constructionId || params.toolRef.id !== params.constructionId) {
+            return { ok: false, reason: 'invalid' };
+          }
+          return this.lifecycle?.placeInspectorConstruction(
+            senderId,
+            params.constructionId,
+            targetX,
+            targetY,
+          ) ?? { ok: false, reason: 'blocked' };
+        }
+        if (params.constructionId !== undefined) return { ok: false, reason: 'invalid' };
+        return this.lifecycle?.useInspectorUtility(
+          senderId,
+          params.toolRef,
+          angle,
+          targetX,
+          targetY,
+          Date.now(),
+          params,
+        ) ?? { ok: false, reason: 'blocked' };
+      }
+      // Legacy construction packets from older clients remain accepted during
+      // the migration, but still pass through the same host validation.
       if (slot === 'weapon2' && params?.constructionId) {
         return this.lifecycle?.placeInspectorConstruction(
           senderId,

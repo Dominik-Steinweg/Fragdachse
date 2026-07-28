@@ -84,6 +84,9 @@ export function resolveLoadoutSelectionIds(
     ultimate: sanitized.ultimate.id,
     coopDefenseClassId: isCoopDefenseMode(mode) ? coopDefenseClassId : null,
     coopDefenseProfile: committedCoopDefenseProfile,
+    tools: coopDefenseClassId === 'inspector_gadachs'
+      ? committedCoopDefenseProfile?.toolLoadout?.map((tool) => ({ ...tool }))
+      : undefined,
   };
 }
 
@@ -119,6 +122,7 @@ export function isCommittedLoadoutEqual(
     && left.utility === right.utility
     && left.ultimate === right.ultimate
     && left.coopDefenseClassId === right.coopDefenseClassId
+    && JSON.stringify(left.tools ?? []) === JSON.stringify(right.tools ?? [])
     && isCoopDefenseUpgradeProfileEqual(
       left.coopDefenseProfile,
       right.coopDefenseProfile,

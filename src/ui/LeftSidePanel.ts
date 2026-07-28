@@ -26,7 +26,12 @@ import {
 import { HelpOverlay } from './HelpOverlay';
 import { OptionsOverlay, type AbortMatchBinding } from './OptionsOverlay';
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
-import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getAvailableUltimateConfigs, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
+import {
+  getSelectableLoadoutItems,
+  LOADOUT_SLOT_LABELS,
+  type LoadoutItemRef,
+} from '../loadout/LoadoutCatalog';
 import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
 import { ensureGlossyButtonTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
@@ -38,7 +43,6 @@ import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
 import { getStoredCoopDefenseProgress, getStoredCoopDefenseUpgradeProfile, getStoredHighestUnlockedCoopDefenseMapId, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
-import { isCoopDefenseLoadoutItemSelectable } from '../utils/coopDefenseUpgrades';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
@@ -121,10 +125,7 @@ function getTeamLabel(teamId: TeamId | null): string {
   return 'Team waehlen';
 }
 
-type LoadoutCarouselItem = {
-  id: string;
-  displayName: string;
-};
+type LoadoutCarouselItem = LoadoutItemRef;
 
 type CompactLabel = Phaser.GameObjects.Text | Phaser.GameObjects.Graphics;
 
@@ -134,19 +135,7 @@ type CompactButton = {
   text?: Phaser.GameObjects.Text;
 };
 
-// Item-Arrays nach Slot gefiltert
-const STATIC_SLOT_ITEMS: Record<Exclude<LoadoutSlot, 'ultimate'>, LoadoutCarouselItem[]> = {
-  weapon1:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon1')),
-  weapon2:  Object.values(WEAPON_CONFIGS).filter(w => (w.allowedSlots as readonly string[]).includes('weapon2')),
-  utility:  Object.values(UTILITY_CONFIGS).filter(u => (u.allowedSlots as readonly string[]).includes('utility')),
-};
-
-const SLOT_LABELS: Record<LoadoutSlot, string> = {
-  weapon1:  'Waffe 1',
-  weapon2:  'Waffe 2',
-  utility:  'Utility',
-  ultimate: 'Ultimate',
-};
+const SLOT_LABELS = LOADOUT_SLOT_LABELS;
 
 // ── Swatch-Eintrag im Picker ──────────────────────────────────────────────────
 interface SwatchEntry {
@@ -973,33 +962,25 @@ export class LeftSidePanel {
     this.updateSlotArrowVisibility(slot);
   }
 
-  private getSlotItems(slot: LoadoutSlot): LoadoutCarouselItem[] {
+  private getSlotItems(slot: LoadoutSlot): readonly LoadoutCarouselItem[] {
     const mode = this.bridge.getGameMode();
-    const base: LoadoutCarouselItem[] = slot === 'ultimate'
-      ? getAvailableUltimateConfigs(mode)
-      : STATIC_SLOT_ITEMS[slot];
-
-    if (!isCoopDefenseMode(mode)) return base;
+    if (!isCoopDefenseMode(mode)) return getSelectableLoadoutItems(slot, mode, null, 'dachs_nukem');
 
     const storedProgress = getStoredCoopDefenseProgress();
-    if (storedProgress.selectedClassId === 'inspector_gadachs' && slot === 'weapon2') {
+    // Der Inspector belegt Sekundaerwaffe und Utility ueber die geteilten Utility-Slots im
+    // Upgrade-Overlay. Beide Karussells zeigen das nur an und sind hier nicht auswaehlbar.
+    if (storedProgress.selectedClassId === 'inspector_gadachs' && (slot === 'weapon2' || slot === 'utility')) {
       return [{
-        id: DEFAULT_LOADOUT.weapon2.id,
-        displayName: 'Konstruktionen (1-5)',
+        id: DEFAULT_LOADOUT[slot].id,
+        displayName: 'Utility-Rad (RMB)',
       }];
     }
-    const profile = getStoredCoopDefenseUpgradeProfile(storedProgress.selectedClassId);
-    const filtered = base.filter((item) => isCoopDefenseLoadoutItemSelectable(
-      profile,
+    return getSelectableLoadoutItems(
       slot,
-      item.id,
+      mode,
+      getStoredCoopDefenseUpgradeProfile(storedProgress.selectedClassId),
       storedProgress.selectedClassId,
-    ));
-    if (filtered.length > 0) return filtered;
-
-    // Sicherheits-Fallback: Liste nie leer — Default-Item des Slots erzwingen.
-    const fallback = DEFAULT_LOADOUT[slot];
-    return [{ id: fallback.id, displayName: fallback.displayName }];
+    );
   }
 
   private syncAllLoadoutSelections(): void {

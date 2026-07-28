@@ -1,12 +1,13 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ConstructionId, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, ConstructionId, LoadoutToolRef, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
 } from '../config';
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import { InspectorToolRadialMenu } from '../ui/InspectorToolRadialMenu';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
@@ -84,6 +85,15 @@ export class InputSystem {
     constructionId: ConstructionId,
   ) => UtilityPlacementPreviewState | undefined) | null = null;
   private constructionWheelHandler: ((event: WheelEvent) => void) | null = null;
+  private inspectorGetTools: (() => readonly LoadoutToolRef[]) | null = null;
+  private inspectorGetSelectedTool: (() => LoadoutToolRef | null) | null = null;
+  private inspectorSetSelectedTool: ((tool: LoadoutToolRef) => void) | null = null;
+  private inspectorModeProvider: (() => boolean) | null = null;
+  private inspectorUtilityOverrideProvider: (() => boolean) | null = null;
+  private inspectorRadialMenu: InspectorToolRadialMenu | null = null;
+  private inspectorRmbStartedAt = 0;
+  private inspectorRmbWasBuildCancel = false;
+  private inspectorConstructionPlacementActive = false;
 
   // Audio
   private audioSystem: GameAudioSystem | null = null;
@@ -138,9 +148,10 @@ export class InputSystem {
 
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
+    this.inspectorRadialMenu = new InspectorToolRadialMenu(this.scene);
     this.constructionWheelHandler = (event: WheelEvent) => {
       const available = this.getAvailableConstructionIds?.() ?? [];
-      if (!this.inputEnabled || available.length < 2) return;
+      if (!this.inputEnabled || this.isInspectorMode() || available.length < 2) return;
       event.preventDefault();
       const current = Math.max(0, available.indexOf(this.getSelectedConstructionId()));
       const direction = event.deltaY >= 0 ? 1 : -1;
@@ -154,7 +165,23 @@ export class InputSystem {
         this.scene.game.canvas.removeEventListener('wheel', this.constructionWheelHandler);
         this.constructionWheelHandler = null;
       }
+      this.inspectorRadialMenu?.destroy();
+      this.inspectorRadialMenu = null;
     });
+  }
+
+  setupInspectorToolProvider(
+    getTools: () => readonly LoadoutToolRef[],
+    getSelected: () => LoadoutToolRef | null,
+    setSelected: (tool: LoadoutToolRef) => void,
+    isInspectorMode?: () => boolean,
+    isUtilityOverrideActive?: () => boolean,
+  ): void {
+    this.inspectorGetTools = getTools;
+    this.inspectorGetSelectedTool = getSelected;
+    this.inspectorSetSelectedTool = setSelected;
+    this.inspectorModeProvider = isInspectorMode ?? null;
+    this.inspectorUtilityOverrideProvider = isUtilityOverrideActive ?? null;
   }
 
   setupConstructionProviders(
@@ -173,13 +200,56 @@ export class InputSystem {
     return this.selectedConstructionId;
   }
 
+  private getInspectorTools(): readonly LoadoutToolRef[] {
+    return this.inspectorGetTools?.() ?? [];
+  }
+
+  private getSelectedInspectorTool(): LoadoutToolRef | null {
+    return this.inspectorGetSelectedTool?.() ?? null;
+  }
+
+  getSelectedInspectorToolForHud(): LoadoutToolRef | null {
+    return this.getSelectedInspectorTool();
+  }
+
+  private getInspectorUtilityParams(): LoadoutUseParams | undefined {
+    const tool = this.getSelectedInspectorTool();
+    // A special pickup temporarily replaces E; let it use the normal utility
+    // slot and restore the Inspector selection afterwards.
+    const activeConfig = this.getLocalUtilityConfig?.();
+    return this.isInspectorMode() && tool?.kind === 'utility'
+      && (!activeConfig || activeConfig.id === tool.id)
+      ? { toolRef: tool }
+      : undefined;
+  }
+
+  private isInspectorMode(): boolean {
+    return this.inspectorModeProvider?.() ?? (this.inspectorGetTools !== null && this.getInspectorTools().length > 0);
+  }
+
+  private isInspectorUtilityOverrideActive(): boolean {
+    return this.isInspectorMode() && (this.inspectorUtilityOverrideProvider?.() ?? false);
+  }
+
+  isInspectorConstructionPlacementActive(): boolean {
+    return this.isInspectorMode()
+      && this.inspectorConstructionPlacementActive
+      && !this.isInspectorUtilityOverrideActive();
+  }
+
   getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
+    if (this.isInspectorMode() && !this.isInspectorConstructionPlacementActive()) return undefined;
+    const inspectorTool = this.getSelectedInspectorTool();
+    if (inspectorTool?.kind === 'construction') {
+      return this.getConstructionPlacementPreviewProvider?.(inspectorTool.id);
+    }
     const available = this.getAvailableConstructionIds?.() ?? [];
     if (available.length === 0) return undefined;
     return this.getConstructionPlacementPreviewProvider?.(this.getSelectedConstructionId());
   }
 
   private updateConstructionHotkeys(): void {
+    if (this.isInspectorMode()) return;
     const available = this.getAvailableConstructionIds?.() ?? [];
     if (available.length === 0) return;
     for (let index = 0; index < this.constructionKeys.length; index += 1) {
@@ -303,6 +373,9 @@ export class InputSystem {
       this.scopeChargeProgress = 0;
       this.tunnelPlacementAnchor = null;
       this.placementPreviewState = null;
+      this.inspectorConstructionPlacementActive = false;
+      this.inspectorRadialMenu?.close();
+      this.inspectorRmbWasBuildCancel = false;
       this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
       this.prevRightPointerDown = false;
@@ -498,7 +571,12 @@ export class InputSystem {
     // Drehen bleibt während des Arena-Countdowns erlaubt und wird über den
     // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
     const aimTarget = this.updateAimFromPointer();
-    const constructionPreview = this.getConstructionPlacementPreviewState();
+    const selectedInspectorTool = this.getSelectedInspectorTool();
+    const constructionPreview = this.isInspectorMode()
+      && this.isInspectorConstructionPlacementActive()
+      && selectedInspectorTool?.kind === 'construction'
+      ? this.getConstructionPlacementPreviewState()
+      : undefined;
     if (constructionPreview) this.syncPlacementPreviewState(constructionPreview);
 
     // ── 2. Bewegungs-Input (immer gesendet) ────────────────────────────────
@@ -582,6 +660,71 @@ export class InputSystem {
       || this.ultimatePlacementActive;
     const ultimateCfg = this.getLocalUltimateConfig?.();
 
+    // Inspector: RMB is selection. During placement it cancels immediately; only a
+    // continued hold opens the radial after the short-cancel threshold.
+    if (this.isInspectorMode()) {
+      const tools = this.getInspectorTools();
+      if (rightInputStarted) {
+        const wasPlacement = this.utilityPlacementActive
+          || this.utilityTargetingActive
+          || this.utilityHoldActive
+          || this.inspectorConstructionPlacementActive;
+        if (wasPlacement) {
+          this.cancelUtilityInteraction();
+        }
+        this.inspectorRmbStartedAt = now;
+        this.inspectorRmbWasBuildCancel = wasPlacement;
+        if (!wasPlacement) {
+          this.inspectorRadialMenu?.open(pointer.x, pointer.y, tools, this.getSelectedInspectorTool());
+        }
+      }
+      if (rightPointerDown && this.inspectorRmbWasBuildCancel && !this.inspectorRadialMenu?.isOpen
+        && now - this.inspectorRmbStartedAt >= 200) {
+        this.inspectorRadialMenu?.open(pointer.downX, pointer.downY, tools, this.getSelectedInspectorTool());
+      }
+      if (this.inspectorRadialMenu?.isOpen) {
+        if (rightPointerDown) {
+          this.inspectorRadialMenu.update(pointer.x, pointer.y);
+        } else {
+          const selected = this.inspectorRadialMenu.close(pointer.x, pointer.y);
+          if (selected) this.inspectorSetSelectedTool?.(selected);
+          this.inspectorRmbWasBuildCancel = false;
+        }
+        this.prevRightPointerDown = rightPointerDown;
+        return;
+      }
+      if (rightPointerDown) {
+        this.prevRightPointerDown = rightPointerDown;
+        return;
+      }
+      if (!rightPointerDown && !rightInputStarted) this.inspectorRmbWasBuildCancel = false;
+    }
+
+    if (this.isInspectorMode() && this.inspectorConstructionPlacementActive) {
+      const preview = constructionPreview;
+      this.syncPlacementPreviewState(preview);
+      if (!preview) {
+        this.cancelInspectorConstructionPlacement();
+        return;
+      }
+      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+        if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
+        if (preview.isValid) {
+          const tool = this.getSelectedInspectorTool();
+          if (tool?.kind === 'construction') {
+            this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY, {
+              inputStarted: true,
+              constructionId: tool.id,
+              toolRef: tool,
+            });
+          }
+        }
+        this.cancelInspectorConstructionPlacement();
+        return;
+      }
+      return;
+    }
+
     if (this.utilityTargetingActive) {
       const targetedCfg = this.getTargetedUtilityConfig();
       if (!targetedCfg) {
@@ -598,7 +741,7 @@ export class InputSystem {
         if (leftInputStarted) {
           this.consumeLeftClickForModeConfirmation();
           this.predictedUtilityCooldownUntil = now + targetedCfg.cooldown;
-          this.onLoadoutUse('utility', targetAngle, target.x, target.y);
+          this.onLoadoutUse('utility', targetAngle, target.x, target.y, this.getInspectorUtilityParams());
           this.cancelUtilityTargeting();
           return;
         }
@@ -658,7 +801,7 @@ export class InputSystem {
           this.consumeLeftClickForModeConfirmation();
         }
         if (preview.isValid) {
-          this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY);
+          this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY, this.getInspectorUtilityParams());
         }
         this.cancelUtilityPlacement();
         return;
@@ -723,18 +866,7 @@ export class InputSystem {
       // andere Waffen feuern weiterhin per Dauerfeuer.
       const scopeCfg = constructionPreview ? undefined : this.getWeapon2Config?.()?.scopeConfig;
       if (constructionPreview) {
-        if (rightInputStarted && constructionPreview.isValid) {
-          this.onLoadoutUse(
-            'weapon2',
-            constructionPreview.angle,
-            constructionPreview.targetX,
-            constructionPreview.targetY,
-            {
-              inputStarted: true,
-              constructionId: constructionPreview.constructionId,
-            },
-          );
-        }
+        // Inspector constructions are started with E; RMB belongs to the radial menu.
       } else if (scopeCfg) {
         if (rightPointerDown) {
           // Scope-In: Fortschritt berechnen, nur holdSpeedFactor aktiv halten (kein Schuss)
@@ -776,12 +908,23 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      const inspectorTool = this.getSelectedInspectorTool();
+      if (this.isInspectorMode() && !inspectorTool) return;
+      if (this.isInspectorMode()
+        && inspectorTool?.kind === 'construction'
+        && !this.isInspectorUtilityOverrideActive()) {
+        this.cancelUtilityInteraction();
+        this.inspectorConstructionPlacementActive = true;
+        this.bridge.sendDecoyStealthBreakRequest();
+        this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
+        return;
+      }
       if (this.getEffectiveUtilityCooldownUntil() > now) {
         this.onUtilityPressedDuringCooldown?.();
       }
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
-        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y);
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getInspectorUtilityParams());
         return;
       }
       if (this.beginPlacementUtilityAim(now)) {
@@ -792,7 +935,7 @@ export class InputSystem {
         return;
       }
       if (!this.beginChargedUtilityHold(now)) {
-        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y);
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getInspectorUtilityParams());
       }
     }
 
@@ -996,6 +1139,7 @@ export class InputSystem {
     this.predictedUtilityCooldownUntil = now + cfg.cooldown;
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
+      ...this.getInspectorUtilityParams(),
       utilityChargeFraction: chargeFraction,
     });
   }
@@ -1054,6 +1198,12 @@ export class InputSystem {
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
     this.cancelUtilityPlacement();
+    this.cancelInspectorConstructionPlacement();
+  }
+
+  private cancelInspectorConstructionPlacement(): void {
+    this.inspectorConstructionPlacementActive = false;
+    this.placementPreviewState = null;
   }
 
   private cancelUtilityCharge(): void {
@@ -1067,7 +1217,7 @@ export class InputSystem {
   }
 
   private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {
-    if (!this.utilityPlacementActive || !preview) {
+    if ((!this.utilityPlacementActive && !this.inspectorConstructionPlacementActive) || !preview) {
       this.placementPreviewState = null;
       return;
     }

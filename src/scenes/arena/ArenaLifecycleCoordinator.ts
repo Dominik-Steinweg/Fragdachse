@@ -52,7 +52,7 @@ import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
-import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
+import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, UtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
@@ -88,7 +88,7 @@ import {
   isConstructionId,
 } from '../../config/coopDefenseConstructions';
 import { getUnlockedCoopDefenseConstructionIds } from '../../utils/coopDefenseUpgrades';
-import type { ConstructionId, LoadoutUseResult } from '../../types';
+import type { ConstructionId, LoadoutToolRef, LoadoutUseResult } from '../../types';
 
 /**
  * Manages the arena round lifecycle.
@@ -1975,6 +1975,9 @@ export class ArenaLifecycleCoordinator {
     if (!getUnlockedCoopDefenseConstructionIds(committed.coopDefenseProfile).includes(constructionId)) {
       return { ok: false, reason: 'invalid' };
     }
+    if (!(committed.tools ?? []).some((tool) => tool.kind === 'construction' && tool.id === constructionId)) {
+      return { ok: false, reason: 'blocked' };
+    }
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (
       !player
@@ -2007,7 +2010,7 @@ export class ArenaLifecycleCoordinator {
     );
     if (!construction) return { ok: false, reason: 'blocked' };
 
-    this.ctx.resourceSystem?.drainAdrenaline(playerId, definition.adrenalineCost);
+    this.ctx.resourceSystem?.drainAdrenaline(playerId, cost);
     this.rockVisualHelper.materializePlaceableRock(construction, true);
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_added',
@@ -2017,6 +2020,36 @@ export class ArenaLifecycleCoordinator {
       gridY: construction.gridY,
     });
     return { ok: true };
+  }
+
+  useInspectorUtility(
+    playerId: string,
+    tool: LoadoutToolRef,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    params?: LoadoutUseParams,
+  ): LoadoutUseResult {
+    if (!bridge.isHost() || tool.kind !== 'utility') return { ok: false, reason: 'invalid' };
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    if (!committed || committed.coopDefenseClassId !== 'inspector_gadachs') {
+      return { ok: false, reason: 'blocked' };
+    }
+    if (!(committed.tools ?? []).some((entry) => entry.kind === 'utility' && entry.id === tool.id)) {
+      return { ok: false, reason: 'blocked' };
+    }
+    const config = UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS] as UtilityConfig | undefined;
+    if (!config) return { ok: false, reason: 'invalid' };
+    return this.ctx.loadoutManager?.useInspectorUtility(
+      playerId,
+      config,
+      angle,
+      targetX,
+      targetY,
+      now,
+      params,
+    ) ?? { ok: false, reason: 'blocked' };
   }
 
   private placeTunnel(

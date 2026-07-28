@@ -73,15 +73,18 @@ import {
   getCoopDefenseUpgradeLoadoutSelection,
   getCoopDefenseUpgradeTextureKey,
   getUnlockedCoopDefenseConstructionIds,
+  getUnlockedLoadoutToolRefs,
+  getCoopDefenseToolCapacity,
+  setLoadoutToolSlots,
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
-import type { CoopDefenseClassId, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import type { CoopDefenseClassId, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import { getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
@@ -478,6 +481,10 @@ export class ArenaScene extends Phaser.Scene {
       (upgradeId) => this.levelDownCoopDefenseUpgrade(upgradeId),
       () => this.fullRespecCoopDefenseUpgrades(),
       (classId) => this.selectCoopDefenseClass(classId),
+      (tool) => this.toggleLoadoutTool(tool),
+      (tools) => this.setLoadoutTools(tools),
+      () => this.getLocalLoadoutSelection(),
+      (slot, itemId) => this.selectLoadoutItem(slot, itemId),
       () => this.cancelCoopDefenseUpgradeChanges(),
       () => this.applyCoopDefenseUpgradeChanges(),
     );
@@ -646,7 +653,20 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setup();
     inputSystem.setAudioSystem(gameAudioSystem);
     inputSystem.setupUtilityConfigProvider(() => this.clientUpdate.getLocalUtilityConfig());
-    inputSystem.setupUtilityCooldownProvider(() => bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId()));
+    inputSystem.setupUtilityCooldownProvider(() => {
+      const tool = this.clientUpdate.getLocalInspectorSelectedTool();
+      const config = this.clientUpdate.getLocalUtilityConfig();
+      const utilityId = tool?.kind === 'utility' && config.id === tool.id ? tool.id : config.id;
+      return bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId(), utilityId);
+    });
+    inputSystem.setupInspectorToolProvider(
+      () => this.clientUpdate.getLocalInspectorTools(),
+      () => this.clientUpdate.getLocalInspectorSelectedTool(),
+      (tool) => this.clientUpdate.setLocalInspectorSelectedTool(tool),
+      () => bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
+      () => bridge.getPlayerUtilityOverrideName(bridge.getLocalPlayerId()) !== ''
+        || this.clientUpdate.clientUtilityOverride !== null,
+    );
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
 
@@ -772,9 +792,11 @@ export class ArenaScene extends Phaser.Scene {
     });
     inputSystem.onUtilityPressedDuringCooldown = () => {
       const localId       = bridge.getLocalPlayerId();
-      const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId);
+      const selected = this.clientUpdate.getLocalInspectorSelectedTool();
+      const config = this.clientUpdate.getLocalUtilityConfig();
+      const utilityId = selected?.kind === 'utility' && config.id === selected.id ? selected.id : config.id;
+      const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, utilityId);
       const remaining     = Math.max(0, cooldownUntil - bridge.getSynchronizedNow());
-      const config        = this.clientUpdate.getLocalUtilityConfig();
       const frac          = config && config.cooldown > 0 ? Math.min(1, remaining / config.cooldown) : 0.8;
       const displayName   = config?.displayName ?? 'Utility';
       this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
@@ -823,8 +845,13 @@ export class ArenaScene extends Phaser.Scene {
         }
         shotId = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);
       }
-      if (slot === 'utility') {
-        const utilityCooldownUntil = bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId());
+      if (slot === 'utility' && params?.toolRef?.kind !== 'construction') {
+        const selectedInspectorTool = this.clientUpdate.getLocalInspectorSelectedTool();
+        const config = this.clientUpdate.getLocalUtilityConfig();
+        const utilityId = selectedInspectorTool?.kind === 'utility' && config.id === selectedInspectorTool.id
+          ? selectedInspectorTool.id
+          : config.id;
+        const utilityCooldownUntil = bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId(), utilityId);
         if (utilityCooldownUntil > Date.now()) {
           if (inputStarted) {
             const utilityShotAudio = this.clientUpdate.getLocalUtilityConfig()?.shotAudio;
@@ -836,13 +863,18 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       const localSprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
-      const awaitResult = (slot === 'utility'
+      const isUtilityPlacementAction = slot === 'utility'
         && inputSystem.isUtilityPlacementActive()
-        && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode')
-        || (slot === 'ultimate'
+        && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode';
+      const isUltimatePlacementAction = slot === 'ultimate'
           && inputSystem.isUltimatePlacementActive()
-          && params?.tunnelAction === 'commit')
-        || params?.constructionId !== undefined;
+          && params?.tunnelAction === 'commit';
+      const isInspectorConstructionAction = params?.toolRef?.kind === 'construction';
+      const isInspectorUtilityAction = params?.toolRef?.kind === 'utility';
+      const awaitResult = isUtilityPlacementAction
+        || isUltimatePlacementAction
+        || isInspectorConstructionAction
+        || isInspectorUtilityAction;
       const awaitFailureResult = inputStarted
         && !params?.constructionId
         && (slot === 'weapon2' || slot === 'ultimate');
@@ -854,9 +886,16 @@ export class ArenaScene extends Phaser.Scene {
       }
       if (awaitResult) {
         void loadoutPromise.then((result) => {
-          if (!result?.ok) this.placementPreview.showPlacementError('Bau fehlgeschlagen');
+          if (result?.ok) return;
+          if (isUtilityPlacementAction || isUltimatePlacementAction || isInspectorConstructionAction) {
+            this.placementPreview.showPlacementError('Bau fehlgeschlagen');
+            return;
+          }
+          handleLocalLoadoutFailure(slot, result, inputStarted);
         }).catch(() => {
-          this.placementPreview.showPlacementError('Bau fehlgeschlagen');
+          if (isUtilityPlacementAction || isUltimatePlacementAction || isInspectorConstructionAction) {
+            this.placementPreview.showPlacementError('Bau fehlgeschlagen');
+          }
         });
       }
     });
@@ -1182,6 +1221,7 @@ export class ArenaScene extends Phaser.Scene {
       && !this.localPlayerState.burrowed
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
       && !this.ctx.inputSystem.isUtilityPlacementActive()
+      && !this.ctx.inputSystem.isInspectorConstructionPlacementActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
     const aimPreviewMs = performance.now() - aimPreviewStartedAt;
@@ -1552,13 +1592,95 @@ export class ArenaScene extends Phaser.Scene {
     setStoredCoopDefenseUpgradeProfile(nextProfile, stored.selectedClassId);
 
     const loadoutSelection = getCoopDefenseUpgradeLoadoutSelection(upgradeId);
-    if (loadoutSelection) {
+    if (loadoutSelection && stored.selectedClassId !== 'inspector_gadachs') {
       bridge.setLocalLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
       setStoredLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
     }
 
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    return true;
+  }
+
+  private toggleLoadoutTool(tool: LoadoutToolRef): boolean {
+    const stored = getStoredCoopDefenseProgress();
+    if (stored.selectedClassId !== 'inspector_gadachs') return false;
+    const profile = stored.profilesByClass.inspector_gadachs;
+    const current = [...(profile.toolLoadout ?? [])];
+    const index = current.findIndex((entry) => entry.kind === tool.kind && entry.id === tool.id);
+    if (index >= 0) {
+      current.splice(index, 1);
+    } else {
+      const capacity = getCoopDefenseToolCapacity(profile);
+      if (current.length >= capacity) return false;
+      if (!getUnlockedLoadoutToolRefs(profile).some((entry) => entry.kind === tool.kind && entry.id === tool.id)) return false;
+      current.push({ ...tool });
+    }
+    const selected = profile.selectedTool
+      && current.some((entry) => entry.kind === profile.selectedTool?.kind && entry.id === profile.selectedTool?.id)
+      ? profile.selectedTool
+      : current[0] ?? null;
+    const nextProfile = setLoadoutToolSlots(profile, current, selected);
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    setStoredCoopDefenseUpgradeProfile(nextProfile, 'inspector_gadachs');
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
+    this.ctx.leftPanel.refreshColorIndicator();
+    return true;
+  }
+
+  /** Setzt die Utility-Slots als Ganzes (Auswahl-Popup); nur freigeschaltete Utilities zaehlen. */
+  private setLoadoutTools(tools: readonly LoadoutToolRef[]): boolean {
+    const stored = getStoredCoopDefenseProgress();
+    if (stored.selectedClassId !== 'inspector_gadachs') return false;
+    const profile = stored.profilesByClass.inspector_gadachs;
+    if (tools.length > getCoopDefenseToolCapacity(profile)) return false;
+
+    const unlocked = getUnlockedLoadoutToolRefs(profile);
+    if (!tools.every((tool) => unlocked.some((entry) => entry.kind === tool.kind && entry.id === tool.id))) {
+      return false;
+    }
+
+    const previous = profile.selectedTool;
+    const selected = previous && tools.some((tool) => tool.kind === previous.kind && tool.id === previous.id)
+      ? previous
+      : tools[0] ?? null;
+    setStoredCoopDefenseUpgradeProfile(
+      setLoadoutToolSlots(profile, tools.map((tool) => ({ ...tool })), selected),
+      'inspector_gadachs',
+    );
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
+    this.ctx.leftPanel.refreshColorIndicator();
+    return true;
+  }
+
+  /** Liest die aktuell ausgeruestete Item-ID je Loadout-Slot des lokalen Spielers. */
+  private getLocalLoadoutSelection(): Record<LoadoutSlot, string | null> {
+    const localId = bridge.getLocalPlayerId();
+    return {
+      weapon1: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? null,
+      weapon2: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? null,
+      utility: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? null,
+      ultimate: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? null,
+    };
+  }
+
+  /** Setzt einen Loadout-Slot aus dem Upgrade-Overlay heraus (gleiche Wirkung wie das Lobby-Karussell). */
+  private selectLoadoutItem(slot: LoadoutSlot, itemId: string): boolean {
+    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return false;
+    if (bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), slot) === itemId) return false;
+
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    bridge.setLocalLoadoutSlot(slot, itemId);
+    setStoredLoadoutSlot(slot, itemId);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
+    this.ctx.leftPanel.refreshColorIndicator();
     return true;
   }
 

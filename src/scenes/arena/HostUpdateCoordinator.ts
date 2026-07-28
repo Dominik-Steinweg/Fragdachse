@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S } from '../../config';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
+import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
@@ -675,7 +676,22 @@ export class HostUpdateCoordinator {
       );
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
       const now = Date.now();
-      const utilCfg   = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
+      const committedLoadout = bridge.getPlayerCommittedLoadout(localId);
+      const hasUtilityOverride = bridge.getPlayerUtilityOverrideName(localId) !== '';
+      const selectedInspectorTool = hasUtilityOverride ? undefined
+        : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? committedLoadout?.coopDefenseProfile?.selectedTool);
+      const selectedInspectorUtility = selectedInspectorTool?.kind === 'utility'
+        ? UTILITY_CONFIGS[selectedInspectorTool.id as keyof typeof UTILITY_CONFIGS]
+        : undefined;
+      const selectedInspectorConstruction = selectedInspectorTool?.kind === 'construction'
+        ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
+        : undefined;
+      const utilCfg   = selectedInspectorUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
+      const utilDisplayName = selectedInspectorConstruction
+        ? `${selectedInspectorConstruction.displayName} · ${selectedInspectorConstruction.adrenalineCost} ADR`
+        : selectedInspectorUtility?.inspectorAdrenalineCost !== undefined
+          ? `${utilCfg?.displayName ?? 'Utility'} · ${selectedInspectorUtility.inspectorAdrenalineCost} ADR`
+          : utilCfg?.displayName;
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
       const activePowerUps = [
@@ -702,7 +718,7 @@ export class HostUpdateCoordinator {
         weapon1CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon1', now) ?? 0,
         weapon2CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
-        utilityDisplayName:      utilCfg?.displayName,
+        utilityDisplayName:      utilDisplayName,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideName(localId) !== '',
         activePowerUps:          stealthBuff ? [...activePowerUps, stealthBuff] : activePowerUps,
@@ -1382,12 +1398,23 @@ export class HostUpdateCoordinator {
 
   private getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
-    const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId);
+    const committed = bridge.getPlayerCommittedLoadout(localId);
+    const hasOverride = bridge.getPlayerUtilityOverrideName(localId) !== '';
+    const selected = hasOverride ? undefined : (this.ctx.inputSystem.getSelectedInspectorToolForHud()
+      ?? committed?.coopDefenseProfile?.selectedTool);
+    if (selected?.kind === 'construction') return 0;
+    const utilityId = selected?.kind === 'utility'
+      ? selected.id
+      : (this.ctx.loadoutManager?.getEquippedUtilityConfig(localId)?.id ?? '__default__');
+    const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, utilityId);
     const remaining = cooldownUntil - bridge.getSynchronizedNow();
     if (remaining <= 0) return 0;
-    const config = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-    if (!config || config.cooldown <= 0) return 0;
-    return Math.min(1, remaining / config.cooldown);
+    const config = selected?.kind === 'utility'
+      ? UTILITY_CONFIGS[selected.id as keyof typeof UTILITY_CONFIGS]
+      : this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
+    const cooldown = selected?.kind === 'utility' ? 1000 : config?.cooldown ?? 0;
+    if (cooldown <= 0) return 0;
+    return Math.min(1, remaining / cooldown);
   }
 
   private getFallbackUltimateConfig() {

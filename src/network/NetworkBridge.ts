@@ -98,7 +98,7 @@ const KEY_LOADOUT_W2   = 'lw2';   // per-player: string (weapon2 item ID)
 const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
-const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: number (Date.now()-Timestamp bis Utility wieder bereit)
+const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_UTILITY_OVERRIDE_NAME = 'uon'; // per-player: string (display name of overridden utility, empty = no override)
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
@@ -1102,6 +1102,9 @@ export class NetworkBridge {
       coopDefenseProfile: raw.coopDefenseProfile == null
         ? null
         : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId ?? undefined),
+      tools: coopDefenseClassId === 'inspector_gadachs'
+        ? sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId).toolLoadout?.map((tool) => ({ ...tool }))
+        : undefined,
     };
   }
 
@@ -2376,16 +2379,28 @@ export class NetworkBridge {
   }
 
   /** Host-only: Publiziert bis wann die Utility eines Spielers im Cooldown ist. */
-  publishUtilityCooldownUntil(playerId: string, cooldownUntil: number): void {
+  publishUtilityCooldownUntil(playerId: string, cooldownUntil: number, utilityId = '__default__'): void {
     if (!isHost()) return;
     const ps = this.playerStateMap.get(playerId);
     if (!ps) return;
-    ps.setState(KEY_UTILITY_CD_UNTIL, cooldownUntil, true);
+    if (utilityId === '__clear__') {
+      ps.setState(KEY_UTILITY_CD_UNTIL, {}, true);
+      return;
+    }
+    const current = ps.getState(KEY_UTILITY_CD_UNTIL);
+    const cooldowns: Record<string, number> = typeof current === 'number'
+      ? { __default__: current }
+      : (current && typeof current === 'object' ? { ...(current as Record<string, number>) } : {});
+    cooldowns[utilityId] = cooldownUntil;
+    ps.setState(KEY_UTILITY_CD_UNTIL, cooldowns, true);
   }
 
   /** Liest den autoritativen Utility-Cooldown-Endzeitpunkt eines Spielers (0 = bereit). */
-  getPlayerUtilityCooldownUntil(playerId: string): number {
-    return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_CD_UNTIL) as number | undefined) ?? 0;
+  getPlayerUtilityCooldownUntil(playerId: string, utilityId = '__default__'): number {
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_CD_UNTIL);
+    if (typeof value === 'number') return utilityId === '__default__' ? value : 0;
+    if (!value || typeof value !== 'object') return 0;
+    return (value as Record<string, number>)[utilityId] ?? 0;
   }
 
   /** Host-only: Publiziert den Display-Namen einer Utility-Override (z.B. BFG, Heilige Handgranate). Leerstring = kein Override. */

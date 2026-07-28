@@ -93,9 +93,9 @@ describe('coop-defense classes', () => {
 });
 
 describe('Inspector construction slots', () => {
-  it('starts with the rocket turret, enforces the unlock cap and blocks invalid slot refunds', () => {
+  it('starts with the rocket turret, separates unlocks from slots and validates slot refunds', () => {
     let profile: CoopDefenseUpgradeProfile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
-    expect(getCoopDefenseConstructionSlotCapacity(profile)).toBe(2);
+    expect(getCoopDefenseConstructionSlotCapacity(profile)).toBe(3);
     expect(getUnlockedCoopDefenseConstructionIds(profile)).toEqual(['rocket_turret']);
 
     profile = levelUpCoopDefenseUpgrade(
@@ -115,7 +115,7 @@ describe('Inspector construction slots', () => {
       20,
       0,
       'inspector_gadachs',
-    )).toBeNull();
+    )).not.toBeNull();
 
     profile = levelUpCoopDefenseUpgrade(
       profile,
@@ -124,24 +124,17 @@ describe('Inspector construction slots', () => {
       0,
       'inspector_gadachs',
     )!;
-    profile = levelUpCoopDefenseUpgrade(
-      profile,
-      'unlock_flame_turret',
-      20,
-      0,
-      'inspector_gadachs',
-    )!;
-    expect(getCoopDefenseConstructionSlotCapacity(profile)).toBe(3);
+    expect(getCoopDefenseConstructionSlotCapacity(profile)).toBe(4);
     expect(canLevelDownCoopDefenseUpgrade(
       profile,
       'inspector_construction_slots',
       'inspector_gadachs',
-    )).toBe(false);
+    )).toBe(true);
     expect(levelDownCoopDefenseUpgrade(
       profile,
       'inspector_construction_slots',
       'inspector_gadachs',
-    )).toBeNull();
+    )).not.toBeNull();
   });
 });
 

@@ -5,6 +5,8 @@ export interface CoopDefenseClassDefinition {
   readonly displayName: string;
   readonly role: string;
   readonly description: string;
+  /** Kurze Besonderheiten fuer das Mouse-over im Upgrade-Overlay. */
+  readonly tooltipLines: readonly string[];
   readonly outgoingDamageMultiplier: number;
   readonly criticalChance: number;
   readonly criticalDamageMultiplier: number;
@@ -38,6 +40,10 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
       displayName: 'Dachs Nukem',
       role: 'Offensive',
       description: '+50% Schaden, 10% Krit-Chance, 200% Krit-Schaden und +20% Laufgeschwindigkeit.',
+      tooltipLines: [
+        'Loadout: Waffe 1, Waffe 2, Utility, Ultimate.',
+        'Staerke: schnelles Toeten auf Distanz und hohe Mobilitaet.',
+      ],
       outgoingDamageMultiplier: 1.5,
       criticalChance: 0.1,
       criticalDamageMultiplier: 2,
@@ -52,6 +58,10 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
       displayName: 'Dachs of Steel',
       role: 'Tank',
       description: 'Doppelte Lebenspunkte und Ruestung, +10 HP/s und Ruestung aus eigenen Felszerstoerungen.',
+      tooltipLines: [
+        'Loadout: Waffe 1, Waffe 2, Utility, Ultimate.',
+        'Staerke: haelt Gegnerwellen direkt an der Basis auf.',
+      ],
       outgoingDamageMultiplier: 1,
       criticalChance: 0,
       criticalDamageMultiplier: 1,
@@ -65,7 +75,13 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
       id: 'inspector_gadachs',
       displayName: 'Inspector Gadachs',
       role: 'Ingenieur',
-      description: 'Ersetzt Sekundaerwaffen durch dauerhafte Konstruktionen und eine Reparaturdrohne.',
+      description: 'Baut dauerhafte Konstruktionen und eine Reparaturdrohne.',
+      tooltipLines: [
+        'Loadout: Waffe 1, mehrere Utility-Slots, Ultimate.',
+        'Utilities kommen aus Utility 1 (nur Inspector) und Utility 2 (alle Klassen).',
+        'Utility-Rad auf RMB, Einsatz kostet Adrenalin statt Cooldown.',
+        'Staerke: stellt bleibende Verteidigung auf und haelt sie instand.',
+      ],
       outgoingDamageMultiplier: 1,
       criticalChance: 0,
       criticalDamageMultiplier: 1,

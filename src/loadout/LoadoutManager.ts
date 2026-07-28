@@ -120,6 +120,8 @@ type PhysicsSystemType  = {
  */
 export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
+  /** Inspector utilities keep an independent cooldown state per player and utility id. */
+  private inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
   private ultimateStates    = new Map<string, UltimateState>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
@@ -185,6 +187,7 @@ export class LoadoutManager {
       utility:  new GenericUtility(utCfg),
       ultimate: new GenericUltimate(ultCfg),
     });
+    this.inspectorUtilities.set(playerId, new Map());
     this.ultimateStates.set(playerId, {
       active:    false,
       startTime: 0,
@@ -200,7 +203,7 @@ export class LoadoutManager {
     // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
     this.savedUtilities.delete(playerId);
     this.utilityAmmo.delete(playerId);
-    this.bridge.publishUtilityCooldownUntil(playerId, 0);
+    this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
     this.bridge.publishUtilityOverrideName(playerId, '');
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
@@ -237,6 +240,7 @@ export class LoadoutManager {
 
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
+    this.inspectorUtilities.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.savedUtilities.delete(playerId);
@@ -359,7 +363,7 @@ export class LoadoutManager {
     if (!loadout) return;
     if (loadout.utility.config.id !== utilityId) return;
     loadout.utility.recordUse(now);
-    this.bridge.publishUtilityCooldownUntil(playerId, now + loadout.utility.config.cooldown);
+    this.bridge.publishUtilityCooldownUntil(playerId, now + loadout.utility.config.cooldown, utilityId);
   }
 
   resetUltimateState(playerId: string): void {
@@ -522,6 +526,58 @@ export class LoadoutManager {
     return didFire;
   }
 
+  /**
+   * Host-authoritative dispatch for an Inspector utility. Unlike the regular
+   * utility slot, every Inspector utility owns a separate fixed 1s cooldown.
+   * Resource consumption is deliberately performed only after the activation
+   * handler reports success.
+   */
+  useInspectorUtility(
+    playerId: string,
+    config: UtilityConfig,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    params?: LoadoutUseParams,
+  ): LoadoutUseResult {
+    const loadout = this.loadouts.get(playerId);
+    const player = this.playerManager.getPlayer(playerId);
+    if (!loadout || !player) return { ok: false, reason: 'invalid' };
+    if (this.actionBlockedChecker?.(playerId, 'utility')) return { ok: false, reason: 'blocked' };
+
+    const effectiveConfig: UtilityConfig = {
+      ...this.resolveUtilityConfig(playerId, config),
+      cooldown: 1000,
+    };
+    const utilities = this.inspectorUtilities.get(playerId) ?? new Map<string, GenericUtility>();
+    this.inspectorUtilities.set(playerId, utilities);
+    let utility = utilities.get(effectiveConfig.id);
+    if (!utility || utility.config !== effectiveConfig) {
+      const previousLastUsedAt = utility?.getLastUsedAt() ?? 0;
+      utility = new GenericUtility(effectiveConfig);
+      utility.setLastUsedAt(previousLastUsedAt);
+      utilities.set(effectiveConfig.id, utility);
+    }
+
+    const cost = effectiveConfig.inspectorAdrenalineCost ?? 0;
+    if (utility.isOnCooldown(now)) return { ok: false, reason: 'cooldown' };
+    if (cost > 0 && this.resourceSystem.getAdrenaline(playerId) < this.resourceSystem.resolveAdrenalineCost(playerId, cost)) {
+      return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
+    }
+
+    // Inspector actions are host-authoritative: the client may submit an aim
+    // target, but never its own origin for range or spawn validation.
+    const x = player.sprite.x;
+    const y = player.sprite.y;
+    const didUse = this.useUtility(utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
+    if (!didUse) return { ok: false, reason: 'blocked' };
+    if (cost > 0) {
+      this.resourceSystem.drainAdrenaline(playerId, this.resourceSystem.resolveAdrenalineCost(playerId, cost));
+    }
+    return this.okResult;
+  }
+
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
 
   /**
@@ -546,7 +602,7 @@ export class LoadoutManager {
     const effectiveConfig = modifierSource ? applyCoopDefenseModifiersToUtilityConfig(config, modifierSource) : config;
     loadout.utility = new GenericUtility(effectiveConfig);
     this.utilityAmmo.set(playerId, ammo);
-    this.bridge.publishUtilityCooldownUntil(playerId, 0); // sofort einsatzbereit
+    this.bridge.publishUtilityCooldownUntil(playerId, 0, config.id); // sofort einsatzbereit
     this.bridge.publishUtilityOverrideName(playerId, effectiveConfig.displayName);
   }
 
@@ -570,8 +626,11 @@ export class LoadoutManager {
 
     // Cooldown-Status an Clients publizieren
     const now = Date.now();
-    const remaining = saved.config.cooldown - (now - saved.lastUsedAt);
-    this.bridge.publishUtilityCooldownUntil(playerId, remaining > 0 ? now + remaining : 0);
+    const inspectorUtility = this.inspectorUtilities.get(playerId)?.get(saved.config.id);
+    const restoredConfig = inspectorUtility?.config ?? saved.config;
+    const restoredLastUsedAt = inspectorUtility?.getLastUsedAt() ?? saved.lastUsedAt;
+    const remaining = restoredConfig.cooldown - (now - restoredLastUsedAt);
+    this.bridge.publishUtilityCooldownUntil(playerId, remaining > 0 ? now + remaining : 0, saved.config.id);
     this.bridge.publishUtilityOverrideName(playerId, ''); // Override aufgehoben
   }
 
@@ -1585,7 +1644,7 @@ export class LoadoutManager {
       // damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird.
       if (!cfg.skipCooldownPublish) {
         utility.recordUse(now);
-        this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown);
+        this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown, cfg.id);
       }
 
       // Ammo dekrementieren und ggf. altes Utility wiederherstellen

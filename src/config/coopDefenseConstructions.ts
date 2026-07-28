@@ -21,8 +21,8 @@ export const COOP_DEFENSE_CONSTRUCTION_IDS: readonly ConstructionId[] = [
 ];
 
 export const DEFAULT_COOP_DEFENSE_CONSTRUCTION_ID: ConstructionId = 'rocket_turret';
-export const COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS = 2;
-export const COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS = 5;
+export const COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS = 3;
+export const COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS = 6;
 export const COOP_DEFENSE_CONSTRUCTION_SLOT_UPGRADE_ID = 'inspector_construction_slots';
 export const COOP_DEFENSE_CONSTRUCTION_HP_UPGRADE_ID = 'inspector_construction_hp';
 export const COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID = 'inspector_repair_drone';

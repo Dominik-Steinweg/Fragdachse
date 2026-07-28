@@ -12,12 +12,13 @@ import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseUpgradeProfile, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseUpgradeProfile, LoadoutToolRef, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
-import { getStoredCoopDefenseProgress } from '../../utils/localPreferences';
+import { getStoredCoopDefenseProgress, setStoredCoopDefenseUpgradeProfile } from '../../utils/localPreferences';
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
+import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
@@ -79,6 +80,7 @@ export class ClientUpdateCoordinator {
 
   /** Client-side prediction for utility override (BFG / Holy Hand Grenade pickup). */
   clientUtilityOverride: UtilityConfig | null = null;
+  private inspectorSelectedTool: LoadoutToolRef | null = null;
 
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
 
@@ -295,9 +297,21 @@ export class ClientUpdateCoordinator {
       const localUltimateConfig = this.getLocalUltimateConfig();
       const ultimateThresholds  = this.getLocalUltimateThresholds();
       const overrideName = bridge.getPlayerUtilityOverrideName(localId2);
-      const utilDisplayName = overrideName
+      const selectedInspectorTool = this.getLocalInspectorSelectedTool();
+      const inspectorConfig = selectedInspectorTool?.kind === 'utility'
+        ? UTILITY_CONFIGS[selectedInspectorTool.id as keyof typeof UTILITY_CONFIGS]
+        : undefined;
+      const inspectorConstruction = selectedInspectorTool?.kind === 'construction'
+        ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
+        : undefined;
+      const inspectorCost = inspectorConfig?.inspectorAdrenalineCost ?? inspectorConstruction?.adrenalineCost;
+      const baseUtilityDisplayName = overrideName
         || this.clientUtilityOverride?.displayName
+        || inspectorConstruction?.displayName
         || localUtilityConfig.displayName;
+      const utilDisplayName = inspectorCost !== undefined && !overrideName && !this.clientUtilityOverride
+        ? `${baseUtilityDisplayName} · ${inspectorCost} ADR`
+        : baseUtilityDisplayName;
       const activePowerUps = bridge.getPlayerActiveBuffs(localId2);
       const localWeapon2Config = this.getLocalWeaponConfig('weapon2');
       const fireSuperiorityActive = localWeapon2Config.id === 'AK47'
@@ -446,11 +460,14 @@ export class ClientUpdateCoordinator {
 
   getLocalUtilityConfig(): UtilityConfig {
     const localId = bridge.getLocalPlayerId();
-    const equipped = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-    if (equipped) return equipped;
     if (this.clientUtilityOverride) {
       return applyCoopDefenseModifiersToUtilityConfig(this.clientUtilityOverride, this.getLocalEffectTotals());
     }
+    const equipped = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
+    if (bridge.getPlayerUtilityOverrideName(localId) && equipped) return equipped;
+    const inspectorConfig = this.getLocalInspectorUtilityConfig();
+    if (inspectorConfig) return inspectorConfig;
+    if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
   }
@@ -503,10 +520,13 @@ export class ClientUpdateCoordinator {
 
   getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
-    const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId);
+    const selected = this.getLocalInspectorSelectedTool();
+    if (selected?.kind === 'construction') return 0;
+    const config = this.getLocalUtilityConfig();
+    const utilityId = selected?.kind === 'utility' && config.id === selected.id ? selected.id : config.id;
+    const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, utilityId);
     const remaining = cooldownUntil - bridge.getSynchronizedNow();
     if (remaining <= 0) return 0;
-    const config = this.getLocalUtilityConfig();
     if (config.cooldown <= 0) return 0;
     return Math.min(1, remaining / config.cooldown);
   }
@@ -545,6 +565,48 @@ export class ClientUpdateCoordinator {
     const progress = getStoredCoopDefenseProgress();
     this.storedProfileFallback ??= progress.profilesByClass[progress.selectedClassId];
     return this.storedProfileFallback;
+  }
+
+  getLocalInspectorTools(): readonly LoadoutToolRef[] {
+    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
+    return committed?.coopDefenseClassId === 'inspector_gadachs'
+      ? (committed.tools ?? committed.coopDefenseProfile?.toolLoadout ?? [])
+      : [];
+  }
+
+  getLocalInspectorSelectedTool(): LoadoutToolRef | null {
+    const tools = this.getLocalInspectorTools();
+    if (this.inspectorSelectedTool && tools.some((tool) => (
+      tool.kind === this.inspectorSelectedTool?.kind && tool.id === this.inspectorSelectedTool?.id
+    ))) return this.inspectorSelectedTool;
+    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId());
+    const profileSelected = committed?.coopDefenseProfile?.selectedTool;
+    const selected = profileSelected && tools.some((tool) => tool.kind === profileSelected.kind && tool.id === profileSelected.id)
+      ? profileSelected
+      : tools[0] ?? null;
+    this.inspectorSelectedTool = selected ? { ...selected } : null;
+    return this.inspectorSelectedTool;
+  }
+
+  setLocalInspectorSelectedTool(tool: LoadoutToolRef): void {
+    if (this.getLocalInspectorTools().some((entry) => entry.kind === tool.kind && entry.id === tool.id)) {
+      this.inspectorSelectedTool = { ...tool };
+      const progress = getStoredCoopDefenseProgress();
+      const profile = progress.profilesByClass.inspector_gadachs;
+      setStoredCoopDefenseUpgradeProfile({ ...profile, selectedTool: { ...tool } }, 'inspector_gadachs');
+    }
+  }
+
+  getLocalInspectorUtilityConfig(): UtilityConfig | undefined {
+    const tool = this.getLocalInspectorSelectedTool();
+    if (tool?.kind !== 'utility') return undefined;
+    const base = this.clientUtilityOverride ?? UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS];
+    if (!base) return undefined;
+    const modified = applyCoopDefenseModifiersToUtilityConfig(base, this.getLocalEffectTotals());
+    return {
+      ...modified,
+      cooldown: 1000,
+    } as UtilityConfig;
   }
 
   private getLocalCoopDefenseClassId() {

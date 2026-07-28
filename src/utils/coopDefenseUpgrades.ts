@@ -6,6 +6,7 @@ import {
 import {
   COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS,
   COOP_DEFENSE_CONSTRUCTION_IDS,
+  COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS,
   COOP_DEFENSE_CONSTRUCTION_SLOT_UPGRADE_ID,
   COOP_DEFENSE_CONSTRUCTIONS,
 } from '../config/coopDefenseConstructions';
@@ -21,6 +22,7 @@ import type {
   CoopDefenseClassId,
   ConstructionId,
   GameMode,
+  LoadoutToolRef,
   LoadoutSlot,
 } from '../types';
 
@@ -205,6 +207,9 @@ const COOP_DEFENSE_UPGRADES_BY_CATEGORY = new Map<CoopDefenseUpgradeCategoryId, 
   COOP_DEFENSE_UPGRADE_CATEGORIES.map((category) => [category.id, category.upgrades]),
 );
 const COOP_DEFENSE_LOADOUT_UNLOCKS = new Map<string, string>();
+const INSPECTOR_CONSTRUCTION_BY_UNLOCK_UPGRADE_ID = new Map<string, ConstructionId>(
+  COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => [COOP_DEFENSE_CONSTRUCTIONS[id].unlockUpgradeId, id]),
+);
 const INSPECTOR_UPGRADE_IDS = new Set([
   ...COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => COOP_DEFENSE_CONSTRUCTIONS[id].unlockUpgradeId),
   'inspector_construction_slots',
@@ -304,19 +309,100 @@ export function isCoopDefenseUpgradeAvailableForClass(
 }
 
 function getConstructionSlotCapacity(levels: Readonly<Record<string, number>>): number {
-  return COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS
-    + Math.max(0, levels[COOP_DEFENSE_CONSTRUCTION_SLOT_UPGRADE_ID] ?? 0);
+  return Math.min(
+    COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS,
+    COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS
+      + Math.max(0, levels[COOP_DEFENSE_CONSTRUCTION_SLOT_UPGRADE_ID] ?? 0),
+  );
 }
 
-function getUnlockedConstructionCount(levels: Readonly<Record<string, number>>): number {
-  return COOP_DEFENSE_CONSTRUCTION_IDS.reduce((count, constructionId) => (
-    count + ((levels[COOP_DEFENSE_CONSTRUCTIONS[constructionId].unlockUpgradeId] ?? 0) > 0 ? 1 : 0)
-  ), 0);
+function toolRefKey(tool: LoadoutToolRef | null | undefined): string {
+  return tool ? `${tool.kind}:${tool.id}` : '';
+}
+
+function isToolUnlockedByLevels(
+  tool: LoadoutToolRef,
+  levels: Readonly<Record<string, number>>,
+): boolean {
+  const upgradeId = getToolUnlockUpgradeId(tool);
+  return !!upgradeId && (levels[upgradeId] ?? 0) > 0;
+}
+
+function getToolUnlockUpgradeId(tool: LoadoutToolRef): string | undefined {
+  return tool.kind === 'construction'
+    ? COOP_DEFENSE_CONSTRUCTIONS[tool.id]?.unlockUpgradeId
+    : COOP_DEFENSE_LOADOUT_UNLOCKS.get(getLoadoutUnlockKey('utility', tool.id));
+}
+
+/** Maps both Inspector construction and utility unlock nodes to the shared tool model. */
+export function getLoadoutToolRefForUpgrade(upgradeId: string): LoadoutToolRef | null {
+  const constructionId = INSPECTOR_CONSTRUCTION_BY_UNLOCK_UPGRADE_ID.get(upgradeId);
+  if (constructionId) return { kind: 'construction', id: constructionId };
+
+  const loadoutUnlock = getCoopDefenseUpgradeDefinition(upgradeId)?.loadoutUnlock;
+  return loadoutUnlock?.slot === 'utility'
+    ? { kind: 'utility', id: loadoutUnlock.itemId }
+    : null;
+}
+
+function getDefaultToolLoadout(): LoadoutToolRef[] {
+  return [
+    { kind: 'construction', id: 'rocket_turret' },
+    { kind: 'utility', id: 'HE_GRENADE' },
+  ];
+}
+
+function getUnlockedToolsByLevels(
+  levels: Readonly<Record<string, number>>,
+): LoadoutToolRef[] {
+  return COOP_DEFENSE_UPGRADE_REGISTRY.upgrades.flatMap((definition) => {
+    if ((levels[definition.id] ?? 0) <= 0) return [];
+    const tool = getLoadoutToolRefForUpgrade(definition.id);
+    return tool ? [tool] : [];
+  });
+}
+
+function sanitizeToolLoadout(
+  rawTools: unknown,
+  levels: Readonly<Record<string, number>>,
+  capacity: number,
+  autoEquipTools?: readonly LoadoutToolRef[],
+): LoadoutToolRef[] {
+  const unlocked = getUnlockedToolsByLevels(levels);
+  const unlockedByKey = new Map(unlocked.map((tool) => [toolRefKey(tool), tool]));
+  const source = Array.isArray(rawTools) ? rawTools : getDefaultToolLoadout();
+  const result: LoadoutToolRef[] = [];
+  const seen = new Set<string>();
+  const append = (tool: LoadoutToolRef): void => {
+    const key = toolRefKey(tool);
+    if (seen.has(key) || result.length >= capacity) return;
+    const valid = unlockedByKey.get(key);
+    if (!valid) return;
+    result.push({ ...valid });
+    seen.add(key);
+  };
+  for (const value of source) {
+    if (!value || typeof value !== 'object') continue;
+    const kind = (value as { kind?: unknown }).kind;
+    const id = (value as { id?: unknown }).id;
+    if (kind !== 'construction' && kind !== 'utility') continue;
+    if (typeof id !== 'string') continue;
+    append({ kind, id } as LoadoutToolRef);
+  }
+  // Neue Freischaltungen werden deterministisch bis zur freien Kapazitaet angehaengt.
+  for (const tool of autoEquipTools ?? (rawTools === undefined ? unlocked : [])) append(tool);
+  if (result.length === 0 && rawTools === undefined) {
+    for (const tool of getDefaultToolLoadout()) append(tool);
+  }
+  return result;
 }
 
 function buildProfileFromRequestedLevels(
   requestedLevels: Readonly<Record<string, number>>,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
+  rawToolLoadout?: unknown,
+  rawSelectedTool?: unknown,
+  autoEquipTools?: readonly LoadoutToolRef[],
 ): CoopDefenseUpgradeProfile {
   const resolvedLevels: Record<string, number> = {};
   const unavailableUpgradeIds = getUnavailableUpgradeIds(classId);
@@ -337,19 +423,6 @@ function buildProfileFromRequestedLevels(
     resolvedLevels[definition.id] = Math.max(definition.startingLevel, requestedLevel);
   }
 
-  if (classId === 'inspector_gadachs') {
-    let capacity = getConstructionSlotCapacity(resolvedLevels);
-    for (const constructionId of COOP_DEFENSE_CONSTRUCTION_IDS) {
-      const unlockId = COOP_DEFENSE_CONSTRUCTIONS[constructionId].unlockUpgradeId;
-      if ((resolvedLevels[unlockId] ?? 0) <= 0) continue;
-      if (capacity > 0) {
-        capacity -= 1;
-      } else {
-        resolvedLevels[unlockId] = 0;
-      }
-    }
-  }
-
   const upgrades: Record<string, CoopDefenseUpgradeState> = {};
   for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
     if (unavailableUpgradeIds.has(definition.id)) {
@@ -362,7 +435,17 @@ function buildProfileFromRequestedLevels(
     };
   }
 
-  return { upgrades };
+  if (classId !== 'inspector_gadachs') return { upgrades };
+
+  const capacity = getConstructionSlotCapacity(resolvedLevels);
+  const toolLoadout = sanitizeToolLoadout(rawToolLoadout, resolvedLevels, capacity, autoEquipTools);
+  const selectedKey = rawSelectedTool && typeof rawSelectedTool === 'object'
+    ? toolRefKey(rawSelectedTool as LoadoutToolRef)
+    : '';
+  const selectedTool = toolLoadout.find((tool) => toolRefKey(tool) === selectedKey)
+    ?? toolLoadout[0]
+    ?? null;
+  return { upgrades, toolLoadout, selectedTool };
 }
 
 function sanitizeRequestedLevel(value: unknown, definition: CoopDefenseUpgradeDefinition): number {
@@ -391,18 +474,51 @@ function getSanitizedProfile(
   return sanitizeCoopDefenseUpgradeProfile(profile, classId);
 }
 
+/**
+ * Reine Anzeige-Umbenennung: Der Inspector hat keine Sekundaerwaffe, sondern zwei gleichwertige
+ * Utility-Herkuenfte. Die Kategorie-Schluessel (`weapon2`, `utility`) bleiben unveraendert.
+ */
+const INSPECTOR_CATEGORY_LABEL_OVERRIDES: Partial<Record<
+  CoopDefenseUpgradeCategoryId,
+  { label: string; description: string }
+>> = {
+  weapon2: {
+    label: 'Utility 1',
+    description: 'Utilities, die nur der Inspector Gadachs einsetzen kann.',
+  },
+  utility: {
+    label: 'Utility 2',
+    description: 'Utilities, die auch die anderen Klassen einsetzen koennen.',
+  },
+};
+
 export function getCoopDefenseUpgradeCategories(
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
 ): readonly CoopDefenseUpgradeCategoryDefinition[] {
-  return COOP_DEFENSE_UPGRADE_CATEGORIES.map((category) => ({
-    ...category,
-    description: classId === 'inspector_gadachs' && category.id === 'weapon2'
-      ? 'Konstruktionen des Inspector Gadachs.'
-      : category.description,
-    upgrades: category.upgrades.filter((definition) => (
-      isCoopDefenseUpgradeAvailableForClass(definition.id, classId)
-    )),
-  }));
+  return COOP_DEFENSE_UPGRADE_CATEGORIES.map((category) => {
+    const override = classId === 'inspector_gadachs'
+      ? INSPECTOR_CATEGORY_LABEL_OVERRIDES[category.id]
+      : undefined;
+    return {
+      ...category,
+      label: override?.label ?? category.label,
+      description: override?.description ?? category.description,
+      upgrades: category.upgrades.filter((definition) => (
+        isCoopDefenseUpgradeAvailableForClass(definition.id, classId)
+      )),
+    };
+  });
+}
+
+/**
+ * Utility-Kategorien sind beim Inspector gleichwertig und werden deshalb identisch eingefaerbt.
+ * Ausserhalb des Inspectors bleibt `weapon2` eine echte Sekundaerwaffen-Kategorie.
+ */
+export function isCoopDefenseToolCategory(
+  categoryId: CoopDefenseUpgradeCategoryId,
+  classId: CoopDefenseClassId,
+): boolean {
+  return classId === 'inspector_gadachs' && (categoryId === 'weapon2' || categoryId === 'utility');
 }
 
 export function getCoopDefenseUpgradeDefinitionsForCategory(
@@ -519,7 +635,11 @@ export function cloneCoopDefenseUpgradeProfile(
   for (const [upgradeId, state] of Object.entries(safeProfile.upgrades)) {
     upgrades[upgradeId] = cloneUpgradeState(state);
   }
-  return { upgrades };
+  return {
+    upgrades,
+    toolLoadout: safeProfile.toolLoadout?.map((tool) => ({ ...tool })),
+    selectedTool: safeProfile.selectedTool ? { ...safeProfile.selectedTool } : null,
+  };
 }
 
 export function isCoopDefenseUpgradeProfileEqual(
@@ -541,6 +661,15 @@ export function isCoopDefenseUpgradeProfileEqual(
       return false;
     }
   }
+
+  const leftTools = normalizedLeft.toolLoadout ?? [];
+  const rightTools = normalizedRight.toolLoadout ?? [];
+  if (leftTools.length !== rightTools.length) return false;
+  for (let index = 0; index < leftTools.length; index += 1) {
+    if (toolRefKey(leftTools[index]) !== toolRefKey(rightTools[index])) return false;
+  }
+  if (toolRefKey(normalizedLeft.selectedTool as LoadoutToolRef)
+    !== toolRefKey(normalizedRight.selectedTool as LoadoutToolRef)) return false;
 
   return true;
 }
@@ -594,7 +723,14 @@ function buildSanitizedCoopDefenseUpgradeProfile(
     }
   }
 
-  return buildProfileFromRequestedLevels(requestedLevels, classId);
+  // `inspectorTools`/`inspectorSelectedTool` sind die Alt-Schluessel gespeicherter Profile und
+  // aelterer Peers; gelesen wird beides, geschrieben nur noch die klassenneutralen Namen.
+  const source = raw && typeof raw === 'object'
+    ? raw as { toolLoadout?: unknown; selectedTool?: unknown; inspectorTools?: unknown; inspectorSelectedTool?: unknown }
+    : null;
+  const rawToolLoadout = source?.toolLoadout ?? source?.inspectorTools;
+  const rawSelectedTool = source?.selectedTool ?? source?.inspectorSelectedTool;
+  return buildProfileFromRequestedLevels(requestedLevels, classId, rawToolLoadout, rawSelectedTool);
 }
 
 /** Removes boss-priced levels that are not backed by earned unique boss-map completions. */
@@ -623,7 +759,12 @@ export function constrainCoopDefenseUpgradeProfileToBossPoints(
     remainingBossPoints -= affordablePaidLevels * definition.bossPointCostPerLevel;
   }
 
-  return buildProfileFromRequestedLevels(requestedLevels, classId);
+  return buildProfileFromRequestedLevels(
+    requestedLevels,
+    classId,
+    safeProfile.toolLoadout,
+    safeProfile.selectedTool,
+  );
 }
 
 export function getCoopDefenseUpgradeState(
@@ -726,20 +867,6 @@ export function canLevelUpCoopDefenseUpgrade(
   const state = safeProfile.upgrades[upgradeId];
   if (!state || !state.unlocked || state.level >= definition.maxLevel) return false;
 
-  if (
-    classId === 'inspector_gadachs'
-    && COOP_DEFENSE_CONSTRUCTION_IDS.some((constructionId) => (
-      COOP_DEFENSE_CONSTRUCTIONS[constructionId].unlockUpgradeId === upgradeId
-    ))
-    && getUnlockedConstructionCount(
-      Object.fromEntries(Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level])),
-    ) >= getConstructionSlotCapacity(
-      Object.fromEntries(Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level])),
-    )
-  ) {
-    return false;
-  }
-
   return getAvailableCoopDefenseUpgradePoints(playerLevel, safeProfile, classId) >= definition.costPerLevel
     && getAvailableCoopDefenseBossPoints(earnedBossPoints, safeProfile, classId) >= definition.bossPointCostPerLevel;
 }
@@ -763,7 +890,19 @@ export function levelUpCoopDefenseUpgrade(
     COOP_DEFENSE_UPGRADE_ORDER.map((entry) => [entry.id, getResolvedUpgradeLevel(safeProfile, entry.id)]),
   ) as Record<string, number>;
   nextRequestedLevels[upgradeId] = Math.min(definition.maxLevel, nextRequestedLevels[upgradeId] + 1);
-  return buildProfileFromRequestedLevels(nextRequestedLevels, classId);
+  const previousLevels = Object.fromEntries(
+    COOP_DEFENSE_UPGRADE_ORDER.map((entry) => [entry.id, getResolvedUpgradeLevel(safeProfile, entry.id)]),
+  ) as Record<string, number>;
+  const autoEquipTools = classId === 'inspector_gadachs'
+    ? getUnlockedToolsByLevels(nextRequestedLevels).filter((tool) => !isToolUnlockedByLevels(tool, previousLevels))
+    : undefined;
+  return buildProfileFromRequestedLevels(
+    nextRequestedLevels,
+    classId,
+    safeProfile.toolLoadout,
+    safeProfile.selectedTool,
+    autoEquipTools,
+  );
 }
 
 export function canLevelDownCoopDefenseUpgrade(
@@ -785,7 +924,7 @@ export function canLevelDownCoopDefenseUpgrade(
       Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level]),
     ) as Record<string, number>;
     levels[upgradeId] = Math.max(0, levels[upgradeId] - 1);
-    if (getUnlockedConstructionCount(levels) > getConstructionSlotCapacity(levels)) return false;
+    if ((safeProfile.toolLoadout?.length ?? 0) > getConstructionSlotCapacity(levels)) return false;
   }
 
   return true;
@@ -805,7 +944,12 @@ export function levelDownCoopDefenseUpgrade(
     COOP_DEFENSE_UPGRADE_ORDER.map((entry) => [entry.id, getResolvedUpgradeLevel(safeProfile, entry.id)]),
   ) as Record<string, number>;
   nextRequestedLevels[upgradeId] = Math.max(0, nextRequestedLevels[upgradeId] - 1);
-  return buildProfileFromRequestedLevels(nextRequestedLevels, classId);
+  return buildProfileFromRequestedLevels(
+    nextRequestedLevels,
+    classId,
+    safeProfile.toolLoadout,
+    safeProfile.selectedTool,
+  );
 }
 
 export function getCoopDefenseConstructionSlotCapacity(
@@ -816,6 +960,41 @@ export function getCoopDefenseConstructionSlotCapacity(
     Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level]),
   ) as Record<string, number>;
   return getConstructionSlotCapacity(levels);
+}
+
+export const getCoopDefenseToolCapacity = getCoopDefenseConstructionSlotCapacity;
+
+export function getLoadoutToolSlots(
+  profile: CoopDefenseUpgradeProfile,
+): readonly LoadoutToolRef[] {
+  return sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs').toolLoadout ?? [];
+}
+
+export function setLoadoutToolSlots(
+  profile: CoopDefenseUpgradeProfile,
+  tools: readonly LoadoutToolRef[],
+  selectedTool?: LoadoutToolRef | null,
+): CoopDefenseUpgradeProfile {
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs');
+  const levels = Object.fromEntries(
+    Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level]),
+  ) as Record<string, number>;
+  return buildProfileFromRequestedLevels(
+    levels,
+    'inspector_gadachs',
+    tools,
+    selectedTool,
+  );
+}
+
+export function getUnlockedLoadoutToolRefs(
+  profile: CoopDefenseUpgradeProfile,
+): readonly LoadoutToolRef[] {
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs');
+  const levels = Object.fromEntries(
+    Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level]),
+  ) as Record<string, number>;
+  return getUnlockedToolsByLevels(levels);
 }
 
 export function getUnlockedCoopDefenseConstructionIds(
