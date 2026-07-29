@@ -5,6 +5,7 @@ import { ArenaGenerator }    from '../../arena/ArenaGenerator';
 import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
 import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
+import { OverchargeSystem }  from '../../systems/OverchargeSystem';
 import { ResourceSystem }    from '../../systems/ResourceSystem';
 import { TeslaDomeSystem }   from '../../systems/TeslaDomeSystem';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -83,8 +84,12 @@ import { EnemyManager } from '../../entities/EnemyManager';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import {
+  COOP_DEFENSE_BUILD_COOLDOWN_MS,
+  COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+  COOP_DEFENSE_DISMANTLE_RANGE,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
   getCoopDefenseConstructionDefinition,
+  getToolCapacityCost,
   isConstructionId,
 } from '../../config/coopDefenseConstructions';
 import { getUnlockedCoopDefenseConstructionIds } from '../../utils/coopDefenseUpgrades';
@@ -428,6 +433,8 @@ export class ArenaLifecycleCoordinator {
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
+    // Host und Client halten das System: der Host autoritativ, der Client fuer die Darstellung.
+    this.ctx.overchargeSystem = new OverchargeSystem();
     this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
@@ -959,6 +966,11 @@ export class ArenaLifecycleCoordinator {
         () => (this.ctx.enemyManager?.getAllEnemies() ?? [])
           .filter(enemy => enemy.sprite.active)
           .map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })),
+      );
+      // Der Buff ist ortsbezogen und wirkt dadurch auf platzierte Tuerme, Fliegenpilze
+      // und Basistuerme gleichermassen.
+      this.ctx.turretSystem.setTurretBuffProvider(
+        (x, y) => this.ctx.overchargeSystem?.getBuffAt(x, y) ?? null,
       );
       this.ctx.teslaDomeSystem.setRockCallbacks(
         () => (this.ctx.arenaResult?.rockObjects ?? [])
@@ -1542,6 +1554,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.timeBubbleSystem?.destroyAll();
     this.ctx.decoySystem.clearAll();
     this.renderers.timeBubble.destroyAll();
+    this.renderers.overchargeField.destroyAll();
     this.renderers.teslaDome.destroyAll();
     this.renderers.healingAura.destroyAll();
     this.renderers.miniTeslaDome.destroyAll();
@@ -1604,6 +1617,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     this.ctx.placementSystem = null;
+    this.ctx.turretSystem?.setTurretBuffProvider(null);
+    this.ctx.overchargeSystem?.clear();
+    this.ctx.overchargeSystem = null;
     this.ctx.powerUpSystem?.reset();
     this.ctx.powerUpSystem  = null;
     this.ctx.shieldBuffSystem = null;
@@ -1988,12 +2004,11 @@ export class ArenaLifecycleCoordinator {
       return { ok: false, reason: 'blocked' };
     }
     const definition = getCoopDefenseConstructionDefinition(constructionId);
-    const cost = this.ctx.resourceSystem?.resolveAdrenalineCost(
-      playerId,
-      definition.adrenalineCost,
-    ) ?? definition.adrenalineCost;
-    if ((this.ctx.resourceSystem?.getAdrenaline(playerId) ?? 0) < cost) {
-      return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
+    if (this.ctx.loadoutManager?.isConstructionOnCooldown(playerId, constructionId, Date.now())) {
+      return { ok: false, reason: 'cooldown' };
+    }
+    if (!this.hasFreeConstructionCapacity(playerId, definition.capacityCost)) {
+      return { ok: false, reason: 'capacity' };
     }
     const hpMultiplier = 1 + (
       this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
@@ -2010,7 +2025,11 @@ export class ArenaLifecycleCoordinator {
     );
     if (!construction) return { ok: false, reason: 'blocked' };
 
-    this.ctx.resourceSystem?.drainAdrenaline(playerId, cost);
+    const placedAt = Date.now();
+    this.ctx.loadoutManager?.markConstructionUsed(playerId, constructionId, placedAt);
+    // Ueber denselben Kanal wie Utility-Cooldowns, damit auch Clients den Bau-Cooldown
+    // des gewaehlten Konstrukts im HUD sehen.
+    bridge.publishUtilityCooldownUntil(playerId, placedAt + COOP_DEFENSE_BUILD_COOLDOWN_MS, constructionId);
     this.rockVisualHelper.materializePlaceableRock(construction, true);
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_added',
@@ -2041,6 +2060,12 @@ export class ArenaLifecycleCoordinator {
     }
     const config = UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS] as UtilityConfig | undefined;
     if (!config) return { ok: false, reason: 'invalid' };
+    // Platzierbare Utilities (Mauer, Fliegenpilz) sind Konstrukte und belegen Kapazitaet;
+    // Granaten und andere Utilities nicht.
+    const capacityCost = getToolCapacityCost(tool);
+    if (capacityCost > 0 && !this.hasFreeConstructionCapacity(playerId, capacityCost)) {
+      return { ok: false, reason: 'capacity' };
+    }
     return this.ctx.loadoutManager?.useInspectorUtility(
       playerId,
       config,
@@ -2050,6 +2075,57 @@ export class ArenaLifecycleCoordinator {
       now,
       params,
     ) ?? { ok: false, reason: 'blocked' };
+  }
+
+  private hasFreeConstructionCapacity(playerId: string, capacityCost: number): boolean {
+    const used = this.ctx.placementSystem?.getUsedCapacity(playerId) ?? 0;
+    return used + capacityCost <= COOP_DEFENSE_CONSTRUCTION_CAPACITY;
+  }
+
+  /**
+   * Rueckbau eines eigenen Konstrukts. Gibt die Kapazitaet sofort frei und laeuft bewusst
+   * nicht ueber den Zerstoerungspfad: Es gibt weder Explosion noch Sporenwolke.
+   */
+  dismantleInspectorConstruction(
+    playerId: string,
+    targetX: number,
+    targetY: number,
+  ): LoadoutUseResult {
+    if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
+    const committed = bridge.getPlayerCommittedLoadout(playerId);
+    if (!committed || committed.coopDefenseClassId !== 'inspector_gadachs') {
+      return { ok: false, reason: 'blocked' };
+    }
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    if (
+      !player
+      || !player.sprite.active
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)
+    ) {
+      return { ok: false, reason: 'blocked' };
+    }
+    const cell = this.ctx.placementSystem?.getClampedTargetCell(
+      player.sprite.x,
+      player.sprite.y,
+      targetX,
+      targetY,
+      COOP_DEFENSE_DISMANTLE_RANGE,
+    );
+    if (!cell) return { ok: false, reason: 'blocked' };
+    const removed = this.ctx.placementSystem?.removeRockAt(cell.gridX, cell.gridY, playerId);
+    if (!removed) return { ok: false, reason: 'blocked' };
+
+    this.rockVisualHelper.removePlaceableRockVisual(removed, true);
+    this.ctx.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeable_removed',
+      source: removed.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+      obstacleId: removed.id,
+      gridX: removed.gridX,
+      gridY: removed.gridY,
+    });
+    return { ok: true };
   }
 
   private placeTunnel(

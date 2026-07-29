@@ -1,6 +1,9 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH, toCssColor } from '../config';
-import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import {
+  COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+  getToolCapacityCost,
+} from '../config/coopDefenseConstructions';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
@@ -11,11 +14,40 @@ const INNER_RADIUS = 34;
 const OUTER_RADIUS = 112;
 const LABEL_RADIUS = 76;
 
+/**
+ * Auswahl aus dem Rad. Der Rueckbau ist ein fester Zusatzeintrag ohne Ausruestungsplatz
+ * und darf deshalb nie als `LoadoutToolRef` in ein Profil wandern.
+ */
+export type InspectorRadialSelection =
+  | { kind: 'tool'; tool: LoadoutToolRef }
+  | { kind: 'dismantle' };
+
+interface RadialEntry {
+  readonly selection: InspectorRadialSelection;
+  readonly displayName: string;
+  readonly textureKey: string | null;
+  readonly accentColor: number;
+  /** Kapazitaetskosten des Konstrukts; 0 bei reinen Utilities und beim Rueckbau. */
+  readonly capacityCost: number;
+  readonly cooldownMs: number;
+  /** false = passt aktuell nicht mehr in die freie Baukapazitaet. */
+  readonly affordable: boolean;
+}
+
+export function isSameInspectorRadialSelection(
+  left: InspectorRadialSelection | null,
+  right: InspectorRadialSelection | null,
+): boolean {
+  if (!left || !right) return left === right;
+  if (left.kind === 'dismantle' || right.kind === 'dismantle') return left.kind === right.kind;
+  return left.tool.kind === right.tool.kind && left.tool.id === right.tool.id;
+}
+
 /** Screen-space radial selection for the Inspector's shared tool loadout. */
 export class InspectorToolRadialMenu {
   private container: Phaser.GameObjects.Container | null = null;
   private graphics: Phaser.GameObjects.Graphics | null = null;
-  private tools: readonly LoadoutToolRef[] = [];
+  private entries: readonly RadialEntry[] = [];
   private currentIndex = -1;
   private hoveredIndex = -1;
   private origin = { x: 0, y: 0 };
@@ -26,16 +58,22 @@ export class InspectorToolRadialMenu {
     return this.container !== null;
   }
 
-  open(originX: number, originY: number, tools: readonly LoadoutToolRef[], selected: LoadoutToolRef | null): void {
+  open(
+    originX: number,
+    originY: number,
+    tools: readonly LoadoutToolRef[],
+    selected: InspectorRadialSelection | null,
+    usedCapacity = 0,
+  ): void {
     this.close();
-    if (tools.length === 0) return;
-    this.tools = tools;
+    this.entries = buildEntries(tools, usedCapacity);
+    if (this.entries.length === 0) return;
     this.origin = {
       x: toDesignSpace(this.scene.scale, originX),
       y: toDesignSpace(this.scene.scale, originY),
     };
     this.currentIndex = selected
-      ? tools.findIndex((tool) => tool.kind === selected.kind && tool.id === selected.id)
+      ? this.entries.findIndex((entry) => isSameInspectorRadialSelection(entry.selection, selected))
       : 0;
     if (this.currentIndex < 0) this.currentIndex = 0;
     this.hoveredIndex = -1;
@@ -48,28 +86,29 @@ export class InspectorToolRadialMenu {
   }
 
   update(pointerX: number, pointerY: number): void {
-    if (!this.container || this.tools.length === 0) return;
+    if (!this.container || this.entries.length === 0) return;
     const designX = toDesignSpace(this.scene.scale, pointerX);
     const designY = toDesignSpace(this.scene.scale, pointerY);
     this.hoveredIndex = getInspectorToolRadialSegmentIndex(
       designX - this.origin.x,
       designY - this.origin.y,
-      this.tools.length,
+      this.entries.length,
       INNER_RADIUS,
     ) ?? -1;
     this.render();
   }
 
-  close(pointerX?: number, pointerY?: number): LoadoutToolRef | null {
+  close(pointerX?: number, pointerY?: number): InspectorRadialSelection | null {
     if (pointerX !== undefined && pointerY !== undefined) this.update(pointerX, pointerY);
-    const selected = this.hoveredIndex >= 0 ? this.tools[this.hoveredIndex] ?? null : null;
+    const entry = this.hoveredIndex >= 0 ? this.entries[this.hoveredIndex] : undefined;
+    const selection = entry ? cloneSelection(entry.selection) : null;
     this.container?.destroy(true);
     this.container = null;
     this.graphics = null;
-    this.tools = [];
+    this.entries = [];
     this.currentIndex = -1;
     this.hoveredIndex = -1;
-    return selected ? { ...selected } : null;
+    return selection;
   }
 
   destroy(): void {
@@ -84,16 +123,16 @@ export class InspectorToolRadialMenu {
     this.container.removeAll(false);
     this.container.add(this.graphics);
     this.graphics.clear();
-    const count = this.tools.length;
+    const count = this.entries.length;
     const step = Math.PI * 2 / count;
     const start = -Math.PI / 2;
     for (let index = 0; index < count; index += 1) {
       const from = start + index * step + 0.025;
       const to = start + (index + 1) * step - 0.025;
-      const tool = this.tools[index];
+      const entry = this.entries[index];
       const active = index === (this.hoveredIndex >= 0 ? this.hoveredIndex : this.currentIndex);
-      const presentation = describeLoadoutTool(tool);
-      const color = presentation.accentColor;
+      const color = entry.affordable ? entry.accentColor : COLORS.RED_2;
+      const contentAlpha = entry.affordable ? (active ? 1 : 0.8) : 0.45;
       this.graphics.fillStyle(active ? color : COLORS.GREY_8, active ? 0.92 : 0.9);
       this.graphics.lineStyle(active ? 3 : 1.5, color, active ? 1 : 0.75);
       this.graphics.beginPath();
@@ -108,27 +147,24 @@ export class InspectorToolRadialMenu {
       const center = start + (index + 0.5) * step;
       const labelX = LABEL_RADIUS * Math.cos(center);
       const labelY = LABEL_RADIUS * Math.sin(center);
-      if (this.scene.textures.exists(presentation.textureKey)) {
-        const icon = this.scene.add.image(labelX, labelY - 8, presentation.textureKey)
+      if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
+        const icon = this.scene.add.image(labelX, labelY - 8, entry.textureKey)
           .setDisplaySize(28, 28)
-          .setAlpha(active ? 1 : 0.82);
+          .setAlpha(contentAlpha);
         this.container.add(icon);
       }
-      const label = presentation.displayName;
-      const cost = tool.kind === 'construction'
-        ? getCoopDefenseConstructionDefinition(tool.id).adrenalineCost
-        : UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS]?.inspectorAdrenalineCost;
-      this.container.add(this.scene.add.text(labelX, labelY + 18, label.slice(0, 14), {
+      this.container.add(this.scene.add.text(labelX, labelY + 18, entry.displayName.slice(0, 14), {
         fontSize: '10px', fontFamily: 'monospace', fontStyle: active ? 'bold' : 'normal',
         color: toCssColor(COLORS.GREY_1),
-      }).setOrigin(0.5).setAlpha(active ? 1 : 0.8));
-      if (cost !== undefined) {
-        this.container.add(this.scene.add.text(labelX, labelY + 30, `${cost} ADR`, {
-          fontSize: '8px', fontFamily: 'monospace', color: toCssColor(COLORS.BLUE_2),
-        }).setOrigin(0.5).setAlpha(active ? 1 : 0.75));
+      }).setOrigin(0.5).setAlpha(contentAlpha));
+      if (entry.capacityCost > 0) {
+        this.container.add(this.scene.add.text(labelX, labelY + 30, `${entry.capacityCost} BK`, {
+          fontSize: '8px', fontFamily: 'monospace',
+          color: toCssColor(entry.affordable ? COLORS.GOLD_2 : COLORS.RED_2),
+        }).setOrigin(0.5).setAlpha(entry.affordable ? (active ? 1 : 0.75) : 0.9));
       }
-      if (tool.kind === 'utility') {
-        this.container.add(this.scene.add.text(labelX, labelY + 40, 'CD 1.0s', {
+      if (entry.cooldownMs > 0) {
+        this.container.add(this.scene.add.text(labelX, labelY + 40, `CD ${(entry.cooldownMs / 1000).toFixed(1)}s`, {
           fontSize: '7px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
         }).setOrigin(0.5).setAlpha(active ? 1 : 0.65));
       }
@@ -141,4 +177,40 @@ export class InspectorToolRadialMenu {
       fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5));
   }
+}
+
+function buildEntries(tools: readonly LoadoutToolRef[], usedCapacity: number): RadialEntry[] {
+  const free = Math.max(0, COOP_DEFENSE_CONSTRUCTION_CAPACITY - usedCapacity);
+  const entries: RadialEntry[] = tools.map((tool) => {
+    const presentation = describeLoadoutTool(tool);
+    const capacityCost = getToolCapacityCost(tool);
+    return {
+      selection: { kind: 'tool', tool },
+      displayName: presentation.displayName,
+      textureKey: presentation.textureKey,
+      accentColor: presentation.accentColor,
+      capacityCost,
+      cooldownMs: tool.kind === 'utility'
+        ? UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0
+        : 0,
+      affordable: capacityCost <= free,
+    };
+  });
+  if (entries.length === 0) return entries;
+  entries.push({
+    selection: { kind: 'dismantle' },
+    displayName: 'Rueckbau',
+    textureKey: null,
+    accentColor: COLORS.GREY_3,
+    capacityCost: 0,
+    cooldownMs: 0,
+    affordable: true,
+  });
+  return entries;
+}
+
+function cloneSelection(selection: InspectorRadialSelection): InspectorRadialSelection {
+  return selection.kind === 'dismantle'
+    ? { kind: 'dismantle' }
+    : { kind: 'tool', tool: { ...selection.tool } };
 }

@@ -111,7 +111,7 @@ export function describeLoadoutTool(tool: LoadoutToolRef): LoadoutItemPresentati
     const definition = getCoopDefenseConstructionDefinition(tool.id);
     return {
       displayName: definition.displayName,
-      textureKey: definition.weaponId,
+      textureKey: definition.iconKey,
       accentColor: COLORS.GOLD_2,
     };
   }

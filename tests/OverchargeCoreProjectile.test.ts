@@ -1,0 +1,86 @@
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => ({
+  Math: {
+    Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
+  },
+}));
+
+import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+
+describe('overcharge core projectile', () => {
+  it('launches a slow wall-colliding rocket payload and deploys only on impact', () => {
+    const spawnProjectile = vi.fn(() => 17);
+    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
+    Object.defineProperty(manager, 'projectileManager', {
+      value: { spawnProjectile },
+    });
+
+    expect(manager.fireAutomatedWeapon(
+      WEAPON_CONFIGS.OVERCHARGE_CORE,
+      100,
+      200,
+      Math.PI,
+      1_000,
+      200,
+      'inspector',
+      0x22cc88,
+    )).toBe(true);
+
+    expect(spawnProjectile).toHaveBeenCalledTimes(1);
+    const [x, y, angle, ownerId, projectile] = spawnProjectile.mock.calls[0];
+    expect({ x, y, ownerId }).toEqual({ x: 100, y: 200, ownerId: 'inspector' });
+    expect(angle).toBe(0);
+    expect(projectile).toMatchObject({
+      speed: 320,
+      size: 12,
+      damage: 0,
+      lifetime: 1_312.5,
+      remainingRangePx: 420,
+      maxBounces: 0,
+      isGrenade: false,
+      projectileStyle: 'rocket',
+      sourceSlot: 'weapon2',
+      explosion: {
+        radius: 220,
+        maxDamage: 0,
+        knockback: 0,
+        selfDamageMult: 0,
+        rockDamageMult: 0,
+        trainDamageMult: 0,
+        overchargeField: {
+          durationMs: 6_000,
+          fireRateMultiplier: 1.5,
+          damageMultiplier: 1.25,
+          color: 0x4fd6ff,
+        },
+      },
+    });
+    expect(projectile.explosion.visualStyle).toBeUndefined();
+  });
+
+  it('limits flight time to the aimed position when it is inside weapon range', () => {
+    const spawnProjectile = vi.fn(() => 18);
+    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
+    Object.defineProperty(manager, 'projectileManager', {
+      value: { spawnProjectile },
+    });
+
+    manager.fireAutomatedWeapon(
+      WEAPON_CONFIGS.OVERCHARGE_CORE,
+      40,
+      60,
+      0,
+      40,
+      220,
+      'inspector',
+      0xffffff,
+    );
+
+    const [, , angle, , projectile] = spawnProjectile.mock.calls[0];
+    expect(angle).toBeCloseTo(Math.PI / 2);
+    expect(projectile.remainingRangePx).toBe(160);
+    expect(projectile.lifetime).toBe(500);
+  });
+});

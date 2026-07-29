@@ -27,6 +27,8 @@ interface BuildLocalArenaHudDataParams {
   activePowerUps?: ArenaHUDData['activePowerUps'];
   shieldBuff?: ArenaHUDData['shieldBuff'];
   weapon2AdrenalineCost?: number;
+  constructionCapacityUsed?: number;
+  constructionCapacityMax?: number;
 }
 
 interface BuildInitialLocalArenaHudDataParams {
@@ -63,6 +65,8 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     activePowerUps: params.activePowerUps ?? [],
     shieldBuff: params.shieldBuff,
     weapon2AdrenalineCost: params.weapon2AdrenalineCost ?? 0,
+    constructionCapacityUsed: params.constructionCapacityUsed ?? 0,
+    constructionCapacityMax: params.constructionCapacityMax ?? 0,
   };
 }
 

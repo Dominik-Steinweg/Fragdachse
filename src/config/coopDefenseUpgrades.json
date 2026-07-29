@@ -814,36 +814,125 @@
       "sortOrder": 30,
       "upgrades": [
         {
-          "id": "unlock_rocket_turret",
+          "id": "unlock_overcharge_core",
           "code": "C-I1",
-          "label": "Raketenturm",
-          "description": "Standardkonstruktion mit automatisch zielenden Flaechenraketen.",
+          "label": "Ueberladungskern",
+          "description": "Feuert per rechter Maustaste einen langsamen Ueberladungskern, der am Ziel oder an Hindernissen ein Feld aufbaut und alle Tuerme darin verstaerkt.",
           "kind": "unlock",
           "maxLevel": 1,
           "startingLevel": 1,
           "costPerLevel": 0,
           "refundable": false,
-          "sortOrder": 10
+          "sortOrder": 10,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "OVERCHARGE_CORE"
+          }
         },
         {
-          "id": "unlock_machine_gun_turret",
-          "code": "C-I2",
-          "label": "Maschinengewehrturm",
-          "description": "Schaltet einen schnell feuernden Einzelturm mit AK-47 frei.",
-          "kind": "unlock",
-          "maxLevel": 1,
+          "id": "overcharge_radius",
+          "code": "C-I1-1",
+          "label": "Upgrade Ueberladungskern: Wirkungsbereich",
+          "description": "+10% Radius des Ueberladungsfeldes je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
           "costPerLevel": 1,
-          "sortOrder": 20
+          "refundable": true,
+          "sortOrder": 20,
+          "requires": [
+            {
+              "upgradeId": "unlock_overcharge_core",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.OVERCHARGE_CORE.fire.radius",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
         },
         {
-          "id": "unlock_flame_turret",
-          "code": "C-I3",
-          "label": "Flammenwerferturm",
-          "description": "Schaltet einen kurzreichweitigen Turm mit kontinuierlicher Brandwirkung frei.",
-          "kind": "unlock",
-          "maxLevel": 1,
+          "id": "overcharge_duration",
+          "code": "C-I1-2",
+          "label": "Upgrade Ueberladungskern: Dauer",
+          "description": "+15% Wirkdauer des Ueberladungsfeldes je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
           "costPerLevel": 1,
-          "sortOrder": 30
+          "refundable": true,
+          "sortOrder": 30,
+          "requires": [
+            {
+              "upgradeId": "unlock_overcharge_core",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.OVERCHARGE_CORE.fire.durationMs",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
+        },
+        {
+          "id": "overcharge_power",
+          "code": "C-I1-3",
+          "label": "Upgrade Ueberladungskern: Verstaerkung",
+          "description": "+0,15 Feuerraten- und +0,1 Schadensfaktor fuer ueberladene Tuerme je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 40,
+          "requires": [
+            {
+              "upgradeId": "overcharge_duration",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.OVERCHARGE_CORE.fire.fireRateMultiplier",
+              "mode": "add_per_level",
+              "value": 0.15
+            },
+            {
+              "stat": "weapon.OVERCHARGE_CORE.fire.damageMultiplier",
+              "mode": "add_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "overcharge_cost",
+          "code": "C-I1-4",
+          "label": "Upgrade Ueberladungskern: Effizienz",
+          "description": "-10% Adrenalinkosten des Ueberladungskerns je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 50,
+          "requires": [
+            {
+              "upgradeId": "overcharge_radius",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "weapon.OVERCHARGE_CORE.adrenalinCost",
+              "mode": "add_percent_per_level",
+              "value": -0.1
+            }
+          ]
         },
         {
           "id": "unlock_p90",
@@ -2987,163 +3076,6 @@
           ]
         },
         {
-          "id": "unlock_felsbau",
-          "code": "D-U7",
-          "label": "Felsbau",
-          "description": "Schaltet Felsbau fuer den Utility-Slot frei.",
-          "kind": "unlock",
-          "maxLevel": 1,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 280,
-          "loadoutUnlock": {
-            "slot": "utility",
-            "itemId": "FELSBAU"
-          }
-        },
-        {
-          "id": "felsbau_hp",
-          "code": "D-U7-1",
-          "label": "Upgrade Felsbau: Strukturpunkte",
-          "description": "+15% Maximal-HP fuer Felsbau je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 290,
-          "requires": [
-            {
-              "upgradeId": "unlock_felsbau",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "utility.FELSBAU.placeable.maxHp",
-              "mode": "add_percent_per_level",
-              "value": 0.15
-            }
-          ]
-        },
-        {
-          "id": "felsbau_duration",
-          "code": "D-U7-2",
-          "label": "Upgrade Felsbau: Haltbarkeit",
-          "description": "+10% Lebensdauer fuer Felsbau je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 300,
-          "requires": [
-            {
-              "upgradeId": "unlock_felsbau",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "utility.FELSBAU.placeable.lifetimeMs",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
-          "id": "unlock_fliegenpilz",
-          "code": "D-U8",
-          "label": "Fliegenpilz",
-          "description": "Schaltet Fliegenpilz fuer den Utility-Slot frei.",
-          "kind": "unlock",
-          "maxLevel": 1,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 310,
-          "loadoutUnlock": {
-            "slot": "utility",
-            "itemId": "FLIEGENPILZ"
-          }
-        },
-        {
-          "id": "fliegenpilz_cooldown",
-          "code": "D-U8-1",
-          "label": "Upgrade Fliegenpilz: Cooldown",
-          "description": "-20% Cooldown fuer den Fliegenpilz je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 320,
-          "requires": [
-            {
-              "upgradeId": "unlock_fliegenpilz",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "utility.FLIEGENPILZ.cooldown",
-              "mode": "add_percent_per_level",
-              "value": -0.2
-            }
-          ]
-        },
-        {
-          "id": "fliegenpilz_hp",
-          "code": "D-U8-2",
-          "label": "Upgrade Fliegenpilz: Strukturpunkte",
-          "description": "+100% Maximal-HP fuer den Fliegenpilz je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 330,
-          "requires": [
-            {
-              "upgradeId": "unlock_fliegenpilz",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "utility.FLIEGENPILZ.placeable.maxHp",
-              "mode": "add_percent_per_level",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "id": "fliegenpilz_range",
-          "code": "D-U8-3",
-          "label": "Upgrade Fliegenpilz: Zielreichweite",
-          "description": "+10% Zielreichweite fuer den Fliegenpilz je Stufe.",
-          "kind": "upgrade",
-          "maxLevel": 3,
-          "startingLevel": 0,
-          "costPerLevel": 1,
-          "refundable": true,
-          "sortOrder": 340,
-          "requires": [
-            {
-              "upgradeId": "fliegenpilz_cooldown",
-              "minLevel": 1
-            }
-          ],
-          "effects": [
-            {
-              "stat": "utility.FLIEGENPILZ.placeable.targetRange",
-              "mode": "add_percent_per_level",
-              "value": 0.1
-            }
-          ]
-        },
-        {
           "id": "unlock_zeus_taser",
           "code": "D-U9",
           "label": "Zeus",
@@ -3279,11 +3211,291 @@
         { "id": "molotov_wildfire", "code": "D-U4-C", "label": "Lauffeuer", "description": "Vom Molotov brennende Gegner fliehen mit 50% mehr Tempo zum naechsten Ausgang der Feuerflaeche, laufen bis zum Ende des Brands in dieser Richtung weiter und entzuenden dabei den Boden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 225, "requires": [{ "upgradeId": "molotov_grenade_duration", "minLevel": 1 }, { "upgradeId": "molotov_burn_duration", "minLevel": 1 }], "effects": [{ "stat": "utility.MOLOTOV_GRENADE.wildfireEnabled", "mode": "add_per_level", "value": 1 }, { "stat": "utility.MOLOTOV_GRENADE.wildfirePanicSpeedMultiplier", "mode": "add_per_level", "value": 1.5 }, { "stat": "utility.MOLOTOV_GRENADE.wildfireTrailDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "utility.MOLOTOV_GRENADE.wildfireTrailDamagePerTick", "mode": "add_per_level", "value": 2 }] },
         { "id": "stinkdruesen_aftercloud", "code": "D-U5-C", "label": "Nachwolke", "description": "Bei natuerlichem Ablauf bleibt 3 Sekunden eine stationaere Wolke mit 70% Radius und 50% Schaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 255, "requires": [{ "upgradeId": "stinkdruesen_damage", "minLevel": 1 }], "effects": [{ "stat": "utility.STINKDRUESEN.afterCloudDurationMs", "mode": "add_per_level", "value": 3000 }, { "stat": "utility.STINKDRUESEN.afterCloudRadiusFactor", "mode": "add_per_level", "value": 0.7 }, { "stat": "utility.STINKDRUESEN.afterCloudDamageFactor", "mode": "add_per_level", "value": 0.5 }] },
         { "id": "translocator_telefrag", "code": "D-U6-C", "label": "Telefrag", "description": "Die Ankunft verursacht 50 Schaden und 650 Rueckstoss in 80 px, ohne Eigen- oder Teamschaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 285, "requires": [{ "upgradeId": "translocator_projectile_speed", "minLevel": 1 }], "effects": [{ "stat": "utility.TRANSLOCATOR.telefragRadius", "mode": "add_per_level", "value": 80 }, { "stat": "utility.TRANSLOCATOR.telefragDamage", "mode": "add_per_level", "value": 50 }, { "stat": "utility.TRANSLOCATOR.telefragKnockback", "mode": "add_per_level", "value": 650 }] },
-        { "id": "felsbau_explosive_collapse", "code": "D-U7-C", "label": "Explosiver Einsturz", "description": "Nur gegnerisch zerstoerte Felsen verursachen 50 Schaden und 700 Rueckstoss in 100 px.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 315, "requires": [{ "upgradeId": "felsbau_hp", "minLevel": 1 }], "effects": [{ "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionRadius", "mode": "add_per_level", "value": 100 }, { "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionDamage", "mode": "add_per_level", "value": 50 }, { "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionKnockback", "mode": "add_per_level", "value": 700 }] },
-        { "id": "fliegenpilz_double_spore", "code": "D-U8-C", "label": "Doppelspore", "description": "Feuert ein zweites Projektil mit vollem Schaden auf ein anderes Ziel.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 345, "requires": [{ "upgradeId": "fliegenpilz_hp", "minLevel": 1 }], "effects": [{ "stat": "utility.FLIEGENPILZ.placeable.secondProjectileDamageFactor", "mode": "add_per_level", "value": 1 }] },
-        { "id": "fliegenpilz_plasma_gun", "code": "D-U8-C2", "label": "Plasmapilz", "description": "Der Fliegenpilz ruestet statt der Sporen-Waffe eine Plasma-Gun mit halber Feuerrate aus.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 346, "requires": [{ "upgradeId": "fliegenpilz_double_spore", "minLevel": 1 }, { "upgradeId": "fliegenpilz_range", "minLevel": 1 }], "effects": [{ "stat": "utility.FLIEGENPILZ.placeable.plasmaWeaponEnabled", "mode": "add_per_level", "value": 1 }] },
         { "id": "zeus_chain_lightning", "code": "D-U9-C", "label": "Kettenblitz", "description": "Trifft zwei weitere Gegner innerhalb 120 px mit jeweils 50% Restschaden.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 375, "requires": [{ "upgradeId": "zeus_taser_arc", "minLevel": 1 }], "effects": [{ "stat": "utility.ZEUS_TASER.chainCount", "mode": "add_per_level", "value": 2 }, { "stat": "utility.ZEUS_TASER.chainRadius", "mode": "add_per_level", "value": 120 }, { "stat": "utility.ZEUS_TASER.chainDamageFactor", "mode": "add_per_level", "value": 0.5 }] },
         { "id": "decoy_explosive_dummy", "code": "D-U10-C", "label": "Sprengattrappe", "description": "Zerstoerung oder natuerlicher Ablauf verursacht 60 Schaden und 500 Rueckstoss in 100 px.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 395, "requires": [{ "upgradeId": "decoy_duration", "minLevel": 1 }], "effects": [{ "stat": "utility.DECOY.explosionRadius", "mode": "add_per_level", "value": 100 }, { "stat": "utility.DECOY.explosionDamage", "mode": "add_per_level", "value": 60 }, { "stat": "utility.DECOY.explosionKnockback", "mode": "add_per_level", "value": 500 }] }
+      ]
+    },
+    {
+      "id": "construction",
+      "label": "Konstruktion",
+      "description": "Konstrukte des Ingenieurs. Sie teilen sich die Utility-Slots mit der Kategorie Utility und belegen im Einsatz Baukapazitaet.",
+      "sortOrder": 45,
+      "upgrades": [
+        {
+          "id": "unlock_rocket_turret",
+          "code": "E-K1",
+          "label": "Raketenturm",
+          "description": "Standardkonstruktion mit automatisch zielenden Flaechenraketen. Belegt 30 Baukapazitaet.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 10
+        },
+        {
+          "id": "unlock_machine_gun_turret",
+          "code": "E-K2",
+          "label": "Maschinengewehrturm",
+          "description": "Schnell feuernder Einzelturm. Belegt 10 Baukapazitaet.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "costPerLevel": 1,
+          "sortOrder": 20
+        },
+        {
+          "id": "unlock_flame_turret",
+          "code": "E-K3",
+          "label": "Flammenwerferturm",
+          "description": "Kurzreichweitiger Turm mit kontinuierlicher Brandwirkung. Belegt 20 Baukapazitaet.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "costPerLevel": 1,
+          "sortOrder": 30
+        },
+        {
+          "id": "unlock_felsbau",
+          "code": "E-K4",
+          "label": "Felsbau",
+          "description": "Dauerhafte Mauer fuer die Utility-Slots. Belegt nur 1 Baukapazitaet.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 40,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "FELSBAU"
+          }
+        },
+        {
+          "id": "felsbau_hp",
+          "code": "E-K4-1",
+          "label": "Upgrade Felsbau: Strukturpunkte",
+          "description": "+15% Maximal-HP fuer Felsbau je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 50,
+          "requires": [
+            {
+              "upgradeId": "unlock_felsbau",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FELSBAU.placeable.maxHp",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
+        },
+        {
+          "id": "felsbau_range",
+          "code": "E-K4-2",
+          "label": "Upgrade Felsbau: Baureichweite",
+          "description": "+15% Baureichweite fuer Felsbau je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 60,
+          "requires": [
+            {
+              "upgradeId": "unlock_felsbau",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FELSBAU.placeable.range",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
+        },
+        {
+          "id": "felsbau_explosive_collapse",
+          "code": "E-K4-C",
+          "label": "Explosiver Einsturz",
+          "description": "Nur gegnerisch zerstoerte Felsen verursachen 50 Schaden und 700 Rueckstoss in 100 px.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "sortOrder": 70,
+          "requires": [
+            {
+              "upgradeId": "felsbau_hp",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionRadius",
+              "mode": "add_per_level",
+              "value": 100
+            },
+            {
+              "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionDamage",
+              "mode": "add_per_level",
+              "value": 50
+            },
+            {
+              "stat": "utility.FELSBAU.placeable.enemyDestroyedExplosionKnockback",
+              "mode": "add_per_level",
+              "value": 700
+            }
+          ]
+        },
+        {
+          "id": "unlock_fliegenpilz",
+          "code": "E-K5",
+          "label": "Fliegenpilz",
+          "description": "Dauerhafter Sporenturm fuer die Utility-Slots. Belegt 15 Baukapazitaet.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 80,
+          "loadoutUnlock": {
+            "slot": "utility",
+            "itemId": "FLIEGENPILZ"
+          }
+        },
+        {
+          "id": "fliegenpilz_build_range",
+          "code": "E-K5-1",
+          "label": "Upgrade Fliegenpilz: Baureichweite",
+          "description": "+15% Baureichweite fuer den Fliegenpilz je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 90,
+          "requires": [
+            {
+              "upgradeId": "unlock_fliegenpilz",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FLIEGENPILZ.placeable.range",
+              "mode": "add_percent_per_level",
+              "value": 0.15
+            }
+          ]
+        },
+        {
+          "id": "fliegenpilz_hp",
+          "code": "E-K5-2",
+          "label": "Upgrade Fliegenpilz: Strukturpunkte",
+          "description": "+100% Maximal-HP fuer den Fliegenpilz je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 100,
+          "requires": [
+            {
+              "upgradeId": "unlock_fliegenpilz",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FLIEGENPILZ.placeable.maxHp",
+              "mode": "add_percent_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "fliegenpilz_range",
+          "code": "E-K5-3",
+          "label": "Upgrade Fliegenpilz: Zielreichweite",
+          "description": "+10% Zielreichweite fuer den Fliegenpilz je Stufe.",
+          "kind": "upgrade",
+          "maxLevel": 3,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 110,
+          "requires": [
+            {
+              "upgradeId": "fliegenpilz_build_range",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FLIEGENPILZ.placeable.targetRange",
+              "mode": "add_percent_per_level",
+              "value": 0.1
+            }
+          ]
+        },
+        {
+          "id": "fliegenpilz_double_spore",
+          "code": "E-K5-C",
+          "label": "Doppelspore",
+          "description": "Feuert ein zweites Projektil mit vollem Schaden auf ein anderes Ziel.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "sortOrder": 120,
+          "requires": [
+            {
+              "upgradeId": "fliegenpilz_hp",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FLIEGENPILZ.placeable.secondProjectileDamageFactor",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "fliegenpilz_plasma_gun",
+          "code": "E-K5-C2",
+          "label": "Plasmapilz",
+          "description": "Der Fliegenpilz ruestet statt der Sporen-Waffe eine Plasma-Gun mit halber Feuerrate aus.",
+          "kind": "upgrade",
+          "maxLevel": 1,
+          "costPerLevel": 0,
+          "bossPointCostPerLevel": 1,
+          "sortOrder": 130,
+          "requires": [
+            {
+              "upgradeId": "fliegenpilz_double_spore",
+              "minLevel": 1
+            },
+            {
+              "upgradeId": "fliegenpilz_range",
+              "minLevel": 1
+            }
+          ],
+          "effects": [
+            {
+              "stat": "utility.FLIEGENPILZ.placeable.plasmaWeaponEnabled",
+              "mode": "add_per_level",
+              "value": 1
+            }
+          ]
+        }
       ]
     },
     {

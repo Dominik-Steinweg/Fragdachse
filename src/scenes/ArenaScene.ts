@@ -84,7 +84,8 @@ import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameMod
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
+import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
@@ -505,7 +506,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      arenaResult: null, currentLayout: null, placementSystem: null, overchargeSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -666,6 +667,23 @@ export class ArenaScene extends Phaser.Scene {
       () => bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
       () => bridge.getPlayerUtilityOverrideName(bridge.getLocalPlayerId()) !== ''
         || this.clientUpdate.clientUtilityOverride !== null,
+      // Host und Client halten denselben Bestand platzierter Objekte, deshalb kann die
+      // belegte Baukapazitaet lokal berechnet werden.
+      () => this.ctx.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
+      () => {
+        const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
+        const placementSystem = this.ctx.placementSystem;
+        if (!player || !placementSystem) return undefined;
+        const pointer = this.getPointerWorldPoint();
+        return placementSystem.getDismantlePreview(
+          bridge.getLocalPlayerId(),
+          player.sprite.x,
+          player.sprite.y,
+          pointer.x,
+          pointer.y,
+          COOP_DEFENSE_DISMANTLE_RANGE,
+        );
+      },
     );
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
@@ -845,7 +863,8 @@ export class ArenaScene extends Phaser.Scene {
         }
         shotId = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);
       }
-      if (slot === 'utility' && params?.toolRef?.kind !== 'construction') {
+      // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
+      if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
         const selectedInspectorTool = this.clientUpdate.getLocalInspectorSelectedTool();
         const config = this.clientUpdate.getLocalUtilityConfig();
         const utilityId = selectedInspectorTool?.kind === 'utility' && config.id === selectedInspectorTool.id
@@ -871,10 +890,12 @@ export class ArenaScene extends Phaser.Scene {
           && params?.tunnelAction === 'commit';
       const isInspectorConstructionAction = params?.toolRef?.kind === 'construction';
       const isInspectorUtilityAction = params?.toolRef?.kind === 'utility';
+      const isInspectorDismantleAction = params?.dismantle === true;
       const awaitResult = isUtilityPlacementAction
         || isUltimatePlacementAction
         || isInspectorConstructionAction
-        || isInspectorUtilityAction;
+        || isInspectorUtilityAction
+        || isInspectorDismantleAction;
       const awaitFailureResult = inputStarted
         && !params?.constructionId
         && (slot === 'weapon2' || slot === 'ultimate');
@@ -887,8 +908,14 @@ export class ArenaScene extends Phaser.Scene {
       if (awaitResult) {
         void loadoutPromise.then((result) => {
           if (result?.ok) return;
+          if (isInspectorDismantleAction) {
+            this.placementPreview.showPlacementError('Rueckbau fehlgeschlagen');
+            return;
+          }
           if (isUtilityPlacementAction || isUltimatePlacementAction || isInspectorConstructionAction) {
-            this.placementPreview.showPlacementError('Bau fehlgeschlagen');
+            this.placementPreview.showPlacementError(
+              result?.reason === 'capacity' ? 'Baukapazitaet erschoepft' : 'Bau fehlgeschlagen',
+            );
             return;
           }
           handleLocalLoadoutFailure(slot, result, inputStarted);
@@ -1189,6 +1216,11 @@ export class ArenaScene extends Phaser.Scene {
 
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
+    // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
+    this.renderers.overchargeField.syncVisuals(
+      inArena ? (this.ctx.overchargeSystem?.getActiveFields() ?? []) : [],
+      bridge.getSynchronizedNow(),
+    );
     this.renderers.teslaDome.update(delta);
     const visualEnemyStartMs = performance.now();
     const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
@@ -2545,7 +2577,28 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;
     bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
+    this.resyncLoadoutWithUnlocks();
     this.coopDefenseUpgradesOverlay?.refresh();
+  }
+
+  /**
+   * Haelt die Loadout-Slots auf tatsaechlich waehlbaren Items. Noetig nach Klassenwechsel,
+   * Level-Down und Full Respec: ein Slot darf nie ein inzwischen gesperrtes Item behalten.
+   * Beim Inspector schnappt so auch der Waffe-2-Slot auf seine Adrenalinfaehigkeit.
+   */
+  private resyncLoadoutWithUnlocks(): void {
+    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
+    const stored = getStoredCoopDefenseProgress();
+    const profile = stored.profilesByClass[stored.selectedClassId];
+    const localId = bridge.getLocalPlayerId();
+    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
+      const selectable = getSelectableLoadoutItems(slot, bridge.getGameMode(), profile, stored.selectedClassId);
+      if (selectable.length === 0) continue;
+      const current = bridge.getPlayerLoadoutSlot(localId, slot);
+      if (current && selectable.some((item) => item.id === current)) continue;
+      bridge.setLocalLoadoutSlot(slot, selectable[0].id);
+      setStoredLoadoutSlot(slot, selectable[0].id);
+    }
   }
 
   /**

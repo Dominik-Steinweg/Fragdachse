@@ -26,7 +26,7 @@ import type {
   LoadoutSlot,
 } from '../types';
 
-export type CoopDefenseUpgradeCategoryId = 'general' | 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
+export type CoopDefenseUpgradeCategoryId = 'general' | 'weapon1' | 'weapon2' | 'utility' | 'construction' | 'ultimate';
 export type CoopDefenseUpgradeKind = 'upgrade' | 'unlock';
 export type CoopDefenseUpgradeEffectMode = 'add_per_level' | 'add_percent_per_level';
 
@@ -183,7 +183,7 @@ interface NormalizedCoopDefenseUpgradeRegistry {
 }
 
 const COOP_DEFENSE_MODE = 'coop_defense' as GameMode;
-const CATEGORY_IDS: readonly CoopDefenseUpgradeCategoryId[] = ['general', 'weapon1', 'weapon2', 'utility', 'ultimate'];
+const CATEGORY_IDS: readonly CoopDefenseUpgradeCategoryId[] = ['general', 'weapon1', 'weapon2', 'utility', 'construction', 'ultimate'];
 
 export const COOP_DEFENSE_HP_UPGRADE_ID = 'hp';
 export const COOP_DEFENSE_PLAYER_STAT_MAX_HP = 'player.maxHp';
@@ -210,12 +210,17 @@ const COOP_DEFENSE_LOADOUT_UNLOCKS = new Map<string, string>();
 const INSPECTOR_CONSTRUCTION_BY_UNLOCK_UPGRADE_ID = new Map<string, ConstructionId>(
   COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => [COOP_DEFENSE_CONSTRUCTIONS[id].unlockUpgradeId, id]),
 );
-const INSPECTOR_UPGRADE_IDS = new Set([
-  ...COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => COOP_DEFENSE_CONSTRUCTIONS[id].unlockUpgradeId),
+/**
+ * Nur-Inspector-Knoten ausserhalb der Kategorie `construction`. Das sind die passiven
+ * Klassen-Upgrades in `general` und die Adrenalinwaffen-Kette in `weapon2`; die gesamte
+ * Kategorie `construction` kommt in `getUnavailableUpgradeIds` ohnehin hinzu.
+ */
+const INSPECTOR_UPGRADE_ROOT_IDS: readonly string[] = [
   'inspector_construction_slots',
   'inspector_construction_hp',
   'inspector_repair_drone',
-]);
+  'unlock_overcharge_core',
+];
 
 for (const definition of COOP_DEFENSE_UPGRADE_REGISTRY.upgrades) {
   if (!definition.loadoutUnlock) continue;
@@ -285,16 +290,28 @@ function collectUpgradeAndDependentIds(rootIds: readonly string[]): Set<string> 
   return result;
 }
 
+/**
+ * Klassenfilter des Upgrade-Baums.
+ *
+ * Der Inspector besitzt die gesamte Kategorie `construction` und in `weapon2` nur seine
+ * Adrenalinfaehigkeiten; die anderen Klassen genau umgekehrt. Beides wird aus den
+ * Wurzelknoten abgeleitet, damit neue Folgeknoten automatisch mitwandern.
+ */
 function getUnavailableUpgradeIds(classId: CoopDefenseClassId): ReadonlySet<string> {
   if (classId !== 'inspector_gadachs') {
-    return INSPECTOR_UPGRADE_IDS;
+    const excluded = collectUpgradeAndDependentIds(INSPECTOR_UPGRADE_ROOT_IDS);
+    for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
+      if (definition.categoryId === 'construction') excluded.add(definition.id);
+    }
+    return excluded;
   }
 
+  const inspectorOnlyIds = collectUpgradeAndDependentIds(INSPECTOR_UPGRADE_ROOT_IDS);
   const excluded = collectUpgradeAndDependentIds(
     getCoopDefenseClassDefinition(classId).excludedGeneralUpgradeIds,
   );
   for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
-    if (definition.categoryId === 'weapon2' && !INSPECTOR_UPGRADE_IDS.has(definition.id)) {
+    if (definition.categoryId === 'weapon2' && !inspectorOnlyIds.has(definition.id)) {
       excluded.add(definition.id);
     }
   }
@@ -474,40 +491,17 @@ function getSanitizedProfile(
   return sanitizeCoopDefenseUpgradeProfile(profile, classId);
 }
 
-/**
- * Reine Anzeige-Umbenennung: Der Inspector hat keine Sekundaerwaffe, sondern zwei gleichwertige
- * Utility-Herkuenfte. Die Kategorie-Schluessel (`weapon2`, `utility`) bleiben unveraendert.
- */
-const INSPECTOR_CATEGORY_LABEL_OVERRIDES: Partial<Record<
-  CoopDefenseUpgradeCategoryId,
-  { label: string; description: string }
->> = {
-  weapon2: {
-    label: 'Utility 1',
-    description: 'Utilities, die nur der Inspector Gadachs einsetzen kann.',
-  },
-  utility: {
-    label: 'Utility 2',
-    description: 'Utilities, die auch die anderen Klassen einsetzen koennen.',
-  },
-};
-
 export function getCoopDefenseUpgradeCategories(
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
 ): readonly CoopDefenseUpgradeCategoryDefinition[] {
-  return COOP_DEFENSE_UPGRADE_CATEGORIES.map((category) => {
-    const override = classId === 'inspector_gadachs'
-      ? INSPECTOR_CATEGORY_LABEL_OVERRIDES[category.id]
-      : undefined;
-    return {
+  return COOP_DEFENSE_UPGRADE_CATEGORIES
+    .filter((category) => classId === 'inspector_gadachs' || category.id !== 'construction')
+    .map((category) => ({
       ...category,
-      label: override?.label ?? category.label,
-      description: override?.description ?? category.description,
       upgrades: category.upgrades.filter((definition) => (
         isCoopDefenseUpgradeAvailableForClass(definition.id, classId)
       )),
-    };
-  });
+    }));
 }
 
 /**
@@ -518,7 +512,7 @@ export function isCoopDefenseToolCategory(
   categoryId: CoopDefenseUpgradeCategoryId,
   classId: CoopDefenseClassId,
 ): boolean {
-  return classId === 'inspector_gadachs' && (categoryId === 'weapon2' || categoryId === 'utility');
+  return classId === 'inspector_gadachs' && (categoryId === 'construction' || categoryId === 'utility');
 }
 
 export function getCoopDefenseUpgradeDefinitionsForCategory(
@@ -1229,7 +1223,13 @@ function validateLoadoutUnlockDefinition(definition: CoopDefenseUpgradeDefinitio
   const loadoutUnlock = definition.loadoutUnlock;
   if (!loadoutUnlock) return;
 
-  if (definition.categoryId !== loadoutUnlock.slot) {
+  // `construction` ist die zweite Utility-Kategorie des Ingenieurs: sie speist dieselben
+  // Utility-Slots wie `utility`, traegt aber die Konstrukte.
+  const expectedCategoryId: CoopDefenseUpgradeCategoryId = definition.categoryId === 'construction'
+    ? 'construction'
+    : loadoutUnlock.slot;
+  const expectedSlot: LoadoutSlot = definition.categoryId === 'construction' ? 'utility' : loadoutUnlock.slot;
+  if (definition.categoryId !== expectedCategoryId || loadoutUnlock.slot !== expectedSlot) {
     throw new Error(
       `[coopDefenseUpgrades] Upgrade ${definition.id} is in category ${definition.categoryId} but unlocks slot ${loadoutUnlock.slot}`,
     );

@@ -967,12 +967,12 @@ export class LeftSidePanel {
     if (!isCoopDefenseMode(mode)) return getSelectableLoadoutItems(slot, mode, null, 'dachs_nukem');
 
     const storedProgress = getStoredCoopDefenseProgress();
-    // Der Inspector belegt Sekundaerwaffe und Utility ueber die geteilten Utility-Slots im
-    // Upgrade-Overlay. Beide Karussells zeigen das nur an und sind hier nicht auswaehlbar.
-    if (storedProgress.selectedClassId === 'inspector_gadachs' && (slot === 'weapon2' || slot === 'utility')) {
+    // Nur der Utility-Slot des Inspectors wird ueber seine geteilten Werkzeug-Slots belegt.
+    // Waffe 2 bleibt ein regulaerer Slot und zeigt seine Klassenwaffe an.
+    if (storedProgress.selectedClassId === 'inspector_gadachs' && slot === 'utility') {
       return [{
         id: DEFAULT_LOADOUT[slot].id,
-        displayName: 'Utility-Rad (RMB)',
+        displayName: 'Utility-Rad (R)',
       }];
     }
     return getSelectableLoadoutItems(

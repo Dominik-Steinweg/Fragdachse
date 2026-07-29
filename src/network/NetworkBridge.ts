@@ -24,7 +24,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedOverchargeField, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -38,7 +38,7 @@ import { countEnemyUpserts } from './enemySnapshotCodec';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
-import { isCommittedLoadoutEqual, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
+import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
@@ -159,6 +159,7 @@ const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
   e: 'enemies',
   r: 'rocks',
   br: 'placeableRocks',
+  oc: 'overchargeFields',
   dc: 'decoys',
   s: 'smokes',
   f: 'fires',
@@ -236,6 +237,7 @@ export interface GameState {
   enemies:      SyncedEnemySnapshot | null;
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
   placeableRocks: SyncedPlaceableRock[];
+  overchargeFields: SyncedOverchargeField[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
@@ -266,6 +268,7 @@ interface OutboundGameState {
   enemies:      SyncedEnemySnapshot | null;
   rocks:        SyncedRockSnapshot | null;
   placeableRocks: SyncedPlaceableRock[];
+  overchargeFields: SyncedOverchargeField[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
@@ -1120,13 +1123,7 @@ export class NetworkBridge {
 
   hasCommittedCoopDefenseProfile(playerId: string): boolean {
     const committed = this.getPlayerCommittedLoadout(playerId);
-    return committed?.coopDefenseProfile != null
-      && committed.coopDefenseClassId != null
-      && (
-        committed.coopDefenseClassId === 'inspector_gadachs'
-          ? committed.weapon2 === null
-          : committed.weapon2 !== null
-      );
+    return committed !== null && isCoopDefenseReadyLoadoutComplete(committed);
   }
 
   /** Gibt zurück ob ALLE aktuell verbundenen Spieler bereit sind (modusabhängige Mindestspielerzahl). */
@@ -1274,6 +1271,7 @@ export class NetworkBridge {
     if (state.enemies)                 payload.e = state.enemies;
     if (state.rocks)                   payload.r = state.rocks;
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
+    if (state.overchargeFields.length > 0) payload.oc = state.overchargeFields;
     if (state.decoys.length > 0)       payload.dc = state.decoys;
     if (state.smokes.length > 0)       payload.s = state.smokes;
     if (state.fires.length > 0)        payload.f = state.fires;
@@ -1446,6 +1444,7 @@ export class NetworkBridge {
       rocks:         nextRocks,
       rockRemovals:  rockSnapshot?.removals ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
+      overchargeFields: (raw.oc as SyncedOverchargeField[] | undefined) ?? [],
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],

@@ -65,6 +65,7 @@ const UT_BAR_Y  = 374;
 // Power-Up section (below utility bar)
 const DIV3_Y        = 400;
 const PU_SECTION_Y  = 410; // Y start for the power-up section
+const CONSTRUCTION_CAPACITY_HUD_ID = '__construction_capacity';
 
 // Fonts
 const LABEL_FONT  = { fontSize: '18px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) };
@@ -85,6 +86,7 @@ const PAL_ADR:  BarPalette = { dark: COLORS.BLUE_4,  mid: COLORS.BLUE_3,  light:
 const PAL_ULT:  BarPalette = { dark: COLORS.RED_3,   mid: COLORS.RED_2,   light: COLORS.RED_1,   spark: 0xffffff };
 const PAL_WPN:  BarPalette = { dark: COLORS.GREY_5,  mid: COLORS.GREY_4,  light: COLORS.GREY_2,  spark: COLORS.GREY_1 };
 const PAL_UTIL: BarPalette = { dark: 0x8a4018,  mid: 0xd97030,  light: 0xf0a048,  spark: 0xffffff };
+const PAL_CAP:  BarPalette = { dark: COLORS.BROWN_5, mid: COLORS.GOLD_3, light: COLORS.GOLD_1, spark: 0xffffff };
 
 const COL_HP_TRAIL = COLORS.RED_1;
 const COL_BAR_BG   = COLORS.GREY_9;
@@ -203,6 +205,9 @@ export interface ArenaHUDData {
   activePowerUps?:          ActivePowerUpInfo[];
   shieldBuff?:              ShieldBuffHudState;
   weapon2AdrenalineCost?:   number;
+  /** Nur beim Ingenieur gesetzt; `constructionCapacityMax = 0` blendet die Leiste aus. */
+  constructionCapacityUsed?: number;
+  constructionCapacityMax?:  number;
 }
 
 // ── Class ───────────────────────────────────────────────────────────────────
@@ -550,7 +555,23 @@ export class ArenaHUD {
           valueText: `+${data.shieldBuff.damageBonusPct}%`,
         }]
       : [];
-    this.updatePowerUpSection([...shieldPowerUps, ...(data.activePowerUps ?? [])]);
+    const capacityMax = data.constructionCapacityMax ?? 0;
+    const capacityUsed = Phaser.Math.Clamp(data.constructionCapacityUsed ?? 0, 0, capacityMax);
+    const constructionCapacity = capacityMax > 0
+      ? [{
+          defId: CONSTRUCTION_CAPACITY_HUD_ID,
+          remainingFrac: capacityUsed / capacityMax,
+          valueText: `${Math.round(capacityUsed)} / ${Math.round(capacityMax)}`,
+        }]
+      : [];
+    // Die Baukapazitaet steht absichtlich zuletzt: Der Power-Up-Container wird an
+    // seiner Unterkante verankert, daher bleibt diese permanente Zeile an derselben
+    // Stelle und zeitlich begrenzte Power-Ups wachsen nach oben.
+    this.updatePowerUpSection([
+      ...shieldPowerUps,
+      ...(data.activePowerUps ?? []),
+      ...constructionCapacity,
+    ]);
   }
 
   flashSlot(slot: 'weapon1' | 'weapon2' | 'utility'): void {
@@ -985,9 +1006,10 @@ export class ArenaHUD {
     let yOff = 0;
     for (const pu of activePowerUps) {
       const def = POWERUP_DEFS[pu.defId];
-      if (!def) continue;
+      const isConstructionCapacity = pu.defId === CONSTRUCTION_CAPACITY_HUD_ID;
+      if (!def && !isConstructionCapacity) continue;
 
-      const palette = paletteFromColor(def.color);
+      const palette = isConstructionCapacity ? PAL_CAP : paletteFromColor(def.color);
       const texKey  = this.ensurePuTexture(pu.defId, palette);
       const labelY  = yOff;
       const barY    = yOff + 20;
@@ -995,10 +1017,10 @@ export class ArenaHUD {
       const bundle = this.createBar(
         labelY,
         barY,
-        `Power-Up: ${def.displayName}`,
+        isConstructionCapacity ? 'Baukapazität' : `Power-Up: ${def.displayName}`,
         palette,
         texKey,
-        pu.defId === 'SHIELD_OVERCHARGE' || pu.defId === 'NEGEV_KILLSTREAK'
+        isConstructionCapacity || pu.defId === 'SHIELD_OVERCHARGE' || pu.defId === 'NEGEV_KILLSTREAK'
           ? { value: true, panel: true }
           : { panel: true },
         this.puContainer,
@@ -1046,7 +1068,9 @@ export class ArenaHUD {
   }
 
   private updatePowerUpSection(activePowerUps: ActivePowerUpInfo[]): void {
-    const visiblePowerUps = activePowerUps.filter((powerUp) => powerUp.remainingFrac > 0.001);
+    const visiblePowerUps = activePowerUps.filter((powerUp) =>
+      powerUp.defId === CONSTRUCTION_CAPACITY_HUD_ID || powerUp.remainingFrac > 0.001
+    );
     const activeIds = new Set(visiblePowerUps.map(p => p.defId));
 
     // Check if the set of active IDs changed

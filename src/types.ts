@@ -231,6 +231,17 @@ export interface FireChunkTarget {
   y: number;
 }
 
+/**
+ * Nutzlast des Ueberladungskerns. Sie laeuft ueber den normalen Projektil-
+ * Explosionspfad, erzeugt am Einschlag aber ausschliesslich ein Turm-Buff-Feld.
+ */
+export interface OverchargeFieldEffect {
+  readonly durationMs: number;
+  readonly fireRateMultiplier: number;
+  readonly damageMultiplier: number;
+  readonly color: number;
+}
+
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
   readonly radius: number;
@@ -252,6 +263,7 @@ export interface ProjectileExplosionConfig {
   readonly fireChunkBurst?: FireChunkBurstConfig;
   readonly blackHoleDurationMs?: number;
   readonly blackHolePullStrength?: number;
+  readonly overchargeField?: OverchargeFieldEffect;
 }
 
 export interface ImpactCloudConfig {
@@ -537,9 +549,11 @@ export interface LoadoutUseParams {
   tunnelStartGridY?: number;
   constructionId?: ConstructionId;
   toolRef?: LoadoutToolRef;
+  /** Rueckbau eines eigenen Konstrukts; belegt keinen Ausruestungsplatz. */
+  dismantle?: boolean;
 }
 
-export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid';
+export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity';
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
 
 export interface LoadoutUseResult {
@@ -597,6 +611,8 @@ export interface UtilityPlacementPreviewState {
   anchorGridY?: number;
   sourceSlot?: 'weapon2' | 'utility' | 'ultimate';
   constructionId?: ConstructionId;
+  /** 'dismantle' markiert ein eigenes Konstrukt zum Rueckbau statt eine Bauflaeche. */
+  mode?: 'place' | 'dismantle';
 }
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
@@ -1253,10 +1269,32 @@ export interface SyncedPlaceableRock {
 /** Waffen, die ein platzierbares Turret fuehren kann. */
 export type TurretWeaponId =
   | 'SPOREN'
+  | 'BASE_SPOREN'
   | 'FLIEGENPILZ_PLASMA'
-  | 'ROCKET_LAUNCHER'
-  | 'AK47'
-  | 'FLAMETHROWER';
+  | 'TURRET_ROCKET'
+  | 'TURRET_MG'
+  | 'TURRET_FLAME'
+  | 'TURRET_SPORE';
+
+/** Aktives Ueberladungsfeld des Ingenieurs (host-autoritativ, per GameState repliziert). */
+export interface SyncedOverchargeField {
+  id: number;
+  ownerId: string;
+  x: number;
+  y: number;
+  radius: number;
+  color: number;
+  fireRateMultiplier: number;
+  damageMultiplier: number;
+  startedAt: number;
+  expiresAt: number;
+}
+
+/** Ortsbezogener Turmbuff; wird vom TurretSystem pro Turmposition abgefragt. */
+export interface TurretBuff {
+  readonly fireRateMultiplier: number;
+  readonly damageMultiplier: number;
+}
 
 export type RepairDronePhase = 'orbiting' | 'travelling' | 'repairing' | 'returning';
 

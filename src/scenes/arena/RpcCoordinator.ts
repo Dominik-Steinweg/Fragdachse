@@ -115,13 +115,22 @@ export class RpcCoordinator {
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const committed = bridge.getPlayerCommittedLoadout(senderId);
       if (committed?.coopDefenseClassId === 'inspector_gadachs') {
-        if (slot === 'weapon2') return { ok: false, reason: 'blocked' };
+        // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
+        if (params?.dismantle) {
+          if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined) {
+            return { ok: false, reason: 'invalid' };
+          }
+          return this.lifecycle?.dismantleInspectorConstruction(senderId, targetX, targetY)
+            ?? { ok: false, reason: 'blocked' };
+        }
         // A regular utility packet is only valid for a temporary special-pickup
         // override; normal Inspector utilities must carry their typed ref.
         if (slot === 'utility' && !params?.toolRef
           && bridge.getPlayerUtilityOverrideName(senderId) === '') {
           return { ok: false, reason: 'blocked' };
         }
+      } else if (params?.dismantle) {
+        return { ok: false, reason: 'invalid' };
       }
       if (params?.toolRef) {
         if (slot !== 'utility' || committed?.coopDefenseClassId !== 'inspector_gadachs') {

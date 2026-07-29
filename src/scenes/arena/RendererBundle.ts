@@ -21,6 +21,7 @@ import { FlamethrowerUpgradeRenderer } from '../../effects/FlamethrowerUpgradeRe
 import { ProjectileBurnRenderer } from '../../effects/ProjectileBurnRenderer';
 import { MiniTeslaDomeRenderer } from '../../effects/MiniTeslaDomeRenderer';
 import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
+import { OverchargeFieldRenderer } from '../../effects/OverchargeFieldRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
 import { FireballRenderer }    from '../../effects/FireballRenderer';
@@ -68,6 +69,7 @@ export interface RendererBundle {
   projectileBurn:      ProjectileBurnRenderer;
   miniTeslaDome:       MiniTeslaDomeRenderer;
   timeBubble:          TimeBubbleRenderer;
+  overchargeField:     OverchargeFieldRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
   fireball:            FireballRenderer;
@@ -153,6 +155,9 @@ export function createRendererBundle(
   const timeBubble = new TimeBubbleRenderer(scene);
   timeBubble.generateTextures();
 
+  const overchargeField = new OverchargeFieldRenderer(scene);
+  overchargeField.generateTextures();
+
   const holyGrenade = new HolyGrenadeRenderer(scene);
   holyGrenade.generateTextures();
 
@@ -204,6 +209,7 @@ export function createRendererBundle(
   miniTeslaDome.setLightingSystem(lighting);
   energyShield.setLightingSystem(lighting);
   timeBubble.setLightingSystem(lighting);
+  overchargeField.setLightingSystem(lighting);
   healingAura.setLightingSystem(lighting);
   guardianSpirit.setLightingSystem(lighting);
   slimeTrail.setLightingSystem(lighting);
@@ -213,7 +219,7 @@ export function createRendererBundle(
   // `ProjectileManager.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   return {
-    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, holyGrenade,
+    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, overchargeField, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow, lighting,
     train: null,

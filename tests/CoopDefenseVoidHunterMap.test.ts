@@ -15,22 +15,33 @@ describe('Map 15 - Leerenjäger', () => {
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA');
   });
 
-  it('uses the fixed duration, night time, boss, bases, and wave cadence', () => {
+  it('defines its structural encounter content and schedules it within the round', () => {
     const map = getCoopDefenseMapConfig('15');
     expect(map).toMatchObject({
       timeOfDay: '22:00',
-      roundDurationSec: 60,
-      rockFillRatio: 0.08,
       trackMode: 'void-fire',
-      boss: { enemyKind: 'void-hunter', spawnAtMs: 2000 },
+      boss: { enemyKind: 'void-hunter' },
     });
-    expect(map.bases.reduce((sum, base) => sum + base.hpMax, 0)).toBe(6000);
-    expect(map.waves).toEqual(expect.arrayContaining([
-      expect.objectContaining({ enemyKind: 'zombie-badger', countPerWave: 1, intervalMs: 2500, startAtMs: 5000 }),
-      expect.objectContaining({ enemyKind: 'demon-badger', countPerWave: 1, intervalMs: 5000, startAtMs: 5000 }),
-      expect.objectContaining({ enemyKind: 'alien-badger', countPerWave: 1, intervalMs: 15000, startAtMs: 15000 }),
-      expect.objectContaining({ enemyKind: 'thrower-badger', countPerWave: 1, intervalMs: 20000, startAtMs: 20000 }),
-    ]));
+    expect(map.bases.map((base) => base.id)).toEqual([
+      'coop-base-rear',
+      'coop-base-middle',
+    ]);
+    expect(map.waves.map((wave) => wave.enemyKind)).toEqual([
+      'zombie-badger',
+      'demon-badger',
+      'alien-badger',
+      'thrower-badger',
+    ]);
+
+    const roundDurationMs = map.roundDurationSec * 1000;
+    expect(map.boss!.spawnAtMs).toBeGreaterThanOrEqual(0);
+    expect(map.boss!.spawnAtMs).toBeLessThan(roundDurationMs);
+    for (const wave of map.waves) {
+      expect(wave.countPerWave).toBeGreaterThan(0);
+      expect(wave.intervalMs).toBeGreaterThan(0);
+      expect(wave.startAtMs).toBeGreaterThanOrEqual(0);
+      expect(wave.startAtMs).toBeLessThan(roundDurationMs);
+    }
   });
 
   it('replaces rails with deterministic collision-free permanent void fire', () => {

@@ -18,6 +18,7 @@ import type { ArenaBuilderResult }  from '../../arena/ArenaBuilder';
 import type { RockRegistry }        from '../../arena/RockRegistry';
 import type { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import type { PlacementSystem }     from '../../systems/PlacementSystem';
+import type { OverchargeSystem }    from '../../systems/OverchargeSystem';
 import type { ResourceSystem }      from '../../systems/ResourceSystem';
 import type { BurrowSystem }        from '../../systems/BurrowSystem';
 import type { LoadoutManager }      from '../../loadout/LoadoutManager';
@@ -96,6 +97,7 @@ export interface ArenaContext {
   arenaResult:       ArenaBuilderResult | null;
   currentLayout:     ArenaLayout        | null;
   placementSystem:   PlacementSystem    | null;
+  overchargeSystem:  OverchargeSystem   | null;
   rockRegistry:      RockRegistry       | null;
   /**
    * Cache der lichtblockierenden Hindernisse. Wird aus denselben Referenzen aufgebaut,

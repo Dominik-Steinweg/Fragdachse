@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S } from '../../config';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
-import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
@@ -271,6 +271,30 @@ export class HostUpdateCoordinator {
     }
 
     for (const explosion of explodedProjectiles) {
+      const overchargeField = explosion.effect.overchargeField;
+      if (overchargeField) {
+        const field = this.ctx.overchargeSystem?.spawnField(
+          explosion.ownerId,
+          explosion.x,
+          explosion.y,
+          explosion.effect.radius,
+          overchargeField.durationMs,
+          overchargeField.fireRateMultiplier,
+          overchargeField.damageMultiplier,
+          overchargeField.color,
+          now,
+        );
+        if (field) {
+          this.ctx.gameAudioSystem.playSound(
+            'sfx_place_fliegenpilz',
+            field.x,
+            field.y,
+            explosion.ownerId,
+          );
+        }
+        continue;
+      }
+
       const damagedTargetKeys = this.ctx.combatSystem.applyExplosionDamage(
         explosion.x,
         explosion.y,
@@ -687,11 +711,13 @@ export class HostUpdateCoordinator {
         ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
         : undefined;
       const utilCfg   = selectedInspectorUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-      const utilDisplayName = selectedInspectorConstruction
-        ? `${selectedInspectorConstruction.displayName} · ${selectedInspectorConstruction.adrenalineCost} ADR`
-        : selectedInspectorUtility?.inspectorAdrenalineCost !== undefined
-          ? `${utilCfg?.displayName ?? 'Utility'} · ${selectedInspectorUtility.inspectorAdrenalineCost} ADR`
-          : utilCfg?.displayName;
+      // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
+      // Utilities kosten nichts ausser ihrem Cooldown.
+      const inspectorCapacityCost = selectedInspectorTool ? getToolCapacityCost(selectedInspectorTool) : 0;
+      const inspectorDisplayName = selectedInspectorConstruction?.displayName ?? utilCfg?.displayName;
+      const utilDisplayName = inspectorCapacityCost > 0
+        ? `${inspectorDisplayName ?? 'Utility'} · ${inspectorCapacityCost} BK`
+        : inspectorDisplayName;
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
       const activePowerUps = [
@@ -726,6 +752,10 @@ export class HostUpdateCoordinator {
         weapon2AdrenalineCost:   this.ctx.loadoutManager?.isAk47FireSuperiorityActive(localId)
           ? 0
           : (weapon2Cfg?.adrenalinCost ?? 0),
+        constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId) ?? 0,
+        constructionCapacityMax:  committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
+          ? COOP_DEFENSE_CONSTRUCTION_CAPACITY
+          : 0,
       });
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
       this.localPlayerState.burrowed = this.ctx.burrowSystem?.isBurrowed(localId) ?? false;
@@ -771,6 +801,7 @@ export class HostUpdateCoordinator {
         gridY: expiredRock.gridY,
       });
     }
+    this.ctx.overchargeSystem?.update(now);
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -860,6 +891,7 @@ export class HostUpdateCoordinator {
       // sie auf den ~2 von 3 Frames ohne Net-Tick ersatzlos verfallen.
       rocks: this.ctx.rockRegistry?.getNetSnapshot() ?? null,
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
+      overchargeFields: this.ctx.overchargeSystem?.getNetSnapshot() ?? [],
       decoys,
       smokes,
       fires,
@@ -1402,19 +1434,18 @@ export class HostUpdateCoordinator {
     const hasOverride = bridge.getPlayerUtilityOverrideName(localId) !== '';
     const selected = hasOverride ? undefined : (this.ctx.inputSystem.getSelectedInspectorToolForHud()
       ?? committed?.coopDefenseProfile?.selectedTool);
-    if (selected?.kind === 'construction') return 0;
-    const utilityId = selected?.kind === 'utility'
-      ? selected.id
-      : (this.ctx.loadoutManager?.getEquippedUtilityConfig(localId)?.id ?? '__default__');
-    const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, utilityId);
-    const remaining = cooldownUntil - bridge.getSynchronizedNow();
-    if (remaining <= 0) return 0;
-    const config = selected?.kind === 'utility'
-      ? UTILITY_CONFIGS[selected.id as keyof typeof UTILITY_CONFIGS]
-      : this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-    const cooldown = selected?.kind === 'utility' ? 1000 : config?.cooldown ?? 0;
+    // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
+    // Bezugsdauer unterscheidet sich.
+    const fallbackConfig = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
+    const itemId = selected ? selected.id : (fallbackConfig?.id ?? '__default__');
+    const cooldown = selected?.kind === 'construction'
+      ? COOP_DEFENSE_BUILD_COOLDOWN_MS
+      : selected?.kind === 'utility'
+        ? UTILITY_CONFIGS[selected.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0
+        : fallbackConfig?.cooldown ?? 0;
     if (cooldown <= 0) return 0;
-    return Math.min(1, remaining / cooldown);
+    const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();
+    return remaining <= 0 ? 0 : Math.min(1, remaining / cooldown);
   }
 
   private getFallbackUltimateConfig() {

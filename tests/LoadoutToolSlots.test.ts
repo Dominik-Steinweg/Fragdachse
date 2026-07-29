@@ -58,10 +58,13 @@ describe('shared tool slots', () => {
       0,
       'inspector_gadachs',
     );
-    const weapon2 = progress.upgradeCategories.find((category) => category.id === 'weapon2');
+    // Die beiden gleichwertigen Utility-Bloecke des Inspectors: Konstruktion und Utility.
+    const construction = progress.upgradeCategories.find((category) => category.id === 'construction');
     const utility = progress.upgradeCategories.find((category) => category.id === 'utility');
-    expect(weapon2?.upgrades.find((node) => node.id === 'unlock_rocket_turret')?.toolRef)
+    expect(construction?.upgrades.find((node) => node.id === 'unlock_rocket_turret')?.toolRef)
       .toEqual({ kind: 'construction', id: 'rocket_turret' });
+    expect(construction?.upgrades.find((node) => node.id === 'unlock_felsbau')?.toolRef)
+      .toEqual({ kind: 'utility', id: 'FELSBAU' });
     expect(utility?.upgrades.find((node) => node.id === 'unlock_he_grenade')?.toolRef)
       .toEqual({ kind: 'utility', id: 'HE_GRENADE' });
   });
@@ -126,13 +129,15 @@ describe('shared tool slots', () => {
 });
 
 describe('category naming per class', () => {
-  it('renames both tool categories for the Inspector only', () => {
+  it('keeps weapon 2 named consistently and shows construction only for the Inspector', () => {
     const inspector = getCoopDefenseUpgradeCategories('inspector_gadachs');
-    expect(inspector.find((category) => category.id === 'weapon2')?.label).toBe('Utility 1');
-    expect(inspector.find((category) => category.id === 'utility')?.label).toBe('Utility 2');
+    expect(inspector.find((category) => category.id === 'weapon2')?.label).toBe('Waffe 2');
+    expect(inspector.find((category) => category.id === 'construction')?.label).toBe('Konstruktion');
+    expect(inspector.find((category) => category.id === 'utility')?.label).toBe('Utility');
 
     const nukem = getCoopDefenseUpgradeCategories('dachs_nukem');
     expect(nukem.find((category) => category.id === 'weapon2')?.label).toBe('Waffe 2');
     expect(nukem.find((category) => category.id === 'utility')?.label).toBe('Utility');
+    expect(nukem.find((category) => category.id === 'construction')).toBeUndefined();
   });
 });

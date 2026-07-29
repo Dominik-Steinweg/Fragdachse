@@ -13,7 +13,10 @@ import {
   isPointInsideArena,
 } from '../config';
 import type { ArenaLayout, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
-import type { CoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import {
+  sumPlaceableCapacity,
+  type CoopDefenseConstructionDefinition,
+} from '../config/coopDefenseConstructions';
 
 interface RuntimeRockRecord extends SyncedPlaceableRock { lastAttackerId?: string }
 
@@ -120,6 +123,26 @@ export class PlacementSystem {
     ));
   }
 
+  /**
+   * Belegte Konstruktionskapazitaet eines Spielers. Laeuft auf Host und Client, weil beide
+   * denselben Bestand halten; das HUD und die Bauvorschau brauchen deshalb keinen eigenen
+   * Netzwerkwert.
+   */
+  getUsedCapacity(ownerId: string): number {
+    return sumPlaceableCapacity(this.runtimeRocks.values(), ownerId);
+  }
+
+  /** Rueckbau: entfernt ein Konstrukt nur, wenn es dem anfragenden Spieler gehoert. */
+  removeRockAt(gridX: number, gridY: number, ownerId: string): SyncedPlaceableRock | undefined {
+    // Der Grid-Index fuehrt statische Layout-Felsen und platzierte Objekte gemeinsam; nur
+    // Letztere stehen in `runtimeRocks` und sind damit ueberhaupt rueckbaubar.
+    const id = this.rockGrid.getIndex(gridX, gridY);
+    if (id < 0) return undefined;
+    const rock = this.runtimeRocks.get(id);
+    if (!rock || rock.ownerId !== ownerId) return undefined;
+    return this.removeRock(id);
+  }
+
   tryPlaceConstruction(
     cfg: CoopDefenseConstructionDefinition,
     maxHp: number,
@@ -179,6 +202,35 @@ export class PlacementSystem {
     };
   }
 
+  /** Vorschau fuer den Rueckbau: gueltig genau dann, wenn dort ein eigenes Konstrukt steht. */
+  getDismantlePreview(
+    ownerId: string,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+    range: number,
+  ): UtilityPlacementPreviewState | undefined {
+    const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, range);
+    if (!targetCell) return undefined;
+    const targetWorld = this.gridToWorld(targetCell.gridX, targetCell.gridY);
+    const id = this.rockGrid.getIndex(targetCell.gridX, targetCell.gridY);
+    const rock = id >= 0 ? this.runtimeRocks.get(id) : undefined;
+    return {
+      angle: Phaser.Math.Angle.Between(originX, originY, targetWorld.x, targetWorld.y),
+      targetX: targetWorld.x,
+      targetY: targetWorld.y,
+      gridX: targetCell.gridX,
+      gridY: targetCell.gridY,
+      isValid: rock?.ownerId === ownerId,
+      frame: 0,
+      range,
+      kind: rock?.kind ?? 'rock',
+      sourceSlot: 'utility',
+      mode: 'dismantle',
+    };
+  }
+
   tryPlaceRock(
     cfg: PlaceableUtilityConfig,
     playerId: string,
@@ -192,6 +244,9 @@ export class PlacementSystem {
     const preview = this.getPlacementPreview(cfg, originX, originY, targetX, targetY);
     if (!preview || !preview.isValid) return null;
 
+    // `lifetimeMs <= 0` kennzeichnet dauerhafte Konstrukte (Mauer, Fliegenpilz). `update()`
+    // ueberspringt `expiresAt <= 0` bereits, deshalb genuegt hier die Null.
+    const isPermanent = cfg.placeable.lifetimeMs <= 0;
     const rock: RuntimeRockRecord = {
       id: this.nextRockId++,
       kind: cfg.placeable.kind,
@@ -201,8 +256,10 @@ export class PlacementSystem {
       maxHp: cfg.placeable.maxHp,
       ownerId: playerId,
       ownerColor,
-      expiresAt: now + cfg.placeable.lifetimeMs,
-      warningStartsAt: now + Math.max(0, cfg.placeable.lifetimeMs - cfg.placeable.warningPulseMs),
+      expiresAt: isPermanent ? 0 : now + cfg.placeable.lifetimeMs,
+      warningStartsAt: isPermanent
+        ? 0
+        : now + Math.max(0, cfg.placeable.lifetimeMs - cfg.placeable.warningPulseMs),
       angle: preview.angle,
       enemyDestroyedExplosionRadius: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionRadius ?? 0) : 0,
       enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,

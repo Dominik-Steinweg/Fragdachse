@@ -1,16 +1,22 @@
-import type { ConstructionId, TurretWeaponId } from '../types';
+import type { ConstructionId, PlaceableKind, TurretWeaponId } from '../types';
 
 export interface CoopDefenseConstructionDefinition {
   readonly id: ConstructionId;
   readonly displayName: string;
   readonly description: string;
   readonly weaponId: TurretWeaponId;
+  /**
+   * Loadout-Icon des Konstrukts. Bewusst getrennt von `weaponId`: die Turmwaffen tragen
+   * eigene Balancing-IDs ohne eigenes Icon-Asset.
+   */
+  readonly iconKey: string;
   readonly unlockUpgradeId: string;
   readonly maxHp: number;
   readonly targetRange: number;
   readonly placementRange: number;
   readonly muzzleOffset: number;
-  readonly adrenalineCost: number;
+  /** Anteil an der festen Konstruktionskapazitaet, solange das Konstrukt steht. */
+  readonly capacityCost: number;
   readonly color: number;
 }
 
@@ -21,6 +27,33 @@ export const COOP_DEFENSE_CONSTRUCTION_IDS: readonly ConstructionId[] = [
 ];
 
 export const DEFAULT_COOP_DEFENSE_CONSTRUCTION_ID: ConstructionId = 'rocket_turret';
+
+/**
+ * Feste Konstruktionskapazitaet des Inspectors. Sie ersetzt die frueheren Adrenalinkosten
+ * als einzige Obergrenze fuer gleichzeitig stehende Konstrukte und ist damit unabhaengig
+ * von Rundendauer, Adrenalin, Cooldowns und Anzahl abgewehrter Wellen.
+ */
+export const COOP_DEFENSE_CONSTRUCTION_CAPACITY = 100;
+
+/**
+ * Einheitlicher Bau-Cooldown fuer alle Konstrukte. Begrenzend ist die Kapazitaet, nicht
+ * dieser Cooldown; er verhindert lediglich, dass eine ganze Verteidigungslinie in einem
+ * einzigen Frame entsteht.
+ */
+export const COOP_DEFENSE_BUILD_COOLDOWN_MS = 500;
+
+/** Reichweite, in der eigene Konstrukte zurueckgebaut werden koennen. */
+export const COOP_DEFENSE_DISMANTLE_RANGE = 320;
+
+/**
+ * Kapazitaetskosten der platzierbaren Utilities. Bewusst hier statt in `LoadoutConfig`,
+ * damit die Kapazitaetsaufloesung ohne Import der Loadout-Configs auskommt.
+ */
+export const COOP_DEFENSE_UTILITY_CAPACITY_COSTS: Readonly<Record<string, number>> = Object.freeze({
+  FELSBAU: 1,
+  FLIEGENPILZ: 15,
+});
+
 export const COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS = 3;
 export const COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS = 6;
 export const COOP_DEFENSE_CONSTRUCTION_SLOT_UPGRADE_ID = 'inspector_construction_slots';
@@ -43,39 +76,42 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       id: 'rocket_turret',
       displayName: 'Raketenturm',
       description: 'Verschiesst automatisch Raketen mit Flaechenschaden.',
-      weaponId: 'ROCKET_LAUNCHER',
+      weaponId: 'TURRET_ROCKET',
+      iconKey: 'ROCKET_LAUNCHER',
       unlockUpgradeId: 'unlock_rocket_turret',
       maxHp: 250,
       targetRange: 600,
       placementRange: 320,
       muzzleOffset: 18,
-      adrenalineCost: 30,
+      capacityCost: 30,
       color: 0xff8a3d,
     },
     machine_gun_turret: {
       id: 'machine_gun_turret',
       displayName: 'Maschinengewehrturm',
       description: 'Bekämpft einzelne Ziele mit hoher Feuerrate.',
-      weaponId: 'AK47',
+      weaponId: 'TURRET_MG',
+      iconKey: 'AK47',
       unlockUpgradeId: 'unlock_machine_gun_turret',
       maxHp: 180,
       targetRange: 550,
       placementRange: 320,
       muzzleOffset: 17,
-      adrenalineCost: 30,
+      capacityCost: 10,
       color: 0xd8b46b,
     },
     flame_turret: {
       id: 'flame_turret',
       displayName: 'Flammenwerferturm',
       description: 'Entzuendet Gegner in kurzer Reichweite kontinuierlich.',
-      weaponId: 'FLAMETHROWER',
+      weaponId: 'TURRET_FLAME',
+      iconKey: 'FLAMETHROWER',
       unlockUpgradeId: 'unlock_flame_turret',
       maxHp: 220,
       targetRange: 220,
       placementRange: 320,
       muzzleOffset: 16,
-      adrenalineCost: 30,
+      capacityCost: 20,
       color: 0xff5f28,
     },
   });
@@ -89,4 +125,42 @@ export function getCoopDefenseConstructionDefinition(
   constructionId: ConstructionId,
 ): CoopDefenseConstructionDefinition {
   return COOP_DEFENSE_CONSTRUCTIONS[constructionId];
+}
+
+/**
+ * Kapazitaetskosten eines stehenden Konstrukts. Die Kosten werden bewusst aus `kind` und
+ * `constructionId` abgeleitet statt im `SyncedPlaceableRock` mitgefuehrt zu werden: Bei bis
+ * zu hundert Mauern je Spieler spart das ein Feld pro Objekt im Replikationssnapshot.
+ * Deshalb duerfen Kapazitaetskosten auch nicht spielerabhaengig modifiziert werden.
+ */
+export function getPlaceableCapacityCost(
+  rock: { readonly kind: PlaceableKind; readonly constructionId?: ConstructionId },
+): number {
+  if (rock.constructionId) return COOP_DEFENSE_CONSTRUCTIONS[rock.constructionId]?.capacityCost ?? 0;
+  if (rock.kind === 'rock') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.FELSBAU;
+  if (rock.kind === 'turret') return COOP_DEFENSE_UTILITY_CAPACITY_COSTS.FLIEGENPILZ;
+  return 0;
+}
+
+/**
+ * Belegte Kapazitaet eines Spielers ueber einen Bestand platzierter Objekte. Bewusst eine
+ * reine Funktion: Host, Client und Tests rechnen damit identisch, ohne Phaser-Abhaengigkeit.
+ */
+export function sumPlaceableCapacity(
+  rocks: Iterable<{ readonly ownerId: string; readonly kind: PlaceableKind; readonly constructionId?: ConstructionId }>,
+  ownerId: string,
+): number {
+  let used = 0;
+  for (const rock of rocks) {
+    if (rock.ownerId !== ownerId) continue;
+    used += getPlaceableCapacityCost(rock);
+  }
+  return used;
+}
+
+/** Kapazitaetskosten eines noch nicht gebauten Werkzeugs aus dem Radialmenue. */
+export function getToolCapacityCost(tool: { kind: 'construction' | 'utility'; id: string }): number {
+  return tool.kind === 'construction'
+    ? COOP_DEFENSE_CONSTRUCTIONS[tool.id as ConstructionId]?.capacityCost ?? 0
+    : COOP_DEFENSE_UTILITY_CAPACITY_COSTS[tool.id] ?? 0;
 }

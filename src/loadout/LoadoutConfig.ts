@@ -1,4 +1,5 @@
 import { COLORS, RAGE_MAX, VOID_FIRE_COLOR, VOID_PALETTE } from '../config';
+import { COOP_DEFENSE_BUILD_COOLDOWN_MS } from '../config/coopDefenseConstructions';
 import type { GroundFireVisualStyle } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
@@ -148,6 +149,21 @@ export interface EnergyShieldWeaponFireConfig {
   readonly domeReflectProjectiles: number; // >0: gegnerische Projektile prallen an der Kuppel ab (Boss d2)
 }
 
+/**
+ * Klassenfaehigkeit des Ingenieurs auf Waffe 2: schleudert einen Energiekern auf eine
+ * Zielposition und verstaerkt dort fuer kurze Zeit alle Tuerme, auch die der Basis.
+ */
+export interface OverchargeCoreWeaponFireConfig {
+  readonly type: 'overcharge_core';
+  readonly projectileSpeed: number;
+  readonly projectileSize: number;
+  readonly radius: number;
+  readonly durationMs: number;
+  readonly fireRateMultiplier: number;
+  readonly damageMultiplier: number;
+  readonly fieldColor: number;
+}
+
 export type WeaponFireConfig =
   | ProjectileWeaponFireConfig
   | HitscanWeaponFireConfig
@@ -156,7 +172,8 @@ export type WeaponFireConfig =
   | LeafBlowerWeaponFireConfig
   | TeslaDomeWeaponFireConfig
   | HealingAuraWeaponFireConfig
-  | EnergyShieldWeaponFireConfig;
+  | EnergyShieldWeaponFireConfig
+  | OverchargeCoreWeaponFireConfig;
 
 export interface WeaponConfig {
   readonly id: string;
@@ -425,8 +442,6 @@ interface BaseUtilityConfig {
   readonly displayName: string;
   readonly type: UtilityType;
   readonly cooldown: number;        // ms
-  /** Verbrauch beim Inspector Gadachs; andere Klassen verwenden keine Utility-Adrenalinkosten. */
-  readonly inspectorAdrenalineCost?: number;
   readonly activation: UtilityActivationConfig;
   readonly projectileSpeed: number; // px/s maximale Wurfgeschwindigkeit
   readonly projectileSize: number;  // px
@@ -1394,6 +1409,48 @@ export const WEAPON_CONFIGS = {
    * "WEAPON2" - Rechte Maustaste
    */
 
+  /**
+   * Adrenalinverbraucher des Ingenieurs. Bewusst als normale Waffe-2-Waffe definiert:
+   * Adrenalinkosten, Cooldown, HUD-Balken und Auswahl im Upgrade-Overlay laufen dadurch
+   * ueber die vorhandenen Pfade. Nur der Ingenieur kann sie waehlen, weil ihr Unlock-Knoten
+   * in `INSPECTOR_UPGRADE_ROOT_IDS` steht.
+   */
+  OVERCHARGE_CORE: {
+    id:                   'OVERCHARGE_CORE',
+    displayName:          'Ueberladungskern',
+    cooldown:             4000,
+    damage:               0,
+    range:                420,
+    fire: {
+      type:               'overcharge_core',
+      projectileSpeed:    320,
+      projectileSize:     12,
+      radius:             220,
+      durationMs:         6000,
+      fireRateMultiplier: 1.5,
+      damageMultiplier:   1.25,
+      fieldColor:         0x4fd6ff,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        50,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'rocket' as ProjectileStyle,
+    projectileColor:      0xa7f1ff,
+    projectileVisualScale: 1.15,
+    rocketSmokeTrailColor: 0x5b9eae,
+    shotAudio: {
+      successKey: 'shot_throw',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
   P90: {
     id:                   'P90',
     displayName:          'P90',
@@ -1895,7 +1952,228 @@ export const WEAPON_CONFIGS = {
     shotAudio: {
       successKey: 'shot_spore',
       failureKey: 'shot_dry_trigger',
-    },        
+    },
+  } as WeaponConfig,
+
+  /**
+   * Turmwaffen des Ingenieurs.
+   *
+   * Bewusst eigene Configs statt der gleichnamigen Spielerwaffen: Ein Turm feuert dauerhaft
+   * und ohne Ressourcenkosten, sein Balancing muss also unabhaengig vom Spielerprofil
+   * derselben Waffe verstellbar sein. Zielgroesse ist, dass eine voll genutzte
+   * Baukapazitaet ungefaehr einem voll ausgeruesteten Kaempfer entspricht.
+   * `allowedSlots: []` haelt sie aus jeder Loadout-Auswahl heraus.
+   */
+  TURRET_ROCKET: {
+    id:                   'TURRET_ROCKET',
+    displayName:          'Turmrakete',
+    cooldown:             1600,
+    damage:               8,
+    range:                640,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      560,
+      projectileSize:       9,
+      projectileMaxBounces: 0,
+      impactExplosion: {
+        radius:          95,
+        maxDamage:       26,
+        minDamage:       5,
+        knockback:       900,
+        selfDamageMult:  0,
+        rockDamageMult:  0,
+        trainDamageMult: 1,
+        color:           0xff8a3d,
+        visualStyle:     'rocket',
+        blackHoleDurationMs: 0,
+        blackHolePullStrength: 0,
+      } satisfies ProjectileExplosionConfig,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'rocket' as ProjectileStyle,
+    projectileColor:      0xe8c170,
+    rocketSmokeTrailColor: COLORS.GREY_2,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      1,
+    shotAudio: {
+      successKey: 'shot_rocketlauncher',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  TURRET_MG: {
+    id:                   'TURRET_MG',
+    displayName:          'Turm-MG',
+    cooldown:             260,
+    damage:               7,
+    range:                600,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      1100,
+      projectileSize:       5,
+      projectileMaxBounces: 0,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileColor:      0xc88444,
+    projectileStyle:      'bullet' as ProjectileStyle,
+    bulletVisualPreset:   'ak47' as BulletVisualPreset,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      1,
+    tracerConfig: {
+      widthCore:  1.5,
+      widthGlow:  4,
+      alphaCore:  0.75,
+      alphaGlow:  0.22,
+      segments:   5,
+      fadeMs:     220,
+      maxLength:  150,
+    } satisfies TracerConfig,
+    shotAudio: {
+      successKey: 'shot_ak47',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  TURRET_FLAME: {
+    id:                   'TURRET_FLAME',
+    displayName:          'Turmflamme',
+    cooldown:             110,
+    damage:               1.5,
+    range:                230,
+    fire: {
+      type:               'flamethrower',
+      projectileSpeed:    380,
+      hitboxStartSize:    14,
+      hitboxEndSize:      104,
+      hitboxGrowRate:     58,
+      velocityDecay:      0.82,
+      burnDurationMs:     2000,
+      burnDamagePerTick:  0.22,
+      piercingCount:      0,
+      kamikaze: {
+        enabled: 0,
+        inheritMolotovBonuses: 0,
+      },
+      burningGround: {
+        cellSize: 0,
+        durationMs: 0,
+        igniteProjectiles: 0,
+        createOnFlameExpiry: 0,
+      },
+      fireRing: {
+        radius: 0,
+        thickness: 0,
+        igniteProjectiles: 0,
+      },
+      fireball: {
+        enabled: 0,
+        projectileSpeed: 450,
+        projectileSize: 28,
+        explosionRadius: 120,
+        explosionMaxDamage: 90,
+        explosionMinDamage: 20,
+        explosionKnockback: 1250,
+        selfDamageMult: 0,
+        trailEnabled: 0,
+        chunkCount: 0,
+        chunkSearchRadius: 96,
+        chunkFlightMs: 320,
+        groundDurationMs: 2000,
+        groundBurnDamagePerTick: 0.5,
+      },
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'flame' as ProjectileStyle,
+    projectileColor:      0xff6600,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      1,
+    shotAudio: {
+      successKey: 'shot_flame',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  TURRET_SPORE: {
+    id:                   'TURRET_SPORE',
+    displayName:          'Turmsporen',
+    cooldown:             1400,
+    damage:               3,
+    range:                340,
+    fire: {
+      type:                 'projectile',
+      projectileSpeed:      280,
+      projectileSize:       10,
+      projectileMaxBounces: 0,
+      impactCloud: {
+        radius:          32,
+        duration:        1500,
+        damagePerTick:   3,
+        tickInterval:    150,
+        rockDamageMult:  0,
+        trainDamageMult: 1,
+        visualVariant:   'spore',
+      } satisfies ImpactCloudConfig,
+      homing: {
+        acquireDelayMs:        80,
+        searchRadius:          320,
+        retargetIntervalMs:    40,
+        maxTurnDegreesPerStep: 20,
+        targetTypes:           ['players', 'enemies'],
+        requireLineOfSight:    true,
+        excludeOwner:          true,
+        distanceWeight:        1,
+        forwardWeight:         0.5,
+      } satisfies ProjectileHomingConfig,
+    },
+    allowedSlots:         [],
+    adrenalinCost:        0,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         0,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'spore' as ProjectileStyle,
+    projectileColor:      0xe7f28b,
+    showCrosshair:        false,
+    rockDamageMult:       0,
+    trainDamageMult:      1,
+    shotAudio: {
+      successKey: 'shot_spore',
+      failureKey: 'shot_dry_trigger',
+    },
   } as WeaponConfig,
 
   /**
@@ -2380,7 +2658,6 @@ export const UTILITY_CONFIGS = {
     displayName:     'HE Granate',
     type:            'explosive',
     cooldown:        3000,
-    inspectorAdrenalineCost: 20,
     activation:      STANDARD_GRENADE_CHARGE,
     projectileSpeed: 800,
     projectileSize:  10,
@@ -2408,7 +2685,6 @@ export const UTILITY_CONFIGS = {
     displayName:            'Smoke Granate',
     type:                   'smoke',
     cooldown:               6000,
-    inspectorAdrenalineCost: 40,
     activation:             STANDARD_GRENADE_CHARGE,
     projectileSpeed:        800,
     projectileSize:         10,
@@ -2440,7 +2716,6 @@ export const UTILITY_CONFIGS = {
     displayName:        'Molotov',
     type:               'molotov',
     cooldown:           5000,
-    inspectorAdrenalineCost: 30,
     activation:         STANDARD_GRENADE_CHARGE,
     projectileSpeed:    800,
     projectileSize:     10,
@@ -2475,7 +2750,6 @@ export const UTILITY_CONFIGS = {
     displayName:         'Time-Bubble',
     type:                'time_bubble',
     cooldown:            5000,
-    inspectorAdrenalineCost: 30,
     activation:          STANDARD_GRENADE_CHARGE,
     projectileSpeed:     760,
     projectileSize:      12,
@@ -2575,7 +2849,6 @@ export const UTILITY_CONFIGS = {
     displayName:         'Stinkdrüsen',
     type:                'stinkcloud',
     cooldown:            8000,
-    inspectorAdrenalineCost: 40,
     activation:          { type: 'instant' } as InstantUtilityActivationConfig,
     projectileSpeed:     0,             // Kein Projektil – Sofortaktivierung
     projectileSize:      0,
@@ -2615,7 +2888,6 @@ export const UTILITY_CONFIGS = {
     displayName:          'Translocator',
     type:                 'translocator',
     cooldown:             3000,
-    inspectorAdrenalineCost: 20,
     activation:           STANDARD_GRENADE_CHARGE,
     projectileSpeed:      600, 
     projectileSize:       16,
@@ -2639,8 +2911,7 @@ export const UTILITY_CONFIGS = {
     id:                  'FELSBAU',
     displayName:         'Felsbau',
     type:                'placeable_rock',
-    cooldown:            100,
-    inspectorAdrenalineCost: 20,
+    cooldown:            COOP_DEFENSE_BUILD_COOLDOWN_MS,
     activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
     projectileSpeed:     0,
     projectileSize:      0,
@@ -2652,7 +2923,7 @@ export const UTILITY_CONFIGS = {
       range:              160,
       footprint:          [{ dx: 0, dy: 0 }] as const,
       maxHp:              200,
-      lifetimeMs:         60000,
+      lifetimeMs:         0,   // dauerhaftes Konstrukt; begrenzt wird ueber die Baukapazitaet
       previewAlpha:       0.5,
       ownerTintStrength:  0.85,
       warningPulseMs:     3500,
@@ -2665,21 +2936,20 @@ export const UTILITY_CONFIGS = {
     id:                  'FLIEGENPILZ',
     displayName:         'Fliegenpilz',
     type:                'placeable_turret',
-    cooldown:            10000,
-    inspectorAdrenalineCost: 50,
+    cooldown:            COOP_DEFENSE_BUILD_COOLDOWN_MS,
     activation:          { type: 'placement_mode' } as PlacementModeUtilityActivationConfig,
     projectileSpeed:     0,
     projectileSize:      0,
     fuseTime:            0,
     maxBounces:          0,
     allowedSlots:        ['utility'],
-    weaponId:            'SPOREN',
+    weaponId:            'TURRET_SPORE',
     placeable: {
       kind:               'turret',
       range:              240,
       footprint:          [{ dx: 0, dy: 0 }] as const,
       maxHp:              50,
-      lifetimeMs:         10000,
+      lifetimeMs:         0,   // dauerhaftes Konstrukt; begrenzt wird ueber die Baukapazitaet
       previewAlpha:       0.55,
       ownerTintStrength:  0.72,
       warningPulseMs:     3500,
@@ -2696,7 +2966,6 @@ export const UTILITY_CONFIGS = {
     displayName:     'Zeus',
     type:            'taser',
     cooldown:        4000,
-    inspectorAdrenalineCost: 30,
     activation:      { type: 'instant' } as InstantUtilityActivationConfig,
     damage:          200,
     range:           80,
@@ -2720,7 +2989,6 @@ export const UTILITY_CONFIGS = {
     displayName:               'Decoy',
     type:                      'decoy',
     cooldown:                  12000,
-    inspectorAdrenalineCost:   50,
     activation:                { type: 'instant' } as InstantUtilityActivationConfig,
     projectileSpeed:           0,
     projectileSize:            0,

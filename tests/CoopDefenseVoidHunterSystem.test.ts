@@ -146,29 +146,34 @@ describe('Leerenjäger', () => {
     )).toEqual({ x: 500, y: 400 });
   });
 
-  it('starts phase two once, fixes the Nuke target, burrows through explosion + 2 s, and emits chunks at the blast', () => {
+  it('starts phase two once, fixes the Nuke target, honors the configured emerge delay, and emits chunks at the blast', () => {
     const fixture = createFixture([{ x: 400, y: 300 }, { x: 800, y: 500 }]);
+    const bossConfig = getCoopDefenseEnemyConfig('void-hunter').voidHunterBoss!;
     fixture.system.hostUpdate(0);
-    fixture.enemy.hp = 1600;
+    fixture.enemy.hp = fixture.enemy.maxHp * bossConfig.phaseTwoHpRatio;
     fixture.system.hostUpdate(100);
 
     expect(fixture.enemy.setMoveSpeedMultiplier).toHaveBeenCalledTimes(1);
-    expect(fixture.enemy.setMoveSpeedMultiplier).toHaveBeenCalledWith(1.2);
+    expect(fixture.enemy.setMoveSpeedMultiplier).toHaveBeenCalledWith(
+      bossConfig.phaseTwoSpeedMultiplier,
+    );
     expect(fixture.power.scheduleConfiguredNukeStrike).toHaveBeenCalledWith(
       'e1',
       600,
       400,
       expect.objectContaining({
-        countdownMs: 5000,
-        radius: 600,
-        maxDamage: 1000,
-        minDamage: 50,
+        countdownMs: bossConfig.nuke.countdownMs,
+        radius: bossConfig.nuke.radiusPx,
+        maxDamage: bossConfig.nuke.maxDamage,
+        minDamage: bossConfig.nuke.minDamage,
         damageTarget: 'player-side',
         variant: 'void',
       }),
       100,
     );
-    expect(fixture.burrow.startScriptedBurrow).toHaveBeenCalledWith('e1', 7100);
+    const explodeAt = 100 + bossConfig.nuke.countdownMs;
+    const emergeAt = explodeAt + bossConfig.nuke.emergeDelayMs;
+    expect(fixture.burrow.startScriptedBurrow).toHaveBeenCalledWith('e1', emergeAt);
 
     fixture.players[0].sprite.x = 1000;
     fixture.system.hostUpdate(200);
@@ -178,24 +183,24 @@ describe('Leerenjäger', () => {
       id: 9,
       x: 600,
       y: 400,
-      radius: 600,
+      radius: bossConfig.nuke.radiusPx,
       armedAt: 100,
-      explodeAt: 5100,
+      explodeAt,
       triggeredBy: 'e1',
       variant: 'void',
-    }, 5100);
+    }, explodeAt);
     expect(fixture.fireChunks.hostCreateFireChunkBurst).toHaveBeenCalledWith(
       'e1',
       600,
       400,
-      expect.objectContaining({ count: 150 }),
+      bossConfig.nuke.fireChunkBurst,
       'void-hunter-nuke:9',
-      5100,
+      explodeAt,
     );
 
-    fixture.system.hostUpdate(7099);
+    fixture.system.hostUpdate(emergeAt - 1);
     expect(fixture.armageddon.activate).not.toHaveBeenCalled();
-    fixture.system.hostUpdate(7100);
+    fixture.system.hostUpdate(emergeAt);
     expect(fixture.armageddon.activate).toHaveBeenCalledTimes(1);
   });
 

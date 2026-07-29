@@ -2,6 +2,7 @@ import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, GameMode, LoadoutCo
 import { isCoopDefenseMode } from '../gameModes';
 import { getCoopDefenseResolvedEffectTotals, isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { applyCoopDefenseModifiersToLoadoutSelection } from './CoopDefenseLoadoutModifiers';
+import { getSelectableLoadoutItems } from './LoadoutCatalog';
 import {
   DEFAULT_LOADOUT,
   sanitizeUltimateForMode,
@@ -75,11 +76,15 @@ export function resolveLoadoutSelectionIds(
   const committedCoopDefenseProfile = isCoopDefenseMode(mode) && coopDefenseProfile
     ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile, coopDefenseClassId ?? undefined)
     : null;
+  const selectableWeapon2 = committedCoopDefenseProfile && coopDefenseClassId
+    ? getSelectableLoadoutItems('weapon2', mode, committedCoopDefenseProfile, coopDefenseClassId)
+    : [];
+  const committedWeapon2 = selectableWeapon2.find((item) => item.id === sanitized.weapon2.id)
+    ?? selectableWeapon2[0]
+    ?? sanitized.weapon2;
   return {
     weapon1: sanitized.weapon1.id,
-    weapon2: isCoopDefenseMode(mode) && coopDefenseClassId === 'inspector_gadachs'
-      ? null
-      : sanitized.weapon2.id,
+    weapon2: committedWeapon2.id,
     utility: sanitized.utility.id,
     ultimate: sanitized.ultimate.id,
     coopDefenseClassId: isCoopDefenseMode(mode) ? coopDefenseClassId : null,
@@ -88,6 +93,19 @@ export function resolveLoadoutSelectionIds(
       ? committedCoopDefenseProfile?.toolLoadout?.map((tool) => ({ ...tool }))
       : undefined,
   };
+}
+
+/**
+ * Verbindlicher Coop-Ready-Vertrag fuer den klassenabhaengigen Waffe-2-Slot.
+ * Insbesondere traegt der Inspector seit dem Ueberladungskern eine echte Waffen-ID statt `null`.
+ */
+export function isCoopDefenseReadyLoadoutComplete(snapshot: LoadoutCommitSnapshot): boolean {
+  const { coopDefenseClassId: classId, coopDefenseProfile: profile, weapon2 } = snapshot;
+  return profile != null
+    && classId != null
+    && weapon2 != null
+    && getSelectableLoadoutItems('weapon2', 'coop_defense', profile, classId)
+      .some((item) => item.id === weapon2);
 }
 
 export function sanitizeCommittedLoadoutForMode(

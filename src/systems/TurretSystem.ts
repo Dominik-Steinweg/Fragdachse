@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CombatSystem } from './CombatSystem';
+import type { TurretBuff } from '../types';
 
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
 export type AutomatedTurretId = number | string;
@@ -40,6 +41,7 @@ export class TurretSystem {
   private turretAngleUpdater: TurretAngleUpdater | null = null;
   private enemyTargetProvider: EnemyTargetProvider | null = null;
   private fireHandler: TurretFireHandler | null = null;
+  private turretBuffProvider: ((x: number, y: number) => TurretBuff | null) | null = null;
   private nextFireAt = new Map<AutomatedTurretId, number>();
 
   constructor(
@@ -62,6 +64,14 @@ export class TurretSystem {
 
   setFireHandler(handler: TurretFireHandler | null): void {
     this.fireHandler = handler;
+  }
+
+  /**
+   * Ortsbezogener Turmbuff (derzeit der Ueberladungskern). Bewusst positionsbasiert, damit
+   * platzierte Konstruktionen, Fliegenpilze und Basistuerme ohne Sonderfall profitieren.
+   */
+  setTurretBuffProvider(provider: ((x: number, y: number) => TurretBuff | null) | null): void {
+    this.turretBuffProvider = provider;
   }
 
   hostUpdate(
@@ -100,12 +110,15 @@ export class TurretSystem {
       this.turretAngleUpdater?.(turret.id, angle);
 
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
-      this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
+      const buff = this.turretBuffProvider?.(turretX, turretY) ?? null;
+      const fireRateMultiplier = Math.max(0.01, buff?.fireRateMultiplier ?? 1);
+      const damageMultiplier = buff?.damageMultiplier ?? 1;
+      this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown / fireRateMultiplier));
 
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
-      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, 1, rangeFactor);
+      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, damageMultiplier, rangeFactor);
       if ((turret.secondProjectileDamageFactor ?? 0) > 0) {
         const secondTarget = this.findNearestTarget(
           turret,
@@ -117,7 +130,7 @@ export class TurretSystem {
         );
         if (secondTarget) {
           const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
-          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, turret.secondProjectileDamageFactor, rangeFactor);
+          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier, rangeFactor);
         }
       }
     }

@@ -7,7 +7,7 @@ import {
 } from '../config';
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
-import { InspectorToolRadialMenu } from '../ui/InspectorToolRadialMenu';
+import { InspectorToolRadialMenu, type InspectorRadialSelection } from '../ui/InspectorToolRadialMenu';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
@@ -44,6 +44,7 @@ export class InputSystem {
   private keyShift!: Phaser.Input.Keyboard.Key;
   private keyE!:     Phaser.Input.Keyboard.Key;
   private keyQ!:     Phaser.Input.Keyboard.Key;
+  private keyR!:     Phaser.Input.Keyboard.Key;
   private keyB!:     Phaser.Input.Keyboard.Key;
   private keyN!:     Phaser.Input.Keyboard.Key;
   private constructionKeys: Phaser.Input.Keyboard.Key[] = [];
@@ -91,9 +92,12 @@ export class InputSystem {
   private inspectorModeProvider: (() => boolean) | null = null;
   private inspectorUtilityOverrideProvider: (() => boolean) | null = null;
   private inspectorRadialMenu: InspectorToolRadialMenu | null = null;
-  private inspectorRmbStartedAt = 0;
-  private inspectorRmbWasBuildCancel = false;
   private inspectorConstructionPlacementActive = false;
+  /** Rueckbau ist eine reine Client-Auswahl und wandert nie in das persistierte Loadout. */
+  private inspectorDismantleSelected = false;
+  private inspectorDismantlePlacementActive = false;
+  private inspectorGetUsedCapacity: (() => number) | null = null;
+  private getDismantlePreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
 
   // Audio
   private audioSystem: GameAudioSystem | null = null;
@@ -136,6 +140,7 @@ export class InputSystem {
     this.keyShift = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.keyE     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E, false);
     this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
+    this.keyR     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.R, false);
     this.keyB     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B, false);
     this.keyN     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N, false);
     this.constructionKeys = [
@@ -176,12 +181,16 @@ export class InputSystem {
     setSelected: (tool: LoadoutToolRef) => void,
     isInspectorMode?: () => boolean,
     isUtilityOverrideActive?: () => boolean,
+    getUsedCapacity?: () => number,
+    getDismantlePreview?: () => UtilityPlacementPreviewState | undefined,
   ): void {
     this.inspectorGetTools = getTools;
     this.inspectorGetSelectedTool = getSelected;
     this.inspectorSetSelectedTool = setSelected;
     this.inspectorModeProvider = isInspectorMode ?? null;
     this.inspectorUtilityOverrideProvider = isUtilityOverrideActive ?? null;
+    this.inspectorGetUsedCapacity = getUsedCapacity ?? null;
+    this.getDismantlePreviewProvider = getDismantlePreview ?? null;
   }
 
   setupConstructionProviders(
@@ -205,11 +214,31 @@ export class InputSystem {
   }
 
   private getSelectedInspectorTool(): LoadoutToolRef | null {
-    return this.inspectorGetSelectedTool?.() ?? null;
+    return this.inspectorDismantleSelected ? null : (this.inspectorGetSelectedTool?.() ?? null);
   }
 
   getSelectedInspectorToolForHud(): LoadoutToolRef | null {
     return this.getSelectedInspectorTool();
+  }
+
+  /** Ist aktuell der Rueckbau statt eines Werkzeugs im Rad gewaehlt? */
+  isInspectorDismantleSelected(): boolean {
+    return this.isInspectorMode() && this.inspectorDismantleSelected;
+  }
+
+  private getSelectedInspectorRadialSelection(): InspectorRadialSelection | null {
+    if (this.inspectorDismantleSelected) return { kind: 'dismantle' };
+    const tool = this.inspectorGetSelectedTool?.() ?? null;
+    return tool ? { kind: 'tool', tool } : null;
+  }
+
+  private applyInspectorRadialSelection(selection: InspectorRadialSelection): void {
+    if (selection.kind === 'dismantle') {
+      this.inspectorDismantleSelected = true;
+      return;
+    }
+    this.inspectorDismantleSelected = false;
+    this.inspectorSetSelectedTool?.(selection.tool);
   }
 
   private getInspectorUtilityParams(): LoadoutUseParams | undefined {
@@ -237,7 +266,14 @@ export class InputSystem {
       && !this.isInspectorUtilityOverrideActive();
   }
 
+  isInspectorDismantlePlacementActive(): boolean {
+    return this.isInspectorMode()
+      && this.inspectorDismantlePlacementActive
+      && !this.isInspectorUtilityOverrideActive();
+  }
+
   getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
+    if (this.isInspectorDismantlePlacementActive()) return this.getDismantlePreviewProvider?.();
     if (this.isInspectorMode() && !this.isInspectorConstructionPlacementActive()) return undefined;
     const inspectorTool = this.getSelectedInspectorTool();
     if (inspectorTool?.kind === 'construction') {
@@ -374,8 +410,8 @@ export class InputSystem {
       this.tunnelPlacementAnchor = null;
       this.placementPreviewState = null;
       this.inspectorConstructionPlacementActive = false;
+      this.inspectorDismantlePlacementActive = false;
       this.inspectorRadialMenu?.close();
-      this.inspectorRmbWasBuildCancel = false;
       this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
       this.prevRightPointerDown = false;
@@ -573,8 +609,8 @@ export class InputSystem {
     const aimTarget = this.updateAimFromPointer();
     const selectedInspectorTool = this.getSelectedInspectorTool();
     const constructionPreview = this.isInspectorMode()
-      && this.isInspectorConstructionPlacementActive()
-      && selectedInspectorTool?.kind === 'construction'
+      && ((this.isInspectorConstructionPlacementActive() && selectedInspectorTool?.kind === 'construction')
+        || this.isInspectorDismantlePlacementActive())
       ? this.getConstructionPlacementPreviewState()
       : undefined;
     if (constructionPreview) this.syncPlacementPreviewState(constructionPreview);
@@ -660,44 +696,61 @@ export class InputSystem {
       || this.ultimatePlacementActive;
     const ultimateCfg = this.getLocalUltimateConfig?.();
 
-    // Inspector: RMB is selection. During placement it cancels immediately; only a
-    // continued hold opens the radial after the short-cancel threshold.
+    // Inspector: R haelt das Auswahlrad offen, RMB gehoert der Waffe 2. Ein laufender
+    // Bau- oder Rueckbaumodus wird von beiden Eingaben zuerst abgebrochen.
     if (this.isInspectorMode()) {
-      const tools = this.getInspectorTools();
-      if (rightInputStarted) {
-        const wasPlacement = this.utilityPlacementActive
-          || this.utilityTargetingActive
-          || this.utilityHoldActive
-          || this.inspectorConstructionPlacementActive;
-        if (wasPlacement) {
-          this.cancelUtilityInteraction();
-        }
-        this.inspectorRmbStartedAt = now;
-        this.inspectorRmbWasBuildCancel = wasPlacement;
-        if (!wasPlacement) {
-          this.inspectorRadialMenu?.open(pointer.x, pointer.y, tools, this.getSelectedInspectorTool());
-        }
+      const inspectorModeActive = this.utilityPlacementActive
+        || this.utilityTargetingActive
+        || this.utilityHoldActive
+        || this.inspectorConstructionPlacementActive
+        || this.inspectorDismantlePlacementActive;
+      if (rightInputStarted && inspectorModeActive) {
+        this.cancelUtilityInteraction();
+        this.prevRightPointerDown = rightPointerDown;
+        this.suppressWeapon1UntilLeftRelease = false;
+        return;
       }
-      if (rightPointerDown && this.inspectorRmbWasBuildCancel && !this.inspectorRadialMenu?.isOpen
-        && now - this.inspectorRmbStartedAt >= 200) {
-        this.inspectorRadialMenu?.open(pointer.downX, pointer.downY, tools, this.getSelectedInspectorTool());
+      if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.inspectorRadialMenu?.isOpen) {
+        if (inspectorModeActive) this.cancelUtilityInteraction();
+        this.inspectorRadialMenu?.open(
+          pointer.x,
+          pointer.y,
+          this.getInspectorTools(),
+          this.getSelectedInspectorRadialSelection(),
+          this.inspectorGetUsedCapacity?.() ?? 0,
+        );
       }
       if (this.inspectorRadialMenu?.isOpen) {
-        if (rightPointerDown) {
+        if (this.keyR.isDown) {
           this.inspectorRadialMenu.update(pointer.x, pointer.y);
         } else {
           const selected = this.inspectorRadialMenu.close(pointer.x, pointer.y);
-          if (selected) this.inspectorSetSelectedTool?.(selected);
-          this.inspectorRmbWasBuildCancel = false;
+          if (selected) this.applyInspectorRadialSelection(selected);
         }
         this.prevRightPointerDown = rightPointerDown;
         return;
       }
-      if (rightPointerDown) {
-        this.prevRightPointerDown = rightPointerDown;
+    }
+
+    if (this.isInspectorMode() && this.inspectorDismantlePlacementActive) {
+      const preview = constructionPreview;
+      this.syncPlacementPreviewState(preview);
+      if (!preview) {
+        this.cancelInspectorConstructionPlacement();
         return;
       }
-      if (!rightPointerDown && !rightInputStarted) this.inspectorRmbWasBuildCancel = false;
+      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+        if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
+        if (preview.isValid) {
+          this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY, {
+            inputStarted: true,
+            dismantle: true,
+          });
+        }
+        this.cancelInspectorConstructionPlacement();
+        return;
+      }
+      return;
     }
 
     if (this.isInspectorMode() && this.inspectorConstructionPlacementActive) {
@@ -864,10 +917,10 @@ export class InputSystem {
     } else if (!weaponsBlocked) {
       // RMB → weapon2: Scope-Waffen (z.B. AWP) nutzen fire-on-release Mechanik,
       // andere Waffen feuern weiterhin per Dauerfeuer.
-      const scopeCfg = constructionPreview ? undefined : this.getWeapon2Config?.()?.scopeConfig;
-      if (constructionPreview) {
-        // Inspector constructions are started with E; RMB belongs to the radial menu.
-      } else if (scopeCfg) {
+      // Auch beim Inspector gehoert RMB der Waffe 2 (Adrenalinfaehigkeit); ein laufender
+      // Bau- oder Rueckbaumodus faengt den Rechtsklick bereits weiter oben ab.
+      const scopeCfg = this.getWeapon2Config?.()?.scopeConfig;
+      if (scopeCfg) {
         if (rightPointerDown) {
           // Scope-In: Fortschritt berechnen, nur holdSpeedFactor aktiv halten (kein Schuss)
           if (rightInputStarted) {
@@ -908,6 +961,12 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (this.isInspectorDismantleSelected() && !this.isInspectorUtilityOverrideActive()) {
+        this.cancelUtilityInteraction();
+        this.inspectorDismantlePlacementActive = true;
+        this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
+        return;
+      }
       const inspectorTool = this.getSelectedInspectorTool();
       if (this.isInspectorMode() && !inspectorTool) return;
       if (this.isInspectorMode()
@@ -1203,6 +1262,7 @@ export class InputSystem {
 
   private cancelInspectorConstructionPlacement(): void {
     this.inspectorConstructionPlacementActive = false;
+    this.inspectorDismantlePlacementActive = false;
     this.placementPreviewState = null;
   }
 

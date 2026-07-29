@@ -10,7 +10,7 @@ import {
   levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
 import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot } from '../src/types';
-import { resolveLoadoutSelectionIds } from '../src/loadout/LoadoutRules';
+import { isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds } from '../src/loadout/LoadoutRules';
 import { RepairDroneSystem } from '../src/systems/RepairDroneSystem';
 import type { SyncedPlaceableRock } from '../src/types';
 
@@ -20,7 +20,7 @@ function commit(
 ): LoadoutCommitSnapshot {
   return {
     weapon1: 'GLOCK',
-    weapon2: classId === 'inspector_gadachs' ? null : 'P90',
+    weapon2: classId === 'inspector_gadachs' ? 'OVERCHARGE_CORE' : 'P90',
     utility: 'FELSEN',
     ultimate: 'GAUSS',
     coopDefenseClassId: classId,
@@ -39,6 +39,20 @@ describe('coop-defense classes', () => {
     expect(snapshot.weapon2).not.toBeNull();
     expect(snapshot.coopDefenseClassId).toBeNull();
     expect(snapshot.coopDefenseProfile).toBeNull();
+  });
+
+  it('commits the Inspector weapon instead of falling back to the P90', () => {
+    const snapshot = resolveLoadoutSelectionIds(
+      undefined,
+      'coop_defense',
+      buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs'),
+      'inspector_gadachs',
+    );
+
+    expect(snapshot.weapon2).toBe('OVERCHARGE_CORE');
+    expect(isCoopDefenseReadyLoadoutComplete(snapshot)).toBe(true);
+    expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: 'P90' })).toBe(false);
+    expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: null })).toBe(false);
   });
 
   it('applies Nukem damage, deterministic critical hits and movement speed', () => {
@@ -65,7 +79,7 @@ describe('coop-defense classes', () => {
     expect(system.getResolvedStat('steel', 'player.maxArmor', 100)).toBe(200);
   });
 
-  it('uses the Inspector adrenaline baseline and class-specific upgrade tree', () => {
+  it('uses the standard adrenaline baseline and the class-specific upgrade tree', () => {
     const system = new CoopDefensePlayerModifierSystem();
     const profile = levelUpCoopDefenseUpgrade(
       buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs'),
@@ -76,19 +90,38 @@ describe('coop-defense classes', () => {
     )!;
     system.syncPlayer('inspector', commit('inspector_gadachs', profile));
 
-    expect(system.getResolvedStat('inspector', 'player.adrenalineRegenRate', 5)).toBe(0.5);
+    // Der Inspector gewinnt Adrenalin wie jede andere Klasse; begrenzend ist die Baukapazitaet.
+    expect(system.getResolvedStat('inspector', 'player.adrenalineRegenRate', 5)).toBe(5);
     expect(system.getCommittedProfile('inspector')?.upgrades.inspector_repair_drone.level).toBe(1);
     const categories = getCoopDefenseUpgradeCategories('inspector_gadachs');
     const generalIds = categories.find(category => category.id === 'general')!.upgrades.map(upgrade => upgrade.id);
     const weapon2Ids = categories.find(category => category.id === 'weapon2')!.upgrades.map(upgrade => upgrade.id);
+    const constructionIds = categories.find(category => category.id === 'construction')!.upgrades.map(upgrade => upgrade.id);
     expect(generalIds).not.toContain('run_speed');
     expect(generalIds).not.toContain('burrow_speed');
     expect(generalIds).not.toContain('burrow_cost');
+    // Waffe 2 traegt nur noch die Adrenalinfaehigkeit, die Konstrukte stehen in ihrer
+    // eigenen Kategorie.
     expect(weapon2Ids).toEqual([
-      'unlock_rocket_turret',
-      'unlock_machine_gun_turret',
-      'unlock_flame_turret',
+      'unlock_overcharge_core',
+      'overcharge_radius',
+      'overcharge_duration',
+      'overcharge_power',
+      'overcharge_cost',
     ]);
+    expect(constructionIds).toContain('unlock_rocket_turret');
+    expect(constructionIds).toContain('unlock_felsbau');
+    expect(constructionIds).toContain('unlock_fliegenpilz');
+  });
+
+  it('keeps constructions and the overcharge core out of the other classes', () => {
+    for (const classId of ['dachs_nukem', 'dachs_of_steel'] as const) {
+      const categories = getCoopDefenseUpgradeCategories(classId);
+      expect(categories.find(category => category.id === 'construction')).toBeUndefined();
+      const weapon2Ids = categories.find(category => category.id === 'weapon2')!.upgrades.map(upgrade => upgrade.id);
+      expect(weapon2Ids).not.toContain('unlock_overcharge_core');
+      expect(weapon2Ids).toContain('unlock_p90');
+    }
   });
 });
 

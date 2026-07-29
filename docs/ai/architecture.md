@@ -70,6 +70,12 @@ Vollbild läuft ausschließlich über `src/ui/fullscreen.ts`; der ScaleManager w
 - Die Lobby-Musik ist ein bewusst verzögertes Scene-Lifetime-Asset: `preloadAllAudio()` lässt `music_lobby` aus, solange Musik beim Standardwert `0` bleibt. Erst ein positiver Musikregler lädt den Track über `GameAudioSystem`; das Optionen-Overlay visualisiert lediglich dessen veröffentlichten Ladezustand.
 - Phaser lässt sich in den Vitest-Tests nicht importieren: `phaser.esm.js` greift beim Modul-Load auf das DOM zu und es gibt kein jsdom-Setup. Module, die testbar bleiben sollen, importieren Phaser deshalb nur als Typ (`import type * as Phaser`) und rufen Phaser-Funktionen ausschließlich über übergebene Objekte auf – siehe `src/effects/LightOccluderIndex.ts`.
 
+## Testdesign und Balancing
+
+Tests sichern Verhalten, Systemgrenzen und langlebige Invarianten ab, nicht die momentanen Tuningwerte. Schadenswerte, Lebenspunkte, Cooldowns, Reichweiten, Rundendauern, Spawnzeitpunkte und vergleichbare Balancingparameter dürfen deshalb nicht als duplizierte Zahlenliterale in Tests festgeschrieben werden. Solche Spiegeltests liefern keinen zusätzlichen Vertrag und werden bei einer beabsichtigten Balanceänderung grundlos rot.
+
+Wenn konfigurationsgetriebenes Verhalten geprüft wird, leitet der Test erwartete Zeitpunkte und Ergebnisse aus der geladenen Konfiguration ab und prüft deren Weitergabe, Berechnung, Grenzen und Reihenfolge. Absolute Zahlen sind nur dann angemessen, wenn die Zahl selbst ein technischer oder fachlich ausdrücklich fixierter Vertrag ist, etwa eine Protokollversion, ein Geometrieformat oder eine bewusst eingefrorene Referenz. Eine bloße aktuelle Balanceentscheidung ist kein solcher Vertrag.
+
 ## Wichtige Referenzpfade
 
 - Boot: `src/main.ts`

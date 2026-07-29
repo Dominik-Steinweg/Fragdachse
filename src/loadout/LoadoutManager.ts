@@ -9,7 +9,8 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { GrenadeEffectConfig, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
+import type { ConstructionId, GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
+import { COOP_DEFENSE_BUILD_COOLDOWN_MS } from '../config/coopDefenseConstructions';
 import type {
   AirstrikeUltimateConfig,
   BfgUtilityConfig,
@@ -19,6 +20,7 @@ import type {
   GaussUltimateConfig,
   LeafBlowerWeaponFireConfig,
   NukeUtilityConfig,
+  OverchargeCoreWeaponFireConfig,
   PlaceableUtilityConfig,
   StinkCloudUtilityConfig,
   TaserUtilityConfig,
@@ -122,6 +124,8 @@ export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
   /** Inspector utilities keep an independent cooldown state per player and utility id. */
   private inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
+  /** Constructions bypass GenericUtility, so their build cooldown is tracked separately. */
+  private inspectorConstructionCooldowns = new Map<string, Map<ConstructionId, number>>();
   private ultimateStates    = new Map<string, UltimateState>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
@@ -188,6 +192,7 @@ export class LoadoutManager {
       ultimate: new GenericUltimate(ultCfg),
     });
     this.inspectorUtilities.set(playerId, new Map());
+    this.inspectorConstructionCooldowns.set(playerId, new Map());
     this.ultimateStates.set(playerId, {
       active:    false,
       startTime: 0,
@@ -241,6 +246,7 @@ export class LoadoutManager {
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
     this.inspectorUtilities.delete(playerId);
+    this.inspectorConstructionCooldowns.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.savedUtilities.delete(playerId);
@@ -528,9 +534,9 @@ export class LoadoutManager {
 
   /**
    * Host-authoritative dispatch for an Inspector utility. Unlike the regular
-   * utility slot, every Inspector utility owns a separate fixed 1s cooldown.
-   * Resource consumption is deliberately performed only after the activation
-   * handler reports success.
+   * utility slot, every Inspector utility owns its own cooldown, taken from the
+   * utility's own config. Inspector utilities never cost adrenaline; constructs
+   * are limited by the fixed construction capacity instead.
    */
   useInspectorUtility(
     playerId: string,
@@ -546,10 +552,7 @@ export class LoadoutManager {
     if (!loadout || !player) return { ok: false, reason: 'invalid' };
     if (this.actionBlockedChecker?.(playerId, 'utility')) return { ok: false, reason: 'blocked' };
 
-    const effectiveConfig: UtilityConfig = {
-      ...this.resolveUtilityConfig(playerId, config),
-      cooldown: 1000,
-    };
+    const effectiveConfig: UtilityConfig = this.resolveUtilityConfig(playerId, config);
     const utilities = this.inspectorUtilities.get(playerId) ?? new Map<string, GenericUtility>();
     this.inspectorUtilities.set(playerId, utilities);
     let utility = utilities.get(effectiveConfig.id);
@@ -560,11 +563,7 @@ export class LoadoutManager {
       utilities.set(effectiveConfig.id, utility);
     }
 
-    const cost = effectiveConfig.inspectorAdrenalineCost ?? 0;
     if (utility.isOnCooldown(now)) return { ok: false, reason: 'cooldown' };
-    if (cost > 0 && this.resourceSystem.getAdrenaline(playerId) < this.resourceSystem.resolveAdrenalineCost(playerId, cost)) {
-      return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
-    }
 
     // Inspector actions are host-authoritative: the client may submit an aim
     // target, but never its own origin for range or spawn validation.
@@ -572,10 +571,22 @@ export class LoadoutManager {
     const y = player.sprite.y;
     const didUse = this.useUtility(utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
     if (!didUse) return { ok: false, reason: 'blocked' };
-    if (cost > 0) {
-      this.resourceSystem.drainAdrenaline(playerId, this.resourceSystem.resolveAdrenalineCost(playerId, cost));
-    }
     return this.okResult;
+  }
+
+  // ── Bau-Cooldowns der Konstruktionen ──────────────────────────────────────
+  // Konstruktionen laufen nicht ueber `GenericUtility`, brauchen aber denselben
+  // einheitlichen Bau-Cooldown wie die platzierbaren Utilities.
+
+  isConstructionOnCooldown(playerId: string, constructionId: ConstructionId, now: number): boolean {
+    const readyAt = this.inspectorConstructionCooldowns.get(playerId)?.get(constructionId) ?? 0;
+    return now < readyAt;
+  }
+
+  markConstructionUsed(playerId: string, constructionId: ConstructionId, now: number): void {
+    const perPlayer = this.inspectorConstructionCooldowns.get(playerId) ?? new Map<ConstructionId, number>();
+    this.inspectorConstructionCooldowns.set(playerId, perPlayer);
+    perPlayer.set(constructionId, now + COOP_DEFENSE_BUILD_COOLDOWN_MS);
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
@@ -1850,6 +1861,20 @@ export class LoadoutManager {
       case 'leaf_blower':
         return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
 
+      case 'overcharge_core':
+        return this.fireOverchargeCoreWeapon(
+          config,
+          config.fire,
+          x,
+          y,
+          angle,
+          targetX,
+          targetY,
+          playerId,
+          playerColor,
+          sourceSlot,
+        );
+
       case 'tesla_dome':
       case 'healing_aura':
       case 'energy_shield':
@@ -1858,6 +1883,66 @@ export class LoadoutManager {
       default:
         return false;
     }
+  }
+
+  /**
+   * Feuert den Ueberladungskern wie eine langsame Rakete bis zum Cursor oder zur
+   * maximalen Reichweite. Die spezielle Explosionsnutzlast wird erst am Einschlag
+   * vom HostUpdateCoordinator in ein Feld umgewandelt.
+   */
+  private fireOverchargeCoreWeapon(
+    config: WeaponConfig,
+    fireConfig: OverchargeCoreWeaponFireConfig,
+    x: number,
+    y: number,
+    fallbackAngle: number,
+    targetX: number,
+    targetY: number,
+    playerId: string,
+    playerColor: number,
+    sourceSlot?: LoadoutSlot,
+  ): boolean {
+    const dx = targetX - x;
+    const dy = targetY - y;
+    const cursorDistance = Math.hypot(dx, dy);
+    const travelDistance = Math.min(config.range, cursorDistance);
+    const angle = cursorDistance > 0.001 ? Math.atan2(dy, dx) : fallbackAngle;
+    const lifetime = (travelDistance / fireConfig.projectileSpeed) * 1000;
+
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed: fireConfig.projectileSpeed,
+      size: fireConfig.projectileSize,
+      damage: 0,
+      color: config.projectileColor ?? fireConfig.fieldColor,
+      ownerColor: playerColor,
+      projectileVisualScale: config.projectileVisualScale,
+      smokeTrailColor: config.rocketSmokeTrailColor ?? fireConfig.fieldColor,
+      lifetime,
+      remainingRangePx: travelDistance,
+      maxBounces: 0,
+      isGrenade: false,
+      adrenalinGain: 0,
+      weaponName: config.displayName,
+      explosion: {
+        radius: fireConfig.radius,
+        maxDamage: 0,
+        knockback: 0,
+        selfDamageMult: 0,
+        rockDamageMult: 0,
+        trainDamageMult: 0,
+        color: fireConfig.fieldColor,
+        overchargeField: {
+          durationMs: fireConfig.durationMs,
+          fireRateMultiplier: fireConfig.fireRateMultiplier,
+          damageMultiplier: fireConfig.damageMultiplier,
+          color: fireConfig.fieldColor,
+        },
+      },
+      projectileStyle: config.projectileStyle,
+      sourceSlot: sourceSlot ?? 'weapon2',
+      shotAudioKey: config.shotAudio?.successKey,
+    });
+    return true;
   }
 
   private createWeapon(config: WeaponConfig): BaseWeapon {

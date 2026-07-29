@@ -95,14 +95,14 @@ const ACTION_BTN_GAP = 40;
 const ACTION_BTN_Y = CY + PANEL_H / 2 - 60;
 const FOOTER_Y = CY + PANEL_H / 2 - 22;
 
-const CLASS_ROW_Y = POINTS_Y + 52;
-const CLASS_BUTTON_W = 210;
-const CLASS_BUTTON_H = 30;
-const CLASS_BUTTON_GAP = 14;
+const CLASS_ROW_Y = POINTS_Y + 62;
+const CLASS_BUTTON_W = 250;
+const CLASS_BUTTON_H = 52;
+const CLASS_BUTTON_GAP = 20;
 // Loadout-Block: Jede Kategorie bekommt eine Spaltenkarte, die Slot und Tab zusammenfasst.
 // Deshalb liegt die Kartenoberkante ueber der Slot-Zeile und die Unterkante unter den Tabs.
-const LOADOUT_LABEL_Y = CLASS_ROW_Y + 32;
-const LOADOUT_CARD_TOP = CLASS_ROW_Y + 46;
+const LOADOUT_LABEL_Y = CLASS_ROW_Y + 42;
+const LOADOUT_CARD_TOP = CLASS_ROW_Y + 56;
 const LOADOUT_SLOT_SIZE = 56;
 const LOADOUT_SLOT_GAP = 8;
 const LOADOUT_ROW_Y = LOADOUT_CARD_TOP + 12 + LOADOUT_SLOT_SIZE / 2;
@@ -168,6 +168,34 @@ type PlacedNode = {
   y: number;
 };
 
+/**
+ * Eigene Farbe je Klasse: Rot fuer den Schadensausteiler, Blau fuer den Panzer, Gold fuer den
+ * Ingenieur – letzteres passt zu seinen goldenen Utility-Slots.
+ */
+const CLASS_ACCENT_COLORS: Record<CoopDefenseClassId, number> = {
+  dachs_nukem: COLORS.RED_2,
+  dachs_of_steel: COLORS.BLUE_2,
+  inspector_gadachs: COLORS.GOLD_2,
+};
+
+type LoadoutSlotParams = {
+  centerX: number;
+  accentColor: number;
+  presentation: LoadoutItemPresentation | null;
+  tooltipTitle: string;
+  tooltipBody: () => string;
+  onOpenPicker: (anchorX: number) => void;
+};
+
+/** Eine Kategorie-Spalte des Loadout-Blocks: Karte plus die darin liegenden Slots. */
+type LoadoutColumn = {
+  centerX: number;
+  width: number;
+  accentColor: number;
+  active: boolean;
+  slots: LoadoutSlotParams[];
+};
+
 /** Was ein Node im Baum ins Loadout uebernehmen kann. */
 type NodeEquipTarget =
   | { kind: 'tool'; tool: LoadoutToolRef }
@@ -226,6 +254,18 @@ const CATEGORY_VISUALS: Record<CoopDefenseUpgradeCategorySnapshot['id'], Categor
     title: COLORS.GOLD_1,
     connector: COLORS.GOLD_2,
   },
+  // Konstruktion teilt sich die Slots mit Utility und bleibt deshalb in derselben
+  // Goldfamilie, nur eine Stufe dunkler abgesetzt.
+  construction: {
+    laneFill: COLORS.BROWN_5,
+    laneAlpha: 0.5,
+    divider: COLORS.GOLD_3,
+    nodeBase: COLORS.BROWN_4,
+    nodeStroke: COLORS.GOLD_3,
+    nodeActive: COLORS.GOLD_2,
+    title: COLORS.GOLD_1,
+    connector: COLORS.GOLD_3,
+  },
   ultimate: {
     laneFill: COLORS.RED_6,
     laneAlpha: 0.52,
@@ -253,7 +293,7 @@ export class CoopDefenseUpgradesOverlay {
   private tabsContainer: Phaser.GameObjects.Container | null = null;
   private classContainer: Phaser.GameObjects.Container | null = null;
   private loadoutContainer: Phaser.GameObjects.Container | null = null;
-  private loadoutHeaderText: Phaser.GameObjects.Text | null = null;
+  private loadoutHintText: Phaser.GameObjects.Text | null = null;
   private loadoutHintTimer: Phaser.Time.TimerEvent | null = null;
   private picker: LoadoutSlotPicker | null = null;
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
@@ -274,6 +314,8 @@ export class CoopDefenseUpgradesOverlay {
   private decorationTweens: Phaser.Tweens.Tween[] = [];
   private tabGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
   private tabTweens: Phaser.Tweens.Tween[] = [];
+  private classGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
+  private classTweens: Phaser.Tweens.Tween[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -304,7 +346,7 @@ export class CoopDefenseUpgradesOverlay {
     this.tabsContainer = null;
     this.classContainer = null;
     this.loadoutContainer = null;
-    this.loadoutHeaderText = null;
+    this.loadoutHintText = null;
     this.upgradesContainer = null;
     this.tooltipContainer = null;
     this.tooltipBackground = null;
@@ -593,6 +635,7 @@ export class CoopDefenseUpgradesOverlay {
 
     this.clearNodeDecorations();
     this.clearTabDecorations();
+    this.clearClassDecorations();
     this.xpBarEffect?.stop();
 
     this.scene.tweens.add({
@@ -625,6 +668,7 @@ export class CoopDefenseUpgradesOverlay {
     }
     this.clearNodeDecorations();
     this.clearTabDecorations();
+    this.clearClassDecorations();
     this.xpBarEffect?.destroy();
     this.xpBarEffect = null;
     this.container?.destroy(true);
@@ -654,38 +698,77 @@ export class CoopDefenseUpgradesOverlay {
     this.hideTooltip();
     this.picker?.close();
     const progress = this.getProgress();
+    // Die Spaltenkarte der offenen Kategorie tritt hervor und muss deshalb mitziehen.
+    this.renderLoadoutRow(progress);
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
   }
 
+  private clearClassDecorations(): void {
+    for (const tween of this.classTweens) tween.destroy();
+    this.classTweens = [];
+    for (const { target, glow } of this.classGlows) {
+      if (target.active) removeExternalFx(target, glow);
+    }
+    this.classGlows = [];
+  }
+
+  /**
+   * Die Klassenwahl ist die folgenreichste Entscheidung im Overlay und wird deshalb wie ein
+   * Kartensatz gezeichnet: eigene Klassenfarbe, Rolle als zweite Zeile und ein atmender Glow
+   * auf der gewaehlten Karte – dieselbe Formsprache wie Kategorie-Tabs und Loadout-Karten.
+   */
   private renderClasses(activeClassId: CoopDefenseClassId): void {
     if (!this.classContainer) return;
+    this.clearClassDecorations();
     this.classContainer.removeAll(true);
+
     const totalWidth = COOP_DEFENSE_CLASS_IDS.length * CLASS_BUTTON_W
       + (COOP_DEFENSE_CLASS_IDS.length - 1) * CLASS_BUTTON_GAP;
     const startX = CX - totalWidth / 2;
 
     COOP_DEFENSE_CLASS_IDS.forEach((classId, index) => {
       const definition = COOP_DEFENSE_CLASS_DEFINITIONS[classId];
+      const accentColor = CLASS_ACCENT_COLORS[classId];
       const active = classId === activeClassId;
       const centerX = startX + CLASS_BUTTON_W / 2 + index * (CLASS_BUTTON_W + CLASS_BUTTON_GAP);
-      const background = this.scene.add.rectangle(
-        centerX,
-        CLASS_ROW_Y,
-        CLASS_BUTTON_W,
-        CLASS_BUTTON_H,
-        active ? COLORS.GOLD_5 : COLORS.GREY_8,
-        active ? 0.98 : 0.82,
-      )
-        .setStrokeStyle(active ? 2 : 1, active ? COLORS.GOLD_1 : COLORS.GREY_5)
+
+      const background = this.scene.add.image(centerX, CLASS_ROW_Y, this.ensureClassButtonTexture(accentColor, active))
         .setScrollFactor(0)
+        .setAlpha(active ? 1 : 0.82)
         .setInteractive({ useHandCursor: true });
-      const label = this.scene.add.text(centerX, CLASS_ROW_Y, definition.displayName, {
-        fontSize: '13px',
+
+      // Aktiv: dunkler Text auf lebendiger Klassenfarbe; passiv: heller Text auf gedimmtem Grund.
+      const name = this.scene.add.text(0, -10, definition.displayName, {
+        fontSize: '17px',
         fontFamily: 'monospace',
         fontStyle: 'bold',
-        color: toCssColor(active ? COLORS.GOLD_1 : COLORS.GREY_2),
+        color: toCssColor(active ? COLORS.GREY_10 : COLORS.GREY_1),
       }).setOrigin(0.5).setScrollFactor(0);
+      const role = this.scene.add.text(0, 12, definition.role.toUpperCase(), {
+        fontSize: '11px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(active ? COLORS.GREY_9 : lerpColor(COLORS.GREY_3, accentColor, 0.5)),
+      }).setOrigin(0.5).setScrollFactor(0);
+      const labels = this.scene.add.container(centerX, CLASS_ROW_Y, [name, role]).setScrollFactor(0);
+
+      if (active) {
+        const glow = addExternalGlow(background, accentColor, 1, 0, false, 0.1, 8);
+        if (glow) {
+          this.classGlows.push({ target: background, glow });
+          this.classTweens.push(this.scene.tweens.add({
+            targets: glow,
+            outerStrength: 2.2,
+            duration: 2000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          }));
+        }
+      }
+
+      attachHoverEffect(this.scene, background, labels);
       background.on('pointerdown', () => {
         if (classId === this.getProgress().classId) return;
         this.onSelectClass(classId);
@@ -693,13 +776,6 @@ export class CoopDefenseUpgradesOverlay {
         this.requestRefresh();
       });
       background.on('pointerover', (pointer: Phaser.Input.Pointer) => {
-        this.scene.tweens.add({
-          targets: [background, label],
-          scaleX: 1.04,
-          scaleY: 1.04,
-          duration: 90,
-          ease: 'Sine.easeOut',
-        });
         this.showTooltip(
           definition.displayName,
           [definition.role, '', definition.description, ...definition.tooltipLines].join('\n'),
@@ -707,17 +783,40 @@ export class CoopDefenseUpgradesOverlay {
         );
       });
       background.on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateTooltipPosition(pointer));
-      background.on('pointerout', () => {
-        this.hideTooltip();
-        this.scene.tweens.add({
-          targets: [background, label],
-          scaleX: 1,
-          scaleY: 1,
-          duration: 110,
-          ease: 'Sine.easeOut',
-        });
+      background.on('pointerout', () => this.hideTooltip());
+
+      this.classContainer!.add([background, labels]);
+    });
+  }
+
+  private ensureClassButtonTexture(accentColor: number, isActive: boolean): string {
+    if (isActive) {
+      return this.ensureRoundedTexture({
+        key: `_ccdclass_${accentColor.toString(16)}_on`,
+        w: CLASS_BUTTON_W,
+        h: CLASS_BUTTON_H,
+        radius: 12,
+        topColor: lerpColor(accentColor, 0xffffff, 0.22),
+        bottomColor: lerpColor(accentColor, 0x000000, 0.34),
+        fillAlpha: 0.97,
+        strokeColor: lerpColor(accentColor, 0xffffff, 0.3),
+        strokeAlpha: 0.95,
+        strokeWidth: 2,
+        highlightAlpha: 0.3,
       });
-      this.classContainer!.add([background, label]);
+    }
+    return this.ensureRoundedTexture({
+      key: `_ccdclass_${accentColor.toString(16)}_off`,
+      w: CLASS_BUTTON_W,
+      h: CLASS_BUTTON_H,
+      radius: 12,
+      topColor: lerpColor(COLORS.GREY_8, accentColor, 0.4),
+      bottomColor: lerpColor(COLORS.GREY_9, accentColor, 0.26),
+      fillAlpha: 0.9,
+      strokeColor: lerpColor(COLORS.GREY_5, accentColor, 0.55),
+      strokeAlpha: 0.75,
+      strokeWidth: 1.5,
+      highlightAlpha: 0.08,
     });
   }
 
@@ -729,97 +828,88 @@ export class CoopDefenseUpgradesOverlay {
   private renderLoadoutRow(progress: CoopDefenseProgressSnapshot): void {
     if (!this.loadoutContainer) return;
     this.loadoutContainer.removeAll(true);
-    this.loadoutHeaderText = null;
 
     const categories = progress.upgradeCategories;
     if (categories.length === 0) return;
 
-    const layout = this.getTabLayout(categories.length);
-    const isInspector = progress.classId === 'inspector_gadachs';
+    // Nur sichtbar, wenn eine Aktion abgelehnt wurde; sonst bleibt der Platz frei.
+    this.loadoutHintText = this.scene.add.text(CX, LOADOUT_LABEL_Y, '', {
+      fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_2),
+    }).setOrigin(0.5).setScrollFactor(0);
+    this.loadoutContainer.add(this.loadoutHintText);
 
-    this.loadoutHeaderText = this.scene.add.text(layout.startX, LOADOUT_LABEL_Y, 'LOADOUT', {
-      fontSize: '12px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
-    }).setOrigin(0, 0.5).setScrollFactor(0);
-    this.loadoutContainer.add(this.loadoutHeaderText);
-
-    const selection = this.getLoadoutSelection();
-    const utilityCategoryIndices: number[] = [];
-    const cards = this.scene.add.graphics().setScrollFactor(0);
-    this.loadoutContainer.add(cards);
-
-    categories.forEach((category, index) => {
-      const accentColor = this.getCategoryVisuals(category.id, progress.classId).connector;
-      if (isInspector && isCoopDefenseToolCategory(category.id, progress.classId)) {
-        utilityCategoryIndices.push(index);
-        return;
-      }
-      // "Allgemein" hat keinen Loadout-Slot; seine Karte beginnt deshalb erst kurz ueber dem Tab.
-      const cardTop = category.id === 'general' ? TAB_TOP - 10 : LOADOUT_CARD_TOP;
-      this.drawCategoryCard(cards, this.getTabCenterX(layout, index), layout.tabW, accentColor, cardTop);
-      if (category.id === 'general') return;
-
-      const slot = category.id as LoadoutSlot;
-      const itemId = selection[slot];
-      this.renderLoadoutSlot({
-        centerX: this.getTabCenterX(layout, index),
-        accentColor,
-        presentation: itemId ? describeLoadoutItem(slot, itemId) : null,
-        tooltipTitle: category.label,
-        tooltipBody: () => this.buildSlotTooltipBody(category.label, itemId ? describeLoadoutItem(slot, itemId) : null),
-        onOpenPicker: (anchorX) => this.openSlotPicker(progress, category.label, slot, anchorX),
-      });
-    });
-
-    if (utilityCategoryIndices.length > 0) {
-      this.renderUtilitySlots(progress, layout, utilityCategoryIndices, cards);
+    const columns = this.buildLoadoutColumns(progress);
+    // Erst alle Karten, dann alle Slots: so liegt keine Karte ueber einem fremden Slot.
+    for (const column of columns) this.renderCategoryCard(column);
+    for (const column of columns) {
+      for (const slot of column.slots) this.renderLoadoutSlot(slot);
     }
   }
 
   /**
-   * Spaltenkarte hinter Slot und Tab. Sie reicht von der Loadout-Zeile bis unter die Tabs,
-   * damit beide als eine Einheit in Kategoriefarbe gelesen werden.
+   * Ordnet jeder Kategorie mit Loadout-Bezug eine Spalte zu. Beim Inspector werden die beiden
+   * gleichwertigen Utility-Kategorien zu einer Spalte mit geteilten Slots zusammengefasst;
+   * "Allgemein" hat kein Loadout und bekommt deshalb gar keine Spalte.
    */
-  private drawCategoryCard(
-    cards: Phaser.GameObjects.Graphics,
-    centerX: number,
-    width: number,
-    accentColor: number,
-    top: number,
-  ): void {
-    const height = TAB_TOP + TAB_H - top;
-    cards.fillStyle(accentColor, 0.14);
-    cards.fillRoundedRect(centerX - width / 2, top, width, height, LOADOUT_CARD_RADIUS);
-    cards.lineStyle(1.5, accentColor, 0.45);
-    cards.strokeRoundedRect(centerX - width / 2, top, width, height, LOADOUT_CARD_RADIUS);
+  private buildLoadoutColumns(progress: CoopDefenseProgressSnapshot): LoadoutColumn[] {
+    const categories = progress.upgradeCategories;
+    const layout = this.getTabLayout(categories.length);
+    const selection = this.getLoadoutSelection();
+    const columns: LoadoutColumn[] = [];
+    const utilityIndices: number[] = [];
+
+    categories.forEach((category, index) => {
+      if (isCoopDefenseToolCategory(category.id, progress.classId)) {
+        utilityIndices.push(index);
+        return;
+      }
+      if (category.id === 'general') return;
+
+      const slot = category.id as LoadoutSlot;
+      const itemId = selection[slot];
+      const accentColor = this.getCategoryVisuals(category.id, progress.classId).connector;
+      const centerX = this.getTabCenterX(layout, index);
+      columns.push({
+        centerX,
+        width: layout.tabW,
+        accentColor,
+        active: index === this.activeCategoryIndex,
+        slots: [{
+          centerX,
+          accentColor,
+          presentation: itemId ? describeLoadoutItem(slot, itemId) : null,
+          tooltipTitle: category.label,
+          tooltipBody: () => this.buildSlotTooltipBody(category.label, itemId ? describeLoadoutItem(slot, itemId) : null),
+          onOpenPicker: (anchorX) => this.openSlotPicker(progress, category.label, slot, anchorX),
+        }],
+      });
+    });
+
+    if (utilityIndices.length > 0) {
+      columns.push(this.buildUtilityColumn(progress, layout, utilityIndices));
+    }
+    return columns;
   }
 
   /** Geteilte Utility-Slots des Inspectors, verteilt ueber beide gleichwertigen Utility-Spalten. */
-  private renderUtilitySlots(
+  private buildUtilityColumn(
     progress: CoopDefenseProgressSnapshot,
     layout: { tabW: number; startX: number },
     categoryIndices: readonly number[],
-    cards: Phaser.GameObjects.Graphics,
-  ): void {
-    if (!this.loadoutContainer) return;
-
+  ): LoadoutColumn {
     const capacity = Math.max(1, progress.toolSlotCapacity);
     const tools = progress.toolLoadout;
-    const firstIndex = categoryIndices[0];
-    const lastIndex = categoryIndices[categoryIndices.length - 1];
-    const spanLeft = this.getTabCenterX(layout, firstIndex) - layout.tabW / 2;
-    const spanRight = this.getTabCenterX(layout, lastIndex) + layout.tabW / 2;
+    const spanLeft = this.getTabCenterX(layout, categoryIndices[0]) - layout.tabW / 2;
+    const spanRight = this.getTabCenterX(layout, categoryIndices[categoryIndices.length - 1]) + layout.tabW / 2;
     const spanCenter = (spanLeft + spanRight) / 2;
     const accentColor = CATEGORY_VISUALS.utility.connector;
-
-    // Eine gemeinsame Karte ueber beide Utility-Spalten zeigt, dass sich die Slots teilen.
-    this.drawCategoryCard(cards, spanCenter, spanRight - spanLeft, accentColor, LOADOUT_CARD_TOP);
-
     const totalW = capacity * LOADOUT_SLOT_SIZE + (capacity - 1) * LOADOUT_SLOT_GAP;
     const startX = spanCenter - totalW / 2 + LOADOUT_SLOT_SIZE / 2;
 
+    const slots: LoadoutSlotParams[] = [];
     for (let index = 0; index < capacity; index += 1) {
       const tool = tools[index] ?? null;
-      this.renderLoadoutSlot({
+      slots.push({
         centerX: startX + index * (LOADOUT_SLOT_SIZE + LOADOUT_SLOT_GAP),
         accentColor,
         presentation: tool ? describeLoadoutTool(tool) : null,
@@ -828,23 +918,37 @@ export class CoopDefenseUpgradesOverlay {
         onOpenPicker: (anchorX) => this.openUtilitySlotPicker(progress, index, anchorX),
       });
     }
+
+    return {
+      centerX: spanCenter,
+      width: spanRight - spanLeft,
+      accentColor,
+      active: categoryIndices.includes(this.activeCategoryIndex),
+      slots,
+    };
   }
 
-  private renderLoadoutSlot(params: {
-    centerX: number;
-    accentColor: number;
-    presentation: LoadoutItemPresentation | null;
-    tooltipTitle: string;
-    tooltipBody: () => string;
-    onOpenPicker: (anchorX: number) => void;
-  }): void {
+  /**
+   * Spaltenkarte hinter Slots und Tab. Sie reicht von der Loadout-Zeile bis unter die Tabs,
+   * damit beide als eine Einheit in Kategoriefarbe gelesen werden; die Spalte der offenen
+   * Kategorie tritt zusaetzlich hervor.
+   */
+  private renderCategoryCard(column: LoadoutColumn): void {
+    if (!this.loadoutContainer) return;
+    const height = TAB_TOP + TAB_H - LOADOUT_CARD_TOP;
+    const key = this.ensureLoadoutCardTexture(column.width, height, column.accentColor, column.active);
+    this.loadoutContainer.add(this.scene.add.image(column.centerX, LOADOUT_CARD_TOP + height / 2, key)
+      .setScrollFactor(0));
+  }
+
+  private renderLoadoutSlot(params: LoadoutSlotParams): void {
     if (!this.loadoutContainer) return;
 
     const { centerX, presentation } = params;
     const group = this.scene.add.container(centerX, LOADOUT_ROW_Y).setScrollFactor(0);
 
     const frame = this.scene.add.image(0, 0, this.ensureLoadoutSlotTexture(
-      presentation ? params.accentColor : COLORS.GREY_5,
+      params.accentColor,
       presentation !== null,
     )).setScrollFactor(0);
     group.add(frame);
@@ -865,8 +969,11 @@ export class CoopDefenseUpgradesOverlay {
       }).setOrigin(0.5).setScrollFactor(0));
     } else {
       group.add(this.scene.add.text(0, 0, '+', {
-        fontSize: '20px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_4),
-      }).setOrigin(0.5).setScrollFactor(0));
+        fontSize: '22px',
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        color: toCssColor(lerpColor(params.accentColor, COLORS.GREY_5, 0.45)),
+      }).setOrigin(0.5).setScrollFactor(0).setAlpha(0.9));
     }
 
     const hitArea = this.scene.add.rectangle(0, 0, LOADOUT_SLOT_SIZE, LOADOUT_SLOT_SIZE, 0x000000, 0.001)
@@ -1016,18 +1123,15 @@ export class CoopDefenseUpgradesOverlay {
     this.showLoadoutHint('Keine freien Utility-Slots — erst eine Utility abwaehlen.');
   }
 
-  /**
-   * Ein abgelehntes Ausruesten blieb bisher unkommentiert. Der Hinweis ersetzt kurzzeitig die
-   * Ueberschrift der Loadout-Zeile, damit er ohne zusaetzlichen Platzbedarf sichtbar wird.
-   */
+  /** Ein abgelehntes Ausruesten blieb bisher unkommentiert; der Hinweis steht ueber dem Block. */
   private showLoadoutHint(message: string): void {
-    const header = this.loadoutHeaderText;
-    if (!header || !header.active) return;
-    header.setText(message).setColor(toCssColor(COLORS.RED_2));
+    const hint = this.loadoutHintText;
+    if (!hint || !hint.active) return;
+    hint.setText(message);
     this.loadoutHintTimer?.destroy();
     this.loadoutHintTimer = this.scene.time.delayedCall(2200, () => {
       this.loadoutHintTimer = null;
-      if (header.active) header.setText('LOADOUT').setColor(toCssColor(COLORS.GREY_2));
+      if (hint.active) hint.setText('');
     });
   }
 
@@ -1036,14 +1140,38 @@ export class CoopDefenseUpgradesOverlay {
       key: `_ccdslot_${LOADOUT_SLOT_SIZE}_${accentColor.toString(16)}_${filled ? 'on' : 'off'}`,
       w: LOADOUT_SLOT_SIZE,
       h: LOADOUT_SLOT_SIZE,
-      radius: 10,
-      topColor: filled ? lerpColor(COLORS.GREY_8, accentColor, 0.35) : COLORS.GREY_8,
-      bottomColor: filled ? lerpColor(COLORS.GREY_9, accentColor, 0.22) : COLORS.GREY_9,
-      fillAlpha: 0.95,
+      radius: 12,
+      // Belegte Slots treten hervor, leere bleiben als gedaempfte Aussparung erkennbar.
+      topColor: lerpColor(COLORS.GREY_8, accentColor, filled ? 0.4 : 0.1),
+      bottomColor: lerpColor(COLORS.GREY_10, accentColor, filled ? 0.24 : 0.06),
+      fillAlpha: filled ? 0.97 : 0.8,
       strokeColor: accentColor,
-      strokeAlpha: filled ? 0.95 : 0.5,
+      strokeAlpha: filled ? 1 : 0.4,
       strokeWidth: filled ? 2 : 1.5,
-      highlightAlpha: filled ? 0.14 : 0.05,
+      highlightAlpha: filled ? 0.16 : 0.04,
+    });
+  }
+
+  /** Glasige Spaltenkarte im Stil von Panel und Tabs, damit der Block nicht flach wirkt. */
+  private ensureLoadoutCardTexture(
+    width: number,
+    height: number,
+    accentColor: number,
+    isActive: boolean,
+  ): string {
+    const w = Math.round(width);
+    return this.ensureRoundedTexture({
+      key: `_ccdcard_${w}_${Math.round(height)}_${accentColor.toString(16)}_${isActive ? 'on' : 'off'}`,
+      w,
+      h: height,
+      radius: LOADOUT_CARD_RADIUS,
+      topColor: lerpColor(COLORS.GREY_8, accentColor, isActive ? 0.34 : 0.2),
+      bottomColor: lerpColor(COLORS.GREY_9, accentColor, isActive ? 0.2 : 0.1),
+      fillAlpha: isActive ? 0.8 : 0.6,
+      strokeColor: accentColor,
+      strokeAlpha: isActive ? 0.85 : 0.4,
+      strokeWidth: isActive ? 2 : 1.5,
+      highlightAlpha: isActive ? 0.1 : 0.05,
     });
   }
 
@@ -1068,8 +1196,8 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   /**
-   * Beim Inspector sind `weapon2` und `utility` gleichwertige Utility-Kategorien und teilen
-   * sich deshalb dieselbe Gold-Farbgebung.
+   * Beim Inspector sind `construction` und `utility` gleichwertige Werkzeug-Kategorien und
+   * teilen sich deshalb dieselbe Gold-Farbgebung.
    */
   private getCategoryVisuals(
     categoryId: CoopDefenseUpgradeCategorySnapshot['id'],

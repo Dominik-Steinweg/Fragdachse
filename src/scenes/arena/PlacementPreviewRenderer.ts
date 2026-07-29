@@ -82,6 +82,15 @@ export class PlacementPreviewRenderer {
     }
 
     const ownerColor = bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0];
+    if (preview.mode === 'dismantle') {
+      // Rueckbau zeigt kein Bau-Ghost, sondern markiert das anvisierte eigene Konstrukt.
+      this.localPlacementPreviewImage?.setVisible(false);
+      this.hideTunnelPreview(this.localTunnelPreview);
+      this.drawDismantleMarker(preview);
+      this.rangeGraphics.lineStyle(2, ownerColor, 0.5);
+      this.rangeGraphics.strokeCircle(localPlayer.sprite.x, localPlayer.sprite.y, preview.range);
+      return;
+    }
     if (preview.kind === 'tunnel') {
       this.localPlacementPreviewImage?.setVisible(false);
       this.drawTunnelPreview(this.localTunnelPreview, preview, ownerColor, this.getPlacementPreviewAlpha(preview.kind), true);
@@ -109,6 +118,26 @@ export class PlacementPreviewRenderer {
       this.invalidGraphics.moveTo(preview.targetX - radius * 0.7, preview.targetY - radius * 0.7);
       this.invalidGraphics.lineTo(preview.targetX + radius * 0.7, preview.targetY + radius * 0.7);
       this.invalidGraphics.strokePath();
+    }
+  }
+
+  /** Eckenrahmen um die anvisierte Zelle: gruen = eigenes Konstrukt, rot = nichts abbaubar. */
+  private drawDismantleMarker(preview: UtilityPlacementPreviewState): void {
+    const half = CELL_SIZE * 0.46;
+    const arm = CELL_SIZE * 0.22;
+    const color = preview.isValid ? COLORS.GREEN_2 : COLORS.RED_2;
+    const pulse = 0.72 + 0.28 * Math.sin(this.scene.time.now / 140);
+    this.invalidGraphics.lineStyle(3, color, pulse);
+    for (const signX of [-1, 1]) {
+      for (const signY of [-1, 1]) {
+        const cornerX = preview.targetX + signX * half;
+        const cornerY = preview.targetY + signY * half;
+        this.invalidGraphics.beginPath();
+        this.invalidGraphics.moveTo(cornerX - signX * arm, cornerY);
+        this.invalidGraphics.lineTo(cornerX, cornerY);
+        this.invalidGraphics.lineTo(cornerX, cornerY - signY * arm);
+        this.invalidGraphics.strokePath();
+      }
     }
   }
 
@@ -198,7 +227,10 @@ export class PlacementPreviewRenderer {
     const visible = inArena && preview !== undefined && alive && !burrowed;
     this.placeableUtilityHint.setVisible(visible);
     if (!visible) return;
-    if (preview?.kind === 'tunnel') {
+    if (preview?.mode === 'dismantle') {
+      this.placeableUtilityHintTitle.setText('RUECKBAU');
+      this.placeableUtilityHintSubtitle.setText('E oder Linksklick: abbauen   Rechtsklick: abbrechen');
+    } else if (preview?.kind === 'tunnel') {
       this.placeableUtilityHintTitle.setText(`DACHS-TUNNEL ${preview.stage ?? 1}/2`);
       this.placeableUtilityHintSubtitle.setText('E oder Linksklick: setzen   Rechtsklick oder Q: abbrechen');
     } else {

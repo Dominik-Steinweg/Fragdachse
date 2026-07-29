@@ -18,7 +18,7 @@ import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
 import { getStoredCoopDefenseProgress, setStoredCoopDefenseUpgradeProfile } from '../../utils/localPreferences';
 import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
-import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
@@ -238,6 +238,8 @@ export class ClientUpdateCoordinator {
         }
       }
 
+      this.ctx.overchargeSystem?.syncFromSnapshot(state.overchargeFields ?? []);
+
       const trainState = state.train;
       this.ctx.combatSystem.setClientTrainBounds(
         trainState?.alive ? { x: trainState.x, y: trainState.y, dir: trainState.dir } : null,
@@ -304,13 +306,16 @@ export class ClientUpdateCoordinator {
       const inspectorConstruction = selectedInspectorTool?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
         : undefined;
-      const inspectorCost = inspectorConfig?.inspectorAdrenalineCost ?? inspectorConstruction?.adrenalineCost;
+      // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
+      // Utilities kosten nichts ausser ihrem Cooldown.
+      const inspectorCapacityCost = selectedInspectorTool ? getToolCapacityCost(selectedInspectorTool) : 0;
       const baseUtilityDisplayName = overrideName
         || this.clientUtilityOverride?.displayName
         || inspectorConstruction?.displayName
+        || inspectorConfig?.displayName
         || localUtilityConfig.displayName;
-      const utilDisplayName = inspectorCost !== undefined && !overrideName && !this.clientUtilityOverride
-        ? `${baseUtilityDisplayName} · ${inspectorCost} ADR`
+      const utilDisplayName = inspectorCapacityCost > 0 && !overrideName && !this.clientUtilityOverride
+        ? `${baseUtilityDisplayName} · ${inspectorCapacityCost} BK`
         : baseUtilityDisplayName;
       const activePowerUps = bridge.getPlayerActiveBuffs(localId2);
       const localWeapon2Config = this.getLocalWeaponConfig('weapon2');
@@ -338,6 +343,10 @@ export class ClientUpdateCoordinator {
         activePowerUps,
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
         weapon2AdrenalineCost:   fireSuperiorityActive ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
+        constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
+        constructionCapacityMax:  bridge.getPlayerCommittedLoadout(localId2)?.coopDefenseClassId === 'inspector_gadachs'
+          ? COOP_DEFENSE_CONSTRUCTION_CAPACITY
+          : 0,
       });
       this.localPlayerState.alive    = localState.alive;
       this.localPlayerState.burrowed = localState.isBurrowed;
@@ -521,14 +530,18 @@ export class ClientUpdateCoordinator {
   getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
     const selected = this.getLocalInspectorSelectedTool();
-    if (selected?.kind === 'construction') return 0;
     const config = this.getLocalUtilityConfig();
-    const utilityId = selected?.kind === 'utility' && config.id === selected.id ? selected.id : config.id;
-    const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, utilityId);
-    const remaining = cooldownUntil - bridge.getSynchronizedNow();
-    if (remaining <= 0) return 0;
-    if (config.cooldown <= 0) return 0;
-    return Math.min(1, remaining / config.cooldown);
+    // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
+    // Bezugsdauer unterscheidet sich.
+    const itemId = selected ? selected.id : config.id;
+    const cooldown = selected?.kind === 'construction'
+      ? COOP_DEFENSE_BUILD_COOLDOWN_MS
+      : selected?.kind === 'utility'
+        ? UTILITY_CONFIGS[selected.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0
+        : config.cooldown;
+    if (cooldown <= 0) return 0;
+    const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();
+    return remaining <= 0 ? 0 : Math.min(1, remaining / cooldown);
   }
 
   private getResolvedLocalPlayerStat(stat: string, baseValue: number): number {
