@@ -164,7 +164,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch';
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -296,8 +296,35 @@ export interface DamageOverTimeAreaConfig {
   readonly trainDamageMult?: number;
 }
 
-export type HomingTargetType = 'players' | 'enemies' | 'train' | 'projectiles';
+export type HomingTargetType = 'players' | 'enemies' | 'train' | 'projectiles' | 'turrets';
 export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
+
+/**
+ * Nutzlast eines Unterstuetzungsprojektils: heilt statt zu schaden.
+ *
+ * Traegt ein Projektil eine dieser Nutzlasten, ist es kein Kampfgeschoss mehr:
+ * `CombatSystem` laesst es aus, und Treffer werden ausschliesslich ueber
+ * `ProjectileManager.setSupportImpactCallback` aufgeloest.
+ */
+export interface ProjectileRepairPayload {
+  /** HP je Treffer – gilt gleichermassen fuer Spieler, Felsen, Konstrukte und Basen. */
+  readonly amount: number;
+  readonly color: number;
+}
+
+/** Nutzlast eines Unterstuetzungsprojektils: laedt den getroffenen Turm kurzzeitig auf. */
+export interface ProjectileTurretChargePayload {
+  readonly durationMs: number;
+  /** Schadenszuwachs je Ladungsstufe; der Gesamtfaktor ist `1 + stacks * value`. */
+  readonly damageMultiplierPerStack: number;
+  readonly maxStacks: number;
+  readonly color: number;
+}
+
+/** Von einem Unterstuetzungsprojektil getroffenes Hindernis (Host, aus den Phaser-Collidern). */
+export type SupportProjectileImpact =
+  | { readonly kind: 'rock'; readonly rockId: number; readonly x: number; readonly y: number }
+  | { readonly kind: 'base'; readonly x: number; readonly y: number };
 
 /** Data-driven Zielsuche/Lenkung für Projektilwaffen. */
 export interface ProjectileHomingConfig {
@@ -636,6 +663,8 @@ export interface ProjectileSpawnConfig {
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
+  repairPayload?:  ProjectileRepairPayload;
+  turretChargePayload?: ProjectileTurretChargePayload;
   smokeTrailColor?: number;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
@@ -951,6 +980,10 @@ export interface TrackedProjectile {
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
+  repairPayload?:  ProjectileRepairPayload;
+  turretChargePayload?: ProjectileTurretChargePayload;
+  /** Nutzlast bereits an einem Hindernis abgegeben; verhindert Mehrfachwirkung vor dem Cleanup. */
+  supportConsumed?: boolean;
   projectileVisualScale?: number;
   smokeTrailColor?: number;
   lockedTargetId?: string | null;
@@ -1285,6 +1318,25 @@ export interface SyncedOverchargeField {
   radius: number;
   color: number;
   fireRateMultiplier: number;
+  damageMultiplier: number;
+  startedAt: number;
+  expiresAt: number;
+}
+
+/**
+ * Aktive Energieladung eines einzelnen Turms (host-autoritativ, per GameState repliziert).
+ *
+ * `turretId` ist die stringifizierte `AutomatedTurretId`: platzierte Konstruktionen tragen
+ * eine Zahl, Basistuerme eine Zeichenkette. Die Position wird mitgefuehrt, weil der
+ * Turmbuff ortsbezogen abgefragt wird und die Clients daraus das Visual setzen.
+ */
+export interface SyncedTurretCharge {
+  turretId: string;
+  ownerId: string;
+  x: number;
+  y: number;
+  color: number;
+  stacks: number;
   damageMultiplier: number;
   startedAt: number;
   expiresAt: number;

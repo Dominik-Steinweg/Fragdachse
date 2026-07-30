@@ -74,6 +74,15 @@ export class TurretSystem {
     this.turretBuffProvider = provider;
   }
 
+  /**
+   * Aktueller Turmbestand aus derselben Quelle, die auch das Turmfeuer speist. Der
+   * Energieinjektor braucht ihn fuer Zielsuche und Treffer-Zuordnung; ein zweiter
+   * Enumerationspfad wuerde sonst Basistuerme oder Fliegenpilze vergessen.
+   */
+  getTurrets(): readonly AutomatedTurret[] {
+    return this.turretProvider?.() ?? [];
+  }
+
   hostUpdate(
     now: number,
     config: PlaceableTurretUtilityConfig,

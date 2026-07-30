@@ -24,7 +24,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedOverchargeField, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedOverchargeField, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTurretCharge, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -160,6 +160,7 @@ const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
   r: 'rocks',
   br: 'placeableRocks',
   oc: 'overchargeFields',
+  tc: 'turretCharges',
   dc: 'decoys',
   s: 'smokes',
   f: 'fires',
@@ -202,6 +203,10 @@ export interface RoundResult {
   colorHex: number;
   frags:    number;
   teamId:   TeamId | null;
+  /** Gemeinsame Match-Metadaten; pro Zeile wiederholt, damit Ergebnis und Kontext atomar replizieren. */
+  roundEndedAt: number;
+  gameMode: GameMode;
+  mapName: string;
   teamScore?: number;
   sharedXp?: number;
 }
@@ -238,6 +243,7 @@ export interface GameState {
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
   placeableRocks: SyncedPlaceableRock[];
   overchargeFields: SyncedOverchargeField[];
+  turretCharges: SyncedTurretCharge[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
@@ -269,6 +275,7 @@ interface OutboundGameState {
   rocks:        SyncedRockSnapshot | null;
   placeableRocks: SyncedPlaceableRock[];
   overchargeFields: SyncedOverchargeField[];
+  turretCharges: SyncedTurretCharge[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
   fires:        SyncedFireZone[];
@@ -1272,6 +1279,7 @@ export class NetworkBridge {
     if (state.rocks)                   payload.r = state.rocks;
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
     if (state.overchargeFields.length > 0) payload.oc = state.overchargeFields;
+    if (state.turretCharges.length > 0) payload.tc = state.turretCharges;
     if (state.decoys.length > 0)       payload.dc = state.decoys;
     if (state.smokes.length > 0)       payload.s = state.smokes;
     if (state.fires.length > 0)        payload.f = state.fires;
@@ -1445,6 +1453,7 @@ export class NetworkBridge {
       rockRemovals:  rockSnapshot?.removals ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
       overchargeFields: (raw.oc as SyncedOverchargeField[] | undefined) ?? [],
+      turretCharges: (raw.tc as SyncedTurretCharge[] | undefined) ?? [],
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],

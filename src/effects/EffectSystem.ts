@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, REPAIR_BEAM_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STAIN, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
 import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
@@ -768,6 +768,11 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
+    if (visualStyle === 'regeneration') {
+      this.playRegenerationEffect(x, y, radius, color ?? REPAIR_BEAM_COLOR);
+      return;
+    }
+
     const isHoly = visualStyle === 'holy';
     const isEnergy = visualStyle === 'energy';
     const isVoidNuke = visualStyle === 'void_nuke';
@@ -1217,13 +1222,15 @@ export class EffectSystem implements EnemyVisualSink {
     // aber nur so hoch wie nötig – darüber verliert die Detonation ihren warmen Ton.
     const lightColor = visualStyle === 'lightning'
       ? 0xcdf1ff
-      : visualStyle === 'energy'
-        ? 0xd4f2fc
-        : visualStyle === 'holy'
-          ? 0xffefbe
-          : visualStyle === 'nuke' || visualStyle === 'void_nuke'
-            ? (visualStyle === 'void_nuke' ? 0xe0b8ff : 0xffe4b8)
-            : mixColors(color ?? 0xff5a1e, 0xffffff, 0.6);
+      : visualStyle === 'regeneration'
+        ? mixColors(color ?? REPAIR_BEAM_COLOR, 0xffffff, 0.45)
+        : visualStyle === 'energy'
+          ? 0xd4f2fc
+          : visualStyle === 'holy'
+            ? 0xffefbe
+            : visualStyle === 'nuke' || visualStyle === 'void_nuke'
+              ? (visualStyle === 'void_nuke' ? 0xe0b8ff : 0xffe4b8)
+              : mixColors(color ?? 0xff5a1e, 0xffffff, 0.6);
 
     this.lighting.pulse('explosion', x, y, {
       // Größe skaliert durchgehend mit der Detonation – auch bei sehr großen Radien,
@@ -1310,6 +1317,62 @@ export class EffectSystem implements EnemyVisualSink {
     sparks.setDepth(DEPTH_FX + 0.3);
     sparks.explode(Math.max(18, Math.ceil(radius * 0.7)));
     this.scene.time.delayedCall(720, () => sparks.destroy());
+  }
+
+  /**
+   * Regenerationsstoss des Reparaturstrahls: kein Blast, sondern ein kurzer gruener Puls
+   * mit aufsteigenden Funken. Bewusst klein und ohne Kamerawirkung – der Effekt markiert
+   * eine Heilung und darf im Gefecht nicht mit einer Detonation verwechselt werden.
+   */
+  private playRegenerationEffect(x: number, y: number, radius: number, color: number): void {
+    const brightColor = this.mixColor(color, 0xffffff, 0.55);
+    const startRadius = Math.max(5, radius * 0.3);
+
+    const core = this.scene.add.circle(x, y, startRadius, brightColor, 0.75);
+    core.setDepth(DEPTH_FX + 0.4);
+    makeAdditive(core);
+    this.scene.tweens.add({
+      targets: core,
+      scale: (radius * 0.7) / startRadius,
+      alpha: 0,
+      duration: 260,
+      ease: 'Sine.easeOut',
+      onComplete: () => core.destroy(),
+    });
+
+    // Zwei nach aussen laufende Ringe: die Doppelung liest sich als Puls, nicht als Druckwelle.
+    for (let ringIndex = 0; ringIndex < 2; ringIndex += 1) {
+      const ring = this.scene.add.circle(x, y, startRadius);
+      ring.setFillStyle(0, 0);
+      ring.setStrokeStyle(ringIndex === 0 ? 2.4 : 1.4, ringIndex === 0 ? brightColor : color, 0.85);
+      ring.setDepth(DEPTH_FX + 0.3 - ringIndex * 0.02);
+      makeAdditive(ring);
+      this.scene.tweens.add({
+        targets: ring,
+        scale: (radius * (ringIndex === 0 ? 0.95 : 1.25)) / startRadius,
+        alpha: 0,
+        delay: ringIndex * 90,
+        duration: 420,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    // Aufsteigende Partikel statt radialem Auswurf – die Bewegungsrichtung allein
+    // unterscheidet Heilung von Schaden, auch wenn beides gleichzeitig auf dem Ziel liegt.
+    const motes = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+      lifespan: { min: 380, max: 720 },
+      speedX: { min: -radius * 0.35, max: radius * 0.35 },
+      speedY: { min: -radius * 1.5, max: -radius * 0.6 },
+      scale: { start: 0.85, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      tint: [0xffffff, brightColor, color],
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    motes.setDepth(DEPTH_FX + 0.35);
+    motes.explode(Math.max(8, Math.ceil(radius * 0.4)));
+    this.scene.time.delayedCall(820, () => motes.destroy());
   }
 
   private mixColor(source: number, target: number, t: number): number {

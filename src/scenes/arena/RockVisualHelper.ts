@@ -238,6 +238,34 @@ export class RockVisualHelper {
     return newHp;
   }
 
+  /**
+   * Gegenstueck zu {@link applyObstacleDamageById} fuer den Reparaturstrahl. Deckt beide
+   * Herkuenfte ab: platzierte Konstrukte fuehrt das `PlacementSystem`, Layout-Felsen die
+   * `RockRegistry`. Gibt die tatsaechlich zugefuehrten HP zurueck (0 = nichts zu reparieren),
+   * damit der Aufrufer den Heileffekt nur bei echter Wirkung zeigt.
+   */
+  applyObstacleRepairById(rockId: number, amount: number): number {
+    if (amount <= 0) return 0;
+    const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    if (runtimeRock) {
+      const before = runtimeRock.hp;
+      const updated = this.ctx.placementSystem?.repairRock(rockId, amount);
+      if (!updated) return 0;
+      this.updateRockVisualById(rockId, updated.hp);
+      return updated.hp - before;
+    }
+
+    const registry = this.ctx.rockRegistry;
+    if (!registry) return 0;
+    const before = registry.getHP(rockId);
+    const maxHp = registry.getMaxHP(rockId);
+    if (before <= 0 || before >= maxHp) return 0;
+    const newHp = Math.min(maxHp, before + amount);
+    registry.setHP(rockId, newHp);
+    this.updateRockVisualById(rockId, newHp);
+    return newHp - before;
+  }
+
   handleDestroyedRock(rockId: number, reason: 'damage' | 'decay', attackerId?: string): void {
     const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock) {

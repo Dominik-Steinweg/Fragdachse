@@ -935,6 +935,38 @@
           ]
         },
         {
+          "id": "unlock_reparaturstrahl",
+          "code": "C-I2",
+          "label": "Reparaturstrahl",
+          "description": "Feuert per rechter Maustaste gruene Reparaturprojektile, die Felsen, Konstrukte, Tuerme, Basen und Verbuendete heilen. Kostet Adrenalin je Schuss.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 60,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "REPARATURSTRAHL"
+          }
+        },
+        {
+          "id": "unlock_energieinjektor",
+          "code": "C-I3",
+          "label": "Energieinjektor",
+          "description": "Entlaedt Adrenalin in schnellen, leicht zielsuchenden Energiebolzen auf einen Turm und erhoeht dessen Schaden fuer kurze Zeit.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 1,
+          "costPerLevel": 0,
+          "refundable": false,
+          "sortOrder": 70,
+          "loadoutUnlock": {
+            "slot": "weapon2",
+            "itemId": "ENERGIEINJEKTOR"
+          }
+        },
+        {
           "id": "unlock_p90",
           "code": "C-W1",
           "label": "P90",

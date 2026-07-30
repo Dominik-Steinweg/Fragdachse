@@ -1,3 +1,4 @@
+import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
 import { isCoopDefenseMode } from '../gameModes';
 import { getCoopDefenseResolvedEffectTotals, isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
@@ -76,8 +77,13 @@ export function resolveLoadoutSelectionIds(
   const committedCoopDefenseProfile = isCoopDefenseMode(mode) && coopDefenseProfile
     ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile, coopDefenseClassId ?? undefined)
     : null;
-  const selectableWeapon2 = committedCoopDefenseProfile && coopDefenseClassId
-    ? getSelectableLoadoutItems('weapon2', mode, committedCoopDefenseProfile, coopDefenseClassId)
+  const selectableWeapon2 = committedCoopDefenseProfile
+    ? getSelectableLoadoutItems(
+      'weapon2',
+      mode,
+      committedCoopDefenseProfile,
+      coopDefenseClassId ?? DEFAULT_COOP_DEFENSE_CLASS_ID,
+    )
     : [];
   const committedWeapon2 = selectableWeapon2.find((item) => item.id === sanitized.weapon2.id)
     ?? selectableWeapon2[0]
@@ -102,9 +108,13 @@ export function resolveLoadoutSelectionIds(
 export function isCoopDefenseReadyLoadoutComplete(snapshot: LoadoutCommitSnapshot): boolean {
   const { coopDefenseClassId: classId, coopDefenseProfile: profile, weapon2 } = snapshot;
   return profile != null
-    && classId != null
     && weapon2 != null
-    && getSelectableLoadoutItems('weapon2', 'coop_defense', profile, classId)
+    && getSelectableLoadoutItems(
+      'weapon2',
+      'coop_defense',
+      profile,
+      classId ?? DEFAULT_COOP_DEFENSE_CLASS_ID,
+    )
       .some((item) => item.id === weapon2);
 }
 

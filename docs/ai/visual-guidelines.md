@@ -86,6 +86,7 @@ Weltpositionen, Aimwinkel und visuelle Anhänge nicht mit Sprite-Frame-Offsets v
 - Wenn ein Client beim ersten Projektil-Snapshot keine Owner-Position hat, rekonstruiert `ProjectileManager` einen Ursprung durch Backtracking entlang der Geschwindigkeit und wendet danach denselben Mündungsoffset an. Diesen Fallback nicht durch stilabhängige Ad-hoc-Offets ersetzen.
 - Trails/Exhaust werden aus der normalisierten Flugrichtung relativ zum Projektilzentrum berechnet, etwa in `RocketRenderer` und `GrenadeRenderer`. Lokale Offsets zuerst in Richtungs-/Normalenvektoren umrechnen, dann in Weltkoordinaten anwenden.
 - Grid-Assets verwenden `ARENA_OFFSET_X/Y + grid * CELL_SIZE + CELL_SIZE / 2`; absichtliche Decal-Jitter kommen erst danach hinzu (`ArenaVisualFactory`).
+- **HUD- und Overlay-Container mit absolut platzierten Kindern dürfen nicht skaliert werden.** Das verbreitete UI-Muster in `src/ui/` legt einen Container auf `(0, 0)` und setzt seine Kinder auf Bildschirmkoordinaten; `alpha` und ein Verschiebungs-Tween über `x`/`y` sind daran unbedenklich. `scale` bezieht sich dagegen auf den Container-Ursprung und zieht deshalb das ganze Element Richtung Bildschirmecke `(0, 0)`, nicht auf seine eigene Mitte. Ein Aufpopp-Tween braucht folglich einen Container **auf** der Elementmitte mit lokal platzierten Kindern; Weltpositionen für Partikelstöße werden dann getrennt festgehalten, statt sie aus den nun lokalen Kindkoordinaten zu lesen (`MatchResultsOverlay`, Belohnungszeilen).
 
 ## Assets
 

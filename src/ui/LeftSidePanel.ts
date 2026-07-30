@@ -967,9 +967,15 @@ export class LeftSidePanel {
     if (!isCoopDefenseMode(mode)) return getSelectableLoadoutItems(slot, mode, null, 'dachs_nukem');
 
     const storedProgress = getStoredCoopDefenseProgress();
+    const classId = storedProgress.classesUnlocked
+      ? storedProgress.selectedClassId
+      : 'dachs_nukem';
+    const profile = storedProgress.classesUnlocked
+      ? getStoredCoopDefenseUpgradeProfile(storedProgress.selectedClassId)
+      : storedProgress.defaultProfile;
     // Nur der Utility-Slot des Inspectors wird ueber seine geteilten Werkzeug-Slots belegt.
     // Waffe 2 bleibt ein regulaerer Slot und zeigt seine Klassenwaffe an.
-    if (storedProgress.selectedClassId === 'inspector_gadachs' && slot === 'utility') {
+    if (storedProgress.classesUnlocked && classId === 'inspector_gadachs' && slot === 'utility') {
       return [{
         id: DEFAULT_LOADOUT[slot].id,
         displayName: 'Utility-Rad (R)',
@@ -978,8 +984,8 @@ export class LeftSidePanel {
     return getSelectableLoadoutItems(
       slot,
       mode,
-      getStoredCoopDefenseUpgradeProfile(storedProgress.selectedClassId),
-      storedProgress.selectedClassId,
+      profile,
+      classId,
     );
   }
 

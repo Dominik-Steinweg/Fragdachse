@@ -22,6 +22,8 @@ import { getTeamLabel, isCoopDefenseMode } from '../gameModes';
 import { bridge } from '../network/bridge';
 import type { TeamId } from '../types';
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
+import { ensureFlatPanelTexture } from './uiTextures';
+import { attachHoverEffect } from './uiHover';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH / 2;
@@ -66,6 +68,11 @@ const RESULTS_START_Y    = 162 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
 const RESULTS_ENTRY_H          = 24;
 const RESULTS_FONT             = '14px'; // einzelne Spielerzeilen
 const RESULTS_HEADER_FONT      = '20px'; // "LETZTE RUNDE"
+// Die Ueberschrift ist zugleich der Knopf, der die Match-Auswertung erneut oeffnet.
+const RESULTS_HEADER_BTN_W     = LOBBY_PANEL_WIDTH;
+const RESULTS_HEADER_BTN_H     = 32;
+const TEX_RESULTS_HEADER_ON    = '_rsp_lastround_on';
+const TEX_RESULTS_HEADER_OFF   = '_rsp_lastround_off';
 const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile – größer als Spielerzeilen
 const RESULTS_LABEL_FONT       = '14px';
 const RESULTS_OUTCOME_FONT     = '18px';
@@ -157,6 +164,11 @@ export class RightSidePanel {
 
   // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
   private resultsHeader!: Phaser.GameObjects.Text;
+  private resultsHeaderButton!: Phaser.GameObjects.Image;
+  private resultsHeaderLabels!: Phaser.GameObjects.Container;
+  private resultsHeaderHint!: Phaser.GameObjects.Text;
+  private replayResultsHandler: (() => void) | null = null;
+  private replayResultsAvailable = false;
   private resultsSep!:    Phaser.GameObjects.Rectangle;
   private resultsOutcome!: Phaser.GameObjects.Text;
   private resultsFragsLabel!: Phaser.GameObjects.Text;
@@ -320,6 +332,36 @@ export class RightSidePanel {
   }
 
   /**
+   * Haengt die Aktion an die Ueberschrift "Letzte Runde". Sie oeffnet die vollstaendige
+   * Match-Auswertung erneut; die Verfuegbarkeit steuert {@link setResultsReplayAvailable}.
+   */
+  setResultsReplayHandler(handler: (() => void) | null): void {
+    this.replayResultsHandler = handler;
+  }
+
+  /**
+   * Schaltet den Knopf scharf. Ergebnisse im Panel bedeuten nicht automatisch, dass eine
+   * Auswertung vorliegt: Wer erst nach dem Rundenende beitritt, sieht den replizierten
+   * Endstand, hat die Auswertung selbst aber nie durchlaufen.
+   */
+  setResultsReplayAvailable(available: boolean): void {
+    if (this.replayResultsAvailable === available) return;
+    this.replayResultsAvailable = available;
+    this.resultsHeaderButton.setTexture(this.ensureResultsHeaderTexture(available));
+    this.resultsHeader.setColor(toCssColor(available ? COLORS.GOLD_1 : COLORS.GREY_2));
+    this.resultsHeaderHint.setVisible(available);
+    if (available) {
+      this.resultsHeaderButton.setInteractive({ useHandCursor: true });
+      return;
+    }
+    this.resultsHeaderButton.disableInteractive();
+    // Wird der Knopf unter dem Zeiger deaktiviert, laeuft kein pointerout mehr —
+    // der vergroesserte Hover-Zustand muss deshalb hier zurueckgesetzt werden.
+    this.resultsHeaderButton.setScale(1);
+    this.resultsHeaderLabels.setScale(1);
+  }
+
+  /**
    * Zeigt den Endstand der letzten Runde im Lobby-Panel.
     * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
    */
@@ -354,7 +396,8 @@ export class RightSidePanel {
     this.resultsTeamHeaders?.red.label.setVisible(false);
     this.resultsTeamHeaders?.red.score.setVisible(false);
 
-    this.resultsHeader.setVisible(true);
+    this.resultsHeaderButton.setVisible(true);
+    this.resultsHeaderLabels.setVisible(true);
     this.resultsSep.setVisible(true);
   this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);
@@ -531,17 +574,63 @@ export class RightSidePanel {
     }
   }
 
+  /**
+   * Flache Knopfflaeche im Stil der uebrigen Menues. Bewusst ohne Glanz: Die Zeile bleibt
+   * zuerst eine Ueberschrift und soll den Blick nicht vom Lobby-Inhalt wegziehen.
+   */
+  private ensureResultsHeaderTexture(enabled: boolean): string {
+    return ensureFlatPanelTexture(
+      this.scene,
+      enabled ? TEX_RESULTS_HEADER_ON : TEX_RESULTS_HEADER_OFF,
+      RESULTS_HEADER_BTN_W,
+      RESULTS_HEADER_BTN_H,
+      COLORS.GREY_8,
+      enabled ? COLORS.GOLD_3 : COLORS.GREY_6,
+      { radius: 8, fillAlpha: enabled ? 0.9 : 0.55, strokeAlpha: enabled ? 0.8 : 0.4 },
+    );
+  }
+
   private buildLobbyContainer(): void {
     this.lobbyContainer = this.scene.add.container(0, 0);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
 
-    // ── Endstand-Header ───────────────────────────────────────────────────────
-    this.resultsHeader = this.scene.add.text(LOBBY_SIDEBAR_CENTER_X, RESULTS_HEADER_Y, 'LETZTE RUNDE', {
+    // ── Endstand-Header (Knopf: oeffnet die Match-Auswertung erneut) ──────────
+    // Beschriftung und Pfeil liegen in einem Container auf der Knopfmitte, damit der
+    // Hover-Effekt sie um ihre eigene Mitte skaliert statt Richtung Bildschirmursprung.
+    this.resultsHeaderButton = this.scene.add.image(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_HEADER_Y,
+      this.ensureResultsHeaderTexture(false),
+    ).setScrollFactor(0);
+    // Ohne abrufbare Auswertung bleibt der Knopf stumm — sonst verspraeche schon der
+    // Zeigerwechsel eine Aktion, die es nicht gibt. Scharf schaltet ihn erst
+    // `setResultsReplayAvailable()`.
+    this.resultsHeaderButton.on('pointerdown', () => {
+      if (!this.replayResultsAvailable) return;
+      this.replayResultsHandler?.();
+    });
+
+    this.resultsHeader = this.scene.add.text(-10, 0, 'LETZTE RUNDE', {
       fontSize:   RESULTS_HEADER_FONT,
       fontFamily: 'monospace',
       color:      toCssColor(COLORS.GREY_2),
       fontStyle:  'bold',
     }).setOrigin(0.5, 0.5).setScrollFactor(0);
+    this.resultsHeaderHint = this.scene.add.text(RESULTS_HEADER_BTN_W / 2 - 16, 0, '▸', {
+      fontSize:   RESULTS_HEADER_FONT,
+      fontFamily: 'monospace',
+      color:      toCssColor(COLORS.GOLD_1),
+      fontStyle:  'bold',
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
+    this.resultsHeaderLabels = this.scene.add.container(
+      LOBBY_SIDEBAR_CENTER_X,
+      RESULTS_HEADER_Y,
+      [this.resultsHeader, this.resultsHeaderHint],
+    ).setScrollFactor(0);
+
+    attachHoverEffect(this.scene, this.resultsHeaderButton, this.resultsHeaderLabels, {
+      isEnabled: () => this.replayResultsAvailable,
+    });
 
     this.resultsSep = this.scene.add.rectangle(LOBBY_SIDEBAR_CENTER_X, RESULTS_SEP_Y, LOBBY_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
     ).setScrollFactor(0) as Phaser.GameObjects.Rectangle;
@@ -580,7 +669,8 @@ export class RightSidePanel {
     }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
 
     this.lobbyContainer.add([
-      this.resultsHeader,
+      this.resultsHeaderButton,
+      this.resultsHeaderLabels,
       this.resultsSep,
       this.resultsOutcome,
       this.resultsFragsLabel,
@@ -780,7 +870,8 @@ export class RightSidePanel {
     const showBlueHeader = blueEntries.length > 0;
     const showRedHeader = redEntries.length > 0;
 
-    this.resultsHeader.setVisible(true);
+    this.resultsHeaderButton.setVisible(true);
+    this.resultsHeaderLabels.setVisible(true);
     this.resultsSep.setVisible(true);
     this.renderRoundOutcome(hasData, roundState);
     this.resultsFragsLabel.setVisible(hasData);

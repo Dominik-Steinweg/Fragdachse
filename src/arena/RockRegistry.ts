@@ -53,6 +53,16 @@ export class RockRegistry {
     return newHp;
   }
 
+  /**
+   * Setzt den HP-Wert direkt. Gedacht fuer Reparaturen; zerstoerte Felsen (Tombstone mit
+   * HP 0) bleiben unangetastet, weil ihr Visual und ihr Grid-Eintrag bereits entfernt sind.
+   */
+  setHP(id: number, hp: number): void {
+    const current = this.hpMap.get(id);
+    if (!current || current.hp <= 0) return;
+    this.hpMap.set(id, { hp: Math.max(0, Math.min(current.maxHp, hp)), maxHp: current.maxHp });
+  }
+
   /** Gibt true zurück wenn der Felsen 0 HP hat. */
   isDestroyed(id: number): boolean {
     const hp = this.hpMap.get(id);

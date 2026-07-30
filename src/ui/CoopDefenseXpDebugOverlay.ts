@@ -9,20 +9,32 @@ function sanitizeNumberInput(value: string): number {
   return Math.max(0, Math.floor(parsed));
 }
 
+interface CoopDefenseXpDebugValues {
+  totalXp: number;
+  bossPoints: number;
+  highestUnlockedMapId: string;
+  classesUnlocked: boolean;
+}
+
 export class CoopDefenseXpDebugOverlay {
   private popup: HTMLDivElement | null = null;
   private closePopupFn: (() => void) | null = null;
 
   constructor(
-    private readonly getCurrentXp: () => number,
-    private readonly getCurrentBossPoints: () => number,
-    private readonly getCurrentHighestUnlockedMapId: () => string,
-    private readonly onSubmit: (totalXp: number, bossPoints: number, highestUnlockedMapId: string) => void,
+    private readonly getCurrentValues: () => CoopDefenseXpDebugValues,
+    private readonly onSubmit: (
+      totalXp: number,
+      bossPoints: number,
+      highestUnlockedMapId: string,
+      classesUnlocked: boolean,
+    ) => void,
+    private readonly onResetCharacter: () => void,
   ) {}
 
   show(): void {
     if (this.popup || typeof document === 'undefined') return;
 
+    const currentValues = this.getCurrentValues();
     const backdrop = document.createElement('div');
     Object.assign(backdrop.style, {
       position: 'fixed',
@@ -36,7 +48,7 @@ export class CoopDefenseXpDebugOverlay {
 
     const popup = document.createElement('div');
     Object.assign(popup.style, {
-      width: '360px',
+      width: '400px',
       padding: '18px 20px',
       border: `2px solid ${toCssColor(COLORS.BROWN_4)}`,
       backgroundColor: toCssColor(COLORS.GREY_8),
@@ -56,7 +68,7 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     const subtitle = document.createElement('div');
-    subtitle.innerText = 'Nur lokal. Ueberschreibt Erfahrung, Bosspunkte und Map-Freischaltung dieser Browser-Instanz.';
+    subtitle.innerText = 'Nur lokal. Ueberschreibt Fortschritt, Map- und Klassenfreischaltung dieser Browser-Instanz.';
     Object.assign(subtitle.style, {
       fontSize: '12px',
       color: toCssColor(COLORS.GREY_4),
@@ -102,9 +114,9 @@ export class CoopDefenseXpDebugOverlay {
     };
 
     const xpLabel = createInputLabel('ERFAHRUNG (XP)');
-    const xpInput = createNumberInput(this.getCurrentXp());
+    const xpInput = createNumberInput(currentValues.totalXp);
     const bossPointsLabel = createInputLabel('BOSSPUNKTE');
-    const bossPointsInput = createNumberInput(this.getCurrentBossPoints());
+    const bossPointsInput = createNumberInput(currentValues.bossPoints);
     Object.assign(bossPointsInput.style, {
       width: '100%',
       marginBottom: '12px',
@@ -132,7 +144,32 @@ export class CoopDefenseXpDebugOverlay {
       option.innerText = mapConfig.displayName;
       unlockSelect.appendChild(option);
     }
-    unlockSelect.value = this.getCurrentHighestUnlockedMapId();
+    unlockSelect.value = currentValues.highestUnlockedMapId;
+
+    const classesRow = document.createElement('label');
+    Object.assign(classesRow.style, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '9px',
+      marginBottom: '12px',
+      color: toCssColor(COLORS.GREY_2),
+      fontSize: '13px',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+    });
+    const classesCheckbox = document.createElement('input');
+    classesCheckbox.type = 'checkbox';
+    classesCheckbox.checked = currentValues.classesUnlocked;
+    Object.assign(classesCheckbox.style, {
+      width: '18px',
+      height: '18px',
+      accentColor: toCssColor(COLORS.GOLD_1),
+      cursor: 'pointer',
+    });
+    const classesLabel = document.createElement('span');
+    classesLabel.innerText = 'KLASSENMECHANIK FREIGESCHALTET';
+    classesRow.append(classesCheckbox, classesLabel);
 
     const preview = document.createElement('div');
     Object.assign(preview.style, {
@@ -175,6 +212,20 @@ export class CoopDefenseXpDebugOverlay {
       fontWeight: 'bold',
     });
 
+    const resetBtn = document.createElement('button');
+    resetBtn.innerText = 'CHARAKTER AUF 0 SETZEN';
+    Object.assign(resetBtn.style, {
+      width: '100%',
+      marginTop: '12px',
+      padding: '9px 14px',
+      border: `1px solid ${toCssColor(COLORS.RED_2)}`,
+      backgroundColor: toCssColor(COLORS.RED_5),
+      color: toCssColor(COLORS.GREY_1),
+      cursor: 'pointer',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+    });
+
     const updatePreview = () => {
       const totalXp = sanitizeNumberInput(xpInput.value);
       const bossPoints = sanitizeNumberInput(bossPointsInput.value);
@@ -183,7 +234,7 @@ export class CoopDefenseXpDebugOverlay {
       const progress = getCoopDefenseProgressSnapshot(totalXp);
       const unlockedMapName = COOP_DEFENSE_MAP_CONFIGS
         .find((mapConfig) => mapConfig.mapId === unlockSelect.value)?.displayName ?? unlockSelect.value;
-      preview.innerText = `Level ${progress.level}\n${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}  |  ★ ${bossPoints} Bosspunkte\nFreigeschaltet bis: ${unlockedMapName}`;
+      preview.innerText = `Level ${progress.level}\n${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}  |  ★ ${bossPoints} Bosspunkte\nFreigeschaltet bis: ${unlockedMapName}\nKlassen: ${classesCheckbox.checked ? 'freigeschaltet' : 'gesperrt'}`;
     };
 
     const closePopup = () => {
@@ -199,6 +250,7 @@ export class CoopDefenseXpDebugOverlay {
         sanitizeNumberInput(xpInput.value),
         sanitizeNumberInput(bossPointsInput.value),
         unlockSelect.value,
+        classesCheckbox.checked,
       );
       closePopup();
     };
@@ -211,13 +263,41 @@ export class CoopDefenseXpDebugOverlay {
       });
     }
     unlockSelect.addEventListener('change', updatePreview);
+    classesCheckbox.addEventListener('change', updatePreview);
     unlockSelect.addEventListener('keydown', (event: KeyboardEvent) => {
       if (event.key === 'Enter') save();
       if (event.key === 'Escape') closePopup();
     });
     confirmBtn.onclick = save;
     cancelBtn.onclick = closePopup;
-    backdrop.addEventListener('pointerdown', (event: PointerEvent) => {
+    resetBtn.onclick = () => {
+      if (!window.confirm('Wirklich den gesamten Coop-Charakterfortschritt auf einen frischen Spieler zuruecksetzen?')) {
+        return;
+      }
+      this.onResetCharacter();
+      closePopup();
+    };
+    const stopOverlayPointerPropagation = (event: Event) => {
+      event.stopPropagation();
+    };
+    for (const eventName of [
+      'pointerdown',
+      'pointerup',
+      'pointermove',
+      'pointercancel',
+      'mousedown',
+      'mouseup',
+      'mousemove',
+      'touchstart',
+      'touchend',
+      'touchmove',
+      'touchcancel',
+      'wheel',
+    ]) {
+      backdrop.addEventListener(eventName, stopOverlayPointerPropagation);
+    }
+    backdrop.addEventListener('click', (event: MouseEvent) => {
+      event.stopPropagation();
       if (event.target === backdrop) closePopup();
     });
 
@@ -231,8 +311,10 @@ export class CoopDefenseXpDebugOverlay {
       bossPointsInput,
       unlockLabel,
       unlockSelect,
+      classesRow,
       preview,
       buttonRow,
+      resetBtn,
     );
     backdrop.appendChild(popup);
     getOverlayRoot().appendChild(backdrop);

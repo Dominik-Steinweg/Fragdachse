@@ -13,7 +13,8 @@ import {
 } from '../utils/coopDefenseUpgrades';
 
 export interface CoopDefensePlayerRuntimeModifiers {
-  classId: CoopDefenseClassId;
+  /** `null` ist die bonuslose Default-Klasse vor Abschluss von Map 5. */
+  classId: CoopDefenseClassId | null;
   additiveStats: Readonly<Record<string, number>>;
   percentageStats: Readonly<Record<string, number>>;
   maxHp: number;
@@ -21,7 +22,7 @@ export interface CoopDefensePlayerRuntimeModifiers {
 }
 
 const DEFAULT_RUNTIME_MODIFIERS: CoopDefensePlayerRuntimeModifiers = {
-  classId: 'dachs_nukem',
+  classId: null,
   additiveStats: Object.freeze({}),
   percentageStats: Object.freeze({}),
   maxHp: HP_MAX,
@@ -50,22 +51,22 @@ export class CoopDefensePlayerModifierSystem {
 
   syncPlayer(playerId: string, snapshot: LoadoutCommitSnapshot | null): void {
     const rawProfile = snapshot?.coopDefenseProfile;
-    const classId = snapshot?.coopDefenseClassId;
-    if (!rawProfile || !classId) {
+    const classId = snapshot?.coopDefenseClassId ?? null;
+    if (!rawProfile) {
       this.committedProfiles.delete(playerId);
       this.runtimeModifiers.delete(playerId);
       return;
     }
 
-    const profile = sanitizeCoopDefenseUpgradeProfile(rawProfile, classId);
-    this.committedProfiles.set(playerId, cloneCoopDefenseUpgradeProfile(profile, classId));
+    const profile = sanitizeCoopDefenseUpgradeProfile(rawProfile, classId ?? undefined);
+    this.committedProfiles.set(playerId, cloneCoopDefenseUpgradeProfile(profile, classId ?? undefined));
     this.runtimeModifiers.set(playerId, this.resolveRuntimeModifiers(profile, classId));
   }
 
   getCommittedProfile(playerId: string): CoopDefenseUpgradeProfile | null {
     const profile = this.committedProfiles.get(playerId);
     const classId = this.runtimeModifiers.get(playerId)?.classId;
-    return profile ? cloneCoopDefenseUpgradeProfile(profile, classId) : null;
+    return profile ? cloneCoopDefenseUpgradeProfile(profile, classId ?? undefined) : null;
   }
 
   getModifiers(playerId: string): CoopDefensePlayerRuntimeModifiers {
@@ -141,10 +142,10 @@ export class CoopDefensePlayerModifierSystem {
 
   private resolveRuntimeModifiers(
     profile: CoopDefenseUpgradeProfile,
-    classId: CoopDefenseClassId,
+    classId: CoopDefenseClassId | null,
   ): CoopDefensePlayerRuntimeModifiers {
-    const totals = getCoopDefenseResolvedEffectTotals(profile, classId);
-    const classDefinition = getCoopDefenseClassDefinition(classId);
+    const totals = getCoopDefenseResolvedEffectTotals(profile, classId ?? undefined);
+    const classDefinition = classId ? getCoopDefenseClassDefinition(classId) : null;
     return {
       classId,
       additiveStats: totals.additive,
@@ -152,10 +153,10 @@ export class CoopDefensePlayerModifierSystem {
       maxHp: (
         HP_MAX + (totals.additive[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0)
       ) * (1 + (totals.percentage[COOP_DEFENSE_PLAYER_STAT_MAX_HP] ?? 0))
-        * classDefinition.maxHpMultiplier,
+        * (classDefinition?.maxHpMultiplier ?? 1),
       hpRegenPerSecond: (
         totals.additive[COOP_DEFENSE_PLAYER_STAT_HP_REGEN_PER_SECOND] ?? 0
-      ) + classDefinition.hpRegenBonusPerSecond,
+      ) + (classDefinition?.hpRegenBonusPerSecond ?? 0),
     };
   }
 }

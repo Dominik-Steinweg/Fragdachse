@@ -6,6 +6,7 @@ import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSam
 import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
 import { OverchargeSystem }  from '../../systems/OverchargeSystem';
+import { TurretChargeSystem } from '../../systems/TurretChargeSystem';
 import { ResourceSystem }    from '../../systems/ResourceSystem';
 import { TeslaDomeSystem }   from '../../systems/TeslaDomeSystem';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -238,6 +239,9 @@ export class ArenaLifecycleCoordinator {
     bridge.setMatchHostId();
     bridge.resetAllFrags();
     bridge.resetCoopDefenseRoundXp();
+    // Der Endstand der Vorrunde bleibt in der Lobby sichtbar, wird aber beim Start atomar
+    // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
+    bridge.publishRoundResults([]);
     applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
     const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
@@ -303,20 +307,27 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
-  hostSaveRoundResults(): void {
+  hostSaveRoundResults(roundEndedAt = Date.now()): void {
     if (!bridge.isHost()) return;
+    const gameMode = bridge.getGameMode();
+    const mapName = isCoopDefenseMode(gameMode)
+      ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()).displayName
+      : 'Zufallsarena';
     const results: RoundResult[] = bridge.getConnectedPlayers().map((p) => {
-      const teamId = isTeamGameMode(bridge.getGameMode()) ? bridge.getPlayerTeam(p.id) : null;
+      const teamId = isTeamGameMode(gameMode) ? bridge.getPlayerTeam(p.id) : null;
       return {
         id:       p.id,
         name:     p.name,
         colorHex: p.colorHex,
         frags:    bridge.getPlayerFrags(p.id),
         teamId,
-        teamScore: bridge.getGameMode() === CAPTURE_THE_BEER_MODE && teamId
+        roundEndedAt,
+        gameMode,
+        mapName,
+        teamScore: gameMode === CAPTURE_THE_BEER_MODE && teamId
           ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
           : undefined,
-        sharedXp: isCoopDefenseMode(bridge.getGameMode()) ? bridge.getCoopDefenseRoundXp() : undefined,
+        sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
       };
     });
     bridge.publishRoundResults(results);
@@ -324,6 +335,7 @@ export class ArenaLifecycleCoordinator {
 
   hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
+    const roundEndedAt = Date.now();
 
     if (roundConclusion) {
       const currentRoundState = bridge.getRoundState();
@@ -333,13 +345,13 @@ export class ArenaLifecycleCoordinator {
         timeOfDayMinutes: currentRoundState?.timeOfDayMinutes,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
-        endedAt: Date.now(),
+        endedAt: roundEndedAt,
       });
     } else {
       bridge.publishRoundState(null);
     }
 
-    this.hostSaveRoundResults();
+    this.hostSaveRoundResults(roundEndedAt);
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
     // zurücksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
@@ -435,6 +447,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
     // Host und Client halten das System: der Host autoritativ, der Client fuer die Darstellung.
     this.ctx.overchargeSystem = new OverchargeSystem();
+    this.ctx.turretChargeSystem = new TurretChargeSystem();
     this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
@@ -968,10 +981,18 @@ export class ArenaLifecycleCoordinator {
           .map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })),
       );
       // Der Buff ist ortsbezogen und wirkt dadurch auf platzierte Tuerme, Fliegenpilze
-      // und Basistuerme gleichermassen.
-      this.ctx.turretSystem.setTurretBuffProvider(
-        (x, y) => this.ctx.overchargeSystem?.getBuffAt(x, y) ?? null,
-      );
+      // und Basistuerme gleichermassen. Ueberladungsfeld (Flaeche) und Energieinjektor
+      // (einzelner Turm) sind unabhaengige Quellen und multiplizieren sich.
+      this.ctx.turretSystem.setTurretBuffProvider((x, y) => {
+        const field = this.ctx.overchargeSystem?.getBuffAt(x, y) ?? null;
+        const charge = this.ctx.turretChargeSystem?.getBuffAt(x, y) ?? null;
+        if (!field) return charge;
+        if (!charge) return field;
+        return {
+          fireRateMultiplier: field.fireRateMultiplier * charge.fireRateMultiplier,
+          damageMultiplier: field.damageMultiplier * charge.damageMultiplier,
+        };
+      });
       this.ctx.teslaDomeSystem.setRockCallbacks(
         () => (this.ctx.arenaResult?.rockObjects ?? [])
           .flatMap((rock, index) => (rock && rock.active)
@@ -1487,6 +1508,10 @@ export class ArenaLifecycleCoordinator {
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockId, 'damage', attackerId);
       });
 
+      this.ctx.projectileManager.setSupportImpactCallback((projectile, impact) => {
+        this.hostUpdate.applySupportProjectileImpact(projectile, impact);
+      });
+
       const trackCell = layout.tracks?.[0];
       if (trackCell !== undefined) {
         this.setupHostTrainEvent(trackCell.gridX);
@@ -1555,6 +1580,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.clearAll();
     this.renderers.timeBubble.destroyAll();
     this.renderers.overchargeField.destroyAll();
+    this.renderers.turretCharge.destroyAll();
     this.renderers.teslaDome.destroyAll();
     this.renderers.healingAura.destroyAll();
     this.renderers.miniTeslaDome.destroyAll();
@@ -1620,6 +1646,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.turretSystem?.setTurretBuffProvider(null);
     this.ctx.overchargeSystem?.clear();
     this.ctx.overchargeSystem = null;
+    this.ctx.turretChargeSystem?.clear();
+    this.ctx.turretChargeSystem = null;
     this.ctx.powerUpSystem?.reset();
     this.ctx.powerUpSystem  = null;
     this.ctx.shieldBuffSystem = null;
@@ -1685,6 +1713,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setObstacleIndex(null);
     this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
+    this.ctx.projectileManager.setSupportImpactCallback(null);
     this.ctx.projectileManager.setProjectileImpactCallback(null);
     this.ctx.projectileManager.setProjectileResolvedCallback(null);
     this.ctx.projectileManager.setMiniRocketCollectedCallback(null);

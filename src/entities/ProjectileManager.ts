@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
-import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact } from '../types';
 import { ProjectileHomingController } from './ProjectileHomingController';
 import type { HomingTargetProvider } from './ProjectileHomingController';
 import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
@@ -154,6 +154,7 @@ export class ProjectileManager {
    */
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
+  private onSupportImpact: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null = null;
 
   // ── Zug-Kollision ─────────────────────────────────────────────────────────
   private trainGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -203,6 +204,18 @@ export class ProjectileManager {
    */
   setRockHitCallback(cb: (rockId: number, damage: number, attackerId: string) => void): void {
     this.onRockHit = cb;
+  }
+
+  /**
+   * Registriert den Empfaenger fuer Hindernistreffer von Unterstuetzungsprojektilen
+   * (Reparaturstrahl, Energieinjektor). Diese Projektile richten keinen Schaden an; ihre
+   * Wirkung entsteht ausschliesslich hier, weil nur der Collider weiss, welcher Fels bzw.
+   * welche Basiszelle getroffen wurde.
+   */
+  setSupportImpactCallback(
+    cb: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null,
+  ): void {
+    this.onSupportImpact = cb;
   }
 
   /**
@@ -567,6 +580,8 @@ export class ProjectileManager {
       enemyHitExplosion: cfg.enemyHitExplosion,
       impactCloud:    cfg.impactCloud,
       homing:         cfg.homing,
+      repairPayload:  cfg.repairPayload,
+      turretChargePayload: cfg.turretChargePayload,
       projectileVisualScale: cfg.projectileVisualScale,
       smokeTrailColor: cfg.smokeTrailColor,
       lockedTargetId: null,
@@ -1117,6 +1132,7 @@ export class ProjectileManager {
       } else {
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+        if (this.tryResolveSupportImpact(tracked, rockGO as Phaser.GameObjects.GameObject, idx)) return;
         if (tracked.bounceProcessedThisStep) {
           // Phasers zweite Velocity-Spiegelung rückgängig machen, damit keine Doppelumkehr entsteht
           if (tracked.velocityAfterFirstBounce) {
@@ -1201,6 +1217,7 @@ export class ProjectileManager {
 
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const baseCollider = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
+        if (this.tryResolveSupportImpact(tracked, baseGO as Phaser.GameObjects.GameObject, -1)) return;
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
             body.velocity.x = tracked.velocityAfterFirstBounce.x;
@@ -1618,6 +1635,32 @@ export class ProjectileManager {
       });
     }
 
+    return true;
+  }
+
+  /**
+   * Meldet den Hindernistreffer eines Unterstuetzungsprojektils und verbraucht es dabei.
+   * Gibt `true` zurueck, wenn der Aufrufer die normale Abpraller-Behandlung ueberspringen soll.
+   *
+   * `rockId < 0` kennzeichnet eine Basiszelle: die Basis wird ueber den Einschlagspunkt
+   * aufgeloest, weil der Collider nur die einzelne Zelle kennt.
+   */
+  private tryResolveSupportImpact(
+    proj: TrackedProjectile,
+    obstacle: Phaser.GameObjects.GameObject,
+    rockId: number,
+  ): boolean {
+    if (!proj.repairPayload && !proj.turretChargePayload) return false;
+    if (proj.supportConsumed) return true;
+    proj.supportConsumed = true;
+    const impact = this.resolveObstacleImpactPoint(proj, obstacle);
+    this.onSupportImpact?.(
+      proj,
+      rockId >= 0
+        ? { kind: 'rock', rockId, x: impact.x, y: impact.y }
+        : { kind: 'base', x: impact.x, y: impact.y },
+    );
+    this.queueDestroyProjectile(proj);
     return true;
   }
 

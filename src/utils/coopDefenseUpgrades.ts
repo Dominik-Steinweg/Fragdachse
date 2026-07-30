@@ -220,6 +220,8 @@ const INSPECTOR_UPGRADE_ROOT_IDS: readonly string[] = [
   'inspector_construction_hp',
   'inspector_repair_drone',
   'unlock_overcharge_core',
+  'unlock_reparaturstrahl',
+  'unlock_energieinjektor',
 ];
 
 for (const definition of COOP_DEFENSE_UPGRADE_REGISTRY.upgrades) {

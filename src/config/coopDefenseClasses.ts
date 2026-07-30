@@ -27,11 +27,8 @@ export const COOP_DEFENSE_CLASS_IDS: readonly CoopDefenseClassId[] = [
 
 export const DEFAULT_COOP_DEFENSE_CLASS_ID: CoopDefenseClassId = 'dachs_nukem';
 
-/**
- * `null` schaltet die Spezialisierungen sofort frei. Spaeter kann hier die letzte
- * Map eingetragen werden, die vor der Klassenauswahl abgeschlossen sein muss.
- */
-export const COOP_DEFENSE_CLASS_UNLOCK_AFTER_MAP_ID: string | null = null;
+/** Ein Sieg auf dieser Map schaltet alle drei Spezialisierungen dauerhaft frei. */
+export const COOP_DEFENSE_CLASS_UNLOCK_AFTER_MAP_ID = '5';
 
 export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId, CoopDefenseClassDefinition>> =
   Object.freeze({

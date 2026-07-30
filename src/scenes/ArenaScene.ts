@@ -29,6 +29,14 @@ import { resolveSkyState } from '../effects/TimeOfDay';
 import { setEmissiveScale } from '../effects/EmissiveScale';
 import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
+import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
+import {
+  createMatchProgressDelta,
+  resolvePersonalMatchOutcome,
+  sortMatchLeaderboard,
+  type MatchProgressDelta,
+  type MatchResultsPresentation,
+} from '../ui/MatchResultsModel';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
@@ -54,10 +62,14 @@ import {
   getStoredMusicVolume,
   markStoredCoopDefenseBossMapCompleted,
   markStoredCoopDefenseRoundProcessed,
+  resetStoredCoopDefenseCharacter,
+  restoreStoredCoopDefenseProgress,
   setStoredCoopDefenseCheatProgress,
   setStoredCoopDefenseClassId,
+  setStoredCoopDefenseClassesUnlocked,
   setStoredLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
+  unlockStoredCoopDefenseClassesAfterVictory,
   unlockStoredCoopDefenseMapAfterVictory,
   type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
@@ -78,9 +90,10 @@ import {
   setLoadoutToolSlots,
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
+import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
-import { isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
+import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
@@ -217,12 +230,21 @@ export class ArenaScene extends Phaser.Scene {
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
   private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
+  private matchResultsOverlay: MatchResultsOverlay | null = null;
   private coopDefenseProgress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
   // Profil-Stand beim Oeffnen des Upgrade-Overlays – fuer "Abbruch" (Wiederherstellen).
   private coopDefenseUpgradeProfileSnapshot: CoopDefenseProgressPreferences | null = null;
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private coopDefenseHighestUnlockedMapId: string = INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
   private lastObservedGamePhase: GamePhase | null = null;
+  private matchResultsPending = false;
+  private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
+  /**
+   * Die zuletzt ausgewertete Runde, exakt so wie sie am Rundenende gezeigt wurde. Der Knopf
+   * "Letzte Runde" im Lobby-Panel spielt genau diese Praesentation erneut ab; der Fortschritt
+   * darin ist bereits verbucht und wird beim Wiederholen weder neu berechnet noch gespeichert.
+   */
+  private lastMatchResultsPresentation: MatchResultsPresentation | null = null;
   private lastLobbySidebarSignature: string | null = null;
   private runtimeProfiler: ArenaRuntimeProfiler | null = null;
   private performanceAblation: PerformanceAblationController | null = null;
@@ -460,14 +482,29 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.events.once('shutdown', () => this.netDebugOverlay?.destroy());
     this.coopDefenseXpDebugOverlay = new CoopDefenseXpDebugOverlay(
-      () => this.coopDefenseProgress.totalXp,
-      () => this.coopDefenseProgress.earnedBossPoints,
-      () => this.coopDefenseHighestUnlockedMapId,
-      (totalXp, bossPoints, highestUnlockedMapId) => {
+      () => {
+        const stored = getStoredCoopDefenseProgress();
+        const liveTotalXp = bridge.getPlayerCoopDefenseTotalXp(bridge.getLocalPlayerId());
+        return {
+          totalXp: Math.max(stored.totalXp, this.coopDefenseProgress.totalXp, liveTotalXp),
+          bossPoints: stored.completedBossMapIds.length,
+          highestUnlockedMapId: stored.highestUnlockedMapId,
+          classesUnlocked: stored.classesUnlocked,
+        };
+      },
+      (totalXp, bossPoints, highestUnlockedMapId, classesUnlocked) => {
         setStoredCoopDefenseCheatProgress(totalXp, bossPoints, highestUnlockedMapId);
+        setStoredCoopDefenseClassesUnlocked(classesUnlocked);
         this.refreshStoredCoopDefenseProgress();
         this.applyDefaultCoopDefenseMapSelection();
         this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+      },
+      () => {
+        resetStoredCoopDefenseCharacter();
+        this.refreshStoredCoopDefenseProgress();
+        this.applyDefaultCoopDefenseMapSelection();
+        this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+        this.ctx.leftPanel.refreshColorIndicator();
       },
     );
     this.timeOfDayDebugOverlay = new TimeOfDayDebugOverlay(
@@ -490,6 +527,14 @@ export class ArenaScene extends Phaser.Scene {
       () => this.applyCoopDefenseUpgradeChanges(),
     );
     this.coopDefenseUpgradesOverlay.build();
+    this.matchResultsOverlay = new MatchResultsOverlay(this, () => {
+      // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
+      // vorbereitete Lobby frei; Ready bleibt durch den Host-Reset weiterhin false.
+      this.lobbyOverlay.setReadyButtonState(false);
+    });
+    this.matchResultsOverlay.build();
+    rightPanel.setResultsReplayHandler(() => this.replayMatchResults());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.matchResultsOverlay?.destroy());
 
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
@@ -506,7 +551,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, overchargeSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      arenaResult: null, currentLayout: null, placementSystem: null, overchargeSystem: null, turretChargeSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -605,7 +650,7 @@ export class ArenaScene extends Phaser.Scene {
     // dieser Provider mehrfach pro Frame, und die Gegner außerhalb des Radius sind der
     // Großteil der Liste. Die Kandidaten gehen per `emit` in den Pool des Controllers,
     // es entsteht also kein Array und kein Objekt pro Aufruf.
-    projectileManager.setHomingTargetProvider((_config, ownerId, originX, originY, searchRadius, emit) => {
+    projectileManager.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
       if (!bridge.isHost()) return;
       const radiusSq = searchRadius * searchRadius;
       const inRange = (x: number, y: number): boolean => {
@@ -613,6 +658,15 @@ export class ArenaScene extends Phaser.Scene {
         const dy = y - originY;
         return dx * dx + dy * dy <= radiusSq;
       };
+      // Tuerme sind ein reiner Unterstuetzungs-Zieltyp (Energieinjektor) und werden nur
+      // aufgezaehlt, wenn die Waffe sie ausdruecklich anfragt – der Bestand kostet sonst
+      // in jedem Homing-Frame jeder Kampfwaffe.
+      if (config.targetTypes?.includes('turrets')) {
+        for (const turret of this.ctx.turretSystem?.getTurrets() ?? []) {
+          if (!inRange(turret.x, turret.y)) continue;
+          emit(String(turret.id), 'turrets', turret.x, turret.y);
+        }
+      }
       for (const player of playerManager.getAllPlayers()) {
         if (player.id === ownerId) continue;
         if (!player.sprite.active) continue;
@@ -966,7 +1020,13 @@ export class ArenaScene extends Phaser.Scene {
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
     // Verbindungsabbruch: es gibt keinen Hostwechsel und keinen Ersatztransport, die Partie
     // endet mit der konkreten Ursache statt still weiterzulaufen.
-    bridge.onNetworkFailure(message => this.lifecycle.terminateMatch(message));
+    bridge.onNetworkFailure(message => {
+      if (bridge.getGamePhase() === 'ARENA') {
+        this.matchResultsPending = false;
+        this.matchResultsOverlay?.showTechnicalAbort(message);
+      }
+      this.lifecycle.terminateMatch(message);
+    });
 
     this.lifecycle.initialize();
     this.registerArenaPanelHotkeys();
@@ -1038,6 +1098,8 @@ export class ArenaScene extends Phaser.Scene {
 
     if (!terminated && phase === 'LOBBY') {
       const lobbyUiStartedAt = performance.now();
+      if (enteredLobbyFromArena) this.beginMatchResults();
+      if (this.matchResultsPending) this.tryFinalizeMatchResults();
       this.lifecycle.syncLobbyTimeOfDay();
       this.menuArenaPreview?.setTreeTint(this.renderers.lighting.resolveCanopyTint(0, 0));
       if (!this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
@@ -1055,7 +1117,7 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay.setTransportDiagnostics(bridge.getWorstTransportDiagnostics());
       this.lobbyOverlay.refreshPlayerList(players);
       this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
-      this.processCoopDefenseRoundXp(enteredLobbyFromArena);
+      this.ctx.rightPanel.setResultsReplayAvailable(this.lastMatchResultsPresentation !== null);
       this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       const localId = bridge.getLocalPlayerId();
@@ -1219,6 +1281,10 @@ export class ArenaScene extends Phaser.Scene {
     // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
     this.renderers.overchargeField.syncVisuals(
       inArena ? (this.ctx.overchargeSystem?.getActiveFields() ?? []) : [],
+      bridge.getSynchronizedNow(),
+    );
+    this.renderers.turretCharge.syncVisuals(
+      inArena ? (this.ctx.turretChargeSystem?.getActiveCharges() ?? []) : [],
       bridge.getSynchronizedNow(),
     );
     this.renderers.teslaDome.update(delta);
@@ -1584,10 +1650,7 @@ export class ArenaScene extends Phaser.Scene {
 
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseClassId(snapshot.selectedClassId);
-    for (const [classId, profile] of Object.entries(snapshot.profilesByClass)) {
-      setStoredCoopDefenseUpgradeProfile(profile, classId as keyof typeof snapshot.profilesByClass);
-    }
+    restoreStoredCoopDefenseProgress(snapshot);
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
     this.ctx.leftPanel.refreshColorIndicator();
@@ -1600,6 +1663,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private selectCoopDefenseClass(classId: CoopDefenseClassId): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
+    if (!getStoredCoopDefenseProgress().classesUnlocked) return;
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
     setStoredCoopDefenseClassId(classId);
@@ -1610,21 +1674,27 @@ export class ArenaScene extends Phaser.Scene {
 
   private levelUpCoopDefenseUpgrade(upgradeId: string): boolean {
     const stored = getStoredCoopDefenseProgress();
+    const activeClassId = stored.classesUnlocked
+      ? stored.selectedClassId
+      : DEFAULT_COOP_DEFENSE_CLASS_ID;
+    const activeProfile = stored.classesUnlocked
+      ? stored.profilesByClass[stored.selectedClassId]
+      : stored.defaultProfile;
     const nextProfile = levelUpCoopDefenseUpgrade(
-      stored.profilesByClass[stored.selectedClassId],
+      activeProfile,
       upgradeId,
       this.coopDefenseProgress.level,
       stored.completedBossMapIds.length,
-      stored.selectedClassId,
+      activeClassId,
     );
     if (!nextProfile) return false;
 
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, stored.selectedClassId);
+    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
 
     const loadoutSelection = getCoopDefenseUpgradeLoadoutSelection(upgradeId);
-    if (loadoutSelection && stored.selectedClassId !== 'inspector_gadachs') {
+    if (loadoutSelection && activeClassId !== 'inspector_gadachs') {
       bridge.setLocalLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
       setStoredLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
     }
@@ -1718,16 +1788,22 @@ export class ArenaScene extends Phaser.Scene {
 
   private levelDownCoopDefenseUpgrade(upgradeId: string): boolean {
     const stored = getStoredCoopDefenseProgress();
+    const activeClassId = stored.classesUnlocked
+      ? stored.selectedClassId
+      : DEFAULT_COOP_DEFENSE_CLASS_ID;
+    const activeProfile = stored.classesUnlocked
+      ? stored.profilesByClass[stored.selectedClassId]
+      : stored.defaultProfile;
     const nextProfile = levelDownCoopDefenseUpgrade(
-      stored.profilesByClass[stored.selectedClassId],
+      activeProfile,
       upgradeId,
-      stored.selectedClassId,
+      activeClassId,
     );
     if (!nextProfile) return false;
 
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, stored.selectedClassId);
+    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
     // Ein Downgrade kann eine aktuell ausgewaehlte Waffe/Utility/Ultimate wieder sperren.
@@ -1737,11 +1813,14 @@ export class ArenaScene extends Phaser.Scene {
 
   private fullRespecCoopDefenseUpgrades(): boolean {
     const stored = getStoredCoopDefenseProgress();
-    const nextProfile = buildDefaultCoopDefenseUpgradeProfile(stored.selectedClassId);
+    const activeClassId = stored.classesUnlocked
+      ? stored.selectedClassId
+      : DEFAULT_COOP_DEFENSE_CLASS_ID;
+    const nextProfile = buildDefaultCoopDefenseUpgradeProfile(activeClassId);
 
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, stored.selectedClassId);
+    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
     // Nach Full Respec sind alle Loadout-Unlocks zurueckgesetzt; Auswahl neu abgleichen.
@@ -1816,7 +1895,12 @@ export class ArenaScene extends Phaser.Scene {
   private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
     const localId = bridge.getLocalPlayerId();
     const storedProgress = getStoredCoopDefenseProgress();
-    const coopDefenseProfile = storedProgress.profilesByClass[storedProgress.selectedClassId];
+    const coopDefenseClassId = storedProgress.classesUnlocked
+      ? storedProgress.selectedClassId
+      : null;
+    const coopDefenseProfile = storedProgress.classesUnlocked
+      ? storedProgress.profilesByClass[storedProgress.selectedClassId]
+      : storedProgress.defaultProfile;
     return resolveLoadoutSelectionIds({
       weapon1:  (bridge.getPlayerLoadoutSlot(localId, 'weapon1')  ?? DEFAULT_LOADOUT.weapon1.id) in WEAPON_CONFIGS
         ? WEAPON_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id) as keyof typeof WEAPON_CONFIGS]
@@ -1830,7 +1914,7 @@ export class ArenaScene extends Phaser.Scene {
       ultimate: (bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) in ULTIMATE_CONFIGS
         ? ULTIMATE_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) as keyof typeof ULTIMATE_CONFIGS]
         : DEFAULT_LOADOUT.ultimate,
-    }, bridge.getGameMode(), coopDefenseProfile, storedProgress.selectedClassId);
+    }, bridge.getGameMode(), coopDefenseProfile, coopDefenseClassId);
   }
 
   private getEnemyHoverNameTarget(): { name: string; x: number; y: number } | null {
@@ -2568,11 +2652,18 @@ export class ArenaScene extends Phaser.Scene {
 
   private refreshStoredCoopDefenseProgress(): void {
     const stored = getStoredCoopDefenseProgress();
+    const activeClassId = stored.classesUnlocked
+      ? stored.selectedClassId
+      : DEFAULT_COOP_DEFENSE_CLASS_ID;
+    const activeProfile = stored.classesUnlocked
+      ? stored.profilesByClass[stored.selectedClassId]
+      : stored.defaultProfile;
     this.coopDefenseProgress = getCoopDefenseProgressSnapshot(
       stored.totalXp,
-      stored.profilesByClass[stored.selectedClassId],
+      activeProfile,
       stored.completedBossMapIds.length,
-      stored.selectedClassId,
+      activeClassId,
+      stored.classesUnlocked,
     );
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;
@@ -2589,10 +2680,13 @@ export class ArenaScene extends Phaser.Scene {
   private resyncLoadoutWithUnlocks(): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
     const stored = getStoredCoopDefenseProgress();
-    const profile = stored.profilesByClass[stored.selectedClassId];
+    const classId = stored.classesUnlocked ? stored.selectedClassId : DEFAULT_COOP_DEFENSE_CLASS_ID;
+    const profile = stored.classesUnlocked
+      ? stored.profilesByClass[stored.selectedClassId]
+      : stored.defaultProfile;
     const localId = bridge.getLocalPlayerId();
     for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
-      const selectable = getSelectableLoadoutItems(slot, bridge.getGameMode(), profile, stored.selectedClassId);
+      const selectable = getSelectableLoadoutItems(slot, bridge.getGameMode(), profile, classId);
       if (selectable.length === 0) continue;
       const current = bridge.getPlayerLoadoutSlot(localId, slot);
       if (current && selectable.some((item) => item.id === current)) continue;
@@ -2610,16 +2704,91 @@ export class ArenaScene extends Phaser.Scene {
     bridge.setCoopDefenseMapId(this.coopDefenseHighestUnlockedMapId);
   }
 
-  private processCoopDefenseRoundXp(enteredLobbyFromArena: boolean): void {
-    if (!enteredLobbyFromArena || !isCoopDefenseMode(bridge.getGameMode())) return;
+  private beginMatchResults(): void {
+    const mode = bridge.getGameMode();
+    const roundState = bridge.getRoundState();
+    const mapLabel = isCoopDefenseMode(mode)
+      ? getCoopDefenseMapConfig(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()).displayName
+      : 'Zufallsarena';
 
+    this.matchResultsPending = true;
+    this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.coopDefenseProgress : null;
+    // Die Auswertung der vorigen Runde ist ab hier ueberholt und darf nicht mehr abrufbar sein.
+    this.lastMatchResultsPresentation = null;
+    this.matchResultsOverlay?.showSyncing(getGameModeLabel(mode), mapLabel);
+  }
+
+  /**
+   * Wartet auf den atomaren Endstand und zeigt erst danach den Endzustand. Der Ergebnis-Layer
+   * selbst schreibt keine Belohnungen; im Coop-Modus ist die lokale Persistenz vorher abgeschlossen.
+   */
+  private tryFinalizeMatchResults(): void {
+    const results = bridge.getRoundResults();
+    if (!results || results.length === 0) return;
+
+    const firstResult = results[0];
+    const mode = firstResult.gameMode ?? bridge.getGameMode();
+    const roundState = bridge.getRoundState();
+    if (
+      isCoopDefenseMode(mode)
+      && (
+        !roundState?.endedAt
+        || roundState.endedAt !== firstResult.roundEndedAt
+        || roundState.status === 'active'
+      )
+    ) {
+      return;
+    }
+
+    const progress = isCoopDefenseMode(mode)
+      ? this.processCoopDefenseRoundProgress(this.matchResultsProgressBefore ?? this.coopDefenseProgress)
+      : null;
+    if (isCoopDefenseMode(mode) && !progress) return;
+
+    const outcome = resolvePersonalMatchOutcome(
+      mode,
+      bridge.getLocalPlayerId(),
+      results,
+      roundState,
+    );
+    const presentation: MatchResultsPresentation = {
+      outcome,
+      mode,
+      modeLabel: getGameModeLabel(mode),
+      mapLabel: firstResult.mapName || 'Zufallsarena',
+      localPlayerId: bridge.getLocalPlayerId(),
+      leaderboard: sortMatchLeaderboard(results),
+      progress,
+      technicalMessage: null,
+    };
+    this.lastMatchResultsPresentation = presentation;
+    this.matchResultsOverlay?.show(presentation);
+    this.matchResultsPending = false;
+    this.matchResultsProgressBefore = null;
+  }
+
+  /**
+   * Oeffnet die Auswertung der letzten Runde noch einmal. Es wird ausschliesslich die bereits
+   * berechnete Praesentation wiederverwendet: kein erneutes Verbuchen von XP, Skillpunkten
+   * oder Map-Freischaltungen, und beim Schliessen kein Lobby-Uebergang.
+   */
+  private replayMatchResults(): void {
+    const presentation = this.lastMatchResultsPresentation;
+    if (!presentation || this.matchResultsPending) return;
+    if (this.matchResultsOverlay?.isVisible()) return;
+    this.matchResultsOverlay?.showReplay(presentation);
+  }
+
+  private processCoopDefenseRoundProgress(
+    before: CoopDefenseProgressSnapshot,
+  ): MatchProgressDelta | null {
     const roundState = bridge.getRoundState();
     const results = bridge.getRoundResults();
     const endedAt = roundState?.endedAt ?? null;
-    if (!endedAt || !results) return;
+    if (!roundState || !endedAt || !results?.length) return null;
 
     if (this.coopDefenseLastProcessedRoundEndedAt !== null && this.coopDefenseLastProcessedRoundEndedAt >= endedAt) {
-      return;
+      return createMatchProgressDelta(before, this.coopDefenseProgress, 0, null);
     }
 
     const sharedRoundXp = Math.max(
@@ -2629,20 +2798,24 @@ export class ArenaScene extends Phaser.Scene {
           ?? bridge.getCoopDefenseRoundXp(),
       ),
     );
-    if (sharedRoundXp > 0) {
-      addStoredCoopDefenseXp(sharedRoundXp);
-    }
-    const completedMapId = roundState?.coopDefenseMapId;
+    if (sharedRoundXp > 0) addStoredCoopDefenseXp(sharedRoundXp);
+
+    const completedMapId = roundState.coopDefenseMapId;
     let unlockedNewMap = false;
-    if (roundState?.status === 'victory' && completedMapId) {
+    if (roundState.status === 'victory' && completedMapId) {
       if (getCoopDefenseMapConfig(completedMapId).boss) {
         markStoredCoopDefenseBossMapCompleted(completedMapId);
       }
+      unlockStoredCoopDefenseClassesAfterVictory(completedMapId);
       unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
     }
+
     markStoredCoopDefenseRoundProcessed(endedAt);
     this.refreshStoredCoopDefenseProgress();
-    // Neu freigeschaltete Map ist die Standardauswahl der naechsten Runde.
+    const unlockedMapName = unlockedNewMap
+      ? getCoopDefenseMapConfig(this.coopDefenseHighestUnlockedMapId).displayName
+      : null;
     if (unlockedNewMap) this.applyDefaultCoopDefenseMapSelection();
+    return createMatchProgressDelta(before, this.coopDefenseProgress, sharedRoundXp, unlockedMapName);
   }
 }

@@ -584,7 +584,7 @@ export class CoopDefenseUpgradesOverlay {
       this.activeCategoryIndex = Phaser.Math.Clamp(this.activeCategoryIndex, 0, categoryCount - 1);
     }
 
-    this.renderClasses(progress.classId);
+    this.renderClasses(progress.classId, progress.classesUnlocked);
     this.renderLoadoutRow(progress);
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
@@ -718,7 +718,7 @@ export class CoopDefenseUpgradesOverlay {
    * Kartensatz gezeichnet: eigene Klassenfarbe, Rolle als zweite Zeile und ein atmender Glow
    * auf der gewaehlten Karte – dieselbe Formsprache wie Kategorie-Tabs und Loadout-Karten.
    */
-  private renderClasses(activeClassId: CoopDefenseClassId): void {
+  private renderClasses(activeClassId: CoopDefenseClassId, classesUnlocked: boolean): void {
     if (!this.classContainer) return;
     this.clearClassDecorations();
     this.classContainer.removeAll(true);
@@ -729,27 +729,29 @@ export class CoopDefenseUpgradesOverlay {
 
     COOP_DEFENSE_CLASS_IDS.forEach((classId, index) => {
       const definition = COOP_DEFENSE_CLASS_DEFINITIONS[classId];
-      const accentColor = CLASS_ACCENT_COLORS[classId];
-      const active = classId === activeClassId;
+      const accentColor = classesUnlocked ? CLASS_ACCENT_COLORS[classId] : COLORS.GREY_5;
+      const active = classesUnlocked && classId === activeClassId;
       const centerX = startX + CLASS_BUTTON_W / 2 + index * (CLASS_BUTTON_W + CLASS_BUTTON_GAP);
 
       const background = this.scene.add.image(centerX, CLASS_ROW_Y, this.ensureClassButtonTexture(accentColor, active))
         .setScrollFactor(0)
-        .setAlpha(active ? 1 : 0.82)
-        .setInteractive({ useHandCursor: true });
+        .setAlpha(classesUnlocked ? (active ? 1 : 0.82) : 0.48)
+        .setInteractive({ useHandCursor: classesUnlocked });
 
       // Aktiv: dunkler Text auf lebendiger Klassenfarbe; passiv: heller Text auf gedimmtem Grund.
       const name = this.scene.add.text(0, -10, definition.displayName, {
         fontSize: '17px',
         fontFamily: 'monospace',
         fontStyle: 'bold',
-        color: toCssColor(active ? COLORS.GREY_10 : COLORS.GREY_1),
+        color: toCssColor(active ? COLORS.GREY_10 : (classesUnlocked ? COLORS.GREY_1 : COLORS.GREY_4)),
       }).setOrigin(0.5).setScrollFactor(0);
-      const role = this.scene.add.text(0, 12, definition.role.toUpperCase(), {
+      const role = this.scene.add.text(0, 12, classesUnlocked ? definition.role.toUpperCase() : '🔒 GESPERRT', {
         fontSize: '11px',
         fontFamily: 'monospace',
         fontStyle: 'bold',
-        color: toCssColor(active ? COLORS.GREY_9 : lerpColor(COLORS.GREY_3, accentColor, 0.5)),
+        color: toCssColor(active
+          ? COLORS.GREY_9
+          : (classesUnlocked ? lerpColor(COLORS.GREY_3, accentColor, 0.5) : COLORS.GREY_5)),
       }).setOrigin(0.5).setScrollFactor(0);
       const labels = this.scene.add.container(centerX, CLASS_ROW_Y, [name, role]).setScrollFactor(0);
 
@@ -768,8 +770,9 @@ export class CoopDefenseUpgradesOverlay {
         }
       }
 
-      attachHoverEffect(this.scene, background, labels);
+      if (classesUnlocked) attachHoverEffect(this.scene, background, labels);
       background.on('pointerdown', () => {
+        if (!classesUnlocked) return;
         if (classId === this.getProgress().classId) return;
         this.onSelectClass(classId);
         this.activeCategoryIndex = 0;
@@ -778,7 +781,9 @@ export class CoopDefenseUpgradesOverlay {
       background.on('pointerover', (pointer: Phaser.Input.Pointer) => {
         this.showTooltip(
           definition.displayName,
-          [definition.role, '', definition.description, ...definition.tooltipLines].join('\n'),
+          classesUnlocked
+            ? [definition.role, '', definition.description, ...definition.tooltipLines].join('\n')
+            : 'Freischaltung durch Abschluss von Map 5',
           pointer,
         );
       });

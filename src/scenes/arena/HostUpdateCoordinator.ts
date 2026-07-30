@@ -15,11 +15,23 @@ import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
 import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
-import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, TeamId, TrackedProjectile } from '../../types';
+import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, TeamId, TrackedProjectile } from '../../types';
+import type { BaseManager } from '../../entities/BaseManager';
+import type { AutomatedTurret, AutomatedTurretId } from '../../systems/TurretSystem';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
+
+/**
+ * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
+ * getroffene Basiszelle, der Turm sitzt aber leicht versetzt darauf.
+ */
+const SUPPORT_BASE_TURRET_SEARCH_RADIUS = 64;
+/** Toleranz fuer Streiftreffer an der Nachbarzelle eines platzierten Turms. */
+const SUPPORT_TURRET_GRAZE_RADIUS = 24;
+/** Sichtbare Groesse des Regenerationsstosses; bewusst klein gehalten. */
+const SUPPORT_REGENERATION_EFFECT_RADIUS = 30;
 
 export interface HostUpdatePerformanceMetrics {
   totalMs: number;
@@ -200,6 +212,7 @@ export class HostUpdateCoordinator {
       this.ctx.weaponUpgradeSystem?.hostUpdate(now);
       this.ctx.combatSystem.update();
       this.ctx.combatSystem.updateBurnEffects(now);
+      this.resolveSupportProjectileAllyHits();
     }
 
     const { explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
@@ -802,6 +815,7 @@ export class HostUpdateCoordinator {
       });
     }
     this.ctx.overchargeSystem?.update(now);
+    this.ctx.turretChargeSystem?.update(now);
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -892,6 +906,7 @@ export class HostUpdateCoordinator {
       rocks: this.ctx.rockRegistry?.getNetSnapshot() ?? null,
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
       overchargeFields: this.ctx.overchargeSystem?.getNetSnapshot() ?? [],
+      turretCharges: this.ctx.turretChargeSystem?.getNetSnapshot() ?? [],
       decoys,
       smokes,
       fires,
@@ -1327,6 +1342,115 @@ export class HostUpdateCoordinator {
   applyTeslaTurretDamage(id: number, damage: number, ownerId: string): void {
     const newHp = this.rockVisualHelper.applyObstacleDamageById(id, damage, ownerId);
     if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage');
+  }
+
+  /**
+   * Hindernistreffer eines Unterstuetzungsprojektils (Reparaturstrahl, Energieinjektor).
+   * Wird vom `ProjectileManager` aus dem Fels- bzw. Basis-Collider gemeldet, weil nur dort
+   * bekannt ist, welches Hindernis getroffen wurde.
+   *
+   * Der Energieinjektor sucht am Einschlagsort einen Turm: bei Felstreffern ist das die
+   * getroffene Konstruktion selbst, bei Basistreffern der naechstgelegene Basisturm.
+   */
+  applySupportProjectileImpact(projectile: TrackedProjectile, impact: SupportProjectileImpact): void {
+    const repair = projectile.repairPayload;
+    if (repair) {
+      const healed = impact.kind === 'rock'
+        ? this.rockVisualHelper.applyObstacleRepairById(impact.rockId, repair.amount)
+        : this.healBaseNear(impact.x, impact.y, repair.amount);
+      if (healed > 0) this.emitRegenerationEffect(impact.x, impact.y, repair.color);
+      return;
+    }
+
+    const charge = projectile.turretChargePayload;
+    if (!charge) return;
+    const turret = impact.kind === 'rock'
+      // Streift der Bolzen die Nachbarzelle desselben Turms, zaehlt der Treffer trotzdem;
+      // ueber diese kurze Distanz kann kein anderer Turm dazwischenliegen.
+      ? this.findTurretById(impact.rockId) ?? this.findNearestTurret(impact.x, impact.y, SUPPORT_TURRET_GRAZE_RADIUS)
+      : this.findNearestTurret(impact.x, impact.y, SUPPORT_BASE_TURRET_SEARCH_RADIUS);
+    if (!turret) return;
+    this.ctx.turretChargeSystem?.applyCharge(
+      String(turret.id),
+      turret.x,
+      turret.y,
+      projectile.ownerId,
+      charge,
+      Date.now(),
+    );
+    bridge.broadcastExplosionEffect(turret.x, turret.y, 26, charge.color, 'lightning');
+  }
+
+  /**
+   * Verbuendetentreffer der Unterstuetzungsprojektile. Laeuft getrennt vom `CombatSystem`,
+   * weil dessen Trefferpfad ausschliesslich Ziele kennt, denen der Schuetze schaden darf.
+   */
+  private resolveSupportProjectileAllyHits(): void {
+    for (const projectile of this.ctx.projectileManager.getActiveProjectiles()) {
+      const repair = projectile.repairPayload;
+      if (!repair || projectile.supportConsumed) continue;
+
+      const bounds = projectile.sprite.getBounds();
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        if (!player.sprite.active) continue;
+        if (player.id !== projectile.ownerId && bridge.isEnemyPair(projectile.ownerId, player.id)) continue;
+        if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+        if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
+        if (!Phaser.Geom.Intersects.RectangleToRectangle(bounds, player.sprite.getBounds())) continue;
+
+        const before = this.ctx.combatSystem.getHP(player.id);
+        const after = this.ctx.combatSystem.heal(player.id, repair.amount);
+        projectile.supportConsumed = true;
+        this.ctx.projectileManager.destroyProjectile(projectile.id);
+        if (after > before) {
+          this.emitRegenerationEffect(player.sprite.x, player.sprite.y, repair.color);
+        }
+        break;
+      }
+    }
+  }
+
+  /** Heilt die dem Einschlag naechstgelegene lebende Basis; liefert die zugefuehrten HP. */
+  private healBaseNear(x: number, y: number, amount: number): number {
+    const baseManager = this.ctx.baseManager;
+    if (!baseManager) return 0;
+
+    let bestBase: ReturnType<BaseManager['getBases']>[number] | undefined;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const base of baseManager.getBases()) {
+      if (base.getHp() <= 0) continue;
+      const surface = base.getNearestSurfacePoint(x, y);
+      if (!surface || surface.distance >= bestDistance) continue;
+      bestBase = base;
+      bestDistance = surface.distance;
+    }
+    if (!bestBase) return 0;
+
+    const before = bestBase.getHp();
+    baseManager.heal(bestBase.id, amount);
+    return bestBase.getHp() - before;
+  }
+
+  private findTurretById(turretId: AutomatedTurretId): AutomatedTurret | undefined {
+    return this.ctx.turretSystem?.getTurrets().find((turret) => turret.id === turretId);
+  }
+
+  private findNearestTurret(x: number, y: number, maxDistance: number): AutomatedTurret | undefined {
+    let best: AutomatedTurret | undefined;
+    let bestDistanceSq = maxDistance * maxDistance;
+    for (const turret of this.ctx.turretSystem?.getTurrets() ?? []) {
+      const dx = turret.x - x;
+      const dy = turret.y - y;
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq > bestDistanceSq) continue;
+      best = turret;
+      bestDistanceSq = distanceSq;
+    }
+    return best;
+  }
+
+  private emitRegenerationEffect(x: number, y: number, color: number): void {
+    bridge.broadcastExplosionEffect(x, y, SUPPORT_REGENERATION_EFFECT_RADIUS, color, 'regeneration');
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

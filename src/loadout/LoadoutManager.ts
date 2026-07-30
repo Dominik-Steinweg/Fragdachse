@@ -22,6 +22,7 @@ import type {
   NukeUtilityConfig,
   OverchargeCoreWeaponFireConfig,
   PlaceableUtilityConfig,
+  RepairBeamWeaponFireConfig,
   StinkCloudUtilityConfig,
   TaserUtilityConfig,
   TimeBubbleUtilityConfig,
@@ -31,6 +32,7 @@ import type {
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
   TeslaDomeWeaponFireConfig,
+  TurretChargeWeaponFireConfig,
   UltimateConfig,
   UtilityConfig,
   WeaponConfig,
@@ -1875,6 +1877,12 @@ export class LoadoutManager {
           sourceSlot,
         );
 
+      case 'repair_beam':
+        return this.fireRepairBeamWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
+
+      case 'turret_charge':
+        return this.fireTurretChargeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
+
       case 'tesla_dome':
       case 'healing_aura':
       case 'energy_shield':
@@ -1939,6 +1947,91 @@ export class LoadoutManager {
         },
       },
       projectileStyle: config.projectileStyle,
+      sourceSlot: sourceSlot ?? 'weapon2',
+      shotAudioKey: config.shotAudio?.successKey,
+    });
+    return true;
+  }
+
+  /**
+   * Feuert ein Reparaturprojektil. Es traegt keinen Schaden und keine Explosion; die
+   * Heilung haengt allein an der `repairPayload`, die der Host beim Treffer aufloest.
+   */
+  private fireRepairBeamWeapon(
+    config: WeaponConfig,
+    fireConfig: RepairBeamWeaponFireConfig,
+    x: number,
+    y: number,
+    angle: number,
+    playerId: string,
+    playerColor: number,
+    sourceSlot?: LoadoutSlot,
+  ): boolean {
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed: fireConfig.projectileSpeed,
+      size: fireConfig.projectileSize,
+      damage: 0,
+      color: config.projectileColor ?? fireConfig.beamColor,
+      ownerColor: playerColor,
+      projectileVisualScale: config.projectileVisualScale,
+      lifetime: (config.range / fireConfig.projectileSpeed) * 1000,
+      remainingRangePx: config.range,
+      maxBounces: 0,
+      isGrenade: false,
+      adrenalinGain: 0,
+      weaponName: config.displayName,
+      rockDamageMult: 0,
+      trainDamageMult: 0,
+      repairPayload: {
+        amount: fireConfig.healPerHit,
+        color: fireConfig.beamColor,
+      },
+      projectileStyle: config.projectileStyle,
+      energyBallVariant: config.energyBallVariant,
+      sourceSlot: sourceSlot ?? 'weapon2',
+      shotAudioKey: config.shotAudio?.successKey,
+    });
+    return true;
+  }
+
+  /**
+   * Feuert einen Energiebolzen, der einen getroffenen Turm auflaedt. Die Lenkung laeuft
+   * ueber die regulaere Homing-Konfiguration mit dem Zieltyp `turrets`.
+   */
+  private fireTurretChargeWeapon(
+    config: WeaponConfig,
+    fireConfig: TurretChargeWeaponFireConfig,
+    x: number,
+    y: number,
+    angle: number,
+    playerId: string,
+    playerColor: number,
+    sourceSlot?: LoadoutSlot,
+  ): boolean {
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed: fireConfig.projectileSpeed,
+      size: fireConfig.projectileSize,
+      damage: 0,
+      color: config.projectileColor ?? fireConfig.chargeColor,
+      ownerColor: playerColor,
+      projectileVisualScale: config.projectileVisualScale,
+      lifetime: (config.range / fireConfig.projectileSpeed) * 1000,
+      remainingRangePx: config.range,
+      maxBounces: 0,
+      isGrenade: false,
+      adrenalinGain: 0,
+      weaponName: config.displayName,
+      homing: fireConfig.homing,
+      rockDamageMult: 0,
+      trainDamageMult: 0,
+      turretChargePayload: {
+        durationMs: fireConfig.durationMs,
+        damageMultiplierPerStack: fireConfig.damageMultiplierPerStack,
+        maxStacks: fireConfig.maxStacks,
+        color: fireConfig.chargeColor,
+      },
+      projectileStyle: config.projectileStyle,
+      energyBallVariant: config.energyBallVariant,
       sourceSlot: sourceSlot ?? 'weapon2',
       shotAudioKey: config.shotAudio?.successKey,
     });

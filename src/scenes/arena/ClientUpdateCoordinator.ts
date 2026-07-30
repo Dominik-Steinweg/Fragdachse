@@ -239,6 +239,7 @@ export class ClientUpdateCoordinator {
       }
 
       this.ctx.overchargeSystem?.syncFromSnapshot(state.overchargeFields ?? []);
+      this.ctx.turretChargeSystem?.syncFromSnapshot(state.turretCharges ?? []);
 
       const trainState = state.train;
       this.ctx.combatSystem.setClientTrainBounds(
@@ -576,7 +577,9 @@ export class ClientUpdateCoordinator {
     const committed = bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile;
     if (committed) return committed;
     const progress = getStoredCoopDefenseProgress();
-    this.storedProfileFallback ??= progress.profilesByClass[progress.selectedClassId];
+    this.storedProfileFallback ??= progress.classesUnlocked
+      ? progress.profilesByClass[progress.selectedClassId]
+      : progress.defaultProfile;
     return this.storedProfileFallback;
   }
 
@@ -624,8 +627,10 @@ export class ClientUpdateCoordinator {
 
   private getLocalCoopDefenseClassId() {
     const localId = bridge.getLocalPlayerId();
-    return bridge.getPlayerCommittedLoadout(localId)?.coopDefenseClassId
-      ?? getStoredCoopDefenseProgress().selectedClassId;
+    const committed = bridge.getPlayerCommittedLoadout(localId);
+    if (committed) return committed.coopDefenseClassId;
+    const progress = getStoredCoopDefenseProgress();
+    return progress.classesUnlocked ? progress.selectedClassId : null;
   }
 
   resetPerRound(): void {
@@ -829,7 +834,11 @@ export class ClientUpdateCoordinator {
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
     }, bridge.getGameMode(), localProgress
-      ? localProgress.profilesByClass[localProgress.selectedClassId]
-      : null, localProgress?.selectedClassId ?? null);
+      ? (
+        localProgress.classesUnlocked
+          ? localProgress.profilesByClass[localProgress.selectedClassId]
+          : localProgress.defaultProfile
+      )
+      : null, localProgress?.classesUnlocked ? localProgress.selectedClassId : null);
   }
 }

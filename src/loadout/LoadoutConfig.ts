@@ -1,4 +1,4 @@
-import { COLORS, RAGE_MAX, VOID_FIRE_COLOR, VOID_PALETTE } from '../config';
+import { COLORS, RAGE_MAX, REPAIR_BEAM_COLOR, TURRET_CHARGE_COLOR, VOID_FIRE_COLOR, VOID_PALETTE } from '../config';
 import { COOP_DEFENSE_BUILD_COOLDOWN_MS } from '../config/coopDefenseConstructions';
 import type { GroundFireVisualStyle } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
@@ -164,6 +164,37 @@ export interface OverchargeCoreWeaponFireConfig {
   readonly fieldColor: number;
 }
 
+/**
+ * Klassenfaehigkeit des Ingenieurs auf Waffe 2: feuert Reparaturprojektile, die Felsen,
+ * Konstrukte, Tuerme, Basen und Verbuendete heilen statt zu schaden. Die Projektile tragen
+ * keinerlei Schaden; getroffen wird ueber denselben Hindernis-Collider wie bei Kampfwaffen,
+ * die Wirkung loest der `SupportProjectileSystem`-Pfad im Host aus.
+ */
+export interface RepairBeamWeaponFireConfig {
+  readonly type: 'repair_beam';
+  readonly projectileSpeed: number;
+  readonly projectileSize: number;
+  /** HP je Treffer, identisch fuer Spieler und Strukturen. */
+  readonly healPerHit: number;
+  readonly beamColor: number;
+}
+
+/**
+ * Klassenfaehigkeit des Ingenieurs auf Waffe 2: schnelle, leicht zielsuchende Energiebolzen,
+ * die Adrenalin in einen Turm entladen und dessen Schaden kurzzeitig erhoehen. Mehrere
+ * Treffer stapeln bis `maxStacks` und verlaengern die Wirkdauer jeweils neu.
+ */
+export interface TurretChargeWeaponFireConfig {
+  readonly type: 'turret_charge';
+  readonly projectileSpeed: number;
+  readonly projectileSize: number;
+  readonly homing: ProjectileHomingConfig;
+  readonly durationMs: number;
+  readonly damageMultiplierPerStack: number;
+  readonly maxStacks: number;
+  readonly chargeColor: number;
+}
+
 export type WeaponFireConfig =
   | ProjectileWeaponFireConfig
   | HitscanWeaponFireConfig
@@ -173,7 +204,9 @@ export type WeaponFireConfig =
   | TeslaDomeWeaponFireConfig
   | HealingAuraWeaponFireConfig
   | EnergyShieldWeaponFireConfig
-  | OverchargeCoreWeaponFireConfig;
+  | OverchargeCoreWeaponFireConfig
+  | RepairBeamWeaponFireConfig
+  | TurretChargeWeaponFireConfig;
 
 export interface WeaponConfig {
   readonly id: string;
@@ -1447,6 +1480,102 @@ export const WEAPON_CONFIGS = {
     rocketSmokeTrailColor: 0x5b9eae,
     shotAudio: {
       successKey: 'shot_throw',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  /**
+   * Zweiter Adrenalinverbraucher des Ingenieurs: heilt statt zu schaden. Wie der
+   * Ueberladungskern eine regulaere Waffe-2-Waffe, damit Kosten, Cooldown, HUD und
+   * Upgrade-Overlay ueber die vorhandenen Pfade laufen.
+   */
+  REPARATURSTRAHL: {
+    id:                   'REPARATURSTRAHL',
+    displayName:          'Reparaturstrahl',
+    cooldown:             200,
+    damage:               0,
+    range:                420,
+    fire: {
+      type:               'repair_beam',
+      projectileSpeed:    720,
+      projectileSize:     8,
+      healPerHit:         25,
+      beamColor:          REPAIR_BEAM_COLOR,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        10,
+    adrenalinGain:        0,
+    spreadStanding:       0,
+    spreadMoving:         2,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'energy_ball' satisfies ProjectileStyle,
+    energyBallVariant:    'plasma' satisfies EnergyBallVariant,
+    projectileColor:      REPAIR_BEAM_COLOR,
+    projectileVisualScale: 1.1,
+    rockDamageMult:       0,
+    trainDamageMult:      0,
+    shotAudio: {
+      successKey: 'shot_plasma',
+      failureKey: 'shot_dry_trigger',
+    },
+  } as WeaponConfig,
+
+  /**
+   * Dritter Waffe-2-Slot des Ingenieurs: entlaedt Adrenalin in schnellen, leicht
+   * zielsuchenden Energiebolzen auf einen Turm und erhoeht dessen Schaden auf Zeit.
+   */
+  ENERGIEINJEKTOR: {
+    id:                   'ENERGIEINJEKTOR',
+    displayName:          'Energieinjektor',
+    cooldown:             90,
+    damage:               0,
+    range:                460,
+    fire: {
+      type:               'turret_charge',
+      projectileSpeed:    780,
+      projectileSize:     7,
+      homing: {
+        acquireDelayMs:        60,
+        searchRadius:          260,
+        retargetIntervalMs:    80,
+        // Bewusst schwach: der Bolzen korrigiert nur leicht nach, ein grob danebengezielter
+        // Schuss trifft den Turm nicht von selbst.
+        maxTurnDegreesPerStep: 4,
+        targetTypes:           ['turrets'],
+        // Ohne Sichtlinienpruefung: ein Turm steht selbst auf einer Hindernis-Zelle und
+        // blockiert damit die Sichtlinie auf seinen eigenen Mittelpunkt. Die kurze
+        // Suchreichweite und die schwache Lenkung begrenzen die Wirkung stattdessen.
+        requireLineOfSight:    false,
+        excludeOwner:          false,
+        distanceWeight:        1,
+        forwardWeight:         1.5,
+      } satisfies ProjectileHomingConfig,
+      durationMs:              3000,
+      damageMultiplierPerStack: 0.08,
+      maxStacks:               8,
+      chargeColor:             TURRET_CHARGE_COLOR,
+    },
+    allowedSlots:         ['weapon2'],
+    adrenalinCost:        5,
+    adrenalinGain:        0,
+    spreadStanding:       2,
+    spreadMoving:         5,
+    spreadPerShot:        0,
+    maxDynamicSpread:     0,
+    spreadRecoveryDelay:  0,
+    spreadRecoveryRate:   0,
+    spreadRecoverySpeed:  100,
+    projectileStyle:      'energy_ball' satisfies ProjectileStyle,
+    energyBallVariant:    'plasma' satisfies EnergyBallVariant,
+    projectileColor:      TURRET_CHARGE_COLOR,
+    rockDamageMult:       0,
+    trainDamageMult:      0,
+    shotAudio: {
+      successKey: 'shot_plasma',
       failureKey: 'shot_dry_trigger',
     },
   } as WeaponConfig,

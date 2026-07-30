@@ -931,6 +931,9 @@ export class CombatSystem {
 
     for (const proj of this.projectileManager.getActiveProjectiles()) {
       if (proj.isGrenade) continue;  // Granaten treffen nicht direkt, nur AoE
+      // Unterstuetzungsprojektile schaden niemandem und fliegen deshalb durch Gegner
+      // hindurch; ihre Treffer loest der SupportProjectileSystem-Pfad des Hosts auf.
+      if (proj.repairPayload || proj.turretChargePayload) continue;
       if (proj.miniRocketDeferredExplosion) continue;
       if (proj.miniRocketSpent) continue;
 

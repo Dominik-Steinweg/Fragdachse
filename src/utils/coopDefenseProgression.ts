@@ -29,6 +29,7 @@ const XP_INCREASE_PER_LEVEL = 25;
 
 export interface CoopDefenseProgressSnapshot {
   classId: CoopDefenseClassId;
+  classesUnlocked: boolean;
   totalXp: number;
   level: number;
   currentLevelStartXp: number;
@@ -116,6 +117,7 @@ export function getCoopDefenseProgressSnapshot(
   profile: CoopDefenseUpgradeProfile = buildDefaultCoopDefenseUpgradeProfile(),
   earnedBossPoints = 0,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
+  classesUnlocked = true,
 ): CoopDefenseProgressSnapshot {
   const safeXp = sanitizeXp(totalXp);
   const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, classId);
@@ -134,6 +136,7 @@ export function getCoopDefenseProgressSnapshot(
 
   return {
     classId,
+    classesUnlocked,
     totalXp: safeXp,
     level,
     currentLevelStartXp,

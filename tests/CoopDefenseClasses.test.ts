@@ -41,6 +41,28 @@ describe('coop-defense classes', () => {
     expect(snapshot.coopDefenseProfile).toBeNull();
   });
 
+  it('keeps default-class upgrades active without granting a specialization bonus', () => {
+    const profile = levelUpCoopDefenseUpgrade(
+      buildDefaultCoopDefenseUpgradeProfile(),
+      'hp',
+      20,
+      0,
+      'dachs_nukem',
+    )!;
+    const snapshot = resolveLoadoutSelectionIds(undefined, 'coop_defense', profile, null);
+    expect(snapshot.coopDefenseClassId).toBeNull();
+    expect(isCoopDefenseReadyLoadoutComplete(snapshot)).toBe(true);
+
+    const system = new CoopDefensePlayerModifierSystem();
+    system.syncPlayer('default', snapshot);
+    expect(system.getClassId('default')).toBeNull();
+    expect(system.getMaxHp('default')).toBe(120);
+    expect(system.resolveOutgoingDamage('default', 'enemy', 100, true, () => 0)).toEqual({
+      amount: 100,
+      isCritical: false,
+    });
+  });
+
   it('commits the Inspector weapon instead of falling back to the P90', () => {
     const snapshot = resolveLoadoutSelectionIds(
       undefined,
@@ -100,7 +122,7 @@ describe('coop-defense classes', () => {
     expect(generalIds).not.toContain('run_speed');
     expect(generalIds).not.toContain('burrow_speed');
     expect(generalIds).not.toContain('burrow_cost');
-    // Waffe 2 traegt nur noch die Adrenalinfaehigkeit, die Konstrukte stehen in ihrer
+    // Waffe 2 traegt nur noch die Adrenalinfaehigkeiten, die Konstrukte stehen in ihrer
     // eigenen Kategorie.
     expect(weapon2Ids).toEqual([
       'unlock_overcharge_core',
@@ -108,6 +130,8 @@ describe('coop-defense classes', () => {
       'overcharge_duration',
       'overcharge_power',
       'overcharge_cost',
+      'unlock_reparaturstrahl',
+      'unlock_energieinjektor',
     ]);
     expect(constructionIds).toContain('unlock_rocket_turret');
     expect(constructionIds).toContain('unlock_felsbau');
@@ -120,6 +144,8 @@ describe('coop-defense classes', () => {
       expect(categories.find(category => category.id === 'construction')).toBeUndefined();
       const weapon2Ids = categories.find(category => category.id === 'weapon2')!.upgrades.map(upgrade => upgrade.id);
       expect(weapon2Ids).not.toContain('unlock_overcharge_core');
+      expect(weapon2Ids).not.toContain('unlock_reparaturstrahl');
+      expect(weapon2Ids).not.toContain('unlock_energieinjektor');
       expect(weapon2Ids).toContain('unlock_p90');
     }
   });
