@@ -59,8 +59,8 @@ describe('loadout catalog', () => {
     const construction = describeLoadoutTool({ kind: 'construction', id: 'rocket_turret' });
     const utility = describeLoadoutTool({ kind: 'utility', id: 'HE_GRENADE' });
     expect(construction.accentColor).toBe(utility.accentColor);
-    // Das Icon haengt an `iconKey`, nicht an der Balancing-Waffe des Turms.
-    expect(construction.textureKey).toBe('ROCKET_LAUNCHER');
+    // Konstrukte haben bis zur Erstellung eigener Bilder bewusst kein Icon.
+    expect(construction.textureKey).toBeNull();
     expect(utility.textureKey).toBe('HE_GRENADE');
   });
 

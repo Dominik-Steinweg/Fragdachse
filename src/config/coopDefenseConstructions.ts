@@ -9,7 +9,7 @@ export interface CoopDefenseConstructionDefinition {
    * Loadout-Icon des Konstrukts. Bewusst getrennt von `weaponId`: die Turmwaffen tragen
    * eigene Balancing-IDs ohne eigenes Icon-Asset.
    */
-  readonly iconKey: string;
+  readonly iconKey: string | null;
   readonly unlockUpgradeId: string;
   readonly maxHp: number;
   readonly targetRange: number;
@@ -97,7 +97,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       displayName: 'Raketenturm',
       description: 'Verschiesst automatisch Raketen mit Flaechenschaden.',
       weaponId: 'TURRET_ROCKET',
-      iconKey: 'ROCKET_LAUNCHER',
+      iconKey: null,
       unlockUpgradeId: 'unlock_rocket_turret',
       maxHp: 250,
       targetRange: 600,
@@ -111,7 +111,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       displayName: 'Maschinengewehrturm',
       description: 'Bekämpft einzelne Ziele mit hoher Feuerrate.',
       weaponId: 'TURRET_MG',
-      iconKey: 'AK47',
+      iconKey: null,
       unlockUpgradeId: 'unlock_machine_gun_turret',
       maxHp: 180,
       targetRange: 550,
@@ -125,7 +125,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       displayName: 'Flammenwerferturm',
       description: 'Entzuendet Gegner in kurzer Reichweite kontinuierlich.',
       weaponId: 'TURRET_FLAME',
-      iconKey: 'FLAMETHROWER',
+      iconKey: null,
       unlockUpgradeId: 'unlock_flame_turret',
       maxHp: 220,
       targetRange: 220,

@@ -33,8 +33,8 @@ export interface LoadoutItemRef {
 /** Alles, was die UI zum Zeichnen eines Loadout-Eintrags braucht. */
 export interface LoadoutItemPresentation {
   readonly displayName: string;
-  /** Texture-Key; Item-IDs sind zugleich Icon-Keys. */
-  readonly textureKey: string;
+  /** Texture-Key; Item-IDs sind zugleich Icon-Keys. Konstrukte koennen bewusst kein Icon haben. */
+  readonly textureKey: string | null;
   readonly accentColor: number;
 }
 

@@ -5,7 +5,7 @@ import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 export interface LoadoutPickerEntry {
   readonly key: string;
   readonly displayName: string;
-  readonly textureKey: string;
+  readonly textureKey: string | null;
   readonly accentColor: number;
   /** Liegt bereits in genau diesem Slot. */
   readonly selected: boolean;
@@ -150,7 +150,7 @@ export class LoadoutSlotPicker {
       .setAlpha(entry.disabled ? 0.45 : 1);
     children.push(background);
 
-    if (this.scene.textures.exists(entry.textureKey)) {
+    if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
       children.push(this.scene.add.image(x + 6 + ICON_SIZE / 2, y + ENTRY_H / 2, entry.textureKey)
         .setDisplaySize(ICON_SIZE, ICON_SIZE)
         .setScrollFactor(0)

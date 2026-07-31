@@ -139,6 +139,14 @@ import {
   wireRenderersToAudioSystem,
 } from './arena';
 
+// These selectable engineer weapons intentionally have no dedicated Loadout PNG yet.
+// The loadout UI already falls back to the item label when their texture is absent.
+const LOADOUT_CONFIG_KEYS_WITHOUT_ICONS = new Set([
+  'OVERCHARGE_CORE',
+  'REPARATURSTRAHL',
+  'ENERGIEINJEKTOR',
+]);
+
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
   const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
 
@@ -338,15 +346,22 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
 
-    // Preload Loadout & Upgrade Icons
-    for (const key of Object.keys(WEAPON_CONFIGS)) {
+    // Preload Loadout & Upgrade Icons. Internal enemy/turret weapon configs have
+    // no selectable loadout slot and therefore no corresponding UI PNG.
+    const queueLoadoutIcon = (key: string): void => {
+      if (LOADOUT_CONFIG_KEYS_WITHOUT_ICONS.has(key)) return;
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+    };
+    for (const config of Object.values(WEAPON_CONFIGS)) {
+      if (config.allowedSlots.length === 0) continue;
+      queueLoadoutIcon(config.id);
     }
-    for (const key of Object.keys(UTILITY_CONFIGS)) {
-      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+    for (const config of Object.values(UTILITY_CONFIGS)) {
+      if (config.allowedSlots.length === 0) continue;
+      queueLoadoutIcon(config.id);
     }
     for (const key of Object.keys(ULTIMATE_CONFIGS)) {
-      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
+      queueLoadoutIcon(key);
     }
 
     // Upgrade-Icons direkt aus den Definitionen ableiten, damit neue Upgrades

@@ -930,7 +930,7 @@ export class CoopDefenseUpgradesOverlay {
     )).setScrollFactor(0);
     group.add(frame);
 
-    if (presentation && this.scene.textures.exists(presentation.textureKey)) {
+    if (presentation?.textureKey && this.scene.textures.exists(presentation.textureKey)) {
       group.add(this.scene.add.image(0, 0, presentation.textureKey)
         .setDisplaySize(LOADOUT_SLOT_SIZE - 12, LOADOUT_SLOT_SIZE - 12)
         .setScrollFactor(0));
@@ -2239,6 +2239,9 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
+    // Construction unlocks have a tool reference for loadout handling, but their
+    // current tool icons are weapon images and therefore not valid upgrade art.
+    if (getCoopDefenseUpgradeTextureKey(node.id) === null) return null;
     if (node.toolRef) return describeLoadoutTool(node.toolRef).textureKey;
     if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
     if (node.kind === 'upgrade') return getCoopDefenseUpgradeTextureKey(node.id);
