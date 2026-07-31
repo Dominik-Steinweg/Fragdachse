@@ -24,6 +24,8 @@ import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils'
 import { emissiveAlpha } from '../effects/EmissiveScale';
 
 const TEX_ENEMY_GLOW = '_enemy_glow';
+/** Kuehles Violett – klar unterscheidbar von Brand (orange) und Void-Brand (lila-rot). */
+const VULNERABLE_MARKER_COLOR = 0xc86bff;
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -66,6 +68,7 @@ export class EnemyEntity {
   private targetAimAngle = 0;
   private hpBarVisibleUntilMs = 0;
   private burnRenderer: EntityBurnRenderer | null = null;
+  private vulnerableRing: Phaser.GameObjects.Arc | null = null;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
@@ -261,6 +264,46 @@ export class EnemyEntity {
     return `entityburn:enemy:${this.id}`;
   }
 
+  /**
+   * Verwundbarkeitsmarker (Item-Affix "Fokusfeuer").
+   *
+   * Bewusst sparsam: ein einzelner gestrichelter Ring statt eines eigenen Partikelsystems. Der
+   * Lifecycle folgt dem des Brandrenderers – erst bei Aktivierung erzeugt, bei Ablauf zerstoert,
+   * damit ein nicht markierter Gegner nichts kostet. Der Ring haengt an keiner Lichtquelle und
+   * kollidiert deshalb nicht mit dem Schluessel des Brandeffekts.
+   */
+  setVulnerable(active: boolean): void {
+    if (!active) {
+      this.vulnerableRing?.destroy();
+      this.vulnerableRing = null;
+      return;
+    }
+    if (this.vulnerableRing) return;
+
+    const radius = this.config.size * 0.62;
+    const ring = this.sprite.scene.add.circle(this.sprite.x, this.sprite.y, radius);
+    ring.setStrokeStyle(2, VULNERABLE_MARKER_COLOR, 0.85);
+    ring.setDepth(DEPTH.PLAYERS - 0.08);
+    makeAdditive(ring);
+    this.sprite.scene.tweens.add({
+      targets: ring,
+      scaleX: 1.14,
+      scaleY: 1.14,
+      alpha: 0.45,
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.vulnerableRing = ring;
+  }
+
+  private syncVulnerableMarker(): void {
+    if (!this.vulnerableRing) return;
+    this.vulnerableRing.setPosition(this.sprite.x, this.sprite.y);
+    this.vulnerableRing.setVisible(!this.burrowed && this.currentHp > 0 && this.sprite.visible);
+  }
+
   getMoveSpeed(): number {
     return this.config.moveSpeed * this.moveSpeedMultiplier;
   }
@@ -444,6 +487,7 @@ export class EnemyEntity {
     this.syncBossDecorations();
     this.syncGlow();
     this.syncBurnEffect();
+    this.syncVulnerableMarker();
     if (!this.shouldShowHpBars()) {
       this.destroyHpBars();
       return;
@@ -485,6 +529,8 @@ export class EnemyEntity {
     this.destroyHpBars();
     this.burnRenderer?.destroy();
     this.burnRenderer = null;
+    this.vulnerableRing?.destroy();
+    this.vulnerableRing = null;
     this.ownerRing?.destroy();
     this.ownerRing = null;
     if (this.glowHalo) {

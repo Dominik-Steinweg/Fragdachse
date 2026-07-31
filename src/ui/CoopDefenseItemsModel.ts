@@ -118,6 +118,12 @@ export function buildCoopDefenseItemTooltip(
     });
   }
 
+  // Affixe ohne Stat haben keine Zahlenzeile; ohne ihre Erklaerung waeren sie unsichtbar.
+  for (const affix of description.affixLines) {
+    lines.push({ text: affix.label, color: description.rarityColor, bold: true });
+    lines.push({ text: affix.text, color: COLORS.GREY_2 });
+  }
+
   // Der Vergleich hilft nur bei einem Teil, das noch nicht getragen wird.
   if (!isEquipped) {
     lines.push({ text: '', color: COLORS.GREY_5 });

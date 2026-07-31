@@ -21,6 +21,7 @@ import {
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import {
+  COOP_DEFENSE_PENDING_UPGRADE_ICONS,
   getCoopDefenseUpgradeTextureKey,
   isCoopDefenseToolCategory,
 } from '../utils/coopDefenseUpgrades';
@@ -746,9 +747,10 @@ export class CoopDefenseUpgradesOverlay {
       background.on('pointerdown', () => {
         if (!classesUnlocked) return;
         if (classId === this.getProgress().classId) return;
-        this.onSelectClass(classId);
         this.activeCategoryIndex = 0;
-        this.requestRefresh();
+        // ArenaScene.refreshStoredCoopDefenseProgress() refreshes the visible overlay
+        // synchronously after changing the class. Do not enqueue a second full tree rebuild.
+        this.onSelectClass(classId);
       });
       background.on('pointerover', (pointer: Phaser.Input.Pointer) => {
         this.showTooltip(
@@ -2239,12 +2241,14 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
-    // Construction unlocks have a tool reference for loadout handling, but their
-    // current tool icons are weapon images and therefore not valid upgrade art.
-    if (getCoopDefenseUpgradeTextureKey(node.id) === null) return null;
+    const upgradeTextureKey = getCoopDefenseUpgradeTextureKey(node.id);
+    if (upgradeTextureKey === null) return null;
+    // Pending IDs deliberately use their temporary own icon, including construction unlocks;
+    // this keeps the generated replacement set visible until final art is supplied.
+    if (COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(node.id)) return upgradeTextureKey;
     if (node.toolRef) return describeLoadoutTool(node.toolRef).textureKey;
     if (node.loadoutUnlock?.itemId) return node.loadoutUnlock.itemId;
-    if (node.kind === 'upgrade') return getCoopDefenseUpgradeTextureKey(node.id);
+    if (node.kind === 'upgrade') return upgradeTextureKey;
     return null;
   }
 

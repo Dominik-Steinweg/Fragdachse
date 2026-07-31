@@ -21,7 +21,12 @@ const TITLE_GAP = 6;
 const DIVIDER_GAP = 7;
 /** Leerzeilen (`text: ''`) dienen als Abschnittstrenner und brauchen keine volle Zeilenhoehe. */
 const SPACER_H = 8;
-const MAX_LINES = 16;
+/**
+ * Zeilen darueber werden still verworfen. Ein gelbes Item mit zwei Laufzeit-Affixen belegt
+ * Grundwert, zwei Affixnamen samt Erklaerung, Vergleichsblock und Fussnoten – 16 reichten dafuer
+ * nicht mehr, und abgeschnitten wuerde ausgerechnet das Ende: Vergleich und Zerlegehinweis.
+ */
+const MAX_LINES = 22;
 
 export class UiTooltip {
   private container: Phaser.GameObjects.Container | null = null;
@@ -127,8 +132,11 @@ export class UiTooltip {
     // 1920x1080-Designraum. Ohne die Umrechnung wandert der Tooltip von der Maus weg.
     const pointerX = toDesignSpace(this.scene.scale, pointer.x);
     const pointerY = toDesignSpace(this.scene.scale, pointer.y);
-    const x = Phaser.Math.Clamp(pointerX + OFFSET_X, 12, GAME_WIDTH - width - 12);
-    const y = Phaser.Math.Clamp(pointerY + OFFSET_Y, 12, GAME_HEIGHT - height - 12);
+    // `Math.max(12, ...)` an der oberen Grenze: passt der Tooltip nicht mehr auf den Bildschirm,
+    // waere der Clamp-Bereich sonst invertiert und Phaser lieferte ein negatives y – der Tooltip
+    // verschwaende oben aus dem Bild, statt am oberen Rand zu kleben.
+    const x = Phaser.Math.Clamp(pointerX + OFFSET_X, 12, Math.max(12, GAME_WIDTH - width - 12));
+    const y = Phaser.Math.Clamp(pointerY + OFFSET_Y, 12, Math.max(12, GAME_HEIGHT - height - 12));
 
     this.container.setPosition(x, y);
   }

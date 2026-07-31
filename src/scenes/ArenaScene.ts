@@ -57,9 +57,9 @@ import {
   ACTIVE_ARENA_METRICS_PROFILE,
   applyArenaMetricsForMode,
 } from '../config';
-import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
-import type { PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
+import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig } from '../loadout/LoadoutConfig';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
 import {
   addStoredCoopDefenseXp,
@@ -74,8 +74,10 @@ import {
   resetStoredCoopDefenseCharacter,
   restoreStoredCoopDefenseProgress,
   setStoredCoopDefenseCheatProgress,
-  setStoredCoopDefenseClassId,
+  getStoredCoopDefenseLoadout,
   setStoredCoopDefenseClassesUnlocked,
+  setStoredCoopDefenseLoadoutSlot,
+  switchStoredCoopDefenseClassLoadout,
   setStoredLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
   claimStoredPendingCoopDefenseItemReward,
@@ -95,6 +97,7 @@ import { getRenderResolutionController, toDesignSpace } from '../graphics/Render
 import { installTextResolution } from '../graphics/TextResolution';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
+  COOP_DEFENSE_PENDING_UPGRADE_ICONS,
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
   buildDefaultCoopDefenseUpgradeProfile,
   levelDownCoopDefenseUpgrade,
@@ -138,14 +141,6 @@ import {
   wireRenderersToEffectSystem,
   wireRenderersToAudioSystem,
 } from './arena';
-
-// These selectable engineer weapons intentionally have no dedicated Loadout PNG yet.
-// The loadout UI already falls back to the item label when their texture is absent.
-const LOADOUT_CONFIG_KEYS_WITHOUT_ICONS = new Set([
-  'OVERCHARGE_CORE',
-  'REPARATURSTRAHL',
-  'ENERGIEINJEKTOR',
-]);
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
   const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
@@ -261,6 +256,9 @@ export class ArenaScene extends Phaser.Scene {
   private coopDefenseUpgradeProfileSnapshot: CoopDefenseProgressPreferences | null = null;
   private coopDefenseLastProcessedRoundEndedAt: number | null = null;
   private coopDefenseHighestUnlockedMapId: string = INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
+  private coopDefenseItemsUnlocked = false;
+  private coopDefenseHasPendingItemReward = false;
+  private coopDefenseHasUnseenItems = false;
   private lastObservedGamePhase: GamePhase | null = null;
   private matchResultsPending = false;
   private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
@@ -346,29 +344,21 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
 
-    // Preload Loadout & Upgrade Icons. Internal enemy/turret weapon configs have
-    // no selectable loadout slot and therefore no corresponding UI PNG.
-    const queueLoadoutIcon = (key: string): void => {
-      if (LOADOUT_CONFIG_KEYS_WITHOUT_ICONS.has(key)) return;
-      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
-    };
-    for (const config of Object.values(WEAPON_CONFIGS)) {
-      if (config.allowedSlots.length === 0) continue;
-      queueLoadoutIcon(config.id);
-    }
-    for (const config of Object.values(UTILITY_CONFIGS)) {
-      if (config.allowedSlots.length === 0) continue;
-      queueLoadoutIcon(config.id);
-    }
-    for (const key of Object.keys(ULTIMATE_CONFIGS)) {
-      queueLoadoutIcon(key);
+    // Katalogmetadaten bestimmen explizit Auswahlreihenfolge und vorhandene Icons.
+    const queuedLoadoutIcons = new Set<string>();
+    for (const entry of LOADOUT_CATALOG_ENTRIES) {
+      if (!entry.iconKey || queuedLoadoutIcons.has(entry.iconKey)) continue;
+      queuedLoadoutIcons.add(entry.iconKey);
+      this.load.image(entry.iconKey, `./assets/sprites/Loadout/${entry.iconKey}.png`);
     }
 
     // Upgrade-Icons direkt aus den Definitionen ableiten, damit neue Upgrades
     // automatisch geladen werden (kein manuelles Pflegen einer Liste noetig).
     const queuedUpgradeTextures = new Set<string>();
     for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
-      if (definition.kind !== 'upgrade') continue;
+      // Temporary recipe-generated icons also cover the three construction unlock nodes.
+      // Other unlocks keep their existing loadout handling and must not create 404 requests.
+      if (definition.kind !== 'upgrade' && !COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(definition.id)) continue;
       const key = getCoopDefenseUpgradeTextureKey(definition.id);
       if (key === null) continue;
       if (queuedUpgradeTextures.has(key)) continue;
@@ -485,7 +475,13 @@ export class ArenaScene extends Phaser.Scene {
     effectSystem.setAudioSystem(gameAudioSystem);
 
     // ── UI (scene-lifetime) ────────────────────────────────────────────────
-    const leftPanel  = new LeftSidePanel(this, bridge, gameAudioSystem, this.graphicsQuality);
+    const leftPanel  = new LeftSidePanel(
+      this,
+      bridge,
+      gameAudioSystem,
+      this.graphicsQuality,
+      () => this.handleImportedGameProgress(),
+    );
     leftPanel.build();
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
@@ -623,7 +619,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyBossFlowFieldService: null,
@@ -633,7 +629,7 @@ export class ArenaScene extends Phaser.Scene {
     playerManager.setSpawnContextProvider((playerId) => {
       const latestState = bridge.getLatestGameState();
       const runtimePlaceables = this.ctx.placementSystem?.getAllRuntimeRocks() ?? latestState?.placeableRocks ?? [];
-      const turretRange = UTILITY_CONFIGS.FLIEGENPILZ.placeable.targetRange;
+      const turretRange = (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable.targetRange;
 
       return {
         fires: latestState?.fires ?? [],
@@ -1674,6 +1670,7 @@ export class ArenaScene extends Phaser.Scene {
       if (bridge.isHost()) {
         this.ctx.combatSystem.removePlayer(id);
         this.ctx.resourceSystem?.removePlayer(id);
+        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(id);
         this.ctx.burrowSystem?.removePlayer(id);
         this.ctx.loadoutManager?.removePlayer(id);
         this.ctx.tunnelSystem?.removePlayer(id);
@@ -1761,11 +1758,10 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private refreshCoopDefenseItemsButton(): void {
-    const progress = getStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseItemsState(
-      isCoopDefenseMode(bridge.getGameMode()) && progress.itemsUnlocked,
-      progress.pendingItemReward !== null,
-      progress.unseenItems,
+      isCoopDefenseMode(bridge.getGameMode()) && this.coopDefenseItemsUnlocked,
+      this.coopDefenseHasPendingItemReward,
+      this.coopDefenseHasUnseenItems,
     );
   }
 
@@ -1789,10 +1785,45 @@ export class ArenaScene extends Phaser.Scene {
 
   private selectCoopDefenseClass(classId: CoopDefenseClassId): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
-    if (!getStoredCoopDefenseProgress().classesUnlocked) return;
+    const stored = getStoredCoopDefenseProgress();
+    if (!stored.classesUnlocked) return;
+
+    // Der Bridge-Zustand ist nur das aktuell aktive Loadout. Vor dem Wechsel wird er
+    // deshalb noch einmal explizit im Profil der bisherigen Klasse gesichert. Alle
+    // persistenten Änderungen werden anschließend in einem Schreibvorgang gebündelt.
+    const previousLoadout: Partial<Record<LoadoutSlot, string>> = {};
+    const localId = bridge.getLocalPlayerId();
+    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
+      const itemId = bridge.getPlayerLoadoutSlot(localId, slot);
+      if (itemId) previousLoadout[slot] = itemId;
+    }
+
+    const savedNextLoadout = getStoredCoopDefenseLoadout(classId);
+    const profile = stored.profilesByClass[classId];
+    const nextLoadout: Partial<Record<LoadoutSlot, string>> = {};
+    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
+      const selectable = getSelectableLoadoutItems(slot, bridge.getGameMode(), profile, classId);
+      if (selectable.length === 0) continue;
+      const savedId = savedNextLoadout[slot];
+      nextLoadout[slot] = savedId && selectable.some((item) => item.id === savedId)
+        ? savedId
+        : selectable[0].id;
+    }
+
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseClassId(classId);
+    switchStoredCoopDefenseClassLoadout(
+      stored.selectedClassId,
+      classId,
+      previousLoadout,
+      nextLoadout,
+    );
+    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
+      const itemId = nextLoadout[slot];
+      if (itemId && bridge.getPlayerLoadoutSlot(localId, slot) !== itemId) {
+        bridge.setLocalLoadoutSlot(slot, itemId);
+      }
+    }
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
     this.ctx.leftPanel.refreshColorIndicator();
@@ -1822,7 +1853,11 @@ export class ArenaScene extends Phaser.Scene {
     const loadoutSelection = getCoopDefenseUpgradeLoadoutSelection(upgradeId);
     if (loadoutSelection && activeClassId !== 'inspector_gadachs') {
       bridge.setLocalLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
-      setStoredLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
+      if (stored.classesUnlocked) {
+        setStoredCoopDefenseLoadoutSlot(activeClassId, loadoutSelection.slot, loadoutSelection.itemId);
+      } else {
+        setStoredLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
+      }
     }
 
     this.refreshStoredCoopDefenseProgress();
@@ -1901,11 +1936,16 @@ export class ArenaScene extends Phaser.Scene {
   private selectLoadoutItem(slot: LoadoutSlot, itemId: string): boolean {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return false;
     if (bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), slot) === itemId) return false;
+    const stored = getStoredCoopDefenseProgress();
 
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
     bridge.setLocalLoadoutSlot(slot, itemId);
-    setStoredLoadoutSlot(slot, itemId);
+    if (stored.classesUnlocked) {
+      setStoredCoopDefenseLoadoutSlot(stored.selectedClassId, slot, itemId);
+    } else {
+      setStoredLoadoutSlot(slot, itemId);
+    }
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
     this.ctx.leftPanel.refreshColorIndicator();
@@ -2810,9 +2850,26 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
     this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;
+    this.coopDefenseItemsUnlocked = stored.itemsUnlocked;
+    this.coopDefenseHasPendingItemReward = stored.pendingItemReward !== null;
+    this.coopDefenseHasUnseenItems = stored.unseenItems;
     bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
-    this.resyncLoadoutWithUnlocks();
+    this.resyncLoadoutWithUnlocks(stored);
     this.coopDefenseUpgradesOverlay?.refresh();
+  }
+
+  /** Zieht nach einem validierten Dateiimport alle lobby-lokalen Ableitungen atomar nach. */
+  private handleImportedGameProgress(): void {
+    if (bridge.getGamePhase() !== 'LOBBY') return;
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    this.refreshStoredCoopDefenseProgress();
+    this.applyDefaultCoopDefenseMapSelection();
+    this.lobbyOverlay.setCoopDefenseProgress(
+      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
+    );
+    this.refreshCoopDefenseItemsButton();
+    this.clientUpdate.refreshStoredProgressFallback();
   }
 
   /**
@@ -2820,9 +2877,8 @@ export class ArenaScene extends Phaser.Scene {
    * Level-Down und Full Respec: ein Slot darf nie ein inzwischen gesperrtes Item behalten.
    * Beim Inspector schnappt so auch der Waffe-2-Slot auf seine Adrenalinfaehigkeit.
    */
-  private resyncLoadoutWithUnlocks(): void {
+  private resyncLoadoutWithUnlocks(stored: CoopDefenseProgressPreferences): void {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
-    const stored = getStoredCoopDefenseProgress();
     const classId = stored.classesUnlocked ? stored.selectedClassId : DEFAULT_COOP_DEFENSE_CLASS_ID;
     const profile = stored.classesUnlocked
       ? stored.profilesByClass[stored.selectedClassId]
@@ -2834,7 +2890,11 @@ export class ArenaScene extends Phaser.Scene {
       const current = bridge.getPlayerLoadoutSlot(localId, slot);
       if (current && selectable.some((item) => item.id === current)) continue;
       bridge.setLocalLoadoutSlot(slot, selectable[0].id);
-      setStoredLoadoutSlot(slot, selectable[0].id);
+      if (stored.classesUnlocked) {
+        setStoredCoopDefenseLoadoutSlot(classId, slot, selectable[0].id);
+      } else {
+        setStoredLoadoutSlot(slot, selectable[0].id);
+      }
     }
   }
 

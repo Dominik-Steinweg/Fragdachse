@@ -6,8 +6,8 @@ export interface CoopDefenseConstructionDefinition {
   readonly description: string;
   readonly weaponId: TurretWeaponId;
   /**
-   * Loadout-Icon des Konstrukts. Bewusst getrennt von `weaponId`: die Turmwaffen tragen
-   * eigene Balancing-IDs ohne eigenes Icon-Asset.
+   * Optionales individuelles Loadout-Icon des Konstrukts. Solange es `null` ist, verwenden
+   * Slot und Unlock-Knoten gemeinsam das temporaere Icon aus `unlockUpgradeId`.
    */
   readonly iconKey: string | null;
   readonly unlockUpgradeId: string;

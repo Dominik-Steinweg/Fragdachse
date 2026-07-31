@@ -1,0 +1,144 @@
+{
+  "ultimates": {
+    "ARMAGEDDON": {
+      "type": "buff",
+      "id": "ARMAGEDDON",
+      "displayName": "Armageddon",
+      "cooldown": 0,
+      "rageRequired": 300,
+      "duration": 7000,
+      "speedMultiplier": 1,
+      "damageMultiplier": 1,
+      "armorPerTick": 0,
+      "armorTickIntervalMs": 200,
+      "rageDrainDuration": 7000,
+      "armageddon": {
+        "meteorSpawnRadius": 350,
+        "meteorDamageRadius": 96,
+        "meteorDamage": 120,
+        "meteorDamageFalloff": {
+          "minDamage": 80
+        },
+        "meteorFallDuration": 1200,
+        "meteorsPerSecond": 3,
+        "meteorRadiusJitter": 0.1,
+        "selfDamageMult": 0,
+        "rockDamageMult": 0.5,
+        "trainDamageMult": 0.5,
+        "fireChunkBurst": {
+          "count": 3,
+          "searchRadius": 96,
+          "flightMs": 320,
+          "igniteCenter": true,
+          "durationMs": 2000,
+          "burnDurationMs": 2000,
+          "burnDamagePerTick": 0.5,
+          "weaponName": "Armageddon-Brand"
+        },
+        "cometStormEnabled": 0,
+        "cometSpawnRateDivisor": 1,
+        "cometFallDurationFactor": 1,
+        "cometRadiusFactor": 1,
+        "cometDamageFactor": 1,
+        "cometChunkCountFactor": 1
+      }
+    },
+    "GAUSS_RIFLE": {
+      "type": "gauss",
+      "id": "GAUSS_RIFLE",
+      "displayName": "Gauss-Gewehr",
+      "cooldown": 0,
+      "rageRequired": 200,
+      "rageCost": 200,
+      "chargeDuration": 1500,
+      "chargeColor": "#78d6ff",
+      "movementSlowFactor": 0.72,
+      "projectileSpeed": 1500,
+      "projectileSize": 16,
+      "projectileColor": "#c8f6ff",
+      "bulletVisualPreset": "gauss",
+      "tracerConfig": {
+        "widthCore": 8,
+        "widthGlow": 22,
+        "alphaCore": 0.96,
+        "alphaGlow": 0.72,
+        "segments": 12,
+        "fadeMs": 1400,
+        "maxLength": 340,
+        "colorCore": "#f4ffff",
+        "colorGlow": "#59c7ff"
+      },
+      "damage": 100,
+      "range": 1800,
+      "rockDamageMult": 2,
+      "trainDamageMult": 1,
+      "shotRecoilForce": 750,
+      "shotRecoilDuration": 200,
+      "shotAudio": {
+        "successKey": "shot_gauss",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "AIRSTRIKE": {
+      "type": "airstrike",
+      "id": "AIRSTRIKE",
+      "displayName": "Luftangriff",
+      "cooldown": 0,
+      "rageRequired": 200,
+      "rageCost": 200,
+      "delayMs": 2000,
+      "radius": 150,
+      "maxDamage": 350,
+      "minDamage": 60,
+      "allowTeamDamage": true,
+      "selfDamageMult": 0,
+      "rockDamageMult": 0.5,
+      "trainDamageMult": 1
+    },
+    "HONEY_BADGER_RAGE": {
+      "type": "buff",
+      "id": "HONEY_BADGER_RAGE",
+      "displayName": "Honigdachs-Wut",
+      "cooldown": 0,
+      "rageRequired": 300,
+      "duration": 6000,
+      "speedMultiplier": 1.5,
+      "damageMultiplier": 1.5,
+      "armorPerTick": 5,
+      "armorTickIntervalMs": 300,
+      "rageDrainDuration": 6000,
+      "aura": {
+        "radius": 128,
+        "damagePerTick": 20,
+        "tickIntervalMs": 500
+      }
+    },
+    "DACHS_TUNNEL": {
+      "type": "tunnel",
+      "id": "DACHS_TUNNEL",
+      "displayName": "Dachstunnel",
+      "cooldown": 0,
+      "rageRequired": 200,
+      "rageCost": 200,
+      "allowedModes": [
+        "capture_the_beer"
+      ],
+      "activation": {
+        "type": "placement_mode"
+      },
+      "placement": {
+        "kind": "tunnel",
+        "range": 760,
+        "entranceRadius": 22,
+        "previewAlpha": 0.38,
+        "ownerTintStrength": 0.45,
+        "spawnShakeDuration": 150,
+        "spawnShakeIntensity": 0.0035
+      },
+      "travelSpeed": 2400,
+      "travelMinDurationMs": 220,
+      "travelMaxDurationMs": 720,
+      "buildLabel": "Dachstunnel"
+    }
+  }
+}

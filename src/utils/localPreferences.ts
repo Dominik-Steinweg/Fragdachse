@@ -7,10 +7,12 @@ import {
 } from '../config/coopDefenseClasses';
 import type {
   CoopDefenseClassId,
+  ConstructionId,
   CoopDefenseItem,
   CoopDefenseItemSlot,
   CoopDefensePendingItemReward,
   CoopDefenseUpgradeProfile,
+  LoadoutToolRef,
   LoadoutSlot,
 } from '../types';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
@@ -43,25 +45,17 @@ import {
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 
-const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 17;
+/** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
+export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
+export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
+export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v1';
+export const LOCAL_SETTINGS_SCHEMA_VERSION = 1;
+export const LOCAL_PROGRESS_SCHEMA_VERSION = 2;
+export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
+export const LOCAL_PROGRESS_EXPORT_VERSION = 1;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
-interface LocalPreferencesV2 {
-  version: 2;
-  audio: {
-    masterVolume: number;
-    effectsVolume: number;
-    musicVolume: number;
-  };
-  profile: {
-    playerName: string | null;
-  };
-  loadout: Partial<Record<LoadoutSlot, string>>;
-}
-
 export interface CoopDefenseProgressPreferences {
-  upgradeTreeVersion: number;
   totalXp: number;
   lastProcessedRoundEndedAt: number | null;
   completedBossMapIds: string[];
@@ -94,8 +88,7 @@ export interface CoopDefenseProgressPreferences {
   unseenItems: boolean;
 }
 
-interface LocalPreferencesV3 {
-  version: 3;
+interface LocalPreferences {
   audio: {
     masterVolume: number;
     effectsVolume: number;
@@ -105,22 +98,7 @@ interface LocalPreferencesV3 {
     playerName: string | null;
   };
   loadout: Partial<Record<LoadoutSlot, string>>;
-  progression: {
-    coopDefense: CoopDefenseProgressPreferences;
-  };
-}
-
-interface LocalPreferencesV17 {
-  version: 17;
-  audio: {
-    masterVolume: number;
-    effectsVolume: number;
-    musicVolume: number;
-  };
-  profile: {
-    playerName: string | null;
-  };
-  loadout: Partial<Record<LoadoutSlot, string>>;
+  loadoutByClass: Partial<Record<CoopDefenseClassId, Partial<Record<LoadoutSlot, string>>>>;
   graphics: {
     quality: GraphicsQuality;
   };
@@ -129,33 +107,63 @@ interface LocalPreferencesV17 {
   };
 }
 
-type LocalPreferences = LocalPreferencesV17;
+interface CompactUpgradeProfile {
+  /** Ausschliesslich Level, die vom aktuellen Klassenstandard abweichen. */
+  levels?: Record<string, number>;
+  toolLoadout?: LoadoutToolRef[];
+  selectedTool?: LoadoutToolRef;
+}
 
-interface ParsedLocalPreferences {
-  audio?: Partial<LocalPreferences['audio']>;
-  profile?: Partial<LocalPreferences['profile']>;
-  loadout?: Partial<Record<LoadoutSlot, unknown>>;
-  graphics?: {
-    quality?: unknown;
-  };
-  progression?: {
-    coopDefense?: Partial<CoopDefenseProgressPreferences> & {
-      profile?: unknown;
-      defaultProfile?: unknown;
-      profilesByClass?: unknown;
-      selectedClassId?: unknown;
-      classesUnlocked?: unknown;
-      itemsUnlocked?: unknown;
-      items?: unknown;
-      equippedItemIds?: unknown;
-      pendingItemReward?: unknown;
-      unseenItems?: unknown;
-    };
+interface LocalSettingsDocumentV1 {
+  schemaVersion: 1;
+  audio: LocalPreferences['audio'];
+  graphics: LocalPreferences['graphics'];
+}
+
+interface LocalProgressDocumentV1 {
+  schemaVersion: 1;
+  profile: LocalPreferences['profile'];
+  loadout: LocalPreferences['loadout'];
+  coopDefense: Omit<LocalProgressDocumentV2['coopDefense'], 'loadoutsByClass'> & {
+    classLoadouts?: LocalPreferences['loadoutByClass'];
   };
 }
 
+export interface LocalProgressDocumentV2 {
+  schemaVersion: 2;
+  profile: LocalPreferences['profile'];
+  loadout: LocalPreferences['loadout'];
+  coopDefense: {
+    totalXp: number;
+    lastProcessedRoundEndedAt: number | null;
+    completedBossMapIds: string[];
+    highestUnlockedMapId: string;
+    classesUnlocked: boolean;
+    defaultProfile?: CompactUpgradeProfile;
+    selectedClassId?: CoopDefenseClassId;
+    profilesByClass?: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>>;
+    loadoutsByClass?: LocalPreferences['loadoutByClass'];
+    itemsUnlocked: boolean;
+    items: CoopDefenseItem[];
+    equippedItemIds: CoopDefenseEquippedItemIds;
+    pendingItemReward: CoopDefensePendingItemReward | null;
+    unseenItems: boolean;
+  };
+}
+
+interface LocalProgressExportEnvelope {
+  format: typeof LOCAL_PROGRESS_EXPORT_FORMAT;
+  formatVersion: typeof LOCAL_PROGRESS_EXPORT_VERSION;
+  exportedAt: string;
+  progress: LocalProgressDocumentV1 | LocalProgressDocumentV2;
+}
+
+export interface LocalProgressTransferResult {
+  readonly ok: boolean;
+  readonly message: string;
+}
+
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
-  upgradeTreeVersion: 13,
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
   completedBossMapIds: [],
@@ -194,7 +202,6 @@ function cloneCoopDefenseItemState(progress: CoopDefenseProgressPreferences): {
 }
 
 const DEFAULT_PREFERENCES: LocalPreferences = {
-  version: LOCAL_PREFERENCES_VERSION,
   audio: {
     masterVolume: SOUND_MASTER_VOLUME,
     effectsVolume: SOUND_SFX_VOLUME,
@@ -204,6 +211,7 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
     playerName: null,
   },
   loadout: {},
+  loadoutByClass: {},
   graphics: {
     quality: 'high',
   },
@@ -248,7 +256,7 @@ function mirrorDefaultProfileToClasses(
 
 function getLocalStorage(): Storage | null {
   try {
-    return window.localStorage;
+    return typeof window === 'undefined' ? null : window.localStorage;
   } catch {
     return null;
   }
@@ -268,6 +276,32 @@ function sanitizeStoredRoundEndedAt(value: unknown): number | null {
   return Math.max(0, Math.floor(value));
 }
 
+function sanitizeStoredLoadout(value: unknown): Partial<Record<LoadoutSlot, string>> {
+  if (!value || typeof value !== 'object') return {};
+  const loadout = value as Record<string, unknown>;
+  return {
+    weapon1: typeof loadout.weapon1 === 'string' ? loadout.weapon1 : undefined,
+    weapon2: typeof loadout.weapon2 === 'string' ? loadout.weapon2 : undefined,
+    utility: typeof loadout.utility === 'string' ? loadout.utility : undefined,
+    ultimate: typeof loadout.ultimate === 'string' ? loadout.ultimate : undefined,
+  };
+}
+
+function sanitizeStoredLoadoutsByClass(
+  value: unknown,
+): Partial<Record<CoopDefenseClassId, Partial<Record<LoadoutSlot, string>>>> {
+  if (!value || typeof value !== 'object') return {};
+  const rawLoadouts = value as Partial<Record<CoopDefenseClassId, unknown>>;
+  const loadoutsByClass: Partial<Record<CoopDefenseClassId, Partial<Record<LoadoutSlot, string>>>> = {};
+  for (const classId of COOP_DEFENSE_CLASS_IDS) {
+    const loadout = sanitizeStoredLoadout(rawLoadouts[classId]);
+    if (Object.values(loadout).some((itemId) => itemId !== undefined)) {
+      loadoutsByClass[classId] = loadout;
+    }
+  }
+  return loadoutsByClass;
+}
+
 function sanitizeCompletedBossMapIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value
@@ -280,26 +314,13 @@ function sanitizeCompletedBossMapIds(value: unknown): string[] {
  * Staende ohne gespeicherten Freischaltstand stammen aus der Zeit vor der Map-Freischaltung: dort
  * ist die Sieg-Historie der Bossmaps der einzige Beleg fuer bereits geschaffte Maps.
  */
-function resolveStoredHighestUnlockedMapId(
-  storedMapId: unknown,
-  completedBossMapIds: readonly string[],
-): string {
-  if (storedMapId !== undefined) return sanitizeHighestUnlockedCoopDefenseMapId(storedMapId);
-  return completedBossMapIds.reduce(
-    (highestMapId, completedMapId) => maxHighestUnlockedCoopDefenseMapId(
-      highestMapId,
-      getCoopDefenseMapUnlockedByVictoryOn(completedMapId) ?? completedMapId,
-    ),
-    INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
-  );
-}
-
 function buildDefaultPreferences(): LocalPreferences {
   return {
     ...DEFAULT_PREFERENCES,
     audio: { ...DEFAULT_PREFERENCES.audio },
     profile: { ...DEFAULT_PREFERENCES.profile },
     loadout: {},
+    loadoutByClass: {},
     graphics: { ...DEFAULT_PREFERENCES.graphics },
     progression: {
       coopDefense: {
@@ -316,141 +337,436 @@ function buildDefaultPreferences(): LocalPreferences {
   };
 }
 
-function parsePreferences(raw: string | null): LocalPreferences {
-  if (!raw) return buildDefaultPreferences();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
+const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
+const ITEM_SLOTS: readonly CoopDefenseItemSlot[] = ['helmet', 'gloves', 'armor', 'boots'];
+
+function isValidLoadoutRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.entries(value).every(([slot, itemId]) => (
+    LOADOUT_SLOTS.includes(slot as LoadoutSlot)
+      && typeof itemId === 'string' && itemId.length > 0 && itemId.length <= 128
+  ));
+}
+
+function safeRead(storage: Storage | null, key: string): string | null {
+  try { return storage?.getItem(key) ?? null; } catch { return null; }
+}
+
+function safeWrite(storage: Storage | null, key: string, value: unknown): boolean {
   try {
-    const parsed = JSON.parse(raw) as ParsedLocalPreferences;
-    const loadout = parsed.loadout && typeof parsed.loadout === 'object'
-      ? parsed.loadout
-      : {};
-    const playerName = typeof parsed.profile?.playerName === 'string'
-      ? sanitizePlayerName(parsed.profile.playerName) || null
-      : null;
-    const masterVolume = typeof parsed.audio?.masterVolume === 'number'
-      ? clampAudioVolume(parsed.audio.masterVolume)
-      : SOUND_MASTER_VOLUME;
-    const effectsVolume = typeof parsed.audio?.effectsVolume === 'number'
-      ? clampAudioVolume(parsed.audio.effectsVolume)
-      : SOUND_SFX_VOLUME;
-    const musicVolume = typeof parsed.audio?.musicVolume === 'number'
-      ? clampAudioVolume(parsed.audio.musicVolume)
-      : SOUND_MUSIC_VOLUME;
-    const totalXp = sanitizeStoredXp(parsed.progression?.coopDefense?.totalXp);
-    const lastProcessedRoundEndedAt = sanitizeStoredRoundEndedAt(parsed.progression?.coopDefense?.lastProcessedRoundEndedAt);
-    const completedBossMapIds = sanitizeCompletedBossMapIds(parsed.progression?.coopDefense?.completedBossMapIds);
-    const sourceTreeVersion = sanitizeStoredXp(parsed.progression?.coopDefense?.upgradeTreeVersion);
-    const rawCoopProgress = parsed.progression?.coopDefense;
-    const highestUnlockedMapId = resolveStoredHighestUnlockedMapId(
-      rawCoopProgress?.highestUnlockedMapId,
-      completedBossMapIds,
-    );
-    const selectedClassId = sanitizeCoopDefenseClassId(rawCoopProgress?.selectedClassId);
-    const rawProfiles = parsed.progression?.coopDefense?.profilesByClass;
-    const storedProfiles = (rawProfiles && typeof rawProfiles === 'object')
-      ? rawProfiles as Partial<Record<CoopDefenseClassId, unknown>>
-      : {};
-    const legacyProfile = parsed.progression?.coopDefense?.profile;
-    const hasStoredClassState = rawCoopProgress?.selectedClassId !== undefined
-      || COOP_DEFENSE_CLASS_IDS.some((classId) => storedProfiles[classId] !== undefined);
-    const classesUnlocked = typeof rawCoopProgress?.classesUnlocked === 'boolean'
-      ? rawCoopProgress.classesUnlocked
-      : hasStoredClassState
-        || completedBossMapIds.includes(COOP_DEFENSE_CLASS_UNLOCK_AFTER_MAP_ID);
-    const rawDefaultProfile = rawCoopProgress?.defaultProfile
-      ?? legacyProfile
-      ?? storedProfiles[selectedClassId];
-    const defaultProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
-      sanitizeCoopDefenseUpgradeProfile(
-        rawDefaultProfile ?? buildDefaultCoopDefenseUpgradeProfile(DEFAULT_COOP_DEFENSE_CLASS_ID),
-        DEFAULT_COOP_DEFENSE_CLASS_ID,
-      ),
-      completedBossMapIds.length,
-      DEFAULT_COOP_DEFENSE_CLASS_ID,
-    );
-    // Die Slot-Zuordnung wird zweistufig gelesen: strukturell, damit das ausgeruestete Teil vom
-    // Kategorielimit ausgenommen bleibt, und danach gegen die fertige Liste geprueft.
-    const equippedItemIdCandidates = readCoopDefenseEquippedItemIdCandidates(rawCoopProgress?.equippedItemIds);
-    const storedItems = sanitizeCoopDefenseItems(rawCoopProgress?.items, equippedItemIdCandidates);
-    const equippedItemIds = sanitizeCoopDefenseEquippedItemIds(equippedItemIdCandidates, storedItems);
-    const itemsUnlocked = rawCoopProgress?.itemsUnlocked === true
-      || isCoopDefenseMapUnlocked('11', highestUnlockedMapId);
-    const pendingItemReward = sanitizeCoopDefensePendingItemReward(rawCoopProgress?.pendingItemReward);
-    // Nur ein tatsaechlich vorhandenes Teil kann ungesehen sein; sonst leuchtet der Button leer.
-    const unseenItems = rawCoopProgress?.unseenItems === true && storedItems.length > 0;
-    const profilesByClass = {} as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
-
-    for (const classId of COOP_DEFENSE_CLASS_IDS) {
-      const rawProfile = classesUnlocked
-        ? (storedProfiles[classId] ?? defaultProfile)
-        : defaultProfile;
-      const migratedProfile = cloneCoopDefenseUpgradeProfile(
-        rawProfile === undefined
-          ? buildDefaultCoopDefenseUpgradeProfile(classId)
-          : sanitizeCoopDefenseUpgradeProfile(rawProfile, classId),
-        classId,
-      );
-      if (sourceTreeVersion < 2) {
-        for (const [upgradeId, definition] of Object.entries(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
-          if (definition.bossPointCostPerLevel <= 0 || upgradeId === 'smoke_grenade_storm') continue;
-          const state = migratedProfile.upgrades[upgradeId];
-          if (state) state.level = 0;
-        }
-      }
-      profilesByClass[classId] = constrainCoopDefenseUpgradeProfileToBossPoints(
-        sanitizeCoopDefenseUpgradeProfile(migratedProfile, classId),
-        completedBossMapIds.length,
-        classId,
-      );
-    }
-
-    return {
-      version: LOCAL_PREFERENCES_VERSION,
-      audio: { masterVolume, effectsVolume, musicVolume },
-      profile: { playerName },
-      loadout: {
-        weapon1: typeof loadout.weapon1 === 'string' ? loadout.weapon1 : undefined,
-        weapon2: typeof loadout.weapon2 === 'string' ? loadout.weapon2 : undefined,
-        utility: typeof loadout.utility === 'string' ? loadout.utility : undefined,
-        ultimate: typeof loadout.ultimate === 'string' ? loadout.ultimate : undefined,
-      },
-      graphics: {
-        quality: isGraphicsQuality(parsed.graphics?.quality) ? parsed.graphics.quality : 'high',
-      },
-      progression: {
-        coopDefense: {
-          upgradeTreeVersion: 13,
-          totalXp,
-          lastProcessedRoundEndedAt,
-          completedBossMapIds,
-          highestUnlockedMapId,
-          classesUnlocked,
-          defaultProfile,
-          selectedClassId: classesUnlocked ? selectedClassId : DEFAULT_COOP_DEFENSE_CLASS_ID,
-          profilesByClass,
-          itemsUnlocked,
-          items: storedItems,
-          equippedItemIds,
-          pendingItemReward,
-          unseenItems,
-        },
-      },
-    };
+    storage?.setItem(key, JSON.stringify(value));
+    return storage !== null;
   } catch {
-    return buildDefaultPreferences();
+    return false;
   }
 }
 
+function safeRemove(storage: Storage | null, key: string): void {
+  try { storage?.removeItem(key); } catch { /* Storage bleibt optional. */ }
+}
+
+function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV1 | null {
+  if (!isRecord(raw) || raw.schemaVersion !== LOCAL_SETTINGS_SCHEMA_VERSION) return null;
+  if (!isRecord(raw.audio) || !isRecord(raw.graphics)) return null;
+  const { masterVolume, effectsVolume, musicVolume } = raw.audio;
+  if (![masterVolume, effectsVolume, musicVolume].every((value) => (
+    typeof value === 'number' && Number.isFinite(value)
+  ))) return null;
+  if (!isGraphicsQuality(raw.graphics.quality)) return null;
+  return {
+    schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+    audio: {
+      masterVolume: clampAudioVolume(masterVolume as number),
+      effectsVolume: clampAudioVolume(effectsVolume as number),
+      musicVolume: clampAudioVolume(musicVolume as number),
+    },
+    graphics: { quality: raw.graphics.quality },
+  };
+}
+
+/** Der Alpha-Schnitt behaelt ausschliesslich geraetenahe Audio-/Grafikeinstellungen. */
+function readLegacySettings(raw: string | null): LocalSettingsDocumentV1 | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) return null;
+    const audio = isRecord(parsed.audio) ? parsed.audio : {};
+    const graphics = isRecord(parsed.graphics) ? parsed.graphics : {};
+    return {
+      schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+      audio: {
+        masterVolume: typeof audio.masterVolume === 'number' && Number.isFinite(audio.masterVolume)
+          ? clampAudioVolume(audio.masterVolume) : SOUND_MASTER_VOLUME,
+        effectsVolume: typeof audio.effectsVolume === 'number' && Number.isFinite(audio.effectsVolume)
+          ? clampAudioVolume(audio.effectsVolume) : SOUND_SFX_VOLUME,
+        musicVolume: typeof audio.musicVolume === 'number' && Number.isFinite(audio.musicVolume)
+          ? clampAudioVolume(audio.musicVolume) : SOUND_MUSIC_VOLUME,
+      },
+      graphics: { quality: isGraphicsQuality(graphics.quality) ? graphics.quality : 'high' },
+    };
+  } catch { return null; }
+}
+
+function sanitizeCompactProfile(raw: unknown): CompactUpgradeProfile | null {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) return null;
+  const result: CompactUpgradeProfile = {};
+  if (raw.levels !== undefined) {
+    if (!isRecord(raw.levels)) return null;
+    const levels: Record<string, number> = {};
+    for (const [upgradeId, level] of Object.entries(raw.levels)) {
+      const definition = COOP_DEFENSE_UPGRADE_DEFINITIONS[upgradeId];
+      if (!definition || typeof level !== 'number' || !Number.isInteger(level)
+        || level < 0 || level > definition.maxLevel) return null;
+      levels[upgradeId] = level;
+    }
+    if (Object.keys(levels).length > 0) result.levels = levels;
+  }
+  const sanitizeTool = (value: unknown): LoadoutToolRef | null => {
+    if (!isRecord(value)) return null;
+    if (value.kind !== 'construction' && value.kind !== 'utility') return null;
+    if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 128) return null;
+    if (value.kind === 'construction') {
+      if (!['rocket_turret', 'machine_gun_turret', 'flame_turret'].includes(value.id)) return null;
+      return { kind: 'construction', id: value.id as ConstructionId };
+    }
+    return { kind: 'utility', id: value.id };
+  };
+  if (raw.toolLoadout !== undefined) {
+    if (!Array.isArray(raw.toolLoadout) || raw.toolLoadout.length > 16) return null;
+    const tools = raw.toolLoadout.map(sanitizeTool);
+    if (tools.some((tool) => tool === null)) return null;
+    result.toolLoadout = tools as LoadoutToolRef[];
+  }
+  if (raw.selectedTool !== undefined) {
+    const selected = sanitizeTool(raw.selectedTool);
+    if (!selected) return null;
+    result.selectedTool = selected;
+  }
+  return result;
+}
+
+function migrateProgressDocument(raw: unknown): LocalProgressDocumentV2 | null {
+  if (!isRecord(raw) || !Number.isInteger(raw.schemaVersion)) return null;
+  let migrated: Record<string, unknown> = raw;
+  while ((migrated.schemaVersion as number) < LOCAL_PROGRESS_SCHEMA_VERSION) {
+    switch (migrated.schemaVersion) {
+      case 1: {
+        if (!isRecord(migrated.coopDefense)) return null;
+        const { classLoadouts, ...coopDefense } = migrated.coopDefense;
+        migrated = {
+          ...migrated,
+          schemaVersion: 2,
+          coopDefense: { ...coopDefense, loadoutsByClass: classLoadouts },
+        };
+        break;
+      }
+      default: return null;
+    }
+  }
+  return migrated.schemaVersion === LOCAL_PROGRESS_SCHEMA_VERSION
+    ? migrated as unknown as LocalProgressDocumentV2
+    : null;
+}
+
+function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' | 'loadout' | 'loadoutByClass' | 'progression'> | null {
+  const document = migrateProgressDocument(raw);
+  if (!document || !isRecord(document.profile) || !isValidLoadoutRecord(document.loadout)
+    || !isRecord(document.coopDefense)) return null;
+  const coop = document.coopDefense as unknown as Record<string, unknown>;
+  if ((document.profile.playerName !== null && typeof document.profile.playerName !== 'string')
+    || typeof coop.totalXp !== 'number' || !Number.isFinite(coop.totalXp)
+    || (coop.lastProcessedRoundEndedAt !== null
+      && (typeof coop.lastProcessedRoundEndedAt !== 'number' || !Number.isFinite(coop.lastProcessedRoundEndedAt)))
+    || !Array.isArray(coop.completedBossMapIds)
+    || !coop.completedBossMapIds.every((value) => typeof value === 'string' && value.trim().length > 0)
+    || typeof coop.highestUnlockedMapId !== 'string'
+    || typeof coop.classesUnlocked !== 'boolean'
+    || typeof coop.itemsUnlocked !== 'boolean'
+    || !Array.isArray(coop.items)
+    || !isRecord(coop.equippedItemIds)
+    || (coop.pendingItemReward !== null && !isRecord(coop.pendingItemReward))
+    || typeof coop.unseenItems !== 'boolean') return null;
+
+  const loadout = sanitizeStoredLoadout(document.loadout);
+  const classesUnlocked = coop.classesUnlocked;
+  if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
+  const selectedClassId = classesUnlocked
+    ? sanitizeCoopDefenseClassId(coop.selectedClassId)
+    : DEFAULT_COOP_DEFENSE_CLASS_ID;
+  const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
+  if (!defaultCompact) return null;
+  const completedBossMapIds = sanitizeCompletedBossMapIds(coop.completedBossMapIds);
+  const bossPoints = completedBossMapIds.length;
+  const hydrateProfile = (compact: CompactUpgradeProfile, classId: CoopDefenseClassId): CoopDefenseUpgradeProfile => {
+    const rawProfile = {
+      upgrades: Object.fromEntries(Object.entries(compact.levels ?? {}).map(([id, level]) => [
+        id, { level, unlocked: false },
+      ])),
+      toolLoadout: compact.toolLoadout,
+      selectedTool: compact.selectedTool,
+    };
+    return constrainCoopDefenseUpgradeProfileToBossPoints(
+      sanitizeCoopDefenseUpgradeProfile(rawProfile, classId), bossPoints, classId,
+    );
+  };
+  const defaultProfile = hydrateProfile(defaultCompact, DEFAULT_COOP_DEFENSE_CLASS_ID);
+  const rawProfiles = coop.profilesByClass;
+  if (rawProfiles !== undefined && !isRecord(rawProfiles)) return null;
+  if (isRecord(rawProfiles) && Object.keys(rawProfiles).some((key) => (
+    !COOP_DEFENSE_CLASS_IDS.includes(key as CoopDefenseClassId)
+  ))) return null;
+  const profilesByClass = {} as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
+  for (const classId of COOP_DEFENSE_CLASS_IDS) {
+    const compact = sanitizeCompactProfile(isRecord(rawProfiles) ? rawProfiles[classId] : undefined);
+    if (!compact) return null;
+    profilesByClass[classId] = classesUnlocked
+      ? hydrateProfile(compact, classId)
+      : constrainCoopDefenseUpgradeProfileToBossPoints(
+        sanitizeCoopDefenseUpgradeProfile(defaultProfile, classId), bossPoints, classId,
+      );
+  }
+  if (isRecord(coop.loadoutsByClass) && Object.entries(coop.loadoutsByClass).some(([classId, classLoadout]) => (
+    !COOP_DEFENSE_CLASS_IDS.includes(classId as CoopDefenseClassId) || !isValidLoadoutRecord(classLoadout)
+  ))) return null;
+  const loadoutByClass = classesUnlocked ? sanitizeStoredLoadoutsByClass(coop.loadoutsByClass) : {};
+  if (coop.loadoutsByClass !== undefined && !isRecord(coop.loadoutsByClass)) return null;
+
+  if (Object.entries(coop.equippedItemIds).some(([slot, uid]) => (
+    !ITEM_SLOTS.includes(slot as CoopDefenseItemSlot)
+      || typeof uid !== 'string' || uid.length === 0
+  ))) return null;
+  const equippedCandidates = readCoopDefenseEquippedItemIdCandidates(coop.equippedItemIds);
+  const items = sanitizeCoopDefenseItems(coop.items, equippedCandidates);
+  if (items.length !== coop.items.length) return null;
+  const equippedItemIds = sanitizeCoopDefenseEquippedItemIds(equippedCandidates, items);
+  const pendingItemReward = coop.pendingItemReward === null
+    ? null : sanitizeCoopDefensePendingItemReward(coop.pendingItemReward);
+  if (coop.pendingItemReward !== null && !pendingItemReward) return null;
+  const highestUnlockedMapId = sanitizeHighestUnlockedCoopDefenseMapId(coop.highestUnlockedMapId);
+  return {
+    profile: {
+      playerName: typeof document.profile.playerName === 'string'
+        ? sanitizePlayerName(document.profile.playerName) || null : null,
+    },
+    loadout,
+    loadoutByClass,
+    progression: {
+      coopDefense: {
+        totalXp: sanitizeStoredXp(coop.totalXp),
+        lastProcessedRoundEndedAt: sanitizeStoredRoundEndedAt(coop.lastProcessedRoundEndedAt),
+        completedBossMapIds,
+        highestUnlockedMapId,
+        classesUnlocked,
+        defaultProfile,
+        selectedClassId,
+        profilesByClass,
+        itemsUnlocked: coop.itemsUnlocked || isCoopDefenseMapUnlocked('11', highestUnlockedMapId),
+        items,
+        equippedItemIds,
+        pendingItemReward,
+        unseenItems: coop.unseenItems && items.length > 0,
+      },
+    },
+  };
+}
+
+function toolKey(tool: LoadoutToolRef | null | undefined): string {
+  return tool ? `${tool.kind}:${tool.id}` : '';
+}
+
+function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefenseClassId): CompactUpgradeProfile | undefined {
+  const safe = sanitizeCoopDefenseUpgradeProfile(profile, classId);
+  const defaults = buildDefaultCoopDefenseUpgradeProfile(classId);
+  const levels: Record<string, number> = {};
+  for (const [upgradeId, state] of Object.entries(safe.upgrades)) {
+    if (state.level !== defaults.upgrades[upgradeId]?.level) levels[upgradeId] = state.level;
+  }
+  const result: CompactUpgradeProfile = {};
+  if (Object.keys(levels).length > 0) result.levels = levels;
+  const tools = safe.toolLoadout ?? [];
+  const defaultTools = defaults.toolLoadout ?? [];
+  if (tools.map(toolKey).join('|') !== defaultTools.map(toolKey).join('|')) {
+    result.toolLoadout = tools.map((tool) => ({ ...tool }));
+  }
+  if (toolKey(safe.selectedTool) !== toolKey(defaults.selectedTool)) {
+    if (safe.selectedTool) result.selectedTool = { ...safe.selectedTool };
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDocumentV2 {
+  const progress = preferences.progression.coopDefense;
+  const profilesByClass: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>> = {};
+  if (progress.classesUnlocked) {
+    for (const classId of COOP_DEFENSE_CLASS_IDS) {
+      const compact = compactProfile(progress.profilesByClass[classId], classId);
+      if (compact) profilesByClass[classId] = compact;
+    }
+  }
+  return {
+    schemaVersion: LOCAL_PROGRESS_SCHEMA_VERSION,
+    profile: { ...preferences.profile },
+    loadout: { ...preferences.loadout },
+    coopDefense: {
+      totalXp: progress.totalXp,
+      lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
+      completedBossMapIds: [...progress.completedBossMapIds],
+      highestUnlockedMapId: progress.highestUnlockedMapId,
+      classesUnlocked: progress.classesUnlocked,
+      defaultProfile: compactProfile(progress.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID),
+      selectedClassId: progress.classesUnlocked ? progress.selectedClassId : undefined,
+      profilesByClass: progress.classesUnlocked && Object.keys(profilesByClass).length > 0
+        ? profilesByClass : undefined,
+      loadoutsByClass: progress.classesUnlocked && Object.keys(preferences.loadoutByClass).length > 0
+        ? sanitizeStoredLoadoutsByClass(preferences.loadoutByClass) : undefined,
+      itemsUnlocked: progress.itemsUnlocked,
+      items: [...progress.items],
+      equippedItemIds: { ...progress.equippedItemIds },
+      pendingItemReward: progress.pendingItemReward
+        ? { ...progress.pendingItemReward, offers: [...progress.pendingItemReward.offers] } : null,
+      unseenItems: progress.unseenItems,
+    },
+  };
+}
+
+let preferencesCache: LocalPreferences | null = null;
+let cachedStorage: Storage | null = null;
+
 function readPreferences(): LocalPreferences {
-  return parsePreferences(getLocalStorage()?.getItem(LOCAL_PREFERENCES_KEY) ?? null);
+  const storage = getLocalStorage();
+  if (preferencesCache && cachedStorage === storage) return preferencesCache;
+  const defaults = buildDefaultPreferences();
+  const rawSettings = safeRead(storage, LOCAL_SETTINGS_STORAGE_KEY);
+  let settings: LocalSettingsDocumentV1 | null = null;
+  if (rawSettings) {
+    try { settings = sanitizeSettingsDocument(JSON.parse(rawSettings)); } catch { settings = null; }
+  }
+  settings ??= readLegacySettings(safeRead(storage, LEGACY_LOCAL_PREFERENCES_KEY));
+  settings ??= {
+    schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+    audio: { ...defaults.audio },
+    graphics: { ...defaults.graphics },
+  };
+
+  const rawProgress = safeRead(storage, LOCAL_PROGRESS_STORAGE_KEY);
+  let progress: ReturnType<typeof decodeProgressDocument> = null;
+  if (rawProgress) {
+    try { progress = decodeProgressDocument(JSON.parse(rawProgress)); } catch { progress = null; }
+  }
+  preferencesCache = {
+    ...defaults,
+    audio: { ...settings.audio },
+    graphics: { ...settings.graphics },
+    ...(progress ?? {}),
+  };
+  cachedStorage = storage;
+  // Fehlende/alte/beschaedigte Dokumente werden kontrolliert auf die neue Generation gesetzt.
+  const settingsWritten = safeWrite(storage, LOCAL_SETTINGS_STORAGE_KEY, settings);
+  const progressWritten = safeWrite(storage, LOCAL_PROGRESS_STORAGE_KEY, encodeProgressDocument(preferencesCache));
+  if (settingsWritten && progressWritten) safeRemove(storage, LEGACY_LOCAL_PREFERENCES_KEY);
+  return preferencesCache;
 }
 
 function writePreferences(next: LocalPreferences): void {
-  getLocalStorage()?.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify(next));
+  const previous = preferencesCache;
+  const storage = getLocalStorage();
+  cachedStorage = storage;
+  if (!previous || previous.audio !== next.audio || previous.graphics !== next.graphics) {
+    safeWrite(storage, LOCAL_SETTINGS_STORAGE_KEY, {
+      schemaVersion: LOCAL_SETTINGS_SCHEMA_VERSION,
+      audio: next.audio,
+      graphics: next.graphics,
+    } satisfies LocalSettingsDocumentV1);
+  }
+  if (!previous || previous.profile !== next.profile || previous.loadout !== next.loadout
+    || previous.loadoutByClass !== next.loadoutByClass || previous.progression !== next.progression) {
+    safeWrite(storage, LOCAL_PROGRESS_STORAGE_KEY, encodeProgressDocument(next));
+  }
+  preferencesCache = next;
 }
 
 function updatePreferences(mutator: (current: LocalPreferences) => LocalPreferences): void {
   writePreferences(mutator(readPreferences()));
+}
+
+/** Explizite Invalidierung fuer Tests, Cross-Tab-Aenderungen und neue Scene-Lifetimes. */
+export function invalidateLocalStorageCache(): void {
+  preferencesCache = null;
+  cachedStorage = null;
+}
+
+export function exportStoredGameProgressJson(): string {
+  const envelope: LocalProgressExportEnvelope = {
+    format: LOCAL_PROGRESS_EXPORT_FORMAT,
+    formatVersion: LOCAL_PROGRESS_EXPORT_VERSION,
+    exportedAt: new Date().toISOString(),
+    progress: encodeProgressDocument(readPreferences()),
+  };
+  return JSON.stringify(envelope, null, 2);
+}
+
+export function importStoredGameProgressJson(json: string): LocalProgressTransferResult {
+  let parsed: unknown;
+  try { parsed = JSON.parse(json); } catch {
+    return { ok: false, message: 'Die Datei enthaelt kein gueltiges JSON.' };
+  }
+  if (!isRecord(parsed) || parsed.format !== LOCAL_PROGRESS_EXPORT_FORMAT
+    || parsed.formatVersion !== LOCAL_PROGRESS_EXPORT_VERSION
+    || typeof parsed.exportedAt !== 'string' || !Number.isFinite(Date.parse(parsed.exportedAt))
+    || !('progress' in parsed)) {
+    return { ok: false, message: 'Die Datei ist kein kompatibler Fragdachse-Spielstand.' };
+  }
+  const decoded = decodeProgressDocument(parsed.progress);
+  if (!decoded) {
+    return { ok: false, message: 'Der Spielstand ist ungueltig oder verwendet ein inkompatibles Schema.' };
+  }
+  const current = readPreferences();
+  writePreferences({ ...current, ...decoded });
+  return { ok: true, message: 'Spielstand erfolgreich importiert.' };
+}
+
+export function downloadStoredGameProgress(): LocalProgressTransferResult {
+  try {
+    if (typeof document === 'undefined' || typeof URL === 'undefined') throw new Error('unavailable');
+    const blob = new Blob([exportStoredGameProgressJson()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `fragdachse-spielstand-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    return { ok: true, message: 'Spielstand wurde exportiert.' };
+  } catch {
+    return { ok: false, message: 'Spielstand konnte nicht exportiert werden.' };
+  }
+}
+
+export function importStoredGameProgressFile(): Promise<LocalProgressTransferResult> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof document === 'undefined') throw new Error('unavailable');
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json,.json';
+      input.onchange = async () => {
+        try {
+          const file = input.files?.[0];
+          if (!file) return resolve({ ok: false, message: 'Keine Datei ausgewaehlt.' });
+          if (file.size > 5_000_000) return resolve({ ok: false, message: 'Die Spielstanddatei ist zu gross.' });
+          resolve(importStoredGameProgressJson(await file.text()));
+        } catch {
+          resolve({ ok: false, message: 'Die Spielstanddatei konnte nicht gelesen werden.' });
+        }
+      };
+      input.click();
+    } catch {
+      resolve({ ok: false, message: 'Der Dateiimport ist in diesem Browser nicht verfuegbar.' });
+    }
+  });
 }
 
 export function getStoredMasterVolume(): number {
@@ -538,10 +854,99 @@ export function clearStoredLoadoutSlot(slot: LoadoutSlot): void {
   });
 }
 
+/** Liest einen Coop-Defense-Loadout-Slot aus dem Profil der konkreten Klasse. */
+export function getStoredCoopDefenseLoadoutSlot(
+  classId: CoopDefenseClassId,
+  slot: LoadoutSlot,
+): string | null {
+  return readPreferences().loadoutByClass[classId]?.[slot] ?? null;
+}
+
+/** Liest das komplette, klassenbezogene Loadout mit nur einem Preferences-Parse. */
+export function getStoredCoopDefenseLoadout(
+  classId: CoopDefenseClassId,
+): Partial<Record<LoadoutSlot, string>> {
+  return { ...(readPreferences().loadoutByClass[classId] ?? {}) };
+}
+
+/** Speichert einen Coop-Defense-Loadout-Slot getrennt vom Profil jeder anderen Klasse. */
+export function setStoredCoopDefenseLoadoutSlot(
+  classId: CoopDefenseClassId,
+  slot: LoadoutSlot,
+  itemId: string,
+): void {
+  updatePreferences((current) => ({
+    ...current,
+    loadoutByClass: {
+      ...current.loadoutByClass,
+      [classId]: {
+        ...(current.loadoutByClass[classId] ?? {}),
+        [slot]: itemId,
+      },
+    },
+  }));
+}
+
+/**
+ * Speichert einen Klassenwechsel atomar: bisheriges Loadout sichern, Ziel-Loadout
+ * wiederherstellen und aktive Klasse setzen. Das vermeidet je Slot einen kompletten
+ * Parse-/Serialize-Zyklus des lokalen Preferences-Objekts.
+ */
+export function switchStoredCoopDefenseClassLoadout(
+  previousClassId: CoopDefenseClassId,
+  nextClassId: CoopDefenseClassId,
+  previousLoadout: Partial<Record<LoadoutSlot, string>>,
+  nextLoadout: Partial<Record<LoadoutSlot, string>>,
+): void {
+  updatePreferences((current) => {
+    const storedProgress = current.progression.coopDefense;
+    if (!storedProgress.classesUnlocked) return current;
+
+    return {
+      ...current,
+      loadoutByClass: {
+        ...current.loadoutByClass,
+        [previousClassId]: {
+          ...(current.loadoutByClass[previousClassId] ?? {}),
+          ...previousLoadout,
+        },
+        [nextClassId]: {
+          ...(current.loadoutByClass[nextClassId] ?? {}),
+          ...nextLoadout,
+        },
+      },
+      progression: {
+        ...current.progression,
+        coopDefense: {
+          ...storedProgress,
+          selectedClassId: sanitizeCoopDefenseClassId(nextClassId),
+        },
+      },
+    };
+  });
+}
+
+/** Entfernt einen gespeicherten Coop-Defense-Slot, ohne andere Klassenprofile anzutasten. */
+export function clearStoredCoopDefenseLoadoutSlot(
+  classId: CoopDefenseClassId,
+  slot: LoadoutSlot,
+): void {
+  updatePreferences((current) => {
+    const nextClassLoadout = { ...(current.loadoutByClass[classId] ?? {}) };
+    delete nextClassLoadout[slot];
+    return {
+      ...current,
+      loadoutByClass: {
+        ...current.loadoutByClass,
+        [classId]: nextClassLoadout,
+      },
+    };
+  });
+}
+
 export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
   const progress = readPreferences().progression.coopDefense;
   return {
-    upgradeTreeVersion: progress.upgradeTreeVersion,
     totalXp: progress.totalXp,
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
     completedBossMapIds: [...progress.completedBossMapIds],
@@ -584,6 +989,7 @@ export function resetStoredCoopDefenseCharacter(): void {
   updatePreferences((current) => ({
     ...current,
     loadout: {},
+    loadoutByClass: {},
     progression: {
       ...current.progression,
       coopDefense: {
@@ -686,8 +1092,15 @@ export function setStoredCoopDefenseClassesUnlocked(unlocked: boolean): boolean 
     storedProgress.completedBossMapIds.length,
     DEFAULT_COOP_DEFENSE_CLASS_ID,
   );
+  const loadoutByClass = unlocked && !current.loadoutByClass[DEFAULT_COOP_DEFENSE_CLASS_ID]
+    ? {
+      ...current.loadoutByClass,
+      [DEFAULT_COOP_DEFENSE_CLASS_ID]: { ...current.loadout },
+    }
+    : current.loadoutByClass;
   writePreferences({
     ...current,
+    loadoutByClass,
     progression: {
       ...current.progression,
       coopDefense: {

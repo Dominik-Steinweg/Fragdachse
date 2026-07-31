@@ -56,6 +56,8 @@ Der Host veröffentlicht bei `NET_TICK_RATE_HZ = 20` einen einzelnen kompakten `
 
 Nutzlast ist JSON. Ein Binärformat lohnt erst, wenn die Slice-Metriken (`NET_DEBUG_ENEMY_SYNC_METRICS`) es belegen.
 
+**Ein neuer Gegner-Zustand gehört nicht automatisch in den Enemy-Codec.** Ein zusätzliches Feld dort kostet sechs Änderungsstellen im Gleichschritt (beide Interfaces, `getNetSnapshot`, `buildDeltaState`, Encode, Decode, Skip-Walker, beide Zweige von `applyRemoteSnapshot`) und liegt in einem heißen Pfad. Für einen Zustand, der nur wenige Gegner gleichzeitig betrifft, ist der **Seitenkanal** günstiger: ein eigener `GameState`-Key, der beim Bauen der Nutzlast komplett entfällt, solange die Liste leer ist – Vorbilder sind `slimeTrail.affectedEnemies` und `vulnerableEnemies`. Er kostet dann exakt nichts, während ein Codec-Bit immer im Maskenvergleich mitläuft. Umgekehrt gewinnt der Codec, sobald der Zustand gleichzeitig auf sehr vielen Gegnern liegt, weil der Seitenkanal keine Deltas kennt. Zeitlich begrenzte Zustände replizieren dabei einen **absoluten Ablaufzeitpunkt** statt einer Restdauer; der Client zählt dann zwischen zwei Snapshots selbst herunter und braucht kein Update beim Ablauf.
+
 ## Zwei Latenzen, die nicht verwechselt werden dürfen
 
 **Ping (Netzwerk-RTT).** `RTCIceCandidatePairStats.currentRoundTripTime` des gewählten Kandidatenpaars. Der ICE-Stack misst sie per STUN **außerhalb unseres Main-Threads**, sie ist daher bildratenunabhängig und mit der Ping-Anzeige üblicher Shooter vergleichbar: auf einem Rechner bzw. im LAN einstellig. `KEY_PING` veröffentlicht Messwert und monotonen Sample-Zähler; der Messwert erscheint in Lobby und Leaderboard, beide Felder speisen den Raumtest.

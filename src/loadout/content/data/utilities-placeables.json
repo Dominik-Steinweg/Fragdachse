@@ -1,0 +1,74 @@
+{
+  "utilities": {
+    "FELSBAU": {
+      "id": "FELSBAU",
+      "displayName": "Felsbau",
+      "type": "placeable_rock",
+      "cooldown": 500,
+      "activation": {
+        "type": "placement_mode"
+      },
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "allowedSlots": [
+        "utility"
+      ],
+      "placeable": {
+        "kind": "rock",
+        "range": 160,
+        "footprint": [
+          {
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "maxHp": 200,
+        "lifetimeMs": 0,
+        "previewAlpha": 0.5,
+        "ownerTintStrength": 0.85,
+        "warningPulseMs": 3500,
+        "spawnShakeDuration": 110,
+        "spawnShakeIntensity": 0.0025
+      }
+    },
+    "FLIEGENPILZ": {
+      "id": "FLIEGENPILZ",
+      "displayName": "Fliegenpilz",
+      "type": "placeable_turret",
+      "cooldown": 500,
+      "activation": {
+        "type": "placement_mode"
+      },
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "allowedSlots": [
+        "utility"
+      ],
+      "weaponId": "TURRET_SPORE",
+      "placeable": {
+        "kind": "turret",
+        "range": 240,
+        "footprint": [
+          {
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "maxHp": 50,
+        "lifetimeMs": 0,
+        "previewAlpha": 0.55,
+        "ownerTintStrength": 0.72,
+        "warningPulseMs": 3500,
+        "spawnShakeDuration": 120,
+        "spawnShakeIntensity": 0.0028,
+        "targetRange": 280,
+        "muzzleOffset": 26,
+        "deathCloudRadius": 64
+      }
+    }
+  }
+}

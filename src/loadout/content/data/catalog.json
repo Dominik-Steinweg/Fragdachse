@@ -1,0 +1,256 @@
+{
+  "catalog": [
+    {
+      "kind": "weapon",
+      "id": "GLOCK",
+      "slot": "weapon1",
+      "order": 0,
+      "iconKey": "GLOCK"
+    },
+    {
+      "kind": "weapon",
+      "id": "ASMD_PRIM",
+      "slot": "weapon1",
+      "order": 1,
+      "iconKey": "ASMD_PRIM"
+    },
+    {
+      "kind": "weapon",
+      "id": "BITE",
+      "slot": "weapon1",
+      "order": 2,
+      "iconKey": "BITE"
+    },
+    {
+      "kind": "weapon",
+      "id": "PLASMA",
+      "slot": "weapon1",
+      "order": 3,
+      "iconKey": "PLASMA"
+    },
+    {
+      "kind": "weapon",
+      "id": "HYDRA",
+      "slot": "weapon1",
+      "order": 4,
+      "iconKey": "HYDRA"
+    },
+    {
+      "kind": "weapon",
+      "id": "XBOW",
+      "slot": "weapon1",
+      "order": 5,
+      "iconKey": "XBOW"
+    },
+    {
+      "kind": "weapon",
+      "id": "LAUBBLAESER",
+      "slot": "weapon1",
+      "order": 6,
+      "iconKey": "LAUBBLAESER"
+    },
+    {
+      "kind": "weapon",
+      "id": "OVERCHARGE_CORE",
+      "slot": "weapon2",
+      "order": 0,
+      "iconKey": null
+    },
+    {
+      "kind": "weapon",
+      "id": "REPARATURSTRAHL",
+      "slot": "weapon2",
+      "order": 1,
+      "iconKey": null
+    },
+    {
+      "kind": "weapon",
+      "id": "ENERGIEINJEKTOR",
+      "slot": "weapon2",
+      "order": 2,
+      "iconKey": null
+    },
+    {
+      "kind": "weapon",
+      "id": "P90",
+      "slot": "weapon2",
+      "order": 3,
+      "iconKey": "P90"
+    },
+    {
+      "kind": "weapon",
+      "id": "AK47",
+      "slot": "weapon2",
+      "order": 4,
+      "iconKey": "AK47"
+    },
+    {
+      "kind": "weapon",
+      "id": "SHOTGUN",
+      "slot": "weapon2",
+      "order": 5,
+      "iconKey": "SHOTGUN"
+    },
+    {
+      "kind": "weapon",
+      "id": "ASMD_SEC",
+      "slot": "weapon2",
+      "order": 6,
+      "iconKey": "ASMD_SEC"
+    },
+    {
+      "kind": "weapon",
+      "id": "ROCKET_LAUNCHER",
+      "slot": "weapon2",
+      "order": 7,
+      "iconKey": "ROCKET_LAUNCHER"
+    },
+    {
+      "kind": "weapon",
+      "id": "MINI_ROCKET_LAUNCHER",
+      "slot": "weapon2",
+      "order": 8,
+      "iconKey": "MINI_ROCKET_LAUNCHER"
+    },
+    {
+      "kind": "weapon",
+      "id": "AWP",
+      "slot": "weapon2",
+      "order": 9,
+      "iconKey": "AWP"
+    },
+    {
+      "kind": "weapon",
+      "id": "FLAMETHROWER",
+      "slot": "weapon2",
+      "order": 10,
+      "iconKey": "FLAMETHROWER"
+    },
+    {
+      "kind": "weapon",
+      "id": "TESLA_DOME",
+      "slot": "weapon2",
+      "order": 11,
+      "iconKey": "TESLA_DOME"
+    },
+    {
+      "kind": "weapon",
+      "id": "ENERGY_SHIELD",
+      "slot": "weapon2",
+      "order": 12,
+      "iconKey": "ENERGY_SHIELD"
+    },
+    {
+      "kind": "weapon",
+      "id": "NEGEV",
+      "slot": "weapon2",
+      "order": 13,
+      "iconKey": "NEGEV"
+    },
+    {
+      "kind": "utility",
+      "id": "HE_GRENADE",
+      "slot": "utility",
+      "order": 0,
+      "iconKey": "HE_GRENADE"
+    },
+    {
+      "kind": "utility",
+      "id": "SMOKE_GRENADE",
+      "slot": "utility",
+      "order": 1,
+      "iconKey": "SMOKE_GRENADE"
+    },
+    {
+      "kind": "utility",
+      "id": "MOLOTOV_GRENADE",
+      "slot": "utility",
+      "order": 2,
+      "iconKey": "MOLOTOV_GRENADE"
+    },
+    {
+      "kind": "utility",
+      "id": "TIME_BUBBLE",
+      "slot": "utility",
+      "order": 3,
+      "iconKey": "TIME_BUBBLE"
+    },
+    {
+      "kind": "utility",
+      "id": "STINKDRUESEN",
+      "slot": "utility",
+      "order": 4,
+      "iconKey": "STINKDRUESEN"
+    },
+    {
+      "kind": "utility",
+      "id": "TRANSLOCATOR",
+      "slot": "utility",
+      "order": 5,
+      "iconKey": "TRANSLOCATOR"
+    },
+    {
+      "kind": "utility",
+      "id": "FELSBAU",
+      "slot": "utility",
+      "order": 6,
+      "iconKey": "FELSBAU"
+    },
+    {
+      "kind": "utility",
+      "id": "FLIEGENPILZ",
+      "slot": "utility",
+      "order": 7,
+      "iconKey": "FLIEGENPILZ"
+    },
+    {
+      "kind": "utility",
+      "id": "ZEUS_TASER",
+      "slot": "utility",
+      "order": 8,
+      "iconKey": "ZEUS_TASER"
+    },
+    {
+      "kind": "utility",
+      "id": "DECOY",
+      "slot": "utility",
+      "order": 9,
+      "iconKey": "DECOY"
+    },
+    {
+      "kind": "ultimate",
+      "id": "ARMAGEDDON",
+      "slot": "ultimate",
+      "order": 0,
+      "iconKey": "ARMAGEDDON"
+    },
+    {
+      "kind": "ultimate",
+      "id": "GAUSS_RIFLE",
+      "slot": "ultimate",
+      "order": 1,
+      "iconKey": "GAUSS_RIFLE"
+    },
+    {
+      "kind": "ultimate",
+      "id": "AIRSTRIKE",
+      "slot": "ultimate",
+      "order": 2,
+      "iconKey": "AIRSTRIKE"
+    },
+    {
+      "kind": "ultimate",
+      "id": "HONEY_BADGER_RAGE",
+      "slot": "ultimate",
+      "order": 3,
+      "iconKey": "HONEY_BADGER_RAGE"
+    },
+    {
+      "kind": "ultimate",
+      "id": "DACHS_TUNNEL",
+      "slot": "ultimate",
+      "order": 4,
+      "iconKey": "DACHS_TUNNEL"
+    }
+  ]
+}

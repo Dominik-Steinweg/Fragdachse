@@ -1,0 +1,190 @@
+{
+  "weapons": {
+    "ROCKET_LAUNCHER": {
+      "id": "ROCKET_LAUNCHER",
+      "displayName": "Raketenwerfer",
+      "cooldown": 950,
+      "damage": 10,
+      "range": 900,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 600,
+        "projectileSize": 10,
+        "projectileMaxBounces": 0,
+        "limitRangeToCursor": true,
+        "impactExplosion": {
+          "radius": 110,
+          "maxDamage": 30,
+          "minDamage": 5,
+          "knockback": 1250,
+          "selfDamageMult": 0.25,
+          "rockDamageMult": 1,
+          "trainDamageMult": 1.15,
+          "color": "#ff8a3d",
+          "visualStyle": "rocket",
+          "blackHoleDurationMs": 0,
+          "blackHolePullStrength": 2400,
+          "groundFire": {
+            "type": "fire",
+            "radius": 110,
+            "damagePerTick": 1,
+            "lingerDuration": 0,
+            "rockDamageMult": 0,
+            "trainDamageMult": 0,
+            "burnDurationMs": 2000,
+            "burnDamagePerTick": 1,
+            "weaponName": "Brennender Raketenboden"
+          }
+        }
+      },
+      "allowedSlots": [
+        "weapon2"
+      ],
+      "adrenalinCost": 30,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 10,
+      "spreadRecoveryDelay": 450,
+      "spreadRecoveryRate": 3,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "rocket",
+      "projectileColor": "#e8c170",
+      "rocketSmokeTrailColor": "#c7cfcc",
+      "trainDamageMult": 1.15,
+      "shotRecoilForce": 520,
+      "shotRecoilDuration": 170,
+      "shotScreenShake": {
+        "duration": 120,
+        "intensity": 0.004
+      },
+      "shotAudio": {
+        "successKey": "shot_rocketlauncher",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "MINI_ROCKET_LAUNCHER": {
+      "id": "MINI_ROCKET_LAUNCHER",
+      "displayName": "Mini-Raketen",
+      "cooldown": 75,
+      "damage": 2,
+      "range": 700,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 550,
+        "projectileSize": 8,
+        "projectileMaxBounces": 0,
+        "limitRangeToCursor": false,
+        "impactExplosion": {
+          "radius": 65,
+          "maxDamage": 3,
+          "minDamage": 1,
+          "falloffReduction": 0,
+          "knockback": 320,
+          "selfDamageMult": 1,
+          "rockDamageMult": 1,
+          "trainDamageMult": 1,
+          "color": "#ffb36b",
+          "visualStyle": "mini_rocket"
+        },
+        "homing": {
+          "acquireDelayMs": 100,
+          "searchRadius": 300,
+          "retargetIntervalMs": 50,
+          "maxTurnDegreesPerStep": 18,
+          "targetTypes": [
+            "players",
+            "enemies"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 1
+        }
+      },
+      "allowedSlots": [
+        "weapon2"
+      ],
+      "adrenalinCost": 8,
+      "adrenalinGain": 0,
+      "spreadStanding": 5,
+      "spreadMoving": 9,
+      "spreadPerShot": 1.2,
+      "maxDynamicSpread": 12,
+      "multiExplosionCount": 1,
+      "multiExplosionCoastMs": 0,
+      "miniRocketReturnEnabled": 0,
+      "miniRocketReturnRangeBuffer": 0.5,
+      "miniRocketPickupRadius": 32,
+      "miniRocketPickupAdrenalineRefundFraction": 0,
+      "miniRocketPickupArmor": 0,
+      "miniRocketSafetyLifetimeMs": 12000,
+      "miniRocketCascadeDamageBonusPerExplosion": 0,
+      "spreadRecoveryDelay": 180,
+      "spreadRecoveryRate": 3,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "rocket",
+      "projectileVisualScale": 0.5,
+      "projectileColor": "#f0c98a",
+      "rocketSmokeTrailColor": "#c7cfcc",
+      "trainDamageMult": 1,
+      "shotRecoilForce": 180,
+      "shotRecoilDuration": 110,
+      "shotScreenShake": {
+        "duration": 70,
+        "intensity": 0.0015
+      },
+      "shotAudio": {
+        "successKey": "shot_minirocketlauncher",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "TURRET_ROCKET": {
+      "id": "TURRET_ROCKET",
+      "displayName": "Turmrakete",
+      "cooldown": 1600,
+      "damage": 8,
+      "range": 640,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 560,
+        "projectileSize": 9,
+        "projectileMaxBounces": 0,
+        "impactExplosion": {
+          "radius": 95,
+          "maxDamage": 26,
+          "minDamage": 5,
+          "knockback": 900,
+          "selfDamageMult": 0,
+          "rockDamageMult": 0,
+          "trainDamageMult": 1,
+          "color": "#ff8a3d",
+          "visualStyle": "rocket",
+          "blackHoleDurationMs": 0,
+          "blackHolePullStrength": 0
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "rocket",
+      "projectileColor": "#e8c170",
+      "rocketSmokeTrailColor": "#c7cfcc",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_rocketlauncher",
+        "failureKey": "shot_dry_trigger"
+      }
+    }
+  }
+}

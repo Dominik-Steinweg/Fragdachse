@@ -24,7 +24,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedOverchargeField, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTurretCharge, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedOverchargeField, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTurretCharge, SyncedTrainState, SyncedTunnel, SyncedVulnerableEnemy, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -172,6 +172,7 @@ const GAME_STATE_SLICE_LABELS: Readonly<Record<string, string>> = {
   g: 'guardianSpirits',
   rd: 'repairDrones',
   sl: 'slimeTrail',
+  vu: 'vulnerableEnemies',
   fg: 'burningGround',
   u: 'powerups',
   pd: 'pedestals',
@@ -264,6 +265,7 @@ export interface GameState {
   guardianSpirits: SyncedGuardianSpirit[];
   repairDrones: SyncedRepairDrone[];
   slimeTrail: SyncedSlimeTrailSnapshot;
+  vulnerableEnemies: SyncedVulnerableEnemy[];
   burningGround: SyncedBurningGroundSnapshot;
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
@@ -296,6 +298,7 @@ interface OutboundGameState {
   guardianSpirits: SyncedGuardianSpirit[];
   repairDrones: SyncedRepairDrone[];
   slimeTrail: SyncedSlimeTrailSnapshot;
+  vulnerableEnemies: SyncedVulnerableEnemy[];
   burningGround: SyncedBurningGroundSnapshot;
 }
 
@@ -318,6 +321,17 @@ function decodeSlimeTrailSnapshot(raw: unknown): SyncedSlimeTrailSnapshot {
     cells: (encoded[0] ?? []).map(([id, x, y, size, alpha]) => ({ id, x, y, size, alpha })),
     affectedEnemies: (encoded[1] ?? []).map(([enemyId, x, y, alpha]) => ({ enemyId, x, y, alpha })),
   };
+}
+
+type EncodedVulnerableEnemy = [string, number];
+
+function encodeVulnerableEnemies(entries: readonly SyncedVulnerableEnemy[]): EncodedVulnerableEnemy[] {
+  return entries.map(entry => [entry.enemyId, entry.expiresAt]);
+}
+
+function decodeVulnerableEnemies(raw: unknown): SyncedVulnerableEnemy[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as EncodedVulnerableEnemy[]).map(([enemyId, expiresAt]) => ({ enemyId, expiresAt }));
 }
 
 type EncodedBurningGroundCell = [number, number, number, number, number, number];
@@ -1296,6 +1310,10 @@ export class NetworkBridge {
     if (state.slimeTrail.cells.length > 0 || state.slimeTrail.affectedEnemies.length > 0) {
       payload.sl = encodeSlimeTrailSnapshot(state.slimeTrail);
     }
+    // Der Schluessel entfaellt vollstaendig, solange kein Gegner verwundbar ist – der Regelfall.
+    if (state.vulnerableEnemies.length > 0) {
+      payload.vu = encodeVulnerableEnemies(state.vulnerableEnemies);
+    }
     const burningGroundDelta = this.buildBurningGroundDelta(state.burningGround);
     if (burningGroundDelta) payload.fg = burningGroundDelta;
     if (state.powerups)                payload.u = state.powerups;
@@ -1468,6 +1486,7 @@ export class NetworkBridge {
       guardianSpirits: (raw.g as SyncedGuardianSpirit[] | undefined) ?? [],
       repairDrones: (raw.rd as SyncedRepairDrone[] | undefined) ?? [],
       slimeTrail: decodeSlimeTrailSnapshot(raw.sl),
+      vulnerableEnemies: decodeVulnerableEnemies(raw.vu),
       burningGround: nextBurningGround,
       powerups:      nextPowerUps,
       pedestals:     nextPedestals,

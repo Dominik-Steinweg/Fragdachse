@@ -5,7 +5,6 @@ import {
   isGraphicsQuality,
 } from '../src/graphics/GraphicsQuality';
 import {
-  getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
   setStoredGraphicsQuality,
 } from '../src/utils/localPreferences';
@@ -132,70 +131,6 @@ describe('graphics quality preferences and profiles', () => {
     expect(getStoredGraphicsQuality()).toBe('high');
     setStoredGraphicsQuality('low');
     expect(getStoredGraphicsQuality()).toBe('low');
-  });
-
-  it('migrates a legacy default profile into every compatible class while keeping classes locked', () => {
-    storage.setItem('fragdachse_local_preferences', JSON.stringify({
-      version: 13,
-      progression: {
-        coopDefense: {
-          upgradeTreeVersion: 13,
-          totalXp: 1000,
-          completedBossMapIds: [],
-          profile: {
-            upgrades: {
-              hp: { unlocked: true, level: 2 },
-            },
-          },
-        },
-      },
-    }));
-
-    const progress = getStoredCoopDefenseProgress();
-    expect(progress.classesUnlocked).toBe(false);
-    expect(progress.selectedClassId).toBe('dachs_nukem');
-    expect(progress.defaultProfile.upgrades.hp.level).toBe(2);
-    expect(progress.profilesByClass.dachs_nukem.upgrades.hp.level).toBe(2);
-    expect(progress.profilesByClass.dachs_of_steel.upgrades.hp.level).toBe(2);
-    expect(progress.profilesByClass.inspector_gadachs.upgrades.hp.level).toBe(2);
-    expect(progress.profilesByClass.inspector_gadachs.upgrades.unlock_rocket_turret.level).toBe(1);
-  });
-
-  it('treats an older save with an active class as already unlocked', () => {
-    storage.setItem('fragdachse_local_preferences', JSON.stringify({
-      version: 14,
-      progression: {
-        coopDefense: {
-          upgradeTreeVersion: 13,
-          selectedClassId: 'dachs_of_steel',
-          profilesByClass: {
-            dachs_of_steel: { upgrades: { hp: { unlocked: true, level: 1 } } },
-          },
-        },
-      },
-    }));
-
-    const progress = getStoredCoopDefenseProgress();
-    expect(progress.classesUnlocked).toBe(true);
-    expect(progress.selectedClassId).toBe('dachs_of_steel');
-    expect(progress.profilesByClass.dachs_of_steel.upgrades.hp.level).toBe(1);
-  });
-
-  it('honors a recorded Map 5 victory when migrating a pre-class save', () => {
-    storage.setItem('fragdachse_local_preferences', JSON.stringify({
-      version: 12,
-      progression: {
-        coopDefense: {
-          upgradeTreeVersion: 13,
-          completedBossMapIds: ['5'],
-          profile: { upgrades: { hp: { unlocked: true, level: 1 } } },
-        },
-      },
-    }));
-
-    const progress = getStoredCoopDefenseProgress();
-    expect(progress.classesUnlocked).toBe(true);
-    expect(progress.selectedClassId).toBe('dachs_nukem');
   });
 
   it('defines progressively smaller visual budgets without changing gameplay state', () => {

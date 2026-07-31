@@ -177,6 +177,65 @@ export interface CoopDefenseItemAffixDefinition {
    * sonst erschiene ein gesenkter Verbrauch als Verschlechterung.
    */
   readonly lowerIsBetter?: boolean;
+  /**
+   * Einzeilige Erklaerung fuer Affixe, deren Wirkung sich nicht aus `label` und Zahl ergibt.
+   *
+   * Nur statlose Affixe brauchen sie: ein Stat-Affix erklaert sich ueber seine Zahlenzeile
+   * bereits vollstaendig. Die festen Parameter kommen aus {@link COOP_DEFENSE_AFFIX_RULES},
+   * damit Text und Laufzeitverhalten nicht auseinanderlaufen koennen.
+   */
+  readonly shortText?: (value: number) => string;
+}
+
+/**
+ * Feste Parameter der Laufzeit-Affixe.
+ *
+ * Bewusst eine einzige Quelle: jeder Wert wird sowohl vom Tooltip-Text als auch vom
+ * `CoopDefenseItemRuntimeSystem` gelesen. Der gewuerfelte Hauptwert des Affixes steht
+ * dagegen auf dem Item, nicht hier.
+ */
+export const COOP_DEFENSE_AFFIX_RULES = Object.freeze({
+  /** Kampfaufladung: Stapelgrenze und Haltedauer je Kill. */
+  killChargeMaxStacks: 5,
+  killChargeDurationMs: 3_000,
+  /** Fokusfeuer: Staerke und Dauer der Verwundbarkeit. */
+  vulnerabilityBonus: 0.2,
+  vulnerabilityDurationMs: 5_000,
+  /** Hinrichtung: HP-Anteil, unterhalb dessen der Gegner hingerichtet werden kann. */
+  cullingHpThreshold: 0.2,
+  /** Blutrausch und Unter Druck / Letzte Bastion: gemeinsame Niedrig-HP-Schwelle. */
+  lowHpThreshold: 0.4,
+  /** Blutrausch: fester Lifeleech-Zuschlag zusaetzlich zum gewuerfelten Schadensbonus. */
+  bloodRageLifeLeechBonus: 0.03,
+  /** Unversehrt: HP-Anteil, ab dem der Schadensbonus gilt. */
+  highHpThreshold: 0.9,
+  /** Brandzerfall: Anzahl und Streuradius der Brocken sowie Dauer des Bodenbrands. */
+  fireChunkCount: 3,
+  fireChunkRadius: 96,
+  fireChunkGroundDurationMs: 2_000,
+  fireChunkBurnDurationMs: 2_000,
+  /** Identisch mit dem Brandexplosion-Upgrade (`player.fire.deathGround.burnDamagePerTick`). */
+  fireChunkBurnDamagePerTick: 0.25,
+  /** Unterdrueckungsmunition: Staerke und Dauer der Verlangsamung. */
+  suppressionSlowFraction: 0.2,
+  suppressionSlowDurationMs: 2_000,
+  /** Notfallreparatur: Zeit ohne tatsaechlichen Schaden, bevor die Zusatzregeneration greift. */
+  emergencyRepairDelayMs: 4_000,
+  /** Nachbrenner: Dauer des Tempobonus nach einem abgeschlossenen Dash. */
+  afterburnerDurationMs: 2_000,
+  /** Kinetische Ladung: Wegstrecke je Ladung. */
+  movementChargeDistancePx: 500,
+});
+
+/** `3,2` statt `3.2000000000000004` – Prozentwerte im Tooltip bleiben lesbar. */
+function percentText(fraction: number): string {
+  const rounded = Math.round(fraction * 1000) / 10;
+  return `${rounded}`.replace('.', ',');
+}
+
+/** `2` statt `2.0` – Sekunden aus Millisekunden, ohne unnoetige Nachkommastelle. */
+function secondsText(durationMs: number): string {
+  return `${Math.round(durationMs / 100) / 10}`.replace('.', ',');
 }
 
 /**
@@ -266,6 +325,41 @@ Object.freeze([
     displayAsPercent: true,
   },
   {
+    id: 'low_hp_damage_reduction',
+    label: 'Letzte Bastion',
+    weight: 35,
+    minAtLevel1: 0.05,
+    maxAtLevel1: 0.1,
+    perLevel: 0.015,
+    slots: ['armor'],
+    displayAsPercent: true,
+    shortText: (value) => `Unter ${percentText(COOP_DEFENSE_AFFIX_RULES.lowHpThreshold)} % HP:`
+      + ` ${percentText(value)} % Schadensreduktion`,
+  },
+  {
+    id: 'out_of_combat_armor_repair',
+    label: 'Notfallreparatur',
+    weight: 45,
+    minAtLevel1: 4,
+    maxAtLevel1: 8,
+    perLevel: 1.5,
+    slots: ['armor'],
+    displayAsPercent: false,
+    shortText: (value) => `${secondsText(COOP_DEFENSE_AFFIX_RULES.emergencyRepairDelayMs)} s ohne Schaden:`
+      + ` +${Math.round(value * 10) / 10} Ruestung/s`,
+  },
+  {
+    id: 'damage_reflection',
+    label: 'Dornenplatten',
+    weight: 25,
+    minAtLevel1: 0.05,
+    maxAtLevel1: 0.1,
+    perLevel: 0.015,
+    slots: ['armor'],
+    displayAsPercent: true,
+    shortText: (value) => `Wirft ${percentText(value)} % des erlittenen Schadens auf den Verursacher zurueck`,
+  },
+  {
     id: 'life_leech',
     label: 'Lifeleech',
     stat: 'player.lifeLeechFraction',
@@ -303,6 +397,82 @@ Object.freeze([
     slots: ['gloves'],
     classIds: ['inspector_gadachs'],
     displayAsPercent: false,
+  },
+  {
+    id: 'primary_vulnerability',
+    label: 'Fokusfeuer',
+    weight: 15,
+    minAtLevel1: 0.015,
+    maxAtLevel1: 0.035,
+    perLevel: 0.0025,
+    slots: ['gloves'],
+    displayAsPercent: true,
+    shortText: (value) => `${percentText(value)} % Chance bei Primaerwaffentreffern:`
+      + ` Ziel erleidet ${secondsText(COOP_DEFENSE_AFFIX_RULES.vulnerabilityDurationMs)} s lang`
+      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.vulnerabilityBonus)} % mehr Schaden aus allen Quellen`,
+  },
+  {
+    id: 'primary_culling',
+    label: 'Hinrichtung',
+    weight: 10,
+    minAtLevel1: 0.01,
+    maxAtLevel1: 0.025,
+    perLevel: 0.0025,
+    slots: ['gloves'],
+    displayAsPercent: true,
+    shortText: (value) => `${percentText(value)} % Chance, einen Gegner unter`
+      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.cullingHpThreshold)} % HP sofort zu toeten (nicht bei Bossen)`,
+  },
+  {
+    id: 'primary_slow',
+    label: 'Unterdrueckungsmunition',
+    weight: 40,
+    minAtLevel1: 0.06,
+    maxAtLevel1: 0.12,
+    perLevel: 0.01,
+    slots: ['gloves'],
+    displayAsPercent: true,
+    shortText: (value) => `${percentText(value)} % Chance bei Primaerwaffentreffern:`
+      + ` Ziel ${secondsText(COOP_DEFENSE_AFFIX_RULES.suppressionSlowDurationMs)} s lang`
+      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.suppressionSlowFraction)} % langsamer`,
+  },
+  {
+    id: 'primary_kill_fire_chunks',
+    label: 'Brandzerfall',
+    weight: 15,
+    minAtLevel1: 0.04,
+    maxAtLevel1: 0.08,
+    perLevel: 0.01,
+    slots: ['gloves'],
+    displayAsPercent: true,
+    shortText: (value) => `${percentText(value)} % Chance bei einem Primaerwaffen-Kill:`
+      + ` schleudert ${COOP_DEFENSE_AFFIX_RULES.fireChunkCount} brennende Brocken auf nahe Bodenstellen`,
+  },
+  {
+    id: 'low_hp_blood_rage',
+    label: 'Blutrausch',
+    weight: 25,
+    minAtLevel1: 0.08,
+    maxAtLevel1: 0.14,
+    perLevel: 0.015,
+    slots: ['gloves'],
+    displayAsPercent: true,
+    shortText: (value) => `Unter ${percentText(COOP_DEFENSE_AFFIX_RULES.lowHpThreshold)} % HP:`
+      + ` +${percentText(value)} % Schaden und`
+      + ` +${percentText(COOP_DEFENSE_AFFIX_RULES.bloodRageLifeLeechBonus)} % Lifeleech`,
+  },
+  {
+    // Bewusst der Gegenpol zu Blutrausch: beide koennen nie gleichzeitig aktiv sein.
+    id: 'high_hp_damage',
+    label: 'Unversehrt',
+    weight: 45,
+    minAtLevel1: 0.06,
+    maxAtLevel1: 0.12,
+    perLevel: 0.02,
+    slots: ['gloves', 'armor'],
+    displayAsPercent: true,
+    shortText: (value) => `Ab ${percentText(COOP_DEFENSE_AFFIX_RULES.highHpThreshold)} % HP:`
+      + ` +${percentText(value)} % Schaden`,
   },
   {
     id: 'run_speed',
@@ -409,6 +579,30 @@ Object.freeze([
     lowerIsBetter: true,
   },
   {
+    id: 'adrenaline_kill_charge',
+    label: 'Kampfaufladung',
+    weight: 45,
+    minAtLevel1: 0.02,
+    maxAtLevel1: 0.04,
+    perLevel: 0.005,
+    slots: ['helmet'],
+    displayAsPercent: true,
+    shortText: (value) => `Eigene Kills geben ${secondsText(COOP_DEFENSE_AFFIX_RULES.killChargeDurationMs)} s lang`
+      + ` +${percentText(value)} % Adrenalinregeneration je Stapel`
+      + ` (max. ${COOP_DEFENSE_AFFIX_RULES.killChargeMaxStacks})`,
+  },
+  {
+    id: 'adrenaline_from_damage',
+    label: 'Schockreaktion',
+    weight: 40,
+    minAtLevel1: 0.04,
+    maxAtLevel1: 0.08,
+    perLevel: 0.01,
+    slots: ['helmet', 'armor'],
+    displayAsPercent: true,
+    shortText: (value) => `${percentText(value)} % des tatsaechlich erlittenen Schadens werden als Adrenalin gutgeschrieben`,
+  },
+  {
     id: 'dash_range',
     label: 'Dash-Reichweite',
     stat: 'player.dashRange',
@@ -419,6 +613,42 @@ Object.freeze([
     perLevel: 0.03,
     slots: ['boots'],
     displayAsPercent: true,
+  },
+  {
+    id: 'dash_speed',
+    label: 'Nachbrenner',
+    weight: 45,
+    minAtLevel1: 0.1,
+    maxAtLevel1: 0.18,
+    perLevel: 0.02,
+    slots: ['boots'],
+    displayAsPercent: true,
+    shortText: (value) => `Nach einem Dash ${secondsText(COOP_DEFENSE_AFFIX_RULES.afterburnerDurationMs)} s lang`
+      + ` +${percentText(value)} % Bewegungsgeschwindigkeit`,
+  },
+  {
+    id: 'low_hp_speed',
+    label: 'Unter Druck',
+    weight: 45,
+    minAtLevel1: 0.1,
+    maxAtLevel1: 0.18,
+    perLevel: 0.02,
+    slots: ['armor', 'boots'],
+    displayAsPercent: true,
+    shortText: (value) => `Unter ${percentText(COOP_DEFENSE_AFFIX_RULES.lowHpThreshold)} % HP:`
+      + ` +${percentText(value)} % Bewegungsgeschwindigkeit`,
+  },
+  {
+    id: 'movement_charge_damage',
+    label: 'Kinetische Ladung',
+    weight: 28,
+    minAtLevel1: 0.15,
+    maxAtLevel1: 0.3,
+    perLevel: 0.03,
+    slots: ['boots'],
+    displayAsPercent: true,
+    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.movementChargeDistancePx} zurueckgelegte Pixel:`
+      + ` naechster Primaerangriff +${percentText(value)} % Schaden`,
   },
 ]);
 

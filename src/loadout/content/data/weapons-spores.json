@@ -1,0 +1,224 @@
+{
+  "weapons": {
+    "SPOREN": {
+      "id": "SPOREN",
+      "displayName": "Sporen",
+      "cooldown": 1250,
+      "damage": 3,
+      "range": 350,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 280,
+        "projectileSize": 10,
+        "projectileMaxBounces": 0,
+        "impactCloud": {
+          "radius": 32,
+          "duration": 1500,
+          "damagePerTick": 4,
+          "tickInterval": 150,
+          "rockDamageMult": 1,
+          "trainDamageMult": 1,
+          "visualVariant": "spore"
+        },
+        "homing": {
+          "acquireDelayMs": 80,
+          "searchRadius": 320,
+          "retargetIntervalMs": 40,
+          "maxTurnDegreesPerStep": 20,
+          "targetTypes": [
+            "players",
+            "enemies"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 0.5
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "spore",
+      "projectileColor": "#e7f28b",
+      "showCrosshair": false,
+      "rockDamageMult": 1,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_spore",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "BASE_SPOREN": {
+      "id": "BASE_SPOREN",
+      "displayName": "Sporen",
+      "cooldown": 2500,
+      "damage": 3,
+      "range": 350,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 280,
+        "projectileSize": 10,
+        "projectileMaxBounces": 0,
+        "impactCloud": {
+          "radius": 32,
+          "duration": 1500,
+          "damagePerTick": 4,
+          "tickInterval": 150,
+          "rockDamageMult": 1,
+          "trainDamageMult": 1,
+          "visualVariant": "spore"
+        },
+        "homing": {
+          "acquireDelayMs": 80,
+          "searchRadius": 320,
+          "retargetIntervalMs": 40,
+          "maxTurnDegreesPerStep": 20,
+          "targetTypes": [
+            "players",
+            "enemies"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 0.5
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "spore",
+      "projectileColor": "#e7f28b",
+      "showCrosshair": false,
+      "rockDamageMult": 1,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_spore",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "WARDEN_SPOREN": {
+      "id": "WARDEN_SPOREN",
+      "displayName": "Sporen",
+      "cooldown": 3000,
+      "damage": 3,
+      "range": 350,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 280,
+        "projectileSize": 10,
+        "projectileMaxBounces": 0,
+        "impactCloud": {
+          "radius": 32,
+          "duration": 1500,
+          "damagePerTick": 4,
+          "tickInterval": 150,
+          "rockDamageMult": 1,
+          "trainDamageMult": 1,
+          "visualVariant": "spore_void"
+        },
+        "homing": {
+          "acquireDelayMs": 80,
+          "searchRadius": 320,
+          "retargetIntervalMs": 40,
+          "maxTurnDegreesPerStep": 20,
+          "targetTypes": [
+            "players",
+            "enemies"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 0.5
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "spore",
+      "projectileColor": "#b347ff",
+      "showCrosshair": false,
+      "rockDamageMult": 1,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_spore",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "TURRET_SPORE": {
+      "id": "TURRET_SPORE",
+      "displayName": "Turmsporen",
+      "cooldown": 1400,
+      "damage": 3,
+      "range": 340,
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 280,
+        "projectileSize": 10,
+        "projectileMaxBounces": 0,
+        "impactCloud": {
+          "radius": 32,
+          "duration": 1500,
+          "damagePerTick": 3,
+          "tickInterval": 150,
+          "rockDamageMult": 0,
+          "trainDamageMult": 1,
+          "visualVariant": "spore"
+        },
+        "homing": {
+          "acquireDelayMs": 80,
+          "searchRadius": 320,
+          "retargetIntervalMs": 40,
+          "maxTurnDegreesPerStep": 20,
+          "targetTypes": [
+            "players",
+            "enemies"
+          ],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 0.5
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "spore",
+      "projectileColor": "#e7f28b",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_spore",
+        "failureKey": "shot_dry_trigger"
+      }
+    }
+  }
+}

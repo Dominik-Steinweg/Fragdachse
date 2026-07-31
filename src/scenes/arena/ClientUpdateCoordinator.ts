@@ -12,7 +12,7 @@ import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
@@ -71,6 +71,7 @@ export class ClientUpdateCoordinator {
   } | null = null;
   private storedProfileFallback: CoopDefenseUpgradeProfile | null = null;
   private storedItemsFallback: readonly CoopDefenseItem[] | null = null;
+  private storedClassIdFallback: CoopDefenseClassId | null = null;
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = { weapon1: 0, weapon2: 0 };
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
@@ -100,6 +101,7 @@ export class ClientUpdateCoordinator {
       this.ctx.gameAudioSystem,
       true,
     );
+    this.refreshStoredProgressFallback();
   }
 
   runClientUpdate(delta: number): void {
@@ -267,8 +269,15 @@ export class ClientUpdateCoordinator {
     }
 
     this.ctx.enemyManager?.updateClientInterpolation(lerpFactor);
+    // Der Host repliziert absolute Ablaufzeitpunkte, deshalb laeuft der Marker hier auch dann
+    // sauber ab, wenn zwischendurch kein Snapshot ankommt.
+    const vulnerableNow = bridge.getSynchronizedNow();
+    const vulnerableUntil = new Map(
+      (state.vulnerableEnemies ?? []).map((entry) => [entry.enemyId, entry.expiresAt]),
+    );
     for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
       this.enemyDashVisuals.sync(enemy);
+      enemy.setVulnerable(vulnerableNow < (vulnerableUntil.get(enemy.id) ?? 0));
     }
 
     this.ctx.decoySystem.updateVisuals(lerpFactor);
@@ -585,21 +594,11 @@ export class ClientUpdateCoordinator {
     );
   }
 
-  /**
-   * Der Fallback liest aus dem `localStorage` und liefert dabei **bei jedem Aufruf einen frisch
-   * geklonten** Profil-Baum. Ohne eigenen Cache traefe der referenzbasierte Cache in
-   * {@link getLocalEffectTotals} deshalb nie zu und der teure Pfad liefe pro Frame mehrfach.
-   * Der geklonte Stand aendert sich nur ueber das Upgrade-Menue, also ausserhalb der Runde;
-   * {@link resetPerRound} verwirft ihn.
-   */
+  /** Reiner Speicherzugriff auf den vor Rundenbeginn geladenen Fallback. */
   private getLocalCoopDefenseProfile() {
     const localId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(localId)?.coopDefenseProfile;
     if (committed) return committed;
-    const progress = getStoredCoopDefenseProgress();
-    this.storedProfileFallback ??= progress.classesUnlocked
-      ? progress.profilesByClass[progress.selectedClassId]
-      : progress.defaultProfile;
     return this.storedProfileFallback;
   }
 
@@ -611,8 +610,7 @@ export class ClientUpdateCoordinator {
   private getLocalCoopDefenseItems(): readonly CoopDefenseItem[] {
     const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.equippedItems;
     if (committed) return committed;
-    this.storedItemsFallback ??= getStoredEquippedCoopDefenseItems();
-    return this.storedItemsFallback;
+    return this.storedItemsFallback ?? [];
   }
 
   getLocalInspectorTools(): readonly LoadoutToolRef[] {
@@ -642,6 +640,7 @@ export class ClientUpdateCoordinator {
       const progress = getStoredCoopDefenseProgress();
       const profile = progress.profilesByClass.inspector_gadachs;
       setStoredCoopDefenseUpgradeProfile({ ...profile, selectedTool: { ...tool } }, 'inspector_gadachs');
+      this.refreshStoredProgressFallback();
     }
   }
 
@@ -661,17 +660,27 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const committed = bridge.getPlayerCommittedLoadout(localId);
     if (committed) return committed.coopDefenseClassId;
+    return this.storedClassIdFallback;
+  }
+
+  /**
+   * Einziger Persistenz-Lesepunkt des Coordinators. Er wird beim Scene-Aufbau und nach dem
+   * Lobby-zu-Runde-Uebergang aufgerufen, niemals aus `runClientUpdate()` oder dessen Gettern.
+   */
+  refreshStoredProgressFallback(): void {
     const progress = getStoredCoopDefenseProgress();
-    return progress.classesUnlocked ? progress.selectedClassId : null;
+    this.storedProfileFallback = progress.classesUnlocked
+      ? progress.profilesByClass[progress.selectedClassId]
+      : progress.defaultProfile;
+    this.storedClassIdFallback = progress.classesUnlocked ? progress.selectedClassId : null;
+    this.storedItemsFallback = getStoredEquippedCoopDefenseItems();
+    this.committedSelectionCache = null;
   }
 
   resetPerRound(): void {
     this.lastGameStateVersion = -1;
-    // Loadout-Caches verwerfen: Zwischen zwei Runden kann das Upgrade-Menue das gespeicherte
-    // Profil geaendert haben, und der Fallback-Klon traegt keine neue Referenz.
-    this.committedSelectionCache = null;
-    this.storedProfileFallback = null;
-    this.storedItemsFallback = null;
+    // Zwischen zwei Runden kann das Lobby-Menue den lokalen Spielstand geaendert haben.
+    this.refreshStoredProgressFallback();
     this.damagedStaticRockIds.clear();
     this.prevAliveStates.clear();
     this.prevDashPhases.clear();
@@ -855,7 +864,7 @@ export class ClientUpdateCoordinator {
   }
 
   private resolveLoadoutSelection(playerId: string) {
-    const localProgress = playerId === bridge.getLocalPlayerId() ? getStoredCoopDefenseProgress() : null;
+    const isLocalPlayer = playerId === bridge.getLocalPlayerId();
     const w1Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon1');
     const w2Id = bridge.getPlayerLoadoutSlot(playerId, 'weapon2');
     const utId = bridge.getPlayerLoadoutSlot(playerId, 'utility');
@@ -865,14 +874,9 @@ export class ClientUpdateCoordinator {
       weapon2:  w2Id ? WEAPON_CONFIGS[w2Id  as keyof typeof WEAPON_CONFIGS]   : undefined,
       utility:  utId ? UTILITY_CONFIGS[utId as keyof typeof UTILITY_CONFIGS]  : undefined,
       ultimate: ulId ? ULTIMATE_CONFIGS[ulId as keyof typeof ULTIMATE_CONFIGS]: undefined,
-    }, bridge.getGameMode(), localProgress
-      ? (
-        localProgress.classesUnlocked
-          ? localProgress.profilesByClass[localProgress.selectedClassId]
-          : localProgress.defaultProfile
-      )
-      : null, localProgress?.classesUnlocked ? localProgress.selectedClassId : null,
+    }, bridge.getGameMode(), isLocalPlayer ? this.storedProfileFallback : null,
+    isLocalPlayer ? this.storedClassIdFallback : null,
     // Referenzstabil ueber den memoisierten Zugriff, sonst greift der Cache dieser Aufloesung nie.
-    localProgress ? this.getLocalCoopDefenseItems() : []);
+    isLocalPlayer ? this.getLocalCoopDefenseItems() : []);
   }
 }

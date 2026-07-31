@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { BLOOD_HIT_VFX, DEPTH } from '../config';
-import { ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { ULTIMATE_CONFIGS, type BuffUltimateConfig } from '../loadout/LoadoutConfig';
 import type { GlowHandle } from '../utils/phaserFx';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
 import { circleZone, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
@@ -23,7 +23,7 @@ const CORE_AURA_TEXTURE_RADIUS = 56;
 const RING_AURA_TEXTURE_RADIUS = 74;
 
 function getRageAuraConfig() {
-  return ULTIMATE_CONFIGS.HONEY_BADGER_RAGE.aura ?? {
+  return (ULTIMATE_CONFIGS.HONEY_BADGER_RAGE as BuffUltimateConfig).aura ?? {
     radius: 108,
     damagePerTick: 20,
     tickIntervalMs: 200,

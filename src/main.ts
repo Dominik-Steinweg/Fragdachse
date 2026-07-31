@@ -6,6 +6,7 @@ import { rejoinCurrentRoom, restartWithNewRoom }  from './utils/roomQuality';
 import { ArenaScene }     from './scenes/ArenaScene';
 import { initialRenderSize, installRenderResolution } from './graphics/RenderResolution';
 import { FULLSCREEN_TARGET_ID, installFullscreenSupport } from './ui/fullscreen';
+import { validateGameContentReferences } from './loadout/content/GameContentValidation';
 
 /**
  * Zeigt einen Verbindungsfehler an, statt ein Spiel zu starten, das nicht spielbar waere.
@@ -80,6 +81,9 @@ function installReconnectNotice(): void {
 }
 
 async function boot(): Promise<void> {
+  // Ausgelieferter Content muss vollständig konsistent sein, bevor Netzwerk oder Phaser starten.
+  validateGameContentReferences();
+
   // 1. Raum eroeffnen oder dem Raum aus dem URL-Hash beitreten. Blockiert, bis die direkte
   //    WebRTC-Verbindung steht bzw. endgueltig gescheitert ist – es gibt keinen Fallback.
   await NetworkBridge.connect();
@@ -132,7 +136,9 @@ boot().catch((error: unknown) => {
   showBootError(
     error instanceof PeerNetworkError
       ? error.message
-      : 'Unerwarteter Fehler beim Verbindungsaufbau.',
+      : error instanceof Error
+        ? error.message
+        : 'Unerwarteter Fehler beim Start.',
     window.location.hash.startsWith('#r=')
       && (!(error instanceof PeerNetworkError) || error.kind !== 'invalid-room-code'),
   );

@@ -1254,6 +1254,18 @@ export interface SyncedSlimeTrailSnapshot {
   affectedEnemies: SyncedSlimedEnemy[];
 }
 
+/**
+ * Ein durch Fokusfeuer verwundbarer Gegner.
+ *
+ * Repliziert wird ausschliesslich die Darstellung – die Schadensrechnung bleibt host-only.
+ * `expiresAt` ist ein absoluter Zeitpunkt statt einer Restdauer, damit der Client zwischen zwei
+ * Snapshots selbst herunterzaehlen kann.
+ */
+export interface SyncedVulnerableEnemy {
+  enemyId: string;
+  expiresAt: number;
+}
+
 export interface SyncedBurningGroundCell {
   id: number;
   gridX: number;

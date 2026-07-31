@@ -37,13 +37,26 @@ import { ensureGlossyButtonTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
 import { getOverlayRoot } from './fullscreen';
 import { BadgerPreview } from './BadgerPreview';
-import type { GameMode, LoadoutSlot, TeamId } from '../types';
+import type { CoopDefenseClassId, GameMode, LoadoutSlot, TeamId } from '../types';
 import { getGameModeLabel, hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
-import { getStoredCoopDefenseProgress, getStoredCoopDefenseUpgradeProfile, getStoredHighestUnlockedCoopDefenseMapId, getStoredLoadoutSlot, getStoredPlayerName, setStoredLoadoutSlot, setStoredPlayerName } from '../utils/localPreferences';
+import {
+  downloadStoredGameProgress,
+  getStoredCoopDefenseLoadoutSlot,
+  getStoredCoopDefenseProgress,
+  getStoredCoopDefenseUpgradeProfile,
+  getStoredHighestUnlockedCoopDefenseMapId,
+  getStoredLoadoutSlot,
+  getStoredPlayerName,
+  importStoredGameProgressFile,
+  setStoredCoopDefenseLoadoutSlot,
+  setStoredLoadoutSlot,
+  setStoredPlayerName,
+} from '../utils/localPreferences';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
+import { UiContextMenu } from './UiContextMenu';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
 const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
@@ -157,6 +170,9 @@ export class LeftSidePanel {
   private arenaHUD!:       ArenaHUD;
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
+  private saveMenu: UiContextMenu | null = null;
+  private saveStatusText: Phaser.GameObjects.Text | null = null;
+  private saveStatusTimer: Phaser.Time.TimerEvent | null = null;
   private editBtn:         Phaser.GameObjects.Image | null = null;
   private editBtnLabel:    Phaser.GameObjects.Text | null = null;
   private modeNameText:    Phaser.GameObjects.Text | null = null;
@@ -209,6 +225,7 @@ export class LeftSidePanel {
     private bridge: NetworkBridge,
     private audioSystem: GameAudioSystem,
     private graphicsQuality: GraphicsQualityController,
+    private readonly onProgressImported?: () => void,
   ) {}
 
   // ── Aufbau ─────────────────────────────────────────────────────────────────
@@ -241,8 +258,15 @@ export class LeftSidePanel {
 
     this.localNameText = this.scene.add.text(CENTER_X, NAME_VALUE_Y, '', NAME_FONT)
       .setOrigin(0.5, 0)
-      .setScrollFactor(0);
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', (pointer: Phaser.Input.Pointer) => this.openSaveMenu(pointer));
     objects.push(this.localNameText);
+
+    this.saveStatusText = this.scene.add.text(CENTER_X, NAME_VALUE_Y + 31, '', {
+      fontSize: '11px', fontFamily: 'monospace', color: toCssColor(COLORS.GREEN_3),
+    }).setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
+    objects.push(this.saveStatusText);
 
     const editControl = this.createCompactButton(
       NAME_BUTTON_X,
@@ -546,6 +570,7 @@ export class LeftSidePanel {
 
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
+    this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer);
 
     // BadgerPreview (world-space, separate from container for preFX support)
     this.badgerPreview = new BadgerPreview(this.scene, CENTER_X, BADGER_Y, 0x888888, BADGER_SIZE);
@@ -591,12 +616,13 @@ export class LeftSidePanel {
   }
 
   isHotkeyInputBlocked(): boolean {
-    return this.nameEditOpen || this.pickerOpen;
+    return this.nameEditOpen || this.pickerOpen || (this.saveMenu?.isOpen() ?? false);
   }
 
   // ── Transitions ────────────────────────────────────────────────────────────
 
   transitionToGame(): void {
+    this.saveMenu?.close();
     this.closeColorPicker();
     this.closeNameEditPopup();
     this.helpOverlay?.hide();
@@ -786,6 +812,10 @@ export class LeftSidePanel {
     }
     this.timeSliderDragging = false;
     this.closeNameEditPopup();
+    this.saveStatusTimer?.remove();
+    this.saveStatusTimer = null;
+    this.saveMenu?.destroy();
+    this.saveMenu = null;
     this.cleanupPickerDismissListener();
     this.badgerPreview?.destroy();
     this.destroyPickerEffects();
@@ -1006,13 +1036,23 @@ export class LeftSidePanel {
 
     const localId = this.bridge.getLocalPlayerId();
     const selectedId = this.bridge.getPlayerLoadoutSlot(localId, slot);
-    const nextIndex = items.findIndex((item) => item.id === selectedId);
+    const activeClassId = this.getActiveCoopDefenseLoadoutClassId();
+    const storedId = activeClassId
+      ? getStoredCoopDefenseLoadoutSlot(activeClassId, slot)
+      : null;
+    const preferredId = storedId && items.some((item) => item.id === storedId)
+      ? storedId
+      : selectedId;
+    const nextIndex = items.findIndex((item) => item.id === preferredId);
     if (nextIndex >= 0) {
       if (this.loadoutIndices[slot] !== nextIndex) {
         this.loadoutIndices[slot] = nextIndex;
-        setStoredLoadoutSlot(slot, items[nextIndex].id);
+        this.persistStoredLoadoutSlot(slot, items[nextIndex].id);
       }
       this.updateCarouselDisplay(slot);
+      if (preferredId !== selectedId) {
+        this.applyLocalLoadoutSelection(slot, items[nextIndex].id);
+      }
       return;
     }
 
@@ -1485,16 +1525,78 @@ export class LeftSidePanel {
 
     const localPlayerId = this.bridge.getLocalPlayerId();
     const currentBridgeId = this.bridge.getPlayerLoadoutSlot(localPlayerId, slot);
-    if (currentBridgeId && items.some((item) => item.id === currentBridgeId)) return currentBridgeId;
-
-    const storedId = getStoredLoadoutSlot(slot);
+    const activeClassId = this.getActiveCoopDefenseLoadoutClassId();
+    const storedId = activeClassId
+      ? getStoredCoopDefenseLoadoutSlot(activeClassId, slot)
+      : getStoredLoadoutSlot(slot);
     if (storedId && items.some((item) => item.id === storedId)) return storedId;
+    if (currentBridgeId && items.some((item) => item.id === currentBridgeId)) return currentBridgeId;
 
     return items[0].id;
   }
 
+  private openSaveMenu(pointer: Phaser.Input.Pointer): void {
+    if (this.lobbyFieldsLocked) return;
+    this.saveMenu?.open({
+      x: pointer.x,
+      y: pointer.y,
+      title: 'Lokaler Spielstand',
+      titleColor: COLORS.GOLD_1,
+      entries: [
+        {
+          label: 'Spielstand exportieren',
+          color: COLORS.GREEN_3,
+          onPick: () => this.showSaveStatus(downloadStoredGameProgress()),
+        },
+        {
+          label: 'Spielstand importieren',
+          color: COLORS.BLUE_2,
+          onPick: () => { void this.importSaveFile(); },
+        },
+      ],
+    });
+  }
+
+  private async importSaveFile(): Promise<void> {
+    const result = await importStoredGameProgressFile();
+    if (result.ok) {
+      this.applyStoredPlayerNamePreference();
+      this.syncAllLoadoutSelections();
+      this.onProgressImported?.();
+      this.refreshColorIndicator();
+    }
+    this.showSaveStatus(result);
+  }
+
+  private showSaveStatus(result: { ok: boolean; message: string }): void {
+    this.saveStatusTimer?.remove();
+    this.saveStatusText
+      ?.setText(result.message)
+      .setColor(toCssColor(result.ok ? COLORS.GREEN_3 : COLORS.RED_3))
+      .setVisible(true);
+    this.saveStatusTimer = this.scene.time.delayedCall(4_000, () => {
+      this.saveStatusText?.setVisible(false);
+      this.saveStatusTimer = null;
+    });
+  }
+
   private applyLocalLoadoutSelection(slot: LoadoutSlot, itemId: string): void {
     this.bridge.setLocalLoadoutSlot(slot, itemId);
-    setStoredLoadoutSlot(slot, itemId);
+    this.persistStoredLoadoutSlot(slot, itemId);
+  }
+
+  private getActiveCoopDefenseLoadoutClassId(): CoopDefenseClassId | null {
+    if (!isCoopDefenseMode(this.bridge.getGameMode())) return null;
+    const storedProgress = getStoredCoopDefenseProgress();
+    return storedProgress.classesUnlocked ? storedProgress.selectedClassId : null;
+  }
+
+  private persistStoredLoadoutSlot(slot: LoadoutSlot, itemId: string): void {
+    const activeClassId = this.getActiveCoopDefenseLoadoutClassId();
+    if (activeClassId) {
+      setStoredCoopDefenseLoadoutSlot(activeClassId, slot, itemId);
+    } else {
+      setStoredLoadoutSlot(slot, itemId);
+    }
   }
 }

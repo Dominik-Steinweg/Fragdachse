@@ -7,7 +7,9 @@ import {
 } from '../src/loadout/LoadoutCatalog';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 import {
+  COOP_DEFENSE_PENDING_UPGRADE_ICONS,
   buildDefaultCoopDefenseUpgradeProfile,
+  getCoopDefenseUpgradeTextureKey,
   isCoopDefenseLoadoutItemSelectable,
   levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
@@ -59,9 +61,15 @@ describe('loadout catalog', () => {
     const construction = describeLoadoutTool({ kind: 'construction', id: 'rocket_turret' });
     const utility = describeLoadoutTool({ kind: 'utility', id: 'HE_GRENADE' });
     expect(construction.accentColor).toBe(utility.accentColor);
-    // Konstrukte haben bis zur Erstellung eigener Bilder bewusst kein Icon.
-    expect(construction.textureKey).toBeNull();
+    // Slot und Unlock-Knoten teilen bis zum individuellen Artwork dasselbe temporaere Icon.
+    expect(construction.textureKey).toBe('UPGRADE_UNLOCK_ROCKET_TURRET');
     expect(utility.textureKey).toBe('HE_GRENADE');
+  });
+
+  it('uses generated temporary upgrade icons without undoing existing aliases', () => {
+    expect(COOP_DEFENSE_PENDING_UPGRADE_ICONS.has('dash_fire_trail')).toBe(true);
+    expect(getCoopDefenseUpgradeTextureKey('dash_fire_trail')).toBe('UPGRADE_DASH_FIRE_TRAIL');
+    expect(getCoopDefenseUpgradeTextureKey('shotgun_range')).toBe('UPGRADE_ASMD_PRIMARY_RANGE');
   });
 
   it('resolves display names from the config a slot actually uses', () => {

@@ -1,0 +1,8 @@
+{
+  "defaultLoadout": {
+    "weapon1": "GLOCK",
+    "weapon2": "P90",
+    "utility": "HE_GRENADE",
+    "ultimate": "ARMAGEDDON"
+  }
+}

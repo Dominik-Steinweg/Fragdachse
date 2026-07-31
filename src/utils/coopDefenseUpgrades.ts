@@ -30,7 +30,12 @@ export type CoopDefenseUpgradeCategoryId = 'general' | 'weapon1' | 'weapon2' | '
 export type CoopDefenseUpgradeKind = 'upgrade' | 'unlock';
 export type CoopDefenseUpgradeEffectMode = 'add_per_level' | 'add_percent_per_level';
 
-/** Upgrades whose own icon still has to be created. */
+/**
+ * Upgrade IDs currently backed by temporary recipe-generated PNGs.
+ *
+ * This remains the authoritative replacement list: when an individually authored icon replaces
+ * one of these temporary files, remove the ID and its recipe as part of that asset handoff.
+ */
 export const COOP_DEFENSE_PENDING_UPGRADE_ICONS: ReadonlySet<string> = new Set([
   'adrenaline_spawn_full',
   'adrenaline_syringe_drops',
@@ -148,7 +153,11 @@ const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Obje
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string | null {
-  if (COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(upgradeId)) return null;
+  // Pending IDs now resolve to their temporary generated asset. Keep aliases above intact so
+  // the previous duplicate-icon cleanup remains authoritative for all existing upgrades.
+  if (COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(upgradeId)) {
+    return `UPGRADE_${upgradeId.toUpperCase()}`;
+  }
   return COOP_DEFENSE_UPGRADE_ICON_ALIASES[upgradeId] ?? `UPGRADE_${upgradeId.toUpperCase()}`;
 }
 

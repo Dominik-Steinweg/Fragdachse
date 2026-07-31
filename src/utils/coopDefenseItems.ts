@@ -41,6 +41,21 @@ export interface CoopDefenseItemStatLine {
   readonly isBaseStat: boolean;
 }
 
+/**
+ * Ein Affix, dessen Wirkung sich nicht als Zahlenzeile ausdruecken laesst.
+ *
+ * Solche Affixe schreiben in keinen Stat-Bucket und tauchen deshalb nicht in
+ * {@link CoopDefenseItemStatLine} auf – ohne diese Liste waeren sie im UI unsichtbar.
+ */
+export interface CoopDefenseItemAffixLine {
+  readonly affixId: string;
+  readonly label: string;
+  readonly value: number;
+  readonly displayAsPercent: boolean;
+  /** Einzeilige Erklaerung inklusive der festen Parameter des Affixes. */
+  readonly text: string;
+}
+
 export interface CoopDefenseItemDescription {
   readonly slot: CoopDefenseItemSlot;
   readonly slotLabel: string;
@@ -49,6 +64,8 @@ export interface CoopDefenseItemDescription {
   readonly rarityColor: number;
   readonly itemLevel: number;
   readonly lines: readonly CoopDefenseItemStatLine[];
+  /** Nur die Affixe ohne Stat; die Reihenfolge folgt der Reihenfolge auf dem Item. */
+  readonly affixLines: readonly CoopDefenseItemAffixLine[];
 }
 
 export interface CoopDefenseItemComparisonRow {
@@ -257,6 +274,28 @@ export function getCoopDefenseItemStatLines(item: CoopDefenseItem): CoopDefenseI
   return lines;
 }
 
+/**
+ * Affixe, die ausschliesslich ueber einen Laufzeit-Handler wirken, mit ihrer Erklaerung.
+ *
+ * Das Gegenstueck zu {@link getCoopDefenseItemStatLines}: zusammen decken beide Listen jedes
+ * Affix eines Items genau einmal ab.
+ */
+export function getCoopDefenseItemAffixLines(item: CoopDefenseItem): CoopDefenseItemAffixLine[] {
+  const lines: CoopDefenseItemAffixLine[] = [];
+  for (const affix of item.affixes) {
+    const definition = getCoopDefenseItemAffixDefinition(affix.affixId);
+    if (!definition || definition.stat) continue;
+    lines.push({
+      affixId: definition.id,
+      label: definition.label,
+      value: affix.value,
+      displayAsPercent: definition.displayAsPercent,
+      text: definition.shortText?.(affix.value) ?? definition.label,
+    });
+  }
+  return lines;
+}
+
 export function describeCoopDefenseItem(item: CoopDefenseItem): CoopDefenseItemDescription {
   const slotDefinition = getCoopDefenseItemSlotDefinition(item.slot);
   const rarityDefinition = getCoopDefenseItemRarityDefinition(item.rarity);
@@ -268,6 +307,7 @@ export function describeCoopDefenseItem(item: CoopDefenseItem): CoopDefenseItemD
     rarityColor: rarityDefinition.color,
     itemLevel: item.itemLevel,
     lines: getCoopDefenseItemStatLines(item),
+    affixLines: getCoopDefenseItemAffixLines(item),
   };
 }
 

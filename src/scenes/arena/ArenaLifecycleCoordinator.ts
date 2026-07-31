@@ -24,6 +24,8 @@ import { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodge
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
 import { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
+import { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
+import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import { RepairDroneSystem } from '../../systems/RepairDroneSystem';
 import { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
@@ -286,6 +288,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.playerManager.addPlayer(profile);
         this.ctx.combatSystem.initPlayer(profile.id);
         this.ctx.resourceSystem?.initPlayer(profile.id);
+        this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
         this.ctx.burrowSystem?.initPlayer(profile.id);
         this.ctx.loadoutManager?.resetUltimateState(profile.id);
         this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
@@ -397,6 +400,7 @@ export class ArenaLifecycleCoordinator {
       if (bridge.isHost()) {
         this.ctx.combatSystem.removePlayer(p.id);
         this.ctx.resourceSystem?.removePlayer(p.id);
+        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(p.id);
         this.ctx.burrowSystem?.removePlayer(p.id);
         this.ctx.loadoutManager?.removePlayer(p.id);
       }
@@ -514,6 +518,20 @@ export class ArenaLifecycleCoordinator {
     if (bridge.isHost()) {
       this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(bridge.getGameMode())
         ? new CoopDefensePlayerModifierSystem()
+        : null;
+      // Der lebende Affix-Zustand haengt am Modifier-System: ohne gerollte Affixwerte gibt es
+      // nichts zu verfolgen.
+      this.ctx.coopDefenseItemRuntimeSystem = this.ctx.coopDefensePlayerModifierSystem
+        ? new CoopDefenseItemRuntimeSystem({
+          getAffixValue: (playerId, affixId) => (
+            this.ctx.coopDefensePlayerModifierSystem?.getItemAffixValue(playerId, affixId) ?? 0
+          ),
+          getPlayerHp: (playerId) => (
+            this.ctx.playerManager.getPlayer(playerId)
+              ? { hp: this.ctx.combatSystem.getHP(playerId), maxHp: this.ctx.combatSystem.getMaxHp(playerId) }
+              : null
+          ),
+        })
         : null;
       this.syncHostCoopDefensePlayerModifiersFromCommittedSelections();
 
@@ -750,7 +768,10 @@ export class ArenaLifecycleCoordinator {
       // `CombatSystem` klemmt den fertigen Anteil auf [0,1], damit Schaden nicht negativ wird.
       const fromWeapon = this.ctx.loadoutManager?.getEquippedWeaponConfig(playerId, 'weapon1')?.damageReduction ?? 0;
       const fromItems = this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.damageReduction') ?? 0;
-      return fromWeapon + fromItems;
+      // "Letzte Bastion" liest hier bewusst die HP **vor** dem Treffer: der Schlag, der unter die
+      // Schwelle drueckt, wird noch nicht reduziert, erst der naechste.
+      const conditional = this.ctx.coopDefenseItemRuntimeSystem?.getConditionalDamageReduction(playerId) ?? 0;
+      return fromWeapon + fromItems + conditional;
     });
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getHpRegenPerSecond(playerId) ?? 0;
@@ -765,10 +786,14 @@ export class ArenaLifecycleCoordinator {
       return (this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'ultimate.rageGainFromArmorDamage') ?? 0) > 0;
     });
     this.ctx.combatSystem.setPlayerLifeLeechFractionResolver((playerId) => {
-      return this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.lifeLeechFraction') ?? 0;
+      return (this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.lifeLeechFraction') ?? 0)
+        + (this.ctx.coopDefenseItemRuntimeSystem?.getConditionalLifeLeechBonus(playerId) ?? 0);
     });
     this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(playerId, 'player.armorRegenPerSecond') ?? 0;
+    });
+    this.ctx.combatSystem.setPlayerBonusArmorRegenPerSecondResolver((playerId) => {
+      return this.ctx.coopDefenseItemRuntimeSystem?.getBonusArmorRegenPerSecond(playerId) ?? 0;
     });
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver((attackerId, targetId, amount, allowCritical) => {
       return this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
@@ -776,7 +801,57 @@ export class ArenaLifecycleCoordinator {
         targetId,
         amount,
         allowCritical,
+        Math.random,
+        // Blutrausch und Unversehrt haengen an den aktuellen HP des Angreifers und koennen
+        // deshalb nicht im committeten Stat-Bucket liegen.
+        this.ctx.coopDefenseItemRuntimeSystem?.getConditionalOutgoingDamageBonus(attackerId) ?? 0,
       ) ?? { amount, isCritical: false };
+    });
+    this.ctx.combatSystem.setEnemyIncomingDamageMultiplierResolver((enemyId) => {
+      return this.ctx.coopDefenseItemRuntimeSystem?.getEnemyIncomingDamageMultiplier(enemyId) ?? 1;
+    });
+    this.ctx.combatSystem.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss) => {
+      const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+      if (!runtime) return;
+
+      const slow = runtime.rollDirectPrimaryHitEffects(attackerId, enemyId);
+      if (slow.slowFraction > 0) {
+        this.ctx.combatSystem.applyEnemySlow(enemyId, slow.slowFraction, slow.slowDurationMs);
+      }
+
+      if (runtime.rollCulling(attackerId, remainingHp, maxHp, isBoss)) {
+        // Genau die Rest-HP als Schaden: der Tod laeuft dadurch ueber den regulaeren Pfad und
+        // zaehlt als normaler Kill des Spielers. `skipLifeLeech` verhindert, dass der
+        // Hinrichtungsschlag Leben zurueckgibt; eine Rekursion ist ausgeschlossen, weil der
+        // Treffer-Handler nur bei ueberlebenden Gegnern feuert.
+        this.ctx.combatSystem.applyDamage(
+          enemyId,
+          remainingHp,
+          false,
+          attackerId,
+          'Hinrichtung',
+          undefined,
+          { damageKind: 'direct', sourceSlot: 'weapon1', allowCritical: false, skipLifeLeech: true },
+        );
+      }
+    });
+    this.ctx.combatSystem.setPlayerDamageTakenHandler((playerId, attackerId, hpLost, armorLost, damageKind) => {
+      const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+      if (!runtime) return;
+      const result = runtime.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind);
+
+      if (result.adrenalineGain > 0) this.ctx.resourceSystem?.addAdrenaline(playerId, result.adrenalineGain);
+      if (result.reflectedDamage > 0 && result.reflectTargetId) {
+        this.ctx.combatSystem.applyDamage(
+          result.reflectTargetId,
+          result.reflectedDamage,
+          false,
+          playerId,
+          'Dornenplatten',
+          undefined,
+          { damageKind: 'reflect', allowCritical: false },
+        );
+      }
     });
     this.ctx.guardianSpiritSystem = bridge.isHost() && this.ctx.enemyManager && this.ctx.coopDefensePlayerModifierSystem
       ? new GuardianSpiritSystem(
@@ -831,6 +906,9 @@ export class ArenaLifecycleCoordinator {
       const burst = this.ctx.slimeTrailSystem?.handleEnemyDeath(enemyId, x, y, Date.now());
       if (burst) bridge.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
       if (death) this.ctx.necromancySystem?.recordEnemyDeath(death);
+      // Sonst bliebe die Verwundbarkeit als Karteileiche stehen, bis ihre Dauer ablaeuft – und
+      // eine wiederverwendete Gegner-ID erbte sie.
+      this.ctx.coopDefenseItemRuntimeSystem?.removeEnemy(enemyId);
     });
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
@@ -889,7 +967,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
     this.ctx.hostPhysics.setEnemyManager(this.ctx.enemyManager);
     this.ctx.hostPhysics.setRunSpeedResolver((playerId) => {
-      return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED;
+      const base = this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED;
+      // "Unter Druck" und "Nachbrenner" sind zeit- bzw. HP-abhaengig und liegen deshalb nicht im
+      // committeten Bucket. Der Wert wird pro Frame neu aufgeloest, ein Zeitbonus wirkt sofort.
+      return base * (this.ctx.coopDefenseItemRuntimeSystem?.getRunSpeedMultiplier(playerId) ?? 1);
     });
     this.ctx.hostPhysics.setDashRangeMultiplierResolver((playerId) => {
       return 1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.dashRange') ?? 0);
@@ -922,7 +1003,11 @@ export class ArenaLifecycleCoordinator {
         return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.maxAdrenaline', 100) ?? 100;
       });
       this.ctx.resourceSystem.setAdrenalineRegenRateResolver((playerId) => {
-        return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.adrenalineRegenRate', 10) ?? 10;
+        const base = this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.adrenalineRegenRate', 10) ?? 10;
+        // Kampfaufladung laeuft ueber die Regenerationsrate, nicht ueber den Regen-Multiplikator
+        // des PowerUpSystems: dessen Pfad wuerde zusaetzlich die Regenerationspause nach
+        // Adrenalinverbrauch unterdruecken.
+        return base * (this.ctx.coopDefenseItemRuntimeSystem?.getAdrenalineRegenMultiplier(playerId) ?? 1);
       });
       this.ctx.resourceSystem.setRageMaxResolver((playerId) => {
         return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'ultimate.maxRage', 600) ?? 600;
@@ -1172,6 +1257,9 @@ export class ArenaLifecycleCoordinator {
         return modifiers
           ? { additive: modifiers.additiveStats, percentage: modifiers.percentageStats }
           : null;
+      });
+      this.ctx.loadoutManager.setItemRuntimeChargeConsumer((playerId) => {
+        return this.ctx.coopDefenseItemRuntimeSystem?.consumeMovementCharge(playerId) ?? 0;
       });
       this.ctx.decoySystem.setCombatStateReader(this.ctx.combatSystem);
       this.ctx.decoySystem.setRunSpeedResolver((playerId) => {
@@ -1465,6 +1553,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.combatSystem.setKillCallback((killerId, victimId, weapon, x, y, source) => {
         this.ctx.loadoutManager?.handleKill(killerId, weapon, x, y, source);
         if (isCoopDefenseMode(bridge.getGameMode()) && (source?.enemyXp ?? 0) > 0) {
+          this.hostHandleCoopDefenseItemKill(killerId, victimId, x, y);
           this.ctx.powerUpSystem?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
           for (const profile of bridge.getConnectedPlayers()) {
             const classDefinition = this.ctx.coopDefensePlayerModifierSystem?.getClassDefinition(profile.id);
@@ -1656,6 +1745,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyTrainAwarenessSystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;
+    this.ctx.coopDefenseItemRuntimeSystem?.clear();
+    this.ctx.coopDefenseItemRuntimeSystem = null;
     this.ctx.guardianSpiritSystem?.clear();
     this.ctx.guardianSpiritSystem = null;
     this.ctx.repairDroneSystem?.clear();
@@ -1677,6 +1768,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerArmorDamageGrantsRageResolver(null);
     this.ctx.combatSystem.setPlayerLifeLeechFractionResolver(null);
     this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver(null);
+    this.ctx.combatSystem.setPlayerBonusArmorRegenPerSecondResolver(null);
+    this.ctx.combatSystem.setEnemyIncomingDamageMultiplierResolver(null);
+    this.ctx.combatSystem.setDirectPrimaryHitHandler(null);
+    this.ctx.combatSystem.setPlayerDamageTakenHandler(null);
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
@@ -1839,6 +1934,7 @@ export class ArenaLifecycleCoordinator {
         if (bridge.isHost()) {
           this.ctx.combatSystem.initPlayer(profile.id);
           this.ctx.resourceSystem?.initPlayer(profile.id);
+          this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
           this.ctx.burrowSystem?.initPlayer(profile.id);
           this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
         }
@@ -1876,6 +1972,7 @@ export class ArenaLifecycleCoordinator {
       if (bridge.isHost()) {
         this.ctx.combatSystem.removePlayer(p.id);
         this.ctx.resourceSystem?.removePlayer(p.id);
+        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(p.id);
         this.ctx.burrowSystem?.removePlayer(p.id);
         this.ctx.loadoutManager?.removePlayer(p.id);
       }
@@ -2148,6 +2245,37 @@ export class ArenaLifecycleCoordinator {
       now,
       params,
     ) ?? { ok: false, reason: 'blocked' };
+  }
+
+  /**
+   * Item-Affixe, die an einem eigenen Gegner-Kill haengen: Kampfaufladung und Brandzerfall.
+   *
+   * Laeuft aus dem Kill-Callback, weil dort sowohl der Killer feststeht als auch
+   * `getLastDamageOrigin` noch gefuellt ist – aufgeraeumt wird erst danach.
+   */
+  private hostHandleCoopDefenseItemKill(killerId: string, victimId: string, x: number, y: number): void {
+    const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+    // Nur der tatsaechliche Killer, nicht das ganze Team: Kills durch Verbuendete zaehlen nicht.
+    if (!runtime || bridge.getPlayerProfile(killerId) === undefined) return;
+
+    runtime.registerOwnKill(killerId);
+
+    // Brandzerfall verlangt einen Kill durch *direkten* Primaerwaffenschaden; Explosionen,
+    // Brand, Kettenblitze und Bodenflaechen loesen ihn nicht aus.
+    const origin = this.ctx.combatSystem.getLastDamageOrigin(victimId);
+    if (origin?.kind !== 'direct' || origin.slot !== 'weapon1') return;
+    if (!runtime.rollFireChunksOnKill(killerId)) return;
+
+    this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(killerId, x, y, {
+      count: COOP_DEFENSE_AFFIX_RULES.fireChunkCount,
+      searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
+      flightMs: 320,
+      igniteCenter: false,
+      durationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkGroundDurationMs,
+      burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
+      burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
+      weaponName: 'Brandzerfall',
+    }, `item-fire-chunks:${killerId}`);
   }
 
   private hasFreeConstructionCapacity(playerId: string, capacityCost: number): boolean {

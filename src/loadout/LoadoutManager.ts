@@ -147,6 +147,11 @@ export class LoadoutManager {
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
+  /**
+   * Verbraucht eine gespeicherte kinetische Ladung und liefert den Schadensbonus als Anteil.
+   * Injiziert statt direkt referenziert, weil das Item-Laufzeitsystem Round-Lifetime hat.
+   */
+  private itemRuntimeChargeConsumer: ((playerId: string) => number) | null = null;
   private shotCounters = new Map<string, number>();
   private ak47States = new Map<string, Ak47CombatState>();
   private negevStates = new Map<string, NegevCombatState>();
@@ -425,6 +430,10 @@ export class LoadoutManager {
 
   setUtilityConfigModifierSource(source: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null): void {
     this.utilityConfigModifierSource = source;
+  }
+
+  setItemRuntimeChargeConsumer(consumer: ((playerId: string) => number) | null): void {
+    this.itemRuntimeChargeConsumer = consumer;
   }
 
   /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
@@ -1498,6 +1507,15 @@ export class LoadoutManager {
         damage: shotCfg.damage * (1 + primaryWeaponFocusState.stacks * (ak47Focus?.damagePerStack ?? 0)),
       };
     }
+    // Kinetische Ladung: der Bonus wird in `shotCfg.damage` gebacken, **bevor** sich der Schuss in
+    // Pellets aufteilt. Dadurch gilt er fuer die vollstaendige Salve statt je Projektil erneut,
+    // greift ohne Sonderfall auch bei Hitscan-Waffen, und Sekundaerschaden erbt ihn nicht.
+    // Verbraucht wird beim Feuern, nicht beim Treffen – ein verfehlter Schuss zaehlt ebenfalls.
+    if (sourceSlot === 'weapon1') {
+      const kineticBonus = this.itemRuntimeChargeConsumer?.(playerId) ?? 0;
+      if (kineticBonus > 0) shotCfg = { ...shotCfg, damage: shotCfg.damage * (1 + kineticBonus) };
+    }
+
     const pelletCount = Math.max(1, Math.round((shotCfg.pelletCount ?? 1) * (shotCfg.pelletCountMultiplier ?? 1)));
     let didFire: boolean;
     if (pelletCount > 1) {

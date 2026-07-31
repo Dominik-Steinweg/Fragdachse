@@ -39,6 +39,7 @@ import { isCoopDefenseMode } from '../gameModes';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 import { getRageGeneratingDamage } from '../utils/rageDamage';
+import { mergeEnemySlow, type EnemySlowState } from '../utils/enemySlow';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -100,6 +101,11 @@ interface DamageApplicationOptions {
   allowCritical?: boolean;
   sourceSlot?: LoadoutSlot;
   damageKind?: CombatDamageKind;
+  /**
+   * Interner Schalter fuer den Hinrichtungsschlag: Er soll den Gegner toeten, aber keinen
+   * Lifeleech und keine schadensabhaengigen Folgeeffekte ausloesen.
+   */
+  skipLifeLeech?: boolean;
 }
 
 interface DamageVisualContext {
@@ -135,10 +141,6 @@ function toDamageOptions(
   };
 }
 
-interface EnemySlowState {
-  movementFactor: number;
-  expiresAt: number;
-}
 
 const MAX_BURN_CATCH_UP_TICKS = 4;
 
@@ -297,6 +299,22 @@ export class CombatSystem {
     amount: number,
     allowCritical: boolean,
   ) => { amount: number; isCritical: boolean }) | null = null;
+  private playerBonusArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
+  private enemyIncomingDamageMultiplierResolver: ((enemyId: string) => number) | null = null;
+  private onDirectPrimaryHit: ((
+    attackerId: string,
+    enemyId: string,
+    remainingHp: number,
+    maxHp: number,
+    isBoss: boolean,
+  ) => void) | null = null;
+  private onPlayerDamageTaken: ((
+    playerId: string,
+    attackerId: string | undefined,
+    hpLost: number,
+    armorLost: number,
+    damageKind: CombatDamageKind,
+  ) => void) | null = null;
 
   constructor(
     private playerManager:     PlayerManager,
@@ -335,6 +353,21 @@ export class CombatSystem {
   setPlayerArmorDamageGrantsRageResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerArmorDamageGrantsRageResolver = resolver; }
   setPlayerLifeLeechFractionResolver(resolver: ((playerId: string) => number) | null): void { this.playerLifeLeechFractionResolver = resolver; }
   setPlayerArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorRegenPerSecondResolver = resolver; }
+  /** Zusatzregeneration aus bedingten Quellen (Notfallreparatur); addiert sich auf den Grundwert. */
+  setPlayerBonusArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerBonusArmorRegenPerSecondResolver = resolver; }
+  /** Zielseitiger Schadensmultiplikator eines Gegners (Verwundbarkeit); 1 = unveraendert. */
+  setEnemyIncomingDamageMultiplierResolver(resolver: ((enemyId: string) => number) | null): void { this.enemyIncomingDamageMultiplierResolver = resolver; }
+  /**
+   * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
+   * Ausschliesslich `damageKind === 'direct'` und `sourceSlot === 'weapon1'`.
+   */
+  setDirectPrimaryHitHandler(handler: ((attackerId: string, enemyId: string, remainingHp: number, maxHp: number, isBoss: boolean) => void) | null): void {
+    this.onDirectPrimaryHit = handler;
+  }
+  /** Meldung ueber tatsaechlich verlorene HP/Ruestung eines Spielers, nach der Verteilung. */
+  setPlayerDamageTakenHandler(handler: ((playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number, damageKind: CombatDamageKind) => void) | null): void {
+    this.onPlayerDamageTaken = handler;
+  }
   setPlayerOutgoingDamageResolver(
     resolver: ((
       attackerId: string | undefined,
@@ -604,6 +637,15 @@ export class CombatSystem {
     }
 
     if (totalDamage > 0) {
+      // Nach der Verteilung, damit Verbraucher den *tatsaechlichen* Verlust sehen: vollstaendig
+      // abgewehrter Schaden, Schaden von null und reine Rueckstoss-Effekte melden hier nichts.
+      this.onPlayerDamageTaken?.(
+        targetId,
+        attackerId,
+        hpLost,
+        armorLost,
+        options?.damageKind ?? 'direct',
+      );
       this.applyLifeLeech(attackerId, targetId, totalDamage);
       const hitSeed = this.nextEffectSeed();
       this.bridge.broadcastEffect(this.buildHitEffect(
@@ -879,16 +921,20 @@ export class CombatSystem {
     return state.movementFactor;
   }
 
-  private applyEnemySlow(enemyId: string, slowFraction: number, durationMs: number, now = Date.now()): void {
+  /**
+   * Verlangsamt einen Gegner. Es gibt bewusst nur einen Slot je Gegner statt einer Liste je
+   * Quelle: der staerkere Faktor und der spaetere Ablauf gewinnen.
+   *
+   * Die Dauer wird **nicht** mehr bedingungslos ueberschrieben. Sonst koennte eine schwache
+   * spaete Anwendung – etwa Unterdrueckungsmunition neben einer ausgebauten Bremsladung – einen
+   * starken laufenden Slow verkuerzen.
+   */
+  applyEnemySlow(enemyId: string, slowFraction: number, durationMs: number, now = Date.now()): void {
     if (slowFraction <= 0 || durationMs <= 0 || !this.enemyManager?.hasEnemy(enemyId)) return;
-    const movementFactor = 1 - Phaser.Math.Clamp(slowFraction, 0, 0.95);
-    const existing = this.enemySlowStates.get(enemyId);
-    this.enemySlowStates.set(enemyId, {
-      movementFactor: existing && existing.expiresAt > now
-        ? Math.min(existing.movementFactor, movementFactor)
-        : movementFactor,
-      expiresAt: now + durationMs,
-    });
+    this.enemySlowStates.set(
+      enemyId,
+      mergeEnemySlow(this.enemySlowStates.get(enemyId), slowFraction, durationMs, now),
+    );
   }
 
   applyExplosionDamage(
@@ -3040,7 +3086,11 @@ export class CombatSystem {
       amount,
       options?.allowCritical ?? true,
     ) ?? { amount, isCritical: false };
-    amount = outgoing.amount;
+    // Zielseitiger Multiplikator (Verwundbarkeit). Bewusst hier und nicht im ausgehenden
+    // Resolver: er gilt fuer *jede* Schadensquelle gegen dieses Ziel, auch fuer Verbuendete,
+    // Tuerme und Basen, die gar keinen Angreifer-Modifikator haben.
+    amount = outgoing.amount
+      * Math.max(0, this.enemyIncomingDamageMultiplierResolver?.(targetId) ?? 1);
 
     if (attackerId && attackerId !== targetId) {
       this.lastAttacker.set(targetId, attackerId);
@@ -3066,7 +3116,19 @@ export class CombatSystem {
 
     const hpLost = previousHp - result.remainingHp;
     if (hpLost <= 0) return;
-    this.applyLifeLeech(attackerId, targetId, hpLost);
+    if (!options?.skipLifeLeech) this.applyLifeLeech(attackerId, targetId, hpLost);
+
+    // Trefferabhaengige Primaerwaffen-Affixe. Erst hier, damit sie nur bei einem Treffer
+    // ausloesen, der tatsaechlich Schaden gemacht hat – und nach dem Schaden, damit ein
+    // Debuff nicht rueckwirkend auf den ausloesenden Treffer wirkt.
+    if (
+      attackerId
+      && !result.died
+      && options?.damageKind === 'direct'
+      && options.sourceSlot === 'weapon1'
+    ) {
+      this.onDirectPrimaryHit?.(attackerId, targetId, result.remainingHp, enemy.getMaxHp(), enemy.isBoss());
+    }
 
     const hitSeed = this.nextEffectSeed();
     const direction = this.resolveDamageDirection(targetId, attackerId, visualContext, hitSeed, x, y);
@@ -3247,7 +3309,10 @@ export class CombatSystem {
 
   armorRegenTick(playerId: string, deltaMs: number): void {
     if (!(this.alive.get(playerId) ?? false)) return;
-    const regenPerSecond = this.playerArmorRegenPerSecondResolver?.(playerId) ?? 0;
+    // Der Bonus wird *vor* dem Frueh-Ausstieg addiert: sonst wirkte die Notfallreparatur nicht
+    // bei einem Spieler ohne jede Grund-Ruestungsregeneration.
+    const regenPerSecond = (this.playerArmorRegenPerSecondResolver?.(playerId) ?? 0)
+      + Math.max(0, this.playerBonusArmorRegenPerSecondResolver?.(playerId) ?? 0);
     if (regenPerSecond <= 0) return;
     const current = this.armor.get(playerId) ?? 0;
     const max = Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX);

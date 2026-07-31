@@ -15,7 +15,7 @@ import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
 import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
-import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, TeamId, TrackedProjectile } from '../../types';
+import type { PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, SyncedActiveHudBuff, TeamId, TrackedProjectile } from '../../types';
 import type { BaseManager } from '../../entities/BaseManager';
 import type { AutomatedTurret, AutomatedTurretId } from '../../systems/TurretSystem';
 import { emitArenaMapGridChanged } from './ArenaEvents';
@@ -186,6 +186,16 @@ export class HostUpdateCoordinator {
         }
       }
       this.ctx.burrowSystem.update(delta);
+    }
+
+    if (!countdownActive && this.ctx.coopDefenseItemRuntimeSystem) {
+      const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+      runtime.hostUpdate(now);
+      // Die Wegstrecke fuer die Kinetische Ladung entsteht aus der Positionsdifferenz je Frame.
+      // `HostPhysicsSystem` schreibt nur Geschwindigkeiten; die Position liegt erst hier fest.
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        runtime.trackMovement(player.id, player.sprite.x, player.sprite.y);
+      }
     }
 
     if (!countdownActive) {
@@ -640,8 +650,15 @@ export class HostUpdateCoordinator {
       this.prevStealthStates.set(player.id, isStealthed);
       player.syncBar();
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
-      if (dashPhase === 1 && (this.prevDashPhases.get(player.id) ?? 0) === 0) {
+      const prevDashPhase = this.prevDashPhases.get(player.id) ?? 0;
+      if (dashPhase === 1 && prevDashPhase === 0) {
         this.ctx.gameAudioSystem.playSound('sfx_dash', player.sprite.x, player.sprite.y, player.id);
+      }
+      // Flanke Erholung → kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
+      // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet – ein eigener Callback dort
+      // waere fuer diese eine Flanke unnoetig.
+      if (dashPhase === 0 && prevDashPhase === 2) {
+        this.ctx.coopDefenseItemRuntimeSystem?.registerDashCompleted(player.id, now);
       }
       this.prevDashPhases.set(player.id, dashPhase);
       if (dashPhase === 0) this.dashTrailTimers.delete(player.id);
@@ -651,6 +668,11 @@ export class HostUpdateCoordinator {
     for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
       const burn = this.ctx.combatSystem.getBurnVisualState(enemy.id);
       enemy.updateBurnStacks(burn.stackCount, burn.visualStyle);
+      if (this.ctx.coopDefenseItemRuntimeSystem) {
+        enemy.setVulnerable(
+          this.ctx.coopDefenseItemRuntimeSystem.getEnemyIncomingDamageMultiplier(enemy.id, now) > 1,
+        );
+      }
       // Die Hitbox-Skalierung besorgt die Physik; hier fehlen nur Trail-Geister und Dash-Sound.
       this.enemyDashVisuals.sync(enemy);
     }
@@ -737,6 +759,7 @@ export class HostUpdateCoordinator {
         ...(this.ctx.powerUpSystem?.getActiveBuffsForHUD(localId) ?? []),
         ...(this.ctx.loadoutManager?.getAk47HudBuffs(localId, now) ?? []),
         ...(this.ctx.loadoutManager?.getNegevHudBuffs(localId) ?? []),
+        ...this.getMovementChargeHudBuffs(localId),
       ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(localId, now);
       const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
@@ -850,6 +873,7 @@ export class HostUpdateCoordinator {
         ...(this.ctx.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []),
         ...(this.ctx.loadoutManager?.getAk47HudBuffs(player.id, now) ?? []),
         ...(this.ctx.loadoutManager?.getNegevHudBuffs(player.id) ?? []),
+        ...this.getMovementChargeHudBuffs(player.id),
       ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(player.id, now);
       bridge.publishActiveBuffs(player.id, stealthBuff ? [...activeBuffs, stealthBuff] : activeBuffs);
@@ -923,6 +947,7 @@ export class HostUpdateCoordinator {
       repairDrones,
       slimeTrail,
       burningGround,
+      vulnerableEnemies: this.ctx.coopDefenseItemRuntimeSystem?.getVulnerableEnemiesSnapshot(now) ?? [],
       // Ebenfalls verbrauchend – siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
       // dient nur der host-lokalen Darstellung und dem eigenen Aufsammel-Check.
       powerups: this.ctx.powerUpSystem?.getNetSnapshot() ?? null,
@@ -1454,6 +1479,27 @@ export class HostUpdateCoordinator {
       bestDistanceSq = distanceSq;
     }
     return best;
+  }
+
+  /**
+   * HUD-Balken der Kinetischen Ladung.
+   *
+   * Als regulaerer `SyncedActiveHudBuff` ausgegeben und in dieselbe Liste gehaengt wie die
+   * AK-47- und Negev-Buffs: dadurch erscheint der Balken ueber `publishActiveBuffs` auch bei
+   * Clients, ohne dass dort etwas angepasst werden muss.
+   */
+  private getMovementChargeHudBuffs(playerId: string): SyncedActiveHudBuff[] {
+    const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+    if (!runtime) return [];
+    const bonus = this.ctx.coopDefensePlayerModifierSystem?.getItemAffixValue(playerId, 'movement_charge_damage') ?? 0;
+    if (bonus <= 0) return [];
+    const charged = runtime.hasMovementCharge(playerId);
+    return [{
+      defId: 'MOVEMENT_CHARGE',
+      remainingFrac: runtime.getMovementChargeProgress(playerId),
+      valueText: charged ? `+${Math.round(bonus * 100)} %` : 'laedt',
+      intensity: charged ? 1 : 0.35,
+    }];
   }
 
   private emitRegenerationEffect(x: number, y: number, color: number): void {

@@ -37,8 +37,6 @@ class MemoryStorage implements Storage {
   setItem(key: string, value: string): void { this.values.set(key, value); }
 }
 
-const STORAGE_KEY = 'fragdachse_local_preferences';
-
 function item(overrides: Partial<CoopDefenseItem> = {}): CoopDefenseItem {
   return {
     uid: 'it_a',
@@ -49,13 +47,6 @@ function item(overrides: Partial<CoopDefenseItem> = {}): CoopDefenseItem {
     affixes: [],
     ...overrides,
   };
-}
-
-function writeRawProgress(coopDefense: Record<string, unknown>): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    version: 17,
-    progression: { coopDefense },
-  }));
 }
 
 describe('coop-defense item persistence', () => {
@@ -83,33 +74,6 @@ describe('coop-defense item persistence', () => {
     expect(getStoredCoopDefenseItemsUnlocked()).toBe(true);
     // Zweiter Sieg auf derselben Map aendert nichts mehr.
     expect(unlockStoredCoopDefenseItemsAfterVictory(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID)).toBe(false);
-  });
-
-  it('migrates old completed-map-10 progress to unlocked items', () => {
-    writeRawProgress({ highestUnlockedMapId: '11', itemsUnlocked: false });
-    expect(getStoredCoopDefenseProgress().itemsUnlocked).toBe(true);
-  });
-
-  it('keeps items locked when map 10 was reached but not won', () => {
-    writeRawProgress({ highestUnlockedMapId: '10', itemsUnlocked: false });
-    expect(getStoredCoopDefenseProgress().itemsUnlocked).toBe(false);
-  });
-
-  it('migrates removed map 16 progress without losing item state', () => {
-    const storedItem = item({ uid: 'legacy-item' });
-    const pending = { roundEndedAt: 42, offers: [item({ uid: 'legacy-offer' })] };
-    writeRawProgress({
-      highestUnlockedMapId: '16',
-      itemsUnlocked: false,
-      items: [storedItem],
-      pendingItemReward: pending,
-    });
-
-    const progress = getStoredCoopDefenseProgress();
-    expect(progress.highestUnlockedMapId).toBe('15');
-    expect(progress.itemsUnlocked).toBe(true);
-    expect(progress.items.map((entry) => entry.uid)).toEqual(['legacy-item']);
-    expect(progress.pendingItemReward?.offers.map((entry) => entry.uid)).toEqual(['legacy-offer']);
   });
 
   it('round-trips items, equipment and pending rewards through storage', () => {
@@ -243,11 +207,6 @@ describe('coop-defense item persistence', () => {
     expect(getStoredCoopDefenseProgress().unseenItems).toBe(false);
   });
 
-  it('never reports unseen items without any item in the inventory', () => {
-    writeRawProgress({ itemsUnlocked: true, unseenItems: true, items: [] });
-    expect(getStoredCoopDefenseProgress().unseenItems).toBe(false);
-  });
-
   it('rejects an unknown offer and a salvage target from another category', () => {
     addStoredCoopDefenseItem(item({ uid: 'boots-1', slot: 'boots', baseValue: 0.05 }));
     setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
@@ -264,41 +223,6 @@ describe('coop-defense item persistence', () => {
 
     expect(setStoredPendingCoopDefenseItemReward({ roundEndedAt: 8, offers: [item({ uid: 'third' })] })).toBe(true);
     expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('third');
-  });
-
-  it('sanitises broken stored item data instead of failing', () => {
-    writeRawProgress({
-      itemsUnlocked: 'yes',
-      items: [
-        item({ uid: 'ok' }),
-        { uid: 'bad-slot', slot: 'cape', rarity: 'white', itemLevel: 1, baseValue: 5, affixes: [] },
-        null,
-        item({ uid: 'ok' }),
-      ],
-      equippedItemIds: { armor: 'ok', boots: 'ok', helmet: 'gone' },
-      pendingItemReward: { roundEndedAt: 5, offers: [{ uid: '' }] },
-    });
-
-    const progress = getStoredCoopDefenseProgress();
-    expect(progress.itemsUnlocked).toBe(false);
-    expect(progress.items.map((entry) => entry.uid)).toEqual(['ok']);
-    // boots verweist auf ein Ruestungsteil, helmet auf nichts: beide Zuweisungen fallen weg.
-    expect(progress.equippedItemIds).toEqual({ armor: 'ok' });
-    expect(progress.pendingItemReward).toBeNull();
-  });
-
-  it('keeps the equipped item when the stored category list is over the limit', () => {
-    writeRawProgress({
-      items: [
-        item({ uid: 'equipped' }),
-        ...Array.from({ length: 20 }, (_, index) => item({ uid: `s${index}` })),
-      ],
-      equippedItemIds: { armor: 'equipped' },
-    });
-
-    const progress = getStoredCoopDefenseProgress();
-    expect(progress.items).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT + 1);
-    expect(progress.equippedItemIds).toEqual({ armor: 'equipped' });
   });
 
   it('wipes items when the character is reset', () => {

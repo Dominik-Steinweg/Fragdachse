@@ -45,6 +45,9 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   AK47_FOCUS: { id: 'AK47_FOCUS', type: 'weapon_buff', displayName: 'Einschiessen', color: 0xffa33a },
   AK47_FIRE_SUPERIORITY: { id: 'AK47_FIRE_SUPERIORITY', type: 'weapon_buff', displayName: 'Feuerueberlegenheit', color: 0xffd166 },
   NEGEV_KILLSTREAK: { id: 'NEGEV_KILLSTREAK', type: 'weapon_buff', displayName: 'Negev-Killstreak', color: 0xff8a2d },
+  // Item-Affix "Kinetische Ladung". Kein einsammelbares Power-Up, sondern nur ein HUD-Eintrag –
+  // dieselbe Rolle wie die AK-47- und Negev-Buffs darueber.
+  MOVEMENT_CHARGE: { id: 'MOVEMENT_CHARGE', type: 'weapon_buff', displayName: 'Kinetische Ladung', color: 0x7fd4ff },
   NUKE:                { id: 'NUKE',                type: 'global_nuke',         displayName: 'Atombombe',                               color: COLORS.RED_2,    spriteKey: 'powerup_nuk' },
   HOLY_HAND_GRENADE:   { id: 'HOLY_HAND_GRENADE',  type: 'holy_hand_grenade',   displayName: 'Heilige Handgranate',                     color: COLORS.GOLD_1,   spriteKey: 'powerup_hhg'  },
   BFG:                 { id: 'BFG',                type: 'bfg',                 displayName: 'BFG',                                     color: COLORS.GREEN_3,  spriteKey: 'powerup_bfg'  },

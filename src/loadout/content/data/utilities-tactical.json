@@ -1,0 +1,203 @@
+{
+  "utilities": {
+    "TIME_BUBBLE": {
+      "id": "TIME_BUBBLE",
+      "displayName": "Time-Bubble",
+      "type": "time_bubble",
+      "cooldown": 5000,
+      "activation": {
+        "type": "charged_throw",
+        "minThrowSpeed": 50,
+        "fullChargeDuration": 700
+      },
+      "projectileSpeed": 760,
+      "projectileSize": 12,
+      "fuseTime": 750,
+      "maxBounces": 3,
+      "bubbleRadius": 120,
+      "bubbleDuration": 5000,
+      "projectileSlowFactor": 0.05,
+      "playerSlowFactor": 0.1,
+      "trainSlowFactor": 0.1,
+      "bubbleColor": "#8edcff",
+      "bubbleDistortion": 0.75,
+      "allowedSlots": [
+        "utility"
+      ],
+      "projectileStyle": "grenade",
+      "grenadeVisualPreset": "time_bubble",
+      "projectileColor": "#8edcff",
+      "frictionDelayMs": 300,
+      "airFrictionDecayPerSec": 0.3,
+      "bounceFrictionMultiplier": 0.7,
+      "stopSpeedThreshold": 20,
+      "shotAudio": {
+        "successKey": "shot_throw",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "BFG": {
+      "id": "BFG",
+      "displayName": "BFG",
+      "type": "bfg",
+      "allowTeamDamage": true,
+      "cooldown": 0,
+      "activation": {
+        "type": "charged_gate",
+        "fullChargeDuration": 900
+      },
+      "projectileSpeed": 250,
+      "projectileSize": 32,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "directDamage": 300,
+      "laserDamage": 20,
+      "laserRadius": 184,
+      "laserInterval": 100,
+      "allowedSlots": [],
+      "skipCooldownPublish": true,
+      "shotAudio": {
+        "successKey": "shot_bfg",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "NUKE": {
+      "id": "NUKE",
+      "displayName": "Atombombe",
+      "type": "nuke",
+      "allowTeamDamage": true,
+      "cooldown": 0,
+      "activation": {
+        "type": "targeted_click"
+      },
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "allowedSlots": [],
+      "skipCooldownPublish": true
+    },
+    "STINKDRUESEN": {
+      "id": "STINKDRUESEN",
+      "displayName": "Stinkdrüsen",
+      "type": "stinkcloud",
+      "cooldown": 8000,
+      "activation": {
+        "type": "instant"
+      },
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "cloudRadius": 180,
+      "cloudDuration": 4000,
+      "cloudDamagePerTick": 3,
+      "cloudTickInterval": 250,
+      "rockDamageMult": 0.1,
+      "trainDamageMult": 0.5,
+      "allowedSlots": [
+        "utility"
+      ]
+    },
+    "ENEMY_STINKDRUESEN": {
+      "id": "ENEMY_STINKDRUESEN",
+      "displayName": "Kleine Stinkdruesen",
+      "type": "stinkcloud",
+      "cooldown": 0,
+      "activation": {
+        "type": "instant"
+      },
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "cloudRadius": 140,
+      "cloudDuration": 0,
+      "cloudDamagePerTick": 5,
+      "cloudTickInterval": 250,
+      "continuous": true,
+      "rockDamageMult": 0,
+      "trainDamageMult": 0,
+      "allowedSlots": []
+    },
+    "TRANSLOCATOR": {
+      "id": "TRANSLOCATOR",
+      "displayName": "Translocator",
+      "type": "translocator",
+      "cooldown": 3000,
+      "activation": {
+        "type": "charged_throw",
+        "minThrowSpeed": 50,
+        "fullChargeDuration": 700
+      },
+      "projectileSpeed": 600,
+      "projectileSize": 16,
+      "fuseTime": 0,
+      "maxBounces": 3,
+      "allowedSlots": [
+        "utility"
+      ],
+      "frictionDelayMs": 300,
+      "airFrictionDecayPerSec": 0.15,
+      "bounceFrictionMultiplier": 0.3,
+      "stopSpeedThreshold": 15,
+      "projectileStyle": "translocator_puck",
+      "projectileColor": "#a8b5b2",
+      "skipCooldownPublish": true,
+      "shotAudio": {
+        "successKey": "shot_throw",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "ZEUS_TASER": {
+      "id": "ZEUS_TASER",
+      "displayName": "Zeus",
+      "type": "taser",
+      "cooldown": 4000,
+      "activation": {
+        "type": "instant"
+      },
+      "damage": 200,
+      "range": 80,
+      "hitArcDegrees": 70,
+      "visualPreset": "zeus_taser",
+      "allowedSlots": [
+        "utility"
+      ],
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "trainDamageMult": 1,
+      "rockDamageMult": 0,
+      "shotAudio": {
+        "successKey": "shot_zeus",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "DECOY": {
+      "id": "DECOY",
+      "displayName": "Decoy",
+      "type": "decoy",
+      "cooldown": 12000,
+      "activation": {
+        "type": "instant"
+      },
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "allowedSlots": [
+        "utility"
+      ],
+      "decoyLifetimeMs": 6000,
+      "stealthDurationMs": 6000,
+      "stealthAlphaMin": 0.1,
+      "stealthAlphaMax": 0.17,
+      "stealthGlowOuterStrength": 1.2,
+      "wobblePeriodMs": 2400,
+      "dissipateDustBurst": 18,
+      "skipCooldownPublish": true
+    }
+  }
+}

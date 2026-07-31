@@ -15,10 +15,14 @@ import type {
   LoadoutSlot,
   LoadoutToolRef,
 } from '../types';
-import { isCoopDefenseLoadoutItemSelectable } from '../utils/coopDefenseUpgrades';
+import {
+  getCoopDefenseUpgradeTextureKey,
+  isCoopDefenseLoadoutItemSelectable,
+} from '../utils/coopDefenseUpgrades';
 import {
   DEFAULT_LOADOUT,
   getAvailableUltimateConfigs,
+  LOADOUT_CATALOG_ENTRIES,
   ULTIMATE_CONFIGS,
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
@@ -33,7 +37,7 @@ export interface LoadoutItemRef {
 /** Alles, was die UI zum Zeichnen eines Loadout-Eintrags braucht. */
 export interface LoadoutItemPresentation {
   readonly displayName: string;
-  /** Texture-Key; Item-IDs sind zugleich Icon-Keys. Konstrukte koennen bewusst kein Icon haben. */
+  /** Texture-Key; fehlt die Textur, zeigt die UI den Anzeigenamen als Fallback. */
   readonly textureKey: string | null;
   readonly accentColor: number;
 }
@@ -46,10 +50,18 @@ export const LOADOUT_SLOT_LABELS: Record<LoadoutSlot, string> = {
   ultimate: 'Ultimate',
 };
 
+function buildStaticSlotItems(slot: Exclude<LoadoutSlot, 'ultimate'>): readonly LoadoutItemRef[] {
+  const configs = LOADOUT_CATALOG_ENTRIES
+    .filter((entry) => entry.slot === slot)
+    .map((entry) => entry.kind === 'utility' ? UTILITY_CONFIGS[entry.id] : WEAPON_CONFIGS[entry.id])
+    .filter((config) => config !== undefined);
+  return configs;
+}
+
 const STATIC_SLOT_ITEMS: Record<Exclude<LoadoutSlot, 'ultimate'>, readonly LoadoutItemRef[]> = {
-  weapon1: Object.values(WEAPON_CONFIGS).filter((w) => (w.allowedSlots as readonly string[]).includes('weapon1')),
-  weapon2: Object.values(WEAPON_CONFIGS).filter((w) => (w.allowedSlots as readonly string[]).includes('weapon2')),
-  utility: Object.values(UTILITY_CONFIGS).filter((u) => (u.allowedSlots as readonly string[]).includes('utility')),
+  weapon1: buildStaticSlotItems('weapon1'),
+  weapon2: buildStaticSlotItems('weapon2'),
+  utility: buildStaticSlotItems('utility'),
 };
 
 /** Alle im Modus grundsaetzlich waehlbaren Items eines Slots, ohne Freischaltungsfilter. */
@@ -95,9 +107,10 @@ const SLOT_ACCENT_COLORS: Record<LoadoutSlot, number> = {
 };
 
 export function describeLoadoutItem(slot: LoadoutSlot, itemId: string): LoadoutItemPresentation {
+  const metadata = LOADOUT_CATALOG_ENTRIES.find((entry) => entry.slot === slot && entry.id === itemId);
   return {
     displayName: getLoadoutItemDisplayName(slot, itemId),
-    textureKey: itemId,
+    textureKey: metadata?.iconKey ?? null,
     accentColor: SLOT_ACCENT_COLORS[slot],
   };
 }
@@ -111,7 +124,9 @@ export function describeLoadoutTool(tool: LoadoutToolRef): LoadoutItemPresentati
     const definition = getCoopDefenseConstructionDefinition(tool.id);
     return {
       displayName: definition.displayName,
-      textureKey: definition.iconKey,
+      // Bis individuelles Konstrukt-Artwork vorliegt, teilen Slot und Unlock-Knoten
+      // dasselbe temporaere, rezeptgenerierte Upgrade-Icon.
+      textureKey: definition.iconKey ?? getCoopDefenseUpgradeTextureKey(definition.unlockUpgradeId),
       accentColor: COLORS.GOLD_2,
     };
   }

@@ -583,5 +583,5 @@ export function renderUpgradeIcon({ symbol, modifiers, color, palette }) {
     return modifierRenderer(colors, { index, total: modifiers.length });
   }).join('');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="${ICON_VIEWBOX}"><g>${symbolRenderer(colors)}${renderedModifiers}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="${ICON_VIEWBOX}"><!-- TEMPORARY GENERATED UPGRADE ICON: replace with individually authored art when available. --><g>${symbolRenderer(colors)}${renderedModifiers}</g></svg>`;
 }

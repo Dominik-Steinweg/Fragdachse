@@ -43,6 +43,7 @@ import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import type { RepairDroneSystem } from '../../systems/RepairDroneSystem';
 import type { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
 import type { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
+import type { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
 import type { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import type { NecromancySystem } from '../../systems/NecromancySystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
@@ -126,6 +127,7 @@ export interface ArenaContext {
   teslaDomeSystem:   TeslaDomeSystem   | null;
   turretSystem:      TurretSystem      | null;
   coopDefensePlayerModifierSystem: CoopDefensePlayerModifierSystem | null;
+  coopDefenseItemRuntimeSystem: CoopDefenseItemRuntimeSystem | null;
   guardianSpiritSystem: GuardianSpiritSystem | null;
   repairDroneSystem: RepairDroneSystem | null;
   slimeTrailSystem: SlimeTrailSystem | null;

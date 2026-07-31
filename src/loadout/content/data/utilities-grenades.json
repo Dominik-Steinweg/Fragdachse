@@ -1,0 +1,148 @@
+{
+  "utilities": {
+    "HE_GRENADE": {
+      "id": "HE_GRENADE",
+      "displayName": "HE Granate",
+      "type": "explosive",
+      "cooldown": 3000,
+      "activation": {
+        "type": "charged_throw",
+        "minThrowSpeed": 50,
+        "fullChargeDuration": 700
+      },
+      "projectileSpeed": 800,
+      "projectileSize": 10,
+      "fuseTime": 1000,
+      "maxBounces": 3,
+      "aoeRadius": 120,
+      "aoeDamage": 60,
+      "damageFalloff": {
+        "minDamage": 10
+      },
+      "allowedSlots": [
+        "utility"
+      ],
+      "projectileStyle": "grenade",
+      "grenadeVisualPreset": "he",
+      "projectileColor": "#6f8151",
+      "frictionDelayMs": 300,
+      "airFrictionDecayPerSec": 0.3,
+      "bounceFrictionMultiplier": 0.7,
+      "stopSpeedThreshold": 20,
+      "shotAudio": {
+        "successKey": "shot_throw",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "SMOKE_GRENADE": {
+      "id": "SMOKE_GRENADE",
+      "displayName": "Smoke Granate",
+      "type": "smoke",
+      "cooldown": 6000,
+      "activation": {
+        "type": "charged_throw",
+        "minThrowSpeed": 50,
+        "fullChargeDuration": 700
+      },
+      "projectileSpeed": 800,
+      "projectileSize": 10,
+      "fuseTime": 1000,
+      "maxBounces": 3,
+      "smokeRadius": 240,
+      "smokeExpandDuration": 500,
+      "smokeLingerDuration": 9000,
+      "smokeDissipateDuration": 2000,
+      "smokeMaxAlpha": 0.95,
+      "smokeDotDamagePerTick": 0,
+      "smokeDotTickIntervalMs": 250,
+      "allowedSlots": [
+        "utility"
+      ],
+      "projectileStyle": "grenade",
+      "grenadeVisualPreset": "smoke",
+      "projectileColor": "#6a7680",
+      "frictionDelayMs": 300,
+      "airFrictionDecayPerSec": 0.3,
+      "bounceFrictionMultiplier": 0.7,
+      "stopSpeedThreshold": 20,
+      "shotAudio": {
+        "successKey": "shot_throw",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "MOLOTOV_GRENADE": {
+      "id": "MOLOTOV_GRENADE",
+      "displayName": "Molotov",
+      "type": "molotov",
+      "cooldown": 5000,
+      "activation": {
+        "type": "charged_throw",
+        "minThrowSpeed": 50,
+        "fullChargeDuration": 700
+      },
+      "projectileSpeed": 800,
+      "projectileSize": 10,
+      "fuseTime": 1000,
+      "maxBounces": 3,
+      "fireRadius": 160,
+      "fireDamagePerTick": 4,
+      "fireLingerDuration": 4000,
+      "fireBurnDurationMs": 2000,
+      "fireBurnDamagePerTick": 0.25,
+      "wildfireEnabled": 0,
+      "wildfirePanicSpeedMultiplier": 0,
+      "wildfireTrailDurationMs": 0,
+      "wildfireTrailDamagePerTick": 0,
+      "rockDamageMult": 0,
+      "allowedSlots": [
+        "utility"
+      ],
+      "projectileStyle": "grenade",
+      "grenadeVisualPreset": "molotov",
+      "projectileColor": "#8a4a20",
+      "frictionDelayMs": 300,
+      "airFrictionDecayPerSec": 0.3,
+      "bounceFrictionMultiplier": 0.7,
+      "stopSpeedThreshold": 20,
+      "shotAudio": {
+        "successKey": "shot_throw",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "HOLY_HAND_GRENADE": {
+      "id": "HOLY_HAND_GRENADE",
+      "displayName": "Heilige Handgranate",
+      "type": "explosive",
+      "allowTeamDamage": true,
+      "cooldown": 0,
+      "activation": {
+        "type": "charged_throw",
+        "minThrowSpeed": 50,
+        "fullChargeDuration": 700
+      },
+      "projectileSpeed": 900,
+      "projectileSize": 14,
+      "fuseTime": 3000,
+      "maxBounces": 10,
+      "aoeRadius": 400,
+      "aoeDamage": 250,
+      "damageFalloff": {
+        "minDamage": 50
+      },
+      "allowedSlots": [],
+      "projectileStyle": "holy_grenade",
+      "projectileColor": "#d9b13b",
+      "trainDamageMult": 1,
+      "explosionVisualStyle": "holy",
+      "skipCooldownPublish": true,
+      "frictionDelayMs": 300,
+      "airFrictionDecayPerSec": 0.3,
+      "bounceFrictionMultiplier": 0.7,
+      "stopSpeedThreshold": 20,
+      "shotAudio": {
+        "successKey": "shot_hallelujah",
+        "failureKey": "shot_dry_trigger"
+      }
+    }
+  }
+}

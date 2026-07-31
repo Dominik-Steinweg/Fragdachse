@@ -264,15 +264,16 @@ Zwei Ebenen greifen jetzt ineinander:
 Auf dem Client ist `ctx.loadoutManager` `null` – das Loadout ist host-autoritativ. Damit fallen
 **alle** `getLocal*Config`-Getter des `ClientUpdateCoordinator` auf
 `resolveCommittedLoadoutSelection()` zurück, das die Auswahl sanitisiert und die
-Coop-Upgrade-Modifikatoren neu durchrechnet. Dasselbe gilt für `getLocalEffectTotals()`, dessen
-Fallback `getStoredCoopDefenseProgress()` sogar aus dem `localStorage` liest und tief klont.
+Coop-Upgrade-Modifikatoren neu durchrechnet. Dasselbe gilt für `getLocalEffectTotals()`.
 
 HUD-Aufbau und Platzierungs-Vorschau rufen diese Getter mehrfach pro Frame. Ungecacht war das
 auf dem Client ein messbarer Teil des Update-Budgets, während der Host bei identischem Code nur
 einen Map-Zugriff macht. Beide Ergebnisse sind deshalb über die **Objektreferenz** ihrer Eingabe
-memoisiert (committed Loadout bzw. Coop-Profil): Die Referenz wechselt genau dann, wenn ein
-neuer Snapshot andere Daten bringt, der Cache kann also nicht veralten und braucht keine
-Frame-Invalidierung.
+memoisiert (committed Loadout bzw. Coop-Profil). Der lokale Persistenz-Fallback wird im
+`ClientUpdateCoordinator` ausschließlich beim Scene-Aufbau und in `resetPerRound()` geladen;
+Profil, Klasse und Items bleiben danach als stabile Referenzen im Speicher. Dadurch enthalten
+die Frame-Getter weder `localStorage`-Zugriffe noch Parse-/Klonarbeit. Lobby-Änderungen werden
+beim nächsten Rundenaufbau explizit über `refreshStoredProgressFallback()` invalidiert.
 
 Wer weitere `getLocal*`-Helfer ergänzt, muss denselben Weg gehen – der teure Fallback ist auf
 dem Client nicht die Ausnahme, sondern der Normalfall.
@@ -311,10 +312,15 @@ ihn neu auf – inklusive Zerstören und Neuanlegen eines `LivingBarEffect` und 
 **je Knoten**. Beim schnellen Vergeben mehrerer Punkte lief das pro Klick. Klicks setzen deshalb
 nur noch ein Dirty-Flag (`requestRefresh()`), der Neuaufbau läuft höchstens einmal pro Frame.
 
-Unabhängig davon schreibt jeder Punkt-Klick den Fortschritt sofort in den `localStorage`
-(`setStoredCoopDefenseUpgradeProfile`) und liest ihn mehrfach zurück. Das ist ein synchroner
-Browser-Zugriff im Klickpfad und wäre besser bis „Übernehmen" aufgeschoben – dafür müsste die
-Änderung im Speicher gehalten und der Abbruch-Pfad darauf umgestellt werden.
+Punkt-Klicks aktualisieren den In-Memory-Spielstand sofort. `localStorage` wird dabei weiterhin
+einmal synchron serialisiert, aber nicht mehr für jeden Getter neu gelesen und geparst; der
+Abbruch-Pfad stellt seinen vorherigen Snapshot atomar wieder her.
+
+Ein Klassenwechsel aktualisiert altes Loadout, Ziel-Loadout und aktive Klasse mit
+`switchStoredCoopDefenseClassLoadout()` in **einem** Fortschritts-Write. Die sichtbare
+Klassenwahl setzt die Kategorie vor dem Callback zurueck und plant keinen zusaetzlichen
+`requestRefresh()` ein, weil `ArenaScene.refreshStoredCoopDefenseProgress()` den bereits
+sichtbaren Overlay-Baum synchron genau einmal aktualisiert.
 
 ### Partikel sind der dominante CPU-Posten (Chrome-Profil, RTX 3080, high, Map 4)
 

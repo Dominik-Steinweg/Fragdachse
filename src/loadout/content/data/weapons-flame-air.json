@@ -1,0 +1,218 @@
+{
+  "weapons": {
+    "FLAMETHROWER": {
+      "id": "FLAMETHROWER",
+      "displayName": "Flammenwerfer",
+      "cooldown": 70,
+      "damage": 2,
+      "range": 250,
+      "fire": {
+        "type": "flamethrower",
+        "projectileSpeed": 400,
+        "hitboxStartSize": 14,
+        "hitboxEndSize": 120,
+        "hitboxGrowRate": 60,
+        "velocityDecay": 0.82,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.25,
+        "piercingCount": 0,
+        "kamikaze": {
+          "enabled": 0,
+          "inheritMolotovBonuses": 0
+        },
+        "burningGround": {
+          "cellSize": 0,
+          "durationMs": 0,
+          "igniteProjectiles": 0,
+          "createOnFlameExpiry": 0
+        },
+        "fireRing": {
+          "radius": 0,
+          "thickness": 0,
+          "igniteProjectiles": 0
+        },
+        "fireball": {
+          "enabled": 0,
+          "projectileSpeed": 450,
+          "projectileSize": 28,
+          "explosionRadius": 120,
+          "explosionMaxDamage": 90,
+          "explosionMinDamage": 20,
+          "explosionKnockback": 1250,
+          "selfDamageMult": 0.25,
+          "trailEnabled": 0,
+          "chunkCount": 0,
+          "chunkSearchRadius": 96,
+          "chunkFlightMs": 320,
+          "groundDurationMs": 2000,
+          "groundBurnDamagePerTick": 0.5
+        }
+      },
+      "allowedSlots": [
+        "weapon2"
+      ],
+      "adrenalinCost": 0.5,
+      "adrenalinGain": 0,
+      "spreadStanding": 8,
+      "spreadMoving": 12,
+      "spreadPerShot": 0.3,
+      "maxDynamicSpread": 6,
+      "spreadRecoveryDelay": 300,
+      "spreadRecoveryRate": 4,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "flame",
+      "projectileColor": "#ff6600",
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_flame",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "INFERNO_COLOSSUS_FLAMETHROWER": {
+      "id": "INFERNO_COLOSSUS_FLAMETHROWER",
+      "displayName": "Lila Höllenwerfer",
+      "cooldown": 70,
+      "damage": 2,
+      "range": 350,
+      "fire": {
+        "type": "flamethrower",
+        "projectileSpeed": 400,
+        "hitboxStartSize": 14,
+        "hitboxEndSize": 120,
+        "hitboxGrowRate": 60,
+        "velocityDecay": 0.82,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.25,
+        "piercingCount": 0
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 8,
+      "spreadMoving": 12,
+      "spreadPerShot": 0.3,
+      "maxDynamicSpread": 6,
+      "spreadRecoveryDelay": 300,
+      "spreadRecoveryRate": 4,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "flame",
+      "projectileColor": "#b347ff",
+      "projectileBurnVisualStyle": "void",
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_flame",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "LAUBBLAESER": {
+      "id": "LAUBBLAESER",
+      "displayName": "Laubblaeser",
+      "cooldown": 90,
+      "damage": 1,
+      "directDamageOverride": 1,
+      "range": 350,
+      "fire": {
+        "type": "leaf_blower",
+        "projectileSpeed": 480,
+        "hitboxStartSize": 12,
+        "hitboxEndSize": 64,
+        "hitboxGrowRate": 30,
+        "velocityDecay": 0.5,
+        "minKnockback": 120,
+        "maxKnockback": 500,
+        "selfPush": 80
+      },
+      "allowedSlots": [
+        "weapon1"
+      ],
+      "adrenalinCost": 0,
+      "adrenalinGain": 10,
+      "spreadStanding": 6,
+      "spreadMoving": 10,
+      "spreadPerShot": 0.2,
+      "maxDynamicSpread": 6,
+      "spreadRecoveryDelay": 260,
+      "spreadRecoveryRate": 4,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "leaf_blower",
+      "projectileColor": "#b8caa3",
+      "rockDamageMult": 0,
+      "trainDamageMult": 0,
+      "showCrosshair": false,
+      "shotAudio": {
+        "successKey": "shot_flame",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "TURRET_FLAME": {
+      "id": "TURRET_FLAME",
+      "displayName": "Turmflamme",
+      "cooldown": 110,
+      "damage": 1.5,
+      "range": 230,
+      "fire": {
+        "type": "flamethrower",
+        "projectileSpeed": 380,
+        "hitboxStartSize": 14,
+        "hitboxEndSize": 104,
+        "hitboxGrowRate": 58,
+        "velocityDecay": 0.82,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.22,
+        "piercingCount": 0,
+        "kamikaze": {
+          "enabled": 0,
+          "inheritMolotovBonuses": 0
+        },
+        "burningGround": {
+          "cellSize": 0,
+          "durationMs": 0,
+          "igniteProjectiles": 0,
+          "createOnFlameExpiry": 0
+        },
+        "fireRing": {
+          "radius": 0,
+          "thickness": 0,
+          "igniteProjectiles": 0
+        },
+        "fireball": {
+          "enabled": 0,
+          "projectileSpeed": 450,
+          "projectileSize": 28,
+          "explosionRadius": 120,
+          "explosionMaxDamage": 90,
+          "explosionMinDamage": 20,
+          "explosionKnockback": 1250,
+          "selfDamageMult": 0,
+          "trailEnabled": 0,
+          "chunkCount": 0,
+          "chunkSearchRadius": 96,
+          "chunkFlightMs": 320,
+          "groundDurationMs": 2000,
+          "groundBurnDamagePerTick": 0.5
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "flame",
+      "projectileColor": "#ff6600",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_flame",
+        "failureKey": "shot_dry_trigger"
+      }
+    }
+  }
+}

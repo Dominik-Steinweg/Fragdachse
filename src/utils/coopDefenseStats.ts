@@ -69,10 +69,16 @@ export function resolveCoopDefenseOutgoingDamage(
   amount: number,
   allowCritical: boolean,
   random: () => number = Math.random,
+  /**
+   * Prozentualer Zuschlag aus bedingten Item-Affixen. Er addiert sich in denselben Bucket wie
+   * Upgrades und Items – zehn Prozent von hier und fuenf aus dem Bucket ergeben x1.15, keine
+   * multiplikative Verkettung.
+   */
+  bonusPercent = 0,
 ): CoopDefenseOutgoingDamageResult {
   const classDefinition = classId ? getCoopDefenseClassDefinition(classId) : null;
   const damageMultiplier = (classDefinition?.outgoingDamageMultiplier ?? 1)
-    * (1 + (totals.percentage[COOP_DEFENSE_PLAYER_STAT_OUTGOING_DAMAGE] ?? 0));
+    * (1 + (totals.percentage[COOP_DEFENSE_PLAYER_STAT_OUTGOING_DAMAGE] ?? 0) + bonusPercent);
   const criticalChance = Math.min(1, Math.max(0, classDefinition?.criticalChance ?? 0));
   const criticalDamageMultiplier = classDefinition?.criticalDamageMultiplier ?? 1;
 

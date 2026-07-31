@@ -24,6 +24,24 @@ export interface ResolvedLoadoutSelection {
   ultimate: UltimateConfig;
 }
 
+function areSemanticValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((entry, index) => areSemanticValuesEqual(entry, right[index]));
+  }
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index]
+      && areSemanticValuesEqual(leftRecord[key], rightRecord[key]));
+}
+
 /**
  * Loadout-Konfigurationen sind reine, serialisierbare Datenobjekte. Ein ID-Vergleich
  * reicht im Coop-Modus nicht aus, weil Upgrades dieselbe Basiswaffe um effektive
@@ -36,7 +54,7 @@ export function areLoadoutConfigsEquivalent<T extends { id: string }>(
 ): boolean {
   if (current === next) return true;
   return current?.id === next.id
-    && JSON.stringify(current) === JSON.stringify(next);
+    && areSemanticValuesEqual(current, next);
 }
 
 export function sanitizeLoadoutSelectionForMode(
@@ -163,7 +181,11 @@ export function isCommittedLoadoutEqual(
     && left.utility === right.utility
     && left.ultimate === right.ultimate
     && left.coopDefenseClassId === right.coopDefenseClassId
-    && JSON.stringify(left.tools ?? []) === JSON.stringify(right.tools ?? [])
+    && (left.tools ?? []).length === (right.tools ?? []).length
+    && (left.tools ?? []).every((tool, index) => {
+      const other = (right.tools ?? [])[index];
+      return tool.kind === other?.kind && tool.id === other.id;
+    })
     && isCoopDefenseUpgradeProfileEqual(
       left.coopDefenseProfile,
       right.coopDefenseProfile,

@@ -7,6 +7,7 @@ Diese Seiten sind ein kleiner Router für langlebiges Projektwissen. Der Quellco
 - [`gameplay.md`](gameplay.md): Spielidee, Modi sowie Trennung von Lobby und Arena.
 - [`networking.md`](networking.md): WebRTC-Transport, Host-Autorität, Kanalzuordnung, Replikation und Diagnose.
 - [`performance.md`](performance.md): Grafikqualitäts-Vertrag, visuelle Budgets und lokaler Messworkflow (Taste T).
+- [`local-persistence.md`](local-persistence.md): versionierte lokale Einstellungen und Spielstand, Cache-Vertrag sowie Import/Export.
 - [`visual-guidelines.md`](visual-guidelines.md): verbindliche Perspektive, Qualitätsmaßstab, Effekt- und Assetregeln.
 - [`reference-implementations.md`](reference-implementations.md): wenige bewährte Code-Referenzen und ihre sinnvolle Verwendung.
 

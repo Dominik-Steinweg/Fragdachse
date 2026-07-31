@@ -1,0 +1,178 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  LEGACY_LOCAL_PREFERENCES_KEY,
+  LOCAL_PROGRESS_SCHEMA_VERSION,
+  LOCAL_PROGRESS_STORAGE_KEY,
+  LOCAL_SETTINGS_STORAGE_KEY,
+  exportStoredGameProgressJson,
+  getStoredCoopDefenseLoadoutSlot,
+  getStoredCoopDefenseProgress,
+  getStoredGraphicsQuality,
+  getStoredMasterVolume,
+  importStoredGameProgressJson,
+  invalidateLocalStorageCache,
+  resetStoredCoopDefenseCharacter,
+  setStoredCoopDefenseClassesUnlocked,
+  setStoredCoopDefenseLoadoutSlot,
+  setStoredCoopDefenseTotalXp,
+  setStoredCoopDefenseUpgradeProfile,
+  setStoredGraphicsQuality,
+  setStoredMasterVolume,
+} from '../src/utils/localPreferences';
+import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
+
+class MemoryStorage implements Storage {
+  readonly values = new Map<string, string>();
+  reads = 0;
+  writes = 0;
+  throwOnWrite = false;
+
+  get length(): number { return this.values.size; }
+  clear(): void { this.values.clear(); }
+  getItem(key: string): string | null {
+    this.reads += 1;
+    return this.values.get(key) ?? null;
+  }
+  key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
+  removeItem(key: string): void { this.values.delete(key); }
+  setItem(key: string, value: string): void {
+    if (this.throwOnWrite) throw new Error('quota');
+    this.writes += 1;
+    this.values.set(key, value);
+  }
+}
+
+describe('local progress generation', () => {
+  let storage: MemoryStorage;
+
+  beforeEach(() => {
+    storage = new MemoryStorage();
+    vi.stubGlobal('window', { localStorage: storage });
+    invalidateLocalStorageCache();
+  });
+
+  afterEach(() => {
+    invalidateLocalStorageCache();
+    vi.unstubAllGlobals();
+  });
+
+  it('resets alpha progress once while preserving legacy device settings', () => {
+    storage.setItem(LEGACY_LOCAL_PREFERENCES_KEY, JSON.stringify({
+      version: 18,
+      audio: { masterVolume: 0.23, effectsVolume: 0.34, musicVolume: 0.45 },
+      graphics: { quality: 'low' },
+      progression: { coopDefense: { totalXp: 99_999, classesUnlocked: true } },
+    }));
+
+    expect(getStoredMasterVolume()).toBe(0.23);
+    expect(getStoredGraphicsQuality()).toBe('low');
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(0);
+    expect(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)).not.toBeNull();
+    expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).not.toBeNull();
+    expect(storage.getItem(LEGACY_LOCAL_PREFERENCES_KEY)).toBeNull();
+  });
+
+  it('loads a current schema document after cache invalidation', () => {
+    setStoredCoopDefenseTotalXp(77);
+    const raw = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    expect(JSON.parse(raw!).schemaVersion).toBe(LOCAL_PROGRESS_SCHEMA_VERSION);
+
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(77);
+  });
+
+  it('applies the new-generation v1 to v2 migration to imported saves', () => {
+    setStoredCoopDefenseClassesUnlocked(true);
+    setStoredCoopDefenseLoadoutSlot('dachs_of_steel', 'weapon1', 'AK47');
+    const envelope = JSON.parse(exportStoredGameProgressJson());
+    const progress = envelope.progress;
+    progress.schemaVersion = 1;
+    progress.coopDefense.classLoadouts = progress.coopDefense.loadoutsByClass;
+    delete progress.coopDefense.loadoutsByClass;
+
+    resetStoredCoopDefenseCharacter();
+    const result = importStoredGameProgressJson(JSON.stringify(envelope));
+    expect(result.ok).toBe(true);
+    expect(getStoredCoopDefenseLoadoutSlot('dachs_of_steel', 'weapon1')).toBe('AK47');
+    expect(JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!).schemaVersion).toBe(2);
+  });
+
+  it('stores only changed upgrade levels and no pre-unlock class copies', () => {
+    const profile = buildDefaultCoopDefenseUpgradeProfile();
+    profile.upgrades.hp.level = 1;
+    setStoredCoopDefenseUpgradeProfile(profile);
+
+    const raw = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!;
+    const document = JSON.parse(raw);
+    expect(raw).not.toContain('"unlocked"');
+    expect(document.coopDefense.defaultProfile.levels.hp).toBe(1);
+    expect(document.coopDefense.profilesByClass).toBeUndefined();
+    expect(document.coopDefense.selectedClassId).toBeUndefined();
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().defaultProfile.upgrades.hp).toEqual({
+      level: 1,
+      unlocked: true,
+    });
+  });
+
+  it('keeps settings separate from progress and character resets', () => {
+    setStoredMasterVolume(0.31);
+    setStoredGraphicsQuality('medium');
+    const settingsBefore = storage.getItem(LOCAL_SETTINGS_STORAGE_KEY);
+    setStoredCoopDefenseTotalXp(500);
+    expect(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)).toBe(settingsBefore);
+
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredMasterVolume()).toBe(0.31);
+    expect(getStoredGraphicsQuality()).toBe('medium');
+  });
+
+  it('exports and imports the complete progress without device settings', () => {
+    setStoredCoopDefenseTotalXp(321);
+    setStoredMasterVolume(0.12);
+    const json = exportStoredGameProgressJson();
+    expect(json).not.toContain('masterVolume');
+
+    setStoredCoopDefenseTotalXp(0);
+    const result = importStoredGameProgressJson(json);
+    expect(result.ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(321);
+    expect(getStoredMasterVolume()).toBe(0.12);
+  });
+
+  it('rejects invalid imports without changing the existing save', () => {
+    setStoredCoopDefenseTotalXp(456);
+    const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    const malformed = importStoredGameProgressJson('{broken');
+    expect(malformed.ok).toBe(false);
+    expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
+
+    const envelope = JSON.parse(exportStoredGameProgressJson());
+    envelope.progress.coopDefense.totalXp = 'lots';
+    const manipulated = importStoredGameProgressJson(JSON.stringify(envelope));
+    expect(manipulated.ok).toBe(false);
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(456);
+  });
+
+  it('serves repeated reads from cache and reloads only after explicit invalidation', () => {
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(0);
+    const readsAfterLoad = storage.reads;
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(0);
+    expect(getStoredMasterVolume()).toBeGreaterThanOrEqual(0);
+    expect(storage.reads).toBe(readsAfterLoad);
+
+    const document = JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!);
+    document.coopDefense.totalXp = 12;
+    storage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(document));
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(0);
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(12);
+  });
+
+  it('keeps the in-memory game usable when localStorage writes fail', () => {
+    getStoredCoopDefenseProgress();
+    storage.throwOnWrite = true;
+    expect(() => setStoredCoopDefenseTotalXp(42)).not.toThrow();
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(42);
+  });
+});
