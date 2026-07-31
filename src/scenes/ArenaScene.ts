@@ -114,7 +114,7 @@ import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
@@ -1238,10 +1238,10 @@ export class ArenaScene extends Phaser.Scene {
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
         ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
         : null;
-      // Auf Angriffsmaps ist die Restzeit bedeutungslos; der Slot zeigt stattdessen das Ziel.
-      const objectiveLabel = activeMapConfig?.objective === 'destroy-hostile-bases'
-        ? 'FEINDBASIS ZERSTOEREN'
-        : (secs <= 0 && activeMapConfig?.boss ? 'BOSS MUSS FALLEN' : null);
+      // Auf Zielkarten ist die Restzeit bedeutungslos; der Slot zeigt stattdessen das Ziel.
+      const objectiveLabel = activeMapConfig && activeMapConfig.objective !== 'survive'
+        ? getCoopDefenseMapObjectiveLabel(activeMapConfig.objective)
+        : null;
       this.ctx.centerHUD.updateTimer(secs, objectiveLabel);
       const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
       const tutorialDurationMs = activeMapConfig?.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;

@@ -60,6 +60,7 @@ Vollbild läuft ausschließlich über `src/ui/fullscreen.ts`; der ScaleManager w
 - DOM-Overlays hängen sich deshalb an `getOverlayRoot()` statt an `document.body`. Sie positionieren sich per `position: fixed` am Viewport, der Elternwechsel ändert also nichts an der Darstellung.
 - Browser-Vollbild (F11, Browsermenü) ist für die Seite nicht dasselbe wie API-Vollbild: `document.fullscreenElement` bleibt `null`, `fullscreenchange` feuert nicht, `exitFullscreen()` bleibt wirkungslos, und Chrome verlangt zum Verlassen ein langes ESC statt eines kurzen. Erkennbar ist es nur über `matchMedia('(display-mode: fullscreen)')`. Damit beide Wege denselben Zustand ergeben, fängt das Modul F11 ab und stellt stattdessen API-Vollbild her; nur wenn bereits Browser-Vollbild aktiv ist, bleibt F11 unangetastet, weil es dort der einzige Ausweg ist.
 - UI, die den Vollbildzustand anzeigt, hört auf `onFullscreenChange()`, nicht auf `Phaser.Scale.Events.ENTER_FULLSCREEN`/`LEAVE_FULLSCREEN` – die kennen nur das API-Vollbild.
+- Der Lobby-Vollbildbutton aktiviert weiterhin auf `pointerup` (Touch-/Browser-Geste), akzeptiert dieses Loslassen aber nur nach einem eigenen `pointerdown`. So kann ein modales Overlay, das sich auf `pointerdown` schließt, seinen nachfolgenden Klick nicht an den unsichtbaren Lobbybutton durchreichen.
 
 ## Nicht offensichtliche Entscheidungen
 

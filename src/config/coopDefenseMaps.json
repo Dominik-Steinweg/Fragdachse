@@ -158,7 +158,8 @@
       "displayName": "Map 5 - Grufttitan",
       "arenaWidthCells": 74,
       "timeOfDay": "22:30",
-      "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Beim ersten Sieg gibt es einen Boss-Punkt für spezielle Upgrades. Nach Abschluss von Map 5 werden außerdem die Klassen freigeschaltet.",
+      "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn der Boss fällt. Beim ersten Sieg gibt es einen Boss-Punkt für spezielle Upgrades. Nach Abschluss von Map 5 werden außerdem die Klassen freigeschaltet.",
+      "objective": "defeat-boss",
       "rockFillRatio": 0.2,
       "roundDurationSec": 45,
       "bases": [
@@ -443,6 +444,7 @@
       "timeOfDay": "22:45",
       "rockFillRatio": 0.1,
       "roundDurationSec": 45,
+      "objective": "defeat-boss",
       "bases": [
         {
           "id": "coop-base-rear",
@@ -827,6 +829,7 @@
       },
       "rockFillRatio": 0.08,
       "roundDurationSec": 45,
+      "objective": "defeat-boss",
       "bases": [
         {
           "id": "coop-base-rear",

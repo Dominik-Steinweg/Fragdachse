@@ -790,7 +790,12 @@ export class MatchResultsOverlay {
     this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, 'WEITER ZUR LOBBY', {
       fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
     }).setOrigin(0.5).setScrollFactor(0);
-    this.continueButton.on('pointerdown', () => this.continueToLobby());
+    this.continueButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+      // Das Overlay verschwindet sofort. Die Abbruchmarkierung verhindert, dass ein
+      // darunterliegendes Lobby-Objekt denselben Pointerdown ebenfalls verarbeitet.
+      event?.stopPropagation();
+      this.continueToLobby();
+    });
     attachHoverEffect(this.scene, this.continueButton, this.continueLabel);
 
     return this.scene.add.container(0, 0, [this.hintText, this.continueButton, this.continueLabel])

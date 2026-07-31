@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
   getCoopDefenseMapConfig,
+  getCoopDefenseMapObjectiveLabel,
   type CoopBaseShape,
 } from '../src/config/coopDefenseMaps';
 import { getCoopDefenseEnemyConfig, getCoopDefenseEnemyXp } from '../src/config/coopDefenseEnemies';
@@ -91,6 +92,37 @@ describe('Coop defense map progression', () => {
         expect(map.tutorialText.trim().length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('assigns exactly one of the three victory objectives to every map', () => {
+    const objectiveByMapId = Object.fromEntries(
+      COOP_DEFENSE_MAP_CONFIGS.map((map) => [map.mapId, map.objective]),
+    );
+
+    expect(objectiveByMapId).toEqual({
+      '0': 'survive',
+      '1': 'survive',
+      '2': 'survive',
+      '3': 'survive',
+      '4': 'survive',
+      '5': 'defeat-boss',
+      '6': 'survive',
+      '7': 'survive',
+      '8': 'survive',
+      '9': 'survive',
+      '10': 'defeat-boss',
+      '11': 'survive',
+      '12': 'destroy-hostile-bases',
+      '13': 'destroy-hostile-bases',
+      '14': 'survive',
+      '15': 'defeat-boss',
+    });
+    expect(new Set(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.objective)).size).toBe(3);
+    expect(getCoopDefenseMapObjectiveLabel('survive')).toBe('ZEIT UEBERLEBEN');
+    expect(getCoopDefenseMapObjectiveLabel('defeat-boss')).toBe('BOSS MUSS FALLEN');
+    expect(getCoopDefenseMapObjectiveLabel('destroy-hostile-bases')).toBe('FEINDBASIS ZERSTOEREN');
+    expect(getCoopDefenseMapConfig('5').tutorialText).toContain('wenn der Boss fällt');
+    expect(getCoopDefenseMapConfig('5').tutorialText).not.toContain('Zeitlimit erreicht');
   });
 
   it('calculates finite XP for every playable map without fixing balancing values', () => {

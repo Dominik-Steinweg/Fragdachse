@@ -23,10 +23,13 @@ import { CoopDefenseEnemyAbilitySystem } from '../src/systems/CoopDefenseEnemyAb
 import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
 
-function createSystem(hasLineOfSight: (...args: unknown[]) => boolean) {
+function createSystem(
+  hasLineOfSight: (...args: unknown[]) => boolean,
+  kind = 'void-stalker',
+) {
   const enemy = {
     id: 'void-stalker-1',
-    kind: 'void-stalker',
+    kind,
     faction: 'hostile',
     sprite: { active: true, x: 400, y: 300 },
     getHp: () => 160,
@@ -87,6 +90,29 @@ describe('Void-Stalker Translocator', () => {
     const { system, spawnProjectile } = createSystem(hasLineOfSight);
 
     system.hostUpdate(0);
+
+    expect(spawnProjectile).not.toHaveBeenCalled();
+  });
+});
+
+describe('Thrower-Badger brood bomb', () => {
+  it('passes the same padded path check before throwing', () => {
+    const hasLineOfSight = vi.fn((...args: unknown[]) => args[6] === 12);
+    const { system, spawnProjectile } = createSystem(hasLineOfSight, 'thrower-badger');
+
+    system.hostUpdate(0);
+    system.hostUpdate(3_000);
+
+    expect(hasLineOfSight).toHaveBeenCalledWith(400, 300, 800, 300, undefined, false, 12);
+    expect(spawnProjectile).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not throw a brood bomb into a blocked padded path', () => {
+    const hasLineOfSight = vi.fn(() => false);
+    const { system, spawnProjectile } = createSystem(hasLineOfSight, 'thrower-badger');
+
+    system.hostUpdate(0);
+    system.hostUpdate(3_000);
 
     expect(spawnProjectile).not.toHaveBeenCalled();
   });

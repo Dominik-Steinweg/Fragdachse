@@ -274,7 +274,7 @@
       "id": "VOID_HUNTER_GAUSS",
       "displayName": "Leeren-Gauss",
       "cooldown": 0,
-      "damage": 100,
+      "damage": 200,
       "range": 1500,
       "fire": {
         "type": "projectile",

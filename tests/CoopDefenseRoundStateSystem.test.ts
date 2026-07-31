@@ -35,17 +35,24 @@ describe('CoopDefenseRoundStateSystem', () => {
     }).update()).toBe('defeat');
   });
 
-  it('requires both elapsed time and a defeated boss for boss-map victory', () => {
+  it('wins a survive map when the timer expires', () => {
+    expect(new CoopDefenseRoundStateSystem({
+      baseManager: createBaseManager(friendly(500)),
+      getSecondsLeft: () => 0,
+    }).update()).toBe('victory');
+  });
+
+  it('wins a boss map as soon as the boss is defeated', () => {
     const bossRun = (secondsLeft: number, bossDefeated: boolean) => new CoopDefenseRoundStateSystem({
       baseManager: createBaseManager(friendly(500)),
+      objective: 'defeat-boss',
       getSecondsLeft: () => secondsLeft,
-      bossRequired: true,
       isBossDefeated: () => bossDefeated,
     }).update();
 
+    expect(bossRun(30, false)).toBeNull();
     expect(bossRun(0, false)).toBeNull();
-    expect(bossRun(1, true)).toBeNull();
-    expect(bossRun(0, true)).toBe('victory');
+    expect(bossRun(30, true)).toBe('victory');
   });
 });
 

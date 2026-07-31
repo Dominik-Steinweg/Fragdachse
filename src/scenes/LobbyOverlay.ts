@@ -154,6 +154,9 @@ export class LobbyOverlay {
   private fullscreenLabel!:    Phaser.GameObjects.Text;
   private fullscreenHintEvent: Phaser.Time.TimerEvent | null = null;
   private fullscreenUnsubscribe: (() => void) | null = null;
+  /** Verhindert, dass ein Overlay-Klick beim anschliessenden `pointerup` Vollbild ausloest. */
+  private fullscreenPointerIds = new Set<number>();
+  private fullscreenPointerUpHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
   private coopProgressContainer: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
@@ -196,6 +199,12 @@ export class LobbyOverlay {
   build(): void {
     this.fullscreenUnsubscribe?.();
     this.fullscreenUnsubscribe = null;
+    if (this.fullscreenPointerUpHandler) {
+      this.scene.input.off('pointerup', this.fullscreenPointerUpHandler);
+      this.scene.input.off('pointerupoutside', this.fullscreenPointerUpHandler);
+      this.fullscreenPointerUpHandler = null;
+    }
+    this.fullscreenPointerIds.clear();
     this.fullscreenHintEvent?.remove();
     this.fullscreenHintEvent = null;
     this.connectionEnded = false;
@@ -348,9 +357,22 @@ export class LobbyOverlay {
       ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_FULLSCREEN_COLOR, FULLSCREEN_BTN_W, FULLSCREEN_BTN_H), FULLSCREEN_BTN_W, FULLSCREEN_BTN_H, BTN_FULLSCREEN_COLOR, COLORS.GOLD_1),
     )
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.onFullscreenClicked())
+      // Vollbild bleibt auf `pointerup`, damit die Browser-Geste auch auf Touch-Geräten
+      // gültig bleibt. Ohne Down-Markierung könnte ein darüberliegendes Overlay, das sich
+      // bei `pointerdown` schliesst, sein anschliessendes `pointerup` hierher durchreichen.
+      .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.fullscreenPointerIds.add(pointer.id))
+      .on('pointerup', (pointer: Phaser.Input.Pointer) => {
+        if (!this.fullscreenPointerIds.delete(pointer.id)) return;
+        this.onFullscreenClicked();
+      })
       .setScrollFactor(0);
     objects.push(this.fullscreenBtn);
+
+    this.fullscreenPointerUpHandler = (pointer: Phaser.Input.Pointer) => {
+      this.fullscreenPointerIds.delete(pointer.id);
+    };
+    this.scene.input.on('pointerup', this.fullscreenPointerUpHandler);
+    this.scene.input.on('pointerupoutside', this.fullscreenPointerUpHandler);
 
     this.fullscreenLabel = this.scene.add.text(0, 0, FULLSCREEN_LABEL, {
       fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),

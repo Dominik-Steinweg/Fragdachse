@@ -25,12 +25,15 @@ const TWEEN_DURATION_MS = 1100;
 const GO_FLOAT_DISTANCE_PX = 40;
 const GO_TEXT_DURATION_MS = 420;
 const GO_FONT_SIZE_PX = 184;
+const OBJECTIVE_Y_OFFSET = -164;
+const OBJECTIVE_FONT_SIZE_PX = 58;
 
 type OverlayMode = 'hidden' | 'countdown' | 'death' | 'respawn-reveal';
 
 export class ArenaCountdownOverlay {
   private readonly veil: Phaser.GameObjects.Graphics;
   private readonly text: Phaser.GameObjects.Text;
+  private readonly objectiveText: Phaser.GameObjects.Text;
   private readonly getFocusSprite: () => Phaser.GameObjects.Image | undefined;
   private mode: OverlayMode = 'hidden';
   private unlockAtMs = 0;
@@ -40,6 +43,7 @@ export class ArenaCountdownOverlay {
   private revealRadius = VEIL_RADIUS_PX;
   private veilAlpha = VEIL_ALPHA;
   private goTriggeredForUnlock = false;
+  private objectiveLabel: string | null = null;
   private deathVeilHoldUntilMs = 0;
   private deathVeilClosing = false;
   private audioSystem: GameAudioSystem | null = null;
@@ -73,22 +77,42 @@ export class ArenaCountdownOverlay {
       .setDepth(DEPTH.OVERLAY)
       .setScrollFactor(0)
       .setVisible(false);
+
+    this.objectiveText = scene.add.text(this.baseX, this.baseY + OBJECTIVE_Y_OFFSET, '', {
+      fontFamily: 'monospace',
+      fontSize: `${OBJECTIVE_FONT_SIZE_PX}px`,
+      fontStyle: 'bold',
+      color: toCssColor(COLORS.GOLD_1),
+      stroke: toCssColor(COLORS.GREY_8),
+      strokeThickness: 10,
+    })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.OVERLAY)
+      .setScrollFactor(0)
+      .setVisible(false);
   }
 
   setAudioSystem(system: GameAudioSystem | null): void {
     this.audioSystem = system;
   }
 
-  syncTo(unlockAtMs: number): void {
+  syncTo(unlockAtMs: number, objectiveLabel: string | null = null): void {
     if (unlockAtMs <= 0) {
       if (this.mode === 'countdown') this.clear();
       this.unlockAtMs = 0;
       return;
     }
 
-    if (unlockAtMs !== this.unlockAtMs || this.mode !== 'countdown') {
+    const nextObjectiveLabel = objectiveLabel?.trim() || null;
+    if (
+      unlockAtMs !== this.unlockAtMs
+      || this.mode !== 'countdown'
+      || nextObjectiveLabel !== this.objectiveLabel
+    ) {
       this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
       this.mode = 'countdown';
+      this.objectiveLabel = nextObjectiveLabel;
+      this.showObjectiveText();
       this.veil.setVisible(true);
     }
     this.unlockAtMs = unlockAtMs;
@@ -187,6 +211,7 @@ export class ArenaCountdownOverlay {
   clear(): void {
     this.mode = 'hidden';
     this.unlockAtMs = 0;
+    this.objectiveLabel = null;
     this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
     this.invalidateVeilCache();
     this.veil.clear();
@@ -197,6 +222,7 @@ export class ArenaCountdownOverlay {
     this.stopTextTweens();
     this.veil.destroy();
     this.text.destroy();
+    this.objectiveText.destroy();
   }
 
   private captureFocusPoint(): void {
@@ -251,6 +277,18 @@ export class ArenaCountdownOverlay {
     this.stopTextTweens();
 
     if (showGoText) {
+      if (this.objectiveText.visible) {
+        this.scene.tweens.add({
+          targets: this.objectiveText,
+          y: this.baseY + OBJECTIVE_Y_OFFSET - 24,
+          alpha: 0,
+          scale: 1.06,
+          duration: GO_TEXT_DURATION_MS,
+          ease: 'Cubic.easeOut',
+          onComplete: () => this.objectiveText.setVisible(false),
+        });
+      }
+
       this.text.setStyle({
         fontFamily: 'monospace',
         fontSize: `${GO_FONT_SIZE_PX}px`,
@@ -280,6 +318,7 @@ export class ArenaCountdownOverlay {
         },
       });
     } else {
+      this.objectiveText.setVisible(false);
       this.text.setVisible(false).setText('');
     }
 
@@ -317,6 +356,23 @@ export class ArenaCountdownOverlay {
       .setAlpha(1)
       .setScale(1)
       .setPosition(this.baseX, this.baseY);
+    this.objectiveText
+      .setVisible(false)
+      .setText('')
+      .setAlpha(1)
+      .setScale(1)
+      .setPosition(this.baseX, this.baseY + OBJECTIVE_Y_OFFSET);
+  }
+
+  private showObjectiveText(): void {
+    if (!this.objectiveLabel) return;
+
+    this.objectiveText
+      .setText(this.objectiveLabel)
+      .setPosition(this.baseX, this.baseY + OBJECTIVE_Y_OFFSET)
+      .setAlpha(1)
+      .setScale(1)
+      .setVisible(true);
   }
 
   private renderVeil(radius: number, alpha: number): void {
@@ -386,6 +442,7 @@ export class ArenaCountdownOverlay {
 
   private stopTextTweens(): void {
     this.scene.tweens.killTweensOf(this.text);
+    this.scene.tweens.killTweensOf(this.objectiveText);
     this.scene.tweens.killTweensOf(this);
   }
 }

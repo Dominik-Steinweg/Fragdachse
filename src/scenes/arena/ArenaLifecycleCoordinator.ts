@@ -59,7 +59,7 @@ import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } fr
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, UtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -511,7 +511,6 @@ export class ArenaLifecycleCoordinator {
         baseManager: this.ctx.baseManager,
         objective: coopDefenseMapConfig?.objective,
         getSecondsLeft: () => bridge.computeSecondsLeft(),
-        bossRequired: !!coopDefenseMapConfig?.boss,
         isBossDefeated: () => this.ctx.coopDefenseWaveSpawner?.isBossDefeated() ?? false,
       })
       : null;
@@ -1924,11 +1923,10 @@ export class ArenaLifecycleCoordinator {
     }
     this.layoutRetryCount = 0;
 
-    const coopDefenseArenaWidthCells = isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(
-        roundState.coopDefenseMapId ?? bridge.getCoopDefenseMapId(),
-      ).arenaWidthCells
-      : undefined;
+    const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
+      ? getCoopDefenseMapConfig(roundState.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+      : null;
+    const coopDefenseArenaWidthCells = coopDefenseMapConfig?.arenaWidthCells;
     applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA', coopDefenseArenaWidthCells);
     this.buildArena(layout);
     this.arenaBuilt = true;
@@ -1952,7 +1950,10 @@ export class ArenaLifecycleCoordinator {
     this.syncHostLoadoutsFromCommittedSelections();
     this.resetLocalArenaHudState();
     this.localPlayerState.overlayTrackedAlive = null;
-    this.ctx.arenaCountdown?.syncTo(bridge.getArenaStartTime());
+    this.ctx.arenaCountdown?.syncTo(
+      bridge.getArenaStartTime(),
+      coopDefenseMapConfig ? getCoopDefenseMapObjectiveLabel(coopDefenseMapConfig.objective) : null,
+    );
     this.lobbyOverlay.lockButton();
     this.lobbyOverlay.hide();
     this.hostUpdate.setActive(true);

@@ -7,31 +7,28 @@ export interface CoopDefenseRoundStateSystemOptions {
   /** Standard `survive`: Sieg ueber das Zeitlimit. */
   readonly objective?: CoopDefenseMapObjective;
   readonly getSecondsLeft: () => number;
-  readonly bossRequired?: boolean;
   readonly isBossDefeated?: () => boolean;
 }
 
 /**
  * Entscheidet host-autoritativ ueber Sieg und Niederlage einer Coop-Defense-Runde.
  *
- * Verloren wird immer ueber die eigenen Basen. Gewonnen wird je nach Map entweder ueber das
- * Zeitlimit (`survive`) oder ueber die Zerstoerung aller feindlichen Basen
- * (`destroy-hostile-bases`) – dort gewaehrt der ablaufende Timer bewusst nie einen Sieg.
+ * Verloren wird immer ueber die eigenen Basen. Gewonnen wird je nach Map ueber das Zeitlimit
+ * (`survive`), den Boss (`defeat-boss`) oder die Zerstoerung aller feindlichen Basen
+ * (`destroy-hostile-bases`).
  */
 export class CoopDefenseRoundStateSystem {
   private concluded = false;
   private readonly baseManager: BaseManager;
   private readonly objective: CoopDefenseMapObjective;
   private readonly getSecondsLeft: () => number;
-  private readonly bossRequired: boolean;
   private readonly isBossDefeated: () => boolean;
 
   constructor(options: CoopDefenseRoundStateSystemOptions) {
     this.baseManager = options.baseManager;
     this.objective = options.objective ?? 'survive';
     this.getSecondsLeft = options.getSecondsLeft;
-    this.bossRequired = options.bossRequired ?? false;
-    this.isBossDefeated = options.isBossDefeated ?? (() => true);
+    this.isBossDefeated = options.isBossDefeated ?? (() => false);
   }
 
   update(): RoundOutcome | null {
@@ -44,6 +41,14 @@ export class CoopDefenseRoundStateSystem {
       return 'defeat';
     }
 
+    if (this.objective === 'defeat-boss') {
+      if (this.isBossDefeated()) {
+        this.concluded = true;
+        return 'victory';
+      }
+      return null;
+    }
+
     if (this.objective === 'destroy-hostile-bases') {
       // Der Guard schuetzt gegen einen Sofortsieg, falls eine Map ohne feindliche Basis das
       // Ziel doch einmal an der Normalisierung vorbei setzt.
@@ -54,7 +59,7 @@ export class CoopDefenseRoundStateSystem {
       return null;
     }
 
-    if (this.getSecondsLeft() <= 0 && (!this.bossRequired || this.isBossDefeated())) {
+    if (this.getSecondsLeft() <= 0) {
       this.concluded = true;
       return 'victory';
     }

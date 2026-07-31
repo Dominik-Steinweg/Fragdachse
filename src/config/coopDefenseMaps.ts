@@ -117,12 +117,22 @@ export interface CoopDefenseMapBossConfig {
 /**
  * Siegbedingung der Map.
  *
- * `survive` ist der bisherige Ablauf: die Runde ist gewonnen, wenn das Zeitlimit ablaeuft (und
- * ein etwaiger Boss gefallen ist). `destroy-hostile-bases` gewinnt erst mit der Zerstoerung aller
- * feindlichen Basen; das Zeitlimit gewaehrt dann nie einen Sieg. Verloren wird in beiden Faellen
- * ueber die eigenen Basen.
+ * Jede Map hat genau ein Ziel: Zeit ueberleben, den Boss besiegen oder alle feindlichen Basen
+ * zerstoeren. Verloren wird in allen Faellen ueber die eigenen Basen.
  */
-export type CoopDefenseMapObjective = 'survive' | 'destroy-hostile-bases';
+export type CoopDefenseMapObjective = 'survive' | 'defeat-boss' | 'destroy-hostile-bases';
+
+export function getCoopDefenseMapObjectiveLabel(objective: CoopDefenseMapObjective | undefined): string {
+  switch (objective) {
+    case 'defeat-boss':
+      return 'BOSS MUSS FALLEN';
+    case 'destroy-hostile-bases':
+      return 'FEINDBASIS ZERSTOEREN';
+    case 'survive':
+    default:
+      return 'ZEIT UEBERLEBEN';
+  }
+}
 
 /**
  * Belohnt einen Sieg auf dieser Map mit einem Item-Angebot. Bewusst pro Map konfigurierbar und
@@ -384,7 +394,7 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     waves: mapConfig.waves.map(normalizeWaveConfig),
     boss: normalizeBossConfig(mapConfig),
-    objective: normalizeObjective(mapConfig.mapId, mapConfig.objective, bases),
+    objective: normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, mapConfig.boss),
     itemDrop: normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop),
   };
 }
@@ -393,8 +403,20 @@ function normalizeObjective(
   mapId: string,
   objective: CoopDefenseMapObjective | undefined,
   bases: readonly CoopBaseConfig[],
+  boss: CoopDefenseMapBossConfig | undefined,
 ): CoopDefenseMapObjective {
-  if (objective !== 'destroy-hostile-bases') return 'survive';
+  const normalizedObjective = objective ?? (boss ? 'defeat-boss' : 'survive');
+
+  if (boss && normalizedObjective !== 'defeat-boss') {
+    throw new Error(`[coopDefenseMaps] Boss map ${mapId} must use the defeat-boss objective`);
+  }
+  if (normalizedObjective === 'defeat-boss') {
+    if (!boss) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} wants defeat-boss but declares no boss`);
+    }
+    return normalizedObjective;
+  }
+  if (normalizedObjective !== 'destroy-hostile-bases') return 'survive';
   // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
   if (!bases.some((baseConfig) => baseConfig.faction === 'hostile')) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} wants destroy-hostile-bases but declares no hostile base`);
@@ -402,7 +424,7 @@ function normalizeObjective(
   if (!bases.some((baseConfig) => baseConfig.faction !== 'hostile')) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly base to lose`);
   }
-  return objective;
+  return normalizedObjective;
 }
 
 function normalizeItemDropConfig(
