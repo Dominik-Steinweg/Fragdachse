@@ -6,6 +6,8 @@
   "scripts": {
     "ai:sync": "node scripts/sync-ai-skills.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
+    "icons:generate": "node scripts/generate-upgrade-icons.mjs",
+    "icons:generate-one": "node scripts/generate-upgrade-icons.mjs --id",
     "dev": "vite",
     "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",
@@ -23,6 +25,7 @@
   "devDependencies": {
     "gh-pages": "^6.3.0",
     "jimp": "^1.6.1",
+    "sharp": "^0.33.5",
     "typescript": "~5.6.0",
     "vite": "^6.0.0",
     "vitest": "^3.2.4"
