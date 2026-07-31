@@ -1,7 +1,8 @@
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
+import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
 import { isCoopDefenseMode } from '../gameModes';
-import { getCoopDefenseResolvedEffectTotals, isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { getCoopDefenseCommittedEffectTotals } from '../utils/coopDefenseItemEffects';
+import { isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { applyCoopDefenseModifiersToLoadoutSelection } from './CoopDefenseLoadoutModifiers';
 import { getSelectableLoadoutItems } from './LoadoutCatalog';
 import {
@@ -50,19 +51,31 @@ export function sanitizeLoadoutSelectionForMode(
   };
 }
 
+/**
+ * Loadout inklusive aller Coop-Defense-Modifikatoren.
+ *
+ * Upgrades **und** ausgeruestete Items laufen ueber denselben Einstiegspunkt wie im
+ * `CoopDefensePlayerModifierSystem`, damit ein Item-Affix wie der Utility-Cooldown schon die
+ * initial ausgeruestete Utility trifft und nicht erst eine spaetere Neuaufloesung. Ausruestung
+ * wirkt dabei auch ohne Upgrade-Profil – nur ohne beides gibt es nichts zu modifizieren.
+ */
 export function resolveEffectiveLoadoutSelection(
   selection: LoadoutSelection | undefined,
   mode: GameMode,
   coopDefenseProfile: CoopDefenseUpgradeProfile | null = null,
   coopDefenseClassId: CoopDefenseClassId | null = null,
+  equippedItems: readonly CoopDefenseItem[] = [],
 ): ResolvedLoadoutSelection {
   const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
-  if (!isCoopDefenseMode(mode) || !coopDefenseProfile) return sanitized;
+  if (!isCoopDefenseMode(mode) || (!coopDefenseProfile && equippedItems.length === 0)) return sanitized;
   return applyCoopDefenseModifiersToLoadoutSelection(
     sanitized,
-    getCoopDefenseResolvedEffectTotals(
-      sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile, coopDefenseClassId ?? undefined),
-      coopDefenseClassId ?? undefined,
+    getCoopDefenseCommittedEffectTotals(
+      coopDefenseProfile
+        ? sanitizeCoopDefenseUpgradeProfile(coopDefenseProfile, coopDefenseClassId ?? undefined)
+        : null,
+      coopDefenseClassId,
+      equippedItems,
     ),
   );
 }

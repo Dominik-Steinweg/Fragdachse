@@ -29,11 +29,31 @@ export const COOP_DEFENSE_CONSTRUCTION_IDS: readonly ConstructionId[] = [
 export const DEFAULT_COOP_DEFENSE_CONSTRUCTION_ID: ConstructionId = 'rocket_turret';
 
 /**
- * Feste Konstruktionskapazitaet des Inspectors. Sie ersetzt die frueheren Adrenalinkosten
- * als einzige Obergrenze fuer gleichzeitig stehende Konstrukte und ist damit unabhaengig
- * von Rundendauer, Adrenalin, Cooldowns und Anzahl abgewehrter Wellen.
+ * Grundkapazitaet des Inspectors. Sie ersetzt die frueheren Adrenalinkosten als einzige
+ * Obergrenze fuer gleichzeitig stehende Konstrukte und ist damit unabhaengig von Rundendauer,
+ * Adrenalin, Cooldowns und Anzahl abgewehrter Wellen.
+ *
+ * Ab dem Item-Affix "Baukapazitaet" ist sie nicht mehr das persoenliche Maximum – dafuer gibt
+ * es {@link getCoopDefenseConstructionCapacity}.
  */
 export const COOP_DEFENSE_CONSTRUCTION_CAPACITY = 100;
+
+/**
+ * Persoenliches Kapazitaetsmaximum eines Spielers.
+ *
+ * Die einzige Stelle, an der Grundkapazitaet und Boni zusammenkommen: Host-Platzierungsgate,
+ * Client-Vorschau, HUD und Radialmenue muessen denselben Wert sehen, sonst zeigt die Vorschau
+ * Bauplaetze an, die der Host ablehnt. `bonus` ist die additive Summe aus `construction.capacity`
+ * (Items, spaeter auch Upgrades); die Kapazitaetskosten der einzelnen Objekte bleiben bewusst
+ * spielerunabhaengig.
+ */
+export function getCoopDefenseConstructionCapacity(bonus: number): number {
+  const safeBonus = Number.isFinite(bonus) ? bonus : 0;
+  return Math.max(0, COOP_DEFENSE_CONSTRUCTION_CAPACITY + safeBonus);
+}
+
+/** Stat-Schluessel des Kapazitaetsbonus im gemeinsamen Upgrade-/Item-Bucket. */
+export const COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT = 'construction.capacity';
 
 /**
  * Einheitlicher Bau-Cooldown fuer alle Konstrukte. Begrenzend ist die Kapazitaet, nicht

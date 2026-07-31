@@ -355,6 +355,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
       if (definition.kind !== 'upgrade') continue;
       const key = getCoopDefenseUpgradeTextureKey(definition.id);
+      if (key === null) continue;
       if (queuedUpgradeTextures.has(key)) continue;
       queuedUpgradeTextures.add(key);
       this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
@@ -774,8 +775,13 @@ export class ArenaScene extends Phaser.Scene {
       () => bridge.getPlayerUtilityOverrideName(bridge.getLocalPlayerId()) !== ''
         || this.clientUpdate.clientUtilityOverride !== null,
       // Host und Client halten denselben Bestand platzierter Objekte, deshalb kann die
-      // belegte Baukapazitaet lokal berechnet werden.
-      () => this.ctx.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
+      // belegte Baukapazitaet lokal berechnet werden. Das Maximum kommt aus denselben
+      // Effekt-Summen wie das HUD, damit das Radialmenue nichts als baubar anzeigt, was das
+      // Host-Gate anschliessend ablehnt.
+      () => ({
+        used: this.ctx.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
+        max: this.clientUpdate.getLocalConstructionCapacity(),
+      }),
       () => {
         const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
         const placementSystem = this.ctx.placementSystem;
@@ -2981,9 +2987,14 @@ export class ArenaScene extends Phaser.Scene {
       // RoundState, deshalb braucht die Belohnung keinen Netzwerkpfad. Persistiert, damit sie
       // Reload und Verbindungsabbruch waehrend der Auswahl uebersteht.
       if (completedMapConfig.itemDrop && getStoredCoopDefenseItemsUnlocked()) {
+        // Klassengebundene Affixe rollen nur fuer die Klasse, mit der die Runde tatsaechlich
+        // gespielt wurde. Das committete Loadout ist dafuer die Wahrheit: es ist seit "Bereit"
+        // eingefroren, waehrend die Klassenauswahl im Speicher schon wieder wandern koennte.
+        const playedClassId = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())
+          ?.coopDefenseClassId ?? null;
         setStoredPendingCoopDefenseItemReward({
           roundEndedAt: endedAt,
-          offers: rollCoopDefenseItemOffer(completedMapConfig.itemDrop.itemLevel),
+          offers: rollCoopDefenseItemOffer(completedMapConfig.itemDrop.itemLevel, playedClassId),
         });
       }
     }

@@ -344,7 +344,7 @@ export class SlimeTrailSystem {
         this.combatSystem.applyDamage(enemyId, state.damagePerTick, false, state.ownerId, 'Schleimspur', {
           sourceX: enemy.sprite.x,
           sourceY: enemy.sprite.y,
-        });
+        }, { damageKind: 'ground' });
         state.nextTickAt += state.tickIntervalMs;
         tickCount += 1;
         if (!this.enemyManager.hasEnemy(enemyId)) break;

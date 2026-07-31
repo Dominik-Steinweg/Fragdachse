@@ -86,9 +86,10 @@ import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../..
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import {
   COOP_DEFENSE_BUILD_COOLDOWN_MS,
-  COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+  COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
   COOP_DEFENSE_DISMANTLE_RANGE,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
+  getCoopDefenseConstructionCapacity,
   getCoopDefenseConstructionDefinition,
   getToolCapacityCost,
   isConstructionId,
@@ -745,7 +746,11 @@ export class ArenaLifecycleCoordinator {
       return this.ctx.coopDefensePlayerModifierSystem?.getMaxHp(playerId) ?? HP_MAX;
     });
     this.ctx.combatSystem.setPlayerDamageReductionResolver((playerId) => {
-      return this.ctx.loadoutManager?.getEquippedWeaponConfig(playerId, 'weapon1')?.damageReduction ?? 0;
+      // Waffen- und Item-Reduktion addieren sich. Die Summe bleibt hier ungedeckelt; das
+      // `CombatSystem` klemmt den fertigen Anteil auf [0,1], damit Schaden nicht negativ wird.
+      const fromWeapon = this.ctx.loadoutManager?.getEquippedWeaponConfig(playerId, 'weapon1')?.damageReduction ?? 0;
+      const fromItems = this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.damageReduction') ?? 0;
+      return fromWeapon + fromItems;
     });
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getHpRegenPerSecond(playerId) ?? 0;
@@ -2147,7 +2152,17 @@ export class ArenaLifecycleCoordinator {
 
   private hasFreeConstructionCapacity(playerId: string, capacityCost: number): boolean {
     const used = this.ctx.placementSystem?.getUsedCapacity(playerId) ?? 0;
-    return used + capacityCost <= COOP_DEFENSE_CONSTRUCTION_CAPACITY;
+    return used + capacityCost <= this.getConstructionCapacity(playerId);
+  }
+
+  /** Persoenliches Kapazitaetsmaximum inklusive Item-Boni. Host-Autoritaet fuer das Bau-Gate. */
+  private getConstructionCapacity(playerId: string): number {
+    return getCoopDefenseConstructionCapacity(
+      this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
+        playerId,
+        COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
+      ) ?? 0,
+    );
   }
 
   /**
@@ -2279,7 +2294,7 @@ export class ArenaLifecycleCoordinator {
         : undefined,
       utility:  UTILITY_CONFIGS[committed.utility  as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, bridge.getGameMode(), committed.coopDefenseProfile, committed.coopDefenseClassId);
+    }, bridge.getGameMode(), committed.coopDefenseProfile, committed.coopDefenseClassId, committed.equippedItems);
   }
 
   private resolveLoadoutSelection(playerId: string): LoadoutSelection {

@@ -291,7 +291,7 @@ export class TeslaDomeSystem {
         this.combatSystem.applyDamage(player.id, damage, false, dome.ownerId, dome.config.displayName, {
           sourceX: dome.x,
           sourceY: dome.y,
-        });
+        }, { damageKind: 'chain' });
       }
     }
 
@@ -301,7 +301,7 @@ export class TeslaDomeSystem {
         this.combatSystem.applyDamage(enemy.id, damage, false, dome.ownerId, dome.config.displayName, {
           sourceX: dome.x,
           sourceY: dome.y,
-        });
+        }, { damageKind: 'chain' });
       }
     }
 

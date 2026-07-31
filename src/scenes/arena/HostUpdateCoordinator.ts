@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S } from '../../config';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
-import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
@@ -463,7 +463,7 @@ export class HostUpdateCoordinator {
               contact.ownerId,
               contact.weaponName,
               { sourceX: contact.x, sourceY: contact.y },
-              { allowTeamDamage: contact.allowTeamDamage },
+              { allowTeamDamage: contact.allowTeamDamage, damageKind: 'ground' },
             );
           }
           // Bodenfeuer darf seinen Besitzer oder dessen Team nicht entzuenden.
@@ -504,7 +504,7 @@ export class HostUpdateCoordinator {
               contact.ownerId,
               contact.weaponName,
               { sourceX: contact.x, sourceY: contact.y },
-              { allowTeamDamage: contact.allowTeamDamage },
+              { allowTeamDamage: contact.allowTeamDamage, damageKind: 'ground' },
             );
           }
           if (contact.burn) {
@@ -767,7 +767,12 @@ export class HostUpdateCoordinator {
           : (weapon2Cfg?.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId) ?? 0,
         constructionCapacityMax:  committedLoadout?.coopDefenseClassId === 'inspector_gadachs'
-          ? COOP_DEFENSE_CONSTRUCTION_CAPACITY
+          ? getCoopDefenseConstructionCapacity(
+            this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
+              localId,
+              COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
+            ) ?? 0,
+          )
           : 0,
       });
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);

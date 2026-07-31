@@ -7,7 +7,7 @@ import {
   COOP_DEFENSE_ITEM_SLOTS,
   COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT,
   getCoopDefenseItemAffixDefinition,
-  getCoopDefenseItemAffixesForSlot,
+  getCoopDefenseItemAffixesForRoll,
   getCoopDefenseItemRarityDefinition,
   getCoopDefenseItemSlotDefinition,
   isCoopDefenseItemRarity,
@@ -16,6 +16,7 @@ import {
   type CoopDefenseItemAffixDefinition,
 } from '../config/coopDefenseItems';
 import type {
+  CoopDefenseClassId,
   CoopDefenseItem,
   CoopDefenseItemAffix,
   CoopDefenseItemRarity,
@@ -115,7 +116,7 @@ function rollRarity(random: () => number): CoopDefenseItemRarity {
   return COOP_DEFENSE_ITEM_RARITIES[COOP_DEFENSE_ITEM_RARITIES.length - 1];
 }
 
-/** Zieht `count` verschiedene Eintraege; nie mehr, als der Pool hergibt. */
+/** Zieht `count` verschiedene Eintraege gleichverteilt; nie mehr, als der Pool hergibt. */
 function pickDistinct<T>(pool: readonly T[], count: number, random: () => number): T[] {
   const remaining = [...pool];
   const picked: T[] = [];
@@ -128,20 +129,71 @@ function pickDistinct<T>(pool: readonly T[], count: number, random: () => number
   return picked;
 }
 
+/** Gewicht <= 0, NaN oder Infinity bedeutet einheitlich "nicht ziehbar". */
+function sanitizeWeight(weight: number): number {
+  return Number.isFinite(weight) && weight > 0 ? weight : 0;
+}
+
+/**
+ * Zieht `count` verschiedene Eintraege gewichtet und ohne Zuruecklegen.
+ *
+ * Das Gewicht ist keine feste Prozentchance, sondern nur ein Verhaeltnis innerhalb derselben
+ * Ziehung: Gewicht 20 ist halb so wahrscheinlich wie Gewicht 40. Weil nach jeder Ziehung der
+ * gezogene Eintrag entfaellt, verschiebt sich das Verhaeltnis fuer die zweite Ziehung – genau
+ * das verhindert, dass ein Item dasselbe Affix zweimal traegt.
+ */
+export function pickWeightedDistinct<T>(
+  pool: readonly T[],
+  count: number,
+  getWeight: (entry: T) => number,
+  random: () => number,
+): T[] {
+  const remaining = pool.filter((entry) => sanitizeWeight(getWeight(entry)) > 0);
+  const picked: T[] = [];
+  const wanted = Math.min(count, remaining.length);
+
+  for (let i = 0; i < wanted; i++) {
+    const totalWeight = remaining.reduce((sum, entry) => sum + sanitizeWeight(getWeight(entry)), 0);
+    let ticket = random() * totalWeight;
+    // Der letzte Eintrag ist der Fallback: bei `random() === 1` laeuft das Ticket sonst durch.
+    let index = remaining.length - 1;
+    for (let candidate = 0; candidate < remaining.length; candidate++) {
+      ticket -= sanitizeWeight(getWeight(remaining[candidate]));
+      if (ticket < 0) { index = candidate; break; }
+    }
+    picked.push(remaining[index]);
+    remaining.splice(index, 1);
+  }
+  return picked;
+}
+
 function createItemUid(random: () => number): string {
   const chunk = (): string => Math.floor(random() * 0xffffffff).toString(36).padStart(7, '0');
   return `it_${chunk()}${chunk()}`;
 }
 
+/**
+ * Wuerfelt ein Item der Kategorie.
+ *
+ * `classId` ist die Klasse, mit der die Runde abgeschlossen wurde; sie schraenkt nur den
+ * ziehbaren Affix-Pool ein. Blau und Gelb greifen auf denselben vollstaendigen Pool zu – die
+ * Seltenheit bestimmt ausschliesslich die Anzahl der Affixe, nicht ihre Qualitaet.
+ */
 export function rollCoopDefenseItem(
   slot: CoopDefenseItemSlot,
   itemLevel: number,
+  classId: CoopDefenseClassId | null = null,
   random: () => number = Math.random,
 ): CoopDefenseItem {
   const level = sanitizeItemLevel(itemLevel);
   const rarity = rollRarity(random);
   const affixCount = getCoopDefenseItemRarityDefinition(rarity).affixCount;
-  const affixes = pickDistinct(getCoopDefenseItemAffixesForSlot(slot), affixCount, random)
+  const affixes = pickWeightedDistinct(
+    getCoopDefenseItemAffixesForRoll(slot, classId),
+    affixCount,
+    (definition) => definition.weight,
+    random,
+  )
     .map((definition) => ({
       affixId: definition.id,
       value: rollAffixValue(definition, level, random),
@@ -166,11 +218,13 @@ export function rollCoopDefenseItem(
  */
 export function rollCoopDefenseItemOffer(
   itemLevel: number,
+  classId: CoopDefenseClassId | null = null,
   random: () => number = Math.random,
 ): CoopDefenseItem[] {
   let offers: CoopDefenseItem[] = [];
+  // Die Kategorien werden weiterhin gleichverteilt gezogen; nur die Affixe sind gewichtet.
   for (const slot of pickDistinct(COOP_DEFENSE_ITEM_SLOTS, COOP_DEFENSE_ITEM_OFFER_SIZE, random)) {
-    offers = addCoopDefenseItem(offers, rollCoopDefenseItem(slot, itemLevel, random));
+    offers = addCoopDefenseItem(offers, rollCoopDefenseItem(slot, itemLevel, classId, random));
   }
   return offers;
 }
@@ -189,7 +243,9 @@ export function getCoopDefenseItemStatLines(item: CoopDefenseItem): CoopDefenseI
 
   for (const affix of item.affixes) {
     const definition = getCoopDefenseItemAffixDefinition(affix.affixId);
-    if (!definition) continue;
+    // Affixe ohne Stat tragen ihren Wert ausschliesslich ueber einen Laufzeit-Handler und
+    // gehoeren damit nicht in die stat-basierte Zeilenliste.
+    if (!definition?.stat) continue;
     lines.push({
       stat: definition.stat,
       label: definition.label,

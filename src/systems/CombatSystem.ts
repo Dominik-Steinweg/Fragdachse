@@ -69,9 +69,37 @@ interface AoeDamageOptions {
   killSource?: KillSourceContext;
 }
 
+/**
+ * Herkunft eines Schadensereignisses.
+ *
+ * `direct` ist der unmittelbare Treffer einer Waffe – Projektil, Hitscan oder Nahkampf. Alles
+ * andere ist Folgeschaden und darf trefferabhaengige Effekte nicht erneut ausloesen. Die
+ * Unterscheidung ist nicht aus `weaponName` ableitbar: das ist ein Anzeigetext.
+ */
+export type CombatDamageKind =
+  | 'direct'
+  | 'explosion'
+  | 'burn'
+  | 'chain'
+  | 'ground'
+  | 'reflect';
+
+/**
+ * Begleitdaten eines Schadensereignisses.
+ *
+ * `sourceSlot` und `damageKind` beschreiben die Quelle. Fehlen sie, gilt ein direkter Treffer
+ * ohne bekannten Slot – damit bleiben Aufrufer gueltig, die nur Schaden zufuegen wollen.
+ *
+ * Wer "direkter Primaerwaffentreffer" pruefen will, muss deshalb **beides** pruefen
+ * (`damageKind === 'direct' && sourceSlot === 'weapon1'`). Der Slot allein reicht nicht, weil
+ * auch Explosionen ihn tragen; `damageKind` allein reicht nicht, weil Quellen ohne Waffenbezug
+ * – Gegnerfaehigkeiten, Dash-Aufprall, Umgebungsschaden – auf dem Default stehen bleiben.
+ */
 interface DamageApplicationOptions {
   allowTeamDamage?: boolean;
   allowCritical?: boolean;
+  sourceSlot?: LoadoutSlot;
+  damageKind?: CombatDamageKind;
 }
 
 interface DamageVisualContext {
@@ -89,6 +117,22 @@ export interface KillSourceContext {
   projectileColor?: number;
   shotgunLightningGeneration?: number;
   enemyXp?: number;
+}
+
+/**
+ * Uebersetzt Flaechenschadens-Optionen in die Begleitdaten des Schadenstrichters. Bisher wurde
+ * `AoeDamageOptions` direkt weitergereicht; dabei fiel `sourceSlot` unter den Tisch, weil der
+ * Trichter das Feld gar nicht kannte.
+ */
+function toDamageOptions(
+  options: AoeDamageOptions | undefined,
+  damageKind: CombatDamageKind,
+): DamageApplicationOptions {
+  return {
+    allowTeamDamage: options?.allowTeamDamage,
+    sourceSlot: options?.sourceSlot,
+    damageKind,
+  };
 }
 
 interface EnemySlowState {
@@ -200,6 +244,11 @@ export class CombatSystem {
   private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
   private lastWeapon:   Map<string, string> = new Map();  // victimId → weaponName
   private lastKillSource: Map<string, KillSourceContext> = new Map();
+  /**
+   * Herkunft des toedlichen Treffers. Getrennt von {@link lastKillSource}, weil dieser Kontext
+   * an die Clients repliziert wird und rein visuell ist – die Quelle ist reine Host-Regel.
+   */
+  private lastDamageOrigin: Map<string, { kind: CombatDamageKind; slot?: LoadoutSlot }> = new Map();
 
   // Callback: (killerId, victimId, weaponName) – Host-only
   private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
@@ -397,6 +446,7 @@ export class CombatSystem {
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
     this.lastKillSource.delete(id);
+    this.lastDamageOrigin.delete(id);
   }
 
   removePlayer(id: string): void {
@@ -409,6 +459,7 @@ export class CombatSystem {
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
     this.lastKillSource.delete(id);
+    this.lastDamageOrigin.delete(id);
     const t = this.respawnTimers.get(id);
     if (t) { clearTimeout(t); this.respawnTimers.delete(id); }
   }
@@ -517,6 +568,7 @@ export class CombatSystem {
         dirY: visualContext.dirY,
         projectileColor: visualContext.projectileColor,
       });
+      this.rememberDamageOrigin(targetId, options);
     }
 
     const player = this.playerManager.getPlayer(targetId);
@@ -737,7 +789,7 @@ export class CombatSystem {
           state.attackerId,
           state.weaponName,
           attacker ? { sourceX: attacker.sprite.x, sourceY: attacker.sprite.y } : undefined,
-          { allowCritical: false },
+          { allowCritical: false, damageKind: 'burn' },
         );
       }
 
@@ -791,7 +843,7 @@ export class CombatSystem {
         sourceX: x,
         sourceY: y,
         ...options?.killSource,
-      }, options);
+      }, toDamageOptions(options, 'explosion'));
     }
 
     this.applyRadialHostileBaseDamage(x, y, radius, damage, ownerId, options?.damageFalloff);
@@ -813,7 +865,7 @@ export class CombatSystem {
         sourceX: x,
         sourceY: y,
         ...options?.killSource,
-      }, options);
+      }, toDamageOptions(options, 'explosion'));
     }
   }
 
@@ -872,10 +924,11 @@ export class CombatSystem {
       const roundedDamage = Math.round(damage);
       if (roundedDamage <= 0) continue;
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
-      void sourceSlot;
       if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, weaponName, effect.burnOrigin);
       this.applyDamage(player.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
+        sourceSlot,
+        damageKind: 'explosion',
       });
       damagedTargetKeys.push(`players:${player.id}`);
     }
@@ -890,6 +943,8 @@ export class CombatSystem {
       this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, weaponName, effect.burnOrigin);
       this.applyDamage(enemy.id, roundedDamage, false, ownerId, weaponName, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
+        sourceSlot,
+        damageKind: 'explosion',
       });
       damagedTargetKeys.push(`enemies:${enemy.id}`);
     }
@@ -1196,7 +1251,7 @@ export class CombatSystem {
           if (proj.penetrationHitIds.has(player.id)) continue;
           proj.penetrationHitIds.add(player.id);
           if (canDealDamage) {
-            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
+            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
             this.applyProjectileBurn(player.id, proj);
           }
           if ((proj.penetrationRemaining ?? 0) > 0) {
@@ -1226,6 +1281,8 @@ export class CombatSystem {
             dirY: proj.body.velocity.y,
           }, {
             allowTeamDamage: proj.allowTeamDamage,
+            sourceSlot: proj.sourceSlot,
+            damageKind: 'direct',
           });
           if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, player.id, undefined, actualDamage);
           continue; // kein break, kein destroyProjectile
@@ -1244,7 +1301,7 @@ export class CombatSystem {
               proj.weaponName,
               'flamethrower_direct',
             );
-            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
+            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
           }
           continue;
         }
@@ -1274,7 +1331,7 @@ export class CombatSystem {
           if (proj.penetrationHitIds.has(enemyKey)) continue;
           proj.penetrationHitIds.add(enemyKey);
           this.applyProjectileBurn(enemy.id, proj);
-          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
+          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
           if ((proj.penetrationRemaining ?? 0) > 0) {
             proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
             proj.damage *= proj.penetrationDamageRetention ?? 1;
@@ -1301,6 +1358,8 @@ export class CombatSystem {
             dirY: proj.body.velocity.y,
           }, {
             allowTeamDamage: proj.allowTeamDamage,
+            sourceSlot: proj.sourceSlot,
+            damageKind: 'direct',
           });
           if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, undefined, enemy.id, actualDamage);
           continue;
@@ -1319,7 +1378,7 @@ export class CombatSystem {
             proj.weaponName,
             'flamethrower_direct',
           );
-          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage });
+          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
           continue;
         }
 
@@ -1505,7 +1564,7 @@ export class CombatSystem {
       if (proj.penetrationHitIds) {
         proj.penetrationHitIds.add(bestHit.playerId);
         if (canDealDamage) {
-          this.applyDamage(bestHit.playerId, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage });
+          this.applyDamage(bestHit.playerId, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
           this.applyProjectileBurn(bestHit.playerId, proj);
         }
         if ((proj.penetrationRemaining ?? 0) > 0) {
@@ -1525,7 +1584,7 @@ export class CombatSystem {
       this.registerAk47Hit(proj);
       if (proj.penetrationHitIds) {
         proj.penetrationHitIds.add(`enemy_${bestHit.enemyId}`);
-        this.applyDamage(bestHit.enemyId, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage });
+        this.applyDamage(bestHit.enemyId, actualDamage, false, proj.ownerId, proj.weaponName, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
         this.applyProjectileBurn(bestHit.enemyId, proj);
         if ((proj.penetrationRemaining ?? 0) > 0) {
           proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
@@ -1658,7 +1717,7 @@ export class CombatSystem {
         sourceY: startY,
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
-      });
+      }, { sourceSlot, damageKind: 'direct' });
 
       if (canDealDamage) this.applyBurnOnHit(trace.hitPlayerId, shooterId, burnOnHit, weaponName);
 
@@ -1676,7 +1735,7 @@ export class CombatSystem {
         sourceY: startY,
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
-      });
+      }, { sourceSlot, damageKind: 'direct' });
 
       this.applyBurnOnHit(trace.hitEnemyId, shooterId, burnOnHit, weaponName);
 
@@ -1800,13 +1859,13 @@ export class CombatSystem {
 
       if (target.kind === 'enemy') {
         opts.visitedEnemies.add(target.enemyId);
-        this.applyDamage(target.enemyId, jumpDamage, false, opts.shooterId, opts.weaponName, visualContext);
+        this.applyDamage(target.enemyId, jumpDamage, false, opts.shooterId, opts.weaponName, visualContext, { damageKind: 'chain' });
         if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
       } else if (target.kind === 'player') {
         opts.visitedPlayers.add(target.playerId);
         const canDeal = this.canDamageTarget(opts.shooterId, target.playerId);
         if (!(canDeal && this.shouldBlockWithShield(target.playerId, 'hitscan', jumpDamage, originX, originY))) {
-          this.applyDamage(target.playerId, jumpDamage, false, opts.shooterId, opts.weaponName, visualContext);
+          this.applyDamage(target.playerId, jumpDamage, false, opts.shooterId, opts.weaponName, visualContext, { damageKind: 'chain' });
           if (canDeal && opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
         }
       } else if (target.kind === 'decoy') {
@@ -2035,7 +2094,7 @@ export class CombatSystem {
         sourceY: y,
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
-      });
+      }, { sourceSlot, damageKind: 'direct' });
       this.applyBurnOnHit(player.id, shooterId, burnOnHit, weaponName);
       meleeHitIds.add(player.id);
       hitPlayer = true;
@@ -2079,7 +2138,7 @@ export class CombatSystem {
         sourceY: y,
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
-      });
+      }, { sourceSlot, damageKind: 'direct' });
       this.applyBurnOnHit(enemy.id, shooterId, burnOnHit, weaponName);
       meleeHitIds.add(enemy.id);
       hitPlayer = true;
@@ -2169,7 +2228,7 @@ export class CombatSystem {
         if (!next) break;
         meleeHitIds.add(next.id);
         chainDamage *= chain.damageFactor;
-        this.applyDamage(next.id, chainDamage, false, shooterId, weaponName, { sourceX: chainX, sourceY: chainY });
+        this.applyDamage(next.id, chainDamage, false, shooterId, weaponName, { sourceX: chainX, sourceY: chainY }, { damageKind: 'chain' });
         chainX = next.x;
         chainY = next.y;
       }
@@ -2797,7 +2856,10 @@ export class CombatSystem {
     }
     if (allowDamage) {
       this.applyProjectileBurn(playerId, projectile);
-      this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext);
+      this.applyDamage(playerId, damage, false, shooterId, weaponName, visualContext, {
+        sourceSlot: projectile?.sourceSlot,
+        damageKind: 'direct',
+      });
       if (leafBlowerImpulse && this.isAlive(playerId)) {
         this.onPlayerImpulse?.(playerId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
       }
@@ -2847,7 +2909,10 @@ export class CombatSystem {
       this.applyEnemySlow(enemyId, slowFraction, slowDurationMs);
     }
     this.applyProjectileBurn(enemyId, projectile);
-    this.applyDamage(enemyId, damage, false, shooterId, weaponName, visualContext);
+    this.applyDamage(enemyId, damage, false, shooterId, weaponName, visualContext, {
+      sourceSlot: projectile?.sourceSlot,
+      damageKind: 'direct',
+    });
     if (leafBlowerImpulse && this.enemyManager?.hasEnemy(enemyId)) {
       this.onEnemyImpulse?.(enemyId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
     }
@@ -2986,6 +3051,7 @@ export class CombatSystem {
         projectileColor: visualContext.projectileColor,
         shotgunLightningGeneration: visualContext.shotgunLightningGeneration,
       });
+      this.rememberDamageOrigin(targetId, options);
     }
 
     const x = enemy.sprite.x;
@@ -3057,9 +3123,12 @@ export class CombatSystem {
         });
       }
 
+      // Erst nach `onKillCb`/`onEnemyDeathCb` aufraeumen: Kill-Handler duerfen die Herkunft des
+      // toedlichen Treffers noch lesen.
       this.lastAttacker.delete(targetId);
       this.lastWeapon.delete(targetId);
       this.lastKillSource.delete(targetId);
+      this.lastDamageOrigin.delete(targetId);
     }
   }
 
@@ -3105,6 +3174,27 @@ export class CombatSystem {
     return next;
   }
 
+  /**
+   * Merkt sich, woher der letzte Treffer auf dieses Ziel kam. Ohne Angabe gilt ein direkter
+   * Treffer ohne bekannten Slot – dieselbe Vorgabe wie beim Lesen der Optionen.
+   */
+  private rememberDamageOrigin(targetId: string, options?: DamageApplicationOptions): void {
+    this.lastDamageOrigin.set(targetId, {
+      kind: options?.damageKind ?? 'direct',
+      slot: options?.sourceSlot,
+    });
+  }
+
+  /**
+   * Herkunft des Treffers, der dieses Ziel zuletzt getroffen hat.
+   *
+   * Gemeint ist der Treffer, nicht der Schadensanteil: die Kill-Zuordnung folgt im ganzen
+   * `CombatSystem` dem letzten Treffer, nicht der Schadensverteilung.
+   */
+  getLastDamageOrigin(targetId: string): { kind: CombatDamageKind; slot?: LoadoutSlot } | undefined {
+    return this.lastDamageOrigin.get(targetId);
+  }
+
   private applyLifeLeech(attackerId: string | undefined, targetId: string, actualDamage: number): void {
     if (!attackerId || attackerId === targetId || actualDamage <= 0) return;
     if (!this.playerManager.getPlayer(attackerId)) return;
@@ -3133,6 +3223,7 @@ export class CombatSystem {
     this.lastAttacker.delete(playerId);
     this.lastWeapon.delete(playerId);
     this.lastKillSource.delete(playerId);
+    this.lastDamageOrigin.delete(playerId);
 
     this.resourceSystem?.resetAdrenalineForSpawn(playerId);
 

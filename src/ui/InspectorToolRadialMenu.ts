@@ -1,9 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH, toCssColor } from '../config';
-import {
-  COOP_DEFENSE_CONSTRUCTION_CAPACITY,
-  getToolCapacityCost,
-} from '../config/coopDefenseConstructions';
+import { getToolCapacityCost } from '../config/coopDefenseConstructions';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
@@ -63,10 +60,13 @@ export class InspectorToolRadialMenu {
     originY: number,
     tools: readonly LoadoutToolRef[],
     selected: InspectorRadialSelection | null,
-    usedCapacity = 0,
+    usedCapacity: number,
+    // Bewusst ohne Default: ein stiller Rueckfall auf die Grundkapazitaet wuerde Item-Boni
+    // verschlucken und Bauplaetze als nicht bezahlbar anzeigen, die der Host akzeptiert.
+    capacityMax: number,
   ): void {
     this.close();
-    this.entries = buildEntries(tools, usedCapacity);
+    this.entries = buildEntries(tools, usedCapacity, capacityMax);
     if (this.entries.length === 0) return;
     this.origin = {
       x: toDesignSpace(this.scene.scale, originX),
@@ -179,8 +179,16 @@ export class InspectorToolRadialMenu {
   }
 }
 
-function buildEntries(tools: readonly LoadoutToolRef[], usedCapacity: number): RadialEntry[] {
-  const free = Math.max(0, COOP_DEFENSE_CONSTRUCTION_CAPACITY - usedCapacity);
+/**
+ * `capacityMax` wird uebergeben statt aus der Konstante gelesen: das persoenliche Maximum haengt
+ * an den Item-Boni des Spielers, und dieses Modul kennt weder Spieler-ID noch Modifikatoren.
+ */
+function buildEntries(
+  tools: readonly LoadoutToolRef[],
+  usedCapacity: number,
+  capacityMax: number,
+): RadialEntry[] {
+  const free = Math.max(0, capacityMax - usedCapacity);
   const entries: RadialEntry[] = tools.map((tool) => {
     const presentation = describeLoadoutTool(tool);
     const capacityCost = getToolCapacityCost(tool);

@@ -1,5 +1,5 @@
 import { COLORS } from '../config';
-import type { CoopDefenseItemRarity, CoopDefenseItemSlot } from '../types';
+import type { CoopDefenseClassId, CoopDefenseItemRarity, CoopDefenseItemSlot } from '../types';
 import type { CoopDefenseUpgradeEffectMode } from '../utils/coopDefenseUpgrades';
 
 /**
@@ -144,20 +144,32 @@ export const COOP_DEFENSE_ITEM_SALVAGE_XP_PER_LEVEL = 0.15;
 export interface CoopDefenseItemAffixDefinition {
   readonly id: string;
   readonly label: string;
-  readonly stat: string;
-  readonly mode: CoopDefenseUpgradeEffectMode;
+  /**
+   * Stat im gemeinsamen Upgrade-/Item-Bucket. Fehlt er, traegt das Affix seinen Wert
+   * ausschliesslich ueber einen Laufzeit-Handler und schreibt in keinen Bucket.
+   */
+  readonly stat?: string;
+  readonly mode?: CoopDefenseUpgradeEffectMode;
+  /**
+   * Relatives Ziehungsgewicht innerhalb des Slot-Pools. Keine feste Prozentchance: Gewicht 20
+   * ist in derselben Ziehung halb so wahrscheinlich wie Gewicht 40. Gewicht <= 0 ist nicht
+   * ziehbar – der einzige Weg, ein definiertes Affix aus dem Drop-Pool zu nehmen, ohne seine
+   * ID zu entfernen und damit gespeicherte Items zu entwerten.
+   */
+  readonly weight: number;
   /** Untere und obere Grenze des Wurfs auf Item-Level 1 (vorzeichenrichtig, min <= max). */
   readonly minAtLevel1: number;
   readonly maxAtLevel1: number;
   /** Verschiebung beider Grenzen je weiterem Item-Level. */
   readonly perLevel: number;
-  /**
-   * Betragsmaessige Obergrenze fuer die Summe aller Items auf diesem Stat. Verhindert, dass
-   * problematische Werte (Laufgeschwindigkeit, Lifeleech) ueber die Ausruestung eskalieren.
-   */
-  readonly maxTotalFromItems: number;
   /** Kategorien, auf denen diese Eigenschaft vorkommen darf. */
   readonly slots: readonly CoopDefenseItemSlot[];
+  /**
+   * Klassen, mit denen das Affix gerollt werden darf. Fehlt die Angabe, ist das Affix
+   * klassenoffen. Ein bereits gerolltes Item bleibt mit jeder Klasse ausruestbar; der Effekt
+   * ist mit einer anderen Klasse nur wirkungslos.
+   */
+  readonly classIds?: readonly CoopDefenseClassId[];
   /** Anzeige als Prozentwert im UI. */
   readonly displayAsPercent: boolean;
   /**
@@ -168,8 +180,13 @@ export interface CoopDefenseItemAffixDefinition {
 }
 
 /**
- * Startpool: klein, kontrollierbar und pro Kategorie mit erkennbarer Identitaet
- * (Helm = Adrenalin, Handschuhe = Offensive, Ruestung = Defensive, Stiefel = Mobilitaet).
+ * Ein gemeinsamer Pool fuer alle Seltenheiten. Die Seltenheit bestimmt ausschliesslich die
+ * Anzahl der Affixe (0/1/2), nicht ihre Qualitaet; seltene Effekte entstehen allein ueber ein
+ * niedrigeres `weight`. Es gibt bewusst keine sichtbaren Affix-Kategorien.
+ *
+ * Pro Kategorie bleibt die Identitaet erkennbar (Helm = Adrenalin und Wut, Handschuhe =
+ * Offensive, Ruestung = Defensive, Stiefel = Mobilitaet), einzelne Affixe duerfen aber ueber
+ * mehrere Slots vorkommen und addieren sich dann vollstaendig.
  */
 export const COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS: readonly CoopDefenseItemAffixDefinition[] =
 Object.freeze([
@@ -178,10 +195,10 @@ Object.freeze([
     label: 'Leben',
     stat: 'player.maxHp',
     mode: 'add_per_level',
+    weight: 100,
     minAtLevel1: 10,
     maxAtLevel1: 25,
     perLevel: 8,
-    maxTotalFromItems: 200,
     slots: ['armor', 'boots'],
     displayAsPercent: false,
   },
@@ -190,10 +207,10 @@ Object.freeze([
     label: 'Lebensregeneration',
     stat: 'player.hpRegenPerSecond',
     mode: 'add_per_level',
+    weight: 75,
     minAtLevel1: 1,
     maxAtLevel1: 3,
     perLevel: 1,
-    maxTotalFromItems: 20,
     slots: ['armor', 'boots'],
     displayAsPercent: false,
   },
@@ -202,10 +219,10 @@ Object.freeze([
     label: 'Ruestungsmaximum',
     stat: 'player.maxArmor',
     mode: 'add_per_level',
+    weight: 100,
     minAtLevel1: 10,
     maxAtLevel1: 25,
     perLevel: 8,
-    maxTotalFromItems: 200,
     slots: ['armor'],
     displayAsPercent: false,
   },
@@ -214,10 +231,10 @@ Object.freeze([
     label: 'Ruestungsregeneration',
     stat: 'player.armorRegenPerSecond',
     mode: 'add_per_level',
+    weight: 75,
     minAtLevel1: 1,
     maxAtLevel1: 4,
     perLevel: 1.5,
-    maxTotalFromItems: 25,
     slots: ['armor'],
     displayAsPercent: false,
   },
@@ -226,10 +243,25 @@ Object.freeze([
     label: 'Ruestungsgewinn',
     stat: 'player.armorGain',
     mode: 'add_percent_per_level',
+    weight: 70,
     minAtLevel1: 0.04,
     maxAtLevel1: 0.1,
     perLevel: 0.03,
-    maxTotalFromItems: 0.6,
+    slots: ['armor'],
+    displayAsPercent: true,
+  },
+  {
+    // Wirkt nach einer vollstaendigen Schildabwehr und vor der Verteilung auf Ruestung und HP.
+    // Die Summe bleibt ungedeckelt; nur der fertige Schaden wird bei null abgefangen, damit
+    // sehr hohe Reduktion den Spieler nicht durch negativen Schaden heilt.
+    id: 'damage_reduction',
+    label: 'Schadensreduktion',
+    stat: 'player.damageReduction',
+    mode: 'add_percent_per_level',
+    weight: 70,
+    minAtLevel1: 0.02,
+    maxAtLevel1: 0.04,
+    perLevel: 0.0075,
     slots: ['armor'],
     displayAsPercent: true,
   },
@@ -238,10 +270,10 @@ Object.freeze([
     label: 'Lifeleech',
     stat: 'player.lifeLeechFraction',
     mode: 'add_per_level',
+    weight: 55,
     minAtLevel1: 0.01,
     maxAtLevel1: 0.03,
     perLevel: 0.01,
-    maxTotalFromItems: 0.15,
     slots: ['gloves'],
     displayAsPercent: true,
   },
@@ -250,24 +282,37 @@ Object.freeze([
     label: 'Schaden',
     stat: 'player.outgoingDamage',
     mode: 'add_percent_per_level',
+    weight: 80,
     minAtLevel1: 0.03,
     maxAtLevel1: 0.08,
     perLevel: 0.03,
-    maxTotalFromItems: 0.6,
     slots: ['gloves'],
     displayAsPercent: true,
+  },
+  {
+    // Erhoeht ausschliesslich das persoenliche Maximum. Die Kapazitaetskosten der einzelnen
+    // Konstrukte bleiben bewusst spielerunabhaengig.
+    id: 'construction_capacity',
+    label: 'Baukapazitaet',
+    stat: 'construction.capacity',
+    mode: 'add_per_level',
+    weight: 35,
+    minAtLevel1: 5,
+    maxAtLevel1: 12,
+    perLevel: 3,
+    slots: ['gloves'],
+    classIds: ['inspector_gadachs'],
+    displayAsPercent: false,
   },
   {
     id: 'run_speed',
     label: 'Bewegungsgeschwindigkeit',
     stat: 'player.runSpeed',
     mode: 'add_percent_per_level',
+    weight: 75,
     minAtLevel1: 0.02,
     maxAtLevel1: 0.05,
     perLevel: 0.015,
-    // Bewusst der engste Rahmen im Pool: Laufgeschwindigkeit steigt bereits ueber Upgrades
-    // (+15 %) und den Klassenmultiplikator (x1.2).
-    maxTotalFromItems: 0.12,
     slots: ['boots'],
     displayAsPercent: true,
   },
@@ -276,10 +321,10 @@ Object.freeze([
     label: 'Maximales Adrenalin',
     stat: 'player.maxAdrenaline',
     mode: 'add_per_level',
+    weight: 90,
     minAtLevel1: 5,
     maxAtLevel1: 12,
     perLevel: 4,
-    maxTotalFromItems: 80,
     slots: ['helmet', 'boots'],
     displayAsPercent: false,
   },
@@ -288,10 +333,10 @@ Object.freeze([
     label: 'Adrenalinregeneration',
     stat: 'player.adrenalineRegenRate',
     mode: 'add_percent_per_level',
+    weight: 85,
     minAtLevel1: 0.03,
     maxAtLevel1: 0.08,
     perLevel: 0.03,
-    maxTotalFromItems: 0.6,
     slots: ['helmet'],
     displayAsPercent: true,
   },
@@ -300,10 +345,10 @@ Object.freeze([
     label: 'Adrenalingewinn',
     stat: 'player.adrenalineGain',
     mode: 'add_percent_per_level',
+    weight: 75,
     minAtLevel1: 0.04,
     maxAtLevel1: 0.1,
     perLevel: 0.03,
-    maxTotalFromItems: 0.6,
     slots: ['helmet', 'gloves'],
     displayAsPercent: true,
   },
@@ -314,10 +359,51 @@ Object.freeze([
     label: 'Adrenalinverbrauch',
     stat: 'player.adrenalineCost',
     mode: 'add_percent_per_level',
+    weight: 65,
     minAtLevel1: -0.08,
     maxAtLevel1: -0.03,
     perLevel: -0.02,
-    maxTotalFromItems: 0.4,
+    slots: ['helmet'],
+    displayAsPercent: true,
+    lowerIsBetter: true,
+  },
+  {
+    // Derselbe prozentuale Bucket wie das Upgrade "Rage-Gewinn". Welche Schadensarten ueberhaupt
+    // Wut erzeugen, bleibt unberuehrt – die Synergie mit "Gepanzerte Wut" gilt damit weiter.
+    id: 'rage_gain',
+    label: 'Wutgewinn',
+    stat: 'ultimate.rageGainPerDamage',
+    mode: 'add_percent_per_level',
+    weight: 75,
+    minAtLevel1: 0.04,
+    maxAtLevel1: 0.1,
+    perLevel: 0.03,
+    slots: ['helmet'],
+    displayAsPercent: true,
+  },
+  {
+    id: 'max_rage',
+    label: 'Maximale Wut',
+    stat: 'ultimate.maxRage',
+    mode: 'add_percent_per_level',
+    weight: 85,
+    minAtLevel1: 0.05,
+    maxAtLevel1: 0.12,
+    perLevel: 0.04,
+    slots: ['helmet'],
+    displayAsPercent: true,
+  },
+  {
+    // Skaliert das `cooldown`-Feld des ausgeruesteten Utility-Configs. Waffen-, Ultimate- und
+    // Dash-Cooldowns sowie der feste Bau-Cooldown der Konstruktionen bleiben unberuehrt.
+    id: 'utility_cooldown',
+    label: 'Utility-Cooldown',
+    stat: 'utility.cooldown',
+    mode: 'add_percent_per_level',
+    weight: 55,
+    minAtLevel1: -0.07,
+    maxAtLevel1: -0.03,
+    perLevel: -0.015,
     slots: ['helmet'],
     displayAsPercent: true,
     lowerIsBetter: true,
@@ -327,10 +413,10 @@ Object.freeze([
     label: 'Dash-Reichweite',
     stat: 'player.dashRange',
     mode: 'add_percent_per_level',
+    weight: 75,
     minAtLevel1: 0.04,
     maxAtLevel1: 0.1,
     perLevel: 0.03,
-    maxTotalFromItems: 0.6,
     slots: ['boots'],
     displayAsPercent: true,
   },
@@ -350,7 +436,8 @@ const AFFIXES_BY_SLOT: Readonly<Record<CoopDefenseItemSlot, readonly CoopDefense
 const LOWER_IS_BETTER_STATS: ReadonlySet<string> = new Set(
   COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS
     .filter((definition) => definition.lowerIsBetter)
-    .map((definition) => definition.stat),
+    .map((definition) => definition.stat)
+    .filter((stat): stat is string => stat !== undefined),
 );
 
 export function isCoopDefenseItemStatLowerBetter(stat: string): boolean {
@@ -381,8 +468,18 @@ export function getCoopDefenseItemAffixDefinition(
   return AFFIX_BY_ID.get(affixId);
 }
 
-export function getCoopDefenseItemAffixesForSlot(
+/**
+ * Ziehbarer Pool einer Kategorie fuer eine konkrete Klasse.
+ *
+ * Nur die Ziehung ist klassenabhaengig – ein bereits gerolltes Item bleibt mit jeder Klasse
+ * ausruestbar und gespeichert. Ohne Klasse (bonuslose Default-Klasse vor Abschluss von Map 5)
+ * fallen klassengebundene Affixe heraus.
+ */
+export function getCoopDefenseItemAffixesForRoll(
   slot: CoopDefenseItemSlot,
+  classId: CoopDefenseClassId | null,
 ): readonly CoopDefenseItemAffixDefinition[] {
-  return AFFIXES_BY_SLOT[slot];
+  return AFFIXES_BY_SLOT[slot].filter(
+    (definition) => !definition.classIds || (classId !== null && definition.classIds.includes(classId)),
+  );
 }

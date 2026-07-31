@@ -7,7 +7,6 @@ import {
   levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../src/utils/coopDefenseItems';
-import { getCoopDefenseItemAffixDefinition } from '../src/config/coopDefenseItems';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot } from '../src/types';
 
 function item(overrides: Partial<CoopDefenseItem> = {}): CoopDefenseItem {
@@ -115,8 +114,7 @@ describe('equipped items in the runtime stat pipeline', () => {
       .toBeCloseTo(172.5, 10);
   });
 
-  it('enforces the item ceiling even with a full set of the same stat', () => {
-    const cap = getCoopDefenseItemAffixDefinition('run_speed')!.maxTotalFromItems;
+  it('passes a full set of the same stat through without a ceiling', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('p', commit({
       equippedItems: [item({
@@ -128,7 +126,8 @@ describe('equipped items in the runtime stat pipeline', () => {
       })],
     }));
 
-    expect(system.getResolvedStat('p', 'player.runSpeed', 200)).toBeCloseTo(200 * (1 + cap), 10);
+    // Der Stiefel-Grundwert schlaegt ungekuerzt durch; frueher klemmte hier eine Item-Obergrenze.
+    expect(system.getResolvedStat('p', 'player.runSpeed', 200)).toBeCloseTo(240, 10);
   });
 
   it('keeps modifiers when only items are committed and drops them when nothing is', () => {
@@ -203,5 +202,75 @@ describe('equipped items at the network boundary', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('p', commit());
     expect(system.getMaxHp('p')).toBe(100);
+  });
+
+  it('still loads items that were stored before the affix pool grew', () => {
+    // Alter Speicherstand: die Affix-IDs von damals, dazu eine inzwischen entfernte ID.
+    // Das unbekannte Affix faellt weg, das restliche Item bleibt erhalten.
+    const sanitized = sanitizeCoopDefenseEquippedItems([{
+      uid: 'legacy',
+      slot: 'armor',
+      rarity: 'yellow',
+      itemLevel: 3,
+      baseValue: 40,
+      affixes: [
+        { affixId: 'max_hp', value: 20 },
+        { affixId: 'ein_entferntes_affix', value: 99 },
+      ],
+    }]);
+
+    expect(sanitized).toHaveLength(1);
+    expect(sanitized[0].baseValue).toBe(40);
+    expect(sanitized[0].affixes.map((affix) => affix.affixId)).toEqual(['max_hp']);
+    // Eine gueltige Zusatzeigenschaft statt zwei: die Seltenheit folgt der Anzahl.
+    expect(sanitized[0].rarity).toBe('blue');
+  });
+});
+
+describe('item affixes that reuse existing upgrade stats', () => {
+  it('stacks rage gain and max rage with the matching upgrades', () => {
+    let profile = buildDefaultCoopDefenseUpgradeProfile();
+    profile = levelUpCoopDefenseUpgrade(profile, 'ultimate_rage_gain', 20)!;
+    profile = levelUpCoopDefenseUpgrade(profile, 'ultimate_max_rage', 20)!;
+    expect(profile).not.toBeNull();
+
+    const helmet = item({
+      uid: 'helm',
+      slot: 'helmet',
+      rarity: 'yellow',
+      baseValue: 0,
+      affixes: [{ affixId: 'rage_gain', value: 0.08 }, { affixId: 'max_rage', value: 0.1 }],
+    });
+    const system = new CoopDefensePlayerModifierSystem();
+    system.syncPlayer('p', commit({ coopDefenseProfile: profile, equippedItems: [helmet] }));
+
+    // Upgrade und Affix landen im selben prozentualen Bucket und addieren sich.
+    expect(system.getPercentageStat('p', 'ultimate.rageGainPerDamage')).toBeCloseTo(0.18, 10);
+    expect(system.getResolvedStat('p', 'ultimate.maxRage', 600)).toBeCloseTo(600 * 1.3, 6);
+  });
+
+  it('adds item damage reduction on top of the weapon value without healing the player', () => {
+    const armor = item({
+      uid: 'armor',
+      slot: 'armor',
+      rarity: 'blue',
+      baseValue: 0,
+      affixes: [{ affixId: 'damage_reduction', value: 0.04 }],
+    });
+    const system = new CoopDefensePlayerModifierSystem();
+    system.syncPlayer('p', commit({ equippedItems: [armor] }));
+
+    const fromItems = system.getPercentageStat('p', 'player.damageReduction');
+    expect(fromItems).toBeCloseTo(0.04, 10);
+
+    // Dieselbe Rechnung wie im Resolver: Waffenwert plus Item-Wert, ungedeckelt summiert.
+    const fromWeapon = 0.1;
+    expect(fromWeapon + fromItems).toBeCloseTo(0.14, 10);
+
+    // Und dieselbe Klemme wie im CombatSystem: sehr hohe Summen machen den Spieler immun,
+    // erzeugen aber niemals negativen Schaden.
+    const clamp = (value: number) => Math.min(1, Math.max(0, value));
+    expect(100 * (1 - clamp(fromWeapon + fromItems))).toBeCloseTo(86, 6);
+    expect(100 * (1 - clamp(3.5))).toBe(0);
   });
 });

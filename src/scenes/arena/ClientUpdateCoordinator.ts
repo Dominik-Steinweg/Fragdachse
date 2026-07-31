@@ -23,7 +23,7 @@ import {
 } from '../../utils/localPreferences';
 import { getCoopDefenseCommittedEffectTotals } from '../../utils/coopDefenseItemEffects';
 import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS, resolveCoopDefenseStat } from '../../utils/coopDefenseStats';
-import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
@@ -348,7 +348,7 @@ export class ClientUpdateCoordinator {
         weapon2AdrenalineCost:   fireSuperiorityActive ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
         constructionCapacityMax:  bridge.getPlayerCommittedLoadout(localId2)?.coopDefenseClassId === 'inspector_gadachs'
-          ? COOP_DEFENSE_CONSTRUCTION_CAPACITY
+          ? this.getLocalConstructionCapacity()
           : 0,
       });
       this.localPlayerState.alive    = localState.alive;
@@ -571,6 +571,18 @@ export class ClientUpdateCoordinator {
     const items = this.getLocalCoopDefenseItems();
     if (!profile && items.length === 0) return EMPTY_EFFECT_TOTALS;
     return getCoopDefenseCommittedEffectTotals(profile, this.getLocalCoopDefenseClassId(), items);
+  }
+
+  /**
+   * Muss denselben Wert liefern wie das Host-Gate in
+   * `ArenaLifecycleCoordinator.getConstructionCapacity`, sonst zeigt die Bauvorschau Plaetze an,
+   * die der Host anschliessend ablehnt. Das `CoopDefensePlayerModifierSystem` ist auf dem Client
+   * nicht verfuegbar, deshalb laeuft es hier ueber dieselben Effekt-Summen.
+   */
+  getLocalConstructionCapacity(): number {
+    return getCoopDefenseConstructionCapacity(
+      this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
+    );
   }
 
   /**
@@ -839,7 +851,7 @@ export class ClientUpdateCoordinator {
         : undefined,
       utility:  UTILITY_CONFIGS[committed.utility as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, mode, committed.coopDefenseProfile, committed.coopDefenseClassId);
+    }, mode, committed.coopDefenseProfile, committed.coopDefenseClassId, committed.equippedItems);
   }
 
   private resolveLoadoutSelection(playerId: string) {
@@ -859,6 +871,8 @@ export class ClientUpdateCoordinator {
           ? localProgress.profilesByClass[localProgress.selectedClassId]
           : localProgress.defaultProfile
       )
-      : null, localProgress?.classesUnlocked ? localProgress.selectedClassId : null);
+      : null, localProgress?.classesUnlocked ? localProgress.selectedClassId : null,
+    // Referenzstabil ueber den memoisierten Zugriff, sonst greift der Cache dieser Aufloesung nie.
+    localProgress ? this.getLocalCoopDefenseItems() : []);
   }
 }

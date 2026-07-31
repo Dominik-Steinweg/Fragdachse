@@ -1664,7 +1664,9 @@ export class CoopDefenseUpgradesOverlay {
     const baseAlpha = isLocked ? 0.34 : isActive ? 1 : 0.82;
 
     const iconKey = this.getNodeTextureKey(node);
-    const hasIcon = iconKey != null && this.scene.textures.exists(iconKey);
+    // Pending-Upgrades liefern bewusst keinen Texture-Key. In diesem Fall bleibt der
+    // Knoten vollstaendig funktionsfaehig, zeigt aber niemals ein fachlich falsches Aliasbild.
+    const hasIcon = iconKey !== null && this.scene.textures.exists(iconKey);
 
     // Boss-Punkt-Upgrades bilden den hochwertigen Abschluss eines Zweigs. Ein
     // eigener, etwas groesserer Rahmen hebt ihre Silhouette hervor, waehrend der
@@ -1755,7 +1757,7 @@ export class CoopDefenseUpgradesOverlay {
       }
     }
 
-    if (hasIcon && iconKey) {
+    if (hasIcon && iconKey !== null) {
       const icon = this.scene.add.image(0, 0, iconKey)
         .setDisplaySize(ICON_SIZE, ICON_SIZE)
         .setScrollFactor(0)

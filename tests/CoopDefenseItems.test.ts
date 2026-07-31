@@ -7,12 +7,15 @@ import {
   COOP_DEFENSE_ITEM_SLOT_DEFINITIONS,
   COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT,
   getCoopDefenseItemAffixDefinition,
+  getCoopDefenseItemAffixesForRoll,
 } from '../src/config/coopDefenseItems';
+import { getCoopDefenseConstructionCapacity } from '../src/config/coopDefenseConstructions';
 import {
   addCoopDefenseItem,
   compareCoopDefenseItems,
   formatCoopDefenseItemValue,
   getCoopDefenseItemAffixIdsForSlot,
+  pickWeightedDistinct,
   getCoopDefenseItemSalvageXp,
   getCoopDefenseItemStatLines,
   getCoopDefenseStashItems,
@@ -52,7 +55,7 @@ describe('coop-defense item rolls', () => {
   it('derives the affix count from the rarity alone', () => {
     for (const slot of COOP_DEFENSE_ITEM_SLOTS) {
       for (const random of [sequence([0]), sequence([0.6]), sequence([0.95])]) {
-        const rolled = rollCoopDefenseItem(slot, 1, random);
+        const rolled = rollCoopDefenseItem(slot, 1, null, random);
         expect(rolled.affixes).toHaveLength(
           COOP_DEFENSE_ITEM_RARITY_DEFINITIONS[rolled.rarity].affixCount,
         );
@@ -70,7 +73,7 @@ describe('coop-defense item rolls', () => {
           (seed * 29 % 100) / 100,
           (seed * 41 % 100) / 100,
         ]);
-        const rolled = rollCoopDefenseItem(slot, 3, random);
+        const rolled = rollCoopDefenseItem(slot, 3, 'inspector_gadachs', random);
         const ids = rolled.affixes.map((affix) => affix.affixId);
         expect(new Set(ids).size).toBe(ids.length);
         for (const id of ids) expect(allowed.has(id)).toBe(true);
@@ -80,7 +83,7 @@ describe('coop-defense item rolls', () => {
 
   it('offers three items from three different categories', () => {
     for (let seed = 0; seed < 30; seed++) {
-      const offer = rollCoopDefenseItemOffer(2, sequence([
+      const offer = rollCoopDefenseItemOffer(2, null, sequence([
         (seed * 11 % 100) / 100,
         (seed * 23 % 100) / 100,
         (seed * 37 % 100) / 100,
@@ -95,14 +98,14 @@ describe('coop-defense item rolls', () => {
     for (const slot of COOP_DEFENSE_ITEM_SLOTS) {
       const definition = COOP_DEFENSE_ITEM_SLOT_DEFINITIONS[slot];
       // Gleicher Wurf, unterschiedliches Item-Level: der Nominalwert steigt monoton.
-      const low = rollCoopDefenseItem(slot, 1, sequence([0.5])).baseValue;
-      const high = rollCoopDefenseItem(slot, 4, sequence([0.5])).baseValue;
+      const low = rollCoopDefenseItem(slot, 1, null, sequence([0.5])).baseValue;
+      const high = rollCoopDefenseItem(slot, 4, null, sequence([0.5])).baseValue;
       expect(high).toBeGreaterThan(low);
 
       // Ein schlechter Wurf auf hohem Level darf einen guten Wurf auf niedrigem Level
       // unterbieten - genau das haelt alte Items relevant.
-      const bestLow = rollCoopDefenseItem(slot, 2, sequence([1])).baseValue;
-      const worstHigh = rollCoopDefenseItem(slot, 2, sequence([0])).baseValue;
+      const bestLow = rollCoopDefenseItem(slot, 2, null, sequence([1])).baseValue;
+      const worstHigh = rollCoopDefenseItem(slot, 2, null, sequence([0])).baseValue;
       expect(bestLow).toBeGreaterThan(worstHigh);
       expect(worstHigh).toBeGreaterThan(0);
       expect(definition.baseValueSpread).toBeGreaterThan(0);
@@ -112,9 +115,64 @@ describe('coop-defense item rolls', () => {
   it('scales affix ranges with the item level', () => {
     for (const definition of COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS) {
       expect(definition.minAtLevel1).toBeLessThanOrEqual(definition.maxAtLevel1);
-      expect(definition.maxTotalFromItems).toBeGreaterThan(0);
+      expect(definition.weight).toBeGreaterThan(0);
       expect(definition.slots.length).toBeGreaterThan(0);
     }
+  });
+
+  it('draws affixes weighted, not uniformly', () => {
+    // Zwei Handschuh-Affixe mit klar unterschiedlichem Gewicht: Schaden (80) muss deutlich
+    // haeufiger fallen als Lifeleech (55). Verglichen wird nur die Rangfolge, nicht die Quote -
+    // sonst waere der Test eine Kopie der Gewichtstabelle.
+    const counts = new Map<string, number>();
+    for (let seed = 0; seed < 600; seed++) {
+      const rolled = rollCoopDefenseItem('gloves', 1, null, sequence([
+        0.9,                       // Seltenheit: gelb
+        (seed * 37 % 601) / 601,   // erste Affix-Ziehung
+        0.5,                       // Wurfwert
+        (seed * 91 % 599) / 599,   // zweite Affix-Ziehung
+        0.5,
+        0.5, 0.5,                  // UID
+      ]));
+      for (const affix of rolled.affixes) {
+        counts.set(affix.affixId, (counts.get(affix.affixId) ?? 0) + 1);
+      }
+    }
+    expect(counts.get('outgoing_damage') ?? 0).toBeGreaterThan(counts.get('life_leech') ?? 0);
+  });
+
+  it('never draws an affix with weight zero', () => {
+    const pool = [{ id: 'never', weight: 0 }, { id: 'always', weight: 10 }];
+    for (let seed = 0; seed < 50; seed++) {
+      const picked = pickWeightedDistinct(pool, 2, (entry) => entry.weight, sequence([seed / 50]));
+      expect(picked.map((entry) => entry.id)).toEqual(['always']);
+    }
+    // Ungueltige Gewichte zaehlen wie null, nicht wie "sehr klein".
+    const broken = [{ id: 'nan', weight: Number.NaN }, { id: 'inf', weight: Number.POSITIVE_INFINITY }];
+    expect(pickWeightedDistinct(broken, 2, (entry) => entry.weight, sequence([0.5]))).toEqual([]);
+  });
+
+  it('rolls class-bound affixes only for their class', () => {
+    const capacity = getCoopDefenseItemAffixDefinition('construction_capacity')!;
+    expect(capacity.classIds).toEqual(['inspector_gadachs']);
+    expect(getCoopDefenseItemAffixesForRoll('gloves', 'inspector_gadachs')).toContain(capacity);
+    for (const classId of ['dachs_nukem', 'dachs_of_steel', null] as const) {
+      expect(getCoopDefenseItemAffixesForRoll('gloves', classId)).not.toContain(capacity);
+    }
+  });
+
+  it('lets blue and yellow draw from the same pool', () => {
+    // Die Seltenheit bestimmt ausschliesslich die Anzahl. Bei identischem Zufall traegt das
+    // gelbe Item deshalb dieselbe erste Eigenschaft wie das blaue.
+    const affixDraw = [0.31, 0.42, 0.77, 0.18];
+    const blue = rollCoopDefenseItem('helmet', 1, null, sequence([0.6, ...affixDraw]));
+    const yellow = rollCoopDefenseItem('helmet', 1, null, sequence([0.95, ...affixDraw]));
+
+    expect(blue.rarity).toBe('blue');
+    expect(yellow.rarity).toBe('yellow');
+    expect(blue.affixes).toHaveLength(1);
+    expect(yellow.affixes).toHaveLength(2);
+    expect(yellow.affixes[0].affixId).toBe(blue.affixes[0].affixId);
   });
 
   it('keeps every affix pool large enough for a yellow item', () => {
@@ -156,18 +214,18 @@ describe('coop-defense item effect totals', () => {
     expect(totals.additive['player.maxHp']).toBe(20);
   });
 
-  it('caps a stat at the configured item ceiling', () => {
-    const cap = getCoopDefenseItemAffixDefinition('run_speed')!.maxTotalFromItems;
+  it('adds up without any ceiling', () => {
+    // Konsequente Spezialisierung soll sich vollstaendig auszahlen: balanciert wird ueber
+    // Affixwerte, Gewichte und Slots, nicht ueber eine Gesamtobergrenze.
     const overloaded = Array.from({ length: 8 }, (_, index) => item({
       uid: `b${index}`,
       slot: 'boots',
       baseValue: 0.05,
     }));
-    expect(getCoopDefenseItemEffectTotals(overloaded).percentage['player.runSpeed']).toBe(cap);
+    expect(getCoopDefenseItemEffectTotals(overloaded).percentage['player.runSpeed']).toBeCloseTo(0.4, 10);
   });
 
-  it('caps negative affixes by magnitude', () => {
-    const cap = getCoopDefenseItemAffixDefinition('adrenaline_cost')!.maxTotalFromItems;
+  it('adds up negative affixes without any ceiling either', () => {
     const helmets = Array.from({ length: 12 }, (_, index) => item({
       uid: `h${index}`,
       slot: 'helmet',
@@ -175,7 +233,39 @@ describe('coop-defense item effect totals', () => {
       baseValue: 0.06,
       affixes: [{ affixId: 'adrenaline_cost', value: -0.08 }],
     }));
-    expect(getCoopDefenseItemEffectTotals(helmets).percentage['player.adrenalineCost']).toBe(-cap);
+    const totals = getCoopDefenseItemEffectTotals(helmets);
+    expect(totals.percentage['player.adrenalineCost']).toBeCloseTo(-0.96, 10);
+    expect(totals.percentage['player.adrenalineRegenRate']).toBeCloseTo(0.72, 10);
+  });
+
+  it('keeps high totals intact across items and upgrades', () => {
+    const armorPieces = Array.from({ length: 4 }, (_, index) => item({
+      uid: `a${index}`,
+      slot: 'armor',
+      rarity: 'yellow',
+      baseValue: 100,
+      affixes: [{ affixId: 'max_hp', value: 200 }, { affixId: 'max_armor', value: 200 }],
+    }));
+    const merged = mergeCoopDefenseEffectTotals(
+      { additive: { 'player.maxHp': 500 }, percentage: {} },
+      getCoopDefenseItemEffectTotals(armorPieces),
+    );
+    // 4 x (100 Grundwert + 200 Affix) + 500 aus Upgrades - nichts wird abgeschnitten.
+    expect(merged.additive['player.maxHp']).toBe(1700);
+    expect(merged.additive['player.maxArmor']).toBe(800);
+  });
+
+  it('keeps a high construction capacity intact', () => {
+    const gloves = Array.from({ length: 5 }, (_, index) => item({
+      uid: `g${index}`,
+      slot: 'gloves',
+      rarity: 'blue',
+      baseValue: 0.08,
+      affixes: [{ affixId: 'construction_capacity', value: 30 }],
+    }));
+    const bonus = getCoopDefenseItemEffectTotals(gloves).additive['construction.capacity'];
+    expect(bonus).toBe(150);
+    expect(getCoopDefenseConstructionCapacity(bonus)).toBe(250);
   });
 
   it('returns the untouched source when only one contributes', () => {
@@ -387,8 +477,10 @@ describe('coop-defense item sanitising', () => {
 });
 
 describe('coop-defense item configuration', () => {
-  it('only references player stats that the upgrade tree already knows', () => {
-    // player.outgoingDamage ist der einzige neu eingefuehrte Key.
+  it('only references stats that a resolver already consumes', () => {
+    // Jeder Key muss auf der anderen Seite von einem Resolver gelesen werden, sonst ist das
+    // Affix eine Zahl ohne Wirkung. `player.outgoingDamage`, `player.damageReduction` und
+    // `construction.capacity` sind die eigens fuer Items eingefuehrten Keys.
     const known = new Set([
       'player.maxHp',
       'player.hpRegenPerSecond',
@@ -403,9 +495,16 @@ describe('coop-defense item configuration', () => {
       'player.adrenalineCost',
       'player.dashRange',
       'player.outgoingDamage',
+      'player.damageReduction',
+      'ultimate.maxRage',
+      'ultimate.rageGainPerDamage',
+      'utility.cooldown',
+      'construction.capacity',
     ]);
 
     for (const definition of COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS) {
+      // Affixe ohne Stat wirken ueber einen Laufzeit-Handler und haben hier nichts zu suchen.
+      if (!definition.stat) continue;
       expect(known.has(definition.stat)).toBe(true);
     }
     for (const slot of COOP_DEFENSE_ITEM_SLOTS as readonly CoopDefenseItemSlot[]) {

@@ -5,6 +5,7 @@ import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
 } from '../config';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY } from '../config/coopDefenseConstructions';
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { InspectorToolRadialMenu, type InspectorRadialSelection } from '../ui/InspectorToolRadialMenu';
@@ -96,7 +97,8 @@ export class InputSystem {
   /** Rueckbau ist eine reine Client-Auswahl und wandert nie in das persistierte Loadout. */
   private inspectorDismantleSelected = false;
   private inspectorDismantlePlacementActive = false;
-  private inspectorGetUsedCapacity: (() => number) | null = null;
+  /** Liefert Verbrauch und persoenliches Maximum als Paar, damit beide nie auseinanderlaufen. */
+  private inspectorGetCapacity: (() => { used: number; max: number }) | null = null;
   private getDismantlePreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
 
   // Audio
@@ -181,7 +183,7 @@ export class InputSystem {
     setSelected: (tool: LoadoutToolRef) => void,
     isInspectorMode?: () => boolean,
     isUtilityOverrideActive?: () => boolean,
-    getUsedCapacity?: () => number,
+    getCapacity?: () => { used: number; max: number },
     getDismantlePreview?: () => UtilityPlacementPreviewState | undefined,
   ): void {
     this.inspectorGetTools = getTools;
@@ -189,7 +191,7 @@ export class InputSystem {
     this.inspectorSetSelectedTool = setSelected;
     this.inspectorModeProvider = isInspectorMode ?? null;
     this.inspectorUtilityOverrideProvider = isUtilityOverrideActive ?? null;
-    this.inspectorGetUsedCapacity = getUsedCapacity ?? null;
+    this.inspectorGetCapacity = getCapacity ?? null;
     this.getDismantlePreviewProvider = getDismantlePreview ?? null;
   }
 
@@ -712,12 +714,14 @@ export class InputSystem {
       }
       if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.inspectorRadialMenu?.isOpen) {
         if (inspectorModeActive) this.cancelUtilityInteraction();
+        const capacity = this.inspectorGetCapacity?.();
         this.inspectorRadialMenu?.open(
           pointer.x,
           pointer.y,
           this.getInspectorTools(),
           this.getSelectedInspectorRadialSelection(),
-          this.inspectorGetUsedCapacity?.() ?? 0,
+          capacity?.used ?? 0,
+          capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
         );
       }
       if (this.inspectorRadialMenu?.isOpen) {

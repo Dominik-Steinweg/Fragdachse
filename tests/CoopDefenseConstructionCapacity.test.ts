@@ -3,6 +3,7 @@ import {
   COOP_DEFENSE_BUILD_COOLDOWN_MS,
   COOP_DEFENSE_CONSTRUCTION_CAPACITY,
   COOP_DEFENSE_CONSTRUCTIONS,
+  getCoopDefenseConstructionCapacity,
   getPlaceableCapacityCost,
   getToolCapacityCost,
   sumPlaceableCapacity,
@@ -111,5 +112,30 @@ describe('used construction capacity', () => {
       .toBeGreaterThan(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
     expect(used + COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret.capacityCost)
       .toBeLessThanOrEqual(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
+  });
+
+  describe('personal capacity maximum', () => {
+    it('is the base capacity without any bonus', () => {
+      expect(getCoopDefenseConstructionCapacity(0)).toBe(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
+      // Kaputte Eingaben duerfen das Gate nicht vergiften.
+      expect(getCoopDefenseConstructionCapacity(Number.NaN)).toBe(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
+    });
+
+    it('raises only the maximum, never the cost of an object', () => {
+      const placed: PlacedStub[] = Array.from({ length: 3 }, () => turret('rocket_turret'));
+      const used = sumPlaceableCapacity(placed, OWNER);
+      const raised = getCoopDefenseConstructionCapacity(30);
+
+      expect(raised).toBe(130);
+      // Derselbe Bestand, dasselbe Kostenmodell - nur das Gate faellt jetzt anders aus.
+      expect(sumPlaceableCapacity(placed, OWNER)).toBe(used);
+      expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost).toBe(30);
+      expect(used + COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost)
+        .toBeLessThanOrEqual(raised);
+    });
+
+    it('never drops below zero', () => {
+      expect(getCoopDefenseConstructionCapacity(-500)).toBe(0);
+    });
   });
 });
