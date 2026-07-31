@@ -17,6 +17,7 @@ import { DECAL_SIZE } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { RockGridIndex } from './RockGridIndex';
+import { resolveArenaBackgroundSpec } from './ArenaBackground';
 
 export interface ArenaBuilderResult {
   /** CTB-Basis-Tintflächen (round-scoped). Coop-Defense-Basen leben in BaseManager. */
@@ -112,11 +113,30 @@ export class ArenaBuilder {
     }
 
     if (this.arenaBackground) {
+      const background = resolveArenaBackgroundSpec(mode, ARENA_WIDTH);
+      // Vor einem Texturwechsel den Crop der bisherigen Frame-Größe lösen. Andernfalls würde
+      // `setTexture()` die alten Crop-Koordinaten kurz gegen den neuen Frame aktualisieren.
+      this.arenaBackground.setCrop();
       this.arenaBackground
-        .setTexture(this.getArenaBackgroundTextureKey(mode))
+        .setTexture(background.textureKey)
         .setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
-        .setDisplaySize(ARENA_WIDTH, ARENA_HEIGHT)
+        .setScale(1)
         .setVisible(inArena);
+      if (
+        background.sourceX === 0
+        && background.sourceY === 0
+        && background.sourceWidth === this.arenaBackground.frame.cutWidth
+        && background.sourceHeight === this.arenaBackground.frame.cutHeight
+      ) {
+        this.arenaBackground.setCrop();
+      } else {
+        this.arenaBackground.setCrop(
+          background.sourceX,
+          background.sourceY,
+          background.sourceWidth,
+          background.sourceHeight,
+        );
+      }
     }
 
     if (this.lobbyBackground) {
@@ -614,10 +634,6 @@ export class ArenaBuilder {
       .image(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, 'lobby_bg')
       .setScrollFactor(0)
       .setDepth(DEPTH.GRASS);
-  }
-
-  private getArenaBackgroundTextureKey(mode: GameMode): string {
-    return mode === CAPTURE_THE_BEER_MODE ? 'gras_bg_ctb' : 'gras_bg_dm';
   }
 
   private setPhysicsBounds(): void {

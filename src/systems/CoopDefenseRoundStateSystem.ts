@@ -1,23 +1,57 @@
+import type { CoopDefenseMapObjective } from '../config/coopDefenseMaps';
 import type { BaseManager } from '../entities/BaseManager';
 import type { RoundOutcome } from '../network/NetworkBridge';
 
+export interface CoopDefenseRoundStateSystemOptions {
+  readonly baseManager: BaseManager;
+  /** Standard `survive`: Sieg ueber das Zeitlimit. */
+  readonly objective?: CoopDefenseMapObjective;
+  readonly getSecondsLeft: () => number;
+  readonly bossRequired?: boolean;
+  readonly isBossDefeated?: () => boolean;
+}
+
+/**
+ * Entscheidet host-autoritativ ueber Sieg und Niederlage einer Coop-Defense-Runde.
+ *
+ * Verloren wird immer ueber die eigenen Basen. Gewonnen wird je nach Map entweder ueber das
+ * Zeitlimit (`survive`) oder ueber die Zerstoerung aller feindlichen Basen
+ * (`destroy-hostile-bases`) – dort gewaehrt der ablaufende Timer bewusst nie einen Sieg.
+ */
 export class CoopDefenseRoundStateSystem {
   private concluded = false;
+  private readonly baseManager: BaseManager;
+  private readonly objective: CoopDefenseMapObjective;
+  private readonly getSecondsLeft: () => number;
+  private readonly bossRequired: boolean;
+  private readonly isBossDefeated: () => boolean;
 
-  constructor(
-    private readonly baseManager: BaseManager,
-    private readonly getSecondsLeft: () => number,
-    private readonly bossRequired = false,
-    private readonly isBossDefeated: () => boolean = () => true,
-  ) {}
+  constructor(options: CoopDefenseRoundStateSystemOptions) {
+    this.baseManager = options.baseManager;
+    this.objective = options.objective ?? 'survive';
+    this.getSecondsLeft = options.getSecondsLeft;
+    this.bossRequired = options.bossRequired ?? false;
+    this.isBossDefeated = options.isBossDefeated ?? (() => true);
+  }
 
   update(): RoundOutcome | null {
     if (this.concluded) return null;
 
-    const totalBaseHp = this.getTotalBaseHp();
-    if (totalBaseHp <= 0) {
+    // Nur eigene Basen zaehlen: sonst waere mit gefallener Gegnerbasis auch die Niederlage
+    // ausgeloest oder – schlimmer – gar nicht mehr moeglich.
+    if (this.baseManager.getTotalHp('friendly') <= 0) {
       this.concluded = true;
       return 'defeat';
+    }
+
+    if (this.objective === 'destroy-hostile-bases') {
+      // Der Guard schuetzt gegen einen Sofortsieg, falls eine Map ohne feindliche Basis das
+      // Ziel doch einmal an der Normalisierung vorbei setzt.
+      if (this.baseManager.hasFaction('hostile') && this.baseManager.getTotalHp('hostile') <= 0) {
+        this.concluded = true;
+        return 'victory';
+      }
+      return null;
     }
 
     if (this.getSecondsLeft() <= 0 && (!this.bossRequired || this.isBossDefeated())) {
@@ -31,13 +65,11 @@ export class CoopDefenseRoundStateSystem {
   applyDebugBaseDamage(amount: number): void {
     if (amount <= 0 || this.concluded) return;
 
-    const targetBase = this.baseManager.getBases().find((base) => base.getHp() > 0);
+    const targetBase = this.baseManager
+      .getBasesByFaction('friendly')
+      .find((base) => base.getHp() > 0);
     if (!targetBase) return;
 
     this.baseManager.applyDamage(targetBase.id, amount);
-  }
-
-  private getTotalBaseHp(): number {
-    return this.baseManager.getBases().reduce((sum, base) => sum + base.getHp(), 0);
   }
 }

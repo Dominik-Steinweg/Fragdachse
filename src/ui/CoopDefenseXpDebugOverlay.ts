@@ -77,12 +77,22 @@ export class CoopDefenseXpDebugOverlay {
       textAlign: 'center',
     });
 
+    const setNumberInputValue = (input: HTMLInputElement, value: number): void => {
+      const serializedValue = String(sanitizeNumberInput(String(value)));
+      // Keep the initial value and the live value in sync. Re-applying this after the
+      // overlay is attached also forces the browser to repaint a native number input
+      // whose initial paint would otherwise still show its default 0.
+      input.defaultValue = serializedValue;
+      input.value = serializedValue;
+    };
+
     const createNumberInput = (value: number) => {
       const input = document.createElement('input');
       input.type = 'number';
       input.min = '0';
       input.step = '1';
-      input.value = String(value);
+      input.autocomplete = 'off';
+      setNumberInputValue(input, value);
       Object.assign(input.style, {
         width: '100%',
         padding: '8px 10px',
@@ -321,9 +331,24 @@ export class CoopDefenseXpDebugOverlay {
 
     this.popup = backdrop;
     this.closePopupFn = closePopup;
+    // Set the values once more after insertion so the visible native controls use the
+    // same persisted values as the controls' initial state.
+    setNumberInputValue(xpInput, currentValues.totalXp);
+    setNumberInputValue(bossPointsInput, currentValues.bossPoints);
     updatePreview();
     xpInput.focus();
     xpInput.select();
+    // Chrome kann den Live-Wert eines dynamischen Number-Inputs beim Fokussieren aus
+    // seinem gespeicherten Formularzustand wiederherstellen. Der persistierte/default-Wert
+    // bleibt dabei korrekt; nach dem Fokus und im naechsten Frame muss der Live-Wert deshalb
+    // nochmals explizit synchronisiert werden.
+    setNumberInputValue(xpInput, currentValues.totalXp);
+    setNumberInputValue(bossPointsInput, currentValues.bossPoints);
+    window.requestAnimationFrame(() => {
+      if (this.popup !== backdrop) return;
+      setNumberInputValue(xpInput, currentValues.totalXp);
+      setNumberInputValue(bossPointsInput, currentValues.bossPoints);
+    });
   }
 
   hide(): void {

@@ -4,6 +4,7 @@
     {
       "mapId": "0",
       "displayName": "Map 0 - Testmap",
+      "arenaWidthCells": 90,
       "timeOfDay": "12:00",
       "rockFillRatio": 0.3,
       "roundDurationSec": 600,
@@ -21,6 +22,7 @@
     {
       "mapId": "1",
       "displayName": "Map 1 - Feuertaufe",
+      "arenaWidthCells": 60,
       "timeOfDay": "12:00",
       "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
       "tutorialShowControls": true,
@@ -43,8 +45,9 @@
     {
       "mapId": "2",
       "displayName": "Map 2 - Zweite Front",
+      "arenaWidthCells": 70,
       "timeOfDay": "05:00",
-      "tutorialText": "Auf dieser Map hat die Basis im mittleren Bereich einen Geschützturm. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
+      "tutorialText": "Auf dieser größeren Map hat die Basis im mittleren Bereich einen Geschützturm. Nutzt den längeren Anmarschweg, bevor die Gegner die Basen erreichen. Das Spiel ist erst verloren, wenn alle Basen zerstört sind.",
       "rockFillRatio": 0.15,
       "roundDurationSec": 60,
       "bases": [
@@ -73,6 +76,7 @@
     {
       "mapId": "3",
       "displayName": "Map 3 - Rastlos",
+      "arenaWidthCells": 76,
       "timeOfDay": "17:00",
       "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
       "rockFillRatio": 0.4,
@@ -105,6 +109,7 @@
     {
       "mapId": "4",
       "displayName": "Map 4 - Adrenalinrausch",
+      "arenaWidthCells": 82,
       "timeOfDay": "06:00",
       "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
       "rockFillRatio": 0.3,
@@ -151,8 +156,9 @@
     {
       "mapId": "5",
       "displayName": "Map 5 - Grufttitan",
+      "arenaWidthCells": 74,
       "timeOfDay": "22:30",
-      "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Wenn ein Boss erstmalig erledigt wird, erhält man einen Boss-Punkt für spezielle Upgrades.",
+      "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn das Zeitlimit erreicht UND der Boss erledigt wurde. Beim ersten Sieg gibt es einen Boss-Punkt für spezielle Upgrades. Nach Abschluss von Map 5 werden außerdem die Klassen freigeschaltet.",
       "rockFillRatio": 0.2,
       "roundDurationSec": 45,
       "bases": [
@@ -198,6 +204,7 @@
     {
       "mapId": "6",
       "displayName": "Map 6 - Sporenfront",
+      "arenaWidthCells": 88,
       "timeOfDay": "08:00",
       "rockFillRatio": 0.1,
       "roundDurationSec": 60,
@@ -258,6 +265,7 @@
     {
       "mapId": "7",
       "displayName": "Map 7 - Medic!",
+      "arenaWidthCells": 80,
       "timeOfDay": "17:00",
       "rockFillRatio": 0.3,
       "roundDurationSec": 70,
@@ -320,6 +328,7 @@
     {
       "mapId": "8",
       "displayName": "Map 8 - Dimensionsbruch",
+      "arenaWidthCells": 92,
       "timeOfDay": "20:45",
       "rockFillRatio": 0.15,
       "roundDurationSec": 80,
@@ -379,6 +388,7 @@
     {
       "mapId": "9",
       "displayName": "Map 9 - Faulnisbrut",
+      "arenaWidthCells": 84,
       "timeOfDay": "04:30",
       "rockFillRatio": 0.4,
       "roundDurationSec": 90,
@@ -429,6 +439,7 @@
     {
       "mapId": "10",
       "displayName": "Map 10 - Flammenkoloss",
+      "arenaWidthCells": 96,
       "timeOfDay": "22:45",
       "rockFillRatio": 0.1,
       "roundDurationSec": 45,
@@ -471,11 +482,15 @@
         { "enemyKind": "demon-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 0 },
         { "enemyKind": "spore-warden", "intervalMs": 15000, "countPerWave": 2, "startAtMs": 0 }
       ],
-      "boss": { "enemyKind": "inferno-colossus", "spawnAtMs": 5000 }
+      "boss": { "enemyKind": "inferno-colossus", "spawnAtMs": 5000 },
+      "itemDrop": {
+        "itemLevel": 1
+      }
     },
     {
       "mapId": "11",
       "displayName": "Map 11 - Bombergeschwader",
+      "arenaWidthCells": 60,
       "timeOfDay": "10:30",
       "tutorialText": "Die Zombies haben den Luftangriff entdeckt, bleibt in Bewegung!",
       "tutorialDurationMs": 10000,
@@ -533,12 +548,19 @@
         { "enemyKind": "spore-warden", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 0, "startsAfterAirstrikeBarrage": true },
         { "enemyKind": "void-stalker", "intervalMs": 12000, "countPerWave": 1, "startAtMs": 5000, "startsAfterAirstrikeBarrage": true },
         { "enemyKind": "stink-broodmother", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 10000, "startsAfterAirstrikeBarrage": true }
-      ]
+      ],
+      "itemDrop": {
+        "itemLevel": 1
+      }
     },
     {
       "mapId": "12",
-      "displayName": "Map 12 - Unterwanderung",
+      "displayName": "Map 12 - Gegenschlag",
+      "arenaWidthCells": 112,
       "timeOfDay": "00:30",
+      "tutorialText": "Erstmals steht der Brutbau der Zombies auf der Karte. Verteidigen allein reicht nicht mehr: Die Runde ist erst gewonnen, wenn die rote Feindbasis fällt. Ein Zeitlimit gibt es nicht.",
+      "tutorialDurationMs": 12000,
+      "objective": "destroy-hostile-bases",
       "enemyAirstrikes": { "bombTutorialRock": false, "huntIntervalMs": 25000 },
       "rockFillRatio": 0.3,
       "roundDurationSec": 90,
@@ -585,6 +607,21 @@
           "powerUpPedestals": [
             { "id": "double-damage-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "DOUBLE_DAMAGE", "respawnMs": 20000, "spawnOnArenaStart": false }
           ]
+        },
+        {
+          "id": "enemy-hive",
+          "faction": "hostile",
+          "hpMax": 1000,
+          "anchor": { "kind": "left-center", "edgeInsetCells": 10 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 }, { "gridX": 1, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 }
+            ]
+          }
         }
       ],
       "powerUps": [
@@ -599,14 +636,19 @@
         { "enemyKind": "spore-warden", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 12000 },
         { "enemyKind": "plague-medic", "intervalMs": 30000, "countPerWave": 1, "startAtMs": 20000 },
         { "enemyKind": "alien-badger", "intervalMs": 9000, "countPerWave": 1, "startAtMs": 0 }
-      ]
+      ],
+      "itemDrop": {
+        "itemLevel": 2
+      }
     },
     {
       "mapId": "13",
       "displayName": "Map 13 - Brutbomben",
+      "arenaWidthCells": 120,
       "timeOfDay": "18:45",
-      "tutorialText": "Wurf-Dachse schleudern Brutbomben. Wo sie einschlagen, schluepft nach kurzer Verzoegerung ein Tollwut-Dachs - fangt die Bomben ab, bevor die Brut euch ueberrennt.",
+      "tutorialText": "Wurf-Dachse schleudern Brutbomben, aus denen Tollwut-Dachse schlüpfen. Fangt sie früh ab. Der größere Brutbau wird von zwei Fliegenpilztürmen verteidigt, die auf euch schießen.",
       "tutorialDurationMs": 10000,
+      "objective": "destroy-hostile-bases",
       "rockFillRatio": 0.3,
       "roundDurationSec": 90,
       "bases": [
@@ -655,6 +697,26 @@
             { "id": "health-station-middle", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
             { "id": "double-damage-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "DOUBLE_DAMAGE", "respawnMs": 20000, "spawnOnArenaStart": false }
           ]
+        },
+        {
+          "id": "enemy-hive",
+          "faction": "hostile",
+          "hpMax": 2000,
+          "anchor": { "kind": "left-center", "edgeInsetCells": 10 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 }, { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 },
+              { "gridX": 0, "gridY": 4 }, { "gridX": 1, "gridY": 4 }, { "gridX": 2, "gridY": 4 }, { "gridX": 3, "gridY": 4 }
+            ]
+          },
+          "turrets": [
+            { "id": "rear-top", "cellOffset": { "gridX": 3, "gridY": 0 }, "mountSide": "rear", "weaponId": "BASE_SPOREN" },
+            { "id": "rear-bottom", "cellOffset": { "gridX": 3, "gridY": 4 }, "mountSide": "rear", "weaponId": "BASE_SPOREN" }
+          ]
         }
       ],
       "powerUps": [
@@ -670,11 +732,15 @@
         { "enemyKind": "spore-warden", "intervalMs": 22000, "countPerWave": 1, "startAtMs": 10000 },
         { "enemyKind": "alien-badger", "intervalMs": 25000, "countPerWave": 1, "startAtMs": 15000 },
         { "enemyKind": "thrower-badger", "intervalMs": 11000, "countPerWave": 1, "startAtMs": 0 }
-      ]
+      ],
+      "itemDrop": {
+        "itemLevel": 2
+      }
     },
     {
       "mapId": "14",
       "displayName": "Map 14 - Brandschneise",
+      "arenaWidthCells": 60,
       "timeOfDay": "21:30",
       "roundDurationSec": 90,
       "rockField": {
@@ -739,11 +805,15 @@
         { "enemyKind": "pyro-badger", "intervalMs": 20000, "countPerWave": 1, "startAtMs": 3000 },
         { "enemyKind": "zombie-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 },
         { "enemyKind": "demon-badger", "intervalMs": 6000, "countPerWave": 1, "startAtMs": 0 }
-      ]
+      ],
+      "itemDrop": {
+        "itemLevel": 3
+      }
     },
     {
       "mapId": "15",
       "displayName": "Map 15 - Leerenjäger",
+      "arenaWidthCells": 100,
       "timeOfDay": "22:00",
       "trackMode": "void-fire",
       "permanentGroundFire": {
@@ -800,6 +870,9 @@
       "boss": {
         "enemyKind": "void-hunter",
         "spawnAtMs": 2000
+      },
+      "itemDrop": {
+        "itemLevel": 3
       }
     }
   ]

@@ -5,7 +5,11 @@ import {
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
-import { ROCK_FILL_RATIO } from '../config';
+import {
+  DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+  normalizeCoopDefenseArenaWidthCells,
+  ROCK_FILL_RATIO,
+} from '../config';
 import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '../effects/TimeOfDay';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
@@ -63,9 +67,17 @@ export interface CoopBasePowerUpPedestalConfig {
   readonly spawnOnArenaStart?: boolean;
 }
 
+/**
+ * `friendly` ist die zu verteidigende Basis (Standard). `hostile` gehoert der Gegnerfraktion:
+ * Zombies laufen nicht dorthin, Reparatur und Schilde greifen nicht, und nur sie kann vom
+ * Spieler beschaedigt werden.
+ */
+export type CoopBaseFaction = 'friendly' | 'hostile';
+
 export interface CoopBaseConfig {
   readonly id: string;
   readonly hpMax: number;
+  readonly faction?: CoopBaseFaction;
   readonly anchor: CoopBaseAnchor;
   readonly shape: CoopBaseShape;
   readonly turrets?: readonly CoopBaseTurretConfig[];
@@ -100,6 +112,25 @@ export interface CoopDefenseMapAirstrikeConfig {
 export interface CoopDefenseMapBossConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly spawnAtMs: number;
+}
+
+/**
+ * Siegbedingung der Map.
+ *
+ * `survive` ist der bisherige Ablauf: die Runde ist gewonnen, wenn das Zeitlimit ablaeuft (und
+ * ein etwaiger Boss gefallen ist). `destroy-hostile-bases` gewinnt erst mit der Zerstoerung aller
+ * feindlichen Basen; das Zeitlimit gewaehrt dann nie einen Sieg. Verloren wird in beiden Faellen
+ * ueber die eigenen Basen.
+ */
+export type CoopDefenseMapObjective = 'survive' | 'destroy-hostile-bases';
+
+/**
+ * Belohnt einen Sieg auf dieser Map mit einem Item-Angebot. Bewusst pro Map konfigurierbar und
+ * bewusst wiederholbar: anders als Boss-Punkte zaehlt jeder erneute Sieg erneut.
+ */
+export interface CoopDefenseMapItemDropConfig {
+  /** Bestimmt die Hoehe der Grundwerte und der Eigenschaftsspannen. */
+  readonly itemLevel: number;
 }
 
 export type CoopDefensePowerUpRegion = 'front' | 'middle' | 'rear';
@@ -170,6 +201,11 @@ export interface CoopDefenseMapRockFieldConfig {
 export interface CoopDefenseMapConfig {
   readonly mapId: string;
   readonly displayName: string;
+  /**
+   * Horizontale Arenabreite im 32-px-Raster. Standard sind 60 Zellen; Werte werden auf
+   * die gemeinsame CTB-Maximalbreite von 135 Zellen begrenzt.
+   */
+  readonly arenaWidthCells?: number;
   readonly tutorialText?: string;
   /** Anzeigedauer des Tutorial-Fensters; Standard ist COOP_DEFENSE_TUTORIAL_DURATION_MS. */
   readonly tutorialDurationMs?: number;
@@ -219,6 +255,10 @@ export interface CoopDefenseMapConfig {
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
   readonly waves: readonly CoopDefenseMapWaveConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
+  /** Standard `survive`. */
+  readonly objective?: CoopDefenseMapObjective;
+  /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
+  readonly itemDrop?: CoopDefenseMapItemDropConfig;
 }
 
 interface CoopDefenseMapRegistryFile {
@@ -321,6 +361,9 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
   return {
     mapId: mapConfig.mapId,
     displayName: mapConfig.displayName,
+    arenaWidthCells: normalizeCoopDefenseArenaWidthCells(
+      mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+    ),
     tutorialText: typeof mapConfig.tutorialText === 'string' && mapConfig.tutorialText.trim().length > 0
       ? mapConfig.tutorialText.trim()
       : undefined,
@@ -341,7 +384,36 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     waves: mapConfig.waves.map(normalizeWaveConfig),
     boss: normalizeBossConfig(mapConfig),
+    objective: normalizeObjective(mapConfig.mapId, mapConfig.objective, bases),
+    itemDrop: normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop),
   };
+}
+
+function normalizeObjective(
+  mapId: string,
+  objective: CoopDefenseMapObjective | undefined,
+  bases: readonly CoopBaseConfig[],
+): CoopDefenseMapObjective {
+  if (objective !== 'destroy-hostile-bases') return 'survive';
+  // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
+  if (!bases.some((baseConfig) => baseConfig.faction === 'hostile')) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} wants destroy-hostile-bases but declares no hostile base`);
+  }
+  if (!bases.some((baseConfig) => baseConfig.faction !== 'hostile')) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly base to lose`);
+  }
+  return objective;
+}
+
+function normalizeItemDropConfig(
+  mapId: string,
+  itemDrop: CoopDefenseMapItemDropConfig | undefined,
+): CoopDefenseMapItemDropConfig | undefined {
+  if (!itemDrop) return undefined;
+  if (typeof itemDrop.itemLevel !== 'number' || !Number.isFinite(itemDrop.itemLevel) || itemDrop.itemLevel < 1) {
+    throw new Error(`[coopDefenseMaps] Item drop on map ${mapId} needs an itemLevel of at least 1`);
+  }
+  return { itemLevel: Math.floor(itemDrop.itemLevel) };
 }
 
 function normalizePermanentGroundFire(
@@ -512,9 +584,19 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
     return normalizeBasePowerUpPedestalConfig(baseConfig.id, pedestal);
   });
 
+  const faction: CoopBaseFaction = baseConfig.faction === 'hostile' ? 'hostile' : 'friendly';
+  // Podeste versorgen ausschliesslich Spieler und bleiben deshalb an Gegnerbasen verboten.
+  // Basistuerme sind dagegen fraktionsfaehig und erhalten ihr Zielverhalten erst zur Laufzeit.
+  if (faction === 'hostile' && powerUpPedestals.length > 0) {
+    throw new Error(
+      `[coopDefenseMaps] Hostile base ${baseConfig.id} must not declare power-up pedestals`,
+    );
+  }
+
   return {
     id: baseConfig.id,
     hpMax: Math.max(1, Math.floor(baseConfig.hpMax)),
+    faction,
     anchor: normalizeBaseAnchor(baseConfig.anchor),
     shape: normalizeBaseShape(baseConfig.shape),
     turrets,

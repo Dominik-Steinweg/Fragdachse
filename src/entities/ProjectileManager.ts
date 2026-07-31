@@ -154,6 +154,7 @@ export class ProjectileManager {
    */
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
+  private onBaseHit:   ((baseId: string, damage: number, attackerId: string) => void) | null = null;
   private onSupportImpact: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null = null;
 
   // ── Zug-Kollision ─────────────────────────────────────────────────────────
@@ -189,13 +190,37 @@ export class ProjectileManager {
   }
 
   /**
-   * Setzt die Coop-Defense-Basis-Gruppe.
-   * Geschosse reagieren physisch (Impact, Explosion, Bounce) wie bei Felsen,
-   * applizieren aber KEINEN Schaden (Spieler-Schaden auf Basen ist in 1.3
-   * verboten; Gegner-Schaden kommt in 1.5).
+   * Setzt die Coop-Defense-Basis-Gruppe. Geschosse reagieren physisch (Impact, Explosion,
+   * Bounce) wie bei Felsen; Schaden entsteht ausschliesslich ueber
+   * {@link setBaseHitCallback}, der nur feindliche Basen beruecksichtigt.
    */
   setBaseGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void {
     this.baseGroup = group;
+  }
+
+  /**
+   * Registriert den Empfaenger fuer Projektil-Basis-Treffer (Host). Analog zu
+   * {@link setRockHitCallback}: nur der Collider weiss, welche Basiszelle getroffen wurde.
+   */
+  setBaseHitCallback(cb: ((baseId: string, damage: number, attackerId: string) => void) | null): void {
+    this.onBaseHit = cb;
+  }
+
+  /**
+   * Meldet einen Basistreffer genau einmal je Projektil und Basis.
+   *
+   * Die Entprellung ist Pflicht: Overlap-Waffen wie BFG und Gauss beruehren jede Zelle einer
+   * Basis einzeln und wuerden eine 17-Zellen-Basis sonst pro Schuss 17-mal treffen – dasselbe
+   * Problem, das fuer Felsen bereits ueber `bfgHitRocks` geloest ist.
+   */
+  private applyBaseHit(tracked: TrackedProjectile, baseObject: Phaser.GameObjects.GameObject): void {
+    if (!this.onBaseHit || tracked.damage <= 0) return;
+    const baseId = baseObject.getData('baseId') as string | undefined;
+    if (!baseId) return;
+    tracked.hitBaseIds ??= new Set<string>();
+    if (tracked.hitBaseIds.has(baseId)) return;
+    tracked.hitBaseIds.add(baseId);
+    this.onBaseHit(baseId, tracked.damage, tracked.ownerId);
   }
 
   /**
@@ -835,7 +860,8 @@ export class ProjectileManager {
         tracked.colliders.push(c);
       }
       if (this.baseGroup && !tracked.ignoreBaseCollisions) {
-        const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
+        const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
+          this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
           this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
           this.queueDestroyProjectile(tracked);
         });
@@ -877,6 +903,8 @@ export class ProjectileManager {
         tracked.colliders.push(c);
       }
       if (this.baseGroup && !tracked.ignoreBaseCollisions) {
+        // Explosionsprojektile richten ihren Basisschaden ueber die Explosion selbst an
+        // (`applyExplosionDamage`); ein direkter Treffer wuerde ihn sonst doppelt zaehlen.
         const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
           this.queueProjectileExplosion(tracked, false, true);
         });
@@ -1025,7 +1053,8 @@ export class ProjectileManager {
       tracked.colliders.push(c);
     }
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
-      const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
+      const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
+        this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
         this.queueDestroyProjectile(tracked);
       });
       tracked.colliders.push(c);
@@ -1218,6 +1247,8 @@ export class ProjectileManager {
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const baseCollider = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
         if (this.tryResolveSupportImpact(tracked, baseGO as Phaser.GameObjects.GameObject, -1)) return;
+        // Vor dem Bounce-Early-Return: sonst zaehlte ein Treffer im selben Schritt nicht.
+        this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
             body.velocity.x = tracked.velocityAfterFirstBounce.x;

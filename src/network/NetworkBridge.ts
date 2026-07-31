@@ -43,6 +43,7 @@ import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/Lo
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
 
@@ -1115,6 +1116,9 @@ export class NetworkBridge {
       tools: coopDefenseClassId === 'inspector_gadachs'
         ? sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId).toolLoadout?.map((tool) => ({ ...tool }))
         : undefined,
+      // Ausruestung wird an derselben Stelle validiert wie die Utility-Slots: unbekannte Items
+      // und Eigenschaften fallen weg, Werte werden auf ihren Wurfbereich geklemmt.
+      equippedItems: sanitizeCoopDefenseEquippedItems(raw.equippedItems),
     };
   }
 

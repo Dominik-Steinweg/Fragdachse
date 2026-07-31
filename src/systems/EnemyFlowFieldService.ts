@@ -555,6 +555,9 @@ export class EnemyFlowFieldService {
     const goalDistance = this.clearanceCells + 1;
     for (const baseSpec of this.baseSpecs) {
       if (!this.activeBaseIds.has(baseSpec.id)) continue;
+      // Nur die Ziele werden gefiltert: feindliche Basiszellen bleiben Hindernisse und muessen
+      // deshalb weiterhin im Kostenfeld (`buildBaseLookup`) stehen.
+      if (baseSpec.faction === 'hostile') continue;
       for (const cell of baseSpec.cells) {
         for (const [dx, dy] of directions) {
           const neighborX = cell.gridX + dx * goalDistance;

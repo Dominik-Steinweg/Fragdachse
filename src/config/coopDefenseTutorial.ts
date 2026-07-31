@@ -1,15 +1,14 @@
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
+  ARENA_WIDTH,
   CELL_SIZE,
-  GAME_WIDTH,
   GRID_COLS,
   GRID_ROWS,
 } from '../config';
 import { HELP_CONTROLS } from './helpControls';
 
 export const COOP_DEFENSE_TUTORIAL_DURATION_MS = 20_000;
-export const COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X = GAME_WIDTH / 2;
 export const COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y = 118;
 export const COOP_DEFENSE_TUTORIAL_PANEL_WIDTH = 840;
 export const COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT = 168;
@@ -32,6 +31,11 @@ export const COOP_DEFENSE_TUTORIAL_CONTROLS_PAD_BOTTOM = 20;
 export const COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X = 180;
 export const COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X = 400;
 
+/** Weltmitte der aktuell aktiven Arena; folgt den pro Map angewendeten Arena-Metriken. */
+export function getCoopDefenseTutorialPanelCenterX(): number {
+  return ARENA_OFFSET_X + ARENA_WIDTH / 2;
+}
+
 /**
  * Höhe des Tutorial-Fensters. Die Steuerungs-Variante (`showControls`) hängt die
  * Tastenliste des Hilfe-Fensters unter den Fließtext und ist dadurch deutlich höher.
@@ -52,7 +56,7 @@ export function getCoopDefenseTutorialRockRegion(showControls = false): {
   minGridY: number;
   maxGridY: number;
 } {
-  const left = COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X - COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
+  const left = getCoopDefenseTutorialPanelCenterX() - COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
   const right = left + COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
   const top = COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y;
   const bottom = top + getCoopDefenseTutorialPanelHeight(showControls);

@@ -30,10 +30,17 @@ import { setEmissiveScale } from '../effects/EmissiveScale';
 import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
+import { CoopDefenseItemRewardOverlay } from '../ui/CoopDefenseItemRewardOverlay';
 import {
+  CoopDefenseItemsOverlay,
+  type CoopDefenseItemsOverlayState,
+} from '../ui/CoopDefenseItemsOverlay';
+import {
+  createMatchItemRewardPresentation,
   createMatchProgressDelta,
   resolvePersonalMatchOutcome,
   sortMatchLeaderboard,
+  type MatchItemRewardPresentation,
   type MatchProgressDelta,
   type MatchResultsPresentation,
 } from '../ui/MatchResultsModel';
@@ -47,6 +54,7 @@ import {
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_VIEWPORT_WIDTH, GAME_WIDTH, GAME_HEIGHT, CELL_SIZE, COLORS, DEPTH,
   NET_SMOOTH_TIME_MS,
+  ACTIVE_ARENA_METRICS_PROFILE,
   applyArenaMetricsForMode,
 } from '../config';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
@@ -61,6 +69,7 @@ import {
   getStoredMasterVolume,
   getStoredMusicVolume,
   markStoredCoopDefenseBossMapCompleted,
+  markStoredCoopDefenseItemsSeen,
   markStoredCoopDefenseRoundProcessed,
   resetStoredCoopDefenseCharacter,
   restoreStoredCoopDefenseProgress,
@@ -69,10 +78,18 @@ import {
   setStoredCoopDefenseClassesUnlocked,
   setStoredLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
+  claimStoredPendingCoopDefenseItemReward,
+  equipStoredCoopDefenseItem,
+  getStoredCoopDefenseItemsUnlocked,
+  salvageStoredCoopDefenseItem,
+  setStoredPendingCoopDefenseItemReward,
+  unequipStoredCoopDefenseItem,
   unlockStoredCoopDefenseClassesAfterVictory,
+  unlockStoredCoopDefenseItemsAfterVictory,
   unlockStoredCoopDefenseMapAfterVictory,
   type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
+import { getEquippedCoopDefenseItems, rollCoopDefenseItemOffer } from '../utils/coopDefenseItems';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getRenderResolutionController, toDesignSpace } from '../graphics/RenderResolution';
 import { installTextResolution } from '../graphics/TextResolution';
@@ -93,7 +110,7 @@ import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
-import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode, usesDynamicCamera } from '../gameModes';
+import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
@@ -245,6 +262,8 @@ export class ArenaScene extends Phaser.Scene {
    * darin ist bereits verbucht und wird beim Wiederholen weder neu berechnet noch gespeichert.
    */
   private lastMatchResultsPresentation: MatchResultsPresentation | null = null;
+  private itemRewardOverlay: CoopDefenseItemRewardOverlay | null = null;
+  private itemsOverlay: CoopDefenseItemsOverlay | null = null;
   private lastLobbySidebarSignature: string | null = null;
   private runtimeProfiler: ArenaRuntimeProfiler | null = null;
   private performanceAblation: PerformanceAblationController | null = null;
@@ -295,6 +314,9 @@ export class ArenaScene extends Phaser.Scene {
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
+    // Rote Variante fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
+    // Frame-Indizes, daher unveraenderte Autotile-Logik.
+    this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadArenaDecalAssets(this.load);
     this.load.image('bg_canopy',  './assets/sprites/192x192canopy01.png');
     this.load.image('lobby_logo', './assets/sprites/fragdachselogo.png');
@@ -340,7 +362,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   create(): void {
-    applyArenaMetricsForMode(bridge.getGameMode(), bridge.getGamePhase());
+    applyArenaMetricsForMode(
+      bridge.getGameMode(),
+      bridge.getGamePhase(),
+      this.resolveCoopDefenseArenaWidthCells(),
+    );
 
     // Muss vor allem anderen laufen: ab hier gilt der 1920x1080-Designraum unabhängig davon,
     // wie viele Pixel die Canvas tatsächlich hat. Alles Folgende platziert Objekte darin.
@@ -484,9 +510,8 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseXpDebugOverlay = new CoopDefenseXpDebugOverlay(
       () => {
         const stored = getStoredCoopDefenseProgress();
-        const liveTotalXp = bridge.getPlayerCoopDefenseTotalXp(bridge.getLocalPlayerId());
         return {
-          totalXp: Math.max(stored.totalXp, this.coopDefenseProgress.totalXp, liveTotalXp),
+          totalXp: stored.totalXp,
           bossPoints: stored.completedBossMapIds.length,
           highestUnlockedMapId: stored.highestUnlockedMapId,
           classesUnlocked: stored.classesUnlocked,
@@ -527,14 +552,40 @@ export class ArenaScene extends Phaser.Scene {
       () => this.applyCoopDefenseUpgradeChanges(),
     );
     this.coopDefenseUpgradesOverlay.build();
+    this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
+      this,
+      (offerUid, salvageUid) => this.claimItemReward(offerUid, salvageUid),
+      () => this.buildItemRewardPresentation(),
+      () => {
+        this.lobbyOverlay.setReadyButtonState(false);
+        this.itemsOverlay?.refresh();
+      },
+    );
+    this.itemRewardOverlay.build();
+    this.itemsOverlay = new CoopDefenseItemsOverlay(
+      this,
+      () => this.getCoopDefenseItemsOverlayState(),
+      (uid) => { equipStoredCoopDefenseItem(uid); this.afterCoopDefenseItemChange(); },
+      (slot) => { unequipStoredCoopDefenseItem(slot); this.afterCoopDefenseItemChange(); },
+      (uid) => { salvageStoredCoopDefenseItem(uid); this.afterCoopDefenseItemChange(); },
+      () => this.openItemRewardOverlay(),
+      () => this.lobbyOverlay.setReadyButtonState(false),
+    );
+    this.itemsOverlay.build();
     this.matchResultsOverlay = new MatchResultsOverlay(this, () => {
       // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
       // vorbereitete Lobby frei; Ready bleibt durch den Host-Reset weiterhin false.
       this.lobbyOverlay.setReadyButtonState(false);
+      // Eine offene Belohnung folgt direkt auf die Auswertung; sie bleibt sonst in der Lobby liegen.
+      this.openItemRewardOverlay();
     });
     this.matchResultsOverlay.build();
     rightPanel.setResultsReplayHandler(() => this.replayMatchResults());
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.matchResultsOverlay?.destroy());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.matchResultsOverlay?.destroy();
+      this.itemRewardOverlay?.destroy();
+      this.itemsOverlay?.destroy();
+    });
 
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
@@ -597,7 +648,8 @@ export class ArenaScene extends Phaser.Scene {
         // Coop-Defense: Lebende Gegner mit ihrer effektiven Angriffsreichweite
         // veröffentlichen, damit der Spawn nicht in deren Wirkungskreis fällt.
         enemyThreats: (() => {
-          const livingBases = this.ctx.baseManager?.getBases().filter((base) => base.getHp() > 0) ?? [];
+          // Nur eigene Basen: der Zombie-Druck wird gegen die Basen gemessen, die sie angreifen.
+          const livingBases = this.ctx.baseManager?.getBasesByFaction('friendly').filter((base) => base.getHp() > 0) ?? [];
           return (this.ctx.enemyManager?.getAllEnemies() ?? [])
           .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && combatSystem.isAlive(enemy.id))
           .map((enemy) => {
@@ -626,7 +678,7 @@ export class ArenaScene extends Phaser.Scene {
             };
           });
         })(),
-        livingCoopBaseIds: this.ctx.baseManager?.getActiveBaseIds(),
+        livingCoopBaseIds: this.ctx.baseManager?.getActiveBaseIds('friendly'),
         isRelevantOpponent: (otherPlayerId) => playerId === null
           ? combatSystem.isAlive(otherPlayerId)
           : combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
@@ -990,9 +1042,11 @@ export class ArenaScene extends Phaser.Scene {
       () => this.onRetryRoom(),
       () => this.netDebugOverlay?.toggle(),
       () => this.openCoopDefenseUpgradesOverlay(),
+      () => this.openCoopDefenseItemsOverlay(),
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.show();
+    this.refreshCoopDefenseItemsButton();
 
     this.roomQualityMonitor = new RoomQualityMonitor(bridge);
 
@@ -1119,6 +1173,8 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
       this.ctx.rightPanel.setResultsReplayAvailable(this.lastMatchResultsPresentation !== null);
       this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+      // Signaturgeschuetzt wie die Fortschrittsanzeige: der Aufruf pro Frame ist billig.
+      this.refreshCoopDefenseItemsButton();
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       const localId = bridge.getLocalPlayerId();
       const sidebarSignature = [
@@ -1165,7 +1221,11 @@ export class ArenaScene extends Phaser.Scene {
       const activeMapConfig = isCoopDefenseMode(bridge.getGameMode())
         ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
         : null;
-      this.ctx.centerHUD.updateTimer(secs, secs <= 0 && !!activeMapConfig?.boss);
+      // Auf Angriffsmaps ist die Restzeit bedeutungslos; der Slot zeigt stattdessen das Ziel.
+      const objectiveLabel = activeMapConfig?.objective === 'destroy-hostile-bases'
+        ? 'FEINDBASIS ZERSTOEREN'
+        : (secs <= 0 && activeMapConfig?.boss ? 'BOSS MUSS FALLEN' : null);
+      this.ctx.centerHUD.updateTimer(secs, objectiveLabel);
       const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
       const tutorialDurationMs = activeMapConfig?.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;
       // `tutorialPersistent` blendet das Fenster über die gesamte Rundendauer ein.
@@ -1643,6 +1703,51 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseUpgradesOverlay?.show();
   }
 
+  /**
+   * Items sind nur ausserhalb eines Matches wechselbar; das Oeffnen nimmt deshalb – wie beim
+   * Upgrade-Menue – die Bereit-Meldung zurueck.
+   */
+  private openCoopDefenseItemsOverlay(): void {
+    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
+    // Zweite Verteidigungslinie neben der Button-Sperre.
+    if (!getStoredCoopDefenseItemsUnlocked()) return;
+
+    this.coopDefenseXpDebugOverlay?.hide();
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    // Ab hier hat der Spieler seine Teile gesehen; der Hinweis am Button erlischt.
+    markStoredCoopDefenseItemsSeen();
+    this.refreshCoopDefenseItemsButton();
+    this.itemsOverlay?.show();
+  }
+
+  private getCoopDefenseItemsOverlayState(): CoopDefenseItemsOverlayState {
+    const progress = getStoredCoopDefenseProgress();
+    return {
+      items: progress.items,
+      equippedItemIds: progress.equippedItemIds,
+      hasPendingReward: progress.pendingItemReward !== null,
+    };
+  }
+
+  /** Nach jeder Item-Aenderung: Lobby-Anzeige und Fortschritts-Cache nachziehen. */
+  private afterCoopDefenseItemChange(): void {
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(
+      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
+    );
+    this.refreshCoopDefenseItemsButton();
+  }
+
+  private refreshCoopDefenseItemsButton(): void {
+    const progress = getStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseItemsState(
+      isCoopDefenseMode(bridge.getGameMode()) && progress.itemsUnlocked,
+      progress.pendingItemReward !== null,
+      progress.unseenItems,
+    );
+  }
+
   private cancelCoopDefenseUpgradeChanges(): void {
     const snapshot = this.coopDefenseUpgradeProfileSnapshot;
     this.coopDefenseUpgradeProfileSnapshot = null;
@@ -1901,7 +2006,11 @@ export class ArenaScene extends Phaser.Scene {
     const coopDefenseProfile = storedProgress.classesUnlocked
       ? storedProgress.profilesByClass[storedProgress.selectedClassId]
       : storedProgress.defaultProfile;
-    return resolveLoadoutSelectionIds({
+    // Ausruestung wird hier eingefroren: ab "Bereit" gilt sie fuer das gesamte Match.
+    const equippedItems = isCoopDefenseMode(bridge.getGameMode())
+      ? getEquippedCoopDefenseItems(storedProgress.items, storedProgress.equippedItemIds)
+      : [];
+    const committed = resolveLoadoutSelectionIds({
       weapon1:  (bridge.getPlayerLoadoutSlot(localId, 'weapon1')  ?? DEFAULT_LOADOUT.weapon1.id) in WEAPON_CONFIGS
         ? WEAPON_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id) as keyof typeof WEAPON_CONFIGS]
         : DEFAULT_LOADOUT.weapon1,
@@ -1915,6 +2024,7 @@ export class ArenaScene extends Phaser.Scene {
         ? ULTIMATE_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) as keyof typeof ULTIMATE_CONFIGS]
         : DEFAULT_LOADOUT.ultimate,
     }, bridge.getGameMode(), coopDefenseProfile, coopDefenseClassId);
+    return equippedItems.length > 0 ? { ...committed, equippedItems } : committed;
   }
 
   private getEnemyHoverNameTarget(): { name: string; x: number; y: number } | null {
@@ -2112,7 +2222,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private syncArenaMetrics(): void {
-    applyArenaMetricsForMode(bridge.getGameMode(), bridge.getGamePhase());
+    applyArenaMetricsForMode(
+      bridge.getGameMode(),
+      bridge.getGamePhase(),
+      this.resolveCoopDefenseArenaWidthCells(),
+    );
     this.arenaBuilder?.syncStaticBackdrop(bridge.getGameMode(), bridge.getGamePhase());
     this.redrawArenaClipMask();
     this.physics.world.setBounds(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT);
@@ -2162,7 +2276,7 @@ export class ArenaScene extends Phaser.Scene {
     const camera = this.cameras.main;
     camera.scrollY = 0;
 
-    if (!inArena || !usesDynamicCamera(bridge.getGameMode())) {
+    if (!inArena || !ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera) {
       this.lastCameraScrollX = 0;
       camera.scrollX = 0;
       return;
@@ -2180,6 +2294,14 @@ export class ArenaScene extends Phaser.Scene {
     const followLerp = 1 - Math.exp(-delta / 120);
     camera.scrollX = Phaser.Math.Linear(camera.scrollX, targetScrollX, followLerp);
     this.lastCameraScrollX = camera.scrollX;
+  }
+
+  private resolveCoopDefenseArenaWidthCells(): number | undefined {
+    if (!isCoopDefenseMode(bridge.getGameMode())) return undefined;
+    const mapId = bridge.getGamePhase() === 'ARENA'
+      ? (bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId())
+      : bridge.getCoopDefenseMapId();
+    return getCoopDefenseMapConfig(mapId).arenaWidthCells;
   }
 
   private getPointerWorldPoint(): Phaser.Math.Vector2 {
@@ -2760,6 +2882,7 @@ export class ArenaScene extends Phaser.Scene {
       leaderboard: sortMatchLeaderboard(results),
       progress,
       technicalMessage: null,
+      itemReward: isCoopDefenseMode(mode) ? this.buildItemRewardPresentation() : null,
     };
     this.lastMatchResultsPresentation = presentation;
     this.matchResultsOverlay?.show(presentation);
@@ -2777,6 +2900,48 @@ export class ArenaScene extends Phaser.Scene {
     if (!presentation || this.matchResultsPending) return;
     if (this.matchResultsOverlay?.isVisible()) return;
     this.matchResultsOverlay?.showReplay(presentation);
+  }
+
+  /** Zeigt eine offene Belohnung. No-op, wenn keine offen ist oder der Layer schon sichtbar ist. */
+  private openItemRewardOverlay(): void {
+    if (this.itemRewardOverlay?.isVisible()) return;
+    const presentation = this.buildItemRewardPresentation();
+    if (!presentation) return;
+    this.itemRewardOverlay?.show(presentation);
+  }
+
+  /** Liest das offene Angebot frisch aus der Persistenz und baut die Auswahlansicht dazu. */
+  private buildItemRewardPresentation(): MatchItemRewardPresentation | null {
+    const progress = getStoredCoopDefenseProgress();
+    return createMatchItemRewardPresentation(
+      progress.pendingItemReward,
+      progress.items,
+      progress.equippedItemIds,
+    );
+  }
+
+  /**
+   * Loest eine Auswahl im Ergebnis-Screen auf und aktualisiert die Anzeige. Bleibt die Belohnung
+   * offen (volle Kategorie ohne Zerlege-Ziel), passiert nichts und der Screen fragt weiter.
+   */
+  private claimItemReward(offerUid: string, salvageUid?: string): boolean {
+    if (!claimStoredPendingCoopDefenseItemReward(offerUid, salvageUid)) return false;
+    this.refreshStoredCoopDefenseProgress();
+    if (this.lastMatchResultsPresentation) {
+      this.lastMatchResultsPresentation = {
+        ...this.lastMatchResultsPresentation,
+        itemReward: this.buildItemRewardPresentation(),
+      };
+    }
+    this.lobbyOverlay.setCoopDefenseProgress(
+      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
+    );
+    // Wurde die Belohnung aus dem offenen Item-Menue heraus abgeholt, sieht der Spieler das neue
+    // Teil sofort - dann darf der Button gar nicht erst zu leuchten anfangen.
+    if (this.itemsOverlay?.isOpen()) markStoredCoopDefenseItemsSeen();
+    this.refreshCoopDefenseItemsButton();
+    this.itemsOverlay?.refresh();
+    return true;
   }
 
   private processCoopDefenseRoundProgress(
@@ -2802,12 +2967,25 @@ export class ArenaScene extends Phaser.Scene {
 
     const completedMapId = roundState.coopDefenseMapId;
     let unlockedNewMap = false;
+    let unlockedItems = false;
     if (roundState.status === 'victory' && completedMapId) {
-      if (getCoopDefenseMapConfig(completedMapId).boss) {
+      const completedMapConfig = getCoopDefenseMapConfig(completedMapId);
+      if (completedMapConfig.boss) {
         markStoredCoopDefenseBossMapCompleted(completedMapId);
       }
       unlockStoredCoopDefenseClassesAfterVictory(completedMapId);
+      unlockedItems = unlockStoredCoopDefenseItemsAfterVictory(completedMapId);
       unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
+
+      // Jeder Spieler wuerfelt sein eigenes Angebot lokal; der Sieg steht bereits reliable im
+      // RoundState, deshalb braucht die Belohnung keinen Netzwerkpfad. Persistiert, damit sie
+      // Reload und Verbindungsabbruch waehrend der Auswahl uebersteht.
+      if (completedMapConfig.itemDrop && getStoredCoopDefenseItemsUnlocked()) {
+        setStoredPendingCoopDefenseItemReward({
+          roundEndedAt: endedAt,
+          offers: rollCoopDefenseItemOffer(completedMapConfig.itemDrop.itemLevel),
+        });
+      }
     }
 
     markStoredCoopDefenseRoundProcessed(endedAt);
@@ -2816,6 +2994,12 @@ export class ArenaScene extends Phaser.Scene {
       ? getCoopDefenseMapConfig(this.coopDefenseHighestUnlockedMapId).displayName
       : null;
     if (unlockedNewMap) this.applyDefaultCoopDefenseMapSelection();
-    return createMatchProgressDelta(before, this.coopDefenseProgress, sharedRoundXp, unlockedMapName);
+    return createMatchProgressDelta(
+      before,
+      this.coopDefenseProgress,
+      sharedRoundXp,
+      unlockedMapName,
+      unlockedItems,
+    );
   }
 }

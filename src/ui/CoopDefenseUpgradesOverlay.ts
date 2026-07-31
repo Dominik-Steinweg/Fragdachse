@@ -24,8 +24,8 @@ import {
   getCoopDefenseUpgradeTextureKey,
   isCoopDefenseToolCategory,
 } from '../utils/coopDefenseUpgrades';
-import { toDesignSpace } from '../graphics/RenderResolution';
 import { attachHoverEffect } from './uiHover';
+import { UiTooltip } from './UiTooltip';
 import {
   COOP_DEFENSE_CLASS_DEFINITIONS,
   COOP_DEFENSE_CLASS_IDS,
@@ -136,10 +136,7 @@ const NODE_LABEL_FONT_SIZE = 9;
 const COLUMN_UNIT = NODE_W + NODE_GAP_X;
 const ROW_UNIT = NODE_H + NODE_GAP_Y;
 
-const TOOLTIP_OFFSET_X = 18;
-const TOOLTIP_OFFSET_Y = 18;
 const TOOLTIP_MAX_W = 320;
-const TOOLTIP_PADDING = 12;
 
 const BASE_UNLOCK_NODE_FILL = COLORS.GREY_5;
 const BASE_UNLOCK_NODE_STROKE = COLORS.GREY_2;
@@ -297,11 +294,7 @@ export class CoopDefenseUpgradesOverlay {
   private loadoutHintTimer: Phaser.Time.TimerEvent | null = null;
   private picker: LoadoutSlotPicker | null = null;
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
-  private tooltipContainer: Phaser.GameObjects.Container | null = null;
-  private tooltipBackground: Phaser.GameObjects.Rectangle | null = null;
-  private tooltipTitleText: Phaser.GameObjects.Text | null = null;
-  private tooltipDivider: Phaser.GameObjects.Rectangle | null = null;
-  private tooltipBodyText: Phaser.GameObjects.Text | null = null;
+  private tooltip: UiTooltip | null = null;
   private visible = false;
   private activeCategoryIndex = 0;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
@@ -348,11 +341,7 @@ export class CoopDefenseUpgradesOverlay {
     this.loadoutContainer = null;
     this.loadoutHintText = null;
     this.upgradesContainer = null;
-    this.tooltipContainer = null;
-    this.tooltipBackground = null;
-    this.tooltipTitleText = null;
-    this.tooltipDivider = null;
-    this.tooltipBodyText = null;
+    this.tooltip = null;
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -488,31 +477,12 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.upgradesContainer);
 
-    this.tooltipBackground = this.scene.add.rectangle(0, 0, 10, 10, COLORS.GREY_9, 0.97)
-      .setOrigin(0, 0)
-      .setStrokeStyle(1, ACCENT)
-      .setVisible(false)
-      .setScrollFactor(0);
-    this.tooltipTitleText = this.scene.add.text(0, 0, '', {
-      fontSize: '16px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(ACCENT), wordWrap: { width: TOOLTIP_MAX_W },
-    }).setOrigin(0, 0).setVisible(false).setScrollFactor(0);
-    this.tooltipDivider = this.scene.add.rectangle(0, 0, 10, 1, COLORS.GREY_4, 0.9)
-      .setOrigin(0, 0)
-      .setVisible(false)
-      .setScrollFactor(0);
-    this.tooltipBodyText = this.scene.add.text(0, 0, '', {
-      fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_1), wordWrap: { width: TOOLTIP_MAX_W },
-    }).setOrigin(0, 0).setVisible(false).setScrollFactor(0);
-    this.tooltipContainer = this.scene.add.container(0, 0, [
-      this.tooltipBackground,
-      this.tooltipTitleText,
-      this.tooltipDivider,
-      this.tooltipBodyText,
-    ])
-      // Ueber dem Auswahl-Popup (OVERLAY + 2), damit Slot-Erklaerungen sichtbar bleiben.
-      .setDepth(DEPTH.OVERLAY + 3)
-      .setVisible(false);
-    objects.push(this.tooltipContainer);
+    this.tooltip = new UiTooltip(this.scene, TOOLTIP_MAX_W, ACCENT);
+    objects.push(
+      this.tooltip.build()
+        // Ueber dem Auswahl-Popup (OVERLAY + 2), damit Slot-Erklaerungen sichtbar bleiben.
+        .setDepth(DEPTH.OVERLAY + 3),
+    );
 
     objects.push(
       this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurueck | ✓ am Symbol oder Klick auf einen Loadout-Slot ruestet aus ]', {
@@ -671,6 +641,8 @@ export class CoopDefenseUpgradesOverlay {
     this.clearClassDecorations();
     this.xpBarEffect?.destroy();
     this.xpBarEffect = null;
+    this.tooltip?.destroy();
+    this.tooltip = null;
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
@@ -2272,59 +2244,15 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private showTooltip(title: string, body: string, pointer: Phaser.Input.Pointer): void {
-    if (
-      !this.tooltipContainer
-      || !this.tooltipBackground
-      || !this.tooltipTitleText
-      || !this.tooltipDivider
-      || !this.tooltipBodyText
-    ) return;
-
-    this.tooltipTitleText.setText(title);
-    this.tooltipBodyText.setText(body);
-
-    const contentWidth = Math.max(this.tooltipTitleText.width, this.tooltipBodyText.width);
-    const width = contentWidth + TOOLTIP_PADDING * 2;
-
-    const titleY = TOOLTIP_PADDING;
-    const dividerY = titleY + this.tooltipTitleText.height + 6;
-    const bodyY = dividerY + 7;
-    const height = bodyY + this.tooltipBodyText.height + TOOLTIP_PADDING;
-
-    this.tooltipBackground.setSize(width, height);
-    this.tooltipTitleText.setPosition(TOOLTIP_PADDING, titleY);
-    this.tooltipDivider.setPosition(TOOLTIP_PADDING, dividerY).setSize(contentWidth, 1);
-    this.tooltipBodyText.setPosition(TOOLTIP_PADDING, bodyY);
-
-    this.tooltipContainer.setVisible(true);
-    this.tooltipBackground.setVisible(true);
-    this.tooltipTitleText.setVisible(true);
-    this.tooltipDivider.setVisible(true);
-    this.tooltipBodyText.setVisible(true);
-    this.updateTooltipPosition(pointer);
+    this.tooltip?.showText(title, body, pointer);
   }
 
   private updateTooltipPosition(pointer: Phaser.Input.Pointer): void {
-    if (!this.tooltipContainer || !this.tooltipBackground) return;
-
-    const width = this.tooltipBackground.width;
-    const height = this.tooltipBackground.height;
-    // Pointer coordinates are render pixels after the pixel-perfect render-resolution
-    // setup, while this overlay is positioned in the 1920x1080 design space.
-    const pointerX = toDesignSpace(this.scene.scale, pointer.x);
-    const pointerY = toDesignSpace(this.scene.scale, pointer.y);
-    const x = Phaser.Math.Clamp(pointerX + TOOLTIP_OFFSET_X, 12, GAME_WIDTH - width - 12);
-    const y = Phaser.Math.Clamp(pointerY + TOOLTIP_OFFSET_Y, 12, GAME_HEIGHT - height - 12);
-
-    this.tooltipContainer.setPosition(x, y);
+    this.tooltip?.move(pointer);
   }
 
   private hideTooltip(): void {
-    this.tooltipContainer?.setVisible(false);
-    this.tooltipBackground?.setVisible(false);
-    this.tooltipTitleText?.setVisible(false);
-    this.tooltipDivider?.setVisible(false);
-    this.tooltipBodyText?.setVisible(false);
+    this.tooltip?.hide();
   }
 
   private buildNodeTooltipBody(node: CoopDefenseUpgradeNodeSnapshot): string {

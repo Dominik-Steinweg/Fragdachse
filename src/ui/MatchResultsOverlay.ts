@@ -31,10 +31,16 @@ import {
   lerpColor,
 } from './uiTextures';
 import type {
+  MatchItemRewardPresentation,
   MatchProgressDelta,
   MatchResultOutcome,
   MatchResultsPresentation,
 } from './MatchResultsModel';
+import { getCoopDefenseItemCellColor } from './CoopDefenseItemsModel';
+import {
+  ensureCoopDefenseItemCellTexture,
+  resolveCoopDefenseItemIconTexture,
+} from './coopDefenseItemIcons';
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 // Der Ergebnis-Layer nutzt dieselbe Formsprache wie Upgrade-, Options- und Help-Overlay:
@@ -93,6 +99,7 @@ const CHIP_H = 60;
 const CHIP_CX = CHIP_X + CHIP_W / 2;
 const CHIP_STRIDE = 74;
 const BADGE_SIZE = 36;
+const CHIP_LABEL_W = CHIP_W - BADGE_SIZE - 70;
 
 const BAR_X = CHIP_X;
 const BAR_W = CHIP_W;
@@ -103,7 +110,14 @@ const XP_TEXT_Y = 408;
 const PROGRESS_DIVIDER_Y = 446;
 const REWARD_TITLE_Y = 484;
 const REWARD_START_Y = 530;
-const MAX_REWARD_CHIPS = 5;
+const MAX_REWARD_CHIPS = 7;
+/** Unterkante, an der die Belohnungsliste enden muss – daraus folgt der Zeilenabstand. */
+const REWARD_LIMIT_Y = SECTION_BOTTOM - 8;
+/** Vorschau der drei angebotenen Teile, rechts in der Item-Zeile. */
+const OFFER_PREVIEW_SIZE = 46;
+const OFFER_PREVIEW_GAP = 8;
+const MAX_OFFER_PREVIEWS = 3;
+const OFFER_PREVIEW_BLOCK_W = MAX_OFFER_PREVIEWS * (OFFER_PREVIEW_SIZE + OFFER_PREVIEW_GAP);
 
 const SUMMARY_START_Y = 330;
 const MAX_SUMMARY_CHIPS = 5;
@@ -187,6 +201,14 @@ interface RewardDescriptor {
   label: string;
   color: number;
   tooltip?: string;
+  /** Markiert die Zeile, an der die Vorschau der angebotenen Teile haengt. */
+  itemOffer?: boolean;
+}
+
+/** Ein Symbol der Angebotsvorschau: Seltenheitsrahmen plus Item-Symbol. */
+interface OfferPreview {
+  frame: Phaser.GameObjects.Image;
+  icon: Phaser.GameObjects.Image;
 }
 
 export class MatchResultsOverlay {
@@ -209,6 +231,8 @@ export class MatchResultsOverlay {
   private xpFlash: Phaser.GameObjects.Rectangle | null = null;
   private xpBarEffect: LivingBarEffect | null = null;
   private rewardChips: RewardChip[] = [];
+  private offerPreviewGroup: Phaser.GameObjects.Container | null = null;
+  private offerPreviews: OfferPreview[] = [];
 
   private summaryGroup: Phaser.GameObjects.Container | null = null;
   private summaryChips: StatChip[] = [];
@@ -403,8 +427,11 @@ export class MatchResultsOverlay {
     this.leaderboardGroup?.setVisible(true).setAlpha(1);
     this.hintText?.setVisible(true).setAlpha(1);
 
+    // Der Weiter-Button fuehrt bei offener Belohnung nicht in die Lobby, sondern in die Auswahl.
+    this.continueLabel?.setText(presentation.itemReward ? 'ITEM AUSWAEHLEN' : 'WEITER ZUR LOBBY');
+
     this.populateLeaderboard(presentation);
-    this.populateProgress(presentation.progress);
+    this.populateProgress(presentation.progress, presentation.itemReward);
     this.populateSummary(presentation);
     this.startIdleAnimations(style.color, false);
     this.startSequence(style);
@@ -454,6 +481,8 @@ export class MatchResultsOverlay {
     this.xpFill = null;
     this.xpFlash = null;
     this.rewardChips = [];
+    this.offerPreviewGroup = null;
+    this.offerPreviews = [];
     this.summaryGroup = null;
     this.summaryChips = [];
     this.syncGroup = null;
@@ -633,7 +662,32 @@ export class MatchResultsOverlay {
       objects.push(chip.container);
     }
 
+    objects.push(this.buildOfferPreview());
+
     return this.scene.add.container(0, 0, objects).setScrollFactor(0).setVisible(false);
+  }
+
+  /**
+   * Die drei angebotenen Teile sitzen rechts in ihrer eigenen Belohnungszeile. So bleibt sofort
+   * sichtbar, worum es bei der Auswahl geht, ohne der Liste eine weitere Zeile zu kosten.
+   */
+  private buildOfferPreview(): Phaser.GameObjects.Container {
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    for (let index = 0; index < MAX_OFFER_PREVIEWS; index++) {
+      const x = -index * (OFFER_PREVIEW_SIZE + OFFER_PREVIEW_GAP);
+      const frame = this.scene.add.image(x, 0, ensureCoopDefenseItemCellTexture(
+        this.scene, OFFER_PREVIEW_SIZE, OFFER_PREVIEW_SIZE, COLORS.GREY_6, 'rest',
+      )).setScrollFactor(0);
+      const icon = this.scene.add.image(x, 0, resolveCoopDefenseItemIconTexture(
+        this.scene, 'armor', OFFER_PREVIEW_SIZE,
+      )).setDisplaySize(OFFER_PREVIEW_SIZE * 0.7, OFFER_PREVIEW_SIZE * 0.7).setScrollFactor(0);
+      this.offerPreviews.push({ frame, icon });
+      objects.push(frame, icon);
+    }
+    this.offerPreviewGroup = this.scene.add.container(0, 0, objects)
+      .setScrollFactor(0)
+      .setVisible(false);
+    return this.offerPreviewGroup;
   }
 
   private buildRewardChip(y: number): RewardChip {
@@ -650,7 +704,7 @@ export class MatchResultsOverlay {
       fontSize: '18px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GREY_1),
-      wordWrap: { width: CHIP_W - BADGE_SIZE - 70 },
+      wordWrap: { width: CHIP_LABEL_W },
     }).setOrigin(0, 0.5).setScrollFactor(0);
     const container = this.scene.add.container(CHIP_CX, y, [frame, badge, glyph, label])
       .setScrollFactor(0)
@@ -799,8 +853,12 @@ export class MatchResultsOverlay {
     });
   }
 
-  private populateProgress(progress: MatchProgressDelta | null): void {
+  private populateProgress(
+    progress: MatchProgressDelta | null,
+    itemReward: MatchItemRewardPresentation | null,
+  ): void {
     this.progressGroup?.setVisible(!!progress).setAlpha(0);
+    this.offerPreviewGroup?.setVisible(false);
     if (!progress) {
       this.xpBarEffect?.stop();
       return;
@@ -809,20 +867,54 @@ export class MatchResultsOverlay {
     this.applyXpValue(progress.before.totalXp);
     this.xpFlash?.setAlpha(0);
 
-    const descriptors = describeRewards(progress);
+    const descriptors = describeRewards(progress, itemReward);
+    // Mit vielen Freischaltungen ruecken die Zeilen zusammen, statt unter die Sektion zu laufen:
+    // die unterste Zeile muss mit ihrer halben Hoehe noch ueber `REWARD_LIMIT_Y` passen.
+    const stride = Math.min(
+      CHIP_STRIDE,
+      Math.floor((REWARD_LIMIT_Y - CHIP_H / 2 - REWARD_START_Y) / Math.max(1, descriptors.length - 1)),
+    );
     this.rewardChips.forEach((chip, index) => {
       const descriptor = descriptors[index];
       if (!descriptor) {
         chip.container.setVisible(false);
         return;
       }
+      const y = REWARD_START_Y + index * stride;
       chip.frame.setTexture(this.ensureChipTexture(descriptor.color));
       chip.badge.setTexture(this.ensureBadgeTexture(descriptor.color));
       chip.glyph.setText(descriptor.glyph);
-      chip.label.setText(descriptor.label).setColor(toCssColor(lerpColor(descriptor.color, 0xffffff, 0.45)));
+      chip.label
+        .setWordWrapWidth(descriptor.itemOffer ? CHIP_LABEL_W - OFFER_PREVIEW_BLOCK_W : CHIP_LABEL_W)
+        .setText(descriptor.label)
+        .setColor(toCssColor(lerpColor(descriptor.color, 0xffffff, 0.45)));
       chip.tooltip = descriptor.tooltip ?? null;
-      chip.container.setVisible(true).setAlpha(0).setScale(0.9);
+      chip.sparkY = y;
+      chip.container.setPosition(CHIP_CX, y).setVisible(true).setAlpha(0).setScale(0.9);
+      if (descriptor.itemOffer) this.placeOfferPreview(itemReward, y);
     });
+  }
+
+  private placeOfferPreview(itemReward: MatchItemRewardPresentation | null, y: number): void {
+    if (!this.offerPreviewGroup || !itemReward) return;
+    this.offerPreviews.forEach((preview, index) => {
+      // Rechtsbuendig: das erste Angebot liegt aussen, die weiteren wandern nach links.
+      const option = itemReward.options[itemReward.options.length - 1 - index];
+      preview.frame.setVisible(!!option);
+      preview.icon.setVisible(!!option);
+      if (!option) return;
+      preview.frame.setTexture(ensureCoopDefenseItemCellTexture(
+        this.scene, OFFER_PREVIEW_SIZE, OFFER_PREVIEW_SIZE, getCoopDefenseItemCellColor(option.item), 'rest',
+      ));
+      preview.icon.setTexture(resolveCoopDefenseItemIconTexture(
+        this.scene, option.item.slot, OFFER_PREVIEW_SIZE,
+      )).setDisplaySize(OFFER_PREVIEW_SIZE * 0.7, OFFER_PREVIEW_SIZE * 0.7);
+    });
+    this.offerPreviewGroup
+      .setPosition(CHIP_CX + CHIP_W / 2 - 16 - OFFER_PREVIEW_SIZE / 2, y)
+      .setVisible(true)
+      .setAlpha(0)
+      .setScale(0.9);
   }
 
   private populateSummary(presentation: MatchResultsPresentation): void {
@@ -1083,6 +1175,17 @@ export class MatchResultsOverlay {
         ease: 'Back.easeOut',
       });
       this.addTimer(delay + 60, () => this.burstSparks(chip.sparkX, chip.sparkY, 8));
+      // Die Angebotsvorschau gehoert zu ihrer Zeile und poppt deshalb mit ihr auf.
+      if (this.offerPreviewGroup?.visible && this.offerPreviewGroup.y === chip.container.y) {
+        this.addTween({
+          targets: this.offerPreviewGroup,
+          alpha: 1,
+          scale: 1,
+          duration: 320,
+          delay: delay + 90,
+          ease: 'Back.easeOut',
+        });
+      }
     });
     this.addTimer(visibleChips.length * 130 + 340, () => this.completeSequence());
   }
@@ -1156,6 +1259,7 @@ export class MatchResultsOverlay {
       this.rewardChips.forEach((chip) => {
         if (chip.container.visible) chip.container.setAlpha(1).setScale(1);
       });
+      if (this.offerPreviewGroup?.visible) this.offerPreviewGroup.setAlpha(1).setScale(1);
     } else {
       this.summaryGroup?.setAlpha(1);
       this.summaryChips.forEach((chip) => {
@@ -1346,8 +1450,28 @@ function xpBarPalette(): LivingBarPalette {
 }
 
 /** Belohnungen als farbcodierte Zeilen; ohne Freischaltung bleibt eine graue Leerzeile. */
-function describeRewards(progress: MatchProgressDelta): RewardDescriptor[] {
+function describeRewards(
+  progress: MatchProgressDelta,
+  itemReward: MatchItemRewardPresentation | null,
+): RewardDescriptor[] {
   const descriptors: RewardDescriptor[] = [];
+  if (progress.itemsUnlocked) {
+    descriptors.push({
+      glyph: '🔓',
+      label: 'NEUE FUNKTION FREIGESCHALTET: ITEMS',
+      color: COLORS.GOLD_1,
+      tooltip: 'Siege lassen ab jetzt dauerhafte Ausrüstung fallen. Verwalten kannst du sie in der Lobby über den Items-Button.',
+    });
+  }
+  if (itemReward && itemReward.options.length > 0) {
+    descriptors.push({
+      glyph: '◈',
+      label: `1 VON ${itemReward.options.length} ITEMS WÄHLEN`,
+      color: COLORS.BLUE_2,
+      tooltip: 'Die Auswahl öffnet sich direkt nach diesem Bildschirm und bleibt bis zur Entscheidung offen.',
+      itemOffer: true,
+    });
+  }
   if (progress.classesUnlocked) {
     descriptors.push({
       glyph: '🔓',
@@ -1356,13 +1480,7 @@ function describeRewards(progress: MatchProgressDelta): RewardDescriptor[] {
       tooltip: 'Dachs Nukem, Dachs of Steel und Inspector Gadachs sind jetzt im Upgrade-Screen auswählbar.',
     });
   }
-  if (progress.levelUps > 0) {
-    descriptors.push({
-      glyph: '▲',
-      label: progress.levelUps === 1 ? 'LEVEL-AUFSTIEG' : `${progress.levelUps} LEVEL-AUFSTIEGE`,
-      color: COLORS.GREEN_2,
-    });
-  }
+  // Der Levelaufstieg selbst zeigt sich bereits am XP-Balken; hier zaehlt nur sein Ertrag.
   if (progress.newSkillPoints > 0) {
     descriptors.push({
       glyph: '◆',

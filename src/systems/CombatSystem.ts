@@ -25,6 +25,7 @@ import {
   BURN_TICK_INTERVAL_MS,
   COLORS,
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+  COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
   HP_MAX, RESPAWN_DELAY_MS,
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,
@@ -215,6 +216,7 @@ export class CombatSystem {
   private decoySystem:      DecoySystem | null = null;
   private enemyManager:     EnemyManager | null = null;
   private baseManager:      BaseManager | null = null;
+  private baseDamageCallback: ((baseId: string, damage: number, attackerId: string) => void) | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
@@ -269,6 +271,13 @@ export class CombatSystem {
   setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
+  /**
+   * Einziger Trichter fuer Basisschaden. Wie `setRockDamageCallback` verdrahtet, damit der
+   * Schaden durch `resolveOutgoingDamage` laeuft und Klassen- sowie Item-Multiplikatoren sieht.
+   */
+  setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string) => void) | null): void {
+    this.baseDamageCallback = cb;
+  }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
   setPlayerDamageReductionResolver(resolver: ((playerId: string) => number) | null): void { this.playerDamageReductionResolver = resolver; }
   setPlayerHpRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerHpRegenPerSecondResolver = resolver; }
@@ -785,6 +794,8 @@ export class CombatSystem {
       }, options);
     }
 
+    this.applyRadialHostileBaseDamage(x, y, radius, damage, ownerId, options?.damageFalloff);
+
     if (options?.skipEnemies) return;
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
@@ -882,15 +893,31 @@ export class CombatSystem {
       });
       damagedTargetKeys.push(`enemies:${enemy.id}`);
     }
+
+    // Explosionen kannten Basen bisher gar nicht; die Gegnerbasis ist das erste Ziel, das ueber
+    // Flaechenschaden erreichbar sein muss.
+    for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
+      if (base.getHp() <= 0) continue;
+      const surface = base.getNearestSurfacePoint(x, y);
+      if (!surface || surface.distance > effect.radius) continue;
+      if (this.enemyManager?.hasEnemy(ownerId)) continue;
+      const damage = Math.round(computeProjectileExplosionDamage(surface.distance, effect));
+      if (damage <= 0) continue;
+      this.applyBaseDamage(base.id, damage, ownerId);
+      damagedTargetKeys.push(`bases:${base.id}`);
+    }
     return damagedTargetKeys;
   }
 
   canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage = false): boolean {
     if (!attackerId) return true;
     if (attackerId === targetId) return true;
-    if (allowTeamDamage) return true;
     const attackerEnemy = this.enemyManager?.getEnemy(attackerId);
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
+    if (attackerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) {
+      return targetEnemy ? targetEnemy.faction !== 'hostile' : true;
+    }
+    if (allowTeamDamage) return true;
     // Eingebuddelte Gegner sind – wie eingebuddelte Spieler – weder Ziel noch Angreifer.
     if (targetEnemy?.isBurrowed() || attackerEnemy?.isBurrowed()) return false;
     if (attackerEnemy && targetEnemy) return attackerEnemy.faction !== targetEnemy.faction;
@@ -1909,6 +1936,17 @@ export class CombatSystem {
       }
     }
 
+    // Feindliche Basis am Endpunkt: dieselbe Reihenfolge wie bei Felsen und Zug, damit ein
+    // getroffenes Hindernis den Schuss beendet.
+    if (this.baseManager && !this.enemyManager?.hasEnemy(shooterId)) {
+      const baseId = this.baseManager.getBaseIdAtWorldPoint(endX, endY);
+      const base = baseId ? this.baseManager.getBase(baseId) : undefined;
+      if (base && base.faction === 'hostile' && base.getHp() > 0) {
+        this.applyBaseDamage(base.id, damage, shooterId);
+        return;
+      }
+    }
+
     // Zug-Bounding-Box am Endpunkt suchen (gesamter Zug als ein Block, keine Lücken)
     if (trainMult !== 0 && this.trainSegObjects && this.onTrainDamage) {
       const trainBounds = this.computeTrainBounds();
@@ -2137,7 +2175,7 @@ export class CombatSystem {
       }
     }
 
-    if (canDamageKind('bases') && this.enemyManager?.hasEnemy(shooterId)) {
+    if (canDamageKind('bases')) {
       const baseHit = this.applyMeleeBaseDamage(
         x,
         y,
@@ -2225,6 +2263,41 @@ export class CombatSystem {
     }
   }
 
+  /**
+   * Host-only: Basisschaden ueber den gemeinsamen Trichter. Ohne verdrahteten Callback faellt es
+   * auf den direkten Weg zurueck, damit ein fehlendes Setup keinen Schaden verschluckt.
+   */
+  applyBaseDamage(baseId: string, damage: number, attackerId: string): void {
+    if (damage <= 0) return;
+    if (this.baseDamageCallback) this.baseDamageCallback(baseId, damage, attackerId);
+    else this.baseManager?.applyDamage(baseId, damage);
+  }
+
+  /**
+   * Radialschaden auf feindliche Basen. Explosionen und Flaechenschaden kannten Basen bisher
+   * gar nicht; nur Spieler-Quellen treffen hier, Zombie-Luftangriffe laufen weiter ueber ihren
+   * eigenen, auf eigene Basen begrenzten Pfad.
+   */
+  applyRadialHostileBaseDamage(
+    x: number,
+    y: number,
+    radius: number,
+    maxDamage: number,
+    attackerId: string | undefined,
+    falloff?: RadialDamageFalloffConfig,
+  ): void {
+    if (!attackerId || radius <= 0 || maxDamage <= 0) return;
+    if (this.enemyManager?.hasEnemy(attackerId)) return;
+
+    for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
+      if (base.getHp() <= 0) continue;
+      const surface = base.getNearestSurfacePoint(x, y);
+      if (!surface || surface.distance > radius) continue;
+      const damage = computeRadialDamage(surface.distance, radius, maxDamage, falloff);
+      this.applyBaseDamage(base.id, damage, attackerId);
+    }
+  }
+
   private applyMeleeBaseDamage(
     x: number,
     y: number,
@@ -2241,7 +2314,13 @@ export class CombatSystem {
     let impactX: number | undefined;
     let impactY: number | undefined;
 
-    for (const base of this.baseManager?.getBases() ?? []) {
+    // Gegner schlagen ausschliesslich auf eigene Basen ein, Spieler ausschliesslich auf
+    // feindliche. Damit bleibt das bisherige Verhalten unveraendert und niemand kann die
+    // Basis der eigenen Seite beschaedigen.
+    const shooterIsEnemy = this.enemyManager?.hasEnemy(shooterId) === true;
+    const targetFaction = shooterIsEnemy ? 'friendly' : 'hostile';
+
+    for (const base of this.baseManager?.getBasesByFaction(targetFaction) ?? []) {
       if (base.getHp() <= 0) continue;
 
       const surface = base.getNearestSurfacePoint(x, y);
@@ -2268,11 +2347,15 @@ export class CombatSystem {
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       // Energie-Kuppel: schützt die getroffene Basisstelle, wenn sie in einer Kuppel liegt.
-      if (this.energyShieldSystem?.tryDomeProtect(targetX, targetY, null, actualDamage, Date.now())) {
+      // Nur eigene Basen – eine Spielerkuppel darf die Gegnerbasis nicht abschirmen.
+      if (
+        base.faction === 'friendly'
+        && this.energyShieldSystem?.tryDomeProtect(targetX, targetY, null, actualDamage, Date.now())
+      ) {
         hit = true;
         continue;
       }
-      this.baseManager?.applyDamage(base.id, actualDamage);
+      this.applyBaseDamage(base.id, actualDamage, shooterId);
       hit = true;
 
       if (dist < nearestDistance) {

@@ -5,7 +5,27 @@ import {
   DEFAULT_COOP_DEFENSE_CLASS_ID,
   sanitizeCoopDefenseClassId,
 } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId, CoopDefenseUpgradeProfile, LoadoutSlot } from '../types';
+import type {
+  CoopDefenseClassId,
+  CoopDefenseItem,
+  CoopDefenseItemSlot,
+  CoopDefensePendingItemReward,
+  CoopDefenseUpgradeProfile,
+  LoadoutSlot,
+} from '../types';
+import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
+import {
+  addCoopDefenseItem,
+  getCoopDefenseItemSalvageXp,
+  getEquippedCoopDefenseItems,
+  isCoopDefenseStashFull,
+  readCoopDefenseEquippedItemIdCandidates,
+  removeCoopDefenseItem,
+  sanitizeCoopDefenseEquippedItemIds,
+  sanitizeCoopDefenseItems,
+  sanitizeCoopDefensePendingItemReward,
+  type CoopDefenseEquippedItemIds,
+} from './coopDefenseItems';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   cloneCoopDefenseUpgradeProfile,
@@ -16,6 +36,7 @@ import {
 import {
   getCoopDefenseMapUnlockedByVictoryOn,
   INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
+  isCoopDefenseMapUnlocked,
   maxHighestUnlockedCoopDefenseMapId,
   sanitizeHighestUnlockedCoopDefenseMapId,
 } from '../config/coopDefenseMapUnlocks';
@@ -23,7 +44,7 @@ import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 
 const LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
-const LOCAL_PREFERENCES_VERSION = 15;
+const LOCAL_PREFERENCES_VERSION = 17;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 interface LocalPreferencesV2 {
@@ -51,6 +72,26 @@ export interface CoopDefenseProgressPreferences {
   defaultProfile: CoopDefenseUpgradeProfile;
   selectedClassId: CoopDefenseClassId;
   profilesByClass: Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
+  /** Das Item-System bleibt bis zum Sieg auf Map 10 verborgen. */
+  itemsUnlocked: boolean;
+  /**
+   * Gesamter Item-Besitz inklusive der ausgeruesteten Teile. Eine einzige Liste plus
+   * {@link equippedItemIds} statt getrennter Stash-/Equipped-Listen: damit kann ein Item
+   * niemals in beiden oder in keiner Liste stehen, und "ausgeruestet zaehlt nicht aufs Limit"
+   * ist eine reine Abfrage statt eines Umhaengens.
+   */
+  items: CoopDefenseItem[];
+  equippedItemIds: CoopDefenseEquippedItemIds;
+  /**
+   * Offenes Belohnungsangebot. Bewusst persistent: so ueberlebt es Reload und Verbindungsabbruch
+   * waehrend der Auswahl und geht nie verloren.
+   */
+  pendingItemReward: CoopDefensePendingItemReward | null;
+  /**
+   * Ein neu erhaltenes Teil liegt im Inventar, ohne dass der Spieler das Item-Menue seitdem
+   * geoeffnet hat. Treibt den Hinweis am Items-Button und wird beim Oeffnen zurueckgesetzt.
+   */
+  unseenItems: boolean;
 }
 
 interface LocalPreferencesV3 {
@@ -69,8 +110,8 @@ interface LocalPreferencesV3 {
   };
 }
 
-interface LocalPreferencesV15 {
-  version: 15;
+interface LocalPreferencesV17 {
+  version: 17;
   audio: {
     masterVolume: number;
     effectsVolume: number;
@@ -88,7 +129,7 @@ interface LocalPreferencesV15 {
   };
 }
 
-type LocalPreferences = LocalPreferencesV15;
+type LocalPreferences = LocalPreferencesV17;
 
 interface ParsedLocalPreferences {
   audio?: Partial<LocalPreferences['audio']>;
@@ -104,6 +145,11 @@ interface ParsedLocalPreferences {
       profilesByClass?: unknown;
       selectedClassId?: unknown;
       classesUnlocked?: unknown;
+      itemsUnlocked?: unknown;
+      items?: unknown;
+      equippedItemIds?: unknown;
+      pendingItemReward?: unknown;
+      unseenItems?: unknown;
     };
   };
 }
@@ -122,7 +168,30 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
     dachs_of_steel: buildDefaultCoopDefenseUpgradeProfile('dachs_of_steel'),
     inspector_gadachs: buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs'),
   },
+  itemsUnlocked: false,
+  items: [],
+  equippedItemIds: {},
+  pendingItemReward: null,
+  unseenItems: false,
 };
+
+/**
+ * Items sind unveraenderliche Wertobjekte; nur die Huellen (Liste, Slot-Zuordnung) muessen
+ * kopiert werden, damit Leser den gespeicherten Stand nicht versehentlich veraendern.
+ */
+function cloneCoopDefenseItemState(progress: CoopDefenseProgressPreferences): {
+  items: CoopDefenseItem[];
+  equippedItemIds: CoopDefenseEquippedItemIds;
+  pendingItemReward: CoopDefensePendingItemReward | null;
+} {
+  return {
+    items: [...progress.items],
+    equippedItemIds: { ...progress.equippedItemIds },
+    pendingItemReward: progress.pendingItemReward
+      ? { ...progress.pendingItemReward, offers: [...progress.pendingItemReward.offers] }
+      : null,
+  };
+}
 
 const DEFAULT_PREFERENCES: LocalPreferences = {
   version: LOCAL_PREFERENCES_VERSION,
@@ -241,6 +310,7 @@ function buildDefaultPreferences(): LocalPreferences {
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
+        ...cloneCoopDefenseItemState(DEFAULT_COOP_DEFENSE_PROGRESS),
       },
     },
   };
@@ -271,6 +341,10 @@ function parsePreferences(raw: string | null): LocalPreferences {
     const completedBossMapIds = sanitizeCompletedBossMapIds(parsed.progression?.coopDefense?.completedBossMapIds);
     const sourceTreeVersion = sanitizeStoredXp(parsed.progression?.coopDefense?.upgradeTreeVersion);
     const rawCoopProgress = parsed.progression?.coopDefense;
+    const highestUnlockedMapId = resolveStoredHighestUnlockedMapId(
+      rawCoopProgress?.highestUnlockedMapId,
+      completedBossMapIds,
+    );
     const selectedClassId = sanitizeCoopDefenseClassId(rawCoopProgress?.selectedClassId);
     const rawProfiles = parsed.progression?.coopDefense?.profilesByClass;
     const storedProfiles = (rawProfiles && typeof rawProfiles === 'object')
@@ -294,6 +368,16 @@ function parsePreferences(raw: string | null): LocalPreferences {
       completedBossMapIds.length,
       DEFAULT_COOP_DEFENSE_CLASS_ID,
     );
+    // Die Slot-Zuordnung wird zweistufig gelesen: strukturell, damit das ausgeruestete Teil vom
+    // Kategorielimit ausgenommen bleibt, und danach gegen die fertige Liste geprueft.
+    const equippedItemIdCandidates = readCoopDefenseEquippedItemIdCandidates(rawCoopProgress?.equippedItemIds);
+    const storedItems = sanitizeCoopDefenseItems(rawCoopProgress?.items, equippedItemIdCandidates);
+    const equippedItemIds = sanitizeCoopDefenseEquippedItemIds(equippedItemIdCandidates, storedItems);
+    const itemsUnlocked = rawCoopProgress?.itemsUnlocked === true
+      || isCoopDefenseMapUnlocked('11', highestUnlockedMapId);
+    const pendingItemReward = sanitizeCoopDefensePendingItemReward(rawCoopProgress?.pendingItemReward);
+    // Nur ein tatsaechlich vorhandenes Teil kann ungesehen sein; sonst leuchtet der Button leer.
+    const unseenItems = rawCoopProgress?.unseenItems === true && storedItems.length > 0;
     const profilesByClass = {} as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
 
     for (const classId of COOP_DEFENSE_CLASS_IDS) {
@@ -339,14 +423,16 @@ function parsePreferences(raw: string | null): LocalPreferences {
           totalXp,
           lastProcessedRoundEndedAt,
           completedBossMapIds,
-          highestUnlockedMapId: resolveStoredHighestUnlockedMapId(
-            parsed.progression?.coopDefense?.highestUnlockedMapId,
-            completedBossMapIds,
-          ),
+          highestUnlockedMapId,
           classesUnlocked,
           defaultProfile,
           selectedClassId: classesUnlocked ? selectedClassId : DEFAULT_COOP_DEFENSE_CLASS_ID,
           profilesByClass,
+          itemsUnlocked,
+          items: storedItems,
+          equippedItemIds,
+          pendingItemReward,
+          unseenItems,
         },
       },
     };
@@ -467,6 +553,9 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     ),
     selectedClassId: progress.selectedClassId,
     profilesByClass: cloneProfilesByClass(progress.profilesByClass),
+    itemsUnlocked: progress.itemsUnlocked,
+    unseenItems: progress.unseenItems,
+    ...cloneCoopDefenseItemState(progress),
   };
 }
 
@@ -484,6 +573,7 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(progress.profilesByClass),
+        ...cloneCoopDefenseItemState(progress),
       },
     },
   }));
@@ -504,6 +594,7 @@ export function resetStoredCoopDefenseCharacter(): void {
           DEFAULT_COOP_DEFENSE_CLASS_ID,
         ),
         profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
+        ...cloneCoopDefenseItemState(DEFAULT_COOP_DEFENSE_PROGRESS),
       },
     },
   }));
@@ -722,6 +813,246 @@ export function markStoredCoopDefenseRoundProcessed(endedAt: number | null): voi
       },
     },
   }));
+}
+
+// ── Dauerhafte Items ────────────────────────────────────────────────────────
+
+export function getStoredCoopDefenseItemsUnlocked(): boolean {
+  return readPreferences().progression.coopDefense.itemsUnlocked;
+}
+
+/** Gibt zurueck, ob sich der Freischaltstand tatsaechlich geaendert hat. */
+export function setStoredCoopDefenseItemsUnlocked(unlocked: boolean): boolean {
+  const current = readPreferences();
+  if (current.progression.coopDefense.itemsUnlocked === unlocked) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: { ...current.progression.coopDefense, itemsUnlocked: unlocked },
+    },
+  });
+  return true;
+}
+
+/** Analog zur Klassenfreischaltung: genau ein Map-Sieg oeffnet das System dauerhaft. */
+export function unlockStoredCoopDefenseItemsAfterVictory(completedMapId: string): boolean {
+  return completedMapId.trim() === COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID
+    && setStoredCoopDefenseItemsUnlocked(true);
+}
+
+export function getStoredCoopDefenseItems(): CoopDefenseItem[] {
+  return [...readPreferences().progression.coopDefense.items];
+}
+
+export function getStoredCoopDefenseEquippedItemIds(): CoopDefenseEquippedItemIds {
+  return { ...readPreferences().progression.coopDefense.equippedItemIds };
+}
+
+/** Die vier ausgeruesteten Teile – genau das, was in den Loadout-Commit wandert. */
+export function getStoredEquippedCoopDefenseItems(): CoopDefenseItem[] {
+  const progress = readPreferences().progression.coopDefense;
+  return getEquippedCoopDefenseItems(progress.items, progress.equippedItemIds);
+}
+
+/** Legt ein Item ins Inventar. Gibt `false` zurueck, wenn die Kategorie voll ist. */
+export function addStoredCoopDefenseItem(item: CoopDefenseItem): boolean {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  if (isCoopDefenseStashFull(progress.items, progress.equippedItemIds, item.slot)) return false;
+
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...progress,
+        items: addCoopDefenseItem(progress.items, item),
+        unseenItems: true,
+      },
+    },
+  });
+  return true;
+}
+
+/** Das Item-Menue wurde angesehen: der Hinweis am Button erlischt. */
+export function markStoredCoopDefenseItemsSeen(): boolean {
+  const current = readPreferences();
+  if (!current.progression.coopDefense.unseenItems) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: { ...current.progression.coopDefense, unseenItems: false },
+    },
+  });
+  return true;
+}
+
+/** Ruestet ein besessenes Item in seinem Slot aus. */
+export function equipStoredCoopDefenseItem(uid: string): boolean {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  const item = progress.items.find((entry) => entry.uid === uid);
+  if (!item || progress.equippedItemIds[item.slot] === uid) return false;
+
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...progress,
+        equippedItemIds: { ...progress.equippedItemIds, [item.slot]: uid },
+      },
+    },
+  });
+  return true;
+}
+
+export function unequipStoredCoopDefenseItem(slot: CoopDefenseItemSlot): boolean {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  if (progress.equippedItemIds[slot] === undefined) return false;
+
+  const equippedItemIds = { ...progress.equippedItemIds };
+  delete equippedItemIds[slot];
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: { ...progress, equippedItemIds },
+    },
+  });
+  return true;
+}
+
+/**
+ * Zerlegt ein besessenes Item und schreibt die XP ins Levelsystem. Gibt die gutgeschriebenen XP
+ * zurueck, `0` wenn das Item nicht existiert oder gerade ausgeruestet ist.
+ */
+export function salvageStoredCoopDefenseItem(uid: string): number {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  const item = progress.items.find((entry) => entry.uid === uid);
+  if (!item || progress.equippedItemIds[item.slot] === uid) return 0;
+
+  const xp = getCoopDefenseItemSalvageXp(item);
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...progress,
+        totalXp: sanitizeStoredXp(progress.totalXp + xp),
+        items: removeCoopDefenseItem(progress.items, uid),
+      },
+    },
+  });
+  return xp;
+}
+
+export function getStoredPendingCoopDefenseItemReward(): CoopDefensePendingItemReward | null {
+  const pending = readPreferences().progression.coopDefense.pendingItemReward;
+  return pending ? { ...pending, offers: [...pending.offers] } : null;
+}
+
+/**
+ * Legt ein Angebot ab. Ein bereits offenes Angebot derselben Runde bleibt bestehen, damit eine
+ * wiederholte Auswertung derselben Runde die bereits gezeigten Items nicht austauscht.
+ */
+export function setStoredPendingCoopDefenseItemReward(reward: CoopDefensePendingItemReward): boolean {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  if (progress.pendingItemReward?.roundEndedAt === reward.roundEndedAt) return false;
+
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...progress,
+        pendingItemReward: { ...reward, offers: [...reward.offers] },
+      },
+    },
+  });
+  return true;
+}
+
+export function clearStoredPendingCoopDefenseItemReward(): void {
+  updatePreferences((current) => ({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: { ...current.progression.coopDefense, pendingItemReward: null },
+    },
+  }));
+}
+
+export interface CoopDefenseItemRewardClaim {
+  /** `null`, wenn das gewaehlte Angebot direkt zerlegt wurde. */
+  readonly acquired: CoopDefenseItem | null;
+  readonly salvagedXp: number;
+}
+
+/**
+ * Loest ein offenes Angebot in einem Schritt auf: Item uebernehmen, optional ein vorhandenes
+ * Teil derselben Kategorie zerlegen, Angebot schliessen.
+ *
+ * Ist die Kategorie voll und wird kein zerlegbares Item benannt, passiert **nichts** und die
+ * Funktion gibt `null` zurueck – die Belohnung bleibt offen, statt still verloren zu gehen.
+ * `salvageUid === offerUid` zerlegt das Angebot selbst.
+ */
+export function claimStoredPendingCoopDefenseItemReward(
+  offerUid: string,
+  salvageUid?: string,
+): CoopDefenseItemRewardClaim | null {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  const offer = progress.pendingItemReward?.offers.find((entry) => entry.uid === offerUid);
+  if (!offer) return null;
+
+  const commit = (
+    items: CoopDefenseItem[],
+    salvagedXp: number,
+    acquired: CoopDefenseItem | null,
+  ): CoopDefenseItemRewardClaim => {
+    writePreferences({
+      ...current,
+      progression: {
+        ...current.progression,
+        coopDefense: {
+          ...progress,
+          totalXp: sanitizeStoredXp(progress.totalXp + salvagedXp),
+          items,
+          pendingItemReward: null,
+          // Nur ein uebernommenes Teil ist neu; ein direkt zerlegtes Angebot landet nie im
+          // Inventar und darf den Hinweis am Button deshalb nicht ausloesen.
+          unseenItems: progress.unseenItems || acquired !== null,
+        },
+      },
+    });
+    return { acquired, salvagedXp };
+  };
+
+  if (salvageUid === offerUid) {
+    return commit([...progress.items], getCoopDefenseItemSalvageXp(offer), null);
+  }
+
+  const salvaged = salvageUid
+    ? progress.items.find((entry) => (
+      entry.uid === salvageUid
+        && entry.slot === offer.slot
+        && progress.equippedItemIds[entry.slot] !== entry.uid
+    ))
+    : undefined;
+  if (salvageUid && !salvaged) return null;
+
+  const remaining = salvaged ? removeCoopDefenseItem(progress.items, salvaged.uid) : [...progress.items];
+  if (isCoopDefenseStashFull(remaining, progress.equippedItemIds, offer.slot)) return null;
+
+  const salvagedXp = salvaged ? getCoopDefenseItemSalvageXp(salvaged) : 0;
+  const items = addCoopDefenseItem(remaining, offer);
+  return commit(items, salvagedXp, items[items.length - 1]);
 }
 
 export function getStoredGraphicsQuality(): GraphicsQuality {

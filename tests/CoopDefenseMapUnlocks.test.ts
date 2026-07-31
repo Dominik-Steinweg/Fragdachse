@@ -38,6 +38,12 @@ describe('Coop defense map unlocks', () => {
     expect(sanitizeHighestUnlockedCoopDefenseMapId(undefined)).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
   });
 
+  it('migrates the removed final map to map 15', () => {
+    expect(LAST_MAP_ID).toBe('15');
+    expect(sanitizeHighestUnlockedCoopDefenseMapId('16')).toBe('15');
+    expect(getCoopDefenseMapUnlockedByVictoryOn('15')).toBeNull();
+  });
+
   it('unlocks every earlier map once a late map is reached', () => {
     const unlockedMapIds = getUnlockedCoopDefenseMapConfigs(LAST_MAP_ID).map((mapConfig) => mapConfig.mapId);
     expect(unlockedMapIds).toEqual(COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => mapConfig.mapId));

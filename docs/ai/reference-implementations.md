@@ -52,6 +52,21 @@ Diese Auswahl ist ein Einstieg, keine Vorlage zum blinden Kopieren. Vor Änderun
 
 **Nicht blind kopieren:** Keine neue Verdrahtung wahllos in die bereits große Coordinator-Datei legen. Fachlogik bleibt im jeweiligen System; der Coordinator verbindet und beendet sie nur.
 
+## Zeigerbedienung in Overlays: Tooltip, Aktionsmenue und Drag & Drop
+
+**Pfad:** `src/ui/CoopDefenseItemsOverlay.ts` mit `src/ui/UiTooltip.ts`, `src/ui/UiContextMenu.ts` und dem reinen Modell `src/ui/CoopDefenseItemsModel.ts`
+
+**Nutzen:** Referenz für Overlays, deren Elemente gleichzeitig hoverbar, klickbar und ziehbar sind.
+
+**Gelungen:** Vier Verträge, die sich beim Nachbauen schnell rächen, wenn man sie übersieht:
+
+- Zeigerkoordinaten sind Renderpixel, Overlays liegen im 1920×1080-Designraum. Alles, was aus `pointer.x/y` positioniert wird (Tooltip, Menü, Zieh-Schemen), muss durch `toDesignSpace()` aus `src/graphics/RenderResolution.ts`.
+- Phaser startet das Ziehen ohne `input.dragDistanceThreshold` bereits beim Drücken; ein einfacher Klick würde dann nie als Klick ankommen. Die Schwelle wird beim Öffnen gesetzt und beim Schließen auf den vorherigen Wert zurückgestellt, weil sie zur ganzen Scene gehört.
+- Das gezogene Objekt bleibt liegen; ein separates Schemen folgt dem Zeiger. So bleibt ein Rasterlayout stabil, und `drop` liefert trotzdem die Zone unter dem Zeiger. `dragend` feuert vor `pointerup` – ein Merker unterscheidet Zug von Klick.
+- Tooltip, Menü und Schemen hängen als letzte Kinder im Root-Container des Overlays statt an eigenen Tiefen. Damit liegen sie über dem Overlay, ohne die Depth-Leiter aus `src/config.ts` gegen höher liegende Layer zu verschieben.
+
+**Nicht blind kopieren:** Rasteraufteilung, Tooltip-Inhalt und Ablageregeln gehören ins Phaser-freie Modell, nicht ins Overlay – nur so bleiben sie unter `node` testbar (`tests/CoopDefenseItemsModel.test.ts`). Die Zellen reagieren bewusst auf `pointerup` statt auf `pointerdown`; das ist die Ausnahme für ziehbare Elemente, nicht das allgemeine Buttonverhalten.
+
 ## Niedriglatenter Command-/Event-Kanal
 
 **Pfad:** `src/network/GameplayTransportChannel.ts` mit `tests/GameplayTransportChannel.test.ts`

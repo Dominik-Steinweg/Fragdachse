@@ -27,7 +27,10 @@ import {
   type LivingBarPalette,
 } from '../ui/LivingBarEffect';
 import { attachHoverEffect } from '../ui/uiHover';
+import { UiTooltip } from '../ui/UiTooltip';
 import { isFullscreen, onFullscreenChange, toggleFullscreen } from '../ui/fullscreen';
+import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
+import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const ACCENT = COLORS.GOLD_1;
@@ -40,6 +43,9 @@ const BTN_COPY_COLOR  = COLORS.BLUE_4;
 const BTN_RETRY_COLOR = COLORS.BROWN_4;
 const BTN_AUTO_COLOR  = COLORS.GREEN_4;
 const BTN_UPGRADES_COLOR = COLORS.GOLD_4;
+const BTN_ITEMS_COLOR = COLORS.BLUE_5;
+const BTN_ITEMS_AVAILABLE_COLOR = COLORS.BLUE_3;
+const BTN_ITEMS_LOCKED_COLOR = COLORS.GREY_6;
 const BTN_UPGRADES_AVAILABLE_COLOR = COLORS.GOLD_2;
 const BTN_FULLSCREEN_COLOR = COLORS.GREY_6;
 const FULLSCREEN_ICON_COLOR = COLORS.GOLD_1;
@@ -62,6 +68,8 @@ const COOP_PROGRESS_PANEL_Y = PANEL_Y + PANEL_H + 114;
 const COOP_UPGRADE_BTN_W = READY_BTN_W*0.8;
 const COOP_UPGRADE_BTN_H = READY_BTN_H*0.8;
 const COOP_UPGRADE_BTN_DY = 30;
+/** Upgrades und Items stehen nebeneinander mittig unter der Fortschrittsleiste. */
+const COOP_BTN_GAP = 22;
 const COOP_BAR_W = 160;
 const COOP_BAR_H = 10;
 const COOP_BAR_TEX_KEY = '_lobby_coop_xpbar';
@@ -84,6 +92,8 @@ const FULLSCREEN_LABEL   = 'VOLLBILD';
 const FULLSCREEN_HINT_MS = 2200;
 
 const READY_BTN_X = GAME_WIDTH / 2;
+const COOP_UPGRADE_BTN_X = READY_BTN_X - (COOP_UPGRADE_BTN_W + COOP_BTN_GAP) / 2;
+const COOP_ITEMS_BTN_X = READY_BTN_X + (COOP_UPGRADE_BTN_W + COOP_BTN_GAP) / 2;
 const COPY_BTN_X = GAME_WIDTH / 2 - (ACTION_BTN_W + ACTION_BTN_GAP);
 const RETRY_BTN_X = GAME_WIDTH / 2;
 const TRANSPORT_BTN_X = GAME_WIDTH / 2 + (ACTION_BTN_W + ACTION_BTN_GAP);
@@ -138,8 +148,15 @@ export class LobbyOverlay {
   private coopBarEffect: LivingBarEffect | null = null;
   private coopProgressUpgradesBtn: Phaser.GameObjects.Image | null = null;
   private coopProgressUpgradesBtnLabel: Phaser.GameObjects.Text | null = null;
+  private coopProgressItemsBtn: Phaser.GameObjects.Image | null = null;
+  private coopProgressItemsBtnLabel: Phaser.GameObjects.Text | null = null;
   private coopProgressPointsText: Phaser.GameObjects.Text | null = null;
   private upgradeBtnEffect: LivingBarEffect | null = null;
+  private itemsBtnEffect: LivingBarEffect | null = null;
+  private itemsTooltip: UiTooltip | null = null;
+  private coopItemsUnlocked = false;
+  private coopItemsSignature: string | null = null;
+  private coopItemsHoverAttached = false;
   private visible         = false;
   private btnLocked       = false;
   private roomQuality: RoomQualitySnapshot | null = null;
@@ -160,6 +177,7 @@ export class LobbyOverlay {
     private onRetryRoom: () => void,
     private onShowNetDiagnostics: () => void,
     private onOpenCoopDefenseUpgrades: () => void,
+    private onOpenCoopDefenseItems: () => void,
   ) {}
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
@@ -173,6 +191,8 @@ export class LobbyOverlay {
     this.roomQualitySignature = null;
     this.transportDiagnosticsSignature = null;
     this.coopProgressSignature = null;
+    this.coopItemsSignature = null;
+    this.coopItemsHoverAttached = false;
     if (this.container) {
       this.container.destroy(true);
       this.container = null;
@@ -180,6 +200,10 @@ export class LobbyOverlay {
     }
     this.upgradeBtnEffect?.destroy();
     this.upgradeBtnEffect = null;
+    this.itemsBtnEffect?.destroy();
+    this.itemsBtnEffect = null;
+    this.itemsTooltip?.destroy();
+    this.itemsTooltip = null;
     this.coopBarEffect?.destroy();
     this.coopBarEffect = null;
     this.coopProgressContainer?.destroy(true);
@@ -353,16 +377,60 @@ export class LobbyOverlay {
 
     const upgradeBtnY = COOP_PROGRESS_PANEL_Y + COOP_UPGRADE_BTN_DY;
     this.coopProgressUpgradesBtn = this.scene.add.image(
-      READY_BTN_X, upgradeBtnY,
+      COOP_UPGRADE_BTN_X, upgradeBtnY,
       ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_UPGRADES_COLOR, COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H), COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H, BTN_UPGRADES_COLOR),
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.onOpenCoopDefenseUpgrades())
       .setScrollFactor(0);
-    this.coopProgressUpgradesBtnLabel = this.scene.add.text(READY_BTN_X, upgradeBtnY, 'UPGRADES', {
-      fontSize: '22px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_3), fontStyle: 'bold',
+    this.coopProgressUpgradesBtnLabel = this.scene.add.text(COOP_UPGRADE_BTN_X, upgradeBtnY, 'UPGRADES', {
+      fontSize: '19px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_3), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
     this.attachHoverEffect(this.coopProgressUpgradesBtn, this.coopProgressUpgradesBtnLabel);
+
+    // Items bleiben bis zum Sieg auf Map 10 gesperrt – gleiche Darstellung wie gesperrte Klassen:
+    // grauer Button, gedimmt, kein Hand-Cursor, kein Hover-Effekt, Klick laeuft ins Leere.
+    this.coopProgressItemsBtn = this.scene.add.image(
+      COOP_ITEMS_BTN_X, upgradeBtnY,
+      ensureGlossyButtonTexture(this.scene, btnTexKey(BTN_ITEMS_LOCKED_COLOR, COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H), COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H, BTN_ITEMS_LOCKED_COLOR),
+    )
+      .setInteractive({ useHandCursor: false })
+      .on('pointerdown', () => {
+        if (!this.coopItemsUnlocked) return;
+        this.onOpenCoopDefenseItems();
+      })
+      .setScrollFactor(0)
+      .setAlpha(0.48);
+    // Gesperrt erklaert der Mouse-Over den Weg zur Freischaltung - wie bei den gesperrten
+    // Klassen-Buttons im Upgrade-Overlay.
+    this.coopProgressItemsBtn.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      if (this.coopItemsUnlocked) return;
+      this.itemsTooltip?.show(
+        'ITEMS',
+        COLORS.GOLD_1,
+        [
+          { text: 'Noch gesperrt.', color: COLORS.GREY_1 },
+          { text: '', color: COLORS.GREY_5 },
+          { text: 'Freischaltung durch einen Sieg auf:', color: COLORS.GREY_3 },
+          {
+            text: getCoopDefenseMapConfig(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID).displayName,
+            color: COLORS.GOLD_2,
+            bold: true,
+          },
+          { text: '', color: COLORS.GREY_5 },
+          { text: 'Danach lassen Siege dauerhafte Ausruestung fallen.', color: COLORS.GREY_3 },
+        ],
+        pointer,
+      );
+    });
+    this.coopProgressItemsBtn.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.coopItemsUnlocked) return;
+      this.itemsTooltip?.move(pointer);
+    });
+    this.coopProgressItemsBtn.on('pointerout', () => this.itemsTooltip?.hide());
+    this.coopProgressItemsBtnLabel = this.scene.add.text(COOP_ITEMS_BTN_X, upgradeBtnY, '🔒 ITEMS', {
+      fontSize: '19px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4), fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setAlpha(0.48);
     this.coopProgressPointsText = this.scene.add.text(READY_BTN_X, upgradeBtnY + COOP_UPGRADE_BTN_H / 2 + 18, '', {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GOLD_1), fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0);
@@ -374,6 +442,8 @@ export class LobbyOverlay {
       this.coopProgressBarFill,
       this.coopProgressUpgradesBtn,
       this.coopProgressUpgradesBtnLabel,
+      this.coopProgressItemsBtn,
+      this.coopProgressItemsBtnLabel,
       this.coopProgressPointsText,
     ]).setDepth(DEPTH.OVERLAY + 0.5).setVisible(false);
 
@@ -386,7 +456,7 @@ export class LobbyOverlay {
     this.upgradeBtnEffect = new LivingBarEffect(
       this.scene,
       this.coopProgressContainer,
-      READY_BTN_X - COOP_UPGRADE_BTN_W / 2,
+      COOP_UPGRADE_BTN_X - COOP_UPGRADE_BTN_W / 2,
       upgradeBtnY - COOP_UPGRADE_BTN_H / 2,
       COOP_UPGRADE_BTN_W,
       COOP_UPGRADE_BTN_H,
@@ -396,6 +466,24 @@ export class LobbyOverlay {
     // Effekt-Partikel ueber dem Button, aber unter dem Label halten.
     this.coopProgressContainer.bringToTop(this.coopProgressUpgradesBtnLabel);
     this.upgradeBtnEffect.stop();
+
+    // Gleiches Prinzip auf dem Item-Button: er leuchtet, solange ungesehene Teile bereitliegen.
+    this.itemsBtnEffect = new LivingBarEffect(
+      this.scene,
+      this.coopProgressContainer,
+      COOP_ITEMS_BTN_X - COOP_UPGRADE_BTN_W / 2,
+      upgradeBtnY - COOP_UPGRADE_BTN_H / 2,
+      COOP_UPGRADE_BTN_W,
+      COOP_UPGRADE_BTN_H,
+      { dark: COLORS.BLUE_3, mid: COLORS.BLUE_2, light: COLORS.BLUE_1 },
+      { glowTarget: this.coopProgressItemsBtn, scrollFactor: 0, intensity: 0.8 },
+    );
+    this.coopProgressContainer.bringToTop(this.coopProgressItemsBtnLabel);
+    this.itemsBtnEffect.stop();
+
+    // Zuletzt eingehaengt, damit der Tooltip ueber Buttons und Effektpartikeln liegt.
+    this.itemsTooltip = new UiTooltip(this.scene, 360);
+    this.coopProgressContainer.add(this.itemsTooltip.build());
 
     // Living-Bar-Effekt auf dem LVL-Fortschrittsbalken (wie die grosse XP-Leiste).
     this.coopBarEffect = new LivingBarEffect(
@@ -428,6 +516,8 @@ export class LobbyOverlay {
     this.container?.setVisible(false);
     this.coopProgressContainer?.setVisible(false);
     this.upgradeBtnEffect?.stop();
+    this.itemsBtnEffect?.stop();
+    this.itemsTooltip?.hide();
     this.coopBarEffect?.stop();
   }
 
@@ -617,6 +707,67 @@ export class LobbyOverlay {
       this.upgradeBtnEffect?.start();
     } else {
       this.upgradeBtnEffect?.stop();
+    }
+  }
+
+  /**
+   * Zustand des Item-Buttons. Getrennt vom Fortschritts-Snapshot, weil Freischaltung, offene
+   * Belohnung und ungesehene Teile nicht Teil der Upgrade-Progression sind.
+   *
+   * `hasUnseenItems` meint neu erhaltene Teile, die der Spieler noch nicht angesehen hat; sie
+   * lassen den Button leuchten wie freie Punkte den Upgrade-Button.
+   */
+  setCoopDefenseItemsState(
+    unlocked: boolean,
+    hasPendingReward: boolean,
+    hasUnseenItems: boolean,
+  ): void {
+    if (!this.coopProgressItemsBtn || !this.coopProgressItemsBtnLabel) return;
+
+    const needsAttention = unlocked && (hasPendingReward || hasUnseenItems);
+    const signature = `${unlocked}|${hasPendingReward}|${hasUnseenItems}|${this.visible}`;
+    if (signature === this.coopItemsSignature) return;
+    this.coopItemsSignature = signature;
+    this.coopItemsUnlocked = unlocked;
+    // Ein offener Sperr-Hinweis waere nach dem Freischalten falsch.
+    this.itemsTooltip?.hide();
+
+    const color = !unlocked
+      ? BTN_ITEMS_LOCKED_COLOR
+      : needsAttention ? BTN_ITEMS_AVAILABLE_COLOR : BTN_ITEMS_COLOR;
+    this.coopProgressItemsBtn
+      .setTexture(ensureGlossyButtonTexture(
+        this.scene,
+        btnTexKey(color, COOP_UPGRADE_BTN_W, COOP_UPGRADE_BTN_H),
+        COOP_UPGRADE_BTN_W,
+        COOP_UPGRADE_BTN_H,
+        color,
+      ))
+      .setAlpha(unlocked ? 1 : 0.48)
+      .setInteractive({ useHandCursor: unlocked });
+
+    // Label auf dem hellen Button dunkler faerben, damit es lesbar bleibt - wie beim
+    // Upgrade-Button nebenan.
+    const labelColor = !unlocked
+      ? COLORS.GREY_4
+      : needsAttention ? COLORS.BLUE_6 : COLORS.GREY_1;
+    this.coopProgressItemsBtnLabel
+      .setText(unlocked ? 'ITEMS' : '🔒 ITEMS')
+      .setColor(toCssColor(labelColor))
+      .setAlpha(unlocked ? 1 : 0.48);
+
+    // Der Hover-Effekt merkt sich beim Anhaengen die Ruhe-Alpha, darf also erst nach dem
+    // Freischalten gebunden werden - und dann genau einmal.
+    if (unlocked && !this.coopItemsHoverAttached) {
+      this.attachHoverEffect(this.coopProgressItemsBtn, this.coopProgressItemsBtnLabel);
+      this.coopItemsHoverAttached = true;
+    }
+
+    if (needsAttention && this.visible) {
+      this.itemsBtnEffect?.setFilledWidth(COOP_UPGRADE_BTN_W);
+      this.itemsBtnEffect?.start();
+    } else {
+      this.itemsBtnEffect?.stop();
     }
   }
 

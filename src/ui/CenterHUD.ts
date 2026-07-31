@@ -21,10 +21,10 @@ import {
   COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H,
   COOP_DEFENSE_TUTORIAL_PAD_TOP,
   COOP_DEFENSE_TUTORIAL_PAD_X,
-  COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X,
   COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
   COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
   COOP_DEFENSE_TUTORIAL_TITLE_H,
+  getCoopDefenseTutorialPanelCenterX,
   getCoopDefenseTutorialPanelHeight,
 } from '../config/coopDefenseTutorial';
 import { HELP_CONTROLS } from '../config/helpControls';
@@ -265,10 +265,10 @@ export class CenterHUD {
     this.tutorialGraphics = this.scene.add.graphics();
     this.tutorialTitle = this.scene.add.text(0, TUTORIAL_PAD_TOP, 'TUTORIAL', TUTORIAL_TITLE_FONT)
       .setOrigin(0.5, 0)
-      .setScrollFactor(0);
+      .setScrollFactor(1);
     this.tutorialBody = this.scene.add.text(0, TUTORIAL_PAD_TOP + TUTORIAL_TITLE_H, '', TUTORIAL_BODY_FONT)
       .setOrigin(0.5, 0)
-      .setScrollFactor(0);
+      .setScrollFactor(1);
 
     // Steuerungstabelle: einmal aufgebaut, nur in der Steuerungs-Variante sichtbar.
     // Pro Zeile zwei Text-Objekte statt eines mehrzeiligen Textes, weil Tasten- und
@@ -276,20 +276,20 @@ export class CenterHUD {
     const left = -COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2;
     this.tutorialControlsHeading = this.scene.add.text(0, TUTORIAL_CONTROLS_TOP, 'STEUERUNG', TUTORIAL_TITLE_FONT)
       .setOrigin(0.5, 0)
-      .setScrollFactor(0);
+      .setScrollFactor(1);
     this.tutorialControlsTexts = HELP_CONTROLS.flatMap(([key, desc], i) => {
       const y = TUTORIAL_CONTROLS_ROWS_Y + i * COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H
         + COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H / 2;
       return [
         this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X, y, key, TUTORIAL_CONTROLS_KEY_FONT)
-          .setOrigin(0, 0.5).setScrollFactor(0),
+          .setOrigin(0, 0.5).setScrollFactor(1),
         this.scene.add.text(left + COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X, y, desc, TUTORIAL_CONTROLS_DESC_FONT)
-          .setOrigin(0, 0.5).setScrollFactor(0),
+          .setOrigin(0, 0.5).setScrollFactor(1),
       ];
     });
 
     this.tutorialContainer = this.scene.add.container(
-      COOP_DEFENSE_TUTORIAL_PANEL_CENTER_X,
+      getCoopDefenseTutorialPanelCenterX(),
       COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
       [
       this.tutorialGraphics,
@@ -299,7 +299,7 @@ export class CenterHUD {
       ...this.tutorialControlsTexts,
       ],
     );
-    this.tutorialContainer.setScrollFactor(0).setVisible(false).setAlpha(0);
+    this.tutorialContainer.setScrollFactor(1).setVisible(false).setAlpha(0);
     this.container.add(this.tutorialContainer);
   }
 
@@ -479,12 +479,16 @@ export class CenterHUD {
     this.puContainerRef = c;
   }
 
-  updateTimer(secs: number, bossObjectivePending = false): void {
+  /**
+   * @param objectiveLabel Gesetzt: ersetzt die Restzeit durch das offene Rundenziel. Dieselbe
+   *   Darstellung wie beim wartenden Boss – kein zusaetzliches Widget.
+   */
+  updateTimer(secs: number, objectiveLabel: string | null = null): void {
     const mm = Math.floor(secs / 60);
     const ss = secs % 60;
-    const nextText = bossObjectivePending ? 'BOSS MUSS FALLEN' : `${mm}:${ss.toString().padStart(2, '0')}`;
-    const nextColor = bossObjectivePending ? '#ffd166' : secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
-    this.timerText.setFontSize(bossObjectivePending ? 18 : 32);
+    const nextText = objectiveLabel ?? `${mm}:${ss.toString().padStart(2, '0')}`;
+    const nextColor = objectiveLabel ? '#ffd166' : secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
+    this.timerText.setFontSize(objectiveLabel ? 18 : 32);
     if (nextText !== this.lastTimerText) {
       this.timerText.setText(nextText);
       this.lastTimerText = nextText;
@@ -500,6 +504,10 @@ export class CenterHUD {
    *   Hilfe-Fensters; das Fenster wächst entsprechend (Einstiegs-Map).
    */
   updateTutorial(text: string | null, showControls = false): void {
+    this.tutorialContainer.setPosition(
+      getCoopDefenseTutorialPanelCenterX(),
+      COOP_DEFENSE_TUTORIAL_PANEL_TOP_Y,
+    );
     const nextText = text?.trim() || null;
     if (nextText === this.tutorialValue && showControls === this.tutorialControlsValue) return;
     this.tutorialValue = nextText;

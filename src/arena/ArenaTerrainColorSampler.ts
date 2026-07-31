@@ -1,8 +1,8 @@
 import type * as Phaser from 'phaser';
 import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../config';
-import { CAPTURE_THE_BEER_MODE } from '../gameModes';
 import type { GameMode } from '../types';
 import type { ArenaBuilderResult } from './ArenaBuilder';
+import { resolveArenaBackgroundSpec } from './ArenaBackground';
 
 const TEX_TERRAIN_SAMPLER = '__leaf_blower_terrain_sampler';
 
@@ -21,11 +21,16 @@ export function createArenaTerrainColorSampler(
   const ctx = canvasTexture.context;
   ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
-  drawImageFrame(
+  const background = resolveArenaBackgroundSpec(mode, ARENA_WIDTH);
+  drawImageFrameRegion(
     scene,
     ctx,
-    mode === CAPTURE_THE_BEER_MODE ? 'gras_bg_ctb' : 'gras_bg_dm',
+    background.textureKey,
     undefined,
+    background.sourceX,
+    background.sourceY,
+    background.sourceWidth,
+    background.sourceHeight,
     0,
     0,
     ARENA_WIDTH,
@@ -150,6 +155,38 @@ function drawImageFrame(
     frame.cutY,
     frame.cutWidth,
     frame.cutHeight,
+    x,
+    y,
+    width,
+    height,
+  );
+}
+
+function drawImageFrameRegion(
+  scene: Phaser.Scene,
+  ctx: CanvasRenderingContext2D,
+  textureKey: string,
+  frameName: string | number | undefined,
+  sourceX: number,
+  sourceY: number,
+  sourceWidth: number,
+  sourceHeight: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  const frame = scene.textures.getFrame(textureKey, frameName);
+  if (!frame) return;
+  const sourceImage = getFrameSource(frame);
+  if (!sourceImage) return;
+
+  ctx.drawImage(
+    sourceImage,
+    frame.cutX + sourceX,
+    frame.cutY + sourceY,
+    sourceWidth,
+    sourceHeight,
     x,
     y,
     width,

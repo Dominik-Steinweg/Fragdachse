@@ -20,7 +20,7 @@ function commit(
 ): LoadoutCommitSnapshot {
   return {
     weapon1: 'GLOCK',
-    weapon2: classId === 'inspector_gadachs' ? 'OVERCHARGE_CORE' : 'P90',
+    weapon2: classId === 'inspector_gadachs' ? 'ENERGIEINJEKTOR' : 'P90',
     utility: 'FELSEN',
     ultimate: 'GAUSS',
     coopDefenseClassId: classId,
@@ -71,7 +71,7 @@ describe('coop-defense classes', () => {
       'inspector_gadachs',
     );
 
-    expect(snapshot.weapon2).toBe('OVERCHARGE_CORE');
+    expect(snapshot.weapon2).toBe('ENERGIEINJEKTOR');
     expect(isCoopDefenseReadyLoadoutComplete(snapshot)).toBe(true);
     expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: 'P90' })).toBe(false);
     expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: null })).toBe(false);

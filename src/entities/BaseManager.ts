@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
-import { TEAM_BLUE_COLOR } from '../config';
+import { TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import type { SyncedBaseState } from '../types';
+import type { CoopBaseFaction } from '../config/coopDefenseMaps';
 import { getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
 import { BaseEntity, type BaseTurretRuntimeState } from './BaseEntity';
 import { mixColors } from '../effects/EffectUtils';
@@ -14,6 +15,9 @@ import {
 const BASE_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.5);
 /** Basistürme lesen sich mit einem helleren, konzentrierteren Kern klar vom Sockel ab. */
 const BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.72);
+/** Gegnerbasen leuchten in derselben Helligkeit, aber in der Farbe des roten Teams. */
+const HOSTILE_BASE_LIGHT_COLOR = mixColors(TEAM_RED_COLOR, 0xffffff, 0.5);
+const HOSTILE_BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_RED_COLOR, 0xffffff, 0.72);
 
 /**
  * Verwaltet alle aktiven Coop-Defense-Basen einer Runde.
@@ -90,19 +94,20 @@ export class BaseManager {
     const seen = new Set<string>();
     for (const entity of this.entities) {
       const spots = entity.getLightSpots();
+      const hostile = entity.faction === 'hostile';
       for (let index = 0; index < spots.length; index += 1) {
         const spot = spots[index];
         const key = baseLightKey(entity.id, index);
         lighting.setLight(key, 'baseGlow', spot.x, spot.y, {
           radiusPx: spot.radius,
-          color: BASE_LIGHT_COLOR,
+          color: hostile ? HOSTILE_BASE_LIGHT_COLOR : BASE_LIGHT_COLOR,
         });
         seen.add(key);
       }
       for (const turret of entity.getTurrets()) {
         const key = baseTurretLightKey(turret.id);
         lighting.setLight(key, 'fliegenpilz', turret.x, turret.y, {
-          color: BASE_TURRET_LIGHT_COLOR,
+          color: hostile ? HOSTILE_BASE_TURRET_LIGHT_COLOR : BASE_TURRET_LIGHT_COLOR,
         });
         seen.add(key);
       }
@@ -154,12 +159,46 @@ export class BaseManager {
     return this.entities;
   }
 
-  getActiveBaseIds(): ReadonlySet<string> {
+  /**
+   * Basen einer Fraktion. Der Standardaufruf `getBases()` bleibt fraktionsblind, weil raeumliche
+   * Verbraucher (Kollision, Sichtlinien, Lichtverdeckung) alle Basen brauchen.
+   */
+  getBasesByFaction(faction: CoopBaseFaction): readonly BaseEntity[] {
+    return this.entities.filter((entity) => entity.faction === faction);
+  }
+
+  getActiveBaseIds(faction?: CoopBaseFaction): ReadonlySet<string> {
     const result = new Set<string>();
     for (const entity of this.entities) {
-      if (!entity.isDestroyed()) result.add(entity.id);
+      if (entity.isDestroyed()) continue;
+      if (faction && entity.faction !== faction) continue;
+      result.add(entity.id);
     }
     return result;
+  }
+
+  /** Summierte HP einer Fraktion – die Basis der Sieg- und Niederlagebedingung. */
+  getTotalHp(faction: CoopBaseFaction): number {
+    return this.getBasesByFaction(faction).reduce((sum, entity) => sum + entity.getHp(), 0);
+  }
+
+  hasFaction(faction: CoopBaseFaction): boolean {
+    return this.entities.some((entity) => entity.faction === faction);
+  }
+
+  /**
+   * Basis an einem Weltpunkt. Fuer den Hitscan-Pfad, der nur ein Treffer-Rechteck kennt und
+   * keinen Zugriff auf das getroffene GameObject hat.
+   */
+  getBaseIdAtWorldPoint(x: number, y: number): string | undefined {
+    for (const entity of this.entities) {
+      if (entity.isDestroyed()) continue;
+      for (const body of entity.getCellBodies()) {
+        const bounds = body.getBounds();
+        if (bounds.contains(x, y)) return entity.id;
+      }
+    }
+    return undefined;
   }
 
   getBase(id: string): BaseEntity | undefined {

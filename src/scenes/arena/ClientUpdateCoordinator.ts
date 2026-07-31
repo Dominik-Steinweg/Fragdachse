@@ -12,17 +12,22 @@ import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseUpgradeProfile, LoadoutToolRef, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
-import { getStoredCoopDefenseProgress, setStoredCoopDefenseUpgradeProfile } from '../../utils/localPreferences';
-import { getCoopDefenseResolvedEffectTotals } from '../../utils/coopDefenseUpgrades';
+import {
+  getStoredCoopDefenseProgress,
+  getStoredEquippedCoopDefenseItems,
+  setStoredCoopDefenseUpgradeProfile,
+} from '../../utils/localPreferences';
+import { getCoopDefenseCommittedEffectTotals } from '../../utils/coopDefenseItemEffects';
+import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS, resolveCoopDefenseStat } from '../../utils/coopDefenseStats';
 import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
-const EMPTY_EFFECT_TOTALS = { additive: {}, percentage: {} } as ReturnType<typeof getCoopDefenseResolvedEffectTotals>;
+const EMPTY_EFFECT_TOTALS = EMPTY_COOP_DEFENSE_EFFECT_TOTALS;
 
 export interface ClientUpdatePerformanceMetrics {
   totalMs: number;
@@ -64,11 +69,8 @@ export class ClientUpdateCoordinator {
     playerId: string;
     value: ReturnType<typeof resolveEffectiveLoadoutSelection>;
   } | null = null;
-  private effectTotalsCache: {
-    key: object;
-    value: ReturnType<typeof getCoopDefenseResolvedEffectTotals>;
-  } | null = null;
   private storedProfileFallback: CoopDefenseUpgradeProfile | null = null;
+  private storedItemsFallback: readonly CoopDefenseItem[] | null = null;
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = { weapon1: 0, weapon2: 0 };
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
@@ -545,24 +547,30 @@ export class ClientUpdateCoordinator {
     return remaining <= 0 ? 0 : Math.min(1, remaining / cooldown);
   }
 
+  /**
+   * Delegiert an dieselbe reine Funktion wie der Host, damit die HUD-Maxima die
+   * Klassenmultiplikatoren nicht unterschlagen.
+   */
   private getResolvedLocalPlayerStat(stat: string, baseValue: number): number {
-    const totals = this.getLocalEffectTotals();
-    return Math.max(0, (baseValue + (totals.additive[stat] ?? 0)) * (1 + (totals.percentage[stat] ?? 0)));
+    return resolveCoopDefenseStat(
+      this.getLocalEffectTotals(),
+      this.getLocalCoopDefenseClassId(),
+      stat,
+      baseValue,
+    );
   }
 
   /**
-   * Memoisiert wie {@link resolveCommittedLoadoutSelection} ueber die Profilreferenz. Die
-   * Max-Werte des HUD (HP, Armor, Adrenalin, Rage) rufen das pro Frame mehrfach auf, und der
-   * Fallback in {@link getLocalCoopDefenseProfile} liest dabei aus dem `localStorage`.
+   * Derselbe Einstiegspunkt wie auf dem Host, damit HUD und Host nicht unterschiedliche
+   * Teilmengen aus Upgrades und Ausruestung kombinieren. Die Memoisierung liegt in
+   * {@link getCoopDefenseCommittedEffectTotals} und greift ueber die Referenzen, die die
+   * Fallbacks unten stabil halten.
    */
   private getLocalEffectTotals() {
     const profile = this.getLocalCoopDefenseProfile();
-    if (!profile) return EMPTY_EFFECT_TOTALS;
-    const cached = this.effectTotalsCache;
-    if (cached && cached.key === profile) return cached.value;
-    const value = getCoopDefenseResolvedEffectTotals(profile, this.getLocalCoopDefenseClassId() ?? undefined);
-    this.effectTotalsCache = { key: profile, value };
-    return value;
+    const items = this.getLocalCoopDefenseItems();
+    if (!profile && items.length === 0) return EMPTY_EFFECT_TOTALS;
+    return getCoopDefenseCommittedEffectTotals(profile, this.getLocalCoopDefenseClassId(), items);
   }
 
   /**
@@ -581,6 +589,18 @@ export class ClientUpdateCoordinator {
       ? progress.profilesByClass[progress.selectedClassId]
       : progress.defaultProfile;
     return this.storedProfileFallback;
+  }
+
+  /**
+   * Ausruestung des lokalen Spielers. Der Fallback greift wie beim Profil nur, solange der
+   * Commit-Snapshot noch nicht angekommen ist – sonst zeigte die HUD waehrend des Countdowns
+   * kurzzeitig zu niedrige Maxima. Die Referenz wird gehalten, damit der Totals-Cache greift.
+   */
+  private getLocalCoopDefenseItems(): readonly CoopDefenseItem[] {
+    const committed = bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())?.equippedItems;
+    if (committed) return committed;
+    this.storedItemsFallback ??= getStoredEquippedCoopDefenseItems();
+    return this.storedItemsFallback;
   }
 
   getLocalInspectorTools(): readonly LoadoutToolRef[] {
@@ -638,8 +658,8 @@ export class ClientUpdateCoordinator {
     // Loadout-Caches verwerfen: Zwischen zwei Runden kann das Upgrade-Menue das gespeicherte
     // Profil geaendert haben, und der Fallback-Klon traegt keine neue Referenz.
     this.committedSelectionCache = null;
-    this.effectTotalsCache = null;
     this.storedProfileFallback = null;
+    this.storedItemsFallback = null;
     this.damagedStaticRockIds.clear();
     this.prevAliveStates.clear();
     this.prevDashPhases.clear();

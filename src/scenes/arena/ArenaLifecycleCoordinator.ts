@@ -59,7 +59,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
@@ -242,11 +242,15 @@ export class ArenaLifecycleCoordinator {
     // Der Endstand der Vorrunde bleibt in der Lobby sichtbar, wird aber beim Start atomar
     // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
     bridge.publishRoundResults([]);
-    applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
-    const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
       : null;
+    applyArenaMetricsForMode(
+      bridge.getGameMode(),
+      'ARENA',
+      coopDefenseMapConfig?.arenaWidthCells,
+    );
+    const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
     const roundDurationSec = coopDefenseMapConfig?.roundDurationSec ?? ARENA_DURATION_SEC;
     const layout = ArenaGenerator.generate(Date.now(), coopDefenseMapConfig ?? undefined);
@@ -498,12 +502,13 @@ export class ArenaLifecycleCoordinator {
     // EntityBurnRenderer der jeweiligen Entity.
     this.ctx.enemyManager?.setLightingSystem(this.renderers.lighting);
     this.ctx.coopDefenseRoundStateSystem = bridge.isHost() && this.ctx.baseManager && isCoopDefenseMode(bridge.getGameMode())
-      ? new CoopDefenseRoundStateSystem(
-        this.ctx.baseManager,
-        () => bridge.computeSecondsLeft(),
-        !!coopDefenseMapConfig?.boss,
-        () => this.ctx.coopDefenseWaveSpawner?.isBossDefeated() ?? false,
-      )
+      ? new CoopDefenseRoundStateSystem({
+        baseManager: this.ctx.baseManager,
+        objective: coopDefenseMapConfig?.objective,
+        getSecondsLeft: () => bridge.computeSecondsLeft(),
+        bossRequired: !!coopDefenseMapConfig?.boss,
+        isBossDefeated: () => this.ctx.coopDefenseWaveSpawner?.isBossDefeated() ?? false,
+      })
       : null;
     if (bridge.isHost()) {
       this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(bridge.getGameMode())
@@ -833,6 +838,17 @@ export class ArenaLifecycleCoordinator {
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, resolvedDamage, attackerId);
       if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockIndex, 'damage', attackerId);
     });
+    // Ein Trichter fuer allen Basisschaden – dieselbe Verdrahtung wie bei Felsen und Zug, damit
+    // Klassen- und Item-Multiplikatoren auch hier greifen.
+    this.ctx.combatSystem.setBaseDamageCallback((baseId, damage, attackerId) => {
+      const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
+        attackerId,
+        `base:${baseId}`,
+        damage,
+        false,
+      ).amount ?? damage;
+      this.ctx.baseManager?.applyDamage(baseId, resolvedDamage);
+    });
     this.ctx.combatSystem.setTrainDamageCallback((damage, attackerId) => {
       const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
         attackerId,
@@ -964,9 +980,12 @@ export class ArenaLifecycleCoordinator {
             id: turret.id,
             x: turret.x,
             y: turret.y,
-            ownerId: COOP_DEFENSE_BASE_TURRET_OWNER_ID,
-            ownerColor: TEAM_BLUE_COLOR,
+            ownerId: turret.faction === 'hostile'
+              ? COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID
+              : COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+            ownerColor: turret.faction === 'hostile' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR,
             weaponId: turret.weaponId,
+            targetMode: turret.faction === 'hostile' ? 'players' as const : 'enemies' as const,
           }));
           return [...placeableTurrets, ...baseTurrets];
         },
@@ -1194,11 +1213,17 @@ export class ArenaLifecycleCoordinator {
       this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
-        const fire = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID && weapon.fire.type === 'projectile'
+        const isFriendlyBaseTurret = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
+        const isHostileBaseTurret = ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;
+        const isBaseTurret = isFriendlyBaseTurret || isHostileBaseTurret;
+        const fire = isBaseTurret && weapon.fire.type === 'projectile'
           ? {
             ...weapon.fire,
             homing: weapon.fire.homing
-              ? { ...weapon.fire.homing, targetTypes: ['enemies'] as const }
+              ? {
+                ...weapon.fire.homing,
+                targetTypes: isHostileBaseTurret ? ['players'] as const : ['enemies'] as const,
+              }
               : undefined,
           }
           : weapon.fire;
@@ -1211,7 +1236,7 @@ export class ArenaLifecycleCoordinator {
           targetY,
           ownerId,
           color,
-          { ignoreBaseCollisions: ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID },
+          { ignoreBaseCollisions: isBaseTurret },
         );
       });
       if (this.ctx.enemyManager && this.ctx.baseManager) {
@@ -1508,6 +1533,14 @@ export class ArenaLifecycleCoordinator {
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockId, 'damage', attackerId);
       });
 
+      // Nur feindliche Basen nehmen Projektilschaden; eigene Basen bleiben unzerstoerbar
+      // durch Spielerbeschuss.
+      this.ctx.projectileManager.setBaseHitCallback((baseId, damage, attackerId) => {
+        const base = this.ctx.baseManager?.getBase(baseId);
+        if (!base || base.faction !== 'hostile' || base.getHp() <= 0) return;
+        this.ctx.combatSystem.applyBaseDamage(baseId, damage, attackerId);
+      });
+
       this.ctx.projectileManager.setSupportImpactCallback((projectile, impact) => {
         this.hostUpdate.applySupportProjectileImpact(projectile, impact);
       });
@@ -1713,6 +1746,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setObstacleIndex(null);
     this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
+    this.ctx.projectileManager.setBaseHitCallback(null);
     this.ctx.projectileManager.setSupportImpactCallback(null);
     this.ctx.projectileManager.setProjectileImpactCallback(null);
     this.ctx.projectileManager.setProjectileResolvedCallback(null);
@@ -1785,7 +1819,12 @@ export class ArenaLifecycleCoordinator {
     }
     this.layoutRetryCount = 0;
 
-    applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA');
+    const coopDefenseArenaWidthCells = isCoopDefenseMode(bridge.getGameMode())
+      ? getCoopDefenseMapConfig(
+        roundState.coopDefenseMapId ?? bridge.getCoopDefenseMapId(),
+      ).arenaWidthCells
+      : undefined;
+    applyArenaMetricsForMode(bridge.getGameMode(), 'ARENA', coopDefenseArenaWidthCells);
     this.buildArena(layout);
     this.arenaBuilt = true;
 

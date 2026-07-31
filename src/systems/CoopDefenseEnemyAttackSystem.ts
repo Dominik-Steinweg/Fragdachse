@@ -378,7 +378,8 @@ export class CoopDefenseEnemyAttackSystem {
   private findNearestBaseTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
     let best: EnemyAttackCandidate | null = null;
 
-    for (const base of this.baseManager.getBases()) {
+    // Gegnerbasen sind fuer Zombies kein Ziel; sie gehoeren derselben Fraktion.
+    for (const base of this.baseManager.getBasesByFaction('friendly')) {
       if (base.getHp() <= 0) continue;
 
       const surface = base.getNearestSurfacePoint(enemy.sprite.x, enemy.sprite.y);

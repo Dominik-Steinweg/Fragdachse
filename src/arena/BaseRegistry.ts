@@ -16,6 +16,7 @@ import {
   type CoopBaseAnchor,
   type CoopBaseCellOffset,
   type CoopBaseConfig,
+  type CoopBaseFaction,
   type CoopBasePowerUpPedestalConfig,
   type CoopBaseShape,
   type CoopBaseTurretConfig,
@@ -57,6 +58,12 @@ export interface BaseSpec {
   readonly cells: readonly { gridX: number; gridY: number }[];
   readonly region: ArenaGridRegion;
   readonly hpMax: number;
+  /**
+   * Bestimmt, wer die Basis angreift, wer sie repariert und ob ihr Fall die Runde gewinnt oder
+   * verliert. Host und Client leiten sie identisch aus der replizierten Map-ID ab; sie ist
+   * deshalb kein Teil des Netzwerk-Snapshots.
+   */
+  readonly faction: CoopBaseFaction;
   readonly turrets: readonly BaseTurretSpec[];
   readonly powerUpPedestals: readonly BasePowerUpPedestalSpec[];
 }
@@ -162,6 +169,7 @@ function resolveBaseSpec(config: CoopBaseConfig): BaseSpec {
     cells: absoluteCells,
     region,
     hpMax: Math.max(1, config.hpMax),
+    faction: config.faction ?? 'friendly',
     turrets,
     powerUpPedestals,
   };

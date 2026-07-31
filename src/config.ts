@@ -393,6 +393,10 @@ export const LOBBY_SIDE_MENU_WIDTH = DEFAULT_ARENA_OFFSET_X + CELL_SIZE * 2;
 export const LOBBY_SIDE_MENU_EXTRA_HEIGHT = CELL_SIZE;
 export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 / 135
 export const GRID_ROWS           = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 22
+/** Aktuelle Coop-Breite: 60 Rasterzellen entsprechen der 1920-px-Designbreite. */
+export const DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS = FULL_ARENA_WIDTH / CELL_SIZE;
+/** Das vorhandene CTB-Hintergrundbild definiert die gemeinsame maximale Arenabreite. */
+export const MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS = CAPTURE_THE_BEER_ARENA_WIDTH / CELL_SIZE;
 export const ROCK_FILL_RATIO     = 0.30;
 export const DIRT_FILL_RATIO     = 0.05;   
 export const DEFAULT_TREE_COUNT  = 3;
@@ -424,6 +428,8 @@ export const COOP_DEFENSE_BASE_HP_BAR_HEIGHT = 10;
 export const COOP_DEFENSE_BASE_HP_BAR_GAP = 12;
 /** Füll-Farbe der Coop-Basis HP-Bar (gleiches Grün wie Verbündete). */
 export const COOP_DEFENSE_BASE_HP_BAR_FILL = 0x00cc44;
+/** Füll-Farbe der HP-Bar einer feindlichen Basis – dasselbe Rot wie das rote Team. */
+export const COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL = COLORS.RED_2;
 
 // ---- Coop-Defense Pathfinding ----
 /** Standardkosten fuer begehbaren Boden im hostseitigen Cost Field. */
@@ -518,14 +524,52 @@ export function isCoopDefenseBasesActive(): boolean {
   return COOP_DEFENSE_BASES_ACTIVE;
 }
 
-export function getArenaMetricsProfile(mode: GameMode, phase: GamePhase): ArenaMetricsProfile {
+const COOP_DEFENSE_ARENA_METRICS_PROFILES = new Map<number, ArenaMetricsProfile>();
+
+export function normalizeCoopDefenseArenaWidthCells(widthCells: number | undefined): number {
+  if (typeof widthCells !== 'number' || !Number.isFinite(widthCells)) {
+    return DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS;
+  }
+  return Math.max(
+    DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+    Math.min(MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS, Math.floor(widthCells)),
+  );
+}
+
+function getCoopDefenseArenaMetricsProfile(widthCells: number | undefined): ArenaMetricsProfile {
+  const normalizedWidthCells = normalizeCoopDefenseArenaWidthCells(widthCells);
+  const cached = COOP_DEFENSE_ARENA_METRICS_PROFILES.get(normalizedWidthCells);
+  if (cached) return cached;
+
+  const arenaWidth = normalizedWidthCells * CELL_SIZE;
+  const profile: ArenaMetricsProfile = {
+    arenaWidth,
+    arenaOffsetX: 0,
+    arenaViewportWidth: GAME_WIDTH,
+    usesDynamicCamera: arenaWidth > GAME_WIDTH,
+    showStaticArenaFrames: false,
+  };
+  COOP_DEFENSE_ARENA_METRICS_PROFILES.set(normalizedWidthCells, profile);
+  return profile;
+}
+
+export function getArenaMetricsProfile(
+  mode: GameMode,
+  phase: GamePhase,
+  coopDefenseArenaWidthCells?: number,
+): ArenaMetricsProfile {
   if (phase !== 'ARENA') return DEFAULT_ARENA_METRICS_PROFILE;
   if (mode === CAPTURE_THE_BEER_MODE) return CAPTURE_THE_BEER_ARENA_METRICS_PROFILE;
+  if (mode === COOP_DEFENSE_MODE) return getCoopDefenseArenaMetricsProfile(coopDefenseArenaWidthCells);
   return FULL_WIDTH_ARENA_METRICS_PROFILE;
 }
 
-export function applyArenaMetricsForMode(mode: GameMode, phase: GamePhase): void {
-  ACTIVE_ARENA_METRICS_PROFILE = getArenaMetricsProfile(mode, phase);
+export function applyArenaMetricsForMode(
+  mode: GameMode,
+  phase: GamePhase,
+  coopDefenseArenaWidthCells?: number,
+): void {
+  ACTIVE_ARENA_METRICS_PROFILE = getArenaMetricsProfile(mode, phase, coopDefenseArenaWidthCells);
   ARENA_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaWidth;
   ARENA_OFFSET_X = ACTIVE_ARENA_METRICS_PROFILE.arenaOffsetX;
   ARENA_VIEWPORT_WIDTH = ACTIVE_ARENA_METRICS_PROFILE.arenaViewportWidth;
@@ -657,6 +701,7 @@ export const TEAM_BLUE_COLOR = COLORS.BLUE_3;
 export const TEAM_RED_COLOR = COLORS.RED_3;
 /** Pseudo-Besitzer für fest an Coop-Basen montierte Geschütztürme. */
 export const COOP_DEFENSE_BASE_TURRET_OWNER_ID = '__coop_base_turret__';
+export const COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID = '__coop_hostile_base_turret__';
 export const CAPTURE_THE_BEER_BASE_TINT_ALPHA = 0.80;
 export const CAPTURE_THE_BEER_BLUE_BASE_TINT = TEAM_BLUE_COLOR;
 export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;

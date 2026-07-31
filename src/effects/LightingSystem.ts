@@ -40,6 +40,18 @@ const RADIAL_TEX_SIZE = 256;
 const CONE_TEX_WIDTH = 256;
 const CONE_TEX_HEIGHT = 512;
 
+/**
+ * The light map is screen-fixed but rendered by the same camera matrix as the world.
+ * Phaser camera shake therefore moves the overlay as well. Without an overscan margin,
+ * even a small horizontal offset exposes unlit pixels at the viewport edge.
+ *
+ * The strongest regular shake is currently 0.018. A limit of 0.02 leaves some headroom;
+ * the squared render-scale term below mirrors Phaser's shake implementation, which scales
+ * the offset by `camera.zoom` before the camera matrix transforms it again.
+ */
+const LIGHTMAP_MAX_SHAKE_INTENSITY = 0.02;
+const LIGHTMAP_OVERSCAN_ALIGNMENT_PX = 8;
+
 /** Ausblendzeit, wenn ein Dauerlicht freigegeben wird – verhindert hartes Poppen. */
 const RELEASE_FADE_MS = 140;
 /**
@@ -418,6 +430,8 @@ export class LightingSystem {
     const overlay = this.ensureLightMap();
     const scrollX = this.scene.cameras.main.scrollX;
     const scrollY = this.scene.cameras.main.scrollY;
+    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
+    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
 
     const queueStartedAt = performance.now();
     this.collectRenderQueue(now, scrollX, scrollY);
@@ -510,7 +524,12 @@ export class LightingSystem {
         // weniger Schatten statt fehlendem Licht.
         const scale = this.quality.lightMapScale;
         const directStartedAt = performance.now();
-        this.stampLight(overlay, light, (light.x - scrollX) * scale, (light.y - scrollY) * scale);
+        this.stampLight(
+          overlay,
+          light,
+          (light.x - scrollX + overscanX) * scale,
+          (light.y - scrollY + overscanY) * scale,
+        );
         directMs += performance.now() - directStartedAt;
         directLights += 1;
         commandCount += 1;
@@ -537,8 +556,8 @@ export class LightingSystem {
       shadowQuads,
       falloffQuads,
       commandCount,
-      lightMapPixels: Math.round(GAME_WIDTH * this.quality.lightMapScale)
-        * Math.round(GAME_HEIGHT * this.quality.lightMapScale),
+      lightMapPixels: Math.ceil((GAME_WIDTH + overscanX * 2) * this.quality.lightMapScale)
+        * Math.ceil((GAME_HEIGHT + overscanY * 2) * this.quality.lightMapScale),
       scratchPixels: occludingUsed * OCCLUDER_SCRATCH_SIZE * OCCLUDER_SCRATCH_SIZE,
       presetCounts,
     };
@@ -647,6 +666,8 @@ export class LightingSystem {
   /** Wählt die sichtbaren Lichter aus, berechnet ihre Intensität und sortiert sie. */
   private collectRenderQueue(now: number, scrollX: number, scrollY: number): void {
     this.renderQueue.length = 0;
+    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
+    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
 
     for (const light of this.lights) {
       let fade = 1;
@@ -668,8 +689,8 @@ export class LightingSystem {
       const screenX = light.x - scrollX;
       const screenY = light.y - scrollY;
       const reach = light.radiusPx;
-      if (screenX + reach < 0 || screenX - reach > GAME_WIDTH) continue;
-      if (screenY + reach < 0 || screenY - reach > GAME_HEIGHT) continue;
+      if (screenX + reach < -overscanX || screenX - reach > GAME_WIDTH + overscanX) continue;
+      if (screenY + reach < -overscanY || screenY - reach > GAME_HEIGHT + overscanY) continue;
 
       this.renderQueue.push(light);
     }
@@ -731,8 +752,8 @@ export class LightingSystem {
     slot.renderTexture.erase([slot.graphics]);
 
     slot.image.setPosition(
-      (light.x - scrollX) * this.quality.lightMapScale,
-      (light.y - scrollY) * this.quality.lightMapScale,
+      (light.x - scrollX + this.getLightMapOverscanPx(GAME_WIDTH)) * this.quality.lightMapScale,
+      (light.y - scrollY + this.getLightMapOverscanPx(GAME_HEIGHT)) * this.quality.lightMapScale,
     );
     this.lightMap?.draw([slot.image]);
     return {
@@ -863,8 +884,12 @@ export class LightingSystem {
   private ensureLightMap(): Phaser.GameObjects.RenderTexture {
     if (this.lightMap) return this.lightMap;
 
-    const width = Math.ceil(GAME_WIDTH * this.quality.lightMapScale);
-    const height = Math.ceil(GAME_HEIGHT * this.quality.lightMapScale);
+    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
+    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
+    const displayWidth = GAME_WIDTH + overscanX * 2;
+    const displayHeight = GAME_HEIGHT + overscanY * 2;
+    const width = Math.ceil(displayWidth * this.quality.lightMapScale);
+    const height = Math.ceil(displayHeight * this.quality.lightMapScale);
 
     // Scratch-Slots liegen knapp unter der Lightmap: die Display-List-Reihenfolge
     // garantiert, dass ihre Command-Buffer vor dem der Lightmap ausgeführt werden.
@@ -872,9 +897,9 @@ export class LightingSystem {
       this.slots.push(this.createOccluderSlot(slot));
     }
 
-    const lightMap = this.scene.add.renderTexture(0, 0, width, height)
+    const lightMap = this.scene.add.renderTexture(-overscanX, -overscanY, width, height)
       .setOrigin(0, 0)
-      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
+      .setDisplaySize(displayWidth, displayHeight)
       .setScrollFactor(0)
       .setDepth(DEPTH_LIGHTING)
       // Konstant MULTIPLY: die Uhrzeit steckt allein im Ambient, mit dem gefüllt wird.
@@ -883,6 +908,16 @@ export class LightingSystem {
     this.lightMap = lightMap;
     this.syncOverlayVisibility();
     return lightMap;
+  }
+
+  private getLightMapOverscanPx(viewportSize: number): number {
+    const requiredPx =
+      viewportSize
+      * LIGHTMAP_MAX_SHAKE_INTENSITY
+      * this.quality.maxRenderScale
+      * this.quality.maxRenderScale;
+    return Math.ceil(requiredPx / LIGHTMAP_OVERSCAN_ALIGNMENT_PX)
+      * LIGHTMAP_OVERSCAN_ALIGNMENT_PX;
   }
 
   private createOccluderSlot(slotIndex: number): OccluderSlot {

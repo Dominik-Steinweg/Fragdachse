@@ -1196,7 +1196,8 @@ export class HostUpdateCoordinator {
 
     // Basis-Schaden (nur Zombie-Luftangriffe konfigurieren baseDamageMult > 0)
     if ((cfg.baseDamageMult ?? 0) > 0 && this.ctx.baseManager) {
-      for (const base of this.ctx.baseManager.getBases()) {
+      // Zombie-Luftangriffe treffen nur eigene Basen.
+      for (const base of this.ctx.baseManager.getBasesByFaction('friendly')) {
         if (base.isDestroyed()) continue;
         let minDist = Infinity;
         for (const cell of base.getCellBodies()) {
@@ -1417,7 +1418,8 @@ export class HostUpdateCoordinator {
 
     let bestBase: ReturnType<BaseManager['getBases']>[number] | undefined;
     let bestDistance = Number.POSITIVE_INFINITY;
-    for (const base of baseManager.getBases()) {
+    // Reparatur gilt nur den eigenen Basen.
+    for (const base of baseManager.getBasesByFaction('friendly')) {
       if (base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance >= bestDistance) continue;

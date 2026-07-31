@@ -35,6 +35,50 @@ function getTheoreticalMapXp(mapId: string): number {
 }
 
 describe('Coop defense map progression', () => {
+  it('uses the progression-specific arena widths', () => {
+    expect(Object.fromEntries(COOP_DEFENSE_MAP_CONFIGS.map((map) => [map.mapId, map.arenaWidthCells])))
+      .toEqual({
+        '0': 90,
+        '1': 60,
+        '2': 70,
+        '3': 76,
+        '4': 82,
+        '5': 74,
+        '6': 88,
+        '7': 80,
+        '8': 92,
+        '9': 84,
+        '10': 96,
+        '11': 60,
+        '12': 112,
+        '13': 120,
+        '14': 60,
+        '15': 100,
+      });
+  });
+
+  it('awards items from map 10 onward at the configured levels', () => {
+    expect(Object.fromEntries(COOP_DEFENSE_MAP_CONFIGS.map((map) => [map.mapId, map.itemDrop?.itemLevel])))
+      .toEqual({
+        '0': undefined,
+        '1': undefined,
+        '2': undefined,
+        '3': undefined,
+        '4': undefined,
+        '5': undefined,
+        '6': undefined,
+        '7': undefined,
+        '8': undefined,
+        '9': undefined,
+        '10': 1,
+        '11': 1,
+        '12': 2,
+        '13': 2,
+        '14': 3,
+        '15': 3,
+      });
+  });
+
   it('keeps map metadata usable after balancing and terminology changes', () => {
     const playableMaps = COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0');
     const displayNames = playableMaps.map((map) => map.displayName.trim());

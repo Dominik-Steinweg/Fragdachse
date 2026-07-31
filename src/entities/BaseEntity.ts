@@ -7,9 +7,12 @@ import {
   COOP_DEFENSE_BASE_HP_BAR_FILL,
   COOP_DEFENSE_BASE_HP_BAR_GAP,
   COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
+  COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL,
   DEPTH,
   TEAM_BLUE_COLOR,
+  TEAM_RED_COLOR,
 } from '../config';
+import type { CoopBaseFaction } from '../config/coopDefenseMaps';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
 import type { SyncedBaseTurretState } from '../types';
@@ -26,6 +29,7 @@ export interface BaseTurretRuntimeState {
   readonly y: number;
   readonly angle: number;
   readonly weaponId: 'SPOREN' | 'BASE_SPOREN';
+  readonly faction: CoopBaseFaction;
 }
 
 /**
@@ -47,6 +51,7 @@ export interface BaseTurretRuntimeState {
 export class BaseEntity {
   readonly id: string;
   readonly spec: BaseSpec;
+  readonly faction: CoopBaseFaction;
 
   private readonly scene: Phaser.Scene;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
@@ -56,6 +61,11 @@ export class BaseEntity {
   private readonly hpBarBg: Phaser.GameObjects.Rectangle;
   private readonly hpBarFg: Phaser.GameObjects.Rectangle;
   private readonly hpBarWidth: number;
+  /**
+   * Fraktionsfarbe des HP-Balkens. Als Feld gehalten, weil `refreshHpBar()` die Fuellfarbe bei
+   * jeder HP-Aenderung neu setzt – ohne das wuerde der Balken beim ersten Treffer zurueckspringen.
+   */
+  private readonly hpBarFill: number;
   /**
    * Wenige große Lichtpunkte, die die gesamte Basisfläche plus einen Überhang gleichmäßig
    * ausleuchten. Einmal aus den Bounds abgeleitet.
@@ -70,8 +80,14 @@ export class BaseEntity {
     this.scene = scene;
     this.id = spec.id;
     this.spec = spec;
+    this.faction = spec.faction;
     this.currentHp = spec.hpMax;
     this.maxHp = spec.hpMax;
+    const hostile = spec.faction === 'hostile';
+    this.hpBarFill = hostile ? COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL : COOP_DEFENSE_BASE_HP_BAR_FILL;
+    // Eigenes rotes Tileset statt Tint: das Basis-Tileset ist gesaettigt blau, ein Multiply-Tint
+    // mit Rot ergibt nahezu Schwarz.
+    const cellTexture = hostile ? 'base_hostile' : 'base';
 
     const bounds = getBaseWorldBounds(spec.region);
 
@@ -87,13 +103,16 @@ export class BaseEntity {
       const mask = AutoTiler.computeMask(cell.gridX, cell.gridY, isOccupied);
       const frame = AutoTiler.getFrame(mask, BASE_AUTOTILE);
 
-      const image = scene.add.image(worldX, worldY, 'base', frame);
+      const image = scene.add.image(worldX, worldY, cellTexture, frame);
       image.setDisplaySize(CELL_SIZE, CELL_SIZE);
       image.setDepth(DEPTH.BASES);
       this.cellImages.push(image);
 
       // Unsichtbares Kollisions-Rechteck mit StaticBody (eines pro Zelle).
       const body = scene.add.rectangle(worldX, worldY, CELL_SIZE, CELL_SIZE, 0x000000, 0);
+      // Collider-Callbacks bekommen nur das GameObject; ueber diesen Schluessel finden sie
+      // zurueck zur Basis, ohne dass ein zusaetzlicher raeumlicher Index noetig waere.
+      body.setData('baseId', spec.id);
       scene.physics.add.existing(body, true);
       const staticBody = body.body as Phaser.Physics.Arcade.StaticBody;
       staticBody.setSize(CELL_SIZE, CELL_SIZE);
@@ -107,7 +126,7 @@ export class BaseEntity {
       const image = scene.add.image(turret.x, turret.y, 'placeable_turret')
         .setDisplaySize(CELL_SIZE, CELL_SIZE)
         .setRotation(turret.initialAngle)
-        .setTint(TEAM_BLUE_COLOR)
+        .setTint(hostile ? TEAM_RED_COLOR : TEAM_BLUE_COLOR)
         .setDepth(DEPTH.BASES + 3);
       this.turretImages.set(turret.id, image);
       this.turretAngles.set(turret.id, turret.initialAngle);
@@ -131,7 +150,7 @@ export class BaseEntity {
       hpBarY,
       this.hpBarWidth,
       COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
-      COOP_DEFENSE_BASE_HP_BAR_FILL,
+      this.hpBarFill,
     );
     this.hpBarFg.setOrigin(0, 0.5);
     this.hpBarFg.setDepth(DEPTH.BASES + 2);
@@ -234,6 +253,7 @@ export class BaseEntity {
       y: turret.y,
       angle: this.turretAngles.get(turret.id) ?? turret.initialAngle,
       weaponId: turret.weaponId,
+      faction: this.faction,
     }));
   }
 
@@ -280,7 +300,7 @@ export class BaseEntity {
   private refreshHpBar(): void {
     const ratio = this.maxHp > 0 ? this.currentHp / this.maxHp : 0;
     this.hpBarFg.width = this.hpBarWidth * ratio;
-    this.hpBarFg.setFillStyle(COOP_DEFENSE_BASE_HP_BAR_FILL);
+    this.hpBarFg.setFillStyle(this.hpBarFill);
   }
 
   /** Entfernt Gameplay-Bodies sofort; Zellbilder übernimmt die gestaffelte Zerstörung. */

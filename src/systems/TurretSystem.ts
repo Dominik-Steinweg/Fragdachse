@@ -6,6 +6,7 @@ import type { TurretBuff } from '../types';
 
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
 export type AutomatedTurretId = number | string;
+export type AutomatedTurretTargetMode = 'players' | 'enemies';
 export interface AutomatedTurret {
   readonly id: AutomatedTurretId;
   readonly x: number;
@@ -18,6 +19,8 @@ export interface AutomatedTurret {
   /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
   readonly targetRange?: number;
   readonly muzzleOffset?: number;
+  /** Erzwingt die Laufzeit-Zielfraktion; ohne Wert bleibt das bisherige gemischte Verhalten. */
+  readonly targetMode?: AutomatedTurretTargetMode;
 }
 type TurretProvider = () => readonly AutomatedTurret[];
 type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
@@ -160,7 +163,7 @@ export class TurretSystem {
     let bestTarget: { x: number; y: number } | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
 
-    for (const player of this.playerManager.getAllPlayers()) {
+    if (turret.targetMode !== 'enemies') for (const player of this.playerManager.getAllPlayers()) {
       if (excluded && player.sprite.x === excluded.x && player.sprite.y === excluded.y) continue;
       if (player.id === turret.ownerId) continue;
       if (!player.sprite.active) continue;
@@ -176,7 +179,7 @@ export class TurretSystem {
       bestTarget = { x: player.sprite.x, y: player.sprite.y };
     }
 
-    for (const enemy of this.enemyTargetProvider?.() ?? []) {
+    if (turret.targetMode !== 'players') for (const enemy of this.enemyTargetProvider?.() ?? []) {
       if (excluded && enemy.x === excluded.x && enemy.y === excluded.y) continue;
       if (!this.combatSystem.isAlive(enemy.id)) continue;
       if (!this.combatSystem.canDamageTarget(turret.ownerId, enemy.id)) continue;

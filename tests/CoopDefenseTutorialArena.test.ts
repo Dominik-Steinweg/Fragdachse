@@ -1,14 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { ArenaGenerator } from '../src/arena/ArenaGenerator';
 import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import {
+  ARENA_OFFSET_X,
+  ARENA_WIDTH,
+  CELL_SIZE,
+  applyArenaMetricsForMode,
+} from '../src/config';
+import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import {
   COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT,
   COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
+  getCoopDefenseTutorialPanelCenterX,
   getCoopDefenseTutorialRockRegion,
 } from '../src/config/coopDefenseTutorial';
 
 describe('Coop defense tutorial arena formation', () => {
+  afterEach(() => {
+    applyArenaMetricsForMode('deathmatch', 'LOBBY');
+  });
+
   it('uses one shared panel footprint large enough for all tutorial maps', () => {
     expect(COOP_DEFENSE_TUTORIAL_PANEL_WIDTH).toBe(840);
     expect(COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT).toBe(168);
@@ -30,7 +42,8 @@ describe('Coop defense tutorial arena formation', () => {
   });
 
   it('fills the tutorial footprint with rocks except for railway cells', () => {
-    const layout = ArenaGenerator.generate(42_424, getCoopDefenseMapConfig('1'));
+    const mapConfig = getCoopDefenseMapConfig('1');
+    const layout = ArenaGenerator.generate(42_424, mapConfig);
     const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
     const trackColumns = new Set<number>();
     for (const track of layout.tracks) {
@@ -55,5 +68,25 @@ describe('Coop defense tutorial arena formation', () => {
       if (insideExpanded && !insideCore) haloRockCount++;
     }
     expect(haloRockCount).toBeGreaterThan(0);
+  });
+
+  it('keeps panel and rocks world-centered on 60- and 120-cell arenas while the camera moves', () => {
+    const cameraScrolls = [0, 320, 960];
+    for (const mapId of ['1', '13']) {
+      const mapConfig = getCoopDefenseMapConfig(mapId);
+      applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', mapConfig.arenaWidthCells);
+
+      const panelWorldCenterX = getCoopDefenseTutorialPanelCenterX();
+      expect(panelWorldCenterX).toBe(ARENA_OFFSET_X + ARENA_WIDTH / 2);
+
+      const region = getCoopDefenseTutorialRockRegion(mapConfig.tutorialShowControls);
+      const rockWorldCenterX = ARENA_OFFSET_X
+        + (region.minGridX + region.maxGridX + 1) * CELL_SIZE / 2;
+      expect(rockWorldCenterX).toBe(panelWorldCenterX);
+
+      for (const scrollX of cameraScrolls) {
+        expect(panelWorldCenterX - scrollX).toBe(rockWorldCenterX - scrollX);
+      }
+    }
   });
 });

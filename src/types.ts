@@ -531,6 +531,43 @@ export interface CoopDefenseUpgradeProfile {
 /** Dauerhafte Coop-Defense-Klassenspezialisierung. */
 export type CoopDefenseClassId = 'dachs_nukem' | 'dachs_of_steel' | 'inspector_gadachs';
 
+/** Ausruestungskategorie eines dauerhaften Items. */
+export type CoopDefenseItemSlot = 'helmet' | 'gloves' | 'armor' | 'boots';
+
+/** Seltenheit bestimmt ausschliesslich die Anzahl der Zusatzeigenschaften. */
+export type CoopDefenseItemRarity = 'white' | 'blue' | 'yellow';
+
+/**
+ * Gewuerfelte Zusatzeigenschaft. Gespeichert wird nur die Definitions-ID und der Wert, damit
+ * Label, Bucket, Kategorie-Pool und Obergrenze in den Definitionsdaten aenderbar bleiben,
+ * ohne bereits gefundene Items anzufassen.
+ */
+export interface CoopDefenseItemAffix {
+  readonly affixId: string;
+  readonly value: number;
+}
+
+/**
+ * Dauerhaftes, an den Charakter gebundenes Ausruestungsteil.
+ *
+ * Der Kategorie-Grundwert (`baseValue`) steckt nicht in `affixes`: er ist fuer jeden Slot fest
+ * definiert und wird nur in seiner Hoehe gewuerfelt.
+ */
+export interface CoopDefenseItem {
+  readonly uid: string;
+  readonly slot: CoopDefenseItemSlot;
+  readonly rarity: CoopDefenseItemRarity;
+  readonly itemLevel: number;
+  readonly baseValue: number;
+  readonly affixes: readonly CoopDefenseItemAffix[];
+}
+
+/** Offenes Belohnungsangebot nach einem Sieg. Ueberlebt Reload und Rejoin. */
+export interface CoopDefensePendingItemReward {
+  readonly roundEndedAt: number;
+  readonly offers: readonly CoopDefenseItem[];
+}
+
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
 export type ConstructionId = 'rocket_turret' | 'machine_gun_turret' | 'flame_turret';
 
@@ -558,6 +595,11 @@ export interface LoadoutCommitSnapshot {
   coopDefenseProfile: CoopDefenseUpgradeProfile | null;
   /** Autoritativ ausgeruestete Utility-Slots (derzeit nur Inspector). */
   tools?: LoadoutToolRef[];
+  /**
+   * Beim Klick auf "Bereit" eingefrorene Ausruestung. Reist im bestehenden Commit-Snapshot mit,
+   * damit Items im laufenden Match unveraenderlich sind und der Host die finalen Werte kennt.
+   */
+  equippedItems?: readonly CoopDefenseItem[];
 }
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
@@ -1038,6 +1080,7 @@ export interface TrackedProjectile {
   gaussHitPlayers?:  Set<string>;     // Debounce: jeden Spieler nur 1x pro Schuss treffen
   gaussHitRocks?:    Set<number>;     // Debounce: jeden Fels nur 1x pro Schuss treffen
   gaussHitTrain?:    boolean;         // Debounce: Zug nur 1x pro Schuss treffen
+  hitBaseIds?:       Set<string>;     // Debounce: jede Basis nur 1x pro Projektil treffen
 
   // Erweiterte Flugphysik
   frictionDelayMs?: number;

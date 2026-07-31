@@ -89,7 +89,7 @@ function createSystem(enemy: EnemyEntity, rock: { x: number; y: number; active: 
       getAllPlayers: () => [player],
       getPlayer: (id: string) => (id === player.id ? player : undefined),
     } as unknown as PlayerManager,
-    { getBases: () => [] } as unknown as BaseManager,
+    { getBases: () => [], getBasesByFaction: () => [] } as unknown as BaseManager,
     {
       isAlive: () => true,
       isBurrowed: () => false,
