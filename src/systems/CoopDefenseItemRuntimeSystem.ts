@@ -1,4 +1,5 @@
 import { COOP_DEFENSE_AFFIX_RULES } from '../config/coopDefenseItems';
+import type { LoadoutSlot } from '../types';
 import type { CombatDamageKind } from './CombatSystem';
 
 /**
@@ -40,6 +41,7 @@ export class CoopDefenseItemRuntimeSystem {
   private readonly killCharges = new Map<string, KillChargeState>();
   private readonly movementCharges = new Map<string, MovementChargeState>();
   private readonly afterburnerUntil = new Map<string, number>();
+  private readonly crossfireUntil = new Map<string, number>();
   private readonly lastRealDamageAt = new Map<string, number>();
   private readonly vulnerableUntil = new Map<string, number>();
 
@@ -53,6 +55,7 @@ export class CoopDefenseItemRuntimeSystem {
   initPlayer(playerId: string, now = Date.now()): void {
     this.killCharges.delete(playerId);
     this.afterburnerUntil.delete(playerId);
+    this.crossfireUntil.delete(playerId);
     this.movementCharges.set(playerId, {
       travelledPx: 0,
       charged: false,
@@ -69,6 +72,7 @@ export class CoopDefenseItemRuntimeSystem {
     this.killCharges.delete(playerId);
     this.movementCharges.delete(playerId);
     this.afterburnerUntil.delete(playerId);
+    this.crossfireUntil.delete(playerId);
     this.lastRealDamageAt.delete(playerId);
   }
 
@@ -80,6 +84,7 @@ export class CoopDefenseItemRuntimeSystem {
     this.killCharges.clear();
     this.movementCharges.clear();
     this.afterburnerUntil.clear();
+    this.crossfireUntil.clear();
     this.lastRealDamageAt.clear();
     this.vulnerableUntil.clear();
   }
@@ -91,6 +96,9 @@ export class CoopDefenseItemRuntimeSystem {
     }
     for (const [playerId, until] of this.afterburnerUntil) {
       if (now >= until) this.afterburnerUntil.delete(playerId);
+    }
+    for (const [playerId, until] of this.crossfireUntil) {
+      if (now >= until) this.crossfireUntil.delete(playerId);
     }
     for (const [enemyId, until] of this.vulnerableUntil) {
       if (now >= until) this.vulnerableUntil.delete(enemyId);
@@ -178,18 +186,39 @@ export class CoopDefenseItemRuntimeSystem {
    * Blutrausch und Unversehrt schliessen sich gegenseitig aus, addieren sich aber mit allem
    * anderen. Nicht-Spieler (Tuerme, Basis-Pseudo-IDs) liefern kein HP-Verhaeltnis und bekommen
    * deshalb keinen Bonus – ohne diese Pruefung erhielte ein Turm dauerhaft den Unversehrt-Bonus.
+   *
+   * `sourceSlot` entscheidet ueber die slot-gebundenen Anteile (Kreuzfeuer). Fehlt er, wirken nur
+   * die slot-unabhaengigen Boni – Umgebungs- und Faehigkeitsschaden bleibt damit unveraendert.
    */
-  getConditionalOutgoingDamageBonus(attackerId: string | undefined): number {
+  getConditionalOutgoingDamageBonus(
+    attackerId: string | undefined,
+    sourceSlot?: LoadoutSlot,
+    now = Date.now(),
+  ): number {
     if (!attackerId) return 0;
     const fraction = this.getHpFraction(attackerId);
     if (fraction === null) return 0;
+
+    let bonus = 0;
     if (fraction < COOP_DEFENSE_AFFIX_RULES.lowHpThreshold) {
-      return this.deps.getAffixValue(attackerId, 'low_hp_blood_rage');
+      bonus += this.deps.getAffixValue(attackerId, 'low_hp_blood_rage');
+    } else if (fraction >= COOP_DEFENSE_AFFIX_RULES.highHpThreshold) {
+      bonus += this.deps.getAffixValue(attackerId, 'high_hp_damage');
     }
-    if (fraction >= COOP_DEFENSE_AFFIX_RULES.highHpThreshold) {
-      return this.deps.getAffixValue(attackerId, 'high_hp_damage');
+    if (sourceSlot === 'weapon1' && now < (this.crossfireUntil.get(attackerId) ?? 0)) {
+      bonus += this.deps.getAffixValue(attackerId, 'crossfire');
     }
-    return 0;
+    return bonus;
+  }
+
+  /**
+   * Ein Waffeneinsatz des Spielers. Nur Waffe 2 oeffnet das Kreuzfeuer-Fenster; erneutes Feuern
+   * verlaengert es lediglich, die Staerke desselben Effekts stapelt sich nicht.
+   */
+  registerWeaponFired(playerId: string, sourceSlot: LoadoutSlot, now = Date.now()): void {
+    if (sourceSlot !== 'weapon2') return;
+    if (this.deps.getAffixValue(playerId, 'crossfire') <= 0) return;
+    this.crossfireUntil.set(playerId, now + COOP_DEFENSE_AFFIX_RULES.crossfireDurationMs);
   }
 
   /** Fester Lifeleech-Zuschlag aus Blutrausch, solange die Schwelle unterschritten ist. */

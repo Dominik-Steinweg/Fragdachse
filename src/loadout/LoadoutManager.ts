@@ -152,6 +152,7 @@ export class LoadoutManager {
    * Injiziert statt direkt referenziert, weil das Item-Laufzeitsystem Round-Lifetime hat.
    */
   private itemRuntimeChargeConsumer: ((playerId: string) => number) | null = null;
+  private itemRuntimeWeaponFiredHandler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null = null;
   private shotCounters = new Map<string, number>();
   private ak47States = new Map<string, Ak47CombatState>();
   private negevStates = new Map<string, NegevCombatState>();
@@ -436,6 +437,17 @@ export class LoadoutManager {
     this.itemRuntimeChargeConsumer = consumer;
   }
 
+  /**
+   * Meldung ueber einen tatsaechlich erfolgten Waffeneinsatz (Kreuzfeuer).
+   *
+   * Bewusst ohne Zeitstempel: `use()` bekommt die Client-Uhr durchgereicht, das Zeitfenster des
+   * Laufzeitsystems laeuft aber gegen `Date.now()` des Hosts. Ein durchgereichtes `now` wuerde
+   * die Dauer um den Clock-Skew verschieben.
+   */
+  setItemRuntimeWeaponFiredHandler(handler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null): void {
+    this.itemRuntimeWeaponFiredHandler = handler;
+  }
+
   /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
   setArmageddonSystem(sys: ArmageddonSystem | null): void {
     this.armageddonSystem = sys;
@@ -699,8 +711,14 @@ export class LoadoutManager {
       case 'weapon1':
         return this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon1', shotId);
 
-      case 'weapon2':
-        return this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId, params);
+      case 'weapon2': {
+        // Der Kreuzfeuer-Melder haengt bewusst hier und nicht in `fireWeapon`: nur ein Aufruf,
+        // der tatsaechlich gefeuert hat, oeffnet das Fenster – Cooldown, fehlendes Adrenalin und
+        // blockierte Schuesse liefern `ok: false` und zaehlen nicht.
+        const result = this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId, params);
+        if (result.ok) this.itemRuntimeWeaponFiredHandler?.(playerId, 'weapon2');
+        return result;
+      }
 
       case 'utility': {
         if (loadout.utility.config.type !== 'decoy') {

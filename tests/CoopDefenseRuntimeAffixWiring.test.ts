@@ -4,9 +4,13 @@ import {
   COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS,
   getCoopDefenseItemAffixDefinition,
 } from '../src/config/coopDefenseItems';
+import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRuntimeSystem';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 import { getCoopDefenseItemAffixLines, getCoopDefenseItemStatLines } from '../src/utils/coopDefenseItems';
-import { resolveCoopDefenseOutgoingDamage } from '../src/utils/coopDefenseStats';
+import {
+  COOP_DEFENSE_BASE_CRITICAL_DAMAGE_MULTIPLIER,
+  resolveCoopDefenseOutgoingDamage,
+} from '../src/utils/coopDefenseStats';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 import type { CoopDefenseItem, LoadoutCommitSnapshot } from '../src/types';
 
@@ -80,17 +84,140 @@ describe('Bedingter Schadensbonus im gemeinsamen Bucket', () => {
   });
 });
 
+describe('Krit-Affixe', () => {
+  const always = () => 0;
+
+  it('macht Krit-Chance ohne Klasse und ohne Klassen-Krit nutzbar', () => {
+    const totals = { additive: { 'player.criticalChance': 0.25 }, percentage: {} };
+    // Ohne Grundwert waere der Multiplikator 1 und der Krit ein normaler Treffer.
+    const result = resolveCoopDefenseOutgoingDamage(totals, null, 100, true, always);
+    expect(result.isCritical).toBe(true);
+    expect(result.amount).toBeCloseTo(100 * COOP_DEFENSE_BASE_CRITICAL_DAMAGE_MULTIPLIER, 10);
+  });
+
+  it('addiert Krit-Schaden auf den Multiplikator statt auf den Schaden', () => {
+    const totals = {
+      additive: { 'player.criticalChance': 0.25, 'player.criticalDamage': 0.5 },
+      percentage: {},
+    };
+    expect(resolveCoopDefenseOutgoingDamage(totals, null, 100, true, always).amount)
+      .toBeCloseTo(100 * (COOP_DEFENSE_BASE_CRITICAL_DAMAGE_MULTIPLIER + 0.5), 10);
+  });
+
+  it('laesst Krit-Schaden ohne jede Krit-Chance wirkungslos', () => {
+    const totals = { additive: { 'player.criticalDamage': 5 }, percentage: {} };
+    const result = resolveCoopDefenseOutgoingDamage(totals, null, 100, true, always);
+    expect(result.isCritical).toBe(false);
+    expect(result.amount).toBe(100);
+  });
+
+  it('addiert die Item-Chance auf den Klassenwert und behaelt den hoeheren Klassenmultiplikator', () => {
+    const totals = { additive: { 'player.criticalChance': 0.05 }, percentage: {} };
+    // Dachs Nukem: 10 % Klassenchance + 5 % aus Items, Klassenmultiplikator 2 schlaegt den Grundwert.
+    expect(resolveCoopDefenseOutgoingDamage(totals, 'dachs_nukem', 100, true, () => 0.14).isCritical).toBe(true);
+    expect(resolveCoopDefenseOutgoingDamage(totals, 'dachs_nukem', 100, true, () => 0.16).isCritical).toBe(false);
+    const critical = resolveCoopDefenseOutgoingDamage(totals, 'dachs_nukem', 100, true, always);
+    // Der Klassenschadensmultiplikator wirkt zusaetzlich, deshalb der Vergleich gegen den Nicht-Krit.
+    const normal = resolveCoopDefenseOutgoingDamage(totals, 'dachs_nukem', 100, false, always);
+    expect(critical.amount).toBeCloseTo(normal.amount * 2, 10);
+  });
+
+  it('aendert ohne Krit-Affixe nichts am bisherigen Verhalten', () => {
+    const empty = { additive: {}, percentage: {} };
+    expect(resolveCoopDefenseOutgoingDamage(empty, 'dachs_of_steel', 100, true, always).isCritical).toBe(false);
+    expect(resolveCoopDefenseOutgoingDamage(empty, 'dachs_nukem', 100, true, always).isCritical).toBe(true);
+  });
+});
+
+describe('Kreuzfeuer', () => {
+  function runtime(crossfireValue: number): CoopDefenseItemRuntimeSystem {
+    return new CoopDefenseItemRuntimeSystem({
+      getAffixValue: (_playerId, affixId) => (affixId === 'crossfire' ? crossfireValue : 0),
+      getPlayerHp: () => ({ hp: 70, maxHp: 100 }),
+    });
+  }
+
+  it('erhoeht nach dem Einsatz von Waffe 2 ausschliesslich den Schaden von Waffe 1', () => {
+    const system = runtime(0.15);
+    const now = 10_000;
+    system.registerWeaponFired('p', 'weapon2', now);
+
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon1', now + 1)).toBeCloseTo(0.15, 10);
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon2', now + 1)).toBe(0);
+    expect(system.getConditionalOutgoingDamageBonus('p', 'ultimate', now + 1)).toBe(0);
+    // Ohne bekannten Slot – Umgebungs- und Faehigkeitsschaden – bleibt es beim alten Verhalten.
+    expect(system.getConditionalOutgoingDamageBonus('p', undefined, now + 1)).toBe(0);
+  });
+
+  it('laeuft nach der festgelegten Dauer aus', () => {
+    const system = runtime(0.15);
+    const now = 10_000;
+    system.registerWeaponFired('p', 'weapon2', now);
+
+    const end = now + COOP_DEFENSE_AFFIX_RULES.crossfireDurationMs;
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon1', end - 1)).toBeCloseTo(0.15, 10);
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon1', end)).toBe(0);
+  });
+
+  it('verlaengert nur die Dauer, statt die Staerke zu stapeln', () => {
+    const system = runtime(0.15);
+    system.registerWeaponFired('p', 'weapon2', 10_000);
+    system.registerWeaponFired('p', 'weapon2', 12_000);
+
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon1', 12_001)).toBeCloseTo(0.15, 10);
+    expect(system.getConditionalOutgoingDamageBonus(
+      'p',
+      'weapon1',
+      12_000 + COOP_DEFENSE_AFFIX_RULES.crossfireDurationMs,
+    )).toBe(0);
+  });
+
+  it('oeffnet ohne das Affix und ohne Waffe 2 gar kein Fenster', () => {
+    const withoutAffix = runtime(0);
+    withoutAffix.registerWeaponFired('p', 'weapon2', 10_000);
+    expect(withoutAffix.getConditionalOutgoingDamageBonus('p', 'weapon1', 10_001)).toBe(0);
+
+    const withAffix = runtime(0.15);
+    withAffix.registerWeaponFired('p', 'weapon1', 10_000);
+    expect(withAffix.getConditionalOutgoingDamageBonus('p', 'weapon1', 10_001)).toBe(0);
+  });
+
+  it('addiert sich mit den HP-abhaengigen Boni statt sie zu ersetzen', () => {
+    const system = new CoopDefenseItemRuntimeSystem({
+      getAffixValue: (_playerId, affixId) => {
+        if (affixId === 'crossfire') return 0.15;
+        if (affixId === 'high_hp_damage') return 0.1;
+        return 0;
+      },
+      getPlayerHp: () => ({ hp: 100, maxHp: 100 }),
+    });
+    system.registerWeaponFired('p', 'weapon2', 10_000);
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon1', 10_001)).toBeCloseTo(0.25, 10);
+  });
+
+  it('nimmt das Fenster nicht in die naechste Runde mit', () => {
+    const system = runtime(0.15);
+    system.registerWeaponFired('p', 'weapon2', 10_000);
+    system.clear();
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon1', 10_001)).toBe(0);
+
+    system.registerWeaponFired('p', 'weapon2', 10_000);
+    system.removePlayer('p');
+    expect(system.getConditionalOutgoingDamageBonus('p', 'weapon1', 10_001)).toBe(0);
+  });
+});
+
 describe('Definitionen der Laufzeit-Affixe', () => {
   const runtimeAffixIds = [
     'adrenaline_kill_charge', 'adrenaline_from_damage',
     'primary_vulnerability', 'primary_culling', 'low_hp_blood_rage',
     'primary_kill_fire_chunks', 'primary_slow', 'high_hp_damage',
     'out_of_combat_armor_repair', 'damage_reflection', 'low_hp_speed', 'low_hp_damage_reduction',
-    'dash_speed', 'movement_charge_damage',
+    'dash_speed', 'movement_charge_damage', 'crossfire',
   ] as const;
 
-  it('umfasst den vollstaendigen Pool aus 32 Affixen', () => {
-    expect(COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS).toHaveLength(32);
+  it('umfasst den vollstaendigen Pool aus 37 Affixen', () => {
+    expect(COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS).toHaveLength(37);
     // Versorgungsmunition ist bewusst zurueckgestellt und darf nicht rollen.
     expect(getCoopDefenseItemAffixDefinition('primary_ally_heal')).toBeUndefined();
   });

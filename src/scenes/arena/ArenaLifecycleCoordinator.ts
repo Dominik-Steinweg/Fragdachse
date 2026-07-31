@@ -795,16 +795,17 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerBonusArmorRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefenseItemRuntimeSystem?.getBonusArmorRegenPerSecond(playerId) ?? 0;
     });
-    this.ctx.combatSystem.setPlayerOutgoingDamageResolver((attackerId, targetId, amount, allowCritical) => {
+    this.ctx.combatSystem.setPlayerOutgoingDamageResolver((attackerId, targetId, amount, allowCritical, sourceSlot) => {
       return this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
         attackerId,
         targetId,
         amount,
         allowCritical,
         Math.random,
-        // Blutrausch und Unversehrt haengen an den aktuellen HP des Angreifers und koennen
-        // deshalb nicht im committeten Stat-Bucket liegen.
-        this.ctx.coopDefenseItemRuntimeSystem?.getConditionalOutgoingDamageBonus(attackerId) ?? 0,
+        // Blutrausch und Unversehrt haengen an den aktuellen HP des Angreifers, Kreuzfeuer am
+        // Slot und einem laufenden Zeitfenster – alle drei koennen deshalb nicht im committeten
+        // Stat-Bucket liegen.
+        this.ctx.coopDefenseItemRuntimeSystem?.getConditionalOutgoingDamageBonus(attackerId, sourceSlot) ?? 0,
       ) ?? { amount, isCritical: false };
     });
     this.ctx.combatSystem.setEnemyIncomingDamageMultiplierResolver((enemyId) => {
@@ -1261,6 +1262,9 @@ export class ArenaLifecycleCoordinator {
       });
       this.ctx.loadoutManager.setItemRuntimeChargeConsumer((playerId) => {
         return this.ctx.coopDefenseItemRuntimeSystem?.consumeMovementCharge(playerId) ?? 0;
+      });
+      this.ctx.loadoutManager.setItemRuntimeWeaponFiredHandler((playerId, sourceSlot) => {
+        this.ctx.coopDefenseItemRuntimeSystem?.registerWeaponFired(playerId, sourceSlot);
       });
       this.ctx.decoySystem.setCombatStateReader(this.ctx.combatSystem);
       this.ctx.decoySystem.setRunSpeedResolver((playerId) => {

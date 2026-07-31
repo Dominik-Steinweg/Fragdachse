@@ -479,8 +479,9 @@ describe('coop-defense item sanitising', () => {
 describe('coop-defense item configuration', () => {
   it('only references stats that a resolver already consumes', () => {
     // Jeder Key muss auf der anderen Seite von einem Resolver gelesen werden, sonst ist das
-    // Affix eine Zahl ohne Wirkung. `player.outgoingDamage`, `player.damageReduction` und
-    // `construction.capacity` sind die eigens fuer Items eingefuehrten Keys.
+    // Affix eine Zahl ohne Wirkung. `player.outgoingDamage`, `player.criticalChance`,
+    // `player.criticalDamage`, `player.damageReduction` und `construction.capacity` sind die
+    // eigens fuer Items eingefuehrten Keys.
     const known = new Set([
       'player.maxHp',
       'player.hpRegenPerSecond',
@@ -494,7 +495,11 @@ describe('coop-defense item configuration', () => {
       'player.adrenalineGain',
       'player.adrenalineCost',
       'player.dashRange',
+      'player.burrowSpeed',
+      'player.burrowCost',
       'player.outgoingDamage',
+      'player.criticalChance',
+      'player.criticalDamage',
       'player.damageReduction',
       'ultimate.maxRage',
       'ultimate.rageGainPerDamage',

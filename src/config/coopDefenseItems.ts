@@ -223,6 +223,8 @@ export const COOP_DEFENSE_AFFIX_RULES = Object.freeze({
   emergencyRepairDelayMs: 4_000,
   /** Nachbrenner: Dauer des Tempobonus nach einem abgeschlossenen Dash. */
   afterburnerDurationMs: 2_000,
+  /** Kreuzfeuer: Dauer des Primaerwaffen-Schadensbonus nach einem Einsatz von Waffe 2. */
+  crossfireDurationMs: 5_000,
   /** Kinetische Ladung: Wegstrecke je Ladung. */
   movementChargeDistancePx: 500,
 });
@@ -384,6 +386,49 @@ Object.freeze([
     displayAsPercent: true,
   },
   {
+    // Klassenoffen: der Krit-Schaden hat einen Grundwert ohne Klassenbezug
+    // (`COOP_DEFENSE_BASE_CRITICAL_DAMAGE_MULTIPLIER`), damit Krit-Chance mit jeder Klasse und
+    // auch ganz ohne Klasse wirkt. Dachs Nukem bringt Grundchance und hoeheren Klassenwert mit
+    // und profitiert dadurch am staerksten.
+    id: 'critical_chance',
+    label: 'Kritische Praezision',
+    stat: 'player.criticalChance',
+    mode: 'add_per_level',
+    weight: 55,
+    minAtLevel1: 0.02,
+    maxAtLevel1: 0.05,
+    perLevel: 0.015,
+    slots: ['gloves', 'helmet'],
+    displayAsPercent: true,
+  },
+  {
+    // Addiert sich auf den Krit-Multiplikator, nicht auf den Schaden: ohne Krit-Chance aus
+    // Klasse oder Items bleibt das Affix wirkungslos.
+    id: 'critical_damage',
+    label: 'Kritischer Schaden',
+    stat: 'player.criticalDamage',
+    mode: 'add_per_level',
+    weight: 55,
+    minAtLevel1: 0.1,
+    maxAtLevel1: 0.25,
+    perLevel: 0.08,
+    slots: ['gloves', 'helmet'],
+    displayAsPercent: true,
+  },
+  {
+    id: 'crossfire',
+    label: 'Kreuzfeuer',
+    weight: 30,
+    minAtLevel1: 0.1,
+    maxAtLevel1: 0.2,
+    perLevel: 0.03,
+    slots: ['gloves'],
+    displayAsPercent: true,
+    shortText: (value) => `Nach dem Einsatz von Waffe 2:`
+      + ` Waffe 1 macht ${secondsText(COOP_DEFENSE_AFFIX_RULES.crossfireDurationMs)} s lang`
+      + ` +${percentText(value)} % Schaden`,
+  },
+  {
     // Erhoeht ausschliesslich das persoenliche Maximum. Die Kapazitaetskosten der einzelnen
     // Konstrukte bleiben bewusst spielerunabhaengig.
     id: 'construction_capacity',
@@ -485,6 +530,35 @@ Object.freeze([
     perLevel: 0.015,
     slots: ['boots'],
     displayAsPercent: true,
+  },
+  {
+    // Derselbe Bucket wie das Upgrade "Einbuddeltempo": beide skalieren den Tempofaktor unter
+    // der Erde, nicht die Laufgeschwindigkeit an der Oberflaeche.
+    id: 'burrow_speed',
+    label: 'Grabtempo',
+    stat: 'player.burrowSpeed',
+    mode: 'add_percent_per_level',
+    weight: 60,
+    minAtLevel1: 0.04,
+    maxAtLevel1: 0.1,
+    perLevel: 0.03,
+    slots: ['boots'],
+    displayAsPercent: true,
+  },
+  {
+    // Weniger Adrenalin je Verbrauchstick unter der Erde – man bleibt laenger unten. Negativ ist
+    // hier wie bei `adrenaline_cost` der Vorteil; `minAtLevel1` bleibt die kleinere Grenze.
+    id: 'burrow_cost',
+    label: 'Grabverbrauch',
+    stat: 'player.burrowCost',
+    mode: 'add_percent_per_level',
+    weight: 55,
+    minAtLevel1: -0.1,
+    maxAtLevel1: -0.04,
+    perLevel: -0.03,
+    slots: ['boots'],
+    displayAsPercent: true,
+    lowerIsBetter: true,
   },
   {
     id: 'max_adrenaline',

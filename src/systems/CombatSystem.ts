@@ -299,6 +299,7 @@ export class CombatSystem {
     targetId: string,
     amount: number,
     allowCritical: boolean,
+    sourceSlot: LoadoutSlot | undefined,
   ) => { amount: number; isCritical: boolean }) | null = null;
   private playerBonusArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private enemyIncomingDamageMultiplierResolver: ((enemyId: string) => number) | null = null;
@@ -369,12 +370,17 @@ export class CombatSystem {
   setPlayerDamageTakenHandler(handler: ((playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number, damageKind: CombatDamageKind) => void) | null): void {
     this.onPlayerDamageTaken = handler;
   }
+  /**
+   * `sourceSlot` reicht die Herkunft des Treffers durch, damit slot-gebundene Angreifer-Boni
+   * (Kreuzfeuer) im selben Bucket landen wie alle anderen Schadensmodifikatoren.
+   */
   setPlayerOutgoingDamageResolver(
     resolver: ((
       attackerId: string | undefined,
       targetId: string,
       amount: number,
       allowCritical: boolean,
+      sourceSlot: LoadoutSlot | undefined,
     ) => { amount: number; isCritical: boolean }) | null,
   ): void {
     this.playerOutgoingDamageResolver = resolver;
@@ -590,6 +596,7 @@ export class CombatSystem {
       targetId,
       amount,
       options?.allowCritical ?? true,
+      options?.sourceSlot,
     ) ?? { amount, isCritical: false };
     amount = outgoing.amount;
 
@@ -3101,6 +3108,7 @@ export class CombatSystem {
       targetId,
       amount,
       options?.allowCritical ?? true,
+      options?.sourceSlot,
     ) ?? { amount, isCritical: false };
     // Zielseitiger Multiplikator (Verwundbarkeit). Bewusst hier und nicht im ausgehenden
     // Resolver: er gilt fuer *jede* Schadensquelle gegen dieses Ziel, auch fuer Verbuendete,

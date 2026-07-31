@@ -18,6 +18,20 @@ const STAT_ADRENALINE_REGEN_RATE = 'player.adrenalineRegenRate';
 const STAT_RUN_SPEED = 'player.runSpeed';
 const STAT_MAX_ARMOR = 'player.maxArmor';
 const STAT_MAX_HP = 'player.maxHp';
+/** Additive Buckets fuer Krit-Chance (Anteil) und Krit-Schaden (Zuschlag auf den Multiplikator). */
+export const COOP_DEFENSE_PLAYER_STAT_CRITICAL_CHANCE = 'player.criticalChance';
+export const COOP_DEFENSE_PLAYER_STAT_CRITICAL_DAMAGE = 'player.criticalDamage';
+
+/**
+ * Krit-Schaden ohne Klassenbezug.
+ *
+ * Ohne diesen Grundwert waere Krit-Chance aus Items nur mit `dachs_nukem` etwas wert, weil alle
+ * anderen Klassen den Multiplikator 1 fuehren – ein Krit haette dann denselben Schaden wie ein
+ * normaler Treffer. Klassenwerte oberhalb des Grundwerts bleiben unangetastet, die Klasse ist
+ * also weiterhin die Quelle der Krit-Identitaet. Ohne Krit-Chance bleibt der Wert wirkungslos,
+ * das Verhalten ohne Item-Affixe aendert sich dadurch nicht.
+ */
+export const COOP_DEFENSE_BASE_CRITICAL_DAMAGE_MULTIPLIER = 1.5;
 
 export const EMPTY_COOP_DEFENSE_EFFECT_TOTALS: CoopDefenseResolvedEffectTotals = Object.freeze({
   additive: Object.freeze({}),
@@ -79,8 +93,14 @@ export function resolveCoopDefenseOutgoingDamage(
   const classDefinition = classId ? getCoopDefenseClassDefinition(classId) : null;
   const damageMultiplier = (classDefinition?.outgoingDamageMultiplier ?? 1)
     * (1 + (totals.percentage[COOP_DEFENSE_PLAYER_STAT_OUTGOING_DAMAGE] ?? 0) + bonusPercent);
-  const criticalChance = Math.min(1, Math.max(0, classDefinition?.criticalChance ?? 0));
-  const criticalDamageMultiplier = classDefinition?.criticalDamageMultiplier ?? 1;
+  const criticalChance = Math.min(1, Math.max(
+    0,
+    (classDefinition?.criticalChance ?? 0) + (totals.additive[COOP_DEFENSE_PLAYER_STAT_CRITICAL_CHANCE] ?? 0),
+  ));
+  const criticalDamageMultiplier = Math.max(
+    COOP_DEFENSE_BASE_CRITICAL_DAMAGE_MULTIPLIER,
+    classDefinition?.criticalDamageMultiplier ?? 1,
+  ) + (totals.additive[COOP_DEFENSE_PLAYER_STAT_CRITICAL_DAMAGE] ?? 0);
 
   const isCritical = allowCritical && criticalChance > 0 && random() < criticalChance;
   return {
