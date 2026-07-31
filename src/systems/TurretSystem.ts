@@ -4,7 +4,14 @@ import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } 
 import type { CombatSystem } from './CombatSystem';
 import type { TurretBuff } from '../types';
 
-type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
+type LineOfSightChecker = (
+  sx: number,
+  sy: number,
+  ex: number,
+  ey: number,
+  skipRockIndex?: number,
+  ignoreBaseObstacles?: boolean,
+) => boolean;
 export type AutomatedTurretId = number | string;
 export type AutomatedTurretTargetMode = 'players' | 'enemies';
 export interface AutomatedTurret {
@@ -15,6 +22,8 @@ export interface AutomatedTurret {
   readonly ownerColor: number;
   readonly weaponId?: keyof typeof WEAPON_CONFIGS;
   readonly skipRockIndex?: number;
+  /** Basistürme stehen auf ihrer Basis und ignorieren deren Sichtlinien-Hindernisse. */
+  readonly ignoreBaseObstacles?: boolean;
   readonly secondProjectileDamageFactor?: number;
   /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
   readonly targetRange?: number;
@@ -207,6 +216,13 @@ export class TurretSystem {
     const angle = Phaser.Math.Angle.Between(turretX, turretY, targetX, targetY);
     const startX = turretX + Math.cos(angle) * muzzleOffset;
     const startY = turretY + Math.sin(angle) * muzzleOffset;
-    return this.lineOfSightChecker(startX, startY, targetX, targetY, turret.skipRockIndex);
+    return this.lineOfSightChecker(
+      startX,
+      startY,
+      targetX,
+      targetY,
+      turret.skipRockIndex,
+      turret.ignoreBaseObstacles,
+    );
   }
 }

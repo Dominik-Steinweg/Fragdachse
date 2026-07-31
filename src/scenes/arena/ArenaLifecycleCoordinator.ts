@@ -1045,8 +1045,8 @@ export class ArenaLifecycleCoordinator {
       this.ctx.teslaDomeSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => {
         return this.ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex);
       });
-      this.ctx.turretSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => {
-        return this.ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex);
+      this.ctx.turretSystem.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex, ignoreBaseObstacles) => {
+        return this.ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, ignoreBaseObstacles);
       });
       this.ctx.turretSystem.setTurretProvider(
         () => {
@@ -1075,6 +1075,7 @@ export class ArenaLifecycleCoordinator {
               : COOP_DEFENSE_BASE_TURRET_OWNER_ID,
             ownerColor: turret.faction === 'hostile' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR,
             weaponId: turret.weaponId,
+            ignoreBaseObstacles: true,
             targetMode: turret.faction === 'hostile' ? 'players' as const : 'enemies' as const,
           }));
           return [...placeableTurrets, ...baseTurrets];

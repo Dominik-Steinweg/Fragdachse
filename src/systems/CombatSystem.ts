@@ -16,6 +16,7 @@ import {
 } from '../utils/geometry';
 import {
   ArenaObstacleIndex,
+  OBSTACLE_BASE,
   OBSTACLE_ROCK,
   type ObstacleCircleVisitor,
 } from './ArenaObstacleIndex';
@@ -2556,12 +2557,14 @@ export class CombatSystem {
 
   /**
    * Prüft, ob eine direkte Sichtlinie zwischen zwei Punkten besteht.
-   * Felsen und Baumstämme blockieren die Sichtlinie; Arena-Wände und Zug nicht.
+   * Felsen, Baumstämme und Basen blockieren die Sichtlinie; Basen können für Quellen
+   * oberhalb ihrer eigenen Fläche gezielt ausgenommen werden.
    */
   hasLineOfSight(
     startX: number, startY: number,
     endX: number, endY: number,
     skipRockIndex?: number,
+    ignoreBaseObstacles = false,
   ): boolean {
     const line = this.losLine.setTo(startX, startY, endX, endY);
     const blockDist = Phaser.Geom.Line.Length(line) - 2;
@@ -2573,6 +2576,7 @@ export class CombatSystem {
       startX, startY, endX, endY,
       (kind, rockIndex, left, top, right, bottom) => {
         if (kind === OBSTACLE_ROCK && rockIndex === skipRockIndex) return false;
+        if (ignoreBaseObstacles && kind === OBSTACLE_BASE) return false;
         const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
         if (hit && hit.distance < blockDist) { blocked = true; return true; }
         return false;

@@ -62,6 +62,8 @@ const ACTION_BTN_W = 160;
 const ACTION_BTN_H = 46;
 const ACTION_BTN_Y = PANEL_Y + PANEL_H - 34;
 const ACTION_BTN_GAP = 18;
+const BUILD_INFO_X = 16;
+const BUILD_INFO_Y = GAME_HEIGHT - 16;
 const COOP_PROGRESS_PANEL_W = 520;
 const COOP_PROGRESS_PANEL_H = 184;
 const COOP_PROGRESS_PANEL_Y = PANEL_Y + PANEL_H + 114;
@@ -100,6 +102,16 @@ const TRANSPORT_BTN_X = GAME_WIDTH / 2 + (ACTION_BTN_W + ACTION_BTN_GAP);
 
 function btnTexKey(color: number, w: number, h: number): string {
   return `_lobby_btn_${color.toString(16)}_${Math.round(w)}x${Math.round(h)}`;
+}
+
+function formatBuildTimestamp(isoTimestamp: string): string {
+  return new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(isoTimestamp));
 }
 
 /**
@@ -319,6 +331,14 @@ export class LobbyOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.transportBtnLabel);
     this.attachHoverEffect(this.transportBtn, this.transportBtnLabel);
+
+    const buildInfo = this.scene.add.text(
+      BUILD_INFO_X,
+      BUILD_INFO_Y,
+      `v${__GAME_VERSION__} \u00b7 ${formatBuildTimestamp(__BUILD_TIMESTAMP__)}`,
+      { fontSize: '12px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3) },
+    ).setOrigin(0, 1).setAlpha(0.9).setScrollFactor(0);
+    objects.push(buildInfo);
 
     // ── Vollbild-Button (unten rechts, unabhaengig vom Lobby-Panel) ────────
     // Gleicher Grey/Gold-Stil wie OPTIONEN/HILFE im linken Panel, damit der Button

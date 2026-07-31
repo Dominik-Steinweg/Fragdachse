@@ -1,6 +1,10 @@
+import gameVersion from './game-version.json';
 import { defineConfig } from 'vite';
 
-export default defineConfig({
+export default defineConfig(() => {
+  const buildTimestamp = new Date().toISOString();
+
+  return {
   base: './',
   server: {
     port: 8080,
@@ -22,4 +26,9 @@ export default defineConfig({
       }
     }
   },
+  define: {
+    __GAME_VERSION__: JSON.stringify(gameVersion.version),
+    __BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),
+  },
+  };
 });
