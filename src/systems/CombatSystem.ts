@@ -2565,9 +2565,12 @@ export class CombatSystem {
     endX: number, endY: number,
     skipRockIndex?: number,
     ignoreBaseObstacles = false,
+    // Optional corridor radius for bodies such as the translocator puck.
+    clearanceRadius = 0,
   ): boolean {
     const line = this.losLine.setTo(startX, startY, endX, endY);
     const blockDist = Phaser.Geom.Line.Length(line) - 2;
+    const clearance = Math.max(0, clearanceRadius);
 
     // Heißester Pfad des Host-Frames (zielsuchende Projektile prüfen pro Kandidat eine
     // Sichtlinie), deshalb über den Hindernis-Index statt über alle Felsen der Karte.
@@ -2577,15 +2580,24 @@ export class CombatSystem {
       (kind, rockIndex, left, top, right, bottom) => {
         if (kind === OBSTACLE_ROCK && rockIndex === skipRockIndex) return false;
         if (ignoreBaseObstacles && kind === OBSTACLE_BASE) return false;
-        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
+        const hit = this.findNearestRectangleHit(
+          line,
+          this.obstacleRect(
+            left - clearance,
+            top - clearance,
+            right + clearance,
+            bottom + clearance,
+          ),
+        );
         if (hit && hit.distance < blockDist) { blocked = true; return true; }
         return false;
       },
       (centerX, centerY, radius) => {
-        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
+        const hit = this.findNearestCircleHit(line, centerX, centerY, radius + clearance);
         if (hit && hit.distance < blockDist) { blocked = true; return true; }
         return false;
       },
+      clearance,
     );
 
     return !blocked;

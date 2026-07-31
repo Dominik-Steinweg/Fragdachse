@@ -154,17 +154,20 @@ export class ArenaObstacleIndex {
     x1: number, y1: number, x2: number, y2: number,
     visitRect: ObstacleRectVisitor,
     visitCircle: ObstacleCircleVisitor,
+    // Include neighboring buckets when a collision shape is wider than the line.
+    padding = 0,
   ): void {
     if (this.needsRebuild()) this.rebuild();
     if (this.bucketCols === 0 || this.bucketRows === 0) return;
 
+    const queryPadding = Math.max(0, padding);
     const dx = x2 - x1;
     const dy = y2 - y1;
 
-    const minX = dx < 0 ? x2 : x1;
-    const maxX = dx < 0 ? x1 : x2;
-    const minY = dy < 0 ? y2 : y1;
-    const maxY = dy < 0 ? y1 : y2;
+    const minX = (dx < 0 ? x2 : x1) - queryPadding;
+    const maxX = (dx < 0 ? x1 : x2) + queryPadding;
+    const minY = (dy < 0 ? y2 : y1) - queryPadding;
+    const maxY = (dy < 0 ? y1 : y2) + queryPadding;
 
     const minCol = Math.max(0, Math.floor((minX - this.originX) / BUCKET_SIZE));
     const maxCol = Math.min(this.bucketCols - 1, Math.floor((maxX - this.originX) / BUCKET_SIZE));
@@ -184,7 +187,10 @@ export class ArenaObstacleIndex {
         // Buckets ab als das Segment wirklich kreuzt – der Slab-Test siebt sie aus.
         if (!overlapsBox(
           x1, y1, dx, dy,
-          bucketLeft, bucketTop, bucketLeft + BUCKET_SIZE, bucketTop + BUCKET_SIZE,
+          bucketLeft - queryPadding,
+          bucketTop - queryPadding,
+          bucketLeft + BUCKET_SIZE + queryPadding,
+          bucketTop + BUCKET_SIZE + queryPadding,
         )) continue;
 
         const bucket = row * this.bucketCols + col;

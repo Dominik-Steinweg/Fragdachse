@@ -39,6 +39,8 @@ interface EnemyVoidFireTrailState {
 }
 
 const ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER = 2;
+/** Extra clearance around rocks so the puck is checked as a body, not as a zero-width line. */
+const ENEMY_TRANSLOCATOR_PATH_SAFETY_MARGIN = 4;
 
 /**
  * Wie beim Translocator bremst die Luftreibung das Geschoss waehrend des Fluges spuerbar ab.
@@ -229,10 +231,16 @@ export class CoopDefenseEnemyAbilitySystem {
     }
 
     if (now < state.nextReadyAt) return;
-    const target = this.findTranslocatorTarget(enemy, ability);
-    if (!target) return;
 
     const utility = UTILITY_CONFIGS[ability.utilityId] as TranslocatorUtilityConfig;
+    const puckRadius = (utility.projectileSize ?? 16) * 0.5;
+    const target = this.findTranslocatorTarget(
+      enemy,
+      ability,
+      puckRadius + ENEMY_TRANSLOCATOR_PATH_SAFETY_MARGIN,
+    );
+    if (!target) return;
+
     const angle = Phaser.Math.Angle.Between(enemy.sprite.x, enemy.sprite.y, target.x, target.y);
     const spawnDistance = enemy.getCollisionRadius() + (utility.projectileSize ?? 16) * 0.5;
     const spawnX = enemy.sprite.x + Math.cos(angle) * spawnDistance;
@@ -424,6 +432,7 @@ export class CoopDefenseEnemyAbilitySystem {
   private findTranslocatorTarget(
     enemy: EnemyEntity,
     ability: CoopDefenseEnemyTranslocatorConfig,
+    pathClearance: number,
   ): { x: number; y: number; distance: number } | null {
     let best: { x: number; y: number; distance: number } | null = null;
 
@@ -432,7 +441,15 @@ export class CoopDefenseEnemyAbilitySystem {
         if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
         if (distance < ability.minRange || distance > ability.maxRange || (best && distance >= best.distance)) continue;
-        if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y)) continue;
+        if (!this.combatSystem.hasLineOfSight(
+          enemy.sprite.x,
+          enemy.sprite.y,
+          target.sprite.x,
+          target.sprite.y,
+          undefined,
+          false,
+          pathClearance,
+        )) continue;
         best = { x: target.sprite.x, y: target.sprite.y, distance };
       }
       return best;
@@ -443,7 +460,15 @@ export class CoopDefenseEnemyAbilitySystem {
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
       if (distance < ability.minRange || distance > ability.maxRange || (best && distance >= best.distance)) continue;
-      if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y)) continue;
+      if (!this.combatSystem.hasLineOfSight(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        player.sprite.x,
+        player.sprite.y,
+        undefined,
+        false,
+        pathClearance,
+      )) continue;
       best = { x: player.sprite.x, y: player.sprite.y, distance };
     }
 

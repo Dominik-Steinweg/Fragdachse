@@ -125,7 +125,7 @@ Readonly<Record<CoopDefenseItemRarity, CoopDefenseItemRarityDefinition>> = Objec
     label: 'Selten',
     affixCount: 1,
     weight: 33,
-    color: COLORS.BLUE_2,
+    color: COLORS.BLUE_3,
     salvageXp: 12,
   },
   yellow: {

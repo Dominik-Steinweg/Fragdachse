@@ -46,13 +46,14 @@ interface Visited {
 function visit(
   index: ArenaObstacleIndex,
   x1: number, y1: number, x2: number, y2: number,
+  padding = 0,
 ): Visited {
   const result: Visited = { rockIndices: [], baseCount: 0, circleCount: 0 };
   index.querySegment(x1, y1, x2, y2, (kind, rockIndex) => {
     if (kind === OBSTACLE_ROCK) result.rockIndices.push(rockIndex);
     else result.baseCount += 1;
     return false;
-  }, () => { result.circleCount += 1; return false; });
+  }, () => { result.circleCount += 1; return false; }, padding);
   return result;
 }
 
@@ -178,6 +179,20 @@ describe('ArenaObstacleIndex', () => {
     });
 
     expect(visit(index, spot.x - 100, spot.y, spot.x + 100, spot.y).circleCount).toBe(1);
+  });
+
+  it('queries neighboring buckets for a padded collision corridor', () => {
+    // The rock box ends just before the bucket boundary at y=140. Without padding
+    // it stays in the neighboring cell and is not visited by the y=140 segment.
+    const rock = new FakeBox(500, 123);
+    const index = new ArenaObstacleIndex({
+      rocks: () => [rock as AnyBox],
+      trunks: () => null,
+      bases: () => null,
+    });
+
+    expect(visit(index, 300, 140, 700, 140).rockIndices).toEqual([]);
+    expect(visit(index, 300, 140, 700, 140, 12).rockIndices).toEqual([0]);
   });
 
   it('bricht die Traversierung ab, sobald ein Besucher true meldet', () => {
