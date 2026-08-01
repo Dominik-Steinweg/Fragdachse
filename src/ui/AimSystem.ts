@@ -10,6 +10,7 @@ import {
   getTopDownMuzzleOrigin,
 } from '../config';
 import { LivingBarEffect, paletteFromColor } from './LivingBarEffect';
+import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
 
 type SlotPalette = {
   beamShadow: number;
@@ -234,7 +235,7 @@ export class AimSystem {
     const frac = maxTotal > 0 ? Math.min(1, totalSpread / maxTotal) : 0;
 
     const pointer = this.scene.input.activePointer;
-    const pointerWorld = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const pointerWorld = getUnshakenPointerWorldPoint(this.scene, pointer);
     const px = pointerWorld.x;
     const py = pointerWorld.y;
     const dx = px - sx;

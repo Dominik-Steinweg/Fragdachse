@@ -1022,6 +1022,246 @@
       "itemDrop": {
         "itemLevel": 3
       }
+    },
+    {
+      "mapId": "16",
+      "displayName": "Map 16 - Zeitzünder",
+      "arenaWidthCells": 104,
+      "timeOfDay": "05:00",
+      "trackMode": "void-fire",
+      "permanentGroundFire": {
+        "randomPatchCount": 6,
+        "minPatchRadiusCells": 2,
+        "maxPatchRadiusCells": 4,
+        "baseClearanceCells": 2,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "weaponName": "Morgenleerer Voidbrand"
+      },
+      "rockFillRatio": 0.12,
+      "roundDurationSec": 90,
+      "objective": "destroy-hostile-bases",
+      "bases": [
+        {
+          "id": "enemy-timebomb-hive",
+          "faction": "hostile",
+          "hpMax": 2800,
+          "anchor": { "kind": "left-center", "edgeInsetCells": 10 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 }, { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 },
+              { "gridX": 0, "gridY": 3 }, { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 },
+              { "gridX": 0, "gridY": 4 }, { "gridX": 1, "gridY": 4 }, { "gridX": 2, "gridY": 4 }, { "gridX": 3, "gridY": 4 }
+            ]
+          }
+        },
+        {
+          "id": "enemy-flame-tower-top",
+          "role": "outpost",
+          "faction": "hostile",
+          "hpMax": 650,
+          "anchor": { "kind": "grid", "gridX": 17, "gridY": 9 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "void-flame", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "rear", "weaponId": "TURRET_VOID_FLAME" }
+          ]
+        },
+        {
+          "id": "enemy-flame-tower-middle",
+          "role": "outpost",
+          "faction": "hostile",
+          "hpMax": 650,
+          "anchor": { "kind": "grid", "gridX": 17, "gridY": 15 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "void-flame", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "rear", "weaponId": "TURRET_VOID_FLAME" }
+          ]
+        },
+        {
+          "id": "enemy-flame-tower-bottom",
+          "role": "outpost",
+          "faction": "hostile",
+          "hpMax": 650,
+          "anchor": { "kind": "grid", "gridX": 17, "gridY": 22 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "void-flame", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "rear", "weaponId": "TURRET_VOID_FLAME" }
+          ]
+        },
+        {
+          "id": "coop-base-middle",
+          "hpMax": 1100,
+          "anchor": { "kind": "center-offset", "dxCells": -4, "dyCells": -1 },
+          "shape": { "kind": "rectangle", "widthCells": 2, "heightCells": 3 }
+        },
+        {
+          "id": "friendly-middle-mushroom-top",
+          "role": "outpost",
+          "hpMax": 850,
+          "anchor": { "kind": "grid", "gridX": 44, "gridY": 11 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "plasma", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "FLIEGENPILZ_PLASMA" }
+          ]
+        },
+        {
+          "id": "friendly-middle-mushroom-bottom",
+          "role": "outpost",
+          "hpMax": 850,
+          "anchor": { "kind": "grid", "gridX": 44, "gridY": 17 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "plasma", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "FLIEGENPILZ_PLASMA" }
+          ]
+        },
+        {
+          "id": "coop-base-rear",
+          "hpMax": 4200,
+          "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 }, { "gridX": 3, "gridY": 0 },
+              { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 }, { "gridX": 3, "gridY": 1 },
+              { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }, { "gridX": 3, "gridY": 2 },
+              { "gridX": 1, "gridY": 3 }, { "gridX": 2, "gridY": 3 }, { "gridX": 3, "gridY": 3 },
+              { "gridX": 0, "gridY": 4 }, { "gridX": 1, "gridY": 4 }, { "gridX": 2, "gridY": 4 }, { "gridX": 3, "gridY": 4 }
+            ]
+          },
+          "powerUpPedestals": [
+            { "id": "health-station", "cellOffset": { "gridX": 0, "gridY": 1 }, "defId": "HEALTH_PACK", "respawnMs": 5000, "spawnOnArenaStart": true },
+            { "id": "armor-station", "cellOffset": { "gridX": 0, "gridY": 2 }, "defId": "ARMOR", "respawnMs": 10000, "spawnOnArenaStart": true },
+            { "id": "adrenaline-station", "cellOffset": { "gridX": 0, "gridY": 3 }, "defId": "ADRENALINE", "respawnMs": 10000, "spawnOnArenaStart": true }
+          ]
+        },
+        {
+          "id": "friendly-rear-mushroom-1",
+          "role": "outpost",
+          "hpMax": 900,
+          "anchor": { "kind": "grid", "gridX": 77, "gridY": 9 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "plasma", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "FLIEGENPILZ_PLASMA" }
+          ]
+        },
+        {
+          "id": "friendly-rear-mushroom-2",
+          "role": "outpost",
+          "hpMax": 900,
+          "anchor": { "kind": "grid", "gridX": 77, "gridY": 13 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "plasma", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "FLIEGENPILZ_PLASMA" }
+          ]
+        },
+        {
+          "id": "friendly-rear-mushroom-3",
+          "role": "outpost",
+          "hpMax": 900,
+          "anchor": { "kind": "grid", "gridX": 77, "gridY": 18 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "plasma", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "FLIEGENPILZ_PLASMA" }
+          ]
+        },
+        {
+          "id": "friendly-rear-mushroom-4",
+          "role": "outpost",
+          "hpMax": 900,
+          "anchor": { "kind": "grid", "gridX": 77, "gridY": 22 },
+          "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+          "turrets": [
+            { "id": "plasma", "cellOffset": { "gridX": 0, "gridY": 0 }, "mountSide": "front", "weaponId": "FLIEGENPILZ_PLASMA" }
+          ]
+        },
+        {
+          "id": "spawn-point-timebomb-top",
+          "role": "spawn-point",
+          "faction": "hostile",
+          "hpMax": 220,
+          "anchor": { "kind": "grid", "gridX": 1, "gridY": 4 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }
+            ]
+          },
+          "spawnCenter": { "gridX": 1, "gridY": 1 },
+          "spawnWave": { "enemyKind": "timebomb-badger", "intervalMs": 3000, "countPerWave": 1, "startAtMs": 0 }
+        },
+        {
+          "id": "spawn-point-timebomb-bottom",
+          "role": "spawn-point",
+          "faction": "hostile",
+          "hpMax": 220,
+          "anchor": { "kind": "grid", "gridX": 2, "gridY": 24 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }
+            ]
+          },
+          "spawnCenter": { "gridX": 1, "gridY": 1 },
+          "spawnWave": { "enemyKind": "timebomb-badger", "intervalMs": 3000, "countPerWave": 1, "startAtMs": 1000 }
+        },
+        {
+          "id": "spawn-point-timebomb-rear",
+          "role": "spawn-point",
+          "faction": "hostile",
+          "hpMax": 220,
+          "anchor": { "kind": "grid", "gridX": 23, "gridY": 4 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }
+            ]
+          },
+          "spawnCenter": { "gridX": 1, "gridY": 1 },
+          "spawnWave": { "enemyKind": "timebomb-badger", "intervalMs": 3000, "countPerWave": 1, "startAtMs": 2000 }
+        },
+        {
+          "id": "spawn-point-zombie-rear",
+          "role": "spawn-point",
+          "faction": "hostile",
+          "hpMax": 220,
+          "anchor": { "kind": "grid", "gridX": 31, "gridY": 24 },
+          "shape": {
+            "kind": "cells",
+            "cells": [
+              { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 },
+              { "gridX": 0, "gridY": 1 },
+              { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }
+            ]
+          },
+          "spawnCenter": { "gridX": 1, "gridY": 1 },
+          "spawnWave": { "enemyKind": "zombie-badger", "intervalMs": 4500, "countPerWave": 1, "startAtMs": 1500 }
+        }
+      ],
+      "powerUps": [
+        { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "ARMOR", "region": "middle", "respawnMs": 10000, "spawnOnArenaStart": true },
+        { "defId": "ADRENALINE", "region": "rear", "respawnMs": 10000, "spawnOnArenaStart": true },
+        { "defId": "HEALTH_PACK", "region": "rear", "respawnMs": 5000, "spawnOnArenaStart": true },
+        { "defId": "DOUBLE_DAMAGE", "region": "rear", "respawnMs": 20000, "spawnOnArenaStart": false }
+      ],
+      "waves": [
+        { "enemyKind": "timebomb-badger", "intervalMs": 3000, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "zombie-badger", "intervalMs": 4500, "countPerWave": 1, "startAtMs": 0 },
+        { "enemyKind": "demon-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 1500 },
+        { "enemyKind": "rabid-badger", "intervalMs": 6500, "countPerWave": 1, "startAtMs": 2500 }
+      ],
+      "itemDrop": {
+        "itemLevel": 3
+      }
     }
   ]
 }

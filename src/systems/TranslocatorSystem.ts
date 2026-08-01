@@ -117,7 +117,7 @@ export class TranslocatorSystem {
     const playerColor = bridge.getPlayerColor(playerId) ?? 0xffffff;
 
     // 2. Start-VFX RPC senden 
-    bridge.broadcastTranslocatorFlash(player.sprite.x, player.sprite.y, playerColor, 'start');
+    bridge.broadcastTranslocatorFlash(player.sprite.x, player.sprite.y, playerColor, 'start', playerId);
 
     // 3. Teleport durchführen
     player.sprite.x = targetX;
@@ -125,7 +125,7 @@ export class TranslocatorSystem {
     player.body.reset(targetX, targetY);
 
     // 4. Ziel-VFX RPC senden
-    bridge.broadcastTranslocatorFlash(targetX, targetY, playerColor, 'end');
+    bridge.broadcastTranslocatorFlash(targetX, targetY, playerColor, 'end', playerId);
 
     // 5. Hazard & Telefrag Checks am Zielort anwenden
     this.checkTeleportHazards(playerId, targetX, targetY);

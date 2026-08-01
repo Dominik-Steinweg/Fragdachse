@@ -24,6 +24,7 @@ import type { TeamId } from '../types';
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
 import { ensureFlatPanelTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH / 2;
@@ -437,6 +438,7 @@ export class RightSidePanel {
   private buildGameContainer(): void {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
     this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
+    promoteToClarityCamera(this.scene, this.gameContainer);
     this.gameContainer.add(
       this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, GAME_HEIGHT / 2, ARENA_SIDEBAR_WIDTH, GAME_HEIGHT, 0x000000, 0.18)
         .setScrollFactor(0),
@@ -593,6 +595,7 @@ export class RightSidePanel {
   private buildLobbyContainer(): void {
     this.lobbyContainer = this.scene.add.container(0, 0);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
+    promoteToClarityCamera(this.scene, this.lobbyContainer);
 
     // ── Endstand-Header (Knopf: oeffnet die Match-Auswertung erneut) ──────────
     // Beschriftung und Pfeil liegen in einem Container auf der Knopfmitte, damit der

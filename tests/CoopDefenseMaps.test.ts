@@ -61,6 +61,7 @@ describe('Coop defense map progression', () => {
         '13': 135,
         '14': 60,
         '15': 100,
+        '16': 104,
       });
   });
 
@@ -83,6 +84,7 @@ describe('Coop defense map progression', () => {
         '13': 2,
         '14': 3,
         '15': 3,
+        '16': 3,
       });
   });
 
@@ -122,6 +124,7 @@ describe('Coop defense map progression', () => {
       '13': 'destroy-hostile-bases',
       '14': 'survive',
       '15': 'defeat-boss',
+      '16': 'destroy-hostile-bases',
     });
     expect(new Set(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.objective)).size).toBe(3);
     expect(getCoopDefenseMapObjectiveLabel('survive')).toBe('ZEIT UEBERLEBEN');
@@ -250,7 +253,7 @@ describe('Coop defense map progression', () => {
   });
 
   it('keeps five-cell obstacle clearance around every role and preserves spawn-center gaps', () => {
-    for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => ['8', '13', '14', '15'].includes(mapId))) {
+    for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => ['8', '13', '14', '15', '16'].includes(mapId))) {
       const specs = resolveCoopDefenseBases(map);
       for (const spec of specs) {
         const edgeCell = {

@@ -37,3 +37,9 @@ export function clearActiveSession(): void {
   activeSession?.room.destroy();
   activeSession = null;
 }
+
+/** Bewusstes Verlassen: der Client sendet zuerst das explizite Leave an den Host. */
+export function leaveActiveSession(): void {
+  activeSession?.room.leave();
+  activeSession = null;
+}

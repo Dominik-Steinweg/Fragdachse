@@ -14,6 +14,7 @@
  */
 import type { DataConnection } from 'peerjs';
 import {
+  PEER_DISCONNECTED_GRACE_MS,
   PEER_FAST_BUFFER_LIMIT_BYTES,
   PEER_FAST_CHANNEL_ID,
   PEER_FAST_CHANNEL_LABEL,
@@ -39,6 +40,9 @@ export class PeerLink implements PeerLinkLike {
   private inbox: QueuedMessage[] = [];
   private closed = false;
   private droppedFastMessages = 0;
+  private monitoredPeerConnection: RTCPeerConnection | null = null;
+  private peerConnectionStateHandler: ((event: Event) => void) | null = null;
+  private disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
 
   playerId = '';
 
@@ -55,6 +59,9 @@ export class PeerLink implements PeerLinkLike {
     });
     this.connection.on('close', () => this.handleRemoteClose());
     this.connection.on('error', () => this.handleRemoteClose());
+    // PeerJS' close/error events are useful but not sufficient on every browser. The native
+    // connection state is the authoritative second signal for a vanished WebRTC link.
+    this.bindPeerConnectionState();
   }
 
   get remotePeerId(): string {
@@ -88,6 +95,8 @@ export class PeerLink implements PeerLinkLike {
    */
   async open(handlers: PeerLinkHandlers): Promise<void> {
     await this.awaitReliableOpen();
+    this.bindPeerConnectionState();
+    if (this.closed) throw createPeerNetworkError('connection-failed');
     await this.openFastChannel();
     this.openedAtMs = Date.now();
     this.handlers = handlers;
@@ -127,6 +136,7 @@ export class PeerLink implements PeerLinkLike {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.clearPeerConnectionMonitor();
     try {
       this.fastChannel?.close();
     } catch {
@@ -162,6 +172,7 @@ export class PeerLink implements PeerLinkLike {
   private openFastChannel(): Promise<void> {
     const peerConnection = this.connection.peerConnection;
     if (!peerConnection) return Promise.reject(createPeerNetworkError('connection-failed'));
+    if (this.closed) return Promise.reject(createPeerNetworkError('connection-failed'));
 
     const channel = peerConnection.createDataChannel(PEER_FAST_CHANNEL_LABEL, {
       negotiated: true,
@@ -182,7 +193,7 @@ export class PeerLink implements PeerLinkLike {
 
     return new Promise<void>((resolve, reject) => {
       const cleanup = (): void => {
-        window.clearTimeout(timeout);
+        globalThis.clearTimeout(timeout);
         channel.removeEventListener('open', onOpen);
         channel.removeEventListener('close', onClose);
         channel.removeEventListener('error', onError);
@@ -194,7 +205,7 @@ export class PeerLink implements PeerLinkLike {
       };
       const onClose = (): void => { cleanup(); reject(createPeerNetworkError('connection-failed')); };
       const onError = (): void => { cleanup(); reject(createPeerNetworkError('connection-failed')); };
-      const timeout = window.setTimeout(() => {
+      const timeout = globalThis.setTimeout(() => {
         cleanup();
         reject(createPeerNetworkError('connection-failed'));
       }, PEER_FAST_CHANNEL_TIMEOUT_MS);
@@ -213,6 +224,7 @@ export class PeerLink implements PeerLinkLike {
   private handleRemoteClose(): void {
     if (this.closed) return;
     this.closed = true;
+    this.clearPeerConnectionMonitor();
     try {
       this.fastChannel?.close();
     } catch {
@@ -221,5 +233,57 @@ export class PeerLink implements PeerLinkLike {
     this.fastChannel = null;
     if (this.connection.open) this.connection.close();
     this.handlers?.onClose();
+  }
+
+  private bindPeerConnectionState(): void {
+    if (this.closed) return;
+    const peerConnection = this.connection.peerConnection;
+    if (!peerConnection || this.monitoredPeerConnection === peerConnection) return;
+
+    this.clearPeerConnectionMonitor();
+    const onStateChange = (_event: Event): void => this.handlePeerConnectionState(peerConnection);
+    this.monitoredPeerConnection = peerConnection;
+    this.peerConnectionStateHandler = onStateChange;
+    peerConnection.addEventListener('connectionstatechange', onStateChange);
+    this.handlePeerConnectionState(peerConnection);
+  }
+
+  private handlePeerConnectionState(peerConnection: RTCPeerConnection): void {
+    if (this.closed) return;
+    const state = peerConnection.connectionState;
+    if (state === 'failed' || state === 'closed') {
+      this.handleRemoteClose();
+      return;
+    }
+    if (state === 'disconnected') {
+      this.scheduleDisconnectedClose(peerConnection);
+      return;
+    }
+    this.clearDisconnectedTimer();
+  }
+
+  private scheduleDisconnectedClose(peerConnection: RTCPeerConnection): void {
+    if (this.disconnectedTimer !== null) return;
+    this.disconnectedTimer = globalThis.setTimeout(() => {
+      this.disconnectedTimer = null;
+      if (!this.closed && peerConnection.connectionState === 'disconnected') {
+        this.handleRemoteClose();
+      }
+    }, PEER_DISCONNECTED_GRACE_MS);
+  }
+
+  private clearDisconnectedTimer(): void {
+    if (this.disconnectedTimer === null) return;
+    globalThis.clearTimeout(this.disconnectedTimer);
+    this.disconnectedTimer = null;
+  }
+
+  private clearPeerConnectionMonitor(): void {
+    this.clearDisconnectedTimer();
+    if (this.monitoredPeerConnection && this.peerConnectionStateHandler) {
+      this.monitoredPeerConnection.removeEventListener('connectionstatechange', this.peerConnectionStateHandler);
+    }
+    this.monitoredPeerConnection = null;
+    this.peerConnectionStateHandler = null;
   }
 }

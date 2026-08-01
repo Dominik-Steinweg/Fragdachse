@@ -80,6 +80,10 @@ function installReconnectNotice(): void {
   });
 }
 
+function installPageLeave(): void {
+  window.addEventListener('pagehide', () => bridge.leaveRoom(), { once: true });
+}
+
 async function boot(): Promise<void> {
   // Ausgelieferter Content muss vollständig konsistent sein, bevor Netzwerk oder Phaser starten.
   validateGameContentReferences();
@@ -91,6 +95,7 @@ async function boot(): Promise<void> {
   // 2. Bridge aktivieren (einmalig – registriert Roster-Listener und RPC-Namen)
   bridge.activate();
   installReconnectNotice();
+  installPageLeave();
 
   // 3. Phaser-Spiel starten – ERST nach stehender Verbindung
   //

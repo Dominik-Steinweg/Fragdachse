@@ -19,6 +19,7 @@ import {
   setStoredMusicVolume,
 } from '../utils/localPreferences';
 import type { GraphicsQuality, GraphicsQualityController } from '../graphics/GraphicsQuality';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const PANEL_W = 680;
 const PANEL_H = 680;
@@ -236,6 +237,7 @@ export class OptionsOverlay {
     this.container = this.scene.add.container(0, 0)
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
+    promoteToClarityCamera(this.scene, this.container);
 
     const objects: Phaser.GameObjects.GameObject[] = [];
     this.dimRect = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, DIM_COLOR, DIM_ALPHA)

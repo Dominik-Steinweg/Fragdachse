@@ -290,6 +290,11 @@ export class PlayerEntity {
     this.hpBarFg.setFillStyle(color);
   }
 
+  /** Anteil verbleibender Lebenspunkte, 1 … 0. Speist die Bildkomposition bei niedriger Gesundheit. */
+  getHpFraction(): number {
+    return this.maxHp > 0 ? Math.max(0, Math.min(1, this.currentHp / this.maxHp)) : 1;
+  }
+
   updateArmor(armor: number): void {
     this.currentArmor = Math.max(0, Math.min(ARMOR_MAX, armor));
     const ratio = this.currentArmor / ARMOR_MAX;

@@ -11,6 +11,7 @@ import {
   type CoopDefenseEffectTotalsSource,
 } from '../src/loadout/CoopDefenseLoadoutModifiers';
 import {
+  getUtilityConfigLineage,
   ULTIMATE_CONFIGS,
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
@@ -39,6 +40,11 @@ function isConfigStat(stat: string): boolean {
 }
 
 function matchingConfigIds(descriptor: ConfigStatDescriptor): readonly string[] {
+  if (descriptor.itemId && descriptor.kind === 'utility') {
+    return Object.values(UTILITY_CONFIGS)
+      .filter((config) => getUtilityConfigLineage(config.id).includes(descriptor.itemId!))
+      .map((config) => config.id);
+  }
   if (descriptor.itemId) return [descriptor.itemId];
   if (descriptor.kind === 'weapon') {
     return Object.values(WEAPON_CONFIGS)

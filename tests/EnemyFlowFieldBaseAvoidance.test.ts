@@ -60,6 +60,36 @@ function createBase(
 }
 
 describe('Flow field around bases', () => {
+  it('keeps the concrete source behind a shared dynamic multi-goal field', () => {
+    const service = new EnemyFlowFieldService(createLayout(), [], METRICS, {
+      goalMode: 'dynamic-fallback-bases',
+    });
+    service.setDynamicGoalCells([
+      { gridX: 2, gridY: 5 },
+      { gridX: 13, gridY: 5 },
+    ]);
+    service.update(Date.now() + 1_000);
+
+    expect(service.getReachedGoalCellAt(3, 5)).toEqual({ gridX: 2, gridY: 5 });
+    expect(service.getReachedGoalCellAt(12, 5)).toEqual({ gridX: 13, gridY: 5 });
+  });
+
+  it('does not fall back to a base when an exclusive dynamic target set becomes empty', () => {
+    const service = new EnemyFlowFieldService(
+      createLayout(),
+      [createBase('base-1', 12, 4, 2, 2)],
+      METRICS,
+      { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 2, gridY: 5 }] },
+    );
+
+    expect(service.getIntegrationValueAt(3, 5)).toBeLessThan(EnemyFlowFieldService.INTEGRATION_INFINITY);
+    service.setDynamicGoalCells([]);
+    service.update(Date.now() + 1_000);
+
+    expect(service.getReachedGoalCellAt(3, 5)).toBeNull();
+    expect(service.getIntegrationValueAt(3, 5)).toBe(EnemyFlowFieldService.INTEGRATION_INFINITY);
+  });
+
   it('charges a surcharge on cells that touch a base, so open routes bow away from the wall', () => {
     const base = createBase('base-1', 6, 4, 3, 3);
     const service = new EnemyFlowFieldService(createLayout(), [base], METRICS);

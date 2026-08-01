@@ -34,7 +34,13 @@ Ein Client-Boot gilt erst nach einem gültigen `welcome` als erfolgreich. Ab dem
 
 Nach einem Client-Linkabbruch hält der Host dessen Spieler-ID und Zustand zehn Sekunden anhand eines zufälligen, pro Raum in `sessionStorage` gespeicherten Tokens. Der Input wird sofort neutralisiert; die Figur bleibt stehen, verwundbar und im Roster. Der Client verbindet sofort und danach mit bis zu zwei Sekunden Backoff neu. Kommt dasselbe Token rechtzeitig zurück, erhält der neue Link den vorhandenen Slot und einen vollständigen Store; der Client verwirft seine Game-State-/Delta-Baseline. Erst nach Ablauf wird der Spieler genau einmal entfernt und `quit` verteilt.
 
+Ein bewusster Client-Ausstieg verwendet dagegen die zuverlässige `leave`-Nachricht ohne Spieler-ID. Der Host nimmt die ID ausschließlich vom zugehörigen Link, entfernt Spielerzustand und Resume-Slot sofort und verteilt danach genau ein `quit` an die übrigen Clients. Navigation über den regulären Raumwechsel sowie `pagehide` lösen diesen Best-Effort-Pfad aus; eine kurze Sendepause lässt die Leave-Nachricht vor dem Schließen des Links abfließen.
+
+Für die Abbrucherkennung überwacht `PeerLink` zusätzlich `RTCPeerConnection.connectionState`: `failed` und `closed` schließen sofort, `disconnected` erst nach drei Sekunden. Ein kleiner zuverlässiger Heartbeat läuft alle zwei Sekunden und beendet einen stillen Link nach sieben Sekunden; erst danach gilt weiterhin die zehnsekündige Resume-Karenz.
+
 **Es gibt keinen Hostwechsel.** Scheitert Resume oder verlässt der Host den Raum, endet Runde bzw. Lobby mit einer Meldung sowie den Wegen „erneut beitreten" und „neuen Raum eröffnen".
+
+Ein Host-Kick ist nur in `LOBBY` gueltig und wird im `NetworkBridge`-RPC erneut gegen Hostrolle, Phase und Zielspieler geprueft. `PeerRoom.kickPlayer()` entfernt den Slot samt Zustands- und Resume-Eintraegen vor dem normalen `quit` an die verbleibenden Clients; der Ziel-Link erhaelt zuvor auf `rel` genau eine `kicked`-Nachricht und wird erst danach geschlossen. Der Client markiert den Kick als terminal, startet keinen Resume-Versuch und kann spaeter ueber den Raumlink neu beitreten.
 
 ## Host und Ownership
 
@@ -52,9 +58,13 @@ Ein Spieler ist Host und besitzt die autoritative Simulation: Positionen, Treffe
 - Der Host ist die einzige Instanz, die weiterreicht; Clients sprechen nie miteinander. `HOST_ONLY_PLAYER_KEYS` hält Keys vom Relay fern, die ausschließlich der Host liest. `KEY_INPUT` gehört bewusst nicht dazu: `PlacementPreviewRenderer` liest `placementPreview` fremder Spieler und läuft auch auf Clients.
 - Beim Join erhält ein Client den vollständigen Store, bevor Join-Callbacks feuern.
 
+Committed Loadouts tragen bei `coop_defense` die konkreten Utility-IDs `FELSBAU_COOP` bzw. `FLIEGENPILZ_COOP`; normale Modi tragen die Basis-IDs. Die Inspector-Profile und Kataloge bleiben bei Basis-IDs für Unlocks, UI und Kapazitätskosten. Platzierte Utility-Objekte führen zusätzlich im bestehenden optionalen `SyncedPlaceableRock.toolRef` die konkrete Utility-ID mit, damit Host und Client dieselbe geerbte Runtime-Konfiguration für Visuals, Cooldowns und Effekte auflösen.
+
 Der Host veröffentlicht bei `NET_TICK_RATE_HZ = 20` einen einzelnen kompakten `KEY_GAME_STATE`-Payload. `playerStateCodec.ts` komprimiert Spielerzustände, Gegner nutzen `enemySnapshotCodec.ts` mit Full-/Delta-Upserts und sticky Removals. Weitere Slices lassen leere oder unveränderte Daten aus und werden clientseitig gegen den letzten Stand gemerged; Felsen, Power-ups, Pedestals und brennender Boden besitzen eigene Delta-/Full-Resync-Regeln. Clients erkennen neue Payloads über eine monotone Sequenz, extrapolieren Projektile und glätten Entity-Ziele (`NET_SMOOTH_TIME_MS = 80`). Beim Arena-Aufbau muss der Merge-Cache zurückgesetzt werden. **Fehlend bedeutet bei Delta-Slices „unverändert", nicht „leer".**
 
 Nutzlast ist JSON. Ein Binärformat lohnt erst, wenn die Slice-Metriken (`NET_DEBUG_ENEMY_SYNC_METRICS`) es belegen.
+
+Hindernisschaden ist host-autoritär: `ProjectileManager` meldet Flammen- und andere Projektiltreffer über den zentralen Rock-Hit-Callback an `RockVisualHelper`; Clients wenden keinen parallelen Schaden an. Flammen führen pro Projektil eine Hindernis-ID-Menge, bleiben nach einem Felskontakt bis zum Lifetime-Ende aktiv und unterscheiden gebaute/statische Felsen von Türmen ausschließlich über das replizierte `kind`-Feld, nicht über eine Loadout-ID.
 
 **Ein neuer Gegner-Zustand gehört nicht automatisch in den Enemy-Codec.** Ein zusätzliches Feld dort kostet sechs Änderungsstellen im Gleichschritt (beide Interfaces, `getNetSnapshot`, `buildDeltaState`, Encode, Decode, Skip-Walker, beide Zweige von `applyRemoteSnapshot`) und liegt in einem heißen Pfad. Für einen Zustand, der nur wenige Gegner gleichzeitig betrifft, ist der **Seitenkanal** günstiger: ein eigener `GameState`-Key, der beim Bauen der Nutzlast komplett entfällt, solange die Liste leer ist – Vorbilder sind `slimeTrail.affectedEnemies` und `vulnerableEnemies`. Er kostet dann exakt nichts, während ein Codec-Bit immer im Maskenvergleich mitläuft. Umgekehrt gewinnt der Codec, sobald der Zustand gleichzeitig auf sehr vielen Gegnern liegt, weil der Seitenkanal keine Deltas kennt. Zeitlich begrenzte Zustände replizieren dabei einen **absoluten Ablaufzeitpunkt** statt einer Restdauer; der Client zählt dann zwischen zwei Snapshots selbst herunter und braucht kein Update beim Ablauf.
 

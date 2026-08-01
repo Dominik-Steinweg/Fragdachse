@@ -37,6 +37,35 @@ export interface GraphicsQualityProfile {
    * Designraum und nimmt die weichere CSS-Skalierung des Browsers in Kauf.
    */
   readonly maxRenderScale: number;
+  /**
+   * Gemeinsamer Faktor auf alle Amplituden des Kamera-Feedbacks. Bewusst **kein** An/Aus-Schalter:
+   * Rumpeln bei Nuke-Countdown, Airstrike-Warnung oder anfliegendem Meteor ist lesbare
+   * Telegraphie und muss auch in `low` erhalten bleiben. Es skaliert, es verschwindet nicht.
+   */
+  readonly cameraMotionScale: number;
+  /**
+   * Silhouettenblitz am getroffenen Ziel. Überall an: es ist die einzige unmittelbare
+   * Rückmeldung am Ziel selbst und damit Lesbarkeit, keine Dekoration.
+   */
+  readonly hitFlash: boolean;
+  /** Rein visueller Trefferimpuls der getroffenen Figur. In `low` aus. */
+  readonly entityJolt: boolean;
+  /** Feste Poolgröße der Trefferkopien. Zur Laufzeit wird nie nachallokiert. */
+  readonly hitFlashPoolSize: number;
+  /** Dezentes Color-Grading der Weltkamera (Sättigung, Kontrast, Helligkeit, Farbbalance). */
+  readonly worldColorGrade: boolean;
+  readonly worldVignette: boolean;
+  /**
+   * Kontrollierter Schwellenwert-Bloom der Weltkamera. `event` heißt: kein Dauerbloom, aber
+   * außergewöhnliche Ereignisse dürfen ihn kurz hochziehen.
+   *
+   * Der Bloom ist der mit Abstand teuerste Posten der Bildkomposition: er kostet einen
+   * Offscreen-Pass in Backing-Store-Auflösung plus Blur-Schritte, und die Renderauflösung geht
+   * quadratisch ein.
+   */
+  readonly worldBloom: 'full' | 'event' | 'off';
+  /** Kurzzeitige Ereignispulse (Nuke, Bossphase, Tod). */
+  readonly eventPostFx: boolean;
 }
 
 export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, GraphicsQualityProfile>> = {
@@ -57,6 +86,14 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     externalDecorativeFilters: true,
     decorativeFilters: true,
     maxRenderScale: 2,
+    cameraMotionScale: 1,
+    hitFlash: true,
+    entityJolt: true,
+    hitFlashPoolSize: 24,
+    worldColorGrade: true,
+    worldVignette: true,
+    worldBloom: 'full',
+    eventPostFx: true,
   },
   medium: {
     level: 'medium',
@@ -71,6 +108,14 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     externalDecorativeFilters: false,
     decorativeFilters: true,
     maxRenderScale: 1.5,
+    cameraMotionScale: 1,
+    hitFlash: true,
+    entityJolt: true,
+    hitFlashPoolSize: 16,
+    worldColorGrade: true,
+    worldVignette: true,
+    worldBloom: 'event',
+    eventPostFx: true,
   },
   low: {
     level: 'low',
@@ -85,6 +130,14 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     externalDecorativeFilters: false,
     decorativeFilters: false,
     maxRenderScale: 1,
+    cameraMotionScale: 0.7,
+    hitFlash: true,
+    entityJolt: false,
+    hitFlashPoolSize: 12,
+    worldColorGrade: false,
+    worldVignette: false,
+    worldBloom: 'off',
+    eventPostFx: false,
   },
 };
 

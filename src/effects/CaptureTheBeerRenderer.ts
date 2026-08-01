@@ -13,6 +13,8 @@ import {
   getBeamPaletteForPlayerColor,
 } from '../config';
 import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, TeamId } from '../types';
+import type { CameraFeedbackController } from './camera/CameraFeedbackController';
+import { impactMedium } from './camera/cameraFeedbackPresets';
 import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, setCircleEmitZone } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 
@@ -58,6 +60,7 @@ interface BeerVisual {
 export class CaptureTheBeerRenderer {
   private readonly visuals = new Map<TeamId, BeerVisual>();
   private arenaMask: Phaser.Display.Masks.GeometryMask | null;
+  private cameraFeedback: CameraFeedbackController | null = null;
   private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene, arenaMask: Phaser.Display.Masks.GeometryMask | null = null) {
@@ -69,6 +72,10 @@ export class CaptureTheBeerRenderer {
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+  }
+
+  setCameraFeedback(controller: CameraFeedbackController | null): void {
+    this.cameraFeedback = controller;
   }
 
   setArenaMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
@@ -454,7 +461,7 @@ export class CaptureTheBeerRenderer {
   private playScoreBurst(x: number, y: number, palette: TeamPalette): void {
     this.playScoreScreenFlash(palette);
     this.scene.cameras.main.flash(150, 255, 255, 255, false);
-    this.scene.cameras.main.shake(460, 0.014);
+    this.cameraFeedback?.request(impactMedium({ sourceX: x, sourceY: y }));
 
     this.playPulseHalo(x, y, palette.foam, 0.88, 0.3, 2.65, 980);
     this.playPulseHalo(x, y, 0xffffff, 0.56, 0.2, 2.15, 720);

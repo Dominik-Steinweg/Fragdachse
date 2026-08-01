@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MAX_PLAYERS } from '../src/config';
+import {
+  MAX_PLAYERS,
+  PEER_HEARTBEAT_INTERVAL_MS,
+  PEER_HEARTBEAT_TIMEOUT_MS,
+  PEER_RESUME_GRACE_MS,
+} from '../src/config';
 import { PeerRoom, type PeerPlayerHandle } from '../src/network/peer/PeerRoom';
+import { NetworkBridge } from '../src/network/NetworkBridge';
 import { createPeerNetworkError, type PeerNetworkError } from '../src/network/peer/PeerSignaling';
+import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import {
   PEER_PROTOCOL_VERSION,
   encodePeerMessage,
@@ -65,6 +72,10 @@ class FakeTransport implements PeerRoomTransport {
     if (this.isHost) return;
     if (!this.reconnectEnabled) throw new Error('Reconnect disabled by test');
     this.network.connectClient(this);
+  }
+
+  getLinks(): FakeLink[] {
+    return this.links;
   }
 
   destroy(): void {
@@ -162,6 +173,7 @@ interface TestRoom {
   transport: FakeTransport;
   joined: string[];
   quit: string[];
+  kicked: number;
   fatals: PeerNetworkError[];
 }
 
@@ -171,9 +183,10 @@ async function startRoom(
   resumeToken?: string,
 ): Promise<TestRoom> {
   const room = new PeerRoom(transport, { hostOnlyPlayerKeys, resumeToken });
-  const testRoom: TestRoom = { room, transport, joined: [], quit: [], fatals: [] };
+  const testRoom: TestRoom = { room, transport, joined: [], quit: [], kicked: 0, fatals: [] };
   room.onPlayerJoin((handle) => testRoom.joined.push(handle.id));
   room.onPlayerQuit((id) => testRoom.quit.push(id));
+  room.onKicked(() => { testRoom.kicked++; });
   room.onFatal((error) => testRoom.fatals.push(error));
   await room.start();
   return testRoom;
@@ -570,6 +583,151 @@ describe('PeerRoom rpc', () => {
 });
 
 describe('PeerRoom disconnects', () => {
+  it('enforces host/lobby/target checks in NetworkBridge and resets remaining ready state', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = new FakeNetwork();
+      const host = await createHostRoom(network);
+      const target = await addClientRoom(network);
+      const observer = await addClientRoom(network);
+      const bridge = new NetworkBridge();
+      setActiveSession({
+        room: host.room,
+        transport: host.transport as never,
+        roomCode: 'ABC123',
+      });
+      bridge.activate();
+
+      host.room.setGlobal('gph', 'ARENA', true);
+      await expect(bridge.kickPlayer('p1')).resolves.toEqual({ ok: false, reason: 'lobby-only' });
+      expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p1', 'p2']);
+
+      host.room.setGlobal('gph', 'LOBBY', true);
+      bridge.hostSetPlayerReady('p0', true);
+      bridge.hostSetPlayerReady('p1', true);
+      bridge.hostSetPlayerReady('p2', true);
+
+      await expect(bridge.kickPlayer('p0')).resolves.toEqual({ ok: false, reason: 'self' });
+      await expect(bridge.kickPlayer('missing')).resolves.toEqual({ ok: false, reason: 'unknown-player' });
+      await expect(bridge.kickPlayer('p1')).resolves.toEqual({ ok: true });
+
+      expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p2']);
+      expect(bridge.getPlayerReady('p0')).toBe(false);
+      expect(bridge.getPlayerReady('p2')).toBe(false);
+      expect(target.kicked).toBe(1);
+      expect(observer.quit).toEqual(['p1']);
+    } finally {
+      clearActiveSession();
+      vi.useRealTimers();
+    }
+  });
+
+  it('removes a kicked client from state, roster and resume slots without reconnecting it', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = new FakeNetwork();
+      const host = await createHostRoom(network);
+      const target = await addClientRoom(network, [], 'kick-target-token');
+      const observer = await addClientRoom(network);
+      setActiveSession({
+        room: target.room,
+        transport: target.transport as never,
+        roomCode: 'ABC123',
+      });
+      const kickedBridge = new NetworkBridge();
+      kickedBridge.activate();
+      const kickedNotice = vi.fn();
+      kickedBridge.onKicked(kickedNotice);
+
+      expect(target.room.kickPlayer('p0')).toBe(false);
+      expect(host.room.kickPlayer('p0')).toBe(false);
+      expect(host.room.kickPlayer('does-not-exist')).toBe(false);
+
+      host.room.setPlayerState('p1', 'hp', 73, true);
+      const targetLink = host.transport.links.find(link => link.playerId === 'p1');
+      expect(targetLink).toBeDefined();
+
+      expect(host.room.kickPlayer('p1')).toBe(true);
+
+      expect(target.kicked).toBe(1);
+      expect(target.fatals).toEqual([]);
+      expect(target.room.getPlayerHandle('p1')).toBeUndefined();
+      expect(target.room.getPlayerState('p1', 'hp')).toBeUndefined();
+      expect(host.room.getPlayerHandle('p1')).toBeUndefined();
+      expect(host.room.getPlayerState('p1', 'hp')).toBeUndefined();
+      expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p2']);
+      expect(observer.room.getPlayerIds().sort()).toEqual(['p0', 'p2']);
+      expect(host.quit).toEqual(['p1']);
+      expect(observer.quit).toEqual(['p1']);
+      expect(targetLink?.sent).toContainEqual({ message: { t: 'kicked' }, channel: 'rel' });
+
+      await vi.advanceTimersByTimeAsync(PEER_RESUME_GRACE_MS);
+      expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p2']);
+      expect(target.kicked).toBe(1);
+      expect(target.transport.links.some(link => !link.closed)).toBe(false);
+
+      // Der Kick loescht den lokalen Roster-/State-Eintrag. Die Bridge darf den noch laufenden
+      // Abschlussframe trotzdem ohne Ausnahme aktualisieren.
+      expect(target.room.isKicked()).toBe(true);
+      expect(kickedNotice).toHaveBeenCalledTimes(1);
+      expect(() => {
+        kickedBridge.updateNetwork();
+        kickedBridge.getLocalPlayerId();
+        kickedBridge.sendPingToHost();
+      }).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('removes an explicitly leaving client immediately and consumes its resume slot', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const leaving = await addClientRoom(network, [], 'explicit-leave-token');
+    const observer = await addClientRoom(network);
+    const handleQuit = vi.fn();
+    host.room.getPlayerHandle('p1')?.onQuit(handleQuit);
+
+    const clientLink = leaving.transport.links[0];
+    leaving.room.leave();
+
+    expect(clientLink.sent).toContainEqual({ message: { t: 'leave' }, channel: 'rel' });
+    expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p2']);
+    expect(host.room.getPlayerHandle('p1')).toBeUndefined();
+    expect(host.room.getPlayerState('p1', 'anything')).toBeUndefined();
+    expect(handleQuit).toHaveBeenCalledTimes(1);
+    expect(host.quit).toEqual(['p1']);
+    expect(observer.quit).toEqual(['p1']);
+
+    const replacement = await addClientRoom(network, [], 'explicit-leave-token');
+    expect(replacement.room.getLocalPlayerId()).toBe('p1');
+    expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p1', 'p2']);
+  });
+
+  it('closes a silent link after the heartbeat timeout but keeps the resume grace period', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = new FakeNetwork();
+      const host = await createHostRoom(network);
+      const vanished = await addClientRoom(network);
+      const hostLink = host.transport.links[0];
+
+      // A destroyed client no longer answers heartbeats, while the in-memory link itself stays
+      // open so this exercises the liveness timeout rather than the close callback.
+      vanished.room.destroy();
+      await vi.advanceTimersByTimeAsync(PEER_HEARTBEAT_INTERVAL_MS + PEER_HEARTBEAT_TIMEOUT_MS);
+
+      expect(hostLink.closed).toBe(true);
+      expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p1']);
+      expect(host.quit).toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(PEER_RESUME_GRACE_MS);
+      expect(host.quit).toEqual(['p1']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resumes within ten seconds without changing player id or state', async () => {
     const network = new FakeNetwork();
     const host = await createHostRoom(network);

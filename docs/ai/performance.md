@@ -148,7 +148,13 @@ reines Messwerkzeug.
 
 Start über den Knopf **„Diagnose-Trace starten"** in der `T`-Diagnose; er startet Aufzeichnung
 und Ablation gemeinsam. Kategorien: Filter/Glow, Partikel, Lichter, Schatten, Blut, Felsen,
-Bodenfeuer, Projektile, statische Deko, HUD.
+Bodenfeuer, Projektile, statische Deko, HUD, Zug, Bildkomposition (Post-FX).
+
+`filters` und `postFx` sind bewusst getrennt: objektbezogene Glows kosten pro Objekt, die
+Bildkomposition der Weltkamera kostet einen Offscreen-Pass in Backing-Store-Auflösung plus
+Blur-Schritte. Die Renderauflösung geht dort quadratisch ein, weshalb der Bloom auf `medium`
+nur ereignisbezogen und auf `low` gar nicht läuft. Beides in einer Zahl wäre für die Diagnose
+wertlos.
 
 Zwei Eigenschaften machen die Zahlen belastbar:
 

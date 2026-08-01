@@ -11,6 +11,7 @@ import {
   toCssColor,
 } from '../config';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const VEIL_CELL_SIZE = 8;
 const VEIL_EDGE_BAND_PX = 96;
@@ -90,6 +91,10 @@ export class ArenaCountdownOverlay {
       .setDepth(DEPTH.OVERLAY)
       .setScrollFactor(0)
       .setVisible(false);
+
+    promoteToClarityCamera(scene, this.veil);
+    promoteToClarityCamera(scene, this.text);
+    promoteToClarityCamera(scene, this.objectiveText);
   }
 
   setAudioSystem(system: GameAudioSystem | null): void {

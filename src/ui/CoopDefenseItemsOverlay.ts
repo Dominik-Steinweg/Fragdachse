@@ -33,6 +33,7 @@ import {
 } from './uiTextures';
 import { UiContextMenu } from './UiContextMenu';
 import { UiTooltip } from './UiTooltip';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 /**
  * Item-Menue der Lobby im Stil klassischer Action-Rollenspiele: links eine Ausruestungspuppe
@@ -217,6 +218,7 @@ export class CoopDefenseItemsOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 3)
       .setVisible(false);
+    promoteToClarityCamera(this.scene, this.container);
     this.contextMenu = new UiContextMenu(this.scene, this.container);
   }
 

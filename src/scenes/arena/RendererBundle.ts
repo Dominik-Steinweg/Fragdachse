@@ -45,6 +45,7 @@ import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { ProjectileManager } from '../../entities/ProjectileManager';
 import type { PlayerManager }     from '../../entities/PlayerManager';
 import type { EffectSystem }      from '../../effects/EffectSystem';
+import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
 import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 
 /** All visual renderers grouped together. Round-scoped renderers start as null. */
@@ -282,6 +283,21 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.nuke.setEffectSystem(effectSystem);
   bundle.airstrike.setEffectSystem(effectSystem);
   effectSystem.setLightingSystem(bundle.lighting);
+}
+
+/**
+ * Verbindet alle Renderer, die Kamerabewegung auslösen, mit dem zentralen Controller.
+ * Direkte `cameras.main.shake()`-Aufrufe sind ab hier verboten – der Ownership-Test in
+ * `tests/CameraShakeOwnership.test.ts` erzwingt das.
+ */
+export function wireRenderersToCameraFeedback(
+  bundle: RendererBundle,
+  controller: CameraFeedbackController,
+): void {
+  bundle.nuke.setCameraFeedback(controller);
+  bundle.airstrike.setCameraFeedback(controller);
+  bundle.meteor.setCameraFeedback(controller);
+  bundle.beer.setCameraFeedback(controller);
 }
 
 /** Wire GameAudioSystem to renderers that play sounds. */

@@ -24,8 +24,10 @@ import {
   type CoopBaseTurretWeaponId,
   type CoopDefenseMapConfig,
   type ResolvedCoopDefenseMapWaveConfig,
+  DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
 } from '../config/coopDefenseMaps';
 import { resolveCoopDefenseEnemyWaveConfig } from '../config/coopDefenseEnemies';
+import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
 
 export interface BaseTurretSpec {
   readonly id: string;
@@ -55,7 +57,8 @@ export interface BasePowerUpPedestalSpec {
  *  - `region` ist die abgeleitete achsenparallele Bounding-Box. Wird für
  *             HP-Bar-Positionierung, Pixel-Bounds und die konservativen
  *             Clearance-/Border-Tests des Generators verwendet.
- *  - `hpMax`  stammt aus der datengetriebenen Coop-Defense-Map-Konfiguration.
+ *  - `hpMax`  ist der aus dem Ein-Spieler-Basiswert und der beim Rundenstart festgelegten
+ *             menschlichen Spielerzahl aufgeloeste Wert.
  */
 export interface BaseSpec {
   readonly id: string;
@@ -208,13 +211,16 @@ function resolveBaseSpec(config: CoopBaseConfig, humanPlayerCount: number): Base
     minGridY,
     absoluteCells,
   ));
+  const faction = config.faction ?? 'friendly';
+  const hpFactor = config.playerScaling?.maxHpFactorPerAdditionalPlayer
+    ?? (faction === 'hostile' ? DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER : 0);
 
   return {
     id: config.id,
     cells: absoluteCells,
     region,
-    hpMax: Math.max(1, config.hpMax),
-    faction: config.faction ?? 'friendly',
+    hpMax: resolveCoopDefensePositiveInteger(config.hpMax, hpFactor, humanPlayerCount),
+    faction,
     role: config.role ?? 'main',
     turrets,
     powerUpPedestals,

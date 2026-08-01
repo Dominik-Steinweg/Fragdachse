@@ -123,4 +123,20 @@ describe('Inferno Colossus void fire chunks', () => {
     expect(WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER.range)
       .toBeGreaterThan(WEAPON_CONFIGS.FLAMETHROWER.range);
   });
+
+  it('gives hostile flame towers their own purple void-flame weapon variant', () => {
+    expect(WEAPON_CONFIGS.TURRET_VOID_FLAME).toMatchObject({
+      id: 'TURRET_VOID_FLAME',
+      range: WEAPON_CONFIGS.TURRET_FLAME.range,
+      projectileColor: VOID_FIRE_COLOR,
+      projectileBurnVisualStyle: 'void',
+      allowedSlots: [],
+      fire: {
+        type: 'flamethrower',
+        burnDurationMs: WEAPON_CONFIGS.TURRET_FLAME.fire?.burnDurationMs,
+        burnDamagePerTick: WEAPON_CONFIGS.TURRET_FLAME.fire?.burnDamagePerTick,
+      },
+    });
+    expect(WEAPON_CONFIGS.TURRET_VOID_FLAME.damage).toBe(WEAPON_CONFIGS.TURRET_FLAME.damage);
+  });
 });

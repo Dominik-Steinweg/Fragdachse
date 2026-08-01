@@ -30,7 +30,7 @@ export interface EnemyFlowFieldGridCell {
 }
 
 export type EnemyFlowFieldGoalCell = EnemyFlowFieldGridCell;
-export type EnemyFlowFieldGoalMode = 'bases' | 'dynamic-fallback-bases';
+export type EnemyFlowFieldGoalMode = 'bases' | 'dynamic' | 'dynamic-fallback-bases';
 
 export interface EnemyFlowFieldSummary {
   readonly cols: number;
@@ -153,6 +153,8 @@ export class EnemyFlowFieldService {
   };
   private readonly integrationField: Float32Array;
   private readonly vectorField: Float32Array; // 2 floats (x, y) per cell
+  /** Index der Zielzelle hinter der guenstigsten Route; -1 bedeutet nicht erreichbar. */
+  private readonly goalSourceField: Int32Array;
   private debugOverlayCallback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null = null;
   private isGridDirty = false;
   private lastDirtyCheckAt = 0;
@@ -174,7 +176,8 @@ export class EnemyFlowFieldService {
     this.goalMode = options.goalMode ?? 'bases';
     this.clearanceCells = Math.max(0, Math.floor(options.clearanceCells ?? 0));
     this.activeBaseIds = new Set(this.baseSpecs.map((spec) => spec.id));
-    this.dynamicGoalCells = this.normalizeGoalCells(options.dynamicGoalCells ?? []);
+    const initialDynamicGoalCells = options.dynamicGoalCells ?? [];
+    this.dynamicGoalCells = [];
     this.metrics = { ...metrics };
     this.eventBus = options.eventBus ?? null;
     this.obstacleCellProvider = options.obstacleCellProvider ?? null;
@@ -188,6 +191,7 @@ export class EnemyFlowFieldService {
     this.goalMask = new Uint8Array(totalCells);
     this.integrationField = new Float32Array(totalCells);
     this.vectorField = new Float32Array(totalCells * 2);
+    this.goalSourceField = new Int32Array(totalCells);
     this.goalCells = [];
     this.summary = {
       cols: this.metrics.cols,
@@ -200,6 +204,10 @@ export class EnemyFlowFieldService {
     };
 
     this.recomputeFields();
+    if (initialDynamicGoalCells.length > 0) {
+      this.dynamicGoalCells = this.normalizeGoalCells(initialDynamicGoalCells);
+      this.recomputeFields();
+    }
     this.lastDirtyCheckAt = Date.now();
     this.eventBus?.on(ARENA_MAP_GRID_CHANGED_EVENT, this.handleArenaMapGridChanged, this);
   }
@@ -377,6 +385,79 @@ export class EnemyFlowFieldService {
   getIntegrationValueAt(gridX: number, gridY: number): number {
     if (!this.isInBounds(gridX, gridY)) return EnemyFlowFieldService.INTEGRATION_INFINITY;
     return this.integrationField[this.toIndex(gridX, gridY)];
+  }
+
+  /** Liefert die konkrete Mehrziel-Quelle hinter dem Flow-Vektor an dieser Zelle. */
+  getReachedGoalCellAt(gridX: number, gridY: number): EnemyFlowFieldGoalCell | null {
+    if (!this.isInBounds(gridX, gridY)) return null;
+    const sourceIndex = this.goalSourceField[this.toIndex(gridX, gridY)];
+    if (sourceIndex < 0) return null;
+    return {
+      gridX: sourceIndex % this.metrics.cols,
+      gridY: Math.floor(sourceIndex / this.metrics.cols),
+    };
+  }
+
+  /**
+   * Zielgebundener Einzelpfad auf demselben Kostenraster. Er erzeugt kein weiteres Flow Field und
+   * wird nur fuer seltene feste Jagdzustaende verwendet; normale Gegner bleiben im Mehrzielfeld.
+   */
+  findNextWorldPositionTowards(
+    fromGridX: number,
+    fromGridY: number,
+    targetGridX: number,
+    targetGridY: number,
+  ): { x: number; y: number } | null {
+    if (!this.isFlowPassableAt(fromGridX, fromGridY)) return null;
+    const target = this.findNearestPassableCell(targetGridX, targetGridY, 3);
+    if (!target) return null;
+    const startIndex = this.toIndex(fromGridX, fromGridY);
+    const targetIndex = this.toIndex(target.gridX, target.gridY);
+    if (startIndex === targetIndex) return this.gridToWorld(target.gridX, target.gridY);
+
+    const totalCells = this.metrics.cols * this.metrics.rows;
+    const costs = new Float32Array(totalCells);
+    costs.fill(EnemyFlowFieldService.INTEGRATION_INFINITY);
+    const parents = new Int32Array(totalCells);
+    parents.fill(-1);
+    const open: number[] = [startIndex];
+    costs[startIndex] = 0;
+
+    while (open.length > 0) {
+      let bestOpenIndex = 0;
+      let bestScore = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < open.length; index += 1) {
+        const cellIndex = open[index];
+        const gx = cellIndex % this.metrics.cols;
+        const gy = Math.floor(cellIndex / this.metrics.cols);
+        const score = costs[cellIndex] + Math.hypot(target.gridX - gx, target.gridY - gy);
+        if (score < bestScore) {
+          bestScore = score;
+          bestOpenIndex = index;
+        }
+      }
+      const currentIndex = open.splice(bestOpenIndex, 1)[0];
+      if (currentIndex === targetIndex) break;
+      const currentX = currentIndex % this.metrics.cols;
+      const currentY = Math.floor(currentIndex / this.metrics.cols);
+      for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
+        const nextX = currentX + dx;
+        const nextY = currentY + dy;
+        if (!this.isReachableNeighbor(currentX, currentY, nextX, nextY)) continue;
+        const nextIndex = this.toIndex(nextX, nextY);
+        const stepCost = this.costs[nextIndex] * (Math.abs(dx) + Math.abs(dy) === 2 ? Math.SQRT2 : 1);
+        const candidate = costs[currentIndex] + stepCost;
+        if (candidate >= costs[nextIndex]) continue;
+        costs[nextIndex] = candidate;
+        parents[nextIndex] = currentIndex;
+        if (!open.includes(nextIndex)) open.push(nextIndex);
+      }
+    }
+
+    if (parents[targetIndex] < 0) return null;
+    let stepIndex = targetIndex;
+    while (parents[stepIndex] >= 0 && parents[stepIndex] !== startIndex) stepIndex = parents[stepIndex];
+    return this.gridToWorld(stepIndex % this.metrics.cols, Math.floor(stepIndex / this.metrics.cols));
   }
 
   getVectorAt(gridX: number, gridY: number): EnemyFlowFieldVector {
@@ -584,6 +665,7 @@ export class EnemyFlowFieldService {
   }
 
   private computeGoalCells(): EnemyFlowFieldGoalCell[] {
+    if (this.goalMode === 'dynamic') return [...this.dynamicGoalCells];
     if (this.goalMode === 'dynamic-fallback-bases' && this.dynamicGoalCells.length > 0) {
       return [...this.dynamicGoalCells];
     }
@@ -653,6 +735,25 @@ export class EnemyFlowFieldService {
   private isFlowPassableAt(gridX: number, gridY: number): boolean {
     if (!this.isInBounds(gridX, gridY)) return false;
     return this.traversable[this.toIndex(gridX, gridY)] === 1;
+  }
+
+  private findNearestPassableCell(
+    gridX: number,
+    gridY: number,
+    maxRadiusCells: number,
+  ): EnemyFlowFieldGridCell | null {
+    let best: { gridX: number; gridY: number; distanceSq: number } | null = null;
+    for (let offsetY = -maxRadiusCells; offsetY <= maxRadiusCells; offsetY += 1) {
+      for (let offsetX = -maxRadiusCells; offsetX <= maxRadiusCells; offsetX += 1) {
+        const candidateX = gridX + offsetX;
+        const candidateY = gridY + offsetY;
+        if (!this.isFlowPassableAt(candidateX, candidateY)) continue;
+        const distanceSq = offsetX * offsetX + offsetY * offsetY;
+        if (best && distanceSq >= best.distanceSq) continue;
+        best = { gridX: candidateX, gridY: candidateY, distanceSq };
+      }
+    }
+    return best ? { gridX: best.gridX, gridY: best.gridY } : null;
   }
 
   private applyClearanceMask(): number {
@@ -762,11 +863,13 @@ export class EnemyFlowFieldService {
   private computeIntegrationField(): void {
     const totalCells = this.metrics.cols * this.metrics.rows;
     this.integrationField.fill(EnemyFlowFieldService.INTEGRATION_INFINITY);
+    this.goalSourceField.fill(-1);
 
     const queue: number[] = [];
     for (const goalCell of this.goalCells) {
       const index = this.toIndex(goalCell.gridX, goalCell.gridY);
       this.integrationField[index] = 0;
+      this.goalSourceField[index] = index;
       queue.push(index);
     }
 
@@ -788,8 +891,15 @@ export class EnemyFlowFieldService {
         const diagonalFactor = Math.abs(dx) + Math.abs(dy) === 2 ? Math.sqrt(2) : 1;
         const newValue = currentValue + neighborCost * diagonalFactor;
 
-        if (newValue < this.integrationField[neighborIndex]) {
+        const sourceIndex = this.goalSourceField[currentIndex];
+        if (
+          newValue < this.integrationField[neighborIndex]
+          || (newValue === this.integrationField[neighborIndex]
+            && sourceIndex >= 0
+            && (this.goalSourceField[neighborIndex] < 0 || sourceIndex < this.goalSourceField[neighborIndex]))
+        ) {
           this.integrationField[neighborIndex] = newValue;
+          this.goalSourceField[neighborIndex] = sourceIndex;
           queue.push(neighborIndex);
         }
       }

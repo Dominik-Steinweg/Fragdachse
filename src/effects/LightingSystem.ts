@@ -41,15 +41,17 @@ const CONE_TEX_WIDTH = 256;
 const CONE_TEX_HEIGHT = 512;
 
 /**
- * The light map is screen-fixed but rendered by the same camera matrix as the world.
- * Phaser camera shake therefore moves the overlay as well. Without an overscan margin,
- * even a small horizontal offset exposes unlit pixels at the viewport edge.
+ * Die Lichtkarte ist bildschirmfest, ihre Lichter werden aber bei `x - camera.scrollX`
+ * gestempelt. Seit alle Kamerabewegung über `CameraFeedbackController` als **Scroll-Versatz**
+ * läuft, wandern Lichter und Welt gemeinsam, während die Lichtkarte selbst stehen bleibt.
+ * Damit gibt es keine unbeleuchteten Randstreifen mehr, und die frühere Overscan-Reserve
+ * entfällt.
  *
- * The strongest regular shake is currently 0.018. A limit of 0.02 leaves some headroom;
- * the squared render-scale term below mirrors Phaser's shake implementation, which scales
- * the offset by `camera.zoom` before the camera matrix transforms it again.
+ * Phasers `camera.shake()` verschob dagegen die gesamte Kameramatrix – inklusive
+ * bildschirmfester Objekte – und skalierte den Versatz zusätzlich quadratisch mit der
+ * Renderauflösung. Dafür war eine Reserve von rund 154 Designpixeln pro Seite nötig, also
+ * etwa die 1,5-fache Füllrate. Der Rand hier ist nur noch die Ausrichtungsreserve.
  */
-const LIGHTMAP_MAX_SHAKE_INTENSITY = 0.02;
 const LIGHTMAP_OVERSCAN_ALIGNMENT_PX = 8;
 
 /** Ausblendzeit, wenn ein Dauerlicht freigegeben wird – verhindert hartes Poppen. */
@@ -911,13 +913,8 @@ export class LightingSystem {
   }
 
   private getLightMapOverscanPx(viewportSize: number): number {
-    const requiredPx =
-      viewportSize
-      * LIGHTMAP_MAX_SHAKE_INTENSITY
-      * this.quality.maxRenderScale
-      * this.quality.maxRenderScale;
-    return Math.ceil(requiredPx / LIGHTMAP_OVERSCAN_ALIGNMENT_PX)
-      * LIGHTMAP_OVERSCAN_ALIGNMENT_PX;
+    void viewportSize;
+    return LIGHTMAP_OVERSCAN_ALIGNMENT_PX;
   }
 
   private createOccluderSlot(slotIndex: number): OccluderSlot {

@@ -11,6 +11,11 @@ import type { EnemyVisualSink } from '../entities/EnemyManager';
 import { SpawnEffectRenderer } from './SpawnEffectRenderer';
 import type { MuzzleFlashRenderer } from './MuzzleFlashRenderer';
 import type { LightingSystem } from './LightingSystem';
+import type { HitFeedbackRenderer } from './HitFeedbackRenderer';
+import type { CameraFeedbackController } from './camera/CameraFeedbackController';
+import type { CameraPostFxController } from './postfx/CameraPostFxController';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { impactExceptional, impactHeavy, impactLight } from './camera/cameraFeedbackPresets';
 import { EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS, EXPLOSION_LIGHT_RADIUS_FACTOR } from './LightingConfig';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 
@@ -76,6 +81,9 @@ export class EffectSystem implements EnemyVisualSink {
   private biteRenderer: BiteRenderer | null = null;
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
   private lighting: LightingSystem | null = null;
+  private hitFeedbackRenderer: HitFeedbackRenderer | null = null;
+  private cameraFeedback: CameraFeedbackController | null = null;
+  private postFx: CameraPostFxController | null = null;
   private spawnEffectRenderer: SpawnEffectRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private texturesGenerated = false;
@@ -100,6 +108,19 @@ export class EffectSystem implements EnemyVisualSink {
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
     this.spawnEffectRenderer?.setLightingSystem(lighting);
+  }
+
+  setHitFeedbackRenderer(renderer: HitFeedbackRenderer | null): void {
+    this.hitFeedbackRenderer = renderer;
+  }
+
+  /** Alle Kamerabewegungen dieses Systems laufen über den zentralen Controller, nie über `camera.shake()`. */
+  setCameraFeedback(controller: CameraFeedbackController | null): void {
+    this.cameraFeedback = controller;
+  }
+
+  setPostFx(controller: CameraPostFxController | null): void {
+    this.postFx = controller;
   }
 
   /** Gegner-Spawn: dieselbe Effektfamilie wie beim Spielerspawn, nur zurückhaltender. */
@@ -331,12 +352,20 @@ export class EffectSystem implements EnemyVisualSink {
           this.audioSystem?.queueHitFeedback(effect.totalDamage);
         }
         this.playHitEffect(effect);
+        // Läuft auf jedem Client inklusive Host, deshalb sehen alle dieselbe Zielreaktion.
+        this.hitFeedbackRenderer?.playHit(effect);
         this.audioSystem?.queueDamageFeedback(effect.totalDamage, effect.x, effect.y);
         if (effect.targetId === this.bridge.getLocalPlayerId()) {
           this.playDamageVignette(effect);
         }
       }
-      if (effect.type === 'death') this.playDeathEffect(effect);
+      if (effect.type === 'death') {
+        this.playDeathEffect(effect);
+        // Der eigene Tod lässt die Welt zurücktreten, damit die Auswertung im Vordergrund steht.
+        if (effect.targetId === this.bridge.getLocalPlayerId()) {
+          this.postFx?.pulseEvent('localDeath');
+        }
+      }
     });
 
     this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey) => {
@@ -857,15 +886,56 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
+    if (visualStyle === 'timebomb_pop') {
+      const popColor = color ?? 0xb82fff;
+      const core = this.scene.add.circle(x, y, 5, 0xf3d9ff, 0.9).setDepth(DEPTH_FX + 0.4);
+      makeAdditive(core);
+      this.scene.tweens.add({
+        targets: core,
+        scaleX: Math.max(1, radius / 8),
+        scaleY: Math.max(1, radius / 8),
+        alpha: 0,
+        duration: 190,
+        ease: 'Expo.easeOut',
+        onComplete: () => core.destroy(),
+      });
+      const ring = this.scene.add.circle(x, y, Math.max(4, radius * 0.22)).setDepth(DEPTH_FX + 0.2);
+      ring.setFillStyle(0, 0).setStrokeStyle(2, popColor, 0.8);
+      makeAdditive(ring);
+      this.scene.tweens.add({
+        targets: ring,
+        scaleX: 2.6,
+        scaleY: 2.6,
+        alpha: 0,
+        duration: 300,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+      const motes = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+        lifespan: { min: 160, max: 320 },
+        speed: { min: radius * 0.45, max: radius * 1.4 },
+        scale: { start: 0.75, end: 0 },
+        alpha: { start: 0.8, end: 0 },
+        tint: [0xffffff, 0xd58aff, popColor],
+        blendMode: Phaser.BlendModes.ADD,
+        emitting: false,
+      });
+      motes.setDepth(DEPTH_FX + 0.1);
+      motes.explode(9);
+      this.scene.time.delayedCall(380, () => motes.destroy());
+      return;
+    }
+
     const isHoly = visualStyle === 'holy';
-    const isEnergy = visualStyle === 'energy';
+    const isTimebomb = visualStyle === 'timebomb';
+    const isEnergy = visualStyle === 'energy' || isTimebomb;
     const isVoidNuke = visualStyle === 'void_nuke';
     const isNuke = visualStyle === 'nuke' || isVoidNuke;
     const isMiniRocketCascade = visualStyle === 'mini_rocket_cascade';
     const fillColor = isHoly
       ? 0xf0c53a
-      : (color ?? (isEnergy ? 0x73bed3 : (isVoidNuke ? 0xa631ff : (isNuke ? 0xffb347 : 0xff2200))));
-    const flashColor = isEnergy ? 0xe8fbff : (isHoly ? 0xfff8de : (isVoidNuke ? 0xf4dcff : (isNuke ? 0xfff2cc : 0xffffcc)));
+      : (color ?? (isTimebomb ? 0xb82fff : (isEnergy ? 0x73bed3 : (isVoidNuke ? 0xa631ff : (isNuke ? 0xffb347 : 0xff2200)))));
+    const flashColor = isTimebomb ? 0xf5dcff : (isEnergy ? 0xe8fbff : (isHoly ? 0xfff8de : (isVoidNuke ? 0xf4dcff : (isNuke ? 0xfff2cc : 0xffffcc))));
     const haloColor = isEnergy
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
@@ -1263,11 +1333,11 @@ export class EffectSystem implements EnemyVisualSink {
       crownEmitter.explode(Math.max(Math.ceil(radius / 1.9), 92));
       this.scene.time.delayedCall(1200, () => crownEmitter.destroy());
 
-      this.scene.cameras.main.shake(520, 0.016);
+      this.cameraFeedback?.request(impactHeavy({ sourceX: x, sourceY: y }));
     } else if (isEnergy) {
-      this.scene.cameras.main.shake(180, 0.005);
+      this.cameraFeedback?.request(impactLight({ sourceX: x, sourceY: y }));
     } else if (isNuke) {
-      this.scene.cameras.main.shake(550, 0.018);
+      this.cameraFeedback?.request(impactExceptional({ sourceX: x, sourceY: y }));
     }
   }
 
@@ -1853,13 +1923,19 @@ export class EffectSystem implements EnemyVisualSink {
 
     this.ensureTextures();
 
-    const createEdge = (tex: string) =>
-      this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, tex)
+    // Klarheitskamera: die Schadensvignette ist Rückmeldung, keine Welt. Auf der Weltkamera
+    // würde das Color-Grading ihr Rot mit der Tageszeit verschieben – genau die Verfälschung,
+    // die Gefahrenhinweise nicht erleiden dürfen.
+    const createEdge = (tex: string) => {
+      const edge = this.scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, tex)
         .setDepth(DEPTH_DAMAGE_VIGNETTE)
         .setScrollFactor(0)
         .setTint(DAMAGE_VIGNETTE_VFX.color)
         .setAlpha(0)
         .setVisible(false);
+      promoteToClarityCamera(this.scene, edge);
+      return edge;
+    };
 
     this.damageVignetteTop    = createEdge(TEX_DAMAGE_VIGNETTE_TOP);
     this.damageVignetteBottom = createEdge(TEX_DAMAGE_VIGNETTE_BOTTOM);

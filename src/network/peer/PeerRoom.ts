@@ -15,7 +15,10 @@
  */
 import {
   MAX_PLAYERS,
+  PEER_HEARTBEAT_INTERVAL_MS,
+  PEER_HEARTBEAT_TIMEOUT_MS,
   PEER_HANDSHAKE_TIMEOUT_MS,
+  PEER_LEAVE_FLUSH_DELAY_MS,
   PEER_RECONNECT_MAX_DELAY_MS,
   PEER_RESUME_GRACE_MS,
 } from '../../config';
@@ -30,6 +33,7 @@ import {
 import type { PeerLinkLike, PeerRoomTransport } from './transport';
 
 let temporaryResumeTokenSequence = 0;
+const KICK_DISCONNECT_DELAY_MS = 100;
 
 /** Schmales Gegenstück zu einem Spieler-Zustandsobjekt, wie die Bridge es erwartet. */
 export interface PeerPlayerHandle {
@@ -114,11 +118,13 @@ export class PeerRoom {
   private readonly resumeToken: string;
   private readonly resumeSlots = new Map<string, ResumeSlot>();
   private readonly linkResumeTokens = new Map<PeerLinkLike, string>();
+  private readonly lastHeartbeatAt = new Map<PeerLinkLike, number>();
 
   private readonly joinCallbacks: Array<(handle: PeerPlayerHandle) => void> = [];
   private readonly playerQuitCallbacks: Array<(playerId: string) => void> = [];
   private fatalCallback: ((error: PeerNetworkError) => void) | null = null;
   private reconnectStatusCallback: ((status: PeerReconnectStatus) => void) | null = null;
+  private readonly kickedCallbacks: Array<() => void> = [];
 
   private readonly hostHandlers = new Map<string, PeerRpcHandler>();
   private readonly allHandlers = new Map<string, PeerRpcHandler>();
@@ -130,7 +136,12 @@ export class PeerRoom {
   private hostPlayerId = '';
   private pendingHandshake: PendingHandshake | null = null;
   private reconnecting = false;
+  private kicked = false;
   private reconnectDelayTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly kickDisconnectTimers = new Set<ReturnType<typeof setTimeout>>();
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private leaveDestroyTimer: ReturnType<typeof setTimeout> | null = null;
+  private leaving = false;
   private destroyed = false;
 
   constructor(private readonly transport: PeerRoomTransport, options: PeerRoomOptions = {}) {
@@ -179,6 +190,15 @@ export class PeerRoom {
     return this.localPlayerId;
   }
 
+  /**
+   * True nach einer vom Host zugestellten Kick-Nachricht. Der Zustand ist terminal: Der Client
+   * darf keinen Resume-Versuch mehr starten und wird durch die Bridge nur noch fuer seine
+   * Abschlussanzeige angesprochen.
+   */
+  isKicked(): boolean {
+    return this.kicked;
+  }
+
   getHostPlayerId(): string {
     return this.hostPlayerId;
   }
@@ -206,6 +226,61 @@ export class PeerRoom {
 
   onReconnectStatus(callback: (status: PeerReconnectStatus) => void): void {
     this.reconnectStatusCallback = callback;
+  }
+
+  onKicked(callback: () => void): void {
+    this.kickedCallbacks.push(callback);
+  }
+
+  /**
+   * Entfernt einen Client hostautoritativ aus dem Raum. Der Slot wird vor dem Versand von
+   * `quit` aus allen lokalen Tabellen gelöscht, damit weder ein Resume noch ein späterer
+   * Linkabbruch den Spieler wieder einfügt. Die direkte `kicked`-Nachricht geht zuverlässig
+   * an den aktuellen Link; der kurze Abstand zum Schließen gibt dem zuverlässigen Kanal Zeit,
+   * sie an den Client zu übergeben.
+   */
+  kickPlayer(playerId: string): boolean {
+    if (!this.transport.isHost || playerId === this.localPlayerId) return false;
+
+    let resumeToken: string | undefined;
+    let slot: ResumeSlot | undefined;
+    for (const [token, candidate] of this.resumeSlots) {
+      if (candidate.playerId === playerId) {
+        resumeToken = token;
+        slot = candidate;
+        break;
+      }
+    }
+    if (!resumeToken || !slot) return false;
+
+    if (slot.expiryTimer) clearTimeout(slot.expiryTimer);
+    slot.expiryTimer = null;
+    this.resumeSlots.delete(resumeToken);
+    const link = slot.link;
+    if (link) {
+      this.linkResumeTokens.delete(link);
+      this.links.delete(link);
+      this.fastBuffers.delete(link);
+      this.fastSendSequences.delete(link);
+      this.fastReceiveSequences.delete(link);
+      this.lastHeartbeatAt.delete(link);
+    }
+
+    const removed = this.removePlayer(playerId);
+    if (!removed) return false;
+
+    if (link) link.send({ t: 'kicked' }, 'rel');
+    this.sendToLinks({ t: 'quit', id: playerId }, 'rel', null);
+
+    if (link) {
+      const timer = setTimeout(() => {
+        this.kickDisconnectTimers.delete(timer);
+        link.close();
+      }, KICK_DISCONNECT_DELAY_MS);
+      this.kickDisconnectTimers.add(timer);
+    }
+    if (this.links.size === 0) this.clearHeartbeatTimer();
+    return true;
   }
 
   // ── Store ─────────────────────────────────────────────────────────────────
@@ -246,6 +321,27 @@ export class PeerRoom {
       batch.q = sequence;
       link.send(batch, 'fast');
     }
+  }
+
+  /** Verlässt den Raum bewusst. Clients melden das ohne Spieler-ID an den Host. */
+  leave(): void {
+    if (this.destroyed || this.leaving) return;
+    this.leaving = true;
+    if (!this.transport.isHost && this.hostLink) {
+      try {
+        this.hostLink.send({ t: 'leave' }, 'rel');
+      } catch {
+        // pagehide/Navigation ist best-effort; der normale Linkabbruch bleibt als Fallback.
+      }
+      this.leaveDestroyTimer = globalThis.setTimeout(() => {
+        this.leaveDestroyTimer = null;
+        this.destroy();
+      }, PEER_LEAVE_FLUSH_DELAY_MS);
+      const timer = this.leaveDestroyTimer as unknown as { unref?: () => void };
+      timer.unref?.();
+      return;
+    }
+    this.destroy();
   }
 
   private applyPlayerState(playerId: string, key: string, value: unknown): void {
@@ -329,6 +425,15 @@ export class PeerRoom {
 
   private handleMessage(link: PeerLinkLike, message: PeerMessage, channel: PeerChannelKind): void {
     if (message.t === 'b' && channel === 'fast' && !this.acceptFastBatch(link, message)) return;
+    if (message.t === 'hb') {
+      this.lastHeartbeatAt.set(link, Date.now());
+      link.send({ t: 'hba' }, 'rel');
+      return;
+    }
+    if (message.t === 'hba') {
+      this.lastHeartbeatAt.set(link, Date.now());
+      return;
+    }
     if (this.transport.isHost) this.handleHostMessage(link, message, channel);
     else this.handleClientMessage(link, message, channel);
   }
@@ -337,6 +442,9 @@ export class PeerRoom {
     switch (message.t) {
       case 'hello':
         this.completeHandshake(link, message.v, message.k, message.r === true);
+        return;
+      case 'leave':
+        this.handleExplicitLeave(link);
         return;
       case 'b':
         this.applyBatch(message);
@@ -369,6 +477,9 @@ export class PeerRoom {
         return;
       case 'quit':
         this.removePlayer(message.id);
+        return;
+      case 'kicked':
+        this.handleKicked(link);
         return;
       case 'b':
         this.applyBatch(message);
@@ -573,11 +684,17 @@ export class PeerRoom {
     this.fastBuffers.set(link, new OutboundBuffer());
     this.fastSendSequences.set(link, 0);
     this.fastReceiveSequences.set(link, 0);
+    this.lastHeartbeatAt.set(link, Date.now());
+    this.ensureHeartbeatTimer();
     if (!this.transport.isHost) this.hostLink = link;
   }
 
   private handleLinkReady(link: PeerLinkLike): void {
     if (this.transport.isHost) return;
+    if (this.kicked) {
+      link.close();
+      return;
+    }
     this.armHandshakeTimeout();
     link.send({
       t: 'hello',
@@ -592,9 +709,13 @@ export class PeerRoom {
     this.fastBuffers.delete(link);
     this.fastSendSequences.delete(link);
     this.fastReceiveSequences.delete(link);
+    this.lastHeartbeatAt.delete(link);
+    if (this.links.size === 0) this.clearHeartbeatTimer();
 
     if (!this.transport.isHost) {
       if (this.hostLink === link) this.hostLink = null;
+      if (this.kicked) return;
+      if (this.leaving) return;
       if (this.localPlayerId.length === 0) {
         this.rejectHandshake(createPeerNetworkError('connection-failed'));
         return;
@@ -615,13 +736,71 @@ export class PeerRoom {
     slot.expiryTimer = setTimeout(() => this.expireResumeSlot(token, slot), PEER_RESUME_GRACE_MS);
   }
 
+  private handleExplicitLeave(link: PeerLinkLike): void {
+    const playerId = link.playerId;
+    const token = this.linkResumeTokens.get(link);
+    if (!playerId || !token) {
+      link.close();
+      return;
+    }
+
+    const slot = this.resumeSlots.get(token);
+    if (!slot || slot.link !== link || slot.playerId !== playerId) {
+      link.close();
+      return;
+    }
+
+    if (slot.expiryTimer) clearTimeout(slot.expiryTimer);
+    slot.expiryTimer = null;
+    this.resumeSlots.delete(token);
+    this.linkResumeTokens.delete(link);
+
+    if (this.removePlayer(playerId)) {
+      // The origin link is excluded: only the remaining clients receive the quit event.
+      this.sendToLinks({ t: 'quit', id: playerId }, 'rel', link);
+    }
+    link.close();
+  }
+
   private expireResumeSlot(token: string, slot: ResumeSlot): void {
     if (this.destroyed || this.resumeSlots.get(token) !== slot || slot.link) return;
     this.resumeSlots.delete(token);
     slot.expiryTimer = null;
-    this.removePlayer(slot.playerId);
-    this.sendToLinks({ t: 'quit', id: slot.playerId }, 'rel', null);
+    const removed = this.removePlayer(slot.playerId);
+    if (removed) this.sendToLinks({ t: 'quit', id: slot.playerId }, 'rel', null);
     this.reconnectStatusCallback?.({ state: 'player-expired', playerId: slot.playerId });
+  }
+
+  private ensureHeartbeatTimer(): void {
+    if (this.destroyed || this.heartbeatTimer !== null || this.links.size === 0) return;
+    this.heartbeatTimer = globalThis.setTimeout(() => {
+      this.heartbeatTimer = null;
+      this.runHeartbeat();
+      this.ensureHeartbeatTimer();
+    }, PEER_HEARTBEAT_INTERVAL_MS);
+
+    // Do not keep a Node/Vitest worker alive solely because a test forgot to tear down a room.
+    const timer = this.heartbeatTimer as unknown as { unref?: () => void };
+    timer.unref?.();
+  }
+
+  private runHeartbeat(): void {
+    if (this.destroyed) return;
+    const now = Date.now();
+    for (const link of [...this.links]) {
+      const lastHeartbeat = this.lastHeartbeatAt.get(link) ?? now;
+      if (now - lastHeartbeat >= PEER_HEARTBEAT_TIMEOUT_MS) {
+        link.close();
+        continue;
+      }
+      link.send({ t: 'hb' }, 'rel');
+    }
+  }
+
+  private clearHeartbeatTimer(): void {
+    if (this.heartbeatTimer === null) return;
+    globalThis.clearTimeout(this.heartbeatTimer);
+    this.heartbeatTimer = null;
   }
 
   private allocatePlayerId(): string {
@@ -653,13 +832,15 @@ export class PeerRoom {
     };
   }
 
-  private removePlayer(playerId: string): void {
-    if (!this.playerHandles.has(playerId)) return;
+  private removePlayer(playerId: string): boolean {
+    const hadPlayer = this.playerHandles.has(playerId) || this.playerStates.has(playerId);
+    if (!hadPlayer) return false;
     this.playerHandles.delete(playerId);
     this.playerStates.delete(playerId);
     for (const callback of this.quitCallbacks.get(playerId) ?? []) callback();
     this.quitCallbacks.delete(playerId);
     for (const callback of this.playerQuitCallbacks) callback(playerId);
+    return true;
   }
 
   private createHandshakeWaiter(): Promise<void> {
@@ -697,7 +878,7 @@ export class PeerRoom {
   }
 
   private beginReconnect(): void {
-    if (this.destroyed || this.reconnecting) return;
+    if (this.destroyed || this.kicked || this.leaving || this.reconnecting) return;
     this.reconnecting = true;
     this.reconnectStatusCallback?.({ state: 'reconnecting' });
     void this.reconnectWithinGracePeriod();
@@ -707,15 +888,17 @@ export class PeerRoom {
     const deadline = Date.now() + PEER_RESUME_GRACE_MS;
     let delayMs = 0;
 
-    while (!this.destroyed && Date.now() < deadline) {
+    while (!this.destroyed && !this.kicked && Date.now() < deadline) {
       if (delayMs > 0) await this.waitForReconnectDelay(Math.min(delayMs, deadline - Date.now()));
-      if (this.destroyed || Date.now() >= deadline) break;
+      if (this.destroyed || this.kicked || Date.now() >= deadline) break;
 
       const welcome = this.createHandshakeWaiter();
       try {
         await Promise.all([this.transport.reconnect(), welcome]);
+        if (this.kicked) return;
         return;
       } catch (error) {
+        if (this.kicked) return;
         const peerError = this.asPeerError(error);
         this.rejectHandshake(peerError);
         if (peerError.kind === 'protocol-mismatch'
@@ -754,6 +937,20 @@ export class PeerRoom {
     if (!this.reconnecting) this.reportFatal(error);
   }
 
+  private handleKicked(link: PeerLinkLike): void {
+    if (this.kicked) return;
+    this.kicked = true;
+    this.reconnecting = false;
+    if (this.reconnectDelayTimer) clearTimeout(this.reconnectDelayTimer);
+    this.reconnectDelayTimer = null;
+    for (const callback of this.kickedCallbacks) callback();
+    // Die UI muss die Nachricht noch im laufenden Frame setzen koennen. Danach wird der lokale
+    // Handle wie jeder andere entfernte Spieler aus Roster und States geloescht; die Bridge
+    // liefert fuer die terminale Anzeige bis zur Navigation einen sicheren Fallback.
+    this.removePlayer(this.localPlayerId);
+    link.close();
+  }
+
   private asPeerError(error: unknown): PeerNetworkError {
     return error instanceof Error && error.name === 'PeerNetworkError'
       ? error as PeerNetworkError
@@ -771,6 +968,11 @@ export class PeerRoom {
     this.destroyed = true;
     if (this.reconnectDelayTimer) clearTimeout(this.reconnectDelayTimer);
     this.reconnectDelayTimer = null;
+    for (const timer of this.kickDisconnectTimers) clearTimeout(timer);
+    this.kickDisconnectTimers.clear();
+    if (this.leaveDestroyTimer) globalThis.clearTimeout(this.leaveDestroyTimer);
+    this.leaveDestroyTimer = null;
+    this.clearHeartbeatTimer();
     for (const slot of this.resumeSlots.values()) {
       if (slot.expiryTimer) clearTimeout(slot.expiryTimer);
     }
@@ -786,6 +988,7 @@ export class PeerRoom {
     this.fastBuffers.clear();
     this.fastSendSequences.clear();
     this.fastReceiveSequences.clear();
+    this.lastHeartbeatAt.clear();
     this.transport.destroy();
   }
 }

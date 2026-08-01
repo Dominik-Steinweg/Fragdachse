@@ -23,6 +23,8 @@ import { CoopDefenseEnemyBurrowSystem } from '../../systems/CoopDefenseEnemyBurr
 import { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodgeSystem';
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
 import { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
+import { CoopDefenseTimebombSystem } from '../../systems/CoopDefenseTimebombSystem';
+import { EnemyStrategicTargetService } from '../../systems/EnemyStrategicTargetService';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
@@ -55,7 +57,7 @@ import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
-import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
+import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, UtilityConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
@@ -574,6 +576,16 @@ export class ArenaLifecycleCoordinator {
           goalMode: 'dynamic-fallback-bases',
         })
         : null;
+      this.ctx.enemyStrategicFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
+        ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
+          eventBus: this.scene.game.events,
+          obstacleCellProvider,
+          goalMode: 'dynamic',
+        })
+        : null;
+      this.ctx.enemyStrategicTargetService = this.ctx.enemyStrategicFlowFieldService
+        ? new EnemyStrategicTargetService(this.ctx.enemyStrategicFlowFieldService)
+        : null;
       this.ctx.enemyBossFlowFieldService = coopDefenseMapConfig?.boss
         ? new EnemyFlowFieldService(layout, coopDefenseBases, flowFieldMetrics, {
           eventBus: this.scene.game.events,
@@ -619,6 +631,7 @@ export class ArenaLifecycleCoordinator {
       const flowFieldService = this.ctx.enemyFlowFieldService;
       const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
       const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
+      const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
       if (baseManager) {
         baseManager.setOnBaseDestroyed((destroyedBase) => {
           this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
@@ -635,6 +648,7 @@ export class ArenaLifecycleCoordinator {
           const activeBaseIds = baseManager.getActiveBaseIds();
           flowFieldService?.setActiveBaseIds(activeBaseIds);
           playerFlowFieldService?.setActiveBaseIds(activeBaseIds);
+          strategicFlowFieldService?.setActiveBaseIds(activeBaseIds);
           bossFlowFieldService?.setActiveBaseIds(activeBaseIds);
           // Die Wiederbelebten navigieren um Basen herum wie alle anderen Einheiten; ohne diese
           // Aktualisierung blieben zerstoerte Basen fuer sie dauerhaft blockiert.
@@ -915,6 +929,11 @@ export class ArenaLifecycleCoordinator {
       return Math.min(slimeFactor, shotgunFactor);
     });
     this.ctx.combatSystem.setEnemyDeathCallback((enemyId, x, y, burnSources, death) => {
+      const wasTimebomb = death ? (this.ctx.coopDefenseTimebombSystem?.handleKilled(death) ?? false) : false;
+      if (wasTimebomb) {
+        this.ctx.coopDefenseItemRuntimeSystem?.removeEnemy(enemyId);
+        return true;
+      }
       this.ctx.flamethrowerUpgradeSystem?.handleEnemyDeath(x, y, burnSources);
       const burst = this.ctx.slimeTrailSystem?.handleEnemyDeath(enemyId, x, y, Date.now());
       if (burst) bridge.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
@@ -922,6 +941,7 @@ export class ArenaLifecycleCoordinator {
       // Sonst bliebe die Verwundbarkeit als Karteileiche stehen, bis ihre Dauer ablaeuft – und
       // eine wiederverwendete Gegner-ID erbte sie.
       this.ctx.coopDefenseItemRuntimeSystem?.removeEnemy(enemyId);
+      return false;
     });
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
@@ -1404,6 +1424,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.loadoutManager,
           () => this.ctx.arenaResult?.rockObjects ?? null,
           this.ctx.coopDefenseEnemyTrainAwarenessSystem,
+          this.ctx.placementSystem,
         );
         this.ctx.hostPhysics.setEnemyRockContactCallback((enemyId, rock, now) => {
           this.ctx.coopDefenseEnemyAttackSystem?.recordObstacleContact(enemyId, rock, now);
@@ -1505,6 +1526,42 @@ export class ArenaLifecycleCoordinator {
       this.ctx.loadoutManager.setArmageddonSystem(this.ctx.armageddonSystem);
       if (
         this.ctx.enemyManager
+        && this.ctx.baseManager
+        && this.ctx.placementSystem
+        && this.ctx.enemyStrategicTargetService
+        && this.ctx.enemyStrategicFlowFieldService
+      ) {
+        this.ctx.coopDefenseTimebombSystem = new CoopDefenseTimebombSystem(
+          this.ctx.enemyManager,
+          this.ctx.playerManager,
+          this.ctx.baseManager,
+          this.ctx.placementSystem,
+          this.ctx.combatSystem,
+          this.ctx.enemyStrategicTargetService,
+          this.ctx.enemyStrategicFlowFieldService,
+          this.ctx.flamethrowerUpgradeSystem,
+          {
+            playExplosion: (x, y, radius, style) => {
+              bridge.broadcastExplosionEffect(x, y, radius, 0xb82fff, style);
+            },
+            applyRadialImpulse: (x, y, radius, force, ownerId) => {
+              this.ctx.hostPhysics.applyRadialImpulse(x, y, radius, force, ownerId, 0);
+            },
+            damageConstruction: (id, damage, attackerId) => {
+              const hp = this.rockVisualHelper.applyObstacleDamageById(id, damage, attackerId);
+              if (hp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage', attackerId);
+            },
+            onSelfDetonated: (enemyId) => {
+              this.ctx.coopDefenseItemRuntimeSystem?.removeEnemy(enemyId);
+            },
+            // Zentrale Vorbereitung fuer spaetere Zuordnungen. Die Detonation selbst verwendet
+            // bereits den vorhandenen Explosionssound ueber den Effekt-RPC.
+            sound: (_event) => { /* intentionally unmapped */ },
+          },
+        );
+      }
+      if (
+        this.ctx.enemyManager
         && this.ctx.coopDefenseEnemyBurrowSystem
         && this.ctx.flamethrowerUpgradeSystem
       ) {
@@ -1518,10 +1575,11 @@ export class ArenaLifecycleCoordinator {
           this.ctx.coopDefenseEnemyBurrowSystem,
           this.ctx.flamethrowerUpgradeSystem,
         );
-        this.ctx.coopDefenseEnemyAttackSystem?.setActionBlockedChecker(
-          (enemyId) => this.ctx.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false,
-        );
       }
+      this.ctx.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
+        (this.ctx.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false)
+        || (this.ctx.coopDefenseTimebombSystem?.blocksRegularBehavior(enemyId) ?? false)
+      ));
 
       this.ctx.airstrikeSystem = new AirstrikeSystem();
       this.ctx.airstrikeSystem.setExplodedCallback((x, y, radius, triggeredBy, cfg) => {
@@ -1654,6 +1712,9 @@ export class ArenaLifecycleCoordinator {
         const newHp = this.rockVisualHelper.applyObstacleDamageById(rockId, damage, attackerId);
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockId, 'damage', attackerId);
       });
+      this.ctx.projectileManager.setObstacleKindResolver(
+        (rockId) => this.ctx.placementSystem?.getRuntimeRock(rockId)?.kind,
+      );
 
       // Nur feindliche Basen nehmen Projektilschaden; eigene Basen bleiben unzerstoerbar
       // durch Spielerbeschuss.
@@ -1725,6 +1786,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyDodgeSystem?.clear();
     this.ctx.coopDefenseEnemyCombatPositioningSystem?.clear();
     this.ctx.coopDefenseVoidHunterSystem?.clear();
+    this.ctx.coopDefenseTimebombSystem?.clear();
     this.ctx.coopDefenseEnemyTrainAwarenessSystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
@@ -1747,6 +1809,8 @@ export class ArenaLifecycleCoordinator {
     this.renderers.corpseMarker.clearAll();
     this.renderers.flamethrowerUpgrades.clear();
     this.ctx.effectSystem.clearAllBurrowStates();
+    // Laufende Kameraquellen und Trefferkopien dürfen nicht in die Lobby überlaufen.
+    this.ctx.visualFeedback.reset();
     this.placementPreview.clearForTeardown();
     this.rockVisualHelper.destroyAllTurretVisuals();
 
@@ -1771,6 +1835,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyDodgeSystem = null;
     this.ctx.coopDefenseEnemyCombatPositioningSystem = null;
     this.ctx.coopDefenseVoidHunterSystem = null;
+    this.ctx.coopDefenseTimebombSystem = null;
     this.ctx.coopDefenseEnemyTrainAwarenessSystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;
@@ -1874,6 +1939,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.setObstacleGroups(null, null);
     this.ctx.projectileManager.setRockGroup(null, null, null);
     this.ctx.projectileManager.setObstacleIndex(null);
+    this.ctx.projectileManager.setObstacleKindResolver(null);
     this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
     this.ctx.projectileManager.setBaseHitCallback(null);
@@ -1908,6 +1974,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.enemyFlowFieldService = null;
     this.ctx.enemyPlayerFlowFieldService?.destroy();
     this.ctx.enemyPlayerFlowFieldService = null;
+    this.ctx.enemyStrategicTargetService?.clear();
+    this.ctx.enemyStrategicTargetService = null;
+    this.ctx.enemyStrategicFlowFieldService?.destroy();
+    this.ctx.enemyStrategicFlowFieldService = null;
     this.ctx.enemyBossFlowFieldService?.destroy();
     this.ctx.enemyBossFlowFieldService = null;
     for (const flowField of this.ctx.allyFlowFieldServices.values()) flowField.destroy();
@@ -2260,7 +2330,7 @@ export class ArenaLifecycleCoordinator {
     if (!(committed.tools ?? []).some((entry) => entry.kind === 'utility' && entry.id === tool.id)) {
       return { ok: false, reason: 'blocked' };
     }
-    const config = UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS] as UtilityConfig | undefined;
+    const config = getUtilityConfigForMode(tool.id, bridge.getGameMode()) as UtilityConfig | undefined;
     if (!config) return { ok: false, reason: 'invalid' };
     // Platzierbare Utilities (Mauer, Fliegenpilz) sind Konstrukte und belegen Kapazitaet;
     // Granaten und andere Utilities nicht.

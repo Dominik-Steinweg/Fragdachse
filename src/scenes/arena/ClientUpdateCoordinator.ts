@@ -3,12 +3,13 @@ import { bridge }          from '../../network/bridge';
 import { dequantizeAngle } from '../../utils/angle';
 import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
-import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
+import { getUtilityConfigForMode, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
+import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
@@ -313,7 +314,7 @@ export class ClientUpdateCoordinator {
       const overrideName = bridge.getPlayerUtilityOverrideName(localId2);
       const selectedInspectorTool = this.getLocalInspectorSelectedTool();
       const inspectorConfig = selectedInspectorTool?.kind === 'utility'
-        ? UTILITY_CONFIGS[selectedInspectorTool.id as keyof typeof UTILITY_CONFIGS]
+        ? getUtilityConfigForMode(selectedInspectorTool.id, bridge.getGameMode())
         : undefined;
       const inspectorConstruction = selectedInspectorTool?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
@@ -373,7 +374,7 @@ export class ClientUpdateCoordinator {
 
     const postSyncStartedAt = performance.now();
     if (state.projectiles.some(p => p.style === 'bfg')) {
-      this.scene.cameras.main.shake(100, 0.003);
+      this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }
     const postSyncMs = performance.now() - postSyncStartedAt;
     this.lastPerformance = {
@@ -543,14 +544,14 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const selected = this.getLocalInspectorSelectedTool();
     const config = this.getLocalUtilityConfig();
+    const hasOverride = bridge.getPlayerUtilityOverrideName(localId) !== '' || this.clientUtilityOverride !== null;
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
-    const itemId = selected ? selected.id : config.id;
-    const cooldown = selected?.kind === 'construction'
+    const isConstruction = selected?.kind === 'construction' && !hasOverride;
+    const itemId = isConstruction ? selected.id : config.id;
+    const cooldown = isConstruction
       ? COOP_DEFENSE_BUILD_COOLDOWN_MS
-      : selected?.kind === 'utility'
-        ? UTILITY_CONFIGS[selected.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0
-        : config.cooldown;
+      : config.cooldown;
     if (cooldown <= 0) return 0;
     const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();
     return remaining <= 0 ? 0 : Math.min(1, remaining / cooldown);
@@ -647,13 +648,20 @@ export class ClientUpdateCoordinator {
   getLocalInspectorUtilityConfig(): UtilityConfig | undefined {
     const tool = this.getLocalInspectorSelectedTool();
     if (tool?.kind !== 'utility') return undefined;
-    const base = this.clientUtilityOverride ?? UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS];
+    const base = this.clientUtilityOverride ?? getUtilityConfigForMode(tool.id, bridge.getGameMode());
     if (!base) return undefined;
     const modified = applyCoopDefenseModifiersToUtilityConfig(base, this.getLocalEffectTotals());
-    return {
-      ...modified,
-      cooldown: 1000,
-    } as UtilityConfig;
+    return modified;
+  }
+
+  /** Concrete utility ID used for the host-published cooldown channel. */
+  getLocalUtilityCooldownId(): string {
+    const localId = bridge.getLocalPlayerId();
+    const config = this.getLocalUtilityConfig();
+    const hasOverride = bridge.getPlayerUtilityOverrideName(localId) !== '' || this.clientUtilityOverride !== null;
+    const selected = this.getLocalInspectorSelectedTool();
+    if (selected?.kind === 'construction' && !hasOverride) return selected.id;
+    return config.id;
   }
 
   private getLocalCoopDefenseClassId() {

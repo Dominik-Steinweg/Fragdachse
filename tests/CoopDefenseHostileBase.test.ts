@@ -4,15 +4,17 @@ import {
   getCoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { applyArenaMetricsForMode } from '../src/config';
 import { getCoopDefenseMapUnlockedByVictoryOn } from '../src/config/coopDefenseMapUnlocks';
+import { COOP_DEFENSE_MODE } from '../src/gameModes';
 
-const ATTACK_MAP_IDS = ['12', '13'] as const;
+const ATTACK_MAP_IDS = ['12', '13', '16'] as const;
 
 describe('coop-defense hostile bases', () => {
-  it('uses maps 12 and 13 as the only attack maps and ends on map 15', () => {
-    expect(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId)).not.toContain('16');
-    expect(COOP_DEFENSE_MAP_CONFIGS.at(-1)?.mapId).toBe('15');
-    expect(getCoopDefenseMapUnlockedByVictoryOn('15')).toBeNull();
+  it('uses maps 12, 13 and 16 as attack maps and ends on map 16', () => {
+    expect(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId)).toContain('16');
+    expect(COOP_DEFENSE_MAP_CONFIGS.at(-1)?.mapId).toBe('16');
+    expect(getCoopDefenseMapUnlockedByVictoryOn('16')).toBeNull();
     expect(COOP_DEFENSE_MAP_CONFIGS
       .filter((map) => map.objective === 'destroy-hostile-bases')
       .map((map) => map.mapId)).toEqual(ATTACK_MAP_IDS);
@@ -93,6 +95,72 @@ describe('coop-defense hostile bases', () => {
       expect(source.spawnCenter).toBeDefined();
       expect(source.cells).not.toContainEqual(source.spawnCenter);
       expect(source.spawnWave?.enemyKind).toBeDefined();
+    }
+  });
+
+  it('configures map 16 as a dense timebomb assault with four destructible sources', () => {
+    const map = getCoopDefenseMapConfig('16');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells);
+    const specs = resolveCoopDefenseBases(map);
+    const hostileMain = specs.find((spec) => spec.faction === 'hostile' && spec.role === 'main');
+    const middleBase = specs.find((spec) => spec.id === 'coop-base-middle');
+    const middleOutposts = specs
+      .filter((spec) => spec.id.startsWith('friendly-middle-mushroom-'));
+    const spawnPoints = specs.filter((spec) => spec.role === 'spawn-point');
+    const hostileTurrets = specs
+      .filter((spec) => spec.faction === 'hostile' && spec.role === 'outpost')
+      .flatMap((spec) => spec.turrets);
+
+    expect(map).toMatchObject({
+      arenaWidthCells: 104,
+      timeOfDay: '05:00',
+      trackMode: 'void-fire',
+      objective: 'destroy-hostile-bases',
+      roundDurationSec: 90,
+    });
+    expect(hostileMain?.hpMax).toBe(2800);
+    expect(hostileMain?.cells).toHaveLength(17);
+    expect(middleBase?.region.minGridX).toBe(47);
+    expect(middleOutposts.map((spec) => [spec.region.minGridX, spec.region.minGridY])).toEqual([
+      [44, 11],
+      [44, 17],
+    ]);
+    expect(hostileTurrets).toHaveLength(3);
+    expect(hostileTurrets.map((turret) => turret.weaponId)).toEqual([
+      'TURRET_VOID_FLAME',
+      'TURRET_VOID_FLAME',
+      'TURRET_VOID_FLAME',
+    ]);
+    expect(spawnPoints).toHaveLength(4);
+    expect(spawnPoints.map((source) => [source.region.minGridX, source.region.minGridY])).toEqual([
+      [1, 4],
+      [2, 24],
+      [23, 4],
+      [31, 24],
+    ]);
+    expect(spawnPoints.map((source) => [source.spawnCenter?.gridX, source.spawnCenter?.gridY])).toEqual([
+      [2, 5],
+      [3, 25],
+      [24, 5],
+      [32, 25],
+    ]);
+    for (const source of spawnPoints.slice(2)) {
+      expect(middleBase!.region.minGridX - source.region.maxGridX).toBeGreaterThan(10);
+    }
+    expect(spawnPoints.slice(0, 3).every((source) => (
+      source.spawnWave?.enemyKind === 'timebomb-badger'
+      && source.spawnWave.intervalMs === 3000
+    ))).toBe(true);
+    expect(spawnPoints[3].spawnWave).toMatchObject({
+      enemyKind: 'zombie-badger',
+      intervalMs: 4500,
+      startAtMs: 1500,
+    });
+    expect(new Set(spawnPoints.map((source) => source.spawnWave?.startAtMs))).toEqual(new Set([0, 1000, 1500, 2000]));
+    for (const source of spawnPoints) {
+      expect(source.cells).toHaveLength(7);
+      expect(source.cells).not.toContainEqual(source.spawnCenter);
+      expect(source.hpMax).toBeLessThan(1000);
     }
   });
 

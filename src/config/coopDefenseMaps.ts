@@ -11,6 +11,7 @@ import {
   ROCK_FILL_RATIO,
 } from '../config';
 import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '../effects/TimeOfDay';
+import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
 const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
@@ -35,6 +36,9 @@ const DEFAULT_AIRSTRIKE_HUNT_INTERVAL_MS = 10_000;
  */
 const DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT = 0.15;
 
+/** Standard-HP-Faktor fuer jede zusaetzliche Spielerin bzw. jeden zusaetzlichen Spieler an Feindstrukturen. */
+export const DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER = 0.5;
+
 export interface CoopBaseCellOffset {
   readonly gridX: number;
   readonly gridY: number;
@@ -58,6 +62,7 @@ export type CoopBaseTurretWeaponId =
   | 'TURRET_ROCKET'
   | 'TURRET_MG'
   | 'TURRET_FLAME'
+  | 'TURRET_VOID_FLAME'
   | 'TURRET_SPORE';
 
 export interface CoopBaseTurretConfig {
@@ -75,6 +80,10 @@ export interface CoopBasePowerUpPedestalConfig {
   readonly spawnOnArenaStart?: boolean;
 }
 
+export interface CoopBasePlayerScaling {
+  readonly maxHpFactorPerAdditionalPlayer?: number;
+}
+
 /**
  * `friendly` ist die zu verteidigende Basis (Standard). `hostile` gehoert der Gegnerfraktion:
  * Zombies laufen nicht dorthin, Reparatur und Schilde greifen nicht, und nur sie kann vom
@@ -86,6 +95,8 @@ export type CoopBaseRole = 'main' | 'outpost' | 'spawn-point';
 export interface CoopBaseConfig {
   readonly id: string;
   readonly hpMax: number;
+  /** Optionaler HP-Faktor; feindliche Strukturen verwenden sonst den zentralen Standard. */
+  readonly playerScaling?: CoopBasePlayerScaling;
   readonly faction?: CoopBaseFaction;
   readonly role?: CoopBaseRole;
   readonly anchor: CoopBaseAnchor;
@@ -667,6 +678,7 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   return {
     id: baseConfig.id,
     hpMax: Math.max(1, Math.floor(baseConfig.hpMax)),
+    playerScaling: normalizeBasePlayerScaling(baseConfig.playerScaling),
     faction,
     role,
     anchor: normalizeBaseAnchor(baseConfig.anchor),
@@ -675,6 +687,17 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
     powerUpPedestals,
     spawnCenter,
     spawnWave,
+  };
+}
+
+function normalizeBasePlayerScaling(
+  scaling: CoopBasePlayerScaling | undefined,
+): CoopBasePlayerScaling | undefined {
+  if (!scaling) return undefined;
+  return {
+    maxHpFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(
+      scaling.maxHpFactorPerAdditionalPlayer,
+    ),
   };
 }
 
@@ -724,6 +747,7 @@ function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig)
     && turret.weaponId !== 'TURRET_ROCKET'
     && turret.weaponId !== 'TURRET_MG'
     && turret.weaponId !== 'TURRET_FLAME'
+    && turret.weaponId !== 'TURRET_VOID_FLAME'
     && turret.weaponId !== 'TURRET_SPORE'
   ) {
     throw new Error(`[coopDefenseMaps] Unsupported base turret weapon on base ${baseId}: ${turret.weaponId}`);

@@ -11,6 +11,10 @@ import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
 import { CombatSystem }          from '../systems/CombatSystem';
 import { DecoySystem }           from '../systems/DecoySystem';
 import { EffectSystem }          from '../effects/EffectSystem';
+import { VisualFeedbackDirector } from '../effects/VisualFeedbackDirector';
+import { CAMERA_FEEDBACK_LIMITS } from '../effects/camera/CameraFeedbackModel';
+import { getCameraBaseScroll, getUnshakenPointerWorldPoint, setCameraBaseScroll } from '../graphics/cameraBaseScroll';
+import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
 import { getProjectileLightSpec, LIGHT_PRESETS } from '../effects/LightingConfig';
 import { mixColors }             from '../effects/EffectUtils';
 import { SmokeSystem }           from '../effects/SmokeSystem';
@@ -26,7 +30,8 @@ import { HostileBaseIndicator } from '../ui/HostileBaseIndicator';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
 import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
-import { resolveSkyState } from '../effects/TimeOfDay';
+import { DEFAULT_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
+import type { WorldGradeInputs } from '../effects/postfx/worldGrade';
 import { setEmissiveScale } from '../effects/EmissiveScale';
 import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
@@ -118,7 +123,7 @@ import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameMode
 import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
 import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
@@ -141,6 +146,7 @@ import {
   wireRenderersToProjManager,
   wireRenderersToEffectSystem,
   wireRenderersToAudioSystem,
+  wireRenderersToCameraFeedback,
 } from './arena';
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
@@ -211,6 +217,14 @@ export class ArenaScene extends Phaser.Scene {
   private hostileBaseIndicator: HostileBaseIndicator | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
   private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
+  /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
+  private visualFeedback: VisualFeedbackDirector | null = null;
+  /**
+   * Zweite, filterfreie Kamera über der Weltkamera. Trägt HUD und Overlays, damit die
+   * Bildkomposition der Welt sie nicht erfasst.
+   */
+  private clarityCamera: Phaser.Cameras.Scene2D.Camera | null = null;
+  private clarityRegistry: ClarityCameraRegistry | null = null;
 
   // ── Coordinators ──────────────────────────────────────────────────────────
   private ctx!: ArenaContext;
@@ -378,6 +392,17 @@ export class ArenaScene extends Phaser.Scene {
 
     // Muss vor allem anderen laufen: ab hier gilt der 1920x1080-Designraum unabhängig davon,
     // wie viele Pixel die Canvas tatsächlich hat. Alles Folgende platziert Objekte darin.
+    //
+    // Die Klarheitskamera entsteht direkt mit, und ihre Registry hängt sich noch vor dem ersten
+    // `add.*` ein: ein Objekt ohne Zuordnung würde von beiden Kameras gezeichnet.
+    this.clarityCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height, false, 'clarity');
+    this.clarityRegistry = new ClarityCameraRegistry(this, this.cameras.main, this.clarityCamera);
+    this.clarityRegistry.install();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.clarityRegistry?.destroy();
+      this.clarityRegistry = null;
+      this.clarityCamera = null;
+    });
     this.bindCameraToDesignSpace();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.bindCameraToDesignSpace, this);
     const uninstallTextResolution = installTextResolution(this);
@@ -399,6 +424,7 @@ export class ArenaScene extends Phaser.Scene {
       getQualityController: () => this.graphicsQuality,
       getShadowSystem: () => this.renderers?.shadow ?? null,
       getLightingSystem: () => this.renderers?.lighting ?? null,
+      getPostFxController: () => this.visualFeedback?.postFx ?? null,
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.performanceAblation?.destroy());
     const unsubscribePerformanceQuality = this.graphicsQuality.subscribe((profile, previous) => {
@@ -475,6 +501,43 @@ export class ArenaScene extends Phaser.Scene {
     );
     projectileManager.setAudioSystem(gameAudioSystem);
     effectSystem.setAudioSystem(gameAudioSystem);
+
+    this.visualFeedback = new VisualFeedbackDirector(this, {
+      getListener: () => {
+        const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
+        return sprite ? { x: sprite.x, y: sprite.y } : null;
+      },
+      getLocalPlayerId: () => bridge.getLocalPlayerId(),
+      getGradeInputs: () => this.resolveWorldGradeInputs(),
+    });
+    // Provider-Closure statt Manager-Referenz im Effektsystem: `enemyManager` ist rundengebunden
+    // und muss zum Aufrufzeitpunkt gelesen werden (siehe ArenaContext-Vertrag).
+    this.visualFeedback.setSilhouetteProvider((targetId) => {
+      const player = playerManager.getPlayer(targetId);
+      if (player) {
+        return {
+          sprite: player.sprite,
+          materialColor: player.color,
+          knockbackFactor: 1,
+          isLocalPlayer: targetId === bridge.getLocalPlayerId(),
+        };
+      }
+      const enemy = this.ctx?.enemyManager?.getEnemy(targetId);
+      if (enemy) {
+        return {
+          sprite: enemy.sprite,
+          materialColor: enemy.getTintColor(),
+          knockbackFactor: enemy.getKnockbackFactor(),
+          isLocalPlayer: false,
+        };
+      }
+      return null;
+    });
+    effectSystem.setHitFeedbackRenderer(this.visualFeedback.hitFeedback);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.visualFeedback?.destroy();
+      this.visualFeedback = null;
+    });
 
     // ── UI (scene-lifetime) ────────────────────────────────────────────────
     const leftPanel  = new LeftSidePanel(
@@ -610,6 +673,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Assemble ArenaContext ──────────────────────────────────────────────
     this.ctx = {
       playerManager, projectileManager, combatSystem, effectSystem,
+      visualFeedback: this.visualFeedback,
       gameAudioSystem,
       decoySystem,
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
@@ -621,9 +685,11 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseRoundStateSystem: null, coopDefenseWaveSpawner: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
+      enemyStrategicFlowFieldService: null,
+      enemyStrategicTargetService: null,
       enemyBossFlowFieldService: null,
       allyFlowFieldServices: new Map(),
     };
@@ -710,6 +776,10 @@ export class ArenaScene extends Phaser.Scene {
     wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
+    wireRenderersToCameraFeedback(this.renderers, this.visualFeedback.camera);
+    effectSystem.setCameraFeedback(this.visualFeedback.camera);
+    effectSystem.setPostFx(this.visualFeedback.postFx);
+    inputSystem.setCameraFeedback(this.visualFeedback.camera);
 
     // Homing providers (closed over ctx, read at call-time → safe after teardown)
     // Der Suchradius wird hier bereits ausgewertet: bei vielen Splitter-Projektilen läuft
@@ -776,10 +846,10 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setAudioSystem(gameAudioSystem);
     inputSystem.setupUtilityConfigProvider(() => this.clientUpdate.getLocalUtilityConfig());
     inputSystem.setupUtilityCooldownProvider(() => {
-      const tool = this.clientUpdate.getLocalInspectorSelectedTool();
-      const config = this.clientUpdate.getLocalUtilityConfig();
-      const utilityId = tool?.kind === 'utility' && config.id === tool.id ? tool.id : config.id;
-      return bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId(), utilityId);
+      return bridge.getPlayerUtilityCooldownUntil(
+        bridge.getLocalPlayerId(),
+        this.clientUpdate.getLocalUtilityCooldownId(),
+      );
     });
     inputSystem.setupInspectorToolProvider(
       () => this.clientUpdate.getLocalInspectorTools(),
@@ -936,12 +1006,14 @@ export class ArenaScene extends Phaser.Scene {
     });
     inputSystem.onUtilityPressedDuringCooldown = () => {
       const localId       = bridge.getLocalPlayerId();
-      const selected = this.clientUpdate.getLocalInspectorSelectedTool();
       const config = this.clientUpdate.getLocalUtilityConfig();
-      const utilityId = selected?.kind === 'utility' && config.id === selected.id ? selected.id : config.id;
+      const utilityId = this.clientUpdate.getLocalUtilityCooldownId();
       const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, utilityId);
       const remaining     = Math.max(0, cooldownUntil - bridge.getSynchronizedNow());
-      const frac          = config && config.cooldown > 0 ? Math.min(1, remaining / config.cooldown) : 0.8;
+      const selected = this.clientUpdate.getLocalInspectorSelectedTool();
+      const hasOverride = bridge.getPlayerUtilityOverrideName(localId) !== '' || this.clientUpdate.clientUtilityOverride !== null;
+      const cooldown = selected?.kind === 'construction' && !hasOverride ? COOP_DEFENSE_BUILD_COOLDOWN_MS : config.cooldown;
+      const frac          = cooldown > 0 ? Math.min(1, remaining / cooldown) : 0.8;
       const displayName   = config?.displayName ?? 'Utility';
       this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
     };
@@ -991,11 +1063,8 @@ export class ArenaScene extends Phaser.Scene {
       }
       // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
       if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
-        const selectedInspectorTool = this.clientUpdate.getLocalInspectorSelectedTool();
         const config = this.clientUpdate.getLocalUtilityConfig();
-        const utilityId = selectedInspectorTool?.kind === 'utility' && config.id === selectedInspectorTool.id
-          ? selectedInspectorTool.id
-          : config.id;
+        const utilityId = this.clientUpdate.getLocalUtilityCooldownId();
         const utilityCooldownUntil = bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId(), utilityId);
         if (utilityCooldownUntil > Date.now()) {
           if (inputStarted) {
@@ -1092,6 +1161,9 @@ export class ArenaScene extends Phaser.Scene {
 
     bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
+    bridge.onKicked(() => {
+      this.lobbyOverlay.showHostDisconnectedMessage('Du wurdest vom Host aus dem Raum entfernt.');
+    });
     // Verbindungsabbruch: es gibt keinen Hostwechsel und keinen Ersatztransport, die Partie
     // endet mit der konkreten Ursache statt still weiterzulaufen.
     bridge.onNetworkFailure(message => {
@@ -1258,9 +1330,15 @@ export class ArenaScene extends Phaser.Scene {
       );
 
       // Train widget
-      const trainEvent = bridge.getTrainEvent();
-      if (trainEvent) {
-        if (!this.lifecycle.isTrainDestroyedShown()) {
+      const hasTrainTrack = (bridge.getArenaLayout()?.tracks?.length ?? 0) > 0;
+      if (!hasTrainTrack) {
+        // Some maps deliberately reserve the corridor without creating rails or
+        // a train. Hide the widget explicitly so stale reliable train state and
+        // its particle effect cannot leak into the fixed HUD position.
+        this.ctx.centerHUD.hideTrainWidget();
+      } else {
+        const trainEvent = bridge.getTrainEvent();
+        if (trainEvent && !this.lifecycle.isTrainDestroyedShown()) {
           const latestState = bridge.getLatestGameState();
           const trainState  = latestState?.train ?? null;
           if (trainState?.alive) {
@@ -1364,6 +1442,8 @@ export class ArenaScene extends Phaser.Scene {
 
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
+    // Nach dem Positionsabgleich der Entities: die Trefferkopien führen ihre Ziele nach.
+    this.visualFeedback?.update(delta);
     // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
     this.renderers.overchargeField.syncVisuals(
       inArena ? (this.ctx.overchargeSystem?.getActiveFields() ?? []) : [],
@@ -1478,6 +1558,10 @@ export class ArenaScene extends Phaser.Scene {
     const visualEffectsMs = visualEffectsEndMs - visualCameraEndMs - visualEnemyMs;
     const visualAimMs = visualAimEndMs - visualEffectsEndMs;
     const visualHudMs = visualsEndMs - visualAimEndMs;
+
+    // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
+    // unversetzten Kameraposition (siehe `applyCameraFeedback`).
+    this.applyCameraFeedback(delta);
 
     const shadowStepStartMs = visualsEndMs;
     this.syncWorldShadows(inArena);
@@ -2333,6 +2417,15 @@ export class ArenaScene extends Phaser.Scene {
     camera.setSize(this.scale.width, this.scale.height);
     camera.setZoom(this.scale.width / GAME_WIDTH, this.scale.height / GAME_HEIGHT);
     this.syncMainCameraBounds();
+
+    // Die Klarheitskamera teilt Designraum und Zoom, hat aber bewusst weder Grenzen noch
+    // Scroll: sie darf weder vom Kamera-Feedback noch von der Kameraverfolgung bewegt werden.
+    const clarity = this.clarityCamera;
+    if (!clarity) return;
+    clarity.setOrigin(0, 0);
+    clarity.setSize(this.scale.width, this.scale.height);
+    clarity.setZoom(this.scale.width / GAME_WIDTH, this.scale.height / GAME_HEIGHT);
+    clarity.setScroll(0, 0);
   }
 
   /**
@@ -2345,14 +2438,27 @@ export class ArenaScene extends Phaser.Scene {
   private syncMainCameraBounds(): void {
     const camera = this.cameras.main;
     if (!camera) return;
+    // Um das Feedback-Budget erweitert: Phaser klemmt `scrollX/scrollY` in `preRender` gegen die
+    // Grenzen. Bei fixer Kamera fallen Sichtfeld und Grenzen exakt zusammen, der zulässige
+    // Bereich kollabiert dann auf einen einzigen Wert – der Kamera-Versatz würde stillschweigend
+    // verschluckt. Die Verfolgung selbst hat ihre eigene Klemmung, die Grenzen sind nur Netz.
+    const pad = CAMERA_FEEDBACK_LIMITS.maxOffsetPx;
     camera.setBounds(
-      (camera.width  - camera.displayWidth)  / 2,
-      (camera.height - camera.displayHeight) / 2,
-      Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X),
-      GAME_HEIGHT,
+      (camera.width  - camera.displayWidth)  / 2 - pad,
+      (camera.height - camera.displayHeight) / 2 - pad,
+      Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X) + pad * 2,
+      GAME_HEIGHT + pad * 2,
     );
   }
 
+  /**
+   * Setzt die Kamera auf ihre **unversetzte** Basisposition. Der visuelle Versatz des
+   * Kamera-Feedbacks kommt erst am Frame-Ende über `applyCameraFeedback()` dazu.
+   *
+   * Die Verfolgung lerpt bewusst aus `lastCameraScrollX` und nicht aus `camera.scrollX`: Zu
+   * Beginn eines Frames trägt die Kamera noch den Versatz des Vorframes, und ein Rücklesen
+   * würde das Rumpeln in die Verfolgung zurückkoppeln und die Kamera abdriften lassen.
+   */
   private syncMainCamera(delta: number, inArena: boolean): void {
     const camera = this.cameras.main;
     camera.scrollY = 0;
@@ -2360,12 +2466,14 @@ export class ArenaScene extends Phaser.Scene {
     if (!inArena || !ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera) {
       this.lastCameraScrollX = 0;
       camera.scrollX = 0;
+      setCameraBaseScroll(this, 0, 0);
       return;
     }
 
     const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite;
     if (!localSprite?.active || !this.localPlayerState.alive) {
       camera.scrollX = this.lastCameraScrollX;
+      setCameraBaseScroll(this, this.lastCameraScrollX, 0);
       return;
     }
 
@@ -2373,8 +2481,43 @@ export class ArenaScene extends Phaser.Scene {
     const focusScreenX = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5;
     const targetScrollX = Phaser.Math.Clamp(localSprite.x - focusScreenX, 0, maxScrollX);
     const followLerp = 1 - Math.exp(-delta / 120);
-    camera.scrollX = Phaser.Math.Linear(camera.scrollX, targetScrollX, followLerp);
-    this.lastCameraScrollX = camera.scrollX;
+    this.lastCameraScrollX = Phaser.Math.Linear(this.lastCameraScrollX, targetScrollX, followLerp);
+    camera.scrollX = this.lastCameraScrollX;
+    setCameraBaseScroll(this, this.lastCameraScrollX, 0);
+  }
+
+  /**
+   * Trägt den Kamera-Versatz auf. Bewusst der letzte Schritt vor Schatten, Licht und Rendering:
+   *
+   * - Alles davor (Eingabe, Zielerfassung, Snapshots, Platzierungsvorschauen) rechnet mit der
+   *   Basisposition und bleibt vom Rumpeln unbeeinflusst.
+   * - Die Lichtkarte stempelt ihre Lichter bei `x - camera.scrollX` und muss deshalb **nach**
+   *   dem Versatz laufen, damit Lichter und Welt zusammen wackeln. Genau deshalb kommt sie
+   *   ohne Overscan-Reserve aus, die Phasers Shake-Effekt noch brauchte.
+   */
+  /**
+   * Eingaben der Basis-Bildkomposition. Die Uhrzeit kommt aus dem Lichtsystem, damit Grading
+   * und Beleuchtung dieselbe Quelle haben und nicht auseinanderlaufen können.
+   */
+  private resolveWorldGradeInputs(): WorldGradeInputs {
+    const minutes = this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES;
+    const inArena = bridge.getGamePhase() === 'ARENA';
+    const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
+    const localPlayer = this.ctx?.playerManager.getPlayer(bridge.getLocalPlayerId());
+
+    return {
+      skyState: resolveSkyState(minutes),
+      isVoidMap: inArena && getCoopDefenseMapConfig(mapId).trackMode === 'void-fire',
+      bossPhase: inArena ? (this.ctx?.enemyManager?.getMaxBossPhase() ?? 0) : 0,
+      localHpFraction: inArena ? (localPlayer?.getHpFraction() ?? 1) : 1,
+      gamePhase: inArena ? 'ARENA' : 'LOBBY',
+    };
+  }
+
+  private applyCameraFeedback(delta: number): void {
+    const base = getCameraBaseScroll(this);
+    if (!base) return;
+    this.visualFeedback?.applyToCamera(this.cameras.main, base.x, base.y, delta);
   }
 
   private resolveCoopDefenseArenaWidthCells(): number | undefined {
@@ -2387,7 +2530,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private getPointerWorldPoint(): Phaser.Math.Vector2 {
     const pointer = this.input.activePointer;
-    return this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    return getUnshakenPointerWorldPoint(this, pointer);
   }
 
   /**

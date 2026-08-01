@@ -16,6 +16,7 @@ import {
   createHostSession,
   joinHostSession,
   getActiveSession,
+  leaveActiveSession,
   requireRoom,
   TransportDiagnostics,
   createPeerNetworkError,
@@ -64,6 +65,17 @@ function isHost(): boolean {
 function myPlayer(): PlayerState {
   const room = requireRoom();
   const handle = room.getPlayerHandle(room.getLocalPlayerId());
+  if (!handle && room.isKicked()) {
+    // Ein Kick entfernt den lokalen Handle absichtlich aus dem Roster. Die Scene laeuft aber
+    // noch bis zur Navigation weiter und fragt in dieser Zeit Ping-/Lobbydaten ab. Dieser
+    // terminale Fallback bewahrt die bestehende API, ohne erneut Zustand zu senden.
+    return {
+      id: room.getLocalPlayerId(),
+      getState: () => undefined,
+      setState: () => undefined,
+      onQuit: () => undefined,
+    };
+  }
   if (!handle) throw new Error('Lokaler Spieler ist im Raum nicht registriert.');
   return handle;
 }
@@ -126,6 +138,9 @@ export interface NetworkPingSample {
   m: number;
   s: number;
 }
+
+export type KickPlayerFailure = 'host-only' | 'lobby-only' | 'self' | 'unknown-player' | 'not-connected';
+export type KickPlayerResult = { ok: true } | { ok: false; reason: KickPlayerFailure };
 
 /**
  * Per-Spieler-Keys, die ausschliesslich der Host liest. Der Host reicht sie nicht an die
@@ -422,7 +437,13 @@ type MeleeSwingHandler = (swing: SyncedMeleeSwing) => void;
 type PowerUpPickupHandler = (uid: number, playerId: string) => void;
 type DecoyStealthBreakHandler = (playerId: string) => void;
 type TrainDestroyedHandler = () => void;
-type TranslocatorFlashHandler = (x: number, y: number, color: number, type: 'start' | 'end') => void;
+type TranslocatorFlashHandler = (
+  x: number,
+  y: number,
+  color: number,
+  type: 'start' | 'end',
+  subjectId?: string,
+) => void;
 type CaptureTheBeerFxHandler = (event: CaptureTheBeerFxEvent) => void;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -528,6 +549,7 @@ export class NetworkBridge {
   private diagnostics: TransportDiagnostics | null = null;
   private networkFailureCbs: Array<(message: string) => void> = [];
   private reconnectStatusCbs: Array<(status: PeerReconnectStatus) => void> = [];
+  private kickedCbs: Array<() => void> = [];
   private lastSentInput: PlayerInput | null = null;
   private lastInputSentAtMs = 0;
   private lastObservedRttSampleCount = 0;
@@ -546,6 +568,26 @@ export class NetworkBridge {
       const teamId = (payload as { teamId?: unknown } | null)?.teamId;
       if (teamId !== 'blue' && teamId !== 'red') return false;
       return this.hostHandleTeamRequest(teamId, caller.id);
+    });
+
+    this.registerHostRpcHandler('kck', (payload: unknown, caller: PlayerState): KickPlayerResult => {
+      const targetId = (payload as { playerId?: unknown } | null)?.playerId;
+      if (!isHost() || caller.id !== requireRoom().getHostPlayerId()) {
+        return { ok: false, reason: 'host-only' };
+      }
+      if (this.getGamePhase() !== 'LOBBY') return { ok: false, reason: 'lobby-only' };
+      if (typeof targetId !== 'string' || targetId.length === 0 || targetId === caller.id) {
+        return { ok: false, reason: 'self' };
+      }
+      if (targetId === requireRoom().getHostPlayerId()) return { ok: false, reason: 'self' };
+      if (!this.playerStateMap.has(targetId)) return { ok: false, reason: 'unknown-player' };
+      if (!requireRoom().kickPlayer(targetId)) return { ok: false, reason: 'not-connected' };
+
+      // Ein Kick invalidiert alle verbleibenden Ready-/Loadout-Commits, damit die Lobby nach
+      // dem Rosterwechsel nicht mit einem veralteten vollständigen Ready-Satz startet.
+      this.hostResetAllLobbyReady();
+      this.hostPublishLobbySync();
+      return { ok: true };
     });
   }
 
@@ -571,6 +613,11 @@ export class NetworkBridge {
         resumeToken: getOrCreateRoomResumeToken(roomCode),
       });
     console.info(`[Netz] Raum ${session.roomCode} – Rolle ${session.room.isHost() ? 'Host' : 'Client'}`);
+  }
+
+  /** Beendet den aktuellen Raum bewusst; ein Client kündigt das dem Host explizit an. */
+  leaveRoom(): void {
+    leaveActiveSession();
   }
 
   // ── Callbacks registrieren ─────────────────────────────────────────────────
@@ -639,6 +686,10 @@ export class NetworkBridge {
       for (const callback of this.reconnectStatusCbs) callback(status);
     });
 
+    requireRoom().onKicked(() => {
+      for (const callback of this.kickedCbs) callback();
+    });
+
     requireRoom().onPlayerJoin((state: PlayerState) => {
       this.playerStateMap.set(state.id, state);
       this.connectedPlayersCacheDirty = true;
@@ -676,6 +727,10 @@ export class NetworkBridge {
 
   onReconnectStatus(callback: (status: PeerReconnectStatus) => void): void {
     this.reconnectStatusCbs.push(callback);
+  }
+
+  onKicked(callback: () => void): void {
+    this.kickedCbs.push(callback);
   }
 
   /** Aktuelle Transportkennzahlen je Verbindung. Fuer Debug-Overlay und Lobby-Anzeige. */
@@ -794,6 +849,30 @@ export class NetworkBridge {
    * dieser Wert ab dem Verbindungsaufbau bereit und gilt auch in der Lobby.
    */
   getHostPlayerId(): string { return requireRoom().getHostPlayerId(); }
+
+  /** Host-only Lobby-Aktion. Die Vorprüfungen sind UX, die identischen Regeln im RPC-Handler
+   * bleiben die eigentliche Netzwerkschranke gegen gefälschte oder verspätete UI-Aufrufe. */
+  kickPlayer(playerId: string): Promise<KickPlayerResult> {
+    if (!isHost()) return Promise.resolve({ ok: false, reason: 'host-only' });
+    if (this.getGamePhase() !== 'LOBBY') return Promise.resolve({ ok: false, reason: 'lobby-only' });
+    if (playerId === this.getLocalPlayerId() || playerId === this.getHostPlayerId()) {
+      return Promise.resolve({ ok: false, reason: 'self' });
+    }
+    if (!this.playerStateMap.has(playerId)) return Promise.resolve({ ok: false, reason: 'unknown-player' });
+
+    return this.callHostRpc('kck', { playerId }, 1_000)
+      .then((result): KickPlayerResult => {
+        if (result && typeof result === 'object' && 'ok' in result && (result as { ok?: unknown }).ok === true) {
+          return { ok: true };
+        }
+        const reason = result && typeof result === 'object' ? (result as { reason?: unknown }).reason : undefined;
+        return reason === 'host-only' || reason === 'lobby-only' || reason === 'self'
+          || reason === 'unknown-player' || reason === 'not-connected'
+          ? { ok: false, reason }
+          : { ok: false, reason: 'not-connected' };
+      })
+      .catch(() => ({ ok: false, reason: 'not-connected' }));
+  }
 
   getConnectedPlayerIds(): string[] {
     return [...this.connectedPlayers.keys()];
@@ -1987,8 +2066,19 @@ export class NetworkBridge {
 
   // ── Translocator-Effekt-RPC: Host → Alle ───────────────────────────────────
 
-  broadcastTranslocatorFlash(x: number, y: number, color: number, type: 'start' | 'end'): void {
-    this.broadcastGameplayEvent('tlfx', { x, y, c: color, t: type });
+  /**
+   * @param subjectId Wer sich teleportiert – Spieler-ID oder Gegner-ID. Nur dadurch kann der
+   *   Client entscheiden, ob es der **lokale** Spieler war; die Farbe taugt dafür nicht, weil
+   *   sie auch Gegner tragen. Optional, damit ältere Sender weiterhin gültig bleiben.
+   */
+  broadcastTranslocatorFlash(
+    x: number,
+    y: number,
+    color: number,
+    type: 'start' | 'end',
+    subjectId?: string,
+  ): void {
+    this.broadcastGameplayEvent('tlfx', { x, y, c: color, t: type, s: subjectId });
   }
 
   registerTranslocatorFlashHandler(handler: TranslocatorFlashHandler): void {
@@ -1996,8 +2086,10 @@ export class NetworkBridge {
     this.registerAllRpcHandler('tlfx', async (data: unknown): Promise<unknown> => {
       const translocatorFlashHandler = this.translocatorFlashHandler;
       if (!translocatorFlashHandler) return undefined;
-      const { x, y, c, t } = data as { x: number; y: number; c: number; t: 'start' | 'end' };
-      translocatorFlashHandler(x, y, c, t);
+      const { x, y, c, t, s } = data as {
+        x: number; y: number; c: number; t: 'start' | 'end'; s?: string;
+      };
+      translocatorFlashHandler(x, y, c, t, s);
       return undefined;
     });
   }

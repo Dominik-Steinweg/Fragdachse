@@ -10,6 +10,7 @@ import {
 } from '../config';
 import { ensureModalPanelTexture } from './uiTextures';
 import { HELP_CONTROLS } from '../config/helpControls';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const PANEL_W = 660;
@@ -125,6 +126,7 @@ export class HelpOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
+    promoteToClarityCamera(this.scene, this.container);
   }
 
   show(): void {

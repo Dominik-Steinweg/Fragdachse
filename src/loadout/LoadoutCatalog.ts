@@ -23,6 +23,7 @@ import {
   DEFAULT_LOADOUT,
   getAvailableUltimateConfigs,
   LOADOUT_CATALOG_ENTRIES,
+  isWeaponAllowedInMode,
   ULTIMATE_CONFIGS,
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
@@ -51,10 +52,17 @@ export const LOADOUT_SLOT_LABELS: Record<LoadoutSlot, string> = {
 };
 
 function buildStaticSlotItems(slot: Exclude<LoadoutSlot, 'ultimate'>): readonly LoadoutItemRef[] {
-  const configs = LOADOUT_CATALOG_ENTRIES
-    .filter((entry) => entry.slot === slot)
-    .map((entry) => entry.kind === 'utility' ? UTILITY_CONFIGS[entry.id] : WEAPON_CONFIGS[entry.id])
-    .filter((config) => config !== undefined);
+  const configs: LoadoutItemRef[] = [];
+  for (const entry of LOADOUT_CATALOG_ENTRIES) {
+    if (entry.slot !== slot) continue;
+    if (entry.kind === 'utility') {
+      const config = UTILITY_CONFIGS[entry.id];
+      if (config) configs.push(config);
+      continue;
+    }
+    const config = WEAPON_CONFIGS[entry.id];
+    if (config) configs.push(config);
+  }
   return configs;
 }
 
@@ -66,7 +74,12 @@ const STATIC_SLOT_ITEMS: Record<Exclude<LoadoutSlot, 'ultimate'>, readonly Loado
 
 /** Alle im Modus grundsaetzlich waehlbaren Items eines Slots, ohne Freischaltungsfilter. */
 export function getLoadoutSlotItems(slot: LoadoutSlot, mode: GameMode): readonly LoadoutItemRef[] {
-  return slot === 'ultimate' ? getAvailableUltimateConfigs(mode) : STATIC_SLOT_ITEMS[slot];
+  if (slot === 'ultimate') return getAvailableUltimateConfigs(mode);
+  return STATIC_SLOT_ITEMS[slot].filter((item) => {
+    if (slot === 'utility') return true;
+    const config = WEAPON_CONFIGS[item.id as keyof typeof WEAPON_CONFIGS];
+    return config !== undefined && isWeaponAllowedInMode(config, mode);
+  });
 }
 
 /**

@@ -3,6 +3,7 @@ import type { CoopDefenseClassId, GameMode, LoadoutSlot } from '../src/types';
 import {
   describeLoadoutItem,
   describeLoadoutTool,
+  getLoadoutSlotItems,
   getSelectableLoadoutItems,
 } from '../src/loadout/LoadoutCatalog';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
@@ -66,10 +67,29 @@ describe('loadout catalog', () => {
     expect(utility.textureKey).toBe('HE_GRENADE');
   });
 
+  it('keeps Inspector support weapons out of PvP loadout lists', () => {
+    const supportWeapons = ['OVERCHARGE_CORE', 'REPARATURSTRAHL', 'ENERGIEINJEKTOR'];
+    for (const mode of ['deathmatch', 'team_deathmatch', 'capture_the_beer'] as const) {
+      const weapon2Ids = getLoadoutSlotItems('weapon2', mode).map((item) => item.id);
+      for (const weaponId of supportWeapons) expect(weapon2Ids).not.toContain(weaponId);
+    }
+
+    const coopWeapon2Ids = getLoadoutSlotItems('weapon2', COOP_DEFENSE).map((item) => item.id);
+    for (const weaponId of supportWeapons) expect(coopWeapon2Ids).toContain(weaponId);
+  });
+
   it('uses generated temporary upgrade icons without undoing existing aliases', () => {
     expect(COOP_DEFENSE_PENDING_UPGRADE_ICONS.has('dash_fire_trail')).toBe(true);
     expect(getCoopDefenseUpgradeTextureKey('dash_fire_trail')).toBe('UPGRADE_DASH_FIRE_TRAIL');
     expect(getCoopDefenseUpgradeTextureKey('shotgun_range')).toBe('UPGRADE_ASMD_PRIMARY_RANGE');
+  });
+
+  it('keeps internal Coop utility variants out of user-facing catalog lists', () => {
+    const utilityIds = getLoadoutSlotItems('utility', COOP_DEFENSE).map((item) => item.id);
+    expect(utilityIds).not.toContain('FELSBAU_COOP');
+    expect(utilityIds).not.toContain('FLIEGENPILZ_COOP');
+    expect(utilityIds).toContain('FELSBAU');
+    expect(utilityIds).toContain('FLIEGENPILZ');
   });
 
   it('resolves display names from the config a slot actually uses', () => {

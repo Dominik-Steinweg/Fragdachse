@@ -12,7 +12,7 @@ import {
   clipPointToArenaRay,
   isPointInsideArena,
 } from '../config';
-import type { ArenaLayout, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
+import type { ArenaLayout, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
 import {
   sumPlaceableCapacity,
   type CoopDefenseConstructionDefinition,
@@ -261,6 +261,7 @@ export class PlacementSystem {
         ? 0
         : now + Math.max(0, cfg.placeable.lifetimeMs - cfg.placeable.warningPulseMs),
       angle: preview.angle,
+      toolRef: { kind: 'utility', id: cfg.id } satisfies LoadoutToolRef,
       enemyDestroyedExplosionRadius: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionRadius ?? 0) : 0,
       enemyDestroyedExplosionDamage: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionDamage ?? 0) : 0,
       enemyDestroyedExplosionKnockback: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionKnockback ?? 0) : 0,
@@ -314,6 +315,8 @@ export class PlacementSystem {
         || current.kind !== incoming.kind
         || current.angle !== incoming.angle
         || current.constructionId !== incoming.constructionId
+        || current.toolRef?.kind !== incoming.toolRef?.kind
+        || current.toolRef?.id !== incoming.toolRef?.id
         || current.turretWeaponId !== incoming.turretWeaponId
         || current.targetRange !== incoming.targetRange
       ) {

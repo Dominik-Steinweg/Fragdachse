@@ -16,6 +16,7 @@ import {
   ensureCoopDefenseItemCellTexture,
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { attachHoverEffect } from './uiHover';
 import {
   ensureFlatPanelTexture,
@@ -244,6 +245,7 @@ export class CoopDefenseItemRewardOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 5)
       .setVisible(false);
+    promoteToClarityCamera(this.scene, this.container);
   }
 
   show(presentation: MatchItemRewardPresentation): void {

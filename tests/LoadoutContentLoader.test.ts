@@ -45,8 +45,8 @@ function expectContentError(run: () => unknown, fragment: string): void {
 describe('loadout content loader', () => {
   it('builds the shipped unified registries and freezes every exposed value', () => {
     const built = buildLoadoutRegistries(clonedSources());
-    expect(Object.keys(built.weapons)).toHaveLength(49);
-    expect(Object.keys(built.utilities)).toHaveLength(14);
+    expect(Object.keys(built.weapons)).toHaveLength(50);
+    expect(Object.keys(built.utilities)).toHaveLength(16);
     expect(Object.keys(built.ultimates)).toHaveLength(6);
     expect(built.defaultLoadout.weapon1).toBe(built.weapons.GLOCK);
     expect(built.defaultLoadout.utility).toBe(built.utilities.HE_GRENADE);
@@ -54,7 +54,23 @@ describe('loadout content loader', () => {
     expect(Object.isFrozen(built.weapons)).toBe(true);
     expect(Object.isFrozen(built.weapons.ROCKET_LAUNCHER.fire)).toBe(true);
     expect(Object.isFrozen(built.catalog)).toBe(true);
+    expect(Object.isFrozen(built.lineages.utility)).toBe(true);
+    expect(built.lineages.utility.FELSBAU_COOP).toEqual(['FELSBAU_COOP', 'FELSBAU']);
+    expect(built.lineages.utility.FLIEGENPILZ_COOP).toEqual(['FLIEGENPILZ_COOP', 'FLIEGENPILZ']);
     expect(typeof built.weapons.GLOCK.projectileColor).toBe('number');
+  });
+
+  it('keeps placeable Coop variants limited to inherited cooldown and lifetime changes', () => {
+    const built = buildLoadoutRegistries(clonedSources());
+    const normalRock = built.utilities.FELSBAU as Record<string, unknown>;
+    const coopRock = built.utilities.FELSBAU_COOP as Record<string, unknown>;
+    const normalTurret = built.utilities.FLIEGENPILZ as Record<string, unknown>;
+    const coopTurret = built.utilities.FLIEGENPILZ_COOP as Record<string, unknown>;
+
+    expect(coopRock).toMatchObject({ cooldown: 500, placeable: { lifetimeMs: 0 } });
+    expect(coopTurret).toMatchObject({ cooldown: 500, placeable: { lifetimeMs: 0 } });
+    expect(coopRock).toEqual({ ...normalRock, id: 'FELSBAU_COOP', cooldown: 500, placeable: { ...(normalRock.placeable as Record<string, unknown>), lifetimeMs: 0 } });
+    expect(coopTurret).toEqual({ ...normalTurret, id: 'FLIEGENPILZ_COOP', cooldown: 500, placeable: { ...(normalTurret.placeable as Record<string, unknown>), lifetimeMs: 0 } });
   });
 
   it('is deterministic across source order and source renames', () => {

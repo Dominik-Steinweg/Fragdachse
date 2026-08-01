@@ -22,6 +22,7 @@ import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBur
 import type { LightingSystem } from '../effects/LightingSystem';
 import { fillRadialGradientTexture, makeAdditive } from '../effects/EffectUtils';
 import { emissiveAlpha } from '../effects/EmissiveScale';
+import { TimebombFuseRenderer } from '../effects/TimebombFuseRenderer';
 
 const TEX_ENEMY_GLOW = '_enemy_glow';
 /** Kuehles Violett – klar unterscheidbar von Brand (orange) und Void-Brand (lila-rot). */
@@ -53,6 +54,7 @@ export class EnemyEntity {
   private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
   private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
   private glowHalo: Phaser.GameObjects.Image | null = null;
+  private timebombFuseRenderer: TimebombFuseRenderer | null = null;
   private bossAura: Phaser.GameObjects.Ellipse | null = null;
   private bossRing: Phaser.GameObjects.Ellipse | null = null;
   private bossLabel: Phaser.GameObjects.Text | null = null;
@@ -486,6 +488,7 @@ export class EnemyEntity {
   syncBar(): void {
     this.syncBossDecorations();
     this.syncGlow();
+    this.syncTimebombFuseVisuals();
     this.syncBurnEffect();
     this.syncVulnerableMarker();
     if (!this.shouldShowHpBars()) {
@@ -538,6 +541,7 @@ export class EnemyEntity {
       this.glowHalo.destroy();
       this.glowHalo = null;
     }
+    this.destroyTimebombFuseVisuals();
     this.lighting?.releaseLight(this.glowLightKey());
     this.bossAura?.destroy();
     this.bossRing?.destroy();
@@ -615,6 +619,9 @@ export class EnemyEntity {
     this.glowHalo.setTint(glow.color);
     this.glowHalo.setAlpha(emissiveAlpha(glow.alpha));
 
+    // Der Zeitbombendachs wird zustandsgebunden pro Frame gepulst; ein paralleler Endlos-Tween
+    // wuerde dessen immer schneller werdende Zuendkurve ueberschreiben.
+    if (this.config.timebomb) return;
     // Leichtes Atmen, damit der Halo nicht als aufgeklebte Scheibe liest.
     scene.tweens.add({
       targets:  this.glowHalo,
@@ -636,14 +643,29 @@ export class EnemyEntity {
     if (!glow) return;
 
     const visible = !this.burrowed && this.currentHp > 0;
+    const isTimebombChase = this.specialAction === 'timebomb-chase';
+    const isTimebombFuse = this.specialAction === 'timebomb-fuse';
+    const timebombProgress = isTimebombFuse ? this.gaussChargeProgress : (isTimebombChase ? 0.34 : 0);
+    const pulsePeriodMs = isTimebombFuse
+      ? Phaser.Math.Linear(420, 105, timebombProgress)
+      : (isTimebombChase ? 360 : 1050);
+    const pulse = this.config.timebomb
+      ? 0.5 + 0.5 * Math.sin(this.sprite.scene.time.now * Math.PI * 2 / pulsePeriodMs)
+      : 0;
+    const timebombSizeMultiplier = this.config.timebomb
+      ? (isTimebombFuse ? 1.32 + pulse * 0.24 : (isTimebombChase ? 1.18 + pulse * 0.16 : 1 + pulse * 0.06))
+      : 1;
+    const timebombAlpha = this.config.timebomb
+      ? (isTimebombFuse ? 0.68 + pulse * 0.3 : (isTimebombChase ? 0.46 + pulse * 0.34 : glow.alpha * (0.78 + pulse * 0.22)))
+      : glow.alpha;
     this.glowHalo?.setVisible(visible);
     this.glowHalo?.setPosition(this.sprite.x, this.sprite.y);
     this.glowHalo?.setDisplaySize(
-      this.config.size * glow.sizeFactor,
-      this.config.size * glow.sizeFactor,
+      this.config.size * glow.sizeFactor * timebombSizeMultiplier,
+      this.config.size * glow.sizeFactor * timebombSizeMultiplier,
     );
     this.glowHalo?.setTint(glow.color);
-    if (phaseTwo) this.glowHalo?.setAlpha(emissiveAlpha(glow.alpha));
+    if (phaseTwo || this.config.timebomb) this.glowHalo?.setAlpha(emissiveAlpha(timebombAlpha));
 
     if (!this.lighting) return;
     if (!visible) {
@@ -652,13 +674,49 @@ export class EnemyEntity {
     }
     this.lighting.setLight(this.glowLightKey(), 'entityGlow', this.sprite.x, this.sprite.y, {
       color:     glow.color,
-      radiusPx:  glow.lightRadiusPx,
-      intensity: glow.lightIntensity,
+      radiusPx:  glow.lightRadiusPx * timebombSizeMultiplier,
+      intensity: this.config.timebomb
+        ? glow.lightIntensity * (isTimebombFuse ? 4.2 : (isTimebombChase ? 3 : 1))
+        : glow.lightIntensity,
     });
   }
 
   private glowLightKey(): string {
     return `enemyglow:${this.id}`;
+  }
+
+  private syncTimebombFuseVisuals(): void {
+    if (!this.config.timebomb) return;
+    const active = this.specialAction === 'timebomb-fuse'
+      && !this.burrowed
+      && this.currentHp > 0
+      && this.sprite.visible;
+    if (!active) {
+      this.destroyTimebombFuseVisuals();
+      this.sprite.setRotation(this.currentAimAngle + this.getSpriteRotationOffset());
+      return;
+    }
+
+    this.timebombFuseRenderer ??= new TimebombFuseRenderer(this.sprite.scene, this.config.size);
+    this.timebombFuseRenderer.sync(
+      this.sprite.x,
+      this.sprite.y,
+      this.gaussChargeProgress,
+      this.config.timebomb.fuseDurationMs,
+    );
+
+    // Das zunehmend hektische Taumeln bleibt ein visueller Offset. Aim- und Netzwerkwinkel
+    // bleiben unveraendert, damit der Telegraph keine Gameplay- oder Snapshotdaten beeinflusst.
+    const progress = this.gaussChargeProgress;
+    const frequency = 0.01 + progress * 0.035;
+    const amplitude = 0.12 + progress * 0.42;
+    const wobble = Math.sin(this.sprite.scene.time.now * frequency) * amplitude;
+    this.sprite.setRotation(this.currentAimAngle + this.getSpriteRotationOffset() + wobble);
+  }
+
+  private destroyTimebombFuseVisuals(): void {
+    this.timebombFuseRenderer?.destroy();
+    this.timebombFuseRenderer = null;
   }
 
   private createBossDecorations(scene: Phaser.Scene): void {
@@ -693,6 +751,18 @@ export class EnemyEntity {
         strokeThickness: 4,
       },
     ).setOrigin(0.5, 1).setDepth(DEPTH.PLAYERS + 2);
+  }
+
+  /**
+   * Bossphase für die Bildkomposition: 0 = kein Boss, 1 = Boss aktiv, 2 = zweite Phase.
+   * Dieselbe Schwelle wie die Bossdekorationen, damit Farbstimmung und Gegnerdarstellung
+   * gleichzeitig umschlagen.
+   */
+  getBossPhase(): number {
+    if (!this.config.isBoss || this.currentHp <= 0) return 0;
+    const ratio = this.config.voidHunterBoss?.phaseTwoHpRatio;
+    if (ratio === undefined) return 1;
+    return this.currentHp / this.maxHp <= ratio ? 2 : 1;
   }
 
   private syncBossDecorations(): void {

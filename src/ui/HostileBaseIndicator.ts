@@ -1,6 +1,7 @@
 import { DEPTH, TEAM_RED_COLOR } from '../config';
 import { getBaseWorldBounds } from '../arena/BaseRegistry';
 import type { BaseManager } from '../entities/BaseManager';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const HOSTILE_BASE_EDGE_INSET_PX = 20;
 
@@ -113,6 +114,8 @@ export class HostileBaseIndicator {
       .setDepth(DEPTH.OVERLAY)
       .setScrollFactor(0)
       .setVisible(false);
+    // Nur der Randpfeil ist HUD. `worldArrow` steht in Weltkoordinaten und bleibt in der Welt.
+    promoteToClarityCamera(scene, this.edgeArrow);
     this.drawArrow(this.worldArrow);
     this.drawArrow(this.edgeArrow);
     this.bounceTween = scene.tweens.add({

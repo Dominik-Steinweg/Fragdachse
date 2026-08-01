@@ -215,6 +215,8 @@ export interface WeaponConfigShape {
   readonly fire: WeaponFireConfig;
 
   readonly allowedSlots: readonly LoadoutSlot[]; // Slots, in die diese Waffe eingesetzt werden darf
+  /** Optionaler Modusfilter; fehlt er, ist die Waffe in allen Spielmodi erlaubt. */
+  readonly allowedModes?: readonly GameMode[];
 
   // Ressourcen
   readonly adrenalinCost: number;       // Adrenalin-Kosten pro Schuss

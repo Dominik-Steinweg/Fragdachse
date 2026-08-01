@@ -70,6 +70,11 @@ export interface EnemyCombatPositioningSource {
   getMovementOverride(enemyId: string): { vx: number; vy: number } | null;
 }
 
+/** Exklusive Spezialbewegung, die normale KI-Zweige fuer diesen Frame ersetzt. */
+export interface EnemySpecialMovementSource {
+  getMovementOverride(enemy: EnemyEntity, now: number): { vx: number; vy: number } | null;
+}
+
 /**
  * Gegner-Visuals, die nicht an der Entity selbst hängen: Buddel-Partikel und der Spawn-Effekt.
  * Strukturell erfüllt vom EffectSystem, das dieselben Effekte für Spieler zeichnet – als lokaler
@@ -226,6 +231,7 @@ export class EnemyManager {
   hostUpdateMovement(
     baseFlowFieldService: EnemyFlowFieldService | null,
     playerFlowFieldService: EnemyFlowFieldService | null,
+    strategicFlowFieldService: EnemyFlowFieldService | null,
     bossFlowFieldService: EnemyFlowFieldService | null,
     movementLocked: boolean,
     now: number,
@@ -235,6 +241,7 @@ export class EnemyManager {
     trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
     burrowSystem?: EnemyBurrowMovementSource | null,
     combatPositioningSystem?: EnemyCombatPositioningSource | null,
+    specialMovementSource?: EnemySpecialMovementSource | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
@@ -250,9 +257,11 @@ export class EnemyManager {
       const burrowSpeedFactor = isBurrowed ? (burrowSystem?.getSpeedFactor(enemy.id) ?? 1) : 1;
       // Unter der Erde ist der Zug keine Gefahr – die Gleis-KI bleibt dann komplett aussen vor.
       const activeTrainAwareness = isBurrowed ? null : trainAwarenessSystem;
-      const primaryFlowFieldService = config.isBoss
-        ? bossFlowFieldService ?? baseFlowFieldService
-        : config.movementTarget === 'players'
+      const primaryFlowFieldService = config.movementTarget === 'players-and-armed-constructs'
+        ? strategicFlowFieldService ?? playerFlowFieldService ?? baseFlowFieldService
+        : config.isBoss
+          ? bossFlowFieldService ?? baseFlowFieldService
+          : config.movementTarget === 'players'
           ? playerFlowFieldService ?? baseFlowFieldService
           : baseFlowFieldService;
 
@@ -270,6 +279,12 @@ export class EnemyManager {
           forcedBurrowDirection.x * burrowSpeed,
           forcedBurrowDirection.y * burrowSpeed,
         );
+        continue;
+      }
+
+      const specialMovement = specialMovementSource?.getMovementOverride(enemy, now) ?? null;
+      if (specialMovement) {
+        enemy.setDesiredVelocity(specialMovement.vx, specialMovement.vy);
         continue;
       }
 
@@ -689,6 +704,19 @@ export class EnemyManager {
     return [...this.enemies.values()];
   }
 
+  /**
+   * Höchste aktive Bossphase im Feld. Ohne Allokation, weil das pro Frame für die
+   * Bildkomposition abgefragt wird.
+   */
+  getMaxBossPhase(): number {
+    let phase = 0;
+    for (const enemy of this.enemies.values()) {
+      const enemyPhase = enemy.getBossPhase();
+      if (enemyPhase > phase) phase = enemyPhase;
+    }
+    return phase;
+  }
+
   getHostileEnemies(): EnemyEntity[] {
     return [...this.enemies.values()].filter((enemy) => enemy.faction === 'hostile');
   }
@@ -706,6 +734,26 @@ export class EnemyManager {
       if (enemy.faction === 'hostile' && enemy.kind === kind) return true;
     }
     return false;
+  }
+
+  /** Host-only: autoritative Entfernung ohne Killbelohnung, Todeseffekt oder Death-Spawns. */
+  hostRemoveWithoutKill(id: string): EnemyDeathInfo | null {
+    const enemy = this.enemies.get(id);
+    if (!enemy) return null;
+    const death: EnemyDeathInfo = {
+      id: enemy.id,
+      kind: enemy.kind,
+      x: enemy.sprite.x,
+      y: enemy.sprite.y,
+      size: enemy.getSize(),
+      faction: enemy.faction,
+      ownerId: enemy.ownerId,
+    };
+    this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
+    this.netSnapshotCache.delete(id);
+    this.destroyEnemyEntity(id, enemy);
+    this.wildfirePanicStates.delete(id);
+    return death;
   }
 
   applyDamage(id: string, damage: number): { died: boolean; remainingHp: number; death?: EnemyDeathInfo } | null {

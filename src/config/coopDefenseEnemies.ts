@@ -1,10 +1,17 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
 import type { ArmageddonMeteorConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { FireChunkBurstConfig, GroundFireCellEffect } from '../types';
+import {
+  normalizeCoopDefenseHumanPlayerCount,
+  normalizeCoopDefensePlayerScalingFactor,
+  resolveCoopDefenseNonNegativeInteger,
+  resolveCoopDefensePositiveInteger,
+  resolveCoopDefensePositiveNumber,
+} from './coopDefenseScaling';
 
 export type CoopDefenseEnemyKind = string;
 
-export type CoopDefenseEnemyMovementTarget = 'bases' | 'players';
+export type CoopDefenseEnemyMovementTarget = 'bases' | 'players' | 'players-and-armed-constructs';
 
 /** Standard-Wegstossfaktor, wenn ein Gegner keinen eigenen Wert konfiguriert. */
 export const DEFAULT_ENEMY_KNOCKBACK_FACTOR = 1;
@@ -194,6 +201,21 @@ export interface CoopDefenseEnemyVoidFireChunkConfig extends FireChunkBurstConfi
 /** Lila, nur fuer Spieler gefaehrliche Brandspur unter dem gesamten Boss-Koerper. */
 export interface CoopDefenseEnemyVoidFireTrailConfig extends GroundFireCellEffect {}
 
+/** Dreiphasige, zielgebundene Selbstzuendung des Zeitbombendachses. */
+export interface CoopDefenseEnemyTimebombConfig {
+  readonly chaseSpeedMultiplier: number;
+  readonly activationRadiusPx: number;
+  readonly lineOfSightDurationMs: number;
+  readonly fuseDistancePx: number;
+  readonly fuseDurationMs: number;
+  readonly explosionRadiusPx: number;
+  readonly explosionDamage: number;
+  readonly explosionKnockback: number;
+  readonly fireChunks: FireChunkBurstConfig;
+  readonly killedPopRadiusPx: number;
+  readonly killedPopDamage: number;
+}
+
 export interface CoopDefenseEnemyPlayerScaling {
   readonly maxHpFactorPerAdditionalPlayer?: number;
   readonly moveSpeedFactorPerAdditionalPlayer?: number;
@@ -236,6 +258,7 @@ export interface CoopDefenseEnemyConfig {
   readonly spawnThrow?: CoopDefenseEnemySpawnThrowConfig;
   readonly voidFireChunks?: CoopDefenseEnemyVoidFireChunkConfig;
   readonly voidFireTrail?: CoopDefenseEnemyVoidFireTrailConfig;
+  readonly timebomb?: CoopDefenseEnemyTimebombConfig;
   readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
   readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
   readonly trainAwareness?: CoopDefenseEnemyTrainAwarenessConfig;
@@ -292,20 +315,20 @@ export function getCoopDefenseEnemyXp(kind: CoopDefenseEnemyKind): number {
 }
 
 export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): ResolvedCoopDefenseEnemyConfigs {
-  const normalizedHumanPlayerCount = Math.max(1, Math.floor(humanPlayerCount));
+  const normalizedHumanPlayerCount = normalizeCoopDefenseHumanPlayerCount(humanPlayerCount);
 
   return Object.fromEntries(
     Object.entries(COOP_DEFENSE_ENEMY_CONFIGS).map(([kind, config]) => [
       kind,
       {
-        maxHp: resolvePositiveInteger(
+        maxHp: resolveCoopDefensePositiveInteger(
           config.maxHp,
           config.playerScaling?.maxHpFactorPerAdditionalPlayer,
           normalizedHumanPlayerCount,
         ),
         xp: Math.max(0, Math.floor(config.xp)),
         size: config.size,
-        moveSpeed: resolvePositiveNumber(
+        moveSpeed: resolveCoopDefensePositiveNumber(
           config.moveSpeed,
           config.playerScaling?.moveSpeedFactorPerAdditionalPlayer,
           normalizedHumanPlayerCount,
@@ -331,6 +354,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         spawnThrow: config.spawnThrow,
         voidFireChunks: config.voidFireChunks,
         voidFireTrail: config.voidFireTrail,
+        timebomb: config.timebomb,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
         trainAwareness: config.trainAwareness,
@@ -346,16 +370,16 @@ export function resolveCoopDefenseEnemyWaveConfig(
   baseWaveConfig: { intervalMs: number; countPerWave: number },
   humanPlayerCount: number,
 ): { intervalMs: number; countPerWave: number } {
-  const normalizedHumanPlayerCount = Math.max(1, Math.floor(humanPlayerCount));
+  const normalizedHumanPlayerCount = normalizeCoopDefenseHumanPlayerCount(humanPlayerCount);
   const config = getCoopDefenseEnemyConfig(kind);
 
   return {
-    intervalMs: resolvePositiveNumber(
+    intervalMs: resolveCoopDefensePositiveNumber(
       baseWaveConfig.intervalMs,
       config.spawnScaling?.intervalMsFactorPerAdditionalPlayer,
       normalizedHumanPlayerCount,
     ),
-    countPerWave: resolveNonNegativeInteger(
+    countPerWave: resolveCoopDefenseNonNegativeInteger(
       baseWaveConfig.countPerWave,
       config.spawnScaling?.countPerWaveFactorPerAdditionalPlayer,
       normalizedHumanPlayerCount,
@@ -425,6 +449,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     spawnThrow: normalizeSpawnThrowConfig(enemy.spawnThrow, enemy.id),
     voidFireChunks: normalizeVoidFireChunkConfig(enemy.voidFireChunks),
     voidFireTrail: normalizeVoidFireTrailConfig(enemy.voidFireTrail),
+    timebomb: normalizeTimebombConfig(enemy.timebomb),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
     trainAwareness: normalizeTrainAwareness(enemy.trainAwareness),
@@ -720,10 +745,40 @@ function normalizeKnockbackFactor(value: number | undefined): number {
 }
 
 function normalizeMovementTarget(target: CoopDefenseEnemyMovementTarget): CoopDefenseEnemyMovementTarget {
-  if (target === 'bases' || target === 'players') {
+  if (target === 'bases' || target === 'players' || target === 'players-and-armed-constructs') {
     return target;
   }
   throw new Error(`[coopDefenseEnemies] Unsupported movementTarget: ${String(target)}`);
+}
+
+function normalizeTimebombConfig(
+  config: CoopDefenseEnemyTimebombConfig | undefined,
+): CoopDefenseEnemyTimebombConfig | undefined {
+  if (!config) return undefined;
+  return {
+    chaseSpeedMultiplier: Math.max(0.1, config.chaseSpeedMultiplier),
+    activationRadiusPx: Math.max(1, config.activationRadiusPx),
+    lineOfSightDurationMs: Math.max(0, Math.floor(config.lineOfSightDurationMs)),
+    fuseDistancePx: Math.max(1, config.fuseDistancePx),
+    fuseDurationMs: Math.max(1, Math.floor(config.fuseDurationMs)),
+    explosionRadiusPx: Math.max(1, config.explosionRadiusPx),
+    explosionDamage: Math.max(0, config.explosionDamage),
+    explosionKnockback: Math.max(0, config.explosionKnockback),
+    fireChunks: {
+      ...config.fireChunks,
+      count: Math.max(0, Math.floor(config.fireChunks.count)),
+      searchRadius: Math.max(0, config.fireChunks.searchRadius),
+      flightMs: Math.max(1, Math.floor(config.fireChunks.flightMs)),
+      igniteCenter: config.fireChunks.igniteCenter === true,
+      durationMs: Math.max(0, Math.floor(config.fireChunks.durationMs)),
+      burnDurationMs: Math.max(0, Math.floor(config.fireChunks.burnDurationMs)),
+      burnDamagePerTick: Math.max(0, config.fireChunks.burnDamagePerTick),
+      visualStyle: 'void',
+      damageTarget: 'players',
+    },
+    killedPopRadiusPx: Math.max(1, config.killedPopRadiusPx),
+    killedPopDamage: Math.max(0, config.killedPopDamage),
+  };
 }
 
 function normalizePlayerScaling(
@@ -731,8 +786,8 @@ function normalizePlayerScaling(
 ): CoopDefenseEnemyPlayerScaling | undefined {
   if (!scaling) return undefined;
   return {
-    maxHpFactorPerAdditionalPlayer: normalizeFactor(scaling.maxHpFactorPerAdditionalPlayer),
-    moveSpeedFactorPerAdditionalPlayer: normalizeFactor(scaling.moveSpeedFactorPerAdditionalPlayer),
+    maxHpFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.maxHpFactorPerAdditionalPlayer),
+    moveSpeedFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.moveSpeedFactorPerAdditionalPlayer),
   };
 }
 
@@ -741,38 +796,7 @@ function normalizeSpawnScaling(
 ): CoopDefenseEnemySpawnScaling | undefined {
   if (!scaling) return undefined;
   return {
-    intervalMsFactorPerAdditionalPlayer: normalizeFactor(scaling.intervalMsFactorPerAdditionalPlayer),
-    countPerWaveFactorPerAdditionalPlayer: normalizeFactor(scaling.countPerWaveFactorPerAdditionalPlayer),
+    intervalMsFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.intervalMsFactorPerAdditionalPlayer),
+    countPerWaveFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.countPerWaveFactorPerAdditionalPlayer),
   };
-}
-
-function normalizeFactor(value: number | undefined): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  return value;
-}
-
-function resolvePositiveInteger(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
-  return Math.max(1, Math.round(scaleByHumanPlayers(baseValue, factor, humanPlayerCount)));
-}
-
-function resolveNonNegativeInteger(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
-  return Math.max(0, Math.round(scaleByHumanPlayers(baseValue, factor, humanPlayerCount)));
-}
-
-function resolvePositiveNumber(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
-  return Math.max(1, scaleByHumanPlayers(baseValue, factor, humanPlayerCount));
-}
-
-function scaleByHumanPlayers(baseValue: number, factor: number | undefined, humanPlayerCount: number): number {
-  const extraPlayers = Math.max(0, humanPlayerCount - 1);
-  const normalizedFactor = factor ?? 0;
-  if (extraPlayers === 0 || normalizedFactor === 0) {
-    return baseValue;
-  }
-
-  if (normalizedFactor > 0) {
-    return baseValue * (1 + normalizedFactor * extraPlayers);
-  }
-
-  return baseValue / (1 + Math.abs(normalizedFactor) * extraPlayers);
 }

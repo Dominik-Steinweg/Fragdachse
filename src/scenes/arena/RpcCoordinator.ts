@@ -6,6 +6,7 @@ import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
 import type { ExplosionVisualStyle } from '../../types';
+import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 
 // SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
 // distance 0.  Explosions are world events, not remote-player gunshots, so we compensate
@@ -18,6 +19,8 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
   switch (visualStyle) {
     case 'holy':        return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };
     case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
+    case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };
+    case 'timebomb_pop': return undefined;
     case 'lightning':   return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * 0.82 };
     case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
     case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };
@@ -188,6 +191,10 @@ export class RpcCoordinator {
       this.ctx.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
       const audio = resolveExplosionAudio(visualStyle);
       if (audio) this.ctx.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
+      // Nur die Nuke löst eine globale Bildreaktion aus. Kleine Explosionen bleiben bewusst
+      // lokal – sonst flackerte das ganze Bild bei jedem Granatentreffer.
+      if (visualStyle === 'nuke') this.ctx.visualFeedback.pulsePostFx('nukeDetonation');
+      else if (visualStyle === 'void_nuke') this.ctx.visualFeedback.pulsePostFx('voidNukeDetonation');
     });
   }
 
@@ -220,6 +227,11 @@ export class RpcCoordinator {
   private registerBlackHoleEffectHandler(): void {
     bridge.registerBlackHoleEffectHandler((x, y, radius, durationMs) => {
       this.renderers.blackHole.play(x, y, radius, durationMs);
+      this.ctx.visualFeedback.pulsePostFx('blackHoleSpawn');
+      this.scene.time.delayedCall(
+        Math.max(0, durationMs - 400),
+        () => this.ctx.visualFeedback.pulsePostFx('blackHoleCollapse'),
+      );
     });
   }
 
@@ -287,17 +299,29 @@ export class RpcCoordinator {
 
   private registerShotFxHandler(): void {
     bridge.registerShotFxHandler((shooterId, duration, intensity) => {
-      if (shooterId === bridge.getLocalPlayerId()) {
-        this.scene.cameras.main.shake(duration, intensity);
-      }
+      if (shooterId !== bridge.getLocalPlayerId()) return;
+      // Rückstoß bleibt ungerichtet: die RPC trägt nur Dauer und Stärke, keine Schussrichtung.
+      // `legacyShakeAmplitudePx` hält die aus der Waffenkonfiguration stammenden Werte gültig.
+      this.ctx.visualFeedback.camera.request({
+        channel: 'impact',
+        amplitudePx: legacyShakeAmplitudePx(intensity),
+        durationMs: duration,
+        priority: CAMERA_FEEDBACK_PRIORITY.weaponRecoil,
+        decay: 'impulse',
+      });
     });
   }
 
   private registerTranslocatorFlashHandler(): void {
-    bridge.registerTranslocatorFlashHandler((x, y, color, type) => {
+    bridge.registerTranslocatorFlashHandler((x, y, color, type, subjectId) => {
       this.renderers.translocatorTeleport?.playFlash(x, y, color, type);
       if (type === 'end') {
         this.ctx.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);
+        // Globale Bildreaktion nur beim eigenen Sprung – ein fremder Teleport am anderen
+        // Arenaende darf das eigene Bild nicht umfärben.
+        if (subjectId === bridge.getLocalPlayerId()) {
+          this.ctx.visualFeedback.pulsePostFx('teleport');
+        }
       }
     });
   }

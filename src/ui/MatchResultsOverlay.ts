@@ -21,6 +21,7 @@ import {
   rgbStr,
   type LivingBarPalette,
 } from './LivingBarEffect';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { attachHoverEffect } from './uiHover';
 import {
   ensureFlatPanelTexture,
@@ -333,6 +334,7 @@ export class MatchResultsOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 4)
       .setVisible(false);
+    promoteToClarityCamera(this.scene, this.container);
 
     // Der lebendige XP-Balken braucht den Container und entsteht deshalb erst hier.
     this.xpBarEffect = new LivingBarEffect(

@@ -164,7 +164,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration';
+export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -1058,6 +1058,7 @@ export interface TrackedProjectile {
   burnDamagePerTick?: number;
   projectileBurnVisualStyle?: GroundFireVisualStyle;
   flamePierceHitIds?: Set<string>; // Pierce: bereits getroffene Ziel-IDs (kein Mehrfachtreffer)
+  hitObstacleIds?: Set<number>; // Flammen treffen jedes Hindernis hoechstens einmal
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;
   fireTrail?: GroundFireCellEffect;
@@ -1365,6 +1366,7 @@ export type TurretWeaponId =
   | 'TURRET_ROCKET'
   | 'TURRET_MG'
   | 'TURRET_FLAME'
+  | 'TURRET_VOID_FLAME'
   | 'TURRET_SPORE';
 
 /** Aktives Ueberladungsfeld des Ingenieurs (host-autoritativ, per GameState repliziert). */
@@ -1483,7 +1485,7 @@ export interface SyncedEnemyState {
   /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
   dashPhase: 0 | 1 | 2;
   /** Replizierte Boss-Spezialaktion; `none` löscht einen zuvor sichtbaren Zustand. */
-  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon';
+  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse';
   specialActionEndsAt: number;
   gaussChargeProgress: number;
   gaussAimAngle: number;
@@ -1505,7 +1507,7 @@ export interface SyncedEnemyDeltaState {
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
   dashPhase?: 0 | 1 | 2;
-  specialAction?: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon';
+  specialAction?: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse';
   specialActionEndsAt?: number;
   gaussChargeProgress?: number;
   gaussAimAngle?: number;

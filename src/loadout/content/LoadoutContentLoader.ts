@@ -24,6 +24,8 @@ export interface LoadoutContentSource {
 export type WeaponRegistry = Readonly<Record<string, WeaponConfig>>;
 export type UtilityRegistry = Readonly<Record<string, UtilityConfig>>;
 export type UltimateRegistry = Readonly<Record<string, UltimateConfig>>;
+export type RegistryKind = 'weapon' | 'utility' | 'ultimate';
+export type RegistryLineage = Readonly<Record<string, readonly string[]>>;
 
 export interface DefaultLoadoutConfig {
   readonly weapon1: WeaponConfig;
@@ -36,11 +38,11 @@ export interface BuiltLoadoutRegistries {
   readonly weapons: WeaponRegistry;
   readonly utilities: UtilityRegistry;
   readonly ultimates: UltimateRegistry;
+  /** IDs from the concrete config back to its inherited root, including the concrete ID. */
+  readonly lineages: Readonly<Record<RegistryKind, RegistryLineage>>;
   readonly defaultLoadout: Readonly<DefaultLoadoutConfig>;
   readonly catalog: readonly LoadoutCatalogEntry[];
 }
-
-type RegistryKind = 'weapon' | 'utility' | 'ultimate';
 
 interface RawEntry {
   readonly kind: RegistryKind;
@@ -282,7 +284,7 @@ export function buildLoadoutRegistries(sources: readonly LoadoutContentSource[])
       let current = entry;
       let edgeCount = 0;
       while (typeof current.value.baseId === 'string') {
-        const baseId = current.value.baseId;
+        const baseId = current.value.baseId as string;
         const base = rawByKind[kind].get(baseId);
         if (!base) {
           const wrongKind = globalIds.get(baseId);
@@ -306,6 +308,24 @@ export function buildLoadoutRegistries(sources: readonly LoadoutContentSource[])
     }
   }
   assertNoErrors(issues);
+
+  const lineagesByKind: Record<RegistryKind, Map<string, readonly string[]>> = {
+    weapon: new Map(),
+    utility: new Map(),
+    ultimate: new Map(),
+  };
+  for (const kind of ['weapon', 'utility', 'ultimate'] as const) {
+    for (const entry of rawByKind[kind].values()) {
+      const lineage: string[] = [];
+      let current: RawEntry | undefined = entry;
+      while (current) {
+        lineage.push(current.id);
+        const baseId: unknown = current.value.baseId;
+        current = typeof baseId === 'string' ? rawByKind[kind].get(baseId) : undefined;
+      }
+      lineagesByKind[kind].set(entry.id, deepFreeze(lineage));
+    }
+  }
 
   const resolvedByKind: Record<RegistryKind, Map<string, unknown>> = {
     weapon: new Map(),
@@ -381,6 +401,11 @@ export function buildLoadoutRegistries(sources: readonly LoadoutContentSource[])
   const weapons = sortedFrozenRecord(resolvedByKind.weapon as Map<string, WeaponConfig>) as WeaponRegistry;
   const utilities = sortedFrozenRecord(resolvedByKind.utility as Map<string, UtilityConfig>) as UtilityRegistry;
   const ultimates = sortedFrozenRecord(resolvedByKind.ultimate as Map<string, UltimateConfig>) as UltimateRegistry;
+  const lineages = {
+    weapon: sortedFrozenRecord(lineagesByKind.weapon),
+    utility: sortedFrozenRecord(lineagesByKind.utility),
+    ultimate: sortedFrozenRecord(lineagesByKind.ultimate),
+  } as Readonly<Record<RegistryKind, RegistryLineage>>;
 
   const seenOrders = new Set<string>();
   for (const entry of catalog) {
@@ -417,6 +442,7 @@ export function buildLoadoutRegistries(sources: readonly LoadoutContentSource[])
     weapons,
     utilities,
     ultimates,
+    lineages,
     defaultLoadout: {
       weapon1: defaultWeapon1,
       weapon2: defaultWeapon2,
@@ -428,6 +454,11 @@ export function buildLoadoutRegistries(sources: readonly LoadoutContentSource[])
 }
 
 export function isUltimateAllowedInMode(config: UltimateConfig, mode: GameMode): boolean {
+  if (!VALID_MODES.has(mode)) return false;
+  return !config.allowedModes || config.allowedModes.length === 0 || config.allowedModes.includes(mode);
+}
+
+export function isWeaponAllowedInMode(config: WeaponConfig, mode: GameMode): boolean {
   if (!VALID_MODES.has(mode)) return false;
   return !config.allowedModes || config.allowedModes.length === 0 || config.allowedModes.includes(mode);
 }

@@ -57,6 +57,7 @@ import {
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { UiContextMenu } from './UiContextMenu';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
 const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
@@ -580,6 +581,15 @@ export class LeftSidePanel {
     // ── Picker-Popup (world-space, über LobbyOverlay) ─────────────────────────
     this.pickerContainer = this.buildPickerContainer();
     this.pickerContainer.setVisible(false);
+
+    // Klarheitskamera: dieses Panel ist HUD und darf von der Bildkomposition der Welt nicht
+    // erfasst werden. `puContainer` und `pickerContainer` sind eigene Wurzeln, kein Kind von
+    // `gameContainer` – sie brauchen deshalb je einen eigenen Aufruf.
+    promoteToClarityCamera(this.scene, this.gameContainer);
+    promoteToClarityCamera(this.scene, this.puContainer);
+    promoteToClarityCamera(this.scene, this.lobbyContainer);
+    promoteToClarityCamera(this.scene, this.pickerContainer);
+    promoteToClarityCamera(this.scene, this.badgerPreview.sprite);
 
     // ── Hilfe-Overlay (world-space, über allem) ───────────────────────────────
     this.helpOverlay = new HelpOverlay(this.scene);

@@ -2,6 +2,7 @@ import type { PlayerManager }       from '../../entities/PlayerManager';
 import type { ProjectileManager }   from '../../entities/ProjectileManager';
 import type { CombatSystem }        from '../../systems/CombatSystem';
 import type { EffectSystem }        from '../../effects/EffectSystem';
+import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
 import type { GameAudioSystem }     from '../../audio/GameAudioSystem';
 import type { SmokeSystem }         from '../../effects/SmokeSystem';
 import type { FireSystem }          from '../../effects/FireSystem';
@@ -38,6 +39,8 @@ import type { CoopDefenseEnemyBurrowSystem } from '../../systems/CoopDefenseEnem
 import type { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodgeSystem';
 import type { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
 import type { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
+import type { CoopDefenseTimebombSystem } from '../../systems/CoopDefenseTimebombSystem';
+import type { EnemyStrategicTargetService } from '../../systems/EnemyStrategicTargetService';
 import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import type { RepairDroneSystem } from '../../systems/RepairDroneSystem';
@@ -81,6 +84,8 @@ export interface ArenaContext {
   readonly projectileManager: ProjectileManager;
   readonly combatSystem:      CombatSystem;
   readonly effectSystem:      EffectSystem;
+  /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Nie `camera.shake()` direkt rufen. */
+  readonly visualFeedback:    VisualFeedbackDirector;
   readonly gameAudioSystem:   GameAudioSystem;
   readonly smokeSystem:       SmokeSystem;
   readonly fireSystem:        FireSystem;
@@ -141,6 +146,7 @@ export interface ArenaContext {
   coopDefenseEnemyDodgeSystem: CoopDefenseEnemyDodgeSystem | null;
   coopDefenseEnemyCombatPositioningSystem: CoopDefenseEnemyCombatPositioningSystem | null;
   coopDefenseVoidHunterSystem: CoopDefenseVoidHunterSystem | null;
+  coopDefenseTimebombSystem: CoopDefenseTimebombSystem | null;
   coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
   coopDefenseWaveSpawner: CoopDefenseWaveSpawner | null;
   coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;
@@ -149,6 +155,8 @@ export interface ArenaContext {
   trainManager:      TrainManager      | null;
   enemyFlowFieldService: EnemyFlowFieldService | null;
   enemyPlayerFlowFieldService: EnemyFlowFieldService | null;
+  enemyStrategicFlowFieldService: EnemyFlowFieldService | null;
+  enemyStrategicTargetService: EnemyStrategicTargetService | null;
   enemyBossFlowFieldService: EnemyFlowFieldService | null;
   allyFlowFieldServices: Map<string, EnemyFlowFieldService>;
 }

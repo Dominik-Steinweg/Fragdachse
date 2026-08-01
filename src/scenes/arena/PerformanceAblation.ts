@@ -39,7 +39,8 @@ export type AblationCategory =
   | 'projectiles'
   | 'staticDecor'
   | 'train'
-  | 'hud';
+  | 'hud'
+  | 'postFx';
 
 export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
   baseline: 0,
@@ -55,6 +56,7 @@ export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
   hud: 10,
   dynamicShadows: 11,
   train: 12,
+  postFx: 13,
 };
 
 /** Was in einem Segment abgeschaltet wird – erscheint so auch in der Anleitung und im Overlay. */
@@ -72,6 +74,7 @@ export const ABLATION_LABELS: Readonly<Record<AblationCategory, string>> = {
   staticDecor: 'Statische Deko (Boden, Decals, Kronen)',
   train: 'Zug (Lok, Waggons, Zug-Schatten)',
   hud: 'HUD und bildschirmfeste UI',
+  postFx: 'Bildkomposition der Weltkamera (Grading, Vignette, Bloom)',
 };
 
 /**
@@ -93,6 +96,7 @@ export const ABLATION_CATEGORIES: readonly AblationCategory[] = [
   'staticDecor',
   'train',
   'hud',
+  'postFx',
 ];
 
 export interface AblationSegment {
@@ -120,6 +124,17 @@ export interface PerformanceAblationDeps {
    */
   getLightingSystem: () => {
     setCompositeSuppressed(suppressed: boolean): void;
+  } | null;
+  /**
+   * Die Bildkomposition der Weltkamera bekommt eine eigene Kategorie, obwohl ihre Filter
+   * bereits im Quality-Controller hängen: ihr Kostenprofil ist ein anderes. Objekt-Glows
+   * kosten pro Objekt, ein Vollbild-Bloom kostet einen Offscreen-Pass in
+   * Backing-Store-Auflösung. Beides in einer Zahl wäre für die Diagnose wertlos.
+   *
+   * Optional, damit bestehende Aufrufer und Tests unverändert bleiben.
+   */
+  getPostFxController?: () => {
+    setEnabled(enabled: boolean): void;
   } | null;
 }
 
@@ -178,6 +193,7 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
     case 'filters':
     case 'staticShadows':
     case 'dynamicShadows':
+    case 'postFx':
     case 'baseline':
     default:
       // Diese Kategorien laufen ueber Systemschalter, nicht ueber die Display-Liste.
@@ -202,6 +218,7 @@ export class PerformanceAblationController {
    */
   private readonly deactivated = new Set<Phaser.GameObjects.GameObject>();
   private filtersSuppressed = false;
+  private postFxSuppressed = false;
   private staticShadowsSuppressed = false;
   private dynamicShadowsSuppressed = false;
   private lightCompositeSuppressed = false;
@@ -297,6 +314,7 @@ export class PerformanceAblationController {
     this.setStaticShadowsSuppressed(category === 'staticShadows');
     this.setDynamicShadowsSuppressed(category === 'dynamicShadows');
     this.setLightCompositeSuppressed(category === 'lights');
+    this.setPostFxSuppressed(category === 'postFx');
 
     // Der Scan laeuft in JEDEM Segment inklusive Baseline und wertet immer das Praedikat aus,
     // damit seine Kosten in allen Segmenten gleich sind und aus der Differenz
@@ -316,6 +334,14 @@ export class PerformanceAblationController {
         this.deactivated.add(child);
       }
     }
+  }
+
+  private setPostFxSuppressed(suppressed: boolean): void {
+    if (this.postFxSuppressed === suppressed) return;
+    const controller = this.deps.getPostFxController?.() ?? null;
+    if (!controller) return;
+    controller.setEnabled(!suppressed);
+    this.postFxSuppressed = suppressed;
   }
 
   private setFiltersSuppressed(suppressed: boolean): void {
@@ -368,6 +394,7 @@ export class PerformanceAblationController {
     this.setStaticShadowsSuppressed(false);
     this.setDynamicShadowsSuppressed(false);
     this.setLightCompositeSuppressed(false);
+    this.setPostFxSuppressed(false);
   }
 
   destroy(): void {

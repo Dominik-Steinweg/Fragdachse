@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S } from '../../config';
-import { UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
+import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
+import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../../utils/radialDamage';
@@ -23,6 +24,7 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
+import type { EnemyStrategicTargetCandidate } from '../../systems/EnemyStrategicTargetService';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -151,6 +153,7 @@ export class HostUpdateCoordinator {
     this.ctx.coopDefenseWaveSpawner?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
+    if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
     // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
@@ -159,6 +162,7 @@ export class HostUpdateCoordinator {
     this.ctx.enemyManager?.hostUpdateMovement(
       this.ctx.enemyFlowFieldService,
       this.ctx.enemyPlayerFlowFieldService,
+      this.ctx.enemyStrategicFlowFieldService,
       this.ctx.enemyBossFlowFieldService,
       countdownActive,
       now,
@@ -168,6 +172,7 @@ export class HostUpdateCoordinator {
       this.ctx.coopDefenseEnemyTrainAwarenessSystem,
       this.ctx.coopDefenseEnemyBurrowSystem,
       this.ctx.coopDefenseEnemyCombatPositioningSystem,
+      this.ctx.coopDefenseTimebombSystem,
     );
     if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
     if (!countdownActive) {
@@ -775,8 +780,11 @@ export class HostUpdateCoordinator {
       const hasUtilityOverride = bridge.getPlayerUtilityOverrideName(localId) !== '';
       const selectedInspectorTool = hasUtilityOverride ? undefined
         : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? committedLoadout?.coopDefenseProfile?.selectedTool);
-      const selectedInspectorUtility = selectedInspectorTool?.kind === 'utility'
-        ? UTILITY_CONFIGS[selectedInspectorTool.id as keyof typeof UTILITY_CONFIGS]
+      const selectedInspectorUtilityBase = selectedInspectorTool?.kind === 'utility'
+        ? getUtilityConfigForMode(selectedInspectorTool.id, bridge.getGameMode())
+        : undefined;
+      const selectedInspectorUtility = selectedInspectorUtilityBase
+        ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedInspectorUtilityBase) ?? selectedInspectorUtilityBase
         : undefined;
       const selectedInspectorConstruction = selectedInspectorTool?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
@@ -1007,7 +1015,7 @@ export class HostUpdateCoordinator {
     });
 
     if (projectiles.some(p => p.style === 'bfg')) {
-      this.scene.cameras.main.shake(100, 0.003);
+      this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }
     metrics.snapshotBuildMs = performance.now() - phaseStartedAt;
     metrics.totalMs = performance.now() - startedAt;
@@ -1648,6 +1656,8 @@ export class HostUpdateCoordinator {
 
     const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
     const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
+    const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
+    const strategicTargetService = this.ctx.enemyStrategicTargetService;
     if (!playerFlowFieldService) {
       bossFlowFieldService?.update(now);
       return;
@@ -1669,9 +1679,73 @@ export class HostUpdateCoordinator {
     playerFlowFieldService.update(now);
     bossFlowFieldService?.update(now);
 
+    if (strategicFlowFieldService && strategicTargetService) {
+      const candidates: EnemyStrategicTargetCandidate[] = [];
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        if (!player.sprite.active || !this.ctx.combatSystem.isAlive(player.id)) continue;
+        if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
+        const goal = strategicFlowFieldService.worldToGrid(player.sprite.x, player.sprite.y);
+        if (!goal) continue;
+        candidates.push({
+          kind: 'player',
+          id: player.id,
+          x: player.sprite.x,
+          y: player.sprite.y,
+          goalCells: [goal],
+        });
+      }
+
+      for (const construction of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+        if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+        const world = strategicFlowFieldService.gridToWorld(construction.gridX, construction.gridY);
+        if (!world) continue;
+        candidates.push({
+          kind: 'armed-construct',
+          id: String(construction.id),
+          x: world.x,
+          y: world.y,
+          goalCells: this.buildAdjacentGoalCells([{ gridX: construction.gridX, gridY: construction.gridY }]),
+        });
+      }
+
+      for (const base of this.ctx.baseManager?.getBasesByFaction('friendly') ?? []) {
+        if (base.role !== 'outpost' || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
+        const turret = base.getTurrets()[0];
+        candidates.push({
+          kind: 'armed-outpost',
+          id: base.id,
+          x: turret.x,
+          y: turret.y,
+          goalCells: this.buildAdjacentGoalCells(base.getSpec().cells),
+          resolvePosition: (fromX, fromY) => {
+            const surface = base.getNearestSurfacePoint(fromX, fromY);
+            return surface ? { x: surface.x, y: surface.y } : null;
+          },
+        });
+      }
+
+      strategicTargetService.updateTargets(candidates);
+      strategicFlowFieldService.update(now);
+    }
+
     // Die Nekromantie setzt ihr gemeinsames Besitzer-Flowfield selbst auf den
     // aktuellen Gegner oder, beim Leash-Rueckzug, auf den Besitzer. Ein zweites
     // Ziel-Update hier wuerde das Angriffsziel jeden Frame wieder ueberschreiben.
+  }
+
+  private buildAdjacentGoalCells(
+    occupiedCells: readonly { gridX: number; gridY: number }[],
+  ): { gridX: number; gridY: number }[] {
+    const result: { gridX: number; gridY: number }[] = [];
+    for (const cell of occupiedCells) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          result.push({ gridX: cell.gridX + dx, gridY: cell.gridY + dy });
+        }
+      }
+    }
+    return result;
   }
 
   private getLocalUtilityCooldownFrac(): number {
@@ -1683,12 +1757,18 @@ export class HostUpdateCoordinator {
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
     const fallbackConfig = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-    const itemId = selected ? selected.id : (fallbackConfig?.id ?? '__default__');
+    const selectedConfigBase = selected?.kind === 'utility'
+      ? getUtilityConfigForMode(selected.id, bridge.getGameMode())
+      : undefined;
+    const selectedConfig = selectedConfigBase
+      ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedConfigBase) ?? selectedConfigBase
+      : undefined;
+    const itemId = selected?.kind === 'construction'
+      ? selected.id
+      : (selectedConfig?.id ?? fallbackConfig?.id ?? '__default__');
     const cooldown = selected?.kind === 'construction'
       ? COOP_DEFENSE_BUILD_COOLDOWN_MS
-      : selected?.kind === 'utility'
-        ? UTILITY_CONFIGS[selected.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0
-        : fallbackConfig?.cooldown ?? 0;
+      : selectedConfig?.cooldown ?? fallbackConfig?.cooldown ?? 0;
     if (cooldown <= 0) return 0;
     const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();
     return remaining <= 0 ? 0 : Math.min(1, remaining / cooldown);

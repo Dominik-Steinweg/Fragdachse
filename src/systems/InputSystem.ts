@@ -9,6 +9,9 @@ import { COOP_DEFENSE_CONSTRUCTION_CAPACITY } from '../config/coopDefenseConstru
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { InspectorToolRadialMenu, type InspectorRadialSelection } from '../ui/InspectorToolRadialMenu';
+import type { CameraFeedbackController } from '../effects/camera/CameraFeedbackController';
+import { chargeRumble } from '../effects/camera/cameraFeedbackPresets';
+import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
@@ -103,6 +106,7 @@ export class InputSystem {
 
   // Audio
   private audioSystem: GameAudioSystem | null = null;
+  private cameraFeedback: CameraFeedbackController | null = null;
   private chargeLoopHandle: string | null = null;
 
   // Scope-Mechanik (für Waffen mit scopeConfig, z.B. AWP)
@@ -1010,7 +1014,7 @@ export class InputSystem {
     if (this.utilityHoldActive && this.utilityChargeStartedAt !== null) {
       const chargeCfg = this.getChargeableUtilityConfig();
       if (chargeCfg?.activation.type === 'charged_gate') {
-        this.scene.cameras.main.shake(50, 0.003);
+        this.cameraFeedback?.request(chargeRumble('utility', 0.003));
       }
     }
 
@@ -1070,7 +1074,7 @@ export class InputSystem {
       if (chargeFraction >= 1.0) {
         this.autoFireAndMaybeRechargeGauss(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
       } else if (this.keyQ.isDown) {
-        this.scene.cameras.main.shake(50, 0.0022);
+        this.cameraFeedback?.request(chargeRumble('ultimate', 0.0022));
       }
     }
 
@@ -1126,7 +1130,7 @@ export class InputSystem {
   }
 
   private getPointerWorldPoint(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
-    return this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    return getUnshakenPointerWorldPoint(this.scene, pointer);
   }
 
   /**
@@ -1387,6 +1391,10 @@ export class InputSystem {
 
   private notifyUltimatePressedWithoutRage(): void {
     this.onUltimatePressedWithoutRage?.();
+  }
+
+  setCameraFeedback(controller: CameraFeedbackController | null): void {
+    this.cameraFeedback = controller;
   }
 
   setAudioSystem(system: GameAudioSystem): void {

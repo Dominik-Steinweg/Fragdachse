@@ -398,6 +398,7 @@ function getBaseTurretTextureKey(weaponId: CoopBaseTurretWeaponId): string {
     case 'TURRET_MG':
       return 'construction_machine_gun_turret';
     case 'TURRET_FLAME':
+    case 'TURRET_VOID_FLAME':
       return 'construction_flame_turret';
     case 'SPOREN':
     case 'BASE_SPOREN':

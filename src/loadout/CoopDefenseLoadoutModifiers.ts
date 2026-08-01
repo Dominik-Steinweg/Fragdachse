@@ -2,7 +2,7 @@ import type { LoadoutSlot } from '../types';
 import { validateResolvedUltimate, validateResolvedUtility, validateResolvedWeapon } from './content/LoadoutSchemas';
 import { EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS } from './ExplicitLoadoutModifierDescriptors';
 import type { ResolvedLoadoutSelection } from './LoadoutRules';
-import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS, type UltimateConfig, type UtilityConfig, type WeaponConfig } from './LoadoutConfig';
+import { getUtilityConfigLineage, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS, type UltimateConfig, type UtilityConfig, type WeaponConfig } from './LoadoutConfig';
 
 export interface CoopDefenseEffectTotalsSource {
   additive: Readonly<Record<string, number>>;
@@ -916,7 +916,10 @@ function shouldApplyDescriptor(
 ): boolean {
   if (descriptor.kind !== kind) return false;
   if (descriptor.slot && descriptor.slot !== slot) return false;
-  if (descriptor.itemId && descriptor.itemId !== configId) return false;
+  if (descriptor.itemId) {
+    const lineage = kind === 'utility' ? getUtilityConfigLineage(configId) : [];
+    if (lineage.length > 0 ? !lineage.includes(descriptor.itemId) : descriptor.itemId !== configId) return false;
+  }
   return true;
 }
 

@@ -7,7 +7,9 @@ import { applyCoopDefenseModifiersToLoadoutSelection } from './CoopDefenseLoadou
 import { getSelectableLoadoutItems } from './LoadoutCatalog';
 import {
   DEFAULT_LOADOUT,
+  getUtilityConfigForMode,
   sanitizeUltimateForMode,
+  sanitizeWeaponForMode,
   ULTIMATE_CONFIGS,
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
@@ -61,10 +63,12 @@ export function sanitizeLoadoutSelectionForMode(
   selection: LoadoutSelection | undefined,
   mode: GameMode,
 ): ResolvedLoadoutSelection {
+  const utility = getUtilityConfigForMode(selection?.utility ?? DEFAULT_LOADOUT.utility, mode)
+    ?? DEFAULT_LOADOUT.utility;
   return {
-    weapon1: selection?.weapon1 ?? DEFAULT_LOADOUT.weapon1,
-    weapon2: selection?.weapon2 ?? DEFAULT_LOADOUT.weapon2,
-    utility: selection?.utility ?? DEFAULT_LOADOUT.utility,
+    weapon1: sanitizeWeaponForMode(selection?.weapon1, 'weapon1', mode),
+    weapon2: sanitizeWeaponForMode(selection?.weapon2, 'weapon2', mode),
+    utility,
     ultimate: sanitizeUltimateForMode(selection?.ultimate, mode),
   };
 }

@@ -46,6 +46,83 @@ interface SmokeEmitterConfig {
 }
 
 describe('projectile performance paths', () => {
+  it('damages each obstacle once per flame and uses kind-specific rock scaling', () => {
+    type ColliderCallback = (object1: unknown, object2: unknown) => void;
+    const rock = {} as Phaser.GameObjects.Image;
+    const callbacks: ColliderCallback[] = [];
+    const scene = {
+      physics: {
+        add: {
+          collider: vi.fn((_left: unknown, _right: unknown, callback?: ColliderCallback) => {
+            if (callback) callbacks.push(callback);
+            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
+          }),
+        },
+      },
+    } as unknown as Phaser.Scene;
+    const manager = new ProjectileManager(scene);
+    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
+
+    const body = { setBounce: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
+    const makeTracked = (multiplier: number): TrackedProjectile => ({
+      ownerId: 'flame-owner',
+      damage: 20,
+      rockDamageMult: multiplier,
+      body,
+      pendingDestroy: false,
+      hitObstacleIds: new Set<number>(),
+      colliders: [],
+    } as unknown as TrackedProjectile);
+
+    const rockHits: Array<{ id: number; damage: number; ownerId: string }> = [];
+    manager.setRockHitCallback((rockId, damage, ownerId) => rockHits.push({ id: rockId, damage, ownerId }));
+
+    const staticRockFlame = makeTracked(0);
+    manager.setObstacleKindResolver(() => undefined);
+    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: TrackedProjectile) => void })
+      .setupFlameColliders({}, body, staticRockFlame);
+    callbacks.shift()?.({}, rock);
+    callbacks.shift()?.({}, rock);
+    expect(rockHits).toEqual([]);
+    expect(body.setBounce).toHaveBeenCalledWith(0, 0);
+
+    const turretFlame = makeTracked(0);
+    manager.setObstacleKindResolver(() => 'turret');
+    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: TrackedProjectile) => void })
+      .setupFlameColliders({}, body, turretFlame);
+    callbacks.shift()?.({}, rock);
+    callbacks.shift()?.({}, rock);
+    expect(rockHits).toEqual([{ id: 0, damage: 20, ownerId: 'flame-owner' }]);
+
+    const secondFlame = makeTracked(0.25);
+    manager.setObstacleKindResolver(() => undefined);
+    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: TrackedProjectile) => void })
+      .setupFlameColliders({}, body, secondFlame);
+    callbacks.shift()?.({}, rock);
+    expect(rockHits).toHaveLength(2);
+    expect(rockHits[1]).toMatchObject({ id: 0, damage: 5 });
+  });
+
+  it('clears a flame obstacle-hit set during projectile cleanup', () => {
+    const scene = {
+      physics: { world: { off: vi.fn() } },
+    } as unknown as Phaser.Scene;
+    const manager = new ProjectileManager(scene);
+    const tracked = {
+      id: 1,
+      sprite: { x: 0, y: 0, displayWidth: 16, destroy: vi.fn() },
+      body: {},
+      boundsListener: vi.fn(),
+      colliders: [],
+      hitObstacleIds: new Set([4]),
+    } as unknown as TrackedProjectile;
+
+    (manager as unknown as { destroyTrackedProjectile: (projectile: TrackedProjectile) => void })
+      .destroyTrackedProjectile(tracked);
+
+    expect(tracked.hitObstacleIds).toEqual(new Set());
+  });
+
   it('reuses one reserved particle emitter for all rocket smoke puffs', () => {
     const emissions: Array<{ x: number; y: number; scale: number; tint: number; scaleAtHalfLife: number }> = [];
     let config: SmokeEmitterConfig | null = null;

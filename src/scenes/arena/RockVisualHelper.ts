@@ -14,6 +14,7 @@ import type { SyncedPlaceableRock } from '../../types';
 import { addInternalGlow, setInternalFxPadding } from '../../utils/phaserFx';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import { isCoopDefenseMode } from '../../gameModes';
+import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
@@ -132,7 +133,7 @@ export class RockVisualHelper {
         this.ctx.currentLayout.rocks,
         rock.id,
         rock.ownerColor,
-        (UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig).placeable.ownerTintStrength,
+        this.getPlaceableRockConfig(rock).placeable.ownerTintStrength,
         rock.hp,
         rock.maxHp,
       );
@@ -173,9 +174,17 @@ export class RockVisualHelper {
       }
       if (rock.ownerId === bridge.getLocalPlayerId()) {
         const shakeCfg = rock.kind === 'turret'
-          ? (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable
-          : (UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig).placeable;
-        this.scene.cameras.main.shake(shakeCfg.spawnShakeDuration, shakeCfg.spawnShakeIntensity);
+          ? this.getPlaceableTurretConfig(rock).placeable
+          : this.getPlaceableRockConfig(rock).placeable;
+        this.ctx.visualFeedback.camera.request({
+          channel: 'impact',
+          amplitudePx: legacyShakeAmplitudePx(shakeCfg.spawnShakeIntensity),
+          durationMs: shakeCfg.spawnShakeDuration,
+          priority: CAMERA_FEEDBACK_PRIORITY.lightImpact,
+          decay: 'impulse',
+          sourceX: world.x,
+          sourceY: world.y,
+        });
       }
     }
   }
@@ -226,7 +235,7 @@ export class RockVisualHelper {
       hp,
       runtimeRock?.maxHp ?? this.ctx.rockRegistry?.getMaxHP(rockId) ?? ROCK_HP_MAX,
       runtimeRock?.ownerColor,
-      runtimeRock ? (UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig).placeable.ownerTintStrength : 0,
+      runtimeRock ? this.getPlaceableRockConfig(runtimeRock).placeable.ownerTintStrength : 0,
     );
   }
 
@@ -365,7 +374,7 @@ export class RockVisualHelper {
     visual.rangeCircle.strokeCircle(
       world.x,
       world.y,
-      rock.targetRange ?? (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable.targetRange,
+      rock.targetRange ?? this.getPlaceableTurretConfig(rock).placeable.targetRange,
     );
     visual.rangeCircle.setVisible(!rock.constructionId);
 
@@ -421,7 +430,7 @@ export class RockVisualHelper {
 
   spawnTurretDeathCloud(rock: SyncedPlaceableRock): void {
     if (rock.kind !== 'turret' || rock.constructionId) return;
-    const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
+    const turretCfg = this.getPlaceableTurretConfig(rock);
     const weaponCfg = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
     if (weaponCfg.fire.type !== 'projectile' || !weaponCfg.fire.impactCloud) return;
 
@@ -443,6 +452,22 @@ export class RockVisualHelper {
 
   private getTurretTextureKey(rock: SyncedPlaceableRock): string {
     return rock.constructionId ? `construction_${rock.constructionId}` : 'placeable_turret';
+  }
+
+  private getPlaceableRockConfig(rock: SyncedPlaceableRock): PlaceableRockUtilityConfig {
+    const configured = rock.toolRef?.kind === 'utility'
+      ? UTILITY_CONFIGS[rock.toolRef.id]
+      : undefined;
+    if (configured?.type === 'placeable_rock') return configured;
+    return UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig;
+  }
+
+  private getPlaceableTurretConfig(rock: SyncedPlaceableRock): PlaceableTurretUtilityConfig {
+    const configured = rock.toolRef?.kind === 'utility'
+      ? UTILITY_CONFIGS[rock.toolRef.id]
+      : undefined;
+    if (configured?.type === 'placeable_turret') return configured;
+    return UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
   }
 
   gridToWorld(gridX: number, gridY: number): { x: number; y: number } {

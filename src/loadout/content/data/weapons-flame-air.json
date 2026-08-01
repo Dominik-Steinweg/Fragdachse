@@ -213,6 +213,75 @@
         "successKey": "shot_flame",
         "failureKey": "shot_dry_trigger"
       }
+    },
+    "TURRET_VOID_FLAME": {
+      "id": "TURRET_VOID_FLAME",
+      "displayName": "Leeren-Turmflamme",
+      "cooldown": 110,
+      "damage": 1.5,
+      "range": 230,
+      "fire": {
+        "type": "flamethrower",
+        "projectileSpeed": 380,
+        "hitboxStartSize": 14,
+        "hitboxEndSize": 104,
+        "hitboxGrowRate": 58,
+        "velocityDecay": 0.82,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.22,
+        "piercingCount": 0,
+        "kamikaze": {
+          "enabled": 0,
+          "inheritMolotovBonuses": 0
+        },
+        "burningGround": {
+          "cellSize": 0,
+          "durationMs": 0,
+          "igniteProjectiles": 0,
+          "createOnFlameExpiry": 0
+        },
+        "fireRing": {
+          "radius": 0,
+          "thickness": 0,
+          "igniteProjectiles": 0
+        },
+        "fireball": {
+          "enabled": 0,
+          "projectileSpeed": 450,
+          "projectileSize": 28,
+          "explosionRadius": 120,
+          "explosionMaxDamage": 90,
+          "explosionMinDamage": 20,
+          "explosionKnockback": 1250,
+          "selfDamageMult": 0,
+          "trailEnabled": 0,
+          "chunkCount": 0,
+          "chunkSearchRadius": 96,
+          "chunkFlightMs": 320,
+          "groundDurationMs": 2000,
+          "groundBurnDamagePerTick": 0.5
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "flame",
+      "projectileColor": "#b347ff",
+      "projectileBurnVisualStyle": "void",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_flame",
+        "failureKey": "shot_dry_trigger"
+      }
     }
   }
 }

@@ -6,6 +6,7 @@ import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
 import type { LoadoutToolRef } from '../types';
 import { getInspectorToolRadialSegmentIndex } from './InspectorToolRadialGeometry';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const INNER_RADIUS = 34;
 const OUTER_RADIUS = 112;
@@ -77,9 +78,12 @@ export class InspectorToolRadialMenu {
       : 0;
     if (this.currentIndex < 0) this.currentIndex = 0;
     this.hoveredIndex = -1;
+    // Wird bei jedem Öffnen neu aufgebaut – die Beförderung gehört deshalb hierher und nicht
+    // in eine einmalige Registrierung beim Start.
     this.container = this.scene.add.container(this.origin.x, this.origin.y)
       .setScrollFactor(0)
       .setDepth(DEPTH.LOCAL_UI + 20);
+    promoteToClarityCamera(this.scene, this.container);
     this.graphics = this.scene.add.graphics();
     this.container.add(this.graphics);
     this.render();

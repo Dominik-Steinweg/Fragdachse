@@ -3,6 +3,8 @@ import type { SyncedAirstrikeStrike } from '../types';
 import { DEPTH }                      from '../config';
 import { circleZone, makeAdditive }   from './EffectUtils';
 import type { EffectSystem }          from './EffectSystem';
+import type { CameraFeedbackController } from './camera/CameraFeedbackController';
+import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from './camera/cameraFeedbackPresets';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
 const TEX_AS_BOMB   = '__airstrike_bomb';
@@ -47,11 +49,16 @@ interface AirstrikeVisual {
 export class AirstrikeRenderer {
   private visuals     = new Map<number, AirstrikeVisual>();
   private effectSystem: EffectSystem | null = null;
+  private cameraFeedback: CameraFeedbackController | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   setEffectSystem(es: EffectSystem): void {
     this.effectSystem = es;
+  }
+
+  setCameraFeedback(controller: CameraFeedbackController | null): void {
+    this.cameraFeedback = controller;
   }
 
   generateTextures(): void {
@@ -176,9 +183,15 @@ export class AirstrikeRenderer {
     v.bombTrails.frequency = Math.max(20, 120 - progress * 100);
     v.sparks.frequency     = Math.max(15, 90 - progress * 70);
 
-    // Kamera-Shake kurz vor Einschlag
+    // Anschwellendes Rumpeln kurz vor dem Einschlag. Stabile `id` je Strike: die Anforderung
+    // läuft pro Frame und soll die Quelle aktualisieren, nicht stapeln oder neu starten.
     if (progress > 0.75) {
-      this.scene.cameras.main.shake(35, 0.001 + progress * 0.0015);
+      this.cameraFeedback?.request(sustainedRumble(
+        `airstrike:${strike.id}`,
+        legacyShakeAmplitudePx(0.001 + progress * 0.0015),
+        CAMERA_FEEDBACK_PRIORITY.telegraph,
+        { sourceX: x, sourceY: y },
+      ));
     }
 
     // Countdown-Text (1, 2, …)

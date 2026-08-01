@@ -1,6 +1,5 @@
 import { AUDIO_ASSETS } from '../../audio/AudioCatalog';
 import {
-  COOP_DEFENSE_BUILD_COOLDOWN_MS,
   COOP_DEFENSE_CONSTRUCTIONS,
 } from '../../config/coopDefenseConstructions';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../config/coopDefenseEnemies';
@@ -13,6 +12,8 @@ import {
 } from '../CoopDefenseLoadoutModifiers';
 import {
   DEFAULT_LOADOUT,
+  COOP_DEFENSE_UTILITY_VARIANTS,
+  getUtilityConfigLineage,
   LOADOUT_CATALOG_ENTRIES,
   ULTIMATE_CONFIGS,
   UTILITY_CONFIGS,
@@ -56,7 +57,10 @@ function matchingConfigs(descriptor: ConfigStatDescriptor): readonly unknown[] {
     return Object.values(WEAPON_CONFIGS).filter((config) => !descriptor.slot || config.allowedSlots.includes(descriptor.slot));
   }
   if (descriptor.kind === 'utility') {
-    if (descriptor.itemId) return UTILITY_CONFIGS[descriptor.itemId] ? [UTILITY_CONFIGS[descriptor.itemId]] : [];
+    if (descriptor.itemId) {
+      return Object.values(UTILITY_CONFIGS)
+        .filter((config) => getUtilityConfigLineage(config.id).includes(descriptor.itemId!));
+    }
     return Object.values(UTILITY_CONFIGS).filter((config) => !descriptor.slot || config.allowedSlots.includes(descriptor.slot));
   }
   if (descriptor.itemId) return ULTIMATE_CONFIGS[descriptor.itemId] ? [ULTIMATE_CONFIGS[descriptor.itemId]] : [];
@@ -184,14 +188,35 @@ export function validateGameContentReferences(): void {
   for (const config of Object.values(ULTIMATE_CONFIGS)) validateShotAudio(config, issues);
 
   const requiredWeapons = ['SPOREN', 'BASE_SPOREN', 'TURRET_SPORE'];
-  const requiredUtilities = ['HE_GRENADE', 'FLIEGENPILZ', 'FELSBAU', 'BFG', 'NUKE', 'HOLY_HAND_GRENADE'];
+  const requiredUtilities = [
+    'HE_GRENADE', 'FLIEGENPILZ', 'FLIEGENPILZ_COOP', 'FELSBAU', 'FELSBAU_COOP',
+    'BFG', 'NUKE', 'HOLY_HAND_GRENADE',
+  ];
   const requiredUltimates = ['ARMAGEDDON', 'HONEY_BADGER_RAGE', 'DACHS_TUNNEL', 'VOID_HUNTER_GAUSS'];
   for (const id of requiredWeapons) if (!WEAPON_CONFIGS[id]) issues.push(`system-fallback: fehlende Waffe ${id}`);
   for (const id of requiredUtilities) if (!UTILITY_CONFIGS[id]) issues.push(`system-fallback: fehlendes Utility ${id}`);
   for (const id of requiredUltimates) if (!ULTIMATE_CONFIGS[id]) issues.push(`system-fallback: fehlendes Ultimate ${id}`);
 
-  if (UTILITY_CONFIGS.FELSBAU?.cooldown !== COOP_DEFENSE_BUILD_COOLDOWN_MS) issues.push('utility:FELSBAU.cooldown: weicht vom Konstruktions-Cooldown ab');
-  if (UTILITY_CONFIGS.FLIEGENPILZ?.cooldown !== COOP_DEFENSE_BUILD_COOLDOWN_MS) issues.push('utility:FLIEGENPILZ.cooldown: weicht vom Konstruktions-Cooldown ab');
+  if (UTILITY_CONFIGS.FELSBAU?.cooldown !== 100) issues.push('utility:FELSBAU.cooldown: erwartet 100 ms aus der Normal-Konfiguration');
+  if (UTILITY_CONFIGS.FELSBAU?.type === 'placeable_rock' && UTILITY_CONFIGS.FELSBAU.placeable.lifetimeMs !== 60000) {
+    issues.push('utility:FELSBAU.placeable.lifetimeMs: erwartet 60000 ms aus der Normal-Konfiguration');
+  }
+  if (UTILITY_CONFIGS.FLIEGENPILZ?.cooldown !== 10000) issues.push('utility:FLIEGENPILZ.cooldown: erwartet 10000 ms aus der Normal-Konfiguration');
+  if (UTILITY_CONFIGS.FLIEGENPILZ?.type === 'placeable_turret' && UTILITY_CONFIGS.FLIEGENPILZ.placeable.lifetimeMs !== 10000) {
+    issues.push('utility:FLIEGENPILZ.placeable.lifetimeMs: erwartet 10000 ms aus der Normal-Konfiguration');
+  }
+  for (const [baseId, variantId] of Object.entries(COOP_DEFENSE_UTILITY_VARIANTS)) {
+    const base = UTILITY_CONFIGS[baseId];
+    const variant = UTILITY_CONFIGS[variantId];
+    if (!base || !variant || !getUtilityConfigLineage(variantId).includes(baseId)) {
+      issues.push(`utility:${variantId}: muss von ${baseId} erben`);
+      continue;
+    }
+    if (variant.cooldown !== 500) issues.push(`utility:${variantId}.cooldown: erwartet 500 ms`);
+    if ((variant.type === 'placeable_rock' || variant.type === 'placeable_turret') && variant.placeable.lifetimeMs !== 0) {
+      issues.push(`utility:${variantId}.placeable.lifetimeMs: erwartet 0 ms`);
+    }
+  }
 
   if (DEFAULT_LOADOUT.weapon1 !== WEAPON_CONFIGS[DEFAULT_LOADOUT.weapon1.id]
     || DEFAULT_LOADOUT.weapon2 !== WEAPON_CONFIGS[DEFAULT_LOADOUT.weapon2.id]
@@ -205,7 +230,13 @@ export function validateGameContentReferences(): void {
     for (const slot of config.allowedSlots) if (!catalogKeys.has(`${slot}:${config.id}`)) issues.push(`catalog:${config.id}: Eintrag für ${slot} fehlt`);
   }
   for (const config of Object.values(UTILITY_CONFIGS)) {
-    for (const slot of config.allowedSlots) if (!catalogKeys.has(`${slot}:${config.id}`)) issues.push(`catalog:${config.id}: Eintrag für ${slot} fehlt`);
+    const lineage = getUtilityConfigLineage(config.id);
+    const catalogBaseId = lineage[lineage.length - 1] ?? config.id;
+    for (const slot of config.allowedSlots) {
+      if (!catalogKeys.has(`${slot}:${config.id}`) && !catalogKeys.has(`${slot}:${catalogBaseId}`)) {
+        issues.push(`catalog:${config.id}: Eintrag für ${slot} fehlt`);
+      }
+    }
   }
   for (const config of Object.values(ULTIMATE_CONFIGS)) {
     if (config.catalogVisible !== false && !catalogKeys.has(`ultimate:${config.id}`)) {

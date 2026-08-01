@@ -13,9 +13,6 @@ const ALWAYS_UNLOCKED_MAP_IDS: ReadonlySet<string> = new Set(['0']);
 
 /** Freischaltstand eines neuen Spielers: alles bis einschliesslich Map 1. */
 export const INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID = '1';
-const LEGACY_HIGHEST_UNLOCKED_MAP_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  '16': '15',
-});
 
 const MAP_ORDER: readonly string[] = COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => mapConfig.mapId);
 
@@ -33,8 +30,7 @@ function indexOfMapId(mapId: string): number {
 export function sanitizeHighestUnlockedCoopDefenseMapId(mapId: unknown): string {
   if (typeof mapId !== 'string') return INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
   const trimmedMapId = mapId.trim();
-  const migratedMapId = LEGACY_HIGHEST_UNLOCKED_MAP_ALIASES[trimmedMapId] ?? trimmedMapId;
-  return indexOfMapId(migratedMapId) >= 0 ? migratedMapId : INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
+  return indexOfMapId(trimmedMapId) >= 0 ? trimmedMapId : INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
 }
 
 export function isCoopDefenseMapUnlocked(mapId: string, highestUnlockedMapId: string): boolean {

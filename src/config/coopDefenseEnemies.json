@@ -358,6 +358,52 @@
       }
     },
     {
+      "id": "timebomb-badger",
+      "maxHp": 60,
+      "xp": 10,
+      "size": 24,
+      "moveSpeed": 140,
+      "knockbackFactor": 1.9,
+      "movementTarget": "players-and-armed-constructs",
+      "weapons": [
+        { "weaponId": "ZOMBIE_BADGER_BITE", "targetMode": "rocks" }
+      ],
+      "attackScanIntervalMs": 120,
+      "attackStopDurationMs": 100,
+      "obstacleAttackDelayMs": 450,
+      "imageKey": "enemy_zombie_badger",
+      "color": 12072191,
+      "glow": {
+        "color": 12072191,
+        "sizeFactor": 1.55,
+        "alpha": 0.18,
+        "lightRadiusPx": 64,
+        "lightIntensity": 0.38
+      },
+      "timebomb": {
+        "chaseSpeedMultiplier": 2,
+        "activationRadiusPx": 450,
+        "lineOfSightDurationMs": 400,
+        "fuseDistancePx": 48,
+        "fuseDurationMs": 2000,
+        "explosionRadiusPx": 168,
+        "explosionDamage": 240,
+        "explosionKnockback": 520,
+        "fireChunks": {
+          "count": 7,
+          "searchRadius": 190,
+          "flightMs": 520,
+          "igniteCenter": false,
+          "durationMs": 2000,
+          "burnDurationMs": 2000,
+          "burnDamagePerTick": 1,
+          "weaponName": "Zeitbomben-Brand"
+        },
+        "killedPopRadiusPx": 42,
+        "killedPopDamage": 2
+      }
+    },
+    {
       "id": "void-hunter",
       "maxHp": 3000,
       "xp": 400,

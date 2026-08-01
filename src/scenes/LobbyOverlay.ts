@@ -28,9 +28,11 @@ import {
 } from '../ui/LivingBarEffect';
 import { attachHoverEffect } from '../ui/uiHover';
 import { UiTooltip } from '../ui/UiTooltip';
+import { UiContextMenu } from '../ui/UiContextMenu';
 import { isFullscreen, onFullscreenChange, toggleFullscreen } from '../ui/fullscreen';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { promoteToClarityCamera } from './arena/ClarityCameraRegistry';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 const ACCENT = COLORS.GOLD_1;
@@ -136,6 +138,7 @@ type PlayerRow = {
 
 export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
+  private playerContextMenu: UiContextMenu | null = null;
   private playerRows:     Map<string, PlayerRow> = new Map();
   private teamHeaders:     Record<TeamId, Phaser.GameObjects.Text> | null = null;
   private statusText!:    Phaser.GameObjects.Text;
@@ -214,6 +217,8 @@ export class LobbyOverlay {
     this.coopProgressSignature = null;
     this.coopItemsSignature = null;
     this.coopItemsHoverAttached = false;
+    this.playerContextMenu?.destroy();
+    this.playerContextMenu = null;
     if (this.container) {
       this.container.destroy(true);
       this.container = null;
@@ -542,6 +547,9 @@ export class LobbyOverlay {
 
     // ── Container mit korrektem Depth erstellen ───────────────────────────
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
+    promoteToClarityCamera(this.scene, this.container);
+    promoteToClarityCamera(this.scene, this.coopProgressContainer);
+    this.playerContextMenu = new UiContextMenu(this.scene, this.container);
     this.container.setVisible(this.visible);
     this.coopProgressContainer.setVisible(this.visible && false);
     this.updateRoomActionButtons();
@@ -555,6 +563,7 @@ export class LobbyOverlay {
 
   hide(): void {
     this.visible = false;
+    this.playerContextMenu?.close();
     this.container?.setVisible(false);
     this.coopProgressContainer?.setVisible(false);
     this.upgradeBtnEffect?.stop();
@@ -576,6 +585,8 @@ export class LobbyOverlay {
     const signature = JSON.stringify([
       mode,
       hostId,
+      this.bridge.getGamePhase(),
+      this.bridge.isHost(),
       connectedPlayers.map(profile => [
         profile.id,
         profile.name,
@@ -594,6 +605,7 @@ export class LobbyOverlay {
     // Reihen für abgemeldete Spieler entfernen
     for (const [id, row] of this.playerRows) {
       if (!currentIds.has(id)) {
+        this.playerContextMenu?.close();
         row.bg.destroy(); row.name.destroy(); row.badge.destroy(); row.label.destroy(); row.level.destroy(); row.ping.destroy();
         this.playerRows.delete(id);
       }
@@ -609,6 +621,7 @@ export class LobbyOverlay {
         row.name.setText(profile.name);
         row.name.setStyle({ color: `#${profile.colorHex.toString(16).padStart(6, '0')}` });
       }
+      this.setPlayerRowInteractive(profile.id, this.playerRows.get(profile.id)!.bg);
     }
 
     this.repositionRows(connectedPlayers);
@@ -815,6 +828,13 @@ export class LobbyOverlay {
 
   /** Button-Zustand nach isReady-Toggle anpassen. */
   setReadyButtonState(isReady: boolean): void {
+    if (this.connectionEnded) {
+      this.btnLocked = true;
+      this.readyBtn.disableInteractive().setAlpha(0.4);
+      this.readyBtnLabel.setText('BEENDET');
+      this.updateRoomActionButtons();
+      return;
+    }
     this.btnLocked = false;
     const readyTex = isReady
       ? ensureGlossyButtonTexture(this.scene, btnTexKey(READY_COLOR, READY_BTN_W, READY_BTN_H), READY_BTN_W, READY_BTN_H, READY_COLOR, COLORS.GREEN_2)
@@ -838,6 +858,7 @@ export class LobbyOverlay {
    * bis das Overlay neu gebaut wird (build()).
    */
   showHostDisconnectedMessage(message = 'Host hat das Spiel verlassen.'): void {
+    this.playerContextMenu?.close();
     this.connectionEnded = true;
     this.statusText
       .setText(message)
@@ -919,8 +940,81 @@ export class LobbyOverlay {
       fontSize: '14px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
     }).setOrigin(1, 0.5).setScrollFactor(0);
 
+    bg.on('pointerup', (
+      pointer: Phaser.Input.Pointer,
+      _localX: number,
+      _localY: number,
+      event: Phaser.Types.Input.EventData,
+    ) => {
+      event?.stopPropagation();
+      const currentProfile = this.bridge.getPlayerProfile(profile.id) ?? profile;
+      if (this.canKickPlayer(currentProfile.id)) {
+        this.openPlayerActionMenu(currentProfile, pointer.x, pointer.y);
+      }
+    });
+
     this.container!.add([bg, name, badge, label, level, ping]);
     this.playerRows.set(profile.id, { bg, name, badge, label, level, ping });
+    this.setPlayerRowInteractive(profile.id, bg);
+  }
+
+  private canKickPlayer(playerId: string): boolean {
+    return this.bridge.isHost()
+      && this.bridge.getGamePhase() === 'LOBBY'
+      && playerId !== this.bridge.getLocalPlayerId()
+      && playerId !== this.bridge.getHostPlayerId();
+  }
+
+  private setPlayerRowInteractive(playerId: string, bg: Phaser.GameObjects.Image): void {
+    if (this.canKickPlayer(playerId)) bg.setInteractive({ useHandCursor: true });
+    else bg.disableInteractive();
+  }
+
+  private openPlayerActionMenu(profile: PlayerProfile, x: number, y: number): void {
+    if (!this.playerContextMenu || !this.canKickPlayer(profile.id)) return;
+    this.playerContextMenu.open({
+      x,
+      y,
+      title: profile.name,
+      titleColor: ACCENT,
+      entries: [{
+        label: 'Spieler kicken',
+        color: COLORS.RED_2,
+        onPick: () => this.openKickConfirmation(profile, x, y),
+      }],
+    });
+  }
+
+  private openKickConfirmation(profile: PlayerProfile, x: number, y: number): void {
+    if (!this.playerContextMenu || !this.canKickPlayer(profile.id)) return;
+    const currentName = this.bridge.getPlayerName(profile.id);
+    this.playerContextMenu.open({
+      x,
+      y,
+      title: 'Spieler kicken?',
+      titleColor: COLORS.RED_1,
+      entries: [
+        {
+          label: `JA: ${currentName}`,
+          color: COLORS.RED_2,
+          onPick: () => { void this.confirmKick(profile.id); },
+        },
+        {
+          label: 'ABBRECHEN',
+          color: COLORS.GREY_2,
+          onPick: () => undefined,
+        },
+      ],
+    });
+  }
+
+  private async confirmKick(playerId: string): Promise<void> {
+    if (!this.canKickPlayer(playerId)) return;
+    const result = await this.bridge.kickPlayer(playerId);
+    if (!result.ok && this.visible && this.statusText.scene) {
+      this.statusText.setText('Spieler konnte nicht gekickt werden.')
+        .setStyle({ color: toCssColor(COLORS.RED_2) });
+    }
   }
 
   private repositionRows(connectedPlayers: PlayerProfile[]): void {

@@ -28,6 +28,7 @@ import {
   getCoopDefenseTutorialPanelHeight,
 } from '../config/coopDefenseTutorial';
 import { HELP_CONTROLS } from '../config/helpControls';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const CENTER_X       = GAME_WIDTH / 2;
 const PANEL_WIDTH    = 200;
@@ -222,6 +223,7 @@ export class CenterHUD {
     this.container = this.scene.add.container(0, 0);
     this.container.setDepth(DEPTH.OVERLAY - 1);
     this.container.setVisible(false);
+    promoteToClarityCamera(this.scene, this.container);
 
     ensureLivingBarTextures(this.scene);
     ensureBarBgTexture(this.scene, TRAIN_BAR_BG_TEX, TRAIN_BAR_W, TRAIN_BAR_H);
@@ -348,6 +350,10 @@ export class CenterHUD {
       TRAIN_PAL,
       { glowTarget: this.trainBarFgImg, scrollFactor: 0, intensity: TRAIN_BAR_ALPHA },
     );
+    // The effect starts with a full emit zone by default, while the train widget
+    // itself is hidden until a round actually provides a train.
+    this.trainBarEffect.setFilledWidth(0);
+    this.trainBarEffect.stop();
 
     this.trainBarBorder = this.scene.add.rectangle(TRAIN_BAR_LEFT, TRAIN_BAR_TOP, TRAIN_BAR_W, TRAIN_BAR_H)
       .setOrigin(0, 0).setScrollFactor(0)
@@ -620,13 +626,11 @@ export class CenterHUD {
   }
 
   hideTrainWidget(): void {
-    if (this.lastTrainMode !== 'hidden') {
-      this.trainPanelBg.setVisible(false);
-      this.trainText.setVisible(false);
-      this.hideTrainBar();
-      this.lastTrainMode = 'hidden';
-      this.lastTrainBarWidth = -1;
-    }
+    this.trainPanelBg.setVisible(false);
+    this.trainText.setVisible(false);
+    this.hideTrainBar();
+    this.lastTrainMode = 'hidden';
+    this.lastTrainBarWidth = -1;
     this.lastTrainText = null;
   }
 

@@ -19,6 +19,9 @@
       "allowedSlots": [
         "weapon2"
       ],
+      "allowedModes": [
+        "coop_defense"
+      ],
       "adrenalinCost": 50,
       "adrenalinGain": 0,
       "spreadStanding": 0,
@@ -52,6 +55,9 @@
       },
       "allowedSlots": [
         "weapon2"
+      ],
+      "allowedModes": [
+        "coop_defense"
       ],
       "adrenalinCost": 10,
       "adrenalinGain": 0,
@@ -103,6 +109,9 @@
       },
       "allowedSlots": [
         "weapon2"
+      ],
+      "allowedModes": [
+        "coop_defense"
       ],
       "adrenalinCost": 5,
       "adrenalinGain": 0,

@@ -219,6 +219,11 @@ export function validateResolvedWeapon(value: unknown): string[] {
   if (!Array.isArray(value.allowedSlots) || value.allowedSlots.some((slot) => slot !== 'weapon1' && slot !== 'weapon2')) {
     issues.push('$.allowedSlots: ungültiger Slot');
   }
+  if (value.allowedModes !== undefined && (
+    !Array.isArray(value.allowedModes) || value.allowedModes.some((mode) => !GAME_MODES.has(mode as GameMode))
+  )) {
+    issues.push('$.allowedModes: ungültiger Spielmodus');
+  }
   if (!isRecord(value.fire) || typeof value.fire.type !== 'string' || !(value.fire.type in FIRE_REQUIRED)) {
     issues.push('$.fire.type: unbekannter Weapon-Fire-Typ');
   } else {

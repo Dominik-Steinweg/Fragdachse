@@ -19,6 +19,7 @@ import {
   rgbStr,
   type LivingBarPalette,
 } from './LivingBarEffect';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import {
   COOP_DEFENSE_PENDING_UPGRADE_ICONS,
@@ -494,6 +495,7 @@ export class CoopDefenseUpgradesOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
+    promoteToClarityCamera(this.scene, this.container);
     this.picker = new LoadoutSlotPicker(this.scene, this.container, DEPTH.OVERLAY + 2);
 
     // Living breathing effect for the XP bar (particles confined to the fill region + glow).

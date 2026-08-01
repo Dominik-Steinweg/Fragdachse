@@ -4,6 +4,8 @@ import { DEPTH, DEPTH_FX, VOID_PALETTE } from '../config';
 import { circleZone, makeAdditive } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import type { CameraFeedbackController } from './camera/CameraFeedbackController';
+import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from './camera/cameraFeedbackPresets';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
 const TEX_METEOR_CORE  = '__meteor_core';
@@ -54,9 +56,14 @@ export class MeteorRenderer {
   /** IDs die beim letzten sync() aktiv waren – zum Erkennen des Einschlags */
   private previousIds = new Set<number>();
   private audioSystem: GameAudioSystem | null = null;
+  private cameraFeedback: CameraFeedbackController | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  setCameraFeedback(controller: CameraFeedbackController | null): void {
+    this.cameraFeedback = controller;
   }
 
   setAudioSystem(system: GameAudioSystem): void {
@@ -382,8 +389,17 @@ export class MeteorRenderer {
       onComplete: () => scorch.destroy(),
     });
 
-    // 7. Kamera-Shake (dezent, da viele Einschläge)
-    this.scene.cameras.main.shake(80, Math.min(0.006, 0.002 * impactParticleFactor));
+    // 7. Kamera-Einschlag (dezent, da viele Einschläge). Die Distanzdämpfung über die
+    // Einschlagsposition sorgt dafür, dass ein Hagel am anderen Arenaende nicht mitwirkt.
+    this.cameraFeedback?.request({
+      channel: 'impact',
+      amplitudePx: legacyShakeAmplitudePx(Math.min(0.006, 0.002 * impactParticleFactor)),
+      durationMs: 260,
+      priority: CAMERA_FEEDBACK_PRIORITY.mediumImpact,
+      decay: 'impulse',
+      sourceX: x,
+      sourceY: y,
+    });
   }
 
   // ── Cleanup ───────────────────────────────────────────────────────────────

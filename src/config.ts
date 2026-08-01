@@ -351,6 +351,29 @@ export const DAMAGE_VIGNETTE_VFX = {
   frameAlphaRatio: 0.2,
 } as const;
 
+/**
+ * Trefferreaktion am Ziel: kurzlebige additive Kopie der **eigenen** Textur des Getroffenen
+ * plus ein rein visueller Positionsimpuls. Die Schadensbänder werden aus
+ * {@link BLOOD_HIT_VFX} abgeleitet, damit Blut und Blitz dieselbe Schwelle benutzen.
+ *
+ * `maxRearmLifetimeMs` deckelt das Nachtriggern: Schaden über Zeit und Schnellfeuerwaffen
+ * liefern viele winzige Trefferereignisse. Ohne Deckel bliebe die Silhouette dauerhaft
+ * erleuchtet statt zu pulsieren.
+ */
+export const HIT_FEEDBACK_VFX = {
+  refractoryMs: 45,
+  maxRearmLifetimeMs: 320,
+  maxJoltPx: 5,
+  /** Der eigene Dachs zuckt bewusst schwächer – sonst löst er sich beim Zielen vom Fadenkreuz. */
+  localPlayerJoltFactor: 0.4,
+  bands: {
+    light:  { alpha: 0.35, durationMs:  70, scaleBoost: 1.00, whiteMix: 0.55, joltPx: 0.9, joltMs:  90, cameraKickPx: 0 },
+    medium: { alpha: 0.55, durationMs:  95, scaleBoost: 1.05, whiteMix: 0.70, joltPx: 1.8, joltMs: 110, cameraKickPx: 0 },
+    heavy:  { alpha: 0.78, durationMs: 125, scaleBoost: 1.10, whiteMix: 0.85, joltPx: 3.0, joltMs: 130, cameraKickPx: 4 },
+    lethal: { alpha: 0.95, durationMs: 150, scaleBoost: 1.14, whiteMix: 1.00, joltPx: 4.4, joltMs: 150, cameraKickPx: 7 },
+  },
+} as const;
+
 // ---- HP-Balken ----
 export const HP_BAR_WIDTH    = PLAYER_SIZE;     // gleiche Breite wie Spieler
 export const HP_BAR_HEIGHT   = 5;
@@ -815,6 +838,14 @@ export const PEER_HANDSHAKE_TIMEOUT_MS = 5_000;
 export const PEER_RESUME_GRACE_MS = 10_000;
 /** Obergrenze des Backoffs zwischen Resume-Versuchen. */
 export const PEER_RECONNECT_MAX_DELAY_MS = 2_000;
+/** Abstand zwischen zwei kleinen Liveness-Proben auf dem zuverlässigen Link. */
+export const PEER_HEARTBEAT_INTERVAL_MS = 2_000;
+/** Nach dieser Zeit ohne Heartbeat-Antwort gilt ein ansonsten stille Link als abgebrochen. */
+export const PEER_HEARTBEAT_TIMEOUT_MS = 7_000;
+/** Kurze Toleranz für den nativen Zustand `disconnected`, bevor der Link geschlossen wird. */
+export const PEER_DISCONNECTED_GRACE_MS = 3_000;
+/** Kurze Sendepause vor dem Schließen nach einem bewussten Client-Leave, damit `leave` abfließen kann. */
+export const PEER_LEAVE_FLUSH_DELAY_MS = 100;
 /**
  * Feste SCTP-Stream-ID des unzuverlaessigen Kanals. Der Kanal wird mit `negotiated: true`
  * erzeugt: beide Seiten legen ihn lokal an, es feuert kein 'datachannel'-Event. Das ist

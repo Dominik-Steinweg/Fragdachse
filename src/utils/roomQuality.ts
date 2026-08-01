@@ -9,6 +9,7 @@
  * auf „Host nicht gefunden". Der Einladungslink wird stattdessen aus dem Raumcode gebaut.
  */
 import { createPeerNetworkError, isValidRoomCode } from '../network/peer/PeerSignaling';
+import { leaveActiveSession } from '../network/peer/session';
 
 const ROOM_HASH_PREFIX = '#r=';
 
@@ -58,6 +59,11 @@ export async function copyRoomShareUrl(roomCode: string): Promise<boolean> {
   }
 }
 
+/** Bewusstes Verlassen des aktuellen Raums, unabhängig von der folgenden Navigation. */
+export function leaveCurrentRoom(): void {
+  leaveActiveSession();
+}
+
 /**
  * Lädt die Seite ohne Raumcode neu, sodass ein frischer Raum entsteht.
  *
@@ -66,6 +72,7 @@ export async function copyRoomShareUrl(roomCode: string): Promise<boolean> {
  * stehen. Deshalb erst die Adresszeile über die History bereinigen und dann neu laden.
  */
 export function restartWithNewRoom(): void {
+  leaveCurrentRoom();
   const target = new URL(window.location.href);
   target.hash = '';
   window.history.replaceState(null, '', target.toString());
@@ -74,5 +81,6 @@ export function restartWithNewRoom(): void {
 
 /** Laedt denselben Einladungslink neu; der Host kann den gespeicherten Slot wieder zuordnen. */
 export function rejoinCurrentRoom(): void {
+  leaveCurrentRoom();
   window.location.reload();
 }

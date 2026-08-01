@@ -128,6 +128,22 @@ function createSystem(
 }
 
 describe('Enemy stuck in a rock', () => {
+  it('blocks regular attacks without overwriting an earlier special-movement decision', () => {
+    const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false });
+    const stopMovement = vi.fn();
+    enemy.stopMovement = stopMovement;
+    const { system, firedWeaponIds } = createSystem(
+      enemy,
+      { x: 128, y: 100, active: true },
+    );
+    system.setActionBlockedChecker(() => true);
+
+    system.hostUpdate(16, 1_000);
+
+    expect(stopMovement).not.toHaveBeenCalled();
+    expect(firedWeaponIds).toEqual([]);
+  });
+
   it('bites the rock once it has been unable to move for the obstacle delay', () => {
     // Genau die Klemme aus dem Bug: die Wegfindung findet keine Route (Mittelpunkt in einer
     // Felszelle), deshalb wird die Wunschgeschwindigkeit auf 0 gesetzt – der Gegner steht still.

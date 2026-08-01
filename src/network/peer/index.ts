@@ -63,6 +63,7 @@ export {
   clearActiveSession,
   getActiveSession,
   hasActiveSession,
+  leaveActiveSession,
   requireRoom,
   type PeerSession,
 } from './session';

@@ -256,7 +256,7 @@ export class CombatSystem {
   // Callback: (killerId, victimId, weaponName) – Host-only
   private onKillCb: ((killerId: string, victimId: string, weapon: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
-  private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => void) | null = null;
+  private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:     BurrowSystemType    | null  = null;
@@ -470,7 +470,7 @@ export class CombatSystem {
     this.onDeathCb = cb;
   }
 
-  setEnemyDeathCallback(cb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => void) | null): void {
+  setEnemyDeathCallback(cb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null): void {
     this.onEnemyDeathCb = cb;
   }
 
@@ -3175,16 +3175,24 @@ export class CombatSystem {
 
     if (result.died) {
       this.enemySlowStates.delete(targetId);
-      this.onEnemyDeathCb?.(targetId, x, y, this.getActiveBurnSources(targetId), result.death);
-      this.bridge.broadcastEffect({
-        type: 'death',
+      const suppressStandardDeathEffect = this.onEnemyDeathCb?.(
+        targetId,
         x,
         y,
-        targetId,
-        targetColor: COLORS.RED_2,
-        rotation: 0,
-        seed: this.nextEffectSeed(),
-      });
+        this.getActiveBurnSources(targetId),
+        result.death,
+      ) === true;
+      if (!suppressStandardDeathEffect) {
+        this.bridge.broadcastEffect({
+          type: 'death',
+          x,
+          y,
+          targetId,
+          targetColor: COLORS.RED_2,
+          rotation: 0,
+          seed: this.nextEffectSeed(),
+        });
+      }
 
       const killerId = this.lastAttacker.get(targetId);
       if (killerId && killerId !== targetId) {

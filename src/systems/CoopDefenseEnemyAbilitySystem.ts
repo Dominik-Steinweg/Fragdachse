@@ -507,10 +507,10 @@ export class CoopDefenseEnemyAbilitySystem {
     state: EnemyTeleportState,
   ): void {
     const color = getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
-    bridge.broadcastTranslocatorFlash(enemy.sprite.x, enemy.sprite.y, color, 'start');
+    bridge.broadcastTranslocatorFlash(enemy.sprite.x, enemy.sprite.y, color, 'start', enemy.id);
     this.projectileManager.destroyProjectile(puckId);
     enemy.setPosition(targetX, targetY);
-    bridge.broadcastTranslocatorFlash(targetX, targetY, color, 'end');
+    bridge.broadcastTranslocatorFlash(targetX, targetY, color, 'end', enemy.id);
 
     const telefragRadius = enemy.getCollisionRadius() + PLAYER_SIZE * 0.5;
     if (enemy.faction === 'allied') {

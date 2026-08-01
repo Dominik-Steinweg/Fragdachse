@@ -49,17 +49,23 @@ describe('construction capacity costs', () => {
     expect(getPlaceableCapacityCost({ kind: 'tunnel' })).toBe(0);
   });
 
-  it('uses one uniform build cooldown so capacity stays the limiting factor', () => {
+  it('keeps construction cooldown separate from normal and Coop utility cooldowns', () => {
     expect(COOP_DEFENSE_BUILD_COOLDOWN_MS).toBe(500);
     expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).cooldown)
-      .toBe(COOP_DEFENSE_BUILD_COOLDOWN_MS);
+      .toBe(100);
     expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).cooldown)
+      .toBe(10000);
+    expect((UTILITY_CONFIGS.FELSBAU_COOP as PlaceableUtilityConfig).cooldown)
+      .toBe(COOP_DEFENSE_BUILD_COOLDOWN_MS);
+    expect((UTILITY_CONFIGS.FLIEGENPILZ_COOP as PlaceableUtilityConfig).cooldown)
       .toBe(COOP_DEFENSE_BUILD_COOLDOWN_MS);
   });
 
-  it('keeps walls and mushrooms permanent instead of expiring', () => {
-    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
-    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
+  it('uses historical normal lifetimes and permanent Coop lifetimes', () => {
+    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(60000);
+    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(10000);
+    expect((UTILITY_CONFIGS.FELSBAU_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
+    expect((UTILITY_CONFIGS.FLIEGENPILZ_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
   });
 
   it('no longer charges adrenaline for any utility', () => {

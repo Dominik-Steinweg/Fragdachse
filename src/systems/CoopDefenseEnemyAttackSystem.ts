@@ -6,6 +6,8 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { CombatSystem } from './CombatSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from './CoopDefenseEnemyTrainAwarenessSystem';
+import type { PlacementSystem } from './PlacementSystem';
+import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { COLORS, PLAYER_SIZE } from '../config';
 
 type EnemyAttackTargetKind = 'base' | 'player' | 'ally' | 'train' | 'obstacle';
@@ -80,6 +82,7 @@ export class CoopDefenseEnemyAttackSystem {
     private readonly loadoutManager: LoadoutManager,
     private readonly getRockObjects: () => readonly (Phaser.GameObjects.Image | null)[] | null,
     private readonly trainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null = null,
+    private readonly placementSystem: PlacementSystem | null = null,
   ) {}
 
   setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
@@ -103,7 +106,11 @@ export class CoopDefenseEnemyAttackSystem {
         this.sustainedAttacks.delete(enemy.id);
         this.playerTargetLocks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
-        enemy.stopMovement();
+        this.obstacleContacts.delete(enemy.id);
+        this.resetMovementProgress(enemy);
+        // Die Sperre gehoert ausschliesslich dem Angriffssystem. Exklusive Spezialbewegungen
+        // (etwa die Jagd des Zeitbombendachses) wurden bereits vom EnemyManager gesetzt und
+        // duerfen hier im spaeteren Host-Update nicht wieder auf null geschrieben werden.
         continue;
       }
 
@@ -366,6 +373,9 @@ export class CoopDefenseEnemyAttackSystem {
   private selectTarget(enemy: EnemyEntity, range: number, now: number): EnemyAttackCandidate | null {
     let best = this.findNearestBaseTarget(enemy, range);
 
+    const armedConstruct = this.findNearestArmedConstructTarget(enemy, range);
+    if (this.isBetterCandidate(armedConstruct, best)) best = armedConstruct;
+
     const obstacle = this.findNearestObstacleTarget(enemy, range, now);
     if (this.isBetterCandidate(obstacle, best)) {
       best = obstacle;
@@ -388,10 +398,15 @@ export class CoopDefenseEnemyAttackSystem {
 
   private findNearestBaseTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
     let best: EnemyAttackCandidate | null = null;
+    const strategicTarget = getCoopDefenseEnemyConfig(enemy.kind).movementTarget;
 
     // Gegnerbasen sind fuer Zombies kein Ziel; sie gehoeren derselben Fraktion.
     for (const base of this.baseManager.getBasesByFaction('friendly')) {
       if (base.getHp() <= 0) continue;
+      if (
+        strategicTarget === 'players-and-armed-constructs'
+        && (base.role !== 'outpost' || base.getTurrets().length === 0)
+      ) continue;
 
       const surface = base.getNearestSurfacePoint(enemy.sprite.x, enemy.sprite.y);
       if (!surface) continue;
@@ -401,12 +416,48 @@ export class CoopDefenseEnemyAttackSystem {
       if (distance > range) continue;
       if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, targetX, targetY)) continue;
 
-      const candidate: EnemyAttackCandidate = { kind: 'base', priority: 1, distance, targetX, targetY };
+      const candidate: EnemyAttackCandidate = {
+        kind: 'base',
+        priority: strategicTarget === 'players-and-armed-constructs' ? 2 : 1,
+        distance,
+        targetX,
+        targetY,
+      };
       if (this.isBetterCandidate(candidate, best)) {
         best = candidate;
       }
     }
 
+    return best;
+  }
+
+  private findNearestArmedConstructTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
+    if (getCoopDefenseEnemyConfig(enemy.kind).movementTarget !== 'players-and-armed-constructs') return null;
+    const rockObjects = this.getRockObjects() ?? [];
+    let best: EnemyAttackCandidate | null = null;
+    for (const construction of this.placementSystem?.getAllRuntimeRocks() ?? []) {
+      if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+      const obstacle = rockObjects[construction.id];
+      if (!obstacle?.active) continue;
+      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
+      if (distance > range) continue;
+      if (!this.combatSystem.hasLineOfSight(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        obstacle.x,
+        obstacle.y,
+        construction.id,
+      )) continue;
+      const candidate: EnemyAttackCandidate = {
+        kind: 'obstacle',
+        priority: 2,
+        distance,
+        targetX: obstacle.x,
+        targetY: obstacle.y,
+        obstacle,
+      };
+      if (this.isBetterCandidate(candidate, best)) best = candidate;
+    }
     return best;
   }
 

@@ -10,7 +10,7 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-export const PEER_PROTOCOL_VERSION = 2;
+export const PEER_PROTOCOL_VERSION = 3;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';
@@ -69,6 +69,26 @@ export interface QuitMessage {
   id: string;
 }
 
+/** Host → der gekickte Client: zuverlässige Einzelmeldung vor dem Link-Abbruch. */
+export interface KickedMessage {
+  t: 'kicked';
+}
+
+/** Client → Host: Der Client verlässt den Raum bewusst. Die Spieler-ID steht absichtlich nicht im Drahtformat. */
+export interface LeaveMessage {
+  t: 'leave';
+}
+
+/** Direkter Link-Liveness-Probe, wird nicht an andere Teilnehmer weitergereicht. */
+export interface HeartbeatMessage {
+  t: 'hb';
+}
+
+/** Antwort auf eine Link-Liveness-Probe. */
+export interface HeartbeatAckMessage {
+  t: 'hba';
+}
+
 /**
  * Gebündelte Store-Schreibvorgänge.
  * `g` = globale Keys als [key, value], `p` = Per-Spieler-Keys als [playerId, key, value].
@@ -109,6 +129,10 @@ export type PeerMessage =
   | WelcomeMessage
   | JoinMessage
   | QuitMessage
+  | KickedMessage
+  | LeaveMessage
+  | HeartbeatMessage
+  | HeartbeatAckMessage
   | BatchMessage
   | RpcMessage
   | RpcResultMessage;
@@ -211,6 +235,14 @@ export function parsePeerMessage(raw: unknown): PeerMessage | null {
       if (typeof value.id !== 'string' || value.id.length === 0) return null;
       return { t: 'quit', id: value.id };
     }
+    case 'kicked':
+      return { t: 'kicked' };
+    case 'leave':
+      return { t: 'leave' };
+    case 'hb':
+      return { t: 'hb' };
+    case 'hba':
+      return { t: 'hba' };
     case 'b': {
       const message: BatchMessage = { t: 'b' };
       if (value.q !== undefined) {

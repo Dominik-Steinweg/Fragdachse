@@ -18,6 +18,7 @@ import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { RockGridIndex } from './RockGridIndex';
 import { resolveArenaBackgroundSpec } from './ArenaBackground';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 export interface ArenaBuilderResult {
   /** CTB-Basis-Tintflächen (round-scoped). Coop-Defense-Basen leben in BaseManager. */
@@ -605,6 +606,9 @@ export class ArenaBuilder {
         .rectangle(ARENA_OFFSET_X * 0.5, GAME_HEIGHT * 0.5, ARENA_OFFSET_X, GAME_HEIGHT, COLORS.GREY_10)
         .setScrollFactor(0)
         .setDepth(DEPTH.LOCAL_UI - 1);
+      // Undurchsichtige Rahmen sind Bildschirmchrome, keine Welt: ein Color-Grading würde sie
+      // mit der Tageszeit umfärben, was für einen statischen Rahmen falsch aussieht.
+      promoteToClarityCamera(this.scene, this.leftSidebar);
     }
 
     if (!this.rightSidebar) {
@@ -618,6 +622,7 @@ export class ArenaBuilder {
         )
         .setScrollFactor(0)
         .setDepth(DEPTH.LOCAL_UI - 1);
+      promoteToClarityCamera(this.scene, this.rightSidebar);
     }
   }
 

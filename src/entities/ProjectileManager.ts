@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
-import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact } from '../types';
 import { ProjectileHomingController } from './ProjectileHomingController';
 import type { HomingTargetProvider } from './ProjectileHomingController';
 import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
@@ -154,6 +154,7 @@ export class ProjectileManager {
    */
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
+  private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
   private onBaseHit:   ((baseId: string, damage: number, attackerId: string) => void) | null = null;
   private onSupportImpact: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null = null;
 
@@ -229,6 +230,11 @@ export class ProjectileManager {
    */
   setRockHitCallback(cb: (rockId: number, damage: number, attackerId: string) => void): void {
     this.onRockHit = cb;
+  }
+
+  /** Resolves dynamic obstacle kinds without coupling projectile logic to loadout IDs. */
+  setObstacleKindResolver(resolver: ((rockId: number) => PlaceableKind | undefined) | null): void {
+    this.obstacleKindResolver = resolver;
   }
 
   /**
@@ -684,6 +690,7 @@ export class ProjectileManager {
       burnDamagePerTick: cfg.burnDamagePerTick,
       projectileBurnVisualStyle: cfg.projectileBurnVisualStyle,
       flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
+      hitObstacleIds: cfg.isFlame ? new Set<number>() : undefined,
       canReceiveFireImbue: cfg.canReceiveFireImbue,
       supplementalBurnOnHit: cfg.supplementalBurnOnHit,
       fireTrail: cfg.fireTrail,
@@ -1008,8 +1015,25 @@ export class ProjectileManager {
     body.setBounce(0, 0);
 
     if (this.rockGroup) {
-      // collider statt overlap: Phaser stoppt den Body physisch am Felsen
-      const c = this.scene.physics.add.collider(sprite, this.rockGroup);
+      // collider statt overlap: Phaser stoppt den Body physisch am Felsen. Der
+      // Callback meldet den Treffer nur einmal pro Flamme; Lebensdauer und
+      // Zerstörung der Flamme bleiben vom Hindernis unabhängig.
+      const rockObjects = this.rockObjects;
+      const onHit = this.onRockHit;
+      const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+        if (tracked.pendingDestroy) return;
+        const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
+        if (idx < 0) return;
+        tracked.hitObstacleIds ??= new Set<number>();
+        if (tracked.hitObstacleIds.has(idx)) return;
+        tracked.hitObstacleIds.add(idx);
+
+        const obstacleKind = this.obstacleKindResolver?.(idx);
+        const damage = obstacleKind === 'turret'
+          ? tracked.damage
+          : tracked.damage * (tracked.rockDamageMult ?? 1);
+        if (damage !== 0) onHit?.(idx, damage, tracked.ownerId);
+      });
       tracked.colliders.push(c);
     }
     if (this.trunkGroup) {
@@ -1710,6 +1734,7 @@ export class ProjectileManager {
   private destroyTrackedProjectile(proj: TrackedProjectile): void {
     this.removeActiveProjectile(proj);
     this.projectilesById.delete(proj.id);
+    proj.hitObstacleIds?.clear();
     this.projectileResolvedCallback?.(proj);
     const destroyX = proj.pendingHydraSplit?.x ?? proj.sprite.x;
     const destroyY = proj.pendingHydraSplit?.y ?? proj.sprite.y;

@@ -5,6 +5,8 @@ import { DEPTH, COLORS, VOID_PALETTE } from '../config';
 import { NUKE_CONFIG } from './PowerUpConfig';
 import type { EffectSystem } from '../effects/EffectSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import type { CameraFeedbackController } from '../effects/camera/CameraFeedbackController';
+import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from '../effects/camera/cameraFeedbackPresets';
 
 const TEX_NUKE_ICON = 'powerup_nuk';
 const TEX_NUKE_WARN = '__nuke_warning_particle';
@@ -26,8 +28,13 @@ export class NukeRenderer {
   private visuals = new Map<number, NukeVisual>();
   private effectSystem: EffectSystem | null = null;
   private audioSystem: GameAudioSystem | null = null;
+  private cameraFeedback: CameraFeedbackController | null = null;
 
   constructor(private scene: Phaser.Scene) {}
+
+  setCameraFeedback(controller: CameraFeedbackController | null): void {
+    this.cameraFeedback = controller;
+  }
 
   /** EffectSystem injizieren für gemeinsame Countdown-Text-Logik. */
   setEffectSystem(effectSystem: EffectSystem): void {
@@ -127,8 +134,16 @@ export class NukeRenderer {
       visual.targetRing.setAlpha(0.45 + progress * 0.4);
       visual.sparks.frequency = Math.max(28, 110 - progress * 80);
 
+      // Anschwellendes Rumpeln in der letzten Countdownphase. Über die stabile `id` wird die
+      // Quelle pro Frame aktualisiert statt neu gestartet – vorher blockierte dieses Rumpeln
+      // durch Phasers `isRunning`-Prüfung die eigene Detonation.
       if (progress > 0.72) {
-        this.scene.cameras.main.shake(40, 0.0012 + progress * 0.0015);
+        this.cameraFeedback?.request(sustainedRumble(
+          `nuke:${nuke.id}`,
+          legacyShakeAmplitudePx(0.0012 + progress * 0.0015),
+          CAMERA_FEEDBACK_PRIORITY.telegraph,
+          { sourceX: nuke.x, sourceY: nuke.y },
+        ));
       }
     }
 
@@ -136,12 +151,14 @@ export class NukeRenderer {
       if (activeIds.has(id)) continue;
       this.destroyVisual(visual);
       this.visuals.delete(id);
+      this.cameraFeedback?.release(`nuke:${id}`, 260);
     }
   }
 
   clear(): void {
-    for (const visual of this.visuals.values()) {
+    for (const [id, visual] of this.visuals) {
       this.destroyVisual(visual);
+      this.cameraFeedback?.release(`nuke:${id}`, 0);
     }
     this.visuals.clear();
   }

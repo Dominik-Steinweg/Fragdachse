@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config';
 import type { ScopeModeConfig } from '../loadout/LoadoutConfig';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 // Start-Sichtradius in Screen-Pixeln bei scope=0 (muss die Screen-Diagonale übersteigen)
 const INITIAL_VIEW_RADIUS_PX = 1500;
@@ -77,6 +78,7 @@ export class ScopeOverlay {
       .setOrigin(0, 0)
       .setScale(CANVAS_DOWNSCALE)
       .setVisible(false);
+    promoteToClarityCamera(scene, this.image);
   }
 
   /**
