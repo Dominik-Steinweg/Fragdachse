@@ -3,6 +3,7 @@ import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S } from '../../config';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
@@ -177,6 +178,51 @@ export class HostUpdateCoordinator {
     metrics.enemyAiMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = performance.now();
+    if (!countdownActive && this.ctx.coopDefenseItemRuntimeSystem) {
+      const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+      runtime.hostUpdate(now);
+      const activeEnemies = (this.ctx.enemyManager?.getAllEnemies() ?? [])
+        .map((enemy) => ({
+          x: enemy.sprite.x,
+          y: enemy.sprite.y,
+          active: enemy.sprite.active,
+          alive: this.ctx.combatSystem.isAlive(enemy.id),
+        }));
+      // Beide Positions-Affixe werden aus echter Distanz gespeist. Teleports werden im
+      // Runtime-System ueber die gemeinsame Schrittgrenze verworfen.
+      for (const player of this.ctx.playerManager.getAllPlayers()) {
+        const alive = this.ctx.combatSystem.isAlive(player.id);
+        const glutwandererBursts = runtime.trackMovement(player.id, player.sprite.x, player.sprite.y);
+        runtime.updateSurrounded(
+          player.id,
+          player.sprite.x,
+          player.sprite.y,
+          alive ? activeEnemies : [],
+          now,
+        );
+        if (glutwandererBursts <= 0 || !alive || !player.sprite.active) continue;
+        for (let burstIndex = 0; burstIndex < glutwandererBursts; burstIndex += 1) {
+          this.ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
+            player.id,
+            player.sprite.x,
+            player.sprite.y,
+            {
+              count: runtime.getGlutwandererChunkCount(player.id),
+              searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
+              flightMs: 320,
+              igniteCenter: false,
+              durationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkGroundDurationMs,
+              burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
+              burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
+              weaponName: 'Glutwanderer',
+            },
+            `glutwanderer:${player.id}:${now}:${burstIndex}`,
+            now,
+          );
+        }
+      }
+    }
+
     if (!countdownActive && this.ctx.resourceSystem && this.ctx.burrowSystem) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         if (!this.ctx.burrowSystem.isBurrowed(player.id)) {
@@ -186,16 +232,6 @@ export class HostUpdateCoordinator {
         }
       }
       this.ctx.burrowSystem.update(delta);
-    }
-
-    if (!countdownActive && this.ctx.coopDefenseItemRuntimeSystem) {
-      const runtime = this.ctx.coopDefenseItemRuntimeSystem;
-      runtime.hostUpdate(now);
-      // Die Wegstrecke fuer die Kinetische Ladung entsteht aus der Positionsdifferenz je Frame.
-      // `HostPhysicsSystem` schreibt nur Geschwindigkeiten; die Position liegt erst hier fest.
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        runtime.trackMovement(player.id, player.sprite.x, player.sprite.y);
-      }
     }
 
     if (!countdownActive) {
@@ -760,6 +796,8 @@ export class HostUpdateCoordinator {
         ...(this.ctx.loadoutManager?.getAk47HudBuffs(localId, now) ?? []),
         ...(this.ctx.loadoutManager?.getNegevHudBuffs(localId) ?? []),
         ...this.getMovementChargeHudBuffs(localId),
+        ...this.getGlutwandererHudBuffs(localId),
+        ...this.getSurroundedHudBuffs(localId, now),
       ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(localId, now);
       const shieldBuff = this.ctx.loadoutManager?.getShieldBuffHudState(localId, now);
@@ -874,6 +912,8 @@ export class HostUpdateCoordinator {
         ...(this.ctx.loadoutManager?.getAk47HudBuffs(player.id, now) ?? []),
         ...(this.ctx.loadoutManager?.getNegevHudBuffs(player.id) ?? []),
         ...this.getMovementChargeHudBuffs(player.id),
+        ...this.getGlutwandererHudBuffs(player.id),
+        ...this.getSurroundedHudBuffs(player.id, now),
       ];
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(player.id, now);
       bridge.publishActiveBuffs(player.id, stealthBuff ? [...activeBuffs, stealthBuff] : activeBuffs);
@@ -923,6 +963,10 @@ export class HostUpdateCoordinator {
     const projectiles = countdownActive
       ? []
       : this.ctx.projectileManager.getHostSyncSnapshot();
+    const remoteControlTurrets = this.ctx.coopDefenseItemRuntimeSystem?.getRemoteControlSnapshot(
+      this.ctx.playerManager.getAllPlayers().map((player) => player.id),
+      this.ctx.turretSystem?.getTurrets() ?? [],
+    ) ?? [];
 
     bridge.publishGameState({
       roundStartTime: bridge.getArenaStartTime(),
@@ -936,6 +980,7 @@ export class HostUpdateCoordinator {
       placeableRocks: this.ctx.placementSystem?.getNetSnapshot() ?? [],
       overchargeFields: this.ctx.overchargeSystem?.getNetSnapshot() ?? [],
       turretCharges: this.ctx.turretChargeSystem?.getNetSnapshot() ?? [],
+      remoteControlTurrets,
       decoys,
       smokes,
       fires,
@@ -1499,6 +1544,30 @@ export class HostUpdateCoordinator {
       remainingFrac: runtime.getMovementChargeProgress(playerId),
       valueText: charged ? `+${Math.round(bonus * 100)} %` : 'laedt',
       intensity: charged ? 1 : 0.35,
+    }];
+  }
+
+  private getGlutwandererHudBuffs(playerId: string): SyncedActiveHudBuff[] {
+    const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+    const value = this.ctx.coopDefensePlayerModifierSystem?.getItemAffixValue(playerId, 'glutwanderer') ?? 0;
+    if (!runtime || value <= 0) return [];
+    return [{
+      defId: 'GLUTWANDERER',
+      remainingFrac: runtime.getGlutwandererProgress(playerId),
+      valueText: `${runtime.getGlutwandererChunkCount(playerId)} Brocken`,
+      intensity: 0.35 + runtime.getGlutwandererProgress(playerId) * 0.65,
+    }];
+  }
+
+  private getSurroundedHudBuffs(playerId: string, now: number): SyncedActiveHudBuff[] {
+    const runtime = this.ctx.coopDefenseItemRuntimeSystem;
+    const value = this.ctx.coopDefensePlayerModifierSystem?.getItemAffixValue(playerId, 'surrounded') ?? 0;
+    if (!runtime || value <= 0 || !runtime.isSurrounded(playerId, now)) return [];
+    return [{
+      defId: 'SURROUNDED',
+      remainingFrac: 1,
+      valueText: `+${Math.round(value * 100)} %`,
+      intensity: 1,
     }];
   }
 

@@ -43,14 +43,22 @@ export interface CoopBaseCellOffset {
 export type CoopBaseAnchor =
   | { kind: 'right-center'; edgeInsetCells: number }
   | { kind: 'left-center'; edgeInsetCells: number }
-  | { kind: 'center-offset'; dxCells: number; dyCells: number };
+  | { kind: 'center-offset'; dxCells: number; dyCells: number }
+  | { kind: 'grid'; gridX: number; gridY: number };
 
 export type CoopBaseShape =
   | { kind: 'rectangle'; widthCells: number; heightCells: number }
   | { kind: 'cells'; cells: readonly CoopBaseCellOffset[] };
 
 export type CoopBaseTurretMountSide = 'front' | 'rear' | 'top' | 'bottom';
-export type CoopBaseTurretWeaponId = 'SPOREN' | 'BASE_SPOREN';
+export type CoopBaseTurretWeaponId =
+  | 'SPOREN'
+  | 'BASE_SPOREN'
+  | 'FLIEGENPILZ_PLASMA'
+  | 'TURRET_ROCKET'
+  | 'TURRET_MG'
+  | 'TURRET_FLAME'
+  | 'TURRET_SPORE';
 
 export interface CoopBaseTurretConfig {
   readonly id: string;
@@ -73,15 +81,21 @@ export interface CoopBasePowerUpPedestalConfig {
  * Spieler beschaedigt werden.
  */
 export type CoopBaseFaction = 'friendly' | 'hostile';
+export type CoopBaseRole = 'main' | 'outpost' | 'spawn-point';
 
 export interface CoopBaseConfig {
   readonly id: string;
   readonly hpMax: number;
   readonly faction?: CoopBaseFaction;
+  readonly role?: CoopBaseRole;
   readonly anchor: CoopBaseAnchor;
   readonly shape: CoopBaseShape;
   readonly turrets?: readonly CoopBaseTurretConfig[];
   readonly powerUpPedestals?: readonly CoopBasePowerUpPedestalConfig[];
+  /** Freie Zelle innerhalb der Shape, an der die Spawnpunkt-Welle erscheint. */
+  readonly spawnCenter?: CoopBaseCellOffset;
+  /** Wellenplan, der ausschließlich von diesem Spawnpunkt erzeugt wird. */
+  readonly spawnWave?: CoopDefenseMapWaveConfig;
 }
 
 export interface CoopDefenseMapWaveConfig {
@@ -317,17 +331,38 @@ export function resolveCoopDefenseMapWaveConfigs(
 export function getCoopDefenseMapScheduledXp(
   mapConfig: CoopDefenseMapConfig,
   waveConfigs: readonly ResolvedCoopDefenseMapWaveConfig[],
+  humanPlayerCount = 1,
 ): number {
   const durationMs = mapConfig.roundDurationSec * 1000;
   let totalXp = 0;
-  for (const wave of waveConfigs) {
-    const activeDurationMs = Math.max(0, durationMs - wave.startAtMs);
-    if (activeDurationMs <= 0 || wave.countPerWave <= 0) continue;
-    const waveCount = Math.max(1, Math.ceil(activeDurationMs / wave.intervalMs));
-    totalXp += waveCount * wave.countPerWave * getEnemyLifecycleXp(wave.enemyKind);
+  for (const wave of waveConfigs) totalXp += getScheduledWaveXp(wave, durationMs);
+  for (const base of mapConfig.bases) {
+    if (!base.spawnWave) continue;
+    totalXp += getScheduledWaveXp(resolveWaveConfigForXp(base.spawnWave, humanPlayerCount), durationMs);
   }
   if (mapConfig.boss) totalXp += getEnemyLifecycleXp(mapConfig.boss.enemyKind);
   return Math.max(1, totalXp);
+}
+
+function getScheduledWaveXp(wave: ResolvedCoopDefenseMapWaveConfig, durationMs: number): number {
+  const activeDurationMs = Math.max(0, durationMs - wave.startAtMs);
+  if (activeDurationMs <= 0 || wave.countPerWave <= 0) return 0;
+  const waveCount = Math.max(1, Math.ceil(activeDurationMs / wave.intervalMs));
+  return waveCount * wave.countPerWave * getEnemyLifecycleXp(wave.enemyKind);
+}
+
+function resolveWaveConfigForXp(
+  waveConfig: CoopDefenseMapWaveConfig,
+  humanPlayerCount: number,
+): ResolvedCoopDefenseMapWaveConfig {
+  const resolved = resolveCoopDefenseEnemyWaveConfig(waveConfig.enemyKind, waveConfig, humanPlayerCount);
+  return {
+    enemyKind: waveConfig.enemyKind,
+    intervalMs: resolved.intervalMs,
+    countPerWave: resolved.countPerWave,
+    startAtMs: waveConfig.startAtMs ?? 0,
+    startsAfterAirstrikeBarrage: waveConfig.startsAfterAirstrikeBarrage ?? false,
+  };
 }
 
 function getEnemyLifecycleXp(kind: CoopDefenseEnemyKind, ancestors = new Set<string>()): number {
@@ -418,11 +453,11 @@ function normalizeObjective(
   }
   if (normalizedObjective !== 'destroy-hostile-bases') return 'survive';
   // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
-  if (!bases.some((baseConfig) => baseConfig.faction === 'hostile')) {
-    throw new Error(`[coopDefenseMaps] Map ${mapId} wants destroy-hostile-bases but declares no hostile base`);
+  if (!bases.some((baseConfig) => baseConfig.faction === 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} wants destroy-hostile-bases but declares no hostile main base`);
   }
-  if (!bases.some((baseConfig) => baseConfig.faction !== 'hostile')) {
-    throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly base to lose`);
+  if (!bases.some((baseConfig) => baseConfig.faction !== 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly main base to lose`);
   }
   return normalizedObjective;
 }
@@ -607,6 +642,20 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   });
 
   const faction: CoopBaseFaction = baseConfig.faction === 'hostile' ? 'hostile' : 'friendly';
+  const role: CoopBaseRole = baseConfig.role === 'outpost' || baseConfig.role === 'spawn-point'
+    ? baseConfig.role
+    : 'main';
+  const spawnCenter = baseConfig.spawnCenter
+    ? normalizeBaseCellOffset(baseConfig.spawnCenter)
+    : undefined;
+  const spawnWave = baseConfig.spawnWave ? normalizeWaveConfig(baseConfig.spawnWave) : undefined;
+
+  if (role === 'spawn-point' && (!spawnCenter || !spawnWave)) {
+    throw new Error(`[coopDefenseMaps] Spawn point ${baseConfig.id} needs spawnCenter and spawnWave`);
+  }
+  if (role !== 'spawn-point' && (spawnCenter || spawnWave)) {
+    throw new Error(`[coopDefenseMaps] Only spawn points may declare spawnCenter or spawnWave: ${baseConfig.id}`);
+  }
   // Podeste versorgen ausschliesslich Spieler und bleiben deshalb an Gegnerbasen verboten.
   // Basistuerme sind dagegen fraktionsfaehig und erhalten ihr Zielverhalten erst zur Laufzeit.
   if (faction === 'hostile' && powerUpPedestals.length > 0) {
@@ -619,10 +668,20 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
     id: baseConfig.id,
     hpMax: Math.max(1, Math.floor(baseConfig.hpMax)),
     faction,
+    role,
     anchor: normalizeBaseAnchor(baseConfig.anchor),
     shape: normalizeBaseShape(baseConfig.shape),
     turrets,
     powerUpPedestals,
+    spawnCenter,
+    spawnWave,
+  };
+}
+
+function normalizeBaseCellOffset(cell: CoopBaseCellOffset): CoopBaseCellOffset {
+  return {
+    gridX: Math.floor(cell.gridX),
+    gridY: Math.floor(cell.gridY),
   };
 }
 
@@ -658,7 +717,15 @@ function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig)
   ) {
     throw new Error(`[coopDefenseMaps] Unknown turret mount side on base ${baseId}: ${turret.mountSide}`);
   }
-  if (turret.weaponId !== 'SPOREN' && turret.weaponId !== 'BASE_SPOREN') {
+  if (
+    turret.weaponId !== 'SPOREN'
+    && turret.weaponId !== 'BASE_SPOREN'
+    && turret.weaponId !== 'FLIEGENPILZ_PLASMA'
+    && turret.weaponId !== 'TURRET_ROCKET'
+    && turret.weaponId !== 'TURRET_MG'
+    && turret.weaponId !== 'TURRET_FLAME'
+    && turret.weaponId !== 'TURRET_SPORE'
+  ) {
     throw new Error(`[coopDefenseMaps] Unsupported base turret weapon on base ${baseId}: ${turret.weaponId}`);
   }
 
@@ -686,6 +753,12 @@ function normalizeBaseAnchor(anchor: CoopBaseAnchor): CoopBaseAnchor {
         kind: 'center-offset',
         dxCells: Math.floor(anchor.dxCells),
         dyCells: Math.floor(anchor.dyCells),
+      };
+    case 'grid':
+      return {
+        kind: 'grid',
+        gridX: Math.floor(anchor.gridX),
+        gridY: Math.floor(anchor.gridY),
       };
   }
 }

@@ -7,9 +7,9 @@ vi.mock('phaser', () => ({
 }));
 
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
-import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 
-describe('automated pellet weapons', () => {
+describe('automated projectile weapons', () => {
   it('dispatches the Void Hunter shotgun as five spread pellets with one shared shot sound', () => {
     const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
     const dispatchWeaponFire = vi.fn(() => true);
@@ -37,5 +37,38 @@ describe('automated pellet weapons', () => {
     for (const call of dispatchWeaponFire.mock.calls.slice(1)) {
       expect(call[0].shotAudio).toBeUndefined();
     }
+  });
+
+  it('fires the Void Hunter Gauss variant with its legacy projectile values and Gauss style', () => {
+    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
+    const spawnProjectile = vi.fn(() => 42);
+    Object.defineProperty(manager, 'projectileManager', {
+      value: { spawnProjectile },
+    });
+    const config = ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS;
+    if (config.type !== 'gauss') throw new Error('Testkonfiguration muss Gauss sein');
+
+    expect(manager.fireAutomatedGaussWeapon(
+      config,
+      100,
+      200,
+      0,
+      'void-hunter',
+      0xaa55ff,
+    )).toBe(true);
+
+    const [, , , , projectile] = spawnProjectile.mock.calls[0];
+    expect(projectile).toMatchObject({
+      speed: 1350,
+      size: 16,
+      damage: 200,
+      color: 0xb347ff,
+      projectileStyle: 'gauss',
+      projectileVisualScale: 1.25,
+      maxBounces: 0,
+      remainingRangePx: 1500,
+      rockDamageMult: 1,
+      trainDamageMult: 1,
+    });
   });
 });

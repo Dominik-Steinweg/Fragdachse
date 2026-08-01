@@ -12,7 +12,7 @@ import {
   TEAM_BLUE_COLOR,
   TEAM_RED_COLOR,
 } from '../config';
-import type { CoopBaseFaction } from '../config/coopDefenseMaps';
+import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
 import type { SyncedBaseTurretState } from '../types';
@@ -28,7 +28,7 @@ export interface BaseTurretRuntimeState {
   readonly x: number;
   readonly y: number;
   readonly angle: number;
-  readonly weaponId: 'SPOREN' | 'BASE_SPOREN';
+  readonly weaponId: CoopBaseTurretWeaponId;
   readonly faction: CoopBaseFaction;
 }
 
@@ -52,6 +52,7 @@ export class BaseEntity {
   readonly id: string;
   readonly spec: BaseSpec;
   readonly faction: CoopBaseFaction;
+  readonly role: NonNullable<BaseSpec['role']>;
 
   private readonly scene: Phaser.Scene;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
@@ -71,6 +72,8 @@ export class BaseEntity {
    * ausleuchten. Einmal aus den Bounds abgeleitet.
    */
   private readonly lightSpots: readonly { readonly x: number; readonly y: number; readonly radius: number }[];
+  private readonly spawnCenterMarker: Phaser.GameObjects.Graphics | null;
+  private readonly spawnCenterTween: Phaser.Tweens.Tween | null;
   private currentHp: number;
   private maxHp: number;
   private destroyedBroadcasted = false;
@@ -81,6 +84,7 @@ export class BaseEntity {
     this.id = spec.id;
     this.spec = spec;
     this.faction = spec.faction;
+    this.role = spec.role ?? 'main';
     this.currentHp = spec.hpMax;
     this.maxHp = spec.hpMax;
     const hostile = spec.faction === 'hostile';
@@ -123,13 +127,38 @@ export class BaseEntity {
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     // Ihr kompletter Lebenszyklus wird von dieser BaseEntity besessen.
     for (const turret of spec.turrets) {
-      const image = scene.add.image(turret.x, turret.y, 'placeable_turret')
+      const image = scene.add.image(turret.x, turret.y, getBaseTurretTextureKey(turret.weaponId))
         .setDisplaySize(CELL_SIZE, CELL_SIZE)
         .setRotation(turret.initialAngle)
         .setTint(hostile ? TEAM_RED_COLOR : TEAM_BLUE_COLOR)
         .setDepth(DEPTH.BASES + 3);
       this.turretImages.set(turret.id, image);
       this.turretAngles.set(turret.id, turret.initialAngle);
+    }
+
+    if (spec.role === 'spawn-point' && spec.spawnCenter) {
+      const marker = scene.add.graphics()
+        .setPosition(spec.spawnCenter.x, spec.spawnCenter.y)
+        .setDepth(DEPTH.BASES + 2);
+      marker.lineStyle(2, hostile ? TEAM_RED_COLOR : TEAM_BLUE_COLOR, 0.78);
+      marker.strokeCircle(0, 0, CELL_SIZE * 0.34);
+      marker.lineStyle(1, hostile ? 0xffaaa8 : 0xb7e9ff, 0.75);
+      marker.strokeCircle(0, 0, CELL_SIZE * 0.18);
+      marker.lineBetween(-CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48, 0);
+      marker.lineBetween(0, -CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48);
+      this.spawnCenterMarker = marker;
+      this.spawnCenterTween = scene.tweens.add({
+        targets: marker,
+        alpha: { from: 0.45, to: 1 },
+        scale: { from: 0.92, to: 1.08 },
+        duration: 760,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+      });
+    } else {
+      this.spawnCenterMarker = null;
+      this.spawnCenterTween = null;
     }
 
     // ── 2) HP-Bar (eine pro Basis, unter der Bounding-Box) ─────────────
@@ -244,6 +273,12 @@ export class BaseEntity {
     return this.spec;
   }
 
+  getSpawnCenterWorldPosition(): { x: number; y: number } | null {
+    return this.isDestroyed() || !this.spec.spawnCenter
+      ? null
+      : { x: this.spec.spawnCenter.x, y: this.spec.spawnCenter.y };
+  }
+
   getTurrets(): readonly BaseTurretRuntimeState[] {
     if (this.isDestroyed()) return [];
     return this.spec.turrets.map((turret) => ({
@@ -318,6 +353,8 @@ export class BaseEntity {
     }
     this.turretImages.clear();
 
+    if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
+
     if (this.hpBarBg.active) this.hpBarBg.setVisible(false);
     if (this.hpBarFg.active) this.hpBarFg.setVisible(false);
 
@@ -345,7 +382,26 @@ export class BaseEntity {
     }
     this.turretImages.clear();
     this.turretAngles.clear();
+    this.spawnCenterTween?.stop();
+    if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
     if (this.hpBarBg.active) this.hpBarBg.destroy();
     if (this.hpBarFg.active) this.hpBarFg.destroy();
+  }
+}
+
+function getBaseTurretTextureKey(weaponId: CoopBaseTurretWeaponId): string {
+  switch (weaponId) {
+    case 'FLIEGENPILZ_PLASMA':
+      return 'construction_plasma_turret';
+    case 'TURRET_ROCKET':
+      return 'construction_rocket_turret';
+    case 'TURRET_MG':
+      return 'construction_machine_gun_turret';
+    case 'TURRET_FLAME':
+      return 'construction_flame_turret';
+    case 'SPOREN':
+    case 'BASE_SPOREN':
+    case 'TURRET_SPORE':
+      return 'placeable_turret';
   }
 }

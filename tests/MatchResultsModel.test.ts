@@ -156,6 +156,7 @@ describe('match item reward presentation', () => {
 
     const option = presentation!.options[0];
     expect(option.equipped).toBeNull();
+    expect(option.directEquip).toBe(true);
     expect(option.freeStashSlots).toBe(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT);
     expect(option.stash).toEqual([]);
   });

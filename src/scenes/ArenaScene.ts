@@ -22,6 +22,7 @@ import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ScopeOverlay } from '../ui/ScopeOverlay';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
+import { HostileBaseIndicator } from '../ui/HostileBaseIndicator';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
 import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
@@ -111,7 +112,7 @@ import {
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
-import type { CoopDefenseClassId, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel } from '../config/coopDefenseMaps';
@@ -207,6 +208,7 @@ export class ArenaScene extends Phaser.Scene {
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
+  private hostileBaseIndicator: HostileBaseIndicator | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
   private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
 
@@ -566,7 +568,7 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseUpgradesOverlay.build();
     this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
       this,
-      (offerUid, salvageUid) => this.claimItemReward(offerUid, salvageUid),
+      (offerUid, salvageUid, action) => this.claimItemReward(offerUid, salvageUid, action),
       () => this.buildItemRewardPresentation(),
       () => {
         this.lobbyOverlay.setReadyButtonState(false);
@@ -690,7 +692,7 @@ export class ArenaScene extends Phaser.Scene {
             };
           });
         })(),
-        livingCoopBaseIds: this.ctx.baseManager?.getActiveBaseIds('friendly'),
+        livingCoopBaseIds: this.ctx.baseManager?.getActiveMainBaseIds('friendly'),
         isRelevantOpponent: (otherPlayerId) => playerId === null
           ? combatSystem.isAlive(otherPlayerId)
           : combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
@@ -757,6 +759,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Shared state & helpers ─────────────────────────────────────────────
     this.localPlayerState = new LocalPlayerState();
     this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
+    this.hostileBaseIndicator = new HostileBaseIndicator(this);
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
     this.tunnelRenderer    = new TunnelRenderer(this);
     this.gaussWarning      = new GaussWarningRenderer(
@@ -1343,6 +1346,12 @@ export class ArenaScene extends Phaser.Scene {
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
     this.syncMainCamera(delta, inArena);
+    const hostileBaseIndicatorActive = inArena && isCoopDefenseMode(bridge.getGameMode());
+    if (hostileBaseIndicatorActive) {
+      this.hostileBaseIndicator?.sync(this.ctx.baseManager, true);
+    } else {
+      this.hostileBaseIndicator?.clear();
+    }
     this.playerStatusRing?.setActive(inArena);
     this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(!inArena);
     if (inArena) {
@@ -1364,6 +1373,15 @@ export class ArenaScene extends Phaser.Scene {
       inArena ? (this.ctx.turretChargeSystem?.getActiveCharges() ?? []) : [],
       bridge.getSynchronizedNow(),
     );
+    const remoteControlTargets = !inArena
+      ? []
+      : bridge.isHost()
+        ? (this.ctx.coopDefenseItemRuntimeSystem?.getRemoteControlSnapshot(
+          this.ctx.playerManager.getAllPlayers().map((player) => player.id),
+          this.ctx.turretSystem?.getTurrets() ?? [],
+        ) ?? [])
+        : (bridge.getLatestGameState()?.remoteControlTurrets ?? []);
+    this.renderers.remoteControl.syncVisuals(remoteControlTargets, bridge.getSynchronizedNow());
     this.renderers.teslaDome.update(delta);
     const visualEnemyStartMs = performance.now();
     const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
@@ -2233,6 +2251,8 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseXpDebugOverlay = null;
       this.coopDefenseUpgradesOverlay?.destroy();
       this.coopDefenseUpgradesOverlay = null;
+      this.hostileBaseIndicator?.destroy();
+      this.hostileBaseIndicator = null;
     });
   }
 
@@ -3005,8 +3025,12 @@ export class ArenaScene extends Phaser.Scene {
    * Loest eine Auswahl im Ergebnis-Screen auf und aktualisiert die Anzeige. Bleibt die Belohnung
    * offen (volle Kategorie ohne Zerlege-Ziel), passiert nichts und der Screen fragt weiter.
    */
-  private claimItemReward(offerUid: string, salvageUid?: string): boolean {
-    if (!claimStoredPendingCoopDefenseItemReward(offerUid, salvageUid)) return false;
+  private claimItemReward(
+    offerUid: string,
+    salvageUid?: string,
+    action: CoopDefenseItemRewardAction = 'take',
+  ): boolean {
+    if (!claimStoredPendingCoopDefenseItemReward(offerUid, salvageUid, action)) return false;
     this.refreshStoredCoopDefenseProgress();
     if (this.lastMatchResultsPresentation) {
       this.lastMatchResultsPresentation = {

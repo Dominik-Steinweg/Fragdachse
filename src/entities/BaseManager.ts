@@ -167,6 +167,10 @@ export class BaseManager {
     return this.entities.filter((entity) => entity.faction === faction);
   }
 
+  getMainBasesByFaction(faction: CoopBaseFaction): readonly BaseEntity[] {
+    return this.entities.filter((entity) => entity.role === 'main' && entity.faction === faction);
+  }
+
   getActiveBaseIds(faction?: CoopBaseFaction): ReadonlySet<string> {
     const result = new Set<string>();
     for (const entity of this.entities) {
@@ -177,9 +181,27 @@ export class BaseManager {
     return result;
   }
 
+  getActiveMainBaseIds(faction?: CoopBaseFaction): ReadonlySet<string> {
+    const result = new Set<string>();
+    for (const entity of this.entities) {
+      if (entity.role !== 'main' || entity.isDestroyed()) continue;
+      if (faction && entity.faction !== faction) continue;
+      result.add(entity.id);
+    }
+    return result;
+  }
+
   /** Summierte HP einer Fraktion – die Basis der Sieg- und Niederlagebedingung. */
   getTotalHp(faction: CoopBaseFaction): number {
     return this.getBasesByFaction(faction).reduce((sum, entity) => sum + entity.getHp(), 0);
+  }
+
+  getTotalMainBaseHp(faction: CoopBaseFaction): number {
+    return this.getMainBasesByFaction(faction).reduce((sum, entity) => sum + entity.getHp(), 0);
+  }
+
+  getActiveMainBase(faction: CoopBaseFaction): BaseEntity | undefined {
+    return this.getMainBasesByFaction(faction).find((entity) => !entity.isDestroyed());
   }
 
   hasFaction(faction: CoopBaseFaction): boolean {

@@ -551,7 +551,7 @@ export class PlayerManager {
 
   private resolveCoopDefenseSpawnBase(spawnContext: SpawnContextSnapshot): BaseSpec | null {
     // Gespawnt wird an den eigenen Basen; an der Gegnerbasis waere es die schlechteste Wahl.
-    const coopBases = getCoopDefenseBases().filter((base) => base.faction !== 'hostile');
+    const coopBases = getCoopDefenseBases().filter((base) => base.faction !== 'hostile' && base.role !== 'outpost' && base.role !== 'spawn-point');
     if (coopBases.length === 0) return null;
 
     const livingIds = spawnContext.livingCoopBaseIds;

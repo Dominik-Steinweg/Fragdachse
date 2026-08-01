@@ -79,6 +79,31 @@
         "failureKey": "shot_dry_trigger"
       }
     },
+    "VOID_HUNTER_GAUSS": {
+      "id": "VOID_HUNTER_GAUSS",
+      "displayName": "Leeren-Gauss",
+      "baseId": "GAUSS_RIFLE",
+      "_notes": "NPC-Variante des Gauss-Gewehrs; behält die bisherigen Leerenjäger-Projektilwerte und ändert nur die Projektil-Semantik auf Gauss.",
+      "catalogVisible": false,
+      "projectileSpeed": 1350,
+      "projectileColor": "#b347ff",
+      "projectileStyle": "gauss",
+      "projectileVisualScale": 1.25,
+      "tracerConfig": {
+        "widthCore": 8,
+        "widthGlow": 24,
+        "alphaCore": 0.96,
+        "alphaGlow": 0.76,
+        "segments": 12,
+        "fadeMs": 1400,
+        "maxLength": 340,
+        "colorCore": "#f9e8ff",
+        "colorGlow": "#b347ff"
+      },
+      "damage": 200,
+      "range": 1500,
+      "rockDamageMult": 1
+    },
     "AIRSTRIKE": {
       "type": "airstrike",
       "id": "AIRSTRIKE",

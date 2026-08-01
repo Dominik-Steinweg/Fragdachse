@@ -34,8 +34,10 @@ export interface MatchItemRewardOption {
   readonly item: CoopDefenseItem;
   /** Aktuell ausgeruestetes Teil derselben Kategorie, `null` bei leerem Slot. */
   readonly equipped: CoopDefenseItem | null;
+  /** Ein leerer Slot nimmt das Angebot direkt auf, auch wenn der Stash bereits voll ist. */
+  readonly directEquip: boolean;
   readonly comparison: readonly CoopDefenseItemComparisonRow[];
-  /** Freie Plaetze der Kategorie. `0` erzwingt vor der Uebernahme eine Zerlege-Entscheidung. */
+  /** Freie Plaetze der Kategorie; bei `directEquip` wird kein Stash-Platz benoetigt. */
   readonly freeStashSlots: number;
   /** XP, die das Angebot selbst beim direkten Zerlegen einbringt. */
   readonly salvageXp: number;
@@ -141,6 +143,7 @@ export function createMatchItemRewardPresentation(
       return {
         item,
         equipped,
+        directEquip: equipped === null,
         comparison: compareCoopDefenseItems(item, equipped),
         freeStashSlots: getFreeCoopDefenseStashSlots(ownedItems, equippedItemIds, item.slot),
         salvageXp: getCoopDefenseItemSalvageXp(item),

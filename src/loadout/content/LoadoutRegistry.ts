@@ -60,6 +60,6 @@ export function getAvailableUltimateConfigs(mode: GameMode): UltimateConfig[] {
   return LOADOUT_CATALOG_ENTRIES
     .filter((entry) => entry.kind === 'ultimate' && entry.slot === 'ultimate')
     .map((entry) => getUltimateConfig(entry.id))
+    .filter((config) => config.catalogVisible !== false)
     .filter((config) => isUltimateAllowedInMode(config, mode));
 }
-

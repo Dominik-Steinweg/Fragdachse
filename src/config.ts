@@ -444,6 +444,14 @@ export const COOP_DEFENSE_FLOW_FIELD_ROCK_COST = 100;
 export const COOP_DEFENSE_FLOW_FIELD_TRUNK_COST = 999999;
 /** Basis-Footprints bleiben blockiert, nutzen aber dieselbe Kostenklasse wie Rocks. */
 export const COOP_DEFENSE_FLOW_FIELD_BASE_COST = COOP_DEFENSE_FLOW_FIELD_ROCK_COST;
+/**
+ * Aufschlag fuer begehbare Zellen, die an ein unzerstoerbares Hindernis grenzen (Basis, Baumstumpf).
+ * Gegnerkoerper sind bis zu 68 px breit, eine Zelle nur 32 px: Eine Route entlang der Zellmittelpunkte
+ * direkt an einer Basiswand laesst den Koerper dauerhaft in der Wand haengen. Der Aufschlag biegt
+ * Routen um eine Zelle von solchen Waenden weg, laesst enge Korridore aber weiterhin zu.
+ * Felsen sind bewusst ausgenommen: an ihnen soll der Gegner haengen bleiben und sie wegbeissen.
+ */
+export const COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST = 2;
 /** Host prueft hoechstens alle 100 ms, ob das Flow Field wegen Arena-Mutationen neu gebaut werden muss. */
 export const COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS = 100;
 

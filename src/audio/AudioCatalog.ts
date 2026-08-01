@@ -87,7 +87,10 @@ const EXPLOSION_ASSETS = {
   sfx_explosion_rocket:         './assets/sounds/sfx_explosion_he.ogg',//done
   sfx_explosion_mini_rocket:    './assets/sounds/sfx_explosion_he.ogg', // platzhalter, bis ein eigener Sound geliefert wird
   sfx_explosion_asmd_secondary: './assets/sounds/sfx_explosion_asmd_secondary.wav',
-  sfx_explosion_armageddon:     './assets/sounds/sfx_explosion_armageddon.wav',
+  // Der geplante eigene Armageddon-WAV ist nicht Teil des ausgelieferten Asset-Sets.
+  // Der vorhandene Nuklear-Einschlag ist klanglich der passende Fallback fuer
+  // normale und Leeren-Armageddon-Meteore.
+  sfx_explosion_armageddon:     './assets/sounds/sfx_nuke_explosion.ogg',
 } as const;
 
 // ── Loadout Activations ─────────────────────────────────────────────────────

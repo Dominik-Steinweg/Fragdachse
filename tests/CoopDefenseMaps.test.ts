@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
   getCoopDefenseMapConfig,
+  getCoopDefenseMapScheduledXp,
   getCoopDefenseMapObjectiveLabel,
   type CoopBaseShape,
+  resolveCoopDefenseMapWaveConfigs,
 } from '../src/config/coopDefenseMaps';
 import { getCoopDefenseEnemyConfig, getCoopDefenseEnemyXp } from '../src/config/coopDefenseEnemies';
+import {
+  isCoopDefenseBaseObstacleClearanceCell,
+  resolveCoopDefenseBases,
+} from '../src/arena/BaseRegistry';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 import { formatTimeOfDay, parseTimeOfDay, resolveSkyState } from '../src/effects/TimeOfDay';
 
@@ -52,7 +58,7 @@ describe('Coop defense map progression', () => {
         '10': 96,
         '11': 60,
         '12': 112,
-        '13': 120,
+        '13': 135,
         '14': 60,
         '15': 100,
       });
@@ -195,6 +201,67 @@ describe('Coop defense map progression', () => {
         expect(getCoopDefenseEnemyConfig(map.boss.enemyKind).isBoss).toBe(true);
         expect(map.boss.spawnAtMs).toBeGreaterThanOrEqual(0);
         expect(map.boss.spawnAtMs).toBeLessThan(map.roundDurationSec * 1_000);
+      }
+      for (const base of map.bases) {
+        if (base.role !== 'spawn-point') continue;
+        expect(base.spawnCenter).toBeDefined();
+        expect(base.spawnWave).toBeDefined();
+        expect(getCoopDefenseEnemyConfig(base.spawnWave!.enemyKind)).toBeDefined();
+        expect(base.spawnWave!.intervalMs).toBeGreaterThan(0);
+        expect(base.spawnWave!.countPerWave).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('adds the configured friendly outpost progression and plasma base weapons', () => {
+    expect(getCoopDefenseMapConfig('8').bases.filter((base) => base.role === 'outpost'))
+      .toHaveLength(2);
+    expect(getCoopDefenseMapConfig('10').bases.filter((base) => base.role === 'outpost'))
+      .toHaveLength(1);
+    expect(getCoopDefenseMapConfig('12').bases.filter((base) => base.role === 'outpost'))
+      .toHaveLength(1);
+    expect(getCoopDefenseMapConfig('15').bases.filter((base) => base.role === 'outpost'))
+      .toHaveLength(2);
+
+    const map12MainWeapons = getCoopDefenseMapConfig('12').bases
+      .filter((base) => (base.role ?? 'main') === 'main')
+      .flatMap((base) => base.turrets ?? [])
+      .map((turret) => turret.weaponId);
+    expect(map12MainWeapons).toHaveLength(3);
+    expect(map12MainWeapons.every((weaponId) => weaponId === 'FLIEGENPILZ_PLASMA')).toBe(true);
+
+    const map13Outposts = getCoopDefenseMapConfig('13').bases.filter((base) => base.role === 'outpost');
+    expect(map13Outposts).toHaveLength(2);
+    expect(map13Outposts.map((base) => base.faction)).toEqual(['hostile', 'friendly']);
+    expect(map13Outposts.flatMap((base) => base.turrets ?? []).map((turret) => turret.weaponId))
+      .toEqual(['FLIEGENPILZ_PLASMA', 'FLIEGENPILZ_PLASMA']);
+  });
+
+  it('includes spawn-point waves in the map XP budget with player scaling', () => {
+    const map = getCoopDefenseMapConfig('13');
+    const waves = resolveCoopDefenseMapWaveConfigs(map, 2);
+    const withSpawnPoints = getCoopDefenseMapScheduledXp(map, waves, 2);
+    const withoutSpawnPoints = getCoopDefenseMapScheduledXp({
+      ...map,
+      bases: map.bases.map((base) => ({ ...base, spawnWave: undefined })),
+    }, waves, 2);
+
+    expect(withSpawnPoints).toBeGreaterThan(withoutSpawnPoints);
+  });
+
+  it('keeps five-cell obstacle clearance around every role and preserves spawn-center gaps', () => {
+    for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => ['8', '13', '14', '15'].includes(mapId))) {
+      const specs = resolveCoopDefenseBases(map);
+      for (const spec of specs) {
+        const edgeCell = {
+          gridX: Math.max(0, spec.region.minGridX - 5),
+          gridY: spec.region.minGridY,
+        };
+        expect(isCoopDefenseBaseObstacleClearanceCell(edgeCell.gridX, edgeCell.gridY, specs)).toBe(true);
+        if (spec.role === 'spawn-point') {
+          expect(spec.spawnCenter).toBeDefined();
+          expect(spec.cells).not.toContainEqual(spec.spawnCenter);
+        }
       }
     }
   });

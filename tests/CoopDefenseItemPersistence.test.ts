@@ -23,7 +23,7 @@ import {
   COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID,
   COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT,
 } from '../src/config/coopDefenseItems';
-import { getCoopDefenseItemSalvageXp } from '../src/utils/coopDefenseItems';
+import { getCoopDefenseItemSalvageXp, getCoopDefenseStashItems } from '../src/utils/coopDefenseItems';
 import type { CoopDefenseItem } from '../src/types';
 
 class MemoryStorage implements Storage {
@@ -141,16 +141,102 @@ describe('coop-defense item persistence', () => {
     expect(getStoredPendingCoopDefenseItemReward()).toBeNull();
   });
 
-  it('keeps the reward open when the category is full and nothing is salvaged', () => {
+  it('equips a claimed reward directly when its category has no equipped item', () => {
+    addStoredCoopDefenseItem(item({ uid: 'armor-stash' }));
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
+
+    const claim = claimStoredPendingCoopDefenseItemReward('offer-armor');
+
+    expect(claim?.acquired?.uid).toBe('offer-armor');
+    expect(getStoredCoopDefenseEquippedItemIds()).toEqual({ armor: 'offer-armor' });
+    expect(getCoopDefenseStashItems(
+      getStoredCoopDefenseItems(),
+      getStoredCoopDefenseEquippedItemIds(),
+      'armor',
+    ).map((entry) => entry.uid)).toEqual(['armor-stash']);
+  });
+
+  it('equips directly even when the empty category stash is already full', () => {
     for (let index = 0; index < COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT; index++) {
       addStoredCoopDefenseItem(item({ uid: `armor-${index}` }));
     }
     setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
 
+    expect(claimStoredPendingCoopDefenseItemReward('offer-armor')?.acquired?.uid).toBe('offer-armor');
+    expect(getStoredCoopDefenseEquippedItemIds()).toEqual({ armor: 'offer-armor' });
+    expect(getCoopDefenseStashItems(
+      getStoredCoopDefenseItems(),
+      getStoredCoopDefenseEquippedItemIds(),
+      'armor',
+    )).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT);
+  });
+
+  it('equips a reward and moves the previously equipped item into the stash', () => {
+    addStoredCoopDefenseItem(item({ uid: 'equipped-armor' }));
+    equipStoredCoopDefenseItem('equipped-armor');
+    addStoredCoopDefenseItem(item({ uid: 'stash-armor' }));
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
+
+    const claim = claimStoredPendingCoopDefenseItemReward('offer-armor', undefined, 'equip');
+
+    expect(claim?.acquired?.uid).toBe('offer-armor');
+    expect(getStoredCoopDefenseEquippedItemIds()).toEqual({ armor: 'offer-armor' });
+    expect(getCoopDefenseStashItems(
+      getStoredCoopDefenseItems(),
+      getStoredCoopDefenseEquippedItemIds(),
+      'armor',
+    ).map((entry) => entry.uid)).toEqual(['equipped-armor', 'stash-armor']);
+  });
+
+  it('keeps the reward open when an equipped category stash is full and nothing is salvaged', () => {
+    for (let index = 0; index < COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT; index++) {
+      addStoredCoopDefenseItem(item({ uid: `armor-${index}` }));
+    }
+    equipStoredCoopDefenseItem('armor-0');
+    addStoredCoopDefenseItem(item({ uid: 'armor-10' }));
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
+
     expect(claimStoredPendingCoopDefenseItemReward('offer-armor')).toBeNull();
     // Nichts darf sich veraendert haben: die Belohnung bleibt abholbar.
     expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('offer-armor');
-    expect(getStoredCoopDefenseItems()).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT);
+    expect(getStoredCoopDefenseItems()).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT + 1);
+  });
+
+  it('does not equip a reward into a full stash or alter the existing inventory', () => {
+    for (let index = 0; index < COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT; index++) {
+      addStoredCoopDefenseItem(item({ uid: `armor-${index}` }));
+    }
+    equipStoredCoopDefenseItem('armor-0');
+    addStoredCoopDefenseItem(item({ uid: 'armor-10' }));
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
+    const before = getStoredCoopDefenseItems();
+
+    expect(claimStoredPendingCoopDefenseItemReward('offer-armor', undefined, 'equip')).toBeNull();
+    expect(getStoredCoopDefenseItems()).toEqual(before);
+    expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('offer-armor');
+  });
+
+  it('equips after salvaging a stash item when the category was full', () => {
+    for (let index = 0; index < COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT; index++) {
+      addStoredCoopDefenseItem(item({ uid: `armor-${index}` }));
+    }
+    equipStoredCoopDefenseItem('armor-0');
+    addStoredCoopDefenseItem(item({ uid: 'armor-10' }));
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
+
+    const claim = claimStoredPendingCoopDefenseItemReward('offer-armor', 'armor-3', 'equip');
+
+    expect(claim?.acquired?.uid).toBe('offer-armor');
+    expect(getStoredCoopDefenseEquippedItemIds()).toEqual({ armor: 'offer-armor' });
+    expect(getStoredCoopDefenseItems().map((entry) => entry.uid)).toEqual([
+      'armor-0', 'armor-1', 'armor-2', 'armor-4', 'armor-5',
+      'armor-6', 'armor-7', 'armor-8', 'armor-9', 'armor-10', 'offer-armor',
+    ]);
+    expect(getCoopDefenseStashItems(
+      getStoredCoopDefenseItems(),
+      getStoredCoopDefenseEquippedItemIds(),
+      'armor',
+    )).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT);
   });
 
   it('claims into a full category by salvaging an existing item', () => {
@@ -158,6 +244,8 @@ describe('coop-defense item persistence', () => {
     for (let index = 0; index < COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT; index++) {
       addStoredCoopDefenseItem(item({ uid: `armor-${index}`, rarity: 'blue', affixes: [{ affixId: 'max_armor', value: 15 }] }));
     }
+    equipStoredCoopDefenseItem('armor-0');
+    addStoredCoopDefenseItem(item({ uid: 'armor-10', rarity: 'blue', affixes: [{ affixId: 'max_armor', value: 15 }] }));
     setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });
 
     const claim = claimStoredPendingCoopDefenseItemReward('offer-armor', 'armor-3');
@@ -166,7 +254,7 @@ describe('coop-defense item persistence', () => {
     expect(getStoredCoopDefenseProgress().totalXp).toBe(claim!.salvagedXp);
 
     const uids = getStoredCoopDefenseItems().map((entry) => entry.uid);
-    expect(uids).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT);
+    expect(uids).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT + 1);
     expect(uids).not.toContain('armor-3');
     expect(uids).toContain('offer-armor');
   });

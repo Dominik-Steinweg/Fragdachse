@@ -27,12 +27,20 @@ const OBSTACLE_ATTACK_DELAY_MS = 500;
 const ATTACK_SCAN_INTERVAL_MS = 140;
 const ATTACK_STOP_DURATION_MS = 120;
 
+interface TestPlayer {
+  id: string;
+  sprite: { x: number; y: number; active: boolean };
+}
+
 /**
  * Gegner, der genau die Situation aus dem Bug abbildet: er steht fest (Position ändert sich nie),
  * feuert aber im Takt seiner Fernwaffe weiter. Vor dem Fix hat jede Angriffspause den
  * Blockier-Zähler zurückgesetzt, sodass der Biss auf den Felsen nie freigeschaltet wurde.
  */
-function createStuckEnemy(movement: { wantsToMove: boolean; pathBlocked: boolean }): EnemyEntity & {
+function createStuckEnemy(
+  movement: { wantsToMove: boolean; pathBlocked: boolean },
+  playerWeaponTargetMode: 'players' | 'all' = 'players',
+): EnemyEntity & {
   attackPauseUntil: number;
 } {
   const bite = new GenericWeapon(WEAPON_CONFIGS.PYRO_BADGER_BITE);
@@ -49,7 +57,7 @@ function createStuckEnemy(movement: { wantsToMove: boolean; pathBlocked: boolean
     isPathBlocked: () => movement.pathBlocked,
     getAttackWeapons: () => [
       { weapon: bite, targetMode: 'structures', minimumFireDurationMs: 0, playerMeleeWindupMs: 0 },
-      { weapon: glock, targetMode: 'players', minimumFireDurationMs: 0, playerMeleeWindupMs: 0 },
+      { weapon: glock, targetMode: playerWeaponTargetMode, minimumFireDurationMs: 0, playerMeleeWindupMs: 0 },
     ],
     getObstacleAttackDelayMs: () => OBSTACLE_ATTACK_DELAY_MS,
     isBurrowed: () => false,
@@ -69,12 +77,15 @@ function createStuckEnemy(movement: { wantsToMove: boolean; pathBlocked: boolean
   } as unknown as EnemyEntity & { attackPauseUntil: number };
 }
 
-function createSystem(enemy: EnemyEntity, rock: { x: number; y: number; active: boolean }) {
+function createSystem(
+  enemy: EnemyEntity,
+  rock: { x: number; y: number; active: boolean },
+  players: readonly TestPlayer[] = [{ id: 'p1', sprite: { x: 400, y: 100, active: true } }],
+) {
   const firedWeaponIds: string[] = [];
+  const firedTargetPositions: Array<{ x: number; y: number }> = [];
   // Spieler in Glock-, aber weit außerhalb von Bissreichweite: der festhängende Gegner feuert
   // dadurch die ganze Zeit weiter und pausiert seine Bewegung nach jedem Schuss.
-  const player = { id: 'p1', sprite: { x: 400, y: 100, active: true } };
-
   const enemyManager = {
     getAllEnemies: () => [enemy],
     getAlliedEnemies: () => [],
@@ -86,8 +97,8 @@ function createSystem(enemy: EnemyEntity, rock: { x: number; y: number; active: 
   const system = new CoopDefenseEnemyAttackSystem(
     enemyManager,
     {
-      getAllPlayers: () => [player],
-      getPlayer: (id: string) => (id === player.id ? player : undefined),
+      getAllPlayers: () => players,
+      getPlayer: (id: string) => players.find(player => player.id === id),
     } as unknown as PlayerManager,
     { getBases: () => [], getBasesByFaction: () => [] } as unknown as BaseManager,
     {
@@ -97,15 +108,23 @@ function createSystem(enemy: EnemyEntity, rock: { x: number; y: number; active: 
       hasLineOfSight: () => true,
     } as unknown as CombatSystem,
     {
-      fireAutomatedWeapon: (config: { id: string }) => {
+      fireAutomatedWeapon: (
+        config: { id: string },
+        _originX: number,
+        _originY: number,
+        _angle: number,
+        targetX: number,
+        targetY: number,
+      ) => {
         firedWeaponIds.push(config.id);
+        firedTargetPositions.push({ x: targetX, y: targetY });
         return true;
       },
     } as unknown as LoadoutManager,
     () => [rock as unknown as Phaser.GameObjects.Image],
   );
 
-  return { system, firedWeaponIds };
+  return { system, firedWeaponIds, firedTargetPositions };
 }
 
 describe('Enemy stuck in a rock', () => {
@@ -139,5 +158,51 @@ describe('Enemy stuck in a rock', () => {
     }
 
     expect(firedWeaponIds).not.toContain('PYRO_BADGER_BITE');
+  });
+
+  it('keeps a player target for two seconds even when another player becomes closer', () => {
+    const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
+    const players: TestPlayer[] = [
+      { id: 'p1', sprite: { x: 220, y: 100, active: true } },
+      { id: 'p2', sprite: { x: 240, y: 100, active: true } },
+    ];
+    const { system, firedTargetPositions } = createSystem(
+      enemy,
+      { x: 10_000, y: 10_000, active: true },
+      players,
+    );
+
+    system.hostUpdate(16, 1_000);
+    players[1].sprite.x = 100;
+    system.hostUpdate(16, 1_420);
+    system.hostUpdate(16, 3_040);
+
+    expect(firedTargetPositions).toEqual([
+      { x: 220, y: 100 },
+      { x: 220, y: 100 },
+      { x: 100, y: 100 },
+    ]);
+  });
+
+  it('drops the player target lock when the locked player is no longer valid', () => {
+    const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false });
+    const players: TestPlayer[] = [
+      { id: 'p1', sprite: { x: 220, y: 100, active: true } },
+      { id: 'p2', sprite: { x: 240, y: 100, active: true } },
+    ];
+    const { system, firedTargetPositions } = createSystem(
+      enemy,
+      { x: 10_000, y: 10_000, active: true },
+      players,
+    );
+
+    system.hostUpdate(16, 1_000);
+    players[0].sprite.active = false;
+    system.hostUpdate(16, 1_420);
+
+    expect(firedTargetPositions).toEqual([
+      { x: 220, y: 100 },
+      { x: 240, y: 100 },
+    ]);
   });
 });

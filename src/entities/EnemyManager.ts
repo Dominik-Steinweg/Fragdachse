@@ -90,6 +90,11 @@ interface WildfirePanicState extends WildfireSourceInfo {
   lastTrailY: number;
 }
 
+export interface EnemySpawnOptions {
+  /** Spawn visual is represented by the burrow effect instead of the normal materialization burst. */
+  readonly spawnBurrowed?: boolean;
+}
+
 export class EnemyManager {
   private readonly scene: Phaser.Scene;
   private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs;
@@ -102,7 +107,7 @@ export class EnemyManager {
   private ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
-  private onEnemySpawned: ((enemy: EnemyEntity) => void) | null = null;
+  private onEnemySpawned: ((enemy: EnemyEntity, options?: EnemySpawnOptions) => void) | null = null;
   private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
   private lighting: LightingSystem | null = null;
@@ -128,7 +133,7 @@ export class EnemyManager {
    * Host-Callback fuer jeden neu erzeugten Gegner – unabhaengig davon, ob er aus einer Welle,
    * einem Death-Spawn oder einer Gegner-Faehigkeit stammt.
    */
-  setEnemySpawnedCallback(callback: ((enemy: EnemyEntity) => void) | null): void {
+  setEnemySpawnedCallback(callback: ((enemy: EnemyEntity, options?: EnemySpawnOptions) => void) | null): void {
     this.onEnemySpawned = callback;
   }
 
@@ -165,8 +170,13 @@ export class EnemyManager {
     return this.hostSpawnAtWorld(x, y, kind);
   }
 
-  hostSpawnAtWorld(x: number, y: number, kind: CoopDefenseEnemyKind): EnemyEntity {
-    return this.hostSpawnUnitAtWorld(x, y, kind, 'hostile');
+  hostSpawnAtWorld(
+    x: number,
+    y: number,
+    kind: CoopDefenseEnemyKind,
+    options: EnemySpawnOptions = {},
+  ): EnemyEntity {
+    return this.hostSpawnUnitAtWorld(x, y, kind, 'hostile', undefined, undefined, options);
   }
 
   hostSpawnAllyAtWorld(
@@ -190,13 +200,14 @@ export class EnemyManager {
     faction: EnemyFaction,
     ownerId?: string,
     ownerColor?: number,
+    options: EnemySpawnOptions = {},
   ): EnemyEntity {
     const id = this.generateEnemyId(kind);
     const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind], faction, ownerId, ownerColor);
     enemy.setLightingSystem(this.lighting);
     this.enemies.set(id, enemy);
-    this.playSpawnEffect(enemy);
-    this.onEnemySpawned?.(enemy);
+    this.playSpawnEffect(enemy, options);
+    this.onEnemySpawned?.(enemy, options);
     return enemy;
   }
 
@@ -207,8 +218,8 @@ export class EnemyManager {
    * Gegner, die eingebuddelt am Spielfeldrand starten, bleiben aussen vor: sie sind beim Spawn
    * unsichtbar, und ihr Auftauchen hat mit dem Buddel-Effekt bereits seine eigene Ankündigung.
    */
-  private playSpawnEffect(enemy: EnemyEntity): void {
-    if (this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtLeftEdge) return;
+  private playSpawnEffect(enemy: EnemyEntity, options: EnemySpawnOptions): void {
+    if (options.spawnBurrowed || this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtLeftEdge) return;
     this.visualSink?.playEnemySpawnEffect(enemy.sprite.x, enemy.sprite.y, enemy.getSpawnEffectColor());
   }
 
@@ -366,12 +377,23 @@ export class EnemyManager {
       // Der einzelne Boss braucht keine Separation. Sie kann den grossen Body
       // seitlich aus seinem Clearance-Korridor in eine Wand druecken.
       const separation = config.isBoss ? { x: 0, y: 0 } : this.computeSeparation(enemy, separationGrid);
-      const bossWaypoint = config.isBoss
+      // Der grobe Zellvektor reicht auf freier Flaeche. Direkt an einer Basiswand nicht: Der Gegner
+      // steht durch Kollisionsaufloesung und Separation meist am Zellrand, und ein achsenparalleler
+      // Vektor druckt ihn von dort in die Wand statt an ihr vorbei. Zusaetzlich springt die
+      // Vektorrichtung beim Wechsel zwischen zwei Randzellen, was ihn an Ort und Stelle zappeln
+      // laesst. In Wandnaehe wird deshalb – wie beim Boss – der Mittelpunkt der naechsten Zelle
+      // angesteuert; der liegt garantiert eine halbe Zelle von jedem Hindernis entfernt.
+      const useWaypointSteering = config.isBoss
+        || flowFieldService.isWallAdjacentAt(gridCell.gridX, gridCell.gridY);
+      const waypoint = useWaypointSteering
         ? flowFieldService.getNextCellWorldPosition(gridCell.gridX, gridCell.gridY)
         : null;
-      const waypointDirection = bossWaypoint
-        ? this.normalizeDirection(bossWaypoint.x - enemy.sprite.x, bossWaypoint.y - enemy.sprite.y)
+      const steerDirection = waypoint
+        ? this.normalizeDirection(waypoint.x - enemy.sprite.x, waypoint.y - enemy.sprite.y)
         : vector;
+      // Steht der Gegner exakt auf dem Wegpunkt, liefert die Normalisierung 0/0. Dann traegt der
+      // Zellvektor weiter, statt die Bewegung fuer einen Frame auf die Separation zu reduzieren.
+      const waypointDirection = steerDirection.x === 0 && steerDirection.y === 0 ? vector : steerDirection;
       let targetVx = waypointDirection.x * speed + separation.x * SEPARATION_STRENGTH * speed;
       let targetVy = waypointDirection.y * speed + separation.y * SEPARATION_STRENGTH * speed;
 
@@ -933,7 +955,7 @@ export class EnemyManager {
         remote.gaussAimAngle ?? rotation,
       );
       this.enemies.set(remote.id, enemy);
-      if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy);
+      if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy, {});
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);
       return;

@@ -88,6 +88,16 @@ export class RockVisualHelper {
       g.fillStyle(0xffb347, 1); g.fillTriangle(28, 12, 32, 16, 28, 20);
       g.fillStyle(0xff6a2a, 0.95); g.fillTriangle(27, 14, 31, 16, 27, 18);
     });
+    this.ensureConstructionTexture('construction_plasma_turret', (g) => {
+      g.fillStyle(0x111d35, 1); g.fillCircle(16, 16, 12);
+      g.lineStyle(2, 0x5275a8, 1); g.strokeCircle(16, 16, 11);
+      g.fillStyle(0x223a68, 1); g.fillCircle(14, 16, 7);
+      g.fillStyle(0x6fc7ff, 1); g.fillCircle(14, 16, 4.2);
+      g.fillStyle(0xd9f7ff, 0.95); g.fillCircle(13, 15, 1.8);
+      g.fillStyle(0x8edcff, 0.9); g.fillRoundedRect(18, 12, 11, 8, 3);
+      g.fillStyle(0x4af0ff, 1); g.fillTriangle(28, 12, 32, 16, 28, 20);
+      g.lineStyle(1, 0xc4fbff, 0.9); g.strokeCircle(16, 16, 8.5);
+    });
     if (!this.scene.textures.exists('placeable_turret_proxy')) {
       const g = this.scene.make.graphics({ x: 0, y: 0 });
       g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 32, 32);

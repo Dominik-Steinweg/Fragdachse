@@ -67,7 +67,7 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
     hasLineOfSight: () => true,
   };
   const loadout = {
-    fireAutomatedWeapon: vi.fn(() => {
+    fireAutomatedGaussWeapon: vi.fn(() => {
       actions.push('gauss-shot');
       return true;
     }),
@@ -100,41 +100,22 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
 }
 
 describe('Leerenjäger', () => {
-  it('owns separate NPC weapons with the fixed balance values', () => {
-    expect(WEAPON_CONFIGS.VOID_HUNTER_SHOTGUN).toMatchObject({
-      damage: 12,
-      range: 350,
-      cooldown: 850,
-      pelletCount: 5,
-      pelletSpreadAngle: 12,
-      burnOnHit: { durationMs: 2000, damagePerTick: 2 },
-    });
-    expect(WEAPON_CONFIGS.VOID_HUNTER_GAUSS).toMatchObject({
-      damage: 100,
-      range: 1500,
-      fire: { projectileSpeed: 1350, projectileSize: 16 },
-    });
-    expect(ULTIMATE_CONFIGS.GAUSS_RIFLE).toMatchObject({
-      chargeColor: 0x78d6ff,
-      projectileColor: 0xc8f6ff,
-      tracerConfig: { colorCore: 0xf4ffff, colorGlow: 0x59c7ff },
-    });
-    expect(getCoopDefenseEnemyConfig('void-hunter')).toMatchObject({
-      maxHp: 3000,
-      xp: 400,
-      size: 52,
-      moveSpeed: 120,
-      spriteRotationOffsetDegrees: 180,
-      playerScaling: { maxHpFactorPerAdditionalPlayer: 0.5 },
-    });
-    expect(resolveCoopDefenseEnemyConfigs(2)['void-hunter']).toMatchObject({
-      maxHp: 4500,
-      phaseTwoGlow: { sizeFactor: 2.45 },
-      voidHunterBoss: {
-        phaseTwoHpRatio: 0.5,
-        gauss: { maxAimTurnDegreesPerSecond: 50 },
-      },
-    });
+  it('keeps boss-only loadout configs in their dedicated registries', () => {
+    const shotgun = WEAPON_CONFIGS.VOID_HUNTER_SHOTGUN;
+    const gauss = ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS;
+    const bossConfig = getCoopDefenseEnemyConfig('void-hunter');
+
+    expect(shotgun.allowedSlots).toEqual([]);
+    expect(gauss.type).toBe('gauss');
+    expect(gauss.projectileStyle).toBe('gauss');
+    expect(gauss.projectileSpeed).toBeGreaterThan(0);
+    expect(gauss.projectileSize).toBeGreaterThan(0);
+    expect(gauss.range).toBeGreaterThan(bossConfig.voidHunterBoss!.shotgunRangePx);
+    expect(bossConfig.voidHunterBoss!.gauss.weaponId).toBe(gauss.id);
+    expect(WEAPON_CONFIGS).not.toHaveProperty(gauss.id);
+    expect(ULTIMATE_CONFIGS.GAUSS_RIFLE.type).toBe('gauss');
+
+    expect(resolveCoopDefenseEnemyConfigs(2)['void-hunter'].voidHunterBoss).toBeDefined();
   });
 
   it('calculates one- and multi-player Nuke targets once at the arithmetic center', () => {
@@ -204,42 +185,64 @@ describe('Leerenjäger', () => {
     expect(fixture.armageddon.activate).toHaveBeenCalledTimes(1);
   });
 
-  it('waits 10 s for Gauss, samples targets every 50 ms but turns smoothly at at most 50 degrees/s', () => {
-    const fixture = createFixture([{ x: 100, y: 700 }]);
+  it('waits for Gauss, samples at the configured interval, and turns at the configured limit', () => {
+    const bossConfig = getCoopDefenseEnemyConfig('void-hunter').voidHunterBoss!;
+    const gaussConfig = ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS;
+    const initialDelay = bossConfig.gauss.initialDelayMs;
+    const chargeDuration = bossConfig.gauss.chargeDurationMs;
+    const aimUpdateInterval = bossConfig.gauss.aimUpdateIntervalMs;
+    const targetDistance = (bossConfig.shotgunRangePx + gaussConfig.range) / 2;
+    const fixture = createFixture([{ x: 100, y: 100 + targetDistance }]);
     fixture.system.hostUpdate(0);
-    fixture.system.hostUpdate(9999);
-    expect(fixture.loadout.fireAutomatedWeapon).not.toHaveBeenCalled();
+    fixture.system.hostUpdate(Math.max(0, initialDelay - 1));
+    expect(fixture.loadout.fireAutomatedGaussWeapon).not.toHaveBeenCalled();
 
-    fixture.system.hostUpdate(10000);
+    fixture.system.hostUpdate(initialDelay);
     expect(fixture.enemy.aim).toBe(0);
-    fixture.system.hostUpdate(10050);
-    expect(fixture.enemy.aim).toBeCloseTo(Math.PI / 72, 5);
-    expect(fixture.playerManager.getPlayer).toHaveBeenCalledTimes(1);
-    fixture.system.hostUpdate(10100);
-    expect(fixture.enemy.aim).toBeCloseTo(Math.PI / 36, 5);
-    expect(fixture.playerManager.getPlayer).toHaveBeenCalledTimes(2);
-    fixture.system.hostUpdate(12000);
+    if (aimUpdateInterval > 0) {
+      for (let elapsed = aimUpdateInterval; elapsed < chargeDuration; elapsed += aimUpdateInterval) {
+        fixture.system.hostUpdate(initialDelay + elapsed);
+      }
+    }
+    fixture.system.hostUpdate(initialDelay + chargeDuration);
 
-    expect(fixture.loadout.fireAutomatedWeapon).toHaveBeenCalledTimes(1);
-    expect(fixture.loadout.fireAutomatedWeapon.mock.calls[0][3]).toBeCloseTo(Math.PI / 2, 5);
+    expect(fixture.loadout.fireAutomatedGaussWeapon).toHaveBeenCalledTimes(1);
+    const expectedAngle = Math.min(
+      Math.PI / 2,
+      (bossConfig.gauss.maxAimTurnDegreesPerSecond * Math.PI / 180) * chargeDuration / 1000,
+    );
+    expect(fixture.loadout.fireAutomatedGaussWeapon.mock.calls[0][3]).toBeCloseTo(expectedAngle, 5);
+    expect(fixture.playerManager.getPlayer).toHaveBeenCalledTimes(
+      aimUpdateInterval > 0 ? Math.floor(chargeDuration / aimUpdateInterval) : 0,
+    );
   });
 
   it('does not begin Gauss inside shotgun range', () => {
-    const fixture = createFixture([{ x: 350, y: 100 }]);
+    const bossConfig = getCoopDefenseEnemyConfig('void-hunter').voidHunterBoss!;
+    const fixture = createFixture([{ x: 100 + bossConfig.shotgunRangePx, y: 100 }]);
     fixture.system.hostUpdate(0);
-    fixture.system.hostUpdate(10000);
-    fixture.system.hostUpdate(12000);
-    expect(fixture.loadout.fireAutomatedWeapon).not.toHaveBeenCalled();
+    fixture.system.hostUpdate(bossConfig.gauss.initialDelayMs);
+    fixture.system.hostUpdate(bossConfig.gauss.initialDelayMs + bossConfig.gauss.chargeDurationMs);
+    expect(fixture.loadout.fireAutomatedGaussWeapon).not.toHaveBeenCalled();
   });
 
   it('finishes a due Gauss shot before starting pending Armageddon', () => {
-    const fixture = createFixture([{ x: 800, y: 100 }]);
-    fixture.enemy.hp = 1600;
+    const bossConfig = getCoopDefenseEnemyConfig('void-hunter').voidHunterBoss!;
+    const gaussConfig = ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS;
+    const targetDistance = (bossConfig.shotgunRangePx + gaussConfig.range) / 2;
+    const fixture = createFixture([{ x: 100 + targetDistance, y: 100 }]);
+    fixture.enemy.hp = fixture.enemy.maxHp * bossConfig.phaseTwoHpRatio;
     fixture.system.hostUpdate(0);
-    fixture.system.hostUpdate(7000);  // erstes Armageddon
-    fixture.system.hostUpdate(17000); // Ende; Gauss beginnt
+    const firstArmageddonAt = bossConfig.nuke.countdownMs + bossConfig.nuke.emergeDelayMs;
+    const gaussStartsAt = firstArmageddonAt + bossConfig.armageddonDurationMs;
+    fixture.system.hostUpdate(firstArmageddonAt); // erstes Armageddon
+    fixture.system.hostUpdate(gaussStartsAt); // Ende; Gauss beginnt
     fixture.actions.length = 0;
-    fixture.system.hostUpdate(32000); // Armageddon wird während der noch geführten Ladung fällig
+    const pendingArmageddonAt = gaussStartsAt + Math.max(
+      bossConfig.gauss.chargeDurationMs,
+      bossConfig.armageddonCooldownMs,
+    );
+    fixture.system.hostUpdate(pendingArmageddonAt); // Armageddon wird während der noch geführten Ladung fällig
     expect(fixture.actions).toEqual(['gauss-shot', 'armageddon-start']);
   });
 

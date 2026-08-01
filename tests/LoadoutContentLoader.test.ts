@@ -45,9 +45,9 @@ function expectContentError(run: () => unknown, fragment: string): void {
 describe('loadout content loader', () => {
   it('builds the shipped unified registries and freezes every exposed value', () => {
     const built = buildLoadoutRegistries(clonedSources());
-    expect(Object.keys(built.weapons)).toHaveLength(50);
+    expect(Object.keys(built.weapons)).toHaveLength(49);
     expect(Object.keys(built.utilities)).toHaveLength(14);
-    expect(Object.keys(built.ultimates)).toHaveLength(5);
+    expect(Object.keys(built.ultimates)).toHaveLength(6);
     expect(built.defaultLoadout.weapon1).toBe(built.weapons.GLOCK);
     expect(built.defaultLoadout.utility).toBe(built.utilities.HE_GRENADE);
     expect(Object.isFrozen(built)).toBe(true);

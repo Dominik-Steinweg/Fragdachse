@@ -31,6 +31,8 @@ const FOLLOW_RADIUS_MAX_PX = 140;
  */
 const FOLLOW_DIRECT_STEER_PX = 96;
 const FOLLOW_ARRIVAL_PX = 10;
+/** So viele Ringplätze werden durchprobiert, bevor der Verbündete auf den Besitzer selbst zielt. */
+const FOLLOW_ANCHOR_ATTEMPTS = 8;
 /** Goldener Winkel: verteilt neue Plätze auch bei wachsender Schar gleichmäßig. */
 const FOLLOW_SLOT_ANGLE_STEP = Math.PI * (3 - Math.sqrt(5));
 
@@ -280,9 +282,15 @@ export class NecromancySystem {
   /**
    * Persönlicher Platz im Gefolge-Ring. Die Wiederbelebten suchen damit die Nähe des Besitzers,
    * ohne auf seiner Position zu stehen.
+   *
+   * Steht der Besitzer an einer Basis, fällt ein Teil des Rings in den Basis-Footprint. Ein dort
+   * angesetzter Platz ist unerreichbar: Der Verbündete drückt gegen die Wand, kommt nie an und
+   * bleibt am Rand stehen. Solche Plätze werden deshalb entlang des Rings weitergedreht und
+   * fallen notfalls auf die Besitzerposition zurück.
    */
   private resolveFollowAnchor(
     allyId: string,
+    ownerId: string,
     ownerX: number,
     ownerY: number,
     followRadius: number,
@@ -292,8 +300,19 @@ export class NecromancySystem {
       slot = this.nextFollowSlot++;
       this.followSlots.set(allyId, slot);
     }
-    const angle = slot * FOLLOW_SLOT_ANGLE_STEP;
-    return { x: ownerX + Math.cos(angle) * followRadius, y: ownerY + Math.sin(angle) * followRadius };
+
+    const flowField = this.allyFlowFields.get(ownerId) ?? null;
+    for (let attempt = 0; attempt < FOLLOW_ANCHOR_ATTEMPTS; attempt += 1) {
+      const angle = (slot + attempt) * FOLLOW_SLOT_ANGLE_STEP;
+      const candidate = {
+        x: ownerX + Math.cos(angle) * followRadius,
+        y: ownerY + Math.sin(angle) * followRadius,
+      };
+      if (!flowField) return candidate;
+      const cell = flowField.worldToGrid(candidate.x, candidate.y);
+      if (cell && flowField.isTraversableAt(cell.gridX, cell.gridY)) return candidate;
+    }
+    return { x: ownerX, y: ownerY };
   }
 
   private updateAlly(
@@ -309,7 +328,7 @@ export class NecromancySystem {
       // Beim Angriff zählt das Ziel selbst, beim Rückweg der eigene Platz im Gefolge-Ring.
       const anchor = destination.target
         ? { x: destination.x, y: destination.y }
-        : this.resolveFollowAnchor(ally.id, destination.x, destination.y, followRadius);
+        : this.resolveFollowAnchor(ally.id, ownerId, destination.x, destination.y, followRadius);
       const dx = anchor.x - ally.sprite.x;
       const dy = anchor.y - ally.sprite.y;
       const length = Math.hypot(dx, dy);
@@ -319,8 +338,11 @@ export class NecromancySystem {
           ally.stopMovement();
         } else {
           // Das Flowfield kennt nur das gemeinsame Ziel; die letzten Meter zum eigenen Platz
-          // laufen deshalb direkt.
-          const steerDirectly = flowDirection === undefined || length <= FOLLOW_DIRECT_STEER_PX;
+          // laufen deshalb direkt – aber nur, wenn die Luftlinie frei ist. Liegt eine Basisecke
+          // dazwischen, würde die Direktsteuerung den Verbündeten in die Wand laufen lassen,
+          // während das Flowfield ihn sauber herumführt.
+          const steerDirectly = flowDirection === undefined
+            || (length <= FOLLOW_DIRECT_STEER_PX && this.hasClearPathToAnchor(ownerId, ally, anchor));
           const directionX = steerDirectly ? dx / length : flowDirection.x;
           const directionY = steerDirectly ? dy / length : flowDirection.y;
           const desiredVx = directionX * ally.getMoveSpeed();
@@ -425,13 +447,24 @@ export class NecromancySystem {
     if (integration <= 0) return undefined;
     const vector = flowField.getVectorAt(cell.gridX, cell.gridY);
     if (vector.x === 0 && vector.y === 0) return null;
-    if (!ally.isBoss()) return vector;
+    // Wie bei den Gegnern: Der grobe Zellvektor genügt auf freier Fläche, an Basiswänden nicht.
+    if (!ally.isBoss() && !flowField.isWallAdjacentAt(cell.gridX, cell.gridY)) return vector;
     const waypoint = flowField.getNextCellWorldPosition(cell.gridX, cell.gridY);
     if (!waypoint) return vector;
     const dx = waypoint.x - ally.sprite.x;
     const dy = waypoint.y - ally.sprite.y;
     const length = Math.hypot(dx, dy);
     return length > 0.001 ? { x: dx / length, y: dy / length } : vector;
+  }
+
+  private hasClearPathToAnchor(
+    ownerId: string,
+    ally: EnemyEntity,
+    anchor: { x: number; y: number },
+  ): boolean {
+    const flowField = this.allyFlowFields.get(ownerId);
+    if (!flowField) return true;
+    return flowField.hasWalkableLine(ally.sprite.x, ally.sprite.y, anchor.x, anchor.y);
   }
 
   private findTeleportPosition(ownerId: string, ownerX: number, ownerY: number): { x: number; y: number } {

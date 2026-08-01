@@ -35,6 +35,45 @@ import { CombatSystem } from '../src/systems/CombatSystem';
 import { TurretSystem } from '../src/systems/TurretSystem';
 
 describe('hostile base turrets', () => {
+  it('multiplies both automated projectile variants with the selected construct bonus', () => {
+    const playerManager = {
+      getAllPlayers: () => [
+        { id: 'owner', sprite: { x: 0, y: 0, active: true } },
+        { id: 'target', sprite: { x: 100, y: 0, active: true } },
+        { id: 'target-2', sprite: { x: 120, y: 0, active: true } },
+      ],
+    } as unknown as PlayerManager;
+    const combatSystem = {
+      isAlive: () => true,
+      isBurrowed: () => false,
+      canDamageTarget: () => true,
+    } as unknown as CombatSystem;
+    const fire = vi.fn();
+    const turrets = new TurretSystem(playerManager, combatSystem);
+    const source = {
+      id: 7,
+      x: 0,
+      y: 0,
+      ownerId: 'owner',
+      ownerColor: 0xffffff,
+      weaponId: 'SPOREN' as const,
+      secondProjectileDamageFactor: 0.5,
+    };
+    turrets.setTurretProvider(() => [source], null);
+    turrets.setTurretDamageMultiplierProvider(() => 1.25);
+    turrets.setFireHandler(fire);
+
+    turrets.hostUpdate(
+      0,
+      UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPOREN,
+    );
+
+    expect(fire).toHaveBeenCalledTimes(2);
+    expect(fire.mock.calls[0][8]).toBeCloseTo(1.25, 10);
+    expect(fire.mock.calls[1][8]).toBeCloseTo(0.625, 10);
+  });
+
   it('targets a living player instead of a closer zombie and fires BASE_SPOREN', () => {
     const playerManager = {
       getAllPlayers: () => [{

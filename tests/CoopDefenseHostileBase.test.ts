@@ -49,7 +49,7 @@ describe('coop-defense hostile bases', () => {
     for (const mapId of ATTACK_MAP_IDS) {
       const specs = resolveCoopDefenseBases(getCoopDefenseMapConfig(mapId));
       const hostileCells = specs
-        .filter((spec) => spec.faction === 'hostile')
+        .filter((spec) => spec.faction === 'hostile' && (spec.role ?? 'main') === 'main')
         .flatMap((spec) => spec.cells);
       const friendlyCells = specs
         .filter((spec) => spec.faction === 'friendly')
@@ -59,6 +59,46 @@ describe('coop-defense hostile bases', () => {
       expect(Math.max(...hostileCells.map((cell) => cell.gridX)))
         .toBeLessThan(Math.min(...friendlyCells.map((cell) => cell.gridX)));
     }
+  });
+
+  it('keeps map 13 spawn waves on four destructible C-shaped sources', () => {
+    const spawnPoints = resolveCoopDefenseBases(getCoopDefenseMapConfig('13'))
+      .filter((spec) => spec.role === 'spawn-point');
+
+    expect(spawnPoints).toHaveLength(4);
+    expect(spawnPoints.map((spec) => [spec.region.minGridX, spec.region.minGridY])).toEqual([
+      [1, 2],
+      [17, 6],
+      [3, 15],
+      [19, 12],
+    ]);
+    expect(spawnPoints.map((spec) => [spec.spawnCenter?.gridX, spec.spawnCenter?.gridY])).toEqual([
+      [2, 3],
+      [18, 7],
+      [4, 16],
+      [20, 13],
+    ]);
+    for (let firstIndex = 0; firstIndex < spawnPoints.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < spawnPoints.length; secondIndex += 1) {
+        const first = spawnPoints[firstIndex].spawnCenter!;
+        const second = spawnPoints[secondIndex].spawnCenter!;
+        expect(Math.max(Math.abs(first.gridX - second.gridX), Math.abs(first.gridY - second.gridY)))
+          .toBeGreaterThan(5);
+      }
+    }
+    for (const source of spawnPoints) {
+      expect(source.hpMax).toBeLessThan(1000);
+      expect(source.cells).toHaveLength(7);
+      expect(source.spawnWave).toBeDefined();
+      expect(source.spawnCenter).toBeDefined();
+      expect(source.cells).not.toContainEqual(source.spawnCenter);
+      expect(source.spawnWave?.enemyKind).toBeDefined();
+    }
+  });
+
+  it('does not add plasma outposts to map 14', () => {
+    const specs = resolveCoopDefenseBases(getCoopDefenseMapConfig('14'));
+    expect(specs.filter((spec) => spec.role === 'outpost')).toHaveLength(0);
   });
 
   it('carries every configured base faction through to the resolved spec', () => {

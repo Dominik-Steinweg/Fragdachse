@@ -227,6 +227,12 @@ export const COOP_DEFENSE_AFFIX_RULES = Object.freeze({
   crossfireDurationMs: 5_000,
   /** Kinetische Ladung: Wegstrecke je Ladung. */
   movementChargeDistancePx: 500,
+  /** Glutwanderer: Wegstrecke je Feuerbrocken-Burst. */
+  glutwandererDistancePx: 500,
+  /** Umzingelt: Gegnerzahl, Radius und Nachlaufzeit der Adrenalinregeneration. */
+  surroundedEnemyCount: 5,
+  surroundedRadiusPx: 160,
+  surroundedLingerMs: 500,
 });
 
 /** `3,2` statt `3.2000000000000004` – Prozentwerte im Tooltip bleiben lesbar. */
@@ -339,6 +345,19 @@ Object.freeze([
       + ` ${percentText(value)} % Schadensreduktion`,
   },
   {
+    id: 'surrounded',
+    label: 'Umzingelt',
+    weight: 24,
+    minAtLevel1: 0.1,
+    maxAtLevel1: 0.18,
+    perLevel: 0.03,
+    slots: ['armor'],
+    displayAsPercent: true,
+    shortText: (value) => `Bei mindestens ${COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount}`
+      + ` Gegnern in ${COOP_DEFENSE_AFFIX_RULES.surroundedRadiusPx} Reichweite:`
+      + ` +${percentText(value)} % Adrenalinregeneration`,
+  },
+  {
     id: 'out_of_combat_armor_repair',
     label: 'Notfallreparatur',
     weight: 45,
@@ -442,6 +461,18 @@ Object.freeze([
     slots: ['gloves'],
     classIds: ['inspector_gadachs'],
     displayAsPercent: false,
+  },
+  {
+    id: 'remote_control',
+    label: 'Fernsteuerung',
+    weight: 18,
+    minAtLevel1: 0.1,
+    maxAtLevel1: 0.18,
+    perLevel: 0.03,
+    slots: ['gloves'],
+    classIds: ['inspector_gadachs'],
+    displayAsPercent: true,
+    shortText: (value) => `Das naechste eigene Konstrukt verursacht +${percentText(value)} % Schaden`,
   },
   {
     id: 'primary_vulnerability',
@@ -723,6 +754,18 @@ Object.freeze([
     displayAsPercent: true,
     shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.movementChargeDistancePx} zurueckgelegte Pixel:`
       + ` naechster Primaerangriff +${percentText(value)} % Schaden`,
+  },
+  {
+    id: 'glutwanderer',
+    label: 'Glutwanderer',
+    weight: 24,
+    minAtLevel1: 2,
+    maxAtLevel1: 4,
+    perLevel: 1,
+    slots: ['boots'],
+    displayAsPercent: false,
+    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.glutwandererDistancePx} zurueckgelegte Pixel:`
+      + ` ${Math.max(1, Math.floor(value))} brennende Brocken`,
   },
 ]);
 

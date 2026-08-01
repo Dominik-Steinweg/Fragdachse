@@ -8,6 +8,7 @@ import {
   COOP_DEFENSE_FLOW_FIELD_ROCK_COST,
   COOP_DEFENSE_FLOW_FIELD_TRACK_COST,
   COOP_DEFENSE_FLOW_FIELD_TRUNK_COST,
+  COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST,
 } from '../config';
 import {
   ARENA_MAP_GRID_CHANGED_EVENT,
@@ -109,6 +110,16 @@ const CELL_RULES: readonly EnemyFlowFieldCellRule[] = [
 
 export type EnemyFlowFieldCellKind = keyof typeof CELL_DEFINITIONS;
 
+/**
+ * Zellarten, die dauerhaft blockieren und nicht weggeraeumt werden koennen. Nur sie loesen den
+ * Wandaufschlag aus – Felsen sind zerstoerbar und sollen weiterhin angelaufen werden.
+ */
+const WALL_KIND_CODES: ReadonlySet<number> = new Set(
+  Object.values(CELL_DEFINITIONS)
+    .filter((definition) => !definition.isTraversable && !definition.isDestructible)
+    .map((definition) => definition.code),
+);
+
 export class EnemyFlowFieldService {
   private readonly metrics: EnemyFlowFieldMetrics;
   private readonly layout: ArenaLayout;
@@ -123,6 +134,12 @@ export class EnemyFlowFieldService {
   private readonly kindCodes: Uint8Array;
   private readonly traversable: Uint8Array;
   private readonly destructible: Uint8Array;
+  /**
+   * Begehbare Zellen mit mindestens einem unzerstoerbaren Hindernis in der 8er-Nachbarschaft.
+   * Traegt beides: den Kostenaufschlag beim Feldaufbau und die Umschaltung auf Wegpunkt-Steuerung
+   * beim Verbraucher.
+   */
+  private readonly wallAdjacent: Uint8Array;
   private readonly goalMask: Uint8Array;
   private readonly goalCells: EnemyFlowFieldGoalCell[];
   private readonly summary: {
@@ -167,6 +184,7 @@ export class EnemyFlowFieldService {
     this.kindCodes = new Uint8Array(totalCells);
     this.traversable = new Uint8Array(totalCells);
     this.destructible = new Uint8Array(totalCells);
+    this.wallAdjacent = new Uint8Array(totalCells);
     this.goalMask = new Uint8Array(totalCells);
     this.integrationField = new Float32Array(totalCells);
     this.vectorField = new Float32Array(totalCells * 2);
@@ -237,6 +255,34 @@ export class EnemyFlowFieldService {
   isDestructibleAt(gridX: number, gridY: number): boolean {
     if (!this.isInBounds(gridX, gridY)) return false;
     return this.destructible[this.toIndex(gridX, gridY)] === 1;
+  }
+
+  /**
+   * True, wenn die Zelle an ein unzerstoerbares Hindernis grenzt (Basis oder Baumstumpf).
+   * Verbraucher schalten dort auf Wegpunkt-Steuerung um, statt dem groben Zellvektor zu folgen.
+   */
+  isWallAdjacentAt(gridX: number, gridY: number): boolean {
+    if (!this.isInBounds(gridX, gridY)) return false;
+    return this.wallAdjacent[this.toIndex(gridX, gridY)] === 1;
+  }
+
+  /**
+   * Prueft, ob die Luftlinie zwischen zwei Weltpunkten ausschliesslich ueber begehbare Zellen
+   * laeuft. Direkte Steuerung auf ein nahes Ziel darf nur so freigegeben werden – sonst laeuft eine
+   * Einheit die letzten Meter stur in eine Basiswand und bleibt dort stehen.
+   */
+  hasWalkableLine(fromWorldX: number, fromWorldY: number, toWorldX: number, toWorldY: number): boolean {
+    const deltaX = toWorldX - fromWorldX;
+    const deltaY = toWorldY - fromWorldY;
+    const distance = Math.hypot(deltaX, deltaY);
+    // Halbe Zellgroesse als Schrittweite: feiner als jede Zelle, damit kein Hindernis uebersprungen wird.
+    const steps = Math.max(1, Math.ceil(distance / (this.metrics.cellSize * 0.5)));
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const cell = this.worldToGrid(fromWorldX + deltaX * t, fromWorldY + deltaY * t);
+      if (!cell || !this.isFlowPassableAt(cell.gridX, cell.gridY)) return false;
+    }
+    return true;
   }
 
   worldToGrid(worldX: number, worldY: number): EnemyFlowFieldGridCell | null {
@@ -436,6 +482,8 @@ export class EnemyFlowFieldService {
       traversableCells = this.applyClearanceMask();
     }
 
+    this.applyWallAdjacencySurcharge();
+
     this.goalMask.fill(0);
     this.goalCells.length = 0;
     this.goalCells.push(...this.computeGoalCells());
@@ -557,7 +605,7 @@ export class EnemyFlowFieldService {
       if (!this.activeBaseIds.has(baseSpec.id)) continue;
       // Nur die Ziele werden gefiltert: feindliche Basiszellen bleiben Hindernisse und muessen
       // deshalb weiterhin im Kostenfeld (`buildBaseLookup`) stehen.
-      if (baseSpec.faction === 'hostile') continue;
+      if (baseSpec.faction === 'hostile' || baseSpec.role === 'outpost' || baseSpec.role === 'spawn-point') continue;
       for (const cell of baseSpec.cells) {
         for (const [dx, dy] of directions) {
           const neighborX = cell.gridX + dx * goalDistance;
@@ -637,6 +685,47 @@ export class EnemyFlowFieldService {
     }
 
     return traversableCells;
+  }
+
+  /**
+   * Markiert begehbare Zellen neben unzerstoerbaren Hindernissen und verteuert sie.
+   *
+   * Das Feld plant auf Zellmittelpunkten, die Koerper sind aber bis zu 68 px breit bei 32 px
+   * Zellgroesse. Eine Route direkt an einer Basiswand laesst den Koerper deshalb dauerhaft in der
+   * Wand stecken: Die Kollisionsaufloesung schiebt ihn jeden Frame zurueck, waehrend der
+   * Richtungsvektor weiter an der Wand entlang zeigt. Der Aufschlag ist absichtlich klein – enge
+   * Korridore bleiben passierbar, offene Wege biegen sich aber um eine Zelle von der Wand weg.
+   *
+   * Felsen bleiben ausgenommen: Sie sind zerstoerbar, und das Anrempeln ist dort der gewollte
+   * Ausloeser fuer {@link CoopDefenseEnemyAttackSystem}s Hindernis-Biss.
+   */
+  private applyWallAdjacencySurcharge(): void {
+    this.wallAdjacent.fill(0);
+    if (COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST <= 0) return;
+
+    for (let gridY = 0; gridY < this.metrics.rows; gridY += 1) {
+      for (let gridX = 0; gridX < this.metrics.cols; gridX += 1) {
+        const index = this.toIndex(gridX, gridY);
+        if (this.traversable[index] !== 1) continue;
+        if (!this.hasIndestructibleBlockerNeighbor(gridX, gridY)) continue;
+        this.wallAdjacent[index] = 1;
+        this.costs[index] += COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST;
+      }
+    }
+  }
+
+  private hasIndestructibleBlockerNeighbor(gridX: number, gridY: number): boolean {
+    for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
+      const neighborX = gridX + dx;
+      const neighborY = gridY + dy;
+      // Der Arenarand zaehlt nicht mit: Sonst waere jede Randspur teuer, obwohl dort weder
+      // Basiswaende noch Baumstuempfe stehen und Gegner regulaer am Rand einbuddeln.
+      if (!this.isInBounds(neighborX, neighborY)) continue;
+      // Bewusst ueber die Zellart statt ueber `traversable`: Der Clearance-Mask sperrt zusaetzliche
+      // Bodenzellen, die keine echten Waende sind und deshalb keinen Aufschlag ausloesen duerfen.
+      if (WALL_KIND_CODES.has(this.kindCodes[this.toIndex(neighborX, neighborY)])) return true;
+    }
+    return false;
   }
 
   private isGoalCandidateAt(gridX: number, gridY: number): boolean {

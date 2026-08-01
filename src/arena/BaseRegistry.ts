@@ -20,8 +20,12 @@ import {
   type CoopBasePowerUpPedestalConfig,
   type CoopBaseShape,
   type CoopBaseTurretConfig,
+  type CoopBaseRole,
+  type CoopBaseTurretWeaponId,
   type CoopDefenseMapConfig,
+  type ResolvedCoopDefenseMapWaveConfig,
 } from '../config/coopDefenseMaps';
+import { resolveCoopDefenseEnemyWaveConfig } from '../config/coopDefenseEnemies';
 
 export interface BaseTurretSpec {
   readonly id: string;
@@ -29,7 +33,7 @@ export interface BaseTurretSpec {
   readonly x: number;
   readonly y: number;
   readonly initialAngle: number;
-  readonly weaponId: 'SPOREN' | 'BASE_SPOREN';
+  readonly weaponId: CoopBaseTurretWeaponId;
 }
 
 export interface BasePowerUpPedestalSpec {
@@ -64,8 +68,16 @@ export interface BaseSpec {
    * deshalb kein Teil des Netzwerk-Snapshots.
    */
   readonly faction: CoopBaseFaction;
+  readonly role: CoopBaseRole;
   readonly turrets: readonly BaseTurretSpec[];
   readonly powerUpPedestals: readonly BasePowerUpPedestalSpec[];
+  readonly spawnCenter?: {
+    readonly gridX: number;
+    readonly gridY: number;
+    readonly x: number;
+    readonly y: number;
+  };
+  readonly spawnWave?: ResolvedCoopDefenseMapWaveConfig;
 }
 
 // ── Anker- & Shape-Auflösung ───────────────────────────────────────────────
@@ -115,6 +127,8 @@ function resolveAnchorOrigin(anchor: CoopBaseAnchor, width: number, height: numb
       const minGridY = Math.floor((GRID_ROWS - height) / 2) + anchor.dyCells;
       return { minGridX, minGridY };
     }
+    case 'grid':
+      return { minGridX: anchor.gridX, minGridY: anchor.gridY };
   }
 }
 
@@ -127,7 +141,7 @@ function clampOriginToGrid(originX: number, originY: number, width: number, heig
   return { minGridX, minGridY };
 }
 
-function resolveBaseSpec(config: CoopBaseConfig): BaseSpec {
+function resolveBaseSpec(config: CoopBaseConfig, humanPlayerCount: number): BaseSpec {
   const { cells: relativeCells, width, height } = resolveShape(config.shape);
   const origin = resolveAnchorOrigin(config.anchor, width, height);
   const { minGridX, minGridY } = clampOriginToGrid(origin.minGridX, origin.minGridY, width, height);
@@ -150,6 +164,37 @@ function resolveBaseSpec(config: CoopBaseConfig): BaseSpec {
     ? { minGridX: minX, maxGridX: maxX, minGridY: minY, maxGridY: maxY }
     : { minGridX: 0, maxGridX: 0, minGridY: 0, maxGridY: 0 };
 
+  let spawnCenter: BaseSpec['spawnCenter'];
+  if (config.role === 'spawn-point') {
+    const relativeCenter = config.spawnCenter;
+    if (!relativeCenter) {
+      throw new Error(`[BaseRegistry] Spawn point ${config.id} has no spawnCenter`);
+    }
+    if (
+      relativeCenter.gridX < 0
+      || relativeCenter.gridX >= width
+      || relativeCenter.gridY < 0
+      || relativeCenter.gridY >= height
+    ) {
+      throw new Error(`[BaseRegistry] Spawn point ${config.id} has a spawnCenter outside its shape bounds`);
+    }
+    const centerGridX = minGridX + relativeCenter.gridX;
+    const centerGridY = minGridY + relativeCenter.gridY;
+    if (absoluteCells.some((cell) => cell.gridX === centerGridX && cell.gridY === centerGridY)) {
+      throw new Error(`[BaseRegistry] Spawn point ${config.id} needs a free spawnCenter cell`);
+    }
+    spawnCenter = {
+      gridX: centerGridX,
+      gridY: centerGridY,
+      x: ARENA_OFFSET_X + centerGridX * CELL_SIZE + CELL_SIZE / 2,
+      y: ARENA_OFFSET_Y + centerGridY * CELL_SIZE + CELL_SIZE / 2,
+    };
+  }
+
+  const resolvedSpawnWave = config.spawnWave
+    ? resolveCoopDefenseEnemyWaveConfig(config.spawnWave.enemyKind, config.spawnWave, humanPlayerCount)
+    : null;
+
   const turrets = (config.turrets ?? []).map((turret) => resolveBaseTurretSpec(
     config.id,
     turret,
@@ -170,8 +215,19 @@ function resolveBaseSpec(config: CoopBaseConfig): BaseSpec {
     region,
     hpMax: Math.max(1, config.hpMax),
     faction: config.faction ?? 'friendly',
+    role: config.role ?? 'main',
     turrets,
     powerUpPedestals,
+    spawnCenter,
+    spawnWave: config.spawnWave && resolvedSpawnWave
+      ? {
+        enemyKind: config.spawnWave.enemyKind,
+        intervalMs: resolvedSpawnWave.intervalMs,
+        countPerWave: resolvedSpawnWave.countPerWave,
+        startAtMs: Math.max(0, Math.floor(config.spawnWave.startAtMs ?? 0)),
+        startsAfterAirstrikeBarrage: config.spawnWave.startsAfterAirstrikeBarrage ?? false,
+      }
+      : undefined,
   };
 }
 
@@ -229,14 +285,20 @@ function resolveBaseTurretSpec(
 // ── Öffentliche API ────────────────────────────────────────────────────────
 
 /** Aktive Coop-Basen für die laufende Runde. Leeres Array außerhalb des Coop-Modus. */
-export function getCoopDefenseBases(mapConfig: CoopDefenseMapConfig = resolveActiveCoopDefenseMapConfig()): readonly BaseSpec[] {
+export function getCoopDefenseBases(
+  mapConfig: CoopDefenseMapConfig = resolveActiveCoopDefenseMapConfig(),
+  humanPlayerCount = 1,
+): readonly BaseSpec[] {
   if (!isCoopDefenseBasesActive()) return [];
-  return resolveCoopDefenseBases(mapConfig);
+  return resolveCoopDefenseBases(mapConfig, humanPlayerCount);
 }
 
 /** Löst eine Map-Konfiguration unabhängig vom derzeit aktiven Spielmodus auf. */
-export function resolveCoopDefenseBases(mapConfig: CoopDefenseMapConfig): readonly BaseSpec[] {
-  return mapConfig.bases.map(resolveBaseSpec);
+export function resolveCoopDefenseBases(
+  mapConfig: CoopDefenseMapConfig,
+  humanPlayerCount = 1,
+): readonly BaseSpec[] {
+  return mapConfig.bases.map((baseConfig) => resolveBaseSpec(baseConfig, humanPlayerCount));
 }
 
 function resolveActiveCoopDefenseMapConfig(): CoopDefenseMapConfig {
@@ -268,9 +330,16 @@ export function getBaseWorldBounds(region: ArenaGridRegion): {
  */
 export const COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS = 5;
 
-function isCoopDefenseBaseWithinBoundingBoxDistance(gx: number, gy: number, distance: number): boolean {
-  if (!isCoopDefenseBasesActive()) return false;
-  for (const base of getCoopDefenseBases()) {
+function isCoopDefenseBaseWithinBoundingBoxDistance(
+  gx: number,
+  gy: number,
+  distance: number,
+  bases?: readonly BaseSpec[],
+): boolean {
+  if (!bases && !isCoopDefenseBasesActive()) return false;
+  const resolvedBases = bases ?? getCoopDefenseBases();
+  if (resolvedBases.length === 0) return false;
+  for (const base of resolvedBases) {
     if (
       gx >= base.region.minGridX - distance
       && gx <= base.region.maxGridX + distance
@@ -307,8 +376,17 @@ export function isCoopDefenseBaseOrBorderCell(gx: number, gy: number): boolean {
  * konkave Innenflächen (z. B. die Lücke einer C-Form) frei von Felsen/Bäumen
  * bleiben.
  */
-export function isCoopDefenseBaseObstacleClearanceCell(gx: number, gy: number): boolean {
-  return isCoopDefenseBaseWithinBoundingBoxDistance(gx, gy, COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS);
+export function isCoopDefenseBaseObstacleClearanceCell(
+  gx: number,
+  gy: number,
+  bases?: readonly BaseSpec[],
+): boolean {
+  return isCoopDefenseBaseWithinBoundingBoxDistance(
+    gx,
+    gy,
+    COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS,
+    bases,
+  );
 }
 
 /**

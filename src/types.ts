@@ -568,6 +568,9 @@ export interface CoopDefensePendingItemReward {
   readonly offers: readonly CoopDefenseItem[];
 }
 
+/** Entscheidung fuer ein offenes Item-Angebot. */
+export type CoopDefenseItemRewardAction = 'take' | 'equip';
+
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
 export type ConstructionId = 'rocket_turret' | 'machine_gun_turret' | 'flame_turret';
 
@@ -1395,6 +1398,15 @@ export interface SyncedTurretCharge {
   damageMultiplier: number;
   startedAt: number;
   expiresAt: number;
+}
+
+/** Aktives Fernsteuerungsziel eines Inspectors (host-autoritativ, per GameState repliziert). */
+export interface SyncedRemoteControlTurret {
+  turretId: string;
+  ownerId: string;
+  x: number;
+  y: number;
+  color: number;
 }
 
 /** Ortsbezogener Turmbuff; wird vom TurretSystem pro Turmposition abgefragt. */

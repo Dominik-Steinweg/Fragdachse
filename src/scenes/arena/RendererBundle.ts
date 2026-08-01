@@ -23,6 +23,7 @@ import { MiniTeslaDomeRenderer } from '../../effects/MiniTeslaDomeRenderer';
 import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
 import { OverchargeFieldRenderer } from '../../effects/OverchargeFieldRenderer';
 import { TurretChargeRenderer } from '../../effects/TurretChargeRenderer';
+import { RemoteControlRenderer } from '../../effects/RemoteControlRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
 import { FireballRenderer }    from '../../effects/FireballRenderer';
@@ -72,6 +73,7 @@ export interface RendererBundle {
   timeBubble:          TimeBubbleRenderer;
   overchargeField:     OverchargeFieldRenderer;
   turretCharge:        TurretChargeRenderer;
+  remoteControl:       RemoteControlRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
   fireball:            FireballRenderer;
@@ -163,6 +165,9 @@ export function createRendererBundle(
   const turretCharge = new TurretChargeRenderer(scene);
   turretCharge.generateTextures();
 
+  const remoteControl = new RemoteControlRenderer(scene);
+  remoteControl.generateTextures();
+
   const holyGrenade = new HolyGrenadeRenderer(scene);
   holyGrenade.generateTextures();
 
@@ -216,6 +221,7 @@ export function createRendererBundle(
   timeBubble.setLightingSystem(lighting);
   overchargeField.setLightingSystem(lighting);
   turretCharge.setLightingSystem(lighting);
+  remoteControl.setLightingSystem(lighting);
   healingAura.setLightingSystem(lighting);
   guardianSpirit.setLightingSystem(lighting);
   slimeTrail.setLightingSystem(lighting);
@@ -228,6 +234,7 @@ export function createRendererBundle(
     bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, overchargeField, turretCharge, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow, lighting,
+    remoteControl,
     train: null,
     translocatorTeleport: null,
   };

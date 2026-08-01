@@ -52,6 +52,11 @@ describe('game-wide loadout content validation', () => {
     }
   });
 
+  it('provides the Armageddon impact sound for normal and void meteors', () => {
+    const assetPath = AUDIO_ASSETS.sfx_explosion_armageddon;
+    expect(existsSync(resolve('public', assetPath.replace(/^\.\//, ''))), assetPath).toBe(true);
+  });
+
   it('gives every loadout upgrade effect an explicit compatible descriptor', () => {
     const contracts = getLoadoutModifierTargetContracts();
     for (const upgrade of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {

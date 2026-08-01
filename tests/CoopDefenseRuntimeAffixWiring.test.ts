@@ -213,11 +213,11 @@ describe('Definitionen der Laufzeit-Affixe', () => {
     'primary_vulnerability', 'primary_culling', 'low_hp_blood_rage',
     'primary_kill_fire_chunks', 'primary_slow', 'high_hp_damage',
     'out_of_combat_armor_repair', 'damage_reflection', 'low_hp_speed', 'low_hp_damage_reduction',
-    'dash_speed', 'movement_charge_damage', 'crossfire',
+    'dash_speed', 'movement_charge_damage', 'crossfire', 'glutwanderer', 'remote_control', 'surrounded',
   ] as const;
 
-  it('umfasst den vollstaendigen Pool aus 37 Affixen', () => {
-    expect(COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS).toHaveLength(37);
+  it('umfasst den vollstaendigen Pool aus 40 Affixen', () => {
+    expect(COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS).toHaveLength(40);
     // Versorgungsmunition ist bewusst zurueckgestellt und darf nicht rollen.
     expect(getCoopDefenseItemAffixDefinition('primary_ally_heal')).toBeUndefined();
   });
@@ -262,5 +262,12 @@ describe('Definitionen der Laufzeit-Affixe', () => {
     const text = getCoopDefenseItemAffixDefinition('primary_slow')?.shortText?.(0.1) ?? '';
     expect(text).toContain(`${COOP_DEFENSE_AFFIX_RULES.suppressionSlowFraction * 100} %`);
     expect(text).toContain(`${COOP_DEFENSE_AFFIX_RULES.suppressionSlowDurationMs / 1000} s`);
+  });
+
+  it('bindet die neuen Affixe an die vorgesehenen Slots und Klassen', () => {
+    expect(getCoopDefenseItemAffixDefinition('glutwanderer')?.slots).toEqual(['boots']);
+    expect(getCoopDefenseItemAffixDefinition('surrounded')?.slots).toEqual(['armor']);
+    expect(getCoopDefenseItemAffixDefinition('remote_control')?.slots).toEqual(['gloves']);
+    expect(getCoopDefenseItemAffixDefinition('remote_control')?.classIds).toEqual(['inspector_gadachs']);
   });
 });

@@ -93,8 +93,8 @@ export function validateGameContentReferences(): void {
       issues.push(`enemy:${enemyId}.stinkAura: unbekanntes Utility ${enemy.stinkAura.utilityId}`);
     }
     const gaussWeaponId = enemy.voidHunterBoss?.gauss.weaponId;
-    if (gaussWeaponId && !WEAPON_CONFIGS[gaussWeaponId]) {
-      issues.push(`enemy:${enemyId}.voidHunterBoss.gauss: unbekannte Waffe ${gaussWeaponId}`);
+    if (gaussWeaponId && !ULTIMATE_CONFIGS[gaussWeaponId]) {
+      issues.push(`enemy:${enemyId}.voidHunterBoss.gauss: unbekanntes Ultimate ${gaussWeaponId}`);
     }
   }
 
@@ -183,9 +183,9 @@ export function validateGameContentReferences(): void {
   for (const config of Object.values(UTILITY_CONFIGS)) validateShotAudio(config, issues);
   for (const config of Object.values(ULTIMATE_CONFIGS)) validateShotAudio(config, issues);
 
-  const requiredWeapons = ['SPOREN', 'BASE_SPOREN', 'TURRET_SPORE', 'VOID_HUNTER_GAUSS'];
+  const requiredWeapons = ['SPOREN', 'BASE_SPOREN', 'TURRET_SPORE'];
   const requiredUtilities = ['HE_GRENADE', 'FLIEGENPILZ', 'FELSBAU', 'BFG', 'NUKE', 'HOLY_HAND_GRENADE'];
-  const requiredUltimates = ['ARMAGEDDON', 'HONEY_BADGER_RAGE', 'DACHS_TUNNEL'];
+  const requiredUltimates = ['ARMAGEDDON', 'HONEY_BADGER_RAGE', 'DACHS_TUNNEL', 'VOID_HUNTER_GAUSS'];
   for (const id of requiredWeapons) if (!WEAPON_CONFIGS[id]) issues.push(`system-fallback: fehlende Waffe ${id}`);
   for (const id of requiredUtilities) if (!UTILITY_CONFIGS[id]) issues.push(`system-fallback: fehlendes Utility ${id}`);
   for (const id of requiredUltimates) if (!ULTIMATE_CONFIGS[id]) issues.push(`system-fallback: fehlendes Ultimate ${id}`);
@@ -208,7 +208,9 @@ export function validateGameContentReferences(): void {
     for (const slot of config.allowedSlots) if (!catalogKeys.has(`${slot}:${config.id}`)) issues.push(`catalog:${config.id}: Eintrag für ${slot} fehlt`);
   }
   for (const config of Object.values(ULTIMATE_CONFIGS)) {
-    if (!catalogKeys.has(`ultimate:${config.id}`)) issues.push(`catalog:${config.id}: Ultimate-Eintrag fehlt`);
+    if (config.catalogVisible !== false && !catalogKeys.has(`ultimate:${config.id}`)) {
+      issues.push(`catalog:${config.id}: Ultimate-Eintrag fehlt`);
+    }
   }
 
   if (issues.length > 0) throw new Error(`[game-content] ${issues.length} Referenzfehler:\n${issues.map((issue) => `- ${issue}`).join('\n')}`);

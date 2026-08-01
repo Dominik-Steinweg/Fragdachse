@@ -22,6 +22,8 @@ Diese Auswahl ist ein Einstieg, keine Vorlage zum blinden Kopieren. Vor Änderun
 
 **Nicht blind kopieren:** Die Methode ist bereits groß und variantenreich. Neue eigenständige Effektfamilien besser in einen fokussierten Renderer auslagern; Nuke-/Holy-Partikelzahlen nicht auf häufige Explosionen übertragen.
 
+**Performancevertrag:** Die vier Nuke-Partikelkanäle werden in `EffectSystem` je Radiusprofil geteilt und über `emitParticleAt()` an die Weltposition gesetzt. Nur exakt gleiche Radien dürfen denselben Kanal verwenden, weil Geschwindigkeit und Lebensdauer radiusabhängig sind; die Partikelanzahl bleibt dem Grafikqualitäts-Controller überlassen.
+
 ## Kontinuierliche Projektilvisualisierung
 
 **Pfad:** `src/effects/RocketRenderer.ts`, Einstiege `createVisual()`, `updateVisual()`, `destroyVisual()`

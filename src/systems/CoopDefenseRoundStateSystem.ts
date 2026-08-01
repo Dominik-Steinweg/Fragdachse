@@ -36,7 +36,7 @@ export class CoopDefenseRoundStateSystem {
 
     // Nur eigene Basen zaehlen: sonst waere mit gefallener Gegnerbasis auch die Niederlage
     // ausgeloest oder – schlimmer – gar nicht mehr moeglich.
-    if (this.baseManager.getTotalHp('friendly') <= 0) {
+    if (this.getTotalMainBaseHp('friendly') <= 0) {
       this.concluded = true;
       return 'defeat';
     }
@@ -52,7 +52,7 @@ export class CoopDefenseRoundStateSystem {
     if (this.objective === 'destroy-hostile-bases') {
       // Der Guard schuetzt gegen einen Sofortsieg, falls eine Map ohne feindliche Basis das
       // Ziel doch einmal an der Normalisierung vorbei setzt.
-      if (this.baseManager.hasFaction('hostile') && this.baseManager.getTotalHp('hostile') <= 0) {
+      if (this.hasMainBase('hostile') && this.getTotalMainBaseHp('hostile') <= 0) {
         this.concluded = true;
         return 'victory';
       }
@@ -70,11 +70,31 @@ export class CoopDefenseRoundStateSystem {
   applyDebugBaseDamage(amount: number): void {
     if (amount <= 0 || this.concluded) return;
 
-    const targetBase = this.baseManager
-      .getBasesByFaction('friendly')
+    const manager = this.baseManager as BaseManager & {
+      getMainBasesByFaction?: (faction: 'friendly' | 'hostile') => readonly { id: string; getHp: () => number }[];
+    };
+    const targetBase = (manager.getMainBasesByFaction?.('friendly') ?? this.baseManager.getBasesByFaction('friendly'))
       .find((base) => base.getHp() > 0);
     if (!targetBase) return;
 
     this.baseManager.applyDamage(targetBase.id, amount);
+  }
+
+  private getTotalMainBaseHp(faction: 'friendly' | 'hostile'): number {
+    const manager = this.baseManager as BaseManager & {
+      getTotalMainBaseHp?: (baseFaction: 'friendly' | 'hostile') => number;
+    };
+    return manager.getTotalMainBaseHp
+      ? manager.getTotalMainBaseHp(faction)
+      : manager.getTotalHp(faction);
+  }
+
+  private hasMainBase(faction: 'friendly' | 'hostile'): boolean {
+    const manager = this.baseManager as BaseManager & {
+      getMainBasesByFaction?: (baseFaction: 'friendly' | 'hostile') => readonly unknown[];
+    };
+    return manager.getMainBasesByFaction
+      ? manager.getMainBasesByFaction(faction).length > 0
+      : manager.hasFaction(faction);
   }
 }

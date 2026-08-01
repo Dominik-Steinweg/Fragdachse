@@ -22,6 +22,18 @@ export interface CoopDefenseItemRuntimeDeps {
   getAffixValue(playerId: string, affixId: string): number;
   /** Aktuelle HP und Maximum eines Spielers; `null` fuer alles, was kein Spieler ist. */
   getPlayerHp(playerId: string): { hp: number; maxHp: number } | null;
+  /** Position des Spielers fuer ortsbezogene Konstrukt-Affixe. */
+  getPlayerPosition?(playerId: string): { x: number; y: number } | null;
+  /** Klassen-ID fuer klassenexklusive Laufzeit-Affixe. */
+  getPlayerClassId?(playerId: string): string | null;
+}
+
+export interface RemoteControlSource {
+  readonly id: number | string;
+  readonly x: number;
+  readonly y: number;
+  readonly ownerId: string;
+  readonly ownerColor: number;
 }
 
 interface KillChargeState {
@@ -31,15 +43,21 @@ interface KillChargeState {
 
 interface MovementChargeState {
   travelledPx: number;
+  glutwandererTravelledPx: number;
   charged: boolean;
   lastX: number;
   lastY: number;
   hasPosition: boolean;
 }
 
+interface SurroundedState {
+  lingerUntil: number;
+}
+
 export class CoopDefenseItemRuntimeSystem {
   private readonly killCharges = new Map<string, KillChargeState>();
   private readonly movementCharges = new Map<string, MovementChargeState>();
+  private readonly surroundedStates = new Map<string, SurroundedState>();
   private readonly afterburnerUntil = new Map<string, number>();
   private readonly crossfireUntil = new Map<string, number>();
   private readonly lastRealDamageAt = new Map<string, number>();
@@ -56,8 +74,10 @@ export class CoopDefenseItemRuntimeSystem {
     this.killCharges.delete(playerId);
     this.afterburnerUntil.delete(playerId);
     this.crossfireUntil.delete(playerId);
+    this.surroundedStates.delete(playerId);
     this.movementCharges.set(playerId, {
       travelledPx: 0,
+      glutwandererTravelledPx: 0,
       charged: false,
       lastX: 0,
       lastY: 0,
@@ -73,6 +93,7 @@ export class CoopDefenseItemRuntimeSystem {
     this.movementCharges.delete(playerId);
     this.afterburnerUntil.delete(playerId);
     this.crossfireUntil.delete(playerId);
+    this.surroundedStates.delete(playerId);
     this.lastRealDamageAt.delete(playerId);
   }
 
@@ -83,6 +104,7 @@ export class CoopDefenseItemRuntimeSystem {
   clear(): void {
     this.killCharges.clear();
     this.movementCharges.clear();
+    this.surroundedStates.clear();
     this.afterburnerUntil.clear();
     this.crossfireUntil.clear();
     this.lastRealDamageAt.clear();
@@ -102,6 +124,9 @@ export class CoopDefenseItemRuntimeSystem {
     }
     for (const [enemyId, until] of this.vulnerableUntil) {
       if (now >= until) this.vulnerableUntil.delete(enemyId);
+    }
+    for (const [playerId, state] of this.surroundedStates) {
+      if (state.lingerUntil > 0 && now >= state.lingerUntil) this.surroundedStates.delete(playerId);
     }
   }
 
@@ -129,8 +154,13 @@ export class CoopDefenseItemRuntimeSystem {
   /** Faktor auf die Adrenalinregeneration; 1 ohne aktive Stapel. */
   getAdrenalineRegenMultiplier(playerId: string, now = Date.now()): number {
     const stacks = this.getKillChargeStacks(playerId, now);
-    if (stacks <= 0) return 1;
-    return 1 + stacks * this.deps.getAffixValue(playerId, 'adrenaline_kill_charge');
+    let bonus = stacks > 0
+      ? stacks * this.deps.getAffixValue(playerId, 'adrenaline_kill_charge')
+      : 0;
+    if (this.isSurrounded(playerId, now)) {
+      bonus += this.deps.getAffixValue(playerId, 'surrounded');
+    }
+    return 1 + bonus;
   }
 
   // ── Schockreaktion, Dornen, Notfallreparatur ───────────────────────────────
@@ -273,9 +303,9 @@ export class CoopDefenseItemRuntimeSystem {
    * schreiben statt ueber Geschwindigkeit – ein Sprung quer durch die Arena darf keine Ladung
    * schenken. Normale Bewegung, Dash und Bewegung unter der Erde bleiben unter der Grenze.
    */
-  trackMovement(playerId: string, x: number, y: number): void {
+  trackMovement(playerId: string, x: number, y: number): number {
     const state = this.movementCharges.get(playerId);
-    if (!state) return;
+    if (!state) return 0;
 
     const previousX = state.lastX;
     const previousY = state.lastY;
@@ -283,17 +313,29 @@ export class CoopDefenseItemRuntimeSystem {
     state.lastX = x;
     state.lastY = y;
     state.hasPosition = true;
-    if (!hadPosition || state.charged) return;
-    if (this.deps.getAffixValue(playerId, 'movement_charge_damage') <= 0) return;
+    if (!hadPosition) return 0;
 
     const step = Math.hypot(x - previousX, y - previousY);
-    if (step > MAX_TRACKED_STEP_PX) return;
+    if (step > MAX_TRACKED_STEP_PX) return 0;
+
+    let glutwandererBursts = 0;
+    if (this.deps.getAffixValue(playerId, 'glutwanderer') > 0) {
+      state.glutwandererTravelledPx += step;
+      const distance = COOP_DEFENSE_AFFIX_RULES.glutwandererDistancePx;
+      glutwandererBursts = Math.floor(state.glutwandererTravelledPx / distance);
+      if (glutwandererBursts > 0) state.glutwandererTravelledPx %= distance;
+    }
+
+    if (state.charged || this.deps.getAffixValue(playerId, 'movement_charge_damage') <= 0) {
+      return glutwandererBursts;
+    }
 
     state.travelledPx += step;
     if (state.travelledPx >= COOP_DEFENSE_AFFIX_RULES.movementChargeDistancePx) {
       state.travelledPx = 0;
       state.charged = true;
     }
+    return glutwandererBursts;
   }
 
   /** Fortschritt zur naechsten Ladung, 0..1 – Grundlage des HUD-Balkens. */
@@ -320,6 +362,128 @@ export class CoopDefenseItemRuntimeSystem {
     state.charged = false;
     state.travelledPx = 0;
     return this.deps.getAffixValue(playerId, 'movement_charge_damage');
+  }
+
+  /** Anzahl brennender Brocken pro Glutwanderer-Burst; der Affixwert bleibt ganzzahlig lesbar. */
+  getGlutwandererChunkCount(playerId: string): number {
+    return Math.max(1, Math.floor(this.deps.getAffixValue(playerId, 'glutwanderer')));
+  }
+
+  /** Fortschritt bis zum naechsten Glutwanderer-Burst, 0..1. */
+  getGlutwandererProgress(playerId: string): number {
+    const state = this.movementCharges.get(playerId);
+    if (!state) return 0;
+    return Math.min(1, state.glutwandererTravelledPx / COOP_DEFENSE_AFFIX_RULES.glutwandererDistancePx);
+  }
+
+  /** Aktualisiert den Schwellenzustand fuer Umzingelt vor der Ressourcenregeneration. */
+  updateSurrounded(
+    playerId: string,
+    playerX: number,
+    playerY: number,
+    enemies: readonly { x: number; y: number; active?: boolean; alive?: boolean }[],
+    now = Date.now(),
+  ): void {
+    if (this.deps.getAffixValue(playerId, 'surrounded') <= 0) {
+      this.surroundedStates.delete(playerId);
+      return;
+    }
+
+    const radiusSq = COOP_DEFENSE_AFFIX_RULES.surroundedRadiusPx ** 2;
+    let nearbyEnemyCount = 0;
+    for (const enemy of enemies) {
+      if (enemy.active === false || enemy.alive === false) continue;
+      const dx = enemy.x - playerX;
+      const dy = enemy.y - playerY;
+      if (dx * dx + dy * dy <= radiusSq) nearbyEnemyCount += 1;
+    }
+
+    const current = this.surroundedStates.get(playerId);
+    if (nearbyEnemyCount >= COOP_DEFENSE_AFFIX_RULES.surroundedEnemyCount) {
+      this.surroundedStates.set(playerId, { lingerUntil: 0 });
+      return;
+    }
+    if (!current) return;
+    if (current.lingerUntil === 0) {
+      current.lingerUntil = now + COOP_DEFENSE_AFFIX_RULES.surroundedLingerMs;
+    } else if (now >= current.lingerUntil) {
+      this.surroundedStates.delete(playerId);
+    }
+  }
+
+  isSurrounded(playerId: string, now = Date.now()): boolean {
+    const state = this.surroundedStates.get(playerId);
+    if (!state) return false;
+    if (state.lingerUntil > 0 && now >= state.lingerUntil) {
+      this.surroundedStates.delete(playerId);
+      return false;
+    }
+    return true;
+  }
+
+  /** Liefert das per Distanz und stabiler ID-Reihenfolge gewaehlte eigene Konstrukt. */
+  getRemoteControlTarget(
+    playerId: string,
+    sources: readonly RemoteControlSource[],
+  ): RemoteControlSource | null {
+    if (!this.isRemoteControlActive(playerId)) return null;
+    const playerPosition = this.deps.getPlayerPosition?.(playerId);
+    if (!playerPosition) return null;
+
+    let best: RemoteControlSource | null = null;
+    let bestDistanceSq = Number.POSITIVE_INFINITY;
+    for (const source of sources) {
+      if (source.ownerId !== playerId) continue;
+      const dx = source.x - playerPosition.x;
+      const dy = source.y - playerPosition.y;
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq < bestDistanceSq || (
+        distanceSq === bestDistanceSq
+        && best !== null
+        && compareRemoteControlIds(source.id, best.id) < 0
+      )) {
+        best = source;
+        bestDistanceSq = distanceSq;
+      }
+    }
+    return best;
+  }
+
+  /** Multiplikator fuer einen Schuss des ausgewaehlten eigenen Konstrukts. */
+  getRemoteControlDamageMultiplier(
+    playerId: string,
+    source: RemoteControlSource,
+    sources: readonly RemoteControlSource[],
+  ): number {
+    const target = this.getRemoteControlTarget(playerId, sources);
+    return target && String(target.id) === String(source.id)
+      ? 1 + this.deps.getAffixValue(playerId, 'remote_control')
+      : 1;
+  }
+
+  /** Replizierbarer Zustand fuer die Spielerfarben-Glut am jeweils ausgewaehlten Konstrukt. */
+  getRemoteControlSnapshot(
+    playerIds: readonly string[],
+    sources: readonly RemoteControlSource[],
+  ): { turretId: string; ownerId: string; x: number; y: number; color: number }[] {
+    const snapshot: { turretId: string; ownerId: string; x: number; y: number; color: number }[] = [];
+    for (const playerId of playerIds) {
+      const target = this.getRemoteControlTarget(playerId, sources);
+      if (!target) continue;
+      snapshot.push({
+        turretId: String(target.id),
+        ownerId: playerId,
+        x: target.x,
+        y: target.y,
+        color: target.ownerColor,
+      });
+    }
+    return snapshot;
+  }
+
+  private isRemoteControlActive(playerId: string): boolean {
+    return this.deps.getPlayerClassId?.(playerId) === 'inspector_gadachs'
+      && this.deps.getAffixValue(playerId, 'remote_control') > 0;
   }
 
   // ── Primaerwaffen-Treffereffekte ───────────────────────────────────────────
@@ -396,4 +560,11 @@ export class CoopDefenseItemRuntimeSystem {
     if (!hp || hp.maxHp <= 0) return null;
     return hp.hp / hp.maxHp;
   }
+}
+
+function compareRemoteControlIds(left: number | string, right: number | string): number {
+  if (typeof left === 'number' && typeof right === 'number') return left - right;
+  if (typeof left === 'number') return -1;
+  if (typeof right === 'number') return 1;
+  return left.localeCompare(right);
 }

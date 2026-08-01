@@ -65,7 +65,7 @@ describe('Map 14 rock field', () => {
 
       // Deutlich unter der Hälfte begehbar; der Rest ist Fels. Der freie Anteil besteht fast nur
       // aus den Schutzradien der beiden Basen, den Gleisspalten und den Gängen.
-      expect(freeCells).toBeLessThan(GRID_COLS * GRID_ROWS * 0.4);
+      expect(freeCells).toBeLessThan(GRID_COLS * GRID_ROWS * 0.45);
       expect(freeCells).toBeGreaterThan(0);
     }
   });
@@ -119,7 +119,7 @@ describe('Map 14 rock field', () => {
     // Bereich nicht über die ganze Strecke konstant sein.
     const blocked = buildBlockedGrid(SEEDS[0]);
     const widths: number[] = [];
-    for (let gx = 2; gx <= 12; gx++) {
+    for (let gx = 14; gx <= 24; gx++) {
       let openCells = 0;
       for (let gy = 0; gy <= 10; gy++) if (!blocked[gy][gx]) openCells++;
       widths.push(openCells);

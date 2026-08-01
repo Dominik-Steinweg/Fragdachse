@@ -555,6 +555,19 @@ export class LoadoutManager {
     return didFire;
   }
 
+  /** Host-authoritativer NPC-Fire-Pfad für Gauss-Ultimate-Varianten. */
+  fireAutomatedGaussWeapon(
+    config: GaussUltimateConfig,
+    x: number,
+    y: number,
+    angle: number,
+    playerId: string,
+    playerColor: number,
+  ): boolean {
+    this.spawnGaussProjectile(config, x, y, angle, playerId, playerColor, config.range);
+    return true;
+  }
+
   /**
    * Host-authoritative dispatch for an Inspector utility. Unlike the regular
    * utility slot, every Inspector utility owns its own cooldown, taken from the
@@ -1116,27 +1129,7 @@ export class LoadoutManager {
     playerId: string,
     playerColor: number,
   ): void {
-    const lifetime = (cfg.range / cfg.projectileSpeed) * 1000;
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed:             cfg.projectileSpeed,
-      size:              cfg.projectileSize,
-      damage:            cfg.damage,
-      color:             cfg.projectileColor,
-      ownerColor:        playerColor,
-      lifetime,
-      maxBounces:        0,
-      isGrenade:         false,
-      adrenalinGain:     0,
-      weaponName:        cfg.displayName,
-      projectileStyle:   'gauss',
-      bulletVisualPreset: cfg.bulletVisualPreset,
-      tracerConfig:      cfg.tracerConfig,
-      rockDamageMult:    cfg.rockDamageMult,
-      trainDamageMult:   cfg.trainDamageMult,
-      shotAudioKey:      cfg.shotAudio?.successKey,
-      gaussChainRadius:  cfg.chainRadius,
-      gaussChainDamageFactor: cfg.chainDamageFactor,
-    });
+    this.spawnGaussProjectile(cfg, x, y, angle, playerId, playerColor);
 
     this.physicsSystem?.addRecoil(
       playerId,
@@ -1144,6 +1137,40 @@ export class LoadoutManager {
       -Math.sin(angle) * cfg.shotRecoilForce,
       cfg.shotRecoilDuration,
     );
+  }
+
+  private spawnGaussProjectile(
+    cfg: GaussUltimateConfig,
+    x: number,
+    y: number,
+    angle: number,
+    playerId: string,
+    playerColor: number,
+    remainingRangePx?: number,
+  ): void {
+    const lifetime = (cfg.range / cfg.projectileSpeed) * 1000;
+    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
+      speed:             cfg.projectileSpeed,
+      size:              cfg.projectileSize,
+      damage:            cfg.damage,
+      color:             cfg.projectileColor,
+      ownerColor:        playerColor,
+      projectileVisualScale: cfg.projectileVisualScale,
+      lifetime,
+      maxBounces:        0,
+      isGrenade:         false,
+      adrenalinGain:     0,
+      weaponName:        cfg.displayName,
+      projectileStyle:   cfg.projectileStyle ?? 'gauss',
+      bulletVisualPreset: cfg.bulletVisualPreset,
+      tracerConfig:      cfg.tracerConfig,
+      rockDamageMult:    cfg.rockDamageMult,
+      trainDamageMult:   cfg.trainDamageMult,
+      shotAudioKey:      cfg.shotAudio?.successKey,
+      gaussChainRadius:  cfg.chainRadius,
+      gaussChainDamageFactor: cfg.chainDamageFactor,
+      remainingRangePx,
+    });
   }
 
   // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────

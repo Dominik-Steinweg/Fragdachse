@@ -54,6 +54,7 @@ export class TurretSystem {
   private enemyTargetProvider: EnemyTargetProvider | null = null;
   private fireHandler: TurretFireHandler | null = null;
   private turretBuffProvider: ((x: number, y: number) => TurretBuff | null) | null = null;
+  private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
   private nextFireAt = new Map<AutomatedTurretId, number>();
 
   constructor(
@@ -84,6 +85,13 @@ export class TurretSystem {
    */
   setTurretBuffProvider(provider: ((x: number, y: number) => TurretBuff | null) | null): void {
     this.turretBuffProvider = provider;
+  }
+
+  /** ZusÃ¤tzlicher, quellenbezogener Schadensmultiplikator fÃ¼r Konstrukte. */
+  setTurretDamageMultiplierProvider(
+    provider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null,
+  ): void {
+    this.turretDamageMultiplierProvider = provider;
   }
 
   /**
@@ -133,7 +141,8 @@ export class TurretSystem {
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
       const buff = this.turretBuffProvider?.(turretX, turretY) ?? null;
       const fireRateMultiplier = Math.max(0.01, buff?.fireRateMultiplier ?? 1);
-      const damageMultiplier = buff?.damageMultiplier ?? 1;
+      const damageMultiplier = (buff?.damageMultiplier ?? 1)
+        * Math.max(0, this.turretDamageMultiplierProvider?.(turret, turrets) ?? 1);
       this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown / fireRateMultiplier));
 
       const muzzleDistance = muzzleOffset;

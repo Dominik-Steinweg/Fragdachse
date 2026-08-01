@@ -270,48 +270,6 @@
         "failureKey": "shot_dry_trigger"
       }
     },
-    "VOID_HUNTER_GAUSS": {
-      "id": "VOID_HUNTER_GAUSS",
-      "displayName": "Leeren-Gauss",
-      "cooldown": 0,
-      "damage": 200,
-      "range": 1500,
-      "fire": {
-        "type": "projectile",
-        "projectileSpeed": 1350,
-        "projectileSize": 16,
-        "projectileMaxBounces": 0
-      },
-      "allowedSlots": [],
-      "adrenalinCost": 0,
-      "adrenalinGain": 0,
-      "spreadStanding": 0,
-      "spreadMoving": 0,
-      "spreadPerShot": 0,
-      "maxDynamicSpread": 0,
-      "spreadRecoveryDelay": 0,
-      "spreadRecoveryRate": 0,
-      "spreadRecoverySpeed": 100,
-      "projectileColor": "#b347ff",
-      "projectileStyle": "bullet",
-      "projectileVisualScale": 1.25,
-      "bulletVisualPreset": "gauss",
-      "tracerConfig": {
-        "widthCore": 8,
-        "widthGlow": 24,
-        "alphaCore": 0.96,
-        "alphaGlow": 0.76,
-        "segments": 12,
-        "fadeMs": 1400,
-        "maxLength": 340,
-        "colorCore": "#f9e8ff",
-        "colorGlow": "#b347ff"
-      },
-      "shotAudio": {
-        "successKey": "shot_gauss",
-        "failureKey": "shot_dry_trigger"
-      }
-    },
     "TESLA_DOME": {
       "id": "TESLA_DOME",
       "displayName": "Tesla-Kuppel",

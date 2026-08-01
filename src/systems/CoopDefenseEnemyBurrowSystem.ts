@@ -1,6 +1,6 @@
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyBurrowConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
-import type { EnemyBurrowMovementSource, EnemyManager } from '../entities/EnemyManager';
+import type { EnemyBurrowMovementSource, EnemyManager, EnemySpawnOptions } from '../entities/EnemyManager';
 
 /**
  * Grund, aus dem ein Gegner gerade eingebuddelt ist.
@@ -8,7 +8,7 @@ import type { EnemyBurrowMovementSource, EnemyManager } from '../entities/EnemyM
  * - `train-crossing`: kurzes Untertauchen, um die Gleise trotz fahrendem Zug zu queren.
  * - `scripted-phase`: zeitlich exakt festgelegtes Untertauchen einer Bossphase.
  */
-type EnemyBurrowReason = 'spawn-tunnel' | 'train-crossing' | 'scripted-phase';
+type EnemyBurrowReason = 'spawn-tunnel' | 'spawn-point' | 'train-crossing' | 'scripted-phase';
 
 interface EnemyBurrowState {
   readonly reason: EnemyBurrowReason;
@@ -16,6 +16,8 @@ interface EnemyBurrowState {
   /** Startposition der Anfahrt – Grundlage für die Mindest-Grabstrecke. */
   readonly startX: number;
 }
+
+const SPAWN_POINT_BURROW_DURATION_MS = 1_200;
 
 /** Prüft, ob an einer Weltposition genug freier, erreichbarer Boden zum Auftauchen ist. */
 export type FreeGroundResolver = (x: number, y: number, radius: number) => boolean;
@@ -42,10 +44,22 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
    * Setzt frisch erzeugte Gegner, die eingebuddelt starten, direkt in die Anfahrt.
    * Wird für jeden Spawn aufgerufen (Welle, Death-Spawn, Fähigkeit).
    */
-  notifyEnemySpawned(enemy: EnemyEntity, now = Date.now()): void {
+  notifyEnemySpawned(
+    enemy: EnemyEntity,
+    optionsOrNow: EnemySpawnOptions | number = {},
+    now = Date.now(),
+  ): void {
+    // Keep the old `(enemy, now)` call contract for scripted/test callers while allowing the
+    // spawn-point path to pass explicit spawn options.
+    const options = typeof optionsOrNow === 'number' ? {} : optionsOrNow;
+    const spawnNow = typeof optionsOrNow === 'number' ? optionsOrNow : now;
+    if (options.spawnBurrowed) {
+      this.startBurrow(enemy, 'spawn-point', spawnNow + SPAWN_POINT_BURROW_DURATION_MS);
+      return;
+    }
     const burrow = this.getBurrowConfig(enemy);
     if (!burrow?.spawnBurrowedAtLeftEdge) return;
-    this.startBurrow(enemy, 'spawn-tunnel', now + burrow.spawnTunnelTimeoutMs);
+    this.startBurrow(enemy, 'spawn-tunnel', spawnNow + burrow.spawnTunnelTimeoutMs);
   }
 
   isBurrowed(enemyId: string): boolean {
@@ -59,7 +73,10 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
 
   getForcedDirection(enemyId: string): { x: number; y: number } | null {
     // Nur die Anfahrt gräbt stur geradeaus; beim Gleis-Queren bleibt die normale Wegfindung aktiv.
-    return this.states.get(enemyId)?.reason === 'spawn-tunnel' ? { x: 1, y: 0 } : null;
+    const reason = this.states.get(enemyId)?.reason;
+    if (reason === 'spawn-tunnel') return { x: 1, y: 0 };
+    if (reason === 'spawn-point') return { x: 0, y: 0 };
+    return null;
   }
 
   /**

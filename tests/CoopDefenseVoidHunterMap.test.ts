@@ -22,9 +22,13 @@ describe('Map 15 - Leerenjäger', () => {
       trackMode: 'void-fire',
       boss: { enemyKind: 'void-hunter' },
     });
-    expect(map.bases.map((base) => base.id)).toEqual([
+    expect(map.bases.filter((base) => (base.role ?? 'main') === 'main').map((base) => base.id)).toEqual([
       'coop-base-rear',
       'coop-base-middle',
+    ]);
+    expect(map.bases.filter((base) => base.role === 'outpost').map((base) => base.id)).toEqual([
+      'friendly-outpost-rocket',
+      'friendly-outpost-flame',
     ]);
     expect(map.waves.map((wave) => wave.enemyKind)).toEqual([
       'zombie-badger',

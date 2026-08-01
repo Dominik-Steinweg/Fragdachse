@@ -3,7 +3,7 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, REPAIR_BEAM_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STAIN, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
-import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
+import { circleZone, createQualityEmitter, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { BiteRenderer } from './BiteRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -39,6 +39,13 @@ interface BurrowEmitterVisual {
   dust: Phaser.GameObjects.Particles.ParticleEmitter;
 }
 
+interface NukeParticleEmitters {
+  spark: Phaser.GameObjects.Particles.ParticleEmitter;
+  ember: Phaser.GameObjects.Particles.ParticleEmitter;
+  plume: Phaser.GameObjects.Particles.ParticleEmitter;
+  fallout: Phaser.GameObjects.Particles.ParticleEmitter;
+}
+
 interface DeathPixelChunk {
   offsetX: number;
   offsetY: number;
@@ -57,6 +64,13 @@ export class EffectSystem implements EnemyVisualSink {
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
+  /**
+   * Nuke-Partikel werden je Radiusprofil geteilt. Ein Luftangriff besteht aus mehreren
+   * identischen Einschlaegen; vier neue Emitter und Timer pro Einschlag erzeugten dabei
+   * unnötige Display-List-/GC-Spitzen. Die Position wird beim Emit uebergeben, die
+   * Partikelkonfiguration bleibt pro Radiusprofil unveraendert.
+   */
+  private nukeParticleEmitterProfiles = new Map<number, NukeParticleEmitters>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private biteRenderer: BiteRenderer | null = null;
@@ -118,6 +132,13 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   destroy(): void {
+    for (const emitters of this.nukeParticleEmitterProfiles.values()) {
+      emitters.spark.destroy();
+      emitters.ember.destroy();
+      emitters.plume.destroy();
+      emitters.fallout.destroy();
+    }
+    this.nukeParticleEmitterProfiles.clear();
     this.damageVignetteTop?.destroy();
     this.damageVignetteBottom?.destroy();
     this.damageVignetteLeft?.destroy();
@@ -234,6 +255,69 @@ export class EffectSystem implements EnemyVisualSink {
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 24, 24);
     });
+  }
+
+  private getNukeParticleEmitters(radius: number): NukeParticleEmitters {
+    const existing = this.nukeParticleEmitterProfiles.get(radius);
+    if (existing) return existing;
+
+    // Geschwindigkeit und Lebensdauer hängen vom Radius ab. Deshalb teilen sich nur
+    // Einschläge mit exakt demselben Radius einen Kanal; dadurch bleibt auch ein
+    // verstärkter Spieler-/Void-Nuke optisch identisch zum bisherigen Einzel-Emitter.
+    const spark = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_SPARK, {
+      lifespan:  { min: 450, max: 1100 },
+      speed:     { min: radius * 0.65, max: radius * 2.8 },
+      scale:     { start: 2.2, end: 0 },
+      alpha:     { start: 1.0, end: 0 },
+      tint:      [0xffffff, 0xfff0b8, 0xffa348, 0xff6422],
+      blendMode: Phaser.BlendModes.ADD,
+      frequency: -1,
+      emitting:  false,
+    });
+    spark.setDepth(DEPTH_FX);
+
+    const ember = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_EMBER, {
+      lifespan:  { min: 900, max: 1800 },
+      speed:     { min: radius * 0.2, max: radius * 1.1 },
+      scale:     { start: 1.3, end: 0.18 },
+      alpha:     { start: 0.92, end: 0 },
+      tint:      [0xffd27a, 0xff8f42, 0x6a2a1b, 0x2e1d23],
+      gravityY:  -180,
+      frequency: -1,
+      emitting:  false,
+    });
+    ember.setDepth(DEPTH_FX);
+
+    const plume = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_SPARK, {
+      lifespan:  { min: 950, max: 1800 },
+      speedX:    { min: -radius * 0.1, max: radius * 0.1 },
+      speedY:    { min: -radius * 0.95, max: -radius * 0.35 },
+      scale:     { start: 2.4, end: 0.15 },
+      alpha:     { start: 0.7, end: 0 },
+      tint:      [0xfff4d8, 0xffb347, 0x583a43, 0x20202b],
+      blendMode: Phaser.BlendModes.ADD,
+      gravityY:  -120,
+      frequency: -1,
+      emitting:  false,
+    });
+    plume.setDepth(DEPTH_FX + 0.4);
+
+    const fallout = createQualityEmitter(this.scene, 0, 0, TEX_EXPLOSION_EMBER, {
+      lifespan:  { min: 1200, max: 2200 },
+      speedX:    { min: -radius * 0.22, max: radius * 0.22 },
+      speedY:    { min: -radius * 0.3, max: radius * 0.1 },
+      scale:     { start: 1.05, end: 0.12 },
+      alpha:     { start: 0.55, end: 0 },
+      tint:      [0x3b2a33, 0x5a3e42, 0x8a5c43],
+      gravityY:  45,
+      frequency: -1,
+      emitting:  false,
+    });
+    fallout.setDepth(DEPTH_FX + 0.35);
+
+    const emitters = { spark, ember, plume, fallout };
+    this.nukeParticleEmitterProfiles.set(radius, emitters);
+    return emitters;
   }
 
   /** RPC-Handler registrieren – Effekte werden bei ALLEN Clients (inkl. Host) abgespielt. */
@@ -787,6 +871,7 @@ export class EffectSystem implements EnemyVisualSink {
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
     const startRadius = 8;
     const endScale = radius / startRadius;
+    const nukeParticleEmitters = isNuke ? this.getNukeParticleEmitters(radius) : null;
 
     if (isNuke) {
       const skyFlash = this.scene.add.rectangle(
@@ -1043,18 +1128,22 @@ export class EffectSystem implements EnemyVisualSink {
           ? [0xffffff, 0xfff0b8, 0xffa348, 0xff6422]
           : [fillColor, 0xffaa00, 0xff6600];
     const sparkCount = Math.ceil(radius / (isHoly ? 1.55 : (isEnergy ? 2.4 : (isNuke ? 1.2 : 5))));
-    const sparkEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
-      lifespan:  isEnergy ? { min: 220, max: 520 } : (isNuke ? { min: 450, max: 1100 } : (isHoly ? { min: 380, max: 980 } : { min: 300, max: 600 })),
-      speed:     isEnergy ? { min: radius * 0.5, max: radius * 1.9 } : (isNuke ? { min: radius * 0.65, max: radius * 2.8 } : (isHoly ? { min: radius * 0.32, max: radius * 2.35 } : { min: 50, max: radius * 1.5 })),
-      scale:     isEnergy ? { start: 1.45, end: 0 } : (isNuke ? { start: 2.2, end: 0 } : (isHoly ? { start: 1.85, end: 0 } : { start: 1.2, end: 0 })),
-      alpha:     { start: isEnergy ? 1.0 : (isNuke ? 1.0 : (isHoly ? 0.96 : 0.9)), end: 0 },
+    const sparkEmitter = nukeParticleEmitters?.spark ?? this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
+      lifespan:  isEnergy ? { min: 220, max: 520 } : (isHoly ? { min: 380, max: 980 } : { min: 300, max: 600 }),
+      speed:     isEnergy ? { min: radius * 0.5, max: radius * 1.9 } : (isHoly ? { min: radius * 0.32, max: radius * 2.35 } : { min: 50, max: radius * 1.5 }),
+      scale:     isEnergy ? { start: 1.45, end: 0 } : (isHoly ? { start: 1.85, end: 0 } : { start: 1.2, end: 0 }),
+      alpha:     { start: isEnergy ? 1.0 : (isHoly ? 0.96 : 0.9), end: 0 },
       tint:      sparkTints,
       blendMode: Phaser.BlendModes.ADD,
       emitting:  false,
     });
     sparkEmitter.setDepth(DEPTH_FX);
-    sparkEmitter.explode(sparkCount);
-    this.scene.time.delayedCall(isNuke ? 1400 : (isHoly ? 1300 : 800), () => sparkEmitter.destroy());
+    if (nukeParticleEmitters) {
+      sparkEmitter.emitParticleAt(x, y, sparkCount);
+    } else {
+      sparkEmitter.explode(sparkCount);
+      this.scene.time.delayedCall(isHoly ? 1300 : 800, () => sparkEmitter.destroy());
+    }
 
     if (isEnergy) {
       const arcEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
@@ -1080,48 +1169,31 @@ export class EffectSystem implements EnemyVisualSink {
           ? [0xffd27a, 0xff8f42, 0x6a2a1b, 0x2e1d23]
           : [fillColor, 0xff4400];
     const emberCount = Math.ceil(radius / (isHoly ? 2.15 : (isEnergy ? 4.8 : (isNuke ? 2.3 : 8))));
-    const emberEmitter = this.scene.add.particles(x, y, TEX_EXPLOSION_EMBER, {
-      lifespan:  isEnergy ? { min: 260, max: 620 } : (isNuke ? { min: 900, max: 1800 } : (isHoly ? { min: 700, max: 1650 } : { min: 500, max: 1000 })),
-      speed:     isEnergy ? { min: radius * 0.15, max: radius * 0.95 } : (isNuke ? { min: radius * 0.2, max: radius * 1.1 } : (isHoly ? { min: radius * 0.22, max: radius * 1.38 } : { min: 20, max: radius * 0.8 })),
-      scale:     isEnergy ? { start: 1.0, end: 0.1 } : (isNuke ? { start: 1.3, end: 0.18 } : (isHoly ? { start: 1.45, end: 0.12 } : { start: 0.8, end: 0.2 })),
-      alpha:     { start: isEnergy ? 0.8 : (isNuke ? 0.92 : (isHoly ? 0.86 : 0.7)), end: 0 },
+    const emberEmitter = nukeParticleEmitters?.ember ?? this.scene.add.particles(x, y, TEX_EXPLOSION_EMBER, {
+      lifespan:  isEnergy ? { min: 260, max: 620 } : (isHoly ? { min: 700, max: 1650 } : { min: 500, max: 1000 }),
+      speed:     isEnergy ? { min: radius * 0.15, max: radius * 0.95 } : (isHoly ? { min: radius * 0.22, max: radius * 1.38 } : { min: 20, max: radius * 0.8 }),
+      scale:     isEnergy ? { start: 1.0, end: 0.1 } : (isHoly ? { start: 1.45, end: 0.12 } : { start: 0.8, end: 0.2 }),
+      alpha:     { start: isEnergy ? 0.8 : (isHoly ? 0.86 : 0.7), end: 0 },
       tint:      emberTints,
-      gravityY:  isEnergy ? -20 : (isNuke ? -180 : (isHoly ? -80 : 40)),
+      gravityY:  isEnergy ? -20 : (isHoly ? -80 : 40),
       emitting:  false,
     });
     emberEmitter.setDepth(DEPTH_FX);
-    emberEmitter.explode(emberCount);
-    this.scene.time.delayedCall(isEnergy ? 900 : (isNuke ? 2200 : (isHoly ? 2200 : 1200)), () => emberEmitter.destroy());
+    if (nukeParticleEmitters) {
+      emberEmitter.emitParticleAt(x, y, emberCount);
+    } else {
+      emberEmitter.explode(emberCount);
+      this.scene.time.delayedCall(isEnergy ? 900 : (isHoly ? 2200 : 1200), () => emberEmitter.destroy());
+    }
 
     if (isNuke) {
-      const plumeEmitter = this.scene.add.particles(x, y + radius * 0.06, TEX_EXPLOSION_SPARK, {
-        lifespan:  { min: 950, max: 1800 },
-        speedX:    { min: -radius * 0.1, max: radius * 0.1 },
-        speedY:    { min: -radius * 0.95, max: -radius * 0.35 },
-        scale:     { start: 2.4, end: 0.15 },
-        alpha:     { start: 0.7, end: 0 },
-        tint:      [0xfff4d8, 0xffb347, 0x583a43, 0x20202b],
-        blendMode: Phaser.BlendModes.ADD,
-        gravityY:  -120,
-        emitting:  false,
-      });
+      const plumeEmitter = nukeParticleEmitters!.plume;
       plumeEmitter.setDepth(DEPTH_FX + 0.4);
-      plumeEmitter.explode(Math.max(Math.ceil(radius / 1.8), 140));
-      this.scene.time.delayedCall(2200, () => plumeEmitter.destroy());
+      plumeEmitter.emitParticleAt(x, y + radius * 0.06, Math.max(Math.ceil(radius / 1.8), 140));
 
-      const falloutEmitter = this.scene.add.particles(x, y - radius * 0.1, TEX_EXPLOSION_EMBER, {
-        lifespan:  { min: 1200, max: 2200 },
-        speedX:    { min: -radius * 0.22, max: radius * 0.22 },
-        speedY:    { min: -radius * 0.3, max: radius * 0.1 },
-        scale:     { start: 1.05, end: 0.12 },
-        alpha:     { start: 0.55, end: 0 },
-        tint:      [0x3b2a33, 0x5a3e42, 0x8a5c43],
-        gravityY:  45,
-        emitting:  false,
-      });
+      const falloutEmitter = nukeParticleEmitters!.fallout;
       falloutEmitter.setDepth(DEPTH_FX + 0.35);
-      falloutEmitter.explode(Math.max(Math.ceil(radius / 3.1), 90));
-      this.scene.time.delayedCall(2600, () => falloutEmitter.destroy());
+      falloutEmitter.emitParticleAt(x, y - radius * 0.1, Math.max(Math.ceil(radius / 3.1), 90));
     }
 
     if (isHoly) {

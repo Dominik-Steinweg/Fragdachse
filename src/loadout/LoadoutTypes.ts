@@ -668,6 +668,8 @@ interface BaseUltimateConfig {
   readonly cooldown: number;          // ms (0 = rage-gated, kein Zeitcooldown)
   readonly rageRequired: number;      // Mindest-Rage zum Aktivieren
   readonly allowedModes?: readonly GameMode[];
+  /** Interne Varianten wie NPC-Fähigkeiten bleiben aus der Spieler-Auswahl heraus. */
+  readonly catalogVisible?: boolean;
 }
 
 export interface BuffUltimateConfig extends BaseUltimateConfig {
@@ -692,6 +694,8 @@ export interface GaussUltimateConfig extends BaseUltimateConfig {
   readonly projectileSize: number;
   readonly projectileColor: number;
   readonly bulletVisualPreset: BulletVisualPreset;
+  readonly projectileStyle?: ProjectileStyle;
+  readonly projectileVisualScale?: number;
   readonly tracerConfig: TracerConfig;
   readonly damage: number;
   readonly range: number;

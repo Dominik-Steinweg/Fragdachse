@@ -14,7 +14,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { LoadoutManager } from '../loadout/LoadoutManager';
-import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import { ULTIMATE_CONFIGS, type GaussUltimateConfig } from '../loadout/LoadoutConfig';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { SyncedNukeStrike } from '../types';
 import type { ArmageddonSystem } from './ArmageddonSystem';
@@ -43,6 +43,12 @@ interface VoidHunterState {
   nextArmageddonAt: number;
   armageddonPending: boolean;
 }
+
+const VOID_HUNTER_GAUSS: GaussUltimateConfig = (() => {
+  const config = ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS;
+  if (config.type !== 'gauss') throw new Error('VOID_HUNTER_GAUSS muss ein Gauss-Ultimate sein');
+  return config;
+})();
 
 export interface VoidHunterTargetPoint {
   readonly x: number;
@@ -239,7 +245,7 @@ export class CoopDefenseVoidHunterSystem {
       );
       if (distance <= config.shotgunRangePx) return false;
       if (
-        distance <= WEAPON_CONFIGS.VOID_HUNTER_GAUSS.range
+        distance <= VOID_HUNTER_GAUSS.range
         && this.combatSystem.hasLineOfSight(
           enemy.sprite.x,
           enemy.sprite.y,
@@ -330,16 +336,12 @@ export class CoopDefenseVoidHunterSystem {
     enemy.setSpecialAction('gauss-charge', gauss.endsAt, progress, gauss.actualAngle);
     if (now < gauss.endsAt) return;
 
-    const range = WEAPON_CONFIGS.VOID_HUNTER_GAUSS.range;
-    const targetX = enemy.sprite.x + Math.cos(gauss.actualAngle) * range;
-    const targetY = enemy.sprite.y + Math.sin(gauss.actualAngle) * range;
-    this.loadoutManager.fireAutomatedWeapon(
-      WEAPON_CONFIGS.VOID_HUNTER_GAUSS,
+    const range = VOID_HUNTER_GAUSS.range;
+    this.loadoutManager.fireAutomatedGaussWeapon(
+      VOID_HUNTER_GAUSS,
       enemy.sprite.x,
       enemy.sprite.y,
       gauss.actualAngle,
-      targetX,
-      targetY,
       enemy.id,
       VOID_FIRE_COLOR,
     );

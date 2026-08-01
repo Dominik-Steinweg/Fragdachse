@@ -9,6 +9,7 @@ import type {
   CoopDefenseClassId,
   ConstructionId,
   CoopDefenseItem,
+  CoopDefenseItemRewardAction,
   CoopDefenseItemSlot,
   CoopDefensePendingItemReward,
   CoopDefenseUpgradeProfile,
@@ -19,6 +20,7 @@ import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseIte
 import {
   addCoopDefenseItem,
   getCoopDefenseItemSalvageXp,
+  getEquippedCoopDefenseItem,
   getEquippedCoopDefenseItems,
   isCoopDefenseStashFull,
   readCoopDefenseEquippedItemIdCandidates,
@@ -1413,11 +1415,14 @@ export interface CoopDefenseItemRewardClaim {
  *
  * Ist die Kategorie voll und wird kein zerlegbares Item benannt, passiert **nichts** und die
  * Funktion gibt `null` zurueck – die Belohnung bleibt offen, statt still verloren zu gehen.
- * `salvageUid === offerUid` zerlegt das Angebot selbst.
+ * `salvageUid === offerUid` zerlegt das Angebot selbst. Bei `action === 'equip'` wird das
+ * bisher ausgeruestete Teil in den Stash verschoben; reicht der Platz dafuer nicht, bleibt die
+ * gesamte Transaktion unveraendert.
  */
 export function claimStoredPendingCoopDefenseItemReward(
   offerUid: string,
   salvageUid?: string,
+  action: CoopDefenseItemRewardAction = 'take',
 ): CoopDefenseItemRewardClaim | null {
   const current = readPreferences();
   const progress = current.progression.coopDefense;
@@ -1428,6 +1433,7 @@ export function claimStoredPendingCoopDefenseItemReward(
     items: CoopDefenseItem[],
     salvagedXp: number,
     acquired: CoopDefenseItem | null,
+    equippedItemIds: CoopDefenseEquippedItemIds = progress.equippedItemIds,
   ): CoopDefenseItemRewardClaim => {
     writePreferences({
       ...current,
@@ -1437,6 +1443,7 @@ export function claimStoredPendingCoopDefenseItemReward(
           ...progress,
           totalXp: sanitizeStoredXp(progress.totalXp + salvagedXp),
           items,
+          equippedItemIds,
           pendingItemReward: null,
           // Nur ein uebernommenes Teil ist neu; ein direkt zerlegtes Angebot landet nie im
           // Inventar und darf den Hinweis am Button deshalb nicht ausloesen.
@@ -1461,11 +1468,24 @@ export function claimStoredPendingCoopDefenseItemReward(
   if (salvageUid && !salvaged) return null;
 
   const remaining = salvaged ? removeCoopDefenseItem(progress.items, salvaged.uid) : [...progress.items];
-  if (isCoopDefenseStashFull(remaining, progress.equippedItemIds, offer.slot)) return null;
+  const slotIsEmpty = getEquippedCoopDefenseItem(
+    progress.items,
+    progress.equippedItemIds,
+    offer.slot,
+  ) === null;
+  // Ein leerer Slot nimmt das neue Teil direkt auf und braucht deshalb keinen Stash-Platz.
+  // Beim Ausruesten eines belegten Slots muss das bisher getragene Teil dagegen in den Stash
+  // wandern. Der Platz wird nach einem optionalen Zerlegen geprueft, bevor irgendetwas
+  // persistiert wird; so kann ein voller Stash weder das alte noch das neue Item verlieren.
+  if (!slotIsEmpty && isCoopDefenseStashFull(remaining, progress.equippedItemIds, offer.slot)) return null;
 
   const salvagedXp = salvaged ? getCoopDefenseItemSalvageXp(salvaged) : 0;
   const items = addCoopDefenseItem(remaining, offer);
-  return commit(items, salvagedXp, items[items.length - 1]);
+  const acquired = items[items.length - 1];
+  const equippedItemIds = slotIsEmpty || action === 'equip'
+    ? { ...progress.equippedItemIds, [offer.slot]: acquired.uid }
+    : progress.equippedItemIds;
+  return commit(items, salvagedXp, acquired, equippedItemIds);
 }
 
 export function getStoredGraphicsQuality(): GraphicsQuality {

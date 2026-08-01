@@ -4,7 +4,7 @@ import {
   getCoopDefenseItemRarityDefinition,
   getCoopDefenseItemSlotDefinition,
 } from '../config/coopDefenseItems';
-import type { CoopDefenseItem } from '../types';
+import type { CoopDefenseItem, CoopDefenseItemRewardAction } from '../types';
 import {
   formatCoopDefenseItemValue,
   getCoopDefenseItemSalvageXp,
@@ -68,6 +68,8 @@ const CARD_BUTTON_DY = CARD_H / 2 - 46;
 
 const CARD_BUTTON_W = CARD_W - CARD_PAD * 2;
 const CARD_BUTTON_H = 46;
+const CARD_BUTTON_GAP = 12;
+const CARD_ACTION_W = (CARD_BUTTON_W - CARD_BUTTON_GAP) / 2;
 
 const FOOTER_Y = PANEL_BOTTOM - 44;
 const FOOTER_BUTTON_W = 300;
@@ -86,6 +88,7 @@ const PANEL_ACCENT = COLORS.GOLD_1;
 const TEX_PANEL = '_cdir_panel';
 const TEX_FOOTER_BUTTON = '_cdir_footer';
 const TEX_TAKE_BUTTON = '_cdir_take';
+const TEX_EQUIP_BUTTON = '_cdir_equip';
 const TEX_SALVAGE_ROW = '_cdir_salvage_row';
 const TEX_SALVAGE_ROW_HOT = '_cdir_salvage_row_hot';
 
@@ -103,8 +106,10 @@ interface RewardCard {
   readonly compareTitle: Phaser.GameObjects.Text;
   readonly compareLines: Phaser.GameObjects.Text[];
   readonly hint: Phaser.GameObjects.Text;
-  readonly button: Phaser.GameObjects.Image;
-  readonly buttonLabel: Phaser.GameObjects.Text;
+  readonly takeButton: Phaser.GameObjects.Image;
+  readonly takeLabel: Phaser.GameObjects.Text;
+  readonly equipButton: Phaser.GameObjects.Image;
+  readonly equipLabel: Phaser.GameObjects.Text;
 }
 
 interface SalvageRow {
@@ -132,11 +137,16 @@ export class CoopDefenseItemRewardOverlay {
   private view: RewardView = 'offers';
   private presentation: MatchItemRewardPresentation | null = null;
   private salvageOption: MatchItemRewardOption | null = null;
+  private salvageAction: CoopDefenseItemRewardAction = 'take';
 
   constructor(
     private readonly scene: Phaser.Scene,
-    /** Uebernimmt ein Angebot; `salvageUid` zerlegt vorher ein Teil (oder das Angebot selbst). */
-    private readonly onClaim: (offerUid: string, salvageUid?: string) => boolean,
+    /** Uebernimmt ein Angebot; `action` entscheidet zwischen Stash und Ausruesten. */
+    private readonly onClaim: (
+      offerUid: string,
+      salvageUid?: string,
+      action?: CoopDefenseItemRewardAction,
+    ) => boolean,
     /** Liefert den aktuellen Stand nach jeder Aenderung; `null` schliesst den Layer. */
     private readonly getPresentation: () => MatchItemRewardPresentation | null,
     private readonly onClosed: () => void,
@@ -252,6 +262,7 @@ export class CoopDefenseItemRewardOverlay {
     this.visible = false;
     this.presentation = null;
     this.salvageOption = null;
+    this.salvageAction = 'take';
     this.container?.setVisible(false);
   }
 
@@ -323,29 +334,50 @@ export class CoopDefenseItemRewardOverlay {
       fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_2),
     }).setOrigin(0.5).setScrollFactor(0);
 
-    const button = this.scene.add.image(
-      0,
+    const takeButton = this.scene.add.image(
+      -(CARD_ACTION_W + CARD_BUTTON_GAP) / 2,
       CARD_BUTTON_DY,
-      ensureGlossyButtonTexture(this.scene, TEX_TAKE_BUTTON, CARD_BUTTON_W, CARD_BUTTON_H, COLORS.GOLD_3),
+      ensureGlossyButtonTexture(this.scene, TEX_TAKE_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, COLORS.BLUE_3),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const buttonLabel = this.scene.add.text(0, CARD_BUTTON_DY, 'NEHMEN', {
-      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
-    }).setOrigin(0.5).setScrollFactor(0);
-    button.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+    const takeLabel = this.scene.add.text(
+      takeButton.x,
+      CARD_BUTTON_DY,
+      'NEHMEN',
+      {
+        fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+      },
+    ).setOrigin(0.5).setScrollFactor(0);
+    takeButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       // Ohne stopPropagation faengt die darunterliegende Ergebnis-Flaeche den Klick ab.
       event?.stopPropagation();
       this.handleTake(index);
     });
-    attachHoverEffect(this.scene, button, buttonLabel);
+    attachHoverEffect(this.scene, takeButton, takeLabel);
+
+    const equipButton = this.scene.add.image(
+      (CARD_ACTION_W + CARD_BUTTON_GAP) / 2,
+      CARD_BUTTON_DY,
+      ensureGlossyButtonTexture(this.scene, TEX_EQUIP_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, COLORS.GOLD_3),
+    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    const equipLabel = this.scene.add.text(equipButton.x, CARD_BUTTON_DY, 'AUSRUESTEN', {
+      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
+    }).setOrigin(0.5).setScrollFactor(0);
+    equipButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+      event?.stopPropagation();
+      this.handleEquip(index);
+    });
+    attachHoverEffect(this.scene, equipButton, equipLabel);
 
     const container = this.scene.add.container(centerX, CARD_CY, [
       frame, iconFrame, icon, title, meta, divider,
-      ...statLines, compareTitle, ...compareLines, hint, button, buttonLabel,
+      ...statLines, compareTitle, ...compareLines, hint,
+      takeButton, takeLabel, equipButton, equipLabel,
     ]).setScrollFactor(0);
 
     return {
       container, frame, iconFrame, icon, title, meta, divider,
-      statLines, compareTitle, compareLines, hint, button, buttonLabel,
+      statLines, compareTitle, compareLines, hint,
+      takeButton, takeLabel, equipButton, equipLabel,
     };
   }
 
@@ -391,6 +423,7 @@ export class CoopDefenseItemRewardOverlay {
   private showOffers(): void {
     this.view = 'offers';
     this.salvageOption = null;
+    this.salvageAction = 'take';
     const options = this.presentation?.options ?? [];
 
     this.title?.setText('BELOHNUNG').setVisible(true);
@@ -448,21 +481,44 @@ export class CoopDefenseItemRewardOverlay {
       ));
     });
 
-    const full = option.freeStashSlots <= 0;
+    const full = !option.directEquip && option.freeStashSlots <= 0;
     card.hint.setText(full
-      ? 'Kategorie voll – ein Teil muss weichen'
+      ? 'Kategorie voll – waehle ein Teil zum Zerlegen'
+      : option.directEquip
+        ? 'Slot leer – wird direkt ausgeruestet'
       : `${option.freeStashSlots} Platz${option.freeStashSlots === 1 ? '' : 'e'} frei`);
     card.hint.setColor(toCssColor(full ? COLORS.RED_2 : COLORS.GREY_4));
-    card.buttonLabel.setText(full ? 'PLATZ SCHAFFEN' : 'NEHMEN');
+    const hasEquippedItem = !option.directEquip;
+    const actionOffset = (CARD_ACTION_W + CARD_BUTTON_GAP) / 2;
+    card.takeButton
+      .setVisible(hasEquippedItem)
+      .setPosition(-actionOffset, CARD_BUTTON_DY)
+      .setDisplaySize(CARD_ACTION_W, CARD_BUTTON_H);
+    card.takeLabel
+      .setVisible(hasEquippedItem)
+      .setPosition(-actionOffset, CARD_BUTTON_DY)
+      .setText('NEHMEN');
+    card.equipButton
+      .setVisible(true)
+      .setPosition(hasEquippedItem ? actionOffset : 0, CARD_BUTTON_DY)
+      .setDisplaySize(hasEquippedItem ? CARD_ACTION_W : CARD_BUTTON_W, CARD_BUTTON_H);
+    card.equipLabel
+      .setVisible(true)
+      .setPosition(hasEquippedItem ? actionOffset : 0, CARD_BUTTON_DY)
+      .setText('AUSRUESTEN');
   }
 
-  private showSalvage(option: MatchItemRewardOption): void {
+  private showSalvage(option: MatchItemRewardOption, action: CoopDefenseItemRewardAction): void {
     this.view = 'salvage';
     this.salvageOption = option;
+    this.salvageAction = action;
 
     this.title?.setText('KATEGORIE VOLL');
     this.subtitle?.setText(
-      `${this.describeSlot(option.item)}: waehle, was zerlegt wird. Die XP fliessen in dein Level.`,
+      action === 'equip'
+        ? `${this.describeSlot(option.item)}: Das bisher getragene Teil wandert ins Inventar. `
+          + 'Waehle vorher ein ungetragenes Teil zum Zerlegen.'
+        : `${this.describeSlot(option.item)}: waehle, was zerlegt wird. Die XP fliessen in dein Level.`,
     );
     for (const card of this.cards) card.container.setVisible(false);
     this.salvageTitle?.setText('ZERLEGEN').setVisible(true);
@@ -498,11 +554,25 @@ export class CoopDefenseItemRewardOverlay {
   private handleTake(cardIndex: number): void {
     const option = this.presentation?.options[cardIndex];
     if (!option || this.view !== 'offers') return;
-    if (option.freeStashSlots <= 0) {
-      this.showSalvage(option);
+    if (!option.directEquip && option.freeStashSlots <= 0) {
+      this.showSalvage(option, 'take');
       return;
     }
-    this.applyClaim(option.item.uid);
+    this.applyClaim(option.item.uid, undefined, 'take');
+  }
+
+  private handleEquip(cardIndex: number): void {
+    const option = this.presentation?.options[cardIndex];
+    if (!option || this.view !== 'offers') return;
+    if (option.directEquip) {
+      this.applyClaim(option.item.uid, undefined, 'equip');
+      return;
+    }
+    if (option.freeStashSlots <= 0) {
+      this.showSalvage(option, 'equip');
+      return;
+    }
+    this.applyClaim(option.item.uid, undefined, 'equip');
   }
 
   private handleSalvageChoice(rowIndex: number): void {
@@ -510,11 +580,18 @@ export class CoopDefenseItemRewardOverlay {
     if (!option || this.view !== 'salvage') return;
     const salvageUid = rowIndex === 0 ? option.item.uid : option.stash[rowIndex - 1]?.uid;
     if (!salvageUid) return;
-    this.applyClaim(option.item.uid, salvageUid);
+    // Beim Ausruesten kann das Angebot selbst nur verworfen werden; ein vorhandenes
+    // ungetragenes Teil macht dagegen Platz fuer das bisher ausgeruestete Item.
+    const action = rowIndex === 0 ? 'take' : this.salvageAction;
+    this.applyClaim(option.item.uid, salvageUid, action);
   }
 
-  private applyClaim(offerUid: string, salvageUid?: string): void {
-    if (!this.onClaim(offerUid, salvageUid)) return;
+  private applyClaim(
+    offerUid: string,
+    salvageUid?: string,
+    action: CoopDefenseItemRewardAction = 'take',
+  ): void {
+    if (!this.onClaim(offerUid, salvageUid, action)) return;
     const next = this.getPresentation();
     if (!next) {
       this.hide();

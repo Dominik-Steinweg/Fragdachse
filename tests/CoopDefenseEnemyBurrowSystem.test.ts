@@ -70,6 +70,20 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     expect(system.getForcedDirection(enemy.id)).toBeNull();
   });
 
+  it('keeps spawn-point enemies stationary while the center is dug out', () => {
+    const enemy = createEnemy('rabid-badger');
+    const { system } = createSystem(enemy, () => true);
+
+    system.notifyEnemySpawned(enemy as unknown as EnemyEntity, { spawnBurrowed: true }, 0);
+
+    expect(system.isBurrowed(enemy.id)).toBe(true);
+    expect(system.getForcedDirection(enemy.id)).toEqual({ x: 0, y: 0 });
+    system.hostUpdate(1_199);
+    expect(system.isBurrowed(enemy.id)).toBe(true);
+    system.hostUpdate(1_200);
+    expect(system.isBurrowed(enemy.id)).toBe(false);
+  });
+
   it('keeps tunnelling until the minimum distance AND free ground are reached', () => {
     const enemy = createEnemy('alien-badger', 0);
     const { system, collisionCalls } = createSystem(enemy, () => true);

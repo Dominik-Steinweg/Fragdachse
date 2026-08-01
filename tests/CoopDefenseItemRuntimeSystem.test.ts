@@ -11,16 +11,22 @@ import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRunt
 function build(options: {
   affixes?: Record<string, number>;
   hp?: Record<string, { hp: number; maxHp: number }>;
+  positions?: Record<string, { x: number; y: number }>;
+  classIds?: Record<string, string | null>;
   rolls?: number[];
 } = {}): CoopDefenseItemRuntimeSystem {
   const affixes = options.affixes ?? {};
   const hp = options.hp ?? {};
+  const positions = options.positions ?? {};
+  const classIds = options.classIds ?? {};
   const rolls = options.rolls ?? [0];
   let index = 0;
   return new CoopDefenseItemRuntimeSystem(
     {
       getAffixValue: (_playerId, affixId) => affixes[affixId] ?? 0,
       getPlayerHp: (playerId) => hp[playerId] ?? null,
+      getPlayerPosition: (playerId) => positions[playerId] ?? null,
+      getPlayerClassId: (playerId) => classIds[playerId] ?? null,
     },
     () => rolls[index++ % rolls.length],
   );
@@ -232,6 +238,87 @@ describe('Bewegungsaffixe', () => {
     // Der Aufrufer verbraucht beim Feuern, nicht beim Treffen – Treffer spielen hier keine Rolle.
     system.consumeMovementCharge('p');
     expect(system.getMovementChargeProgress('p')).toBe(0);
+  });
+});
+
+describe('Neue Positions-Affixe', () => {
+  it('loest Glutwanderer nach echter Strecke aus und bewahrt Reststrecke', () => {
+    const system = build({ affixes: { glutwanderer: 3.8 } });
+    system.initPlayer('p', 0);
+    system.trackMovement('p', 0, 0);
+
+    let bursts = 0;
+    for (let step = 1; step <= 8; step += 1) {
+      bursts += system.trackMovement('p', step * 64, 0);
+    }
+    expect(bursts).toBe(1);
+    expect(system.getGlutwandererChunkCount('p')).toBe(3);
+    expect(system.getGlutwandererProgress('p')).toBeCloseTo((8 * 64 - 500) / 500, 10);
+
+    const second = system.trackMovement('p', 8 * 64 + 64, 0);
+    expect(second).toBe(0);
+    expect(system.getGlutwandererProgress('p')).toBeCloseTo((9 * 64 - 500) / 500, 10);
+  });
+
+  it('zaehlt Teleports weder fuer Glutwanderer noch fuer die vorhandene Bewegungsladung', () => {
+    const system = build({ affixes: { glutwanderer: 3, movement_charge_damage: 0.2 } });
+    system.initPlayer('p', 0);
+    system.trackMovement('p', 0, 0);
+    expect(system.trackMovement('p', 4_000, 0)).toBe(0);
+    expect(system.getGlutwandererProgress('p')).toBe(0);
+    expect(system.getMovementChargeProgress('p')).toBe(0);
+  });
+
+  it('haelt Umzingelt waehrend der Nachlaufzeit aktiv und addiert sich mit Kampfaufladung', () => {
+    const system = build({
+      affixes: { surrounded: 0.12, adrenaline_kill_charge: 0.03 },
+    });
+    system.initPlayer('p', 0);
+    const enemies = Array.from({ length: 5 }, (_, index) => ({ x: index * 10, y: 0 }));
+    system.updateSurrounded('p', 0, 0, enemies, 1_000);
+    system.registerOwnKill('p', 1_000);
+    expect(system.isSurrounded('p', 1_000)).toBe(true);
+    expect(system.getAdrenalineRegenMultiplier('p', 1_000)).toBeCloseTo(1.15, 10);
+
+    system.updateSurrounded('p', 0, 0, [], 1_001);
+    expect(system.isSurrounded('p', 1_000 + COOP_DEFENSE_AFFIX_RULES.surroundedLingerMs - 1)).toBe(true);
+    expect(system.isSurrounded('p', 1_001 + COOP_DEFENSE_AFFIX_RULES.surroundedLingerMs)).toBe(false);
+  });
+
+  it('waehlt bei Fernsteuerung das naechste eigene Konstrukt stabil nach ID', () => {
+    const sources = [
+      { id: 8, x: 10, y: 0, ownerId: 'p', ownerColor: 0xff00aa },
+      { id: 2, x: -10, y: 0, ownerId: 'p', ownerColor: 0xff00aa },
+      { id: 1, x: 0, y: 0, ownerId: 'other', ownerColor: 0x00ffaa },
+    ];
+    const system = build({
+      affixes: { remote_control: 0.15 },
+      positions: { p: { x: 0, y: 0 } },
+      classIds: { p: 'inspector_gadachs' },
+    });
+
+    expect(system.getRemoteControlTarget('p', sources)?.id).toBe(2);
+    expect(system.getRemoteControlDamageMultiplier('p', sources[1], sources)).toBeCloseTo(1.15, 10);
+    expect(system.getRemoteControlDamageMultiplier('p', sources[0], sources)).toBe(1);
+    expect(system.getRemoteControlSnapshot(['p'], sources)).toEqual([{
+      turretId: '2', ownerId: 'p', x: -10, y: 0, color: 0xff00aa,
+    }]);
+  });
+
+  it('macht Fernsteuerung ohne Inspector-Klasse oder ohne Affix wirkungslos', () => {
+    const source = { id: 1, x: 0, y: 0, ownerId: 'p', ownerColor: 0xffffff };
+    const wrongClass = build({
+      affixes: { remote_control: 0.15 },
+      positions: { p: { x: 0, y: 0 } },
+      classIds: { p: 'dachs_of_steel' },
+    });
+    expect(wrongClass.getRemoteControlTarget('p', [source])).toBeNull();
+
+    const noAffix = build({
+      positions: { p: { x: 0, y: 0 } },
+      classIds: { p: 'inspector_gadachs' },
+    });
+    expect(noAffix.getRemoteControlDamageMultiplier('p', source, [source])).toBe(1);
   });
 });
 

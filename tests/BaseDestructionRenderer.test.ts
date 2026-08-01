@@ -20,6 +20,7 @@ const BASE_SPEC: BaseSpec = {
     maxGridY: 11,
   },
   hpMax: 100,
+  role: 'main',
   turrets: [],
   powerUpPedestals: [],
 };

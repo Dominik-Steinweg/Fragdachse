@@ -29,6 +29,11 @@ interface SustainedEnemyAttackState {
   lastShotAt: number;
 }
 
+interface PlayerTargetLockState {
+  readonly targetId: string;
+  readonly lockedUntil: number;
+}
+
 interface MeleeWindupState {
   readonly weaponId: string;
   readonly targetId: string;
@@ -57,8 +62,11 @@ interface EnemyObstacleContactState {
 export class CoopDefenseEnemyAttackSystem {
   private static readonly MOVEMENT_PROGRESS_DISTANCE_PX = 4;
   private static readonly OBSTACLE_CONTACT_FRESHNESS_MS = 150;
+  /** Prevents near-equal player distances from causing visible target oscillation. */
+  private static readonly PLAYER_TARGET_LOCK_DURATION_MS = 2_000;
 
   private readonly sustainedAttacks = new Map<string, SustainedEnemyAttackState>();
+  private readonly playerTargetLocks = new Map<string, PlayerTargetLockState>();
   private readonly meleeWindups = new Map<string, MeleeWindupState>();
   private readonly movementProgress = new Map<string, EnemyMovementProgressState>();
   private readonly obstacleContacts = new Map<string, EnemyObstacleContactState>();
@@ -93,6 +101,7 @@ export class CoopDefenseEnemyAttackSystem {
 
       if (this.actionBlockedChecker?.(enemy.id)) {
         this.sustainedAttacks.delete(enemy.id);
+        this.playerTargetLocks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
         enemy.stopMovement();
         continue;
@@ -101,6 +110,7 @@ export class CoopDefenseEnemyAttackSystem {
       // Eingebuddelt gilt dieselbe Waffensperre wie beim Spieler.
       if (enemy.isBurrowed()) {
         this.sustainedAttacks.delete(enemy.id);
+        this.playerTargetLocks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
         this.obstacleContacts.delete(enemy.id);
         this.resetMovementProgress(enemy);
@@ -109,6 +119,7 @@ export class CoopDefenseEnemyAttackSystem {
 
       if (this.enemyManager.isEnemyPanicking(enemy.id)) {
         this.sustainedAttacks.delete(enemy.id);
+        this.playerTargetLocks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
         this.obstacleContacts.delete(enemy.id);
         this.resetMovementProgress(enemy);
@@ -117,6 +128,7 @@ export class CoopDefenseEnemyAttackSystem {
 
       if (this.trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) {
         this.sustainedAttacks.delete(enemy.id);
+        this.playerTargetLocks.delete(enemy.id);
         this.meleeWindups.delete(enemy.id);
         this.obstacleContacts.delete(enemy.id);
         this.resetMovementProgress(enemy);
@@ -284,7 +296,7 @@ export class CoopDefenseEnemyAttackSystem {
       const weapon = attackWeapon.weapon;
       if (weapon.config.fire.type === 'healing_aura' || weapon.config.fire.type === 'tesla_dome') continue;
       let target = attackWeapon.targetMode === 'players'
-        ? this.findNearestLivingTarget(enemy, weapon.config.range)
+        ? this.findLivingTargetWithLock(enemy, weapon.config.range, now)
         : attackWeapon.targetMode === 'rocks'
           ? this.findNearestObstacleTarget(enemy, weapon.config.range, now)
           : attackWeapon.targetMode === 'structures'
@@ -325,29 +337,28 @@ export class CoopDefenseEnemyAttackSystem {
     }
 
     const player = this.playerManager.getPlayer(state.targetId);
-    if (player?.sprite.active && this.combatSystem.isAlive(player.id)) {
-      state.targetX = player.sprite.x;
-      state.targetY = player.sprite.y;
-    } else {
-      const ally = this.enemyManager.getEnemy(state.targetId);
-      if (ally?.faction === 'allied' && ally.sprite.active && this.combatSystem.isAlive(ally.id)) {
-        state.targetX = ally.sprite.x;
-        state.targetY = ally.sprite.y;
-      }
+    const playerTarget = player
+      ? this.buildPlayerTargetCandidate(enemy, player.id, attackWeapon.weapon.config.range)
+      : null;
+    const ally = this.enemyManager.getEnemy(state.targetId);
+    const allyTarget = !playerTarget && ally?.faction === 'allied'
+      ? this.buildAllyTargetCandidate(enemy, ally, attackWeapon.weapon.config.range)
+      : null;
+    const sustainedTarget = playerTarget ?? allyTarget;
+    if (!sustainedTarget) {
+      this.sustainedAttacks.delete(enemy.id);
+      this.playerTargetLocks.delete(enemy.id);
+      return { active: false, attack: null };
     }
+
+    state.targetX = sustainedTarget.targetX;
+    state.targetY = sustainedTarget.targetY;
 
     return {
       active: true,
       attack: {
         attackWeapon,
-        target: {
-          kind: this.enemyManager.getEnemy(state.targetId)?.faction === 'allied' ? 'ally' : 'player',
-          priority: 2,
-          distance: Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, state.targetX, state.targetY),
-          targetX: state.targetX,
-          targetY: state.targetY,
-          targetId: state.targetId,
-        },
+        target: sustainedTarget,
       },
     };
   }
@@ -360,7 +371,7 @@ export class CoopDefenseEnemyAttackSystem {
       best = obstacle;
     }
 
-    const livingTarget = this.findNearestLivingTarget(enemy, range);
+    const livingTarget = this.findLivingTargetWithLock(enemy, range, now);
     if (this.isBetterCandidate(livingTarget, best)) {
       best = livingTarget;
     }
@@ -460,17 +471,8 @@ export class CoopDefenseEnemyAttackSystem {
     let best: EnemyAttackCandidate | null = null;
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.isValidPlayerTarget(enemy, player.id, range)) continue;
-
-      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
-      const candidate: EnemyAttackCandidate = {
-        kind: 'player',
-        priority: 2,
-        distance,
-        targetX: player.sprite.x,
-        targetY: player.sprite.y,
-        targetId: player.id,
-      };
+      const candidate = this.buildPlayerTargetCandidate(enemy, player.id, range);
+      if (!candidate) continue;
       if (this.isBetterCandidate(candidate, best)) {
         best = candidate;
       }
@@ -482,21 +484,87 @@ export class CoopDefenseEnemyAttackSystem {
   private findNearestLivingTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
     let best = this.findNearestPlayerTarget(enemy, range);
     for (const ally of this.enemyManager.getAlliedEnemies()) {
-      if (!ally.sprite.active || !this.combatSystem.isAlive(ally.id)) continue;
-      if (!this.combatSystem.canDamageTarget(enemy.id, ally.id)) continue;
-      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y);
-      if (distance > range || !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y)) continue;
-      const candidate: EnemyAttackCandidate = {
-        kind: 'ally',
-        priority: 2,
-        distance,
-        targetX: ally.sprite.x,
-        targetY: ally.sprite.y,
-        targetId: ally.id,
-      };
+      const candidate = this.buildAllyTargetCandidate(enemy, ally, range);
+      if (!candidate) continue;
       if (this.isBetterCandidate(candidate, best)) best = candidate;
     }
     return best;
+  }
+
+  private findLivingTargetWithLock(
+    enemy: EnemyEntity,
+    range: number,
+    now: number,
+  ): EnemyAttackCandidate | null {
+    const lockedTarget = this.getLockedPlayerTarget(enemy, range, now);
+    if (lockedTarget) return lockedTarget;
+
+    const target = this.findNearestLivingTarget(enemy, range);
+    if (target?.kind === 'player' && target.targetId) {
+      this.playerTargetLocks.set(enemy.id, {
+        targetId: target.targetId,
+        lockedUntil: now + CoopDefenseEnemyAttackSystem.PLAYER_TARGET_LOCK_DURATION_MS,
+      });
+    }
+    return target;
+  }
+
+  private getLockedPlayerTarget(
+    enemy: EnemyEntity,
+    range: number,
+    now: number,
+  ): EnemyAttackCandidate | null {
+    const lock = this.playerTargetLocks.get(enemy.id);
+    if (!lock) return null;
+    if (now >= lock.lockedUntil) {
+      this.playerTargetLocks.delete(enemy.id);
+      return null;
+    }
+
+    const target = this.buildPlayerTargetCandidate(enemy, lock.targetId, range);
+    if (!target) this.playerTargetLocks.delete(enemy.id);
+    return target;
+  }
+
+  private buildPlayerTargetCandidate(
+    enemy: EnemyEntity,
+    playerId: string,
+    range: number,
+  ): EnemyAttackCandidate | null {
+    const player = this.playerManager.getPlayer(playerId);
+    if (!player || !this.isValidPlayerTarget(enemy, player.id, range)) return null;
+
+    return {
+      kind: 'player',
+      priority: 2,
+      distance: Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y),
+      targetX: player.sprite.x,
+      targetY: player.sprite.y,
+      targetId: player.id,
+    };
+  }
+
+  private buildAllyTargetCandidate(
+    enemy: EnemyEntity,
+    ally: EnemyEntity,
+    range: number,
+  ): EnemyAttackCandidate | null {
+    if (!ally.sprite.active || !this.combatSystem.isAlive(ally.id)) return null;
+    if (!this.combatSystem.canDamageTarget(enemy.id, ally.id)) return null;
+
+    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y);
+    if (distance > range || !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y)) {
+      return null;
+    }
+
+    return {
+      kind: 'ally',
+      priority: 2,
+      distance,
+      targetX: ally.sprite.x,
+      targetY: ally.sprite.y,
+      targetId: ally.id,
+    };
   }
 
   private isValidPlayerTarget(enemy: EnemyEntity, playerId: string, range: number): boolean {
@@ -582,6 +650,7 @@ export class CoopDefenseEnemyAttackSystem {
 
   private cleanupInactiveEnemies(activeEnemyIds: ReadonlySet<string>): void {
     this.deleteInactiveEntries(this.sustainedAttacks, activeEnemyIds);
+    this.deleteInactiveEntries(this.playerTargetLocks, activeEnemyIds);
     this.deleteInactiveEntries(this.meleeWindups, activeEnemyIds);
     this.deleteInactiveEntries(this.movementProgress, activeEnemyIds);
     this.deleteInactiveEntries(this.obstacleContacts, activeEnemyIds);

@@ -446,7 +446,9 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseEnemyConfigs = isCoopDefenseMode(bridge.getGameMode())
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
-    const coopDefenseBases = coopDefenseMapConfig ? getCoopDefenseBases(coopDefenseMapConfig) : [];
+    const coopDefenseBases = coopDefenseMapConfig
+      ? getCoopDefenseBases(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
+      : [];
     const coopDefenseWaveConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapWaveConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
@@ -530,6 +532,11 @@ export class ArenaLifecycleCoordinator {
               ? { hp: this.ctx.combatSystem.getHP(playerId), maxHp: this.ctx.combatSystem.getMaxHp(playerId) }
               : null
           ),
+          getPlayerPosition: (playerId) => {
+            const player = this.ctx.playerManager.getPlayer(playerId);
+            return player ? { x: player.sprite.x, y: player.sprite.y } : null;
+          },
+          getPlayerClassId: (playerId) => this.ctx.coopDefensePlayerModifierSystem?.getClassId(playerId) ?? null,
         })
         : null;
       this.syncHostCoopDefensePlayerModifiersFromCommittedSelections();
@@ -589,11 +596,17 @@ export class ArenaLifecycleCoordinator {
           goalMode: 'dynamic-fallback-bases',
         }));
       }
-      if (this.ctx.enemyManager && this.ctx.enemyFlowFieldService && coopDefenseWaveConfigs.length > 0) {
+      if (
+        this.ctx.enemyManager
+        && this.ctx.enemyFlowFieldService
+        && (coopDefenseWaveConfigs.length > 0 || coopDefenseBases.some((base) => base.spawnWave))
+      ) {
         this.ctx.coopDefenseWaveSpawner = new CoopDefenseWaveSpawner(
           this.ctx.enemyManager,
           this.ctx.enemyFlowFieldService,
           coopDefenseWaveConfigs,
+          coopDefenseBases,
+          () => this.ctx.baseManager?.getActiveBaseIds() ?? new Set<string>(),
           coopDefenseMapConfig?.boss,
           this.ctx.enemyBossFlowFieldService,
           () => this.ctx.coopDefenseAirstrikeDirector?.isOpeningBarrageComplete() ?? true,
@@ -1103,6 +1116,13 @@ export class ArenaLifecycleCoordinator {
           damageMultiplier: field.damageMultiplier * charge.damageMultiplier,
         };
       });
+      this.ctx.turretSystem.setTurretDamageMultiplierProvider((turret, turrets) => (
+        this.ctx.coopDefenseItemRuntimeSystem?.getRemoteControlDamageMultiplier(
+          turret.ownerId,
+          turret,
+          turrets,
+        ) ?? 1
+      ));
       this.ctx.teslaDomeSystem.setRockCallbacks(
         () => (this.ctx.arenaResult?.rockObjects ?? [])
           .flatMap((rock, index) => (rock && rock.active)
@@ -1349,8 +1369,8 @@ export class ArenaLifecycleCoordinator {
           (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
         );
         this.ctx.coopDefenseEnemyTrainAwarenessSystem.setBurrowSource(this.ctx.coopDefenseEnemyBurrowSystem);
-        this.ctx.enemyManager.setEnemySpawnedCallback((enemy) => {
-          this.ctx.coopDefenseEnemyBurrowSystem?.notifyEnemySpawned(enemy);
+        this.ctx.enemyManager.setEnemySpawnedCallback((enemy, options) => {
+          this.ctx.coopDefenseEnemyBurrowSystem?.notifyEnemySpawned(enemy, options);
         });
         this.ctx.coopDefenseEnemyDodgeSystem = new CoopDefenseEnemyDodgeSystem(
           this.ctx.enemyManager,
@@ -1457,7 +1477,11 @@ export class ArenaLifecycleCoordinator {
           this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.BFG, 1);
         },
         coopDefenseMapXpTotal: coopDefenseMapConfig
-          ? getCoopDefenseMapScheduledXp(coopDefenseMapConfig, coopDefenseWaveConfigs)
+          ? getCoopDefenseMapScheduledXp(
+            coopDefenseMapConfig,
+            coopDefenseWaveConfigs,
+            coopDefenseHumanPlayerCount,
+          )
           : 1,
         isAdrenalineDropEnabled: (playerId) => (
           (this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.adrenalineDropEnabled', 0) ?? 0) > 0
@@ -1712,6 +1736,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.timeBubble.destroyAll();
     this.renderers.overchargeField.destroyAll();
     this.renderers.turretCharge.destroyAll();
+    this.renderers.remoteControl.destroyAll();
     this.renderers.teslaDome.destroyAll();
     this.renderers.healingAura.destroyAll();
     this.renderers.miniTeslaDome.destroyAll();
@@ -1781,6 +1806,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.currentLayout  = null;
     this.ctx.placementSystem = null;
     this.ctx.turretSystem?.setTurretBuffProvider(null);
+    this.ctx.turretSystem?.setTurretDamageMultiplierProvider(null);
     this.ctx.overchargeSystem?.clear();
     this.ctx.overchargeSystem = null;
     this.ctx.turretChargeSystem?.clear();

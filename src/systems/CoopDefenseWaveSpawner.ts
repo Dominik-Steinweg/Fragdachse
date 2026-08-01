@@ -5,6 +5,8 @@ import type {
   ResolvedCoopDefenseMapWaveConfig,
 } from '../config/coopDefenseMaps';
 import type { EnemyManager } from '../entities/EnemyManager';
+import type { EnemySpawnOptions } from '../entities/EnemyManager';
+import type { BaseSpec } from '../arena/BaseRegistry';
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyKind,
@@ -23,6 +25,8 @@ const SPAWN_TUNNEL_DIG_TOLERANCE_CELLS = 2;
 export class CoopDefenseWaveSpawner {
   private readonly accumulators: number[];
   private readonly startedWaves: boolean[];
+  private readonly spawnPointAccumulators: number[];
+  private readonly startedSpawnPointWaves: boolean[];
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
   private elapsedMs = 0;
@@ -34,12 +38,16 @@ export class CoopDefenseWaveSpawner {
     private readonly enemyManager: EnemyManager,
     private readonly flowFieldService: EnemyFlowFieldService,
     private readonly waveConfigs: readonly ResolvedCoopDefenseMapWaveConfig[],
+    private readonly spawnPointBases: readonly BaseSpec[] = [],
+    private readonly getActiveBaseIds: () => ReadonlySet<string> = () => new Set<string>(),
     private readonly bossConfig?: CoopDefenseMapBossConfig,
     private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
     private readonly isAirstrikeBarrageComplete?: () => boolean,
   ) {
     this.accumulators = waveConfigs.map(() => 0);
     this.startedWaves = waveConfigs.map(() => false);
+    this.spawnPointAccumulators = this.getSpawnPointSources().map(() => 0);
+    this.startedSpawnPointWaves = this.getSpawnPointSources().map(() => false);
   }
 
   hostUpdate(deltaMs: number, countdownActive: boolean): void {
@@ -76,12 +84,40 @@ export class CoopDefenseWaveSpawner {
       }
       this.accumulators[index] = acc;
     }
+
+    const activeBaseIds = this.getActiveBaseIds();
+    for (const [index, source] of this.getSpawnPointSources().entries()) {
+      if (!activeBaseIds.has(source.id)) continue;
+      const waveConfig = source.spawnWave;
+      if (!waveConfig) continue;
+      const effectiveStartAtMs = this.getEffectiveStartAtMs(waveConfig);
+      if (effectiveStartAtMs === null || this.elapsedMs < effectiveStartAtMs) continue;
+
+      if (!this.startedSpawnPointWaves[index]) {
+        this.startedSpawnPointWaves[index] = true;
+        this.runSpawnPointWave(source, waveConfig.countPerWave);
+      }
+
+      const activeDeltaMs = this.getActiveDeltaMs(previousElapsedMs, this.elapsedMs, effectiveStartAtMs);
+      if (activeDeltaMs <= 0) continue;
+
+      let acc = this.spawnPointAccumulators[index] + activeDeltaMs;
+      while (acc >= waveConfig.intervalMs) {
+        acc -= waveConfig.intervalMs;
+        this.runSpawnPointWave(source, waveConfig.countPerWave);
+      }
+      this.spawnPointAccumulators[index] = acc;
+    }
   }
 
   reset(): void {
     for (let index = 0; index < this.accumulators.length; index++) {
       this.accumulators[index] = 0;
       this.startedWaves[index] = false;
+    }
+    for (let index = 0; index < this.spawnPointAccumulators.length; index++) {
+      this.spawnPointAccumulators[index] = 0;
+      this.startedSpawnPointWaves[index] = false;
     }
     this.recentCells.length = 0;
     this.exhaustionWarned = false;
@@ -125,6 +161,23 @@ export class CoopDefenseWaveSpawner {
           || Math.abs(cell.gridY - pick.gridY) > MIN_INTRA_WAVE_DISTANCE_CELLS,
       );
     }
+  }
+
+  private runSpawnPointWave(source: BaseSpec, count: number): void {
+    if (!source.spawnCenter || !source.spawnWave || count <= 0) return;
+    const spawnOptions: EnemySpawnOptions = { spawnBurrowed: true };
+    for (let index = 0; index < count; index += 1) {
+      this.enemyManager.hostSpawnAtWorld(
+        source.spawnCenter.x,
+        source.spawnCenter.y,
+        source.spawnWave.enemyKind,
+        spawnOptions,
+      );
+    }
+  }
+
+  private getSpawnPointSources(): readonly BaseSpec[] {
+    return this.spawnPointBases.filter((base) => base.role === 'spawn-point' && base.spawnCenter && base.spawnWave);
   }
 
   private spawnOne(kind: CoopDefenseEnemyKind): boolean {
