@@ -268,12 +268,12 @@ export class CombatSystem {
   private decoySystem:      DecoySystem | null = null;
   private enemyManager:     EnemyManager | null = null;
   private baseManager:      BaseManager | null = null;
-  private baseDamageCallback: ((baseId: string, damage: number, attackerId: string) => void) | null = null;
+  private baseDamageCallback: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => void) | null = null;
   private trunkObjects: readonly Phaser.GameObjects.Arc[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
-   * Schuss-Schaden wird hier nie appliziert (Spieler-Schaden auf Basen ist in 1.3 verboten);
-   * Basen wirken aber als physische Wände, hinter denen Spieler nicht getroffen werden.
+   * Direkter Schaden läuft über den zentralen Basisschadenspfad; die Rechtecke wirken
+   * außerdem als physische Wände, hinter denen Spieler nicht getroffen werden.
    */
   private baseObstacles: readonly Phaser.GameObjects.Rectangle[] | null = null;
   private trainSegObjects: readonly Phaser.GameObjects.Rectangle[] | null = null;
@@ -344,7 +344,7 @@ export class CombatSystem {
    * Einziger Trichter fuer Basisschaden. Wie `setRockDamageCallback` verdrahtet, damit der
    * Schaden durch `resolveOutgoingDamage` laeuft und Klassen- sowie Item-Multiplikatoren sieht.
    */
-  setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string) => void) | null): void {
+  setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => void) | null): void {
     this.baseDamageCallback = cb;
   }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
@@ -896,7 +896,7 @@ export class CombatSystem {
       }, toDamageOptions(options, 'explosion'));
     }
 
-    this.applyRadialHostileBaseDamage(x, y, radius, damage, ownerId, options?.damageFalloff);
+    this.applyRadialHostileBaseDamage(x, y, radius, damage, ownerId, options?.damageFalloff, options?.sourceSlot);
 
     if (options?.skipEnemies) return;
 
@@ -1003,8 +1003,8 @@ export class CombatSystem {
       damagedTargetKeys.push(`enemies:${enemy.id}`);
     }
 
-    // Explosionen kannten Basen bisher gar nicht; die Gegnerbasis ist das erste Ziel, das ueber
-    // Flaechenschaden erreichbar sein muss.
+    // Basen erhalten denselben zentralen Schadenstrichter wie direkte Treffer; die
+    // Oberflächenprüfung berücksichtigt dabei auch große oder konkave Formen.
     for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
       if (base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
@@ -1012,7 +1012,7 @@ export class CombatSystem {
       if (this.enemyManager?.hasEnemy(ownerId)) continue;
       const damage = Math.round(computeProjectileExplosionDamage(surface.distance, effect));
       if (damage <= 0) continue;
-      this.applyBaseDamage(base.id, damage, ownerId);
+      this.applyBaseDamage(base.id, damage, ownerId, sourceSlot);
       damagedTargetKeys.push(`bases:${base.id}`);
     }
     return damagedTargetKeys;
@@ -1251,6 +1251,15 @@ export class CombatSystem {
       projectileMultiplier *= 1 + closeness * (proj.shotgunProximityMaxDamageBonus ?? 0);
     }
     return proj.damage * loadoutMult * powerUpMult * projectileMultiplier;
+  }
+
+  /**
+   * Wendet einen Projektiltreffer auf eine Basis an. Die Berechnung bleibt identisch zum
+   * Projektiltreffer gegen Spieler/Gegner; der anschließende Basistrichter ergänzt die
+   * strukturspezifischen Coop-Modifikatoren.
+   */
+  applyProjectileBaseDamage(baseId: string, projectile: TrackedProjectile): void {
+    this.applyBaseDamage(baseId, this.computeProjectileDamage(projectile), projectile.ownerId, projectile.sourceSlot);
   }
 
   private registerAk47Hit(proj: TrackedProjectile): void {
@@ -1816,7 +1825,7 @@ export class CombatSystem {
       // Kein Spieler getroffen → prüfen ob Fels oder Zug getroffen wurde
       this.applyHitscanObjectDamage(
         startX, startY, trace.endX, trace.endY,
-        damage, rockDamageMult, trainDamageMult, shooterId,
+        damage, rockDamageMult, trainDamageMult, shooterId, sourceSlot,
       );
     }
 
@@ -2021,6 +2030,7 @@ export class CombatSystem {
   private applyHitscanObjectDamage(
     startX: number, startY: number, endX: number, endY: number,
     damage: number, rockMult: number, trainMult: number, shooterId: string,
+    sourceSlot?: WeaponSlot,
   ): void {
     const hitLine = new Phaser.Geom.Line(startX, startY, endX, endY);
     const endDist = Phaser.Geom.Line.Length(hitLine);
@@ -2055,7 +2065,11 @@ export class CombatSystem {
       const baseId = this.baseManager.getBaseIdAtWorldPoint(endX, endY);
       const base = baseId ? this.baseManager.getBase(baseId) : undefined;
       if (base && base.faction === 'hostile' && base.getHp() > 0) {
-        this.applyBaseDamage(base.id, damage, shooterId);
+        const loadoutMult = sourceSlot
+          ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+          : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+        this.applyBaseDamage(base.id, damage * loadoutMult * powerUpMult, shooterId, sourceSlot);
         return;
       }
     }
@@ -2380,16 +2394,15 @@ export class CombatSystem {
    * Host-only: Basisschaden ueber den gemeinsamen Trichter. Ohne verdrahteten Callback faellt es
    * auf den direkten Weg zurueck, damit ein fehlendes Setup keinen Schaden verschluckt.
    */
-  applyBaseDamage(baseId: string, damage: number, attackerId: string): void {
+  applyBaseDamage(baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot): void {
     if (damage <= 0) return;
-    if (this.baseDamageCallback) this.baseDamageCallback(baseId, damage, attackerId);
+    if (this.baseDamageCallback) this.baseDamageCallback(baseId, damage, attackerId, sourceSlot);
     else this.baseManager?.applyDamage(baseId, damage);
   }
 
   /**
-   * Radialschaden auf feindliche Basen. Explosionen und Flaechenschaden kannten Basen bisher
-   * gar nicht; nur Spieler-Quellen treffen hier, Zombie-Luftangriffe laufen weiter ueber ihren
-   * eigenen, auf eigene Basen begrenzten Pfad.
+   * Radialschaden auf feindliche Basen. Nur Spieler-Quellen treffen hier; Zombie-Luftangriffe
+   * laufen weiter ueber ihren eigenen, auf eigene Basen begrenzten Pfad.
    */
   applyRadialHostileBaseDamage(
     x: number,
@@ -2398,6 +2411,7 @@ export class CombatSystem {
     maxDamage: number,
     attackerId: string | undefined,
     falloff?: RadialDamageFalloffConfig,
+    sourceSlot?: LoadoutSlot,
   ): void {
     if (!attackerId || radius <= 0 || maxDamage <= 0) return;
     if (this.enemyManager?.hasEnemy(attackerId)) return;
@@ -2407,7 +2421,7 @@ export class CombatSystem {
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
       const damage = computeRadialDamage(surface.distance, radius, maxDamage, falloff);
-      this.applyBaseDamage(base.id, damage, attackerId);
+      this.applyBaseDamage(base.id, damage, attackerId, sourceSlot);
     }
   }
 
@@ -2468,7 +2482,7 @@ export class CombatSystem {
         hit = true;
         continue;
       }
-      this.applyBaseDamage(base.id, actualDamage, shooterId);
+      this.applyBaseDamage(base.id, actualDamage, shooterId, sourceSlot);
       hit = true;
 
       if (dist < nearestDistance) {

@@ -96,7 +96,7 @@ export interface ShieldBuffHudState {
   damageBonusPct: number;
 }
 
-export type TeslaDomeTargetType = 'players' | 'enemies' | 'train' | 'rocks' | 'turrets';
+export type TeslaDomeTargetType = 'players' | 'enemies' | 'train' | 'rocks' | 'turrets' | 'bases';
 
 export interface SyncedTeslaDomeTarget {
   x: number;

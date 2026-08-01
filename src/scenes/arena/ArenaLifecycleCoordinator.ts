@@ -956,12 +956,17 @@ export class ArenaLifecycleCoordinator {
     });
     // Ein Trichter fuer allen Basisschaden – dieselbe Verdrahtung wie bei Felsen und Zug, damit
     // Klassen- und Item-Multiplikatoren auch hier greifen.
-    this.ctx.combatSystem.setBaseDamageCallback((baseId, damage, attackerId) => {
+    this.ctx.combatSystem.setBaseDamageCallback((baseId, damage, attackerId, sourceSlot) => {
+      const conditionalBonus = sourceSlot
+        ? (this.ctx.coopDefenseItemRuntimeSystem?.getConditionalOutgoingDamageBonus(attackerId, sourceSlot) ?? 0)
+        : 0;
       const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
         attackerId,
         `base:${baseId}`,
         damage,
         false,
+        Math.random,
+        conditionalBonus,
       ).amount ?? damage;
       this.ctx.baseManager?.applyDamage(baseId, resolvedDamage);
     });
@@ -1165,6 +1170,10 @@ export class ArenaLifecycleCoordinator {
         () => (this.ctx.enemyManager?.getAllEnemies() ?? [])
           .filter(enemy => enemy.sprite.active)
           .map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })),
+      );
+      this.ctx.teslaDomeSystem.setBaseCallbacks(
+        () => this.ctx.baseManager?.getBasesByFaction('hostile') ?? [],
+        (baseId, damage, ownerId, sourceSlot) => this.ctx.combatSystem.applyBaseDamage(baseId, damage, ownerId, sourceSlot),
       );
       this.ctx.teslaDomeSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
       this.ctx.teslaDomeSystem.setTrainCallbacks(
@@ -1718,10 +1727,11 @@ export class ArenaLifecycleCoordinator {
 
       // Nur feindliche Basen nehmen Projektilschaden; eigene Basen bleiben unzerstoerbar
       // durch Spielerbeschuss.
-      this.ctx.projectileManager.setBaseHitCallback((baseId, damage, attackerId) => {
+      this.ctx.projectileManager.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
         const base = this.ctx.baseManager?.getBase(baseId);
         if (!base || base.faction !== 'hostile' || base.getHp() <= 0) return;
-        this.ctx.combatSystem.applyBaseDamage(baseId, damage, attackerId);
+        if (projectile) this.ctx.combatSystem.applyProjectileBaseDamage(baseId, projectile);
+        else this.ctx.combatSystem.applyBaseDamage(baseId, damage, attackerId);
       });
 
       this.ctx.projectileManager.setSupportImpactCallback((projectile, impact) => {
@@ -1881,6 +1891,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.shieldBuffSystem = null;
     this.ctx.energyShieldSystem = null;
     this.ctx.timeBubbleSystem = null;
+    this.ctx.teslaDomeSystem?.setBaseCallbacks(null, null);
     this.ctx.teslaDomeSystem = null;
     this.ctx.turretSystem    = null;
     this.ctx.resourceSystem?.setPowerUpSystem(null);

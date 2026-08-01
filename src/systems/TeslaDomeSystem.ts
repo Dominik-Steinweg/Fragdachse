@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../loadout/LoadoutConfig';
-import type { SyncedTeslaDome, SyncedTeslaDomeTarget } from '../types';
+import type { LoadoutSlot, SyncedTeslaDome, SyncedTeslaDomeTarget } from '../types';
 import type { CombatSystem } from './CombatSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { ResourceSystem } from './ResourceSystem';
@@ -38,6 +38,18 @@ interface TeslaEnemyTarget {
   y: number;
 }
 
+interface TeslaBaseTarget {
+  id: string;
+  faction: 'friendly' | 'hostile';
+  getHp(): number;
+  getNearestSurfacePoint(x: number, y: number): { x: number; y: number; distance: number } | null;
+}
+
+interface TeslaDomeTarget extends SyncedTeslaDomeTarget {
+  /** Host-only identity for applying a tick to the same base that was selected. */
+  targetId?: string;
+}
+
 type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
 type RockTargetProvider = () => readonly TeslaRockTarget[];
 type RockDamageHandler = (index: number, damage: number, ownerId: string) => void;
@@ -46,6 +58,8 @@ type TrainDamageHandler = (damage: number, ownerId: string) => void;
 type TurretTargetProvider = () => readonly TeslaTurretTarget[];
 type TurretDamageHandler = (id: number, damage: number, ownerId: string) => void;
 type EnemyTargetProvider = () => readonly TeslaEnemyTarget[];
+type BaseTargetProvider = () => readonly TeslaBaseTarget[];
+type BaseDamageHandler = (baseId: string, damage: number, ownerId: string, sourceSlot?: LoadoutSlot) => void;
 
 export class TeslaDomeSystem {
   private readonly activeDomes = new Map<string, ActiveTeslaDome>();
@@ -58,6 +72,8 @@ export class TeslaDomeSystem {
   private turretTargetProvider: TurretTargetProvider | null = null;
   private turretDamageHandler: TurretDamageHandler | null = null;
   private enemyTargetProvider: EnemyTargetProvider | null = null;
+  private baseTargetProvider: BaseTargetProvider | null = null;
+  private baseDamageHandler: BaseDamageHandler | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
 
   private static readonly HOLD_GRACE_MS = 500;
@@ -89,6 +105,11 @@ export class TeslaDomeSystem {
 
   setEnemyTargetProvider(provider: EnemyTargetProvider | null): void {
     this.enemyTargetProvider = provider;
+  }
+
+  setBaseCallbacks(provider: BaseTargetProvider | null, damageHandler: BaseDamageHandler | null): void {
+    this.baseTargetProvider = provider;
+    this.baseDamageHandler = damageHandler;
   }
 
   setEnergyShieldSystem(system: EnergyShieldSystem | null): void {
@@ -203,8 +224,8 @@ export class TeslaDomeSystem {
     return synced;
   }
 
-  private collectTargets(dome: ActiveTeslaDome): SyncedTeslaDomeTarget[] {
-    const targets: SyncedTeslaDomeTarget[] = [];
+  private collectTargets(dome: ActiveTeslaDome): TeslaDomeTarget[] {
+    const targets: TeslaDomeTarget[] = [];
     const fire = dome.config.fire;
     const radius = Math.max(1, this.getEffectiveRadius(dome));
 
@@ -251,6 +272,18 @@ export class TeslaDomeSystem {
       }
     }
 
+    if (fire.targetTypes.includes('bases') && this.baseTargetProvider) {
+      for (const base of this.baseTargetProvider()) {
+        // The provider is intentionally filtered again here: a future caller must not be able
+        // to make a Tesla dome damage friendly bases by accidentally returning all structures.
+        if (base.faction !== 'hostile' || base.getHp() <= 0) continue;
+        const surface = base.getNearestSurfacePoint(dome.x, dome.y);
+        if (!surface || surface.distance > radius) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, surface.x, surface.y)) continue;
+        targets.push({ x: surface.x, y: surface.y, type: 'bases', targetId: base.id });
+      }
+    }
+
     if (fire.targetTypes.includes('train') && this.trainTargetProvider) {
       for (const segment of this.trainTargetProvider()) {
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, segment.x, segment.y);
@@ -264,12 +297,13 @@ export class TeslaDomeSystem {
     return targets;
   }
 
-  private applyTickDamage(dome: ActiveTeslaDome, targets: SyncedTeslaDomeTarget[]): void {
+  private applyTickDamage(dome: ActiveTeslaDome, targets: TeslaDomeTarget[]): void {
     const damage = dome.config.fire.damagePerTick
       * (1 + dome.chargeStacks * (dome.config.fire.damageBonusPerCharge ?? 0));
     const playerTargets = targets.filter(target => target.type === 'players');
     const enemyTargets = targets.filter(target => target.type === 'enemies');
     const rockTargets = targets.filter(target => target.type === 'rocks');
+    const baseTargets = targets.filter(target => target.type === 'bases');
     const hasTrainTarget = targets.some(target => target.type === 'train');
 
     for (const player of this.playerManager.getAllPlayers()) {
@@ -302,6 +336,16 @@ export class TeslaDomeSystem {
           sourceX: dome.x,
           sourceY: dome.y,
         }, { damageKind: 'chain' });
+      }
+    }
+
+    if (baseTargets.length > 0 && this.baseTargetProvider && this.baseDamageHandler) {
+      for (const base of this.baseTargetProvider()) {
+        if (base.faction !== 'hostile' || base.getHp() <= 0) continue;
+        if (!baseTargets.some(target => target.targetId === base.id)) continue;
+        // Bases use the ordinary Tesla tick. In particular, rockDamageMult must not bleed
+        // into this target class; the central base path applies Coop modifiers afterwards.
+        this.baseDamageHandler(base.id, damage, dome.ownerId);
       }
     }
 

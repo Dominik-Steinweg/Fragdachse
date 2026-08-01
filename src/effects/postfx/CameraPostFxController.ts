@@ -49,7 +49,21 @@ interface FilterChain {
   barrel: BarrelLike | null;
 }
 
-const BLOOM_EDGE_WIDTH = 0.12;
+/**
+ * Breite der Threshold-Rampe. Phasers Threshold ist eine **lineare** Rampe
+ * (`clamp((c - edge1) / (edge2 - edge1))`), kein harter Schnitt. Eine schmale Rampe lässt fast
+ * nur ausgebrannte Pixel durch; erst eine breitere lässt auch helle Kerne teilweise beitragen
+ * und macht den Bloom als Leuchten lesbar.
+ */
+const BLOOM_EDGE_WIDTH = 0.22;
+
+/**
+ * Streuung des Bloom-Blurs. Der Shader rechnet `offset = 1.333 · x · strength` in Pixeln je
+ * Schritt – die vorherigen 2 px über 2 Schritte ergaben rund 5 px Gesamtstreuung und waren
+ * schlicht nicht als Leuchten wahrnehmbar.
+ */
+const BLOOM_BLUR_OFFSET_PX = 8;
+const BLOOM_BLUR_STEPS = 3;
 
 /**
  * Bildkomposition der **Weltkamera**. Objektbezogene Glows bleiben in `utils/phaserFx.ts`;
@@ -195,7 +209,7 @@ export class CameraPostFxController {
       this.baseGrade.bloomThreshold,
       this.baseGrade.bloomThreshold + BLOOM_EDGE_WIDTH,
     );
-    parallel.top.addBlur(1, 2, 2, 1, 0xffffff, 2);
+    parallel.top.addBlur(1, BLOOM_BLUR_OFFSET_PX, BLOOM_BLUR_OFFSET_PX, 1, 0xffffff, BLOOM_BLUR_STEPS);
     parallel.blend.blendMode = Phaser.BlendModes.ADD;
     parallel.blend.amount = 0;
     parallel.active = false;

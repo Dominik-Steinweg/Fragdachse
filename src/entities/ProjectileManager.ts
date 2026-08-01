@@ -149,13 +149,13 @@ export class ProjectileManager {
   private readonly bestRockRect        = new Phaser.Geom.Rectangle();
   /**
    * Coop-Defense-Basis-Gruppe. Wird vom ProjectileManager wie trunkGroup
-   * behandelt: physische Kollision/Impact, kein Schaden. Basen können erst
-   * ab Phase 1.5 (Gegner) Schaden nehmen.
+   * behandelt: physische Kollision/Impact; direkter Schaden wird über den
+   * zentralen Basistreffer-Callback weitergeleitet.
    */
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
   private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
-  private onBaseHit:   ((baseId: string, damage: number, attackerId: string) => void) | null = null;
+  private onBaseHit:   ((baseId: string, damage: number, attackerId: string, projectile?: TrackedProjectile) => void) | null = null;
   private onSupportImpact: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null = null;
 
   // ── Zug-Kollision ─────────────────────────────────────────────────────────
@@ -192,8 +192,8 @@ export class ProjectileManager {
 
   /**
    * Setzt die Coop-Defense-Basis-Gruppe. Geschosse reagieren physisch (Impact, Explosion,
-   * Bounce) wie bei Felsen; Schaden entsteht ausschliesslich ueber
-   * {@link setBaseHitCallback}, der nur feindliche Basen beruecksichtigt.
+   * Bounce) wie bei Felsen; direkter Schaden entsteht ausschliesslich ueber
+   * {@link setBaseHitCallback}, dessen Empfaenger die Fraktion prueft.
    */
   setBaseGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void {
     this.baseGroup = group;
@@ -202,8 +202,10 @@ export class ProjectileManager {
   /**
    * Registriert den Empfaenger fuer Projektil-Basis-Treffer (Host). Analog zu
    * {@link setRockHitCallback}: nur der Collider weiss, welche Basiszelle getroffen wurde.
+   * Das optionale Projektil wird mitgereicht, damit der Empfaenger denselben effektiven
+   * Projektilschaden wie beim Gegner-Treffer berechnen kann.
    */
-  setBaseHitCallback(cb: ((baseId: string, damage: number, attackerId: string) => void) | null): void {
+  setBaseHitCallback(cb: ((baseId: string, damage: number, attackerId: string, projectile?: TrackedProjectile) => void) | null): void {
     this.onBaseHit = cb;
   }
 
@@ -221,7 +223,7 @@ export class ProjectileManager {
     tracked.hitBaseIds ??= new Set<string>();
     if (tracked.hitBaseIds.has(baseId)) return;
     tracked.hitBaseIds.add(baseId);
-    this.onBaseHit(baseId, tracked.damage, tracked.ownerId);
+    this.onBaseHit(baseId, tracked.damage, tracked.ownerId, tracked);
   }
 
   /**
@@ -1001,9 +1003,10 @@ export class ProjectileManager {
   }
 
   /**
-   * Richtet Fels-/Trunk-/Zug-Kollision für Flammen-Hitboxen ein.
-   * Felsen und Trunks stoppen die Flamme physisch (collider, kein Bounce);
-   * sie verweilt dann für ihre restliche Lifetime an der Aufprallstelle.
+   * Richtet Fels-/Trunk-/Basis-/Zug-Kollision für Flammen-Hitboxen ein.
+   * Felsen, Trunks und Basen stoppen die Flamme physisch (collider, kein Bounce);
+   * Basen erhalten dabei direkten Schaden, die Flamme verweilt dann für ihre restliche Lifetime
+   * an der Aufprallstelle.
    * Der Zug zerstört die Flamme sofort und erhält Schaden.
    */
   private setupFlameColliders(
@@ -1041,7 +1044,11 @@ export class ProjectileManager {
       tracked.colliders.push(c);
     }
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
-      const c = this.scene.physics.add.collider(sprite, this.baseGroup);
+      const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
+        this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
+        // A base blocks the flame physically, but the flame remains alive until its lifetime ends.
+        body.setVelocity(0, 0);
+      });
       tracked.colliders.push(c);
     }
     if (this.trainGroup) {
@@ -1735,6 +1742,7 @@ export class ProjectileManager {
     this.removeActiveProjectile(proj);
     this.projectilesById.delete(proj.id);
     proj.hitObstacleIds?.clear();
+    proj.hitBaseIds?.clear();
     this.projectileResolvedCallback?.(proj);
     const destroyX = proj.pendingHydraSplit?.x ?? proj.sprite.x;
     const destroyY = proj.pendingHydraSplit?.y ?? proj.sprite.y;

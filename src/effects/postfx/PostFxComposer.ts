@@ -6,7 +6,7 @@
  * niemals einen dauerhaften Rest an Sättigung, Kontrast, Vignette oder Verzerrung hinterlassen.
  */
 
-import { NEUTRAL_WORLD_GRADE, type WorldGrade, WORLD_GRADE_CLAMPS } from './worldGrade';
+import { NEUTRAL_WORLD_GRADE, POST_FX_PULSE_CLAMPS, type WorldGrade } from './worldGrade';
 
 export type PostFxEase = 'impulse' | 'linear' | 'expo';
 
@@ -69,8 +69,12 @@ export function postFxEnvelope(ease: PostFxEase, t: number): number {
   return (Math.exp(-4 * u) - Math.exp(-4)) / (1 - Math.exp(-4));
 }
 
+/**
+ * Ereignisse werden gegen die **weiteren** Pulsgrenzen geklemmt. Die engen Grenzen der Basis
+ * schützen das Dauerbild; ein Belichtungsstoß, der sich daran halten müsste, wäre unsichtbar.
+ */
 function clampField(field: keyof WorldGrade, value: number): number {
-  const range = (WORLD_GRADE_CLAMPS as Partial<Record<string, readonly [number, number]>>)[field];
+  const range = (POST_FX_PULSE_CLAMPS as Partial<Record<string, readonly [number, number]>>)[field];
   if (!range) return value;
   return value < range[0] ? range[0] : value > range[1] ? range[1] : value;
 }

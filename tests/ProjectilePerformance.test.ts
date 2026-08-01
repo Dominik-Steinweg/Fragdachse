@@ -63,7 +63,7 @@ describe('projectile performance paths', () => {
     const manager = new ProjectileManager(scene);
     manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
 
-    const body = { setBounce: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
+    const body = { setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
     const makeTracked = (multiplier: number): TrackedProjectile => ({
       ownerId: 'flame-owner',
       damage: 20,
@@ -103,6 +103,56 @@ describe('projectile performance paths', () => {
     expect(rockHits[1]).toMatchObject({ id: 0, damage: 5 });
   });
 
+  it('damages a multi-cell hostile base once per flame, even with zero rock damage', () => {
+    type ColliderCallback = (object1: unknown, object2: unknown) => void;
+    const callbacks: ColliderCallback[] = [];
+    const scene = {
+      physics: {
+        add: {
+          collider: vi.fn((_left: unknown, _right: unknown, callback?: ColliderCallback) => {
+            if (callback) callbacks.push(callback);
+            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
+          }),
+        },
+      },
+    } as unknown as Phaser.Scene;
+    const manager = new ProjectileManager(scene);
+    manager.setBaseGroup({} as Phaser.Physics.Arcade.StaticGroup);
+
+    const body = { setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
+    const tracked = {
+      ownerId: 'flame-owner',
+      damage: 20,
+      rockDamageMult: 0,
+      body,
+      pendingDestroy: false,
+      colliders: [],
+    } as unknown as TrackedProjectile;
+    const baseCell = (baseId: string) => ({
+      getData: vi.fn((key: string) => key === 'baseId' ? baseId : undefined),
+    }) as unknown as Phaser.GameObjects.GameObject;
+    const baseHits: Array<{ baseId: string; damage: number; attackerId: string; projectile?: TrackedProjectile }> = [];
+    manager.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
+      baseHits.push({ baseId, damage, attackerId, projectile });
+    });
+
+    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: TrackedProjectile) => void })
+      .setupFlameColliders({}, body, tracked);
+
+    // Two different cells expose the same logical base ID.
+    callbacks[0]?.({}, baseCell('enemy-base'));
+    callbacks[0]?.({}, baseCell('enemy-base'));
+
+    expect(baseHits).toHaveLength(1);
+    expect(baseHits[0]).toMatchObject({
+      baseId: 'enemy-base',
+      damage: 20,
+      attackerId: 'flame-owner',
+      projectile: tracked,
+    });
+    expect(body.setVelocity).toHaveBeenCalledWith(0, 0);
+  });
+
   it('clears a flame obstacle-hit set during projectile cleanup', () => {
     const scene = {
       physics: { world: { off: vi.fn() } },
@@ -115,12 +165,14 @@ describe('projectile performance paths', () => {
       boundsListener: vi.fn(),
       colliders: [],
       hitObstacleIds: new Set([4]),
+      hitBaseIds: new Set(['enemy-base']),
     } as unknown as TrackedProjectile;
 
     (manager as unknown as { destroyTrackedProjectile: (projectile: TrackedProjectile) => void })
       .destroyTrackedProjectile(tracked);
 
     expect(tracked.hitObstacleIds).toEqual(new Set());
+    expect(tracked.hitBaseIds).toEqual(new Set());
   });
 
   it('reuses one reserved particle emitter for all rocket smoke puffs', () => {

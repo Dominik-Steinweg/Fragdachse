@@ -288,7 +288,8 @@
           "players",
           "enemies",
           "train",
-          "turrets"
+          "turrets",
+          "bases"
         ],
         "visualIndicatorAlpha": 0.08,
         "visualFieldAlpha": 0.16,

@@ -807,6 +807,13 @@ export class TeslaDomeRenderer {
           burstSpeedMax: 210,
           haloAlpha: 0.28,
         };
+      case 'bases':
+        return {
+          burstCount: Math.round(10 * strength),
+          burstSpeedMin: 85,
+          burstSpeedMax: 220,
+          haloAlpha: 0.3,
+        };
       case 'train':
         return {
           burstCount: Math.round(11 * strength),
@@ -832,6 +839,8 @@ export class TeslaDomeRenderer {
         return 1.18;
       case 'turrets':
         return 1.02;
+      case 'bases':
+        return 1.08;
       case 'train':
         return 1.14;
       case 'rocks':

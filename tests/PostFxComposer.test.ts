@@ -4,7 +4,12 @@ import {
   postFxEnvelope,
   PostFxPulseSet,
 } from '../src/effects/postfx/PostFxComposer';
-import { NEUTRAL_WORLD_GRADE, WORLD_GRADE_CLAMPS, type WorldGrade } from '../src/effects/postfx/worldGrade';
+import {
+  NEUTRAL_WORLD_GRADE,
+  POST_FX_PULSE_CLAMPS,
+  WORLD_GRADE_CLAMPS,
+  type WorldGrade,
+} from '../src/effects/postfx/worldGrade';
 import { getPostFxPreset, POST_FX_EVENTS } from '../src/effects/postfx/postFxPresets';
 
 const BASE: WorldGrade = {
@@ -103,8 +108,11 @@ describe('composePostFx', () => {
     expect(compose(set, 200).activePulses).toBe(0);
   });
 
-  /** Die Klemmungen schuetzen Telegraphen und Spielerfarben vor jeder spaeteren Abstimmung. */
-  it('haelt jedes Feld innerhalb der Grenzen, auch bei absurd starken Pulsen', () => {
+  /**
+   * Zwei Ebenen: die engen Basisgrenzen schuetzen das **Dauerbild**, die weiteren Pulsgrenzen
+   * lassen ein Ereignis kurzzeitig deutlicher ausschlagen. Beide muessen greifen.
+   */
+  it('haelt jedes Feld innerhalb der Pulsgrenzen, auch bei absurd starken Pulsen', () => {
     const set = new PostFxPulseSet();
     for (let i = 0; i < 12; i += 1) {
       set.request({
@@ -116,12 +124,34 @@ describe('composePostFx', () => {
       }, 0);
     }
     const state = compose(set, 0);
-    expect(state.saturation).toBeLessThanOrEqual(WORLD_GRADE_CLAMPS.saturation[1]);
-    expect(state.contrast).toBeLessThanOrEqual(WORLD_GRADE_CLAMPS.contrast[1]);
-    expect(state.brightness).toBeLessThanOrEqual(WORLD_GRADE_CLAMPS.brightness[1]);
-    expect(state.vignetteStrength).toBeLessThanOrEqual(WORLD_GRADE_CLAMPS.vignetteStrength[1]);
-    expect(state.tintStrength).toBeLessThanOrEqual(WORLD_GRADE_CLAMPS.tintStrength[1]);
-    expect(state.bloomAmount).toBeLessThanOrEqual(WORLD_GRADE_CLAMPS.bloomAmount[1]);
+    expect(state.saturation).toBeLessThanOrEqual(POST_FX_PULSE_CLAMPS.saturation[1]);
+    expect(state.contrast).toBeLessThanOrEqual(POST_FX_PULSE_CLAMPS.contrast[1]);
+    expect(state.brightness).toBeLessThanOrEqual(POST_FX_PULSE_CLAMPS.brightness[1]);
+    expect(state.vignetteStrength).toBeLessThanOrEqual(POST_FX_PULSE_CLAMPS.vignetteStrength[1]);
+    expect(state.tintStrength).toBeLessThanOrEqual(POST_FX_PULSE_CLAMPS.tintStrength[1]);
+    expect(state.bloomAmount).toBeLessThanOrEqual(POST_FX_PULSE_CLAMPS.bloomAmount[1]);
+  });
+
+  it('laesst die Pulsgrenzen ueberall mindestens so weit sein wie die Basisgrenzen', () => {
+    for (const field of Object.keys(WORLD_GRADE_CLAMPS) as (keyof typeof WORLD_GRADE_CLAMPS)[]) {
+      expect(POST_FX_PULSE_CLAMPS[field][0]).toBeLessThanOrEqual(WORLD_GRADE_CLAMPS[field][0]);
+      expect(POST_FX_PULSE_CLAMPS[field][1]).toBeGreaterThanOrEqual(WORLD_GRADE_CLAMPS[field][1]);
+    }
+  });
+
+  /**
+   * Der Vignette-Shader mischt **ausserhalb** des Radius voll zur Vignettenfarbe. Faellt der
+   * Radius unter die Eckdistanz von `sqrt(0.5² + 0.5²) ≈ 0.707`, entsteht dort ein harter
+   * schwarzer Rand statt eines Verlaufs.
+   */
+  it('haelt den Vignettenradius jenseits der Bildecke', () => {
+    const CORNER_DISTANCE = Math.SQRT1_2;
+    expect(WORLD_GRADE_CLAMPS.vignetteRadius[0]).toBeGreaterThan(CORNER_DISTANCE);
+    expect(POST_FX_PULSE_CLAMPS.vignetteRadius[0]).toBeGreaterThan(CORNER_DISTANCE);
+
+    const set = new PostFxPulseSet();
+    set.request({ priority: 90, durationMs: 800, ease: 'linear', grade: { vignetteRadius: 0.1 } }, 0);
+    expect(compose(set, 0).vignetteRadius).toBeGreaterThan(CORNER_DISTANCE);
   });
 
   it('leert alle Pulse bei clear()', () => {

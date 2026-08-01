@@ -46,77 +46,79 @@ const PRESETS: Readonly<Record<PostFxEvent, PostFxPulse>> = {
    */
   heavyLocalHit: {
     priority: POST_FX_PRIORITY.hit,
-    durationMs: 260,
-    ease: 'impulse',
-    grade: { saturation: -0.08, contrast: 0.04, vignetteStrength: 0.14 },
+    durationMs: 380,
+    // `expo` statt `impulse`: ein Treffer soll sofort auf voller Stärke stehen. Die
+    // Anstiegsflanke von `impulse` verschluckt bei kurzen Pulsen den Ausschlag.
+    ease: 'expo',
+    grade: { saturation: -0.22, contrast: 0.1, vignetteStrength: 0.32 },
   },
 
   bossPhaseChange: {
     priority: POST_FX_PRIORITY.bossPhase,
-    durationMs: 900,
+    durationMs: 1200,
     ease: 'expo',
-    grade: { saturation: -0.06, contrast: 0.05, tintStrength: 0.1, vignetteStrength: 0.08 },
+    grade: { saturation: -0.16, contrast: 0.12, tintStrength: 0.26, vignetteStrength: 0.18 },
   },
 
   /** Normale Nuke: warmer Belichtungsstoß mit kurzer Bloom-Spitze. */
   nukeDetonation: {
     priority: POST_FX_PRIORITY.nuke,
-    durationMs: 1400,
+    durationMs: 1500,
     ease: 'impulse',
     grade: {
-      brightness: 0.06,
-      contrast: 0.06,
-      saturation: -0.05,
+      brightness: 0.16,
+      contrast: 0.16,
+      saturation: -0.14,
       tint: NUKE_WARM_TINT,
-      tintStrength: 0.22,
-      bloomAmount: 0.34,
-      vignetteStrength: 0.1,
+      tintStrength: 0.45,
+      bloomAmount: 0.75,
+      vignetteStrength: 0.22,
     },
   },
 
   /** Void-Nuke: gleiche Grammatik, anderes Farbprofil. */
   voidNukeDetonation: {
     priority: POST_FX_PRIORITY.nuke,
-    durationMs: 1400,
+    durationMs: 1500,
     ease: 'impulse',
     grade: {
-      brightness: 0.05,
-      contrast: 0.07,
-      saturation: -0.07,
+      brightness: 0.14,
+      contrast: 0.18,
+      saturation: -0.18,
       tint: VOID_FIRE_COLOR,
-      tintStrength: 0.26,
-      bloomAmount: 0.34,
-      vignetteStrength: 0.12,
+      tintStrength: 0.5,
+      bloomAmount: 0.75,
+      vignetteStrength: 0.26,
     },
   },
 
   blackHoleSpawn: {
     priority: POST_FX_PRIORITY.blackHole,
-    durationMs: 1100,
+    durationMs: 1300,
     ease: 'expo',
-    grade: { saturation: -0.1, contrast: 0.05, tint: VOID_FIRE_COLOR, tintStrength: 0.16, vignetteStrength: 0.18 },
+    grade: { saturation: -0.28, contrast: 0.12, tint: VOID_FIRE_COLOR, tintStrength: 0.34, vignetteStrength: 0.36 },
   },
 
   blackHoleCollapse: {
     priority: POST_FX_PRIORITY.blackHole,
-    durationMs: 520,
+    durationMs: 600,
     ease: 'impulse',
-    grade: { brightness: 0.04, contrast: 0.06, vignetteStrength: -0.06 },
+    grade: { brightness: 0.12, contrast: 0.16, bloomAmount: 0.3, vignetteStrength: -0.12 },
   },
 
   teleport: {
     priority: POST_FX_PRIORITY.teleport,
-    durationMs: 300,
-    ease: 'impulse',
-    grade: { saturation: -0.12, brightness: 0.03 },
+    durationMs: 420,
+    ease: 'expo',
+    grade: { saturation: -0.34, brightness: 0.09, contrast: 0.08 },
   },
 
   /** Eigener Tod: die Welt tritt zurück, damit die Auswertung im Vordergrund steht. */
   localDeath: {
     priority: POST_FX_PRIORITY.death,
-    durationMs: 1200,
+    durationMs: 1500,
     ease: 'expo',
-    grade: { saturation: -0.15, contrast: -0.04, vignetteStrength: 0.3 },
+    grade: { saturation: -0.45, contrast: -0.1, vignetteStrength: 0.5 },
   },
 };
 

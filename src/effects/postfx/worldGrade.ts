@@ -40,15 +40,41 @@ export interface WorldGradeInputs {
  * keine spätere Abstimmung Telegraphen, Spielerfarben oder Gefahrenhinweise unleserlich macht.
  */
 export const WORLD_GRADE_CLAMPS = {
-  saturation: [0.85, 1.10],
-  contrast: [0.94, 1.10],
+  saturation: [0.80, 1.12],
+  contrast: [0.92, 1.18],
   brightness: [0.94, 1.08],
   temperature: [-1, 1],
-  tintStrength: [0, 0.30],
-  vignetteRadius: [0.35, 1],
-  vignetteStrength: [0, 0.45],
-  bloomThreshold: [0.45, 0.95],
-  bloomAmount: [0, 0.6],
+  tintStrength: [0, 0.40],
+  /**
+   * Untergrenze ist **kein** Geschmackswert. Phasers Vignette mischt außerhalb des Radius
+   * **voll** zur Vignettenfarbe (`vignette = 1.0` als Mix-Faktor), innerhalb dagegen weich über
+   * `sin(g·π·strength)`. Die Bildecke liegt bei `sqrt(0.5² + 0.5²) ≈ 0.707`; ein kleinerer
+   * Radius erzeugt dort einen harten schwarzen Rand statt eines Verlaufs. Die Stärke steuert
+   * die Intensität, der Radius bleibt jenseits der Ecke.
+   */
+  vignetteRadius: [0.75, 1.2],
+  // Obergrenze bewusst moderat: `sin(g·π·strength)` erreicht bei 0.5 bereits rund 85 % Abdunklung
+  // in den Ecken. Darüber verschluckt die Vignette Gegner am Bildrand.
+  vignetteStrength: [0, 0.5],
+  bloomThreshold: [0.30, 0.95],
+  bloomAmount: [0, 0.85],
+} as const;
+
+/**
+ * Weitere Grenzen für die Dauer eines Ereignisses. Die engen Grenzen oben schützen das
+ * **Dauerbild**; ein Nuke-Belichtungsstoß oder der eigene Tod dürfen kurzzeitig deutlicher
+ * ausschlagen, ohne dass dadurch der Normalzustand aufgeweicht wird.
+ */
+export const POST_FX_PULSE_CLAMPS = {
+  saturation: [0.45, 1.35],
+  contrast: [0.85, 1.45],
+  brightness: [0.88, 1.30],
+  temperature: [-1, 1],
+  tintStrength: [0, 0.65],
+  vignetteRadius: [0.75, 1.2],
+  vignetteStrength: [0, 0.80],
+  bloomThreshold: [0.20, 0.95],
+  bloomAmount: [0, 1.2],
 } as const;
 
 export const NEUTRAL_WORLD_GRADE: WorldGrade = {
@@ -87,7 +113,7 @@ export function resolveDarkness(sky: SkyState): number {
  * überall und nachts nirgends. Sie folgt darum der Helligkeit des Bildes.
  */
 function resolveBloomThreshold(darkness: number): number {
-  return clamp(0.82 - darkness * 0.3, WORLD_GRADE_CLAMPS.bloomThreshold);
+  return clamp(0.62 - darkness * 0.22, WORLD_GRADE_CLAMPS.bloomThreshold);
 }
 
 export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
@@ -99,34 +125,40 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
   const hurt = 1 - Math.min(1, Math.max(0, inputs.localHpFraction));
   const bossActive = inputs.bossPhase > 0;
 
-  // Nachts leicht entsättigen und die Kontraste anziehen – das ist der Effekt, den das
-  // Auge bei wenig Licht ohnehin erwartet, und er trennt Silhouetten besser vom Boden.
-  let saturation = 1 - darkness * 0.1;
-  let contrast = 1 + darkness * 0.05;
-  let brightness = 1 - darkness * 0.02;
+  // Nachts entsättigen und die Kontraste anziehen – das ist der Effekt, den das Auge bei
+  // wenig Licht ohnehin erwartet, und er trennt Silhouetten besser vom Boden.
+  let saturation = 1 - darkness * 0.18;
+  let contrast = 1 + darkness * 0.12;
+  let brightness = 1 - darkness * 0.04;
 
   let tint = darkness > 0.05 ? NIGHT_TINT : 0xffffff;
-  let tintStrength = darkness * 0.12;
-  let temperature = -darkness * 0.35;
+  let tintStrength = darkness * 0.28;
+  let temperature = -darkness * 0.6;
 
   if (inputs.isVoidMap) {
     tint = VOID_TINT;
-    tintStrength = Math.max(tintStrength, 0.16);
-    saturation -= 0.04;
+    tintStrength = Math.max(tintStrength, 0.3);
+    saturation -= 0.06;
+    contrast += 0.04;
   }
 
   if (bossActive) {
     tint = BOSS_TINT;
-    tintStrength = Math.max(tintStrength, 0.1 + Math.min(0.08, inputs.bossPhase * 0.04));
-    contrast += 0.03;
-    temperature += 0.2;
+    tintStrength = Math.max(tintStrength, 0.22 + Math.min(0.14, inputs.bossPhase * 0.07));
+    contrast += 0.06;
+    temperature += 0.45;
   }
 
   // Niedrige Gesundheit ausschliesslich über Vignette und Entsättigung – kein Farbtonwechsel,
   // sonst verschieben sich Telegraph- und Teamfarben genau dann, wenn sie am wichtigsten sind.
-  const vignetteStrength = 0.1 + darkness * 0.08 + hurt * 0.26;
-  const vignetteRadius = 0.9 - hurt * 0.2;
-  saturation -= hurt * 0.12;
+  // Der Radius bleibt jenseits der Bildecke, die Intensität läuft allein über die Stärke.
+  // Die Vignette rahmt ein Bild, sie verdunkelt es nicht zusätzlich. Nachts ist die Lightmap
+  // ohnehin dunkel; ein mit der Dunkelheit wachsender Rand würde dort Gegner am Bildrand
+  // verschlucken. Sie bleibt deshalb weitgehend konstant, und die Dramatik kommt aus der
+  // Gesundheit.
+  const vignetteStrength = 0.18 + darkness * 0.05 + hurt * 0.34;
+  const vignetteRadius = 1.05 - hurt * 0.18;
+  saturation -= hurt * 0.2;
 
   return {
     saturation: clamp(saturation, WORLD_GRADE_CLAMPS.saturation),
@@ -138,7 +170,7 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
     vignetteRadius: clamp(vignetteRadius, WORLD_GRADE_CLAMPS.vignetteRadius),
     vignetteStrength: clamp(vignetteStrength, WORLD_GRADE_CLAMPS.vignetteStrength),
     bloomThreshold: resolveBloomThreshold(darkness),
-    bloomAmount: clamp(0.16 + darkness * 0.06, WORLD_GRADE_CLAMPS.bloomAmount),
+    bloomAmount: clamp(0.34 + darkness * 0.14, WORLD_GRADE_CLAMPS.bloomAmount),
   };
 }
 
