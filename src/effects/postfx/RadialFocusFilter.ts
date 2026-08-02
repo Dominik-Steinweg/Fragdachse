@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../../config';
 import {
   RADIAL_FOCUS_DESATURATE,
   RADIAL_FOCUS_DARKEN,
+  RADIAL_FOCUS_KERNEL_TAP_COUNT,
   RADIAL_FOCUS_SOFTNESS_PX,
   resolveRadialFocusSampling,
   type RadialFocusFrame,
@@ -28,8 +29,8 @@ const RADIAL_FOCUS_FRAGMENT_SHADER = [
   'uniform float uDesaturate;',
   'varying vec2 outTexCoord;',
   '#pragma phaserTemplate(fragmentHeader)',
-  'const float PI = 3.14159265358979323846;',
-  'const float MAX_SAMPLES = 12.0;',
+  'const int MAX_KERNEL_TAPS = 9;',
+  'const float KERNEL_CORNER_RADIUS_SCALE = 0.70710678;',
   '',
   'void main ()',
   '{',
@@ -53,16 +54,34 @@ const RADIAL_FOCUS_FRAGMENT_SHADER = [
   '    blurMix = clamp(blurMix * uAlpha, 0.0, 1.0);',
   '',
   '    float blurScale = mix(0.35, 1.0, blurMix);',
-  '    // Keep only a small center contribution so the outer arena reads as genuinely defocused.',
-  '    vec4 blurred = source * 0.18;',
-  '    float sampleWeight = 0.82 / max(uSampleCount, 1.0);',
-  '    for (int i = 0; i < 12; i++)',
+  '    // Symmetric 3x3 area kernel: center plus eight taps spread across the footprint.',
+  '    // The original center is deliberately dominant to keep silhouettes readable.',
+  '    vec4 blurred = vec4(0.0);',
+  '    for (int i = 0; i < MAX_KERNEL_TAPS; i++)',
   '    {',
   '        if (float(i) >= uSampleCount) break;',
-  '        float angle = (float(i) / MAX_SAMPLES) * (PI * 2.0);',
-  '        vec2 direction = vec2(cos(angle), sin(angle));',
-  '        vec2 offset = direction * (uBlurRadius * blurScale) / uDesignSize;',
-  '        blurred += boundedSampler(uMainSampler, outTexCoord + offset) * sampleWeight;',
+  '        float tapIndex = float(i);',
+  '        vec2 grid = vec2(mod(tapIndex, 3.0) - 1.0, floor(tapIndex / 3.0) - 1.0);',
+  '        float tapWeight = 0.05;',
+  '        if (i == 4)',
+  '        {',
+  '            tapWeight = 0.44;',
+  '        }',
+  '        else if (grid.x == 0.0 || grid.y == 0.0)',
+  '        {',
+  '            tapWeight = 0.09;',
+  '        }',
+  '        vec2 offset = grid * (uBlurRadius * KERNEL_CORNER_RADIUS_SCALE * blurScale) / uDesignSize;',
+  '        vec4 tap;',
+  '        if (i == 4)',
+  '        {',
+  '            tap = source;',
+  '        }',
+  '        else',
+  '        {',
+  '            tap = boundedSampler(uMainSampler, outTexCoord + offset);',
+  '        }',
+  '        blurred += tap * tapWeight;',
   '    }',
   '',
   '    vec3 color = mix(source.rgb, blurred.rgb, blurMix);',
@@ -94,8 +113,8 @@ export class RadialFocusFilterController extends Phaser.Filters.Controller {
   arenaWidth = 0;
   arenaHeight = 0;
   softnessPx = RADIAL_FOCUS_SOFTNESS_PX;
-  blurRadiusPx = 48;
-  sampleCount = 12;
+  blurRadiusPx = 30;
+  sampleCount = RADIAL_FOCUS_KERNEL_TAP_COUNT;
   darken = RADIAL_FOCUS_DARKEN;
   desaturate = RADIAL_FOCUS_DESATURATE;
 

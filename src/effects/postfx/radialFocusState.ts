@@ -26,6 +26,7 @@ export interface RadialFocusFrame {
 
 export interface RadialFocusSampling {
   readonly filterActive: boolean;
+  /** Total taps, including the original center sample. */
   readonly sampleCount: number;
   readonly blurRadiusPx: number;
 }
@@ -33,6 +34,7 @@ export interface RadialFocusSampling {
 export const RADIAL_FOCUS_SOFTNESS_PX = 96;
 export const RADIAL_FOCUS_DARKEN = 0.18;
 export const RADIAL_FOCUS_DESATURATE = 0.58;
+export const RADIAL_FOCUS_KERNEL_TAP_COUNT = 9;
 
 export function resolveRadialFocusFrame(
   focusWorldX: number,
@@ -64,6 +66,6 @@ export function resolveRadialFocusSampling(level: RadialFocusQualityLevel): Radi
     return { filterActive: false, sampleCount: 0, blurRadiusPx: 0 };
   }
   return level === 'high'
-    ? { filterActive: true, sampleCount: 12, blurRadiusPx: 48 }
-    : { filterActive: true, sampleCount: 6, blurRadiusPx: 24 };
+    ? { filterActive: true, sampleCount: RADIAL_FOCUS_KERNEL_TAP_COUNT, blurRadiusPx: 30 }
+    : { filterActive: true, sampleCount: RADIAL_FOCUS_KERNEL_TAP_COUNT, blurRadiusPx: 20 };
 }

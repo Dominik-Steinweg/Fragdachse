@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RADIAL_FOCUS_DESATURATE,
   RADIAL_FOCUS_DARKEN,
+  RADIAL_FOCUS_KERNEL_TAP_COUNT,
   RADIAL_FOCUS_SOFTNESS_PX,
   resolveRadialFocusFrame,
   resolveRadialFocusSampling,
@@ -32,16 +33,16 @@ describe('radial focus state', () => {
     expect(resolveRadialFocusFrame(200, 300, 0, 0, 176, -1).alpha).toBe(0);
   });
 
-  it('uses progressively cheaper sampling without changing the radial constants', () => {
+  it('uses a symmetric nine-tap area kernel with a reduced medium radius', () => {
     expect(resolveRadialFocusSampling('high')).toEqual({
       filterActive: true,
-      sampleCount: 12,
-      blurRadiusPx: 48,
+      sampleCount: 9,
+      blurRadiusPx: 30,
     });
     expect(resolveRadialFocusSampling('medium')).toEqual({
       filterActive: true,
-      sampleCount: 6,
-      blurRadiusPx: 24,
+      sampleCount: 9,
+      blurRadiusPx: 20,
     });
     expect(resolveRadialFocusSampling('low')).toEqual({
       filterActive: false,
@@ -51,5 +52,6 @@ describe('radial focus state', () => {
     expect(RADIAL_FOCUS_SOFTNESS_PX).toBe(96);
     expect(RADIAL_FOCUS_DARKEN).toBeCloseTo(0.18);
     expect(RADIAL_FOCUS_DESATURATE).toBeCloseTo(0.58);
+    expect(RADIAL_FOCUS_KERNEL_TAP_COUNT).toBe(9);
   });
 });
