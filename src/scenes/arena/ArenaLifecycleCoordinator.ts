@@ -660,6 +660,7 @@ export class ArenaLifecycleCoordinator {
           eventBus: this.scene.game.events,
           obstacleCellProvider,
           goalMode: 'dynamic-fallback-bases',
+          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
         })
         : null;
       this.ctx.enemyStrategicFlowFieldService = isCoopDefenseMode(bridge.getGameMode())
@@ -667,6 +668,7 @@ export class ArenaLifecycleCoordinator {
           eventBus: this.scene.game.events,
           obstacleCellProvider,
           goalMode: 'dynamic',
+          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
         })
         : null;
       this.ctx.enemyStrategicTargetService = this.ctx.enemyStrategicFlowFieldService
@@ -683,6 +685,7 @@ export class ArenaLifecycleCoordinator {
             0,
             getCoopDefenseEnemyConfig(coopDefenseMapConfig.boss.enemyKind).size * 0.5 - CELL_SIZE * 0.5,
           ) / CELL_SIZE),
+          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
         })
         : null;
       for (const flowField of this.ctx.allyFlowFieldServices.values()) flowField.destroy();
@@ -692,6 +695,7 @@ export class ArenaLifecycleCoordinator {
           eventBus: this.scene.game.events,
           obstacleCellProvider,
           goalMode: 'dynamic-fallback-bases',
+          topologySource: this.ctx.enemyFlowFieldService ?? undefined,
         }));
       }
       if (

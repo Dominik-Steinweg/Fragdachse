@@ -155,4 +155,39 @@ describe('Enemy navigation geometry', () => {
     expect(service.isDestructibleAt(3, 3)).toBe(true);
     expect(service.getIntegrationValueAt(3, 3)).toBe(EnemyFlowFieldService.INTEGRATION_INFINITY);
   });
+
+  it('shares one topology refresh while keeping dynamic goal fields independent', () => {
+    let obstacleCells: ReadonlyArray<{ gridX: number; gridY: number }> = [];
+    let obstacleReads = 0;
+    const eventBus = createEventBus();
+    const source = new EnemyFlowFieldService(createLayout(), [], METRICS, {
+      eventBus,
+      obstacleCellProvider: () => {
+        obstacleReads += 1;
+        return obstacleCells;
+      },
+      goalMode: 'dynamic',
+      dynamicGoalCells: [{ gridX: 2, gridY: 5 }],
+    });
+    const dependent = new EnemyFlowFieldService(createLayout(), [], METRICS, {
+      eventBus,
+      obstacleCellProvider: () => {
+        throw new Error('shared topology must not query its own obstacle provider');
+      },
+      goalMode: 'dynamic',
+      dynamicGoalCells: [{ gridX: 13, gridY: 5 }],
+      topologySource: source,
+    });
+    const readsAfterConstruction = obstacleReads;
+
+    obstacleCells = [{ gridX: 3, gridY: 3 }];
+    eventBus.emitGridChange({ reason: 'placeable_added', source: 'placeable_rock', gridX: 3, gridY: 3 });
+    expect(dependent.update(Date.now() + 1_000)).toBe(true);
+
+    expect(obstacleReads).toBe(readsAfterConstruction + 1);
+    expect(source.getKindAt(3, 3)).toBe('rock');
+    expect(dependent.getKindAt(3, 3)).toBe('rock');
+    expect(source.getReachedGoalCellAt(4, 5)).toEqual({ gridX: 2, gridY: 5 });
+    expect(dependent.getReachedGoalCellAt(12, 5)).toEqual({ gridX: 13, gridY: 5 });
+  });
 });

@@ -602,7 +602,9 @@ function normalizeDetailCounts(details: ArenaRuntimeDetails | undefined): Record
 function contextsEqual(left: PerformanceContextChange | null, right: PerformanceContextChange): boolean {
   if (!left) return false;
   for (const key of Object.keys(right) as Array<keyof PerformanceContextChange>) {
-    if (key === 'atMs') continue;
+    // Die fortlaufende Rundenzeit steht bereits verlustfrei in jeder Frame-Zeile. Als
+    // Context-Change wuerde sie dagegen nahezu einen redundanten Eintrag pro Frame erzeugen.
+    if (key === 'atMs' || key === 'roundElapsedMs') continue;
     if (left[key] !== right[key]) return false;
   }
   return true;
@@ -964,6 +966,7 @@ export class ArenaRuntimeProfiler {
   }
 
   shouldCaptureSceneBreakdown(role: 'host' | 'client', deltaMs: number): boolean {
+    if (!this.wantsDetailedSampling()) return false;
     const now = performance.now();
     const window = this.metricsWindow;
     if (!window || window.role !== role) return true;
@@ -1052,6 +1055,11 @@ export class ArenaRuntimeProfiler {
 
   isRecording(): boolean {
     return this.recording;
+  }
+
+  /** Teure Scene-Scans sind nur fuer eine sichtbare Live-Ansicht oder einen Export relevant. */
+  wantsDetailedSampling(): boolean {
+    return this.recording || this.liveDrawCallTracking;
   }
 
   getRecordingDurationMs(): number {

@@ -1455,7 +1455,9 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       const leaderboardCanopyStartedAt = performance.now();
-      this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
+      if (this.arenaPanelsHeld) {
+        this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
+      }
 
       if (this.ctx.arenaResult) {
         const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite ?? null;
@@ -1648,7 +1650,8 @@ export class ArenaScene extends Phaser.Scene {
     const scopePerformance = this.scopeOverlay?.getPerformanceMetrics();
     const clientPerformance = this.clientUpdate.getPerformanceMetrics();
     const hostPerformance = this.hostUpdate.getPerformanceMetrics();
-    const sceneCounts = this.sampleScenePerformanceCounts(performance.now());
+    const detailedDiagnostics = this.runtimeProfiler?.wantsDetailedSampling() ?? false;
+    const sceneCounts = this.sampleScenePerformanceCounts(performance.now(), detailedDiagnostics);
     const transportCounts = this.sampleTransportPerformanceCounts(performance.now());
     let sceneBreakdown: string | null = null;
     let sceneBreakdownScanMs = 0;
@@ -2944,7 +2947,11 @@ export class ArenaScene extends Phaser.Scene {
     return `visible=${visibleCount} active=${activeCount} top=${topEntries}`;
   }
 
-  private sampleScenePerformanceCounts(nowMs: number): typeof this.scenePerformanceCounts {
+  private sampleScenePerformanceCounts(
+    nowMs: number,
+    enabled: boolean,
+  ): typeof this.scenePerformanceCounts {
+    if (!enabled) return { ...this.scenePerformanceCounts, scanMs: 0 };
     if (nowMs - this.lastScenePerformanceCountAtMs < 250) {
       return { ...this.scenePerformanceCounts, scanMs: 0 };
     }

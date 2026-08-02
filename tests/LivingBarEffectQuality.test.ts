@@ -17,10 +17,18 @@ function makeScene(quality: GraphicsQuality) {
     add: {
       particles: () => {
         const emitter = {
+          active: true,
           addEmitZone: () => emitter,
           setScrollFactor: () => emitter,
+          setActive: (active: boolean) => {
+            emitter.active = active;
+            return emitter;
+          },
+          setSortCallback: () => emitter,
           start: () => emitter,
           stop: () => emitter,
+          killAll: () => emitter,
+          forEachDead: () => emitter,
           destroy: () => emitter,
           emitting: true,
           once: () => emitter,
@@ -58,7 +66,7 @@ describe('LivingBarEffect quality gating', () => {
     const { scene, created, tweens } = makeScene('low');
     const effect = new LivingBarEffect(scene, container, 0, 0, 40, 14, palette);
     // Weder Emitter noch Puls-Tween: Ohne den Schalter blieben nur die Partikel aus,
-    // die Emitter-Objekte und der Glow-Tween liefen weiter.
+    // die Emitter-Objekte und der Aura-Tween liefen weiter.
     expect(created.length).toBe(0);
     expect(tweens.length).toBe(0);
     expect(effect.idleCore).toBeNull();
@@ -68,12 +76,12 @@ describe('LivingBarEffect quality gating', () => {
   it('stays inert on low when the bar is later filled', () => {
     const { scene, created, tweens } = makeScene('low');
     const effect = new LivingBarEffect(scene, container, 0, 0, 40, 14, palette);
-    // setFilledWidth()/start() rufen intern ensureGlow() – der Glow darf nicht nachwachsen.
+    // setFilledWidth()/start() rufen intern ensureAura() – die Aura darf nicht nachwachsen.
     effect.setFilledWidth(38);
     effect.start();
     expect(created.length).toBe(0);
     expect(tweens.length).toBe(0);
-    expect(effect.breathGlow).toBeNull();
+    expect(effect.breathAura).toBeNull();
     // Aufraeumen muss ohne Emitter fehlerfrei durchlaufen.
     expect(() => effect.destroy()).not.toThrow();
   });

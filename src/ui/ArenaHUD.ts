@@ -28,6 +28,7 @@ import {
   ensureLivingBarTextures, LivingBarEffect,
 } from './LivingBarEffect';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
 
 // ── Layout ──────────────────────────────────────────────────────────────────
 const DEFAULT_PANEL_W = 240;
@@ -220,6 +221,7 @@ export class ArenaHUD {
   private w1!:      BarBundle;
   private w2!:      BarBundle;
   private util!:    BarBundle;
+  private presentationActive = true;
 
   // Name
   private nameText!:        Phaser.GameObjects.Text;
@@ -530,6 +532,11 @@ export class ArenaHUD {
   }
 
   update(data: ArenaHUDData): void {
+    if (!this.presentationActive) {
+      this.updatePersistentPowerUps(data);
+      return;
+    }
+
     this.currentMaxArmor = Math.max(1, data.maxArmor);
     this.currentMaxAdrenaline = Math.max(1, data.maxAdrenaline);
     this.currentMaxRage = Math.max(1, data.maxRage);
@@ -548,6 +555,11 @@ export class ArenaHUD {
       this.onUtilityNameChanged(data.utilityDisplayName);
     }
     this.updateUtilityOverrideVisual(data.isUtilityOverridden ?? false);
+    this.updatePersistentPowerUps(data);
+  }
+
+  /** Power-ups remain visible outside the TAB panel and therefore keep receiving state updates. */
+  private updatePersistentPowerUps(data: ArenaHUDData): void {
     const shieldPowerUps = data.shieldBuff?.visible
       ? [{
           defId: data.shieldBuff.defId,
@@ -574,7 +586,35 @@ export class ArenaHUD {
     ]);
   }
 
+  /** Fully suspends the expensive, normally hidden TAB-HUD presentation. */
+  setPresentationActive(active: boolean): void {
+    if (this.presentationActive === active) return;
+    this.presentationActive = active;
+
+    for (const bundle of [this.hp, this.armor, this.adr, this.ult, this.w1, this.w2, this.util]) {
+      this.syncBarPresentation(bundle);
+    }
+
+    if (this.adrBurstEmitter) {
+      if (active) this.adrBurstEmitter.setActive(true);
+      else this.deactivateEmitter(this.adrBurstEmitter);
+    }
+
+    for (const tween of [
+      this.nameScrollTween,
+      this.ultPulseTween,
+      this.adrSyringeTween,
+      this.utilWobbleTween,
+      this.utilLabelPulseTween,
+    ]) {
+      if (!tween) continue;
+      if (active) tween.resume();
+      else tween.pause();
+    }
+  }
+
   flashSlot(slot: 'weapon1' | 'weapon2' | 'utility'): void {
+    if (!this.presentationActive) return;
     const bundle = slot === 'weapon1' ? this.w1 : slot === 'weapon2' ? this.w2 : this.util;
     if (!bundle.highlight) return;
     this.scene.tweens.killTweensOf(bundle.highlight);
@@ -785,7 +825,7 @@ export class ArenaHUD {
   }
 
   private emitAdrBurst(frac: number): void {
-    if (!this.adrBurstEmitter) return;
+    if (!this.presentationActive || !this.adrBurstEmitter) return;
     const px = BAR_X + barWidth * frac;
     const py = ADR_BAR_Y + BAR_H / 2;
     this.adrBurstEmitter.setPosition(px, py);
@@ -1125,21 +1165,45 @@ export class ArenaHUD {
   private setBarEnergized(bundle: BarBundle, energized: boolean): void {
     if (bundle.energized === energized) return;
     bundle.energized = energized;
-    const hasFill = bundle.currentFrac > 0.03;
+    this.syncBarPresentation(bundle);
+  }
 
-    if (energized) {
-      // Stop idle breathing, start energized sparkle
+  private syncBarPresentation(bundle: BarBundle): void {
+    const hasFill = bundle.currentFrac > 0.03;
+    if (!this.presentationActive) {
+      bundle.idleEffect.stop();
+      this.deactivateEmitter(bundle.coreEmitter);
+      this.deactivateEmitter(bundle.outerEmitter);
+      return;
+    }
+
+    if (bundle.energized) {
       bundle.idleEffect.stop();
       if (hasFill) {
-        bundle.coreEmitter.start();
-        bundle.outerEmitter.start();
+        this.activateEmitter(bundle.coreEmitter);
+        this.activateEmitter(bundle.outerEmitter);
+      } else {
+        this.deactivateEmitter(bundle.coreEmitter);
+        this.deactivateEmitter(bundle.outerEmitter);
       }
-    } else {
-      // Stop energized sparkle, start idle breathing
-      bundle.coreEmitter.stop();
-      bundle.outerEmitter.stop();
-      bundle.idleEffect.start();
+      return;
     }
+
+    this.deactivateEmitter(bundle.coreEmitter);
+    this.deactivateEmitter(bundle.outerEmitter);
+    if (hasFill) bundle.idleEffect.start();
+    else bundle.idleEffect.stop();
+  }
+
+  private activateEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
+    emitter.setActive(true);
+    if (!emitter.emitting) emitter.start();
+  }
+
+  private deactivateEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
+    emitter.stop();
+    killAllAndResetParticlePositions(emitter);
+    emitter.setActive(false);
   }
 
   // ── Shared bar helpers ────────────────────────────────────────────────────
@@ -1159,14 +1223,14 @@ export class ArenaHUD {
     // Update energized zone
     if (w > 6) {
       bundle.energyZone.width = w - 4;
-      if (bundle.energized) {
-        if (!bundle.coreEmitter.emitting) bundle.coreEmitter.start();
-        if (!bundle.outerEmitter.emitting) bundle.outerEmitter.start();
+      if (bundle.energized && this.presentationActive) {
+        this.activateEmitter(bundle.coreEmitter);
+        this.activateEmitter(bundle.outerEmitter);
       }
     } else {
       bundle.energyZone.width = 0;
-      bundle.coreEmitter.stop();
-      bundle.outerEmitter.stop();
+      this.deactivateEmitter(bundle.coreEmitter);
+      this.deactivateEmitter(bundle.outerEmitter);
     }
   }
 

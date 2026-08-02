@@ -11,7 +11,6 @@ import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { LightingSystem } from '../../effects/LightingSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
-import { addInternalGlow, setInternalFxPadding } from '../../utils/phaserFx';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import { isCoopDefenseMode } from '../../gameModes';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
@@ -19,11 +18,14 @@ import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseCo
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
+  aura:      Phaser.GameObjects.Image;
   rangeCircle: Phaser.GameObjects.Graphics;
   hpBarBg:   Phaser.GameObjects.Rectangle;
   hpBarFg:   Phaser.GameObjects.Rectangle;
   constructionId?: SyncedPlaceableRock['constructionId'];
 }
+
+const TEX_TURRET_AURA = '__placeable_turret_aura';
 
 /**
  * Manages all rock and turret visual state.
@@ -47,6 +49,11 @@ export class RockVisualHelper {
   }
 
   private ensureTurretTextures(): void {
+    fillRadialGradientTexture(this.scene.textures, TEX_TURRET_AURA, 64, [
+      [0, 'rgba(255,255,255,0.34)'],
+      [0.46, 'rgba(255,255,255,0.16)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
     if (!this.scene.textures.exists('placeable_turret')) {
       const g = this.scene.make.graphics({ x: 0, y: 0 });
       g.clear();
@@ -394,11 +401,15 @@ export class RockVisualHelper {
     const world = this.gridToWorld(rock.gridX, rock.gridY);
     let visual = this.turretVisuals.get(rock.id);
     if (!visual) {
+      const aura = this.scene.add.image(world.x, world.y, TEX_TURRET_AURA)
+        .setDisplaySize(CELL_SIZE + 24, CELL_SIZE + 24)
+        .setTint(rock.ownerColor)
+        .setAlpha(0.2)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(DEPTH.ROCKS + 0.1);
       const image = this.scene.add.image(world.x, world.y, this.getTurretTextureKey(rock))
         .setDisplaySize(CELL_SIZE, CELL_SIZE)
         .setDepth(DEPTH.ROCKS + 0.2);
-      setInternalFxPadding(image, 12);
-      addInternalGlow(image, rock.ownerColor, 5, 0, false, 0.12, 10, 'critical');
 
       const rangeCircle = this.scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
       if (this.arenaClipMask) {
@@ -410,7 +421,7 @@ export class RockVisualHelper {
         .setOrigin(0, 0.5)
         .setDepth(DEPTH.ROCKS + 0.4);
 
-      visual = { image, rangeCircle, hpBarBg, hpBarFg, constructionId: rock.constructionId };
+      visual = { image, aura, rangeCircle, hpBarBg, hpBarFg, constructionId: rock.constructionId };
       this.turretVisuals.set(rock.id, visual);
     }
 
@@ -423,6 +434,10 @@ export class RockVisualHelper {
       .setTexture(this.getTurretTextureKey(rock))
       .setPosition(world.x, world.y)
       .setRotation(rock.kind === 'pedestal' ? 0 : rock.angle);
+    visual.aura
+      .setPosition(world.x, world.y)
+      .setTint(rock.ownerColor)
+      .setVisible(visual.image.visible);
     visual.constructionId = rock.constructionId;
     visual.rangeCircle.clear();
     visual.rangeCircle.lineStyle(1.4, rock.ownerColor, 0.48);
@@ -469,6 +484,7 @@ export class RockVisualHelper {
     const visual = this.turretVisuals.get(id);
     if (!visual) return;
     visual.image.destroy();
+    visual.aura.destroy();
     visual.rangeCircle.destroy();
     visual.hpBarBg.destroy();
     visual.hpBarFg.destroy();

@@ -236,7 +236,7 @@ export class LeftSidePanel {
   build(): void {
     // ── gameContainer (ArenaHUD, initial off-screen oben) ─────────────────────
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
-    this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
+    this.gameContainer.setDepth(DEPTH.OVERLAY - 1).setVisible(false).setActive(false);
     this.gameContainer.add(
       this.scene.add.rectangle(ARENA_CENTER_X, GAME_HEIGHT / 2, ARENA_PANEL_W, GAME_HEIGHT, 0x000000, 0.18)
         .setScrollFactor(0),
@@ -657,6 +657,8 @@ export class LeftSidePanel {
     this.initArenaHUD();
     this.arenaOverlayVisible = false;
     this.gameContainer.y = -GAME_HEIGHT;
+    this.gameContainer.setVisible(false).setActive(false);
+    this.arenaHUD.setPresentationActive(false);
 
     this.scene.tweens.add({
       targets:  this.lobbyContainer,
@@ -675,6 +677,7 @@ export class LeftSidePanel {
     this.pendingDelay?.remove();
 
     this.arenaHUD.reset();
+    this.arenaHUD.setPresentationActive(false);
     this.arenaOverlayVisible = false;
     this.badgerPreview?.setVisible(true);
     this.puContainer.setVisible(false);
@@ -684,6 +687,7 @@ export class LeftSidePanel {
       y:        -GAME_HEIGHT,
       duration: 350,
       ease:     'Power2.easeIn',
+      onComplete: () => this.gameContainer.setVisible(false).setActive(false),
     });
 
     this.pendingDelay = this.scene.time.delayedCall(100, () => {
@@ -711,8 +715,16 @@ export class LeftSidePanel {
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.arenaOverlayVisible = visible;
 
+    if (visible) {
+      this.gameContainer.setVisible(true).setActive(true);
+      this.arenaHUD.setPresentationActive(true);
+    } else {
+      this.arenaHUD.setPresentationActive(false);
+    }
+
     if (immediate) {
       this.gameContainer.y = targetY;
+      this.gameContainer.setVisible(visible).setActive(visible);
       return;
     }
 
@@ -721,6 +733,11 @@ export class LeftSidePanel {
       y: targetY,
       duration: visible ? 220 : 180,
       ease: visible ? 'Back.easeOut' : 'Power2.easeIn',
+      onComplete: () => {
+        if (!visible && !this.arenaOverlayVisible) {
+          this.gameContainer.setVisible(false).setActive(false);
+        }
+      },
     });
   }
 
@@ -741,7 +758,7 @@ export class LeftSidePanel {
 
   /** Trigger fire-highlight on a weapon/utility slot. */
   flashSlot(slot: 'weapon1' | 'weapon2' | 'utility'): void {
-    this.arenaHUD.flashSlot(slot);
+    if (this.arenaOverlayVisible) this.arenaHUD.flashSlot(slot);
   }
 
   /** Aktualisiert den Dachs-Farbindikator und Spielernamen anhand des aktuellen Player-States. */

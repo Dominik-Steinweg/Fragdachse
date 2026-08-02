@@ -8,7 +8,6 @@ import {
   ensureCanvasTexture,
   killAllAndResetParticlePositions,
 } from './EffectUtils';
-import { addInternalBlur, addInternalGlow, setInternalFxPadding } from '../utils/phaserFx';
 import {
   ensureFlameTextures,
   ensureVoidFlameTextures,
@@ -37,7 +36,7 @@ const GROUND_DEPTH = DEPTH.ROCKS - 0.24;
 // Funken bleiben damit unter Spieler-, Gegner- und Boss-Visuals.
 const GROUND_PARTICLE_DEPTH = DEPTH.ROCKS + 0.2;
 const RING_PARTICLE_DEPTH = DEPTH.FIRE + 0.12;
-const MAX_GROUND_EMISSIONS_PER_SECOND = 720;
+const MAX_GROUND_EMISSIONS_PER_SECOND = 540;
 /**
  * Wie viele Heat-Haze-Bilder ueber ein Rundenende hinaus vorgehalten werden.
  *
@@ -219,8 +218,6 @@ export class FlamethrowerUpgradeRenderer {
     this.ringSparks = this.createSparkEmitter(RING_PARTICLE_DEPTH + 0.1, true);
     this.ringFlames.addParticleProcessor(new RingTurbulenceProcessor(32));
     this.ringSparks.addParticleProcessor(new RingTurbulenceProcessor(54));
-    setInternalFxPadding(this.ringFlames, 10);
-    addInternalGlow(this.ringFlames, 0xff7b21, 1.45, 0.2, false, 0.1, 5);
   }
 
   syncGround(snapshot: SyncedBurningGroundSnapshot): void {
@@ -637,9 +634,6 @@ export class FlamethrowerUpgradeRenderer {
       particle.angle = Phaser.Math.RadToDeg(particle.rotation);
     });
     bandEmitter.addParticleProcessor(new RingTurbulenceProcessor(8));
-    setInternalFxPadding(bandEmitter, 14);
-    addInternalBlur(bandEmitter, 1, 1.15, 1.15, 1, 0xff5b18, 1);
-    addInternalGlow(bandEmitter, 0xff4d18, 1.9, 0.2, false, 0.1, 7);
     bandEmitter.fastForward(650, 16.67);
 
     const coreProfiles = new WeakMap<Phaser.GameObjects.Particles.Particle, RingParticleProfile>();
@@ -692,9 +686,6 @@ export class FlamethrowerUpgradeRenderer {
       particle.angle = Phaser.Math.RadToDeg(particle.rotation);
     });
     coreEmitter.addParticleProcessor(new RingTurbulenceProcessor(6));
-    setInternalFxPadding(coreEmitter, 10);
-    addInternalBlur(coreEmitter, 0, 0.45, 0.45, 1, 0xffd34f, 1);
-    addInternalGlow(coreEmitter, 0xffb12e, 1.15, 0.28, false, 0.1, 5);
     coreEmitter.fastForward(380, 16.67);
 
     return {
@@ -868,6 +859,7 @@ export class FlamethrowerUpgradeRenderer {
       rotate: { min: -35, max: 35 },
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: 920,
+      maxAliveParticles: 420,
       reserve: 260,
       emitting: false,
     }, depth);
@@ -891,6 +883,7 @@ export class FlamethrowerUpgradeRenderer {
       rotate: { min: 0, max: 360 },
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: 1300,
+      maxAliveParticles: 560,
       reserve: 380,
       emitting: false,
     }, depth);
@@ -911,7 +904,7 @@ export class FlamethrowerUpgradeRenderer {
       rotate: { min: -22, max: 22 },
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: 1200,
-      maxAliveParticles: 1050,
+      maxAliveParticles: 640,
       reserve: 420,
       emitting: false,
     }, depth);
@@ -935,6 +928,7 @@ export class FlamethrowerUpgradeRenderer {
       tint: [...colors],
       blendMode: Phaser.BlendModes.ADD,
       maxParticles: ring ? 360 : 520,
+      maxAliveParticles: ring ? 220 : 180,
       reserve: ring ? 100 : 150,
       emitting: false,
     }, depth);
@@ -946,7 +940,7 @@ export class FlamethrowerUpgradeRenderer {
       speedX: { min: -9, max: 9 }, speedY: { min: -24, max: -10 },
       scale: { start: 0.34, end: 0.78 }, alpha: { start: 0.16, end: 0 },
       tint: [0x72675d, 0x857468, 0x5c5651], rotate: { min: 0, max: 360 },
-      maxParticles: 260, reserve: 80, emitting: false,
+      maxParticles: 260, maxAliveParticles: 96, reserve: 80, emitting: false,
     }, depth);
   }
 

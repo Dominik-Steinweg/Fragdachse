@@ -62,7 +62,7 @@ export const ABLATION_CODES: Readonly<Record<AblationCategory, number>> = {
 /** Was in einem Segment abgeschaltet wird – erscheint so auch in der Anleitung und im Overlay. */
 export const ABLATION_LABELS: Readonly<Record<AblationCategory, string>> = {
   baseline: 'Baseline (nichts abgeschaltet)',
-  filters: 'Glow-/PostFX-Filter',
+  filters: 'Objektfilter (Glow/Blur, ohne Kamera-PostFX)',
   particles: 'Alle Partikel-Emitter',
   lights: 'Dynamische Beleuchtung (Composite)',
   staticShadows: 'Statische Schatten (gebackene Layer)',
@@ -140,7 +140,7 @@ export interface PerformanceAblationDeps {
 
 const BLOOD_TEXTURE_PREFIX = '__blood';
 const GROUND_FIRE_TEXTURE_HINTS = ['flame', 'fire', 'ember', 'spark', 'heat_haze', 'smoke'];
-const STATIC_DECOR_TEXTURE_HINTS = ['dirt', 'kiesel', 'decal', 'canopy', 'gras_bg', 'rocks'];
+const STATIC_DECOR_TEXTURE_HINTS = ['dirt', 'kiesel', 'decal', 'canopy', 'gras_bg'];
 
 function textureKeyOf(object: Phaser.GameObjects.GameObject): string {
   return (object as Phaser.GameObjects.GameObject & { texture?: { key?: string } }).texture?.key ?? '';

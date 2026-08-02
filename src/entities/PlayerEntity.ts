@@ -3,9 +3,9 @@ import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
-import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
+import { fillRadialGradientTexture, killAllAndResetParticlePositions } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
-import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import type { GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
   toCssColor,
@@ -15,6 +15,7 @@ import {
 } from '../config';
 
 export class PlayerEntity {
+  private static readonly GLOW_AURA_TEXTURE = '__player_color_aura';
   readonly id:     string;
   readonly sprite: Phaser.GameObjects.Image;
 
@@ -42,6 +43,7 @@ export class PlayerEntity {
 
   // Glow-Aura für Spielerfarbe
   private glowFx: GlowHandle | null = null;
+  private glowAura: Phaser.GameObjects.Image | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
   private spawnShine: Phaser.GameObjects.Image | null = null;
   private spawnShineTween: Phaser.Tweens.Tween | null = null;
@@ -105,10 +107,19 @@ export class PlayerEntity {
     this.body.setCircle(PLAYER_SIZE / 2);
     this.body.setCollideWorldBounds(true);
 
-    // Leuchtende Spielerfarb-Aura (vgl. PowerUpRenderer)
-    // setPadding nötig, damit der Glow nicht an den Sprite-Grenzen abgeschnitten wird
-    setInternalFxPadding(this.sprite, 20);
-    this.glowFx = addInternalGlow(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
+    // Vorgebackene Spielerfarb-Aura statt eines eigenen Filter-Framebuffers pro Entity.
+    fillRadialGradientTexture(scene.textures, PlayerEntity.GLOW_AURA_TEXTURE, 80, [
+      [0, 'rgba(255,255,255,0.34)'],
+      [0.38, 'rgba(255,255,255,0.2)'],
+      [0.72, 'rgba(255,255,255,0.08)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]);
+    this.glowAura = scene.add.image(x, y, PlayerEntity.GLOW_AURA_TEXTURE)
+      .setDepth(DEPTH.PLAYERS - 0.02)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(profile.colorHex);
+    this.glowFx = { outerStrength: 4, innerStrength: 0, color: profile.colorHex };
+    this.syncGlowAura();
     this.startDefaultGlowTween();
 
     this.spawnShine = scene.add.image(x, y, 'badger');
@@ -431,6 +442,7 @@ export class PlayerEntity {
         outerStrength: 5,
         duration:      480,
         ease:          'Quad.easeOut',
+        onUpdate:      () => this.syncGlowAura(),
         onComplete:    () => {
           this.startDefaultGlowTween();
         },
@@ -468,6 +480,7 @@ export class PlayerEntity {
   setDashScale(scale: number): void {
     this.sprite.setScale(scale);
     this.syncSpawnShine();
+    this.syncGlowAura();
   }
 
   getBurrowPhase(): BurrowPhase {
@@ -627,6 +640,7 @@ export class PlayerEntity {
       this.glowFx.innerStrength = 0;
     }
     this.applyDisplayVisibility();
+    this.syncGlowAura();
     this.syncSpawnShine();
     this.syncStealthOverlay();
     this.syncAttachedEffects();
@@ -802,6 +816,7 @@ export class PlayerEntity {
       yoyo:          true,
       repeat:        -1,
       ease:          'Sine.easeInOut',
+      onUpdate:      () => this.syncGlowAura(),
     });
   }
 
@@ -815,6 +830,27 @@ export class PlayerEntity {
       this.burnVisualStyle,
     );
     this.rageRenderer?.sync(this.sprite.x, this.sprite.y, PLAYER_SIZE, this.sprite.visible);
+    this.syncGlowAura();
+  }
+
+  private syncGlowAura(): void {
+    const aura = this.glowAura;
+    const glow = this.glowFx;
+    if (!aura || !glow) return;
+    const strength = Math.max(0, glow.outerStrength);
+    const spriteScale = Math.max(Math.abs(this.sprite.scaleX), Math.abs(this.sprite.scaleY), 0.01);
+    const diameter = PLAYER_SIZE * spriteScale + strength * 2.1;
+    const alpha = Phaser.Math.Clamp(
+      (0.025 + strength * 0.012 + Math.max(0, glow.innerStrength) * 0.03) * this.sprite.alpha,
+      0,
+      0.34,
+    );
+    aura
+      .setVisible(this.sprite.visible && alpha > 0.001)
+      .setPosition(this.sprite.x, this.sprite.y)
+      .setDisplaySize(diameter, diameter)
+      .setAlpha(alpha)
+      .setTint(glow.color);
   }
 
   destroy(): void {
@@ -831,8 +867,9 @@ export class PlayerEntity {
     this.hpBarFg.destroy();
     this.armorBarBg.destroy();
     this.armorBarFg.destroy();
-    removeInternalFx(this.sprite, this.glowFx);
     this.glowFx = null;
+    this.glowAura?.destroy();
+    this.glowAura = null;
     this.sprite.destroy();
     this.spawnShine?.destroy();
     this.stealthShell?.destroy();

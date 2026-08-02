@@ -11,9 +11,9 @@ Die Profile steuern zentral:
 - Dichte statischer Schatten-Layer und Projektilschatten;
 - interne und externe Phaser-Filter.
 
-Der Controller wird am Anfang von `ArenaScene.create()` an die Scene gebunden. Danach erzeugte ParticleEmitter werden automatisch als `standard` erfasst. Abweichende Bedeutung wird am vorhandenen Emitter gesetzt oder beim Effect-Helper angegeben. `critical` ist für Gameplay-Lesbarkeit reserviert, `decorative` für gefahrlos entfallende Atmosphäre. Neue Qualitätszweige dürfen keine Gameplay-Konfiguration duplizieren.
+Der Controller wird am Anfang von `ArenaScene.create()` an die Scene gebunden. Danach erzeugte ParticleEmitter werden automatisch als `standard` erfasst. Abweichende Bedeutung wird am vorhandenen Emitter gesetzt oder beim Effect-Helper angegeben. `critical` ist für Gameplay-Lesbarkeit reserviert, `decorative` für gefahrlos entfallende Atmosphäre. Neue Qualitätszweige dürfen keine Gameplay-Konfiguration duplizieren. Phaser 4.2.1 richtet selbst ohne `sortProperty` einen Sort-Callback ein; der Controller entfernt diese wirkungslose Sortierung automatisch. Ein Effekt, der Sortierung wirklich benötigt, muss `sortProperty` oder `sortCallback` ausdrücklich in seiner Emitter-Konfiguration setzen.
 
-Filter werden über `utils/phaserFx.ts` registriert, damit ein Profilwechsel bestehende Handles sofort aktiviert oder deaktiviert. `LightingSystem` und `ShadowSystem` abonnieren das Profil und bauen nur ihre lokalen Renderressourcen neu auf; Spielzustand bleibt erhalten.
+Filter werden über `utils/phaserFx.ts` registriert, damit ein Profilwechsel bestehende Handles sofort aktiviert oder deaktiviert. Objektfilter verwenden den voreingestellten Scope `object`, Kamera-Filter müssen beim Tracken `camera` angeben. Nur so bleiben die Diagnosekategorien `filters` und `postFx` unabhängig. `LightingSystem` und `ShadowSystem` abonnieren das Profil und bauen nur ihre lokalen Renderressourcen neu auf; Spielzustand bleibt erhalten.
 
 ## Lobby-UI
 
@@ -129,9 +129,24 @@ Kandidaten gehen per `emit`-Callback in einen Pool des Controllers, damit weder 
 Objekte pro Aufruf entstehen. Bei vielen Splitter-Projektilen läuft dieser Pfad mehrfach pro
 Frame – ein frisches Array mit einem Objekt je Gegner wäre reiner GC-Druck.
 
+## Flowfields teilen Topologie, nicht Ziele
+
+Die Coop-Runde besitzt mehrere Flowfields mit identischem Raster, aber unterschiedlichen
+Zielmengen. Services mit gleicher `clearanceCells`-Konfiguration teilen deshalb Kosten,
+Zellarten, Begehbarkeit, Wandnähe und vorberechnete Nachbarindizes über `topologySource`.
+Integration, Zielquelle und Vektoren bleiben je Service getrennt. Ein Boss mit größerem
+Clearance-Radius darf die normale Topologie nicht teilen; der Konstruktor verwirft eine dafür
+ungeeignete Quelle automatisch.
+
+Rasteränderungen mit konkreter Zelle aktualisieren bei Clearance 0 nur diese Zelle und ihre
+Nachbarschaft. Ereignisse ohne Koordinate und Raster mit Clearance-Maske brauchen weiterhin
+einen Vollaufbau. Das gewichtete Mehrzielfeld wird mit einem Min-Heap als Dijkstra-Lauf
+berechnet; die frühere FIFO-Relaxation konnte dieselbe Zelle bei unterschiedlichen Kosten
+mehrfach teuer nachbearbeiten.
+
 ## Lokaler Messworkflow
 
-`T` öffnet die Performance-Diagnose. Die Live-Ansicht arbeitet ohne Telemetrie. Eine Aufzeichnung wird manuell gestartet und gestoppt, ist auf 30 Minuten begrenzt und kann danach als JSON heruntergeladen werden. Der Export enthält Browser-/Renderer-Metadaten und Qualitätswechsel, aber keine Raumcodes oder Spieler-IDs.
+`T` öffnet die Performance-Diagnose. Die Live-Ansicht arbeitet ohne Telemetrie. Eine Aufzeichnung wird manuell gestartet und gestoppt, ist auf 30 Minuten begrenzt und kann danach als JSON heruntergeladen werden. Der Export enthält Browser-/Renderer-Metadaten und Qualitätswechsel, aber keine Raumcodes oder Spieler-IDs. Display-Listen-, Bounds- und Filter-Scans laufen nur bei sichtbarer Diagnose oder aktiver Aufzeichnung; im normalen geschlossenen Zustand liefert der Profiler den letzten Cachewert, ohne die Scene erneut abzutasten.
 
 Messfenster trennen Frame-Delta, Scene-Update, CPU-Render-Abgabe, Netzwerk-Update/-Flush, Visuals sowie Host-Simulation beziehungsweise Client-Synchronisierung. Dadurch darf ein langsamer Host nicht vorschnell der Grafik zugeschrieben werden. Die Render-Abgabe misst CPU-Zeit zwischen Phasers Pre-/Post-Render-Ereignissen, nicht die vollständige GPU-Zeit, und stammt aus dem vorherigen Frame, weil `update` vor `render` läuft.
 
@@ -286,10 +301,10 @@ dem Client nicht die Ausnahme, sondern der Normalfall.
 
 ## LivingBarEffect: Kosten skalieren mit der Zahl der Instanzen
 
-Jede `LivingBarEffect`-Instanz erzeugt **zwei** Emitter mit `frequency: 10` (je 100 Partikel pro
-Sekunde) und animiert an beiden `scale` **und** `alpha` über die Lebenszeit. Bei Lebensdauern von
-1200–2500 ms ergibt das im eingeschwungenen Zustand mehrere hundert lebende Partikel pro
-Instanz, deren Ease-Callbacks pro Partikel und Frame laufen.
+Jede `LivingBarEffect`-Instanz erzeugt zwei begrenzte Emitter mit `frequency: 30` beziehungsweise
+`36` (rund 28–33 Partikel pro Sekunde) und animiert an beiden `scale` und `alpha` über die
+Lebenszeit. `maxAliveParticles` und `reserve` begrenzen die Pools; der frühere externe
+Glow-Filter ist durch eine additive, vorgebackene Aura ersetzt.
 
 Der Effekt wird an vielen Stellen gleichzeitig verwendet – Arena-HUD (eine Instanz je Balken),
 Power-Up-Anzeige, Center-HUD, Seitenpanel, Lobby – und im Coop-Upgrade-Overlay **einmal pro
@@ -297,8 +312,9 @@ Upgrade-Knoten**. Dort multipliziert sich der Aufwand entsprechend; wer den Effe
 Schleife anlegt, sollte das bewusst tun.
 
 Im `low`-Profil ist er über `livingBarEffects` vollständig abgeschaltet. Der Schalter ist nötig,
-weil `particleFactors.decorative = 0` zwar die Partikel unterdrückt, die Emitter-Objekte, der
-PostFX-Glow und dessen Endlos-Tween aber weiterliefen.
+weil `particleFactors.decorative = 0` zwar die Emission unterdrückt, Emitter-Objekte und
+Aura-Tween aber weiterliefen. Stoppen bedeutet deshalb immer: Emission beenden, Alive-Pool
+leeren und den Emitter über `active = false` aus Phasers UpdateList nehmen.
 
 Zwei Dinge gehören dabei zusammen und dürfen nicht getrennt werden:
 
@@ -307,14 +323,15 @@ Zwei Dinge gehören dabei zusammen und dürfen nicht getrennt werden:
   dauerhaft abgeschaltet. `LivingBarEffect` und `PlayerStatusRing` abonnieren deshalb den
   Quality-Controller.
 - **`PlayerStatusRing` baut dasselbe Muster nach, ohne die Klasse zu benutzen** – vier Bundles zu
-  je zwei Emittern (HP, Adrenalin, Rage, Armor) mit Lebensdauern bis 7 s, also die mit Abstand
-  größte Instanz davon. Er hängt am selben Schalter und meldet seine Emitter als `decorative`;
-  ohne das liefen sie als `standard` und wurden in den niedrigen Stufen nur gedrosselt.
+  je zwei Emittern (HP, Adrenalin, Rage, Armor), also die größte Instanz davon. Er hängt am selben
+  Schalter und meldet seine Emitter als `decorative`. Seine unveränderlichen Ringlagen liegen in
+  einer CanvasTexture; dynamische Graphics werden nur bei quantisierter Zustandsänderung und für
+  Animationen höchstens mit 30 Hz neu aufgebaut.
 
 ## Upgrade-Overlay: Baum-Neuaufbau sammeln
 
 `refresh()` verwirft den kompletten Kategoriebaum (`upgradesContainer.removeAll(true)`) und baut
-ihn neu auf – inklusive Zerstören und Neuanlegen eines `LivingBarEffect` und eines PostFX-Glows
+ihn neu auf – inklusive Zerstören und Neuanlegen eines `LivingBarEffect` samt Aura
 **je Knoten**. Beim schnellen Vergeben mehrerer Punkte lief das pro Klick. Klicks setzen deshalb
 nur noch ein Dirty-Flag (`requestRefresh()`), der Neuaufbau läuft höchstens einmal pro Frame.
 

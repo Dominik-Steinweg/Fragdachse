@@ -159,6 +159,38 @@ describe('graphics quality preferences and profiles', () => {
     controller.setLevel('medium');
     expect(handle.active).toBe(true);
   });
+  it('deaktiviert bei der Filter-Ablation nur Objektfilter', () => {
+    const controller = new GraphicsQualityController('high');
+    const objectFilter = { active: false };
+    const cameraFilter = { active: false };
+    controller.trackFilter({}, objectFilter, false, 'standard', 'object');
+    controller.trackFilter({}, cameraFilter, false, 'standard', 'camera');
+
+    controller.setAblationFiltersDisabled(true);
+    expect(objectFilter.active).toBe(false);
+    expect(cameraFilter.active).toBe(true);
+  });
+
+  it('entfernt den leeren Phaser-Sort-Callback nur ohne explizite Sortierung', () => {
+    const makeEmitter = () => ({
+      maxAliveParticles: 0,
+      explode: vi.fn(),
+      emitParticleAt: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
+      setFrequency: vi.fn(),
+      setSortCallback: vi.fn(),
+    });
+    const controller = new GraphicsQualityController('high');
+    const unsorted = makeEmitter();
+    const explicitlySorted = makeEmitter();
+
+    controller.trackEmitter(unsorted as never, {});
+    controller.trackEmitter(explicitlySorted as never, { sortProperty: 'y' });
+
+    expect(unsorted.setSortCallback).toHaveBeenCalledOnce();
+    expect(explicitlySorted.setSortCallback).not.toHaveBeenCalled();
+  });
 });
 
 describe('ArenaRuntimeProfiler', () => {
@@ -533,6 +565,8 @@ describe('ArenaRuntimeProfiler', () => {
     now = 120;
     profiler.record(sample({ phase: 'arena', context: { ...context, roundElapsedMs: 20 } }));
     now = 140;
+    profiler.record(sample({ phase: 'arena', context: { ...context, roundElapsedMs: 40 } }));
+    now = 160;
     profiler.stopRecording();
 
     const report = profiler.buildReport();
@@ -543,7 +577,7 @@ describe('ArenaRuntimeProfiler', () => {
     expect(report?.windows[0].lightingPresets.muzzleFlash.peak).toBe(2);
     expect(report?.windows[0].filterBreakdown).toBe('GlowFilter:2');
     expect(report?.contextChanges).toHaveLength(2);
-    expect(report?.frameSeries.rows).toHaveLength(2);
+    expect(report?.frameSeries.rows).toHaveLength(3);
     expect(report?.frameSeries.columns).toContain('detail.scopeUploadMs');
     expect(report?.frameSeries.columns).toContain('context.scopeActive');
   });

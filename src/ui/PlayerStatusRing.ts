@@ -37,6 +37,8 @@ interface SegmentEmitterBundle {
   coreSource: ArcRingRandomSource;
   outerSource: ArcRingRandomSource;
   activeMode: boolean;
+  lastFraction: number;
+  section: AngleSection | null;
 }
 
 const RING_GAP_PX = 16;
@@ -52,9 +54,14 @@ const FLASH_MS = 180;
 const BURST_MS = 320;
 const WARNING_MS = 540;
 const WARNING_PUNCH_MS = 140;
-const LIVING_EMITTER_IDLE_FREQUENCY = 20;
-const LIVING_EMITTER_ACTIVE_FREQUENCY = 5;
+const LIVING_EMITTER_IDLE_FREQUENCY = 48;
+const LIVING_EMITTER_ACTIVE_FREQUENCY = 20;
 const LIVING_EMITTER_DEPTH = DEPTH.LOCAL_UI;
+const GRAPHICS_REFRESH_INTERVAL_MS = 1000 / 30;
+const TEX_STATUS_RING_STATIC = '__player_status_ring_static_v2';
+const STATUS_RING_TEXTURE_PADDING = 8;
+const STATUS_RING_TEXTURE_RADIUS = RING_OUTER_RADIUS + STATUS_RING_TEXTURE_PADDING;
+const STATUS_RING_TEXTURE_SIZE = Math.ceil(STATUS_RING_TEXTURE_RADIUS * 2);
 
 const PAL_HP: SegmentPalette = { dark: COLORS.GREEN_3, mid: 0x00cc44, light: COLORS.GREEN_1, spark: 0xffffff };
 const PAL_ADR: SegmentPalette = { dark: COLORS.BLUE_3, mid: COLORS.BLUE_2, light: COLORS.BLUE_1, spark: 0xffffff };
@@ -68,8 +75,6 @@ const SEGMENTS: readonly SegmentConfig[] = [
   { key: 'rage',       fillStartAngle: 248, fillEndAngle: 352, palette: PAL_RAGE },
 ];
 
-type RingPoint = Phaser.Math.Vector2;
-
 function clamp01(value: number): number {
   return Phaser.Math.Clamp(value, 0, 1);
 }
@@ -78,33 +83,74 @@ function degToRadFromTop(angle: number): number {
   return Phaser.Math.DegToRad(angle - 90);
 }
 
-function polarPoint(angle: number, radius: RingPoint['x']): RingPoint {
-  const rad = degToRadFromTop(angle);
-  return new Phaser.Math.Vector2(Math.cos(rad) * radius, Math.sin(rad) * radius);
-}
-
-function buildArcPolygon(startAngle: number, endAngle: number, innerRadius: number, outerRadius: number): RingPoint[] {
-  const points: RingPoint[] = [];
+function fillArcPolygon(
+  graphics: Phaser.GameObjects.Graphics,
+  startAngle: number,
+  endAngle: number,
+  innerRadius: number,
+  outerRadius: number,
+  color: number,
+  alpha: number,
+): void {
+  graphics.fillStyle(color, alpha);
+  graphics.beginPath();
   for (let index = 0; index <= POLY_STEPS; index += 1) {
     const angle = Phaser.Math.Linear(startAngle, endAngle, index / POLY_STEPS);
-    points.push(polarPoint(angle, outerRadius));
+    const rad = degToRadFromTop(angle);
+    const x = Math.cos(rad) * outerRadius;
+    const y = Math.sin(rad) * outerRadius;
+    if (index === 0) graphics.moveTo(x, y);
+    else graphics.lineTo(x, y);
   }
   for (let index = POLY_STEPS; index >= 0; index -= 1) {
     const angle = Phaser.Math.Linear(startAngle, endAngle, index / POLY_STEPS);
-    points.push(polarPoint(angle, innerRadius));
-  }
-  return points;
-}
-
-function fillPolygon(graphics: Phaser.GameObjects.Graphics, points: readonly RingPoint[], color: number, alpha: number): void {
-  graphics.fillStyle(color, alpha);
-  graphics.beginPath();
-  graphics.moveTo(points[0].x, points[0].y);
-  for (let index = 1; index < points.length; index += 1) {
-    graphics.lineTo(points[index].x, points[index].y);
+    const rad = degToRadFromTop(angle);
+    graphics.lineTo(Math.cos(rad) * innerRadius, Math.sin(rad) * innerRadius);
   }
   graphics.closePath();
   graphics.fillPath();
+}
+
+function canvasArcLayer(
+  ctx: CanvasRenderingContext2D,
+  segment: SegmentConfig,
+  innerRadius: number,
+  outerRadius: number,
+  color: number,
+  alpha: number,
+): void {
+  const center = STATUS_RING_TEXTURE_SIZE / 2;
+  const start = degToRadFromTop(segment.fillStartAngle);
+  const end = degToRadFromTop(segment.fillEndAngle);
+  const anticlockwise = segment.fillEndAngle < segment.fillStartAngle;
+  ctx.beginPath();
+  ctx.arc(center, center, outerRadius, start, end, anticlockwise);
+  ctx.arc(center, center, innerRadius, end, start, !anticlockwise);
+  ctx.closePath();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+  ctx.fill();
+}
+
+function ensureStatusRingStaticTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TEX_STATUS_RING_STATIC)) return;
+  const texture = scene.textures.createCanvas(
+    TEX_STATUS_RING_STATIC,
+    STATUS_RING_TEXTURE_SIZE,
+    STATUS_RING_TEXTURE_SIZE,
+  )!;
+  const ctx = texture.context;
+  for (const segment of [SEGMENTS[1], SEGMENTS[0], SEGMENTS[2]]) {
+    canvasArcLayer(ctx, segment, RING_INNER_RADIUS, RING_OUTER_RADIUS, COLORS.GREY_10, 0.28);
+  }
+  canvasArcLayer(ctx, SEGMENTS[1], RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, COLORS.GREY_10, 0.32);
+  for (const segment of [SEGMENTS[1], SEGMENTS[0], SEGMENTS[2]]) {
+    canvasArcLayer(ctx, segment, RING_INNER_RADIUS, RING_OUTER_RADIUS, segment.palette.dark, 0.26);
+    canvasArcLayer(ctx, segment, RING_INNER_RADIUS + 0.8, RING_INNER_RADIUS + RING_THICKNESS * 0.52, COLORS.GREY_10, 0.18);
+  }
+  canvasArcLayer(ctx, SEGMENTS[1], RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, PAL_ARMOR.dark, 0.2);
+  ctx.globalAlpha = 1;
+  texture.refresh();
 }
 
 class ArcRingRandomSource {
@@ -137,8 +183,7 @@ class ArcRingRandomSource {
 
 export class PlayerStatusRing {
   private readonly container: Phaser.GameObjects.Container;
-  private readonly shadowGraphics: Phaser.GameObjects.Graphics;
-  private readonly baseGraphics: Phaser.GameObjects.Graphics;
+  private readonly staticRing: Phaser.GameObjects.Image;
   private readonly warningGraphics: Phaser.GameObjects.Graphics;
   private readonly glowGraphics: Phaser.GameObjects.Graphics;
   private readonly fillGraphics: Phaser.GameObjects.Graphics;
@@ -173,6 +218,8 @@ export class PlayerStatusRing {
   private adrBurstUntil = 0;
   private adrenalineWarningUntil = 0;
   private adrenalineWarningPunchUntil = 0;
+  private lastGraphicsSignature = '';
+  private nextAnimatedGraphicsAt = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -181,11 +228,8 @@ export class PlayerStatusRing {
     private readonly isLocalBurrowed: () => boolean = () => false,
   ) {
     ensureLivingBarTextures(scene);
-
-    this.shadowGraphics = scene.add.graphics();
-    this.shadowGraphics.setPosition(SHADOW_OFFSET, SHADOW_OFFSET);
-
-    this.baseGraphics = scene.add.graphics();
+    ensureStatusRingStaticTexture(scene);
+    this.staticRing = scene.add.image(SHADOW_OFFSET, SHADOW_OFFSET, TEX_STATUS_RING_STATIC);
     this.warningGraphics = scene.add.graphics();
     this.glowGraphics = scene.add.graphics();
     this.glowGraphics.setBlendMode(Phaser.BlendModes.ADD);
@@ -203,7 +247,9 @@ export class PlayerStatusRing {
     // haengt deshalb am selben Qualitaetsschalter und wird bei Bedarf zur Laufzeit
     // aus- und wieder eingeschaltet.
     this.livingEnabled = getGraphicsQualityProfile(scene).livingBarEffects;
-    if (!this.livingEnabled) this.stopLivingEmitters();
+    // Der Ring startet verborgen; auch auf hoher Qualitaet sollen seine acht Emitter bis zum
+    // ersten aktiven HUD-Frame nicht in der UpdateList arbeiten.
+    this.stopLivingEmitters();
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       if (profile.livingBarEffects === this.livingEnabled) return;
       this.livingEnabled = profile.livingBarEffects;
@@ -211,8 +257,7 @@ export class PlayerStatusRing {
     }) ?? null;
 
     this.container = scene.add.container(0, 0, [
-      this.shadowGraphics,
-      this.baseGraphics,
+      this.staticRing,
       this.warningGraphics,
       this.glowGraphics,
       this.fillGraphics,
@@ -280,6 +325,8 @@ export class PlayerStatusRing {
   }
 
   destroy(): void {
+    this.unsubscribeQuality?.();
+    this.unsubscribeQuality = null;
     this.stopLivingEmitters();
     for (const bundle of this.livingEmitters.values()) {
       bundle.core.destroy();
@@ -299,13 +346,15 @@ export class PlayerStatusRing {
     const outerZone = { type: 'random', source: outerSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
 
     const core = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 3000, max: 5000 },
+      lifespan: { min: 1300, max: 2200 },
       frequency: LIVING_EMITTER_IDLE_FREQUENCY,
       quantity: 1,
+      maxAliveParticles: 64,
+      reserve: 64,
       speedX: { min: -2, max: 2 },
       speedY: { min: -1, max: 1 },
       scale: { start: 0.72, end: 0.28 },
-      alpha: { start: 0.05, end: 0.03 },
+      alpha: { start: 0.09, end: 0.035 },
       tint: [segment.palette.mid, segment.palette.dark, segment.palette.mid],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
@@ -315,13 +364,15 @@ export class PlayerStatusRing {
     core.setDepth(LIVING_EMITTER_DEPTH);
 
     const outer = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 3000, max: 7000 },
+      lifespan: { min: 1500, max: 2600 },
       frequency: LIVING_EMITTER_IDLE_FREQUENCY,
       quantity: 1,
+      maxAliveParticles: 72,
+      reserve: 72,
       speedX: { min: -1, max: 1 },
       speedY: { min: -0.5, max: 0.5 },
       scale: { start: 1.05, end: 0.5 },
-      alpha: { start: 0.09, end: 0.03 },
+      alpha: { start: 0.14, end: 0.035 },
       tint: [segment.palette.dark, segment.palette.dark, segment.palette.mid],
       blendMode: Phaser.BlendModes.ADD,
       emitting: true,
@@ -330,7 +381,15 @@ export class PlayerStatusRing {
     outer.addEmitZone(outerZone);
     outer.setDepth(LIVING_EMITTER_DEPTH);
 
-    return { core, outer, coreSource, outerSource, activeMode: false };
+    return {
+      core,
+      outer,
+      coreSource,
+      outerSource,
+      activeMode: false,
+      lastFraction: Number.NaN,
+      section: null,
+    };
   }
 
   /**
@@ -344,16 +403,12 @@ export class PlayerStatusRing {
 
   private stopLivingEmitters(): void {
     for (const bundle of this.livingEmitters.values()) {
-      bundle.core.stop();
-      killAllAndResetParticlePositions(bundle.core);
-      bundle.outer.stop();
-      killAllAndResetParticlePositions(bundle.outer);
+      this.stopEmitter(bundle.core);
+      this.stopEmitter(bundle.outer);
     }
     if (this.armorEmitter) {
-      this.armorEmitter.core.stop();
-      killAllAndResetParticlePositions(this.armorEmitter.core);
-      this.armorEmitter.outer.stop();
-      killAllAndResetParticlePositions(this.armorEmitter.outer);
+      this.stopEmitter(this.armorEmitter.core);
+      this.stopEmitter(this.armorEmitter.outer);
     }
   }
 
@@ -390,19 +445,33 @@ export class PlayerStatusRing {
 
     this.updateHpTrail(now);
 
-    this.shadowGraphics.clear();
-    this.baseGraphics.clear();
-    this.warningGraphics.clear();
-    this.glowGraphics.clear();
-    this.fillGraphics.clear();
-    this.sparkGraphics.clear();
-
-    this.drawSegmentShadows();
-    this.drawBaseSegments();
-    this.drawAdrenalineWarning(warningFrac, warningPulse, warningPunchFrac);
-    this.drawEffectGlows(now, warningFrac, warningPulse, warningPunchFrac);
-    this.drawFilledSegments(now);
-    this.drawSparks(now);
+    const animated = warningFrac > 0.01
+      || this.hpFlashUntil > now
+      || this.adrBurstUntil > now
+      || this.adrenalineBoostActive
+      || this.rageReady
+      || this.hpTrailDelayUntil > 0;
+    const flags = (this.adrenalineBoostActive ? 1 : 0)
+      | (this.rageReady ? 2 : 0)
+      | (this.ultimateActive ? 4 : 0)
+      | (this.isAdrenalineInsufficientForWeapon2() ? 8 : 0)
+      | (warningFrac > 0.01 ? 16 : 0)
+      | (this.hpFlashUntil > now ? 32 : 0)
+      | (this.adrBurstUntil > now ? 64 : 0);
+    const quantize = (value: number) => Math.round(clamp01(value) * 128);
+    const signature = `${quantize(this.hpFrac)}:${quantize(this.hpTrailFrac)}:${quantize(this.adrFrac)}:${quantize(this.rageFrac)}:${quantize(this.armorFrac)}:${flags}`;
+    if (signature !== this.lastGraphicsSignature || (animated && now >= this.nextAnimatedGraphicsAt)) {
+      this.warningGraphics.clear();
+      this.glowGraphics.clear();
+      this.fillGraphics.clear();
+      this.sparkGraphics.clear();
+      this.drawAdrenalineWarning(warningFrac, warningPulse, warningPunchFrac);
+      this.drawEffectGlows(now, warningFrac, warningPulse, warningPunchFrac);
+      this.drawFilledSegments(now);
+      this.drawSparks(now);
+      this.lastGraphicsSignature = signature;
+      this.nextAnimatedGraphicsAt = now + GRAPHICS_REFRESH_INTERVAL_MS;
+    }
 
     this.syncLivingEmitters(1, now);
   }
@@ -420,25 +489,6 @@ export class PlayerStatusRing {
     }
   }
 
-  private drawSegmentShadows(): void {
-    this.drawSegmentLayer(this.shadowGraphics, SEGMENTS[1], 1, RING_INNER_RADIUS, RING_OUTER_RADIUS, COLORS.GREY_10, 0.28);
-    this.drawSegmentLayer(this.shadowGraphics, SEGMENTS[0], 1, RING_INNER_RADIUS, RING_OUTER_RADIUS, COLORS.GREY_10, 0.28);
-    this.drawSegmentLayer(this.shadowGraphics, SEGMENTS[2], 1, RING_INNER_RADIUS, RING_OUTER_RADIUS, COLORS.GREY_10, 0.28);
-    this.drawSegmentLayer(this.shadowGraphics, SEGMENTS[1], 1, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, COLORS.GREY_10, 0.32);
-  }
-
-  private drawBaseSegments(): void {
-    this.drawResourceBase(SEGMENTS[1]);
-    this.drawResourceBase(SEGMENTS[0]);
-    this.drawResourceBase(SEGMENTS[2]);
-    this.drawSegmentLayer(this.baseGraphics, SEGMENTS[1], 1, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS, RING_OUTER_RADIUS + 0.4, PAL_ARMOR.dark, 0.2);
-  }
-
-  private drawResourceBase(segment: SegmentConfig): void {
-    this.drawSegmentLayer(this.baseGraphics, segment, 1, RING_INNER_RADIUS, RING_OUTER_RADIUS, segment.palette.dark, 0.26);
-    this.drawSegmentLayer(this.baseGraphics, segment, 1, RING_INNER_RADIUS + 0.8, RING_INNER_RADIUS + RING_THICKNESS * 0.52, COLORS.GREY_10, 0.18);
-  }
-
   private drawAdrenalineWarning(warningFrac: number, warningPulse: number, warningPunchFrac: number): void {
     if (warningFrac <= 0.01) return;
     const pulseAlpha = 0.92 + warningPulse * 0.3 + warningPunchFrac * 0.45;
@@ -448,6 +498,17 @@ export class PlayerStatusRing {
   }
 
   private drawEffectGlows(now: number, warningFrac: number, warningPulse: number, warningPunchFrac: number): void {
+    const ambientPulse = 0.88 + Math.sin(now * 0.0035) * 0.12;
+    this.drawAmbientResourceGlow(SEGMENTS[1], this.hpFrac, PAL_HP, ambientPulse);
+    this.drawAmbientResourceGlow(
+      SEGMENTS[0],
+      this.adrFrac,
+      this.isAdrenalineInsufficientForWeapon2() ? PAL_ADR_LOW : PAL_ADR,
+      ambientPulse,
+    );
+    this.drawAmbientResourceGlow(SEGMENTS[2], this.rageFrac, PAL_RAGE, ambientPulse);
+    this.drawAmbientArmorGlow(ambientPulse);
+
     const ragePulse = 0.45 + 0.55 * Math.sin(now * 0.008);
     const boostPulse = 0.45 + 0.55 * Math.sin(now * 0.01);
     const hpFlash = clamp01((this.hpFlashUntil - now) / FLASH_MS);
@@ -496,6 +557,25 @@ export class PlayerStatusRing {
         0.18 + ragePulse * (this.ultimateActive ? 0.22 : 0.16),
       );
     }
+  }
+
+  /** Mehrere additive Breitenlagen bilden einen weichen, farbtreuen Halo ohne Filterpass. */
+  private drawAmbientResourceGlow(
+    segment: SegmentConfig,
+    fraction: number,
+    palette: SegmentPalette,
+    pulse: number,
+  ): void {
+    if (fraction <= 0.01) return;
+    this.drawSegmentLayer(this.glowGraphics, segment, fraction, RING_INNER_RADIUS - 4.2, RING_OUTER_RADIUS + 4.2, palette.mid, 0.055 * pulse);
+    this.drawSegmentLayer(this.glowGraphics, segment, fraction, RING_INNER_RADIUS - 2.4, RING_OUTER_RADIUS + 2.4, palette.light, 0.075 * pulse);
+    this.drawSegmentLayer(this.glowGraphics, segment, fraction, RING_INNER_RADIUS - 0.8, RING_OUTER_RADIUS + 1.2, palette.light, 0.1 * pulse);
+  }
+
+  private drawAmbientArmorGlow(pulse: number): void {
+    if (this.armorFrac <= 0.01) return;
+    this.drawSegmentLayer(this.glowGraphics, SEGMENTS[1], this.armorFrac, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS - 2.4, RING_OUTER_RADIUS + 3.2, PAL_ARMOR.mid, 0.07 * pulse);
+    this.drawSegmentLayer(this.glowGraphics, SEGMENTS[1], this.armorFrac, RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS - 0.8, RING_OUTER_RADIUS + 1.8, PAL_ARMOR.light, 0.11 * pulse);
   }
 
   private drawFilledSegments(now: number): void {
@@ -557,7 +637,22 @@ export class PlayerStatusRing {
 
     const centerX = this.container.x;
     const centerY = this.container.y;
-    const section = this.getFilledSection(segment, fraction);
+    const quantizedFraction = Math.round(clamp01(fraction) * 128) / 128;
+    if (bundle.lastFraction !== quantizedFraction) {
+      bundle.lastFraction = quantizedFraction;
+      bundle.section = this.getFilledSection(segment, quantizedFraction);
+      bundle.coreSource.set(
+        RING_INNER_RADIUS + 0.8,
+        RING_INNER_RADIUS + RING_THICKNESS * 0.72,
+        bundle.section,
+      );
+      bundle.outerSource.set(
+        RING_INNER_RADIUS + 0.2,
+        RING_OUTER_RADIUS - 0.4,
+        bundle.section,
+      );
+    }
+    const section = bundle.section;
 
     bundle.core.setPosition(centerX, centerY);
     bundle.outer.setPosition(centerX, centerY);
@@ -571,17 +666,12 @@ export class PlayerStatusRing {
       bundle.core.setFrequency(freq, 1);
       bundle.outer.setFrequency(freq, 1);
     }
-    bundle.coreSource.set(RING_INNER_RADIUS + 0.8, RING_INNER_RADIUS + RING_THICKNESS * 0.72, section);
-    bundle.outerSource.set(RING_INNER_RADIUS + 0.2, RING_OUTER_RADIUS - 0.4, section);
-
     if (this.livingEnabled && fraction > 0.03 && section) {
-      if (!bundle.core.emitting) bundle.core.start();
-      if (!bundle.outer.emitting) bundle.outer.start();
+      this.startEmitter(bundle.core);
+      this.startEmitter(bundle.outer);
     } else {
-      bundle.core.stop();
-      killAllAndResetParticlePositions(bundle.core);
-      bundle.outer.stop();
-      killAllAndResetParticlePositions(bundle.outer);
+      this.stopEmitter(bundle.core);
+      this.stopEmitter(bundle.outer);
     }
   }
 
@@ -613,12 +703,14 @@ export class PlayerStatusRing {
       const wave = now * 0.01 + index * 1.7;
       const radius = RING_OUTER_RADIUS + 1.5 + Math.sin(wave) * 1.2;
       const offsetAngle = angle + Math.sin(wave * 1.35) * 2.4;
-      const point = polarPoint(offsetAngle, radius);
+      const rad = degToRadFromTop(offsetAngle);
+      const pointX = Math.cos(rad) * radius;
+      const pointY = Math.sin(rad) * radius;
       const size = 1.2 + ((Math.sin(wave * 1.9) + 1) * 0.5);
       this.sparkGraphics.fillStyle(palette.spark, alpha * 0.7);
-      this.sparkGraphics.fillCircle(point.x, point.y, size);
+      this.sparkGraphics.fillCircle(pointX, pointY, size);
       this.sparkGraphics.fillStyle(palette.light, alpha);
-      this.sparkGraphics.fillCircle(point.x, point.y, size * 0.58);
+      this.sparkGraphics.fillCircle(pointX, pointY, size * 0.58);
     }
   }
 
@@ -633,9 +725,11 @@ export class PlayerStatusRing {
     const outerZone = { type: 'random', source: outerSource } as Phaser.Types.GameObjects.Particles.EmitZoneData;
 
     const core = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 2500, max: 4500 },
+      lifespan: { min: 1200, max: 2000 },
       frequency: LIVING_EMITTER_IDLE_FREQUENCY,
       quantity: 1,
+      maxAliveParticles: 48,
+      reserve: 48,
       speedX: { min: -1.5, max: 1.5 },
       speedY: { min: -0.8, max: 0.8 },
       scale: { start: 0.55, end: 0.18 },
@@ -649,9 +743,11 @@ export class PlayerStatusRing {
     core.setDepth(LIVING_EMITTER_DEPTH);
 
     const outer = this.scene.add.particles(0, 0, '_living_blob', {
-      lifespan: { min: 2000, max: 4000 },
+      lifespan: { min: 1200, max: 2200 },
       frequency: LIVING_EMITTER_IDLE_FREQUENCY,
       quantity: 1,
+      maxAliveParticles: 44,
+      reserve: 44,
       speedX: { min: -0.8, max: 0.8 },
       speedY: { min: -0.4, max: 0.4 },
       scale: { start: 0.75, end: 0.28 },
@@ -664,7 +760,15 @@ export class PlayerStatusRing {
     outer.addEmitZone(outerZone);
     outer.setDepth(LIVING_EMITTER_DEPTH);
 
-    return { core, outer, coreSource, outerSource, activeMode: false };
+    return {
+      core,
+      outer,
+      coreSource,
+      outerSource,
+      activeMode: false,
+      lastFraction: Number.NaN,
+      section: null,
+    };
   }
 
   private syncArmorEmitter(alpha: number): void {
@@ -674,7 +778,16 @@ export class PlayerStatusRing {
     const centerX = this.container.x;
     const centerY = this.container.y;
     // Armor follows the HP arc, so use SEGMENTS[1] as the angular template
-    const section = this.getFilledSection(SEGMENTS[1], this.armorFrac);
+    const quantizedFraction = Math.round(clamp01(this.armorFrac) * 128) / 128;
+    if (bundle.lastFraction !== quantizedFraction) {
+      bundle.lastFraction = quantizedFraction;
+      bundle.section = this.getFilledSection(SEGMENTS[1], quantizedFraction);
+      const rimInner = RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS;
+      const rimOuter = RING_OUTER_RADIUS + 0.4;
+      bundle.coreSource.set(rimInner, rimOuter, bundle.section);
+      bundle.outerSource.set(rimInner - 0.4, rimOuter + 0.8, bundle.section);
+    }
+    const section = bundle.section;
 
     bundle.core.setPosition(centerX, centerY);
     bundle.outer.setPosition(centerX, centerY);
@@ -683,20 +796,12 @@ export class PlayerStatusRing {
     bundle.core.setAlpha(alpha * 0.9 * fracScale);
     bundle.outer.setAlpha(alpha * 0.85 * fracScale);
 
-    // Both sources spawn right inside the thin armor rim
-    const rimInner = RING_OUTER_RADIUS - ARMOR_RIM_THICKNESS;
-    const rimOuter = RING_OUTER_RADIUS + 0.4;
-    bundle.coreSource.set(rimInner, rimOuter, section);
-    bundle.outerSource.set(rimInner - 0.4, rimOuter + 0.8, section);
-
     if (this.livingEnabled && this.armorFrac > 0.03 && section) {
-      if (!bundle.core.emitting) bundle.core.start();
-      if (!bundle.outer.emitting) bundle.outer.start();
+      this.startEmitter(bundle.core);
+      this.startEmitter(bundle.outer);
     } else {
-      bundle.core.stop();
-      killAllAndResetParticlePositions(bundle.core);
-      bundle.outer.stop();
-      killAllAndResetParticlePositions(bundle.outer);
+      this.stopEmitter(bundle.core);
+      this.stopEmitter(bundle.outer);
     }
   }
 
@@ -711,7 +816,27 @@ export class PlayerStatusRing {
   ): void {
     const section = this.getFilledSection(segment, fraction);
     if (!section) return;
-    fillPolygon(graphics, buildArcPolygon(section.startAngle, section.endAngle, innerRadius, outerRadius), color, alpha);
+    fillArcPolygon(
+      graphics,
+      section.startAngle,
+      section.endAngle,
+      innerRadius,
+      outerRadius,
+      color,
+      alpha,
+    );
+  }
+
+  private startEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
+    emitter.setActive(true);
+    if (!emitter.emitting) emitter.start();
+  }
+
+  private stopEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter): void {
+    if (!emitter.active && !emitter.emitting) return;
+    emitter.stop();
+    killAllAndResetParticlePositions(emitter);
+    emitter.setActive(false);
   }
 
   private getFilledSection(segment: SegmentConfig, fraction: number): AngleSection | null {

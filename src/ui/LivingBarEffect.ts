@@ -2,12 +2,13 @@
  * LivingBarEffect — reusable "breathing liquid" particle effect for bars.
  *
  * Two layers of slow, overlapping blob particles (additive blend) plus an
- * optional pulsing PostFX glow.  Used by ArenaHUD, UtilityChargeIndicator,
+ * optional pulsing, pre-baked aura. Used by ArenaHUD, UtilityChargeIndicator,
  * and the lobby colour indicator.
  */
 import * as Phaser from 'phaser';
-import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
+import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -43,6 +44,10 @@ export function paletteFromColor(color: number): LivingBarPalette {
 // ── Shared textures ─────────────────────────────────────────────────────────
 
 const TEX_BLOB = '_living_blob';
+const CORE_FREQUENCY_MS = 30;
+const OUTER_FREQUENCY_MS = 36;
+const CORE_PARTICLE_CAP = 52;
+const OUTER_PARTICLE_CAP = 64;
 
 export function ensureLivingBarTextures(scene: Phaser.Scene): void {
   if (scene.textures.exists(TEX_BLOB)) return;
@@ -108,7 +113,7 @@ export function randomEmitZoneData(
 // ── LivingBarEffect class ───────────────────────────────────────────────────
 
 export interface LivingBarEffectOpts {
-  /** GameObject that supports postFX (Image, Sprite) for breathing glow. */
+  /** Vorhandenes Balkenbild; aktiviert Glow auf high und die gebackene Aura auf medium. */
   glowTarget?: Phaser.GameObjects.Image;
   /** Set to 0 for screen-fixed HUD elements. Default: don't override. */
   scrollFactor?: number;
@@ -119,29 +124,32 @@ export interface LivingBarEffectOpts {
 /**
  * Lebendiger Balken-Effekt für HUD, Menüs und Overlays.
  *
- * Kostenhinweis: Jede Instanz erzeugt **zwei** Emitter mit `frequency: 10` – also je 100
- * Partikel pro Sekunde – und animiert an jedem davon `scale` **und** `alpha` über die
- * Lebenszeit. Beides zusammen ergibt im eingeschwungenen Zustand mehrere hundert lebende
- * Partikel pro Instanz, deren Ease-Callbacks pro Partikel und Frame laufen. Wer den Effekt
- * vervielfacht (etwa je Upgrade-Knoten), vervielfacht diese Kosten linear.
+ * Kostenhinweis: Jede Instanz erzeugt zwei begrenzte Emitter mit 28–33 Partikeln pro Sekunde
+ * und animiert an jedem davon `scale` und `alpha` über die Lebenszeit. Wer den Effekt
+ * vervielfacht (etwa je Upgrade-Knoten), vervielfacht diese Kosten weiterhin linear.
  *
  * Im `low`-Profil ist der Effekt vollständig abgeschaltet: Ohne den Schalter blieben zwar die
- * Partikel über `particleFactors.decorative` aus, die Emitter-Objekte, der PostFX-Glow und
- * dessen Endlos-Tween liefen aber weiter.
+ * Partikel über `particleFactors.decorative` aus, die Emitter-Objekte und der Aura-Tween
+ * liefen aber weiter.
  */
 export class LivingBarEffect {
   idleCore:  Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   idleOuter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   readonly emitZone:  Phaser.Geom.Rectangle;
 
-  breathGlow:  GlowHandle | null = null;
+  breathAura: Phaser.GameObjects.Image | null = null;
+  breathGlow: GlowHandle | null = null;
   breathTween: Phaser.Tweens.Tween | null = null;
 
   private active = true;
   private glowTarget: Phaser.GameObjects.Image | null;
   private enabled: boolean;
+  private filterGlowEnabled: boolean;
   private readonly container: Phaser.GameObjects.Container;
   private readonly barHeight: number;
+  private readonly barX: number;
+  private readonly barY: number;
+  private filledWidth: number;
   private readonly opts: LivingBarEffectOpts | undefined;
   private unsubscribeQuality: (() => void) | null = null;
 
@@ -154,8 +162,13 @@ export class LivingBarEffect {
   ) {
     this.container = container;
     this.barHeight = h;
+    this.barX = x;
+    this.barY = y;
+    this.filledWidth = w;
     this.opts = opts;
-    this.enabled = getGraphicsQualityProfile(scene).livingBarEffects;
+    const qualityProfile = getGraphicsQualityProfile(scene);
+    this.enabled = qualityProfile.livingBarEffects;
+    this.filterGlowEnabled = qualityProfile.externalDecorativeFilters;
     this.glowTarget = opts?.glowTarget ?? null;
     // Die Zone wird auch im abgeschalteten Zustand gefuehrt: `setFilledWidth()` schreibt
     // weiterhin hinein, und die Aufrufer sollen keine Fallunterscheidung brauchen.
@@ -165,10 +178,16 @@ export class LivingBarEffect {
     // lange wie ihr HUD-Element und wuerden sonst nach einem Wechsel von `low` auf `high`
     // dauerhaft abgeschaltet bleiben.
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
+      const glowModeChanged = this.filterGlowEnabled !== profile.externalDecorativeFilters;
+      this.filterGlowEnabled = profile.externalDecorativeFilters;
       this.applyEnabled(profile.livingBarEffects);
+      if (glowModeChanged && this.enabled && this.active) this.rebuildGlowVisual();
     }) ?? null;
 
-    if (this.enabled) this.createEmitters();
+    if (this.enabled) {
+      this.createEmitters();
+      this.setFilledWidth(this.filledWidth);
+    }
   }
 
   private applyEnabled(enabled: boolean): void {
@@ -176,10 +195,15 @@ export class LivingBarEffect {
     this.enabled = enabled;
     if (enabled) {
       this.createEmitters();
-      if (this.active) this.setFilledWidth(this.emitZone.width + 2);
+      if (this.active) this.setFilledWidth(this.filledWidth);
+      else {
+        this.stopEmitter(this.idleCore);
+        this.stopEmitter(this.idleOuter);
+        this.removeGlowVisual();
+      }
       return;
     }
-    this.removeGlow();
+    this.removeGlowVisual();
     this.idleCore?.destroy();
     this.idleOuter?.destroy();
     this.idleCore = null;
@@ -202,15 +226,17 @@ export class LivingBarEffect {
 
     this.idleCore = scene.add.particles(0, 0, TEX_BLOB, {
       lifespan:  { min: 1200, max: 1500 },
-      frequency: 10,
+      frequency: CORE_FREQUENCY_MS,
       quantity:  1,
+      maxAliveParticles: CORE_PARTICLE_CAP,
+      reserve: CORE_PARTICLE_CAP,
+      emitting: false,
       speedX:    { min: -2, max: 2 },
       speedY:    { min: -1, max: 1 },
       scale:     { start: 1.0 * sf, end: 0.4 * sf },
       alpha:     { start: 0.05 * intensity, end: 0.03 * intensity },
       tint:      [palette.mid, palette.dark, palette.light],
       blendMode: Phaser.BlendModes.ADD,
-      emitting:  true,
     });
     getGraphicsQualityController(scene)?.setEmitterImportance(this.idleCore, 'decorative');
     this.idleCore.addEmitZone(zoneData);
@@ -219,82 +245,85 @@ export class LivingBarEffect {
 
     this.idleOuter = scene.add.particles(0, 0, TEX_BLOB, {
       lifespan:  { min: 1000, max: 2500 },
-      frequency: 10,
+      frequency: OUTER_FREQUENCY_MS,
       quantity:  1,
+      maxAliveParticles: OUTER_PARTICLE_CAP,
+      reserve: OUTER_PARTICLE_CAP,
+      emitting: false,
       speedX:    { min: -1, max: 1 },
       speedY:    { min: -0.5, max: 0.5 },
       scale:     { start: 1.5 * sf, end: 0.7 * sf },
       alpha:     { start: 0.1 * intensity, end: 0.03 * intensity },
       tint:      [palette.dark, palette.mid],
       blendMode: Phaser.BlendModes.ADD,
-      emitting:  true,
     });
     getGraphicsQualityController(scene)?.setEmitterImportance(this.idleOuter, 'decorative');
     this.idleOuter.addEmitZone(zoneData);
     if (opts?.scrollFactor !== undefined) this.idleOuter.setScrollFactor(opts.scrollFactor);
     container.add(this.idleOuter);
 
-    // PostFX breathing glow
-    if (this.glowTarget) {
-      this.breathGlow = addExternalGlow(this.glowTarget, palette.mid, 0, 0, false, 0.1, 6);
-      if (this.breathGlow) {
-        this.breathTween = scene.tweens.add({
-          targets: this.breathGlow,
-          outerStrength: 2.5 * intensity,
-          duration: 2000,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      }
-    }
+    this.ensureGlowVisual();
   }
 
   /** Update the particle spawn region width (call when bar fill changes). */
   setFilledWidth(w: number): void {
+    this.filledWidth = Math.max(0, w);
     if (w > 4) {
       this.emitZone.width = w - 2;
       if (this.active) {
-        if (this.idleCore && !this.idleCore.emitting) this.idleCore.start();
-        if (this.idleOuter && !this.idleOuter.emitting) this.idleOuter.start();
-        this.ensureGlow();
+        this.startEmitter(this.idleCore);
+        this.startEmitter(this.idleOuter);
+        this.ensureGlowVisual();
+        this.syncAuraGeometry();
       }
     } else {
       this.emitZone.width = 0;
-      this.idleCore?.stop();
-      this.idleOuter?.stop();
-      this.removeGlow();
+      this.stopEmitter(this.idleCore);
+      this.stopEmitter(this.idleOuter);
+      this.removeGlowVisual();
     }
   }
 
   /** Pause the effect (particles stop, glow removed). */
   stop(): void {
     this.active = false;
-    this.idleCore?.stop();
-    this.idleOuter?.stop();
-    this.removeGlow();
+    this.stopEmitter(this.idleCore);
+    this.stopEmitter(this.idleOuter);
+    this.removeGlowVisual();
   }
 
   /** Resume the effect (particles start, glow added). */
   start(): void {
     this.active = true;
     if (this.emitZone.width > 2) {
-      this.idleCore?.start();
-      this.idleOuter?.start();
-      this.ensureGlow();
+      this.startEmitter(this.idleCore);
+      this.startEmitter(this.idleOuter);
+      this.ensureGlowVisual();
+      this.breathAura?.setVisible(true);
+      this.breathTween?.resume();
     }
   }
 
-  private ensureGlow(): void {
-    // Auch der Glow haengt am Schalter: `setFilledWidth()` und `start()` rufen hier spaeter
-    // erneut an und wuerden ihn sonst nachtraeglich doch noch anlegen.
-    if (!this.enabled) return;
-    if (!this.glowTarget || this.breathGlow || this.emitZone.width <= 2) return;
+  private rebuildGlowVisual(): void {
+    this.removeGlowVisual();
+    this.ensureGlowVisual();
+  }
+
+  /** High erhaelt den urspruenglichen Filter-Glow; medium nutzt den guenstigen Textur-Fallback. */
+  private ensureGlowVisual(): void {
+    if (!this.enabled || !this.glowTarget || this.emitZone.width <= 2) return;
+    if (this.filterGlowEnabled) this.ensureFilterGlow();
+    else this.ensureAura();
+  }
+
+  private ensureFilterGlow(): void {
+    if (!this.glowTarget || this.breathGlow) return;
+    const intensity = this.opts?.intensity ?? 1;
     this.breathGlow = addExternalGlow(this.glowTarget, this.palette.mid, 0, 0, false, 0.1, 6);
     if (!this.breathGlow) return;
     this.breathTween = this.scene.tweens.add({
       targets: this.breathGlow,
-      outerStrength: 2.5,
+      outerStrength: 2.5 * intensity,
       duration: 2000,
       yoyo: true,
       repeat: -1,
@@ -302,7 +331,51 @@ export class LivingBarEffect {
     });
   }
 
-  private removeGlow(): void {
+  private ensureAura(): void {
+    if (!this.enabled) return;
+    if (!this.glowTarget || this.breathAura || this.emitZone.width <= 2) return;
+    const intensity = this.opts?.intensity ?? 1;
+    this.breathAura = this.scene.add.image(0, 0, TEX_BLOB)
+      .setTint(this.palette.mid)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(0.1 * intensity);
+    if (this.opts?.scrollFactor !== undefined) this.breathAura.setScrollFactor(this.opts.scrollFactor);
+    this.container.addAt(this.breathAura, 0);
+    this.syncAuraGeometry();
+    this.breathTween = this.scene.tweens.add({
+      targets: this.breathAura,
+      alpha: { from: 0.08 * intensity, to: 0.2 * intensity },
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  private syncAuraGeometry(): void {
+    if (!this.breathAura) return;
+    const width = Math.max(1, this.filledWidth);
+    this.breathAura
+      .setPosition(this.barX + width * 0.5, this.barY + this.barHeight * 0.5)
+      .setDisplaySize(width + 16, this.barHeight * 3.2)
+      .setVisible(this.active && width > 4);
+  }
+
+  private startEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter | null): void {
+    if (!emitter) return;
+    emitter.setActive(true);
+    if (!emitter.emitting) emitter.start();
+  }
+
+  private stopEmitter(emitter: Phaser.GameObjects.Particles.ParticleEmitter | null): void {
+    if (!emitter) return;
+    if (!emitter.active && !emitter.emitting) return;
+    emitter.stop();
+    killAllAndResetParticlePositions(emitter);
+    emitter.setActive(false);
+  }
+
+  private removeGlowVisual(): void {
     if (this.breathTween) {
       this.breathTween.destroy();
       this.breathTween = null;
@@ -311,12 +384,15 @@ export class LivingBarEffect {
       removeExternalFx(this.glowTarget, this.breathGlow);
       this.breathGlow = null;
     }
+    this.breathAura?.destroy();
+    this.breathAura = null;
   }
 
   destroy(): void {
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
     this.stop();
+    this.removeGlowVisual();
     this.idleCore?.destroy();
     this.idleOuter?.destroy();
     this.idleCore = null;

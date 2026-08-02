@@ -4,6 +4,7 @@ const GAME_OBJECT_DESTROY_EVENT = 'destroy';
 
 export type GraphicsQuality = 'high' | 'medium' | 'low';
 export type VisualImportance = 'critical' | 'standard' | 'decorative';
+export type FilterScope = 'object' | 'camera';
 
 export interface GraphicsQualityProfile {
   readonly level: GraphicsQuality;
@@ -22,10 +23,8 @@ export interface GraphicsQualityProfile {
   readonly dynamicShadows: boolean;
   /**
    * Der lebendige Balken-Effekt (LivingBarEffect) in HUD, Menues und Overlays. Jede Instanz
-   * traegt zwei Partikel-Emitter mit hoher Emissionsrate sowie einen dauerhaft pulsierenden
-   * PostFX-Glow. In `low` komplett aus: Die Partikel werden zwar bereits ueber
-   * `particleFactors.decorative` auf null gesetzt, die Emitter-Objekte, der Glow und der
-   * Puls-Tween liefen aber weiter.
+   * traegt zwei begrenzte Partikel-Emitter sowie eine dauerhaft pulsierende, vorgebackene Aura.
+   * In `low` komplett aus, damit auch Emitter-Objekte und Puls-Tween nicht weiterlaufen.
    */
   readonly livingBarEffects: boolean;
   readonly externalDecorativeFilters: boolean;
@@ -187,6 +186,7 @@ interface TrackedFilter {
   readonly handle: { active?: boolean; setActive?: (active: boolean) => unknown };
   readonly external: boolean;
   readonly importance: VisualImportance;
+  readonly scope: FilterScope;
   readonly destroyHandler: () => void;
 }
 
@@ -231,12 +231,7 @@ export class GraphicsQualityController {
     return GRAPHICS_QUALITY_PROFILES[this.level];
   }
 
-  /**
-   * Diagnose-Schalter des Ablationsmodus: schaltet **alle** getrackten Filter ab, unabhaengig
-   * von Qualitaetsstufe und Wichtigkeit. Nur fuer Messungen gedacht; im Normalbetrieb immer
-   * `false`. Der Qualitaets-Pfad bleibt unveraendert und greift wieder, sobald zurueckgesetzt
-   * wird (siehe {@link PerformanceAblationController}).
-   */
+  /** Diagnose-Schalter fuer Objektfilter. Kamera-PostFX werden separat abgetragen. */
   setAblationFiltersDisabled(disabled: boolean): void {
     if (this.ablationFiltersDisabled === disabled) return;
     this.ablationFiltersDisabled = disabled;
@@ -275,6 +270,10 @@ export class GraphicsQualityController {
       this.applyEmitterProfile(existing);
       return;
     }
+    // Phaser 4.2.1 initialisiert auch ohne `sortProperty` einen Sort-Callback. Die Renderer
+    // sortieren dadurch den Alive-Pool jedes Frame, obwohl der Vergleich fuer den leeren
+    // Property-Namen immer gleich ist. Nur explizit konfigurierte Sortierung behalten.
+    if (!config.sortCallback && !config.sortProperty) emitter.setSortCallback();
     const frequency = typeof config.frequency === 'number' ? config.frequency : 0;
     const quantity = config.quantity ?? 1;
     const maxAliveParticles = typeof config.maxAliveParticles === 'number' ? config.maxAliveParticles : 0;
@@ -328,12 +327,14 @@ export class GraphicsQualityController {
     handle: { active?: boolean; setActive?: (active: boolean) => unknown },
     external: boolean,
     importance: VisualImportance = 'standard',
+    scope: FilterScope = 'object',
   ): void {
     const tracked: TrackedFilter = {
       target,
       handle,
       external,
       importance,
+      scope,
       destroyHandler: () => this.filters.delete(tracked),
     };
     target.once?.(GAME_OBJECT_DESTROY_EVENT, tracked.destroyHandler);
@@ -387,7 +388,7 @@ export class GraphicsQualityController {
 
   private applyFilterProfile(tracked: TrackedFilter): void {
     const profile = this.getProfile();
-    const active = !this.ablationFiltersDisabled
+    const active = !(this.ablationFiltersDisabled && tracked.scope === 'object')
       && (tracked.importance === 'critical'
         || (profile.decorativeFilters && (!tracked.external || profile.externalDecorativeFilters)));
     if (tracked.handle.setActive) tracked.handle.setActive(active);

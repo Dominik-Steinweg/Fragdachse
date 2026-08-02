@@ -160,6 +160,8 @@ export class RightSidePanel {
   private leaderboardXpLabel!: Phaser.GameObjects.Text;
   private leaderboardSharedXpValue!: Phaser.GameObjects.Text;
   private leaderboardCache: (LeaderboardEntryView | null)[] = Array.from({ length: 12 }, () => null);
+  private leaderboardInputCache: LeaderboardEntry[] = [];
+  private leaderboardInputMode: string | null = null;
   private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
   private readonly cssColorCache = new Map<number, string>();
 
@@ -200,6 +202,7 @@ export class RightSidePanel {
     this.pendingDelay?.remove();
     this.arenaOverlayVisible = false;
     this.gameContainer.y = -GAME_HEIGHT;
+    this.gameContainer.setVisible(false).setActive(false);
 
     this.scene.tweens.add({
       targets:  this.lobbyContainer,
@@ -221,6 +224,7 @@ export class RightSidePanel {
       y:        -GAME_HEIGHT,
       duration: 350,
       ease:     'Power2.easeIn',
+      onComplete: () => this.gameContainer.setVisible(false).setActive(false),
     });
 
     this.pendingDelay = this.scene.time.delayedCall(100, () => {
@@ -243,8 +247,14 @@ export class RightSidePanel {
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.arenaOverlayVisible = visible;
 
+    if (visible) {
+      this.gameContainer.setVisible(true).setActive(true);
+      this.renderKillFeed();
+    }
+
     if (immediate) {
       this.gameContainer.y = targetY;
+      this.gameContainer.setVisible(visible).setActive(visible);
       return;
     }
 
@@ -253,6 +263,11 @@ export class RightSidePanel {
       y: targetY,
       duration: visible ? 220 : 180,
       ease: visible ? 'Back.easeOut' : 'Power2.easeIn',
+      onComplete: () => {
+        if (!visible && !this.arenaOverlayVisible) {
+          this.gameContainer.setVisible(false).setActive(false);
+        }
+      },
     });
   }
 
@@ -276,7 +291,7 @@ export class RightSidePanel {
   ): void {
     this.killFeedData.unshift({ killerName, killerColor, weapon, victimName, victimColor });
     if (this.killFeedData.length > KILLFEED_MAX) this.killFeedData.length = KILLFEED_MAX;
-    this.renderKillFeed();
+    if (this.arenaOverlayVisible) this.renderKillFeed();
   }
 
   /**
@@ -284,6 +299,8 @@ export class RightSidePanel {
    * entries muss bereits absteigend nach Frags sortiert sein.
    */
   updateLeaderboard(entries: LeaderboardEntry[]): void {
+    if (!this.arenaOverlayVisible) return;
+    if (this.isLeaderboardInputUnchanged(entries)) return;
     this.syncArenaLabels(entries);
     if (entries.some((entry) => entry.teamId === 'blue' || entry.teamId === 'red')) {
       this.renderGroupedLeaderboard(entries);
@@ -437,7 +454,7 @@ export class RightSidePanel {
 
   private buildGameContainer(): void {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
-    this.gameContainer.setDepth(DEPTH.OVERLAY - 1);
+    this.gameContainer.setDepth(DEPTH.OVERLAY - 1).setVisible(false).setActive(false);
     promoteToClarityCamera(this.scene, this.gameContainer);
     this.gameContainer.add(
       this.scene.add.rectangle(ARENA_SIDEBAR_CENTER_X, GAME_HEIGHT / 2, ARENA_SIDEBAR_WIDTH, GAME_HEIGHT, 0x000000, 0.18)
@@ -838,6 +855,40 @@ export class RightSidePanel {
       this.lbPingRows[i].setVisible(false);
       this.leaderboardCache[i] = { visible: false, nameText: '', nameColor: '', fragsText: '', pingText: '', pingColor: '' };
     }
+  }
+
+  /**
+   * Netzwerk- und Hostpfad liefern pro Frame ein neues Array, obwohl Scoreboardwerte meist
+   * unveraendert bleiben. Der kleine lineare Vergleich vermeidet dann Filter-, Sortier- und
+   * Textlayout-Arbeit komplett; kopiert wird nur bei einer echten Aenderung.
+   */
+  private isLeaderboardInputUnchanged(entries: LeaderboardEntry[]): boolean {
+    const mode = bridge.getGameMode();
+    const previous = this.leaderboardInputCache;
+    let unchanged = this.leaderboardInputMode === mode && previous.length === entries.length;
+    if (unchanged) {
+      for (let index = 0; index < entries.length; index += 1) {
+        const left = previous[index];
+        const right = entries[index];
+        if (
+          left.name !== right.name
+          || left.colorHex !== right.colorHex
+          || left.frags !== right.frags
+          || left.ping !== right.ping
+          || left.teamId !== right.teamId
+          || left.teamScore !== right.teamScore
+          || left.sharedXp !== right.sharedXp
+        ) {
+          unchanged = false;
+          break;
+        }
+      }
+    }
+    if (unchanged) return true;
+
+    this.leaderboardInputMode = mode;
+    this.leaderboardInputCache = entries.map((entry) => ({ ...entry }));
+    return false;
   }
 
   private renderGroupedLeaderboardTeamRows(entries: LeaderboardEntry[], startRowIndex: number, startY: number): number {

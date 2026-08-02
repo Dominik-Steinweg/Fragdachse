@@ -2342,7 +2342,7 @@ export class CoopDefenseUpgradesOverlay {
    * Sammelt Refreshes bis zum Frame-Ende.
    *
    * `refresh()` baut den gesamten Kategoriebaum neu auf – inklusive Zerstoeren und Neuanlegen
-   * eines {@link LivingBarEffect} (zwei Partikel-Emitter) und eines PostFX-Glows **je Knoten**.
+   * eines {@link LivingBarEffect} (zwei Partikel-Emitter und Aura) **je Knoten**.
    * Beim schnellen Vergeben mehrerer Punkte lief das pro Klick und war deutlich spuerbar; so
    * laeuft es hoechstens einmal pro Frame.
    */

@@ -11,7 +11,6 @@ import {
 } from '../effects/EffectUtils';
 import { mixColors } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
-import { addInternalGlow, setInternalFxPadding } from '../utils/phaserFx';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE } from './PowerUpConfig';
 
 const TEX_POWERUP_PEDESTAL_OUTER_GLOW = '__powerup_pedestal_outer_glow';
@@ -45,14 +44,8 @@ interface PedestalVisual {
 /**
  * Rendert Power-Up-Items auf dem Spielfeld (Host + Client).
  *
- * Aufbau je Container (Schicht-Reihenfolge = Render-Reihenfolge):
- *   [0] Image | Rectangle – die eigentliche Grafik (feste Größe)
- *       └─ preFX.addGlow()  – Pixel-Lichtaura direkt an der Grafikkante,
- *                             outerStrength pulsiert via Tween
- *
- * Der preFX-Glow rendert die Aura hinter dem Sprite-Pixel, die Grafik bleibt
- * immer sichtbar vorne. Der Glow-Tween-Cleanup erfolgt über das destroy-Event
- * der Grafik – keine separate Tween-Map nötig.
+ * Eine vorgebackene additive Aura pulsiert hinter der eigentlichen Grafik. Damit bleibt das
+ * Item klar lesbar, ohne fuer jedes liegende Power-up einen eigenen Filter-Pass zu erzeugen.
  * Container.destroy(true) räumt Grafik + deren Tweens automatisch auf.
  */
 export class PowerUpRenderer {
@@ -108,21 +101,19 @@ export class PowerUpRenderer {
       container.addAt(itemAura, 0);
 
       // ── preFX-Glow: Pixel-Aura, outerStrength pulsiert ───────────────────
-      setInternalFxPadding(graphic, 16);
-      const glow = addInternalGlow(graphic, glowColor, 2, 0, false, 0.1, 14);
-      if (glow) {
-        const glowTween = this.scene.tweens.add({
-          targets:       glow,
-          outerStrength: { from: 2, to: 8 },
-          duration:      900,
-          yoyo:          true,
-          repeat:        -1,
-          ease:          'Sine.easeInOut',
-          delay:         phaseMs,
-        });
-        // Tween-Cleanup ohne separate Map: destroy-Event der Grafik abfangen
-        graphic.once(Phaser.GameObjects.Events.DESTROY, () => glowTween.stop());
-      }
+      // Vorgebackene Aura statt eigenem Filter-Framebuffer pro Item.
+      const auraTween = this.scene.tweens.add({
+        targets: itemAura,
+        alpha: { from: 0.12, to: 0.24 },
+        scaleX: { from: 0.48, to: 0.62 },
+        scaleY: { from: 0.48, to: 0.62 },
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: phaseMs,
+      });
+      itemAura.once(Phaser.GameObjects.Events.DESTROY, () => auraTween.stop());
 
       this.sprites.set(pu.uid, { container, graphic, color: glowColor });
       this.setItemLight(pu.uid, pu.x, pu.y, glowColor);

@@ -352,12 +352,12 @@ export class CameraPostFxController {
 
     // Bloom und Barrel sind dekorativ und fallen damit auf `low` weg; Grading und Vignette
     // gelten als Standard. Nichts davon ist kritisch – die gesamte Kette muss ablatierbar sein.
-    quality?.trackFilter(this.worldCamera, parallel, false, 'decorative');
-    quality?.trackFilter(this.worldCamera, barrel, false, 'decorative');
-    quality?.trackFilter(this.worldCamera, colorMatrix, false, 'standard');
-    quality?.trackFilter(this.worldCamera, vignette, false, 'standard');
-    quality?.trackFilter(this.worldCamera, radialFocusParallel, false, 'standard');
-    quality?.trackFilter(this.worldCamera, displacement, false, 'standard');
+    quality?.trackFilter(this.worldCamera, parallel, false, 'decorative', 'camera');
+    quality?.trackFilter(this.worldCamera, barrel, false, 'decorative', 'camera');
+    quality?.trackFilter(this.worldCamera, colorMatrix, false, 'standard', 'camera');
+    quality?.trackFilter(this.worldCamera, vignette, false, 'standard', 'camera');
+    quality?.trackFilter(this.worldCamera, radialFocusParallel, false, 'standard', 'camera');
+    quality?.trackFilter(this.worldCamera, displacement, false, 'standard', 'camera');
   }
 
   /**

@@ -77,6 +77,8 @@ export interface EnemyFlowFieldServiceOptions {
   readonly dynamicGoalCells?: ReadonlyArray<EnemyFlowFieldGoalCell>;
   /** Number of whole cells kept clear around an enemy's center. */
   readonly clearanceCells?: number;
+  /** Teilt die unveraenderliche/topologische Rasterbasis mit einem gleich grossen Service. */
+  readonly topologySource?: EnemyFlowFieldService;
 }
 
 /** Begrenzter Sonderbewegungs-Check fuer einen Kreis entlang eines kurzen Weltsegments. */
@@ -129,6 +131,73 @@ const WALL_KIND_CODES: ReadonlySet<number> = new Set(
     .map((definition) => definition.code),
 );
 const MAX_SAFE_POSITION_SEARCH_RADIUS_CELLS = 4;
+const NEIGHBOR_MOVE_FACTORS = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2] as const;
+
+/** Allokationsarmer Min-Heap fuer die gewichtete Mehrziel-Dijkstra-Berechnung. */
+class FlowFieldMinHeap {
+  private readonly indexes: number[] = [];
+  private readonly priorities: number[] = [];
+  private readonly sources: number[] = [];
+  poppedIndex = -1;
+  poppedPriority = 0;
+  poppedSource = -1;
+
+  get size(): number { return this.indexes.length; }
+
+  push(index: number, priority: number, source: number): void {
+    let cursor = this.indexes.length;
+    this.indexes.push(index);
+    this.priorities.push(priority);
+    this.sources.push(source);
+    while (cursor > 0) {
+      const parent = (cursor - 1) >> 1;
+      if (!this.less(cursor, parent)) break;
+      this.swap(cursor, parent);
+      cursor = parent;
+    }
+  }
+
+  pop(): void {
+    this.poppedIndex = this.indexes[0];
+    this.poppedPriority = this.priorities[0];
+    this.poppedSource = this.sources[0];
+    const last = this.indexes.length - 1;
+    if (last === 0) {
+      this.indexes.pop();
+      this.priorities.pop();
+      this.sources.pop();
+      return;
+    }
+    this.indexes[0] = this.indexes.pop()!;
+    this.priorities[0] = this.priorities.pop()!;
+    this.sources[0] = this.sources.pop()!;
+    let cursor = 0;
+    while (true) {
+      const left = cursor * 2 + 1;
+      if (left >= this.indexes.length) break;
+      const right = left + 1;
+      let best = left;
+      if (right < this.indexes.length && this.less(right, left)) best = right;
+      if (!this.less(best, cursor)) break;
+      this.swap(best, cursor);
+      cursor = best;
+    }
+  }
+
+  private less(left: number, right: number): boolean {
+    const priorityDelta = this.priorities[left] - this.priorities[right];
+    if (priorityDelta !== 0) return priorityDelta < 0;
+    const sourceDelta = this.sources[left] - this.sources[right];
+    if (sourceDelta !== 0) return sourceDelta < 0;
+    return this.indexes[left] < this.indexes[right];
+  }
+
+  private swap(left: number, right: number): void {
+    [this.indexes[left], this.indexes[right]] = [this.indexes[right], this.indexes[left]];
+    [this.priorities[left], this.priorities[right]] = [this.priorities[right], this.priorities[left]];
+    [this.sources[left], this.sources[right]] = [this.sources[right], this.sources[left]];
+  }
+}
 
 export class EnemyFlowFieldService {
   private readonly metrics: EnemyFlowFieldMetrics;
@@ -140,6 +209,7 @@ export class EnemyFlowFieldService {
   private dynamicGoalCells: EnemyFlowFieldGoalCell[];
   private readonly eventBus: ArenaEventBus | null;
   private readonly obstacleCellProvider: (() => ReadonlyArray<EnemyFlowFieldGridCell>) | null;
+  private readonly topologySource: EnemyFlowFieldService | null;
   private readonly costs: Uint32Array;
   private readonly kindCodes: Uint8Array;
   private readonly traversable: Uint8Array;
@@ -150,6 +220,9 @@ export class EnemyFlowFieldService {
    * beim Verbraucher.
    */
   private readonly wallAdjacent: Uint8Array;
+  private readonly neighborIndices: Int32Array;
+  private readonly diagonalGuardA: Int32Array;
+  private readonly diagonalGuardB: Int32Array;
   private readonly goalMask: Uint8Array;
   private readonly goalCells: EnemyFlowFieldGoalCell[];
   private readonly summary: {
@@ -168,6 +241,8 @@ export class EnemyFlowFieldService {
   private debugOverlayCallback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null = null;
   private isTopologyDirty = false;
   private isGoalDirty = false;
+  private fullTopologyRebuildRequired = false;
+  private readonly pendingTopologyCells = new Set<number>();
   private lastDirtyCheckAt = 0;
 
   static readonly INTEGRATION_INFINITY = 999999;
@@ -192,13 +267,20 @@ export class EnemyFlowFieldService {
     this.metrics = { ...metrics };
     this.eventBus = options.eventBus ?? null;
     this.obstacleCellProvider = options.obstacleCellProvider ?? null;
-
     const totalCells = this.metrics.cols * this.metrics.rows;
-    this.costs = new Uint32Array(totalCells);
-    this.kindCodes = new Uint8Array(totalCells);
-    this.traversable = new Uint8Array(totalCells);
-    this.destructible = new Uint8Array(totalCells);
-    this.wallAdjacent = new Uint8Array(totalCells);
+    const requestedTopologySource = options.topologySource ?? null;
+    const canShareTopology = requestedTopologySource !== null
+      && requestedTopologySource.costs.length === totalCells
+      && requestedTopologySource.clearanceCells === this.clearanceCells;
+    this.topologySource = canShareTopology ? requestedTopologySource : null;
+    this.costs = canShareTopology ? this.topologySource!.costs : new Uint32Array(totalCells);
+    this.kindCodes = canShareTopology ? this.topologySource!.kindCodes : new Uint8Array(totalCells);
+    this.traversable = canShareTopology ? this.topologySource!.traversable : new Uint8Array(totalCells);
+    this.destructible = canShareTopology ? this.topologySource!.destructible : new Uint8Array(totalCells);
+    this.wallAdjacent = canShareTopology ? this.topologySource!.wallAdjacent : new Uint8Array(totalCells);
+    this.neighborIndices = canShareTopology ? this.topologySource!.neighborIndices : new Int32Array(totalCells * 8);
+    this.diagonalGuardA = canShareTopology ? this.topologySource!.diagonalGuardA : new Int32Array(totalCells * 8);
+    this.diagonalGuardB = canShareTopology ? this.topologySource!.diagonalGuardB : new Int32Array(totalCells * 8);
     this.goalMask = new Uint8Array(totalCells);
     this.integrationField = new Float32Array(totalCells);
     this.vectorField = new Float32Array(totalCells * 2);
@@ -214,6 +296,7 @@ export class EnemyFlowFieldService {
       countsByKind: this.createEmptyCounts(),
     };
 
+    if (!canShareTopology) this.buildNeighborLookups();
     this.recomputeTopology();
     if (initialDynamicGoalCells.length > 0) {
       this.dynamicGoalCells = this.normalizeGoalCells(initialDynamicGoalCells);
@@ -376,6 +459,7 @@ export class EnemyFlowFieldService {
    * berechnet Goal-Cells & Integration-Field ausschließlich über aktive Basen.
    */
   setActiveBaseIds(ids: ReadonlySet<string>): void {
+    this.topologySource?.setActiveBaseIds(ids);
     const next = new Set(ids);
     if (next.size === this.activeBaseIds.size) {
       let identical = true;
@@ -391,6 +475,8 @@ export class EnemyFlowFieldService {
     // this is especially visible because they have no separation movement to
     // nudge them out of that cell. Base changes are rare, so apply this
     // topology change immediately instead of waiting for update().
+    this.fullTopologyRebuildRequired = true;
+    this.isTopologyDirty = true;
     this.recomputeFields();
     this.isTopologyDirty = false;
     this.isGoalDirty = false;
@@ -403,6 +489,7 @@ export class EnemyFlowFieldService {
       goalMode: this.goalMode,
       dynamicGoalCells: this.dynamicGoalCells,
       clearanceCells: this.clearanceCells,
+      topologySource: this.topologySource ?? undefined,
     });
   }
 
@@ -464,6 +551,7 @@ export class EnemyFlowFieldService {
       gridX: sourceIndex % this.metrics.cols,
       gridY: Math.floor(sourceIndex / this.metrics.cols),
     };
+
   }
 
   /**
@@ -640,17 +728,53 @@ export class EnemyFlowFieldService {
     }
   }
 
-  private handleArenaMapGridChanged(_event: ArenaMapGridChangedEvent): void {
+  private handleArenaMapGridChanged(event: ArenaMapGridChangedEvent): void {
     this.isTopologyDirty = true;
     this.isGoalDirty = true;
+    if (this.topologySource) return;
+    if (
+      this.clearanceCells === 0
+      && event.gridX !== undefined
+      && event.gridY !== undefined
+      && this.isInBounds(event.gridX, event.gridY)
+    ) {
+      this.pendingTopologyCells.add(this.toIndex(event.gridX, event.gridY));
+      return;
+    }
+    this.fullTopologyRebuildRequired = true;
   }
 
   private recomputeFields(): void {
-    this.recomputeTopology();
+    this.refreshTopology();
     this.recomputeGoalAndVectorFields();
   }
 
+  private refreshTopology(): void {
+    if (this.topologySource) {
+      this.topologySource.refreshTopologyIfDirty();
+      this.copyTopologySummary(this.topologySource);
+    } else if (!this.fullTopologyRebuildRequired && this.pendingTopologyCells.size > 0) {
+      this.recomputeTopologyCells(this.pendingTopologyCells);
+    } else {
+      this.recomputeTopology();
+    }
+    this.pendingTopologyCells.clear();
+    this.fullTopologyRebuildRequired = false;
+    this.isTopologyDirty = false;
+  }
+
+  private refreshTopologyIfDirty(): void {
+    if (!this.isTopologyDirty) return;
+    this.refreshTopology();
+    this.isGoalDirty = true;
+  }
+
   private recomputeTopology(): void {
+    if (this.topologySource) {
+      this.topologySource.refreshTopologyIfDirty();
+      this.copyTopologySummary(this.topologySource);
+      return;
+    }
     const activeSpecs = this.baseSpecs.filter((spec) => this.activeBaseIds.has(spec.id));
     const buildContext = this.createBuildContext(this.layout, activeSpecs);
     const countsByKind = this.createEmptyCounts();
@@ -680,6 +804,43 @@ export class EnemyFlowFieldService {
     this.summary.traversableCells = traversableCells;
     this.summary.blockedCells = this.summary.totalCells - traversableCells;
     this.summary.countsByKind = countsByKind;
+  }
+
+  private copyTopologySummary(source: EnemyFlowFieldService): void {
+    this.summary.traversableCells = source.summary.traversableCells;
+    this.summary.blockedCells = source.summary.blockedCells;
+    this.summary.countsByKind = { ...source.summary.countsByKind };
+  }
+
+  /** Aktualisiert bei einem Fels-/Bauplatzereignis nur die betroffene Zelle und Nachbarschaft. */
+  private recomputeTopologyCells(indexes: ReadonlySet<number>): void {
+    const activeSpecs = this.baseSpecs.filter((spec) => this.activeBaseIds.has(spec.id));
+    const buildContext = this.createBuildContext(this.layout, activeSpecs);
+    const adjacencyCandidates = new Set<number>();
+    for (const index of indexes) {
+      const oldKind = CELL_KINDS_BY_CODE[this.kindCodes[index]];
+      const nextKind = this.resolveKind(index, buildContext);
+      if (oldKind !== nextKind) {
+        const definition = CELL_DEFINITIONS[nextKind];
+        this.summary.countsByKind[oldKind] -= 1;
+        this.summary.countsByKind[nextKind] += 1;
+        const wasTraversable = this.traversable[index] === 1;
+        this.kindCodes[index] = definition.code;
+        this.traversable[index] = definition.isTraversable ? 1 : 0;
+        this.destructible[index] = definition.isDestructible ? 1 : 0;
+        if (wasTraversable !== definition.isTraversable) {
+          this.summary.traversableCells += definition.isTraversable ? 1 : -1;
+        }
+      }
+      adjacencyCandidates.add(index);
+      const neighborBase = index * 8;
+      for (let direction = 0; direction < 8; direction += 1) {
+        const neighborIndex = this.neighborIndices[neighborBase + direction];
+        if (neighborIndex >= 0) adjacencyCandidates.add(neighborIndex);
+      }
+    }
+    for (const index of adjacencyCandidates) this.refreshWallAdjacencyAt(index);
+    this.summary.blockedCells = this.summary.totalCells - this.summary.traversableCells;
   }
 
   private recomputeGoalAndVectorFields(): void {
@@ -851,6 +1012,41 @@ export class EnemyFlowFieldService {
     return gridY * this.metrics.cols + gridX;
   }
 
+  private buildNeighborLookups(): void {
+    this.neighborIndices.fill(-1);
+    this.diagonalGuardA.fill(-1);
+    this.diagonalGuardB.fill(-1);
+    for (let gridY = 0; gridY < this.metrics.rows; gridY += 1) {
+      for (let gridX = 0; gridX < this.metrics.cols; gridX += 1) {
+        const index = this.toIndex(gridX, gridY);
+        const base = index * 8;
+        for (let direction = 0; direction < 8; direction += 1) {
+          const [dx, dy] = EnemyFlowFieldService.NEIGHBOR_DIRECTIONS[direction];
+          const neighborX = gridX + dx;
+          const neighborY = gridY + dy;
+          if (!this.isInBounds(neighborX, neighborY)) continue;
+          this.neighborIndices[base + direction] = this.toIndex(neighborX, neighborY);
+          if (direction < 4) continue;
+          this.diagonalGuardA[base + direction] = this.toIndex(gridX + dx, gridY);
+          this.diagonalGuardB[base + direction] = this.toIndex(gridX, gridY + dy);
+        }
+      }
+    }
+  }
+
+  private isReachableNeighborIndex(currentIndex: number, direction: number): boolean {
+    const lookupIndex = currentIndex * 8 + direction;
+    const neighborIndex = this.neighborIndices[lookupIndex];
+    if (neighborIndex < 0 || this.traversable[neighborIndex] !== 1) return false;
+    if (direction < 4) return true;
+    const guardA = this.diagonalGuardA[lookupIndex];
+    const guardB = this.diagonalGuardB[lookupIndex];
+    return guardA >= 0
+      && guardB >= 0
+      && this.traversable[guardA] === 1
+      && this.traversable[guardB] === 1;
+  }
+
   private isFlowPassableAt(gridX: number, gridY: number): boolean {
     if (!this.isInBounds(gridX, gridY)) return false;
     return this.traversable[this.toIndex(gridX, gridY)] === 1;
@@ -958,6 +1154,21 @@ export class EnemyFlowFieldService {
     }
   }
 
+  private refreshWallAdjacencyAt(index: number): void {
+    const kind = CELL_KINDS_BY_CODE[this.kindCodes[index]];
+    this.costs[index] = CELL_DEFINITIONS[kind].cost;
+    this.wallAdjacent[index] = 0;
+    if (
+      COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST <= 0
+      || this.traversable[index] !== 1
+    ) return;
+    const gridX = index % this.metrics.cols;
+    const gridY = Math.floor(index / this.metrics.cols);
+    if (!this.hasIndestructibleBlockerNeighbor(gridX, gridY)) return;
+    this.wallAdjacent[index] = 1;
+    this.costs[index] += COOP_DEFENSE_FLOW_FIELD_WALL_ADJACENT_COST;
+  }
+
   private hasIndestructibleBlockerNeighbor(gridX: number, gridY: number): boolean {
     for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
       const neighborX = gridX + dx;
@@ -1004,37 +1215,35 @@ export class EnemyFlowFieldService {
   }
 
   private computeIntegrationField(): void {
-    const totalCells = this.metrics.cols * this.metrics.rows;
     this.integrationField.fill(EnemyFlowFieldService.INTEGRATION_INFINITY);
     this.goalSourceField.fill(-1);
 
-    const queue: number[] = [];
+    const open = new FlowFieldMinHeap();
     for (const goalCell of this.goalCells) {
       const index = this.toIndex(goalCell.gridX, goalCell.gridY);
       this.integrationField[index] = 0;
       this.goalSourceField[index] = index;
-      queue.push(index);
+      open.push(index, 0, index);
     }
 
-    let queueIdx = 0;
-    while (queueIdx < queue.length) {
-      const currentIndex = queue[queueIdx++];
-      const currentValue = this.integrationField[currentIndex];
-      const currentGx = currentIndex % this.metrics.cols;
-      const currentGy = Math.floor(currentIndex / this.metrics.cols);
+    while (open.size > 0) {
+      open.pop();
+      const currentIndex = open.poppedIndex;
+      const currentValue = open.poppedPriority;
+      const sourceIndex = open.poppedSource;
+      // Eine Zelle darf mehrfach im Heap liegen. Veraltete Eintraege kosten nur diesen Test.
+      if (
+        currentValue !== this.integrationField[currentIndex]
+        || sourceIndex !== this.goalSourceField[currentIndex]
+      ) continue;
 
-      for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
-        const neighborGx = currentGx + dx;
-        const neighborGy = currentGy + dy;
-
-        if (!this.isReachableNeighbor(currentGx, currentGy, neighborGx, neighborGy)) continue;
-
-        const neighborIndex = this.toIndex(neighborGx, neighborGy);
+      const neighborBase = currentIndex * 8;
+      for (let direction = 0; direction < 8; direction += 1) {
+        if (!this.isReachableNeighborIndex(currentIndex, direction)) continue;
+        const neighborIndex = this.neighborIndices[neighborBase + direction];
         const neighborCost = this.costs[neighborIndex];
-        const diagonalFactor = Math.abs(dx) + Math.abs(dy) === 2 ? Math.sqrt(2) : 1;
-        const newValue = currentValue + neighborCost * diagonalFactor;
+        const newValue = currentValue + neighborCost * NEIGHBOR_MOVE_FACTORS[direction];
 
-        const sourceIndex = this.goalSourceField[currentIndex];
         if (
           newValue < this.integrationField[neighborIndex]
           || (newValue === this.integrationField[neighborIndex]
@@ -1043,7 +1252,7 @@ export class EnemyFlowFieldService {
         ) {
           this.integrationField[neighborIndex] = newValue;
           this.goalSourceField[neighborIndex] = sourceIndex;
-          queue.push(neighborIndex);
+          open.push(neighborIndex, newValue, sourceIndex);
         }
       }
     }
@@ -1061,31 +1270,24 @@ export class EnemyFlowFieldService {
           continue;
         }
 
-        let bestNeighborGx = gridX;
-        let bestNeighborGy = gridY;
+        let bestDirection = -1;
         let bestValue = this.integrationField[index];
 
-        for (const [dx, dy] of EnemyFlowFieldService.NEIGHBOR_DIRECTIONS) {
-          const neighborGx = gridX + dx;
-          const neighborGy = gridY + dy;
-
-          if (!this.isReachableNeighbor(gridX, gridY, neighborGx, neighborGy)) continue;
-
-          const neighborValue = this.integrationField[this.toIndex(neighborGx, neighborGy)];
+        const neighborBase = index * 8;
+        for (let direction = 0; direction < 8; direction += 1) {
+          if (!this.isReachableNeighborIndex(index, direction)) continue;
+          const neighborValue = this.integrationField[this.neighborIndices[neighborBase + direction]];
           if (neighborValue < bestValue) {
             bestValue = neighborValue;
-            bestNeighborGx = neighborGx;
-            bestNeighborGy = neighborGy;
+            bestDirection = direction;
           }
         }
 
-        const dirX = bestNeighborGx - gridX;
-        const dirY = bestNeighborGy - gridY;
-        const length = Math.sqrt(dirX * dirX + dirY * dirY);
-
-        if (length > 0) {
-          this.vectorField[vIndex] = dirX / length;
-          this.vectorField[vIndex + 1] = dirY / length;
+        if (bestDirection >= 0) {
+          const [dirX, dirY] = EnemyFlowFieldService.NEIGHBOR_DIRECTIONS[bestDirection];
+          const invLength = bestDirection < 4 ? 1 : Math.SQRT1_2;
+          this.vectorField[vIndex] = dirX * invLength;
+          this.vectorField[vIndex + 1] = dirY * invLength;
         } else {
           this.vectorField[vIndex] = 0;
           this.vectorField[vIndex + 1] = 0;
