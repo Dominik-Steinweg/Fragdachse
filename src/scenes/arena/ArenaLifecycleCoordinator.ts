@@ -1394,7 +1394,8 @@ export class ArenaLifecycleCoordinator {
         this.ctx.coopDefenseEnemyBurrowSystem = new CoopDefenseEnemyBurrowSystem(
           this.ctx.enemyManager,
           (enemyId, enabled) => this.ctx.hostPhysics.setEnemyBurrowed(enemyId, !enabled),
-          (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
+          (x, y, radius) => this.isSafeEnemyGroundAt(x, y, radius),
+          (x, y, radius, maxRadiusCells) => this.findSafeEnemyGroundPosition(x, y, radius, maxRadiusCells),
         );
         this.ctx.coopDefenseEnemyTrainAwarenessSystem.setBurrowSource(this.ctx.coopDefenseEnemyBurrowSystem);
         this.ctx.enemyManager.setEnemySpawnedCallback((enemy, options) => {
@@ -1407,12 +1408,14 @@ export class ArenaLifecycleCoordinator {
           this.ctx.combatSystem,
           this.ctx.hostPhysics,
           (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
+          (fromX, fromY, toX, toY, radius) => this.hasWalkableEnemyCircleLine(fromX, fromY, toX, toY, radius),
         );
         this.ctx.coopDefenseEnemyCombatPositioningSystem = new CoopDefenseEnemyCombatPositioningSystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.combatSystem,
           (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
+          (fromX, fromY, toX, toY, radius) => this.hasWalkableEnemyCircleLine(fromX, fromY, toX, toY, radius),
         );
         this.ctx.coopDefenseEnemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
           this.ctx.enemyManager,
@@ -2103,25 +2106,42 @@ export class ArenaLifecycleCoordinator {
     this.lobbyOverlay.show();
   }
 
-  /**
-   * True, wenn ein Gegner an dieser Stelle auftauchen kann: Der Mittelpunkt und alle vier
-   * Randpunkte seines Körpers müssen auf begehbaren, per Flowfield erreichbaren Zellen liegen.
-   * Grundlage für das Auftauchen nach der Einbuddel-Anfahrt vom linken Spielfeldrand.
-   */
-  private isFreeEnemyGroundAt(x: number, y: number, radius: number): boolean {
-    const flowFieldService = this.ctx.enemyPlayerFlowFieldService ?? this.ctx.enemyFlowFieldService;
-    if (!flowFieldService) return true;
+  /** Liefert das gemeinsame Boden-/Flowfield-Raster fuer Gegner-Sonderbewegungen. */
+  private getEnemyNavigationFlowField(): EnemyFlowFieldService | null {
+    return this.ctx.enemyPlayerFlowFieldService ?? this.ctx.enemyFlowFieldService;
+  }
 
-    const probes: readonly [number, number][] = [
-      [x, y], [x + radius, y], [x - radius, y], [x, y + radius], [x, y - radius],
-    ];
-    return probes.every(([probeX, probeY]) => {
-      const cell = flowFieldService.worldToGrid(probeX, probeY);
-      if (!cell) return false;
-      if (!flowFieldService.isTraversableAt(cell.gridX, cell.gridY)) return false;
-      return flowFieldService.getIntegrationValueAt(cell.gridX, cell.gridY)
-        < EnemyFlowFieldService.INTEGRATION_INFINITY;
-    });
+  /** Physisch freie Bodenposition; Erreichbarkeit ist fuer reine Landepunktpruefungen optional. */
+  private isFreeEnemyGroundAt(x: number, y: number, radius: number): boolean {
+    const flowFieldService = this.getEnemyNavigationFlowField();
+    if (!flowFieldService) return true;
+    return flowFieldService.isCircleGroundFreeAt(x, y, radius);
+  }
+
+  /** Sichere Auftauchposition: Koerperfreiheit und Flowfield-Erreichbarkeit zugleich. */
+  private isSafeEnemyGroundAt(x: number, y: number, radius: number): boolean {
+    const flowFieldService = this.getEnemyNavigationFlowField();
+    if (!flowFieldService) return true;
+    return flowFieldService.isCirclePositionFreeAt(x, y, radius);
+  }
+
+  private findSafeEnemyGroundPosition(
+    x: number,
+    y: number,
+    radius: number,
+    maxRadiusCells: number,
+  ): { x: number; y: number } | null {
+    return this.getEnemyNavigationFlowField()?.findNearestSafeWorldPosition(x, y, radius, maxRadiusCells) ?? null;
+  }
+
+  private hasWalkableEnemyCircleLine(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    radius: number,
+  ): boolean {
+    return this.getEnemyNavigationFlowField()?.hasWalkableCircleLine(fromX, fromY, toX, toY, radius) ?? true;
   }
 
   private setupHostTrainEvent(trackGridX: number): void {

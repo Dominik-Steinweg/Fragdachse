@@ -7,6 +7,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyCombatPositioningSource, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem } from './CombatSystem';
+import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
 
 /** Prüft, ob an einer Weltposition genug freier, erreichbarer Boden für den Gegner ist. */
 export type FreeGroundResolver = (x: number, y: number, radius: number) => boolean;
@@ -37,6 +38,7 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
     private readonly playerManager: PlayerManager,
     private readonly combatSystem: CombatSystem,
     private readonly isFreeGroundAt: FreeGroundResolver,
+    private readonly hasWalkableCircleLine?: EnemyCirclePathResolver,
   ) {}
 
   getMovementOverride(enemyId: string): { vx: number; vy: number } | null {
@@ -126,7 +128,12 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
       const directionY = Math.sin(angle);
       const probeX = enemy.sprite.x + directionX * RETREAT_PROBE_DISTANCE_PX;
       const probeY = enemy.sprite.y + directionY * RETREAT_PROBE_DISTANCE_PX;
-      if (this.isFreeGroundAt(probeX, probeY, radius)) return { x: directionX, y: directionY };
+      if (!this.isFreeGroundAt(probeX, probeY, radius)) continue;
+      if (
+        this.hasWalkableCircleLine
+        && !this.hasWalkableCircleLine(enemy.sprite.x, enemy.sprite.y, probeX, probeY, radius)
+      ) continue;
+      return { x: directionX, y: directionY };
     }
 
     return null;

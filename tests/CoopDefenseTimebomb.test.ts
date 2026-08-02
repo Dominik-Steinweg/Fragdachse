@@ -248,6 +248,56 @@ describe('Zeitbombendachs', () => {
     expect(findNextWorldPositionTowards).toHaveBeenCalledTimes(3);
   });
 
+  it('caches radius-aware direct chase checks until a cell or repath interval changes', () => {
+    const enemy = {
+      id: 'e-cache',
+      kind: 'timebomb-badger',
+      faction: 'hostile',
+      sprite: { active: true, x: 0, y: 0 },
+      getHp: () => 45,
+      getMoveSpeed: () => 112,
+      getCollisionRadius: () => 12,
+      setSpecialAction: vi.fn(),
+      stopMovement: vi.fn(),
+    } as unknown as EnemyEntity;
+    const hasWalkableCircleLine = vi.fn(() => true);
+    const system = new CoopDefenseTimebombSystem(
+      {
+        getHostileEnemies: () => [enemy],
+        getEnemy: () => enemy,
+      } as unknown as EnemyManager,
+      { getAllPlayers: () => [] } as unknown as PlayerManager,
+      { getBasesByFaction: () => [] } as unknown as BaseManager,
+      { getAllRuntimeRocks: () => [] } as unknown as PlacementSystem,
+      {
+        hasLineOfSight: () => true,
+        isAlive: () => true,
+        isBurrowed: () => false,
+      } as unknown as CombatSystem,
+      {
+        selectTarget: () => ({ kind: 'player', id: 'p0', x: 100, y: 0, goalCells: [] }),
+        getPosition: () => ({ x: 100, y: 0 }),
+      } as unknown as EnemyStrategicTargetService,
+      {
+        hasWalkableCircleLine,
+        worldToGrid: (x: number, y: number) => ({ gridX: Math.floor(x / 10), gridY: Math.floor(y / 10) }),
+        findNextWorldPositionTowards: () => ({ x: 5, y: 5 }),
+      } as unknown as EnemyFlowFieldService,
+      null,
+      { playExplosion: vi.fn(), applyRadialImpulse: vi.fn(), damageConstruction: vi.fn() },
+    );
+
+    system.hostUpdate(1_000);
+    system.hostUpdate(1_400);
+    system.getMovementOverride(enemy, 1_401);
+    system.getMovementOverride(enemy, 1_402);
+    expect(hasWalkableCircleLine).toHaveBeenCalledTimes(1);
+
+    enemy.sprite.x = 10;
+    system.getMovementOverride(enemy, 1_403);
+    expect(hasWalkableCircleLine).toHaveBeenCalledTimes(2);
+  });
+
   it('uses only the small pop path when killed normally', () => {
     const playExplosion = vi.fn();
     const sound = vi.fn();

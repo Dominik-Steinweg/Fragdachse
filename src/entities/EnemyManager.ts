@@ -30,7 +30,10 @@ import {
 const STEER_RESPONSIVENESS = 8;
 const SPAWN_LANE_JITTER_PX = CELL_SIZE * 0.3;
 const SEPARATION_RADIUS_PX = CELL_SIZE * 2;
+const SEPARATION_RADIUS_SQ = SEPARATION_RADIUS_PX * SEPARATION_RADIUS_PX;
 const SEPARATION_STRENGTH = 0.6;
+const WALL_ADJACENT_SEPARATION_MULTIPLIER = 0.1;
+const NO_SEPARATION = { x: 0, y: 0 } as const;
 
 export interface EnemyDeathInfo {
   readonly id: string;
@@ -112,6 +115,7 @@ export class EnemyManager {
   private ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
+  private readonly separationVector = { x: 0, y: 0 };
   private onEnemySpawned: ((enemy: EnemyEntity, options?: EnemySpawnOptions) => void) | null = null;
   private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
@@ -389,9 +393,6 @@ export class EnemyManager {
       }
 
       const speed = enemy.getMoveSpeed() * burrowSpeedFactor;
-      // Der einzelne Boss braucht keine Separation. Sie kann den grossen Body
-      // seitlich aus seinem Clearance-Korridor in eine Wand druecken.
-      const separation = config.isBoss ? { x: 0, y: 0 } : this.computeSeparation(enemy, separationGrid);
       // Der grobe Zellvektor reicht auf freier Flaeche. Direkt an einer Basiswand nicht: Der Gegner
       // steht durch Kollisionsaufloesung und Separation meist am Zellrand, und ein achsenparalleler
       // Vektor druckt ihn von dort in die Wand statt an ihr vorbei. Zusaetzlich springt die
@@ -400,6 +401,10 @@ export class EnemyManager {
       // angesteuert; der liegt garantiert eine halbe Zelle von jedem Hindernis entfernt.
       const useWaypointSteering = config.isBoss
         || flowFieldService.isWallAdjacentAt(gridCell.gridX, gridCell.gridY);
+      // Der einzelne Boss braucht keine Separation. Bei normalen Gegnern bleibt sie in
+      // Wandnaehe fast wirkungslos, damit der Wegpunkt nicht seitlich in die Wand gedrueckt wird.
+      const separation = config.isBoss ? NO_SEPARATION : this.computeSeparation(enemy, separationGrid);
+      const separationMultiplier = useWaypointSteering ? WALL_ADJACENT_SEPARATION_MULTIPLIER : 1;
       const waypoint = useWaypointSteering
         ? flowFieldService.getNextCellWorldPosition(gridCell.gridX, gridCell.gridY)
         : null;
@@ -409,8 +414,10 @@ export class EnemyManager {
       // Steht der Gegner exakt auf dem Wegpunkt, liefert die Normalisierung 0/0. Dann traegt der
       // Zellvektor weiter, statt die Bewegung fuer einen Frame auf die Separation zu reduzieren.
       const waypointDirection = steerDirection.x === 0 && steerDirection.y === 0 ? vector : steerDirection;
-      let targetVx = waypointDirection.x * speed + separation.x * SEPARATION_STRENGTH * speed;
-      let targetVy = waypointDirection.y * speed + separation.y * SEPARATION_STRENGTH * speed;
+      let targetVx = waypointDirection.x * speed
+        + separation.x * SEPARATION_STRENGTH * separationMultiplier * speed;
+      let targetVy = waypointDirection.y * speed
+        + separation.y * SEPARATION_STRENGTH * separationMultiplier * speed;
 
       const targetSpeed = Math.hypot(targetVx, targetVy);
       if (targetSpeed > speed) {
@@ -606,8 +613,10 @@ export class EnemyManager {
           if (other === enemy) continue;
           const dx = enemy.sprite.x - other.sprite.x;
           const dy = enemy.sprite.y - other.sprite.y;
-          const distance = Math.hypot(dx, dy);
-          if (distance <= 0 || distance >= SEPARATION_RADIUS_PX) continue;
+          const distanceSq = dx * dx + dy * dy;
+          if (distanceSq <= 0 || distanceSq >= SEPARATION_RADIUS_SQ) continue;
+
+          const distance = Math.sqrt(distanceSq);
 
           const weight = (1 - distance / SEPARATION_RADIUS_PX) / distance;
           pushX += dx * weight;
@@ -616,7 +625,9 @@ export class EnemyManager {
       }
     }
 
-    return { x: pushX, y: pushY };
+    this.separationVector.x = pushX;
+    this.separationVector.y = pushY;
+    return this.separationVector;
   }
 
   getNetSnapshot(): SyncedEnemySnapshot {

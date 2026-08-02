@@ -16,7 +16,7 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_zombie_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
@@ -35,7 +35,7 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_demon_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
@@ -54,7 +54,7 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_rabid_badger",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
@@ -84,14 +84,14 @@
         "destroysTrain": true
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "spore-warden",
-      "maxHp": 120,
+      "maxHp": 140,
       "xp": 15,
-      "size": 32,
+      "size": 30,
       "moveSpeed": 100,
       "knockbackFactor": 1,
       "movementTarget": "bases",
@@ -105,12 +105,12 @@
       "imageKey": "enemy_spore_warden",
       "displayName": "Sporenpanzer",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "plague-medic",
-      "maxHp": 100,
+      "maxHp": 120,
       "xp": 25,
       "size": 30,
       "moveSpeed": 70,
@@ -126,14 +126,14 @@
       "imageKey": "enemy_plague_medic",
       "displayName": "Seuchenheiler",
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "void-stalker",
-      "maxHp": 160,
+      "maxHp": 190,
       "xp": 40,
-      "size": 32,
+      "size": 30,
       "moveSpeed": 120,
       "knockbackFactor": 1,
       "movementTarget": "players",
@@ -154,14 +154,14 @@
         "maxRange": 1100
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "stink-broodmother",
-      "maxHp": 140,
+      "maxHp": 180,
       "xp": 50,
-      "size": 40,
+      "size": 30,
       "moveSpeed": 80,
       "knockbackFactor": 0.7,
       "movementTarget": "players",
@@ -180,12 +180,12 @@
         { "enemyKind": "rabid-badger", "count": 4, "offsetPx": 9 }
       ],
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "alien-badger",
-      "maxHp": 150,
+      "maxHp": 220,
       "xp": 70,
       "size": 30,
       "moveSpeed": 150,
@@ -220,14 +220,14 @@
         "timeSafetyMarginMs": 600
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "thrower-badger",
-      "maxHp": 320,
+      "maxHp": 350,
       "xp": 90,
-      "size": 38,
+      "size": 30,
       "moveSpeed": 105,
       "knockbackFactor": 0.5,
       "movementTarget": "players",
@@ -256,12 +256,12 @@
         "color": 9067058
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "inferno-colossus",
-      "maxHp": 1800,
+      "maxHp": 2500,
       "xp": 200,
       "size": 68,
       "moveSpeed": 36,
@@ -305,12 +305,12 @@
         "destroysTrain": true
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "pyro-badger",
-      "maxHp": 420,
+      "maxHp": 500,
       "xp": 110,
       "size": 30,
       "moveSpeed": 175,
@@ -354,7 +354,7 @@
         "timeSafetyMarginMs": 600
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
@@ -401,11 +401,14 @@
         },
         "killedPopRadiusPx": 42,
         "killedPopDamage": 2
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     },
     {
       "id": "void-hunter",
-      "maxHp": 3000,
+      "maxHp": 4000,
       "xp": 400,
       "size": 52,
       "moveSpeed": 120,
@@ -520,7 +523,7 @@
         }
       },
       "playerScaling": {
-        "maxHpFactorPerAdditionalPlayer": 0.5
+        "maxHpFactorPerAdditionalPlayer": 0.8
       }
     }
   ]

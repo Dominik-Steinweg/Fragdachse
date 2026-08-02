@@ -1243,7 +1243,7 @@
             ]
           },
           "spawnCenter": { "gridX": 1, "gridY": 1 },
-          "spawnWave": { "enemyKind": "zombie-badger", "intervalMs": 4500, "countPerWave": 1, "startAtMs": 1500 }
+          "spawnWave": { "enemyKind": "timebomb-badger", "intervalMs": 3000, "countPerWave": 1, "startAtMs": 0 }
         }
       ],
       "powerUps": [
@@ -1254,7 +1254,6 @@
         { "defId": "DOUBLE_DAMAGE", "region": "rear", "respawnMs": 20000, "spawnOnArenaStart": false }
       ],
       "waves": [
-        { "enemyKind": "timebomb-badger", "intervalMs": 3000, "countPerWave": 1, "startAtMs": 0 },
         { "enemyKind": "zombie-badger", "intervalMs": 4500, "countPerWave": 1, "startAtMs": 0 },
         { "enemyKind": "demon-badger", "intervalMs": 5000, "countPerWave": 1, "startAtMs": 1500 },
         { "enemyKind": "rabid-badger", "intervalMs": 6500, "countPerWave": 1, "startAtMs": 2500 }

@@ -227,11 +227,6 @@ export class RpcCoordinator {
   private registerBlackHoleEffectHandler(): void {
     bridge.registerBlackHoleEffectHandler((x, y, radius, durationMs) => {
       this.renderers.blackHole.play(x, y, radius, durationMs);
-      this.ctx.visualFeedback.pulsePostFx('blackHoleSpawn');
-      this.scene.time.delayedCall(
-        Math.max(0, durationMs - 400),
-        () => this.ctx.visualFeedback.pulsePostFx('blackHoleCollapse'),
-      );
     });
   }
 

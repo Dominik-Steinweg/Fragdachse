@@ -106,6 +106,14 @@ export class BlackHoleRenderer {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDisplaySize(Math.max(16, diameter * 0.25), Math.max(16, diameter * 0.21))
       .setAlpha(0);
+    // Lokaler Collapse-Ersatz für den früheren globalen Bloom-Puls. Die vorhandene
+    // Horizont-Textur bleibt radiusgebunden und erzeugt nur am Feldzentrum einen kurzen,
+    // expandierenden violetten Ring.
+    const collapseRipple = this.scene.add.image(x, y, TEX_BLACK_HOLE_HORIZON)
+      .setDepth(DEPTH.FIRE - 0.035)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDisplaySize(Math.max(16, diameter * 0.3), Math.max(16, diameter * 0.25))
+      .setAlpha(0);
     setInternalFxPadding(horizon, 12);
     addInternalGlow(horizon, 0x9c64df, 0.09, 0.015, false, 0.12, 7);
 
@@ -207,6 +215,15 @@ export class BlackHoleRenderer {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
+    this.scene.tweens.add({
+      targets: collapseRipple,
+      alpha: { from: 0.42, to: 0 },
+      scaleX: { from: 0.82, to: 1.48 },
+      scaleY: { from: 0.82, to: 1.48 },
+      delay: fadeDelay,
+      duration: fadeDuration,
+      ease: 'Cubic.easeOut',
+    });
     this.scene.time.delayedCall(fadeDelay, () => {
       outerOrbitEmitter.stop();
       wispEmitter.stop();
@@ -219,9 +236,17 @@ export class BlackHoleRenderer {
       duration: fadeDuration,
       ease: 'Sine.easeIn',
       onComplete: () => {
-        this.scene.tweens.killTweensOf([core, horizon, outerOrbitEmitter, wispEmitter, innerOrbitEmitter]);
+        this.scene.tweens.killTweensOf([
+          core,
+          horizon,
+          collapseRipple,
+          outerOrbitEmitter,
+          wispEmitter,
+          innerOrbitEmitter,
+        ]);
         core.destroy();
         horizon.destroy();
+        collapseRipple.destroy();
         destroyEmitter(outerOrbitEmitter);
         destroyEmitter(wispEmitter);
         destroyEmitter(innerOrbitEmitter);

@@ -10,7 +10,11 @@ import {
   WORLD_GRADE_CLAMPS,
   type WorldGrade,
 } from '../src/effects/postfx/worldGrade';
-import { getPostFxPreset, POST_FX_EVENTS } from '../src/effects/postfx/postFxPresets';
+import {
+  getPostFxPreset,
+  isPostFxEvent,
+  POST_FX_EVENTS,
+} from '../src/effects/postfx/postFxPresets';
 
 const BASE: WorldGrade = {
   ...NEUTRAL_WORLD_GRADE,
@@ -163,6 +167,13 @@ describe('composePostFx', () => {
 });
 
 describe('postFxPresets', () => {
+  it('haelt Schwarze Loecher aus der globalen Event-Whitelist heraus', () => {
+    expect(POST_FX_EVENTS).not.toContain('blackHoleSpawn');
+    expect(POST_FX_EVENTS).not.toContain('blackHoleCollapse');
+    expect(isPostFxEvent('blackHoleSpawn')).toBe(false);
+    expect(isPostFxEvent('blackHoleCollapse')).toBe(false);
+  });
+
   it('verzerrt die Bildgeometrie in keinem Dauerpreset', () => {
     for (const event of POST_FX_EVENTS) {
       const preset = getPostFxPreset(event);

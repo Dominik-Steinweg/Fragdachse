@@ -79,6 +79,15 @@ export interface EnemyFlowFieldServiceOptions {
   readonly clearanceCells?: number;
 }
 
+/** Begrenzter Sonderbewegungs-Check fuer einen Kreis entlang eines kurzen Weltsegments. */
+export type EnemyCirclePathResolver = (
+  fromWorldX: number,
+  fromWorldY: number,
+  toWorldX: number,
+  toWorldY: number,
+  radius: number,
+) => boolean;
+
 const CELL_DEFINITIONS = {
   ground: { code: 0, cost: COOP_DEFENSE_FLOW_FIELD_GROUND_COST, isTraversable: true, isDestructible: false },
   rock: { code: 1, cost: COOP_DEFENSE_FLOW_FIELD_ROCK_COST, isTraversable: false, isDestructible: true },
@@ -119,6 +128,7 @@ const WALL_KIND_CODES: ReadonlySet<number> = new Set(
     .filter((definition) => !definition.isTraversable && !definition.isDestructible)
     .map((definition) => definition.code),
 );
+const MAX_SAFE_POSITION_SEARCH_RADIUS_CELLS = 4;
 
 export class EnemyFlowFieldService {
   private readonly metrics: EnemyFlowFieldMetrics;
@@ -156,7 +166,8 @@ export class EnemyFlowFieldService {
   /** Index der Zielzelle hinter der guenstigsten Route; -1 bedeutet nicht erreichbar. */
   private readonly goalSourceField: Int32Array;
   private debugOverlayCallback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null = null;
-  private isGridDirty = false;
+  private isTopologyDirty = false;
+  private isGoalDirty = false;
   private lastDirtyCheckAt = 0;
 
   static readonly INTEGRATION_INFINITY = 999999;
@@ -203,11 +214,11 @@ export class EnemyFlowFieldService {
       countsByKind: this.createEmptyCounts(),
     };
 
-    this.recomputeFields();
+    this.recomputeTopology();
     if (initialDynamicGoalCells.length > 0) {
       this.dynamicGoalCells = this.normalizeGoalCells(initialDynamicGoalCells);
-      this.recomputeFields();
     }
+    this.recomputeGoalAndVectorFields();
     this.lastDirtyCheckAt = Date.now();
     this.eventBus?.on(ARENA_MAP_GRID_CHANGED_EVENT, this.handleArenaMapGridChanged, this);
   }
@@ -293,6 +304,57 @@ export class EnemyFlowFieldService {
     return true;
   }
 
+  /** Prueft Mittelpunkt plus vier kardinale und vier diagonale Randpunkte eines Kreiskoerpers. */
+  isCircleGroundFreeAt(worldX: number, worldY: number, radius: number): boolean {
+    return this.isCircleClearAt(worldX, worldY, radius, false);
+  }
+
+  /** Prueft Kreisfreiheit und ob alle Randproben im aktuellen Flowfield erreichbar sind. */
+  isCircleFlowReachableAt(worldX: number, worldY: number, radius: number): boolean {
+    return this.isCircleClearAt(worldX, worldY, radius, true);
+  }
+
+  /** Semantischer Alias fuer Sonderfaelle wie Auftauchen: frei und vom Flowfield erreichbar. */
+  isCirclePositionFreeAt(worldX: number, worldY: number, radius: number): boolean {
+    return this.isCircleFlowReachableAt(worldX, worldY, radius);
+  }
+
+  /**
+   * Prueft einen kurzen Kreis-Korridor. Die Abtastung bleibt auf maximal einer halben Rasterzelle
+   * und wird nur von Sonderbewegungen verwendet, nicht von der normalen Flowfield-Steuerung.
+   */
+  hasWalkableCircleLine(
+    fromWorldX: number,
+    fromWorldY: number,
+    toWorldX: number,
+    toWorldY: number,
+    radius: number,
+    requireReachable = false,
+  ): boolean {
+    if (
+      !Number.isFinite(fromWorldX)
+      || !Number.isFinite(fromWorldY)
+      || !Number.isFinite(toWorldX)
+      || !Number.isFinite(toWorldY)
+      || !Number.isFinite(radius)
+      || radius < 0
+    ) return false;
+    const deltaX = toWorldX - fromWorldX;
+    const deltaY = toWorldY - fromWorldY;
+    const distance = Math.hypot(deltaX, deltaY);
+    const steps = Math.max(1, Math.ceil(distance / (this.metrics.cellSize * 0.5)));
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const sampleX = fromWorldX + deltaX * t;
+      const sampleY = fromWorldY + deltaY * t;
+      const clear = requireReachable
+        ? this.isCircleFlowReachableAt(sampleX, sampleY, radius)
+        : this.isCircleGroundFreeAt(sampleX, sampleY, radius);
+      if (!clear) return false;
+    }
+    return true;
+  }
+
   worldToGrid(worldX: number, worldY: number): EnemyFlowFieldGridCell | null {
     const gridX = Math.floor((worldX - this.metrics.arenaOffsetX) / this.metrics.cellSize);
     const gridY = Math.floor((worldY - this.metrics.arenaOffsetY) / this.metrics.cellSize);
@@ -330,7 +392,8 @@ export class EnemyFlowFieldService {
     // nudge them out of that cell. Base changes are rare, so apply this
     // topology change immediately instead of waiting for update().
     this.recomputeFields();
-    this.isGridDirty = false;
+    this.isTopologyDirty = false;
+    this.isGoalDirty = false;
   }
 
   rebuild(): EnemyFlowFieldService {
@@ -359,7 +422,7 @@ export class EnemyFlowFieldService {
     }
 
     this.dynamicGoalCells = next;
-    this.isGridDirty = true;
+    this.isGoalDirty = true;
   }
 
   update(now: number): boolean {
@@ -368,12 +431,17 @@ export class EnemyFlowFieldService {
     }
 
     this.lastDirtyCheckAt = now;
-    if (!this.isGridDirty) {
+    if (!this.isTopologyDirty && !this.isGoalDirty) {
       return false;
     }
 
-    this.recomputeFields();
-    this.isGridDirty = false;
+    if (this.isTopologyDirty) {
+      this.recomputeFields();
+    } else {
+      this.recomputeGoalAndVectorFields();
+    }
+    this.isTopologyDirty = false;
+    this.isGoalDirty = false;
     return true;
   }
 
@@ -524,6 +592,44 @@ export class EnemyFlowFieldService {
     return best ? { x: best.x, y: best.y } : null;
   }
 
+  /** Sucht innerhalb eines festen Zellradius einen koerperlich freien, erreichbaren Mittelpunkt. */
+  findNearestSafeWorldPosition(
+    worldX: number,
+    worldY: number,
+    radius: number,
+    maxRadiusCells = 4,
+  ): { x: number; y: number } | null {
+    const origin = this.worldToGrid(worldX, worldY);
+    if (!origin || !Number.isFinite(radius) || radius < 0) return null;
+    if (this.isCirclePositionFreeAt(worldX, worldY, radius)) return { x: worldX, y: worldY };
+
+    const searchRadius = Math.min(
+      MAX_SAFE_POSITION_SEARCH_RADIUS_CELLS,
+      Math.max(1, Math.floor(maxRadiusCells)),
+    );
+    let best: { x: number; y: number; distanceSq: number; integration: number } | null = null;
+    for (let offsetY = -searchRadius; offsetY <= searchRadius; offsetY += 1) {
+      for (let offsetX = -searchRadius; offsetX <= searchRadius; offsetX += 1) {
+        const candidateX = origin.gridX + offsetX;
+        const candidateY = origin.gridY + offsetY;
+        const world = this.gridToWorld(candidateX, candidateY);
+        if (!world || !this.isCirclePositionFreeAt(world.x, world.y, radius)) continue;
+
+        const distanceSq = offsetX * offsetX + offsetY * offsetY;
+        const integration = this.getIntegrationValueAt(candidateX, candidateY);
+        if (
+          best
+          && (distanceSq > best.distanceSq
+            || (distanceSq === best.distanceSq && integration >= best.integration))
+        ) {
+          continue;
+        }
+        best = { x: world.x, y: world.y, distanceSq, integration };
+      }
+    }
+    return best ? { x: best.x, y: best.y } : null;
+  }
+
   registerDebugOverlayCallback(
     callback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null,
   ): void {
@@ -535,10 +641,16 @@ export class EnemyFlowFieldService {
   }
 
   private handleArenaMapGridChanged(_event: ArenaMapGridChangedEvent): void {
-    this.isGridDirty = true;
+    this.isTopologyDirty = true;
+    this.isGoalDirty = true;
   }
 
   private recomputeFields(): void {
+    this.recomputeTopology();
+    this.recomputeGoalAndVectorFields();
+  }
+
+  private recomputeTopology(): void {
     const activeSpecs = this.baseSpecs.filter((spec) => this.activeBaseIds.has(spec.id));
     const buildContext = this.createBuildContext(this.layout, activeSpecs);
     const countsByKind = this.createEmptyCounts();
@@ -565,6 +677,16 @@ export class EnemyFlowFieldService {
 
     this.applyWallAdjacencySurcharge();
 
+    this.summary.traversableCells = traversableCells;
+    this.summary.blockedCells = this.summary.totalCells - traversableCells;
+    this.summary.countsByKind = countsByKind;
+  }
+
+  private recomputeGoalAndVectorFields(): void {
+    if (this.goalMode !== 'bases') {
+      this.dynamicGoalCells = this.normalizeGoalCells(this.dynamicGoalCells);
+    }
+
     this.goalMask.fill(0);
     this.goalCells.length = 0;
     this.goalCells.push(...this.computeGoalCells());
@@ -575,10 +697,7 @@ export class EnemyFlowFieldService {
     this.computeIntegrationField();
     this.computeVectorField();
 
-    this.summary.traversableCells = traversableCells;
-    this.summary.blockedCells = this.summary.totalCells - traversableCells;
     this.summary.goalCells = this.goalCells.length;
-    this.summary.countsByKind = countsByKind;
 
     if (this.debugOverlayCallback) {
       this.debugOverlayCallback(new EnemyFlowFieldDebugRendererImpl(this));
@@ -737,6 +856,29 @@ export class EnemyFlowFieldService {
     return this.traversable[this.toIndex(gridX, gridY)] === 1;
   }
 
+  private isCircleClearAt(worldX: number, worldY: number, radius: number, requireReachable: boolean): boolean {
+    if (!Number.isFinite(radius) || radius < 0) return false;
+    const diagonal = radius * Math.SQRT1_2;
+    return this.isCircleSampleClearAt(worldX, worldY, requireReachable)
+      && this.isCircleSampleClearAt(worldX + radius, worldY, requireReachable)
+      && this.isCircleSampleClearAt(worldX - radius, worldY, requireReachable)
+      && this.isCircleSampleClearAt(worldX, worldY + radius, requireReachable)
+      && this.isCircleSampleClearAt(worldX, worldY - radius, requireReachable)
+      && this.isCircleSampleClearAt(worldX + diagonal, worldY + diagonal, requireReachable)
+      && this.isCircleSampleClearAt(worldX - diagonal, worldY - diagonal, requireReachable)
+      && this.isCircleSampleClearAt(worldX + diagonal, worldY - diagonal, requireReachable)
+      && this.isCircleSampleClearAt(worldX - diagonal, worldY + diagonal, requireReachable);
+  }
+
+  private isCircleSampleClearAt(worldX: number, worldY: number, requireReachable: boolean): boolean {
+    const gridX = Math.floor((worldX - this.metrics.arenaOffsetX) / this.metrics.cellSize);
+    const gridY = Math.floor((worldY - this.metrics.arenaOffsetY) / this.metrics.cellSize);
+    if (!this.isInBounds(gridX, gridY)) return false;
+    const index = this.toIndex(gridX, gridY);
+    if (this.traversable[index] !== 1) return false;
+    return !requireReachable || this.integrationField[index] < EnemyFlowFieldService.INTEGRATION_INFINITY;
+  }
+
   private findNearestPassableCell(
     gridX: number,
     gridY: number,
@@ -791,11 +933,12 @@ export class EnemyFlowFieldService {
   /**
    * Markiert begehbare Zellen neben unzerstoerbaren Hindernissen und verteuert sie.
    *
-   * Das Feld plant auf Zellmittelpunkten, die Koerper sind aber bis zu 68 px breit bei 32 px
-   * Zellgroesse. Eine Route direkt an einer Basiswand laesst den Koerper deshalb dauerhaft in der
+   * Das Feld plant auf Zellmittelpunkten, normale Koerper sind dabei hoechstens 30 px breit bei
+   * 32 px Zellgroesse. Eine Route direkt an einer Basiswand laesst den Koerper deshalb dauerhaft in der
    * Wand stecken: Die Kollisionsaufloesung schiebt ihn jeden Frame zurueck, waehrend der
    * Richtungsvektor weiter an der Wand entlang zeigt. Der Aufschlag ist absichtlich klein – enge
    * Korridore bleiben passierbar, offene Wege biegen sich aber um eine Zelle von der Wand weg.
+   * Bosse verwenden weiterhin ihr eigenes Clearance-Profil.
    *
    * Felsen bleiben ausgenommen: Sie sind zerstoerbar, und das Anrempeln ist dort der gewollte
    * Ausloeser fuer {@link CoopDefenseEnemyAttackSystem}s Hindernis-Biss.

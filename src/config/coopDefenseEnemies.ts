@@ -13,6 +13,9 @@ export type CoopDefenseEnemyKind = string;
 
 export type CoopDefenseEnemyMovementTarget = 'bases' | 'players' | 'players-and-armed-constructs';
 
+/** Maximale Kantenlaenge normaler Gegner; Bosse duerfen groesser sein. */
+export const MAX_REGULAR_ENEMY_SIZE_PX = 30;
+
 /** Standard-Wegstossfaktor, wenn ein Gegner keinen eigenen Wert konfiguriert. */
 export const DEFAULT_ENEMY_KNOCKBACK_FACTOR = 1;
 
@@ -416,6 +419,13 @@ function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): Record<
 }
 
 function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefenseEnemyConfig {
+  const isBoss = enemy.isBoss === true;
+  if (!isBoss && enemy.size > MAX_REGULAR_ENEMY_SIZE_PX) {
+    throw new Error(
+      `[coopDefenseEnemies] Regular enemy ${enemy.id} exceeds ${MAX_REGULAR_ENEMY_SIZE_PX}px: configured size ${enemy.size}px`,
+    );
+  }
+
   return {
     maxHp: Math.max(1, Math.floor(enemy.maxHp)),
     xp: Math.max(0, Math.floor(enemy.xp)),
@@ -432,7 +442,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       && Number.isFinite(enemy.spriteRotationOffsetDegrees)
       ? enemy.spriteRotationOffsetDegrees
       : undefined,
-    isBoss: enemy.isBoss === true,
+    isBoss,
     displayName: typeof enemy.displayName === 'string' && enemy.displayName.trim().length > 0
       ? enemy.displayName.trim()
       : undefined,

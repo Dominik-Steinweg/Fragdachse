@@ -43,6 +43,12 @@ interface TimebombState {
   nextTickAt: number;
   repathAt: number;
   waypoint: { x: number; y: number } | null;
+  directPathClear: boolean | null;
+  directPathCheckAt: number;
+  directPathFromGridX: number;
+  directPathFromGridY: number;
+  directPathTargetGridX: number;
+  directPathTargetGridY: number;
 }
 
 export interface CoopDefenseTimebombHooks {
@@ -106,12 +112,9 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     const targetY = state.lastTargetY;
     let steerX = targetX;
     let steerY = targetY;
-    const hasDirectPath = this.strategicFlowField.hasWalkableLine(
-      enemy.sprite.x,
-      enemy.sprite.y,
-      targetX,
-      targetY,
-    );
+    const from = this.strategicFlowField.worldToGrid(enemy.sprite.x, enemy.sprite.y);
+    const to = this.strategicFlowField.worldToGrid(targetX, targetY);
+    const hasDirectPath = this.hasCachedDirectPath(enemy, state, targetX, targetY, from, to, now);
     if (hasDirectPath) {
       // Ein alter Umwegpunkt darf nicht wieder greifen, falls die direkte Linie am Rand eines
       // Hindernisses im naechsten Frame erneut blockiert ist. Sonst liegt er oft bereits hinter
@@ -119,7 +122,6 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
       state.waypoint = null;
       state.repathAt = 0;
     } else {
-      const from = this.strategicFlowField.worldToGrid(enemy.sprite.x, enemy.sprite.y);
       const waypointCell = state.waypoint
         ? this.strategicFlowField.worldToGrid(state.waypoint.x, state.waypoint.y)
         : null;
@@ -183,7 +185,53 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
       nextTickAt: 0,
       repathAt: 0,
       waypoint: null,
+      directPathClear: null,
+      directPathCheckAt: 0,
+      directPathFromGridX: -1,
+      directPathFromGridY: -1,
+      directPathTargetGridX: -1,
+      directPathTargetGridY: -1,
     };
+  }
+
+  private hasCachedDirectPath(
+    enemy: EnemyEntity,
+    state: TimebombState,
+    targetX: number,
+    targetY: number,
+    from: { gridX: number; gridY: number } | null,
+    to: { gridX: number; gridY: number } | null,
+    now: number,
+  ): boolean {
+    // Test doubles und alte Aufrufer koennen nur den zellbasierten Check anbieten. Der echte
+    // Service nutzt darunter den radiusabhaengigen Sonderbewegungs-Helper.
+    if (typeof this.strategicFlowField.hasWalkableCircleLine !== 'function') {
+      return this.strategicFlowField.hasWalkableLine(enemy.sprite.x, enemy.sprite.y, targetX, targetY);
+    }
+
+    const changedCell = state.directPathFromGridX !== (from?.gridX ?? -1)
+      || state.directPathFromGridY !== (from?.gridY ?? -1)
+      || state.directPathTargetGridX !== (to?.gridX ?? -1)
+      || state.directPathTargetGridY !== (to?.gridY ?? -1);
+    if (
+      state.directPathClear === null
+      || changedCell
+      || now >= state.directPathCheckAt
+    ) {
+      state.directPathFromGridX = from?.gridX ?? -1;
+      state.directPathFromGridY = from?.gridY ?? -1;
+      state.directPathTargetGridX = to?.gridX ?? -1;
+      state.directPathTargetGridY = to?.gridY ?? -1;
+      state.directPathClear = Boolean(from && to) && this.strategicFlowField.hasWalkableCircleLine(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        targetX,
+        targetY,
+        enemy.getCollisionRadius(),
+      );
+      state.directPathCheckAt = now + TIMEBOMB_REPATH_INTERVAL_MS;
+    }
+    return state.directPathClear === true;
   }
 
   private updateApproach(

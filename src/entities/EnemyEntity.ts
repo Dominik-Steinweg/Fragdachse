@@ -320,6 +320,12 @@ export class EnemyEntity {
   }
 
   getCollisionRadius(): number {
+    // Der Arcade-Body ist waehrend eines Dashes temporaer kleiner. Sonderbewegungen muessen
+    // deshalb den tatsaechlichen Radius verwenden; auf Clients ohne autoritativen Body gilt die
+    // registrierte Groesse als identische visuelle und physische Abmessung.
+    if (this.authoritative && this.sprite.body) {
+      return this.body.halfWidth;
+    }
     return this.config.size * 0.5;
   }
 

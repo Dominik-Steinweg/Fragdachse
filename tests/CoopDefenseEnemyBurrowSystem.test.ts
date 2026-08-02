@@ -10,6 +10,7 @@ interface FakeEnemy {
   sprite: { x: number; y: number; active: boolean };
   burrowed: boolean;
   setBurrowed(value: boolean): boolean;
+  setPosition(x: number, y: number): void;
   getCollisionRadius(): number;
 }
 
@@ -25,11 +26,19 @@ function createEnemy(kind: string, x = 0): FakeEnemy {
       this.burrowed = value;
       return changed;
     },
+    setPosition(nextX: number, nextY: number) {
+      this.sprite.x = nextX;
+      this.sprite.y = nextY;
+    },
     getCollisionRadius: () => 15,
   };
 }
 
-function createSystem(enemy: FakeEnemy, isFreeGround: () => boolean) {
+function createSystem(
+  enemy: FakeEnemy,
+  isFreeGround: () => boolean,
+  findSafeGroundPosition?: (x: number, y: number, radius: number, maxRadiusCells: number) => { x: number; y: number } | null,
+) {
   const collisionCalls: Array<{ enemyId: string; enabled: boolean }> = [];
   const enemyManager = {
     getEnemy: (id: string) => (id === enemy.id ? enemy as unknown as EnemyEntity : undefined),
@@ -43,6 +52,7 @@ function createSystem(enemy: FakeEnemy, isFreeGround: () => boolean) {
     enemyManager,
     (enemyId, enabled) => collisionCalls.push({ enemyId, enabled }),
     () => isFreeGround(),
+    findSafeGroundPosition,
   );
   return { system, collisionCalls };
 }
@@ -101,7 +111,7 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     expect(collisionCalls.at(-1)).toEqual({ enemyId: 'e1', enabled: true });
   });
 
-  it('surfaces after the tunnel timeout even when the ground stays blocked', () => {
+  it('keeps digging after the tunnel timeout when no safe ground exists', () => {
     const enemy = createEnemy('alien-badger', 0);
     const { system } = createSystem(enemy, () => false);
     system.notifyEnemySpawned(enemy as unknown as EnemyEntity, 0);
@@ -111,7 +121,25 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     expect(system.isBurrowed(enemy.id)).toBe(true);
 
     system.hostUpdate(5000);
+    expect(system.isBurrowed(enemy.id)).toBe(true);
+  });
+
+  it('moves to a bounded safe position before resurfacing after a timeout', () => {
+    const enemy = createEnemy('alien-badger', 0);
+    const { system, collisionCalls } = createSystem(
+      enemy,
+      () => false,
+      (_x, _y, _radius, maxRadiusCells) => maxRadiusCells === 4 ? { x: 880, y: 100 } : null,
+    );
+    system.notifyEnemySpawned(enemy as unknown as EnemyEntity, 0);
+
+    enemy.sprite.x = 900;
+    system.hostUpdate(5000);
+
+    expect(enemy.sprite.x).toBe(880);
+    expect(enemy.sprite.y).toBe(100);
     expect(system.isBurrowed(enemy.id)).toBe(false);
+    expect(collisionCalls.at(-1)).toEqual({ enemyId: 'e1', enabled: true });
   });
 
   it('dives under the tracks for at most the configured 2 seconds and keeps normal pathing', () => {

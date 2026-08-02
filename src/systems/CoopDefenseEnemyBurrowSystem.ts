@@ -19,8 +19,17 @@ interface EnemyBurrowState {
 
 const SPAWN_POINT_BURROW_DURATION_MS = 1_200;
 
-/** Prüft, ob an einer Weltposition genug freier, erreichbarer Boden zum Auftauchen ist. */
+/** Prueft, ob der Koerper an einer Weltposition physisch freien Boden hat. */
 export type FreeGroundResolver = (x: number, y: number, radius: number) => boolean;
+export type SafeGroundPositionResolver = (
+  x: number,
+  y: number,
+  radius: number,
+  maxRadiusCells: number,
+) => { x: number; y: number } | null;
+
+const BURROW_SAFE_SEARCH_RADIUS_CELLS = 4;
+const BURROW_SAFE_RETRY_INTERVAL_MS = 250;
 
 /**
  * Host-seitiges Einbuddeln für Coop-Defense-Gegner. Unter der Erde gelten dieselben
@@ -38,6 +47,7 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
     private readonly enemyManager: EnemyManager,
     private readonly setEnemyCollisionsEnabled: (enemyId: string, enabled: boolean) => void,
     private readonly isFreeGroundAt: FreeGroundResolver,
+    private readonly findSafeGroundPosition?: SafeGroundPositionResolver,
   ) {}
 
   /**
@@ -112,14 +122,39 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
       }
 
       // Die Anfahrt endet, sobald der Gegner die Mindest-Grabstrecke hinter sich hat UND freien
-      // Boden erreicht. Die maximale Grabzeit ist nur der Not-Aus, damit niemand dauerhaft
-      // unter der Erde stecken bleibt.
+      // Boden erreicht. Die maximale Grabzeit loest nur den begrenzten Sicherheitsversuch aus;
+      // ein blockierter Gegner bleibt bis zu einer sicheren Position unter der Erde.
       const reachedFreeGround = state.reason === 'spawn-tunnel'
         && enemy.sprite.x - state.startX >= (this.getBurrowConfig(enemy)?.spawnTunnelMinDistancePx ?? 0)
         && this.isFreeGroundAt(enemy.sprite.x, enemy.sprite.y, enemy.getCollisionRadius());
-      if (reachedFreeGround || now >= state.endsAt) {
+      if (reachedFreeGround) {
         this.endBurrow(enemy);
+        continue;
       }
+      if (now < state.endsAt) continue;
+
+      const radius = enemy.getCollisionRadius();
+      if (this.isFreeGroundAt(enemy.sprite.x, enemy.sprite.y, radius)) {
+        this.endBurrow(enemy);
+        continue;
+      }
+
+      // Ein Timeout ist kein Freibrief, den Collider im Hindernis zu reaktivieren. Die Suche ist
+      // bewusst klein und selten; zwischen erfolglosen Versuchen bleibt der Gegner unsichtbar und
+      // kollisionsfrei, statt sich in die Topologie einzubetten.
+      const safePosition = this.findSafeGroundPosition?.(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        radius,
+        BURROW_SAFE_SEARCH_RADIUS_CELLS,
+      ) ?? null;
+      if (!safePosition) {
+        this.states.set(enemyId, { ...state, endsAt: now + BURROW_SAFE_RETRY_INTERVAL_MS });
+        continue;
+      }
+
+      enemy.setPosition(safePosition.x, safePosition.y);
+      this.endBurrow(enemy);
     }
   }
 

@@ -17,8 +17,6 @@ export const POST_FX_EVENTS = [
   'bossPhaseChange',
   'nukeDetonation',
   'voidNukeDetonation',
-  'blackHoleSpawn',
-  'blackHoleCollapse',
   'teleport',
   'localDeath',
 ] as const;
@@ -29,7 +27,6 @@ export const POST_FX_PRIORITY = {
   hit: 30,
   teleport: 45,
   bossPhase: 60,
-  blackHole: 80,
   death: 85,
   nuke: 100,
 } as const;
@@ -90,20 +87,6 @@ const PRESETS: Readonly<Record<PostFxEvent, PostFxPulse>> = {
       bloomAmount: 0.75,
       vignetteStrength: 0.26,
     },
-  },
-
-  blackHoleSpawn: {
-    priority: POST_FX_PRIORITY.blackHole,
-    durationMs: 1300,
-    ease: 'expo',
-    grade: { saturation: -0.28, contrast: 0.12, tint: VOID_FIRE_COLOR, tintStrength: 0.34, vignetteStrength: 0.36 },
-  },
-
-  blackHoleCollapse: {
-    priority: POST_FX_PRIORITY.blackHole,
-    durationMs: 600,
-    ease: 'impulse',
-    grade: { brightness: 0.12, contrast: 0.16, bloomAmount: 0.3, vignetteStrength: -0.12 },
   },
 
   teleport: {

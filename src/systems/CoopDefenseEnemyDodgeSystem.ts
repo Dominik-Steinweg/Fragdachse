@@ -11,6 +11,7 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { TrackedProjectile } from '../types';
 import type { CombatSystem } from './CombatSystem';
 import type { HostPhysicsSystem } from './HostPhysicsSystem';
+import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
 
 /** Prüft, ob an einer Weltposition genug freier, erreichbarer Boden für den Gegner ist. */
 export type FreeGroundResolver = (x: number, y: number, radius: number) => boolean;
@@ -54,6 +55,7 @@ export class CoopDefenseEnemyDodgeSystem {
     private readonly combatSystem: CombatSystem,
     private readonly hostPhysics: HostPhysicsSystem,
     private readonly isFreeGroundAt: FreeGroundResolver,
+    private readonly hasWalkableCircleLine?: EnemyCirclePathResolver,
   ) {}
 
   hostUpdate(now: number): void {
@@ -229,6 +231,16 @@ export class CoopDefenseEnemyDodgeSystem {
     const targetX = enemy.sprite.x + direction.x * distance;
     const targetY = enemy.sprite.y + direction.y * distance;
     if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, targetX, targetY)) return false;
+    if (
+      this.hasWalkableCircleLine
+      && !this.hasWalkableCircleLine(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        targetX,
+        targetY,
+        enemy.getCollisionRadius(),
+      )
+    ) return false;
 
     // Landepunkt mit Sicherheitsaufschlag prüfen, damit der Gegner nicht direkt an einer Felskante
     // stehen bleibt und beim nächsten Schubser doch wieder in der Lücke landet.
