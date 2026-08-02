@@ -667,6 +667,7 @@ export class ArenaScene extends Phaser.Scene {
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
+      this.visualFeedback.postFx,
     );
     arenaCountdown.setAudioSystem(gameAudioSystem);
 
@@ -1562,6 +1563,9 @@ export class ArenaScene extends Phaser.Scene {
     // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
     // unversetzten Kameraposition (siehe `applyCameraFeedback`).
     this.applyCameraFeedback(delta);
+    // Der Fokus wird erst nach dem finalen Scroll-/Shake-Versatz in Bildschirmkoordinaten
+    // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
+    this.ctx.arenaCountdown?.syncAfterCameraFeedback();
 
     const shadowStepStartMs = visualsEndMs;
     this.syncWorldShadows(inArena);

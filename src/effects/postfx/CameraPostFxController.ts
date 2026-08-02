@@ -12,6 +12,11 @@ import {
 } from './PostFxComposer';
 import { BARREL_MIN_PRIORITY, getPostFxPreset, type PostFxEvent } from './postFxPresets';
 import { buildTintMatrix, NEUTRAL_WORLD_GRADE, type WorldGrade } from './worldGrade';
+import {
+  RADIAL_FOCUS_RENDER_NODE,
+  RadialFocusFilterController,
+  type RadialFocusFrame,
+} from './RadialFocusFilter';
 
 /** Minimalverträge der Phaser-4-Filter, die diese Kette verwendet. */
 interface ColorMatrixLike {
@@ -46,6 +51,7 @@ interface FilterChain {
   threshold: ThresholdLike | null;
   colorMatrix: ColorMatrixLike | null;
   vignette: VignetteLike | null;
+  radialFocus: RadialFocusFilterController | null;
   barrel: BarrelLike | null;
 }
 
@@ -87,10 +93,11 @@ export class CameraPostFxController {
   private readonly pulses = new PostFxPulseSet();
   private readonly chain: FilterChain = {
     displacement: null, parallel: null, threshold: null,
-    colorMatrix: null, vignette: null, barrel: null,
+    colorMatrix: null, vignette: null, radialFocus: null, barrel: null,
   };
 
   private baseGrade: WorldGrade = NEUTRAL_WORLD_GRADE;
+  private radialFocusFrame: RadialFocusFrame | null = null;
   private lastState: ResolvedPostFxState | null = null;
   private lastBloomThreshold = Number.NaN;
   private enabled = true;
@@ -126,6 +133,19 @@ export class CameraPostFxController {
 
   setBaseGrade(grade: WorldGrade): void {
     this.baseGrade = grade;
+  }
+
+  /**
+   * Sets the current spawn/death focus without changing the filter chain. The frame is kept
+   * independently from the global grade pulses because it is spatial rather than additive.
+   */
+  setRadialFocus(frame: RadialFocusFrame | null): void {
+    this.radialFocusFrame = frame;
+    this.applyRadialFocus();
+  }
+
+  isRadialFocusFilterActive(): boolean {
+    return this.chain.radialFocus?.active ?? false;
   }
 
   /** Ereignisse laufen ausschließlich über die Whitelist in `postFxPresets`. */
@@ -172,6 +192,7 @@ export class CameraPostFxController {
   reset(): void {
     this.pulses.clear();
     this.baseGrade = NEUTRAL_WORLD_GRADE;
+    this.radialFocusFrame = null;
     this.lastState = null;
     this.applyState(null);
   }
@@ -223,6 +244,18 @@ export class CameraPostFxController {
     vignette.active = false;
     this.chain.vignette = vignette;
 
+    const radialFocus = list.add(
+      new RadialFocusFilterController(this.worldCamera),
+    ) as unknown as RadialFocusFilterController;
+    radialFocus.active = false;
+    this.chain.radialFocus = radialFocus;
+    // The controller stays inactive until needed, but the registered RenderNode is constructed
+    // now so the first death/respawn frame does not allocate filter infrastructure.
+    const renderer = this.scene.game.renderer as unknown as {
+      renderNodes?: { getNode(name: string): unknown };
+    };
+    renderer.renderNodes?.getNode(RADIAL_FOCUS_RENDER_NODE);
+
     const barrel = list.addBarrel(1) as unknown as BarrelLike;
     barrel.active = false;
     this.chain.barrel = barrel;
@@ -233,6 +266,7 @@ export class CameraPostFxController {
     quality?.trackFilter(this.worldCamera, barrel, false, 'decorative');
     quality?.trackFilter(this.worldCamera, colorMatrix, false, 'standard');
     quality?.trackFilter(this.worldCamera, vignette, false, 'standard');
+    quality?.trackFilter(this.worldCamera, radialFocus, false, 'standard');
     quality?.trackFilter(this.worldCamera, displacement, false, 'standard');
   }
 
@@ -252,6 +286,7 @@ export class CameraPostFxController {
       if (vignette) vignette.active = false;
       if (parallel) parallel.active = false;
       if (barrel) barrel.active = false;
+      this.applyRadialFocus();
       return;
     }
 
@@ -306,6 +341,24 @@ export class CameraPostFxController {
       barrel.active = wanted;
       if (wanted) barrel.amount = state.barrel;
     }
+
+    this.applyRadialFocus();
+  }
+
+  private applyRadialFocus(): void {
+    const radialFocus = this.chain.radialFocus;
+    if (!radialFocus) return;
+
+    const profile = getGraphicsQualityProfile(this.scene);
+    const wanted = this.enabled
+      && profile.level !== 'low'
+      && this.radialFocusFrame !== null
+      && this.radialFocusFrame.alpha > 0.01;
+
+    radialFocus.setFrame(
+      wanted ? this.radialFocusFrame : null,
+      profile.level === 'high' ? 'high' : 'medium',
+    );
   }
 }
 

@@ -147,6 +147,18 @@ describe('graphics quality preferences and profiles', () => {
     expect(controller.scaleParticleCount(10, 'standard')).toBe(4);
     expect(controller.scaleParticleCount(10, 'decorative')).toBe(0);
   });
+
+  it('schaltet den persistenten Standardfilter nur über active um', () => {
+    const controller = new GraphicsQualityController('high');
+    const handle = { active: false };
+    controller.trackFilter({}, handle, false, 'standard');
+
+    expect(handle.active).toBe(true);
+    controller.setLevel('low');
+    expect(handle.active).toBe(false);
+    controller.setLevel('medium');
+    expect(handle.active).toBe(true);
+  });
 });
 
 describe('ArenaRuntimeProfiler', () => {

@@ -96,12 +96,12 @@ const PRESETS: Readonly<Record<PostFxEvent, PostFxPulse>> = {
     grade: { saturation: -0.34, brightness: 0.09, contrast: 0.08 },
   },
 
-  /** Eigener Tod: die Welt tritt zurück, damit die Auswertung im Vordergrund steht. */
+  /** Eigener Tod: dezenter globaler Ton; der räumliche Fokus übernimmt Rand-Blur und Entsättigung. */
   localDeath: {
     priority: POST_FX_PRIORITY.death,
     durationMs: 1500,
     ease: 'expo',
-    grade: { saturation: -0.45, contrast: -0.1, vignetteStrength: 0.5 },
+    grade: { brightness: -0.03, contrast: -0.06 },
   },
 };
 

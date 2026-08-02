@@ -12,11 +12,15 @@ import {
 } from '../config';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import type { CameraPostFxController } from '../effects/postfx/CameraPostFxController';
+import {
+  RADIAL_FOCUS_SOFTNESS_PX,
+  resolveRadialFocusFrame,
+  type RadialFocusFrame,
+} from '../effects/postfx/radialFocusState';
 
-const VEIL_CELL_SIZE = 8;
-const VEIL_EDGE_BAND_PX = 96;
 const VEIL_RADIUS_PX = 176;
-const CLOSED_VEIL_RADIUS_PX = -(VEIL_EDGE_BAND_PX + VEIL_CELL_SIZE);
+const CLOSED_VEIL_RADIUS_PX = -(RADIAL_FOCUS_SOFTNESS_PX + 8);
 const VEIL_ALPHA = 1.00;
 const REVEAL_DURATION_MS = 1800;
 const DEATH_VEIL_HOLD_MS = 500;
@@ -28,19 +32,28 @@ const GO_TEXT_DURATION_MS = 420;
 const GO_FONT_SIZE_PX = 184;
 const OBJECTIVE_Y_OFFSET = -164;
 const OBJECTIVE_FONT_SIZE_PX = 58;
+const FOCUS_FALLBACK_TEXTURE_KEY = '__arena_countdown_radial_focus';
+const FOCUS_FALLBACK_SCALE = 0.25;
+const FOCUS_FALLBACK_WIDTH = Math.ceil(GAME_WIDTH * FOCUS_FALLBACK_SCALE);
+const FOCUS_FALLBACK_HEIGHT = Math.ceil(GAME_HEIGHT * FOCUS_FALLBACK_SCALE);
+const FOCUS_FALLBACK_TINT = '54,54,54';
+const FOCUS_FALLBACK_MID_ALPHA = 0.14;
+const FOCUS_FALLBACK_OUTER_ALPHA = 0.30;
 
 type OverlayMode = 'hidden' | 'countdown' | 'death' | 'respawn-reveal';
 
 export class ArenaCountdownOverlay {
-  private readonly veil: Phaser.GameObjects.Graphics;
+  private readonly focusFallbackTexture: Phaser.Textures.CanvasTexture;
+  private readonly focusFallback: Phaser.GameObjects.Image;
   private readonly text: Phaser.GameObjects.Text;
   private readonly objectiveText: Phaser.GameObjects.Text;
   private readonly getFocusSprite: () => Phaser.GameObjects.Image | undefined;
+  private readonly postFx: CameraPostFxController | null;
   private mode: OverlayMode = 'hidden';
   private unlockAtMs = 0;
   private lastShownNumber = 0;
-  private lastFocusX = GAME_WIDTH / 2;
-  private lastFocusY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
+  private lastFocusWorldX = GAME_WIDTH / 2;
+  private lastFocusWorldY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
   private revealRadius = VEIL_RADIUS_PX;
   private veilAlpha = VEIL_ALPHA;
   private goTriggeredForUnlock = false;
@@ -50,20 +63,31 @@ export class ArenaCountdownOverlay {
   private audioSystem: GameAudioSystem | null = null;
   private readonly baseX = GAME_WIDTH / 2;
   private readonly baseY = GAME_HEIGHT / 2;
-  private lastRenderedRadius: number | null = null;
-  private lastRenderedAlpha: number | null = null;
-  private lastRenderedFocusX: number | null = null;
-  private lastRenderedFocusY: number | null = null;
+  private lastFallbackFrameKey: string | null = null;
+  private destroyed = false;
 
   constructor(
     private scene: Phaser.Scene,
     getFocusSprite: () => Phaser.GameObjects.Image | undefined,
+    postFx: CameraPostFxController | null = null,
   ) {
     this.getFocusSprite = getFocusSprite;
+    this.postFx = postFx;
 
-    this.veil = scene.add.graphics()
+    if (scene.textures.exists(FOCUS_FALLBACK_TEXTURE_KEY)) {
+      scene.textures.remove(FOCUS_FALLBACK_TEXTURE_KEY);
+    }
+    this.focusFallbackTexture = scene.textures.createCanvas(
+      FOCUS_FALLBACK_TEXTURE_KEY,
+      FOCUS_FALLBACK_WIDTH,
+      FOCUS_FALLBACK_HEIGHT,
+    ) as Phaser.Textures.CanvasTexture;
+    this.focusFallbackTexture.setSmoothPixelArt(false);
+    this.focusFallbackTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    this.focusFallback = scene.add.image(this.baseX, this.baseY, FOCUS_FALLBACK_TEXTURE_KEY)
       .setDepth(DEPTH.OVERLAY - 2)
       .setScrollFactor(0)
+      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
       .setVisible(false);
 
     this.text = scene.add.text(this.baseX, this.baseY, '', {
@@ -92,9 +116,9 @@ export class ArenaCountdownOverlay {
       .setScrollFactor(0)
       .setVisible(false);
 
-    promoteToClarityCamera(scene, this.veil);
     promoteToClarityCamera(scene, this.text);
     promoteToClarityCamera(scene, this.objectiveText);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
 
   setAudioSystem(system: GameAudioSystem | null): void {
@@ -118,7 +142,6 @@ export class ArenaCountdownOverlay {
       this.mode = 'countdown';
       this.objectiveLabel = nextObjectiveLabel;
       this.showObjectiveText();
-      this.veil.setVisible(true);
     }
     this.unlockAtMs = unlockAtMs;
   }
@@ -131,14 +154,12 @@ export class ArenaCountdownOverlay {
     this.mode = 'death';
     this.deathVeilHoldUntilMs = this.scene.time.now + DEATH_VEIL_HOLD_MS;
     this.deathVeilClosing = false;
-    this.renderVeil(this.revealRadius, this.veilAlpha);
   }
 
   playRespawnReveal(): void {
     this.captureFocusPoint();
     this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
     this.mode = 'respawn-reveal';
-    this.renderVeil(this.revealRadius, this.veilAlpha);
     this.playReveal(false);
   }
 
@@ -156,12 +177,8 @@ export class ArenaCountdownOverlay {
           revealRadius: CLOSED_VEIL_RADIUS_PX,
           duration: DEATH_VEIL_CLOSE_DURATION_MS,
           ease: 'Quad.easeIn',
-          onUpdate: () => {
-            this.renderVeil(this.revealRadius, this.veilAlpha);
-          },
         });
       }
-      this.renderVeil(this.revealRadius, this.veilAlpha);
       return;
     }
 
@@ -169,12 +186,9 @@ export class ArenaCountdownOverlay {
 
     if (this.mode === 'respawn-reveal') {
       if (this.veilAlpha > 0.01) {
-        this.renderVeil(this.revealRadius, this.veilAlpha);
         return;
       }
 
-      this.veil.clear();
-      this.veil.setVisible(false);
       this.mode = 'hidden';
       return;
     }
@@ -186,7 +200,6 @@ export class ArenaCountdownOverlay {
 
     const secondsLeft = Math.max(0, Math.ceil((this.unlockAtMs - now) / 1000));
     if (secondsLeft > 0) {
-      this.renderVeil(this.revealRadius, this.veilAlpha);
       if (secondsLeft === this.lastShownNumber) return;
       this.lastShownNumber = secondsLeft;
 
@@ -205,12 +218,36 @@ export class ArenaCountdownOverlay {
     }
 
     if (this.veilAlpha > 0.01) {
-      this.renderVeil(this.revealRadius, this.veilAlpha);
+      return;
+    }
+  }
+
+  /**
+   * Applies the current logical focus after the Scene has written the final camera feedback.
+   * The overlay stores a world point so both dynamic camera scroll and screen shake remain in
+   * the same coordinate space as the rendered world.
+   */
+  syncAfterCameraFeedback(): void {
+    if (this.mode === 'hidden' || this.veilAlpha <= 0.01) {
+      this.postFx?.setRadialFocus(null);
+      this.focusFallback.setVisible(false);
       return;
     }
 
-    this.veil.clear();
-    this.veil.setVisible(false);
+    const camera = this.scene.cameras.main;
+    const frame: RadialFocusFrame = resolveRadialFocusFrame(
+      this.lastFocusWorldX,
+      this.lastFocusWorldY,
+      camera.scrollX,
+      camera.scrollY,
+      this.revealRadius,
+      this.veilAlpha,
+    );
+
+    this.postFx?.setRadialFocus(frame);
+    const filterActive = this.postFx?.isRadialFocusFilterActive() ?? false;
+    this.focusFallback.setVisible(!filterActive);
+    if (!filterActive) this.updateFallbackTexture(frame);
   }
 
   clear(): void {
@@ -218,24 +255,29 @@ export class ArenaCountdownOverlay {
     this.unlockAtMs = 0;
     this.objectiveLabel = null;
     this.resetOverlayState(VEIL_RADIUS_PX, VEIL_ALPHA);
-    this.invalidateVeilCache();
-    this.veil.clear();
-    this.veil.setVisible(false);
+    this.lastFallbackFrameKey = null;
+    this.postFx?.setRadialFocus(null);
+    this.focusFallback.setVisible(false);
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.stopTextTweens();
-    this.veil.destroy();
+    this.postFx?.setRadialFocus(null);
+    this.focusFallback.destroy();
     this.text.destroy();
     this.objectiveText.destroy();
+    if (this.scene.textures.exists(FOCUS_FALLBACK_TEXTURE_KEY)) {
+      this.scene.textures.remove(FOCUS_FALLBACK_TEXTURE_KEY);
+    }
   }
 
   private captureFocusPoint(): void {
     const sprite = this.getFocusSprite();
     if (sprite?.active) {
-      const camera = this.scene.cameras.main;
-      this.lastFocusX = sprite.x - camera.scrollX;
-      this.lastFocusY = sprite.y - camera.scrollY;
+      this.lastFocusWorldX = sprite.x;
+      this.lastFocusWorldY = sprite.y;
     }
   }
 
@@ -333,12 +375,8 @@ export class ArenaCountdownOverlay {
       veilAlpha: 0,
       duration: REVEAL_DURATION_MS,
       ease: 'Quad.easeOut',
-      onUpdate: () => {
-        this.renderVeil(this.revealRadius, this.veilAlpha);
-      },
       onComplete: () => {
-        this.veil.clear();
-        this.veil.setVisible(false);
+        this.lastFallbackFrameKey = null;
         if (this.mode === 'respawn-reveal' || this.goTriggeredForUnlock) {
           this.mode = 'hidden';
         }
@@ -354,7 +392,7 @@ export class ArenaCountdownOverlay {
     this.deathVeilClosing = false;
     this.revealRadius = radius;
     this.veilAlpha = alpha;
-    this.invalidateVeilCache();
+    this.lastFallbackFrameKey = null;
     this.text
       .setVisible(false)
       .setText('')
@@ -380,69 +418,62 @@ export class ArenaCountdownOverlay {
       .setVisible(true);
   }
 
-  private renderVeil(radius: number, alpha: number): void {
-    const clampedAlpha = Phaser.Math.Clamp(alpha, 0, 1);
-    if (clampedAlpha <= 0.01) {
-      this.invalidateVeilCache();
-      this.veil.clear();
-      this.veil.setVisible(false);
-      return;
+  private updateFallbackTexture(frame: RadialFocusFrame): void {
+    const key = [
+      frame.focusX,
+      frame.focusY,
+      frame.radiusPx,
+      frame.alpha,
+      frame.arenaRect.x,
+      frame.arenaRect.y,
+      frame.arenaRect.width,
+      frame.arenaRect.height,
+    ].map((value) => Math.round(value * 100) / 100).join('|');
+    if (key === this.lastFallbackFrameKey) return;
+    this.lastFallbackFrameKey = key;
+
+    const texture = this.focusFallbackTexture;
+    const context = texture.context;
+    const scaleX = texture.width / GAME_WIDTH;
+    const scaleY = texture.height / GAME_HEIGHT;
+    const arenaX = frame.arenaRect.x * scaleX;
+    const arenaY = frame.arenaRect.y * scaleY;
+    const arenaWidth = frame.arenaRect.width * scaleX;
+    const arenaHeight = frame.arenaRect.height * scaleY;
+    const focusX = frame.focusX * scaleX;
+    const focusY = frame.focusY * scaleY;
+    const radius = frame.radiusPx * scaleX;
+    const softness = RADIAL_FOCUS_SOFTNESS_PX * scaleX;
+    const alpha = Phaser.Math.Clamp(frame.alpha, 0, 1);
+
+    context.clearRect(0, 0, texture.width, texture.height);
+    context.save();
+    context.beginPath();
+    context.rect(arenaX, arenaY, arenaWidth, arenaHeight);
+    context.clip();
+
+    if (frame.radiusPx <= 0) {
+      context.fillStyle = `rgba(${FOCUS_FALLBACK_TINT},${alpha * FOCUS_FALLBACK_OUTER_ALPHA})`;
+      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
+    } else {
+      const outerRadius = Math.max(1, radius + softness);
+      const gradient = context.createRadialGradient(
+        focusX,
+        focusY,
+        Math.max(0, radius),
+        focusX,
+        focusY,
+        outerRadius,
+      );
+      gradient.addColorStop(0, `rgba(${FOCUS_FALLBACK_TINT},0)`);
+      gradient.addColorStop(0.55, `rgba(${FOCUS_FALLBACK_TINT},${alpha * FOCUS_FALLBACK_MID_ALPHA})`);
+      gradient.addColorStop(1, `rgba(${FOCUS_FALLBACK_TINT},${alpha * FOCUS_FALLBACK_OUTER_ALPHA})`);
+      context.fillStyle = gradient;
+      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
     }
 
-    if (
-      this.lastRenderedRadius === radius
-      && this.lastRenderedAlpha === clampedAlpha
-      && this.lastRenderedFocusX === this.lastFocusX
-      && this.lastRenderedFocusY === this.lastFocusY
-    ) {
-      return;
-    }
-
-    this.veil.setVisible(true);
-    this.veil.clear();
-
-    const arenaRight = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH;
-    const arenaBottom = ARENA_OFFSET_Y + ARENA_HEIGHT;
-
-    for (let y = ARENA_OFFSET_Y; y < arenaBottom; y += VEIL_CELL_SIZE) {
-      for (let x = ARENA_OFFSET_X; x < arenaRight; x += VEIL_CELL_SIZE) {
-        const cellCenterX = x + VEIL_CELL_SIZE / 2;
-        const cellCenterY = y + VEIL_CELL_SIZE / 2;
-        const dist = Phaser.Math.Distance.Between(cellCenterX, cellCenterY, this.lastFocusX, this.lastFocusY);
-
-        if (dist <= radius) continue;
-
-        const inEdgeBand = dist <= radius + VEIL_EDGE_BAND_PX;
-        const checker = ((x / VEIL_CELL_SIZE) + (y / VEIL_CELL_SIZE)) % 2;
-        const color = inEdgeBand
-          ? (checker === 0 ? COLORS.BROWN_6 : COLORS.RED_6)
-          : (checker === 0 ? COLORS.GREY_10 : COLORS.GREY_9);
-        const cellAlpha = inEdgeBand
-          ? clampedAlpha * (checker === 0 ? 0.52 : 0.44)
-          : clampedAlpha * (checker === 0 ? 0.90 : 0.96);
-
-        this.veil.fillStyle(color, cellAlpha);
-        this.veil.fillRect(x, y, VEIL_CELL_SIZE, VEIL_CELL_SIZE);
-      }
-    }
-
-    this.veil.fillStyle(COLORS.GREY_10, clampedAlpha * 0.35);
-    this.veil.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_VIEWPORT_WIDTH, 8);
-    this.veil.fillRect(ARENA_OFFSET_X, arenaBottom - 8, ARENA_VIEWPORT_WIDTH, 8);
-    this.veil.fillRect(ARENA_OFFSET_X, ARENA_OFFSET_Y, 8, ARENA_HEIGHT);
-    this.veil.fillRect(arenaRight - 8, ARENA_OFFSET_Y, 8, ARENA_HEIGHT);
-
-    this.lastRenderedRadius = radius;
-    this.lastRenderedAlpha = clampedAlpha;
-    this.lastRenderedFocusX = this.lastFocusX;
-    this.lastRenderedFocusY = this.lastFocusY;
-  }
-
-  private invalidateVeilCache(): void {
-    this.lastRenderedRadius = null;
-    this.lastRenderedAlpha = null;
-    this.lastRenderedFocusX = null;
-    this.lastRenderedFocusY = null;
+    context.restore();
+    texture.refresh();
   }
 
   private stopTextTweens(): void {

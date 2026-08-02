@@ -203,4 +203,13 @@ describe('postFxPresets', () => {
     expect(voidVariant.priority).toBe(normal.priority);
     expect(voidVariant.grade?.tint).not.toBe(normal.grade?.tint);
   });
+
+  it('hält localDeath global dezent und überlässt Rand-Blur und Entsättigung dem Fokusfilter', () => {
+    const death = getPostFxPreset('localDeath');
+
+    expect(death.priority).toBe(85);
+    expect(death.durationMs).toBe(1500);
+    expect(death.ease).toBe('expo');
+    expect(death.grade).toEqual({ brightness: -0.03, contrast: -0.06 });
+  });
 });
