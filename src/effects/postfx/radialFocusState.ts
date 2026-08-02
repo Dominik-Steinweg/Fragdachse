@@ -26,16 +26,21 @@ export interface RadialFocusFrame {
 
 export interface RadialFocusSampling {
   readonly filterActive: boolean;
-  /** Phaser Blur quality: 0 low, 1 medium. */
-  readonly blurQuality: 0 | 1;
-  /** Effective design-pixel radius represented by Phaser's x/y/steps configuration. */
-  readonly blurRadiusPx: number;
+  /** Phaser Blur quality: 0 low, 1 medium, 2 high. */
+  readonly blurQuality: 0 | 1 | 2;
+  /** Small, fixed Phaser Blur offsets that avoid repeated contour copies. */
+  readonly blurX: number;
+  readonly blurY: number;
+  readonly blurStrength: number;
   readonly blurSteps: number;
+  /** Quality-specific desaturation applied to the blurred branch. */
+  readonly desaturate: number;
 }
 
 export const RADIAL_FOCUS_SOFTNESS_PX = 96;
 export const RADIAL_FOCUS_DARKEN = 0.18;
 export const RADIAL_FOCUS_DESATURATE = 0.58;
+export const RADIAL_FOCUS_DESATURATE_HIGH = 0.72;
 
 export function resolveRadialFocusFrame(
   focusWorldX: number,
@@ -64,9 +69,33 @@ export function resolveRadialFocusFrame(
 
 export function resolveRadialFocusSampling(level: RadialFocusQualityLevel): RadialFocusSampling {
   if (level === 'low') {
-    return { filterActive: false, blurQuality: 0, blurRadiusPx: 0, blurSteps: 0 };
+    return {
+      filterActive: false,
+      blurQuality: 0,
+      blurX: 0,
+      blurY: 0,
+      blurStrength: 0,
+      blurSteps: 0,
+      desaturate: 0,
+    };
   }
   return level === 'high'
-    ? { filterActive: true, blurQuality: 1, blurRadiusPx: 30, blurSteps: 2 }
-    : { filterActive: true, blurQuality: 0, blurRadiusPx: 12, blurSteps: 1 };
+    ? {
+      filterActive: true,
+      blurQuality: 2,
+      blurX: 1.5,
+      blurY: 1.5,
+      blurStrength: 1,
+      blurSteps: 3,
+      desaturate: RADIAL_FOCUS_DESATURATE_HIGH,
+    }
+    : {
+      filterActive: true,
+      blurQuality: 1,
+      blurX: 1.25,
+      blurY: 1.25,
+      blurStrength: 1,
+      blurSteps: 2,
+      desaturate: RADIAL_FOCUS_DESATURATE,
+    };
 }

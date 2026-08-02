@@ -20,7 +20,6 @@ import {
 } from './RadialFocusFilter';
 import {
   RADIAL_FOCUS_DARKEN,
-  RADIAL_FOCUS_DESATURATE,
   resolveRadialFocusSampling,
 } from './radialFocusState';
 
@@ -130,6 +129,7 @@ export class CameraPostFxController {
   private radialFocusFrame: RadialFocusFrame | null = null;
   private lastState: ResolvedPostFxState | null = null;
   private lastBloomThreshold = Number.NaN;
+  private lastRadialFocusDesaturate = Number.NaN;
   private enabled = true;
   private readonly supported: boolean;
   private readonly radialFocusMask: RadialFocusMaskTexture | null;
@@ -287,16 +287,17 @@ export class CameraPostFxController {
     const highSampling = resolveRadialFocusSampling('high');
     const radialFocusBlur = radialFocusParallel.top.addBlur(
       highSampling.blurQuality,
-      this.resolveBlurOffset(highSampling),
-      this.resolveBlurOffset(highSampling),
-      1,
+      highSampling.blurX,
+      highSampling.blurY,
+      highSampling.blurStrength,
       0xffffff,
       highSampling.blurSteps,
     );
     const radialFocusGrade = radialFocusParallel.top.addColorMatrix();
     radialFocusGrade.colorMatrix.reset();
     radialFocusGrade.colorMatrix.brightness(1 - RADIAL_FOCUS_DARKEN, true);
-    radialFocusGrade.colorMatrix.saturate(-RADIAL_FOCUS_DESATURATE, true);
+    radialFocusGrade.colorMatrix.saturate(-highSampling.desaturate, true);
+    this.lastRadialFocusDesaturate = highSampling.desaturate;
     const radialFocusMask = radialFocusParallel.top.addMask(RADIAL_FOCUS_MASK_TEXTURE_KEY);
     radialFocusParallel.blend.blendMode = Phaser.BlendModes.NORMAL;
     radialFocusParallel.blend.amount = 1;
@@ -409,16 +410,16 @@ export class CameraPostFxController {
     const sampling = resolveRadialFocusSampling(profile.level === 'high' ? 'high' : 'medium');
     radialFocus.blur.quality = sampling.blurQuality;
     radialFocus.blur.steps = sampling.blurSteps;
-    radialFocus.blur.x = this.resolveBlurOffset(sampling);
-    radialFocus.blur.y = this.resolveBlurOffset(sampling);
+    radialFocus.blur.x = sampling.blurX;
+    radialFocus.blur.y = sampling.blurY;
+    radialFocus.blur.strength = sampling.blurStrength;
+    if (sampling.desaturate !== this.lastRadialFocusDesaturate) {
+      radialFocus.grade.colorMatrix.reset();
+      radialFocus.grade.colorMatrix.brightness(1 - RADIAL_FOCUS_DARKEN, true);
+      radialFocus.grade.colorMatrix.saturate(-sampling.desaturate, true);
+      this.lastRadialFocusDesaturate = sampling.desaturate;
+    }
     radialFocus.parallel.setEffectActive(wanted && sampling.filterActive);
-  }
-
-  /** Phaser's built-in Blur uses quality-dependent per-step padding constants. */
-  private resolveBlurOffset(sampling: ReturnType<typeof resolveRadialFocusSampling>): number {
-    if (sampling.blurSteps <= 0 || sampling.blurRadiusPx <= 0) return 0;
-    const qualityStepFactor = sampling.blurQuality === 1 ? 3.2307692308 : 1.333;
-    return sampling.blurRadiusPx / (qualityStepFactor * sampling.blurSteps);
   }
 }
 
