@@ -128,13 +128,13 @@ export function buildCoopDefenseItemTooltip(
   if (!isEquipped) {
     lines.push({ text: '', color: COLORS.GREY_5 });
     lines.push({
-      text: equipped ? 'GEGENUEBER AUSGERUESTET' : 'SLOT IST LEER',
+      text: equipped ? 'GEGENÜBER AUSGERÜSTET' : 'SLOT IST LEER',
       color: COLORS.GREY_4,
       bold: true,
     });
     const changes = compareCoopDefenseItems(item, equipped).filter((change) => change.delta !== 0);
     if (changes.length === 0) {
-      lines.push({ text: 'identisch zum ausgeruesteten Teil', color: COLORS.GREY_4 });
+      lines.push({ text: 'identisch zum ausgerüsteten Teil', color: COLORS.GREY_4 });
     } else {
       for (const change of changes) {
         lines.push({
@@ -148,7 +148,7 @@ export function buildCoopDefenseItemTooltip(
   lines.push({ text: '', color: COLORS.GREY_5 });
   lines.push({ text: `Zerlegen bringt +${getCoopDefenseItemSalvageXp(item)} XP`, color: COLORS.GREY_4 });
   lines.push({
-    text: isEquipped ? 'Klick: Menue · Ziehen: Ablegen' : 'Klick: Menue · Ziehen: Ausruesten',
+    text: isEquipped ? 'Klick: Menü · Ziehen: Ablegen' : 'Klick: Menü · Ziehen: Ausrüsten',
     color: COLORS.GREY_5,
   });
 

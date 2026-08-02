@@ -95,7 +95,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     rocket_turret: {
       id: 'rocket_turret',
       displayName: 'Raketenturm',
-      description: 'Verschiesst automatisch Raketen mit Flaechenschaden.',
+      description: 'Verschießt automatisch Raketen mit Flächenschaden.',
       weaponId: 'TURRET_ROCKET',
       iconKey: null,
       unlockUpgradeId: 'unlock_rocket_turret',
@@ -123,7 +123,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     flame_turret: {
       id: 'flame_turret',
       displayName: 'Flammenwerferturm',
-      description: 'Entzuendet Gegner in kurzer Reichweite kontinuierlich.',
+      description: 'Entzündet Gegner in kurzer Reichweite kontinuierlich.',
       weaponId: 'TURRET_FLAME',
       iconKey: null,
       unlockUpgradeId: 'unlock_flame_turret',

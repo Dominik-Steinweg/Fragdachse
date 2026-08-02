@@ -301,8 +301,14 @@ export class CenterHUD {
       ...this.tutorialControlsTexts,
       ],
     );
-    this.tutorialContainer.setScrollFactor(1).setVisible(false).setAlpha(0);
-    this.container.add(this.tutorialContainer);
+    // Der übrige CenterHUD liegt auf der scrollfreien Klarheitskamera. Das Tutorial muss
+    // dagegen ein Weltobjekt bleiben, damit es beim horizontalen Kamera-Scroll über seiner
+    // Felsformation bleibt. Als eigener Root-Container erbt es nicht die Kamera-Maske des HUDs.
+    this.tutorialContainer
+      .setDepth(DEPTH.OVERLAY - 1)
+      .setScrollFactor(1)
+      .setVisible(false)
+      .setAlpha(0);
   }
 
   private buildAnnouncementOverlay(): void {

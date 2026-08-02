@@ -191,7 +191,7 @@ export class CoopDefenseItemsOverlay {
       ).setScrollFactor(0).setInteractive(),
     );
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, 'AUSRUESTUNG', {
+      this.scene.add.text(CX, TITLE_Y, 'AUSRÜSTUNG', {
         fontFamily: 'monospace', fontSize: '38px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -256,7 +256,7 @@ export class CoopDefenseItemsOverlay {
     if (!this.visible) return;
     const state = this.getState();
 
-    this.rewardHint?.setText(state.hasPendingReward ? '● Offene Belohnung – hier auswaehlen' : '');
+    this.rewardHint?.setText(state.hasPendingReward ? '● Offene Belohnung – hier auswählen' : '');
     this.sortLabel?.setText(this.sortMode === 'rarity' ? 'SORTIERUNG: SELTENHEIT' : 'SORTIERUNG: STUFE');
 
     const columns = buildCoopDefenseInventoryGrid(state.items, state.equippedItemIds, this.sortMode);
@@ -311,7 +311,7 @@ export class CoopDefenseItemsOverlay {
       this.scene.add.image(DOLL_CX, SECTION_CY, ensureTintedSectionTexture(
         this.scene, TEX_SECTION_DOLL, DOLL_W, SECTION_H, COLORS.GOLD_3, COLORS.GREY_9,
       )).setScrollFactor(0),
-      this.scene.add.text(DOLL_CX, SECTION_TITLE_Y, 'AUSGERUESTET', {
+      this.scene.add.text(DOLL_CX, SECTION_TITLE_Y, 'AUSGERÜSTET', {
         fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -336,7 +336,7 @@ export class CoopDefenseItemsOverlay {
         fontFamily: 'monospace', fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
       }).setOrigin(0.5).setScrollFactor(0),
     );
-    this.summaryEmpty = this.scene.add.text(DOLL_CX, SUMMARY_START_Y + 6, 'Nichts ausgeruestet.', {
+    this.summaryEmpty = this.scene.add.text(DOLL_CX, SUMMARY_START_Y + 6, 'Nichts ausgerüstet.', {
       fontFamily: 'monospace', fontSize: '15px', color: toCssColor(COLORS.GREY_5),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.summaryEmpty);
@@ -362,7 +362,7 @@ export class CoopDefenseItemsOverlay {
       this.scene.add.text(GRID_CX, SECTION_TITLE_Y, 'INVENTAR', {
         fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
       }).setOrigin(0.5).setScrollFactor(0),
-      this.scene.add.text(GRID_CX, GRID_HINT_Y, 'Mouse-Over zeigt die Werte · Klick oeffnet das Menue · Ziehen ruestet aus und ab', {
+      this.scene.add.text(GRID_CX, GRID_HINT_Y, 'Mouse-Over zeigt die Werte · Klick öffnet das Menü · Ziehen rüstet aus und ab', {
         fontFamily: 'monospace', fontSize: '14px', color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -533,7 +533,15 @@ export class CoopDefenseItemsOverlay {
         this.dragJustEnded = false;
         return;
       }
-      if (cell.item) this.openCellMenu(cell, pointer);
+      if (cell.item) {
+        // Die Koordinaten sofort kopieren: Phaser aktualisiert das Pointer-Objekt beim Klick
+        // auf die Menuezeile. Die Bestaetigung muss trotzdem am urspruenglichen Anker bleiben.
+        this.openCellMenu(
+          cell,
+          toDesignSpace(this.scene.scale, pointer.x) + 8,
+          toDesignSpace(this.scene.scale, pointer.y) + 8,
+        );
+      }
     });
 
     cell.frame.on('dragstart', () => this.handleDragStart(cell));
@@ -585,7 +593,7 @@ export class CoopDefenseItemsOverlay {
 
   // ── Aktionen ──────────────────────────────────────────────────────────────
 
-  private openCellMenu(cell: ItemCell, pointer: Phaser.Input.Pointer): void {
+  private openCellMenu(cell: ItemCell, x: number, y: number): void {
     const item = cell.item;
     if (!item || !this.contextMenu) return;
     this.tooltip?.hide();
@@ -595,8 +603,8 @@ export class CoopDefenseItemsOverlay {
     const salvageXp = getCoopDefenseItemSalvageXp(item);
 
     this.contextMenu.open({
-      x: toDesignSpace(this.scene.scale, pointer.x) + 8,
-      y: toDesignSpace(this.scene.scale, pointer.y) + 8,
+      x,
+      y,
       title: `${getCoopDefenseItemSlotDefinition(cell.slot).label} · Stufe ${item.itemLevel}`,
       titleColor: rarity.color,
       onClose: () => {
@@ -613,7 +621,7 @@ export class CoopDefenseItemsOverlay {
             },
           }
           : {
-            label: 'AUSRUESTEN',
+            label: 'AUSRÜSTEN',
             color: COLORS.GREEN_2,
             onPick: () => {
               this.onEquip(item.uid);
@@ -628,7 +636,7 @@ export class CoopDefenseItemsOverlay {
             if (!confirming) {
               // Erster Klick fragt nach; erst der zweite zerlegt wirklich.
               this.pendingSalvageUid = item.uid;
-              this.openCellMenu(cell, pointer);
+              this.openCellMenu(cell, x, y);
               return;
             }
             this.pendingSalvageUid = null;

@@ -211,7 +211,7 @@ function buildEntries(
   if (entries.length === 0) return entries;
   entries.push({
     selection: { kind: 'dismantle' },
-    displayName: 'Rueckbau',
+    displayName: 'Rückbau',
     textureKey: null,
     accentColor: COLORS.GREY_3,
     capacityCost: 0,

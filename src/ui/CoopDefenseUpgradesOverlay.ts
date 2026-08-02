@@ -25,9 +25,11 @@ import {
   COOP_DEFENSE_PENDING_UPGRADE_ICONS,
   getCoopDefenseUpgradeTextureKey,
   isCoopDefenseToolCategory,
+  type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
 import { attachHoverEffect } from './uiHover';
 import { UiTooltip } from './UiTooltip';
+import { UiContextMenu, type UiContextMenuEntry } from './UiContextMenu';
 import {
   COOP_DEFENSE_CLASS_DEFINITIONS,
   COOP_DEFENSE_CLASS_IDS,
@@ -161,6 +163,8 @@ type CategoryVisuals = {
   connector: number;
 };
 
+type RespecAction = 'category' | 'class' | 'full';
+
 type PlacedNode = {
   node: CoopDefenseUpgradeNodeSnapshot;
   x: number;
@@ -286,6 +290,11 @@ export class CoopDefenseUpgradesOverlay {
   private respecButton: Phaser.GameObjects.Image | null = null;
   private respecLabel: Phaser.GameObjects.Text | null = null;
   private respecEnabled = false;
+  private respecMenu: UiContextMenu | null = null;
+  private pendingRespecAction: RespecAction | null = null;
+  private categoryRespecEnabled = false;
+  private classRespecEnabled = false;
+  private fullRespecEnabled = false;
   private progressFill: Phaser.GameObjects.Image | null = null;
   private xpBarEffect: LivingBarEffect | null = null;
   private contentBg: Phaser.GameObjects.Image | null = null;
@@ -317,6 +326,9 @@ export class CoopDefenseUpgradesOverlay {
     private readonly getProgress: () => CoopDefenseProgressSnapshot,
     private readonly onLevelUpUpgrade: (upgradeId: string) => boolean,
     private readonly onLevelDownUpgrade: (upgradeId: string) => boolean,
+    private readonly onCategoryRespec: (categoryId: CoopDefenseUpgradeCategoryId) => boolean,
+    private readonly onClassRespec: () => boolean,
+    private readonly canFullRespec: () => boolean,
     private readonly onFullRespec: () => boolean,
     private readonly onSelectClass: (classId: CoopDefenseClassId) => void,
     private readonly onToggleLoadoutTool: (tool: LoadoutToolRef) => boolean,
@@ -336,6 +348,8 @@ export class CoopDefenseUpgradesOverlay {
     this.pointsChip = null;
     this.respecButton = null;
     this.respecLabel = null;
+    this.respecMenu = null;
+    this.pendingRespecAction = null;
     this.progressFill = null;
     this.contentBg = null;
     this.tabsContainer = null;
@@ -441,27 +455,29 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0);
     objects.push(this.pointsChip);
 
-    this.pointsText = this.scene.add.text(pointsChipX, POINTS_Y, '0 Upgrade-Punkte verfuegbar', {
+    this.pointsText = this.scene.add.text(pointsChipX, POINTS_Y, '0 Upgrade-Punkte verfügbar', {
       fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.BLUE_1),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.pointsText);
 
-    // "Full Respec"-Button rechts, ungefaehr auf Hoehe der Punkte-Anzeige.
+    // Ein einzelner Respec-Button oeffnet das Auswahlmenue fuer Kategorie/Klasse/Full.
     const respecX = BAR_X + BAR_W - RESPEC_W / 2;
     this.respecButton = this.scene.add.image(respecX, POINTS_Y, this.ensureRespecButtonTexture())
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    this.respecButton.on('pointerdown', () => {
-      if (!this.respecEnabled) return;
-      if (this.onFullRespec()) this.requestRefresh();
+    this.respecButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+      event?.stopPropagation();
+      this.openRespecMenu(respecX - 230, POINTS_Y + RESPEC_H / 2 + 8);
     });
     objects.push(this.respecButton);
-
-    this.respecLabel = this.scene.add.text(respecX, POINTS_Y, 'FULL RESPEC', {
-      fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_5),
-    }).setOrigin(0.5).setScrollFactor(0);
+    this.respecLabel = this.scene.add.text(respecX, POINTS_Y, 'RESPEC', {
+      fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_5),
+    })
+      .setOrigin(0.5).setScrollFactor(0);
     objects.push(this.respecLabel);
-    attachHoverEffect(this.scene, this.respecButton, this.respecLabel, { isEnabled: () => this.respecEnabled });
+    attachHoverEffect(this.scene, this.respecButton, this.respecLabel, {
+      isEnabled: () => this.respecEnabled,
+    });
 
     this.classContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.classContainer);
@@ -487,7 +503,7 @@ export class CoopDefenseUpgradesOverlay {
     );
 
     objects.push(
-      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurueck | ✓ am Symbol oder Klick auf einen Loadout-Slot ruestet aus ]', {
+      this.scene.add.text(CX, FOOTER_Y, '[ Linksklick skillt | Rechtsklick nimmt zurück | ✓ am Symbol oder Klick auf einen Loadout-Slot rüstet aus ]', {
         fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
       }).setOrigin(0.5).setScrollFactor(0),
     );
@@ -497,6 +513,7 @@ export class CoopDefenseUpgradesOverlay {
     this.container.setVisible(false);
     promoteToClarityCamera(this.scene, this.container);
     this.picker = new LoadoutSlotPicker(this.scene, this.container, DEPTH.OVERLAY + 2);
+    this.respecMenu = new UiContextMenu(this.scene, this.container);
 
     // Living breathing effect for the XP bar (particles confined to the fill region + glow).
     this.xpBarEffect = new LivingBarEffect(
@@ -528,6 +545,7 @@ export class CoopDefenseUpgradesOverlay {
 
     this.hideTooltip();
     this.picker?.close();
+    this.closeRespecMenu();
 
     const progress = this.getProgress();
 
@@ -540,14 +558,6 @@ export class CoopDefenseUpgradesOverlay {
     this.pointsText.setColor(toCssColor(hasPoints ? COLORS.BLUE_1 : COLORS.GREY_4));
     this.pointsChip?.setTexture(this.ensurePointsChipTexture(hasPoints));
 
-    // Respec nur moeglich, wenn irgendein zuruecknehmbares Upgrade ueber Startlevel ist.
-    this.respecEnabled = progress.upgradeCategories.some((category) =>
-      category.upgrades.some((upgrade) => upgrade.refundable && upgrade.level > upgrade.startingLevel),
-    );
-    if (this.respecButton) this.respecButton.setAlpha(this.respecEnabled ? 1 : 0.4);
-    if (this.respecLabel) {
-      this.respecLabel.setColor(toCssColor(this.respecEnabled ? COLORS.RED_1 : COLORS.RED_3));
-    }
     const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
     this.progressFill.setCrop(0, 0, fillW, BAR_H);
     this.xpBarEffect?.setFilledWidth(fillW);
@@ -556,6 +566,7 @@ export class CoopDefenseUpgradesOverlay {
     if (categoryCount > 0) {
       this.activeCategoryIndex = Phaser.Math.Clamp(this.activeCategoryIndex, 0, categoryCount - 1);
     }
+    this.updateRespecButtons(progress);
 
     this.renderClasses(progress.classId, progress.classesUnlocked);
     this.renderLoadoutRow(progress);
@@ -604,6 +615,7 @@ export class CoopDefenseUpgradesOverlay {
     this.dismissDelay?.destroy();
     this.dismissDelay = null;
     this.picker?.close();
+    this.closeRespecMenu();
     this.dimRect?.disableInteractive().removeAllListeners();
 
     this.clearNodeDecorations();
@@ -635,6 +647,8 @@ export class CoopDefenseUpgradesOverlay {
     this.loadoutHintTimer = null;
     this.picker?.close();
     this.picker = null;
+    this.closeRespecMenu();
+    this.respecMenu = null;
     if (this.keyHandler) {
       this.scene.input.keyboard?.off('keydown', this.keyHandler);
       this.keyHandler = null;
@@ -667,12 +681,111 @@ export class CoopDefenseUpgradesOverlay {
       .on('pointerout', () => this.hideTooltip());
   }
 
+  private updateRespecButtons(progress: CoopDefenseProgressSnapshot): void {
+    const activeCategory = progress.upgradeCategories[this.activeCategoryIndex];
+    this.categoryRespecEnabled = activeCategory?.upgrades.some((upgrade) => (
+      upgrade.level > upgrade.startingLevel
+    )) ?? false;
+    this.classRespecEnabled = progress.classesUnlocked && progress.upgradeCategories.some((category) => (
+      category.upgrades.some((upgrade) => upgrade.level > upgrade.startingLevel)
+    ));
+    this.fullRespecEnabled = this.canFullRespec();
+    this.respecEnabled = this.categoryRespecEnabled || this.classRespecEnabled || this.fullRespecEnabled;
+    this.respecButton?.setAlpha(this.respecEnabled ? 1 : 0.4);
+    this.respecLabel?.setColor(toCssColor(this.respecEnabled ? COLORS.RED_1 : COLORS.RED_3));
+  }
+
+  private openRespecMenu(x: number, y: number): void {
+    if (!this.respecMenu) return;
+
+    const progress = this.getProgress();
+    const activeCategory = progress.upgradeCategories[this.activeCategoryIndex];
+    const actions: Array<{
+      action: RespecAction;
+      label: string;
+      color: number;
+      enabled: boolean;
+    }> = [
+      {
+        action: 'category',
+        label: 'CATEGORY RESPEC',
+        color: COLORS.RED_2,
+        enabled: this.categoryRespecEnabled,
+      },
+    ];
+    if (progress.classesUnlocked) {
+      actions.push({
+        action: 'class',
+        label: 'CLASS RESPEC',
+        color: COLORS.RED_2,
+        enabled: this.classRespecEnabled,
+      });
+    }
+    actions.push({
+      action: 'full',
+      label: 'FULL RESPEC',
+      color: COLORS.RED_1,
+      enabled: this.fullRespecEnabled,
+    });
+
+    const entries: UiContextMenuEntry[] = actions.map((entry) => {
+      const confirming = this.pendingRespecAction === entry.action;
+      return {
+        label: confirming ? `WIRKLICH? ${entry.label}` : entry.label,
+        color: confirming ? COLORS.RED_1 : entry.color,
+        enabled: entry.enabled,
+        keepOpen: entry.enabled && !confirming,
+        onPick: () => {
+          if (!entry.enabled) return;
+          if (!confirming) {
+            // Erster Klick fragt nach; erst der zweite fuehrt den Respec aus.
+            this.pendingRespecAction = entry.action;
+            this.openRespecMenu(x, y);
+            return;
+          }
+          this.pendingRespecAction = null;
+          this.executeRespec(entry.action);
+        },
+      };
+    });
+
+    this.respecMenu.open({
+      x,
+      y,
+      title: activeCategory ? `RESPEC · ${activeCategory.label}` : 'RESPEC',
+      titleColor: ACCENT,
+      entries,
+      onClose: () => {
+        this.pendingRespecAction = null;
+      },
+    });
+  }
+
+  private executeRespec(action: RespecAction): void {
+    const changed = action === 'category'
+      ? (() => {
+        const category = this.getProgress().upgradeCategories[this.activeCategoryIndex];
+        return category ? this.onCategoryRespec(category.id) : false;
+      })()
+      : action === 'class'
+        ? this.onClassRespec()
+        : this.onFullRespec();
+    if (changed) this.requestRefresh();
+  }
+
+  private closeRespecMenu(): void {
+    this.respecMenu?.close();
+    this.pendingRespecAction = null;
+  }
+
   private setActiveCategory(index: number): void {
     if (index === this.activeCategoryIndex) return;
     this.activeCategoryIndex = index;
     this.hideTooltip();
     this.picker?.close();
+    this.closeRespecMenu();
     const progress = this.getProgress();
+    this.updateRespecButtons(progress);
     // Die Spaltenkarte der offenen Kategorie tritt hervor und muss deshalb mitziehen.
     this.renderLoadoutRow(progress);
     this.renderTabs(progress);
@@ -981,10 +1094,10 @@ export class CoopDefenseUpgradesOverlay {
 
   private buildSlotTooltipBody(categoryLabel: string, presentation: LoadoutItemPresentation | null): string {
     return [
-      presentation ? `Ausgeruestet: ${presentation.displayName}` : 'Leer',
+      presentation ? `Ausgerüstet: ${presentation.displayName}` : 'Leer',
       `Items aus der Kategorie "${categoryLabel}".`,
       '',
-      'Klick oeffnet die Auswahl der freigeschalteten Items.',
+      'Klick öffnet die Auswahl der freigeschalteten Items.',
     ].join('\n');
   }
 
@@ -993,11 +1106,11 @@ export class CoopDefenseUpgradesOverlay {
     tool: LoadoutToolRef | null,
   ): string {
     return [
-      tool ? `Ausgeruestet: ${describeLoadoutTool(tool).displayName}` : 'Leer',
+      tool ? `Ausgerüstet: ${describeLoadoutTool(tool).displayName}` : 'Leer',
       `${progress.toolLoadout.length}/${Math.max(1, progress.toolSlotCapacity)} Utility-Slots belegt.`,
       'Utilities aus Utility 1 und Utility 2 sind gleichwertig und teilen sich diese Slots.',
       '',
-      'Klick oeffnet die Auswahl der freigeschalteten Utilities.',
+      'Klick öffnet die Auswahl der freigeschalteten Utilities.',
     ].join('\n');
   }
 
@@ -1093,7 +1206,7 @@ export class CoopDefenseUpgradesOverlay {
       this.requestRefresh();
       return;
     }
-    this.showLoadoutHint('Utility konnte nicht ausgeruestet werden.');
+    this.showLoadoutHint('Utility konnte nicht ausgerüstet werden.');
   }
 
   private toggleTool(tool: LoadoutToolRef): void {
@@ -1101,7 +1214,7 @@ export class CoopDefenseUpgradesOverlay {
       this.requestRefresh();
       return;
     }
-    this.showLoadoutHint('Keine freien Utility-Slots — erst eine Utility abwaehlen.');
+    this.showLoadoutHint('Keine freien Utility-Slots — erst eine Utility abwählen.');
   }
 
   /** Ein abgelehntes Ausruesten blieb bisher unkommentiert; der Hinweis steht ueber dem Block. */
@@ -2280,7 +2393,7 @@ export class CoopDefenseUpgradesOverlay {
     if (node.bossPointCostPerLevel > 0) {
       lines.push(`★ Boss-Kosten: ${node.bossPointCostPerLevel} Punkt`);
       if (!node.bossPointRequirementMet && node.level < node.maxLevel) {
-        lines.push('Boss-Punkt fehlt: Boss-Level erfolgreich abschliessen.');
+        lines.push('Boss-Punkt fehlt: Boss-Level erfolgreich abschließen.');
       }
     }
     return lines.join('\n');

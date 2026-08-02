@@ -8,11 +8,12 @@ import {
 } from '../src/utils/coopDefenseUpgrades';
 import { getMiniRocketCascadeMultiplier } from '../src/utils/miniRocketCascade';
 
-function profile(levels: Record<string, number>): CoopDefenseUpgradeProfile {
+function maxProfile(upgradeIds: readonly string[]): CoopDefenseUpgradeProfile {
   return {
-    upgrades: Object.fromEntries(
-      Object.entries(levels).map(([id, level]) => [id, { unlocked: true, level }]),
-    ),
+    upgrades: Object.fromEntries(upgradeIds.map((id) => [
+      id,
+      { unlocked: true, level: getCoopDefenseUpgradeDefinition(id)?.maxLevel ?? 1 },
+    ])),
   };
 }
 
@@ -25,28 +26,30 @@ describe('mini-rocket cascade charge', () => {
 
   it('wires the upgrade into the per-explosion cascade stat instead of static radius', () => {
     const definition = getCoopDefenseUpgradeDefinition('mini_rocket_cascade_charge');
-    expect(definition?.description).toContain('erste Explosion erhaelt keinen Bonus');
-    expect(definition?.effects).toEqual([
-      {
-        stat: 'weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeDamageBonusPerExplosion',
-        mode: 'add_per_level',
-        value: 0.1,
-      },
-    ]);
+    expect(definition?.description).toContain('erste Explosion erhält keinen Bonus');
+    expect(definition?.effects.map(({ stat, mode }) => ({ stat, mode }))).toEqual([{
+      stat: 'weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeDamageBonusPerExplosion',
+      mode: 'add_per_level',
+    }]);
+    expect(definition?.effects[0]?.value).toBeGreaterThan(0);
 
-    const totals = getCoopDefenseResolvedEffectTotals(profile({
-      unlock_mini_rocket_launcher: 1,
-      mini_rocket_long_range_drive: 1,
-      mini_rocket_triple_detonation: 1,
-      mini_rocket_cascade_charge: 3,
-    }));
+    const totals = getCoopDefenseResolvedEffectTotals(maxProfile([
+      'unlock_mini_rocket_launcher',
+      'mini_rocket_long_range_drive',
+      'mini_rocket_triple_detonation',
+      'mini_rocket_cascade_charge',
+    ]));
+    const base = WEAPON_CONFIGS.MINI_ROCKET_LAUNCHER;
     const resolved = applyCoopDefenseModifiersToWeaponConfig(
-      WEAPON_CONFIGS.MINI_ROCKET_LAUNCHER,
+      base,
       'weapon2',
       totals,
     );
 
-    expect(resolved.miniRocketCascadeDamageBonusPerExplosion).toBeCloseTo(0.3);
-    expect(resolved.fire.impactExplosion.radius).toBe(65);
+    expect(resolved.miniRocketCascadeDamageBonusPerExplosion).toBeCloseTo(
+      base.miniRocketCascadeDamageBonusPerExplosion
+      + (totals.additive['weapon.MINI_ROCKET_LAUNCHER.miniRocketCascadeDamageBonusPerExplosion'] ?? 0),
+    );
+    expect(resolved.fire.impactExplosion.radius).toBe(base.fire.impactExplosion.radius);
   });
 });

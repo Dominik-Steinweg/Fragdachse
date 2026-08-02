@@ -113,6 +113,7 @@ export class EnemyManager {
   private nextEnemyIdSeq = 1;
   // Sendet die aktive ID-Liste sofort beim ersten Snapshot (Bootstrap), danach periodisch.
   private ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
+  private forceFullNetSnapshot = false;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
   private readonly separationVector = { x: 0, y: 0 };
@@ -634,7 +635,8 @@ export class EnemyManager {
     // Kein schwerer Full-Snapshot mehr: Neue/geänderte Gegner gehen als Delta, unveränderte Gegner
     // werden rollierend (Refresh-Zyklus) binnen ~2 s einmal voll nachgesendet. Periodisch trägt der
     // Snapshot zusätzlich die vollständige aktive ID-Liste zur Phantom-Reconciliation.
-    const sendActiveList = this.ticksSinceActiveList >= ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
+    const sendActiveList = this.forceFullNetSnapshot
+      || this.ticksSinceActiveList >= ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
     const currentIds = new Set<string>();
     const upserts: SyncedEnemyDeltaState[] = [];
 
@@ -646,6 +648,12 @@ export class EnemyManager {
       const current = this.buildNetState(enemy);
       currentIds.add(current.id);
       const previous = this.netSnapshotCache.get(current.id);
+
+      if (this.forceFullNetSnapshot) {
+        upserts.push(current);
+        this.netSnapshotCache.set(current.id, current);
+        continue;
+      }
 
       if (!previous) {
         upserts.push(current);
@@ -700,6 +708,7 @@ export class EnemyManager {
       }
       snapshot.a = [...currentIds].map(enemyIdToNum).sort((left, right) => left - right);
       this.ticksSinceActiveList = 0;
+      this.forceFullNetSnapshot = false;
     } else {
       this.ticksSinceActiveList += 1;
     }
@@ -713,6 +722,11 @@ export class EnemyManager {
 
   getAllEnemies(): EnemyEntity[] {
     return [...this.enemies.values()];
+  }
+
+  /** Naechster Netzwerk-Snapshot enthaelt jeden aktuellen Gegner vollstaendig. */
+  requestFullNetSnapshot(): void {
+    this.forceFullNetSnapshot = true;
   }
 
   /**
@@ -885,6 +899,7 @@ export class EnemyManager {
     this.nextEnemyIdSeq = 1;
     this.remoteSnapshotSeen = false;
     this.ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
+    this.forceFullNetSnapshot = false;
     this.refreshCursor = 0;
   }
 

@@ -1006,7 +1006,7 @@ export function applyCoopDefenseModifiersToWeaponConfig(
 
   // Der Feuerball feuert langsamer, soll bei Dauerfeuer aber denselben
   // Adrenalinverbrauch pro Zeit haben. Den Faktor aus den effektiven und
-  // ursprÃ¼nglichen Cooldowns ableiten, damit spÃ¤tere FeuerratenÃ¤nderungen
+  // ursprünglichen Cooldowns ableiten, damit spätere Feuerratenänderungen
   // automatisch mitgezogen werden.
   return {
     ...resolved,

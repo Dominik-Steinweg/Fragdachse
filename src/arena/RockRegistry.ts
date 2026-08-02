@@ -11,6 +11,7 @@ export class RockRegistry {
   private readonly netSnapshotCache = new Map<number, RockNetState>();
   private readonly pendingRemovalIds = new Set<number>();
   private ticksSinceFullNetSnapshot = ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+  private forceFullNetSnapshot = false;
 
   constructor(layout: ArenaLayout) {
     this.reset(layout);
@@ -22,6 +23,7 @@ export class RockRegistry {
     this.netSnapshotCache.clear();
     this.pendingRemovalIds.clear();
     this.ticksSinceFullNetSnapshot = ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    this.forceFullNetSnapshot = false;
     for (let i = 0; i < layout.rocks.length; i++) {
       this.hpMap.set(i, { hp: ROCK_HP_MAX, maxHp: ROCK_HP_MAX });
     }
@@ -78,12 +80,18 @@ export class RockRegistry {
     this.pendingRemovalIds.add(id);
   }
 
+  /** Naechster Netzwerk-Snapshot enthaelt alle aktuellen Schadenswerte. */
+  requestFullNetSnapshot(): void {
+    this.forceFullNetSnapshot = true;
+  }
+
   /**
    * Delta-Snapshot für Netzwerk-Sync: Nur Felsen mit HP < ROCK_HP_MAX enthalten.
    * Abwesende IDs gelten beim Client als vollständig (ROCK_HP_MAX).
    */
   getNetSnapshot(): SyncedRockSnapshot | null {
-    const full = this.ticksSinceFullNetSnapshot >= ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    const full = this.forceFullNetSnapshot
+      || this.ticksSinceFullNetSnapshot >= ROCK_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     const currentIds = new Set<number>();
     const upserts: RockNetState[] = [];
 
@@ -106,6 +114,7 @@ export class RockRegistry {
         if (!currentIds.has(id)) this.netSnapshotCache.delete(id);
       }
       this.ticksSinceFullNetSnapshot = 0;
+      this.forceFullNetSnapshot = false;
     } else {
       this.ticksSinceFullNetSnapshot += 1;
       for (const id of removals) {

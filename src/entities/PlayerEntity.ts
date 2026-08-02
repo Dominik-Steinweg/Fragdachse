@@ -8,6 +8,7 @@ import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
   PLAYER_SIZE, DEPTH, COLORS,
+  toCssColor,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR, ARMOR_MAX,
   HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
@@ -19,6 +20,9 @@ export class PlayerEntity {
 
   private readonly colorHex: number;
   private readonly isEnemy: boolean;
+  private displayName: string;
+  private readonly nameLabel: Phaser.GameObjects.Text;
+  private nameLabelVisible = false;
   private hpBarBg:  Phaser.GameObjects.Rectangle;
   private hpBarFg:  Phaser.GameObjects.Rectangle;
   private armorBarBg: Phaser.GameObjects.Rectangle;
@@ -89,6 +93,7 @@ export class PlayerEntity {
     this.id       = profile.id;
     this.colorHex = profile.colorHex;
     this.isEnemy  = isEnemy;
+    this.displayName = profile.name;
     this.targetX  = x;
     this.targetY  = y;
 
@@ -177,6 +182,17 @@ export class PlayerEntity {
     this.armorBarFg.setDepth(DEPTH.PLAYERS + 2);
     this.armorBarFg.setVisible(false);
 
+    this.nameLabel = scene.add.text(x, y - PLAYER_SIZE * 0.72, this.displayName, {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      color: toCssColor(this.colorHex),
+      stroke: '#050709',
+      strokeThickness: 3,
+    }).setOrigin(0.5, 1)
+      .setDepth(DEPTH.PLAYERS + 3)
+      .setVisible(false);
+
     this.syncBar();
 
     // Sterbe-Sprite (zunächst ausgeblendet; Tiefe leicht unter Spielern)
@@ -193,6 +209,17 @@ export class PlayerEntity {
 
   get color(): number {
     return this.colorHex;
+  }
+
+  setDisplayName(name: string): void {
+    if (this.displayName === name) return;
+    this.displayName = name;
+    this.nameLabel.setText(name);
+  }
+
+  setNameVisible(visible: boolean): void {
+    this.nameLabelVisible = visible;
+    this.nameLabel.setVisible(visible && this.baseVisible);
   }
 
   isDecoyStealthedVisual(): boolean {
@@ -275,6 +302,7 @@ export class PlayerEntity {
     this.hpBarFg.setPosition(x - HP_BAR_WIDTH / 2, hpY);
     this.armorBarBg.setPosition(x, armorY);
     this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
+    this.nameLabel.setPosition(x, this.sprite.y - PLAYER_SIZE * 0.72);
     this.syncAttachedEffects();
     this.syncSpawnShine();
   }
@@ -708,6 +736,7 @@ export class PlayerEntity {
     const barsVisible = visible && this.worldBarsVisible && !this.isDecoyStealthed;
     const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
     this.sprite.setVisible(visible);
+    this.nameLabel.setVisible(this.nameLabelVisible && visible);
     this.hpBarBg.setVisible(barsVisible);
     this.hpBarFg.setVisible(barsVisible);
     this.armorBarBg.setVisible(barsVisible && this.currentArmor > 0);
@@ -809,5 +838,6 @@ export class PlayerEntity {
     this.stealthShell?.destroy();
     this.stealthScan?.destroy();
     this.deathSprite?.destroy();
+    this.nameLabel.destroy();
   }
 }

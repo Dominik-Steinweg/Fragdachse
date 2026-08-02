@@ -465,7 +465,7 @@ export class LobbyOverlay {
             bold: true,
           },
           { text: '', color: COLORS.GREY_5 },
-          { text: 'Danach lassen Siege dauerhafte Ausruestung fallen.', color: COLORS.GREY_3 },
+          { text: 'Danach lassen Siege dauerhafte Ausrüstung fallen.', color: COLORS.GREY_3 },
         ],
         pointer,
       );
@@ -1146,14 +1146,14 @@ export class LobbyOverlay {
 
     if (link.usesRelay) {
       return {
-        text: 'Verbindung laeuft ueber einen Relay-Server – abgelehnt (Konfigurationsfehler).',
+        text: 'Verbindung läuft über einen Relay-Server – abgelehnt (Konfigurationsfehler).',
         color: toCssColor(COLORS.RED_2),
       };
     }
 
     if (link.connectionState === 'failed' || link.iceConnectionState === 'failed') {
       return {
-        text: 'Direkte Verbindung nicht moeglich. Netzwerk oder Firewall blockiert WebRTC.',
+        text: 'Direkte Verbindung nicht möglich. Netzwerk oder Firewall blockiert WebRTC.',
         color: toCssColor(COLORS.RED_2),
       };
     }

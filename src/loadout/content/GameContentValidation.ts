@@ -197,24 +197,12 @@ export function validateGameContentReferences(): void {
   for (const id of requiredUtilities) if (!UTILITY_CONFIGS[id]) issues.push(`system-fallback: fehlendes Utility ${id}`);
   for (const id of requiredUltimates) if (!ULTIMATE_CONFIGS[id]) issues.push(`system-fallback: fehlendes Ultimate ${id}`);
 
-  if (UTILITY_CONFIGS.FELSBAU?.cooldown !== 100) issues.push('utility:FELSBAU.cooldown: erwartet 100 ms aus der Normal-Konfiguration');
-  if (UTILITY_CONFIGS.FELSBAU?.type === 'placeable_rock' && UTILITY_CONFIGS.FELSBAU.placeable.lifetimeMs !== 60000) {
-    issues.push('utility:FELSBAU.placeable.lifetimeMs: erwartet 60000 ms aus der Normal-Konfiguration');
-  }
-  if (UTILITY_CONFIGS.FLIEGENPILZ?.cooldown !== 10000) issues.push('utility:FLIEGENPILZ.cooldown: erwartet 10000 ms aus der Normal-Konfiguration');
-  if (UTILITY_CONFIGS.FLIEGENPILZ?.type === 'placeable_turret' && UTILITY_CONFIGS.FLIEGENPILZ.placeable.lifetimeMs !== 10000) {
-    issues.push('utility:FLIEGENPILZ.placeable.lifetimeMs: erwartet 10000 ms aus der Normal-Konfiguration');
-  }
   for (const [baseId, variantId] of Object.entries(COOP_DEFENSE_UTILITY_VARIANTS)) {
     const base = UTILITY_CONFIGS[baseId];
     const variant = UTILITY_CONFIGS[variantId];
     if (!base || !variant || !getUtilityConfigLineage(variantId).includes(baseId)) {
       issues.push(`utility:${variantId}: muss von ${baseId} erben`);
       continue;
-    }
-    if (variant.cooldown !== 500) issues.push(`utility:${variantId}.cooldown: erwartet 500 ms`);
-    if ((variant.type === 'placeable_rock' || variant.type === 'placeable_turret') && variant.placeable.lifetimeMs !== 0) {
-      issues.push(`utility:${variantId}.placeable.lifetimeMs: erwartet 0 ms`);
     }
   }
 

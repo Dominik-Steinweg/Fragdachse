@@ -255,6 +255,8 @@ export class ArenaLifecycleCoordinator {
       coopDefenseMapConfig?.arenaWidthCells,
     );
     const arenaStartTime = Date.now() + ARENA_COUNTDOWN_SEC * 1000;
+    bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), arenaStartTime);
+    bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
     const roundDurationSec = coopDefenseMapConfig?.roundDurationSec ?? ARENA_DURATION_SEC;
     const layout = ArenaGenerator.generate(Date.now(), coopDefenseMapConfig ?? undefined);
@@ -279,7 +281,9 @@ export class ArenaLifecycleCoordinator {
   spawnReadyPlayers(): void {
     if (!bridge.isHost()) return;
     for (const profile of bridge.getConnectedPlayers()) {
-      if (bridge.getPlayerReady(profile.id) && !this.ctx.playerManager.hasPlayer(profile.id)) {
+      if (bridge.canPlayerSpawnOrRespawn(profile.id)
+        && bridge.getPlayerReady(profile.id)
+        && !this.ctx.playerManager.hasPlayer(profile.id)) {
         // Erst spawnen, wenn der host das verbindliche Loadout-Snapshot wirklich hat. Sonst würde
         // resolveCommittedLoadoutSelection() auf die separat propagierten Live-Slots zurückfallen –
         // die bei umgekehrter Key-Reihenfolge noch veraltet sein können (Ursache von "mit falscher
@@ -322,23 +326,26 @@ export class ArenaLifecycleCoordinator {
     const mapName = isCoopDefenseMode(gameMode)
       ? getCoopDefenseMapConfig(bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId()).displayName
       : 'Zufallsarena';
-    const results: RoundResult[] = bridge.getConnectedPlayers().map((p) => {
-      const teamId = isTeamGameMode(gameMode) ? bridge.getPlayerTeam(p.id) : null;
-      return {
-        id:       p.id,
-        name:     p.name,
-        colorHex: p.colorHex,
-        frags:    bridge.getPlayerFrags(p.id),
-        teamId,
-        roundEndedAt,
-        gameMode,
-        mapName,
-        teamScore: gameMode === CAPTURE_THE_BEER_MODE && teamId
-          ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
-          : undefined,
-        sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
-      };
-    });
+    const eligibleIds = new Set(bridge.getRoundResultEligiblePlayerIds());
+    const results: RoundResult[] = bridge.getConnectedPlayers()
+      .filter((p) => eligibleIds.has(p.id))
+      .map((p) => {
+        const teamId = isTeamGameMode(gameMode) ? bridge.getPlayerTeam(p.id) : null;
+        return {
+          id:       p.id,
+          name:     p.name,
+          colorHex: p.colorHex,
+          frags:    bridge.getPlayerFrags(p.id),
+          teamId,
+          roundEndedAt,
+          gameMode,
+          mapName,
+          teamScore: gameMode === CAPTURE_THE_BEER_MODE && teamId
+            ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
+            : undefined,
+          sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
+        };
+      });
     bridge.publishRoundResults(results);
   }
 
@@ -354,6 +361,7 @@ export class ArenaLifecycleCoordinator {
         timeOfDayMinutes: currentRoundState?.timeOfDayMinutes,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
+        resultEligiblePlayerIds: bridge.getRoundResultEligiblePlayerIds(),
         endedAt: roundEndedAt,
       });
     } else {
@@ -361,6 +369,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     this.hostSaveRoundResults(roundEndedAt);
+    bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
     // zurücksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
@@ -383,6 +392,74 @@ export class ArenaLifecycleCoordinator {
   /** True, wenn der lokale Spieler die laufende Partie gerade abbrechen darf. */
   canHostAbortRound(): boolean {
     return bridge.isHost() && bridge.getGamePhase() === 'ARENA' && !this.matchTerminated;
+  }
+
+  /** True, solange die lokale Rolle eine laufende Runde verlassen darf. */
+  canEnterSpectatorMode(): boolean {
+    const localId = bridge.getLocalPlayerId();
+    return bridge.getGamePhase() === 'ARENA'
+      && !this.matchTerminated
+      && bridge.canPlayerAct(localId);
+  }
+
+  /** Wird vom Optionsmenue nach der zweiten Bestaetigung aufgerufen. */
+  enterSpectatorMode(): void {
+    if (!this.canEnterSpectatorMode()) return;
+    void bridge.requestSpectatorMode();
+  }
+
+  /**
+   * Synchronisiert die lokale Rolle und entfernt gesperrte Entitaeten ohne Todespfad.
+   * Dadurch gibt es weder Frag-/Kill-Callbacks noch einen Respawn-Timer fuer Spectatoren.
+   */
+  syncRoundParticipation(): void {
+    if (bridge.getGamePhase() !== 'ARENA') {
+      this.localPlayerState.spectator = false;
+      return;
+    }
+
+    const localId = bridge.getLocalPlayerId();
+    const spectator = bridge.isRoundSpectator(localId);
+    this.localPlayerState.spectator = spectator;
+    if (spectator) {
+      this.localPlayerState.alive = false;
+      this.localPlayerState.burrowed = false;
+    }
+
+    for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
+      if (!bridge.canPlayerSpawnOrRespawn(player.id)) {
+        this.removePlayerFromActiveRound(player.id);
+      }
+    }
+  }
+
+  /** Host callback fuer den atomaren Rollenwechsel; kein CombatSystem-Tod. */
+  handleSpectatorEntered(playerId: string): void {
+    if (bridge.getGamePhase() !== 'ARENA') return;
+    this.removePlayerFromActiveRound(playerId);
+    if (playerId === bridge.getLocalPlayerId()) {
+      this.localPlayerState.spectator = true;
+      this.localPlayerState.alive = false;
+      this.localPlayerState.burrowed = false;
+      this.localPlayerState.overlayTrackedAlive = null;
+    }
+  }
+
+  /** Gemeinsamer Entkopplungspfad fuer Spectator, Disconnect und Arena-Teardown. */
+  removePlayerFromActiveRound(playerId: string): void {
+    if (bridge.isHost()) {
+      this.ctx.combatSystem.removePlayer(playerId);
+      this.ctx.resourceSystem?.removePlayer(playerId);
+      this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId);
+      this.ctx.burrowSystem?.removePlayer(playerId);
+      this.ctx.loadoutManager?.removePlayer(playerId);
+      this.ctx.powerUpSystem?.removePlayer(playerId);
+      this.ctx.tunnelSystem?.removePlayer(playerId);
+    }
+    this.ctx.effectSystem.clearBurrowState(playerId);
+    this.clientUpdate.removeBurrowPhase(playerId);
+    this.ctx.hostPhysics.removePlayer(playerId);
+    this.ctx.playerManager.removePlayer(playerId);
   }
 
   terminateMatch(reason?: string): void {
@@ -788,6 +865,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getMaxHp(playerId) ?? HP_MAX;
     });
+    this.ctx.combatSystem.setRespawnAllowedResolver((playerId) => bridge.canPlayerSpawnOrRespawn(playerId));
+    this.ctx.combatSystem.setPlayerActionAllowedResolver((playerId) => bridge.canPlayerAct(playerId));
     this.ctx.combatSystem.setPlayerDamageReductionResolver((playerId) => {
       // Waffen- und Item-Reduktion addieren sich. Die Summe bleibt hier ungedeckelt; das
       // `CombatSystem` klemmt den fertigen Anteil auf [0,1], damit Schaden nicht negativ wird.
@@ -1462,6 +1541,7 @@ export class ArenaLifecycleCoordinator {
         return this.placeTunnel(cfg, playerId, x, y, targetX, targetY, playerColor, params);
       });
       this.ctx.loadoutManager.setActionBlockedChecker((playerId, slot) => {
+        if (!bridge.canPlayerAct(playerId)) return true;
         if (!this.ctx.combatSystem.isAlive(playerId)) return true;
         if (slot === 'weapon1' || slot === 'weapon2') {
           if (this.ctx.burrowSystem?.isWeaponBlocked(playerId)) return true;
@@ -1868,6 +1948,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setDeathCallback(null);
     this.ctx.combatSystem.setEnemyDeathCallback(null);
     this.ctx.combatSystem.setPlayerMaxHpResolver(null);
+    this.ctx.combatSystem.setRespawnAllowedResolver(null);
+    this.ctx.combatSystem.setPlayerActionAllowedResolver(null);
     this.ctx.combatSystem.setPlayerDamageReductionResolver(null);
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver(null);
     this.ctx.combatSystem.setPlayerMaxArmorResolver(null);
@@ -2042,7 +2124,9 @@ export class ArenaLifecycleCoordinator {
     this.arenaBuilt = true;
 
     for (const profile of bridge.getConnectedPlayers()) {
-      if (bridge.getPlayerReady(profile.id) && !this.ctx.playerManager.hasPlayer(profile.id)) {
+      if (bridge.canPlayerSpawnOrRespawn(profile.id)
+        && bridge.getPlayerReady(profile.id)
+        && !this.ctx.playerManager.hasPlayer(profile.id)) {
         this.ctx.playerManager.addPlayer(profile);
         if (bridge.isHost()) {
           this.ctx.combatSystem.initPlayer(profile.id);
@@ -2059,6 +2143,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.centerHUD.transitionToGame();
     this.syncHostLoadoutsFromCommittedSelections();
     this.resetLocalArenaHudState();
+    this.localPlayerState.spectator = false;
     this.localPlayerState.overlayTrackedAlive = null;
     this.ctx.arenaCountdown?.syncTo(
       bridge.getArenaStartTime(),
@@ -2078,6 +2163,7 @@ export class ArenaLifecycleCoordinator {
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;
+    this.localPlayerState.spectator = false;
     this.localPlayerState.overlayTrackedAlive = null;
     this.clientUpdate.clientUtilityOverride = null;
     this.ctx.arenaCountdown?.clear();
@@ -2102,7 +2188,11 @@ export class ArenaLifecycleCoordinator {
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
     this.ctx.rightPanel.transitionToLobby();
     this.ctx.centerHUD.transitionToLobby();
-    this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
+    const roundResults = bridge.getRoundResults();
+    this.ctx.rightPanel.showRoundResults(
+      bridge.isLocalRoundResultEligible(roundResults) ? roundResults : null,
+      bridge.getRoundState(),
+    );
     this.lobbyOverlay.setReadyButtonState(false);
     this.lobbyOverlay.show();
   }

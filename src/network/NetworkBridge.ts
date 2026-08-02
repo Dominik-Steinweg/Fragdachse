@@ -25,7 +25,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedOverchargeField, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTurretCharge, SyncedTrainState, SyncedTunnel, SyncedVulnerableEnemy, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedOverchargeField, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTurretCharge, SyncedTrainState, SyncedTunnel, SyncedVulnerableEnemy, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -36,6 +36,7 @@ import {
 } from '../config';
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { countEnemyUpserts } from './enemySnapshotCodec';
+import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
@@ -47,6 +48,15 @@ import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades'
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
+import {
+  canRoundPlayerReceiveRewards,
+  canRoundPlayerSpawnOrRespawn,
+  createRoundParticipationState,
+  enterRoundSpectator,
+  getRoundPlayerRole,
+  getRoundResultEligibleIds,
+  markRoundLateJoiner,
+} from '../scenes/arena/RoundParticipationPolicy';
 
 /**
  * Zustandsobjekt eines Spielers. Absichtlich schmal: nur `id`, `getState` und `setState`
@@ -121,6 +131,7 @@ const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
+const KEY_ROUND_PARTICIPATION = 'rpt'; // global reliable: RoundParticipationState | null
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
@@ -131,6 +142,7 @@ const KEY_TRAIN_EVENT    = 'tev'; // global: TrainEventConfig   (reliable,   ein
 const KEY_TRAIN_STATE    = 'trs'; // global: SyncedTrainState   (unreliable, per-frame Zug-Snapshot)
 const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, unreliable)
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
+const KEY_GAME_STATE_INITIAL = 'gsi'; // global reliable: vollstaendiger Bootstrap-Snapshot der laufenden Runde
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
 const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
 
@@ -249,6 +261,8 @@ export interface RoundState {
   // Client Basen/Map race-frei aus EINEM Objekt baut, statt den separaten KEY_COOP_MAP_ID parallel
   // abzuwarten (sonst kann eine Basis beim Client fehlen, wenn der Key später als die Phase ankommt).
   coopDefenseMapId?: string;
+  /** Spieler, die beim Abschluss fuer Ergebnisse/Belohnungen qualifiziert waren. */
+  resultEligiblePlayerIds?: string[];
   endedAt?: number;
 }
 
@@ -504,6 +518,7 @@ export class NetworkBridge {
 
   private joinCbs: Array<(profile: PlayerProfile) => void> = [];
   private quitCbs: Array<(id: string) => void>             = [];
+  private spectatorEnteredCbs: Array<(id: string) => void> = [];
 
   private activated = false;
   private rpcDispatchersActive = false;
@@ -554,6 +569,7 @@ export class NetworkBridge {
   private lastInputSentAtMs = 0;
   private lastObservedRttSampleCount = 0;
   private publishedPingSequence = 0;
+  private fullGameStateRequested = false;
 
   constructor() {
     this.pingController = new NetworkPingController({
@@ -568,6 +584,10 @@ export class NetworkBridge {
       const teamId = (payload as { teamId?: unknown } | null)?.teamId;
       if (teamId !== 'blue' && teamId !== 'red') return false;
       return this.hostHandleTeamRequest(teamId, caller.id);
+    });
+
+    this.registerHostRpcHandler('spt', (_payload: unknown, caller: PlayerState): boolean => {
+      return this.hostEnterSpectator(caller.id);
     });
 
     this.registerHostRpcHandler('kck', (payload: unknown, caller: PlayerState): KickPlayerResult => {
@@ -639,6 +659,11 @@ export class NetworkBridge {
     this.quitCbs.push(cb);
   }
 
+  /** Wird auf dem Host unmittelbar nach dem autoritativen Rollenwechsel ausgelöst. */
+  onSpectatorEntered(cb: (id: string) => void): void {
+    this.spectatorEnteredCbs.push(cb);
+  }
+
   /**
    * Löscht alle Join- und Quit-Callbacks.
    * Muss am Anfang von create() der ArenaScene aufgerufen werden,
@@ -647,6 +672,7 @@ export class NetworkBridge {
   clearPlayerCallbacks(): void {
     this.joinCbs = [];
     this.quitCbs = [];
+    this.spectatorEnteredCbs = [];
   }
 
   // ── Einmalige Aktivierung (in main.ts aufrufen) ────────────────────────────
@@ -707,6 +733,12 @@ export class NetworkBridge {
 
       const profile = this.extractProfile(state);
       this.connectedPlayers.set(state.id, profile);
+      if (isHost() && this.getGamePhase() === 'ARENA') {
+        // Der Rosterbeitritt ist bereits bekannt, die Runde bleibt aber unveraendert: Der neue
+        // Spieler bekommt nur die Spectator-Rolle und einen verlaesslichen Full-Snapshot.
+        this.hostRegisterLateJoiner(state.id);
+        this.requestFullGameState();
+      }
       this.joinCbs.forEach(cb => cb(profile));
       this.hostPublishLobbySync();
     });
@@ -1125,6 +1157,17 @@ export class NetworkBridge {
    * verzoegert, was sich anfuehlbar auswirken koennte.
    */
   sendLocalInput(input: PlayerInput): void {
+    // Spectatoren koennen auch bei manipuliertem Client keinen alten Bewegungs-/Preview-State
+    // weiter an den Host schreiben.
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) {
+      input = {
+        dx: 0,
+        dy: 0,
+        aim: input.aim,
+        dashHeld: false,
+        placementPreview: null,
+      } satisfies PlayerInput;
+    }
     const now = Date.now();
     if (now - this.lastInputSentAtMs < NET_INPUT_KEEPALIVE_MS && isSamePlayerInput(input, this.lastSentInput)) {
       return;
@@ -1244,6 +1287,121 @@ export class NetworkBridge {
       && this.hasCommittedLoadout(id)
       && (!requiresCoopDefenseProfile || this.hasCommittedCoopDefenseProfile(id))
     ));
+  }
+
+  // ── Rundenteilnahme / Spectator-Rolle: Host → Alle (global, reliable) ─────
+
+  getRoundParticipation(): RoundParticipationState | null {
+    const raw = getState(KEY_ROUND_PARTICIPATION) as RoundParticipationState | null | undefined;
+    if (!raw || typeof raw !== 'object') return null;
+    if (!Array.isArray(raw.participantIds) || !Array.isArray(raw.spectatorIds)) return null;
+    return {
+      roundStartTime: typeof raw.roundStartTime === 'number' ? raw.roundStartTime : 0,
+      participantIds: [...raw.participantIds],
+      spectatorIds: [...raw.spectatorIds],
+    };
+  }
+
+  /** Host-only: friert die Teilnehmerliste beim Wechsel in die Arena ein. */
+  hostStartRoundParticipants(participantIds: readonly string[], roundStartTime: number): void {
+    if (!isHost()) return;
+    setState(
+      KEY_ROUND_PARTICIPATION,
+      createRoundParticipationState(roundStartTime, participantIds),
+      true,
+    );
+  }
+
+  /** Host-only: setzt einen spaeter beigetretenen Roster-Eintrag auf Spectator. */
+  private hostRegisterLateJoiner(playerId: string): void {
+    if (!isHost() || this.getGamePhase() !== 'ARENA') return;
+    const current = this.getRoundParticipation();
+    if (!current) return;
+    setState(KEY_ROUND_PARTICIPATION, markRoundLateJoiner(current, playerId), true);
+  }
+
+  /** Host-only: schaltet einen aktiven Teilnehmer unwiderruflich auf Spectator. */
+  hostEnterSpectator(playerId: string): boolean {
+    if (!isHost() || this.getGamePhase() !== 'ARENA') return false;
+    const current = this.getRoundParticipation();
+    if (!current || getRoundPlayerRole(current, playerId) !== 'participant') return false;
+
+    setState(KEY_ROUND_PARTICIPATION, enterRoundSpectator(current, playerId), true);
+    const player = this.playerStateMap.get(playerId);
+    const previous = player?.getState(KEY_INPUT) as PlayerInput | undefined;
+    player?.setState(KEY_INPUT, {
+      dx: 0,
+      dy: 0,
+      aim: previous?.aim ?? 0,
+      dashHeld: false,
+      placementPreview: null,
+    } satisfies PlayerInput, false);
+    for (const callback of this.spectatorEnteredCbs) callback(playerId);
+    return true;
+  }
+
+  /** Lokale UI-Aktion; die eigentliche Entscheidung bleibt beim Host-RPC. */
+  async requestSpectatorMode(): Promise<boolean> {
+    const localId = this.getLocalPlayerId();
+    if (!this.canPlayerAct(localId)) return false;
+    if (isHost()) return this.hostEnterSpectator(localId);
+    const result = await this.callHostRpc('spt', {}, 1_000).catch(() => false);
+    return result === true;
+  }
+
+  /** Host-only: naechster Net-Tick muss einen verlaesslichen Full-Snapshot senden. */
+  requestFullGameState(): void {
+    if (isHost()) this.fullGameStateRequested = true;
+  }
+
+  consumeFullGameStateRequest(): boolean {
+    if (!isHost()) return false;
+    const requested = this.fullGameStateRequested;
+    this.fullGameStateRequested = false;
+    return requested;
+  }
+
+  /** Host-only: Rollen-Snapshot nach Rundenende loeschen; in der naechsten Lobby gilt normaler Join. */
+  hostResetRoundParticipation(): void {
+    if (!isHost()) return;
+    setState(KEY_ROUND_PARTICIPATION, null, true);
+  }
+
+  getRoundRole(playerId: string): import('../types').RoundPlayerRole {
+    if (this.getGamePhase() !== 'ARENA') return 'participant';
+    return getRoundPlayerRole(this.getRoundParticipation(), playerId);
+  }
+
+  isRoundSpectator(playerId: string): boolean {
+    return this.getRoundRole(playerId) === 'spectator';
+  }
+
+  isLocalSpectator(): boolean {
+    return this.isRoundSpectator(this.getLocalPlayerId());
+  }
+
+  canPlayerSpawnOrRespawn(playerId: string): boolean {
+    return this.getGamePhase() === 'ARENA'
+      && canRoundPlayerSpawnOrRespawn(this.getRoundParticipation(), playerId);
+  }
+
+  canPlayerAct(playerId: string): boolean {
+    return this.canPlayerSpawnOrRespawn(playerId);
+  }
+
+  canPlayerReceiveRoundRewards(playerId: string): boolean {
+    return canRoundPlayerReceiveRewards(this.getRoundParticipation(), playerId);
+  }
+
+  getRoundResultEligiblePlayerIds(): string[] {
+    return getRoundResultEligibleIds(this.getRoundParticipation(), this.getConnectedPlayerIds());
+  }
+
+  isLocalRoundResultEligible(results = this.getRoundResults()): boolean {
+    const localId = this.getLocalPlayerId();
+    if (results) return results.some((result) => result.id === localId);
+    const finalIds = this.getRoundState()?.resultEligiblePlayerIds;
+    return finalIds?.includes(localId) === true;
   }
 
   // ── Spielphase: Host → Alle (global, reliable) ────────────────────────────
@@ -1371,7 +1529,11 @@ export class NetworkBridge {
    * Leere Arrays und null-Werte werden weggelassen, um Bandbreite zu sparen.
    * Enthält eine Sequenznummer (_s) für zuverlässige Change-Detection auf Clients.
    */
-  publishGameState(state: OutboundGameState): void {
+  publishGameState(state: OutboundGameState, fullSnapshot = false): void {
+    if (fullSnapshot) {
+      this.publishFullGameState(state);
+      return;
+    }
     const payload: Record<string, unknown> = { p: encodePlayerStates(state.players), _s: ++this.publishSeq };
     payload.rt = state.roundStartTime;
     if (state.projectiles.length > 0)  payload.j = state.projectiles;
@@ -1410,6 +1572,49 @@ export class NetworkBridge {
     if (state.captureTheBeer)          payload.cb = state.captureTheBeer;
     this.recordEnemySyncMetrics(payload, state.enemies);
     setState(KEY_GAME_STATE, payload, false);
+  }
+
+  /** Baut einen vollstaendigen Bootstrap-Payload und veroeffentlicht ihn reliable. */
+  private publishFullGameState(state: OutboundGameState): void {
+    const payload: Record<string, unknown> = {
+      p: encodePlayerStates(state.players),
+      _s: ++this.publishSeq,
+      _full: true,
+      rt: state.roundStartTime,
+      j: state.projectiles,
+      e: state.enemies,
+      r: state.rocks ?? { full: true, count: 0, upserts: [], removals: [] } satisfies SyncedRockSnapshot,
+      br: state.placeableRocks,
+      oc: state.overchargeFields,
+      tc: state.turretCharges,
+      rc: state.remoteControlTurrets,
+      dc: state.decoys,
+      s: state.smokes,
+      f: state.fires,
+      sc: state.stinkClouds,
+      tb: state.timeBubbles,
+      td: state.teslaDomes,
+      es: state.energyShields,
+      g: state.guardianSpirits,
+      rd: state.repairDrones,
+      sl: encodeSlimeTrailSnapshot(state.slimeTrail),
+      vu: encodeVulnerableEnemies(state.vulnerableEnemies),
+      fg: this.buildFullBurningGroundDelta(state.burningGround),
+      u: state.powerups ?? { full: true, count: 0, upserts: [], removals: [] } satisfies SyncedPowerUpSnapshot,
+      pd: state.pedestals ?? { full: true, upserts: [], removals: [] } satisfies SyncedPowerUpPedestalSnapshot,
+      n: state.nukes,
+      ak: state.airstrikes,
+      mt: state.meteors,
+      tn: state.tunnels,
+      t: state.train,
+      b: state.bases,
+      cb: state.captureTheBeer,
+    };
+    this.recordEnemySyncMetrics(payload, state.enemies);
+    // Die unreliable Kopie hält bereits verbundene Clients aktuell; der reliable Key ist der
+    // Bootstrap für neue Teilnehmer und bleibt bis zum nächsten Full-Resync erhalten.
+    setState(KEY_GAME_STATE, payload, false);
+    setState(KEY_GAME_STATE_INITIAL, payload, true);
   }
 
   private recordEnemySyncMetrics(payload: Record<string, unknown>, enemySnapshot: SyncedEnemySnapshot | null): void {
@@ -1517,15 +1722,43 @@ export class NetworkBridge {
   }
 
   getLatestGameState(): GameState | undefined {
-    const raw = getState(KEY_GAME_STATE) as Record<string, unknown> | undefined;
-    if (!raw || !raw.p) return this.cachedGameState;
-    // Sequenznummer vergleichen: nur parsen wenn neue Daten vom Host eingetroffen sind
+    const fastRaw = getState(KEY_GAME_STATE) as Record<string, unknown> | undefined;
+    const initialRaw = getState(KEY_GAME_STATE_INITIAL) as Record<string, unknown> | undefined;
+    const expectedRoundStartTime = this.getArenaStartTime();
+    const inArena = this.getGamePhase() === 'ARENA' && expectedRoundStartTime > 0;
+    const isCurrentRound = (candidate: Record<string, unknown> | undefined): boolean => {
+      if (!candidate || !candidate.p) return false;
+      if (!inArena) return true;
+      return candidate.rt === expectedRoundStartTime;
+    };
+    const validFast = isCurrentRound(fastRaw) ? fastRaw : undefined;
+    const validInitial = isCurrentRound(initialRaw) && isCompleteGameStatePayload(initialRaw)
+      ? initialRaw
+      : undefined;
+
+    // Ein Latejoiner darf einen Delta-State nicht als Baseline interpretieren. Er wartet auf den
+    // reliable Full-Snapshot, statt fehlende Slices fälschlich als leere Arena zu behandeln.
+    if (inArena && !this.cachedGameState && !validInitial) return undefined;
+
+    const candidates = [validFast, validInitial].filter(
+      (candidate): candidate is Record<string, unknown> => candidate !== undefined,
+    );
+    if (candidates.length === 0) return this.cachedGameState;
+    const raw = !this.cachedGameState && validInitial
+      ? validInitial
+      : candidates.sort((left, right) => {
+        const leftSeq = typeof left._s === 'number' ? left._s : -1;
+        const rightSeq = typeof right._s === 'number' ? right._s : -1;
+        if (leftSeq !== rightSeq) return rightSeq - leftSeq;
+        return left._full === true ? -1 : 1;
+      })[0];
+
+    // Sequenznummer vergleichen: nur parsen wenn neue Daten vom Host eingetroffen sind.
     const seq = raw._s as number | undefined;
     if (seq !== undefined && seq <= this.lastSeenSeq) return this.cachedGameState;
     if (seq !== undefined) this.lastSeenSeq = seq;
 
     const roundStartTime = (raw.rt as number | undefined) ?? 0;
-    const expectedRoundStartTime = this.getArenaStartTime();
     if (this.getGamePhase() === 'ARENA' && expectedRoundStartTime > 0 && roundStartTime !== expectedRoundStartTime) {
       this.cachedGameState = undefined;
       return undefined;
@@ -1699,6 +1932,9 @@ export class NetworkBridge {
     clientNow?: number,
     awaitResult = false,
   ): Promise<LoadoutUseResult | null> {
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) {
+      return { ok: false, reason: 'blocked' };
+    }
     if (isHost()) {
       return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
     }
@@ -1764,6 +2000,7 @@ export class NetworkBridge {
   // ── Power-Up-Pickup-RPC: Client → Host ────────────────────────────────────
 
   sendPickupPowerUp(uid: number): void {
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
     if (isHost()) {
       this.powerUpPickupHandler?.(uid, myPlayer().id);
       return;
@@ -1786,6 +2023,7 @@ export class NetworkBridge {
   }
 
   sendDecoyStealthBreakRequest(): void {
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
     if (isHost()) {
       this.decoyStealthBreakHandler?.(myPlayer().id);
       return;
@@ -1848,6 +2086,17 @@ export class NetworkBridge {
       ...(upserts.length > 0 ? { u: upserts } : {}),
       ...(removals.length > 0 ? { r: removals } : {}),
     };
+  }
+
+  private buildFullBurningGroundDelta(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundDelta {
+    this.burningGroundPublishTicks += 1;
+    this.lastPublishedBurningGround.clear();
+    const full = snapshot.cells.map((cell) => {
+      const encoded = encodeBurningGroundCell(cell);
+      this.lastPublishedBurningGround.set(cell.id, encoded);
+      return encoded;
+    });
+    return { f: full };
   }
 
   private mergeBurningGroundDelta(
@@ -2208,6 +2457,7 @@ export class NetworkBridge {
   // ── Dash-RPC: Client → Host ───────────────────────────────────────────────
 
   sendDash(dx: number, dy: number): void {
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
     if (isHost()) {
       this.dashHandler?.(myPlayer().id, dx, dy);
       return;
@@ -2232,6 +2482,7 @@ export class NetworkBridge {
   // ── Burrow-RPC: Client → Host ─────────────────────────────────────────────
 
   sendBurrowRequest(wantsBurrowed: boolean): void {
+    if (this.getGamePhase() === 'ARENA' && !this.canPlayerAct(this.getLocalPlayerId())) return;
     if (isHost()) {
       this.burrowHandler?.(myPlayer().id, wantsBurrowed);
       return;
@@ -2596,7 +2847,7 @@ export class NetworkBridge {
 
   /** Host-only: Erhöht den Frag-Zähler eines Spielers um 1. */
   incrementPlayerFrags(killerId: string): void {
-    if (!isHost()) return;
+    if (!isHost() || !this.canPlayerReceiveRoundRewards(killerId)) return;
     const ps = this.playerStateMap.get(killerId);
     if (!ps) return;
     const current = (ps.getState(KEY_FRAGS) as number | undefined) ?? 0;
@@ -2605,7 +2856,7 @@ export class NetworkBridge {
 
   /** Host-only: Erhöht den Frag-Zähler eines Spielers um einen beliebigen Betrag. */
   addPlayerFrags(playerId: string, amount: number): void {
-    if (!isHost()) return;
+    if (!isHost() || !this.canPlayerReceiveRoundRewards(playerId)) return;
     const ps = this.playerStateMap.get(playerId);
     if (!ps) return;
     const current = (ps.getState(KEY_FRAGS) as number | undefined) ?? 0;
@@ -2636,6 +2887,14 @@ export class NetworkBridge {
     const nextTotal = this.getCoopDefenseRoundXp() + Math.max(0, Math.floor(amount));
     this.setCoopDefenseRoundXp(nextTotal);
     return nextTotal;
+  }
+
+  /** Host-only, mit Teilnehmerberechtigungs-Gate fuer Kill-/XP-Quellen. */
+  addCoopDefenseRoundXpForPlayer(playerId: string, amount: number): number {
+    if (!isHost() || !this.canPlayerReceiveRoundRewards(playerId)) {
+      return this.getCoopDefenseRoundXp();
+    }
+    return this.addCoopDefenseRoundXp(amount);
   }
 
   resetCoopDefenseRoundXp(): void {
@@ -2704,6 +2963,7 @@ export class NetworkBridge {
 
   /** Host-only: Speichert den Endstand der Runde für die Lobby-Anzeige. */
   publishRoundResults(results: RoundResult[]): void {
+    if (!isHost()) return;
     setState(KEY_ROUND_RESULTS, results, true);
   }
 

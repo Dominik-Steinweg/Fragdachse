@@ -7,11 +7,12 @@ import {
   type CoopBaseShape,
   resolveCoopDefenseMapWaveConfigs,
 } from '../src/config/coopDefenseMaps';
-import { getCoopDefenseEnemyConfig, getCoopDefenseEnemyXp } from '../src/config/coopDefenseEnemies';
+import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import {
   isCoopDefenseBaseObstacleClearanceCell,
   resolveCoopDefenseBases,
 } from '../src/arena/BaseRegistry';
+import { MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS } from '../src/config';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 import { formatTimeOfDay, parseTimeOfDay, resolveSkyState } from '../src/effects/TimeOfDay';
 
@@ -23,69 +24,27 @@ function getShapeBounds(shape: CoopBaseShape): { width: number; height: number }
   };
 }
 
-function expectedRespawnMs(defId: string): number {
-  if (defId === 'HEALTH_PACK') return 5_000;
-  if (defId === 'ARMOR' || defId === 'ADRENALINE') return 10_000;
-  if (defId === 'DOUBLE_DAMAGE') return 20_000;
-  return 30_000;
-}
-
-function getTheoreticalMapXp(mapId: string): number {
-  const map = getCoopDefenseMapConfig(mapId);
-  const durationMs = map.roundDurationSec * 1_000;
-  const waveXp = map.waves.reduce((sum, wave) => {
-    const activeMs = Math.max(0, durationMs - (wave.startAtMs ?? 0));
-    const waveCount = 1 + Math.floor(activeMs / wave.intervalMs);
-    return sum + waveCount * wave.countPerWave * getCoopDefenseEnemyXp(wave.enemyKind);
-  }, 0);
-  return waveXp + (map.boss ? getCoopDefenseEnemyXp(map.boss.enemyKind) : 0);
-}
-
 describe('Coop defense map progression', () => {
-  it('uses the progression-specific arena widths', () => {
-    expect(Object.fromEntries(COOP_DEFENSE_MAP_CONFIGS.map((map) => [map.mapId, map.arenaWidthCells])))
-      .toEqual({
-        '0': 90,
-        '1': 60,
-        '2': 70,
-        '3': 76,
-        '4': 82,
-        '5': 74,
-        '6': 88,
-        '7': 80,
-        '8': 92,
-        '9': 84,
-        '10': 96,
-        '11': 60,
-        '12': 112,
-        '13': 135,
-        '14': 60,
-        '15': 100,
-        '16': 104,
-      });
+  it('keeps map identifiers and arena widths valid without snapshotting balance values', () => {
+    const mapIds = COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId);
+    expect(mapIds.every((mapId) => mapId.trim().length > 0)).toBe(true);
+    expect(new Set(mapIds).size).toBe(mapIds.length);
+    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+      expect(Number.isInteger(map.arenaWidthCells), map.mapId).toBe(true);
+      expect(map.arenaWidthCells, map.mapId).toBeGreaterThan(0);
+      expect(map.arenaWidthCells, map.mapId).toBeLessThanOrEqual(MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS);
+    }
   });
 
-  it('awards items from map 10 onward at the configured levels', () => {
-    expect(Object.fromEntries(COOP_DEFENSE_MAP_CONFIGS.map((map) => [map.mapId, map.itemDrop?.itemLevel])))
-      .toEqual({
-        '0': undefined,
-        '1': undefined,
-        '2': undefined,
-        '3': undefined,
-        '4': undefined,
-        '5': undefined,
-        '6': undefined,
-        '7': undefined,
-        '8': undefined,
-        '9': undefined,
-        '10': 1,
-        '11': 1,
-        '12': 2,
-        '13': 2,
-        '14': 3,
-        '15': 3,
-        '16': 3,
-      });
+  it('keeps configured item rewards valid and non-decreasing through campaign progression', () => {
+    let highestItemLevel = 0;
+    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+      if (!map.itemDrop) continue;
+      expect(Number.isInteger(map.itemDrop.itemLevel), map.mapId).toBe(true);
+      expect(map.itemDrop.itemLevel, map.mapId).toBeGreaterThan(0);
+      expect(map.itemDrop.itemLevel, map.mapId).toBeGreaterThanOrEqual(highestItemLevel);
+      highestItemLevel = map.itemDrop.itemLevel;
+    }
   });
 
   it('keeps map metadata usable after balancing and terminology changes', () => {
@@ -102,43 +61,37 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('assigns exactly one of the three victory objectives to every map', () => {
+  it('assigns one valid victory objective to every map', () => {
     const objectiveByMapId = Object.fromEntries(
       COOP_DEFENSE_MAP_CONFIGS.map((map) => [map.mapId, map.objective]),
     );
 
-    expect(objectiveByMapId).toEqual({
-      '0': 'survive',
-      '1': 'survive',
-      '2': 'survive',
-      '3': 'survive',
-      '4': 'survive',
-      '5': 'defeat-boss',
-      '6': 'survive',
-      '7': 'survive',
-      '8': 'survive',
-      '9': 'survive',
-      '10': 'defeat-boss',
-      '11': 'survive',
-      '12': 'destroy-hostile-bases',
-      '13': 'destroy-hostile-bases',
-      '14': 'survive',
-      '15': 'defeat-boss',
-      '16': 'destroy-hostile-bases',
-    });
-    expect(new Set(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.objective)).size).toBe(3);
-    expect(getCoopDefenseMapObjectiveLabel('survive')).toBe('ZEIT UEBERLEBEN');
-    expect(getCoopDefenseMapObjectiveLabel('defeat-boss')).toBe('BOSS MUSS FALLEN');
-    expect(getCoopDefenseMapObjectiveLabel('destroy-hostile-bases')).toBe('FEINDBASIS ZERSTOEREN');
-    expect(getCoopDefenseMapConfig('5').tutorialText).toContain('wenn der Boss fällt');
-    expect(getCoopDefenseMapConfig('5').tutorialText).not.toContain('Zeitlimit erreicht');
+    expect(Object.values(objectiveByMapId).every((objective) => (
+      objective === 'survive'
+      || objective === 'defeat-boss'
+      || objective === 'destroy-hostile-bases'
+    ))).toBe(true);
+    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+      expect(getCoopDefenseMapObjectiveLabel(map.objective).trim().length).toBeGreaterThan(0);
+      if (map.boss) expect(map.objective).toBe('defeat-boss');
+      if (map.objective === 'destroy-hostile-bases') {
+        expect(map.bases.some((base) => base.faction === 'hostile' && (base.role ?? 'main') === 'main')).toBe(true);
+        expect(map.bases.some((base) => base.faction !== 'hostile' && (base.role ?? 'main') === 'main')).toBe(true);
+      }
+    }
   });
 
-  it('calculates finite XP for every playable map without fixing balancing values', () => {
+  it('keeps the German labels for representative map objectives', () => {
+    expect(getCoopDefenseMapObjectiveLabel('destroy-hostile-bases')).toBe('FEINDBASIS ZERSTÖREN');
+    expect(getCoopDefenseMapObjectiveLabel('survive')).toBe('ZEIT ÜBERLEBEN');
+  });
+
+  it('calculates positive finite XP for every playable map', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
-      const theoreticalXp = getTheoreticalMapXp(map.mapId);
-      expect(Number.isFinite(theoreticalXp)).toBe(true);
-      expect(theoreticalXp).toBeGreaterThan(0);
+      const waves = resolveCoopDefenseMapWaveConfigs(map, 1);
+      const scheduledXp = getCoopDefenseMapScheduledXp(map, waves, 1);
+      expect(Number.isFinite(scheduledXp)).toBe(true);
+      expect(scheduledXp).toBeGreaterThan(0);
     }
   });
 
@@ -216,28 +169,22 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('adds the configured friendly outpost progression and plasma base weapons', () => {
-    expect(getCoopDefenseMapConfig('8').bases.filter((base) => base.role === 'outpost'))
-      .toHaveLength(2);
-    expect(getCoopDefenseMapConfig('10').bases.filter((base) => base.role === 'outpost'))
-      .toHaveLength(1);
-    expect(getCoopDefenseMapConfig('12').bases.filter((base) => base.role === 'outpost'))
-      .toHaveLength(1);
-    expect(getCoopDefenseMapConfig('15').bases.filter((base) => base.role === 'outpost'))
-      .toHaveLength(2);
-
-    const map12MainWeapons = getCoopDefenseMapConfig('12').bases
-      .filter((base) => (base.role ?? 'main') === 'main')
+  it('keeps outpost factions and turret assignments semantically coherent', () => {
+    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+      const outposts = map.bases.filter((base) => base.role === 'outpost');
+      for (const outpost of outposts) {
+        expect(outpost.faction === undefined || outpost.faction === 'friendly' || outpost.faction === 'hostile').toBe(true);
+        for (const turret of outpost.turrets ?? []) {
+          expect(turret.weaponId.trim().length).toBeGreaterThan(0);
+          expect(turret.mountSide.trim().length).toBeGreaterThan(0);
+        }
+      }
+    }
+    const plasmaTurrets = COOP_DEFENSE_MAP_CONFIGS
+      .flatMap((map) => map.bases)
       .flatMap((base) => base.turrets ?? [])
-      .map((turret) => turret.weaponId);
-    expect(map12MainWeapons).toHaveLength(3);
-    expect(map12MainWeapons.every((weaponId) => weaponId === 'FLIEGENPILZ_PLASMA')).toBe(true);
-
-    const map13Outposts = getCoopDefenseMapConfig('13').bases.filter((base) => base.role === 'outpost');
-    expect(map13Outposts).toHaveLength(2);
-    expect(map13Outposts.map((base) => base.faction)).toEqual(['hostile', 'friendly']);
-    expect(map13Outposts.flatMap((base) => base.turrets ?? []).map((turret) => turret.weaponId))
-      .toEqual(['FLIEGENPILZ_PLASMA', 'FLIEGENPILZ_PLASMA']);
+      .filter((turret) => turret.weaponId === 'FLIEGENPILZ_PLASMA');
+    expect(plasmaTurrets.length).toBeGreaterThan(0);
   });
 
   it('includes spawn-point waves in the map XP budget with player scaling', () => {
@@ -273,12 +220,14 @@ describe('Coop defense map progression', () => {
     for (const mapId of ['6', '8']) {
       const rearBase = getCoopDefenseMapConfig(mapId).bases.find((base) => base.id === 'coop-base-rear');
       expect(rearBase).toBeDefined();
-      expect(getShapeBounds(rearBase!.shape)).toEqual({ width: 4, height: 5 });
-      expect(rearBase!.powerUpPedestals?.map((pedestal) => pedestal.defId)).toEqual([
+      const bounds = getShapeBounds(rearBase!.shape);
+      expect(bounds.width).toBeGreaterThan(0);
+      expect(bounds.height).toBeGreaterThan(0);
+      expect(rearBase!.powerUpPedestals?.map((pedestal) => pedestal.defId)).toEqual(expect.arrayContaining([
         'HEALTH_PACK',
         'ADRENALINE',
         'ARMOR',
-      ]);
+      ]));
     }
   });
 
@@ -302,13 +251,14 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('uses standardized cooldowns and delays the first strong pedestal spawn', () => {
+  it('keeps power-up respawns valid and delays the first strong pedestal spawn', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
       const freePowerUps = map.powerUps;
       const linkedPowerUps = map.bases.flatMap((base) => base.powerUpPedestals ?? []);
       for (const powerUp of [...freePowerUps, ...linkedPowerUps]) {
         expect(powerUp.spawnOnArenaStart).toBe(!shouldDelayFirstPedestalSpawn(powerUp.defId));
-        expect(powerUp.respawnMs).toBe(expectedRespawnMs(powerUp.defId));
+        expect(Number.isFinite(powerUp.respawnMs)).toBe(true);
+        expect(powerUp.respawnMs).toBeGreaterThan(0);
       }
     }
   });

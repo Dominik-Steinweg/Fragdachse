@@ -108,7 +108,7 @@
     },
     "LAUBBLAESER": {
       "id": "LAUBBLAESER",
-      "displayName": "Laubblaeser",
+      "displayName": "Laubbläser",
       "cooldown": 90,
       "damage": 1,
       "directDamageOverride": 1,

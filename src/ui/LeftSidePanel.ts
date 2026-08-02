@@ -24,7 +24,7 @@ import {
   toCssColor,
 } from '../config';
 import { HelpOverlay } from './HelpOverlay';
-import { OptionsOverlay, type AbortMatchBinding } from './OptionsOverlay';
+import { OptionsOverlay, type AbortMatchBinding, type SpectatorMatchBinding } from './OptionsOverlay';
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
 import {
@@ -136,7 +136,7 @@ const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
 function getTeamLabel(teamId: TeamId | null): string {
   if (teamId === 'blue') return 'Team Blau';
   if (teamId === 'red') return 'Team Rot';
-  return 'Team waehlen';
+  return 'Team wählen';
 }
 
 type LoadoutCarouselItem = LoadoutItemRef;
@@ -220,6 +220,7 @@ export class LeftSidePanel {
   private optionsOverlay:   OptionsOverlay | null = null;
   // Wird vor dem Bau gesetzt, wenn der Lifecycle-Koordinator frueher fertig ist als das Panel.
   private abortMatchBinding: AbortMatchBinding | null = null;
+  private spectatorMatchBinding: SpectatorMatchBinding | null = null;
 
   constructor(
     private scene:  Phaser.Scene,
@@ -272,7 +273,7 @@ export class LeftSidePanel {
     const editControl = this.createCompactButton(
       NAME_BUTTON_X,
       NAME_COLOR_ROW_Y,
-      'NAME \u00c4NDERN',
+      'NAME ÄNDERN',
       NAME_COLOR_BUTTON_W,
       NAME_COLOR_BUTTON_H,
       () => this.openNameEdit(),
@@ -284,7 +285,7 @@ export class LeftSidePanel {
     const colorEditBtn = this.createCompactButton(
       COLOR_BUTTON_X,
       NAME_COLOR_ROW_Y,
-      'FARBE \u00c4NDERN',
+      'FARBE ÄNDERN',
       NAME_COLOR_BUTTON_W,
       NAME_COLOR_BUTTON_H,
       () => this.toggleColorPicker(),
@@ -597,6 +598,7 @@ export class LeftSidePanel {
     this.optionsOverlay = new OptionsOverlay(this.scene, this.audioSystem, this.graphicsQuality);
     this.optionsOverlay.build();
     this.optionsOverlay.setAbortMatchBinding(this.abortMatchBinding);
+    this.optionsOverlay.setSpectatorMatchBinding(this.spectatorMatchBinding);
     this.setLobbyFieldsLocked(false);
     this.refreshColorIndicator();
   }
@@ -607,6 +609,12 @@ export class LeftSidePanel {
   setAbortMatchBinding(binding: AbortMatchBinding | null): void {
     this.abortMatchBinding = binding;
     this.optionsOverlay?.setAbortMatchBinding(binding);
+  }
+
+  /** Reicht den freiwilligen Rollenwechsel in den Spectator-Modus durch. */
+  setSpectatorMatchBinding(binding: SpectatorMatchBinding | null): void {
+    this.spectatorMatchBinding = binding;
+    this.optionsOverlay?.setSpectatorMatchBinding(binding);
   }
 
   toggleOptionsOverlay(): void {
@@ -1316,7 +1324,7 @@ export class LeftSidePanel {
       ?.setPosition(COLOR_BUTTON_X, NAME_COLOR_ROW_Y + CONTROL_LABEL_OFFSET_Y)
       .setVisible(visible)
       .setAlpha(visible ? 1 : 0)
-      .setText('FARBE \u00c4NDERN');
+      .setText('FARBE ÄNDERN');
     if (enabled) this.colorEditBtn?.setInteractive({ useHandCursor: true });
     else this.colorEditBtn?.disableInteractive();
   }

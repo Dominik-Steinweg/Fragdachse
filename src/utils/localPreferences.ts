@@ -714,7 +714,7 @@ export function exportStoredGameProgressJson(): string {
 export function importStoredGameProgressJson(json: string): LocalProgressTransferResult {
   let parsed: unknown;
   try { parsed = JSON.parse(json); } catch {
-    return { ok: false, message: 'Die Datei enthaelt kein gueltiges JSON.' };
+    return { ok: false, message: 'Die Datei enthält kein gültiges JSON.' };
   }
   if (!isRecord(parsed) || parsed.format !== LOCAL_PROGRESS_EXPORT_FORMAT
     || parsed.formatVersion !== LOCAL_PROGRESS_EXPORT_VERSION
@@ -724,7 +724,7 @@ export function importStoredGameProgressJson(json: string): LocalProgressTransfe
   }
   const decoded = decodeProgressDocument(parsed.progress);
   if (!decoded) {
-    return { ok: false, message: 'Der Spielstand ist ungueltig oder verwendet ein inkompatibles Schema.' };
+    return { ok: false, message: 'Der Spielstand ist ungültig oder verwendet ein inkompatibles Schema.' };
   }
   const current = readPreferences();
   writePreferences({ ...current, ...decoded });
@@ -757,8 +757,8 @@ export function importStoredGameProgressFile(): Promise<LocalProgressTransferRes
       input.onchange = async () => {
         try {
           const file = input.files?.[0];
-          if (!file) return resolve({ ok: false, message: 'Keine Datei ausgewaehlt.' });
-          if (file.size > 5_000_000) return resolve({ ok: false, message: 'Die Spielstanddatei ist zu gross.' });
+          if (!file) return resolve({ ok: false, message: 'Keine Datei ausgewählt.' });
+          if (file.size > 5_000_000) return resolve({ ok: false, message: 'Die Spielstanddatei ist zu groß.' });
           resolve(importStoredGameProgressJson(await file.text()));
         } catch {
           resolve({ ok: false, message: 'Die Spielstanddatei konnte nicht gelesen werden.' });
@@ -766,7 +766,7 @@ export function importStoredGameProgressFile(): Promise<LocalProgressTransferRes
       };
       input.click();
     } catch {
-      resolve({ ok: false, message: 'Der Dateiimport ist in diesem Browser nicht verfuegbar.' });
+      resolve({ ok: false, message: 'Der Dateiimport ist in diesem Browser nicht verfügbar.' });
     }
   });
 }
@@ -1179,6 +1179,33 @@ export function setStoredCoopDefenseUpgradeProfile(
               resolvedClassId,
             ),
           },
+        },
+      },
+    };
+  });
+}
+
+/** Setzt den gesamten Coop-Defense-Upgradefortschritt atomar auf die Startprofile zurueck. */
+export function resetStoredCoopDefenseUpgradeProfiles(): void {
+  updatePreferences((current) => {
+    const storedProgress = current.progression.coopDefense;
+    const defaultProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
+      buildDefaultCoopDefenseUpgradeProfile(DEFAULT_COOP_DEFENSE_CLASS_ID),
+      storedProgress.completedBossMapIds.length,
+      DEFAULT_COOP_DEFENSE_CLASS_ID,
+    );
+
+    return {
+      ...current,
+      progression: {
+        ...current.progression,
+        coopDefense: {
+          ...storedProgress,
+          defaultProfile,
+          profilesByClass: mirrorDefaultProfileToClasses(
+            defaultProfile,
+            storedProgress.completedBossMapIds.length,
+          ),
         },
       },
     };

@@ -8,43 +8,52 @@ import {
 } from '../src/utils/coopDefenseUpgrades';
 
 function maxHydraProfile(): CoopDefenseUpgradeProfile {
+  const upgradeIds = ['unlock_hydra', 'hydra_range', 'hydra_damage_split'] as const;
   return {
-    upgrades: {
-      unlock_hydra: { unlocked: true, level: 1 },
-      hydra_range: { unlocked: true, level: 3 },
-      hydra_damage_split: { unlocked: true, level: 3 },
-    },
+    upgrades: Object.fromEntries(upgradeIds.map((id) => [
+      id,
+      {
+        unlocked: true,
+        level: getCoopDefenseUpgradeDefinition(id)?.maxLevel ?? 1,
+      },
+    ])),
   };
 }
 
 describe('Hydra Gun coop-defense upgrades', () => {
   it('combines range and projectile speed before the split-power follow-up', () => {
-    expect(getCoopDefenseUpgradeDefinition('hydra_range')).toMatchObject({
-      maxLevel: 3,
-      requires: [{ upgradeId: 'unlock_hydra', minLevel: 1 }],
-      effects: [
-        { stat: 'weapon.HYDRA.range', mode: 'add_percent_per_level', value: 0.2 },
-        { stat: 'weapon.HYDRA.projectileSpeed', mode: 'add_percent_per_level', value: 0.1 },
-      ],
-    });
-    expect(getCoopDefenseUpgradeDefinition('hydra_damage_split')).toMatchObject({
-      maxLevel: 3,
-      requires: [{ upgradeId: 'hydra_range', minLevel: 1 }],
-      effects: [
-        { stat: 'weapon.HYDRA.damage', mode: 'add_percent_per_level', value: 0.3 },
-        { stat: 'weapon.HYDRA.splitFactor', mode: 'add_percent_per_level', value: 0.1 },
-      ],
-    });
+    const range = getCoopDefenseUpgradeDefinition('hydra_range');
+    const damageSplit = getCoopDefenseUpgradeDefinition('hydra_damage_split');
+    expect(range?.requires).toEqual([{ upgradeId: 'unlock_hydra', minLevel: 1 }]);
+    expect(damageSplit?.requires).toEqual([{ upgradeId: 'hydra_range', minLevel: 1 }]);
+    expect(range?.effects.map(({ stat, mode }) => ({ stat, mode }))).toEqual([
+      { stat: 'weapon.HYDRA.range', mode: 'add_percent_per_level' },
+      { stat: 'weapon.HYDRA.projectileSpeed', mode: 'add_percent_per_level' },
+    ]);
+    expect(damageSplit?.effects.map(({ stat, mode }) => ({ stat, mode }))).toEqual([
+      { stat: 'weapon.HYDRA.damage', mode: 'add_percent_per_level' },
+      { stat: 'weapon.HYDRA.splitFactor', mode: 'add_percent_per_level' },
+    ]);
+    for (const effect of [...(range?.effects ?? []), ...(damageSplit?.effects ?? [])]) {
+      expect(Number.isFinite(effect.value), effect.stat).toBe(true);
+      expect(effect.value, effect.stat).toBeGreaterThan(0);
+    }
     expect(getCoopDefenseUpgradeDefinition('hydra_projectile_speed')).toBeNull();
   });
 
-  it('resolves the maximum range, speed, initial damage, and split retention values', () => {
+  it('applies each resolved modifier relative to the current base config', () => {
     const totals = getCoopDefenseResolvedEffectTotals(maxHydraProfile());
-    const resolved = applyCoopDefenseModifiersToWeaponConfig(WEAPON_CONFIGS.HYDRA, 'weapon1', totals);
+    const base = WEAPON_CONFIGS.HYDRA;
+    const resolved = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon1', totals);
 
-    expect(resolved.range).toBeCloseTo(1600);
-    expect(resolved.fire.projectileSpeed).toBeCloseTo(390);
-    expect(resolved.damage).toBeCloseTo(22.8);
-    expect(resolved.splitFactor).toBeCloseTo(1.95);
+    const scaled = (stat: string, baseValue: number): number => (
+      baseValue * (1 + (totals.percentage[stat] ?? 0))
+    );
+    expect(resolved.range).toBeCloseTo(scaled('weapon.HYDRA.range', base.range));
+    expect(resolved.fire.projectileSpeed).toBeCloseTo(
+      scaled('weapon.HYDRA.projectileSpeed', base.fire.projectileSpeed),
+    );
+    expect(resolved.damage).toBeCloseTo(scaled('weapon.HYDRA.damage', base.damage));
+    expect(resolved.splitFactor).toBeCloseTo(scaled('weapon.HYDRA.splitFactor', base.splitFactor));
   });
 });

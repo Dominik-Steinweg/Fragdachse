@@ -78,7 +78,7 @@ Readonly<Record<CoopDefenseItemSlot, CoopDefenseItemSlotDefinition>> = Object.fr
   },
   armor: {
     id: 'armor',
-    label: 'Ruestung',
+    label: 'Rüstung',
     baseStat: 'player.maxHp',
     baseLabel: 'Maximale HP',
     baseMode: 'add_per_level',
@@ -114,7 +114,7 @@ export const COOP_DEFENSE_ITEM_RARITY_DEFINITIONS:
 Readonly<Record<CoopDefenseItemRarity, CoopDefenseItemRarityDefinition>> = Object.freeze({
   white: {
     id: 'white',
-    label: 'Gewoehnlich',
+    label: 'Gewöhnlich',
     affixCount: 0,
     weight: 55,
     color: COLORS.GREY_2,
@@ -283,7 +283,7 @@ Object.freeze([
   },
   {
     id: 'max_armor',
-    label: 'Ruestungsmaximum',
+    label: 'Rüstungsmaximum',
     stat: 'player.maxArmor',
     mode: 'add_per_level',
     weight: 100,
@@ -295,7 +295,7 @@ Object.freeze([
   },
   {
     id: 'armor_regen',
-    label: 'Ruestungsregeneration',
+    label: 'Rüstungsregeneration',
     stat: 'player.armorRegenPerSecond',
     mode: 'add_per_level',
     weight: 75,
@@ -307,7 +307,7 @@ Object.freeze([
   },
   {
     id: 'armor_gain',
-    label: 'Ruestungsgewinn',
+    label: 'Rüstungsgewinn',
     stat: 'player.armorGain',
     mode: 'add_percent_per_level',
     weight: 70,
@@ -367,7 +367,7 @@ Object.freeze([
     slots: ['armor'],
     displayAsPercent: false,
     shortText: (value) => `${secondsText(COOP_DEFENSE_AFFIX_RULES.emergencyRepairDelayMs)} s ohne Schaden:`
-      + ` +${Math.round(value * 10) / 10} Ruestung/s`,
+      + ` +${Math.round(value * 10) / 10} Rüstung/s`,
   },
   {
     id: 'damage_reflection',
@@ -378,7 +378,7 @@ Object.freeze([
     perLevel: 0.015,
     slots: ['armor'],
     displayAsPercent: true,
-    shortText: (value) => `Wirft ${percentText(value)} % des erlittenen Schadens auf den Verursacher zurueck`,
+    shortText: (value) => `Wirft ${percentText(value)} % des erlittenen Schadens auf den Verursacher zurück`,
   },
   {
     id: 'life_leech',
@@ -410,7 +410,7 @@ Object.freeze([
     // auch ganz ohne Klasse wirkt. Dachs Nukem bringt Grundchance und hoeheren Klassenwert mit
     // und profitiert dadurch am staerksten.
     id: 'critical_chance',
-    label: 'Kritische Praezision',
+    label: 'Kritische Präzision',
     stat: 'player.criticalChance',
     mode: 'add_per_level',
     weight: 55,
@@ -451,7 +451,7 @@ Object.freeze([
     // Erhoeht ausschliesslich das persoenliche Maximum. Die Kapazitaetskosten der einzelnen
     // Konstrukte bleiben bewusst spielerunabhaengig.
     id: 'construction_capacity',
-    label: 'Baukapazitaet',
+    label: 'Baukapazität',
     stat: 'construction.capacity',
     mode: 'add_per_level',
     weight: 35,
@@ -472,7 +472,7 @@ Object.freeze([
     slots: ['gloves'],
     classIds: ['inspector_gadachs'],
     displayAsPercent: true,
-    shortText: (value) => `Das naechste eigene Konstrukt verursacht +${percentText(value)} % Schaden`,
+    shortText: (value) => `Das nächste eigene Konstrukt verursacht +${percentText(value)} % Schaden`,
   },
   {
     id: 'primary_vulnerability',
@@ -483,7 +483,7 @@ Object.freeze([
     perLevel: 0.0025,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % Chance bei Primaerwaffentreffern:`
+    shortText: (value) => `${percentText(value)} % Chance bei Primärwaffentreffern:`
       + ` Ziel erleidet ${secondsText(COOP_DEFENSE_AFFIX_RULES.vulnerabilityDurationMs)} s lang`
       + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.vulnerabilityBonus)} % mehr Schaden aus allen Quellen`,
   },
@@ -497,18 +497,18 @@ Object.freeze([
     slots: ['gloves'],
     displayAsPercent: true,
     shortText: (value) => `${percentText(value)} % Chance, einen Gegner unter`
-      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.cullingHpThreshold)} % HP sofort zu toeten (nicht bei Bossen)`,
+      + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.cullingHpThreshold)} % HP sofort zu töten (nicht bei Bossen)`,
   },
   {
     id: 'primary_slow',
-    label: 'Unterdrueckungsmunition',
+    label: 'Unterdrückungsmunition',
     weight: 40,
     minAtLevel1: 0.06,
     maxAtLevel1: 0.12,
     perLevel: 0.01,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % Chance bei Primaerwaffentreffern:`
+    shortText: (value) => `${percentText(value)} % Chance bei Primärwaffentreffern:`
       + ` Ziel ${secondsText(COOP_DEFENSE_AFFIX_RULES.suppressionSlowDurationMs)} s lang`
       + ` ${percentText(COOP_DEFENSE_AFFIX_RULES.suppressionSlowFraction)} % langsamer`,
   },
@@ -521,7 +521,7 @@ Object.freeze([
     perLevel: 0.01,
     slots: ['gloves'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % Chance bei einem Primaerwaffen-Kill:`
+    shortText: (value) => `${percentText(value)} % Chance bei einem Primärwaffen-Kill:`
       + ` schleudert ${COOP_DEFENSE_AFFIX_RULES.fireChunkCount} brennende Brocken auf nahe Bodenstellen`,
   },
   {
@@ -705,7 +705,7 @@ Object.freeze([
     perLevel: 0.01,
     slots: ['helmet', 'armor'],
     displayAsPercent: true,
-    shortText: (value) => `${percentText(value)} % des tatsaechlich erlittenen Schadens werden als Adrenalin gutgeschrieben`,
+    shortText: (value) => `${percentText(value)} % des tatsächlich erlittenen Schadens werden als Adrenalin gutgeschrieben`,
   },
   {
     id: 'dash_range',
@@ -752,8 +752,8 @@ Object.freeze([
     perLevel: 0.03,
     slots: ['boots'],
     displayAsPercent: true,
-    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.movementChargeDistancePx} zurueckgelegte Pixel:`
-      + ` naechster Primaerangriff +${percentText(value)} % Schaden`,
+    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.movementChargeDistancePx} zurückgelegte Pixel:`
+      + ` nächster Primärangriff +${percentText(value)} % Schaden`,
   },
   {
     id: 'glutwanderer',
@@ -764,7 +764,7 @@ Object.freeze([
     perLevel: 1,
     slots: ['boots'],
     displayAsPercent: false,
-    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.glutwandererDistancePx} zurueckgelegte Pixel:`
+    shortText: (value) => `Je ${COOP_DEFENSE_AFFIX_RULES.glutwandererDistancePx} zurückgelegte Pixel:`
       + ` ${Math.max(1, Math.floor(value))} brennende Brocken`,
   },
 ]);

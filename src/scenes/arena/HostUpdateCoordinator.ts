@@ -875,6 +875,15 @@ export class HostUpdateCoordinator {
     metrics.networkTick = true;
     phaseStartedAt = performance.now();
 
+    // Erst nach dem Throttle konsumieren: In Frames ohne Net-Tick muss die Anforderung
+    // erhalten bleiben, damit der reliable Bootstrap garantiert veroeffentlicht wird.
+    const fullSnapshotRequested = bridge.consumeFullGameStateRequest();
+    if (fullSnapshotRequested) {
+      this.ctx.rockRegistry?.requestFullNetSnapshot();
+      this.ctx.powerUpSystem?.requestFullNetSnapshot();
+      this.ctx.enemyManager?.requestFullNetSnapshot();
+    }
+
     for (const expiredRock of this.ctx.placementSystem?.update(now) ?? []) {
       if (expiredRock.kind === 'turret') {
         this.rockVisualHelper.spawnTurretDeathCloud(expiredRock);
@@ -1012,7 +1021,7 @@ export class HostUpdateCoordinator {
       train,
       bases: this.ctx.baseManager?.getNetSnapshot() ?? [],
       captureTheBeer,
-    });
+    }, fullSnapshotRequested);
 
     if (projectiles.some(p => p.style === 'bfg')) {
       this.ctx.visualFeedback.camera.request(bfgFlightRumble());
@@ -1027,7 +1036,7 @@ export class HostUpdateCoordinator {
   }
 
   getLeaderboardEntries(): { name: string; colorHex: number; frags: number; ping: number; teamId: TeamId | null; teamScore?: number; sharedXp?: number }[] {
-    const playerIds = bridge.getConnectedPlayerIds();
+    const playerIds = bridge.getRoundResultEligiblePlayerIds();
     const signatureParts: string[] = [];
     const blueTeamScore = this.resolveTeamObjectiveScore('blue');
     const redTeamScore = this.resolveTeamObjectiveScore('red');
@@ -1550,7 +1559,7 @@ export class HostUpdateCoordinator {
     return [{
       defId: 'MOVEMENT_CHARGE',
       remainingFrac: runtime.getMovementChargeProgress(playerId),
-      valueText: charged ? `+${Math.round(bonus * 100)} %` : 'laedt',
+      valueText: charged ? `+${Math.round(bonus * 100)} %` : 'lädt',
       intensity: charged ? 1 : 0.35,
     }];
   }

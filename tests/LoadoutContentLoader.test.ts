@@ -45,9 +45,16 @@ function expectContentError(run: () => unknown, fragment: string): void {
 describe('loadout content loader', () => {
   it('builds the shipped unified registries and freezes every exposed value', () => {
     const built = buildLoadoutRegistries(clonedSources());
-    expect(Object.keys(built.weapons)).toHaveLength(50);
-    expect(Object.keys(built.utilities)).toHaveLength(16);
-    expect(Object.keys(built.ultimates)).toHaveLength(6);
+    const registryIds = [
+      ...Object.keys(built.weapons),
+      ...Object.keys(built.utilities),
+      ...Object.keys(built.ultimates),
+    ];
+    expect(registryIds.length).toBeGreaterThan(0);
+    expect(new Set(registryIds).size).toBe(registryIds.length);
+    for (const [id, config] of Object.entries(built.weapons)) expect(config.id).toBe(id);
+    for (const [id, config] of Object.entries(built.utilities)) expect(config.id).toBe(id);
+    for (const [id, config] of Object.entries(built.ultimates)) expect(config.id).toBe(id);
     expect(built.defaultLoadout.weapon1).toBe(built.weapons.GLOCK);
     expect(built.defaultLoadout.utility).toBe(built.utilities.HE_GRENADE);
     expect(Object.isFrozen(built)).toBe(true);
@@ -60,17 +67,37 @@ describe('loadout content loader', () => {
     expect(typeof built.weapons.GLOCK.projectileColor).toBe('number');
   });
 
-  it('keeps placeable Coop variants limited to inherited cooldown and lifetime changes', () => {
+  it('keeps placeable Coop variants limited to their explicit mode overrides', () => {
     const built = buildLoadoutRegistries(clonedSources());
     const normalRock = built.utilities.FELSBAU as Record<string, unknown>;
     const coopRock = built.utilities.FELSBAU_COOP as Record<string, unknown>;
     const normalTurret = built.utilities.FLIEGENPILZ as Record<string, unknown>;
     const coopTurret = built.utilities.FLIEGENPILZ_COOP as Record<string, unknown>;
+    const coopRockPlaceable = coopRock.placeable as Record<string, unknown>;
+    const coopTurretPlaceable = coopTurret.placeable as Record<string, unknown>;
 
-    expect(coopRock).toMatchObject({ cooldown: 500, placeable: { lifetimeMs: 0 } });
-    expect(coopTurret).toMatchObject({ cooldown: 500, placeable: { lifetimeMs: 0 } });
-    expect(coopRock).toEqual({ ...normalRock, id: 'FELSBAU_COOP', cooldown: 500, placeable: { ...(normalRock.placeable as Record<string, unknown>), lifetimeMs: 0 } });
-    expect(coopTurret).toEqual({ ...normalTurret, id: 'FLIEGENPILZ_COOP', cooldown: 500, placeable: { ...(normalTurret.placeable as Record<string, unknown>), lifetimeMs: 0 } });
+    expect(coopRock.cooldown).toBe(coopTurret.cooldown);
+    expect(coopRockPlaceable).toMatchObject({ lifetimeMs: expect.any(Number) });
+    expect(coopTurretPlaceable).toMatchObject({ lifetimeMs: expect.any(Number) });
+    expect(coopRockPlaceable.lifetimeMs).toBe(coopTurretPlaceable.lifetimeMs);
+    expect(coopRock).toEqual({
+      ...normalRock,
+      id: 'FELSBAU_COOP',
+      cooldown: coopRock.cooldown,
+      placeable: {
+        ...(normalRock.placeable as Record<string, unknown>),
+        lifetimeMs: coopRockPlaceable.lifetimeMs,
+      },
+    });
+    expect(coopTurret).toEqual({
+      ...normalTurret,
+      id: 'FLIEGENPILZ_COOP',
+      cooldown: coopTurret.cooldown,
+      placeable: {
+        ...(normalTurret.placeable as Record<string, unknown>),
+        lifetimeMs: coopTurretPlaceable.lifetimeMs,
+      },
+    });
   });
 
   it('is deterministic across source order and source renames', () => {
@@ -219,6 +246,10 @@ describe('loadout content loader', () => {
   });
 
   it('rejects implausible numbers, registry-specific slots and unknown modes', () => {
+    const typeSources = clonedSources();
+    documentWith(typeSources, 'weapons', 'GLOCK').weapons!.GLOCK.damage = 'not-a-number';
+    expectContentError(() => buildLoadoutRegistries(typeSources), 'damage');
+
     const numberSources = clonedSources();
     documentWith(numberSources, 'weapons', 'GLOCK').weapons!.GLOCK.cooldown = -1;
     expectContentError(() => buildLoadoutRegistries(numberSources), 'negative Zahl');

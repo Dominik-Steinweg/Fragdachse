@@ -8,6 +8,7 @@ import {
   COOP_DEFENSE_MAP_CONFIGS,
   resolveCoopDefenseMapWaveConfigs,
 } from '../src/config/coopDefenseMaps';
+import { scaleByCoopDefenseHumanPlayers } from '../src/config/coopDefenseScaling';
 
 describe('Coop defense multiplayer scaling', () => {
   it('keeps every regular enemy at or below the shared 30px size limit', () => {
@@ -31,7 +32,7 @@ describe('Coop defense multiplayer scaling', () => {
         expect(base.playerScaling?.moveSpeedFactorPerAdditionalPlayer).toBeUndefined();
         expect(base.spawnScaling).toBeUndefined();
         if (base.playerScaling) {
-          expect(base.playerScaling.maxHpFactorPerAdditionalPlayer).toBe(0.8);
+          expect(Number.isFinite(base.playerScaling.maxHpFactorPerAdditionalPlayer)).toBe(true);
         }
         const hpFactor = base.playerScaling?.maxHpFactorPerAdditionalPlayer ?? 0;
         const expectedMaxHp = Math.max(1, Math.round(base.maxHp * (1 + hpFactor * (playerCount - 1))));
@@ -48,5 +49,12 @@ describe('Coop defense multiplayer scaling', () => {
         resolveCoopDefenseMapWaveConfigs(map, 1),
       );
     }
+  });
+
+  it('applies the player formula to artificial positive and negative factors', () => {
+    const baseValue = 100;
+    expect(scaleByCoopDefenseHumanPlayers(baseValue, 0.25, 1)).toBe(baseValue);
+    expect(scaleByCoopDefenseHumanPlayers(baseValue, 0.25, 3)).toBe(150);
+    expect(scaleByCoopDefenseHumanPlayers(baseValue, -0.25, 3)).toBeCloseTo(100 / 1.5);
   });
 });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { COLORS } from '../src/config';
-import { COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT } from '../src/config/coopDefenseItems';
+import {
+  COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT,
+  getCoopDefenseItemRarityDefinition,
+} from '../src/config/coopDefenseItems';
 import {
   buildCoopDefenseInventoryGrid,
   buildCoopDefenseItemTooltip,
@@ -78,10 +81,10 @@ describe('coop-defense item tooltip', () => {
     );
     const texts = tooltipTexts(content);
 
-    expect(content.title).toBe('Ruestung · Stufe 1');
+    expect(content.title).toBe('Rüstung · Stufe 1');
     expect(texts).toContain('+30 Maximale HP');
-    expect(texts).toContain('+20 Ruestungsmaximum');
-    expect(texts).toContain('GEGENUEBER AUSGERUESTET');
+    expect(texts).toContain('+20 Rüstungsmaximum');
+    expect(texts).toContain('GEGENÜBER AUSGERÜSTET');
     expect(texts).toContain('+8 Maximale HP');
 
     const gain = content.lines.find((line) => line.text === '+8 Maximale HP')!;
@@ -117,9 +120,13 @@ describe('coop-defense item tooltip', () => {
     const worn = item({ uid: 'worn', baseValue: 25 });
     const texts = tooltipTexts(buildCoopDefenseItemTooltip(worn, worn, true));
 
-    expect(texts).not.toContain('GEGENUEBER AUSGERUESTET');
+    expect(texts).not.toContain('GEGENÜBER AUSGERÜSTET');
     expect(texts).toContain('+25 Maximale HP');
     expect(texts.some((text) => text.includes('Ablegen'))).toBe(true);
+  });
+
+  it('uses the German rarity label in the item presentation', () => {
+    expect(getCoopDefenseItemRarityDefinition('white').label).toBe('Gewöhnlich');
   });
 
   it('always states the salvage reward', () => {

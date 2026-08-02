@@ -14,6 +14,8 @@ import { ensureFlatPanelTexture } from './uiTextures';
 export interface UiContextMenuEntry {
   readonly label: string;
   readonly color: number;
+  /** Deaktivierte Eintraege bleiben sichtbar, reagieren aber nicht auf Klicks. */
+  readonly enabled?: boolean;
   readonly onPick: () => void;
   /** Haelt das Menue offen, z.B. wenn ein Eintrag erst noch eine Bestaetigung verlangt. */
   readonly keepOpen?: boolean;
@@ -59,15 +61,12 @@ export class UiContextMenu {
     const y = Phaser.Math.Clamp(options.y, 12, GAME_HEIGHT - height - 12);
 
     // Vollflaechiger Fangschirm: ein Klick daneben schliesst das Menue.
-    // Menue und Fangschirm handeln beim *Loslassen*: das dazugehoerige `pointerup` darf nicht an
-    // das Element darunter durchschlagen, sonst oeffnet der Schliessklick das Menue sofort neu.
+    // Das Menue und der Fangschirm handeln beim Druecken. So kann ein neu geoeffneter Fangschirm
+    // nicht das Loslassen desselben Klicks als Schliessklick interpretieren.
     const backdrop = this.scene.add.rectangle(
       GAME_WIDTH / 2 - x, GAME_HEIGHT / 2 - y, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.25,
     ).setScrollFactor(0).setInteractive();
     backdrop.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
-      event?.stopPropagation();
-    });
-    backdrop.on('pointerup', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.close();
     });
@@ -90,18 +89,20 @@ export class UiContextMenu {
 
     options.entries.forEach((entry, index) => {
       const rowY = PADDING + TITLE_H + index * (ROW_H + ROW_GAP);
-      const row = this.scene.add.rectangle(PADDING, rowY, ROW_W, ROW_H, COLORS.GREY_8, 0.9)
+      const enabled = entry.enabled !== false;
+      const entryColor = enabled ? entry.color : COLORS.GREY_5;
+      const row = this.scene.add.rectangle(PADDING, rowY, ROW_W, ROW_H, COLORS.GREY_8, enabled ? 0.9 : 0.55)
         .setOrigin(0, 0)
-        .setStrokeStyle(1, entry.color, 0.75)
+        .setStrokeStyle(1, entryColor, enabled ? 0.75 : 0.35)
         .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true });
-      row.on('pointerover', () => row.setFillStyle(COLORS.GREY_6, 1));
-      row.on('pointerout', () => row.setFillStyle(COLORS.GREY_8, 0.9));
+        .setInteractive({ useHandCursor: enabled });
+      row.on('pointerover', () => {
+        if (enabled) row.setFillStyle(COLORS.GREY_6, 1);
+      });
+      row.on('pointerout', () => row.setFillStyle(COLORS.GREY_8, enabled ? 0.9 : 0.55));
       row.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
         event?.stopPropagation();
-      });
-      row.on('pointerup', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
-        event?.stopPropagation();
+        if (!enabled) return;
         // Erst schliessen, dann handeln: die Aktion darf das Menue mit neuen Eintraegen
         // sofort wieder oeffnen (Bestaetigungsschritt beim Zerlegen).
         if (!entry.keepOpen) this.close();
@@ -110,7 +111,7 @@ export class UiContextMenu {
       children.push(
         row,
         this.scene.add.text(PADDING + 12, rowY + ROW_H / 2, entry.label, {
-          fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: toCssColor(entry.color),
+          fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: toCssColor(entryColor),
         }).setOrigin(0, 0.5).setScrollFactor(0),
       );
     });

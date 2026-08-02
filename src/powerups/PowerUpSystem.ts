@@ -125,6 +125,7 @@ export class PowerUpSystem {
   private readonly pedestalNetCache = new Map<number, string>();
   private readonly pendingPedestalRemovalIds = new Set<number>();
   private ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+  private forceFullNetSnapshot = false;
 
   private arenaStartTime = 0;
   private pedestalsActivated = false;
@@ -164,6 +165,7 @@ export class PowerUpSystem {
     this.pedestalNetCache.clear();
     this.pendingPedestalRemovalIds.clear();
     this.ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    this.forceFullNetSnapshot = false;
     this.arenaStartTime = 0;
     this.pedestalsActivated = false;
     for (const pedestal of this.pedestals.values()) {
@@ -491,8 +493,14 @@ export class PowerUpSystem {
     return result;
   }
 
+  /** Naechster Netzwerk-Snapshot enthaelt Power-Ups und Podeste vollstaendig. */
+  requestFullNetSnapshot(): void {
+    this.forceFullNetSnapshot = true;
+  }
+
   getNetSnapshot(): SyncedPowerUpSnapshot | null {
-    const full = this.ticksSinceFullNetSnapshot >= POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    const full = this.forceFullNetSnapshot
+      || this.ticksSinceFullNetSnapshot >= POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     const currentIds = new Set<number>();
     const upserts: SyncedPowerUp[] = [];
 
@@ -552,7 +560,8 @@ export class PowerUpSystem {
    * Full-Resync), statt das volle Array jeden Tick. Gibt null zurück, wenn nichts zu senden ist.
    */
   getPedestalNetSnapshot(): SyncedPowerUpPedestalSnapshot | null {
-    const full = this.ticksSinceFullPedestalSnapshot >= POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
+    const full = this.forceFullNetSnapshot
+      || this.ticksSinceFullPedestalSnapshot >= POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
     const currentIds = new Set<number>();
     const upserts: SyncedPowerUpPedestal[] = [];
 
@@ -577,6 +586,7 @@ export class PowerUpSystem {
         }
       }
       this.ticksSinceFullPedestalSnapshot = 0;
+      this.forceFullNetSnapshot = false;
     } else {
       this.ticksSinceFullPedestalSnapshot += 1;
     }

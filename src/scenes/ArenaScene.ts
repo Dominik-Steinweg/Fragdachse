@@ -86,6 +86,7 @@ import {
   switchStoredCoopDefenseClassLoadout,
   setStoredLoadoutSlot,
   setStoredCoopDefenseUpgradeProfile,
+  resetStoredCoopDefenseUpgradeProfiles,
   claimStoredPendingCoopDefenseItemReward,
   equipStoredCoopDefenseItem,
   getStoredCoopDefenseItemsUnlocked,
@@ -108,15 +109,19 @@ import {
   buildDefaultCoopDefenseUpgradeProfile,
   levelDownCoopDefenseUpgrade,
   levelUpCoopDefenseUpgrade,
+  respecCoopDefenseUpgradeCategory,
   getCoopDefenseUpgradeLoadoutSelection,
   getCoopDefenseUpgradeTextureKey,
   getUnlockedCoopDefenseConstructionIds,
   getUnlockedLoadoutToolRefs,
   getCoopDefenseToolCapacity,
   setLoadoutToolSlots,
+  getSpentCoopDefenseUpgradePoints,
+  getSpentCoopDefenseBossPoints,
+  type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
-import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
+import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseItemRewardAction, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
@@ -130,6 +135,7 @@ import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
 import { PerformanceAblationController } from './arena/PerformanceAblation';
 import { PerformanceDiagnosticsOverlay } from '../ui/PerformanceDiagnosticsOverlay';
+import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 
 import {
   type ArenaContext,
@@ -253,6 +259,9 @@ export class ArenaScene extends Phaser.Scene {
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private lastCameraScrollX = 0;
+  private spectatorCameraScrollX = 0;
+  private spectatorCameraLeftKey: Phaser.Input.Keyboard.Key | null = null;
+  private spectatorCameraRightKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
   private coopDefenseDebugDamageKey: Phaser.Input.Keyboard.Key | null = null;
   private arenaPanelsHeld = false;
@@ -500,6 +509,8 @@ export class ArenaScene extends Phaser.Scene {
     const inputSystem      = new InputSystem(
       this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.sprite,
     );
+    this.spectatorCameraLeftKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A, false) ?? null;
+    this.spectatorCameraRightKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, false) ?? null;
     projectileManager.setAudioSystem(gameAudioSystem);
     effectSystem.setAudioSystem(gameAudioSystem);
 
@@ -620,6 +631,9 @@ export class ArenaScene extends Phaser.Scene {
       () => this.coopDefenseProgress,
       (upgradeId) => this.levelUpCoopDefenseUpgrade(upgradeId),
       (upgradeId) => this.levelDownCoopDefenseUpgrade(upgradeId),
+      (categoryId) => this.categoryRespecCoopDefenseUpgrades(categoryId),
+      () => this.classRespecCoopDefenseUpgrades(),
+      () => this.canFullRespecCoopDefenseUpgrades(),
       () => this.fullRespecCoopDefenseUpgrades(),
       (classId) => this.selectCoopDefenseClass(classId),
       (tool) => this.toggleLoadoutTool(tool),
@@ -1048,6 +1062,7 @@ export class ArenaScene extends Phaser.Scene {
       }
     };
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
+      if (!bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
 
       let shotId: number | undefined;
@@ -1112,12 +1127,12 @@ export class ArenaScene extends Phaser.Scene {
         void loadoutPromise.then((result) => {
           if (result?.ok) return;
           if (isInspectorDismantleAction) {
-            this.placementPreview.showPlacementError('Rueckbau fehlgeschlagen');
+            this.placementPreview.showPlacementError('Rückbau fehlgeschlagen');
             return;
           }
           if (isUtilityPlacementAction || isUltimatePlacementAction || isInspectorConstructionAction) {
             this.placementPreview.showPlacementError(
-              result?.reason === 'capacity' ? 'Baukapazitaet erschoepft' : 'Bau fehlgeschlagen',
+              result?.reason === 'capacity' ? 'Baukapazität erschöpft' : 'Bau fehlgeschlagen',
             );
             return;
           }
@@ -1162,6 +1177,10 @@ export class ArenaScene extends Phaser.Scene {
       canAbort: () => this.lifecycle.canHostAbortRound(),
       abort: () => this.lifecycle.hostAbortRound(),
     });
+    leftPanel.setSpectatorMatchBinding({
+      canSpectate: () => this.lifecycle.canEnterSpectatorMode(),
+      spectate: () => this.lifecycle.enterSpectatorMode(),
+    });
 
     if (bridge.isHost()) {
       bridge.initColorPool(PLAYER_COLORS);
@@ -1169,6 +1188,7 @@ export class ArenaScene extends Phaser.Scene {
 
     bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
+    bridge.onSpectatorEntered(id => this.lifecycle.handleSpectatorEntered(id));
     bridge.onKicked(() => {
       this.lobbyOverlay.showHostDisconnectedMessage('Du wurdest vom Host aus dem Raum entfernt.');
     });
@@ -1217,6 +1237,8 @@ export class ArenaScene extends Phaser.Scene {
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated      = this.lifecycle.isMatchTerminated();
     const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
+    this.lifecycle.syncRoundParticipation();
+    const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
 
     if (phase === 'LOBBY') {
       this.clearDebugModes();
@@ -1241,8 +1263,8 @@ export class ArenaScene extends Phaser.Scene {
 
     if (inGame) {
       // Drehen ist während des Countdowns erlaubt, alles andere bleibt gesperrt.
-      this.ctx.inputSystem.setAimEnabled(!optionsOpen);
-      this.ctx.inputSystem.setInputEnabled(!countdownActive && !optionsOpen);
+      this.ctx.inputSystem.setAimEnabled(!optionsOpen && !spectator);
+      this.ctx.inputSystem.setInputEnabled(!countdownActive && !optionsOpen && !spectator);
       this.ctx.inputSystem.update();
     } else {
       this.ctx.inputSystem.setAimEnabled(false);
@@ -1270,7 +1292,11 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.setTransportDiagnostics(bridge.getWorstTransportDiagnostics());
       this.lobbyOverlay.refreshPlayerList(players);
-      this.ctx.rightPanel.showRoundResults(bridge.getRoundResults(), bridge.getRoundState());
+      const roundResults = bridge.getRoundResults();
+      this.ctx.rightPanel.showRoundResults(
+        bridge.isLocalRoundResultEligible(roundResults) ? roundResults : null,
+        bridge.getRoundState(),
+      );
       this.ctx.rightPanel.setResultsReplayAvailable(this.lastMatchResultsPresentation !== null);
       this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
       // Signaturgeschuetzt wie die Fortschrittsanzeige: der Aufruf pro Frame ist billig.
@@ -1431,14 +1457,17 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     const inArena = inGame && !terminated;
-    this.syncMainCamera(delta, inArena);
+    // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
+    // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
+    this.syncMainCamera(spectator ? 0 : delta, inArena);
+    this.syncSpectatorPlayerNames(inArena);
     const hostileBaseIndicatorActive = inArena && isCoopDefenseMode(bridge.getGameMode());
     if (hostileBaseIndicatorActive) {
       this.hostileBaseIndicator?.sync(this.ctx.baseManager, true);
     } else {
       this.hostileBaseIndicator?.clear();
     }
-    this.playerStatusRing?.setActive(inArena);
+    this.playerStatusRing?.setActive(inArena && !spectator);
     this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(!inArena);
     if (inArena) {
       this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
@@ -1488,17 +1517,18 @@ export class ArenaScene extends Phaser.Scene {
     const visualEffectsEndMs = performance.now();
 
     const aimPreviewStartedAt = performance.now();
-    const utilityTargeting    = inArena ? this.ctx.inputSystem.getUtilityTargetingPreviewState() : undefined;
-    const airstrikeTargeting  = inArena ? this.ctx.inputSystem.getAirstrikeTargetingPreviewState() : undefined;
-    const utilityPlacement    = inArena ? this.getLocalPlacementPreview() : undefined;
-    const ultimatePlacement   = inArena ? this.getLocalUltimatePlacementPreview() : undefined;
-    const constructionPlacement = inArena
+    const utilityTargeting    = inArena && !spectator ? this.ctx.inputSystem.getUtilityTargetingPreviewState() : undefined;
+    const airstrikeTargeting  = inArena && !spectator ? this.ctx.inputSystem.getAirstrikeTargetingPreviewState() : undefined;
+    const utilityPlacement    = inArena && !spectator ? this.getLocalPlacementPreview() : undefined;
+    const ultimatePlacement   = inArena && !spectator ? this.getLocalUltimatePlacementPreview() : undefined;
+    const constructionPlacement = inArena && !spectator
       ? this.ctx.inputSystem.getConstructionPlacementPreviewState()
       : undefined;
     const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
-    const ultimatePreview     = inArena ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
+    const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
     const showAim = inArena
       && !optionsOpen
+      && !spectator
       && this.localPlayerState.alive
       && !this.localPlayerState.burrowed
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
@@ -1513,8 +1543,8 @@ export class ArenaScene extends Phaser.Scene {
     this.ctx.aimSystem?.setWeaponChargeProgress(this.ctx.inputSystem.getScopeChargeProgress());
     const targetingForReticle = utilityTargeting ?? airstrikeTargeting;
     this.ctx.aimSystem?.update(
-      (showAim || targetingForReticle !== undefined) && !optionsOpen,
-      inArena && !optionsOpen,
+      (showAim || targetingForReticle !== undefined) && !optionsOpen && !spectator,
+      inArena && !optionsOpen && !spectator,
       delta,
       optionsOpen ? undefined : targetingForReticle,
       optionsOpen ? undefined : ultimatePreview,
@@ -1524,7 +1554,7 @@ export class ArenaScene extends Phaser.Scene {
     // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
     const scopeStartedAt = performance.now();
     if (this.scopeOverlay) {
-      const scopeCfg = inArena ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
+      const scopeCfg = inArena && !spectator ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
       if (scopeCfg) {
         // `pointer.x/y` zählen Renderpixel; das Overlay rechnet im Designraum.
         const pointer = this.input.activePointer;
@@ -1543,7 +1573,7 @@ export class ArenaScene extends Phaser.Scene {
     const scopeMs = performance.now() - scopeStartedAt;
 
     const aimIndicatorsStartedAt = performance.now();
-    this.utilityChargeIndicator?.update(inArena ? this.ctx.inputSystem.getUtilityChargePreviewState() : undefined);
+    this.utilityChargeIndicator?.update(inArena && !spectator ? this.ctx.inputSystem.getUtilityChargePreviewState() : undefined);
     this.ultimateChargeIndicator?.update(ultimatePreview);
     const aimIndicatorsMs = performance.now() - aimIndicatorsStartedAt;
     const visualAimEndMs = performance.now();
@@ -1781,18 +1811,7 @@ export class ArenaScene extends Phaser.Scene {
   private onPlayerLeft(id: string): void {
     if (bridge.isHost()) bridge.hostReclaimColor(id);
     if (this.ctx.playerManager.hasPlayer(id)) {
-      if (bridge.isHost()) {
-        this.ctx.combatSystem.removePlayer(id);
-        this.ctx.resourceSystem?.removePlayer(id);
-        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(id);
-        this.ctx.burrowSystem?.removePlayer(id);
-        this.ctx.loadoutManager?.removePlayer(id);
-        this.ctx.tunnelSystem?.removePlayer(id);
-      }
-      this.ctx.effectSystem.clearBurrowState(id);
-      this.clientUpdate.removeBurrowPhase(id);
-      this.ctx.hostPhysics.removePlayer(id);
-      this.ctx.playerManager.removePlayer(id);
+      this.lifecycle.removePlayerFromActiveRound(id);
     }
     if (bridge.getGamePhase() === 'ARENA' && id === bridge.getMatchHostId()) {
       this.lifecycle.terminateMatch();
@@ -2091,16 +2110,67 @@ export class ArenaScene extends Phaser.Scene {
     return true;
   }
 
-  private fullRespecCoopDefenseUpgrades(): boolean {
+  private categoryRespecCoopDefenseUpgrades(categoryId: CoopDefenseUpgradeCategoryId): boolean {
     const stored = getStoredCoopDefenseProgress();
     const activeClassId = stored.classesUnlocked
       ? stored.selectedClassId
       : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const nextProfile = buildDefaultCoopDefenseUpgradeProfile(activeClassId);
+    const activeProfile = stored.classesUnlocked
+      ? stored.profilesByClass[stored.selectedClassId]
+      : stored.defaultProfile;
+    const nextProfile = respecCoopDefenseUpgradeCategory(activeProfile, categoryId, activeClassId);
+    if (!nextProfile) return false;
 
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
     setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    this.ctx.leftPanel.refreshColorIndicator();
+    return true;
+  }
+
+  private classRespecCoopDefenseUpgrades(): boolean {
+    const stored = getStoredCoopDefenseProgress();
+    if (!stored.classesUnlocked) return false;
+
+    const activeClassId = stored.selectedClassId;
+    const activeProfile = stored.profilesByClass[activeClassId];
+    if (
+      getSpentCoopDefenseUpgradePoints(activeProfile, activeClassId) <= 0
+      && getSpentCoopDefenseBossPoints(activeProfile, activeClassId) <= 0
+    ) return false;
+
+    const nextProfile = buildDefaultCoopDefenseUpgradeProfile(activeClassId);
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
+    this.refreshStoredCoopDefenseProgress();
+    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+    this.ctx.leftPanel.refreshColorIndicator();
+    return true;
+  }
+
+  private canFullRespecCoopDefenseUpgrades(): boolean {
+    const stored = getStoredCoopDefenseProgress();
+    if (!stored.classesUnlocked) {
+      return getSpentCoopDefenseUpgradePoints(stored.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID) > 0
+        || getSpentCoopDefenseBossPoints(stored.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID) > 0;
+    }
+
+    return COOP_DEFENSE_CLASS_IDS.some((classId) => {
+      const profile = stored.profilesByClass[classId];
+      return getSpentCoopDefenseUpgradePoints(profile, classId) > 0
+        || getSpentCoopDefenseBossPoints(profile, classId) > 0;
+    });
+  }
+
+  private fullRespecCoopDefenseUpgrades(): boolean {
+    if (!this.canFullRespecCoopDefenseUpgrades()) return false;
+
+    bridge.setLocalReady(false);
+    this.lifecycle.setIsLocalReady(false);
+    resetStoredCoopDefenseUpgradeProfiles();
     this.refreshStoredCoopDefenseProgress();
     this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
     // Nach Full Respec sind alle Loadout-Unlocks zurueckgesetzt; Auswahl neu abgleichen.
@@ -2124,6 +2194,14 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.ctx.arenaCountdown) return;
 
     if (!inArena) {
+      this.localPlayerState.overlayTrackedAlive = null;
+      this.ctx.arenaCountdown.clear();
+      return;
+    }
+
+    // Spectatoren sehen die Arena direkt: ihre Rolle ist kein Todeszustand und darf deshalb
+    // weder den Death-Veil noch den Respawn-Reveal ausloesen.
+    if (this.localPlayerState.spectator || bridge.isLocalSpectator()) {
       this.localPlayerState.overlayTrackedAlive = null;
       this.ctx.arenaCountdown.clear();
       return;
@@ -2170,6 +2248,16 @@ export class ArenaScene extends Phaser.Scene {
       pointer.y,
       this.ctx.inputSystem.getUltimatePlacementAnchor(),
     );
+  }
+
+  /** Spectator-Ansicht: Namen lebender Spieler bleiben dauerhaft als Entity-Label sichtbar. */
+  private syncSpectatorPlayerNames(inArena: boolean): void {
+    const visible = inArena && (this.localPlayerState.spectator || bridge.isLocalSpectator());
+    for (const player of this.ctx.playerManager.getAllPlayers()) {
+      const profile = bridge.getPlayerProfile(player.id);
+      if (profile) player.setDisplayName(profile.name);
+      player.setNameVisible(visible);
+    }
   }
 
   private buildLocalCommittedLoadoutSnapshot(): LoadoutCommitSnapshot {
@@ -2475,10 +2563,29 @@ export class ArenaScene extends Phaser.Scene {
     const camera = this.cameras.main;
     camera.scrollY = 0;
 
-    if (!inArena || !ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera) {
+    const spectator = inArena && (this.localPlayerState.spectator || bridge.isLocalSpectator());
+    const arenaWidth = Math.max(0, ARENA_MAX_X - ARENA_OFFSET_X);
+    const canSpectatorPan = arenaWidth > ARENA_VIEWPORT_WIDTH;
+    if (!inArena || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !(spectator && canSpectatorPan))) {
       this.lastCameraScrollX = 0;
+      this.spectatorCameraScrollX = 0;
       camera.scrollX = 0;
       setCameraBaseScroll(this, 0, 0);
+      return;
+    }
+
+    if (spectator) {
+      this.spectatorCameraScrollX = advanceSpectatorCameraScroll({
+        currentScrollX: this.spectatorCameraScrollX,
+        deltaMs: delta,
+        moveLeft: this.spectatorCameraLeftKey?.isDown === true,
+        moveRight: this.spectatorCameraRightKey?.isDown === true,
+        arenaWidth,
+        viewportWidth: ARENA_VIEWPORT_WIDTH,
+      });
+      this.lastCameraScrollX = this.spectatorCameraScrollX;
+      camera.scrollX = this.spectatorCameraScrollX;
+      setCameraBaseScroll(this, this.spectatorCameraScrollX, 0);
       return;
     }
 
@@ -3083,6 +3190,16 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private beginMatchResults(): void {
+    // Die Auswertung darf nicht aus der vorherigen Runde als Replay in den neuen Lobby-Frame
+    // hineinragen, insbesondere nicht bei einem Latejoiner/Spectator.
+    this.lastMatchResultsPresentation = null;
+    const existingResults = bridge.getRoundResults();
+    if (existingResults && !bridge.isLocalRoundResultEligible(existingResults)) {
+      this.matchResultsPending = false;
+      this.matchResultsProgressBefore = null;
+      this.matchResultsOverlay?.hide();
+      return;
+    }
     const mode = bridge.getGameMode();
     const roundState = bridge.getRoundState();
     const mapLabel = isCoopDefenseMode(mode)
@@ -3091,8 +3208,6 @@ export class ArenaScene extends Phaser.Scene {
 
     this.matchResultsPending = true;
     this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.coopDefenseProgress : null;
-    // Die Auswertung der vorigen Runde ist ab hier ueberholt und darf nicht mehr abrufbar sein.
-    this.lastMatchResultsPresentation = null;
     this.matchResultsOverlay?.showSyncing(getGameModeLabel(mode), mapLabel);
   }
 
@@ -3103,6 +3218,12 @@ export class ArenaScene extends Phaser.Scene {
   private tryFinalizeMatchResults(): void {
     const results = bridge.getRoundResults();
     if (!results || results.length === 0) return;
+    if (!bridge.isLocalRoundResultEligible(results)) {
+      this.matchResultsPending = false;
+      this.matchResultsProgressBefore = null;
+      this.matchResultsOverlay?.hide();
+      return;
+    }
 
     const firstResult = results[0];
     const mode = firstResult.gameMode ?? bridge.getGameMode();
@@ -3211,6 +3332,7 @@ export class ArenaScene extends Phaser.Scene {
     const results = bridge.getRoundResults();
     const endedAt = roundState?.endedAt ?? null;
     if (!roundState || !endedAt || !results?.length) return null;
+    if (!bridge.isLocalRoundResultEligible(results)) return null;
 
     if (this.coopDefenseLastProcessedRoundEndedAt !== null && this.coopDefenseLastProcessedRoundEndedAt >= endedAt) {
       return createMatchProgressDelta(before, this.coopDefenseProgress, 0, null);

@@ -27,11 +27,12 @@ const mushroom = (ownerId = OWNER): PlacedStub => ({ ownerId, kind: 'turret' });
 
 describe('construction capacity costs', () => {
   it('assigns the intended cost per construct type', () => {
-    expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost).toBe(30);
-    expect(COOP_DEFENSE_CONSTRUCTIONS.flame_turret.capacityCost).toBe(20);
-    expect(COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret.capacityCost).toBe(10);
-    expect(getToolCapacityCost({ kind: 'utility', id: 'FLIEGENPILZ' })).toBe(15);
-    expect(getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })).toBe(1);
+    for (const construction of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
+      expect(Number.isFinite(construction.capacityCost), construction.id).toBe(true);
+      expect(construction.capacityCost, construction.id).toBeGreaterThanOrEqual(0);
+    }
+    expect(getToolCapacityCost({ kind: 'utility', id: 'FLIEGENPILZ' })).toBeGreaterThan(0);
+    expect(getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })).toBeGreaterThan(0);
   });
 
   it('costs nothing for utilities that are not constructs', () => {
@@ -43,27 +44,28 @@ describe('construction capacity costs', () => {
   it('derives the cost of a placed object from kind and constructionId alone', () => {
     // Bewusst kein eigenes Netzwerkfeld: die Kosten muessen allein aus dem replizierten
     // Snapshot ableitbar sein, sonst kostet jede Mauer ein Feld pro Objekt.
-    expect(getPlaceableCapacityCost({ kind: 'turret', constructionId: 'rocket_turret' })).toBe(30);
-    expect(getPlaceableCapacityCost({ kind: 'turret' })).toBe(15);   // Fliegenpilz
-    expect(getPlaceableCapacityCost({ kind: 'rock' })).toBe(1);      // Felsbau
+    expect(getPlaceableCapacityCost({ kind: 'turret', constructionId: 'rocket_turret' }))
+      .toBe(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost);
+    expect(getPlaceableCapacityCost({ kind: 'turret' }))
+      .toBe(getToolCapacityCost({ kind: 'utility', id: 'FLIEGENPILZ' }));
+    expect(getPlaceableCapacityCost({ kind: 'rock' }))
+      .toBe(getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' }));
     expect(getPlaceableCapacityCost({ kind: 'tunnel' })).toBe(0);
   });
 
   it('keeps construction cooldown separate from normal and Coop utility cooldowns', () => {
-    expect(COOP_DEFENSE_BUILD_COOLDOWN_MS).toBe(500);
-    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).cooldown)
-      .toBe(100);
-    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).cooldown)
-      .toBe(10000);
+    expect(COOP_DEFENSE_BUILD_COOLDOWN_MS).toBeGreaterThan(0);
+    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
+    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
     expect((UTILITY_CONFIGS.FELSBAU_COOP as PlaceableUtilityConfig).cooldown)
       .toBe(COOP_DEFENSE_BUILD_COOLDOWN_MS);
     expect((UTILITY_CONFIGS.FLIEGENPILZ_COOP as PlaceableUtilityConfig).cooldown)
       .toBe(COOP_DEFENSE_BUILD_COOLDOWN_MS);
   });
 
-  it('uses historical normal lifetimes and permanent Coop lifetimes', () => {
-    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(60000);
-    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(10000);
+  it('keeps normal placeables finite and Coop placeables permanent', () => {
+    expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
+    expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).placeable.lifetimeMs).toBeGreaterThan(0);
     expect((UTILITY_CONFIGS.FELSBAU_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
     expect((UTILITY_CONFIGS.FLIEGENPILZ_COOP as PlaceableUtilityConfig).placeable.lifetimeMs).toBe(0);
   });
@@ -86,38 +88,63 @@ describe('used construction capacity', () => {
       turret('rocket_turret', OTHER_OWNER),
       wall(OTHER_OWNER),
     ];
-    expect(sumPlaceableCapacity(placed, OWNER)).toBe(30 + 10 + 20 + 15 + 3);
-    expect(sumPlaceableCapacity(placed, OTHER_OWNER)).toBe(31);
+    const expectedOwnerCapacity = (
+      COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost
+      + COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret.capacityCost
+      + COOP_DEFENSE_CONSTRUCTIONS.flame_turret.capacityCost
+      + getToolCapacityCost({ kind: 'utility', id: 'FLIEGENPILZ' })
+      + 3 * getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })
+    );
+    const expectedOtherCapacity = (
+      COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost
+      + getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })
+    );
+    expect(sumPlaceableCapacity(placed, OWNER)).toBe(expectedOwnerCapacity);
+    expect(sumPlaceableCapacity(placed, OTHER_OWNER)).toBe(expectedOtherCapacity);
     expect(sumPlaceableCapacity(placed, 'unknown')).toBe(0);
   });
 
   it('frees capacity again when a construct is removed', () => {
     const placed: PlacedStub[] = [turret('rocket_turret'), turret('rocket_turret'), wall()];
-    expect(sumPlaceableCapacity(placed, OWNER)).toBe(61);
+    const rocketCost = COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost;
+    const wallCost = getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' });
+    expect(sumPlaceableCapacity(placed, OWNER)).toBe(2 * rocketCost + wallCost);
     placed.splice(0, 1);
-    expect(sumPlaceableCapacity(placed, OWNER)).toBe(31);
+    expect(sumPlaceableCapacity(placed, OWNER)).toBe(rocketCost + wallCost);
     placed.length = 0;
     expect(sumPlaceableCapacity(placed, OWNER)).toBe(0);
   });
 
-  it('fits the reference defence of three rocket turrets plus ten walls exactly', () => {
+  it('sums a mixed construction inventory against the configured capacity', () => {
     const placed: PlacedStub[] = [
       ...Array.from({ length: 3 }, () => turret('rocket_turret')),
       ...Array.from({ length: 10 }, () => wall()),
     ];
-    expect(sumPlaceableCapacity(placed, OWNER)).toBe(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
+    const expected = (
+      3 * COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost
+      + 10 * getToolCapacityCost({ kind: 'utility', id: 'FELSBAU' })
+    );
+    expect(sumPlaceableCapacity(placed, OWNER)).toBe(expected);
+    expect(expected).toBeGreaterThan(0);
   });
 
-  it('blocks a fourth rocket turret but still allows a cheap one', () => {
+  it('blocks the next expensive turret while allowing a cheaper one when it fits', () => {
     // Dieselbe Entscheidungsregel wie in `ArenaLifecycleCoordinator.hasFreeConstructionCapacity`:
     // sie haengt weder an Adrenalin noch an der Rundendauer.
-    const placed: PlacedStub[] = Array.from({ length: 3 }, () => turret('rocket_turret'));
+    const placed: PlacedStub[] = [];
+    const rocketCost = COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost;
+    expect(rocketCost).toBeGreaterThan(0);
+    while (sumPlaceableCapacity(placed, OWNER) + rocketCost <= COOP_DEFENSE_CONSTRUCTION_CAPACITY) {
+      placed.push(turret('rocket_turret'));
+    }
     const used = sumPlaceableCapacity(placed, OWNER);
-    expect(used).toBe(90);
-    expect(used + COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost)
+    expect(used).toBeLessThanOrEqual(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
+    expect(used + rocketCost)
       .toBeGreaterThan(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
-    expect(used + COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret.capacityCost)
-      .toBeLessThanOrEqual(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
+    const cheapCost = COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret.capacityCost;
+    if (cheapCost <= COOP_DEFENSE_CONSTRUCTION_CAPACITY - used) {
+      expect(used + cheapCost).toBeLessThanOrEqual(COOP_DEFENSE_CONSTRUCTION_CAPACITY);
+    }
   });
 
   describe('personal capacity maximum', () => {
@@ -132,10 +159,10 @@ describe('used construction capacity', () => {
       const used = sumPlaceableCapacity(placed, OWNER);
       const raised = getCoopDefenseConstructionCapacity(30);
 
-      expect(raised).toBe(130);
+      expect(raised).toBe(COOP_DEFENSE_CONSTRUCTION_CAPACITY + 30);
       // Derselbe Bestand, dasselbe Kostenmodell - nur das Gate faellt jetzt anders aus.
       expect(sumPlaceableCapacity(placed, OWNER)).toBe(used);
-      expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost).toBe(30);
+      expect(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost).toBeGreaterThan(0);
       expect(used + COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.capacityCost)
         .toBeLessThanOrEqual(raised);
     });

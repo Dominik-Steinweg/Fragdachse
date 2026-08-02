@@ -325,6 +325,7 @@ export class HostPhysicsSystem {
    * Kein Dash wenn: tot, gestunnt, bereits dashend, oder im Stand.
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
+    if (!this.bridge.canPlayerAct(playerId)) return;
     if (!this.combatSystem.isAlive(playerId)) return;
     if (this.burrowSystem?.isDashBlocked(playerId)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam

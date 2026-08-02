@@ -101,7 +101,7 @@
     },
     "ENEMY_STINKDRUESEN": {
       "id": "ENEMY_STINKDRUESEN",
-      "displayName": "Kleine Stinkdruesen",
+      "displayName": "Kleine Stinkdrüsen",
       "type": "stinkcloud",
       "cooldown": 0,
       "activation": {

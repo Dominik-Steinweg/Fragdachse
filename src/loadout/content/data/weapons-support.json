@@ -2,7 +2,7 @@
   "weapons": {
     "OVERCHARGE_CORE": {
       "id": "OVERCHARGE_CORE",
-      "displayName": "Ueberladungskern",
+      "displayName": "Überladungskern",
       "cooldown": 4000,
       "damage": 0,
       "range": 420,

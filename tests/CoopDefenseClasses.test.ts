@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
+import { COOP_DEFENSE_CLASS_DEFINITIONS } from '../src/config/coopDefenseClasses';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
   canLevelDownCoopDefenseUpgrade,
@@ -29,6 +30,12 @@ function commit(
 }
 
 describe('coop-defense classes', () => {
+  it('keeps German class tooltip text readable', () => {
+    expect(COOP_DEFENSE_CLASS_DEFINITIONS.dachs_of_steel.tooltipLines).toContain(
+      'Stärke: hält Gegnerwellen direkt an der Basis auf.',
+    );
+  });
+
   it('does not alter loadout slots outside coop defense', () => {
     const snapshot = resolveLoadoutSelectionIds(
       undefined,
@@ -125,13 +132,13 @@ describe('coop-defense classes', () => {
     // Waffe 2 traegt nur noch die Adrenalinfaehigkeiten, die Konstrukte stehen in ihrer
     // eigenen Kategorie.
     expect(weapon2Ids).toEqual([
+      'unlock_energieinjektor',
       'unlock_overcharge_core',
       'overcharge_radius',
       'overcharge_duration',
       'overcharge_power',
       'overcharge_cost',
       'unlock_reparaturstrahl',
-      'unlock_energieinjektor',
     ]);
     expect(constructionIds).toContain('unlock_rocket_turret');
     expect(constructionIds).toContain('unlock_felsbau');

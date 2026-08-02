@@ -24,6 +24,10 @@ import {
   ensureModalPanelTexture,
   ensureTintedSectionTexture,
 } from './uiTextures';
+import {
+  COOP_DEFENSE_ITEM_REWARD_BACK_LABEL,
+  COOP_DEFENSE_ITEM_REWARD_LATER_LABEL,
+} from './coopDefenseRewardLabels';
 
 /**
  * Auswahl der Item-Belohnung nach einem Sieg.
@@ -210,7 +214,7 @@ export class CoopDefenseItemRewardOverlay {
       FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, COLORS.GREY_6),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.backLabel = this.scene.add.text(this.backButton.x, FOOTER_Y, 'ZURUECK', {
+    this.backLabel = this.scene.add.text(this.backButton.x, FOOTER_Y, COOP_DEFENSE_ITEM_REWARD_BACK_LABEL, {
       fontFamily: 'monospace',
       fontSize: '18px',
       fontStyle: 'bold',
@@ -228,7 +232,7 @@ export class CoopDefenseItemRewardOverlay {
       FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, COLORS.GREY_6),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.footerLabel = this.scene.add.text(this.footerButton.x, FOOTER_Y, 'SPAETER ENTSCHEIDEN', {
+    this.footerLabel = this.scene.add.text(this.footerButton.x, FOOTER_Y, COOP_DEFENSE_ITEM_REWARD_LATER_LABEL, {
       fontFamily: 'monospace',
       fontSize: '17px',
       fontStyle: 'bold',
@@ -361,7 +365,7 @@ export class CoopDefenseItemRewardOverlay {
       CARD_BUTTON_DY,
       ensureGlossyButtonTexture(this.scene, TEX_EQUIP_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, COLORS.GOLD_3),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const equipLabel = this.scene.add.text(equipButton.x, CARD_BUTTON_DY, 'AUSRUESTEN', {
+    const equipLabel = this.scene.add.text(equipButton.x, CARD_BUTTON_DY, 'AUSRÜSTEN', {
       fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_10),
     }).setOrigin(0.5).setScrollFactor(0);
     equipButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
@@ -429,12 +433,12 @@ export class CoopDefenseItemRewardOverlay {
     const options = this.presentation?.options ?? [];
 
     this.title?.setText('BELOHNUNG').setVisible(true);
-    this.subtitle?.setText('Waehle genau ein Teil. Es wandert dauerhaft in dein Inventar.').setVisible(true);
+    this.subtitle?.setText('Wähle genau ein Teil. Es wandert dauerhaft in dein Inventar.').setVisible(true);
     this.salvageTitle?.setVisible(false);
     for (const row of this.salvageRows) row.container.setVisible(false);
     this.backButton?.setVisible(false);
     this.backLabel?.setVisible(false);
-    this.footerLabel?.setText('SPAETER ENTSCHEIDEN');
+    this.footerLabel?.setText(COOP_DEFENSE_ITEM_REWARD_LATER_LABEL);
 
     this.cards.forEach((card, index) => {
       const option = options[index];
@@ -471,7 +475,7 @@ export class CoopDefenseItemRewardOverlay {
       text.setColor(toCssColor(line.isBaseStat ? COLORS.GREY_1 : rarity.color));
     });
 
-    card.compareTitle.setText(option.equipped ? 'GEGENUEBER AUSGERUESTET' : 'SLOT IST LEER');
+    card.compareTitle.setText(option.equipped ? 'GEGENÜBER AUSGERÜSTET' : 'SLOT IST LEER');
     const changes = option.comparison.filter((row) => row.delta !== 0);
     card.compareLines.forEach((text, index) => {
       const row = changes[index];
@@ -485,9 +489,9 @@ export class CoopDefenseItemRewardOverlay {
 
     const full = !option.directEquip && option.freeStashSlots <= 0;
     card.hint.setText(full
-      ? 'Kategorie voll – waehle ein Teil zum Zerlegen'
+      ? 'Kategorie voll – wähle ein Teil zum Zerlegen'
       : option.directEquip
-        ? 'Slot leer – wird direkt ausgeruestet'
+        ? 'Slot leer – wird direkt ausgerüstet'
       : `${option.freeStashSlots} Platz${option.freeStashSlots === 1 ? '' : 'e'} frei`);
     card.hint.setColor(toCssColor(full ? COLORS.RED_2 : COLORS.GREY_4));
     const hasEquippedItem = !option.directEquip;
@@ -507,7 +511,7 @@ export class CoopDefenseItemRewardOverlay {
     card.equipLabel
       .setVisible(true)
       .setPosition(hasEquippedItem ? actionOffset : 0, CARD_BUTTON_DY)
-      .setText('AUSRUESTEN');
+      .setText('AUSRÜSTEN');
   }
 
   private showSalvage(option: MatchItemRewardOption, action: CoopDefenseItemRewardAction): void {
@@ -519,14 +523,14 @@ export class CoopDefenseItemRewardOverlay {
     this.subtitle?.setText(
       action === 'equip'
         ? `${this.describeSlot(option.item)}: Das bisher getragene Teil wandert ins Inventar. `
-          + 'Waehle vorher ein ungetragenes Teil zum Zerlegen.'
-        : `${this.describeSlot(option.item)}: waehle, was zerlegt wird. Die XP fliessen in dein Level.`,
+          + 'Wähle vorher ein ungetragenes Teil zum Zerlegen.'
+        : `${this.describeSlot(option.item)}: wähle, was zerlegt wird. Die XP fließen in dein Level.`,
     );
     for (const card of this.cards) card.container.setVisible(false);
     this.salvageTitle?.setText('ZERLEGEN').setVisible(true);
     this.backButton?.setVisible(true);
     this.backLabel?.setVisible(true);
-    this.footerLabel?.setText('SPAETER ENTSCHEIDEN');
+    this.footerLabel?.setText(COOP_DEFENSE_ITEM_REWARD_LATER_LABEL);
 
     // Erste Zeile ist immer das Angebot selbst: so ist "gar nichts behalten" ein klarer Klick
     // und keine versteckte Option.

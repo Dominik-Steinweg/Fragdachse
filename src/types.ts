@@ -8,6 +8,22 @@ export interface PlayerProfile {
   teamId?:  TeamId | null;
 }
 
+/**
+ * Host-autoritatives Rollenmodell einer laufenden Runde.
+ *
+ * `participantIds` bleibt waehrend der Runde unveraendert: Die Liste beschreibt exakt den
+ * Teilnehmer-Snapshot beim Rundenstart. Ein Spieler kann daraus in `spectatorIds` wechseln,
+ * verliert dadurch aber nicht seine historische Zugehoerigkeit – seine Spawn-/Belohnungsrechte
+ * werden immer ueber die effektive Rolle aufgeloest.
+ */
+export type RoundPlayerRole = 'participant' | 'spectator';
+
+export interface RoundParticipationState {
+  roundStartTime: number;
+  participantIds: string[];
+  spectatorIds: string[];
+}
+
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {
   dx: number;  // -1 | 0 | 1

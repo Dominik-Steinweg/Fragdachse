@@ -152,10 +152,10 @@ export function getCoopDefenseMapObjectiveLabel(objective: CoopDefenseMapObjecti
     case 'defeat-boss':
       return 'BOSS MUSS FALLEN';
     case 'destroy-hostile-bases':
-      return 'FEINDBASIS ZERSTOEREN';
+      return 'FEINDBASIS ZERSTÖREN';
     case 'survive':
     default:
-      return 'ZEIT UEBERLEBEN';
+      return 'ZEIT ÜBERLEBEN';
   }
 }
 

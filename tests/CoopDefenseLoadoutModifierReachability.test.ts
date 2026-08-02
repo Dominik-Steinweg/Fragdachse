@@ -182,10 +182,11 @@ describe('coop-defense loadout modifier reachability', () => {
 
   it('always reapplies from the frozen registry base instead of compounding', () => {
     const totals = { additive: {}, percentage: { 'weapon1.damage': 0.25 } };
-    const once = applyCoopDefenseModifiersToWeaponConfig(WEAPON_CONFIGS.GLOCK, 'weapon1', totals);
+    const base = WEAPON_CONFIGS.GLOCK;
+    const once = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon1', totals);
     const twice = applyCoopDefenseModifiersToWeaponConfig(once, 'weapon1', totals);
     expect(twice).toEqual(once);
-    expect(WEAPON_CONFIGS.GLOCK.damage).toBe(6);
+    expect(WEAPON_CONFIGS.GLOCK.damage).toBe(base.damage);
   });
 
   it('throws in development for fractional integer targets', () => {

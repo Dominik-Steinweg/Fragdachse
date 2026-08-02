@@ -62,7 +62,7 @@
     },
     "DEMON_BADGER_BITE": {
       "id": "DEMON_BADGER_BITE",
-      "displayName": "Daemonen-Dachsbiss",
+      "displayName": "Dämonen-Dachsbiss",
       "damage": 20,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
@@ -97,7 +97,7 @@
     },
     "STINK_BROODMOTHER_BITE": {
       "id": "STINK_BROODMOTHER_BITE",
-      "displayName": "Faulnisbrueter-Biss",
+      "displayName": "Faulnisbrüter-Biss",
       "damage": 40,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."

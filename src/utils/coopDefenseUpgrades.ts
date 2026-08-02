@@ -684,6 +684,43 @@ export function buildDefaultCoopDefenseUpgradeProfile(
   return buildProfileFromRequestedLevels(getDefaultRequestedLevels(classId), classId);
 }
 
+/**
+ * Setzt alle Upgrades einer Kategorie auf ihr Startlevel zurueck.
+ *
+ * Die Profilrekonstruktion laesst die uebrigen Kategorien unveraendert, normalisiert aber
+ * abhaengige Knoten wie bei jedem anderen Profilaufbau. Beim Inspector werden dadurch auch
+ * Tool-Slots entfernt, deren Freischaltung durch den Respec verloren geht.
+ */
+export function respecCoopDefenseUpgradeCategory(
+  profile: CoopDefenseUpgradeProfile,
+  categoryId: CoopDefenseUpgradeCategoryId,
+  classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
+): CoopDefenseUpgradeProfile | null {
+  const safeProfile = getSanitizedProfile(profile, classId);
+  const definitions = getCoopDefenseUpgradeDefinitionsForCategory(categoryId, classId);
+  if (definitions.length === 0) return null;
+
+  const nextRequestedLevels = Object.fromEntries(
+    COOP_DEFENSE_UPGRADE_ORDER.map((entry) => [entry.id, getResolvedUpgradeLevel(safeProfile, entry.id)]),
+  ) as Record<string, number>;
+  let changed = false;
+
+  for (const definition of definitions) {
+    if (getResolvedUpgradeLevel(safeProfile, definition.id) > definition.startingLevel) {
+      changed = true;
+    }
+    nextRequestedLevels[definition.id] = definition.startingLevel;
+  }
+
+  if (!changed) return null;
+  return buildProfileFromRequestedLevels(
+    nextRequestedLevels,
+    classId,
+    safeProfile.toolLoadout,
+    safeProfile.selectedTool,
+  );
+}
+
 export function cloneCoopDefenseUpgradeProfile(
   profile: CoopDefenseUpgradeProfile,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,

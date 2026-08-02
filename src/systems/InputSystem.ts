@@ -605,6 +605,20 @@ export class InputSystem {
 
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
   update(): void {
+    // Die Scene schaltet den lokalen Input zusaetzlich ab; dieser Rollencheck verhindert, dass
+    // bereits gedrueckte Tasten oder Debug-/Placement-Hotkeys beim Spectator noch Aktionen
+    // erzeugen, bevor der naechste Snapshot die Entity entfernt.
+    if (this.bridge.getGamePhase() === 'ARENA' && !this.bridge.canPlayerAct(this.bridge.getLocalPlayerId())) {
+      this.bridge.sendLocalInput({
+        dx: 0,
+        dy: 0,
+        aim: quantizeAngle(this.currentAimAngle),
+        dashHeld: false,
+        placementPreview: null,
+      });
+      return;
+    }
+
     // Process debug hotkeys first (regardless of input enabled state)
     this.updateDebugHotkeys();
     this.updateConstructionHotkeys();

@@ -69,6 +69,11 @@ describe('game-wide loadout content validation', () => {
     }
   });
 
+  it('keeps representative German upgrade labels intact', () => {
+    expect(COOP_DEFENSE_UPGRADE_DEFINITIONS.hp.label).toBe('Vitalität');
+    expect(COOP_DEFENSE_UPGRADE_DEFINITIONS.max_armor.label).toBe('Rüstungsmaximum');
+  });
+
   it('publishes finite, bounded contracts for every modifier target', () => {
     for (const [stat, contracts] of Object.entries(getLoadoutModifierTargetContracts())) {
       expect(contracts.length, stat).toBeGreaterThan(0);

@@ -42,8 +42,8 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
   DOUBLE_DAMAGE: { id: 'DOUBLE_DAMAGE', type: 'buff_damage',   displayName: 'Double Damage',      durationMs:  8_000, multiplier: 2.0, color: COLORS.PURPLE_2, spriteKey: 'powerup_dam' },
   DECOY_STEALTH: { id: 'DECOY_STEALTH', type: 'decoy_stealth', displayName: 'Unsichtbarkeit', color: COLORS.GREY_2 },
   SHIELD_OVERCHARGE: { id: 'SHIELD_OVERCHARGE', type: 'shield_overcharge', displayName: 'Schildladung', color: 0x78f0ff },
-  AK47_FOCUS: { id: 'AK47_FOCUS', type: 'weapon_buff', displayName: 'Einschiessen', color: 0xffa33a },
-  AK47_FIRE_SUPERIORITY: { id: 'AK47_FIRE_SUPERIORITY', type: 'weapon_buff', displayName: 'Feuerueberlegenheit', color: 0xffd166 },
+  AK47_FOCUS: { id: 'AK47_FOCUS', type: 'weapon_buff', displayName: 'Einschießen', color: 0xffa33a },
+  AK47_FIRE_SUPERIORITY: { id: 'AK47_FIRE_SUPERIORITY', type: 'weapon_buff', displayName: 'Feuerüberlegenheit', color: 0xffd166 },
   NEGEV_KILLSTREAK: { id: 'NEGEV_KILLSTREAK', type: 'weapon_buff', displayName: 'Negev-Killstreak', color: 0xff8a2d },
   // Item-Affix "Kinetische Ladung". Kein einsammelbares Power-Up, sondern nur ein HUD-Eintrag –
   // dieselbe Rolle wie die AK-47- und Negev-Buffs darueber.

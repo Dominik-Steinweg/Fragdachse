@@ -87,7 +87,7 @@ export class TurretSystem {
     this.turretBuffProvider = provider;
   }
 
-  /** ZusÃ¤tzlicher, quellenbezogener Schadensmultiplikator fÃ¼r Konstrukte. */
+  /** Zusätzlicher, quellenbezogener Schadensmultiplikator für Konstrukte. */
   setTurretDamageMultiplierProvider(
     provider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null,
   ): void {

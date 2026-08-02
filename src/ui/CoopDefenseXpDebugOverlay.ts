@@ -68,7 +68,7 @@ export class CoopDefenseXpDebugOverlay {
     });
 
     const subtitle = document.createElement('div');
-    subtitle.innerText = 'Nur lokal. Ueberschreibt Fortschritt, Map- und Klassenfreischaltung dieser Browser-Instanz.';
+    subtitle.innerText = 'Nur lokal. Überschreibt Fortschritt, Map- und Klassenfreischaltung dieser Browser-Instanz.';
     Object.assign(subtitle.style, {
       fontSize: '12px',
       color: toCssColor(COLORS.GREY_4),
@@ -281,7 +281,7 @@ export class CoopDefenseXpDebugOverlay {
     confirmBtn.onclick = save;
     cancelBtn.onclick = closePopup;
     resetBtn.onclick = () => {
-      if (!window.confirm('Wirklich den gesamten Coop-Charakterfortschritt auf einen frischen Spieler zuruecksetzen?')) {
+      if (!window.confirm('Wirklich den gesamten Coop-Charakterfortschritt auf einen frischen Spieler zurücksetzen?')) {
         return;
       }
       this.onResetCharacter();

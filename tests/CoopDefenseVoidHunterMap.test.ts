@@ -54,8 +54,8 @@ describe('Map 15 - Leerenjäger', () => {
     const repeated = ArenaGenerator.generate(71_515, map);
     expect(first.tracks).toEqual([]);
     expect(first.permanentGroundFireZones).toEqual(repeated.permanentGroundFireZones);
-    expect(first.permanentGroundFireZones).toHaveLength(7);
-    expect(map.permanentGroundFire?.baseClearanceCells).toBe(2);
+    expect(first.permanentGroundFireZones).toHaveLength(1 + (map.permanentGroundFire?.randomPatchCount ?? 0));
+    expect(map.permanentGroundFire?.baseClearanceCells).toBeGreaterThan(0);
 
     const hazardCells = new Set(
       first.permanentGroundFireZones!.flatMap((zone) => zone.cells.map((cell) => `${cell.gridX}:${cell.gridY}`)),
@@ -63,8 +63,8 @@ describe('Map 15 - Leerenjäger', () => {
     expect(hazardCells.size).toBeGreaterThan(0);
     for (const zone of first.permanentGroundFireZones!) {
       expect(zone).toMatchObject({
-        burnDurationMs: 2000,
-        burnDamagePerTick: 0.5,
+        burnDurationMs: map.permanentGroundFire?.burnDurationMs,
+        burnDamagePerTick: map.permanentGroundFire?.burnDamagePerTick,
         visualStyle: 'void',
         damageTarget: 'players',
       });

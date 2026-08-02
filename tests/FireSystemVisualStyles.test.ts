@@ -84,7 +84,7 @@ describe('FireSystem visual styles and damage targets', () => {
         ownerId: 'boss-1',
         durationMs: 6_000,
         burn: { durationMs: 2_000, damagePerTick: 0.5 },
-        weaponName: 'Lila HÃ¶llenspur',
+        weaponName: 'Lila Höllenspur',
         visualStyle: 'void',
         damageTarget: 'players',
       },

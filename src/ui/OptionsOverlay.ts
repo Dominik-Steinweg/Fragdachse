@@ -22,7 +22,7 @@ import type { GraphicsQuality, GraphicsQualityController } from '../graphics/Gra
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const PANEL_W = 680;
-const PANEL_H = 680;
+const PANEL_H = 760;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
@@ -31,7 +31,7 @@ const TRACK_W = 430;
 const TRACK_H = 18;
 const TRACK_X = CX - TRACK_W / 2;
 const PERCENT_X = TRACK_X + TRACK_W;
-const FOOTER_Y = CY + PANEL_H / 2 - 28;
+const FOOTER_Y = CY + PANEL_H / 2 - 12;
 const QUALITY_BUTTON_Y = CY - 184;
 const QUALITY_BUTTON_W = 150;
 const QUALITY_BUTTON_H = 44;
@@ -66,10 +66,12 @@ const AUDIO_BLOCK_BOTTOM = MUSIC_LOAD_BAR_Y + 16;
 
 // Partie-Abbruch (nur Host, nur waehrend einer laufenden Runde sichtbar)
 const ABORT_DIVIDER_Y = CY + 224;
-const ABORT_BUTTON_Y = CY + 258;
+const SPECTATOR_BUTTON_Y = CY + 258;
+const SPECTATOR_HINT_Y = CY + 286;
+const ABORT_BUTTON_Y = CY + 318;
 const ABORT_BUTTON_W = 320;
 const ABORT_BUTTON_H = 44;
-const ABORT_HINT_Y = CY + 290;
+const ABORT_HINT_Y = CY + 346;
 /** Fenster, in dem der zweite Klick als Bestaetigung zaehlt; danach faellt der Button zurueck. */
 const ABORT_CONFIRM_TIMEOUT_MS = 5000;
 
@@ -107,6 +109,12 @@ interface QualityButtonState {
 export interface AbortMatchBinding {
   canAbort: () => boolean;
   abort: () => void;
+}
+
+/** Spielerwechsel in den host-autoritativ gesperrten Spectator-Zustand. */
+export interface SpectatorMatchBinding {
+  canSpectate: () => boolean;
+  spectate: () => void;
 }
 
 const QUALITY_OPTIONS: readonly { level: GraphicsQuality; label: string }[] = [
@@ -188,8 +196,14 @@ export class OptionsOverlay {
   private musicLoadHideTimer: Phaser.Time.TimerEvent | null = null;
   private unsubscribeMusicLoadState: (() => void) | null = null;
   private lastPreviewAt = -PREVIEW_COOLDOWN_MS;
+  private spectatorBinding: SpectatorMatchBinding | null = null;
   private abortBinding: AbortMatchBinding | null = null;
   private abortDivider: Phaser.GameObjects.Rectangle | null = null;
+  private spectatorButton: Phaser.GameObjects.Image | null = null;
+  private spectatorLabel: Phaser.GameObjects.Text | null = null;
+  private spectatorHint: Phaser.GameObjects.Text | null = null;
+  private spectatorConfirmPending = false;
+  private spectatorConfirmTimer: Phaser.Time.TimerEvent | null = null;
   private abortButton: Phaser.GameObjects.Image | null = null;
   private abortLabel: Phaser.GameObjects.Text | null = null;
   private abortHint: Phaser.GameObjects.Text | null = null;
@@ -208,6 +222,11 @@ export class OptionsOverlay {
     this.syncAbortSection();
   }
 
+  setSpectatorMatchBinding(binding: SpectatorMatchBinding | null): void {
+    this.spectatorBinding = binding;
+    this.syncAbortSection();
+  }
+
   build(): void {
     this.unsubscribeMusicLoadState?.();
     this.unsubscribeMusicLoadState = null;
@@ -216,6 +235,9 @@ export class OptionsOverlay {
     this.abortConfirmTimer?.destroy();
     this.abortConfirmTimer = null;
     this.abortConfirmPending = false;
+    this.spectatorConfirmTimer?.destroy();
+    this.spectatorConfirmTimer = null;
+    this.spectatorConfirmPending = false;
     for (const slider of this.sliders.values()) {
       slider.fillEffect.destroy();
     }
@@ -228,6 +250,9 @@ export class OptionsOverlay {
     this.musicLoadFill = null;
     this.musicLoadLabel = null;
     this.abortDivider = null;
+    this.spectatorButton = null;
+    this.spectatorLabel = null;
+    this.spectatorHint = null;
     this.abortButton = null;
     this.abortLabel = null;
     this.abortHint = null;
@@ -258,7 +283,7 @@ export class OptionsOverlay {
     );
 
     this.buildSectionBlock(
-      'Grafikqualit\u00e4t',
+      'Grafikqualität',
       GRAPHICS_BLOCK_TOP,
       GRAPHICS_BLOCK_BOTTOM,
       GRAPHICS_HEADER_Y,
@@ -297,6 +322,7 @@ export class OptionsOverlay {
     this.syncFromAudioSystem();
     this.syncQualityButtons();
     this.resetAbortConfirm();
+    this.resetSpectatorConfirm();
     this.syncAbortSection();
 
     this.container.setVisible(true);
@@ -331,6 +357,7 @@ export class OptionsOverlay {
     this.visible = false;
     this.draggingSliderKey = null;
     this.resetAbortConfirm();
+    this.resetSpectatorConfirm();
     this.dismissDelay?.destroy();
     this.dismissDelay = null;
     this.dimRect?.disableInteractive().removeAllListeners();
@@ -370,8 +397,15 @@ export class OptionsOverlay {
     this.abortConfirmTimer?.destroy();
     this.abortConfirmTimer = null;
     this.abortConfirmPending = false;
+    this.spectatorConfirmTimer?.destroy();
+    this.spectatorConfirmTimer = null;
+    this.spectatorConfirmPending = false;
+    this.spectatorBinding = null;
     this.abortBinding = null;
     this.abortDivider = null;
+    this.spectatorButton = null;
+    this.spectatorLabel = null;
+    this.spectatorHint = null;
     this.abortButton = null;
     this.abortLabel = null;
     this.abortHint = null;
@@ -575,6 +609,30 @@ export class OptionsOverlay {
       .setScrollFactor(0)
       .setVisible(false);
 
+    this.spectatorButton = this.scene.add.image(
+      CX,
+      SPECTATOR_BUTTON_Y,
+      ensureGlossyButtonTexture(
+        this.scene,
+        `_options_spectator_btn_${ABORT_BUTTON_W}x${ABORT_BUTTON_H}`,
+        ABORT_BUTTON_W,
+        ABORT_BUTTON_H,
+        COLORS.BLUE_5,
+        COLORS.BLUE_1,
+      ),
+    ).setScrollFactor(0)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.onSpectatorButtonPressed());
+
+    this.spectatorLabel = this.scene.add.text(CX, SPECTATOR_BUTTON_Y, '', {
+      fontSize: '15px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+    this.spectatorHint = this.scene.add.text(CX, SPECTATOR_HINT_Y, '', {
+      fontSize: '12px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_4),
+    }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
     this.abortButton = this.scene.add.image(
       CX,
       ABORT_BUTTON_Y,
@@ -600,7 +658,16 @@ export class OptionsOverlay {
     }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
     attachHoverEffect(this.scene, this.abortButton, this.abortLabel);
-    objects.push(this.abortDivider, this.abortButton, this.abortLabel, this.abortHint);
+    attachHoverEffect(this.scene, this.spectatorButton, this.spectatorLabel);
+    objects.push(
+      this.abortDivider,
+      this.spectatorButton,
+      this.spectatorLabel,
+      this.spectatorHint,
+      this.abortButton,
+      this.abortLabel,
+      this.abortHint,
+    );
   }
 
   /**
@@ -609,17 +676,38 @@ export class OptionsOverlay {
    * der uebrigen Optionen nicht veraendert.
    */
   private syncAbortSection(): void {
-    const available = this.abortBinding?.canAbort() === true;
+    const spectatorAvailable = this.spectatorBinding?.canSpectate() === true;
+    const abortAvailable = this.abortBinding?.canAbort() === true;
     // Der Hover-Effekt skaliert Button und Beschriftung; beim Aus-/Einblenden feuert kein
     // pointerout mehr, deshalb hier den Ruhezustand explizit wiederherstellen.
-    this.scene.tweens.killTweensOf([this.abortButton, this.abortLabel].filter((o) => !!o));
+    this.scene.tweens.killTweensOf(
+      [this.spectatorButton, this.spectatorLabel, this.abortButton, this.abortLabel].filter((o) => !!o),
+    );
+    this.spectatorButton?.setScale(1);
+    this.spectatorLabel?.setScale(1);
     this.abortButton?.setScale(1);
     this.abortLabel?.setScale(1);
-    this.abortDivider?.setVisible(available);
-    this.abortButton?.setVisible(available);
-    this.abortLabel?.setVisible(available);
-    this.abortHint?.setVisible(available);
-    if (!available) {
+    this.abortDivider?.setVisible(spectatorAvailable || abortAvailable);
+    this.spectatorButton?.setVisible(spectatorAvailable);
+    this.spectatorLabel?.setVisible(spectatorAvailable);
+    this.spectatorHint?.setVisible(spectatorAvailable);
+    this.abortButton?.setVisible(abortAvailable);
+    this.abortLabel?.setVisible(abortAvailable);
+    this.abortHint?.setVisible(abortAvailable);
+    if (!spectatorAvailable) {
+      this.spectatorButton?.disableInteractive();
+    } else {
+      this.spectatorButton?.setInteractive({ useHandCursor: true });
+      this.spectatorLabel
+        ?.setText(this.spectatorConfirmPending ? 'WIRKLICH ZUSCHAUEN?' : 'RUNDE VERLASSEN & ZUSCHAUEN')
+        .setColor(toCssColor(this.spectatorConfirmPending ? COLORS.BLUE_1 : COLORS.GREY_1));
+      this.spectatorHint
+        ?.setText(this.spectatorConfirmPending
+          ? 'Erneut klicken zum Bestaetigen'
+          : 'Du bleibst bis zur naechsten Lobby Zuschauer')
+        .setColor(toCssColor(this.spectatorConfirmPending ? COLORS.BLUE_1 : COLORS.GREY_4));
+    }
+    if (!abortAvailable) {
       this.abortButton?.disableInteractive();
       return;
     }
@@ -633,6 +721,31 @@ export class OptionsOverlay {
         ? 'Erneut klicken zum Bestätigen'
         : 'Beendet die laufende Runde für alle Spieler')
       .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_4));
+  }
+
+  private onSpectatorButtonPressed(): void {
+    const binding = this.spectatorBinding;
+    if (!binding?.canSpectate()) {
+      this.resetSpectatorConfirm();
+      this.syncAbortSection();
+      return;
+    }
+
+    if (!this.spectatorConfirmPending) {
+      this.spectatorConfirmPending = true;
+      this.spectatorConfirmTimer?.destroy();
+      this.spectatorConfirmTimer = this.scene.time.delayedCall(ABORT_CONFIRM_TIMEOUT_MS, () => {
+        this.spectatorConfirmTimer = null;
+        this.spectatorConfirmPending = false;
+        this.syncAbortSection();
+      });
+      this.syncAbortSection();
+      return;
+    }
+
+    this.resetSpectatorConfirm();
+    this.hide();
+    binding.spectate();
   }
 
   private onAbortButtonPressed(): void {
@@ -664,6 +777,12 @@ export class OptionsOverlay {
     this.abortConfirmTimer?.destroy();
     this.abortConfirmTimer = null;
     this.abortConfirmPending = false;
+  }
+
+  private resetSpectatorConfirm(): void {
+    this.spectatorConfirmTimer?.destroy();
+    this.spectatorConfirmTimer = null;
+    this.spectatorConfirmPending = false;
   }
 
   private syncMusicLoadingIndicator(state: MusicLoadState | null): void {

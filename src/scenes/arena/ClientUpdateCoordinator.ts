@@ -127,11 +127,32 @@ export class ClientUpdateCoordinator {
     let playersMs = 0;
     let projectilesEffectsMs = 0;
     let worldStateMs = 0;
+    const participationKnown = bridge.getRoundParticipation() !== null;
+
+    // Rollenwechsel und Latejoiner duerfen nicht auf den naechsten Delta-Tick warten. Die
+    // Teilnehmerliste ist ein eigener reliable Snapshot; sobald sie bekannt ist, gilt sie als
+    // Render-Roster fuer alle PlayerEntities.
+    if (participationKnown) {
+      for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
+        if (bridge.canPlayerSpawnOrRespawn(player.id)) continue;
+        this.ctx.effectSystem.clearBurrowState(player.id);
+        this.removeBurrowPhase(player.id);
+        this.ctx.playerManager.removePlayer(player.id);
+      }
+    }
+
+    for (const id of Object.keys(state.players)) {
+      if (participationKnown && !bridge.canPlayerSpawnOrRespawn(id)) continue;
+      if (this.ctx.playerManager.hasPlayer(id)) continue;
+      const profile = bridge.getConnectedPlayers().find((p) => p.id === id);
+      if (profile) this.ctx.playerManager.addPlayer(profile);
+    }
 
     if (isNewData) {
       const playersStartedAt = performance.now();
       const localId = bridge.getLocalPlayerId();
       for (const [id, ps] of Object.entries(state.players)) {
+        if (participationKnown && !bridge.canPlayerSpawnOrRespawn(id)) continue;
         let player = this.ctx.playerManager.getPlayer(id);
         if (!player) {
           const profile = bridge.getConnectedPlayers().find(p => p.id === id);
@@ -403,6 +424,7 @@ export class ClientUpdateCoordinator {
     void targetY;
 
     if (slot !== 'weapon1' && slot !== 'weapon2') return undefined;
+    if (bridge.getGamePhase() === 'ARENA' && !bridge.canPlayerAct(bridge.getLocalPlayerId())) return undefined;
 
     const now = Date.now();
     const lastFired = this.weaponLastFired[slot];
@@ -440,6 +462,7 @@ export class ClientUpdateCoordinator {
   }
 
   notifyUtilityFired(): void {
+    if (bridge.getGamePhase() === 'ARENA' && !bridge.canPlayerAct(bridge.getLocalPlayerId())) return;
     if (this.clientUtilityOverride) this.clientUtilityOverride = null;
     this.ctx.leftPanel.flashSlot('utility');
   }

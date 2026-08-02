@@ -7,8 +7,7 @@ import {
   getCoopDefenseUpgradeDefinition,
 } from '../src/utils/coopDefenseUpgrades';
 
-const MAX_ARMAGEDDON_PROFILE: CoopDefenseUpgradeProfile = {
-  upgrades: Object.fromEntries([
+const ARMAGEDDON_UPGRADE_IDS = [
     'unlock_armageddon',
     'armageddon_duration',
     'armageddon_damage',
@@ -17,8 +16,16 @@ const MAX_ARMAGEDDON_PROFILE: CoopDefenseUpgradeProfile = {
     'armageddon_radius',
     'armageddon_fire_chunks',
     'armageddon_comet_storm',
-  ].map((id) => [id, { unlocked: true, level: id === 'unlock_armageddon' || id === 'armageddon_comet_storm' ? 1 : 3 }])),
-};
+] as const;
+
+function maxArmageddonProfile(): CoopDefenseUpgradeProfile {
+  return {
+    upgrades: Object.fromEntries(ARMAGEDDON_UPGRADE_IDS.map((id) => [
+      id,
+      { unlocked: true, level: getCoopDefenseUpgradeDefinition(id)?.maxLevel ?? 1 },
+    ])),
+  };
+}
 
 describe('Armageddon coop-defense upgrades', () => {
   it('forms two level-three chains which merge into comet storm', () => {
@@ -40,28 +47,45 @@ describe('Armageddon coop-defense upgrades', () => {
     ]);
   });
 
-  it('resolves the fully upgraded end values before comet storm runtime factors', () => {
-    const totals = getCoopDefenseResolvedEffectTotals(MAX_ARMAGEDDON_PROFILE);
+  it('resolves upgraded Armageddon fields relative to the current base config', () => {
+    const totals = getCoopDefenseResolvedEffectTotals(maxArmageddonProfile());
+    const base = ULTIMATE_CONFIGS.ARMAGEDDON as BuffUltimateConfig;
     const resolved = applyCoopDefenseModifiersToUltimateConfig(
-      ULTIMATE_CONFIGS.ARMAGEDDON,
+      base,
       totals,
     ) as BuffUltimateConfig;
 
-    expect(resolved.duration).toBe(9100);
-    expect(resolved.rageDrainDuration).toBe(9100);
-    expect(resolved.rageRequired).toBeCloseTo(165);
-    expect(resolved.armageddon).toMatchObject({
-      meteorDamage: 156,
-      meteorDamageFalloff: { minDamage: 104 },
-      meteorDamageRadius: 139.2,
-      fireChunkBurst: { count: 12 },
-      cometStormEnabled: 1,
-      cometSpawnRateDivisor: 3,
-      cometFallDurationFactor: 0.25,
-      cometRadiusFactor: 2,
-      cometDamageFactor: 3,
-      cometChunkCountFactor: 3,
-    });
-    expect(resolved.armageddon.meteorsPerSecond).toBeCloseTo(3.9);
+    const scaled = (stat: string, baseValue: number): number => (
+      (baseValue + (totals.additive[stat] ?? 0)) * (1 + (totals.percentage[stat] ?? 0))
+    );
+    expect(resolved.duration).toBeCloseTo(scaled('ultimate.ARMAGEDDON.duration', base.duration));
+    expect(resolved.rageDrainDuration).toBeCloseTo(scaled('ultimate.ARMAGEDDON.duration', base.rageDrainDuration));
+    expect(resolved.rageRequired).toBeCloseTo(scaled('ultimate.ARMAGEDDON.rageRequired', base.rageRequired));
+    expect(resolved.armageddon.meteorDamage).toBeCloseTo(
+      scaled('ultimate.ARMAGEDDON.damage', base.armageddon.meteorDamage),
+    );
+    expect(resolved.armageddon.meteorDamageFalloff.minDamage).toBeCloseTo(
+      scaled('ultimate.ARMAGEDDON.damage', base.armageddon.meteorDamageFalloff.minDamage),
+    );
+    expect(resolved.armageddon.meteorDamageRadius).toBeCloseTo(
+      scaled('ultimate.ARMAGEDDON.radius', base.armageddon.meteorDamageRadius),
+    );
+    expect(resolved.armageddon.fireChunkBurst.count).toBe(
+      scaled('ultimate.ARMAGEDDON.fireChunks', base.armageddon.fireChunkBurst.count),
+    );
+    expect(resolved.armageddon.meteorsPerSecond).toBeCloseTo(
+      scaled('ultimate.ARMAGEDDON.meteorCount', base.armageddon.meteorsPerSecond),
+    );
+    expect(resolved.armageddon.cometStormEnabled).toBeGreaterThan(0);
+    for (const key of [
+      'cometSpawnRateDivisor',
+      'cometFallDurationFactor',
+      'cometRadiusFactor',
+      'cometDamageFactor',
+      'cometChunkCountFactor',
+    ] as const) {
+      expect(Number.isFinite(resolved.armageddon[key]), key).toBe(true);
+      expect(resolved.armageddon[key], key).toBeGreaterThan(0);
+    }
   });
 });

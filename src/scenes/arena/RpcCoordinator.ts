@@ -88,6 +88,7 @@ export class RpcCoordinator {
     bridge.registerDashHandler((playerId, dx, dy) => {
       if (!bridge.isHost()) return;
       if (bridge.getGamePhase() !== 'ARENA') return;
+      if (!bridge.canPlayerAct(playerId)) return;
       if (bridge.isArenaCountdownActive()) return;
       this.ctx.hostPhysics.handleDashRPC(playerId, dx, dy);
     });
@@ -97,6 +98,7 @@ export class RpcCoordinator {
     bridge.registerBurrowHandler((playerId, wantsBurrowed) => {
       if (!bridge.isHost()) return;
       if (bridge.getGamePhase() !== 'ARENA') return;
+      if (!bridge.canPlayerAct(playerId)) return;
       if (bridge.isArenaCountdownActive()) return;
       this.ctx.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
     });
@@ -106,6 +108,7 @@ export class RpcCoordinator {
     bridge.registerDecoyStealthBreakHandler((playerId) => {
       if (!bridge.isHost()) return;
       if (bridge.getGamePhase() !== 'ARENA') return;
+      if (!bridge.canPlayerAct(playerId)) return;
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (player) this.ctx.gameAudioSystem.playSound('sfx_decoy_reveal', player.sprite.x, player.sprite.y, playerId);
       this.ctx.decoySystem.breakStealth(playerId, Date.now());
@@ -115,6 +118,7 @@ export class RpcCoordinator {
   private registerLoadoutUseHandler(): void {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
+      if (!bridge.canPlayerAct(senderId)) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const committed = bridge.getPlayerCommittedLoadout(senderId);
       if (committed?.coopDefenseClassId === 'inspector_gadachs') {
@@ -248,6 +252,12 @@ export class RpcCoordinator {
 
   private registerCoopDefenseXpPopupHandler(): void {
     bridge.registerCoopDefenseXpPopupHandler((x, y, xp) => {
+      // Spectatoren erhalten weder XP noch die dazugehoerige Belohnungsdarstellung. Die
+      // autoritative XP-Summe wird weiterhin einmalig auf dem Host gefuehrt; diese lokale
+      // Sichtbarkeitspruefung verhindert nur, dass ein Latejoiner oder freiwilliger Spectator
+      // den XP-Zuwachs als eigene Belohnung wahrnimmt.
+      if (bridge.getGamePhase() === 'ARENA'
+        && !bridge.canPlayerReceiveRoundRewards(bridge.getLocalPlayerId())) return;
       this.ctx.effectSystem.playCoopDefenseXpText(x, y, xp);
     });
   }
@@ -368,6 +378,7 @@ export class RpcCoordinator {
 
   private registerPickupPowerUpHandler(): void {
     bridge.registerPickupPowerUpHandler((uid, playerId) => {
+      if (!bridge.canPlayerAct(playerId)) return;
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (!player) return;
       this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.sprite.x, player.sprite.y, playerId);

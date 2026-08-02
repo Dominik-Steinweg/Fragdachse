@@ -430,7 +430,7 @@ export class MatchResultsOverlay {
     this.hintText?.setVisible(true).setAlpha(1);
 
     // Der Weiter-Button fuehrt bei offener Belohnung nicht in die Lobby, sondern in die Auswahl.
-    this.continueLabel?.setText(presentation.itemReward ? 'ITEM AUSWAEHLEN' : 'WEITER ZUR LOBBY');
+    this.continueLabel?.setText(presentation.itemReward ? 'ITEM AUSWÄHLEN' : 'WEITER ZUR LOBBY');
 
     this.populateLeaderboard(presentation);
     this.populateProgress(presentation.progress, presentation.itemReward);

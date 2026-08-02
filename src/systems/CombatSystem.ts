@@ -303,6 +303,9 @@ export class CombatSystem {
   ) => { amount: number; isCritical: boolean }) | null = null;
   private playerBonusArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private enemyIncomingDamageMultiplierResolver: ((enemyId: string) => number) | null = null;
+  /** Host-authoritative round-role gates shared by initial spawn and every respawn. */
+  private respawnAllowedResolver: ((playerId: string) => boolean) | null = null;
+  private playerActionAllowedResolver: ((playerId: string) => boolean) | null = null;
   private onDirectPrimaryHit: ((
     attackerId: string,
     enemyId: string,
@@ -360,6 +363,8 @@ export class CombatSystem {
   setPlayerBonusArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerBonusArmorRegenPerSecondResolver = resolver; }
   /** Zielseitiger Schadensmultiplikator eines Gegners (Verwundbarkeit); 1 = unveraendert. */
   setEnemyIncomingDamageMultiplierResolver(resolver: ((enemyId: string) => number) | null): void { this.enemyIncomingDamageMultiplierResolver = resolver; }
+  setRespawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.respawnAllowedResolver = resolver; }
+  setPlayerActionAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerActionAllowedResolver = resolver; }
   /**
    * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
    * Ausschliesslich `damageKind === 'direct'` und `sourceSlot === 'weapon1'`.
@@ -478,6 +483,7 @@ export class CombatSystem {
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
 
   initPlayer(id: string): void {
+    if (this.respawnAllowedResolver && !this.respawnAllowedResolver(id)) return;
     const maxHp = this.resolvePlayerMaxHp(id);
     this.maxHp.set(id, maxHp);
     this.hp.set(id, maxHp);
@@ -777,7 +783,7 @@ export class CombatSystem {
         supplemental.durationMs,
         supplemental.damagePerTick,
         `imbued-projectile:${proj.weaponName}`,
-        `${proj.weaponName} (entzuendet)`,
+        `${proj.weaponName} (entzündet)`,
       );
     }
   }
@@ -1021,6 +1027,9 @@ export class CombatSystem {
 
   canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage = false): boolean {
     if (!attackerId) return true;
+    if (this.playerActionAllowedResolver
+      && this.bridge.getPlayerProfile(attackerId)
+      && !this.playerActionAllowedResolver(attackerId)) return false;
     if (attackerId === targetId) return true;
     const attackerEnemy = this.enemyManager?.getEnemy(attackerId);
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
@@ -3219,7 +3228,10 @@ export class CombatSystem {
           this.bridge.incrementPlayerFrags(effectiveKillerId as string);
         }
         const enemyXp = getCoopDefenseEnemyXp(enemy.kind);
-        if ((killedByPlayer || killedByBaseTurret) && isCoopDefenseMode(this.bridge.getGameMode())) {
+        const xpSourceIsEligible = killedByPlayer
+          ? this.bridge.canPlayerReceiveRoundRewards(effectiveKillerId as string)
+          : killedByBaseTurret && this.bridge.getRoundResultEligiblePlayerIds().length > 0;
+        if (xpSourceIsEligible && isCoopDefenseMode(this.bridge.getGameMode())) {
           if (enemyXp > 0) {
             this.bridge.addCoopDefenseRoundXp(enemyXp);
             this.bridge.broadcastCoopDefenseXpPopup(x, y, enemyXp);
@@ -3266,6 +3278,7 @@ export class CombatSystem {
       this.onKillCb?.(killerId, playerId, weapon, x, y, this.lastKillSource.get(playerId));
     }
 
+    if (this.respawnAllowedResolver && !this.respawnAllowedResolver(playerId)) return;
     const timer = setTimeout(() => this.respawn(playerId), RESPAWN_DELAY_MS);
     this.respawnTimers.set(playerId, timer);
   }
@@ -3324,11 +3337,12 @@ export class CombatSystem {
   }
 
   private respawn(playerId: string): void {
+    this.respawnTimers.delete(playerId);
+    if (this.respawnAllowedResolver && !this.respawnAllowedResolver(playerId)) return;
     this.hp.set(playerId, this.getMaxHp(playerId));
     this.armor.set(playerId, 0);
     this.alive.set(playerId, true);
     this.clearBurnForPlayer(playerId);
-    this.respawnTimers.delete(playerId);
     this.lastAttacker.delete(playerId);
     this.lastWeapon.delete(playerId);
     this.lastKillSource.delete(playerId);

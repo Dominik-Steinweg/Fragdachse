@@ -172,7 +172,7 @@
       "attackStopDurationMs": 240,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_stink_broodmother",
-      "displayName": "Faulnisbrueter",
+      "displayName": "Faulnisbrüter",
       "stinkAura": {
         "utilityId": "ENEMY_STINKDRUESEN"
       },

@@ -228,7 +228,7 @@ export class PlacementPreviewRenderer {
     this.placeableUtilityHint.setVisible(visible);
     if (!visible) return;
     if (preview?.mode === 'dismantle') {
-      this.placeableUtilityHintTitle.setText('RUECKBAU');
+      this.placeableUtilityHintTitle.setText('RÜCKBAU');
       this.placeableUtilityHintSubtitle.setText('E oder Linksklick: abbauen   Rechtsklick: abbrechen');
     } else if (preview?.kind === 'tunnel') {
       this.placeableUtilityHintTitle.setText(`DACHS-TUNNEL ${preview.stage ?? 1}/2`);
