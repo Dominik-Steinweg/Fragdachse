@@ -240,8 +240,9 @@ export class ProjectileManager {
   }
 
   /**
-   * Registriert den Empfaenger fuer Hindernistreffer von Unterstuetzungsprojektilen
-   * (Reparaturstrahl, Energieinjektor). Diese Projektile richten keinen Schaden an; ihre
+   * Registriert den Empfaenger fuer Hindernistreffer von kontextabhaengigen
+   * Unterstuetzungsprojektilen (derzeit Energieinjektor). Diese Projektile richten keinen
+   * direkten Schaden an; ihre
    * Wirkung entsteht ausschliesslich hier, weil nur der Collider weiss, welcher Fels bzw.
    * welche Basiszelle getroffen wurde.
    */
@@ -613,8 +614,8 @@ export class ProjectileManager {
       enemyHitExplosion: cfg.enemyHitExplosion,
       impactCloud:    cfg.impactCloud,
       homing:         cfg.homing,
-      repairPayload:  cfg.repairPayload,
-      turretChargePayload: cfg.turretChargePayload,
+      energyInjectorPayload: cfg.energyInjectorPayload,
+      sourceTurretId: cfg.sourceTurretId,
       projectileVisualScale: cfg.projectileVisualScale,
       smokeTrailColor: cfg.smokeTrailColor,
       lockedTargetId: null,
@@ -1032,7 +1033,7 @@ export class ProjectileManager {
         tracked.hitObstacleIds.add(idx);
 
         const obstacleKind = this.obstacleKindResolver?.(idx);
-        const damage = obstacleKind === 'turret'
+        const damage = obstacleKind !== undefined && obstacleKind !== 'rock'
           ? tracked.damage
           : tracked.damage * (tracked.rockDamageMult ?? 1);
         if (damage !== 0) onHit?.(idx, damage, tracked.ownerId);
@@ -1181,9 +1182,12 @@ export class ProjectileManager {
           const idx = rockObjects?.indexOf(rockGO as Phaser.GameObjects.Image) ?? -1;
           if (idx < 0 || tracked.penetratedRockIds?.has(idx)) return;
           tracked.penetratedRockIds?.add(idx);
-          const rockMult = tracked.rockDamageMult ?? 1;
-          if (applyRockDamage && rockMult !== 0) {
-            onHit?.(idx, tracked.damage * rockMult, tracked.ownerId);
+          const obstacleKind = this.obstacleKindResolver?.(idx);
+          const obstacleMult = obstacleKind !== undefined && obstacleKind !== 'rock'
+            ? 1
+            : tracked.rockDamageMult ?? 1;
+          if (applyRockDamage && obstacleMult !== 0) {
+            onHit?.(idx, tracked.damage * obstacleMult, tracked.ownerId);
           }
           const impact = this.resolveObstacleImpactPoint(tracked, rockGO as Phaser.GameObjects.GameObject);
           playImpact(impact.x, impact.y, body.velocity.x, body.velocity.y, tracked.color);
@@ -1214,9 +1218,12 @@ export class ProjectileManager {
           );
         }
         if (applyRockDamage && rockObjects && onHit) {
-          const rockMult = tracked.rockDamageMult ?? 1;
-          if (rockMult !== 0 && idx !== -1) {
-            onHit(idx, tracked.damage * rockMult, tracked.ownerId);
+          const obstacleKind = idx !== -1 ? this.obstacleKindResolver?.(idx) : undefined;
+          const obstacleMult = obstacleKind !== undefined && obstacleKind !== 'rock'
+            ? 1
+            : tracked.rockDamageMult ?? 1;
+          if (obstacleMult !== 0 && idx !== -1) {
+            onHit(idx, tracked.damage * obstacleMult, tracked.ownerId);
           }
         }
         if (tracked.projectileStyle === 'hydra') {
@@ -1474,9 +1481,12 @@ export class ProjectileManager {
 
     proj.bounceCount++;
 
-    const rockMult = proj.rockDamageMult ?? 1;
-    if (rockMult !== 0) {
-      this.onRockHit?.(bestRockIndex, proj.damage * rockMult, proj.ownerId);
+    const obstacleKind = this.obstacleKindResolver?.(bestRockIndex);
+    const obstacleMult = obstacleKind !== undefined && obstacleKind !== 'rock'
+      ? 1
+      : proj.rockDamageMult ?? 1;
+    if (obstacleMult !== 0) {
+      this.onRockHit?.(bestRockIndex, proj.damage * obstacleMult, proj.ownerId);
     }
 
     this.bulletRenderer?.playImpactSparks(proj.id, bestHit.x, bestHit.y, nextVx, nextVy, proj.color);
@@ -1716,7 +1726,7 @@ export class ProjectileManager {
     obstacle: Phaser.GameObjects.GameObject,
     rockId: number,
   ): boolean {
-    if (!proj.repairPayload && !proj.turretChargePayload) return false;
+    if (!proj.energyInjectorPayload) return false;
     if (proj.supportConsumed) return true;
     proj.supportConsumed = true;
     const impact = this.resolveObstacleImpactPoint(proj, obstacle);
@@ -1876,6 +1886,7 @@ export class ProjectileManager {
       ownerId: proj.ownerId,
       effect: resolvedEffect,
       sourceSlot: proj.sourceSlot,
+      sourceTurretId: proj.sourceTurretId,
       weaponName: proj.weaponName,
       projectileId: proj.id,
       continuesAfterExplosion: resumesAfterExplosion,
@@ -2102,6 +2113,7 @@ export class ProjectileManager {
       ownerId: proj.ownerId,
       effect: proj.enemyHitExplosion,
       sourceSlot: proj.sourceSlot,
+      sourceTurretId: proj.sourceTurretId,
       weaponName: proj.weaponName,
     });
     this.queueDestroyProjectile(proj);
@@ -2298,6 +2310,7 @@ export class ProjectileManager {
             ownerId: proj.ownerId,
             effect: proj.explosion,
             sourceSlot: proj.sourceSlot,
+            sourceTurretId: proj.sourceTurretId,
             weaponName: proj.weaponName,
           });
           this.destroyTrackedProjectile(proj);

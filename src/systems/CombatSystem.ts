@@ -8,7 +8,7 @@ import type { ResourceSystem }    from './ResourceSystem';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, GroundFireVisualStyle, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
   type GeometryHit,
   findNearestRectangleHit as geomNearestRectangleHit,
@@ -41,6 +41,7 @@ import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 import { getRageGeneratingDamage } from '../utils/rageDamage';
 import { mergeEnemySlow, type EnemySlowState } from '../utils/enemySlow';
+import type { TargetStatusTarget } from './TargetStatusSystem';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -180,6 +181,8 @@ export interface HitscanTraceResult {
   readonly hitEnemyId: string | null;
   readonly hitDecoyId: number | null;
   readonly hitObstacle: boolean;
+  readonly hitObstacleKind?: HitscanObstacleKind;
+  readonly hitObstacleIndex?: number;
 }
 
 export interface HitscanTraceOptions {
@@ -190,6 +193,16 @@ export interface HitscanTraceOptions {
   readonly range: number;
   readonly traceThickness: number;
   readonly applyFavorTheShooter: boolean;
+  readonly includeShooter?: boolean;
+}
+
+export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'trunk' | 'train';
+
+export interface HitscanSupportImpact {
+  readonly targetType: 'player' | 'rock' | 'base';
+  readonly targetId: string;
+  readonly x: number;
+  readonly y: number;
 }
 
 interface HitscanSpriteTarget {
@@ -303,6 +316,21 @@ export class CombatSystem {
   ) => { amount: number; isCritical: boolean }) | null = null;
   private playerBonusArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private enemyIncomingDamageMultiplierResolver: ((enemyId: string) => number) | null = null;
+  /** Gemeinsamer zielseitiger Multiplikator fuer Gegner und hostautoritäre Strukturen. */
+  private targetIncomingDamageMultiplierResolver: ((target: TargetStatusTarget) => number) | null = null;
+  private onEnergyInjectorTargetHit: ((
+    targetType: 'player' | 'enemy',
+    targetId: string,
+    x: number,
+    y: number,
+    projectile: TrackedProjectile,
+  ) => void) | null = null;
+  private onHitscanSupportImpact: ((
+    impact: HitscanSupportImpact,
+    effect: HitscanSupportEffect,
+    attackerId: string,
+    sourceSlot?: LoadoutSlot,
+  ) => void) | null = null;
   /** Host-authoritative round-role gates shared by initial spawn and every respawn. */
   private respawnAllowedResolver: ((playerId: string) => boolean) | null = null;
   private playerActionAllowedResolver: ((playerId: string) => boolean) | null = null;
@@ -363,6 +391,30 @@ export class CombatSystem {
   setPlayerBonusArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerBonusArmorRegenPerSecondResolver = resolver; }
   /** Zielseitiger Schadensmultiplikator eines Gegners (Verwundbarkeit); 1 = unveraendert. */
   setEnemyIncomingDamageMultiplierResolver(resolver: ((enemyId: string) => number) | null): void { this.enemyIncomingDamageMultiplierResolver = resolver; }
+  /** Gemeinsamer Zielstatus-Trichter; ersetzt den alten Gegner-only-Resolver, falls gesetzt. */
+  setTargetIncomingDamageMultiplierResolver(resolver: ((target: TargetStatusTarget) => number) | null): void {
+    this.targetIncomingDamageMultiplierResolver = resolver;
+  }
+  setEnergyInjectorTargetHitCallback(handler: ((
+    targetType: 'player' | 'enemy',
+    targetId: string,
+    x: number,
+    y: number,
+    projectile: TrackedProjectile,
+  ) => void) | null): void {
+    this.onEnergyInjectorTargetHit = handler;
+  }
+  setHitscanSupportImpactCallback(handler: ((
+    impact: HitscanSupportImpact,
+    effect: HitscanSupportEffect,
+    attackerId: string,
+    sourceSlot?: LoadoutSlot,
+  ) => void) | null): void {
+    this.onHitscanSupportImpact = handler;
+  }
+  getTargetIncomingDamageMultiplier(target: TargetStatusTarget): number {
+    return Math.max(0, this.targetIncomingDamageMultiplierResolver?.(target) ?? 1);
+  }
   setRespawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.respawnAllowedResolver = resolver; }
   setPlayerActionAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerActionAllowedResolver = resolver; }
   /**
@@ -606,6 +658,9 @@ export class CombatSystem {
       options?.sourceSlot,
     ) ?? { amount, isCritical: false };
     amount = outgoing.amount;
+    // Allgemeine Zielstatus wirken auch auf Spieler, damit der Energieinjektor im PvP und
+    // kuenftige offensive Statusquellen denselben eingehenden Schadenspfad verwenden.
+    amount *= this.getTargetIncomingDamageMultiplier({ targetType: 'player', targetId });
 
     // Letzten Angreifer tracken (Selbstschaden ausgenommen)
     if (attackerId && attackerId !== targetId) {
@@ -1077,9 +1132,6 @@ export class CombatSystem {
 
     for (const proj of this.projectileManager.getActiveProjectiles()) {
       if (proj.isGrenade) continue;  // Granaten treffen nicht direkt, nur AoE
-      // Unterstuetzungsprojektile schaden niemandem und fliegen deshalb durch Gegner
-      // hindurch; ihre Treffer loest der SupportProjectileSystem-Pfad des Hosts auf.
-      if (proj.repairPayload || proj.turretChargePayload) continue;
       if (proj.miniRocketDeferredExplosion) continue;
       if (proj.miniRocketSpent) continue;
 
@@ -1290,6 +1342,12 @@ export class CombatSystem {
         const canDealDamage = this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage);
         if (!canDealDamage) continue;
 
+        if (proj.energyInjectorPayload) {
+          this.onEnergyInjectorTargetHit?.('player', player.id, player.sprite.x, player.sprite.y, proj);
+          this.projectileManager.destroyProjectile(proj.id);
+          return true;
+        }
+
         if (canDealDamage && this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
           const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(player.id) ?? 0);
           if (reflectionFactor > 0) {
@@ -1396,6 +1454,11 @@ export class CombatSystem {
       if (!this.canDamageTarget(proj.ownerId, enemy.id, proj.allowTeamDamage)) continue;
 
       if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemy.sprite.getBounds())) {
+        if (proj.energyInjectorPayload) {
+          this.onEnergyInjectorTargetHit?.('enemy', enemy.id, enemy.sprite.x, enemy.sprite.y, proj);
+          this.projectileManager.destroyProjectile(proj.id);
+          return true;
+        }
         const actualDamage = this.computeProjectileDamage(proj);
         const enemyKey = `enemy_${enemy.id}`;
         this.registerAk47Hit(proj);
@@ -1743,6 +1806,7 @@ export class CombatSystem {
     trainDamageMult = 1,
     chainCfg?: ChainLightningConfig,
     burnOnHit?: BurnOnHitConfig,
+    supportEffect?: HitscanSupportEffect,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -1754,6 +1818,7 @@ export class CombatSystem {
       range,
       traceThickness,
       applyFavorTheShooter: true,
+      includeShooter: Boolean(supportEffect),
     });
 
     this.queueHitscanTrace({
@@ -1761,7 +1826,7 @@ export class CombatSystem {
       startY: Math.round(startY),
       endX: Math.round(trace.endX),
       endY: Math.round(trace.endY),
-      color: playerColor,
+      color: supportEffect?.beamColor ?? playerColor,
       thickness: traceThickness,
       impactKind: (trace.hitPlayerId || trace.hitEnemyId) ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       visualPreset,
@@ -1775,6 +1840,21 @@ export class CombatSystem {
       this.detonationSystem?.checkHitscanDetonations(
         startX, startY, trace.endX, trace.endY, shooterId, detonatorCfg,
       );
+    }
+
+    if (supportEffect) {
+      this.resolveHitscanSupportImpact(
+        trace,
+        supportEffect,
+        shooterId,
+        startX,
+        startY,
+        angle,
+        weaponName,
+        sourceSlot,
+        adrenalinGain,
+      );
+      return true;
     }
 
     if (trace.hitPlayerId) {
@@ -1872,6 +1952,125 @@ export class CombatSystem {
     }
 
     return true;
+  }
+
+  /**
+   * Kontextabhaengiger Hitscan-Treffer des Plasmabrenners. Die Zielentscheidung bleibt im
+   * CombatSystem, waehrend Reparaturen an hostautoritaeren Strukturen beim Host-Update liegen.
+   * Feindlicher Schaden nutzt bewusst denselben Schadenstrichter wie jede andere Hitscan-Waffe.
+   */
+  private resolveHitscanSupportImpact(
+    trace: HitscanTraceResult,
+    effect: HitscanSupportEffect,
+    shooterId: string,
+    startX: number,
+    startY: number,
+    angle: number,
+    weaponName: string,
+    sourceSlot?: WeaponSlot,
+    adrenalinGain = 0,
+  ): void {
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
+
+    const damageTarget = (targetId: string): void => {
+      const loadoutMult = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
+      if (actualDamage <= 0) return;
+      if (this.shouldBlockWithShield(targetId, 'hitscan', actualDamage, startX, startY)) return;
+      this.applyDamage(
+        targetId,
+        actualDamage,
+        false,
+        shooterId,
+        weaponName,
+        { sourceX: startX, sourceY: startY, dirX, dirY },
+        { sourceSlot, damageKind: 'direct' },
+      );
+      if (adrenalinGain > 0) this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+    };
+
+    if (trace.hitPlayerId) {
+      const targetId = trace.hitPlayerId;
+      const friendly = targetId === shooterId || !this.canDamageTarget(shooterId, targetId);
+      if (friendly) {
+        const before = this.getHP(targetId);
+        const after = this.heal(targetId, effect.healPerHit);
+        if (after > before) {
+          this.onHitscanSupportImpact?.(
+            { targetType: 'player', targetId, x: trace.endX, y: trace.endY },
+            effect,
+            shooterId,
+            sourceSlot,
+          );
+        }
+      } else {
+        damageTarget(targetId);
+      }
+      return;
+    }
+
+    if (trace.hitEnemyId) {
+      damageTarget(trace.hitEnemyId);
+      return;
+    }
+
+    if (trace.hitDecoyId !== null) {
+      const loadoutMult = sourceSlot
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
+      if (actualDamage <= 0) return;
+      const hit = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, weaponName, {
+        sourceX: startX,
+        sourceY: startY,
+        dirX,
+        dirY,
+      }) ?? false;
+      if (hit && adrenalinGain > 0) this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      return;
+    }
+
+    if (!trace.hitObstacle) return;
+    if (trace.hitObstacleKind === 'rock' && trace.hitObstacleIndex !== undefined) {
+      this.onHitscanSupportImpact?.(
+        {
+          targetType: 'rock',
+          targetId: String(trace.hitObstacleIndex),
+          x: trace.endX,
+          y: trace.endY,
+        },
+        effect,
+        shooterId,
+        sourceSlot,
+      );
+      return;
+    }
+
+    if (trace.hitObstacleKind === 'base') {
+      const targetId = this.resolveHitscanBaseId(trace.endX, trace.endY, dirX, dirY);
+      if (!targetId) return;
+      this.onHitscanSupportImpact?.(
+        { targetType: 'base', targetId, x: trace.endX, y: trace.endY },
+        effect,
+        shooterId,
+        sourceSlot,
+      );
+    }
+  }
+
+  private resolveHitscanBaseId(endX: number, endY: number, dirX: number, dirY: number): string | undefined {
+    const direct = this.baseManager?.getBaseIdAtWorldPoint(endX, endY);
+    if (direct) return direct;
+    for (const backtrack of [0.5, 1, 2, 4, 8]) {
+      const id = this.baseManager?.getBaseIdAtWorldPoint(endX - dirX * backtrack, endY - dirY * backtrack);
+      if (id) return id;
+    }
+    return undefined;
   }
 
   // ── Kettenblitz ────────────────────────────────────────────────────────────
@@ -2406,8 +2605,32 @@ export class CombatSystem {
    */
   applyBaseDamage(baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot): void {
     if (damage <= 0) return;
-    if (this.baseDamageCallback) this.baseDamageCallback(baseId, damage, attackerId, sourceSlot);
-    else this.baseManager?.applyDamage(baseId, damage);
+    const resolvedDamage = damage * this.getTargetIncomingDamageMultiplier({ targetType: 'base', targetId: baseId });
+    if (resolvedDamage <= 0) return;
+    if (this.baseDamageCallback) this.baseDamageCallback(baseId, resolvedDamage, attackerId, sourceSlot);
+    else this.baseManager?.applyDamage(baseId, resolvedDamage);
+  }
+
+  /**
+   * Wendet ausgehenden und zielseitigen Schaden auf eine hostautoritäre Struktur an, ohne
+   * den konkreten Lifecycle des Objekts in den CombatSystem zu ziehen. Der Aufrufer entscheidet
+   * anschliessend, ob es ein Fels, Konstrukt, Aussenposten oder eine andere Struktur war.
+   */
+  resolveExternalTargetDamage(
+    target: TargetStatusTarget,
+    damage: number,
+    attackerId: string,
+    sourceSlot?: LoadoutSlot,
+  ): number {
+    if (damage <= 0) return 0;
+    const outgoing = this.playerOutgoingDamageResolver?.(
+      attackerId,
+      `${target.targetType}:${target.targetId}`,
+      damage,
+      false,
+      sourceSlot,
+    ) ?? { amount: damage, isCritical: false };
+    return Math.max(0, outgoing.amount) * this.getTargetIncomingDamageMultiplier(target);
   }
 
   /**
@@ -2506,7 +2729,7 @@ export class CombatSystem {
   }
 
   traceHitscan(options: HitscanTraceOptions): HitscanTraceResult {
-    const { shooterId, startX, startY, angle, range, traceThickness, applyFavorTheShooter } = options;
+    const { shooterId, startX, startY, angle, range, traceThickness, applyFavorTheShooter, includeShooter = false } = options;
 
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
@@ -2522,13 +2745,16 @@ export class CombatSystem {
     let hitEnemyId: string | null = null;
     let hitDecoyId: number | null = null;
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.isHitscanTargetCandidate(player.id, shooterId)) continue;
+      if (!this.isHitscanTargetCandidate(player.id, shooterId, includeShooter)) continue;
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
         player,
         traceThickness,
-        applyFavorTheShooter,
+        // Support-Hitscans duerfen den Schuetzen als Heilziel einbeziehen. Seine eigene
+        // Lag-Kompensation darf die Trefferkapsel beim Rueckwaertslaufen jedoch nicht vor
+        // die Muendung zurueckspulen und den Strahl nach wenigen Pixeln abschneiden.
+        applyFavorTheShooter && player.id !== shooterId,
       );
       if (hitDistance === null || hitDistance > closestDistance) continue;
 
@@ -2573,6 +2799,7 @@ export class CombatSystem {
       hitDecoyId = decoy.id;
     }
 
+    const hitObstacle = obstacleHit !== null && closestDistance >= obstacleHit.distance;
     return {
       endX: startX + dirX * closestDistance,
       endY: startY + dirY * closestDistance,
@@ -2580,7 +2807,9 @@ export class CombatSystem {
       hitPlayerId,
       hitEnemyId,
       hitDecoyId,
-      hitObstacle: obstacleHit !== null && closestDistance >= obstacleHit.distance,
+      hitObstacle,
+      hitObstacleKind: hitObstacle ? obstacleHit?.kind : undefined,
+      hitObstacleIndex: hitObstacle ? obstacleHit?.index : undefined,
     };
   }
 
@@ -2682,8 +2911,8 @@ export class CombatSystem {
     return true;
   }
 
-  private isHitscanTargetCandidate(playerId: string, shooterId: string): boolean {
-    if (playerId === shooterId) return false;
+  private isHitscanTargetCandidate(playerId: string, shooterId: string, includeShooter = false): boolean {
+    if (playerId === shooterId && !includeShooter) return false;
     if (!this.isHitscanTargetAlive(playerId)) return false;
     if (this.isHitscanTargetBurrowed(playerId)) return false;
     return true;
@@ -2715,19 +2944,28 @@ export class CombatSystem {
 
   private findNearestObstacleHit(
     line: Phaser.Geom.Line,
-  ): { distance: number; x: number; y: number } | null {
-    let bestHit = this.findNearestRectangleHit(line, this.arenaBounds);
+  ): (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null {
+    const arenaHit = this.findNearestRectangleHit(line, this.arenaBounds);
+    let bestHit: (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null = arenaHit
+      ? { ...arenaHit, kind: 'arena' }
+      : null;
 
     this.obstacleIndex.querySegment(
       line.x1, line.y1, line.x2, line.y2,
-      (_kind, _rockIndex, left, top, right, bottom) => {
+      (kind, rockIndex, left, top, right, bottom) => {
         const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
-        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+        if (hit && (!bestHit || hit.distance < bestHit.distance)) {
+          bestHit = {
+            ...hit,
+            kind: kind === OBSTACLE_ROCK ? 'rock' : 'base',
+            ...(kind === OBSTACLE_ROCK ? { index: rockIndex } : {}),
+          };
+        }
         return false;
       },
       (centerX, centerY, radius) => {
         const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
-        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+        if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = { ...hit, kind: 'trunk' };
         return false;
       },
     );
@@ -2735,7 +2973,7 @@ export class CombatSystem {
     const trainBounds = this.computeTrainBounds();
     if (trainBounds) {
       const hit = this.findNearestRectangleHit(line, trainBounds);
-      if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = hit;
+      if (hit && (!bestHit || hit.distance < bestHit.distance)) bestHit = { ...hit, kind: 'train' };
     }
 
     return bestHit;
@@ -3137,8 +3375,11 @@ export class CombatSystem {
     // Zielseitiger Multiplikator (Verwundbarkeit). Bewusst hier und nicht im ausgehenden
     // Resolver: er gilt fuer *jede* Schadensquelle gegen dieses Ziel, auch fuer Verbuendete,
     // Tuerme und Basen, die gar keinen Angreifer-Modifikator haben.
-    amount = outgoing.amount
-      * Math.max(0, this.enemyIncomingDamageMultiplierResolver?.(targetId) ?? 1);
+    const incomingMultiplier = this.targetIncomingDamageMultiplierResolver?.({
+      targetType: 'enemy',
+      targetId,
+    }) ?? this.enemyIncomingDamageMultiplierResolver?.(targetId) ?? 1;
+    amount = outgoing.amount * Math.max(0, incomingMultiplier);
 
     if (attackerId && attackerId !== targetId) {
       this.lastAttacker.set(targetId, attackerId);

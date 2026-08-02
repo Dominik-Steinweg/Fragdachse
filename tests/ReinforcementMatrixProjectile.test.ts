@@ -9,7 +9,8 @@ vi.mock('phaser', () => ({
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 
-describe('overcharge core projectile', () => {
+// Fachlicher Name; OVERCHARGE_CORE bleibt nur der persistente Loadout-Identifier.
+describe('reinforcement matrix projectile', () => {
   it('launches a slow wall-colliding rocket payload and deploys only on impact', () => {
     const spawnProjectile = vi.fn(() => 17);
     const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
@@ -49,10 +50,10 @@ describe('overcharge core projectile', () => {
         selfDamageMult: 0,
         rockDamageMult: 0,
         trainDamageMult: 0,
-        overchargeField: {
+        reinforcementMatrix: {
           durationMs: 6_000,
-          fireRateMultiplier: 1.5,
-          damageMultiplier: 1.25,
+          damageReduction: 0.5,
+          vulnerabilityBonus: 0.2,
           color: 0x4fd6ff,
         },
       },

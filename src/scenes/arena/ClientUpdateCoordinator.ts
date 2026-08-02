@@ -74,6 +74,9 @@ export class ClientUpdateCoordinator {
   private storedItemsFallback: readonly CoopDefenseItem[] | null = null;
   private storedClassIdFallback: CoopDefenseClassId | null = null;
   private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = { weapon1: 0, weapon2: 0 };
+  private predictedLocalAdrenaline: number | null = null;
+  private predictedLocalAdrenalineSnapshot: number | null = null;
+  private predictedLocalAdrenalineSnapshotVersion = -1;
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
   private moveLoopHandle: string | null = null;
@@ -264,8 +267,10 @@ export class ClientUpdateCoordinator {
         }
       }
 
-      this.ctx.overchargeSystem?.syncFromSnapshot(state.overchargeFields ?? []);
-      this.ctx.turretChargeSystem?.syncFromSnapshot(state.turretCharges ?? []);
+      this.ctx.reinforcementMatrixSystem?.syncFromSnapshot(state.reinforcementMatrices ?? []);
+      this.ctx.energyInjectorSystem?.syncEffectsFromSnapshot(state.energyInjectorEffects ?? []);
+      this.ctx.energyInjectorSystem?.syncFocusFromSnapshot(state.energyInjectorFocus ?? []);
+      this.ctx.targetStatusSystem?.syncFromSnapshot(state.targetVulnerabilities ?? []);
 
       const trainState = state.train;
       this.ctx.combatSystem.setClientTrainBounds(
@@ -274,6 +279,15 @@ export class ClientUpdateCoordinator {
 
       this.ctx.baseManager?.applySnapshot(state.bases ?? []);
       this.ctx.enemyManager?.applySnapshot(state.enemies);
+      const vulnerabilityNow = bridge.getSynchronizedNow();
+      for (const base of this.ctx.baseManager?.getBases() ?? []) {
+        base.setVulnerable(
+          this.ctx.targetStatusSystem?.isVulnerable(
+            { targetType: 'base', targetId: base.id },
+            vulnerabilityNow,
+          ) ?? false,
+        );
+      }
 
       this.checkLocalPickup(state.powerups ?? []);
       worldStateMs = performance.now() - worldStartedAt;
@@ -294,12 +308,9 @@ export class ClientUpdateCoordinator {
     // Der Host repliziert absolute Ablaufzeitpunkte, deshalb laeuft der Marker hier auch dann
     // sauber ab, wenn zwischendurch kein Snapshot ankommt.
     const vulnerableNow = bridge.getSynchronizedNow();
-    const vulnerableUntil = new Map(
-      (state.vulnerableEnemies ?? []).map((entry) => [entry.enemyId, entry.expiresAt]),
-    );
     for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
       this.enemyDashVisuals.sync(enemy);
-      enemy.setVulnerable(vulnerableNow < (vulnerableUntil.get(enemy.id) ?? 0));
+      enemy.setVulnerable(this.ctx.targetStatusSystem?.isVulnerable({ targetType: 'enemy', targetId: enemy.id }, vulnerableNow) ?? false);
     }
 
     this.ctx.decoySystem.updateVisuals(lerpFactor);
@@ -560,7 +571,42 @@ export class ClientUpdateCoordinator {
 
   getLocalAdrenaline(): number {
     const localId = bridge.getLocalPlayerId();
-    return bridge.getLatestGameState()?.players[localId]?.adrenaline ?? 0;
+    // Der Host besitzt den autoritativen Wert bereits lokal. Der replizierte 20-Hz-Snapshot
+    // kann nach einem Schuss noch einen Frame lang veraltet sein und darf deshalb dort kein
+    // zweites, anschliessend abgelehntes Prediction-Feuer freigeben.
+    if (bridge.isHost() && this.ctx.resourceSystem) {
+      return this.ctx.resourceSystem.getAdrenaline(localId);
+    }
+
+    const snapshotAdrenaline = bridge.getLatestGameState()?.players[localId]?.adrenaline ?? 0;
+    const snapshotVersion = bridge.getGameStateVersion();
+    if (this.predictedLocalAdrenaline === null || this.predictedLocalAdrenalineSnapshot === null) {
+      this.predictedLocalAdrenaline = snapshotAdrenaline;
+      this.predictedLocalAdrenalineSnapshot = snapshotAdrenaline;
+      this.predictedLocalAdrenalineSnapshotVersion = snapshotVersion;
+    } else if (snapshotVersion !== this.predictedLocalAdrenalineSnapshotVersion) {
+      const snapshotDelta = snapshotAdrenaline - this.predictedLocalAdrenalineSnapshot;
+      if (snapshotDelta < 0) {
+        // Autoritative Verbraeuche koennen den Schattenwert nur senken. Ein vor dem Schuss
+        // erzeugter Snapshot darf eine bereits lokal reservierte Ausgabe nicht zuruecknehmen.
+        this.predictedLocalAdrenaline = Math.min(this.predictedLocalAdrenaline, snapshotAdrenaline);
+      } else if (snapshotDelta > 0) {
+        // Regeneration und Belohnungen werden als Delta uebernommen. So kann gehaltenes Feuer
+        // wieder anlaufen, ohne einen noch nicht bestaetigten Verbrauch zu vergessen.
+        this.predictedLocalAdrenaline = Math.min(
+          this.getLocalMaxAdrenaline(),
+          this.predictedLocalAdrenaline + snapshotDelta,
+        );
+      }
+      this.predictedLocalAdrenalineSnapshot = snapshotAdrenaline;
+      this.predictedLocalAdrenalineSnapshotVersion = snapshotVersion;
+    }
+    return this.predictedLocalAdrenaline;
+  }
+
+  recordPredictedAdrenalineSpend(amount: number): void {
+    if (bridge.isHost() || amount <= 0) return;
+    this.predictedLocalAdrenaline = Math.max(0, this.getLocalAdrenaline() - amount);
   }
 
   getLocalUtilityCooldownFrac(): number {
@@ -724,6 +770,9 @@ export class ClientUpdateCoordinator {
     this.enemyDashVisuals.reset();
     this.weaponLastFired = { weapon1: 0, weapon2: 0 };
     this.predictedHitscanCooldownUntil = { weapon1: 0, weapon2: 0 };
+    this.predictedLocalAdrenaline = null;
+    this.predictedLocalAdrenalineSnapshot = null;
+    this.predictedLocalAdrenalineSnapshotVersion = -1;
     this.nextPredictedHitscanShotId = 1;
     this.pickupCooldownUntil = 0;
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
@@ -828,6 +877,7 @@ export class ClientUpdateCoordinator {
       range:      config.range,
       traceThickness: config.fire.traceThickness,
       applyFavorTheShooter: bridge.isHost(),
+      includeShooter: Boolean(config.fire.supportEffect),
     });
 
     this.ctx.effectSystem.playPredictedHitscanTracer(
@@ -835,10 +885,12 @@ export class ClientUpdateCoordinator {
       muzzleOrigin.y,
       trace.endX,
       trace.endY,
-      localPlayer.color,
+      config.fire.supportEffect?.beamColor ?? localPlayer.color,
       config.fire.traceThickness,
       shotId,
-      trace.hitPlayerId ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
+      (trace.hitPlayerId || trace.hitEnemyId || trace.hitDecoyId !== null)
+        ? 'player'
+        : (trace.hitObstacle ? 'environment' : 'none'),
       config.fire.visualPreset,
       config.shotAudio?.successKey,
     );

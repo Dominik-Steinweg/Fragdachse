@@ -34,6 +34,7 @@ interface PedestalVisual {
   aura: Phaser.GameObjects.Image;
   ringOuter: Phaser.GameObjects.Arc;
   ringInner: Phaser.GameObjects.Arc;
+  ownerRing: Phaser.GameObjects.Arc;
   core: Phaser.GameObjects.Arc;
   ambientEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -190,6 +191,8 @@ export class PowerUpRenderer {
         .setStrokeStyle(2, glowColor, 0.75);
       const ringInner = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderInnerRadius - 2)
         .setStrokeStyle(2, 0xffffff, 0.18);
+      const ownerRing = this.scene.add.circle(0, 0, POWERUP_PEDESTAL_CONFIG.renderBaseRadius - 2)
+        .setStrokeStyle(1.5, pedestal.ownerColor ?? 0xffffff, pedestal.ownerColor === undefined ? 0 : 0.78);
       const glow = configureAdditiveImage(
         this.scene.add.image(0, 0, TEX_POWERUP_PEDESTAL_GLOW),
         DEPTH.PLAYERS - 2.2,
@@ -231,7 +234,7 @@ export class PowerUpRenderer {
       }, DEPTH.PLAYERS - 2.05);
       setCircleEmitZone(sparkEmitter, POWERUP_PEDESTAL_CONFIG.renderInnerRadius + 3, 1, true);
 
-      container.add([outerGlow, glow, aura, shadow, base, plate, core, ringOuter, ringInner]);
+      container.add([outerGlow, glow, aura, shadow, base, plate, core, ringOuter, ringInner, ownerRing]);
       this.pedestals.set(pedestal.id, {
         container,
         outerGlow,
@@ -239,6 +242,7 @@ export class PowerUpRenderer {
         aura,
         ringOuter,
         ringInner,
+        ownerRing,
         core,
         ambientEmitter,
         sparkEmitter,
@@ -318,6 +322,10 @@ export class PowerUpRenderer {
       visual.aura.setAlpha(auraAlpha).setScale(auraScale);
       visual.ringOuter.setAlpha(ringOuterAlpha).setScale(ringPulse);
       visual.ringInner.setAlpha(ringInnerAlpha).setScale(1 + breath * 0.02);
+      visual.ownerRing
+        .setStrokeStyle(1.5, visual.state.ownerColor ?? 0xffffff, visual.state.ownerColor === undefined ? 0 : 0.78)
+        .setAlpha(visual.state.ownerColor === undefined ? 0 : 0.72 + breath * 0.12)
+        .setScale(1 + breath * 0.025);
       visual.core.setAlpha(coreAlpha).setScale(1 + breath * 0.05);
       visual.ambientEmitter.frequency = ambientFrequency;
       visual.sparkEmitter.frequency = sparkFrequency;

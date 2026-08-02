@@ -143,9 +143,10 @@ describe('coop-defense classes', () => {
     expect(constructionIds).toContain('unlock_rocket_turret');
     expect(constructionIds).toContain('unlock_felsbau');
     expect(constructionIds).toContain('unlock_fliegenpilz');
+    expect(constructionIds).toContain('unlock_tesla_turret');
   });
 
-  it('keeps constructions and the overcharge core out of the other classes', () => {
+  it('keeps constructions and the reinforcement matrix out of the other classes', () => {
     for (const classId of ['dachs_nukem', 'dachs_of_steel'] as const) {
       const categories = getCoopDefenseUpgradeCategories(classId);
       expect(categories.find(category => category.id === 'construction')).toBeUndefined();
@@ -182,6 +183,18 @@ describe('Inspector construction slots', () => {
       0,
       'inspector_gadachs',
     )).not.toBeNull();
+    profile = levelUpCoopDefenseUpgrade(
+      profile,
+      'unlock_tesla_turret',
+      20,
+      0,
+      'inspector_gadachs',
+    )!;
+    expect(getUnlockedCoopDefenseConstructionIds(profile)).toEqual([
+      'rocket_turret',
+      'machine_gun_turret',
+      'tesla_turret',
+    ]);
 
     profile = levelUpCoopDefenseUpgrade(
       profile,

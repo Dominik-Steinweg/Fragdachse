@@ -67,7 +67,11 @@
         "spawnShakeIntensity": 0.0028,
         "targetRange": 280,
         "muzzleOffset": 26,
-        "deathCloudRadius": 64
+        "deathCloudRadius": 64,
+        "energyInjectorEffect": {
+          "type": "damage_turret",
+          "damageMultiplier": 1.25
+        }
       }
     },
     "FELSBAU_COOP": {

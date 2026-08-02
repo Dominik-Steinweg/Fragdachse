@@ -354,7 +354,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     this.states.delete(enemy.id);
     this.damagePlayers(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage, 'Zeitbombendachs');
     this.damageConstructions(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage);
-    this.damageArmedOutposts(x, y, config.explosionRadiusPx, config.explosionDamage);
+    this.damageArmedOutposts(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage);
     this.hooks.applyRadialImpulse(x, y, config.explosionRadiusPx, config.explosionKnockback, enemy.id);
     this.hooks.playExplosion(x, y, config.explosionRadiusPx, 'timebomb');
     this.fireChunks?.hostCreateFireChunkBurst(
@@ -402,15 +402,16 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     }
   }
 
-  private damageArmedOutposts(x: number, y: number, radius: number, maxDamage: number): void {
+  private damageArmedOutposts(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
     for (const base of this.baseManager.getBasesByFaction('friendly')) {
       if (base.role !== 'outpost' || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - surface.distance / radius)));
-      // Gegnerquellen erhalten keine Spieler-/Itemmodifikatoren. Direkter Basisschaden macht den
-      // Vertrag explizit und funktioniert auch nachdem das detonierende Ziel aus der KI faellt.
-      this.baseManager.applyDamage(base.id, damage);
+      // Auch Gegner-Spezialschaden laeuft durch den zentralen Zielstatuspfad, damit Matrixschutz
+      // und Verwundbarkeit auf Basen fuer jede Schadensquelle gleich gelten. Der ausgehende
+      // Spielerresolver bleibt fuer die feindliche Angreifer-ID neutral.
+      this.combatSystem.applyBaseDamage(base.id, damage, attackerId);
     }
   }
 

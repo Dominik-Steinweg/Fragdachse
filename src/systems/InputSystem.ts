@@ -27,6 +27,7 @@ import type {
   UtilityConfig,
   WeaponConfig,
 } from '../loadout/LoadoutConfig';
+import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 
 /** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
 type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig;
@@ -252,8 +253,15 @@ export class InputSystem {
     // A special pickup temporarily replaces E; let it use the normal utility
     // slot and restore the Inspector selection afterwards.
     const activeConfig = this.getLocalUtilityConfig?.();
+    const resolvedToolConfig = tool?.kind === 'utility'
+      ? getUtilityConfigForMode(tool.id, this.bridge.getGameMode())
+      : undefined;
     return this.isInspectorMode() && tool?.kind === 'utility'
-      && (!activeConfig || activeConfig.id === tool.id)
+      // Coop commits the concrete `*_COOP` variant while the Inspector keeps
+      // the user-facing base ID. Treat both IDs as the same tool, but keep
+      // temporary utility overrides (which resolve to a different config)
+      // on the ordinary utility path.
+      && (!activeConfig || activeConfig.id === resolvedToolConfig?.id)
       ? { toolRef: tool }
       : undefined;
   }

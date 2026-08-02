@@ -2,18 +2,18 @@
   "weapons": {
     "OVERCHARGE_CORE": {
       "id": "OVERCHARGE_CORE",
-      "displayName": "Überladungskern",
-      "cooldown": 4000,
+      "displayName": "Verstärkungsmatrix",
+      "cooldown": 6000,
       "damage": 0,
       "range": 420,
       "fire": {
-        "type": "overcharge_core",
+        "type": "reinforcement_matrix",
         "projectileSpeed": 320,
         "projectileSize": 12,
         "radius": 220,
         "durationMs": 6000,
-        "fireRateMultiplier": 1.5,
-        "damageMultiplier": 1.25,
+        "damageReduction": 0.5,
+        "vulnerabilityBonus": 0.2,
         "fieldColor": "#4fd6ff"
       },
       "allowedSlots": [
@@ -22,7 +22,7 @@
       "allowedModes": [
         "coop_defense"
       ],
-      "adrenalinCost": 50,
+      "adrenalinCost": 40,
       "adrenalinGain": 0,
       "spreadStanding": 0,
       "spreadMoving": 0,
@@ -42,70 +42,20 @@
     },
     "REPARATURSTRAHL": {
       "id": "REPARATURSTRAHL",
-      "displayName": "Reparaturstrahl",
-      "cooldown": 200,
+      "displayName": "Plasmabrenner",
+      "cooldown": 160,
       "damage": 0,
       "range": 420,
       "fire": {
-        "type": "repair_beam",
-        "projectileSpeed": 720,
-        "projectileSize": 8,
-        "healPerHit": 25,
-        "beamColor": "#5cf58f"
-      },
-      "allowedSlots": [
-        "weapon2"
-      ],
-      "allowedModes": [
-        "coop_defense"
-      ],
-      "adrenalinCost": 10,
-      "adrenalinGain": 0,
-      "spreadStanding": 0,
-      "spreadMoving": 2,
-      "spreadPerShot": 0,
-      "maxDynamicSpread": 0,
-      "spreadRecoveryDelay": 0,
-      "spreadRecoveryRate": 0,
-      "spreadRecoverySpeed": 100,
-      "projectileStyle": "energy_ball",
-      "energyBallVariant": "plasma",
-      "projectileColor": "#5cf58f",
-      "projectileVisualScale": 1.1,
-      "rockDamageMult": 0,
-      "trainDamageMult": 0,
-      "shotAudio": {
-        "successKey": "shot_plasma",
-        "failureKey": "shot_dry_trigger"
-      }
-    },
-    "ENERGIEINJEKTOR": {
-      "id": "ENERGIEINJEKTOR",
-      "displayName": "Energieinjektor",
-      "cooldown": 90,
-      "damage": 0,
-      "range": 460,
-      "fire": {
-        "type": "turret_charge",
-        "projectileSpeed": 780,
-        "projectileSize": 7,
-        "homing": {
-          "acquireDelayMs": 60,
-          "searchRadius": 260,
-          "retargetIntervalMs": 80,
-          "maxTurnDegreesPerStep": 4,
-          "targetTypes": [
-            "turrets"
-          ],
-          "requireLineOfSight": false,
-          "excludeOwner": false,
-          "distanceWeight": 1,
-          "forwardWeight": 1.5
-        },
-        "durationMs": 3000,
-        "damageMultiplierPerStack": 0.08,
-        "maxStacks": 8,
-        "chargeColor": "#53b6ff"
+        "type": "hitscan",
+        "traceThickness": 5,
+        "visualPreset": "plasma_burner",
+        "supportEffect": {
+          "type": "plasma_burner",
+          "healPerHit": 25,
+          "damagePerHit": 25,
+          "beamColor": "#5cf58f"
+        }
       },
       "allowedSlots": [
         "weapon2"
@@ -114,6 +64,41 @@
         "coop_defense"
       ],
       "adrenalinCost": 5,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "shotAudio": {
+        "successKey": "shot_plasma",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "ENERGIEINJEKTOR": {
+      "id": "ENERGIEINJEKTOR",
+      "displayName": "Energieinjektor",
+      "cooldown": 600,
+      "damage": 0,
+      "range": 460,
+      "fire": {
+        "type": "energy_injector",
+        "projectileSpeed": 780,
+        "projectileSize": 7,
+        "durationMs": 7000,
+        "vulnerabilityBonus": 0.2,
+        "focusDurationMs": 7000,
+        "injectorColor": "#53b6ff"
+      },
+      "allowedSlots": [
+        "weapon2"
+      ],
+      "allowedModes": [
+        "coop_defense"
+      ],
+      "adrenalinCost": 25,
       "adrenalinGain": 0,
       "spreadStanding": 2,
       "spreadMoving": 5,

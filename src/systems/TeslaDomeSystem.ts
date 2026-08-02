@@ -8,8 +8,11 @@ import type { ResourceSystem } from './ResourceSystem';
 
 interface ActiveTeslaDome {
   ownerId: string;
+  sourceSlot: LoadoutSlot;
+  damageMultiplier: number;
   x: number;
   y: number;
+  skipRockIndex?: number;
   color: number;
   config: WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
   lastRefreshAt: number;
@@ -17,6 +20,21 @@ interface ActiveTeslaDome {
   lastTickAt: number;
   activatedAt: number;
   chargeStacks: number;
+}
+
+interface TeslaConstructionSource {
+  id: number;
+  ownerId: string;
+  x: number;
+  y: number;
+  color: number;
+  /** Laufzeitboni des Besitzers und lokale Turmbuffs; globale Coop-Werte folgen im CombatSystem. */
+  damageMultiplier?: number;
+  config: WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
+}
+
+interface ActiveConstructionTeslaDome extends ActiveTeslaDome {
+  sourceId: number;
 }
 
 interface TeslaRockTarget {
@@ -60,9 +78,11 @@ type TurretDamageHandler = (id: number, damage: number, ownerId: string) => void
 type EnemyTargetProvider = () => readonly TeslaEnemyTarget[];
 type BaseTargetProvider = () => readonly TeslaBaseTarget[];
 type BaseDamageHandler = (baseId: string, damage: number, ownerId: string, sourceSlot?: LoadoutSlot) => void;
+type TeslaConstructionSourceProvider = () => readonly TeslaConstructionSource[];
 
 export class TeslaDomeSystem {
   private readonly activeDomes = new Map<string, ActiveTeslaDome>();
+  private readonly activeConstructionDomes = new Map<number, ActiveConstructionTeslaDome>();
 
   private lineOfSightChecker: LineOfSightChecker | null = null;
   private rockTargetProvider: RockTargetProvider | null = null;
@@ -75,6 +95,7 @@ export class TeslaDomeSystem {
   private baseTargetProvider: BaseTargetProvider | null = null;
   private baseDamageHandler: BaseDamageHandler | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
+  private constructionSourceProvider: TeslaConstructionSourceProvider | null = null;
 
   private static readonly HOLD_GRACE_MS = 500;
 
@@ -116,6 +137,11 @@ export class TeslaDomeSystem {
     this.energyShieldSystem = system;
   }
 
+  setConstructionSourceProvider(provider: TeslaConstructionSourceProvider | null): void {
+    this.constructionSourceProvider = provider;
+    if (!provider) this.activeConstructionDomes.clear();
+  }
+
   hostRefresh(
     ownerId: string,
     x: number,
@@ -136,6 +162,8 @@ export class TeslaDomeSystem {
 
     this.activeDomes.set(ownerId, {
       ownerId,
+      sourceSlot: 'weapon2',
+      damageMultiplier: 1,
       x,
       y,
       color,
@@ -221,6 +249,82 @@ export class TeslaDomeSystem {
       });
     }
 
+    synced.push(...this.hostUpdateConstructionDomes(now));
+    return synced;
+  }
+
+  private hostUpdateConstructionDomes(now: number): SyncedTeslaDome[] {
+    const synced: SyncedTeslaDome[] = [];
+    const activeSourceIds = new Set<number>();
+
+    for (const source of this.constructionSourceProvider?.() ?? []) {
+      activeSourceIds.add(source.id);
+      const domeState: ActiveTeslaDome = {
+        ownerId: source.ownerId,
+        sourceSlot: 'utility',
+        damageMultiplier: Math.max(0, source.damageMultiplier ?? 1),
+        x: source.x,
+        y: source.y,
+        skipRockIndex: source.id,
+        color: source.color,
+        config: source.config,
+        lastRefreshAt: now,
+        lastDrainAt: now,
+        lastTickAt: now,
+        activatedAt: now,
+        chargeStacks: 0,
+      };
+      const targets = this.collectTargets(domeState);
+
+      // Ein Tesla-Turm ist nur bei einem erreichbaren Gegner aktiv. Dadurch bleiben
+      // Kuppelvisual und Netzwerk-Snapshot im Ruhezustand vollständig aus.
+      if (targets.length === 0) {
+        this.activeConstructionDomes.delete(source.id);
+        continue;
+      }
+
+      let dome = this.activeConstructionDomes.get(source.id);
+      if (!dome) {
+        dome = {
+          ...domeState,
+          sourceId: source.id,
+        };
+        this.activeConstructionDomes.set(source.id, dome);
+      } else {
+        dome.ownerId = source.ownerId;
+        dome.x = source.x;
+        dome.y = source.y;
+        dome.color = source.color;
+        dome.config = source.config;
+        dome.damageMultiplier = Math.max(0, source.damageMultiplier ?? 1);
+      }
+
+      const tickInterval = Math.max(1, dome.config.fire.tickInterval);
+      while (now - dome.lastTickAt >= tickInterval) {
+        dome.lastTickAt += tickInterval;
+        this.applyTickDamage(dome, targets);
+      }
+
+      synced.push({
+        ownerId: constructionVisualId(source.id),
+        x: Math.round(source.x),
+        y: Math.round(source.y),
+        radius: this.getEffectiveRadius(dome),
+        color: source.color,
+        alpha: 1,
+        weaponId: source.config.id,
+        targets: targets.map(target => ({
+          x: Math.round(target.x),
+          y: Math.round(target.y),
+          type: target.type,
+        })),
+      });
+    }
+
+    for (const sourceId of [...this.activeConstructionDomes.keys()]) {
+      if (!activeSourceIds.has(sourceId)) this.activeConstructionDomes.delete(sourceId);
+    }
+
     return synced;
   }
 
@@ -238,7 +342,7 @@ export class TeslaDomeSystem {
         if (!this.combatSystem.canDamageTarget(dome.ownerId, player.id)) continue;
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, player.sprite.x, player.sprite.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, player.sprite.x, player.sprite.y)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, player.sprite.x, player.sprite.y, dome.skipRockIndex)) continue;
         targets.push({ x: player.sprite.x, y: player.sprite.y, type: 'players' });
       }
     }
@@ -267,7 +371,7 @@ export class TeslaDomeSystem {
         if (!this.combatSystem.canDamageTarget(dome.ownerId, enemy.id)) continue;
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, enemy.x, enemy.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, enemy.x, enemy.y)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, enemy.x, enemy.y, dome.skipRockIndex)) continue;
         targets.push({ x: enemy.x, y: enemy.y, type: 'enemies' });
       }
     }
@@ -279,7 +383,7 @@ export class TeslaDomeSystem {
         if (base.faction !== 'hostile' || base.getHp() <= 0) continue;
         const surface = base.getNearestSurfacePoint(dome.x, dome.y);
         if (!surface || surface.distance > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, surface.x, surface.y)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, surface.x, surface.y, dome.skipRockIndex)) continue;
         targets.push({ x: surface.x, y: surface.y, type: 'bases', targetId: base.id });
       }
     }
@@ -288,7 +392,7 @@ export class TeslaDomeSystem {
       for (const segment of this.trainTargetProvider()) {
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, segment.x, segment.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, segment.x, segment.y)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, segment.x, segment.y, dome.skipRockIndex)) continue;
         targets.push({ x: segment.x, y: segment.y, type: 'train' });
         break;
       }
@@ -300,6 +404,7 @@ export class TeslaDomeSystem {
   private applyTickDamage(dome: ActiveTeslaDome, targets: TeslaDomeTarget[]): void {
     const damage = dome.config.fire.damagePerTick
       * (1 + dome.chargeStacks * (dome.config.fire.damageBonusPerCharge ?? 0));
+    const resolvedDamage = damage * dome.damageMultiplier;
     const playerTargets = targets.filter(target => target.type === 'players');
     const enemyTargets = targets.filter(target => target.type === 'enemies');
     const rockTargets = targets.filter(target => target.type === 'rocks');
@@ -315,27 +420,27 @@ export class TeslaDomeSystem {
         if (this.energyShieldSystem?.tryBlockDamage({
           targetId: player.id,
           category: 'tesla',
-          damage,
+          damage: resolvedDamage,
           sourceX: dome.x,
           sourceY: dome.y,
           now: Date.now(),
         })) {
           continue;
         }
-        this.combatSystem.applyDamage(player.id, damage, false, dome.ownerId, dome.config.displayName, {
+        this.combatSystem.applyDamage(player.id, resolvedDamage, false, dome.ownerId, dome.config.displayName, {
           sourceX: dome.x,
           sourceY: dome.y,
-        }, { damageKind: 'chain' });
+        }, { damageKind: 'chain', sourceSlot: dome.sourceSlot, allowCritical: true });
       }
     }
 
     if (enemyTargets.length > 0 && this.enemyTargetProvider) {
       for (const enemy of this.enemyTargetProvider()) {
         if (!enemyTargets.some(target => target.x === enemy.x && target.y === enemy.y)) continue;
-        this.combatSystem.applyDamage(enemy.id, damage, false, dome.ownerId, dome.config.displayName, {
+        this.combatSystem.applyDamage(enemy.id, resolvedDamage, false, dome.ownerId, dome.config.displayName, {
           sourceX: dome.x,
           sourceY: dome.y,
-        }, { damageKind: 'chain' });
+        }, { damageKind: 'chain', sourceSlot: dome.sourceSlot, allowCritical: true });
       }
     }
 
@@ -345,11 +450,11 @@ export class TeslaDomeSystem {
         if (!baseTargets.some(target => target.targetId === base.id)) continue;
         // Bases use the ordinary Tesla tick. In particular, rockDamageMult must not bleed
         // into this target class; the central base path applies Coop modifiers afterwards.
-        this.baseDamageHandler(base.id, damage, dome.ownerId);
+        this.baseDamageHandler(base.id, resolvedDamage, dome.ownerId, dome.sourceSlot);
       }
     }
 
-    const rockDamage = damage * (dome.config.rockDamageMult ?? 1);
+    const rockDamage = resolvedDamage * (dome.config.rockDamageMult ?? 1);
     if (rockDamage > 0 && rockTargets.length > 0 && this.rockTargetProvider && this.rockDamageHandler) {
       for (const rock of this.rockTargetProvider()) {
         if (!rockTargets.some(target => target.x === rock.x && target.y === rock.y)) continue;
@@ -358,7 +463,7 @@ export class TeslaDomeSystem {
     }
 
     const turretTargets = targets.filter(target => target.type === 'turrets');
-    const turretDamage = damage * (dome.config.rockDamageMult ?? 1);
+    const turretDamage = resolvedDamage * (dome.config.rockDamageMult ?? 1);
     if (turretDamage > 0 && turretTargets.length > 0 && this.turretTargetProvider && this.turretDamageHandler) {
       for (const turret of this.turretTargetProvider()) {
         if (!this.combatSystem.canDamageTarget(dome.ownerId, turret.ownerId)) continue;
@@ -367,7 +472,7 @@ export class TeslaDomeSystem {
       }
     }
 
-    const trainDamage = damage * (dome.config.trainDamageMult ?? 1);
+    const trainDamage = resolvedDamage * (dome.config.trainDamageMult ?? 1);
     if (trainDamage > 0 && hasTrainTarget && this.trainDamageHandler) {
       this.trainDamageHandler(trainDamage, dome.ownerId);
     }
@@ -390,4 +495,8 @@ export class TeslaDomeSystem {
     return dome.config.fire.radius
       * (1 + dome.chargeStacks * (dome.config.fire.radiusBonusPerCharge ?? 0));
   }
+}
+
+function constructionVisualId(sourceId: number): string {
+  return `tesla-turret:${sourceId}`;
 }

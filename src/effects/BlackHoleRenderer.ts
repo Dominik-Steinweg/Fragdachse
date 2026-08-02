@@ -10,7 +10,10 @@ import {
 } from './EffectUtils';
 import type { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
 import { DISTORTION_PRIORITY } from './distortion/distortionFramePlanner';
-import { resolveBlackHoleDistortion } from './distortion/blackHoleDistortion';
+import {
+  resolveBlackHoleDistortion,
+  resolveBlackHoleRadiusScale,
+} from './distortion/blackHoleDistortion';
 
 const TEX_BLACK_HOLE = '__black_hole';
 const TEX_BLACK_HOLE_HORIZON = '__black_hole_horizon';
@@ -78,7 +81,7 @@ export class BlackHoleRenderer {
     for (let i = this.activeHoles.length - 1; i >= 0; i -= 1) {
       const hole = this.activeHoles[i];
       hole.elapsedMs += deltaMs;
-      const frame = resolveBlackHoleDistortion(hole.elapsedMs, hole.durationMs);
+      const frame = resolveBlackHoleDistortion(hole.elapsedMs, hole.durationMs, hole.radius);
       if (frame.finished) {
         this.activeHoles.splice(i, 1);
         continue;
@@ -151,6 +154,10 @@ export class BlackHoleRenderer {
   play(x: number, y: number, radius: number, durationMs: number): void {
     this.activeHoles.push({ id: this.nextHoleId++, x, y, radius, durationMs, elapsedMs: 0 });
     const diameter = Math.max(24, radius * 2);
+    // Zonen und Kern waren bereits radiusgebunden, Partikelgröße und Umlaufgeschwindigkeit
+    // dagegen nicht. Beim kleineren Turmloch ragten deshalb besonders die 3:1-Wisps weit über
+    // den Kern hinaus. Unterhalb der Raketenwerfer-Referenz skaliert nun die gesamte Komposition.
+    const fieldVisualScale = resolveBlackHoleRadiusScale(radius);
     const fadeDuration = Math.min(280, Math.max(160, durationMs * 0.2));
     const fadeDelay = Math.max(0, durationMs - fadeDuration);
     const core = this.scene.add.image(x, y, TEX_BLACK_HOLE)
@@ -184,8 +191,8 @@ export class BlackHoleRenderer {
       reserve: 48,
       emitZone: circleZone(radius * 0.96),
       speed: 0,
-      emitCallback: createInwardOrbitCallback(0, 0, 58, 16),
-      scale: { start: 0.56, end: 0.04 },
+      emitCallback: createInwardOrbitCallback(0, 0, 58 * fieldVisualScale, 16 * fieldVisualScale),
+      scale: { start: 0.56 * fieldVisualScale, end: 0.04 * fieldVisualScale },
       alpha: { start: 0.42, end: 0 },
       tint: [0x7847a9, 0xa970df, 0xe5c7ff],
       blendMode: Phaser.BlendModes.ADD,
@@ -196,7 +203,7 @@ export class BlackHoleRenderer {
       y: 0,
       power: 1.7,
       epsilon: Math.max(40, radius * 0.36),
-      gravity: 26,
+      gravity: 26 * fieldVisualScale,
     });
     outerOrbitEmitter.emitParticle(18);
 
@@ -209,8 +216,8 @@ export class BlackHoleRenderer {
       reserve: 32,
       emitZone: circleZone(radius * 0.76),
       speed: 0,
-      emitCallback: createInwardOrbitCallback(0, 0, 44, 20),
-      scale: { start: 0.58, end: 0.07 },
+      emitCallback: createInwardOrbitCallback(0, 0, 44 * fieldVisualScale, 20 * fieldVisualScale),
+      scale: { start: 0.58 * fieldVisualScale, end: 0.07 * fieldVisualScale },
       alpha: { start: 0.28, end: 0 },
       tint: [0x8050b4, 0xb985ea, 0xe1c2ff],
       blendMode: Phaser.BlendModes.ADD,
@@ -221,7 +228,7 @@ export class BlackHoleRenderer {
       y: 0,
       power: 1.35,
       epsilon: Math.max(34, radius * 0.3),
-      gravity: 21,
+      gravity: 21 * fieldVisualScale,
     });
     wispEmitter.emitParticle(12);
 
@@ -234,8 +241,8 @@ export class BlackHoleRenderer {
       reserve: 54,
       emitZone: circleZone(radius * 0.34),
       speed: 0,
-      emitCallback: createInwardOrbitCallback(0, 0, 58, 25),
-      scale: { start: 0.5, end: 0.03 },
+      emitCallback: createInwardOrbitCallback(0, 0, 58 * fieldVisualScale, 25 * fieldVisualScale),
+      scale: { start: 0.5 * fieldVisualScale, end: 0.03 * fieldVisualScale },
       alpha: { start: 0.64, end: 0 },
       tint: [0xa46be0, 0xd7a9ff, 0xffffff],
       blendMode: Phaser.BlendModes.ADD,
@@ -246,7 +253,7 @@ export class BlackHoleRenderer {
       y: 0,
       power: 2,
       epsilon: Math.max(24, radius * 0.2),
-      gravity: 28,
+      gravity: 28 * fieldVisualScale,
     });
     innerOrbitEmitter.emitParticle(10);
 

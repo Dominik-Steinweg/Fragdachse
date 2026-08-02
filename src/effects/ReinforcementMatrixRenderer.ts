@@ -1,13 +1,14 @@
 import * as Phaser from 'phaser';
+// Canonical implementation filename: ReinforcementMatrixRenderer.
 import { DEPTH } from '../config';
-import type { SyncedOverchargeField } from '../types';
+import type { SyncedReinforcementMatrix } from '../types';
 import { circleZone, ensureCanvasTexture, mixColors } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
-const TEX_OVERCHARGE_CARPET = '__overcharge_carpet';
-const TEX_OVERCHARGE_RING = '__overcharge_ring';
-const TEX_OVERCHARGE_TURRET_GLOW = '__overcharge_turret_glow';
+const TEX_REINFORCEMENT_MATRIX_CARPET = '__reinforcement_matrix_carpet';
+const TEX_REINFORCEMENT_MATRIX_RING = '__reinforcement_matrix_ring';
+const TEX_REINFORCEMENT_MATRIX_SPARK = '__reinforcement_matrix_spark';
 
 /** Quellgroesse der prozeduralen Texturen; die Skalierung leitet sich aus dem Feldradius ab. */
 const TEXTURE_SIZE = 320;
@@ -17,16 +18,16 @@ const TEXTURE_RADIUS = TEXTURE_SIZE / 2;
 const FADE_IN_MS = 220;
 const FADE_OUT_MS = 420;
 
-interface OverchargeVisual {
+interface ReinforcementMatrixVisual {
   carpet: Phaser.GameObjects.Image;
   ring: Phaser.GameObjects.Image;
   sparks: Phaser.GameObjects.Particles.ParticleEmitter;
-  snapshot: SyncedOverchargeField;
+  snapshot: SyncedReinforcementMatrix;
   seed: number;
 }
 
 /**
- * OverchargeFieldRenderer – Bodenteppich und Randring des Ueberladungskerns.
+ * ReinforcementMatrixRenderer – Bodenteppich und Randring der Verstärkungsmatrix.
  *
  * Round-Lifetime-Renderer nach dem Muster von `TimeBubbleRenderer`: `syncVisuals()`
  * bekommt den replizierten Bestand, erzeugt und verwirft die Visuals daraus und
@@ -37,8 +38,8 @@ interface OverchargeVisual {
  * Alle Layer sind additiv ueber `emissiveAlpha`, damit sie ueber hellem Mittagsboden
  * nicht zu einer weissen Flaeche klippen.
  */
-export class OverchargeFieldRenderer {
-  private readonly visuals = new Map<number, OverchargeVisual>();
+export class ReinforcementMatrixRenderer {
+  private readonly visuals = new Map<number, ReinforcementMatrixVisual>();
   private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -50,7 +51,7 @@ export class OverchargeFieldRenderer {
   generateTextures(): void {
     // Energieteppich: dichter Kern, weicher Rand, dazu ein feines Hexraster als
     // technische Signatur. Rein weiss gezeichnet, die Feldfarbe kommt per Tint.
-    ensureCanvasTexture(this.scene.textures, TEX_OVERCHARGE_CARPET, TEXTURE_SIZE, TEXTURE_SIZE, (ctx) => {
+    ensureCanvasTexture(this.scene.textures, TEX_REINFORCEMENT_MATRIX_CARPET, TEXTURE_SIZE, TEXTURE_SIZE, (ctx) => {
       ctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
       const center = TEXTURE_RADIUS;
 
@@ -97,7 +98,7 @@ export class OverchargeFieldRenderer {
     });
 
     // Randring: markiert die Wirkungsgrenze scharf genug, um sie im Gefecht zu lesen.
-    ensureCanvasTexture(this.scene.textures, TEX_OVERCHARGE_RING, TEXTURE_SIZE, TEXTURE_SIZE, (ctx) => {
+    ensureCanvasTexture(this.scene.textures, TEX_REINFORCEMENT_MATRIX_RING, TEXTURE_SIZE, TEXTURE_SIZE, (ctx) => {
       ctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
       const center = TEXTURE_RADIUS;
       const edge = TEXTURE_RADIUS - 6;
@@ -125,8 +126,8 @@ export class OverchargeFieldRenderer {
       }
     });
 
-    // Turm-Glow: weicher Punkt, der einen ueberladenen Turm hervorhebt.
-    ensureCanvasTexture(this.scene.textures, TEX_OVERCHARGE_TURRET_GLOW, 96, 96, (ctx) => {
+    // Matrix-Glow: weicher Punkt, der ein markiertes Ziel hervorhebt.
+    ensureCanvasTexture(this.scene.textures, TEX_REINFORCEMENT_MATRIX_SPARK, 96, 96, (ctx) => {
       ctx.clearRect(0, 0, 96, 96);
       const gradient = ctx.createRadialGradient(48, 48, 0, 48, 48, 48);
       gradient.addColorStop(0, 'rgba(255,255,255,0.85)');
@@ -137,7 +138,7 @@ export class OverchargeFieldRenderer {
     });
   }
 
-  syncVisuals(fields: readonly SyncedOverchargeField[], now: number): void {
+  syncVisuals(fields: readonly SyncedReinforcementMatrix[], now: number): void {
     const activeIds = new Set(fields.map((field) => field.id));
     for (const [id] of this.visuals) {
       if (!activeIds.has(id)) this.destroyVisual(id);
@@ -160,16 +161,16 @@ export class OverchargeFieldRenderer {
     }
   }
 
-  private createVisual(field: SyncedOverchargeField): OverchargeVisual {
+  private createVisual(field: SyncedReinforcementMatrix): ReinforcementMatrixVisual {
     const scale = field.radius / TEXTURE_RADIUS;
     // Unter den Spielern: das Feld ist ein Telegraph, kein Vordergrundeffekt.
-    const carpet = this.scene.add.image(field.x, field.y, TEX_OVERCHARGE_CARPET)
+    const carpet = this.scene.add.image(field.x, field.y, TEX_REINFORCEMENT_MATRIX_CARPET)
       .setDepth(DEPTH.DECALS + 0.4)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale(scale)
       .setAlpha(0)
       .setTint(field.color);
-    const ring = this.scene.add.image(field.x, field.y, TEX_OVERCHARGE_RING)
+    const ring = this.scene.add.image(field.x, field.y, TEX_REINFORCEMENT_MATRIX_RING)
       .setDepth(DEPTH.DECALS + 0.45)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale(scale)
@@ -177,7 +178,7 @@ export class OverchargeFieldRenderer {
       .setTint(mixColors(field.color, 0xffffff, 0.45));
 
     // Aufsteigende Funken geben dem Feld Bewegung, ohne die Flaeche zuzudecken.
-    const sparks = this.scene.add.particles(field.x, field.y, TEX_OVERCHARGE_TURRET_GLOW, {
+    const sparks = this.scene.add.particles(field.x, field.y, TEX_REINFORCEMENT_MATRIX_SPARK, {
       lifespan: { min: 420, max: 820 },
       speed: { min: 6, max: 26 },
       scale: { start: 0.14, end: 0 },
@@ -192,7 +193,7 @@ export class OverchargeFieldRenderer {
     return { carpet, ring, sparks, snapshot: field, seed: field.id * 1.317 };
   }
 
-  private updateVisual(visual: OverchargeVisual, now: number): void {
+  private updateVisual(visual: ReinforcementMatrixVisual, now: number): void {
     const field = visual.snapshot;
     const scale = field.radius / TEXTURE_RADIUS;
     const elapsed = now - field.startedAt;
@@ -237,5 +238,5 @@ export class OverchargeFieldRenderer {
 }
 
 function lightKey(id: number): string {
-  return `overcharge:${id}`;
+    return `reinforcement-matrix:${id}`;
 }

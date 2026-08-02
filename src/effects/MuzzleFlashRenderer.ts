@@ -138,7 +138,8 @@ export class MuzzleFlashRenderer {
     preset: HitscanVisualPreset = 'default',
     color?: number,
   ): void {
-    this.playFlash(x, y, vx, vy, preset === 'asmd_primary' ? 'asmd_primary' : 'default', color);
+    const resolvedPreset = preset === 'asmd_primary' ? preset : 'default';
+    this.playFlash(x, y, vx, vy, resolvedPreset, color);
   }
 
   private playFlash(

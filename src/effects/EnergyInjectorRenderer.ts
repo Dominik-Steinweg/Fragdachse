@@ -1,13 +1,14 @@
 import * as Phaser from 'phaser';
+// Canonical implementation filename: EnergyInjectorRenderer.
 import { DEPTH } from '../config';
-import type { SyncedTurretCharge } from '../types';
+import type { SyncedEnergyInjectorEffect } from '../types';
 import { circleZone, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
 
-const TEX_CHARGE_HALO = '__turret_charge_halo';
-const TEX_CHARGE_RING = '__turret_charge_ring';
-const TEX_CHARGE_SPARK = '__turret_charge_spark';
+const TEX_ENERGY_INJECTOR_HALO = '__energy_injector_halo';
+const TEX_ENERGY_INJECTOR_RING = '__energy_injector_ring';
+const TEX_ENERGY_INJECTOR_SPARK = '__energy_injector_spark';
 
 /** Quellgroesse des Rings; die Darstellung skaliert daraus auf die Wirkbreite am Turm. */
 const RING_TEXTURE_SIZE = 96;
@@ -17,27 +18,26 @@ const VISUAL_RADIUS = 26;
 const FADE_IN_MS = 140;
 const FADE_OUT_MS = 320;
 
-interface TurretChargeVisual {
+interface EnergyInjectorVisual {
   halo: Phaser.GameObjects.Image;
   ring: Phaser.GameObjects.Image;
   sparks: Phaser.GameObjects.Particles.ParticleEmitter;
-  snapshot: SyncedTurretCharge;
+  snapshot: SyncedEnergyInjectorEffect;
   seed: number;
 }
 
 /**
- * TurretChargeRenderer – blaues Energieaufleuchten eines aufgeladenen Turms.
+ * EnergyInjectorRenderer – blaues Energieaufleuchten eines fokussierten Konstrukts.
  *
- * Round-Lifetime-Renderer nach dem Muster von `OverchargeFieldRenderer`: `syncVisuals()`
+ * Round-Lifetime-Renderer: `syncVisuals()`
  * bekommt den replizierten Bestand und leitet Erzeugung und Verwurf daraus ab.
  *
  * Bewusst ueber den Spielern (`DEPTH.PROJECTILES`), anders als das bodennahe
- * Ueberladungsfeld: Die Ladung ist kein Flaechen-Telegraph, sondern der Zustand eines
- * einzelnen Turms und muss auch im Getuemmel an ihm ablesbar bleiben. Die Intensitaet
- * waechst mit den Ladungsstufen, damit ein voll aufgeladener Turm sofort auffaellt.
+ * Die Markierung ist kein Flaechen-Telegraph, sondern der Zustand eines einzelnen Ziels und
+ * muss auch im Getuemmel an ihm ablesbar bleiben.
  */
-export class TurretChargeRenderer {
-  private readonly visuals = new Map<string, TurretChargeVisual>();
+export class EnergyInjectorRenderer {
+  private readonly visuals = new Map<string, EnergyInjectorVisual>();
   private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -48,14 +48,14 @@ export class TurretChargeRenderer {
 
   generateTextures(): void {
     // Weiches Grundleuchten unter dem Turmkopf; die Farbe kommt per Tint.
-    fillRadialGradientTexture(this.scene.textures, TEX_CHARGE_HALO, 96, [
+    fillRadialGradientTexture(this.scene.textures, TEX_ENERGY_INJECTOR_HALO, 96, [
       [0, 'rgba(255,255,255,0.62)'],
       [0.4, 'rgba(255,255,255,0.26)'],
       [1, 'rgba(255,255,255,0.0)'],
     ]);
 
     // Energieband mit Aussparungen: rotiert langsam und liest sich als technische Ladung.
-    ensureCanvasTexture(this.scene.textures, TEX_CHARGE_RING, RING_TEXTURE_SIZE, RING_TEXTURE_SIZE, (ctx) => {
+    ensureCanvasTexture(this.scene.textures, TEX_ENERGY_INJECTOR_RING, RING_TEXTURE_SIZE, RING_TEXTURE_SIZE, (ctx) => {
       ctx.clearRect(0, 0, RING_TEXTURE_SIZE, RING_TEXTURE_SIZE);
       const center = RING_TEXTURE_SIZE / 2;
       const radius = center - 8;
@@ -78,50 +78,50 @@ export class TurretChargeRenderer {
       ctx.stroke();
     });
 
-    fillRadialGradientTexture(this.scene.textures, TEX_CHARGE_SPARK, 10, [
+    fillRadialGradientTexture(this.scene.textures, TEX_ENERGY_INJECTOR_SPARK, 10, [
       [0, 'rgba(255,255,255,1.0)'],
       [0.45, 'rgba(255,255,255,0.5)'],
       [1, 'rgba(255,255,255,0.0)'],
     ]);
   }
 
-  syncVisuals(charges: readonly SyncedTurretCharge[], now: number): void {
-    const activeIds = new Set(charges.map((charge) => charge.turretId));
-    for (const [turretId] of this.visuals) {
-      if (!activeIds.has(turretId)) this.destroyVisual(turretId);
+  syncVisuals(effects: readonly SyncedEnergyInjectorEffect[], now: number): void {
+    const activeIds = new Set(effects.map((effect) => effect.targetId));
+    for (const [targetId] of this.visuals) {
+      if (!activeIds.has(targetId)) this.destroyVisual(targetId);
     }
 
-    for (const charge of charges) {
-      let visual = this.visuals.get(charge.turretId);
+    for (const effect of effects) {
+      let visual = this.visuals.get(effect.targetId);
       if (!visual) {
-        visual = this.createVisual(charge);
-        this.visuals.set(charge.turretId, visual);
+        visual = this.createVisual(effect);
+        this.visuals.set(effect.targetId, visual);
       }
-      visual.snapshot = charge;
+      visual.snapshot = effect;
       this.updateVisual(visual, now);
     }
   }
 
   destroyAll(): void {
-    for (const [turretId] of this.visuals) {
-      this.destroyVisual(turretId);
+    for (const [targetId] of this.visuals) {
+      this.destroyVisual(targetId);
     }
   }
 
-  private createVisual(charge: SyncedTurretCharge): TurretChargeVisual {
-    const halo = this.scene.add.image(charge.x, charge.y, TEX_CHARGE_HALO)
+  private createVisual(effect: SyncedEnergyInjectorEffect): EnergyInjectorVisual {
+    const halo = this.scene.add.image(effect.x, effect.y, TEX_ENERGY_INJECTOR_HALO)
       .setDepth(DEPTH.PROJECTILES - 0.2)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0)
-      .setTint(charge.color);
-    const ring = this.scene.add.image(charge.x, charge.y, TEX_CHARGE_RING)
+      .setTint(effect.color);
+    const ring = this.scene.add.image(effect.x, effect.y, TEX_ENERGY_INJECTOR_RING)
       .setDepth(DEPTH.PROJECTILES - 0.1)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0)
-      .setTint(mixColors(charge.color, 0xffffff, 0.5));
+      .setTint(mixColors(effect.color, 0xffffff, 0.5));
 
     // Nach innen laufende Funken lesen sich als einstroemende Energie.
-    const sparks = this.scene.add.particles(charge.x, charge.y, TEX_CHARGE_SPARK, {
+    const sparks = this.scene.add.particles(effect.x, effect.y, TEX_ENERGY_INJECTOR_SPARK, {
       lifespan: { min: 220, max: 420 },
       speed: { min: -34, max: -12 },
       scale: { start: 0.32, end: 0 },
@@ -129,58 +129,58 @@ export class TurretChargeRenderer {
       quantity: 1,
       frequency: 70,
       blendMode: Phaser.BlendModes.ADD,
-      tint: mixColors(charge.color, 0xffffff, 0.4),
+      tint: mixColors(effect.color, 0xffffff, 0.4),
       emitZone: circleZone(VISUAL_RADIUS),
     }).setDepth(DEPTH.PROJECTILES - 0.15);
 
-    return { halo, ring, sparks, snapshot: charge, seed: hashSeed(charge.turretId) };
+    return { halo, ring, sparks, snapshot: effect, seed: hashSeed(effect.targetId) };
   }
 
-  private updateVisual(visual: TurretChargeVisual, now: number): void {
-    const charge = visual.snapshot;
-    const elapsed = now - charge.startedAt;
-    const remaining = charge.expiresAt - now;
+  private updateVisual(visual: EnergyInjectorVisual, now: number): void {
+    const effect = visual.snapshot;
+    const elapsed = now - effect.startedAt;
+    const remaining = effect.expiresAt - now;
     const envelope = Phaser.Math.Clamp(elapsed / FADE_IN_MS, 0, 1)
       * Phaser.Math.Clamp(remaining / FADE_OUT_MS, 0, 1);
     // Die Ladungsstufen sind der eigentliche Informationsträger; sie heben Helligkeit und
     // Pulsfrequenz spürbar an, ohne die Grundform zu ändern.
-    const intensity = Phaser.Math.Clamp(0.45 + charge.stacks * 0.09, 0.45, 1);
+    const intensity = effect.effect.type === 'damage_turret' ? 0.9 : 0.78;
     const time = now * 0.001;
-    const pulse = 0.5 + 0.5 * Math.sin(time * (4 + charge.stacks * 0.5) + visual.seed);
+    const pulse = 0.5 + 0.5 * Math.sin(time * 4.2 + visual.seed);
 
     const haloScale = (VISUAL_RADIUS * 2 * (0.92 + pulse * 0.12)) / 96;
     visual.halo
-      .setPosition(charge.x, charge.y)
+      .setPosition(effect.x, effect.y)
       .setScale(haloScale)
       .setAlpha(emissiveAlpha(envelope * intensity * (0.55 + pulse * 0.3)));
     visual.ring
-      .setPosition(charge.x, charge.y)
+      .setPosition(effect.x, effect.y)
       .setScale((VISUAL_RADIUS * 2) / RING_TEXTURE_SIZE)
       .setRotation(time * 1.6 + visual.seed)
       .setAlpha(emissiveAlpha(envelope * intensity * (0.7 + pulse * 0.25)));
-    visual.sparks.setPosition(charge.x, charge.y).setAlpha(envelope * intensity);
+    visual.sparks.setPosition(effect.x, effect.y).setAlpha(envelope * intensity);
 
-    this.lighting?.setLight(lightKey(charge.turretId), 'electricField', charge.x, charge.y, {
+    this.lighting?.setLight(lightKey(effect.targetId), 'electricField', effect.x, effect.y, {
       radiusPx: VISUAL_RADIUS * 3,
-      color: mixColors(charge.color, 0xffffff, 0.45),
+      color: mixColors(effect.color, 0xffffff, 0.45),
       intensity: 0.6 * envelope * intensity,
     });
   }
 
-  private destroyVisual(turretId: string): void {
-    this.lighting?.releaseLight(lightKey(turretId));
-    const visual = this.visuals.get(turretId);
+  private destroyVisual(targetId: string): void {
+    this.lighting?.releaseLight(lightKey(targetId));
+    const visual = this.visuals.get(targetId);
     if (!visual) return;
     visual.halo.destroy();
     visual.ring.destroy();
     visual.sparks.stop();
     visual.sparks.destroy();
-    this.visuals.delete(turretId);
+    this.visuals.delete(targetId);
   }
 }
 
-function lightKey(turretId: string): string {
-  return `turretcharge:${turretId}`;
+function lightKey(targetId: string): string {
+  return `energy-injector:${targetId}`;
 }
 
 /** Stabiler Phasenversatz je Turm, damit benachbarte Ladungen nicht im Gleichtakt pulsen. */

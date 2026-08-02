@@ -2,6 +2,7 @@ import { AUDIO_ASSETS } from '../../audio/AudioCatalog';
 import {
   COOP_DEFENSE_CONSTRUCTIONS,
 } from '../../config/coopDefenseConstructions';
+import { POWERUP_DEFS, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../../powerups/PowerUpConfig';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../config/coopDefenseEnemies';
 import { COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS } from '../../config/coopDefenseItems';
 import { COOP_DEFENSE_MAP_CONFIGS } from '../../config/coopDefenseMaps';
@@ -111,7 +112,11 @@ export function validateGameContentReferences(): void {
   }
 
   for (const construction of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
-    if (!WEAPON_CONFIGS[construction.weaponId]) issues.push(`construction:${construction.id}: unbekannte Waffe ${construction.weaponId}`);
+    if (construction.kind === 'turret') {
+      if (!WEAPON_CONFIGS[construction.weaponId]) issues.push(`construction:${construction.id}: unbekannte Waffe ${construction.weaponId}`);
+    } else if (!POWERUP_DEFS[construction.powerUpDefId] || !TIMED_POWERUP_PEDESTAL_CONFIGS[construction.powerUpDefId]) {
+      issues.push(`construction:${construction.id}: unbekanntes Podest-Power-up ${construction.powerUpDefId}`);
+    }
   }
 
   for (const utility of Object.values(UTILITY_CONFIGS)) {

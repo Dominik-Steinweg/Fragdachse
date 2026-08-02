@@ -48,6 +48,8 @@
         { "id": "necromancy_undying", "code": "A19-3", "label": "Untote Wiederkehr", "description": "Je Stufe bleibt ein weiterer Wiederbelebter beim Tod am Leben und wird stattdessen vollständig geheilt. Es zählen immer die stärksten Wiederbelebten zuerst.", "kind": "upgrade", "maxLevel": 4, "costPerLevel": 1, "sortOrder": 194, "requires": [{ "upgradeId": "necromancy_vitality", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.undyingCount", "mode": "add_per_level", "value": 1 }] },
         { "id": "necromancy_revive_radius", "code": "A19-4", "label": "Weiter Totenruf", "description": "+100% Reichweite, in der Leichen wiederbelebt werden, je Stufe.", "kind": "upgrade", "maxLevel": 2, "costPerLevel": 1, "sortOrder": 195, "requires": [{ "upgradeId": "necromancy_vitality", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.reviveRadius", "mode": "add_percent_per_level", "value": 1 }] },
         { "id": "necromancy_dominance", "code": "A19-E", "label": "Herrschaft der Toten", "description": "Ist das Limit erreicht und liegt in Reichweite die Leiche eines stärkeren Gegners, wird der schwächste Wiederbelebte geopfert und die stärkere Leiche stattdessen wiederbelebt.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 196, "requires": [{ "upgradeId": "necromancy_undying", "minLevel": 1 }, { "upgradeId": "necromancy_revive_radius", "minLevel": 1 }], "effects": [{ "stat": "player.necromancy.replaceWeakest", "mode": "add_per_level", "value": 1 }] },
+        { "id": "critical_chance", "code": "A20", "label": "Kritische Trefferchance", "description": "+5% kritische Trefferchance je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 200, "effects": [{ "stat": "player.criticalChance", "mode": "add_per_level", "value": 0.05 }] },
+        { "id": "critical_damage", "code": "A20-1", "label": "Kritischer Trefferschaden", "description": "+20% kritischer Trefferschaden je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 201, "requires": [{ "upgradeId": "critical_chance", "minLevel": 1 }], "effects": [{ "stat": "player.criticalDamage", "mode": "add_per_level", "value": 0.2 }] },
         { "id": "flamethrower_fire_ring", "code": "A21-C", "label": "Flammenring", "description": "Ein Flammenring umgibt den Spieler und setzt berührte Gegner in Brand.", "kind": "upgrade", "maxLevel": 1, "costPerLevel": 0, "bossPointCostPerLevel": 1, "sortOrder": 210, "effects": [{ "stat": "player.fire.ring.radius", "mode": "add_per_level", "value": 64 }, { "stat": "player.fire.ring.thickness", "mode": "add_per_level", "value": 16 }, { "stat": "player.fire.ring.burnDurationMs", "mode": "add_per_level", "value": 2000 }, { "stat": "player.fire.ring.burnDamagePerTick", "mode": "add_per_level", "value": 1 }] },
         { "id": "flamethrower_fire_ring_damage", "code": "A21-1", "label": "Lodernder Flammenring", "description": "+20% Brandschaden des Flammenrings je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 211, "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.burnDamagePerTick", "mode": "add_percent_per_level", "value": 0.2 }] },
         { "id": "flamethrower_fire_ring_radius", "code": "A21-2", "label": "Weiter Flammenkreis", "description": "+20% Radius des Flammenrings je Stufe.", "kind": "upgrade", "maxLevel": 3, "costPerLevel": 1, "sortOrder": 212, "requires": [{ "upgradeId": "flamethrower_fire_ring", "minLevel": 1 }], "effects": [{ "stat": "player.fire.ring.radius", "mode": "add_percent_per_level", "value": 0.2 }] },
@@ -832,8 +834,8 @@
         {
           "id": "unlock_overcharge_core",
           "code": "C-I1",
-          "label": "Überladungskern",
-          "description": "Feuert per rechter Maustaste einen langsamen Überladungskern, der am Ziel oder an Hindernissen ein Feld aufbaut und alle Türme darin verstärkt.",
+          "label": "Verstärkungsmatrix",
+          "description": "Feuert per rechter Maustaste eine Verstärkungsmatrix, die Verbündete schützt und Gegner im Feld verwundbar macht.",
           "kind": "unlock",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -848,8 +850,8 @@
         {
           "id": "overcharge_radius",
           "code": "C-I1-1",
-          "label": "Upgrade Überladungskern: Wirkungsbereich",
-          "description": "+10% Radius des Überladungsfeldes je Stufe.",
+          "label": "Upgrade Verstärkungsmatrix: Wirkungsbereich",
+          "description": "+10% Radius der Verstärkungsmatrix je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -873,8 +875,8 @@
         {
           "id": "overcharge_duration",
           "code": "C-I1-2",
-          "label": "Upgrade Überladungskern: Dauer",
-          "description": "+15% Wirkdauer des Überladungsfeldes je Stufe.",
+          "label": "Upgrade Verstärkungsmatrix: Dauer",
+          "description": "+15% Wirkdauer der Verstärkungsmatrix je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -898,8 +900,8 @@
         {
           "id": "overcharge_power",
           "code": "C-I1-3",
-          "label": "Upgrade Überladungskern: Verstärkung",
-          "description": "+0,15 Feuerraten- und +0,1 Schadensfaktor für überladene Türme je Stufe.",
+          "label": "Upgrade Verstärkungsmatrix: Schadensreduktion",
+          "description": "+10 Prozentpunkte Schadensreduktion der Verstärkungsmatrix je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -914,12 +916,7 @@
           ],
           "effects": [
             {
-              "stat": "weapon.OVERCHARGE_CORE.fire.fireRateMultiplier",
-              "mode": "add_per_level",
-              "value": 0.15
-            },
-            {
-              "stat": "weapon.OVERCHARGE_CORE.fire.damageMultiplier",
+              "stat": "weapon.OVERCHARGE_CORE.fire.damageReduction",
               "mode": "add_per_level",
               "value": 0.1
             }
@@ -928,8 +925,8 @@
         {
           "id": "overcharge_cost",
           "code": "C-I1-4",
-          "label": "Upgrade Überladungskern: Effizienz",
-          "description": "-10% Adrenalinkosten des Überladungskerns je Stufe.",
+          "label": "Upgrade Verstärkungsmatrix: Effizienz",
+          "description": "-10% Adrenalinkosten der Verstärkungsmatrix je Stufe.",
           "kind": "upgrade",
           "maxLevel": 3,
           "startingLevel": 0,
@@ -953,8 +950,8 @@
         {
           "id": "unlock_reparaturstrahl",
           "code": "C-I2",
-          "label": "Reparaturstrahl",
-          "description": "Feuert per rechter Maustaste grüne Reparaturprojektile, die Felsen, Konstrukte, Türme, Basen und Verbündete heilen. Kostet Adrenalin je Schuss.",
+          "label": "Plasmabrenner",
+          "description": "Hält per rechter Maustaste einen grünen Plasma-Hitscan auf dem Ziel. Verbündete werden geheilt und repariert, Gegner und gegnerische Strukturen erleiden Schaden. Kostet Adrenalin je Impuls.",
           "kind": "unlock",
           "maxLevel": 1,
           "startingLevel": 0,
@@ -3284,6 +3281,66 @@
           "maxLevel": 1,
           "costPerLevel": 1,
           "sortOrder": 30
+        },
+        {
+          "id": "unlock_tesla_turret",
+          "code": "E-K6",
+          "label": "Tesla-Turm",
+          "description": "Kompakte Teslakuppel, die nahe Gegner automatisch unter Strom setzt. Belegt 25 Baukapazität.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 35
+        },
+        {
+          "id": "unlock_gravity_turret",
+          "code": "E-K7",
+          "label": "Gravitationsturm",
+          "description": "Erzeugt am Einschlag ein schwarzes Loch ohne Schaden. Belegt 25 Baukapazität.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 36
+        },
+        {
+          "id": "unlock_slow_bubble_turret",
+          "code": "E-K8",
+          "label": "Slow-Bubble-Turm",
+          "description": "Erzeugt am Einschlag eine kleine Zeitblase ohne Schaden. Belegt 20 Baukapazität.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 37
+        },
+        {
+          "id": "unlock_medic_pedestal",
+          "code": "E-K9",
+          "label": "Medic-Podest",
+          "description": "Stellt ein Medipack mit regulärem Respawn bereit. Belegt 30 Baukapazität.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 38
+        },
+        {
+          "id": "unlock_armor_pedestal",
+          "code": "E-K10",
+          "label": "Armor-Podest",
+          "description": "Stellt ein Armor-Power-up mit regulärem Respawn bereit. Belegt 25 Baukapazität.",
+          "kind": "unlock",
+          "maxLevel": 1,
+          "startingLevel": 0,
+          "costPerLevel": 1,
+          "refundable": true,
+          "sortOrder": 39
         },
         {
           "id": "unlock_felsbau",

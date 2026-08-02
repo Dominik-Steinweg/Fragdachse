@@ -10,7 +10,9 @@ import {
 } from '../src/effects/distortion/distortionProfileBake';
 import { resolveIsotropicDistortionAmounts } from '../src/effects/distortion/distortionScale';
 import {
+  BLACK_HOLE_DISTORTION_REFERENCE_RADIUS_PX,
   resolveBlackHoleDistortion,
+  resolveBlackHoleRadiusScale,
 } from '../src/effects/distortion/blackHoleDistortion';
 
 const SIZE = 64;
@@ -67,9 +69,9 @@ describe('writeDistortionProfilePixels', () => {
     }
   });
 
-  it('schuetzt den gesamten sichtbaren Ereignishorizont vor Verzerrung', () => {
+  it('schuetzt die sichtbare Kern- und Halo-Flaeche vor Verzerrung', () => {
     const pixels = writeDistortionProfilePixels('pullSwirl', SIZE);
-    for (const radius of [0, 0.12, BLACK_HOLE_PROTECTED_CORE_RADIUS - 0.03]) {
+    for (const radius of [0, 0.12, 0.52, BLACK_HOLE_PROTECTED_CORE_RADIUS - 0.03]) {
       const x = Math.floor(SIZE / 2 + SIZE / 2 * radius);
       const pixel = pixelAt(pixels, SIZE, x, SIZE / 2);
       expect(Math.abs(decode(pixel.r, pixel.a) * 255 - DISTORTION_NEUTRAL_BYTE)).toBeLessThanOrEqual(2);
@@ -79,7 +81,7 @@ describe('writeDistortionProfilePixels', () => {
 
   it('legt den Sog als rotierende Linse ausserhalb des Ereignishorizonts an', () => {
     const pixels = writeDistortionProfilePixels('pullSwirl', SIZE);
-    const annulus = pixelAt(pixels, SIZE, Math.round(SIZE * 0.75), SIZE / 2);
+    const annulus = pixelAtRadius(pixels, SIZE, 0.64);
     expect(decode(annulus.r, annulus.a) * 255).toBeLessThan(DISTORTION_NEUTRAL_BYTE);
     expect(decode(annulus.g, annulus.a) * 255).toBeGreaterThan(DISTORTION_NEUTRAL_BYTE);
   });
@@ -87,7 +89,7 @@ describe('writeDistortionProfilePixels', () => {
   it('zieht beim pull-Profil nach innen', () => {
     const pixels = writeDistortionProfilePixels('pull', SIZE);
     // Punkt rechts der Mitte: die Verschiebung muss nach links (negativ) zeigen.
-    const right = pixelAt(pixels, SIZE, Math.round(SIZE * 0.78), SIZE / 2);
+    const right = pixelAtRadius(pixels, SIZE, 0.78);
     expect(right.a).toBeGreaterThan(0);
     expect(decode(right.r, right.a) * 255).toBeLessThan(DISTORTION_NEUTRAL_BYTE);
   });
@@ -148,6 +150,32 @@ describe('resolveBlackHoleDistortion', () => {
     expect(early.strength).toBeLessThan(settled.strength);
     expect(settled.strength).toBe(1);
     expect(settled.profile).toBe('pullSwirl');
+  });
+
+  it('skaliert kleine Felder proportional, damit sie wie die Raketenwerfer-Referenz aussehen', () => {
+    const turretRadius = 95;
+    const turret = resolveBlackHoleDistortion(300, 1000, turretRadius);
+    const rocket = resolveBlackHoleDistortion(
+      300,
+      1000,
+      BLACK_HOLE_DISTORTION_REFERENCE_RADIUS_PX,
+    );
+
+    expect(turret.strength / turretRadius).toBeCloseTo(
+      rocket.strength / BLACK_HOLE_DISTORTION_REFERENCE_RADIUS_PX,
+      8,
+    );
+  });
+
+  it('liefert denselben proportionalen Faktor für Linse und Partikelschichten', () => {
+    expect(resolveBlackHoleRadiusScale(95)).toBeCloseTo(95 / 120, 8);
+    expect(resolveBlackHoleRadiusScale(120)).toBe(1);
+    expect(resolveBlackHoleRadiusScale(165)).toBe(1);
+  });
+
+  it('lässt Raketenwerfer-große Felder unverändert', () => {
+    expect(resolveBlackHoleDistortion(300, 1000, 121).strength).toBe(1);
+    expect(resolveBlackHoleDistortion(300, 1000, 165).strength).toBe(1);
   });
 
   /** Ohne Gegenimpuls endete die Linse mit einem harten Sprung zurueck auf Neutral. */

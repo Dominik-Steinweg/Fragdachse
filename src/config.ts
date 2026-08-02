@@ -156,12 +156,11 @@ export const COLORS = {
 /** Kanonischer VFX-Akzent fuer die lila Boss-Feuerfamilie. */
 export const VOID_FIRE_COLOR = 0xb347ff;
 /**
- * Gemeinsamer Akzent der Ingenieur-Unterstuetzung. Der Reparaturstrahl ist durchgaengig
- * gruen, die Turmladung durchgaengig blau – Projektil, Einschlag und Zielaufleuchten teilen
- * sich jeweils denselben Wert, damit Wirkung und Quelle im Gefecht zusammengelesen werden.
+ * Gemeinsamer Akzent des Plasmabrenners fuer Strahl, Treffer und Regenerations-VFX.
  */
-export const REPAIR_BEAM_COLOR = 0x5cf58f;
-export const TURRET_CHARGE_COLOR = 0x53b6ff;
+export const PLASMA_BURNER_COLOR = 0x5cf58f;
+export const ENERGY_INJECTOR_COLOR = 0x53b6ff;
+/** @deprecated Persistenz-/Testkompatibilitaet; UI und Fachlogik verwenden Energieinjektor. */
 
 /** Gemeinsame Palette aller Leerenjäger-Warnungen, Projektile und Einschläge. */
 export const VOID_PALETTE = {

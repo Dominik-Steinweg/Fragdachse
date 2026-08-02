@@ -16,6 +16,7 @@ const TEX_DOME_WISP = '__tesla_dome_wisp';
 
 interface TeslaDomeVisual {
   ownerColor: number;
+  config?: WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
   coreGlow: Phaser.GameObjects.Image;
   fieldGlow: Phaser.GameObjects.Image;
   membrane: Phaser.GameObjects.Image;
@@ -199,10 +200,12 @@ export class TeslaDomeRenderer {
     for (const dome of domes) {
       let visual = this.visuals.get(dome.ownerId);
       if (!visual) {
-        visual = this.createVisual(dome, this.configs.get(dome.ownerId));
+        visual = this.createVisual(dome, this.resolveWeaponConfig(dome));
         this.visuals.set(dome.ownerId, visual);
         this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);
       }
+
+      visual.config = this.resolveWeaponConfig(dome) ?? visual.config;
 
       visual.targetX = dome.x;
       visual.targetY = dome.y;
@@ -241,7 +244,7 @@ export class TeslaDomeRenderer {
         target.currentY = Phaser.Math.Linear(target.currentY, target.targetY, targetLerp);
       }
 
-      this.updateVisual(ownerId, visual, this.configs.get(ownerId));
+      this.updateVisual(ownerId, visual, visual.config);
 
       // Dauerlicht am Lebenszyklus des Visuals. Die Kuppel steht sichtbar unter Strom,
       // muss also auch ihre Umgebung beleuchten. Farbe deutlich aufgehellt: eine rohe
@@ -401,6 +404,7 @@ export class TeslaDomeRenderer {
 
     return {
       ownerColor: dome.color,
+      config,
       coreGlow,
       fieldGlow,
       membrane,
@@ -869,6 +873,18 @@ export class TeslaDomeRenderer {
   private getFireConfig(config?: WeaponConfig & { fire: TeslaDomeWeaponFireConfig }): TeslaDomeWeaponFireConfig {
     const fallbackConfig = WEAPON_CONFIGS.TESLA_DOME as WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
     return (config ?? fallbackConfig).fire;
+  }
+
+  private resolveWeaponConfig(
+    dome: SyncedTeslaDome,
+  ): (WeaponConfig & { fire: TeslaDomeWeaponFireConfig }) | undefined {
+    if (dome.weaponId) {
+      const config = WEAPON_CONFIGS[dome.weaponId as keyof typeof WEAPON_CONFIGS];
+      if (config?.fire.type === 'tesla_dome') {
+        return config as WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
+      }
+    }
+    return this.configs.get(dome.ownerId);
   }
 
   private resolveOwnerColor(

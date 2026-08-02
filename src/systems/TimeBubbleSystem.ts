@@ -1,4 +1,4 @@
-import type { SyncedTimeBubble, TimeBubbleGrenadeEffect } from '../types';
+import type { SyncedTimeBubble, TimeBubbleEffectConfig } from '../types';
 
 const FADE_IN_MS = 220;
 const FADE_OUT_MS = 300;
@@ -8,7 +8,7 @@ interface ActiveTimeBubble {
   ownerId: string;
   x: number;
   y: number;
-  effect: TimeBubbleGrenadeEffect;
+  effect: TimeBubbleEffectConfig;
   createdAt: number;
 }
 
@@ -25,7 +25,7 @@ export class TimeBubbleSystem {
     ownerId: string,
     x: number,
     y: number,
-    effect: TimeBubbleGrenadeEffect,
+    effect: TimeBubbleEffectConfig,
     now = Date.now(),
   ): void {
     this.activeBubbles.push({

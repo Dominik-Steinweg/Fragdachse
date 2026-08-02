@@ -24,8 +24,12 @@ export const DISTORTION_PROFILE_SIZE = 128;
 /** Neutralwert je Kanal – der Shader zieht exakt diesen Wert ab. */
 export const DISTORTION_NEUTRAL_BYTE = 128;
 
-/** Der sichtbare Ereignishorizont bleibt von der Kamera-Verzerrung vollständig unberührt. */
-export const BLACK_HOLE_PROTECTED_CORE_RADIUS = 0.28;
+/**
+ * Die sichtbare Kern-/Halo-Textur bleibt von der Kamera-Verzerrung vollständig unberührt.
+ * Das Profil wird über den gesamten Feldradius gestempelt; ein Schutz nur bis zum schwarzen
+ * Ereignishorizont würde deshalb den violetten Rand der `TEX_BLACK_HOLE`-Textur mitverformen.
+ */
+export const BLACK_HOLE_PROTECTED_CORE_RADIUS = 0.58;
 
 /** Ab hier klingt die Zeitbrechung ab; die äußere Membran selbst bleibt kreisförmig. */
 export const TIME_BUBBLE_MEMBRANE_GUARD_START = 0.62;
@@ -47,8 +51,8 @@ function profileMagnitude(profile: DistortionProfileKey, r: number): number {
     // unendlich steil an und verzerrte den Kern schon im ersten Pixel.
     case 'pull':
     case 'pullSwirl':
-      return smoothstep(BLACK_HOLE_PROTECTED_CORE_RADIUS, 0.56, r)
-        * (1 - smoothstep(0.68, 1, r));
+      return smoothstep(BLACK_HOLE_PROTECTED_CORE_RADIUS, 0.72, r)
+        * (1 - smoothstep(0.82, 1, r));
     // Zeitblase: die Welt wird im Inneren gebrochen. Vor der sichtbaren Membran klingt das
     // Profil vollständig auf Neutral aus, damit der Kamera-Pass die eigene Kreisform nicht
     // mitzieht und ausbeult.

@@ -307,7 +307,7 @@ export class PlacementPreviewRenderer {
     if (kind === 'tunnel') {
       return (ULTIMATE_CONFIGS.DACHS_TUNNEL as TunnelUltimateConfig).placement.previewAlpha;
     }
-    return kind === 'turret'
+    return kind === 'turret' || kind === 'pedestal'
       ? (UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig).placeable.previewAlpha
       : (UTILITY_CONFIGS.FELSBAU as PlaceableRockUtilityConfig).placeable.previewAlpha;
   }
@@ -316,8 +316,10 @@ export class PlacementPreviewRenderer {
     kind: PlacementPreviewNetState['kind'],
     constructionId?: PlacementPreviewNetState['constructionId'],
   ): string {
+    if (constructionId === 'medic_pedestal') return 'powerup_hp';
+    if (constructionId === 'armor_pedestal') return 'powerup_arm';
     if (constructionId) return `construction_${constructionId}`;
-    return kind === 'turret' ? 'placeable_turret' : 'rocks';
+    return kind === 'turret' || kind === 'pedestal' ? 'placeable_turret' : 'rocks';
   }
 
   private ensureRemoteTunnelPreview(playerId: string): TunnelPreviewVisualState {

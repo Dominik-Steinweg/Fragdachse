@@ -1,5 +1,5 @@
-import type { GroundFireVisualStyle } from '../types';
-import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
+import type { EnergyInjectorConstructionEffect, GroundFireVisualStyle } from '../types';
+import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanSupportEffect, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityArcConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ export interface HitscanWeaponFireConfig {
   readonly type: 'hitscan';
   readonly traceThickness: number;      // px - für spätere Ray-/Sweep-Checks
   readonly visualPreset?: HitscanVisualPreset;
+  readonly supportEffect?: HitscanSupportEffect;
 }
 
 export interface MeleeWeaponFireConfig {
@@ -148,50 +149,36 @@ export interface EnergyShieldWeaponFireConfig {
 }
 
 /**
- * Klassenfaehigkeit des Ingenieurs auf Waffe 2: schleudert einen Energiekern auf eine
- * Zielposition und verstaerkt dort fuer kurze Zeit alle Tuerme, auch die der Basis.
+ * Klassenfaehigkeit des Inspectors auf Waffe 2: schleudert eine Matrix auf eine Zielposition
+ * und schuetzt dort Verbündete, waehrend Gegner verwundbar werden.
  */
-export interface OverchargeCoreWeaponFireConfig {
-  readonly type: 'overcharge_core';
+export interface ReinforcementMatrixWeaponFireConfig {
+  readonly type: 'reinforcement_matrix';
   readonly projectileSpeed: number;
   readonly projectileSize: number;
   readonly radius: number;
   readonly durationMs: number;
-  readonly fireRateMultiplier: number;
-  readonly damageMultiplier: number;
+  readonly damageReduction: number;
+  readonly vulnerabilityBonus: number;
   readonly fieldColor: number;
 }
 
 /**
- * Klassenfaehigkeit des Ingenieurs auf Waffe 2: feuert Reparaturprojektile, die Felsen,
- * Konstrukte, Tuerme, Basen und Verbuendete heilen statt zu schaden. Die Projektile tragen
- * keinerlei Schaden; getroffen wird ueber denselben Hindernis-Collider wie bei Kampfwaffen,
- * die Wirkung loest der `SupportProjectileSystem`-Pfad im Host aus.
+ * Klassenfaehigkeit des Inspectors auf Waffe 2: praezise Energiebolzen ohne Lenkwirkung.
+ * Konstrukte erhalten eine typisierte Funktionsverstaerkung; Gegner werden verwundbar und
+ * fuer freundliche Tuerme fokussiert. Folgekontakte erneuern den Einzelzielstatus.
  */
-export interface RepairBeamWeaponFireConfig {
-  readonly type: 'repair_beam';
+export interface EnergyInjectorWeaponFireConfig {
+  readonly type: 'energy_injector';
   readonly projectileSpeed: number;
   readonly projectileSize: number;
-  /** HP je Treffer, identisch fuer Spieler und Strukturen. */
-  readonly healPerHit: number;
-  readonly beamColor: number;
+  readonly durationMs: number;
+  readonly vulnerabilityBonus: number;
+  readonly focusDurationMs: number;
+  readonly injectorColor: number;
 }
 
-/**
- * Klassenfaehigkeit des Ingenieurs auf Waffe 2: schnelle, leicht zielsuchende Energiebolzen,
- * die Adrenalin in einen Turm entladen und dessen Schaden kurzzeitig erhoehen. Mehrere
- * Treffer stapeln bis `maxStacks` und verlaengern die Wirkdauer jeweils neu.
- */
-export interface TurretChargeWeaponFireConfig {
-  readonly type: 'turret_charge';
-  readonly projectileSpeed: number;
-  readonly projectileSize: number;
-  readonly homing: ProjectileHomingConfig;
-  readonly durationMs: number;
-  readonly damageMultiplierPerStack: number;
-  readonly maxStacks: number;
-  readonly chargeColor: number;
-}
+/** @deprecated Technischer Alias fuer alte gespeicherte Loadout-Daten. */
 
 export type WeaponFireConfig =
   | ProjectileWeaponFireConfig
@@ -202,9 +189,8 @@ export type WeaponFireConfig =
   | TeslaDomeWeaponFireConfig
   | HealingAuraWeaponFireConfig
   | EnergyShieldWeaponFireConfig
-  | OverchargeCoreWeaponFireConfig
-  | RepairBeamWeaponFireConfig
-  | TurretChargeWeaponFireConfig;
+  | ReinforcementMatrixWeaponFireConfig
+  | EnergyInjectorWeaponFireConfig;
 
 export interface WeaponConfigShape {
   readonly id: string;
@@ -307,6 +293,7 @@ export interface WeaponConfigShape {
   readonly projectileStyle?: ProjectileStyle; // 'bullet' (eckig, Standard) | 'ball' (rund)
   readonly projectileVisualScale?: number;   // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
   readonly bulletVisualPreset?: BulletVisualPreset;
+  readonly grenadeVisualPreset?: GrenadeVisualPreset;
   readonly energyBallVariant?: EnergyBallVariant;
   readonly projectileBurnVisualStyle?: GroundFireVisualStyle;
   readonly rocketSmokeTrailColor?: number;   // optionales Farb-Override für Raketenrauch, sonst Spielerfarbe
@@ -457,6 +444,8 @@ export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig
   readonly targetRange: number;
   readonly muzzleOffset: number;
   readonly deathCloudRadius: number;
+  /** Typisierte Verstaerkung des Energieinjektors fuer dieses Geschuetz. */
+  readonly energyInjectorEffect?: EnergyInjectorConstructionEffect;
   readonly secondProjectileDamageFactor?: number;
   /** > 0 ersetzt die Sporen-Waffe des Turrets durch `FLIEGENPILZ_PLASMA` (Boss-Upgrade). */
   readonly plasmaWeaponEnabled?: number;

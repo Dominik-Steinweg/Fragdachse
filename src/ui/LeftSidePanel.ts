@@ -58,6 +58,7 @@ import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlock
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { UiContextMenu } from './UiContextMenu';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { toDesignSpace } from '../graphics/RenderResolution';
 
 // ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
 const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
@@ -766,10 +767,12 @@ export class LeftSidePanel {
   updateLobby(): void {
     if (this.badgerPreview) {
       const pointer = this.scene.input.activePointer;
-      // Sprite is scrollFactor(0), so compare with screen coords directly
+      // The sprite is fixed to the clarity camera in design space; pointer coordinates are
+      // render pixels and must be converted before comparing them with the sprite position.
       const angle = Phaser.Math.Angle.Between(
         CENTER_X, BADGER_Y,
-        pointer.x, pointer.y,
+        toDesignSpace(this.scene.scale, pointer.x),
+        toDesignSpace(this.scene.scale, pointer.y),
       );
       this.badgerPreview.setRotation(angle);
     }

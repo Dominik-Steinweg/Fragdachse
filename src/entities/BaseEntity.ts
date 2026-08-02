@@ -15,12 +15,14 @@ import {
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
+import { makeAdditive } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 
 const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
 const BASE_LIGHT_SPACING = CELL_SIZE * 4.5;
 const BASE_LIGHT_OVERHANG = CELL_SIZE * 1.25;
 const BASE_LIGHT_RADIUS = BASE_LIGHT_SPACING * 1.35;
+const VULNERABLE_MARKER_COLOR = 0xc86bff;
 
 export interface BaseTurretRuntimeState {
   readonly id: string;
@@ -78,6 +80,7 @@ export class BaseEntity {
   private maxHp: number;
   private destroyedBroadcasted = false;
   private onDestroyed: (() => void) | null = null;
+  private vulnerableMarker: Phaser.GameObjects.Graphics | null = null;
 
   constructor(scene: Phaser.Scene, spec: BaseSpec) {
     this.scene = scene;
@@ -225,6 +228,30 @@ export class BaseEntity {
     return this.cellBodies;
   }
 
+  /** Sichtbarer, rein visueller Statusmarker fuer die allgemeine Verwundbarkeit. */
+  setVulnerable(active: boolean): void {
+    if (!active) {
+      this.vulnerableMarker?.destroy();
+      this.vulnerableMarker = null;
+      return;
+    }
+    if (this.vulnerableMarker || this.isDestroyed()) return;
+    const bounds = getBaseWorldBounds(this.spec.region);
+    const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 5);
+    marker.lineStyle(3, VULNERABLE_MARKER_COLOR, 0.88);
+    marker.strokeRect(bounds.x - 4, bounds.y - 4, bounds.width + 8, bounds.height + 8);
+    makeAdditive(marker);
+    this.scene.tweens.add({
+      targets: marker,
+      alpha: { from: 0.45, to: 1 },
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.vulnerableMarker = marker;
+  }
+
   /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */
   destroyCellVisual(cellIndex: number): void {
     const image = this.cellImages[cellIndex];
@@ -342,6 +369,8 @@ export class BaseEntity {
   private handleDestruction(): void {
     if (this.destroyedBroadcasted) return;
     this.destroyedBroadcasted = true;
+    this.vulnerableMarker?.destroy();
+    this.vulnerableMarker = null;
 
     for (const body of this.cellBodies) {
       if (body.active) body.destroy();

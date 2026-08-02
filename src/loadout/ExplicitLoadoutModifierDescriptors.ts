@@ -437,20 +437,15 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "OVERCHARGE_CORE",
     targets: [{ path: ["adrenalinCost"], formula: "scale" }],
   },
-  "weapon.OVERCHARGE_CORE.fire.damageMultiplier": {
+  "weapon.OVERCHARGE_CORE.fire.damageReduction": {
     kind: "weapon",
     itemId: "OVERCHARGE_CORE",
-    targets: [{ path: ["fire","damageMultiplier"], formula: "add" }],
+    targets: [{ path: ["fire","damageReduction"], formula: "add" }],
   },
   "weapon.OVERCHARGE_CORE.fire.durationMs": {
     kind: "weapon",
     itemId: "OVERCHARGE_CORE",
     targets: [{ path: ["fire","durationMs"], formula: "scale" }],
-  },
-  "weapon.OVERCHARGE_CORE.fire.fireRateMultiplier": {
-    kind: "weapon",
-    itemId: "OVERCHARGE_CORE",
-    targets: [{ path: ["fire","fireRateMultiplier"], formula: "add" }],
   },
   "weapon.OVERCHARGE_CORE.fire.radius": {
     kind: "weapon",

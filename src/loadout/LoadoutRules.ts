@@ -138,7 +138,7 @@ export function resolveLoadoutSelectionIds(
 
 /**
  * Verbindlicher Coop-Ready-Vertrag fuer den klassenabhaengigen Waffe-2-Slot.
- * Insbesondere traegt der Inspector seit dem Ueberladungskern eine echte Waffen-ID statt `null`.
+ * Insbesondere traegt der Inspector mit der Verstärkungsmatrix eine echte Waffen-ID statt `null`.
  */
 export function isCoopDefenseReadyLoadoutComplete(snapshot: LoadoutCommitSnapshot): boolean {
   const { coopDefenseClassId: classId, coopDefenseProfile: profile, weapon2 } = snapshot;

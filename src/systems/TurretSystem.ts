@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CombatSystem } from './CombatSystem';
-import type { TurretBuff } from '../types';
+import type { TurretDamageBuff } from '../types';
 
 type LineOfSightChecker = (
   sx: number,
@@ -34,6 +34,8 @@ export interface AutomatedTurret {
 type TurretProvider = () => readonly AutomatedTurret[];
 type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
 type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
+type FocusTargetProvider = (ownerId: string) => { targetType: 'enemy' | 'base'; targetId: string } | null;
+type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number) => { id: string; x: number; y: number } | null;
 type TurretFireHandler = (
   ownerId: string,
   color: number,
@@ -45,6 +47,7 @@ type TurretFireHandler = (
   targetY: number,
   damageFactor?: number,
   rangeFactor?: number,
+  sourceTurretId?: AutomatedTurretId,
 ) => void;
 
 export class TurretSystem {
@@ -52,8 +55,10 @@ export class TurretSystem {
   private turretProvider: TurretProvider | null = null;
   private turretAngleUpdater: TurretAngleUpdater | null = null;
   private enemyTargetProvider: EnemyTargetProvider | null = null;
+  private focusTargetProvider: FocusTargetProvider | null = null;
+  private focusedBaseTargetProvider: FocusedBaseTargetProvider | null = null;
   private fireHandler: TurretFireHandler | null = null;
-  private turretBuffProvider: ((x: number, y: number) => TurretBuff | null) | null = null;
+  private turretDamageBuffProvider: ((x: number, y: number) => TurretDamageBuff | null) | null = null;
   private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
   private nextFireAt = new Map<AutomatedTurretId, number>();
 
@@ -75,16 +80,25 @@ export class TurretSystem {
     this.enemyTargetProvider = provider;
   }
 
+  setFocusTargetProvider(provider: FocusTargetProvider | null): void {
+    this.focusTargetProvider = provider;
+  }
+
+  setFocusedBaseTargetProvider(provider: FocusedBaseTargetProvider | null): void {
+    this.focusedBaseTargetProvider = provider;
+  }
+
   setFireHandler(handler: TurretFireHandler | null): void {
     this.fireHandler = handler;
   }
 
   /**
-   * Ortsbezogener Turmbuff (derzeit der Ueberladungskern). Bewusst positionsbasiert, damit
-   * platzierte Konstruktionen, Fliegenpilze und Basistuerme ohne Sonderfall profitieren.
+   * Ortsbezogener Konstruktionsbuff aus der Verstärkungsmatrix-/Energieinjektor-Pipeline.
+   * Bewusst positionsbasiert, damit platzierte Konstruktionen, Fliegenpilze und Basistuerme
+   * ohne Sonderfall profitieren.
    */
-  setTurretBuffProvider(provider: ((x: number, y: number) => TurretBuff | null) | null): void {
-    this.turretBuffProvider = provider;
+  setTurretDamageBuffProvider(provider: ((x: number, y: number) => TurretDamageBuff | null) | null): void {
+    this.turretDamageBuffProvider = provider;
   }
 
   /** Zusätzlicher, quellenbezogener Schadensmultiplikator für Konstrukte. */
@@ -122,6 +136,9 @@ export class TurretSystem {
       const targetRange = turret.targetRange ?? baseTargetRange;
       const turretWeaponId = turret.weaponId ?? 'SPOREN';
       const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
+      // Tesla-Konstrukte werden vom TeslaDomeSystem als Feldwaffe verarbeitet und
+      // duerfen hier nicht zusaetzlich den generischen Projektilpfad ausloesen.
+      if (turretWeaponConfig.fire.type === 'tesla_dome') continue;
       const rangeFactor = turret.muzzleOffset === undefined
         ? (baseTargetRange > 0 ? targetRange / baseTargetRange : 1)
         : Math.max(1, targetRange / Math.max(1, turretWeaponConfig.range));
@@ -139,16 +156,15 @@ export class TurretSystem {
       this.turretAngleUpdater?.(turret.id, angle);
 
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
-      const buff = this.turretBuffProvider?.(turretX, turretY) ?? null;
-      const fireRateMultiplier = Math.max(0.01, buff?.fireRateMultiplier ?? 1);
+      const buff = this.turretDamageBuffProvider?.(turretX, turretY) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
         * Math.max(0, this.turretDamageMultiplierProvider?.(turret, turrets) ?? 1);
-      this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown / fireRateMultiplier));
+      this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
 
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
-      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, damageMultiplier, rangeFactor);
+      this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, angle, target.x, target.y, damageMultiplier, rangeFactor, turret.id);
       if ((turret.secondProjectileDamageFactor ?? 0) > 0) {
         const secondTarget = this.findNearestTarget(
           turret,
@@ -160,7 +176,7 @@ export class TurretSystem {
         );
         if (secondTarget) {
           const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
-          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier, rangeFactor);
+          this.fireHandler?.(turret.ownerId, turret.ownerColor, turretWeaponId, muzzleX, muzzleY, secondAngle, secondTarget.x, secondTarget.y, (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier, rangeFactor, turret.id);
         }
       }
     }
@@ -180,6 +196,18 @@ export class TurretSystem {
   ): { x: number; y: number } | null {
     let bestTarget: { x: number; y: number } | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
+    let bestPriority = Number.POSITIVE_INFINITY;
+    const focus = this.focusTargetProvider?.(turret.ownerId) ?? null;
+
+    const consider = (candidate: { x: number; y: number }, priority: number): void => {
+      const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
+      if (distance > range) return;
+      if (!this.hasLineOfSightFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfSightStartOffset)) return;
+      if (priority > bestPriority || (priority === bestPriority && distance >= bestDistance)) return;
+      bestPriority = priority;
+      bestDistance = distance;
+      bestTarget = candidate;
+    };
 
     if (turret.targetMode !== 'enemies') for (const player of this.playerManager.getAllPlayers()) {
       if (excluded && player.sprite.x === excluded.x && player.sprite.y === excluded.y) continue;
@@ -189,12 +217,11 @@ export class TurretSystem {
       if (this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(turret.ownerId, player.id)) continue;
 
-      const distance = Phaser.Math.Distance.Between(turretX, turretY, player.sprite.x, player.sprite.y);
-      if (distance > range || distance >= bestDistance) continue;
-      if (!this.hasLineOfSightFromMuzzle(turret, turretX, turretY, player.sprite.x, player.sprite.y, lineOfSightStartOffset)) continue;
-
-      bestDistance = distance;
-      bestTarget = { x: player.sprite.x, y: player.sprite.y };
+      // Fokusziele werden nur priorisiert; Reichweite und Sichtlinie bleiben verbindlich.
+      consider(
+        { x: player.sprite.x, y: player.sprite.y },
+        focus?.targetType === 'enemy' && focus.targetId === player.id ? 0 : 1,
+      );
     }
 
     if (turret.targetMode !== 'players') for (const enemy of this.enemyTargetProvider?.() ?? []) {
@@ -202,12 +229,15 @@ export class TurretSystem {
       if (!this.combatSystem.isAlive(enemy.id)) continue;
       if (!this.combatSystem.canDamageTarget(turret.ownerId, enemy.id)) continue;
 
-      const distance = Phaser.Math.Distance.Between(turretX, turretY, enemy.x, enemy.y);
-      if (distance > range || distance >= bestDistance) continue;
-      if (!this.hasLineOfSightFromMuzzle(turret, turretX, turretY, enemy.x, enemy.y, lineOfSightStartOffset)) continue;
+      consider(
+        { x: enemy.x, y: enemy.y },
+        focus?.targetType === 'enemy' && focus.targetId === enemy.id ? 0 : 1,
+      );
+    }
 
-      bestDistance = distance;
-      bestTarget = { x: enemy.x, y: enemy.y };
+    if (focus?.targetType === 'base') {
+      const base = this.focusedBaseTargetProvider?.(focus.targetId, turretX, turretY) ?? null;
+      if (base) consider({ x: base.x, y: base.y }, 0);
     }
 
     return bestTarget;

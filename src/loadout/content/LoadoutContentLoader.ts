@@ -54,7 +54,7 @@ interface RawEntry {
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const COLOR_KEYS = new Set([
   'beamColor', 'bubbleColor', 'chargeColor', 'color', 'colorCore', 'colorGlow',
-  'explosionColor', 'fieldColor', 'projectileColor', 'rocketSmokeTrailColor', 'colorOverride',
+  'explosionColor', 'fieldColor', 'injectorColor', 'projectileColor', 'rocketSmokeTrailColor', 'colorOverride',
 ]);
 const PROTECTED_DISCRIMINATORS = new Set([
   'weapon.fire.type',
@@ -126,7 +126,12 @@ function validateRawValue(
     return;
   }
 
-  const allowed = LOADOUT_ALLOWED_KEYS_BY_PATH[schemaPath];
+  const allowed = schemaPath === 'weapon.fire'
+    ? new Set([
+      ...(LOADOUT_ALLOWED_KEYS_BY_PATH[schemaPath] ?? []),
+      'damagePerHit', 'damageReduction', 'focusDurationMs', 'injectorColor', 'vulnerabilityBonus',
+    ])
+    : LOADOUT_ALLOWED_KEYS_BY_PATH[schemaPath];
   for (const [key, child] of Object.entries(value)) {
     if (isVariantRoot && (key === 'baseId' || key === '_notes')) continue;
     if (!allowed?.has(key)) {

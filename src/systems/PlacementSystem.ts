@@ -14,6 +14,7 @@ import {
 } from '../config';
 import type { ArenaLayout, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
 import {
+  getCoopDefenseConstructionDefinition,
   sumPlaceableCapacity,
   type CoopDefenseConstructionDefinition,
 } from '../config/coopDefenseConstructions';
@@ -99,6 +100,12 @@ export class PlacementSystem {
   applyDamage(id: number, damage: number, attackerId?: string): SyncedPlaceableRock | undefined {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
+    if (
+      rock.constructionId
+      && getCoopDefenseConstructionDefinition(rock.constructionId).indestructible === true
+    ) {
+      return { ...rock };
+    }
     rock.hp = Math.max(0, rock.hp - damage);
     rock.lastAttackerId = attackerId;
     return { ...rock };
@@ -158,7 +165,7 @@ export class PlacementSystem {
     const resolvedMaxHp = Math.max(1, maxHp);
     const rock: RuntimeRockRecord = {
       id: this.nextRockId++,
-      kind: 'turret',
+      kind: cfg.kind,
       constructionId: cfg.id,
       gridX: preview.gridX,
       gridY: preview.gridY,
@@ -169,8 +176,9 @@ export class PlacementSystem {
       expiresAt: 0,
       warningStartsAt: 0,
       angle: preview.angle,
-      targetRange: cfg.targetRange,
-      turretWeaponId: cfg.weaponId,
+      targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
+      turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
+      energyInjectorEffect: cfg.energyInjectorEffect,
     };
     this.runtimeRocks.set(rock.id, rock);
     this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
@@ -196,7 +204,7 @@ export class PlacementSystem {
       isValid: this.canPlaceSingleCell(targetCell.gridX, targetCell.gridY),
       frame: 0,
       range: cfg.placementRange,
-      kind: 'turret',
+      kind: cfg.kind,
       sourceSlot: 'weapon2',
       constructionId: cfg.id,
     };
@@ -269,6 +277,9 @@ export class PlacementSystem {
       targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
       turretWeaponId: cfg.placeable.kind === 'turret' && (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
         ? 'FLIEGENPILZ_PLASMA'
+        : undefined,
+      energyInjectorEffect: cfg.placeable.kind === 'turret'
+        ? cfg.placeable.energyInjectorEffect
         : undefined,
     };
 

@@ -5,8 +5,9 @@ import { ArenaGenerator }    from '../../arena/ArenaGenerator';
 import { createArenaTerrainColorSampler } from '../../arena/ArenaTerrainColorSampler';
 import { RockRegistry }      from '../../arena/RockRegistry';
 import { PlacementSystem }   from '../../systems/PlacementSystem';
-import { OverchargeSystem }  from '../../systems/OverchargeSystem';
-import { TurretChargeSystem } from '../../systems/TurretChargeSystem';
+import { ReinforcementMatrixSystem, type TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
+import { EnergyInjectorSystem } from '../../systems/EnergyInjectorSystem';
+import { TargetStatusSystem } from '../../systems/TargetStatusSystem';
 import { ResourceSystem }    from '../../systems/ResourceSystem';
 import { TeslaDomeSystem }   from '../../systems/TeslaDomeSystem';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -57,7 +58,7 @@ import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
-import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, UtilityConfig } from '../../loadout/LoadoutConfig';
+import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
@@ -99,6 +100,7 @@ import {
 } from '../../config/coopDefenseConstructions';
 import { getUnlockedCoopDefenseConstructionIds } from '../../utils/coopDefenseUpgrades';
 import type { ConstructionId, LoadoutToolRef, LoadoutUseResult } from '../../types';
+import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 
 /**
  * Manages the arena round lifecycle.
@@ -447,6 +449,11 @@ export class ArenaLifecycleCoordinator {
 
   /** Gemeinsamer Entkopplungspfad fuer Spectator, Disconnect und Arena-Teardown. */
   removePlayerFromActiveRound(playerId: string): void {
+    // Zielstatus und Injector-Fokus gehoeren zur laufenden Runde, nicht zur Lobby-Persona.
+    // Deshalb muessen sie auch beim Disconnect/Spectator-Wechsel vor dem naechsten Snapshot
+    // entfernt werden.
+    this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
+    this.ctx.energyInjectorSystem?.removeOwner(playerId);
     if (bridge.isHost()) {
       this.ctx.combatSystem.removePlayer(playerId);
       this.ctx.resourceSystem?.removePlayer(playerId);
@@ -535,8 +542,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.arenaResult = builder.buildDynamic(layout);
     this.ctx.placementSystem = new PlacementSystem(layout, this.ctx.arenaResult.rockGrid, this.ctx.playerManager);
     // Host und Client halten das System: der Host autoritativ, der Client fuer die Darstellung.
-    this.ctx.overchargeSystem = new OverchargeSystem();
-    this.ctx.turretChargeSystem = new TurretChargeSystem();
+    this.ctx.reinforcementMatrixSystem = new ReinforcementMatrixSystem();
+    this.ctx.energyInjectorSystem = new EnergyInjectorSystem();
+    this.ctx.targetStatusSystem = new TargetStatusSystem();
     this.ctx.captureTheBeerSystem = bridge.getGameMode() === CAPTURE_THE_BEER_MODE
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
@@ -617,6 +625,7 @@ export class ArenaLifecycleCoordinator {
           getPlayerClassId: (playerId) => this.ctx.coopDefensePlayerModifierSystem?.getClassId(playerId) ?? null,
         })
         : null;
+      this.ctx.coopDefenseItemRuntimeSystem?.setTargetStatusSystem(this.ctx.targetStatusSystem);
       this.syncHostCoopDefensePlayerModifiersFromCommittedSelections();
 
       const obstacleCellProvider = () => {
@@ -624,10 +633,12 @@ export class ArenaLifecycleCoordinator {
           const isActive = this.ctx.arenaResult?.rockObjects[index]?.active ?? false;
           return isActive ? [{ gridX: rock.gridX, gridY: rock.gridY }] : [];
         });
-        const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? []).map((rock) => ({
-          gridX: rock.gridX,
-          gridY: rock.gridY,
-        }));
+        const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
+          .filter((rock) => rock.kind !== 'pedestal')
+          .map((rock) => ({
+            gridX: rock.gridX,
+            gridY: rock.gridY,
+          }));
 
         return [...staticRockCells, ...runtimeRockCells];
       };
@@ -710,6 +721,8 @@ export class ArenaLifecycleCoordinator {
       const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
       if (baseManager) {
         baseManager.setOnBaseDestroyed((destroyedBase) => {
+          this.ctx.targetStatusSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
+          this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
           this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
           const blast = getBaseDestructionBlast(destroyedBase);
           this.ctx.hostPhysics.applyRadialImpulse(
@@ -793,6 +806,7 @@ export class ArenaLifecycleCoordinator {
         addBoundsToFireIndex(bounds.left, bounds.top, bounds.right, bounds.bottom, true);
       }
       for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+        if (rock.kind === 'pedestal') continue;
         const left = ARENA_OFFSET_X + rock.gridX * CELL_SIZE;
         const top = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE;
         addBoundsToFireIndex(left, top, left + CELL_SIZE, top + CELL_SIZE, true);
@@ -875,7 +889,15 @@ export class ArenaLifecycleCoordinator {
       // "Letzte Bastion" liest hier bewusst die HP **vor** dem Treffer: der Schlag, der unter die
       // Schwelle drueckt, wird noch nicht reduziert, erst der naechste.
       const conditional = this.ctx.coopDefenseItemRuntimeSystem?.getConditionalDamageReduction(playerId) ?? 0;
-      return fromWeapon + fromItems + conditional;
+      const player = this.ctx.playerManager.getPlayer(playerId);
+      const matrix = player
+        ? this.ctx.reinforcementMatrixSystem?.getDamageReductionForFootprint(
+          this.getTargetFootprint({ targetType: 'player', targetId: playerId })!,
+          Date.now(),
+          (field) => !bridge.isEnemyPair(field.ownerId, playerId),
+        ) ?? 0
+        : 0;
+      return fromWeapon + fromItems + conditional + matrix;
     });
     this.ctx.combatSystem.setPlayerHpRegenPerSecondResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getHpRegenPerSecond(playerId) ?? 0;
@@ -914,6 +936,40 @@ export class ArenaLifecycleCoordinator {
     });
     this.ctx.combatSystem.setEnemyIncomingDamageMultiplierResolver((enemyId) => {
       return this.ctx.coopDefenseItemRuntimeSystem?.getEnemyIncomingDamageMultiplier(enemyId) ?? 1;
+    });
+    this.ctx.combatSystem.setTargetIncomingDamageMultiplierResolver((target) => {
+      const vulnerability = this.ctx.targetStatusSystem?.getIncomingDamageMultiplier(target) ?? 1;
+      const footprint = this.getTargetFootprint(target);
+      if (!footprint || target.targetType === 'enemy') return vulnerability;
+
+      const matrixApplies = target.targetType === 'player'
+        ? (field: { ownerId: string }) => !bridge.isEnemyPair(field.ownerId, target.targetId)
+        : target.targetType === 'base'
+          ? () => this.ctx.baseManager?.getBase(target.targetId)?.faction === 'friendly'
+          : target.targetType === 'construction'
+            ? (field: { ownerId: string }) => {
+              const rock = this.ctx.placementSystem?.getRuntimeRock(Number(target.targetId));
+              return Boolean(rock && !bridge.isEnemyPair(field.ownerId, rock.ownerId));
+            }
+            : target.targetType === 'rock' || target.targetType === 'wall'
+              ? (field: { ownerId: string }) => {
+                const rock = this.ctx.placementSystem?.getRuntimeRock(Number(target.targetId));
+                return !rock || !bridge.isEnemyPair(field.ownerId, rock.ownerId);
+              }
+              : () => false;
+      const matrixMultiplier = this.ctx.reinforcementMatrixSystem?.getDamageMultiplierForFootprint(
+        footprint,
+        Date.now(),
+        matrixApplies,
+      ) ?? 1;
+      return vulnerability * matrixMultiplier;
+    });
+    this.ctx.combatSystem.setEnergyInjectorTargetHitCallback((targetType, targetId, x, y, projectile) => {
+      if (targetType === 'player' && !bridge.isEnemyPair(projectile.ownerId, targetId)) return;
+      this.hostUpdate.applyEnergyInjectorTargetHit(targetType, targetId, x, y, projectile);
+    });
+    this.ctx.combatSystem.setHitscanSupportImpactCallback((impact, effect, attackerId, sourceSlot) => {
+      this.hostUpdate.applyHitscanSupportImpact(impact, effect, attackerId, sourceSlot);
     });
     this.ctx.combatSystem.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss) => {
       const runtime = this.ctx.coopDefenseItemRuntimeSystem;
@@ -1009,6 +1065,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setEnemyDeathCallback((enemyId, x, y, burnSources, death) => {
       const wasTimebomb = death ? (this.ctx.coopDefenseTimebombSystem?.handleKilled(death) ?? false) : false;
       if (wasTimebomb) {
+        this.ctx.targetStatusSystem?.removeTarget({ targetType: 'enemy', targetId: enemyId });
+        this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'enemy', targetId: enemyId });
         this.ctx.coopDefenseItemRuntimeSystem?.removeEnemy(enemyId);
         return true;
       }
@@ -1018,17 +1076,22 @@ export class ArenaLifecycleCoordinator {
       if (death) this.ctx.necromancySystem?.recordEnemyDeath(death);
       // Sonst bliebe die Verwundbarkeit als Karteileiche stehen, bis ihre Dauer ablaeuft – und
       // eine wiederverwendete Gegner-ID erbte sie.
+      this.ctx.targetStatusSystem?.removeTarget({ targetType: 'enemy', targetId: enemyId });
+      this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'enemy', targetId: enemyId });
       this.ctx.coopDefenseItemRuntimeSystem?.removeEnemy(enemyId);
       return false;
     });
 
     this.ctx.combatSystem.setRockDamageCallback((rockIndex, damage, attackerId) => {
-      const resolvedDamage = this.ctx.coopDefensePlayerModifierSystem?.resolveOutgoingDamage(
-        attackerId,
-        `rock:${rockIndex}`,
+      const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockIndex);
+      const resolvedDamage = this.ctx.combatSystem.resolveExternalTargetDamage(
+        {
+          targetType: runtimeRock?.constructionId ? 'construction' : 'rock',
+          targetId: String(rockIndex),
+        },
         damage,
-        false,
-      ).amount ?? damage;
+        attackerId,
+      );
       const newHp = this.rockVisualHelper.applyObstacleDamageById(rockIndex, resolvedDamage, attackerId);
       if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockIndex, 'damage', attackerId);
     });
@@ -1178,7 +1241,10 @@ export class ArenaLifecycleCoordinator {
               secondProjectileDamageFactor: rock.secondProjectileDamageFactor,
               targetRange: rock.targetRange,
               muzzleOffset: rock.constructionId
-                ? getCoopDefenseConstructionDefinition(rock.constructionId).muzzleOffset
+                ? (() => {
+                  const definition = getCoopDefenseConstructionDefinition(rock.constructionId!);
+                  return definition.kind === 'turret' ? definition.muzzleOffset : undefined;
+                })()
                 : undefined,
               weaponId: rock.turretWeaponId ?? ('SPOREN' as const),
             }));
@@ -1206,18 +1272,58 @@ export class ArenaLifecycleCoordinator {
           .filter(enemy => enemy.sprite.active)
           .map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })),
       );
-      // Der Buff ist ortsbezogen und wirkt dadurch auf platzierte Tuerme, Fliegenpilze
-      // und Basistuerme gleichermassen. Ueberladungsfeld (Flaeche) und Energieinjektor
-      // (einzelner Turm) sind unabhaengige Quellen und multiplizieren sich.
-      this.ctx.turretSystem.setTurretBuffProvider((x, y) => {
-        const field = this.ctx.overchargeSystem?.getBuffAt(x, y) ?? null;
-        const charge = this.ctx.turretChargeSystem?.getBuffAt(x, y) ?? null;
-        if (!field) return charge;
-        if (!charge) return field;
-        return {
-          fireRateMultiplier: field.fireRateMultiplier * charge.fireRateMultiplier,
-          damageMultiplier: field.damageMultiplier * charge.damageMultiplier,
-        };
+      this.ctx.turretSystem.setFocusTargetProvider(
+        (ownerId) => this.ctx.energyInjectorSystem?.getFocusTarget(ownerId) as { targetType: 'enemy' | 'base'; targetId: string } | null,
+      );
+      this.ctx.turretSystem.setFocusedBaseTargetProvider((targetId, turretX, turretY) => {
+        const base = this.ctx.baseManager?.getBase(targetId);
+        if (!base || base.faction !== 'hostile' || base.getHp() <= 0) return null;
+        const surface = base.getNearestSurfacePoint(turretX, turretY);
+        return surface ? { id: base.id, x: surface.x, y: surface.y } : null;
+      });
+      this.ctx.teslaDomeSystem.setConstructionSourceProvider(
+        () => {
+          const turrets = this.ctx.turretSystem?.getTurrets() ?? [];
+          return (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
+            .filter(rock => (
+              rock.kind === 'turret'
+              && rock.constructionId === 'tesla_turret'
+              && rock.turretWeaponId === 'TURRET_TESLA'
+              && rock.hp > 0
+            ))
+            .map(rock => {
+              const x = ARENA_OFFSET_X + rock.gridX * CELL_SIZE + CELL_SIZE / 2;
+              const y = ARENA_OFFSET_Y + rock.gridY * CELL_SIZE + CELL_SIZE / 2;
+              const injectorMultiplier = this.ctx.energyInjectorSystem?.getTurretDamageMultiplierAt(x, y) ?? 1;
+              const turret = turrets.find(candidate => String(candidate.id) === String(rock.id));
+              const remoteControlMultiplier = turret
+                ? (this.ctx.coopDefenseItemRuntimeSystem?.getRemoteControlDamageMultiplier(
+                  rock.ownerId,
+                  turret,
+                  turrets,
+                ) ?? 1)
+                : 1;
+              return {
+                id: rock.id,
+                ownerId: rock.ownerId,
+                x,
+                y,
+                color: rock.ownerColor,
+                config: WEAPON_CONFIGS.TURRET_TESLA as WeaponConfig & { fire: TeslaDomeWeaponFireConfig },
+                damageMultiplier: injectorMultiplier
+                  * remoteControlMultiplier
+                  * (this.ctx.loadoutManager?.getDamageMultiplier(rock.ownerId) ?? 1)
+                  * (this.ctx.powerUpSystem?.getDamageMultiplier(rock.ownerId) ?? 1),
+              };
+            });
+        },
+      );
+      // Der Konstrukteffekt ist ortsbezogen und wirkt dadurch auf platzierte Tuerme,
+      // Fliegenpilze und Basistuerme gleichermassen. Die Matrix liefert hier bewusst
+      // keinen Turm-Schadens- oder Feuerratenbuff.
+      this.ctx.turretSystem.setTurretDamageBuffProvider((x, y) => {
+        const damageMultiplier = this.ctx.energyInjectorSystem?.getTurretDamageMultiplierAt(x, y) ?? 1;
+        return damageMultiplier > 1 ? { damageMultiplier } : null;
       });
       this.ctx.turretSystem.setTurretDamageMultiplierProvider((turret, turrets) => (
         this.ctx.coopDefenseItemRuntimeSystem?.getRemoteControlDamageMultiplier(
@@ -1434,12 +1540,16 @@ export class ArenaLifecycleCoordinator {
           if (player) this.ctx.gameAudioSystem.playSound('sfx_place_decoy', player.sprite.x, player.sprite.y, playerId);
         }
       });
-      this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1) => {
+      this.ctx.turretSystem.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId) => {
         const turretCfg = UTILITY_CONFIGS.FLIEGENPILZ as PlaceableTurretUtilityConfig;
         const weapon    = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
         const isFriendlyBaseTurret = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
         const isHostileBaseTurret = ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;
         const isBaseTurret = isFriendlyBaseTurret || isHostileBaseTurret;
+        const ownerRuntimeDamageMultiplier = isBaseTurret
+          ? 1
+          : (this.ctx.loadoutManager?.getDamageMultiplier(ownerId) ?? 1)
+            * (this.ctx.powerUpSystem?.getDamageMultiplier(ownerId) ?? 1);
         const fire = isBaseTurret && weapon.fire.type === 'projectile'
           ? {
             ...weapon.fire,
@@ -1452,7 +1562,7 @@ export class ArenaLifecycleCoordinator {
           }
           : weapon.fire;
         this.ctx.loadoutManager?.fireAutomatedWeapon(
-          { ...weapon, fire, damage: weapon.damage * damageFactor, range: weapon.range * rangeFactor },
+          { ...weapon, fire, range: weapon.range * rangeFactor },
           x,
           y,
           angle,
@@ -1460,7 +1570,17 @@ export class ArenaLifecycleCoordinator {
           targetY,
           ownerId,
           color,
-          { ignoreBaseCollisions: isBaseTurret },
+          {
+            ignoreBaseCollisions: isBaseTurret,
+            // Spielerbauten bleiben ihrem Besitzer zugerechnet und laufen als Utility-Schaden
+            // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
+            sourceSlot: isBaseTurret ? undefined : 'utility',
+            sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
+            directDamageMultiplier: damageFactor,
+            // Explosionen, Brand und Schadenswolken laufen nicht durch computeProjectileDamage;
+            // ihr Besitzer-/Power-up-Faktor wird deshalb beim Turmschuss eingefroren.
+            payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
+          },
         );
       });
       if (this.ctx.enemyManager && this.ctx.baseManager) {
@@ -1605,6 +1725,12 @@ export class ArenaLifecycleCoordinator {
           1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
         ),
       });
+      this.ctx.powerUpSystem.setConstructionRespawnMultiplierProvider((constructionId) => {
+        const rock = this.ctx.placementSystem?.getRuntimeRock(constructionId);
+        if (!rock) return 1;
+        const world = this.rockVisualHelper.gridToWorld(rock.gridX, rock.gridY);
+        return this.ctx.energyInjectorSystem?.getPowerUpRespawnMultiplierAt(world.x, world.y) ?? 1;
+      });
       this.ctx.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
       this.ctx.combatSystem.setPowerUpSystem(this.ctx.powerUpSystem);
       this.ctx.resourceSystem.setPowerUpSystem(this.ctx.powerUpSystem);
@@ -1639,7 +1765,9 @@ export class ArenaLifecycleCoordinator {
               this.ctx.hostPhysics.applyRadialImpulse(x, y, radius, force, ownerId, 0);
             },
             damageConstruction: (id, damage, attackerId) => {
-              const hp = this.rockVisualHelper.applyObstacleDamageById(id, damage, attackerId);
+              const resolvedDamage = this.resolveObstacleDamage(id, damage, attackerId);
+              if (resolvedDamage <= 0) return;
+              const hp = this.rockVisualHelper.applyObstacleDamageById(id, resolvedDamage, attackerId);
               if (hp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage', attackerId);
             },
             onSelfDetonated: (enemyId) => {
@@ -1800,7 +1928,9 @@ export class ArenaLifecycleCoordinator {
 
       this.ctx.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
         if (!this.ctx.arenaResult) return;
-        const newHp = this.rockVisualHelper.applyObstacleDamageById(rockId, damage, attackerId);
+        const resolvedDamage = this.resolveObstacleDamage(rockId, damage, attackerId);
+        if (resolvedDamage <= 0) return;
+        const newHp = this.rockVisualHelper.applyObstacleDamageById(rockId, resolvedDamage, attackerId);
         if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockId, 'damage', attackerId);
       });
       this.ctx.projectileManager.setObstacleKindResolver(
@@ -1889,8 +2019,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.clearAll();
     this.renderers.timeBubble.destroyAll();
     this.renderers.blackHole.destroyAll();
-    this.renderers.overchargeField.destroyAll();
-    this.renderers.turretCharge.destroyAll();
+    this.renderers.reinforcementMatrix.destroyAll();
+    this.renderers.energyInjector.destroyAll();
+    this.renderers.plasmaBurner.clear();
     this.renderers.remoteControl.destroyAll();
     this.renderers.teslaDome.destroyAll();
     this.renderers.healingAura.destroyAll();
@@ -1959,18 +2090,27 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPlayerArmorRegenPerSecondResolver(null);
     this.ctx.combatSystem.setPlayerBonusArmorRegenPerSecondResolver(null);
     this.ctx.combatSystem.setEnemyIncomingDamageMultiplierResolver(null);
+    this.ctx.combatSystem.setTargetIncomingDamageMultiplierResolver(null);
+    this.ctx.combatSystem.setEnergyInjectorTargetHitCallback(null);
+    this.ctx.combatSystem.setHitscanSupportImpactCallback(null);
     this.ctx.combatSystem.setDirectPrimaryHitHandler(null);
     this.ctx.combatSystem.setPlayerDamageTakenHandler(null);
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
     this.ctx.rockRegistry   = null;
     this.ctx.currentLayout  = null;
     this.ctx.placementSystem = null;
-    this.ctx.turretSystem?.setTurretBuffProvider(null);
+    this.ctx.turretSystem?.setTurretDamageBuffProvider(null);
     this.ctx.turretSystem?.setTurretDamageMultiplierProvider(null);
-    this.ctx.overchargeSystem?.clear();
-    this.ctx.overchargeSystem = null;
-    this.ctx.turretChargeSystem?.clear();
-    this.ctx.turretChargeSystem = null;
+    this.ctx.turretSystem?.setFocusTargetProvider(null);
+    this.ctx.turretSystem?.setFocusedBaseTargetProvider(null);
+    this.ctx.turretSystem?.setFireHandler(null);
+    this.ctx.reinforcementMatrixSystem?.clear();
+    this.ctx.reinforcementMatrixSystem = null;
+    this.ctx.energyInjectorSystem?.clear();
+    this.ctx.energyInjectorSystem = null;
+    this.ctx.targetStatusSystem?.clear();
+    this.ctx.targetStatusSystem = null;
+    this.ctx.powerUpSystem?.setConstructionRespawnMultiplierProvider(null);
     this.ctx.powerUpSystem?.reset();
     this.ctx.powerUpSystem  = null;
     this.ctx.shieldBuffSystem = null;
@@ -2403,9 +2543,11 @@ export class ArenaLifecycleCoordinator {
     if (!this.hasFreeConstructionCapacity(playerId, definition.capacityCost)) {
       return { ok: false, reason: 'capacity' };
     }
-    const hpMultiplier = 1 + (
-      this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
-    );
+    const hpMultiplier = definition.indestructible
+      ? 1
+      : 1 + (
+        this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
+      );
     const construction = this.ctx.placementSystem?.tryPlaceConstruction(
       definition,
       definition.maxHp * hpMultiplier,
@@ -2417,6 +2559,21 @@ export class ArenaLifecycleCoordinator {
       targetY,
     );
     if (!construction) return { ok: false, reason: 'blocked' };
+
+    if (definition.kind === 'pedestal') {
+      const world = this.rockVisualHelper.gridToWorld(construction.gridX, construction.gridY);
+      const registered = this.ctx.powerUpSystem?.registerConstructionPedestal(
+        construction.id,
+        definition.powerUpDefId,
+        world.x,
+        world.y,
+        player.color,
+      ) ?? false;
+      if (!registered) {
+        this.ctx.placementSystem?.removeRock(construction.id);
+        return { ok: false, reason: 'blocked' };
+      }
+    }
 
     const placedAt = Date.now();
     this.ctx.loadoutManager?.markConstructionUsed(playerId, constructionId, placedAt);
@@ -2550,11 +2707,17 @@ export class ArenaLifecycleCoordinator {
     const removed = this.ctx.placementSystem?.removeRockAt(cell.gridX, cell.gridY, playerId);
     if (!removed) return { ok: false, reason: 'blocked' };
 
+    this.ctx.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
+    this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
+
+    if (removed.kind === 'pedestal') {
+      this.ctx.powerUpSystem?.unregisterConstructionPedestal(removed.id);
+    }
     this.rockVisualHelper.removePlaceableRockVisual(removed, true);
     this.ctx.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_removed',
-      source: removed.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
+      source: removed.kind === 'rock' ? 'placeable_rock' : 'placeable_turret',
       obstacleId: removed.id,
       gridX: removed.gridX,
       gridY: removed.gridY,
@@ -2603,6 +2766,84 @@ export class ArenaLifecycleCoordinator {
       proj.impactCloud.trainDamageMult ?? 1,
       proj.impactCloud.visualVariant,
     );
+  }
+
+  /** Gemeinsamer externer Hindernisschaden fuer Projektile und Gegner-Spezialeffekte. */
+  private resolveObstacleDamage(index: number, damage: number, attackerId: string): number {
+    const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(index);
+    return this.ctx.combatSystem.resolveExternalTargetDamage(
+      {
+        targetType: runtimeRock?.constructionId ? 'construction' : 'rock',
+        targetId: String(index),
+      },
+      damage,
+      attackerId,
+    );
+  }
+
+  /** Liefert die reale Kollisions-/Darstellungsflaeche fuer Schutz- und Statusabfragen. */
+  private getTargetFootprint(target: TargetStatusTarget): TargetFootprint | null {
+    if (target.targetType === 'player') {
+      const player = this.ctx.playerManager.getPlayer(target.targetId);
+      if (!player?.sprite.active) return null;
+      const bounds = player.sprite.getBounds();
+      return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };
+    }
+    if (target.targetType === 'enemy') {
+      const enemy = this.ctx.enemyManager?.getEnemy(target.targetId);
+      if (!enemy?.sprite.active) return null;
+      const bounds = enemy.sprite.getBounds();
+      return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };
+    }
+    if (target.targetType === 'base') {
+      const base = this.ctx.baseManager?.getBase(target.targetId);
+      if (!base || base.isDestroyed()) return null;
+      const parts = base.getCellBodies().map((body) => {
+        const bounds = body.getBounds();
+        return {
+          x: bounds.centerX,
+          y: bounds.centerY,
+          width: bounds.width,
+          height: bounds.height,
+        } satisfies TargetFootprint;
+      });
+      const bounds = parts.reduce<{ left: number; top: number; right: number; bottom: number } | null>((acc, next) => {
+        if (!acc) {
+          return {
+            left: next.x - next.width / 2,
+            top: next.y - next.height / 2,
+            right: next.x + next.width / 2,
+            bottom: next.y + next.height / 2,
+          };
+        }
+        return {
+          left: Math.min(acc.left, next.x - next.width / 2),
+          top: Math.min(acc.top, next.y - next.height / 2),
+          right: Math.max(acc.right, next.x + next.width / 2),
+          bottom: Math.max(acc.bottom, next.y + next.height / 2),
+        };
+      }, null);
+      if (!bounds || parts.length === 0) return null;
+      return {
+        x: (bounds.left + bounds.right) * 0.5,
+        y: (bounds.top + bounds.bottom) * 0.5,
+        width: bounds.right - bounds.left,
+        height: bounds.bottom - bounds.top,
+        parts,
+      };
+    }
+
+    const rockId = Number(target.targetId);
+    if (!Number.isFinite(rockId)) return null;
+    const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    if (runtimeRock) {
+      const world = this.rockVisualHelper.gridToWorld(runtimeRock.gridX, runtimeRock.gridY);
+      return { x: world.x, y: world.y, width: CELL_SIZE, height: CELL_SIZE };
+    }
+    const rock = this.ctx.arenaResult?.rockObjects[rockId];
+    if (!rock?.active) return null;
+    const bounds = rock.getBounds();
+    return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };
   }
 
   private resetLocalArenaHudState(): void {

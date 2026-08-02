@@ -116,7 +116,8 @@ describe('Zeitbombendachs', () => {
     expect(playExplosion).toHaveBeenCalledTimes(1);
     expect(playExplosion).toHaveBeenCalledWith(60, 0, 168, 'timebomb');
     expect(applyRadialImpulse).toHaveBeenCalledTimes(1);
-    expect(applyBaseDamage).toHaveBeenCalledWith('outpost-1', 222);
+    expect(combat.applyBaseDamage).toHaveBeenCalledWith('outpost-1', 222, 'e1');
+    expect(applyBaseDamage).not.toHaveBeenCalled();
     expect(fireChunks.hostCreateFireChunkBurst).toHaveBeenCalledTimes(1);
     expect(sound).toHaveBeenCalledWith(expect.objectContaining({ type: 'timebomb-detonate' }));
   });

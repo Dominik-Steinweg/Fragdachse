@@ -8,20 +8,21 @@ vi.mock('phaser', () => ({
 
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
-import { TurretChargeSystem } from '../src/systems/TurretChargeSystem';
-import { REPAIR_BEAM_COLOR, TURRET_CHARGE_COLOR } from '../src/config';
-import type { ProjectileTurretChargePayload } from '../src/types';
+import { ENERGY_INJECTOR_COLOR, PLASMA_BURNER_COLOR } from '../src/config';
+import { EnergyInjectorSystem } from '../src/systems/EnergyInjectorSystem';
 
 function createManagerWithSpawnSpy() {
   const spawnProjectile = vi.fn(() => 42);
+  const resolveHitscanShot = vi.fn(() => true);
   const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
   Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile } });
-  return { manager, spawnProjectile };
+  Object.defineProperty(manager, 'combatSystem', { value: { resolveHitscanShot } });
+  return { manager, spawnProjectile, resolveHitscanShot };
 }
 
 describe('inspector support weapons', () => {
-  it('fires the repair beam as a damage-free projectile carrying only a heal payload', () => {
-    const { manager, spawnProjectile } = createManagerWithSpawnSpy();
+  it('fires the Plasmabrenner as a continuous, context-sensitive hitscan', () => {
+    const { manager, spawnProjectile, resolveHitscanShot } = createManagerWithSpawnSpy();
 
     expect(manager.fireAutomatedWeapon(
       WEAPON_CONFIGS.REPARATURSTRAHL,
@@ -34,21 +35,34 @@ describe('inspector support weapons', () => {
       0x22cc88,
     )).toBe(true);
 
-    const [, , , , projectile] = spawnProjectile.mock.calls[0];
-    expect(projectile).toMatchObject({
-      damage: 0,
-      rockDamageMult: 0,
-      trainDamageMult: 0,
-      maxBounces: 0,
-      projectileStyle: 'energy_ball',
-      sourceSlot: 'weapon2',
-      repairPayload: { amount: 25, color: REPAIR_BEAM_COLOR },
+    expect(spawnProjectile).not.toHaveBeenCalled();
+    expect(WEAPON_CONFIGS.REPARATURSTRAHL.displayName).toBe('Plasmabrenner');
+    expect(WEAPON_CONFIGS.REPARATURSTRAHL.cooldown).toBe(160);
+    expect(WEAPON_CONFIGS.REPARATURSTRAHL.fire).toMatchObject({
+      type: 'hitscan',
+      traceThickness: 5,
+      visualPreset: 'plasma_burner',
+      supportEffect: {
+        type: 'plasma_burner',
+        healPerHit: 25,
+        damagePerHit: 25,
+        beamColor: PLASMA_BURNER_COLOR,
+      },
     });
-    expect(projectile.explosion).toBeUndefined();
-    expect(projectile.turretChargePayload).toBeUndefined();
+    const call = resolveHitscanShot.mock.calls[0];
+    expect(call?.[4]).toBe(420);
+    expect(call?.[5]).toBe(0);
+    expect(call?.[6]).toBe(5);
+    expect(call?.[9]).toBe('Plasmabrenner');
+    expect(call?.[19]).toEqual({
+      type: 'plasma_burner',
+      healPerHit: 25,
+      damagePerHit: 25,
+      beamColor: PLASMA_BURNER_COLOR,
+    });
   });
 
-  it('fires the energy injector with turret-only homing and a charge payload', () => {
+  it('fires the energy injector as a precise non-homing projectile', () => {
     const { manager, spawnProjectile } = createManagerWithSpawnSpy();
 
     manager.fireAutomatedWeapon(
@@ -64,52 +78,45 @@ describe('inspector support weapons', () => {
 
     const [, , , , projectile] = spawnProjectile.mock.calls[0];
     expect(projectile.damage).toBe(0);
-    expect(projectile.homing?.targetTypes).toEqual(['turrets']);
-    expect(projectile.repairPayload).toBeUndefined();
-    expect(projectile.turretChargePayload).toMatchObject({
-      durationMs: 3_000,
-      damageMultiplierPerStack: 0.08,
-      maxStacks: 8,
-      color: TURRET_CHARGE_COLOR,
+    expect(projectile.homing).toBeUndefined();
+    expect(projectile.energyInjectorPayload).toMatchObject({
+      durationMs: 7_000,
+      focusDurationMs: 7_000,
+      vulnerabilityBonus: 0.2,
+      color: ENERGY_INJECTOR_COLOR,
     });
   });
 });
 
-describe('turret charge system', () => {
-  const payload: ProjectileTurretChargePayload = {
-    durationMs: 1_000,
-    damageMultiplierPerStack: 0.1,
-    maxStacks: 3,
-    color: TURRET_CHARGE_COLOR,
-  };
+describe('energy injector target state', () => {
+  const payload = {
+    durationMs: 7_000,
+    focusDurationMs: 7_000,
+    vulnerabilityBonus: 0.2,
+    color: ENERGY_INJECTOR_COLOR,
+  } as const;
 
-  it('stacks up to the cap, refreshes the duration and only buffs damage', () => {
-    const system = new TurretChargeSystem();
+  it('replaces a construction effect instead of stacking it', () => {
+    const system = new EnergyInjectorSystem();
+    system.applyConstructionEffect('7', 'inspector', 100, 100, { type: 'damage_turret', damageMultiplier: 1.25 }, payload, 0);
+    system.applyConstructionEffect('7', 'inspector', 100, 100, { type: 'damage_turret', damageMultiplier: 1.5 }, payload, 200);
 
-    system.applyCharge('7', 100, 100, 'inspector', payload, 0);
-    system.applyCharge('7', 100, 100, 'inspector', payload, 200);
-    const third = system.applyCharge('7', 100, 100, 'inspector', payload, 400);
-    const fourth = system.applyCharge('7', 100, 100, 'inspector', payload, 600);
-
-    expect(third.stacks).toBe(3);
-    expect(fourth.stacks).toBe(3);
-    // Startzeit bleibt der erste Treffer, das Ende schiebt jeder weitere Treffer nach hinten.
-    expect(fourth.startedAt).toBe(0);
-    expect(fourth.expiresAt).toBe(1_600);
-    expect(system.getBuffAt(100, 100)).toEqual({ fireRateMultiplier: 1, damageMultiplier: 1.3 });
+    expect(system.getActiveEffects()).toHaveLength(1);
+    expect(system.getEffect('7', 200)?.effect).toEqual({ type: 'damage_turret', damageMultiplier: 1.5 });
+    expect(system.getTurretDamageMultiplierAt(100, 100, 200)).toBe(1.5);
   });
 
-  it('matches only the charged turret position and expires on time', () => {
-    const system = new TurretChargeSystem();
-    system.applyCharge('base:north', 300, 300, 'inspector', payload, 0);
+  it('keeps one focus target per Inspector and refreshes it on a new target', () => {
+    const system = new EnergyInjectorSystem();
+    system.setFocusTarget('inspector', { targetType: 'enemy', targetId: 'a' }, 7_000, 0);
+    system.setFocusTarget('inspector', { targetType: 'base', targetId: 'base:red' }, 7_000, 200);
 
-    expect(system.getBuffAt(300, 300)).not.toBeNull();
-    expect(system.getBuffAt(340, 300)).toBeNull();
-
-    system.update(999);
-    expect(system.getActiveCharges()).toHaveLength(1);
-    system.update(1_000);
-    expect(system.getActiveCharges()).toHaveLength(0);
-    expect(system.getBuffAt(300, 300)).toBeNull();
+    expect(system.getNetFocusSnapshot(200)).toEqual([{
+      ownerId: 'inspector',
+      targetType: 'base',
+      targetId: 'base:red',
+      startedAt: 200,
+      expiresAt: 7_200,
+    }]);
   });
 });

@@ -141,6 +141,8 @@ export const COOP_DEFENSE_PENDING_UPGRADE_ICONS: ReadonlySet<string> = new Set([
 ]);
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  critical_chance: 'UPGRADE_AK47_ACCURACY',
+  critical_damage: 'UPGRADE_AK47_FOCUS_DAMAGE',
   glock_adrenaline_gain: 'UPGRADE_ADRENALINE_GAIN',
   glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
   shotgun_range: 'UPGRADE_ASMD_PRIMARY_RANGE',

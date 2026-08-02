@@ -33,7 +33,7 @@ export interface PlayerInput {
   placementPreview?: PlacementPreviewNetState | null;
 }
 
-export type PlaceableKind = 'rock' | 'turret' | 'tunnel';
+export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel';
 
 export interface PlacementPreviewNetState {
   active: boolean;
@@ -127,6 +127,8 @@ export interface SyncedTeslaDome {
   radius: number;
   color: number;
   alpha: number;
+  /** Optionaler Config-Schluessel fuer Nicht-Spieler-Kuppeln, z. B. den Tesla-Turm. */
+  weaponId?: string;
   targets: SyncedTeslaDomeTarget[];
 }
 
@@ -170,7 +172,15 @@ export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' |
 export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov' | 'time_bubble' | 'fur_ball';
 
 /** Visuelles Preset fuer Hitscan-Strahlen. */
-export type HitscanVisualPreset = 'default' | 'asmd_primary';
+export type HitscanVisualPreset = 'default' | 'asmd_primary' | 'plasma_burner';
+
+/** Kontextabhaengige Supportwirkung eines Hitscan-Strahls. */
+export interface HitscanSupportEffect {
+  readonly type: 'plasma_burner';
+  readonly healPerHit: number;
+  readonly damagePerHit: number;
+  readonly beamColor: number;
+}
 
 /** Visuelles Preset fuer Melee-Swings. */
 export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite';
@@ -248,15 +258,18 @@ export interface FireChunkTarget {
 }
 
 /**
- * Nutzlast des Ueberladungskerns. Sie laeuft ueber den normalen Projektil-
- * Explosionspfad, erzeugt am Einschlag aber ausschliesslich ein Turm-Buff-Feld.
+ * Nutzlast der Verstärkungsmatrix. Sie laeuft ueber den normalen Projektil-
+ * Explosionspfad, erzeugt am Einschlag aber ausschliesslich ein Schutz-/Verwundbarkeitsfeld.
  */
-export interface OverchargeFieldEffect {
+export interface ReinforcementMatrixEffect {
   readonly durationMs: number;
-  readonly fireRateMultiplier: number;
-  readonly damageMultiplier: number;
+  readonly damageReduction: number;
+  readonly vulnerabilityBonus: number;
   readonly color: number;
 }
+
+/** @deprecated Nur fuer alte gespeicherte Projektile; fachlich gilt Verstärkungsmatrix. */
+export type OverchargeFieldEffect = ReinforcementMatrixEffect;
 
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
@@ -279,6 +292,10 @@ export interface ProjectileExplosionConfig {
   readonly fireChunkBurst?: FireChunkBurstConfig;
   readonly blackHoleDurationMs?: number;
   readonly blackHolePullStrength?: number;
+  /** Gemeinsame Zeitblasen-Nutzlast fuer Granaten und Projektil-Einschlaege. */
+  readonly timeBubble?: TimeBubbleEffectConfig;
+  readonly reinforcementMatrix?: ReinforcementMatrixEffect;
+  /** @deprecated Wire-/Replay-Kompatibilitaet fuer alte Runden. */
   readonly overchargeField?: OverchargeFieldEffect;
 }
 
@@ -316,26 +333,22 @@ export type HomingTargetType = 'players' | 'enemies' | 'train' | 'projectiles' |
 export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
 
 /**
- * Nutzlast eines Unterstuetzungsprojektils: heilt statt zu schaden.
- *
- * Traegt ein Projektil eine dieser Nutzlasten, ist es kein Kampfgeschoss mehr:
+ * Nutzlast eines Energieinjektor-Projektils. Es bleibt ein Support-Geschoss:
  * `CombatSystem` laesst es aus, und Treffer werden ausschliesslich ueber
  * `ProjectileManager.setSupportImpactCallback` aufgeloest.
  */
-export interface ProjectileRepairPayload {
-  /** HP je Treffer – gilt gleichermassen fuer Spieler, Felsen, Konstrukte und Basen. */
-  readonly amount: number;
+export interface ProjectileEnergyInjectorPayload {
+  readonly durationMs: number;
+  readonly focusDurationMs: number;
+  readonly vulnerabilityBonus: number;
   readonly color: number;
 }
 
-/** Nutzlast eines Unterstuetzungsprojektils: laedt den getroffenen Turm kurzzeitig auf. */
-export interface ProjectileTurretChargePayload {
-  readonly durationMs: number;
-  /** Schadenszuwachs je Ladungsstufe; der Gesamtfaktor ist `1 + stacks * value`. */
-  readonly damageMultiplierPerStack: number;
-  readonly maxStacks: number;
-  readonly color: number;
-}
+export type EnergyInjectorConstructionEffect =
+  | { readonly type: 'damage_turret'; readonly damageMultiplier: number }
+  | { readonly type: 'gravity_pull'; readonly pullStrengthMultiplier: number }
+  | { readonly type: 'slow_bubble'; readonly slowStrengthMultiplier: number }
+  | { readonly type: 'powerup_cooldown'; readonly respawnTimeMultiplier: number };
 
 /** Von einem Unterstuetzungsprojektil getroffenes Hindernis (Host, aus den Phaser-Collidern). */
 export type SupportProjectileImpact =
@@ -588,7 +601,15 @@ export interface CoopDefensePendingItemReward {
 export type CoopDefenseItemRewardAction = 'take' | 'equip';
 
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
-export type ConstructionId = 'rocket_turret' | 'machine_gun_turret' | 'flame_turret';
+export type ConstructionId =
+  | 'rocket_turret'
+  | 'machine_gun_turret'
+  | 'flame_turret'
+  | 'tesla_turret'
+  | 'gravity_turret'
+  | 'slow_bubble_turret'
+  | 'medic_pedestal'
+  | 'armor_pedestal';
 
 /**
  * Eintrag in den gemeinsamen Utility-Slots eines Loadouts. Konstruktionen und Utilities
@@ -724,8 +745,8 @@ export interface ProjectileSpawnConfig {
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
-  repairPayload?:  ProjectileRepairPayload;
-  turretChargePayload?: ProjectileTurretChargePayload;
+  energyInjectorPayload?: ProjectileEnergyInjectorPayload;
+  sourceTurretId?: string;
   smokeTrailColor?: number;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;
@@ -867,7 +888,7 @@ export interface FireGrenadeEffect {
   };
 }
 
-export interface TimeBubbleGrenadeEffect {
+export interface TimeBubbleEffectConfig {
   type: 'time_bubble';
   radius: number;
   duration: number;
@@ -878,6 +899,9 @@ export interface TimeBubbleGrenadeEffect {
   distortion?: number;
   friendlyImmunity?: number;
 }
+
+/** @deprecated Verwende den allgemeinen TimeBubbleEffectConfig-Typ. */
+export type TimeBubbleGrenadeEffect = TimeBubbleEffectConfig;
 
 /**
  * Wurfgeschoss, das beim Ausloesen keine Explosion erzeugt, sondern Gegner absetzt
@@ -967,6 +991,7 @@ export interface ExplodedProjectile {
   sourceSlot?: LoadoutSlot;
   weaponName?: string;
   projectileId?: number;
+  sourceTurretId?: string;
   continuesAfterExplosion?: boolean;
 }
 
@@ -1041,8 +1066,8 @@ export interface TrackedProjectile {
   enemyHitExplosion?: ProjectileExplosionConfig;  // Explosion NUR bei Gegner-/Spielertreffern (nicht Wände/Lifetime)
   impactCloud?:    ImpactCloudConfig;
   homing?:         ProjectileHomingConfig;
-  repairPayload?:  ProjectileRepairPayload;
-  turretChargePayload?: ProjectileTurretChargePayload;
+  energyInjectorPayload?: ProjectileEnergyInjectorPayload;
+  sourceTurretId?: string;
   /** Nutzlast bereits an einem Hindernis abgegeben; verhindert Mehrfachwirkung vor dem Cleanup. */
   supportConsumed?: boolean;
   projectileVisualScale?: number;
@@ -1286,6 +1311,13 @@ export interface SyncedVulnerableEnemy {
   expiresAt: number;
 }
 
+/** Allgemeiner, replizierter Verwundbarkeitsstatus fuer Gegner und Strukturen. */
+export interface SyncedTargetVulnerability {
+  targetType: 'player' | 'enemy' | 'base' | 'construction' | 'rock' | 'wall' | 'outpost' | 'structure';
+  targetId: string;
+  expiresAt: number;
+}
+
 export interface SyncedBurningGroundCell {
   id: number;
   gridX: number;
@@ -1371,6 +1403,8 @@ export interface SyncedPlaceableRock {
   targetRange?: number;
   turretWeaponId?: TurretWeaponId;
   constructionId?: ConstructionId;
+  /** Beim Platzieren eingefrorene, typisierte Energieinjektor-Wirkung. */
+  energyInjectorEffect?: EnergyInjectorConstructionEffect;
   toolRef?: LoadoutToolRef;
 }
 
@@ -1382,38 +1416,45 @@ export type TurretWeaponId =
   | 'TURRET_ROCKET'
   | 'TURRET_MG'
   | 'TURRET_FLAME'
+  | 'TURRET_TESLA'
+  | 'TURRET_GRAVITY'
+  | 'TURRET_SLOW_BUBBLE'
   | 'TURRET_VOID_FLAME'
   | 'TURRET_SPORE';
 
-/** Aktives Ueberladungsfeld des Ingenieurs (host-autoritativ, per GameState repliziert). */
-export interface SyncedOverchargeField {
+/** Aktive Verstärkungsmatrix (host-autoritativ, per GameState repliziert). */
+export interface SyncedReinforcementMatrix {
   id: number;
   ownerId: string;
   x: number;
   y: number;
   radius: number;
   color: number;
-  fireRateMultiplier: number;
-  damageMultiplier: number;
+  damageReduction: number;
+  vulnerabilityBonus: number;
   startedAt: number;
   expiresAt: number;
 }
 
-/**
- * Aktive Energieladung eines einzelnen Turms (host-autoritativ, per GameState repliziert).
- *
- * `turretId` ist die stringifizierte `AutomatedTurretId`: platzierte Konstruktionen tragen
- * eine Zahl, Basistuerme eine Zeichenkette. Die Position wird mitgefuehrt, weil der
- * Turmbuff ortsbezogen abgefragt wird und die Clients daraus das Visual setzen.
- */
-export interface SyncedTurretCharge {
-  turretId: string;
+/** @deprecated Technischer Alias fuer alte Replay-/Snapshot-Leser. */
+export type SyncedOverchargeField = SyncedReinforcementMatrix;
+
+export interface SyncedEnergyInjectorEffect {
+  targetId: string;
+  targetType: 'construction';
   ownerId: string;
   x: number;
   y: number;
   color: number;
-  stacks: number;
-  damageMultiplier: number;
+  effect: EnergyInjectorConstructionEffect;
+  startedAt: number;
+  expiresAt: number;
+}
+
+export interface SyncedEnergyInjectorFocus {
+  ownerId: string;
+  targetType: 'enemy' | 'base';
+  targetId: string;
   startedAt: number;
   expiresAt: number;
 }
@@ -1427,9 +1468,8 @@ export interface SyncedRemoteControlTurret {
   color: number;
 }
 
-/** Ortsbezogener Turmbuff; wird vom TurretSystem pro Turmposition abgefragt. */
-export interface TurretBuff {
-  readonly fireRateMultiplier: number;
+/** Ortsbezogene Schadensverstaerkung eines Konstrukts aus dem Energieinjektor. */
+export interface TurretDamageBuff {
   readonly damageMultiplier: number;
 }
 
@@ -1584,6 +1624,8 @@ export interface SyncedPowerUpPedestal {
   defId: string;
   x: number;
   y: number;
+  /** Nur bei gebauten Podesten gesetzt: die Farbe des Besitzers. */
+  ownerColor?: number;
   hasPowerUp: boolean;
   nextRespawnAt: number;
 }

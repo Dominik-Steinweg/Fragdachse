@@ -696,7 +696,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // Round-scoped (start null)
-      arenaResult: null, currentLayout: null, placementSystem: null, overchargeSystem: null, turretChargeSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      arenaResult: null, currentLayout: null, placementSystem: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -937,14 +937,16 @@ export class ArenaScene extends Phaser.Scene {
         }
       }
     };
-    const isWeapon2AdrenalineInsufficient = (assumeRecentLocalShot = false): boolean => {
+    const getLocalWeapon2AdrenalineCost = (): number => {
       const localId = bridge.getLocalPlayerId();
       const weapon2Config = this.clientUpdate.getLocalWeaponConfig('weapon2');
       const fireSuperiorityActive = this.ctx.loadoutManager?.isAk47FireSuperiorityActive(localId)
         ?? (weapon2Config.id === 'AK47'
           && bridge.getPlayerActiveBuffs(localId).some((buff) => buff.defId === 'AK47_FIRE_SUPERIORITY'));
-      if (fireSuperiorityActive) return false;
-      const adrenalineCost = weapon2Config.adrenalinCost ?? 0;
+      return fireSuperiorityActive ? 0 : (weapon2Config.adrenalinCost ?? 0);
+    };
+    const isWeapon2AdrenalineInsufficient = (assumeRecentLocalShot = false): boolean => {
+      const adrenalineCost = getLocalWeapon2AdrenalineCost();
       if (adrenalineCost <= 0) return false;
 
       const localAdrenaline = this.clientUpdate.getLocalAdrenaline();
@@ -1082,7 +1084,17 @@ export class ArenaScene extends Phaser.Scene {
           handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
           return;
         }
+        // Der Host prueft Ressourcen autoritativ im LoadoutManager. Dasselbe Gate muss vor
+        // der lokalen Prediction liegen, die sowohl Host als auch Clients ausfuehren; sonst
+        // werden trotz abgelehntem Schuss weiterhin Strahl und Erfolgssound dargestellt.
+        if (slot === 'weapon2' && isWeapon2AdrenalineInsufficient()) {
+          handleLocalFailureFeedback(slot, 'resource', inputStarted, 'adrenaline');
+          return;
+        }
         shotId = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);
+        if (slot === 'weapon2') {
+          this.clientUpdate.recordPredictedAdrenalineSpend(getLocalWeapon2AdrenalineCost());
+        }
       }
       // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
       if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
@@ -1483,12 +1495,12 @@ export class ArenaScene extends Phaser.Scene {
     // Nach dem Positionsabgleich der Entities: die Trefferkopien führen ihre Ziele nach.
     this.visualFeedback?.update(delta);
     // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
-    this.renderers.overchargeField.syncVisuals(
-      inArena ? (this.ctx.overchargeSystem?.getActiveFields() ?? []) : [],
+    this.renderers.reinforcementMatrix.syncVisuals(
+      inArena ? (this.ctx.reinforcementMatrixSystem?.getActiveMatrices() ?? []) : [],
       bridge.getSynchronizedNow(),
     );
-    this.renderers.turretCharge.syncVisuals(
-      inArena ? (this.ctx.turretChargeSystem?.getActiveCharges() ?? []) : [],
+    this.renderers.energyInjector.syncVisuals(
+      inArena ? (this.ctx.energyInjectorSystem?.getActiveEffects() ?? []) : [],
       bridge.getSynchronizedNow(),
     );
     const remoteControlTargets = !inArena

@@ -1,6 +1,7 @@
 import { COOP_DEFENSE_AFFIX_RULES } from '../config/coopDefenseItems';
 import type { LoadoutSlot } from '../types';
 import type { CombatDamageKind } from './CombatSystem';
+import type { TargetStatusSystem } from './TargetStatusSystem';
 
 /**
  * Host-only: lebender Zustand der bedingten und ereignisbasierten Item-Affixe.
@@ -62,11 +63,18 @@ export class CoopDefenseItemRuntimeSystem {
   private readonly crossfireUntil = new Map<string, number>();
   private readonly lastRealDamageAt = new Map<string, number>();
   private readonly vulnerableUntil = new Map<string, number>();
+  /** Live-Runden verwenden den gemeinsamen Statusspeicher; die Map bleibt nur als
+   * rueckwaertskompatibler Fallback fuer isolierte Alt-Tests/alte Replay-Daten. */
+  private targetStatusSystem: TargetStatusSystem | null = null;
 
   constructor(
     private readonly deps: CoopDefenseItemRuntimeDeps,
     private readonly random: () => number = Math.random,
   ) {}
+
+  setTargetStatusSystem(system: TargetStatusSystem | null): void {
+    this.targetStatusSystem = system;
+  }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -98,6 +106,7 @@ export class CoopDefenseItemRuntimeSystem {
   }
 
   removeEnemy(enemyId: string): void {
+    this.targetStatusSystem?.removeTarget({ targetType: 'enemy', targetId: enemyId });
     this.vulnerableUntil.delete(enemyId);
   }
 
@@ -113,6 +122,7 @@ export class CoopDefenseItemRuntimeSystem {
 
   /** Verwirft abgelaufene Eintraege, damit die Maps nicht ueber eine lange Runde wachsen. */
   hostUpdate(now = Date.now()): void {
+    this.targetStatusSystem?.prune(now);
     for (const [playerId, state] of this.killCharges) {
       if (now >= state.expiresAt) this.killCharges.delete(playerId);
     }
@@ -501,10 +511,18 @@ export class CoopDefenseItemRuntimeSystem {
     const vulnerabilityChance = this.deps.getAffixValue(attackerId, 'primary_vulnerability');
     if (vulnerabilityChance > 0 && this.random() < vulnerabilityChance) {
       // Stapelt nicht: eine erneute Ausloesung verlaengert nur.
-      this.vulnerableUntil.set(
-        enemyId,
-        Math.max(this.vulnerableUntil.get(enemyId) ?? 0, now + COOP_DEFENSE_AFFIX_RULES.vulnerabilityDurationMs),
-      );
+      if (this.targetStatusSystem) {
+        this.targetStatusSystem.applyVulnerability(
+          { targetType: 'enemy', targetId: enemyId },
+          COOP_DEFENSE_AFFIX_RULES.vulnerabilityDurationMs,
+          now,
+        );
+      } else {
+        this.vulnerableUntil.set(
+          enemyId,
+          Math.max(this.vulnerableUntil.get(enemyId) ?? 0, now + COOP_DEFENSE_AFFIX_RULES.vulnerabilityDurationMs),
+        );
+      }
     }
 
     const slowChance = this.deps.getAffixValue(attackerId, 'primary_slow');
@@ -534,6 +552,9 @@ export class CoopDefenseItemRuntimeSystem {
 
   /** Eingehender Schadensmultiplikator eines Gegners; 1 ohne Verwundbarkeit. */
   getEnemyIncomingDamageMultiplier(enemyId: string, now = Date.now()): number {
+    if (this.targetStatusSystem) {
+      return this.targetStatusSystem.getIncomingDamageMultiplier({ targetType: 'enemy', targetId: enemyId }, now);
+    }
     const until = this.vulnerableUntil.get(enemyId);
     if (until === undefined) return 1;
     if (now >= until) {
@@ -548,6 +569,11 @@ export class CoopDefenseItemRuntimeSystem {
    * damit der Client zwischen zwei Snapshots selbst herunterzaehlen kann.
    */
   getVulnerableEnemiesSnapshot(now = Date.now()): { enemyId: string; expiresAt: number }[] {
+    if (this.targetStatusSystem) {
+      return this.targetStatusSystem.getSnapshot(now)
+        .filter((entry) => entry.targetType === 'enemy')
+        .map((entry) => ({ enemyId: entry.targetId, expiresAt: entry.expiresAt }));
+    }
     const snapshot: { enemyId: string; expiresAt: number }[] = [];
     for (const [enemyId, expiresAt] of this.vulnerableUntil) {
       if (now < expiresAt) snapshot.push({ enemyId, expiresAt });

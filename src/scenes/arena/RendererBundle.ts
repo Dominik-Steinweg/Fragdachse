@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
 import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
+import { PlasmaBurnerRenderer } from '../../effects/PlasmaBurnerRenderer';
 import { BiteRenderer } from '../../effects/BiteRenderer';
 import { BlackHoleRenderer } from '../../effects/BlackHoleRenderer';
 import { ZeusTaserRenderer } from '../../effects/ZeusTaserRenderer';
@@ -21,8 +22,8 @@ import { FlamethrowerUpgradeRenderer } from '../../effects/FlamethrowerUpgradeRe
 import { ProjectileBurnRenderer } from '../../effects/ProjectileBurnRenderer';
 import { MiniTeslaDomeRenderer } from '../../effects/MiniTeslaDomeRenderer';
 import { TimeBubbleRenderer }  from '../../effects/TimeBubbleRenderer';
-import { OverchargeFieldRenderer } from '../../effects/OverchargeFieldRenderer';
-import { TurretChargeRenderer } from '../../effects/TurretChargeRenderer';
+import { ReinforcementMatrixRenderer } from '../../effects/ReinforcementMatrixRenderer';
+import { EnergyInjectorRenderer } from '../../effects/EnergyInjectorRenderer';
 import { RemoteControlRenderer } from '../../effects/RemoteControlRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
@@ -53,6 +54,7 @@ import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 export interface RendererBundle {
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
+  plasmaBurner:        PlasmaBurnerRenderer;
   bite:                BiteRenderer;
   blackHole:           BlackHoleRenderer;
   zeusTaser:           ZeusTaserRenderer;
@@ -73,8 +75,8 @@ export interface RendererBundle {
   projectileBurn:      ProjectileBurnRenderer;
   miniTeslaDome:       MiniTeslaDomeRenderer;
   timeBubble:          TimeBubbleRenderer;
-  overchargeField:     OverchargeFieldRenderer;
-  turretCharge:        TurretChargeRenderer;
+  reinforcementMatrix: ReinforcementMatrixRenderer;
+  energyInjector:      EnergyInjectorRenderer;
   remoteControl:       RemoteControlRenderer;
   holyGrenade:         HolyGrenadeRenderer;
   rocket:              RocketRenderer;
@@ -108,6 +110,8 @@ export function createRendererBundle(
 
   const asmdPrimary = new AsmdPrimaryRenderer(scene);
   asmdPrimary.generateTextures();
+
+  const plasmaBurner = new PlasmaBurnerRenderer(scene);
 
   const bite = new BiteRenderer(scene);
   bite.generateTextures();
@@ -161,11 +165,11 @@ export function createRendererBundle(
   const timeBubble = new TimeBubbleRenderer(scene);
   timeBubble.generateTextures();
 
-  const overchargeField = new OverchargeFieldRenderer(scene);
-  overchargeField.generateTextures();
+  const reinforcementMatrix = new ReinforcementMatrixRenderer(scene);
+  reinforcementMatrix.generateTextures();
 
-  const turretCharge = new TurretChargeRenderer(scene);
-  turretCharge.generateTextures();
+  const energyInjector = new EnergyInjectorRenderer(scene);
+  energyInjector.generateTextures();
 
   const remoteControl = new RemoteControlRenderer(scene);
   remoteControl.generateTextures();
@@ -217,12 +221,13 @@ export function createRendererBundle(
   projectileBurn.setLightingSystem(lighting);
   flamethrowerUpgrades.setLightingSystem(lighting);
   asmdPrimary.setLightingSystem(lighting);
+  plasmaBurner.setLightingSystem(lighting);
   teslaDome.setLightingSystem(lighting);
   miniTeslaDome.setLightingSystem(lighting);
   energyShield.setLightingSystem(lighting);
   timeBubble.setLightingSystem(lighting);
-  overchargeField.setLightingSystem(lighting);
-  turretCharge.setLightingSystem(lighting);
+  reinforcementMatrix.setLightingSystem(lighting);
+  energyInjector.setLightingSystem(lighting);
   remoteControl.setLightingSystem(lighting);
   healingAura.setLightingSystem(lighting);
   guardianSpirit.setLightingSystem(lighting);
@@ -233,7 +238,7 @@ export function createRendererBundle(
   // `ProjectileManager.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   return {
-    bullet, asmdPrimary, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, overchargeField, turretCharge, holyGrenade,
+    bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
@@ -279,6 +284,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setMuzzleFlashRenderer(bundle.muzzleFlash);
   bundle.asmdPrimary.setMuzzleFlashRenderer(bundle.muzzleFlash);
   effectSystem.setAsmdPrimaryRenderer(bundle.asmdPrimary);
+  effectSystem.setPlasmaBurnerRenderer(bundle.plasmaBurner);
   effectSystem.setBiteRenderer(bundle.bite);
   effectSystem.setZeusTaserRenderer(bundle.zeusTaser);
   bundle.nuke.setEffectSystem(effectSystem);

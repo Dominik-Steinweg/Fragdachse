@@ -1,10 +1,11 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, REPAIR_BEAM_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STAIN, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
 import { circleZone, createQualityEmitter, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
+import { PlasmaBurnerRenderer } from './PlasmaBurnerRenderer';
 import { BiteRenderer } from './BiteRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { EnemyVisualSink } from '../entities/EnemyManager';
@@ -92,6 +93,7 @@ export class EffectSystem implements EnemyVisualSink {
   private nukeParticleEmitterProfiles = new Map<number, NukeParticleEmitters>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
+  private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
   private biteRenderer: BiteRenderer | null = null;
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
   private lighting: LightingSystem | null = null;
@@ -154,6 +156,10 @@ export class EffectSystem implements EnemyVisualSink {
 
   setAsmdPrimaryRenderer(renderer: AsmdPrimaryRenderer | null): void {
     this.asmdPrimaryRenderer = renderer;
+  }
+
+  setPlasmaBurnerRenderer(renderer: PlasmaBurnerRenderer | null): void {
+    this.plasmaBurnerRenderer = renderer;
   }
 
   setBiteRenderer(renderer: BiteRenderer | null): void {
@@ -902,7 +908,7 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     if (visualStyle === 'regeneration') {
-      this.playRegenerationEffect(x, y, radius, color ?? REPAIR_BEAM_COLOR);
+      this.playRegenerationEffect(x, y, radius, color ?? PLASMA_BURNER_COLOR);
       return;
     }
 
@@ -1402,7 +1408,7 @@ export class EffectSystem implements EnemyVisualSink {
     const lightColor = visualStyle === 'lightning'
       ? 0xcdf1ff
       : visualStyle === 'regeneration'
-        ? mixColors(color ?? REPAIR_BEAM_COLOR, 0xffffff, 0.45)
+        ? mixColors(color ?? PLASMA_BURNER_COLOR, 0xffffff, 0.45)
         : visualStyle === 'energy'
           ? 0xd4f2fc
           : visualStyle === 'holy'
@@ -1499,7 +1505,7 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   /**
-   * Regenerationsstoss des Reparaturstrahls: kein Blast, sondern ein kurzer gruener Puls
+   * Regenerationsstoss des Plasmabrenners: kein Blast, sondern ein kurzer gruener Puls
    * mit aufsteigenden Funken. Bewusst klein und ohne Kamerawirkung – der Effekt markiert
    * eine Heilung und darf im Gefecht nicht mit einer Detonation verwechselt werden.
    */
@@ -1633,6 +1639,7 @@ export class EffectSystem implements EnemyVisualSink {
     thickness: number,
     impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
+    beamId?: string,
   ): void {
     this.ensureTextures();
     const clippedEnd = clipPointToArenaRay(startX, startY, endX, endY);
@@ -1645,6 +1652,11 @@ export class EffectSystem implements EnemyVisualSink {
     const palette = getBeamPaletteForPlayerColor(playerColor);
 
     this.emitHitscanBeamLight(startX, startY, renderEndX, renderEndY, playerColor, visualPreset);
+
+    if (visualPreset === 'plasma_burner' && this.plasmaBurnerRenderer) {
+      this.plasmaBurnerRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind, beamId);
+      return;
+    }
 
     if (visualPreset === 'asmd_primary' && this.asmdPrimaryRenderer) {
       this.asmdPrimaryRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind);
@@ -1692,14 +1704,34 @@ export class EffectSystem implements EnemyVisualSink {
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
     this.audioSystem?.playSound(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId());
-    this.playHitscanTracer(startX, startY, endX, endY, playerColor, thickness, impactKind, visualPreset);
+    this.playHitscanTracer(
+      startX,
+      startY,
+      endX,
+      endY,
+      playerColor,
+      thickness,
+      impactKind,
+      visualPreset,
+      this.bridge.getLocalPlayerId(),
+    );
   }
 
   playSyncedHitscanTracer(trace: SyncedHitscanTrace): void {
     const { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey } = trace;
     if (this.shouldSkipSyncedTracer(shooterId, shotId)) return;
     this.audioSystem?.playSound(shotAudioKey, startX, startY, shooterId);
-    this.playHitscanTracer(startX, startY, endX, endY, color, thickness, impactKind ?? 'environment', visualPreset);
+    this.playHitscanTracer(
+      startX,
+      startY,
+      endX,
+      endY,
+      color,
+      thickness,
+      impactKind ?? 'environment',
+      visualPreset,
+      shooterId,
+    );
   }
 
   /**
@@ -1723,10 +1755,9 @@ export class EffectSystem implements EnemyVisualSink {
   ): void {
     if (!this.lighting) return;
 
-    // Das ASMD-Primärfeuer bringt sein eigenes (kaltes) Licht im AsmdPrimaryRenderer mit –
-    // derselbe Pfad, den auch die Kugelgewitter-Kettenblitze nehmen. Hier nur die warmen
-    // Projektilwaffen-Strahlen, sonst leuchtet der ASMD-Schuss doppelt.
-    if (visualPreset === 'asmd_primary') return;
+    // ASMD und Plasmabrenner bringen ihr eigenes Strahllicht im gemeinsamen Renderer mit.
+    // Hier nur die generische Hitscan-Beleuchtung, sonst leuchten diese Varianten doppelt.
+    if (visualPreset === 'asmd_primary' || visualPreset === 'plasma_burner') return;
 
     const dx = endX - startX;
     const dy = endY - startY;

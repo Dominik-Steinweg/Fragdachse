@@ -46,7 +46,7 @@ export type DefaultLoadoutIds = DeepReadonly<v.InferOutput<typeof DefaultLoadout
 const GAME_MODES = new Set<GameMode>(['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense']);
 const COLOR_KEYS = new Set([
   'beamColor', 'bubbleColor', 'chargeColor', 'color', 'colorCore', 'colorGlow',
-  'explosionColor', 'fieldColor', 'projectileColor', 'rocketSmokeTrailColor', 'colorOverride',
+  'explosionColor', 'fieldColor', 'injectorColor', 'projectileColor', 'rocketSmokeTrailColor', 'colorOverride',
 ]);
 const ORDERED_NUMBER_PAIRS: readonly (readonly [string, string])[] = [
   ['minDamage', 'maxDamage'],
@@ -84,15 +84,11 @@ const FIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
     'blockableCategories', 'visualInnerAlpha', 'visualOuterAlpha', 'domeEnabled', 'domeRadius',
     'domeHealPerSecond', 'domeToggleEnabled', 'domeReflectProjectiles',
   ],
-  overcharge_core: [
-    'projectileSpeed', 'projectileSize', 'radius', 'durationMs', 'fireRateMultiplier',
-    'damageMultiplier', 'fieldColor',
+  reinforcement_matrix: [
+    'projectileSpeed', 'projectileSize', 'radius', 'durationMs', 'damageReduction',
+    'vulnerabilityBonus', 'fieldColor',
   ],
-  repair_beam: ['projectileSpeed', 'projectileSize', 'healPerHit', 'beamColor'],
-  turret_charge: [
-    'projectileSpeed', 'projectileSize', 'homing', 'durationMs', 'damageMultiplierPerStack',
-    'maxStacks', 'chargeColor',
-  ],
+  energy_injector: ['projectileSpeed', 'projectileSize', 'durationMs', 'vulnerabilityBonus', 'focusDurationMs', 'injectorColor'],
 };
 
 const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {

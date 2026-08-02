@@ -98,7 +98,7 @@ export class AsmdPrimaryRenderer {
     const dy = renderEndY - startY;
     const beamLength = Math.hypot(dx, dy);
     if (beamLength <= 1) {
-      if (resolvedImpactKind !== 'none') this.playImpact(renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind);
+      if (resolvedImpactKind !== 'none') this.playImpact(renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind, ASMD_PRIMARY_LINGER_MULT);
       return;
     }
 
@@ -108,11 +108,12 @@ export class AsmdPrimaryRenderer {
     const beamThickness = Math.max(thickness * 2.65, 5);
     const segmentCount = Phaser.Math.Clamp(Math.round(beamLength / 64), 4, 11);
     const segmentLength = beamLength / segmentCount;
+    const lingerMultiplier = ASMD_PRIMARY_LINGER_MULT;
     const glowColor = playerColor;
     const accentColor = mixColors(playerColor, 0xffffff, 0.28);
     const coreColor = mixColors(playerColor, 0xffffff, 0.6);
 
-    this.playMuzzleBurst(startX, startY, angle, playerColor, beamThickness);
+    this.playMuzzleBurst(startX, startY, angle, playerColor, beamThickness, lingerMultiplier);
 
     for (let index = 0; index < segmentCount; index++) {
       const startT = index / segmentCount;
@@ -153,8 +154,8 @@ export class AsmdPrimaryRenderer {
         alpha: 0,
         scaleX: 1.04,
         scaleY: 0.72,
-        delay: Math.round(startT * 92 * ASMD_PRIMARY_LINGER_MULT),
-        duration: Math.round(Phaser.Math.Linear(96, 190, endT) * ASMD_PRIMARY_LINGER_MULT),
+        delay: Math.round(startT * 92 * lingerMultiplier),
+        duration: Math.round(Phaser.Math.Linear(96, 190, endT) * lingerMultiplier),
         ease: 'Cubic.easeOut',
         onComplete: () => {
           segment.removeAll(true);
@@ -163,15 +164,15 @@ export class AsmdPrimaryRenderer {
       });
     }
 
-    this.playBeamParticles(startX, startY, renderEndX, renderEndY, playerColor, beamThickness);
+    this.playBeamParticles(startX, startY, renderEndX, renderEndY, playerColor, beamThickness, lingerMultiplier);
     this.emitBeamLight(startX, startY, renderEndX, renderEndY);
-    if (resolvedImpactKind !== 'none') this.playImpact(renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind);
+    if (resolvedImpactKind !== 'none') this.playImpact(renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind, lingerMultiplier);
   }
 
   /**
-   * Kalte Entladungs-Lichtpunkte entlang des Strahls. Deckt beide Aufrufer ab: das
-   * ASMD-Primärfeuer (über `EffectSystem.playHitscanTracer`) und die Kettenblitze des
-   * Kugelgewitter-Upgrades, die den Renderer direkt ansteuern. Der Mündungspunkt bleibt
+   * Kalte Entladungs-Lichtpunkte entlang des Strahls. Deckt die gemeinsamen Aufrufer ab:
+   * ASMD-Primärfeuer, Plasmabrenner und die Kettenblitze des Kugelgewitter-Upgrades.
+   * Der Mündungspunkt bleibt
    * frei – dort sitzt bereits das Mündungsfeuer.
    */
   private emitBeamLight(startX: number, startY: number, endX: number, endY: number): void {
@@ -194,6 +195,7 @@ export class AsmdPrimaryRenderer {
     playerColor: number,
     thickness: number,
     impactKind: HitscanImpactKind,
+    lingerMultiplier: number,
   ): void {
     if (impactKind === 'none' || !isPointInsideArena(x, y)) return;
 
@@ -228,8 +230,8 @@ export class AsmdPrimaryRenderer {
 
     const sparks = createEmitter(this.scene, x, y, TEX_ASMD_SPARK, {
       lifespan: impactKind === 'player'
-        ? { min: Math.round(90 * ASMD_PRIMARY_LINGER_MULT), max: Math.round(180 * ASMD_PRIMARY_LINGER_MULT) }
-        : { min: Math.round(120 * ASMD_PRIMARY_LINGER_MULT), max: Math.round(260 * ASMD_PRIMARY_LINGER_MULT) },
+        ? { min: Math.round(90 * lingerMultiplier), max: Math.round(180 * lingerMultiplier) }
+        : { min: Math.round(120 * lingerMultiplier), max: Math.round(260 * lingerMultiplier) },
       quantity: impactKind === 'player' ? 9 : 15,
       frequency: -1,
       speed: impactKind === 'player' ? { min: 36, max: 110 } : { min: 55, max: 180 },
@@ -241,7 +243,7 @@ export class AsmdPrimaryRenderer {
       emitting: false,
     }, DEPTH_TRACE + 0.12);
     sparks.explode(impactKind === 'player' ? 9 : 15);
-    this.scene.time.delayedCall(Math.round(320 * ASMD_PRIMARY_LINGER_MULT), () => destroyEmitter(sparks));
+    this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => destroyEmitter(sparks));
 
     this.playImpactArcs(
       x,
@@ -250,7 +252,7 @@ export class AsmdPrimaryRenderer {
       playerColor,
       flashColor,
       impactKind === 'player' ? 3 : 5,
-      Math.round((impactKind === 'player' ? 130 : 180) * ASMD_PRIMARY_LINGER_MULT),
+      Math.round((impactKind === 'player' ? 130 : 180) * lingerMultiplier),
     );
   }
 
@@ -260,6 +262,7 @@ export class AsmdPrimaryRenderer {
     angle: number,
     playerColor: number,
     beamThickness: number,
+    lingerMultiplier: number,
   ): void {
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
@@ -304,7 +307,7 @@ export class AsmdPrimaryRenderer {
 
     const angleDeg = Phaser.Math.RadToDeg(angle);
     const sparks = createEmitter(this.scene, x, y, TEX_ASMD_SPARK, {
-      lifespan: { min: Math.round(80 * ASMD_PRIMARY_LINGER_MULT), max: Math.round(150 * ASMD_PRIMARY_LINGER_MULT) },
+      lifespan: { min: Math.round(80 * lingerMultiplier), max: Math.round(150 * lingerMultiplier) },
       quantity: 12,
       frequency: -1,
       angle: { min: angleDeg - 24, max: angleDeg + 24 },
@@ -316,7 +319,7 @@ export class AsmdPrimaryRenderer {
       emitting: false,
     }, DEPTH_TRACE + 0.13);
     sparks.explode(12);
-    this.scene.time.delayedCall(Math.round(220 * ASMD_PRIMARY_LINGER_MULT), () => destroyEmitter(sparks));
+    this.scene.time.delayedCall(Math.round(220 * lingerMultiplier), () => destroyEmitter(sparks));
   }
 
   private playBeamParticles(
@@ -326,6 +329,7 @@ export class AsmdPrimaryRenderer {
     endY: number,
     playerColor: number,
     beamThickness: number,
+    lingerMultiplier: number,
   ): void {
     const dx = endX - startX;
     const dy = endY - startY;
@@ -352,7 +356,7 @@ export class AsmdPrimaryRenderer {
     } as Phaser.Types.GameObjects.Particles.EmitZoneData;
 
     const flow = createEmitter(this.scene, 0, 0, TEX_ASMD_SPARK, {
-      lifespan: { min: Math.round(70 * ASMD_PRIMARY_LINGER_MULT), max: Math.round(135 * ASMD_PRIMARY_LINGER_MULT) },
+      lifespan: { min: Math.round(70 * lingerMultiplier), max: Math.round(135 * lingerMultiplier) },
       quantity,
       frequency: -1,
       emitZone: beamZone,
@@ -367,7 +371,7 @@ export class AsmdPrimaryRenderer {
     flow.explode(quantity);
 
     const front = createEmitter(this.scene, 0, 0, TEX_ASMD_SPARK, {
-      lifespan: { min: Math.round(140 * ASMD_PRIMARY_LINGER_MULT), max: Math.round(220 * ASMD_PRIMARY_LINGER_MULT) },
+      lifespan: { min: Math.round(140 * lingerMultiplier), max: Math.round(220 * lingerMultiplier) },
       quantity: frontQuantity,
       frequency: -1,
       emitZone: frontZone,
@@ -381,7 +385,7 @@ export class AsmdPrimaryRenderer {
     }, DEPTH_TRACE + 0.1);
     front.explode(frontQuantity);
 
-    this.scene.time.delayedCall(Math.round(320 * ASMD_PRIMARY_LINGER_MULT), () => {
+    this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => {
       destroyEmitter(flow);
       destroyEmitter(front);
     });

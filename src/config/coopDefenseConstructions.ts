@@ -1,10 +1,9 @@
-import type { ConstructionId, PlaceableKind, TurretWeaponId } from '../types';
+import type { ConstructionId, EnergyInjectorConstructionEffect, PlaceableKind, TurretWeaponId } from '../types';
 
-export interface CoopDefenseConstructionDefinition {
+interface CoopDefenseConstructionBaseDefinition {
   readonly id: ConstructionId;
   readonly displayName: string;
   readonly description: string;
-  readonly weaponId: TurretWeaponId;
   /**
    * Optionales individuelles Loadout-Icon des Konstrukts. Solange es `null` ist, verwenden
    * Slot und Unlock-Knoten gemeinsam das temporaere Icon aus `unlockUpgradeId`.
@@ -12,18 +11,41 @@ export interface CoopDefenseConstructionDefinition {
   readonly iconKey: string | null;
   readonly unlockUpgradeId: string;
   readonly maxHp: number;
-  readonly targetRange: number;
   readonly placementRange: number;
-  readonly muzzleOffset: number;
   /** Anteil an der festen Konstruktionskapazitaet, solange das Konstrukt steht. */
   readonly capacityCost: number;
   readonly color: number;
+  /** Typisierte Wirkung des Energieinjektors; Felsen/Mauern besitzen keine Definition. */
+  readonly energyInjectorEffect: EnergyInjectorConstructionEffect;
 }
+
+export interface CoopDefenseWeaponConstructionDefinition extends CoopDefenseConstructionBaseDefinition {
+  readonly kind: 'turret';
+  readonly weaponId: TurretWeaponId;
+  readonly targetRange: number;
+  readonly muzzleOffset: number;
+  readonly indestructible?: false;
+}
+
+export interface CoopDefensePowerUpPedestalDefinition extends CoopDefenseConstructionBaseDefinition {
+  readonly kind: 'pedestal';
+  readonly powerUpDefId: 'HEALTH_PACK' | 'ARMOR';
+  readonly indestructible: true;
+}
+
+export type CoopDefenseConstructionDefinition =
+  | CoopDefenseWeaponConstructionDefinition
+  | CoopDefensePowerUpPedestalDefinition;
 
 export const COOP_DEFENSE_CONSTRUCTION_IDS: readonly ConstructionId[] = [
   'rocket_turret',
   'machine_gun_turret',
   'flame_turret',
+  'tesla_turret',
+  'gravity_turret',
+  'slow_bubble_turret',
+  'medic_pedestal',
+  'armor_pedestal',
 ];
 
 export const DEFAULT_COOP_DEFENSE_CONSTRUCTION_ID: ConstructionId = 'rocket_turret';
@@ -93,6 +115,7 @@ export const COOP_DEFENSE_REPAIR_DRONE_CONFIG = Object.freeze({
 export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDefenseConstructionDefinition>> =
   Object.freeze({
     rocket_turret: {
+      kind: 'turret',
       id: 'rocket_turret',
       displayName: 'Raketenturm',
       description: 'Verschießt automatisch Raketen mit Flächenschaden.',
@@ -105,8 +128,10 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 18,
       capacityCost: 30,
       color: 0xff8a3d,
+      energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
     },
     machine_gun_turret: {
+      kind: 'turret',
       id: 'machine_gun_turret',
       displayName: 'Maschinengewehrturm',
       description: 'Bekämpft einzelne Ziele mit hoher Feuerrate.',
@@ -119,8 +144,10 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 17,
       capacityCost: 10,
       color: 0xd8b46b,
+      energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
     },
     flame_turret: {
+      kind: 'turret',
       id: 'flame_turret',
       displayName: 'Flammenwerferturm',
       description: 'Entzündet Gegner in kurzer Reichweite kontinuierlich.',
@@ -133,6 +160,85 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       muzzleOffset: 16,
       capacityCost: 20,
       color: 0xff5f28,
+      energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
+    },
+    tesla_turret: {
+      kind: 'turret',
+      id: 'tesla_turret',
+      displayName: 'Tesla-Turm',
+      description: 'Erzeugt bei nahen Gegnern eine kleine Teslakuppel mit kontinuierlichem Schaden.',
+      weaponId: 'TURRET_TESLA',
+      iconKey: null,
+      unlockUpgradeId: 'unlock_tesla_turret',
+      maxHp: 200,
+      targetRange: 96,
+      placementRange: 320,
+      muzzleOffset: 0,
+      capacityCost: 25,
+      color: 0x9ae7ff,
+      energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
+    },
+    gravity_turret: {
+      kind: 'turret',
+      id: 'gravity_turret',
+      displayName: 'Gravitationsturm',
+      description: 'Erzeugt am Einschlag ein schwarzes Loch, das Gegner anzieht.',
+      weaponId: 'TURRET_GRAVITY',
+      iconKey: null,
+      unlockUpgradeId: 'unlock_gravity_turret',
+      maxHp: 200,
+      targetRange: 520,
+      placementRange: 320,
+      muzzleOffset: 16,
+      capacityCost: 25,
+      color: 0xa755ff,
+      energyInjectorEffect: { type: 'gravity_pull', pullStrengthMultiplier: 1.5 },
+    },
+    slow_bubble_turret: {
+      kind: 'turret',
+      id: 'slow_bubble_turret',
+      displayName: 'Slow-Bubble-Turm',
+      description: 'Erzeugt am Einschlag eine kleine Zeitblase, die alle Einheiten verlangsamt.',
+      weaponId: 'TURRET_SLOW_BUBBLE',
+      iconKey: null,
+      unlockUpgradeId: 'unlock_slow_bubble_turret',
+      maxHp: 180,
+      targetRange: 500,
+      placementRange: 320,
+      muzzleOffset: 16,
+      capacityCost: 20,
+      color: 0x8edcff,
+      energyInjectorEffect: { type: 'slow_bubble', slowStrengthMultiplier: 1.5 },
+    },
+    medic_pedestal: {
+      kind: 'pedestal',
+      id: 'medic_pedestal',
+      displayName: 'Medic-Podest',
+      description: 'Stellt regelmaessig ein Medipack bereit.',
+      powerUpDefId: 'HEALTH_PACK',
+      iconKey: null,
+      unlockUpgradeId: 'unlock_medic_pedestal',
+      maxHp: 1,
+      placementRange: 320,
+      capacityCost: 30,
+      color: 0x52d273,
+      energyInjectorEffect: { type: 'powerup_cooldown', respawnTimeMultiplier: 0.5 },
+      indestructible: true,
+    },
+    armor_pedestal: {
+      kind: 'pedestal',
+      id: 'armor_pedestal',
+      displayName: 'Armor-Podest',
+      description: 'Stellt regelmaessig ein Armor-Power-up bereit.',
+      powerUpDefId: 'ARMOR',
+      iconKey: null,
+      unlockUpgradeId: 'unlock_armor_pedestal',
+      maxHp: 1,
+      placementRange: 320,
+      capacityCost: 25,
+      color: 0x5aa9ff,
+      energyInjectorEffect: { type: 'powerup_cooldown', respawnTimeMultiplier: 0.5 },
+      indestructible: true,
     },
   });
 

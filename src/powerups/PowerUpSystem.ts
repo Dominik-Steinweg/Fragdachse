@@ -35,9 +35,11 @@ interface WorldItem {
 
 interface PedestalRuntime {
   id: number;
+  constructionId?: number;
   def: PowerUpDef;
   x: number;
   y: number;
+  ownerColor?: number;
   respawnMs: number;
   spawnOnArenaStart: boolean;
   linkedBaseId?: string;
@@ -118,6 +120,8 @@ export class PowerUpSystem {
   private activeNukes = new Map<number, ActiveNukeStrike>();
   private pedestals   = new Map<number, PedestalRuntime>();
   private itemToPedestal = new Map<number, number>();
+  private readonly constructionPedestalIds = new Map<number, number>();
+  private nextDynamicPedestalId = 0;
   private nextUid     = 1;
   private nextNukeId  = 1;
   private ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
@@ -126,6 +130,7 @@ export class PowerUpSystem {
   private readonly pendingPedestalRemovalIds = new Set<number>();
   private ticksSinceFullPedestalSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
   private forceFullNetSnapshot = false;
+  private constructionRespawnMultiplierProvider: ((constructionId: number) => number) | null = null;
 
   private arenaStartTime = 0;
   private pedestalsActivated = false;
@@ -159,6 +164,11 @@ export class PowerUpSystem {
     this.activeBuffs.clear();
     this.activeNukes.clear();
     this.itemToPedestal.clear();
+    for (const pedestalId of this.constructionPedestalIds.values()) {
+      this.pedestals.delete(pedestalId);
+    }
+    this.constructionPedestalIds.clear();
+    this.nextDynamicPedestalId = this.getInitialDynamicPedestalId();
     this.nextUid = 1;
     this.nextNukeId = 1;
     this.ticksSinceFullNetSnapshot = POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS;
@@ -183,17 +193,59 @@ export class PowerUpSystem {
   destroyPedestalsLinkedToBase(baseId: string): void {
     for (const [pedestalId, pedestal] of [...this.pedestals]) {
       if (pedestal.linkedBaseId !== baseId) continue;
-
-      if (pedestal.currentUid !== null) {
-        this.worldItems.delete(pedestal.currentUid);
-        this.netSnapshotCache.delete(pedestal.currentUid);
-        this.pendingRemovalUids.add(pedestal.currentUid);
-        this.itemToPedestal.delete(pedestal.currentUid);
-      }
-      this.pedestals.delete(pedestalId);
-      this.pedestalNetCache.delete(pedestalId);
-      this.pendingPedestalRemovalIds.add(pedestalId);
+      this.removePedestal(pedestalId);
     }
+  }
+
+  setConstructionRespawnMultiplierProvider(provider: ((constructionId: number) => number) | null): void {
+    this.constructionRespawnMultiplierProvider = provider;
+  }
+
+  /**
+   * Bindet ein gebautes Inspector-Podest an den bestehenden Power-up-Lifecycle.
+   * Das erste Item liegt unmittelbar nach erfolgreicher Registrierung bereit.
+   */
+  registerConstructionPedestal(
+    constructionId: number,
+    defId: string,
+    x: number,
+    y: number,
+    ownerColor?: number,
+  ): boolean {
+    const existingId = this.constructionPedestalIds.get(constructionId);
+    if (existingId !== undefined) return this.pedestals.has(existingId);
+
+    const def = POWERUP_DEFS[defId];
+    const cfg = TIMED_POWERUP_PEDESTAL_CONFIGS[defId];
+    if (!def || !cfg) return false;
+
+    while (this.pedestals.has(this.nextDynamicPedestalId)) this.nextDynamicPedestalId += 1;
+    const pedestalId = this.nextDynamicPedestalId++;
+    const pedestal: PedestalRuntime = {
+      id: pedestalId,
+      constructionId,
+      def,
+      x,
+      y,
+      ownerColor,
+      respawnMs: Math.max(1, Math.floor(cfg.respawnMs)),
+      spawnOnArenaStart: true,
+      currentUid: null,
+      nextRespawnAt: 0,
+    };
+    this.pedestals.set(pedestalId, pedestal);
+    this.constructionPedestalIds.set(constructionId, pedestalId);
+    this.pendingPedestalRemovalIds.delete(pedestalId);
+    this.spawnPedestalItem(pedestal);
+    return true;
+  }
+
+  /** Entfernt ein gebautes Podest samt eventuell darauf liegendem Item. */
+  unregisterConstructionPedestal(constructionId: number): boolean {
+    const pedestalId = this.constructionPedestalIds.get(constructionId);
+    if (pedestalId === undefined) return false;
+    this.constructionPedestalIds.delete(constructionId);
+    return this.removePedestal(pedestalId);
   }
 
   // ── Host-Update (jeden Frame) ───────────────────────────────────────────
@@ -216,7 +268,7 @@ export class PowerUpSystem {
       if (!this.pedestalsActivated && now >= this.arenaStartTime) {
         this.pedestalsActivated = true;
         for (const pedestal of this.pedestals.values()) {
-          if (pedestal.spawnOnArenaStart) {
+          if (pedestal.spawnOnArenaStart && pedestal.currentUid === null && pedestal.nextRespawnAt <= 0) {
             this.spawnPedestalItem(pedestal);
           }
         }
@@ -321,7 +373,10 @@ export class PowerUpSystem {
       const pedestal = this.pedestals.get(pedestalId);
       if (pedestal) {
         pedestal.currentUid = null;
-        pedestal.nextRespawnAt = Date.now() + pedestal.respawnMs;
+        const multiplier = pedestal.constructionId === undefined
+          ? 1
+          : Math.max(0.05, this.constructionRespawnMultiplierProvider?.(pedestal.constructionId) ?? 1);
+        pedestal.nextRespawnAt = Date.now() + Math.max(1, Math.floor(pedestal.respawnMs * multiplier));
       }
       this.itemToPedestal.delete(uid);
     }
@@ -548,6 +603,7 @@ export class PowerUpSystem {
         defId: pedestal.def.id,
         x: pedestal.x,
         y: pedestal.y,
+        ...(pedestal.ownerColor === undefined ? {} : { ownerColor: pedestal.ownerColor }),
         hasPowerUp: pedestal.currentUid !== null,
         nextRespawnAt: pedestal.currentUid === null ? pedestal.nextRespawnAt : 0,
       });
@@ -568,7 +624,7 @@ export class PowerUpSystem {
     for (const entry of this.getPedestalSnapshot()) {
       currentIds.add(entry.id);
       // Position/Typ sind statisch – nur der veränderliche Zustand bestimmt die Delta-Signatur.
-      const signature = `${entry.hasPowerUp ? 1 : 0}:${entry.nextRespawnAt}`;
+      const signature = `${entry.ownerColor ?? ''}:${entry.hasPowerUp ? 1 : 0}:${entry.nextRespawnAt}`;
       if (full || this.pedestalNetCache.get(entry.id) !== signature) {
         upserts.push(entry);
         this.pedestalNetCache.set(entry.id, signature);
@@ -710,6 +766,28 @@ export class PowerUpSystem {
         nextRespawnAt: 0,
       });
     }
+    this.nextDynamicPedestalId = this.getInitialDynamicPedestalId();
+  }
+
+  private getInitialDynamicPedestalId(): number {
+    let maxId = -1;
+    for (const pedestal of this.layout.powerUpPedestals) maxId = Math.max(maxId, pedestal.id);
+    return maxId + 1;
+  }
+
+  private removePedestal(pedestalId: number): boolean {
+    const pedestal = this.pedestals.get(pedestalId);
+    if (!pedestal) return false;
+    if (pedestal.currentUid !== null) {
+      this.worldItems.delete(pedestal.currentUid);
+      this.netSnapshotCache.delete(pedestal.currentUid);
+      this.pendingRemovalUids.add(pedestal.currentUid);
+      this.itemToPedestal.delete(pedestal.currentUid);
+    }
+    this.pedestals.delete(pedestalId);
+    this.pedestalNetCache.delete(pedestalId);
+    this.pendingPedestalRemovalIds.add(pedestalId);
+    return true;
   }
 
   private spawnPowerUpDef(def: PowerUpDef, x: number, y: number): number {

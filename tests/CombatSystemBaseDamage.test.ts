@@ -74,7 +74,7 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
-import type { ProjectileExplosionConfig, TrackedProjectile } from '../src/types';
+import type { HitscanSupportEffect, ProjectileExplosionConfig, TrackedProjectile } from '../src/types';
 
 function makeCombatHarness() {
   const base = {
@@ -115,7 +115,71 @@ function makeCombatHarness() {
   return { combat, base, baseDamage };
 }
 
+function makeSupportCombatHarness() {
+  const players = [
+    { id: 'shooter', color: 0xffffff, sprite: { x: 0, y: 0, rotation: 0 } },
+    { id: 'ally', color: 0x55cc88, sprite: { x: 100, y: 0, rotation: 0 } },
+    { id: 'victim', color: 0xcc5555, sprite: { x: 100, y: 20, rotation: 0 } },
+  ];
+  const bridge = {
+    isHost: vi.fn(() => true),
+    getPlayerProfile: vi.fn(() => undefined),
+    areTeammates: vi.fn((first: string, second: string) => first === 'shooter' && second === 'ally'),
+    broadcastEffect: vi.fn(),
+    broadcastHitscanTracer: vi.fn(),
+  } as unknown as NetworkBridge;
+  const playerManager = {
+    getAllPlayers: () => players,
+    getPlayer: (id: string) => players.find((player) => player.id === id),
+  } as unknown as PlayerManager;
+  const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+  for (const player of players) combat.initPlayer(player.id);
+  combat.setLoadoutManager({
+    getDamageMultiplier: () => 1,
+    getWeaponDamageMultiplier: () => 1,
+    registerAk47ProjectileHit: () => {},
+    resetAk47State: () => {},
+  });
+  combat.setPowerUpSystem({ getDamageMultiplier: () => 1, removePlayer: () => {} });
+  return { combat, players };
+}
+
 describe('CombatSystem base damage routing', () => {
+  it('applies general vulnerability in the central base path', () => {
+    const { combat, baseDamage } = makeCombatHarness();
+    combat.setTargetIncomingDamageMultiplierResolver((target) => target.targetType === 'base' ? 1.2 : 1);
+
+    combat.applyBaseDamage('hostile-base', 10, 'player-1', 'weapon2');
+
+    expect(baseDamage.mock.calls[0]?.[0]).toBe('hostile-base');
+    expect(baseDamage.mock.calls[0]?.[1]).toBe(12);
+    expect(baseDamage.mock.calls[0]?.[2]).toBe('player-1');
+  });
+
+  it('applies general vulnerability to player damage as well', () => {
+    const player = { id: 'victim', color: 0xffffff, sprite: { x: 100, y: 100, rotation: 0 } };
+    const bridge = {
+      isHost: vi.fn(() => true),
+      getPlayerProfile: vi.fn(() => undefined),
+      areTeammates: vi.fn(() => false),
+      broadcastEffect: vi.fn(),
+    } as unknown as NetworkBridge;
+    const combat = new CombatSystem(
+      {
+        getAllPlayers: () => [player],
+        getPlayer: (id: string) => id === player.id ? player : undefined,
+      } as unknown as PlayerManager,
+      {} as ProjectileManager,
+      bridge,
+    );
+    combat.initPlayer(player.id);
+    combat.setTargetIncomingDamageMultiplierResolver((target) => target.targetType === 'player' ? 1.2 : 1);
+
+    combat.applyDamage(player.id, 10, false, 'attacker', 'Plasmabrenner');
+
+    expect(combat.getHP(player.id)).toBe(88);
+  });
+
   it('keeps projectile, melee, hitscan and explosion base paths on one callback', () => {
     const { combat, baseDamage } = makeCombatHarness();
 
@@ -171,5 +235,135 @@ describe('CombatSystem base damage routing', () => {
       ['hostile-base', 30, 'player-1', 'weapon1'],
       ['hostile-base', 11, 'player-1', 'utility'],
     ]);
+  });
+});
+
+describe('Plasmabrenner hitscan support impact', () => {
+  const effect: HitscanSupportEffect = {
+    type: 'plasma_burner',
+    healPerHit: 25,
+    damagePerHit: 25,
+    beamColor: 0x5cf58f,
+  };
+
+  it('does not rewind the shooter into its own support trace while moving backwards', () => {
+    const shooter = {
+      id: 'shooter',
+      color: 0xffffff,
+      sprite: {
+        x: 0,
+        y: 0,
+        displayWidth: 40,
+        displayHeight: 40,
+        body: { velocity: { x: -240, y: 0 } },
+      },
+    };
+    const bridge = {
+      isHost: vi.fn(() => true),
+      getLatestGameState: vi.fn(() => undefined),
+    } as unknown as NetworkBridge;
+    const combat = new CombatSystem(
+      {
+        getAllPlayers: () => [shooter],
+        getPlayer: () => shooter,
+      } as unknown as PlayerManager,
+      {} as ProjectileManager,
+      bridge,
+    );
+    combat.initPlayer(shooter.id);
+
+    const internals = combat as unknown as {
+      findNearestObstacleHit: ReturnType<typeof vi.fn>;
+      getHitscanTargetHitDistance: ReturnType<typeof vi.fn>;
+    };
+    internals.findNearestObstacleHit = vi.fn(() => null);
+    internals.getHitscanTargetHitDistance = vi.fn((_line, _target, _thickness, applyRewind: boolean) => (
+      applyRewind ? 4 : null
+    ));
+
+    const trace = combat.traceHitscan({
+      shooterId: shooter.id,
+      startX: 28,
+      startY: 0,
+      angle: 0,
+      range: 420,
+      traceThickness: 5,
+      applyFavorTheShooter: true,
+      includeShooter: true,
+    });
+
+    expect(internals.getHitscanTargetHitDistance).toHaveBeenCalledWith(
+      expect.anything(),
+      shooter,
+      5,
+      false,
+    );
+    expect(trace.distance).toBe(420);
+    expect(trace.hitPlayerId).toBeNull();
+  });
+
+  it('heals allies and damages enemies through the normal damage path', () => {
+    const { combat } = makeSupportCombatHarness();
+    combat.applyDamage('ally', 40, false, 'enemy', 'test');
+    combat.applyDamage('victim', 40, false, 'shooter', 'test');
+
+    const internals = combat as unknown as { traceHitscan: ReturnType<typeof vi.fn> };
+    internals.traceHitscan = vi.fn(() => ({
+      endX: 100,
+      endY: 0,
+      distance: 100,
+      hitPlayerId: 'ally',
+      hitEnemyId: null,
+      hitDecoyId: null,
+      hitObstacle: false,
+    }));
+    combat.resolveHitscanShot(
+      'shooter', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
+      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
+    );
+    expect(combat.getHP('ally')).toBe(85);
+
+    internals.traceHitscan.mockReturnValue({
+      endX: 100,
+      endY: 20,
+      distance: 100,
+      hitPlayerId: 'victim',
+      hitEnemyId: null,
+      hitDecoyId: null,
+      hitObstacle: false,
+    });
+    combat.setTargetIncomingDamageMultiplierResolver((target) => target.targetType === 'player' ? 1.2 : 1);
+    combat.resolveHitscanShot(
+      'shooter', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
+      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
+    );
+    expect(combat.getHP('victim')).toBe(30);
+  });
+
+  it('reports an actual base collision surface to the host support callback', () => {
+    const { combat } = makeCombatHarness();
+    const callback = vi.fn();
+    combat.setHitscanSupportImpactCallback(callback);
+    const internals = combat as unknown as { traceHitscan: ReturnType<typeof vi.fn> };
+    internals.traceHitscan = vi.fn(() => ({
+      endX: 100,
+      endY: 0,
+      distance: 100,
+      hitPlayerId: null,
+      hitEnemyId: null,
+      hitDecoyId: null,
+      hitObstacle: true,
+      hitObstacleKind: 'base',
+    }));
+    combat.resolveHitscanShot(
+      'player-1', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
+      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
+    );
+    expect(callback).toHaveBeenCalledWith(
+      { targetType: 'base', targetId: 'hostile-base', x: 100, y: 0 },
+      effect,
+      'player-1',
+      'weapon2',
+    );
   });
 });

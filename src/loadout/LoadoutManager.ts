@@ -9,7 +9,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { ConstructionId, GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
+import type { ConstructionId, GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ProjectileExplosionConfig, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
 import { COOP_DEFENSE_BUILD_COOLDOWN_MS } from '../config/coopDefenseConstructions';
 import type {
   AirstrikeUltimateConfig,
@@ -20,9 +20,8 @@ import type {
   GaussUltimateConfig,
   LeafBlowerWeaponFireConfig,
   NukeUtilityConfig,
-  OverchargeCoreWeaponFireConfig,
+  ReinforcementMatrixWeaponFireConfig,
   PlaceableUtilityConfig,
-  RepairBeamWeaponFireConfig,
   StinkCloudUtilityConfig,
   TaserUtilityConfig,
   TimeBubbleUtilityConfig,
@@ -32,7 +31,7 @@ import type {
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
   TeslaDomeWeaponFireConfig,
-  TurretChargeWeaponFireConfig,
+  EnergyInjectorWeaponFireConfig,
   UltimateConfig,
   UtilityConfig,
   WeaponConfig,
@@ -509,15 +508,29 @@ export class LoadoutManager {
     targetY: number,
     playerId: string,
     playerColor: number,
-    options?: { ignoreBaseCollisions?: boolean },
+    options?: {
+      ignoreBaseCollisions?: boolean;
+      sourceSlot?: LoadoutSlot;
+      /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
+      sourceTurretId?: string;
+      /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
+      directDamageMultiplier?: number;
+      /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
+      payloadDamageMultiplier?: number;
+    },
   ): boolean {
+    const resolvedConfig = scaleAutomatedWeaponDamage(
+      config,
+      options?.directDamageMultiplier ?? 1,
+      options?.payloadDamageMultiplier ?? options?.directDamageMultiplier ?? 1,
+    );
     const pelletCount = Math.max(
       1,
-      Math.round((config.pelletCount ?? 1) * (config.pelletCountMultiplier ?? 1)),
+      Math.round((resolvedConfig.pelletCount ?? 1) * (resolvedConfig.pelletCountMultiplier ?? 1)),
     );
     if (pelletCount <= 1) {
       return this.dispatchWeaponFire(
-        config,
+        resolvedConfig,
         x,
         y,
         angle,
@@ -525,18 +538,18 @@ export class LoadoutManager {
         targetY,
         playerId,
         playerColor,
-        undefined,
+        options?.sourceSlot,
         undefined,
         options,
       );
     }
 
-    const pelletOffsets = calcPelletAngles(pelletCount, config.pelletSpreadAngle ?? 0);
+    const pelletOffsets = calcPelletAngles(pelletCount, resolvedConfig.pelletSpreadAngle ?? 0);
     let didFire = false;
     for (let pelletIndex = 0; pelletIndex < pelletOffsets.length; pelletIndex += 1) {
       const pelletConfig = pelletIndex === 0
-        ? config
-        : { ...config, shotAudio: undefined };
+        ? resolvedConfig
+        : { ...resolvedConfig, shotAudio: undefined };
       const pelletFired = this.dispatchWeaponFire(
         pelletConfig,
         x,
@@ -546,7 +559,7 @@ export class LoadoutManager {
         targetY,
         playerId,
         playerColor,
-        undefined,
+        options?.sourceSlot,
         undefined,
         options,
       );
@@ -1908,7 +1921,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
     shotId?:     number,
-    options?: { ignoreBaseCollisions?: boolean },
+    options?: { ignoreBaseCollisions?: boolean; sourceTurretId?: string },
   ): boolean {
     switch (config.fire.type) {
       case 'projectile':
@@ -1926,8 +1939,8 @@ export class LoadoutManager {
       case 'leaf_blower':
         return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
 
-      case 'overcharge_core':
-        return this.fireOverchargeCoreWeapon(
+      case 'reinforcement_matrix':
+        return this.fireReinforcementMatrixWeapon(
           config,
           config.fire,
           x,
@@ -1940,11 +1953,8 @@ export class LoadoutManager {
           sourceSlot,
         );
 
-      case 'repair_beam':
-        return this.fireRepairBeamWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
-
-      case 'turret_charge':
-        return this.fireTurretChargeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
+      case 'energy_injector':
+        return this.fireEnergyInjectorWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot);
 
       case 'tesla_dome':
       case 'healing_aura':
@@ -1957,13 +1967,13 @@ export class LoadoutManager {
   }
 
   /**
-   * Feuert den Ueberladungskern wie eine langsame Rakete bis zum Cursor oder zur
+   * Feuert die Verstärkungsmatrix wie eine langsame Rakete bis zum Cursor oder zur
    * maximalen Reichweite. Die spezielle Explosionsnutzlast wird erst am Einschlag
    * vom HostUpdateCoordinator in ein Feld umgewandelt.
    */
-  private fireOverchargeCoreWeapon(
+  private fireReinforcementMatrixWeapon(
     config: WeaponConfig,
-    fireConfig: OverchargeCoreWeaponFireConfig,
+    fireConfig: ReinforcementMatrixWeaponFireConfig,
     x: number,
     y: number,
     fallbackAngle: number,
@@ -2002,10 +2012,10 @@ export class LoadoutManager {
         rockDamageMult: 0,
         trainDamageMult: 0,
         color: fireConfig.fieldColor,
-        overchargeField: {
+        reinforcementMatrix: {
           durationMs: fireConfig.durationMs,
-          fireRateMultiplier: fireConfig.fireRateMultiplier,
-          damageMultiplier: fireConfig.damageMultiplier,
+          damageReduction: fireConfig.damageReduction,
+          vulnerabilityBonus: fireConfig.vulnerabilityBonus,
           color: fireConfig.fieldColor,
         },
       },
@@ -2017,12 +2027,12 @@ export class LoadoutManager {
   }
 
   /**
-   * Feuert ein Reparaturprojektil. Es traegt keinen Schaden und keine Explosion; die
-   * Heilung haengt allein an der `repairPayload`, die der Host beim Treffer aufloest.
+   * Feuert einen Energiebolzen ohne Lenkwirkung. Der Host ordnet einen Treffer dem Ziel zu und
+   * ermittelt die typisierte Konstruktionswirkung aus dessen Definition.
    */
-  private fireRepairBeamWeapon(
+  private fireEnergyInjectorWeapon(
     config: WeaponConfig,
-    fireConfig: RepairBeamWeaponFireConfig,
+    fireConfig: EnergyInjectorWeaponFireConfig,
     x: number,
     y: number,
     angle: number,
@@ -2034,7 +2044,7 @@ export class LoadoutManager {
       speed: fireConfig.projectileSpeed,
       size: fireConfig.projectileSize,
       damage: 0,
-      color: config.projectileColor ?? fireConfig.beamColor,
+      color: config.projectileColor ?? fireConfig.injectorColor,
       ownerColor: playerColor,
       projectileVisualScale: config.projectileVisualScale,
       lifetime: (config.range / fireConfig.projectileSpeed) * 1000,
@@ -2045,53 +2055,11 @@ export class LoadoutManager {
       weaponName: config.displayName,
       rockDamageMult: 0,
       trainDamageMult: 0,
-      repairPayload: {
-        amount: fireConfig.healPerHit,
-        color: fireConfig.beamColor,
-      },
-      projectileStyle: config.projectileStyle,
-      energyBallVariant: config.energyBallVariant,
-      sourceSlot: sourceSlot ?? 'weapon2',
-      shotAudioKey: config.shotAudio?.successKey,
-    });
-    return true;
-  }
-
-  /**
-   * Feuert einen Energiebolzen, der einen getroffenen Turm auflaedt. Die Lenkung laeuft
-   * ueber die regulaere Homing-Konfiguration mit dem Zieltyp `turrets`.
-   */
-  private fireTurretChargeWeapon(
-    config: WeaponConfig,
-    fireConfig: TurretChargeWeaponFireConfig,
-    x: number,
-    y: number,
-    angle: number,
-    playerId: string,
-    playerColor: number,
-    sourceSlot?: LoadoutSlot,
-  ): boolean {
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed: fireConfig.projectileSpeed,
-      size: fireConfig.projectileSize,
-      damage: 0,
-      color: config.projectileColor ?? fireConfig.chargeColor,
-      ownerColor: playerColor,
-      projectileVisualScale: config.projectileVisualScale,
-      lifetime: (config.range / fireConfig.projectileSpeed) * 1000,
-      remainingRangePx: config.range,
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      weaponName: config.displayName,
-      homing: fireConfig.homing,
-      rockDamageMult: 0,
-      trainDamageMult: 0,
-      turretChargePayload: {
+      energyInjectorPayload: {
         durationMs: fireConfig.durationMs,
-        damageMultiplierPerStack: fireConfig.damageMultiplierPerStack,
-        maxStacks: fireConfig.maxStacks,
-        color: fireConfig.chargeColor,
+        focusDurationMs: fireConfig.focusDurationMs,
+        vulnerabilityBonus: fireConfig.vulnerabilityBonus,
+        color: fireConfig.injectorColor,
       },
       projectileStyle: config.projectileStyle,
       energyBallVariant: config.energyBallVariant,
@@ -2157,7 +2125,7 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
-    options?: { ignoreBaseCollisions?: boolean },
+    options?: { ignoreBaseCollisions?: boolean; sourceTurretId?: string },
   ): boolean {
     const cursorRange = Math.hypot(targetX - x, targetY - y);
     const effectiveRange = fireConfig.limitRangeToCursor
@@ -2171,6 +2139,7 @@ export class LoadoutManager {
     this.projectileManager.spawnProjectile(x, y, angle, playerId, {
       speed:           fireConfig.projectileSpeed,
       ignoreBaseCollisions: options?.ignoreBaseCollisions,
+      sourceTurretId:     options?.sourceTurretId,
       size:            fireConfig.projectileSize,
       damage:          config.directDamageOverride ?? config.damage,
       color:           config.projectileColor ?? playerColor,  // Waffen-eigene Farbe hat Vorrang
@@ -2207,6 +2176,7 @@ export class LoadoutManager {
         : undefined,
       projectileStyle: config.projectileStyle,
       bulletVisualPreset: config.bulletVisualPreset,
+      grenadeVisualPreset: config.grenadeVisualPreset,
       energyBallVariant: config.energyBallVariant,
       tracerConfig:    config.tracerConfig,
       detonable:       config.detonable,
@@ -2316,6 +2286,7 @@ export class LoadoutManager {
       config.trainDamageMult ?? 1,
       config.chainLightning,  // ChainLightningConfig weitergeben (optional)
       config.burnOnHit,       // BurnOnHitConfig weitergeben (optional)
+      fireConfig.supportEffect,
     ) ?? false;
   }
 
@@ -2504,4 +2475,105 @@ export class LoadoutManager {
     if (!weapon || weapon.fire.type !== 'energy_shield') return null;
     return weapon.fire as EnergyShieldWeaponFireConfig;
   }
+}
+
+/**
+ * Skaliert alle derzeit von automatischen Turmwaffen verwendeten Schadensfelder gemeinsam.
+ *
+ * Direktschaden bekommt nur den lokalen Turmfaktor: aktive Besitzer-/Power-up-Faktoren werden
+ * beim eigentlichen Projektiltreffer vom CombatSystem aufgeloest. Explosionen, Wolken und Brand
+ * umgehen diesen Projektiltrichter; deshalb wird deren Gesamtfaktor bereits beim Schuss
+ * eingefroren. Der zentrale Coop-Resolver (globaler Schaden, Krit) folgt weiterhin pro Treffer.
+ */
+function scaleAutomatedWeaponDamage(
+  config: WeaponConfig,
+  directDamageMultiplier: number,
+  payloadDamageMultiplier: number,
+): WeaponConfig {
+  const directFactor = Math.max(0, directDamageMultiplier);
+  const payloadFactor = Math.max(0, payloadDamageMultiplier);
+  const baseConfig: WeaponConfig = {
+    ...config,
+    damage: config.damage * directFactor,
+    directDamageOverride: config.directDamageOverride === undefined
+      ? undefined
+      : config.directDamageOverride * directFactor,
+    burnOnHit: config.burnOnHit
+      ? { ...config.burnOnHit, damagePerTick: config.burnOnHit.damagePerTick * payloadFactor }
+      : undefined,
+  };
+
+  if (config.fire.type === 'projectile') {
+    return {
+      ...baseConfig,
+      fire: {
+        ...config.fire,
+        impactExplosion: scaleAutomatedExplosion(config.fire.impactExplosion, payloadFactor),
+        enemyHitExplosion: scaleAutomatedExplosion(config.fire.enemyHitExplosion, payloadFactor),
+        impactCloud: config.fire.impactCloud
+          ? { ...config.fire.impactCloud, damagePerTick: config.fire.impactCloud.damagePerTick * payloadFactor }
+          : undefined,
+      },
+    };
+  }
+
+  if (config.fire.type === 'flamethrower') {
+    return {
+      ...baseConfig,
+      fire: {
+        ...config.fire,
+        burnDamagePerTick: config.fire.burnDamagePerTick * payloadFactor,
+        fireball: config.fire.fireball
+          ? {
+            ...config.fire.fireball,
+            explosionMaxDamage: config.fire.fireball.explosionMaxDamage * payloadFactor,
+            explosionMinDamage: config.fire.fireball.explosionMinDamage * payloadFactor,
+            groundBurnDamagePerTick: config.fire.fireball.groundBurnDamagePerTick * payloadFactor,
+          }
+          : undefined,
+      },
+    };
+  }
+
+  if (config.fire.type === 'tesla_dome') {
+    return {
+      ...baseConfig,
+      fire: {
+        ...config.fire,
+        damagePerTick: config.fire.damagePerTick * payloadFactor,
+      },
+    };
+  }
+
+  return baseConfig;
+}
+
+function scaleAutomatedExplosion(
+  effect: ProjectileExplosionConfig | undefined,
+  multiplier: number,
+): ProjectileExplosionConfig | undefined {
+  if (!effect) return undefined;
+  return {
+    ...effect,
+    maxDamage: effect.maxDamage * multiplier,
+    minDamage: effect.minDamage === undefined ? undefined : effect.minDamage * multiplier,
+    burnOnHit: effect.burnOnHit
+      ? { ...effect.burnOnHit, damagePerTick: effect.burnOnHit.damagePerTick * multiplier }
+      : undefined,
+    groundFire: effect.groundFire
+      ? {
+        ...effect.groundFire,
+        damagePerTick: effect.groundFire.damagePerTick * multiplier,
+        burnDamagePerTick: effect.groundFire.burnDamagePerTick === undefined
+          ? undefined
+          : effect.groundFire.burnDamagePerTick * multiplier,
+      }
+      : undefined,
+    fireChunkBurst: effect.fireChunkBurst
+      ? {
+        ...effect.fireChunkBurst,
+        burnDamagePerTick: effect.fireChunkBurst.burnDamagePerTick * multiplier,
+      }
+      : undefined,
+  };
 }

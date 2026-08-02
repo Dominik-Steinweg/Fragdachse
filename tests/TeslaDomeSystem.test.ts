@@ -50,6 +50,7 @@ function makeConfig(targetTypes: readonly TeslaDomeTargetType[]): WeaponConfig &
 
 function makeSystem(bases: readonly TestBase[]) {
   const owner = { id: 'player-1', sprite: { x: 0, y: 0, active: true } };
+  const enemies: { id: string; x: number; y: number }[] = [];
   const damageHandler = vi.fn();
   const lineOfSight = vi.fn(() => true);
   const playerManager = {
@@ -70,8 +71,9 @@ function makeSystem(bases: readonly TestBase[]) {
   const system = new TeslaDomeSystem(playerManager, combatSystem, resourceSystem);
   system.setLineOfSightChecker(lineOfSight);
   system.setBaseCallbacks(() => bases, damageHandler);
+  system.setEnemyTargetProvider(() => enemies);
 
-  return { system, damageHandler, lineOfSight, owner };
+  return { system, damageHandler, lineOfSight, owner, enemies, combatSystem };
 }
 
 describe('Tesla dome base targets', () => {
@@ -83,7 +85,12 @@ describe('Tesla dome base targets', () => {
     system.hostRefresh('player-1', 0, 0, 0, config, 0xffffff);
     const synced = system.hostUpdate(config.fire.tickInterval);
 
-    expect(damageHandler).toHaveBeenCalledWith('hostile-base', config.fire.damagePerTick, 'player-1');
+    expect(damageHandler).toHaveBeenCalledWith(
+      'hostile-base',
+      config.fire.damagePerTick,
+      'player-1',
+      'weapon2',
+    );
     expect(synced[0]?.targets).toContainEqual({ x: 120, y: 0, type: 'bases' });
     expect(base.getNearestSurfacePoint).toHaveBeenCalledWith(0, 0);
     expect(lineOfSight).toHaveBeenCalledWith(0, 0, 120, 0, undefined);
@@ -117,5 +124,44 @@ describe('Tesla dome base targets', () => {
     expect(damageHandler).toHaveBeenCalledTimes(1);
     expect(synced[0]?.targets).toContainEqual({ x: 180, y: 0, type: 'bases' });
     expect(lineOfSight).toHaveBeenCalledWith(0, 0, 180, 0, undefined);
+  });
+});
+
+describe('Tesla turret construction', () => {
+  it('stays dormant without enemies and activates with the shared Tesla dome visual contract', () => {
+    const config = makeConfig(['enemies']);
+    const { system, enemies, combatSystem } = makeSystem([]);
+    const source = {
+      id: 7,
+      ownerId: 'player-1',
+      x: 100,
+      y: 100,
+      color: 0x9ae7ff,
+      damageMultiplier: 1.5,
+      config,
+    };
+    system.setConstructionSourceProvider(() => [source]);
+
+    expect(system.hostUpdate(0)).toEqual([]);
+
+    enemies.push({ id: 'enemy-1', x: 150, y: 100 });
+    const activated = system.hostUpdate(0);
+    expect(activated[0]).toMatchObject({
+      ownerId: 'tesla-turret:7',
+      weaponId: config.id,
+      radius: config.fire.radius,
+      targets: [{ x: 150, y: 100, type: 'enemies' }],
+    });
+
+    system.hostUpdate(config.fire.tickInterval);
+    expect(combatSystem.applyDamage).toHaveBeenCalledWith(
+      'enemy-1',
+      config.fire.damagePerTick * 1.5,
+      false,
+      'player-1',
+      config.displayName,
+      { sourceX: 100, sourceY: 100 },
+      { damageKind: 'chain', sourceSlot: 'utility', allowCritical: true },
+    );
   });
 });

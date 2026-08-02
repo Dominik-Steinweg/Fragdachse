@@ -214,7 +214,7 @@ export class ShadowSystem {
 
       const cell = layout.rocks[id];
       const runtime = runtimeById.get(id);
-      const preset = runtime?.kind === 'turret' ? SHADOW_CASTERS.turret : SHADOW_CASTERS.rock;
+      const preset = runtime && runtime.kind !== 'rock' ? SHADOW_CASTERS.turret : SHADOW_CASTERS.rock;
       const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
       this.drawFootprint(this.getLayer(preset.layerDepth, 'rocks').staticGraphics, worldX, worldY, preset);

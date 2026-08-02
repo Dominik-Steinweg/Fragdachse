@@ -10,6 +10,78 @@ import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 
 describe('automated projectile weapons', () => {
+  it('forwards construction damage as owner-attributed utility damage', () => {
+    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
+    const dispatchWeaponFire = vi.fn(() => true);
+    Object.defineProperty(manager, 'dispatchWeaponFire', {
+      value: dispatchWeaponFire,
+    });
+
+    expect(manager.fireAutomatedWeapon(
+      WEAPON_CONFIGS.TURRET_ROCKET,
+      100,
+      200,
+      0,
+      400,
+      200,
+      'player-owner',
+      0xff8a3d,
+      { sourceSlot: 'utility' },
+    )).toBe(true);
+
+    expect(dispatchWeaponFire).toHaveBeenCalledOnce();
+    expect(dispatchWeaponFire.mock.calls[0][6]).toBe('player-owner');
+    expect(dispatchWeaponFire.mock.calls[0][8]).toBe('utility');
+  });
+
+  it('applies one shared tower multiplier to direct, explosive, cloud and burn damage', () => {
+    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
+    const dispatchWeaponFire = vi.fn(() => true);
+    Object.defineProperty(manager, 'dispatchWeaponFire', { value: dispatchWeaponFire });
+
+    manager.fireAutomatedWeapon(
+      WEAPON_CONFIGS.TURRET_ROCKET,
+      0, 0, 0, 100, 0, 'owner', 0xffffff,
+      { directDamageMultiplier: 1.25, payloadDamageMultiplier: 2.5, sourceSlot: 'utility' },
+    );
+    const rocket = dispatchWeaponFire.mock.calls[0][0];
+    expect(rocket.damage).toBeCloseTo(WEAPON_CONFIGS.TURRET_ROCKET.damage * 1.25, 10);
+    expect(rocket.fire.impactExplosion.maxDamage).toBeCloseTo(
+      WEAPON_CONFIGS.TURRET_ROCKET.fire.type === 'projectile'
+        ? (WEAPON_CONFIGS.TURRET_ROCKET.fire.impactExplosion?.maxDamage ?? 0) * 2.5
+        : 0,
+      10,
+    );
+
+    dispatchWeaponFire.mockClear();
+    manager.fireAutomatedWeapon(
+      WEAPON_CONFIGS.SPOREN,
+      0, 0, 0, 100, 0, 'owner', 0xffffff,
+      { directDamageMultiplier: 1.25, payloadDamageMultiplier: 2.5, sourceSlot: 'utility' },
+    );
+    const spores = dispatchWeaponFire.mock.calls[0][0];
+    expect(spores.fire.impactCloud.damagePerTick).toBeCloseTo(
+      WEAPON_CONFIGS.SPOREN.fire.type === 'projectile'
+        ? (WEAPON_CONFIGS.SPOREN.fire.impactCloud?.damagePerTick ?? 0) * 2.5
+        : 0,
+      10,
+    );
+
+    dispatchWeaponFire.mockClear();
+    manager.fireAutomatedWeapon(
+      WEAPON_CONFIGS.TURRET_FLAME,
+      0, 0, 0, 100, 0, 'owner', 0xffffff,
+      { directDamageMultiplier: 1.25, payloadDamageMultiplier: 2.5, sourceSlot: 'utility' },
+    );
+    const flame = dispatchWeaponFire.mock.calls[0][0];
+    expect(flame.fire.burnDamagePerTick).toBeCloseTo(
+      WEAPON_CONFIGS.TURRET_FLAME.fire.type === 'flamethrower'
+        ? WEAPON_CONFIGS.TURRET_FLAME.fire.burnDamagePerTick * 2.5
+        : 0,
+      10,
+    );
+  });
+
   it('dispatches the Void Hunter shotgun as five spread pellets with one shared shot sound', () => {
     const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
     const dispatchWeaponFire = vi.fn(() => true);

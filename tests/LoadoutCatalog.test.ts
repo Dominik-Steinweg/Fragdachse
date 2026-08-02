@@ -97,5 +97,6 @@ describe('loadout catalog', () => {
     expect(describeLoadoutItem('utility', 'HE_GRENADE').displayName).toBe('HE Granate');
     expect(describeLoadoutItem('weapon1', 'UNKNOWN_ITEM').displayName).toBe('UNKNOWN ITEM');
     expect(describeLoadoutItem('weapon1', 'LAUBBLAESER').displayName).toBe('Laubbläser');
+    expect(describeLoadoutItem('weapon2', 'REPARATURSTRAHL').displayName).toBe('Plasmabrenner');
   });
 });

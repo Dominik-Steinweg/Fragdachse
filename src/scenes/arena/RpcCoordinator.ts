@@ -21,6 +21,7 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
     case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
     case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };
     case 'timebomb_pop': return undefined;
+    case 'regeneration': return undefined;
     case 'lightning':   return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * 0.82 };
     case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
     case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };
