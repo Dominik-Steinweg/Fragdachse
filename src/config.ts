@@ -733,6 +733,8 @@ export const TEAM_RED_COLOR = COLORS.RED_3;
 /** Pseudo-Besitzer für fest an Coop-Basen montierte Geschütztürme. */
 export const COOP_DEFENSE_BASE_TURRET_OWNER_ID = '__coop_base_turret__';
 export const COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID = '__coop_hostile_base_turret__';
+/** Synthetic attacker id for enemy airstrikes in Coop Defense. */
+export const COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID = 'coop-zombie-bomber';
 export const CAPTURE_THE_BEER_BASE_TINT_ALPHA = 0.80;
 export const CAPTURE_THE_BEER_BLUE_BASE_TINT = TEAM_BLUE_COLOR;
 export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;

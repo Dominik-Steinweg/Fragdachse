@@ -342,7 +342,8 @@ export class CombatSystem {
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   /**
    * Einziger Trichter fuer Basisschaden. Wie `setRockDamageCallback` verdrahtet, damit der
-   * Schaden durch `resolveOutgoingDamage` laeuft und Klassen- sowie Item-Multiplikatoren sieht.
+   * Schaden durch `resolveOutgoingDamage` laeuft und Klassen-, Item- sowie optionale
+   * Quell-Slot-Modifikatoren sieht.
    */
   setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => void) | null): void {
     this.baseDamageCallback = cb;

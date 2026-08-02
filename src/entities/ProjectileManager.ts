@@ -1278,8 +1278,12 @@ export class ProjectileManager {
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const baseCollider = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
         if (this.tryResolveSupportImpact(tracked, baseGO as Phaser.GameObjects.GameObject, -1)) return;
-        // Vor dem Bounce-Early-Return: sonst zaehlte ein Treffer im selben Schritt nicht.
-        this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
+        // Explosionsprojektile melden Basisschaden ausschließlich über ihre Explosion;
+        // ein direkter Treffer würde bei bouncenden Varianten doppelt zählen.
+        if (!tracked.explosion) {
+          // Vor dem Bounce-Early-Return: sonst zaehlte ein Treffer im selben Schritt nicht.
+          this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
+        }
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
             body.velocity.x = tracked.velocityAfterFirstBounce.x;

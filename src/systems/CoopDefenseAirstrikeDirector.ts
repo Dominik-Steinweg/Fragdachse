@@ -8,8 +8,7 @@ import {
 import { getCoopDefenseTutorialRockRegion } from '../config/coopDefenseTutorial';
 import { ULTIMATE_CONFIGS, type AirstrikeUltimateConfig } from '../loadout/LoadoutConfig';
 
-/** Synthetische Angreifer-ID der Zombie-Luftangriffe (kein Spieler, kein Gegner-Entity). */
-export const COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID = 'coop-zombie-bomber';
+export { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../config';
 
 const PLAYER_AIRSTRIKE = ULTIMATE_CONFIGS.AIRSTRIKE as AirstrikeUltimateConfig;
 

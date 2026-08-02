@@ -38,7 +38,6 @@ import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundState
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
 import {
   CoopDefenseAirstrikeDirector,
-  COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
   isPointNearBaseRegion,
 } from '../../systems/CoopDefenseAirstrikeDirector';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
@@ -63,7 +62,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
+import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';

@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { SyncedAirstrikeStrike } from '../types';
-import { DEPTH }                      from '../config';
-import { circleZone, makeAdditive }   from './EffectUtils';
+import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, DEPTH, VOID_PALETTE } from '../config';
+import { circleZone }                  from './EffectUtils';
 import type { EffectSystem }          from './EffectSystem';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from './camera/cameraFeedbackPresets';
@@ -16,6 +16,34 @@ const COL_WARNING  = 0xff6600;
 const COL_GLOW     = 0xff9933;
 const COL_CORE     = 0xffcc66;
 const COL_RING     = 0xffaa00;
+
+interface AirstrikePalette {
+  warning:    number;
+  glow:       number;
+  core:       number;
+  ring:       number;
+  bombTints:  number[];
+  sparkTints: number[];
+}
+
+const PLAYER_AIRSTRIKE_PALETTE: AirstrikePalette = {
+  warning:    COL_WARNING,
+  glow:       COL_GLOW,
+  core:       COL_CORE,
+  ring:       COL_RING,
+  bombTints:  [0xffffff, COL_CORE, COL_GLOW, COL_WARNING],
+  sparkTints: [0xffffff, COL_CORE, COL_GLOW],
+};
+
+/** Void-Akzent nur fuer den gegnerischen Telegraphen; der Einschlag bleibt warm. */
+const ENEMY_AIRSTRIKE_PALETTE: AirstrikePalette = {
+  warning:    VOID_PALETTE.deep,
+  glow:       VOID_PALETTE.primary,
+  core:       VOID_PALETTE.bright,
+  ring:       VOID_PALETTE.primary,
+  bombTints:  [VOID_PALETTE.core, VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep],
+  sparkTints: [VOID_PALETTE.core, VOID_PALETTE.bright, VOID_PALETTE.primary],
+};
 
 // ── Visuelle State pro Strike ────────────────────────────────────────────────
 
@@ -70,10 +98,10 @@ export class AirstrikeRenderer {
       if (c) {
         const ctx = c.context;
         const g = ctx.createLinearGradient(0, 0, 0, 20);
-        g.addColorStop(0,   'rgba(255,220,120,0.0)');
-        g.addColorStop(0.2, 'rgba(255,180,60,0.85)');
-        g.addColorStop(0.7, 'rgba(255,100,20,0.65)');
-        g.addColorStop(1,   'rgba(255,60,0,0.0)');
+        g.addColorStop(0,   'rgba(255,255,255,0.0)');
+        g.addColorStop(0.2, 'rgba(255,255,255,0.85)');
+        g.addColorStop(0.7, 'rgba(255,255,255,0.65)');
+        g.addColorStop(1,   'rgba(255,255,255,0.0)');
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, 8, 20);
         c.refresh();
@@ -86,9 +114,9 @@ export class AirstrikeRenderer {
       if (c) {
         const ctx  = c.context;
         const grad = ctx.createRadialGradient(3, 3, 0, 3, 3, 3);
-        grad.addColorStop(0,   'rgba(255,255,200,1)');
-        grad.addColorStop(0.5, 'rgba(255,160,40,0.7)');
-        grad.addColorStop(1,   'rgba(255,80,0,0)');
+        grad.addColorStop(0,   'rgba(255,255,255,1)');
+        grad.addColorStop(0.5, 'rgba(255,255,255,0.7)');
+        grad.addColorStop(1,   'rgba(255,255,255,0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 6, 6);
         c.refresh();
@@ -101,9 +129,9 @@ export class AirstrikeRenderer {
       if (c) {
         const ctx  = c.context;
         const grad = ctx.createRadialGradient(4, 4, 0, 4, 4, 4);
-        grad.addColorStop(0,   'rgba(255,200,80,1)');
-        grad.addColorStop(0.4, 'rgba(255,120,20,0.7)');
-        grad.addColorStop(1,   'rgba(255,60,0,0)');
+        grad.addColorStop(0,   'rgba(255,255,255,1)');
+        grad.addColorStop(0.4, 'rgba(255,255,255,0.7)');
+        grad.addColorStop(1,   'rgba(255,255,255,0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 8, 8);
         c.refresh();
@@ -204,40 +232,43 @@ export class AirstrikeRenderer {
 
   private createVisual(strike: SyncedAirstrikeStrike): AirstrikeVisual {
     const { x, y, radius } = strike;
+    const palette = strike.triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID
+      ? ENEMY_AIRSTRIKE_PALETTE
+      : PLAYER_AIRSTRIKE_PALETTE;
 
     // Die Marker der Gefahrenzone bleiben bewusst ungedämpft (`setBlendMode` statt
     // `makeAdditive`): sie sind ein Telegraph, keine Impact-Grafik, und müssen zu jeder
     // Tageszeit voll lesbar bleiben. Der Einschlag weiter unten wird dagegen gedämpft.
 
     // Großer Warnkreis (gefüllt)
-    const warningFill = this.scene.add.circle(x, y, radius, COL_WARNING, 0.08);
+    const warningFill = this.scene.add.circle(x, y, radius, palette.warning, 0.08);
     warningFill.setDepth(DEPTH.CANOPY - 1);
     warningFill.setBlendMode(Phaser.BlendModes.ADD);
 
     // Äußerer Warnring (Stroke)
     const warningRing = this.scene.add.circle(x, y, radius);
-    warningRing.setStrokeStyle(3, COL_RING, 0.65);
+    warningRing.setStrokeStyle(3, palette.ring, 0.65);
     warningRing.setDepth(DEPTH.CANOPY);
     warningRing.setBlendMode(Phaser.BlendModes.ADD);
 
     // Innerer pulsierender Ring
     const innerRing = this.scene.add.circle(x, y, radius * 0.22);
-    innerRing.setStrokeStyle(2, COL_CORE, 0.75);
+    innerRing.setStrokeStyle(2, palette.core, 0.75);
     innerRing.setDepth(DEPTH.PLAYERS - 1);
     innerRing.setBlendMode(Phaser.BlendModes.ADD);
 
     // Zentrum-Glow
-    const coreGlow = this.scene.add.circle(x, y, 18, COL_GLOW, 0.28);
+    const coreGlow = this.scene.add.circle(x, y, 18, palette.glow, 0.28);
     coreGlow.setDepth(DEPTH.PLAYERS - 1);
     coreGlow.setBlendMode(Phaser.BlendModes.ADD);
 
     // Fadenkreuz – horizontal
-    const crossH = this.scene.add.rectangle(x, y, radius * 1.2, 2, COL_RING, 0.7);
+    const crossH = this.scene.add.rectangle(x, y, radius * 1.2, 2, palette.ring, 0.7);
     crossH.setDepth(DEPTH.PLAYERS - 1);
     crossH.setBlendMode(Phaser.BlendModes.ADD);
 
     // Fadenkreuz – vertikal
-    const crossV = this.scene.add.rectangle(x, y, 2, radius * 1.2, COL_RING, 0.7);
+    const crossV = this.scene.add.rectangle(x, y, 2, radius * 1.2, palette.ring, 0.7);
     crossV.setDepth(DEPTH.PLAYERS - 1);
     crossV.setBlendMode(Phaser.BlendModes.ADD);
 
@@ -249,7 +280,7 @@ export class AirstrikeRenderer {
       accelerationY: 30,
       scale:       { start: 1.2, end: 0.2 },
       alpha:       { start: 0.85, end: 0 },
-      tint:        [0xffffff, COL_CORE, COL_GLOW, COL_WARNING],
+      tint:        palette.bombTints,
       blendMode:   Phaser.BlendModes.ADD,
       frequency:   80,
       quantity:    1,
@@ -265,7 +296,7 @@ export class AirstrikeRenderer {
       speed:     { min: 20, max: 55 },
       scale:     { start: 0.9, end: 0 },
       alpha:     { start: 0.8, end: 0 },
-      tint:      [0xffffff, COL_CORE, COL_GLOW],
+      tint:      palette.sparkTints,
       blendMode: Phaser.BlendModes.ADD,
       frequency: 70,
       quantity:  1,
