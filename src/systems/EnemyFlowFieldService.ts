@@ -1242,7 +1242,7 @@ export class EnemyFlowFieldService {
         if (!this.isReachableNeighborIndex(currentIndex, direction)) continue;
         const neighborIndex = this.neighborIndices[neighborBase + direction];
         const neighborCost = this.costs[neighborIndex];
-        const newValue = currentValue + neighborCost * NEIGHBOR_MOVE_FACTORS[direction];
+        const newValue = Math.fround(currentValue + neighborCost * NEIGHBOR_MOVE_FACTORS[direction]);
 
         if (
           newValue < this.integrationField[neighborIndex]

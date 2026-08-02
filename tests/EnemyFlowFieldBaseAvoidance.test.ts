@@ -124,6 +124,24 @@ describe('Flow field around bases', () => {
     expect(service.getIntegrationValueAt(5, 6)).toBeLessThan(EnemyFlowFieldService.INTEGRATION_INFINITY);
   });
 
+  it('expands diagonal Dijkstra entries after Float32 storage', () => {
+    const service = new EnemyFlowFieldService(
+      createLayout({
+        dirt: [
+          { gridX: 1, gridY: 0 },
+          { gridX: 0, gridY: 1 },
+        ] as ArenaLayout['dirt'],
+      }),
+      [],
+      METRICS,
+      { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 0, gridY: 0 }] },
+    );
+
+    expect(service.getIntegrationValueAt(2, 2)).toBeCloseTo(2 * Math.SQRT2, 5);
+    expect(service.getVectorAt(2, 2).x).toBeCloseTo(-Math.SQRT1_2, 5);
+    expect(service.getVectorAt(2, 2).y).toBeCloseTo(-Math.SQRT1_2, 5);
+  });
+
   it('reports a blocked straight line through a base footprint', () => {
     const service = new EnemyFlowFieldService(createLayout(), [createBase('base-1', 6, 4, 3, 3)], METRICS);
 

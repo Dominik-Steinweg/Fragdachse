@@ -249,6 +249,7 @@ export class LeftSidePanel {
 
     configureArenaHudLayout(ARENA_PANEL_W);
     this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer, this.puContainer);
+    this.arenaHUD.setPresentationActive(false);
 
     // ── lobbyContainer (Namens- und Farbsektion, initial on-screen) ───────────
     const objects: Phaser.GameObjects.GameObject[] = [];

@@ -303,8 +303,9 @@ dem Client nicht die Ausnahme, sondern der Normalfall.
 
 Jede `LivingBarEffect`-Instanz erzeugt zwei begrenzte Emitter mit `frequency: 30` beziehungsweise
 `36` (rund 28–33 Partikel pro Sekunde) und animiert an beiden `scale` und `alpha` über die
-Lebenszeit. `maxAliveParticles` und `reserve` begrenzen die Pools; der frühere externe
-Glow-Filter ist durch eine additive, vorgebackene Aura ersetzt.
+Lebenszeit. `maxAliveParticles` und `reserve` begrenzen die Pools. Auf `high` gehört der kräftige
+externe Glow zum visuellen Qualitätsvertrag; `medium` nutzt stattdessen eine additive,
+vorgebackene Aura und `low` schaltet den Effekt vollständig ab.
 
 Der Effekt wird an vielen Stellen gleichzeitig verwendet – Arena-HUD (eine Instanz je Balken),
 Power-Up-Anzeige, Center-HUD, Seitenpanel, Lobby – und im Coop-Upgrade-Overlay **einmal pro
@@ -326,7 +327,15 @@ Zwei Dinge gehören dabei zusammen und dürfen nicht getrennt werden:
   je zwei Emittern (HP, Adrenalin, Rage, Armor), also die größte Instanz davon. Er hängt am selben
   Schalter und meldet seine Emitter als `decorative`. Seine unveränderlichen Ringlagen liegen in
   einer CanvasTexture; dynamische Graphics werden nur bei quantisierter Zustandsänderung und für
-  Animationen höchstens mit 30 Hz neu aufgebaut.
+  Animationen höchstens mit 30 Hz neu aufgebaut. Ein günstiger additiver Halo erhält dabei die
+  Leuchtwirkung des Rings, ohne pro Segment weitere Filter-Pässe einzuführen.
+
+Das per TAB eingeblendete Arena-HUD ist außerhalb seiner kurzen Ein-/Ausblendanimation vollständig
+inaktiv: Die Panel-Container sind unsichtbar und `active = false`, die LivingBar-Emitter werden
+geleert, ihre Tweens pausiert und Leaderboard-Daten nur bei gedrückter TAB-Taste aufbereitet.
+Killfeed-Ereignisse werden weiterhin gespeichert, die Textzeilen aber erst beim nächsten Öffnen
+neu gerendert. Der separate Power-Up-Container bleibt davon ausgenommen, weil seine Buff-Anzeigen
+auch ohne TAB sichtbar sein können.
 
 ## Upgrade-Overlay: Baum-Neuaufbau sammeln
 
