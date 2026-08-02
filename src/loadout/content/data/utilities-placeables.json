@@ -77,8 +77,8 @@
     "FELSBAU_COOP": {
       "id": "FELSBAU_COOP",
       "baseId": "FELSBAU",
-      "_notes": "Coop-Defense variant uses the construction cooldown and permanent runtime lifetime while inheriting the normal Felsbau definition.",
-      "cooldown": 500,
+      "_notes": "Coop-Defense variant keeps a permanent runtime lifetime; its cooldown is configured here per item.",
+      "cooldown": 100,
       "placeable": {
         "lifetimeMs": 0
       }
@@ -86,8 +86,8 @@
     "FLIEGENPILZ_COOP": {
       "id": "FLIEGENPILZ_COOP",
       "baseId": "FLIEGENPILZ",
-      "_notes": "Coop-Defense variant uses the construction cooldown and permanent runtime lifetime while inheriting the normal Fliegenpilz definition.",
-      "cooldown": 500,
+      "_notes": "Coop-Defense variant keeps a permanent runtime lifetime; its cooldown is configured here per item.",
+      "cooldown": 100,
       "placeable": {
         "lifetimeMs": 0
       }

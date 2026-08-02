@@ -1,0 +1,10 @@
+{
+  "rocket_turret": { "buildCooldownMs": 100 },
+  "machine_gun_turret": { "buildCooldownMs": 100 },
+  "flame_turret": { "buildCooldownMs": 100 },
+  "tesla_turret": { "buildCooldownMs": 100 },
+  "gravity_turret": { "buildCooldownMs": 100 },
+  "slow_bubble_turret": { "buildCooldownMs": 100 },
+  "medic_pedestal": { "buildCooldownMs": 100 },
+  "armor_pedestal": { "buildCooldownMs": 100 }
+}

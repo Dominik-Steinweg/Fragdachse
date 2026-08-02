@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COOP_DEFENSE_BUILD_COOLDOWN_MS,
   COOP_DEFENSE_CONSTRUCTION_CAPACITY,
   COOP_DEFENSE_CONSTRUCTIONS,
   getCoopDefenseConstructionCapacity,
@@ -53,14 +52,16 @@ describe('construction capacity costs', () => {
     expect(getPlaceableCapacityCost({ kind: 'tunnel' })).toBe(0);
   });
 
-  it('keeps construction cooldown separate from normal and Coop utility cooldowns', () => {
-    expect(COOP_DEFENSE_BUILD_COOLDOWN_MS).toBeGreaterThan(0);
+  it('configures each construction and Coop placeable cooldown per item', () => {
+    for (const construction of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
+      expect(construction.buildCooldownMs, construction.id).toBe(100);
+    }
     expect((UTILITY_CONFIGS.FELSBAU as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
     expect((UTILITY_CONFIGS.FLIEGENPILZ as PlaceableUtilityConfig).cooldown).toBeGreaterThan(0);
     expect((UTILITY_CONFIGS.FELSBAU_COOP as PlaceableUtilityConfig).cooldown)
-      .toBe(COOP_DEFENSE_BUILD_COOLDOWN_MS);
+      .toBe(100);
     expect((UTILITY_CONFIGS.FLIEGENPILZ_COOP as PlaceableUtilityConfig).cooldown)
-      .toBe(COOP_DEFENSE_BUILD_COOLDOWN_MS);
+      .toBe(100);
   });
 
   it('keeps normal placeables finite and Coop placeables permanent', () => {

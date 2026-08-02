@@ -74,7 +74,7 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
       role: 'Ingenieur',
       description: 'Baut dauerhafte Konstruktionen im Rahmen einer festen Baukapazität.',
       tooltipLines: [
-        'Loadout: Waffe 1, Verstärkungsmatrix auf RMB, mehrere Utility-Slots, Ultimate.',
+        'Loadout: Waffe 1, Plasmabrenner auf RMB, mehrere Utility-Slots, Ultimate.',
         'Konstrukte belegen Baukapazität (100 Punkte) statt Adrenalin.',
         'R hält das Utility-Rad offen, E setzt die Auswahl ein.',
         'Stärke: stellt bleibende Verteidigung auf und verstärkt sie im Ernstfall.',

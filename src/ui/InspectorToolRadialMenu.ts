@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH, toCssColor } from '../config';
-import { getToolCapacityCost } from '../config/coopDefenseConstructions';
+import { getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../config/coopDefenseConstructions';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
@@ -202,9 +202,9 @@ function buildEntries(
       textureKey: presentation.textureKey,
       accentColor: presentation.accentColor,
       capacityCost,
-      cooldownMs: tool.kind === 'utility'
-        ? UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0
-        : 0,
+      cooldownMs: tool.kind === 'construction'
+        ? getCoopDefenseConstructionDefinition(tool.id).buildCooldownMs
+        : UTILITY_CONFIGS[tool.id as keyof typeof UTILITY_CONFIGS]?.cooldown ?? 0,
       affordable: capacityCost <= free,
     };
   });

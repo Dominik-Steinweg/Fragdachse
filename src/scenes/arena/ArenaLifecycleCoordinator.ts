@@ -89,7 +89,6 @@ import { EnemyManager } from '../../entities/EnemyManager';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import {
-  COOP_DEFENSE_BUILD_COOLDOWN_MS,
   COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
   COOP_DEFENSE_DISMANTLE_RANGE,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
@@ -2579,7 +2578,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.markConstructionUsed(playerId, constructionId, placedAt);
     // Ueber denselben Kanal wie Utility-Cooldowns, damit auch Clients den Bau-Cooldown
     // des gewaehlten Konstrukts im HUD sehen.
-    bridge.publishUtilityCooldownUntil(playerId, placedAt + COOP_DEFENSE_BUILD_COOLDOWN_MS, constructionId);
+    bridge.publishUtilityCooldownUntil(playerId, placedAt + definition.buildCooldownMs, constructionId);
     this.rockVisualHelper.materializePlaceableRock(construction, true);
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'placeable_added',

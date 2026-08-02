@@ -36,6 +36,27 @@ describe('loadout catalog', () => {
     }
   });
 
+  it('starts Inspector with the Plasmabrenner in weapon 2', () => {
+    const profile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
+    const weapon2 = getSelectableLoadoutItems('weapon2', COOP_DEFENSE, profile, 'inspector_gadachs');
+    const progress = getCoopDefenseProgressSnapshot(0, profile, 0, 'inspector_gadachs');
+    const weapon2Category = progress.upgradeCategories.find((category) => category.id === 'weapon2');
+
+    expect(weapon2.map((item) => item.id)).toEqual(['REPARATURSTRAHL']);
+    expect(weapon2Category?.upgrades[0]?.id).toBe('unlock_reparaturstrahl');
+
+    const withMatrix = levelUpCoopDefenseUpgrade(
+      profile,
+      'unlock_overcharge_core',
+      20,
+      0,
+      'inspector_gadachs',
+    )!;
+    expect(getSelectableLoadoutItems('weapon2', COOP_DEFENSE, withMatrix, 'inspector_gadachs')
+      .map((item) => item.id))
+      .toEqual(['REPARATURSTRAHL', 'OVERCHARGE_CORE']);
+  });
+
   it('grows the selectable list when the matching unlock is skilled', () => {
     const classId: CoopDefenseClassId = 'dachs_nukem';
     const base = buildDefaultCoopDefenseUpgradeProfile(classId);

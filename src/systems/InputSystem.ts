@@ -125,6 +125,7 @@ export class InputSystem {
   private localIsBurrowed = false;
   private localBurrowPhase: BurrowPhase = 'idle';
   private inputEnabled    = true;
+  private inspectorRadialEnabled = false;
   private aimEnabled      = true;
 
   constructor(
@@ -246,6 +247,45 @@ export class InputSystem {
     }
     this.inspectorDismantleSelected = false;
     this.inspectorSetSelectedTool?.(selection.tool);
+  }
+
+  /**
+   * Verarbeitet das Inspector-Rad vor dem Gameplay-Input-Gate. Damit bleibt es im
+   * Countdown bedienbar, ohne dass dadurch Bewegung, Waffen oder Bauaktionen frei werden.
+   */
+  private updateInspectorRadialMenu(): boolean {
+    if (!this.inspectorRadialEnabled || !this.isInspectorMode()) {
+      if (!this.inspectorRadialEnabled) this.inspectorRadialMenu?.close();
+      return false;
+    }
+
+    const pointer = this.scene.input.activePointer;
+    const inspectorModeActive = this.utilityPlacementActive
+      || this.utilityTargetingActive
+      || this.utilityHoldActive
+      || this.inspectorConstructionPlacementActive
+      || this.inspectorDismantlePlacementActive;
+    if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.inspectorRadialMenu?.isOpen) {
+      if (inspectorModeActive) this.cancelUtilityInteraction();
+      const capacity = this.inspectorGetCapacity?.();
+      this.inspectorRadialMenu?.open(
+        pointer.x,
+        pointer.y,
+        this.getInspectorTools(),
+        this.getSelectedInspectorRadialSelection(),
+        capacity?.used ?? 0,
+        capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+      );
+    }
+
+    if (!this.inspectorRadialMenu?.isOpen) return false;
+    if (this.keyR.isDown) {
+      this.inspectorRadialMenu.update(pointer.x, pointer.y);
+    } else {
+      const selected = this.inspectorRadialMenu.close(pointer.x, pointer.y);
+      if (selected) this.applyInspectorRadialSelection(selected);
+    }
+    return true;
   }
 
   private getInspectorUtilityParams(): LoadoutUseParams | undefined {
@@ -410,8 +450,13 @@ export class InputSystem {
     this.aimEnabled = enabled;
   }
 
-  setInputEnabled(enabled: boolean): void {
+  /**
+   * Schaltet Gameplay-Input; das Inspector-Rad kann im Arena-Countdown als einzige
+   * Aktion trotzdem aktiv bleiben, damit die Auswahl vor Rundenbeginn vorbereitet wird.
+   */
+  setInputEnabled(enabled: boolean, allowInspectorRadial = enabled): void {
     this.inputEnabled = enabled;
+    this.inspectorRadialEnabled = allowInspectorRadial;
     if (!enabled) {
       this.predictedUtilityCooldownUntil = 0;
       this.cancelUtilityInteraction();
@@ -425,7 +470,7 @@ export class InputSystem {
       this.placementPreviewState = null;
       this.inspectorConstructionPlacementActive = false;
       this.inspectorDismantlePlacementActive = false;
-      this.inspectorRadialMenu?.close();
+      if (!allowInspectorRadial) this.inspectorRadialMenu?.close();
       this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
       this.prevRightPointerDown = false;
@@ -661,7 +706,8 @@ export class InputSystem {
     };
     this.bridge.sendLocalInput(input);
 
-    if (!this.inputEnabled) return;
+    const inspectorRadialHandled = this.updateInspectorRadialMenu();
+    if (!this.inputEnabled || inspectorRadialHandled) return;
 
     // ── 3. Stun: keine weiteren Aktionen ───────────────────────────────────
     if (this.localIsStunned) {
@@ -724,8 +770,8 @@ export class InputSystem {
       || this.ultimatePlacementActive;
     const ultimateCfg = this.getLocalUltimateConfig?.();
 
-    // Inspector: R haelt das Auswahlrad offen, RMB gehoert der Waffe 2. Ein laufender
-    // Bau- oder Rueckbaumodus wird von beiden Eingaben zuerst abgebrochen.
+    // Inspector: RMB gehoert der Waffe 2. Ein laufender Bau- oder Rueckbaumodus wird
+    // von der Eingabe zuerst abgebrochen.
     if (this.isInspectorMode()) {
       const inspectorModeActive = this.utilityPlacementActive
         || this.utilityTargetingActive
@@ -736,28 +782,6 @@ export class InputSystem {
         this.cancelUtilityInteraction();
         this.prevRightPointerDown = rightPointerDown;
         this.suppressWeapon1UntilLeftRelease = false;
-        return;
-      }
-      if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.inspectorRadialMenu?.isOpen) {
-        if (inspectorModeActive) this.cancelUtilityInteraction();
-        const capacity = this.inspectorGetCapacity?.();
-        this.inspectorRadialMenu?.open(
-          pointer.x,
-          pointer.y,
-          this.getInspectorTools(),
-          this.getSelectedInspectorRadialSelection(),
-          capacity?.used ?? 0,
-          capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
-        );
-      }
-      if (this.inspectorRadialMenu?.isOpen) {
-        if (this.keyR.isDown) {
-          this.inspectorRadialMenu.update(pointer.x, pointer.y);
-        } else {
-          const selected = this.inspectorRadialMenu.close(pointer.x, pointer.y);
-          if (selected) this.applyInspectorRadialSelection(selected);
-        }
-        this.prevRightPointerDown = rightPointerDown;
         return;
       }
     }

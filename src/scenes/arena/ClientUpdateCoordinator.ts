@@ -24,7 +24,7 @@ import {
 } from '../../utils/localPreferences';
 import { getCoopDefenseCommittedEffectTotals } from '../../utils/coopDefenseItemEffects';
 import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS, resolveCoopDefenseStat } from '../../utils/coopDefenseStats';
-import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
@@ -619,7 +619,7 @@ export class ClientUpdateCoordinator {
     const isConstruction = selected?.kind === 'construction' && !hasOverride;
     const itemId = isConstruction ? selected.id : config.id;
     const cooldown = isConstruction
-      ? COOP_DEFENSE_BUILD_COOLDOWN_MS
+      ? getCoopDefenseConstructionDefinition(selected.id).buildCooldownMs
       : config.cooldown;
     if (cooldown <= 0) return 0;
     const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();

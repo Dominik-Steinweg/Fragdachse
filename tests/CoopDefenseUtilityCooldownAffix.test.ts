@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COOP_DEFENSE_BUILD_COOLDOWN_MS,
   COOP_DEFENSE_CONSTRUCTIONS,
 } from '../src/config/coopDefenseConstructions';
 import { getCoopDefenseItemAffixDefinition } from '../src/config/coopDefenseItems';
@@ -56,16 +55,15 @@ describe('utility cooldown item affix', () => {
     expect(totals.percentage['utility.cooldown']).toBeCloseTo(-0.12, 10);
   });
 
-  it('leaves the construction build cooldown untouched', () => {
-    // Konstruktionen laufen nicht ueber den Utility-Cooldown, sondern ueber einen eigenen,
-    // einheitlichen Bau-Cooldown im LoadoutManager. Kein Item darf ihn verschieben.
+  it('leaves per-item construction build cooldowns untouched', () => {
+    // Konstruktionen laufen nicht ueber den Utility-Cooldown. Kein Item-Affix darf ihre
+    // jeweils aus der Konstruktions-JSON gelesene Konfiguration verschieben.
     const totals = getCoopDefenseItemEffectTotals([helmetWithCooldownAffix(-0.5)]);
     expect(totals.percentage['utility.cooldown']).toBeCloseTo(-0.5, 10);
-    expect(COOP_DEFENSE_BUILD_COOLDOWN_MS).toBe(500);
     // Konstruktionen tragen ueberhaupt kein `cooldown`-Feld – der Descriptor findet dort nichts,
-    // an dem er ansetzen koennte, und der Bau-Cooldown bleibt die feste Konstante.
+    // Der Utility-Descriptor adressiert das separate `buildCooldownMs`-Feld nicht.
     for (const definition of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
-      expect(definition).not.toHaveProperty('cooldown');
+      expect(definition.buildCooldownMs).toBe(100);
     }
   });
 });

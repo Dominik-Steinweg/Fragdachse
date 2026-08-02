@@ -128,7 +128,7 @@ import { getGameModeLabel, isCoopDefenseMode, isTeamGameMode } from '../gameMode
 import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel } from '../config/coopDefenseMaps';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
 import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
@@ -784,6 +784,9 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, playerManager, this.arenaClipMask);
+    this.renderers.plasmaBurner.setLocalAimAngleProvider((ownerId) => (
+      ownerId === bridge.getLocalPlayerId() ? inputSystem.getAimAngle() : null
+    ));
     // Spawn-Blitz und Brand hängen an der jeweiligen Entity, nicht an einem zentralen
     // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
     playerManager.setLightingSystem(this.renderers.lighting);
@@ -1036,7 +1039,9 @@ export class ArenaScene extends Phaser.Scene {
       const remaining     = Math.max(0, cooldownUntil - bridge.getSynchronizedNow());
       const selected = this.clientUpdate.getLocalInspectorSelectedTool();
       const hasOverride = bridge.getPlayerUtilityOverrideName(localId) !== '' || this.clientUpdate.clientUtilityOverride !== null;
-      const cooldown = selected?.kind === 'construction' && !hasOverride ? COOP_DEFENSE_BUILD_COOLDOWN_MS : config.cooldown;
+      const cooldown = selected?.kind === 'construction' && !hasOverride
+        ? getCoopDefenseConstructionDefinition(selected.id).buildCooldownMs
+        : config.cooldown;
       const frac          = cooldown > 0 ? Math.min(1, remaining / cooldown) : 0.8;
       const displayName   = config?.displayName ?? 'Utility';
       this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
@@ -1276,7 +1281,10 @@ export class ArenaScene extends Phaser.Scene {
     if (inGame) {
       // Drehen ist während des Countdowns erlaubt, alles andere bleibt gesperrt.
       this.ctx.inputSystem.setAimEnabled(!optionsOpen && !spectator);
-      this.ctx.inputSystem.setInputEnabled(!countdownActive && !optionsOpen && !spectator);
+      this.ctx.inputSystem.setInputEnabled(
+        !countdownActive && !optionsOpen && !spectator,
+        !optionsOpen && !spectator,
+      );
       this.ctx.inputSystem.update();
     } else {
       this.ctx.inputSystem.setAimEnabled(false);
@@ -1492,6 +1500,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
     this.renderers.blackHole.update(delta);
+    this.renderers.plasmaBurner.update(delta);
     // Nach dem Positionsabgleich der Entities: die Trefferkopien führen ihre Ziele nach.
     this.visualFeedback?.update(delta);
     // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.

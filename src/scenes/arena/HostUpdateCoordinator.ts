@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
-import { COOP_DEFENSE_BUILD_COOLDOWN_MS, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionCapacity, getCoopDefenseConstructionDefinition, getToolCapacityCost } from '../../config/coopDefenseConstructions';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
@@ -2039,7 +2039,7 @@ export class HostUpdateCoordinator {
       ? selected.id
       : (selectedConfig?.id ?? fallbackConfig?.id ?? '__default__');
     const cooldown = selected?.kind === 'construction'
-      ? COOP_DEFENSE_BUILD_COOLDOWN_MS
+      ? getCoopDefenseConstructionDefinition(selected.id).buildCooldownMs
       : selectedConfig?.cooldown ?? fallbackConfig?.cooldown ?? 0;
     if (cooldown <= 0) return 0;
     const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();

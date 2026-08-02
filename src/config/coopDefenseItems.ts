@@ -669,8 +669,8 @@ Object.freeze([
     displayAsPercent: true,
   },
   {
-    // Skaliert das `cooldown`-Feld des ausgeruesteten Utility-Configs. Waffen-, Ultimate- und
-    // Dash-Cooldowns sowie der feste Bau-Cooldown der Konstruktionen bleiben unberuehrt.
+    // Skaliert das `cooldown`-Feld des ausgeruesteten Utility-Configs. Waffen-, Ultimate-,
+    // Dash- und per Item konfigurierten Konstruktions-Cooldowns bleiben unberuehrt.
     id: 'utility_cooldown',
     label: 'Utility-Cooldown',
     stat: 'utility.cooldown',

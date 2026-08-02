@@ -51,14 +51,14 @@
     },
     {
       "kind": "weapon",
-      "id": "OVERCHARGE_CORE",
+      "id": "REPARATURSTRAHL",
       "slot": "weapon2",
       "order": 0,
       "iconKey": null
     },
     {
       "kind": "weapon",
-      "id": "REPARATURSTRAHL",
+      "id": "OVERCHARGE_CORE",
       "slot": "weapon2",
       "order": 1,
       "iconKey": null

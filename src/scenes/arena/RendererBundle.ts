@@ -112,6 +112,11 @@ export function createRendererBundle(
   asmdPrimary.generateTextures();
 
   const plasmaBurner = new PlasmaBurnerRenderer(scene);
+  plasmaBurner.generateTextures();
+  plasmaBurner.setOwnerVisualStateProvider((ownerId) => {
+    const player = playerManager.getPlayer(ownerId);
+    return player ? { x: player.sprite.x, y: player.sprite.y, color: player.color } : null;
+  });
 
   const bite = new BiteRenderer(scene);
   bite.generateTextures();

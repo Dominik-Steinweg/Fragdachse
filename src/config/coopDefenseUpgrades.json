@@ -816,19 +816,19 @@
       "sortOrder": 30,
       "upgrades": [
         {
-          "id": "unlock_energieinjektor",
-          "code": "C-I3",
-          "label": "Energieinjektor",
-          "description": "Entlädt Adrenalin in schnellen, leicht zielsuchenden Energiebolzen auf einen Turm und erhöht dessen Schaden für kurze Zeit.",
+          "id": "unlock_reparaturstrahl",
+          "code": "C-I2",
+          "label": "Plasmabrenner",
+          "description": "Hält per rechter Maustaste einen grünen Plasma-Hitscan auf dem Ziel. Verbündete werden geheilt und repariert, Gegner und gegnerische Strukturen erleiden Schaden. Kostet Adrenalin je Impuls.",
           "kind": "unlock",
           "maxLevel": 1,
           "startingLevel": 1,
           "costPerLevel": 0,
           "refundable": false,
-          "sortOrder": 70,
+          "sortOrder": 0,
           "loadoutUnlock": {
             "slot": "weapon2",
-            "itemId": "ENERGIEINJEKTOR"
+            "itemId": "REPARATURSTRAHL"
           }
         },
         {
@@ -948,19 +948,19 @@
           ]
         },
         {
-          "id": "unlock_reparaturstrahl",
-          "code": "C-I2",
-          "label": "Plasmabrenner",
-          "description": "Hält per rechter Maustaste einen grünen Plasma-Hitscan auf dem Ziel. Verbündete werden geheilt und repariert, Gegner und gegnerische Strukturen erleiden Schaden. Kostet Adrenalin je Impuls.",
+          "id": "unlock_energieinjektor",
+          "code": "C-I3",
+          "label": "Energieinjektor",
+          "description": "Entlädt Adrenalin in schnellen, leicht zielsuchenden Energiebolzen auf einen Turm und erhöht dessen Schaden für kurze Zeit.",
           "kind": "unlock",
           "maxLevel": 1,
           "startingLevel": 0,
           "costPerLevel": 1,
           "refundable": true,
-          "sortOrder": 60,
+          "sortOrder": 70,
           "loadoutUnlock": {
             "slot": "weapon2",
-            "itemId": "REPARATURSTRAHL"
+            "itemId": "ENERGIEINJEKTOR"
           }
         },
         {

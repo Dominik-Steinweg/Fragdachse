@@ -1,9 +1,15 @@
+import rawCoopDefenseConstructionCooldowns from './coopDefenseConstructions.json';
 import type { ConstructionId, EnergyInjectorConstructionEffect, PlaceableKind, TurretWeaponId } from '../types';
+
+interface RawCoopDefenseConstructionCooldownDefinition {
+  readonly buildCooldownMs?: unknown;
+}
 
 interface CoopDefenseConstructionBaseDefinition {
   readonly id: ConstructionId;
   readonly displayName: string;
   readonly description: string;
+  readonly buildCooldownMs: number;
   /**
    * Optionales individuelles Loadout-Icon des Konstrukts. Solange es `null` ist, verwenden
    * Slot und Unlock-Knoten gemeinsam das temporaere Icon aus `unlockUpgradeId`.
@@ -77,12 +83,7 @@ export function getCoopDefenseConstructionCapacity(bonus: number): number {
 /** Stat-Schluessel des Kapazitaetsbonus im gemeinsamen Upgrade-/Item-Bucket. */
 export const COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT = 'construction.capacity';
 
-/**
- * Einheitlicher Bau-Cooldown fuer alle Konstrukte. Begrenzend ist die Kapazitaet, nicht
- * dieser Cooldown; er verhindert lediglich, dass eine ganze Verteidigungslinie in einem
- * einzigen Frame entsteht.
- */
-export const COOP_DEFENSE_BUILD_COOLDOWN_MS = 500;
+const COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS = loadConstructionBuildCooldowns();
 
 /** Reichweite, in der eigene Konstrukte zurueckgebaut werden koennen. */
 export const COOP_DEFENSE_DISMANTLE_RANGE = 320;
@@ -112,11 +113,33 @@ export const COOP_DEFENSE_REPAIR_DRONE_CONFIG = Object.freeze({
   repairDistance: 22,
 });
 
+function loadConstructionBuildCooldowns(): Readonly<Record<ConstructionId, number>> {
+  const raw = rawCoopDefenseConstructionCooldowns as Record<string, RawCoopDefenseConstructionCooldownDefinition>;
+  const cooldowns = {} as Record<ConstructionId, number>;
+
+  for (const constructionId of COOP_DEFENSE_CONSTRUCTION_IDS) {
+    const value = raw[constructionId]?.buildCooldownMs;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new Error(`[coopDefenseConstructions] Invalid buildCooldownMs for ${constructionId}`);
+    }
+    cooldowns[constructionId] = Math.floor(value);
+  }
+
+  for (const constructionId of Object.keys(raw)) {
+    if (!COOP_DEFENSE_CONSTRUCTION_IDS.includes(constructionId as ConstructionId)) {
+      throw new Error(`[coopDefenseConstructions] Unknown construction cooldown entry: ${constructionId}`);
+    }
+  }
+
+  return Object.freeze(cooldowns);
+}
+
 export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDefenseConstructionDefinition>> =
   Object.freeze({
     rocket_turret: {
       kind: 'turret',
       id: 'rocket_turret',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.rocket_turret,
       displayName: 'Raketenturm',
       description: 'Verschießt automatisch Raketen mit Flächenschaden.',
       weaponId: 'TURRET_ROCKET',
@@ -133,6 +156,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     machine_gun_turret: {
       kind: 'turret',
       id: 'machine_gun_turret',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.machine_gun_turret,
       displayName: 'Maschinengewehrturm',
       description: 'Bekämpft einzelne Ziele mit hoher Feuerrate.',
       weaponId: 'TURRET_MG',
@@ -149,6 +173,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     flame_turret: {
       kind: 'turret',
       id: 'flame_turret',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.flame_turret,
       displayName: 'Flammenwerferturm',
       description: 'Entzündet Gegner in kurzer Reichweite kontinuierlich.',
       weaponId: 'TURRET_FLAME',
@@ -165,6 +190,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     tesla_turret: {
       kind: 'turret',
       id: 'tesla_turret',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.tesla_turret,
       displayName: 'Tesla-Turm',
       description: 'Erzeugt bei nahen Gegnern eine kleine Teslakuppel mit kontinuierlichem Schaden.',
       weaponId: 'TURRET_TESLA',
@@ -181,6 +207,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     gravity_turret: {
       kind: 'turret',
       id: 'gravity_turret',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.gravity_turret,
       displayName: 'Gravitationsturm',
       description: 'Erzeugt am Einschlag ein schwarzes Loch, das Gegner anzieht.',
       weaponId: 'TURRET_GRAVITY',
@@ -197,6 +224,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     slow_bubble_turret: {
       kind: 'turret',
       id: 'slow_bubble_turret',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.slow_bubble_turret,
       displayName: 'Slow-Bubble-Turm',
       description: 'Erzeugt am Einschlag eine kleine Zeitblase, die alle Einheiten verlangsamt.',
       weaponId: 'TURRET_SLOW_BUBBLE',
@@ -213,6 +241,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     medic_pedestal: {
       kind: 'pedestal',
       id: 'medic_pedestal',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.medic_pedestal,
       displayName: 'Medic-Podest',
       description: 'Stellt regelmaessig ein Medipack bereit.',
       powerUpDefId: 'HEALTH_PACK',
@@ -228,6 +257,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     armor_pedestal: {
       kind: 'pedestal',
       id: 'armor_pedestal',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.armor_pedestal,
       displayName: 'Armor-Podest',
       description: 'Stellt regelmaessig ein Armor-Power-up bereit.',
       powerUpDefId: 'ARMOR',

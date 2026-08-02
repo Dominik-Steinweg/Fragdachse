@@ -10,7 +10,7 @@ import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
 import type { ConstructionId, GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ProjectileExplosionConfig, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
-import { COOP_DEFENSE_BUILD_COOLDOWN_MS } from '../config/coopDefenseConstructions';
+import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import type {
   AirstrikeUltimateConfig,
   BfgUtilityConfig,
@@ -624,8 +624,8 @@ export class LoadoutManager {
   }
 
   // ── Bau-Cooldowns der Konstruktionen ──────────────────────────────────────
-  // Konstruktionen laufen nicht ueber `GenericUtility`, brauchen aber denselben
-  // einheitlichen Bau-Cooldown wie die platzierbaren Utilities.
+  // Konstruktionen laufen nicht ueber `GenericUtility`; ihr Bau-Cooldown kommt aus
+  // der jeweiligen Konstruktsdefinition.
 
   isConstructionOnCooldown(playerId: string, constructionId: ConstructionId, now: number): boolean {
     const readyAt = this.inspectorConstructionCooldowns.get(playerId)?.get(constructionId) ?? 0;
@@ -635,7 +635,7 @@ export class LoadoutManager {
   markConstructionUsed(playerId: string, constructionId: ConstructionId, now: number): void {
     const perPlayer = this.inspectorConstructionCooldowns.get(playerId) ?? new Map<ConstructionId, number>();
     this.inspectorConstructionCooldowns.set(playerId, perPlayer);
-    perPlayer.set(constructionId, now + COOP_DEFENSE_BUILD_COOLDOWN_MS);
+    perPlayer.set(constructionId, now + getCoopDefenseConstructionDefinition(constructionId).buildCooldownMs);
   }
 
   // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──

@@ -21,7 +21,7 @@ function commit(
 ): LoadoutCommitSnapshot {
   return {
     weapon1: 'GLOCK',
-    weapon2: classId === 'inspector_gadachs' ? 'ENERGIEINJEKTOR' : 'P90',
+    weapon2: classId === 'inspector_gadachs' ? 'REPARATURSTRAHL' : 'P90',
     utility: 'FELSEN',
     ultimate: 'GAUSS',
     coopDefenseClassId: classId,
@@ -78,7 +78,7 @@ describe('coop-defense classes', () => {
       'inspector_gadachs',
     );
 
-    expect(snapshot.weapon2).toBe('ENERGIEINJEKTOR');
+    expect(snapshot.weapon2).toBe('REPARATURSTRAHL');
     expect(isCoopDefenseReadyLoadoutComplete(snapshot)).toBe(true);
     expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: 'P90' })).toBe(false);
     expect(isCoopDefenseReadyLoadoutComplete({ ...snapshot, weapon2: null })).toBe(false);
@@ -132,13 +132,13 @@ describe('coop-defense classes', () => {
     // Waffe 2 traegt nur noch die Adrenalinfaehigkeiten, die Konstrukte stehen in ihrer
     // eigenen Kategorie.
     expect(weapon2Ids).toEqual([
-      'unlock_energieinjektor',
+      'unlock_reparaturstrahl',
       'unlock_overcharge_core',
       'overcharge_radius',
       'overcharge_duration',
       'overcharge_power',
       'overcharge_cost',
-      'unlock_reparaturstrahl',
+      'unlock_energieinjektor',
     ]);
     expect(constructionIds).toContain('unlock_rocket_turret');
     expect(constructionIds).toContain('unlock_felsbau');

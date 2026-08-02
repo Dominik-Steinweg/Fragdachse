@@ -23,9 +23,42 @@ function createManagerWithSpawnSpy() {
 describe('inspector support weapons', () => {
   it('fires the Plasmabrenner as a continuous, context-sensitive hitscan', () => {
     const { manager, spawnProjectile, resolveHitscanShot } = createManagerWithSpawnSpy();
+    const productionConfig = WEAPON_CONFIGS.REPARATURSTRAHL;
+
+    expect(productionConfig.displayName).toBe('Plasmabrenner');
+    expect(productionConfig.shotAudio).toMatchObject({ failureKey: 'shot_dry_trigger' });
+    expect(productionConfig.fire).toMatchObject({
+      type: 'hitscan',
+      visualPreset: 'plasma_burner',
+      supportEffect: {
+        type: 'plasma_burner',
+        beamColor: PLASMA_BURNER_COLOR,
+      },
+    });
+    if (productionConfig.fire.type !== 'hitscan') {
+      throw new Error('Der Plasmabrenner muss eine Hitscan-Waffe sein');
+    }
+
+    const supportEffect = {
+      type: 'plasma_burner' as const,
+      healPerHit: 3,
+      damagePerHit: 7,
+      beamColor: 0x123456,
+    };
+    const testConfig = {
+      ...productionConfig,
+      range: 123,
+      damage: 11,
+      adrenalinGain: 5,
+      fire: {
+        ...productionConfig.fire,
+        traceThickness: 9,
+        supportEffect,
+      },
+    };
 
     expect(manager.fireAutomatedWeapon(
-      WEAPON_CONFIGS.REPARATURSTRAHL,
+      testConfig,
       100,
       200,
       0,
@@ -36,30 +69,14 @@ describe('inspector support weapons', () => {
     )).toBe(true);
 
     expect(spawnProjectile).not.toHaveBeenCalled();
-    expect(WEAPON_CONFIGS.REPARATURSTRAHL.displayName).toBe('Plasmabrenner');
-    expect(WEAPON_CONFIGS.REPARATURSTRAHL.cooldown).toBe(160);
-    expect(WEAPON_CONFIGS.REPARATURSTRAHL.fire).toMatchObject({
-      type: 'hitscan',
-      traceThickness: 5,
-      visualPreset: 'plasma_burner',
-      supportEffect: {
-        type: 'plasma_burner',
-        healPerHit: 25,
-        damagePerHit: 25,
-        beamColor: PLASMA_BURNER_COLOR,
-      },
-    });
     const call = resolveHitscanShot.mock.calls[0];
-    expect(call?.[4]).toBe(420);
-    expect(call?.[5]).toBe(0);
-    expect(call?.[6]).toBe(5);
-    expect(call?.[9]).toBe('Plasmabrenner');
-    expect(call?.[19]).toEqual({
-      type: 'plasma_burner',
-      healPerHit: 25,
-      damagePerHit: 25,
-      beamColor: PLASMA_BURNER_COLOR,
-    });
+    expect(call?.[4]).toBe(testConfig.range);
+    expect(call?.[5]).toBe(testConfig.damage);
+    expect(call?.[6]).toBe(testConfig.fire.traceThickness);
+    expect(call?.[8]).toBe(testConfig.adrenalinGain);
+    expect(call?.[9]).toBe(testConfig.displayName);
+    expect(call?.[10]).toBe(testConfig.fire.visualPreset);
+    expect(call?.[19]).toEqual(supportEffect);
   });
 
   it('fires the energy injector as a precise non-homing projectile', () => {
