@@ -24,6 +24,8 @@ import {
 } from './radialFocusState';
 import { DistortionFilter } from '../distortion/DistortionFilter';
 import { resolveIsotropicDistortionAmounts } from '../distortion/distortionScale';
+import { getRenderScale } from '../../graphics/RenderResolution';
+import { resolveWorldBloomSampling } from './bloomSampling';
 
 /** Minimalverträge der Phaser-4-Filter, die diese Kette verwendet. */
 interface ColorMatrixLike {
@@ -68,6 +70,7 @@ interface FilterChain {
   displacement: DistortionFilter | null;
   parallel: ParallelLike | null;
   threshold: ThresholdLike | null;
+  blur: BlurLike | null;
   colorMatrix: ColorMatrixLike | null;
   vignette: VignetteLike | null;
   radialFocus: {
@@ -85,15 +88,7 @@ interface FilterChain {
  * nur ausgebrannte Pixel durch; erst eine breitere lässt auch helle Kerne teilweise beitragen
  * und macht den Bloom als Leuchten lesbar.
  */
-const BLOOM_EDGE_WIDTH = 0.22;
-
-/**
- * Streuung des Bloom-Blurs. Der Shader rechnet `offset = 1.333 · x · strength` in Pixeln je
- * Schritt – die vorherigen 2 px über 2 Schritte ergaben rund 5 px Gesamtstreuung und waren
- * schlicht nicht als Leuchten wahrnehmbar.
- */
-const BLOOM_BLUR_OFFSET_PX = 8;
-const BLOOM_BLUR_STEPS = 3;
+const BLOOM_EDGE_WIDTH = 0.14;
 
 /**
  * Bildkomposition der **Weltkamera**. Objektbezogene Glows bleiben in `utils/phaserFx.ts`;
@@ -116,7 +111,7 @@ const BLOOM_BLUR_STEPS = 3;
 export class CameraPostFxController {
   private readonly pulses = new PostFxPulseSet();
   private readonly chain: FilterChain = {
-    displacement: null, parallel: null, threshold: null,
+    displacement: null, parallel: null, threshold: null, blur: null,
     colorMatrix: null, vignette: null, radialFocus: null, barrel: null,
   };
 
@@ -124,6 +119,7 @@ export class CameraPostFxController {
   private radialFocusFrame: RadialFocusFrame | null = null;
   private lastState: ResolvedPostFxState | null = null;
   private lastBloomThreshold = Number.NaN;
+  private lastBloomSamplingKey = '';
   private distortionTextureKey: string | null = null;
   private lastRadialFocusDesaturate = Number.NaN;
   private enabled = true;
@@ -295,7 +291,18 @@ export class CameraPostFxController {
       this.baseGrade.bloomThreshold,
       this.baseGrade.bloomThreshold + BLOOM_EDGE_WIDTH,
     );
-    parallel.top.addBlur(1, BLOOM_BLUR_OFFSET_PX, BLOOM_BLUR_OFFSET_PX, 1, 0xffffff, BLOOM_BLUR_STEPS);
+    const sampling = resolveWorldBloomSampling(
+      getGraphicsQualityProfile(this.scene).level,
+      getRenderScale(this.scene.scale),
+    );
+    this.chain.blur = parallel.top.addBlur(
+      sampling.blurQuality,
+      sampling.blurOffsetPx,
+      sampling.blurOffsetPx,
+      1,
+      0xffffff,
+      sampling.blurSteps,
+    ) as BlurLike;
     parallel.blend.blendMode = Phaser.BlendModes.ADD;
     parallel.blend.amount = 0;
     parallel.active = false;
@@ -363,6 +370,7 @@ export class CameraPostFxController {
   private applyState(state: ResolvedPostFxState | null): void {
     const profile = getGraphicsQualityProfile(this.scene);
     const { colorMatrix, vignette, parallel, barrel } = this.chain;
+    this.applyBloomSampling(profile.level);
 
     if (!state || state.neutral) {
       if (colorMatrix) colorMatrix.active = false;
@@ -450,6 +458,22 @@ export class CameraPostFxController {
       this.lastRadialFocusDesaturate = sampling.desaturate;
     }
     radialFocus.parallel.setEffectActive(wanted && sampling.filterActive);
+  }
+
+  private applyBloomSampling(level: 'high' | 'medium' | 'low'): void {
+    const blur = this.chain.blur;
+    if (!blur) return;
+
+    const renderScale = getRenderScale(this.scene.scale);
+    const sampling = resolveWorldBloomSampling(level, renderScale);
+    const key = `${sampling.blurQuality}:${sampling.blurOffsetPx}:${sampling.blurSteps}`;
+    if (key === this.lastBloomSamplingKey) return;
+
+    blur.quality = sampling.blurQuality;
+    blur.x = sampling.blurOffsetPx;
+    blur.y = sampling.blurOffsetPx;
+    blur.steps = sampling.blurSteps;
+    this.lastBloomSamplingKey = key;
   }
 }
 

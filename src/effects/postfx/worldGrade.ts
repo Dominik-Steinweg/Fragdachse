@@ -57,7 +57,9 @@ export const WORLD_GRADE_CLAMPS = {
   // in den Ecken. Darüber verschluckt die Vignette Gegner am Bildrand.
   vignetteStrength: [0, 0.5],
   bloomThreshold: [0.30, 0.95],
-  bloomAmount: [0, 0.85],
+  // Dauer-Bloom bleibt bewusst unter dem Ereignisbereich; Ereignispulse verwenden die
+  // weiteren POST_FX_PULSE_CLAMPS und dürfen kurzzeitig deutlich stärker werden.
+  bloomAmount: [0, 0.32],
 } as const;
 
 /**
@@ -113,7 +115,7 @@ export function resolveDarkness(sky: SkyState): number {
  * überall und nachts nirgends. Sie folgt darum der Helligkeit des Bildes.
  */
 function resolveBloomThreshold(darkness: number): number {
-  return clamp(0.62 - darkness * 0.22, WORLD_GRADE_CLAMPS.bloomThreshold);
+  return clamp(0.68 - darkness * 0.18, WORLD_GRADE_CLAMPS.bloomThreshold);
 }
 
 export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
@@ -170,7 +172,7 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
     vignetteRadius: clamp(vignetteRadius, WORLD_GRADE_CLAMPS.vignetteRadius),
     vignetteStrength: clamp(vignetteStrength, WORLD_GRADE_CLAMPS.vignetteStrength),
     bloomThreshold: resolveBloomThreshold(darkness),
-    bloomAmount: clamp(0.34 + darkness * 0.14, WORLD_GRADE_CLAMPS.bloomAmount),
+    bloomAmount: clamp(0.14 + darkness * 0.08, WORLD_GRADE_CLAMPS.bloomAmount),
   };
 }
 

@@ -906,6 +906,10 @@ export class LightingSystem {
       .setDepth(DEPTH_LIGHTING)
       // Konstant MULTIPLY: die Uhrzeit steckt allein im Ambient, mit dem gefüllt wird.
       .setBlendMode(Phaser.BlendModes.MULTIPLY);
+    // Die Lightmap bleibt absichtlich halbauflösend, ist aber ein weiches Lichtfeld. Explizit
+    // linear filtern, damit die anschließende Kamera-Bloom-Stufe keine halben Lightmap-Zellen
+    // als regelmäßiges Raster in die Threshold-Rampe übernimmt.
+    lightMap.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     lightMap.setRenderMode('all');
     this.lightMap = lightMap;
     this.syncOverlayVisibility();
