@@ -74,9 +74,14 @@ Vollbild läuft ausschließlich über `src/ui/fullscreen.ts`; der ScaleManager w
 
 ## Testdesign und Balancing
 
-Tests sichern Verhalten, Systemgrenzen und langlebige Invarianten ab, nicht die momentanen Tuningwerte. Schadenswerte, Lebenspunkte, Cooldowns, Reichweiten, Rundendauern, Spawnzeitpunkte und vergleichbare Balancingparameter dürfen deshalb nicht als duplizierte Zahlenliterale in Tests festgeschrieben werden. Solche Spiegeltests liefern keinen zusätzlichen Vertrag und werden bei einer beabsichtigten Balanceänderung grundlos rot.
+> Teste Verhalten und Verträge, nicht den aktuellen Balance-Snapshot.
 
-Wenn konfigurationsgetriebenes Verhalten geprüft wird, leitet der Test erwartete Zeitpunkte und Ergebnisse aus der geladenen Konfiguration ab und prüft deren Weitergabe, Berechnung, Grenzen und Reihenfolge. Absolute Zahlen sind nur dann angemessen, wenn die Zahl selbst ein technischer oder fachlich ausdrücklich fixierter Vertrag ist, etwa eine Protokollversion, ein Geometrieformat oder eine bewusst eingefrorene Referenz. Eine bloße aktuelle Balanceentscheidung ist kein solcher Vertrag.
+- Tests schützen technische Verträge, Berechnungslogik, Referenzintegrität, Schemas, Invarianten und bewusst festgelegte Designregeln.
+- Veränderliche Balancing-Werte aus JSON- oder Konfigurationsdateien nicht als exakte Zahlen duplizieren. Erfordert eine legitime Balanceänderung nur dieselbe Zahlenänderung im Test, ist dieser in der Regel zu stark gekoppelt.
+- Formeln und Modifier mit kleinen künstlichen Testdaten prüfen; produktive Konfigurationen vor allem auf Gültigkeit, Referenzen, Wertebereiche und semantische Beziehungen testen.
+- Konkrete Produktionswerte nur festschreiben, wenn sie einen ausdrücklich benannten technischen oder fachlichen Vertrag bilden; die Ausnahme im Testnamen oder Kommentar als Design- beziehungsweise Balancevertrag kennzeichnen.
+- Reine Balanceprüfungen dürfen keine Validierung bilden, die den Spielstart blockiert.
+- Keine vollständigen Snapshots veränderlicher Map-, Waffen-, Gegner- oder Progressionswerte und keine exakten Registry-Anzahlen, sofern eine feste Anzahl nicht fachlich erforderlich ist.
 
 ## Wichtige Referenzpfade
 

@@ -191,10 +191,8 @@ export class RpcCoordinator {
       this.ctx.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
       const audio = resolveExplosionAudio(visualStyle);
       if (audio) this.ctx.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
-      // Nur die Nuke löst eine globale Bildreaktion aus. Kleine Explosionen bleiben bewusst
-      // lokal – sonst flackerte das ganze Bild bei jedem Granatentreffer.
-      if (visualStyle === 'nuke') this.ctx.visualFeedback.pulsePostFx('nukeDetonation');
-      else if (visualStyle === 'void_nuke') this.ctx.visualFeedback.pulsePostFx('voidNukeDetonation');
+      // Die Nuke pulst nicht von hier: ihre Detonation ist Phase B der Choreografie, die das
+      // Effektsystem startet. Ein Puls daneben liefe doppelt.
     });
   }
 

@@ -46,6 +46,7 @@ import type { ProjectileManager } from '../../entities/ProjectileManager';
 import type { PlayerManager }     from '../../entities/PlayerManager';
 import type { EffectSystem }      from '../../effects/EffectSystem';
 import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
+import type { LocalDistortionComposer } from '../../effects/distortion/LocalDistortionComposer';
 import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 
 /** All visual renderers grouped together. Round-scoped renderers start as null. */
@@ -298,6 +299,19 @@ export function wireRenderersToCameraFeedback(
   bundle.airstrike.setCameraFeedback(controller);
   bundle.meteor.setCameraFeedback(controller);
   bundle.beer.setCameraFeedback(controller);
+}
+
+/**
+ * Verbindet die Renderer, die Weltpixel lokal verzerren, mit der gemeinsamen Karte. Jeder
+ * meldet seine Quellen pro Frame an; die Auswahl, Begrenzung und der einzelne Renderpass
+ * liegen beim Composer.
+ */
+export function wireRenderersToDistortion(
+  bundle: RendererBundle,
+  composer: LocalDistortionComposer,
+): void {
+  bundle.timeBubble.setDistortionComposer(composer);
+  bundle.blackHole.setDistortionComposer(composer);
 }
 
 /** Wire GameAudioSystem to renderers that play sounds. */

@@ -193,6 +193,7 @@ describe('projectile performance paths', () => {
         });
       }),
       killAll: vi.fn(),
+      forEachDead: vi.fn(),
     };
     const particles = vi.fn((
       _x: number,

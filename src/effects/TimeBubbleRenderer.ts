@@ -4,6 +4,8 @@ import type { SyncedTimeBubble } from '../types';
 import { ensureCanvasTexture, mixColors } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+import type { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
+import { DISTORTION_PRIORITY } from './distortion/distortionFramePlanner';
 
 const TEX_TIME_BUBBLE_MEMBRANE = '__time_bubble_membrane';
 const TEX_TIME_BUBBLE_INTERFERENCE = '__time_bubble_interference';
@@ -125,8 +127,13 @@ function drawRadiusRing(ctx: CanvasRenderingContext2D, center: number, ring: Rad
 export class TimeBubbleRenderer {
   private readonly visuals = new Map<number, TimeBubbleVisual>();
   private lighting: LightingSystem | null = null;
+  private distortion: LocalDistortionComposer | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setDistortionComposer(composer: LocalDistortionComposer | null): void {
+    this.distortion = composer;
+  }
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
@@ -308,6 +315,22 @@ export class TimeBubbleRenderer {
       radiusPx: Math.max(bubble.radius * 1.45, 110),
       color: mixColors(bubble.color, 0xffffff, 0.62),
       intensity: 0.85 * Phaser.Math.Clamp(bubble.alpha, 0, 1),
+    });
+
+    // Lokale Lichtbrechung der Welt hinter der Blase. Die Stärke kommt aus dem replizierten
+    // `distortion`-Wert – Host und Clients sehen damit dieselbe Brechung. Das `lens`-Profil
+    // liegt im Innenraum und wird bereits vor dem sichtbaren Membranband neutral. So bleibt die
+    // äußere Silhouette trotz des Kamera-Passes kreisförmig. Die langsame Drehung übernimmt die
+    // Rotation der Membran, damit beides zusammenläuft.
+    this.distortion?.submit({
+      id: `timeBubble:${bubble.id}`,
+      profile: 'lens',
+      worldX: bubble.x,
+      worldY: bubble.y,
+      radiusPx: bubble.radius,
+      strength: Phaser.Math.Clamp(bubble.distortion, 0, 1) * Phaser.Math.Clamp(bubble.alpha, 0, 1),
+      rotation: visual.membrane.rotation,
+      priority: DISTORTION_PRIORITY.timeBubble,
     });
   }
 

@@ -1808,6 +1808,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.timeBubbleSystem?.destroyAll();
     this.ctx.decoySystem.clearAll();
     this.renderers.timeBubble.destroyAll();
+    this.renderers.blackHole.destroyAll();
     this.renderers.overchargeField.destroyAll();
     this.renderers.turretCharge.destroyAll();
     this.renderers.remoteControl.destroyAll();

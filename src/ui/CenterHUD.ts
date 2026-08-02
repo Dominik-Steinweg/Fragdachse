@@ -541,8 +541,6 @@ export class CenterHUD {
     this.tutorialGraphics.fillRoundedRect(left, 0, width, height, 12);
     this.tutorialGraphics.lineStyle(2, TUTORIAL_ACCENT, 0.72);
     this.tutorialGraphics.strokeRoundedRect(left, 0, width, height, 12);
-    this.tutorialGraphics.fillStyle(TUTORIAL_ACCENT, 0.9);
-    this.tutorialGraphics.fillRoundedRect(left, 10, 4, height - 20, 2);
 
     if (showControls) {
       // Trennlinie unter der Überschrift + Zeilen-Alternierung wie im Hilfe-Fenster.

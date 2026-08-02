@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH, VOID_FIRE_COLOR } from '../config';
-import { circleZone } from './EffectUtils';
+import { circleZone, killAllAndResetParticlePositions } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 import type { GroundFireVisualStyle } from '../types';
 import {
@@ -178,9 +178,9 @@ export class EntityBurnRenderer {
 
     // Bereits lebende Partikel behalten ihre Texture-Frames. Beim seltenen Stilwechsel
     // werden sie deshalb entfernt, bevor die drei gepoolten Emitter umgefaerbt werden.
-    this.coreEmitter.killAll();
-    this.outerEmitter.killAll();
-    this.sparkEmitter.killAll();
+    killAllAndResetParticlePositions(this.coreEmitter);
+    killAllAndResetParticlePositions(this.outerEmitter);
+    killAllAndResetParticlePositions(this.sparkEmitter);
 
     const isVoid = visualStyle === 'void';
     this.coreEmitter

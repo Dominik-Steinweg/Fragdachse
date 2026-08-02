@@ -1,7 +1,11 @@
 import * as Phaser from 'phaser';
 import { DEPTH, VOID_FIRE_COLOR } from '../config';
 import type { GroundFireVisualStyle } from '../types';
-import { createEmitter, destroyEmitter } from './EffectUtils';
+import {
+  createEmitter,
+  destroyEmitter,
+  killAllAndResetParticlePositions,
+} from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
 import {
   ensureFlameTextures,
@@ -252,12 +256,12 @@ export class ProjectileBurnRenderer {
 
   destroyAll(): void {
     for (const id of [...this.visuals.keys()]) this.destroyVisual(id);
-    this.outer.killAll();
-    this.core.killAll();
-    this.sparks.killAll();
-    this.voidOuter.killAll();
-    this.voidCore.killAll();
-    this.voidSparks.killAll();
+    killAllAndResetParticlePositions(this.outer);
+    killAllAndResetParticlePositions(this.core);
+    killAllAndResetParticlePositions(this.sparks);
+    killAllAndResetParticlePositions(this.voidOuter);
+    killAllAndResetParticlePositions(this.voidCore);
+    killAllAndResetParticlePositions(this.voidSparks);
   }
 
   shutdown(): void {

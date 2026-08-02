@@ -14,6 +14,20 @@ import type { LightingSystem } from './LightingSystem';
 import type { HitFeedbackRenderer } from './HitFeedbackRenderer';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import type { CameraPostFxController } from './postfx/CameraPostFxController';
+import type { NukeVariant } from './nuke/NukeChoreography';
+
+/** Schmaler Ausschnitt der Regie, den das Effektsystem für die Nuke braucht. */
+interface NukeSequenceHost {
+  startNukeSequence(options: {
+    variant: NukeVariant;
+    x: number;
+    y: number;
+    radiusPx: number;
+    onSkyFlash?: (alpha: number) => void;
+    onFinished?: () => void;
+  }): boolean;
+  hasActiveNukeSequence(): boolean;
+}
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { impactExceptional, impactHeavy, impactLight } from './camera/cameraFeedbackPresets';
 import { EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS, EXPLOSION_LIGHT_RADIUS_FACTOR } from './LightingConfig';
@@ -84,6 +98,7 @@ export class EffectSystem implements EnemyVisualSink {
   private hitFeedbackRenderer: HitFeedbackRenderer | null = null;
   private cameraFeedback: CameraFeedbackController | null = null;
   private postFx: CameraPostFxController | null = null;
+  private visualFeedback: NukeSequenceHost | null = null;
   private spawnEffectRenderer: SpawnEffectRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private texturesGenerated = false;
@@ -121,6 +136,11 @@ export class EffectSystem implements EnemyVisualSink {
 
   setPostFx(controller: CameraPostFxController | null): void {
     this.postFx = controller;
+  }
+
+  /** Nur für die mehrphasige Nuke-Regie; alles andere läuft über die schmalen Setter. */
+  setVisualFeedback(director: NukeSequenceHost | null): void {
+    this.visualFeedback = director;
   }
 
   /** Gegner-Spawn: dieselbe Effektfamilie wie beim Spielerspawn, nur zurückhaltender. */
@@ -955,13 +975,28 @@ export class EffectSystem implements EnemyVisualSink {
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
       makeAdditive(skyFlash);
-      this.scene.tweens.add({
-        targets:    skyFlash,
-        alpha:      0,
-        duration:   420,
-        ease:       'Quad.easeOut',
-        onComplete: () => skyFlash.destroy(),
-      });
+
+      // Der Blitz ist der Belichtungsstoß der Detonationsphase und wird deshalb von der
+      // Choreografie getrieben, nicht von einem eigenen Tween daneben. Ohne laufende Regie
+      // (keine Kamerafilter, `low`) bleibt der Tween als Rückfallebene.
+      const sequenceStarted = this.visualFeedback?.startNukeSequence({
+        variant: isVoidNuke ? 'void' : 'normal',
+        x,
+        y,
+        radiusPx: radius,
+        onSkyFlash: (alpha) => skyFlash.setAlpha(alpha * 0.24),
+        onFinished: () => skyFlash.destroy(),
+      }) ?? false;
+
+      if (!sequenceStarted) {
+        this.scene.tweens.add({
+          targets:    skyFlash,
+          alpha:      0,
+          duration:   420,
+          ease:       'Quad.easeOut',
+          onComplete: () => skyFlash.destroy(),
+        });
+      }
     }
 
     const flash = this.scene.add.circle(x, y, startRadius, flashColor, 1);
@@ -1336,7 +1371,9 @@ export class EffectSystem implements EnemyVisualSink {
       this.cameraFeedback?.request(impactHeavy({ sourceX: x, sourceY: y }));
     } else if (isEnergy) {
       this.cameraFeedback?.request(impactLight({ sourceX: x, sourceY: y }));
-    } else if (isNuke) {
+    } else if (isNuke && !this.visualFeedback?.hasActiveNukeSequence()) {
+      // Der Einschlag der Nuke gehört zur Choreografie. Nur wenn die nicht läuft (kein WebGL,
+      // `low`), springt der Einzeleffekt als Rückfallebene ein – sonst schlüge er doppelt zu.
       this.cameraFeedback?.request(impactExceptional({ sourceX: x, sourceY: y }));
     }
   }

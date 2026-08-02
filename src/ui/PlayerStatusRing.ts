@@ -7,6 +7,7 @@ import {
 } from '../config';
 import { ensureLivingBarTextures } from './LivingBarEffect';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
 import type { LocalArenaHudData } from './LocalArenaHudData';
 
 type SegmentKey = 'hp' | 'adrenaline' | 'rage';
@@ -344,15 +345,15 @@ export class PlayerStatusRing {
   private stopLivingEmitters(): void {
     for (const bundle of this.livingEmitters.values()) {
       bundle.core.stop();
-      bundle.core.killAll();
+      killAllAndResetParticlePositions(bundle.core);
       bundle.outer.stop();
-      bundle.outer.killAll();
+      killAllAndResetParticlePositions(bundle.outer);
     }
     if (this.armorEmitter) {
       this.armorEmitter.core.stop();
-      this.armorEmitter.core.killAll();
+      killAllAndResetParticlePositions(this.armorEmitter.core);
       this.armorEmitter.outer.stop();
-      this.armorEmitter.outer.killAll();
+      killAllAndResetParticlePositions(this.armorEmitter.outer);
     }
   }
 
@@ -578,9 +579,9 @@ export class PlayerStatusRing {
       if (!bundle.outer.emitting) bundle.outer.start();
     } else {
       bundle.core.stop();
-      bundle.core.killAll();
+      killAllAndResetParticlePositions(bundle.core);
       bundle.outer.stop();
-      bundle.outer.killAll();
+      killAllAndResetParticlePositions(bundle.outer);
     }
   }
 
@@ -693,9 +694,9 @@ export class PlayerStatusRing {
       if (!bundle.outer.emitting) bundle.outer.start();
     } else {
       bundle.core.stop();
-      bundle.core.killAll();
+      killAllAndResetParticlePositions(bundle.core);
       bundle.outer.stop();
-      bundle.outer.killAll();
+      killAllAndResetParticlePositions(bundle.outer);
     }
   }
 

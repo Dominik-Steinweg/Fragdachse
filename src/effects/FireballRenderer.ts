@@ -1,6 +1,10 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { createEmitter, fillRadialGradientTexture } from './EffectUtils';
+import {
+  createEmitter,
+  fillRadialGradientTexture,
+  killAllAndResetParticlePositions,
+} from './EffectUtils';
 import { ensureFlameTextures, FLAME_COLORS_OUTER, FLAME_COLORS_SPARK, TEX_FLAME_EMBER, TEX_FLAME_SPARK } from './FlameShared';
 
 const TEX_FIREBALL_CORE = '__fireball_core';
@@ -83,8 +87,8 @@ export class FireballRenderer {
     for (const id of [...this.visuals.keys()]) this.destroyVisual(id);
     // ProjectileManager.destroyAll() wird auch zwischen Runden aufgerufen; die
     // szenenweiten Pool-Emitter bleiben deshalb fuer die naechste Runde erhalten.
-    this.tail.killAll();
-    this.sparks.killAll();
+    killAllAndResetParticlePositions(this.tail);
+    killAllAndResetParticlePositions(this.sparks);
   }
 
   private generateTextures(): void {

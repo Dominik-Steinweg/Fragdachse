@@ -3,6 +3,7 @@ import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types
 import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
+import { killAllAndResetParticlePositions } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlow, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
@@ -569,9 +570,13 @@ export class PlayerEntity {
       this.stealthShell?.setVisible(false);
       this.stealthScan?.setVisible(false);
       this.stealthAmbientParticles?.stop();
-      this.stealthAmbientParticles?.killAll();
+      if (this.stealthAmbientParticles) {
+        killAllAndResetParticlePositions(this.stealthAmbientParticles);
+      }
       this.stealthTrailParticles?.stop();
-      this.stealthTrailParticles?.killAll();
+      if (this.stealthTrailParticles) {
+        killAllAndResetParticlePositions(this.stealthTrailParticles);
+      }
       this.startDefaultGlowTween();
     }
 

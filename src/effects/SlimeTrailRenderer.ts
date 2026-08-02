@@ -1,7 +1,14 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SlimeBloomTarget, SyncedSlimeTrailCell, SyncedSlimeTrailSnapshot, SyncedSlimedEnemy } from '../types';
-import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import {
+  configureAdditiveImage,
+  createEmitter,
+  destroyEmitter,
+  ensureCanvasTexture,
+  fillRadialGradientTexture,
+  killAllAndResetParticlePositions,
+} from './EffectUtils';
 import { MAX_SLIME_LIGHTS, SLIME_LIGHT_BUCKET_SIZE } from './LightingConfig';
 import type { LightingSystem } from './LightingSystem';
 
@@ -241,10 +248,10 @@ export class SlimeTrailRenderer {
     this.trailCursor = 0;
     this.glintCursor = 0;
     this.rippleCursor = 0;
-    this.trailBubbles.killAll();
-    this.trailGlints.killAll();
-    this.trailRipples.killAll();
-    this.enemyBubbles.killAll();
+    killAllAndResetParticlePositions(this.trailBubbles);
+    killAllAndResetParticlePositions(this.trailGlints);
+    killAllAndResetParticlePositions(this.trailRipples);
+    killAllAndResetParticlePositions(this.enemyBubbles);
     for (const tween of this.activeBloomTweens) tween.stop();
     this.activeBloomTweens.clear();
     for (const chunk of this.activeBloomChunks) chunk.destroy();

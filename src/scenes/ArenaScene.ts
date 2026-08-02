@@ -147,6 +147,7 @@ import {
   wireRenderersToEffectSystem,
   wireRenderersToAudioSystem,
   wireRenderersToCameraFeedback,
+  wireRenderersToDistortion,
 } from './arena';
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
@@ -778,8 +779,14 @@ export class ArenaScene extends Phaser.Scene {
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
     wireRenderersToCameraFeedback(this.renderers, this.visualFeedback.camera);
+    wireRenderersToDistortion(this.renderers, this.visualFeedback.distortion);
     effectSystem.setCameraFeedback(this.visualFeedback.camera);
     effectSystem.setPostFx(this.visualFeedback.postFx);
+    effectSystem.setVisualFeedback(this.visualFeedback);
+    this.renderers.nuke.setNukeCountdownDriver(
+      (nukeId, progress, nx, ny) => this.visualFeedback?.driveNukeCountdown(nukeId, progress, nx, ny) ?? 0,
+      (nukeId) => this.visualFeedback?.releaseNukeCountdown(nukeId),
+    );
     inputSystem.setCameraFeedback(this.visualFeedback.camera);
 
     // Homing providers (closed over ctx, read at call-time → safe after teardown)
@@ -1443,6 +1450,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
+    this.renderers.blackHole.update(delta);
     // Nach dem Positionsabgleich der Entities: die Trefferkopien führen ihre Ziele nach.
     this.visualFeedback?.update(delta);
     // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
@@ -2374,7 +2382,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.lifecycle?.isMatchTerminated()): void {
     if (!this.ctx) return;
-    const shouldShow = inArena && (bridge.isArenaCountdownActive() || this.arenaPanelsHeld || !this.localPlayerState.alive);
+    const shouldShow = inArena && this.arenaPanelsHeld;
     this.syncArenaPanelOverlay(shouldShow);
   }
 

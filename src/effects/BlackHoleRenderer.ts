@@ -8,6 +8,9 @@ import {
   ensureCanvasTexture,
   fillRadialGradientTexture,
 } from './EffectUtils';
+import type { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
+import { DISTORTION_PRIORITY } from './distortion/distortionFramePlanner';
+import { resolveBlackHoleDistortion } from './distortion/blackHoleDistortion';
 
 const TEX_BLACK_HOLE = '__black_hole';
 const TEX_BLACK_HOLE_HORIZON = '__black_hole_horizon';
@@ -41,8 +44,61 @@ function createInwardOrbitCallback(
 }
 
 /** A deliberately restrained local visual for host-synchronized black-hole fields. */
+interface ActiveBlackHole {
+  /** Stabil über die Lebensdauer – ein Array-Index würde beim Entfernen anderer Felder springen. */
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly durationMs: number;
+  elapsedMs: number;
+}
+
 export class BlackHoleRenderer {
+  /**
+   * Die Sichtdarstellung selbst läuft weiter über Tweens. Diese Liste existiert nur für die
+   * Gravitationslinse: ihr Verlauf muss pro Frame als Quelle angemeldet werden und soll aus
+   * einer prüfbaren Kurve kommen statt aus einem Tween.
+   */
+  private readonly activeHoles: ActiveBlackHole[] = [];
+  private distortion: LocalDistortionComposer | null = null;
+  private nextHoleId = 1;
+
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setDistortionComposer(composer: LocalDistortionComposer | null): void {
+    this.distortion = composer;
+  }
+
+  /**
+   * Meldet die Linse jedes aktiven Feldes an. Quellen sind Frame-Anmeldungen – hört der
+   * Renderer auf zu melden, verschwindet die Verzerrung von allein.
+   */
+  update(deltaMs: number): void {
+    for (let i = this.activeHoles.length - 1; i >= 0; i -= 1) {
+      const hole = this.activeHoles[i];
+      hole.elapsedMs += deltaMs;
+      const frame = resolveBlackHoleDistortion(hole.elapsedMs, hole.durationMs);
+      if (frame.finished) {
+        this.activeHoles.splice(i, 1);
+        continue;
+      }
+      if (frame.strength <= 0) continue;
+      this.distortion?.submit({
+        id: `blackHole:${hole.id}`,
+        profile: frame.profile,
+        worldX: hole.x,
+        worldY: hole.y,
+        radiusPx: hole.radius * frame.radiusScale,
+        strength: frame.strength,
+        priority: DISTORTION_PRIORITY.blackHole,
+      });
+    }
+  }
+
+  destroyAll(): void {
+    this.activeHoles.length = 0;
+  }
 
   generateTextures(): void {
     ensureCanvasTexture(this.scene.textures, TEX_BLACK_HOLE, 256, 256, (ctx) => {
@@ -93,18 +149,20 @@ export class BlackHoleRenderer {
   }
 
   play(x: number, y: number, radius: number, durationMs: number): void {
+    this.activeHoles.push({ id: this.nextHoleId++, x, y, radius, durationMs, elapsedMs: 0 });
     const diameter = Math.max(24, radius * 2);
     const fadeDuration = Math.min(280, Math.max(160, durationMs * 0.2));
     const fadeDelay = Math.max(0, durationMs - fadeDuration);
     const core = this.scene.add.image(x, y, TEX_BLACK_HOLE)
       .setDepth(DEPTH.FIRE - 0.1)
       .setBlendMode(Phaser.BlendModes.NORMAL)
-      .setDisplaySize(diameter * 1.06, diameter * 0.9)
+      .setDisplaySize(diameter, diameter)
       .setAlpha(0);
     const horizon = this.scene.add.image(x, y, TEX_BLACK_HOLE_HORIZON)
       .setDepth(DEPTH.FIRE - 0.07)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDisplaySize(Math.max(16, diameter * 0.25), Math.max(16, diameter * 0.21))
+      // NORMAL bewahrt die schwarze Scheibe; ADD würde schwarze Pixel vollständig verlieren.
+      .setBlendMode(Phaser.BlendModes.NORMAL)
+      .setDisplaySize(Math.max(18, diameter * 0.34), Math.max(18, diameter * 0.34))
       .setAlpha(0);
     // Lokaler Collapse-Ersatz für den früheren globalen Bloom-Puls. Die vorhandene
     // Horizont-Textur bleibt radiusgebunden und erzeugt nur am Feldzentrum einen kurzen,
@@ -112,7 +170,7 @@ export class BlackHoleRenderer {
     const collapseRipple = this.scene.add.image(x, y, TEX_BLACK_HOLE_HORIZON)
       .setDepth(DEPTH.FIRE - 0.035)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setDisplaySize(Math.max(16, diameter * 0.3), Math.max(16, diameter * 0.25))
+      .setDisplaySize(Math.max(18, diameter * 0.32), Math.max(18, diameter * 0.32))
       .setAlpha(0);
     setInternalFxPadding(horizon, 12);
     addInternalGlow(horizon, 0x9c64df, 0.09, 0.015, false, 0.12, 7);
@@ -193,8 +251,14 @@ export class BlackHoleRenderer {
     innerOrbitEmitter.emitParticle(10);
 
     this.scene.tweens.add({
-      targets: [core, horizon, outerOrbitEmitter, wispEmitter, innerOrbitEmitter],
+      targets: [core, outerOrbitEmitter, wispEmitter, innerOrbitEmitter],
       alpha: { from: 0, to: 1 },
+      duration: 150,
+      ease: 'Sine.easeOut',
+    });
+    this.scene.tweens.add({
+      targets: horizon,
+      alpha: { from: 0, to: 0.92 },
       duration: 150,
       ease: 'Sine.easeOut',
     });
@@ -209,7 +273,6 @@ export class BlackHoleRenderer {
       targets: horizon,
       scaleX: { from: 0.98, to: 1.01 },
       scaleY: { from: 0.98, to: 1.01 },
-      alpha: { from: 0.12, to: 0.24 },
       duration: 1200,
       yoyo: true,
       repeat: -1,

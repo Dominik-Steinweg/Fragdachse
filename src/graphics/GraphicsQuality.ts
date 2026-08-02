@@ -66,6 +66,19 @@ export interface GraphicsQualityProfile {
   readonly worldBloom: 'full' | 'event' | 'off';
   /** Kurzzeitige Ereignispulse (Nuke, Bossphase, Tod). */
   readonly eventPostFx: boolean;
+  /**
+   * Lokale Bildverzerrung (Zeitblase, Schwarzes Loch, Druckwelle). Aus bleiben in `low` die
+   * bestehenden Membran-, Ring- und Partikeldarstellungen unverändert erhalten – nur die
+   * Verzerrung der Welt dahinter entfällt.
+   */
+  readonly localDistortion: boolean;
+  /** Obergrenze gleichzeitig gezeichneter Verzerrungsquellen. */
+  readonly maxDistortionSources: number;
+  /**
+   * Auflösung der Verschiebungskarte relativ zum Designraum. Sie darf klein sein: die Karte
+   * trägt weiche Richtungsfelder, keine Details. 0 schaltet sie ab.
+   */
+  readonly distortionMapScale: number;
 }
 
 export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, GraphicsQualityProfile>> = {
@@ -94,6 +107,9 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     worldVignette: true,
     worldBloom: 'full',
     eventPostFx: true,
+    localDistortion: true,
+    maxDistortionSources: 6,
+    distortionMapScale: 0.25,
   },
   medium: {
     level: 'medium',
@@ -116,6 +132,9 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     worldVignette: true,
     worldBloom: 'event',
     eventPostFx: true,
+    localDistortion: true,
+    maxDistortionSources: 3,
+    distortionMapScale: 0.1875,
   },
   low: {
     level: 'low',
@@ -138,6 +157,9 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     worldVignette: false,
     worldBloom: 'off',
     eventPostFx: false,
+    localDistortion: false,
+    maxDistortionSources: 0,
+    distortionMapScale: 0,
   },
 };
 

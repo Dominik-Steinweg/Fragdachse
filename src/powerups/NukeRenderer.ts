@@ -29,11 +29,26 @@ export class NukeRenderer {
   private effectSystem: EffectSystem | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private cameraFeedback: CameraFeedbackController | null = null;
+  private countdownDriver: ((nukeId: number, progress: number, x: number, y: number) => number) | null = null;
+  private countdownRelease: ((nukeId: number) => void) | null = null;
 
   constructor(private scene: Phaser.Scene) {}
 
   setCameraFeedback(controller: CameraFeedbackController | null): void {
     this.cameraFeedback = controller;
+  }
+
+  /**
+   * Treiber der Countdownphase. Bewusst zwei schmale Funktionen statt einer Referenz auf die
+   * Regie: der Renderer soll nur melden, wie weit der Countdown ist, und erfahren, wie stark er
+   * seine Telegraphen anheben muss.
+   */
+  setNukeCountdownDriver(
+    driver: ((nukeId: number, progress: number, x: number, y: number) => number) | null,
+    release: ((nukeId: number) => void) | null,
+  ): void {
+    this.countdownDriver = driver;
+    this.countdownRelease = release;
   }
 
   /** EffectSystem injizieren für gemeinsame Countdown-Text-Logik. */
@@ -134,10 +149,17 @@ export class NukeRenderer {
       visual.targetRing.setAlpha(0.45 + progress * 0.4);
       visual.sparks.frequency = Math.max(28, 110 - progress * 80);
 
-      // Anschwellendes Rumpeln in der letzten Countdownphase. Über die stabile `id` wird die
-      // Quelle pro Frame aktualisiert statt neu gestartet – vorher blockierte dieses Rumpeln
-      // durch Phasers `isRunning`-Prüfung die eigene Detonation.
-      if (progress > 0.72) {
+      // Phase A der Choreografie: anschwellendes Rumpeln, leichte Entsättigung und ein
+      // Telegraph-Boost. Der Boost ist zwingend – das Grading entsättigt die Warnringe sonst
+      // mit und der Kontrast zur sicheren Zone würde schlechter statt besser.
+      const telegraphBoost = this.countdownDriver?.(nuke.id, progress, nuke.x, nuke.y) ?? 0;
+      if (telegraphBoost > 0) {
+        visual.ring.setAlpha(visual.ring.alpha + telegraphBoost * 0.3);
+        visual.outerRing.setAlpha(visual.outerRing.alpha + telegraphBoost * 0.28);
+        visual.targetRing.setAlpha(visual.targetRing.alpha + telegraphBoost * 0.26);
+        visual.coreGlow.setAlpha(visual.coreGlow.alpha + telegraphBoost * 0.2);
+      } else if (progress > 0.72) {
+        // Rückfallebene ohne Bildkomposition: nur das Rumpeln, wie bisher.
         this.cameraFeedback?.request(sustainedRumble(
           `nuke:${nuke.id}`,
           legacyShakeAmplitudePx(0.0012 + progress * 0.0015),
@@ -152,6 +174,7 @@ export class NukeRenderer {
       this.destroyVisual(visual);
       this.visuals.delete(id);
       this.cameraFeedback?.release(`nuke:${id}`, 260);
+      this.countdownRelease?.(id);
     }
   }
 
@@ -159,6 +182,7 @@ export class NukeRenderer {
     for (const [id, visual] of this.visuals) {
       this.destroyVisual(visual);
       this.cameraFeedback?.release(`nuke:${id}`, 0);
+      this.countdownRelease?.(id);
     }
     this.visuals.clear();
   }

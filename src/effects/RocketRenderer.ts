@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { MiniRocketFlightPhase } from '../types';
+import { killAllAndResetParticlePositions } from './EffectUtils';
 
 const TEX_ROCKET_BODY = '__rocket_body';
 const TEX_ROCKET_ACCENT = '__rocket_accent';
@@ -406,6 +407,6 @@ export class RocketRenderer {
     for (const id of this.getActiveIds()) {
       this.destroyVisual(id);
     }
-    this.smokeEmitter?.killAll();
+    if (this.smokeEmitter) killAllAndResetParticlePositions(this.smokeEmitter);
   }
 }

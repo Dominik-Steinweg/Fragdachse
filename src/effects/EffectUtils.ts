@@ -82,6 +82,21 @@ export function createEmitter(
   return emitter;
 }
 
+/**
+ * Leert einen Emitter und neutralisiert die Koordinaten seiner gepoolten Partikel.
+ * Phaser verschiebt `killAll()`-Partikel nur in den Dead-Pool; beim naechsten
+ * `emitParticleAt()` wuerden ihre alten Koordinaten sonst erneut aufaddiert.
+ */
+export function killAllAndResetParticlePositions(
+  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
+): void {
+  emitter.killAll();
+  emitter.forEachDead((particle) => {
+    particle.x = 0;
+    particle.y = 0;
+  }, undefined);
+}
+
 export function createQualityEmitter(
   scene: Phaser.Scene,
   x: number,

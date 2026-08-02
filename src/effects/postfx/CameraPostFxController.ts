@@ -22,6 +22,8 @@ import {
   RADIAL_FOCUS_DARKEN,
   resolveRadialFocusSampling,
 } from './radialFocusState';
+import { DistortionFilter } from '../distortion/DistortionFilter';
+import { resolveIsotropicDistortionAmounts } from '../distortion/distortionScale';
 
 /** Minimalverträge der Phaser-4-Filter, die diese Kette verwendet. */
 interface ColorMatrixLike {
@@ -62,15 +64,8 @@ interface RadialFocusParallelLike {
   };
   blend: BlendLike;
 }
-interface DisplacementLike {
-  active: boolean;
-  x: number;
-  y: number;
-  setPaddingOverride(left?: number | null, top?: number, right?: number, bottom?: number): unknown;
-}
-
 interface FilterChain {
-  displacement: DisplacementLike | null;
+  displacement: DistortionFilter | null;
   parallel: ParallelLike | null;
   threshold: ThresholdLike | null;
   colorMatrix: ColorMatrixLike | null;
@@ -129,6 +124,7 @@ export class CameraPostFxController {
   private radialFocusFrame: RadialFocusFrame | null = null;
   private lastState: ResolvedPostFxState | null = null;
   private lastBloomThreshold = Number.NaN;
+  private distortionTextureKey: string | null = null;
   private lastRadialFocusDesaturate = Number.NaN;
   private enabled = true;
   private readonly supported: boolean;
@@ -182,6 +178,37 @@ export class CameraPostFxController {
     return this.chain.radialFocus?.parallel.active ?? false;
   }
 
+  /**
+   * Übernimmt das Ergebnis des {@link LocalDistortionComposer}. Ohne lebende Quelle bleibt der
+   * Pass abgeschaltet und kostet nichts – der Normalfall.
+   */
+  setDistortion(textureKey: string, amount: number): void {
+    const displacement = this.chain.displacement;
+    if (!displacement) return;
+    if (amount <= 0) {
+      displacement.setEffectActive(false);
+      return;
+    }
+    const amounts = resolveIsotropicDistortionAmounts(
+      amount,
+      this.worldCamera.width,
+      this.worldCamera.height,
+    );
+    displacement.x = amounts.x;
+    displacement.y = amounts.y;
+    displacement.setEffectActive(true);
+    if (this.distortionTextureKey !== textureKey) {
+      this.distortionTextureKey = textureKey;
+      displacement.setTexture(textureKey);
+    }
+  }
+
+  /** Nach einem Neuaufbau der Verzerrungskarte: der Filter hält sonst einen toten Texturzeiger. */
+  rebindDistortionTexture(textureKey: string): void {
+    this.distortionTextureKey = textureKey;
+    this.chain.displacement?.setTexture(textureKey);
+  }
+
   /** Ereignisse laufen ausschließlich über die Whitelist in `postFxPresets`. */
   pulseEvent(event: PostFxEvent, overrides?: Partial<PostFxPulse>): void {
     if (!this.supported || !this.enabled) return;
@@ -228,6 +255,7 @@ export class CameraPostFxController {
     this.baseGrade = NEUTRAL_WORLD_GRADE;
     this.radialFocusFrame = null;
     this.lastState = null;
+    this.chain.displacement?.setEffectActive(false);
     this.applyState(null);
   }
 
@@ -250,13 +278,15 @@ export class CameraPostFxController {
     const list = this.worldCamera.filters.internal;
     const quality = getGraphicsQualityController(this.scene);
 
-    // 1. Platzhalter für die lokale Verzerrung aus Stufe 3. Er entsteht bereits hier, damit die
-    //    Kettenform später nicht mehr angefasst werden muss.
-    const displacement = list.addDisplacement() as unknown as DisplacementLike;
+    // 1. Lokale Verzerrung. Steht bewusst **vor** Bloom und Grading: verzerrt wird die Welt,
+    //    danach wird das bereits verzerrte Bild einheitlich komponiert. Andersherum liefe der
+    //    Bloom auf einem unverzerrten Bild und die Spitzlichter lägen neben ihren Quellen.
+    const displacement = new DistortionFilter(this.worldCamera);
+    list.add(displacement);
     displacement.setPaddingOverride();
     displacement.x = 0;
     displacement.y = 0;
-    displacement.active = false;
+    displacement.setEffectActive(false);
     this.chain.displacement = displacement;
 
     // 2. Schwellenwert-Bloom nach Phasers eigenem Rezept.

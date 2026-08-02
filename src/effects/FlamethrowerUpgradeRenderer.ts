@@ -2,7 +2,12 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { FireChunkTarget, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
-import { createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';
+import {
+  createEmitter,
+  destroyEmitter,
+  ensureCanvasTexture,
+  killAllAndResetParticlePositions,
+} from './EffectUtils';
 import { addInternalBlur, addInternalGlow, setInternalFxPadding } from '../utils/phaserFx';
 import {
   ensureFlameTextures,
@@ -463,15 +468,15 @@ export class FlamethrowerUpgradeRenderer {
     this.groundAccumulator = 0;
     this.previousNow = 0;
     this.lastUpdateMs = 0;
-    this.groundCore.killAll();
-    this.groundOuter.killAll();
-    this.groundSparks.killAll();
-    this.groundSmoke.killAll();
-    this.voidGroundCore.killAll();
-    this.voidGroundOuter.killAll();
-    this.voidGroundSparks.killAll();
-    this.ringFlames.killAll();
-    this.ringSparks.killAll();
+    killAllAndResetParticlePositions(this.groundCore);
+    killAllAndResetParticlePositions(this.groundOuter);
+    killAllAndResetParticlePositions(this.groundSparks);
+    killAllAndResetParticlePositions(this.groundSmoke);
+    killAllAndResetParticlePositions(this.voidGroundCore);
+    killAllAndResetParticlePositions(this.voidGroundOuter);
+    killAllAndResetParticlePositions(this.voidGroundSparks);
+    killAllAndResetParticlePositions(this.ringFlames);
+    killAllAndResetParticlePositions(this.ringSparks);
     for (const chunk of this.flyingChunks) {
       this.scene.tweens.killTweensOf(chunk);
       chunk.destroy();
@@ -709,7 +714,7 @@ export class FlamethrowerUpgradeRenderer {
     visual.bandEmitter.setQuantity(this.getRingBandEmissionQuantity(radius));
     visual.bandEmitter.maxParticles = this.getRingBandPoolSize(radius);
     visual.bandEmitter.maxAliveParticles = this.getRingBandPoolSize(radius);
-    visual.bandEmitter.killAll();
+    killAllAndResetParticlePositions(visual.bandEmitter);
     visual.bandEmitter.reserve(this.getRingBandReserve(radius));
     visual.bandEmitter.fastForward(650, 16.67);
     visual.coreEmitter.clearEmitZones();
@@ -717,7 +722,7 @@ export class FlamethrowerUpgradeRenderer {
     visual.coreEmitter.setQuantity(this.getRingCoreEmissionQuantity(radius));
     visual.coreEmitter.maxParticles = this.getRingCorePoolSize(radius);
     visual.coreEmitter.maxAliveParticles = this.getRingCorePoolSize(radius);
-    visual.coreEmitter.killAll();
+    killAllAndResetParticlePositions(visual.coreEmitter);
     visual.coreEmitter.reserve(this.getRingCoreReserve(radius));
     visual.coreEmitter.fastForward(380, 16.67);
   }
