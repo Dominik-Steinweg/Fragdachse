@@ -7,10 +7,6 @@ import { ArenaScene }     from './scenes/ArenaScene';
 import { initialRenderSize, installRenderResolution } from './graphics/RenderResolution';
 import { FULLSCREEN_TARGET_ID, installFullscreenSupport } from './ui/fullscreen';
 import { validateGameContentReferences } from './loadout/content/GameContentValidation';
-import {
-  RADIAL_FOCUS_RENDER_NODE,
-  RadialFocusRenderNode,
-} from './effects/postfx/RadialFocusFilter';
 
 /**
  * Zeigt einen Verbindungsfehler an, statt ein Spiel zu starten, das nicht spielbar waere.
@@ -114,13 +110,6 @@ async function boot(): Promise<void> {
     parent:          FULLSCREEN_TARGET_ID,
     backgroundColor: '#000000',
     smoothPixelArt: true,
-    render: {
-      // Phaser's runtime expects constructors here although the 4.2.1 declaration models
-      // the value as a RenderNodesConfig object.
-      renderNodes: {
-        [RADIAL_FOCUS_RENDER_NODE]: RadialFocusRenderNode as unknown as Phaser.Types.Core.RenderNodesConfig,
-      },
-    },
     physics: {
       default: 'arcade',
       arcade:  { gravity: { x: 0, y: 0 }, debug: false, fps: 120 },

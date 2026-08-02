@@ -13,10 +13,16 @@ import {
 import { BARREL_MIN_PRIORITY, getPostFxPreset, type PostFxEvent } from './postFxPresets';
 import { buildTintMatrix, NEUTRAL_WORLD_GRADE, type WorldGrade } from './worldGrade';
 import {
-  RADIAL_FOCUS_RENDER_NODE,
-  RadialFocusFilterController,
+  RADIAL_FOCUS_MASK_TEXTURE_KEY,
+  RadialFocusMaskTexture,
+  RadialFocusParallelFilters,
   type RadialFocusFrame,
 } from './RadialFocusFilter';
+import {
+  RADIAL_FOCUS_DARKEN,
+  RADIAL_FOCUS_DESATURATE,
+  resolveRadialFocusSampling,
+} from './radialFocusState';
 
 /** Minimalverträge der Phaser-4-Filter, die diese Kette verwendet. */
 interface ColorMatrixLike {
@@ -33,9 +39,28 @@ interface VignetteLike { active: boolean; radius: number; strength: number; }
 interface BarrelLike { active: boolean; amount: number; }
 interface ThresholdLike { setEdge(edge1: number, edge2: number): unknown; }
 interface BlendLike { blendMode: number; amount: number; }
+interface BlurLike {
+  active: boolean;
+  quality: number;
+  x: number;
+  y: number;
+  strength: number;
+  steps: number;
+}
+interface MaskLike { active: boolean; }
 interface ParallelLike {
   active: boolean;
   top: { addThreshold(e1?: number, e2?: number): ThresholdLike; addBlur(q?: number, x?: number, y?: number, s?: number, c?: number, steps?: number): unknown };
+  blend: BlendLike;
+}
+interface RadialFocusParallelLike {
+  active: boolean;
+  setEffectActive(value: boolean): void;
+  top: {
+    addBlur(q?: number, x?: number, y?: number, s?: number, c?: number, steps?: number): BlurLike;
+    addColorMatrix(): ColorMatrixLike;
+    addMask(texture?: string): MaskLike;
+  };
   blend: BlendLike;
 }
 interface DisplacementLike {
@@ -51,7 +76,12 @@ interface FilterChain {
   threshold: ThresholdLike | null;
   colorMatrix: ColorMatrixLike | null;
   vignette: VignetteLike | null;
-  radialFocus: RadialFocusFilterController | null;
+  radialFocus: {
+    parallel: RadialFocusParallelLike;
+    blur: BlurLike;
+    grade: ColorMatrixLike;
+    mask: MaskLike;
+  } | null;
   barrel: BarrelLike | null;
 }
 
@@ -102,6 +132,7 @@ export class CameraPostFxController {
   private lastBloomThreshold = Number.NaN;
   private enabled = true;
   private readonly supported: boolean;
+  private readonly radialFocusMask: RadialFocusMaskTexture | null;
   private unsubscribeQuality: (() => void) | null = null;
 
   constructor(
@@ -110,9 +141,11 @@ export class CameraPostFxController {
   ) {
     this.supported = CameraPostFxController.isSupported(scene, worldCamera);
     if (!this.supported) {
+      this.radialFocusMask = null;
       console.info('[PostFX] Kamerafilter nicht verfügbar (kein WebGL) – Bildkomposition bleibt aus.');
       return;
     }
+    this.radialFocusMask = new RadialFocusMaskTexture(scene);
     this.buildChain();
     const quality = getGraphicsQualityController(scene);
     // Ein Qualitätswechsel darf die Kette nicht neu aufbauen, aber der Bloom-Zweig muss
@@ -141,11 +174,12 @@ export class CameraPostFxController {
    */
   setRadialFocus(frame: RadialFocusFrame | null): void {
     this.radialFocusFrame = frame;
+    if (frame) this.radialFocusMask?.update(frame);
     this.applyRadialFocus();
   }
 
   isRadialFocusFilterActive(): boolean {
-    return this.chain.radialFocus?.active ?? false;
+    return this.chain.radialFocus?.parallel.active ?? false;
   }
 
   /** Ereignisse laufen ausschließlich über die Whitelist in `postFxPresets`. */
@@ -201,6 +235,7 @@ export class CameraPostFxController {
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
     this.reset();
+    this.radialFocusMask?.destroy();
   }
 
   getMetrics(): { activePulses: number; neutral: boolean; supported: boolean } {
@@ -244,17 +279,34 @@ export class CameraPostFxController {
     vignette.active = false;
     this.chain.vignette = vignette;
 
-    const radialFocus = list.add(
-      new RadialFocusFilterController(this.worldCamera),
-    ) as unknown as RadialFocusFilterController;
-    radialFocus.active = false;
-    this.chain.radialFocus = radialFocus;
-    // The controller stays inactive until needed, but the registered RenderNode is constructed
-    // now so the first death/respawn frame does not allocate filter infrastructure.
-    const renderer = this.scene.game.renderer as unknown as {
-      renderNodes?: { getNode(name: string): unknown };
+    // The empty bottom branch is the unmodified camera image. The top branch uses only
+    // Phaser's built-in Gaussian blur, a spatial color grade, and the persistent radial mask.
+    const radialFocusParallel = list.add(
+      new RadialFocusParallelFilters(this.worldCamera),
+    ) as unknown as RadialFocusParallelLike;
+    const highSampling = resolveRadialFocusSampling('high');
+    const radialFocusBlur = radialFocusParallel.top.addBlur(
+      highSampling.blurQuality,
+      this.resolveBlurOffset(highSampling),
+      this.resolveBlurOffset(highSampling),
+      1,
+      0xffffff,
+      highSampling.blurSteps,
+    );
+    const radialFocusGrade = radialFocusParallel.top.addColorMatrix();
+    radialFocusGrade.colorMatrix.reset();
+    radialFocusGrade.colorMatrix.brightness(1 - RADIAL_FOCUS_DARKEN, true);
+    radialFocusGrade.colorMatrix.saturate(-RADIAL_FOCUS_DESATURATE, true);
+    const radialFocusMask = radialFocusParallel.top.addMask(RADIAL_FOCUS_MASK_TEXTURE_KEY);
+    radialFocusParallel.blend.blendMode = Phaser.BlendModes.NORMAL;
+    radialFocusParallel.blend.amount = 1;
+    radialFocusParallel.active = false;
+    this.chain.radialFocus = {
+      parallel: radialFocusParallel,
+      blur: radialFocusBlur,
+      grade: radialFocusGrade,
+      mask: radialFocusMask,
     };
-    renderer.renderNodes?.getNode(RADIAL_FOCUS_RENDER_NODE);
 
     const barrel = list.addBarrel(1) as unknown as BarrelLike;
     barrel.active = false;
@@ -266,7 +318,7 @@ export class CameraPostFxController {
     quality?.trackFilter(this.worldCamera, barrel, false, 'decorative');
     quality?.trackFilter(this.worldCamera, colorMatrix, false, 'standard');
     quality?.trackFilter(this.worldCamera, vignette, false, 'standard');
-    quality?.trackFilter(this.worldCamera, radialFocus, false, 'standard');
+    quality?.trackFilter(this.worldCamera, radialFocusParallel, false, 'standard');
     quality?.trackFilter(this.worldCamera, displacement, false, 'standard');
   }
 
@@ -354,11 +406,19 @@ export class CameraPostFxController {
       && profile.level !== 'low'
       && this.radialFocusFrame !== null
       && this.radialFocusFrame.alpha > 0.01;
+    const sampling = resolveRadialFocusSampling(profile.level === 'high' ? 'high' : 'medium');
+    radialFocus.blur.quality = sampling.blurQuality;
+    radialFocus.blur.steps = sampling.blurSteps;
+    radialFocus.blur.x = this.resolveBlurOffset(sampling);
+    radialFocus.blur.y = this.resolveBlurOffset(sampling);
+    radialFocus.parallel.setEffectActive(wanted && sampling.filterActive);
+  }
 
-    radialFocus.setFrame(
-      wanted ? this.radialFocusFrame : null,
-      profile.level === 'high' ? 'high' : 'medium',
-    );
+  /** Phaser's built-in Blur uses quality-dependent per-step padding constants. */
+  private resolveBlurOffset(sampling: ReturnType<typeof resolveRadialFocusSampling>): number {
+    if (sampling.blurSteps <= 0 || sampling.blurRadiusPx <= 0) return 0;
+    const qualityStepFactor = sampling.blurQuality === 1 ? 3.2307692308 : 1.333;
+    return sampling.blurRadiusPx / (qualityStepFactor * sampling.blurSteps);
   }
 }
 

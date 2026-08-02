@@ -1,187 +1,135 @@
 import * as Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../../config';
 import {
-  RADIAL_FOCUS_DESATURATE,
-  RADIAL_FOCUS_DARKEN,
-  RADIAL_FOCUS_KERNEL_TAP_COUNT,
   RADIAL_FOCUS_SOFTNESS_PX,
-  resolveRadialFocusSampling,
   type RadialFocusFrame,
-  type RadialFocusQualityLevel,
 } from './radialFocusState';
 
-export const RADIAL_FOCUS_RENDER_NODE = 'FragdachseRadialFocus';
-export type { RadialFocusFrame, RadialFocusQualityLevel } from './radialFocusState';
+/** Texture used by Phaser's built-in Mask filter in the blurred ParallelFilters branch. */
+export const RADIAL_FOCUS_MASK_TEXTURE_KEY = '__radial_focus_blur_mask';
 
-const RADIAL_FOCUS_FRAGMENT_SHADER = [
-  '#pragma phaserTemplate(shaderName)',
-  'precision mediump float;',
-  'uniform sampler2D uMainSampler;',
-  'uniform vec2 uDesignSize;',
-  'uniform vec2 uFocus;',
-  'uniform vec4 uArenaRect;',
-  'uniform float uRadius;',
-  'uniform float uSoftness;',
-  'uniform float uAlpha;',
-  'uniform float uBlurRadius;',
-  'uniform float uSampleCount;',
-  'uniform float uDarken;',
-  'uniform float uDesaturate;',
-  'varying vec2 outTexCoord;',
-  '#pragma phaserTemplate(fragmentHeader)',
-  'const int MAX_KERNEL_TAPS = 9;',
-  'const float KERNEL_CORNER_RADIUS_SCALE = 0.70710678;',
-  '',
-  'void main ()',
-  '{',
-  '    vec4 source = boundedSampler(uMainSampler, outTexCoord);',
-  '    // Filter UVs use a bottom-left origin; frame coordinates use screen top-left.',
-  '    vec2 screenUv = vec2(outTexCoord.x, 1.0 - outTexCoord.y);',
-  '    vec2 screenPx = screenUv * uDesignSize;',
-  '',
-  '    if (screenPx.x < uArenaRect.x || screenPx.y < uArenaRect.y',
-  '        || screenPx.x > uArenaRect.x + uArenaRect.z',
-  '        || screenPx.y > uArenaRect.y + uArenaRect.w)',
-  '    {',
-  '        gl_FragColor = source;',
-  '        return;',
-  '    }',
-  '',
-  '    float distancePx = length(screenPx - uFocus);',
-  '    float blurMix = uRadius <= 0.0',
-  '        ? 1.0',
-  '        : smoothstep(uRadius, uRadius + uSoftness, distancePx);',
-  '    blurMix = clamp(blurMix * uAlpha, 0.0, 1.0);',
-  '',
-  '    float blurScale = mix(0.35, 1.0, blurMix);',
-  '    // Symmetric 3x3 area kernel: center plus eight taps spread across the footprint.',
-  '    // The original center is deliberately dominant to keep silhouettes readable.',
-  '    vec4 blurred = vec4(0.0);',
-  '    for (int i = 0; i < MAX_KERNEL_TAPS; i++)',
-  '    {',
-  '        if (float(i) >= uSampleCount) break;',
-  '        float tapIndex = float(i);',
-  '        vec2 grid = vec2(mod(tapIndex, 3.0) - 1.0, floor(tapIndex / 3.0) - 1.0);',
-  '        float tapWeight = 0.05;',
-  '        if (i == 4)',
-  '        {',
-  '            tapWeight = 0.44;',
-  '        }',
-  '        else if (grid.x == 0.0 || grid.y == 0.0)',
-  '        {',
-  '            tapWeight = 0.09;',
-  '        }',
-  '        vec2 offset = grid * (uBlurRadius * KERNEL_CORNER_RADIUS_SCALE * blurScale) / uDesignSize;',
-  '        vec4 tap;',
-  '        if (i == 4)',
-  '        {',
-  '            tap = source;',
-  '        }',
-  '        else',
-  '        {',
-  '            tap = boundedSampler(uMainSampler, outTexCoord + offset);',
-  '        }',
-  '        blurred += tap * tapWeight;',
-  '    }',
-  '',
-  '    vec3 color = mix(source.rgb, blurred.rgb, blurMix);',
-  '    float outerMix = uRadius <= 0.0',
-  '        ? 1.0',
-  '        : smoothstep(uRadius + uSoftness * 0.4, uRadius + uSoftness * 1.35, distancePx);',
-  '    outerMix = clamp(outerMix * uAlpha, 0.0, 1.0);',
-  '    float luminance = dot(color, vec3(0.299, 0.587, 0.114));',
-  '    color = mix(color, vec3(luminance), outerMix * uDesaturate);',
-  '    color *= 1.0 - outerMix * uDarken;',
-  '',
-  '    gl_FragColor = vec4(color, source.a);',
-  '}',
-].join('\n');
+const RADIAL_FOCUS_MASK_SCALE = 0.25;
+const RADIAL_FOCUS_MASK_WIDTH = Math.ceil(GAME_WIDTH * RADIAL_FOCUS_MASK_SCALE);
+const RADIAL_FOCUS_MASK_HEIGHT = Math.ceil(GAME_HEIGHT * RADIAL_FOCUS_MASK_SCALE);
+const RADIAL_FOCUS_MASK_COLOR = '255,255,255';
+
+export type { RadialFocusFrame } from './radialFocusState';
 
 /**
- * Persistent controller for the world-camera focus pass. The camera filter list owns this
- * instance for the lifetime of the scene; effects only mutate its uniforms and active state.
+ * Built-in ParallelFilters with a separate quality permission and live effect state.
+ * GraphicsQualityController can disable the persistent controller without a later frame update
+ * re-enabling it while the focus animation is still alive.
  */
-export class RadialFocusFilterController extends Phaser.Filters.Controller {
+export class RadialFocusParallelFilters extends Phaser.Filters.ParallelFilters {
   private effectActive = false;
   private qualityEnabled = true;
-  focusX = 0;
-  focusY = 0;
-  radiusPx = 0;
-  alpha = 0;
-  arenaX = 0;
-  arenaY = 0;
-  arenaWidth = 0;
-  arenaHeight = 0;
-  softnessPx = RADIAL_FOCUS_SOFTNESS_PX;
-  blurRadiusPx = 30;
-  sampleCount = RADIAL_FOCUS_KERNEL_TAP_COUNT;
-  darken = RADIAL_FOCUS_DARKEN;
-  desaturate = RADIAL_FOCUS_DESATURATE;
 
-  constructor(camera: Phaser.Cameras.Scene2D.Camera) {
-    super(camera, RADIAL_FOCUS_RENDER_NODE);
-    this.setPaddingOverride();
-    this.active = false;
-  }
-
-  /** Keeps the quality controller's permission separate from the live effect state. */
   override setActive(value: boolean): this {
     this.qualityEnabled = value;
-    this.active = value && this.effectActive;
+    super.setActive(value && this.effectActive);
     return this;
   }
 
-  setFrame(frame: RadialFocusFrame | null, quality: RadialFocusQualityLevel): void {
-    if (!frame) {
-      this.effectActive = false;
-      this.alpha = 0;
-      this.active = false;
-      return;
-    }
-
-    this.focusX = frame.focusX;
-    this.focusY = frame.focusY;
-    this.radiusPx = frame.radiusPx;
-    this.alpha = Phaser.Math.Clamp(frame.alpha, 0, 1);
-    this.arenaX = frame.arenaRect.x;
-    this.arenaY = frame.arenaRect.y;
-    this.arenaWidth = frame.arenaRect.width;
-    this.arenaHeight = frame.arenaRect.height;
-    const sampling = resolveRadialFocusSampling(quality);
-    this.sampleCount = sampling.sampleCount;
-    this.blurRadiusPx = sampling.blurRadiusPx;
-    this.effectActive = sampling.filterActive && this.alpha > 0.01;
-    this.active = this.qualityEnabled && this.effectActive;
+  setEffectActive(value: boolean): void {
+    this.effectActive = value;
+    super.setActive(this.qualityEnabled && value);
   }
 }
 
-/** WebGL render node used by {@link RadialFocusFilterController}. */
-export class RadialFocusRenderNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
-  constructor(manager: Phaser.Renderer.WebGL.RenderNodes.RenderNodeManager) {
-    super(RADIAL_FOCUS_RENDER_NODE, manager, undefined, RADIAL_FOCUS_FRAGMENT_SHADER);
+/**
+ * Persistent, low-resolution radial alpha mask for the built-in Mask filter.
+ * The texture is updated in place as the focus frame changes; no filter or render target is
+ * created during a countdown, death close, or respawn reveal.
+ */
+export class RadialFocusMaskTexture {
+  readonly texture: Phaser.Textures.CanvasTexture;
+  private lastFrameKey: string | null = null;
+  private destroyed = false;
+
+  constructor(private readonly scene: Phaser.Scene) {
+    if (scene.textures.exists(RADIAL_FOCUS_MASK_TEXTURE_KEY)) {
+      scene.textures.remove(RADIAL_FOCUS_MASK_TEXTURE_KEY);
+    }
+
+    this.texture = scene.textures.createCanvas(
+      RADIAL_FOCUS_MASK_TEXTURE_KEY,
+      RADIAL_FOCUS_MASK_WIDTH,
+      RADIAL_FOCUS_MASK_HEIGHT,
+    ) as Phaser.Textures.CanvasTexture;
+    this.texture.setSmoothPixelArt(false);
+    this.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    this.texture.refresh();
   }
 
-  setupUniforms(
-    controller: Phaser.Filters.Controller,
-    _drawingContext: Phaser.Renderer.WebGL.DrawingContext,
-  ): void {
-    const radial = controller as RadialFocusFilterController;
-    const uniforms = this.programManager;
+  update(frame: RadialFocusFrame): void {
+    if (this.destroyed) return;
 
-    uniforms.setUniform('uDesignSize', [GAME_WIDTH, GAME_HEIGHT]);
-    uniforms.setUniform('uFocus', [radial.focusX, radial.focusY]);
-    uniforms.setUniform('uArenaRect', [
-      radial.arenaX,
-      radial.arenaY,
-      radial.arenaWidth,
-      radial.arenaHeight,
-    ]);
-    uniforms.setUniform('uRadius', radial.radiusPx);
-    uniforms.setUniform('uSoftness', radial.softnessPx);
-    uniforms.setUniform('uAlpha', radial.alpha);
-    uniforms.setUniform('uBlurRadius', radial.blurRadiusPx);
-    uniforms.setUniform('uSampleCount', radial.sampleCount);
-    uniforms.setUniform('uDarken', radial.darken);
-    uniforms.setUniform('uDesaturate', radial.desaturate);
+    const key = [
+      frame.focusX,
+      frame.focusY,
+      frame.radiusPx,
+      frame.alpha,
+      frame.arenaRect.x,
+      frame.arenaRect.y,
+      frame.arenaRect.width,
+      frame.arenaRect.height,
+    ].map((value) => Math.round(value * 100) / 100).join('|');
+    if (key === this.lastFrameKey) return;
+    this.lastFrameKey = key;
+
+    const context = this.texture.context;
+    const scaleX = this.texture.width / GAME_WIDTH;
+    const scaleY = this.texture.height / GAME_HEIGHT;
+    const arenaX = frame.arenaRect.x * scaleX;
+    const arenaY = frame.arenaRect.y * scaleY;
+    const arenaWidth = frame.arenaRect.width * scaleX;
+    const arenaHeight = frame.arenaRect.height * scaleY;
+    const focusX = frame.focusX * scaleX;
+    const focusY = frame.focusY * scaleY;
+    const alpha = Phaser.Math.Clamp(frame.alpha, 0, 1);
+
+    context.clearRect(0, 0, this.texture.width, this.texture.height);
+    context.save();
+    context.beginPath();
+    context.rect(arenaX, arenaY, arenaWidth, arenaHeight);
+    context.clip();
+
+    if (frame.radiusPx <= 0) {
+      context.fillStyle = `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha})`;
+      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
+    } else {
+      const radius = Math.max(0, frame.radiusPx * scaleX);
+      const softness = RADIAL_FOCUS_SOFTNESS_PX * scaleX;
+      const outerRadius = Math.max(1, radius + softness);
+      const gradient = context.createRadialGradient(
+        focusX,
+        focusY,
+        radius,
+        focusX,
+        focusY,
+        outerRadius,
+      );
+
+      // The mask mirrors a smoothstep transition: transparent core, broad soft ramp,
+      // and a fully blended blurred branch in the outer arena.
+      gradient.addColorStop(0, `rgba(${RADIAL_FOCUS_MASK_COLOR},0)`);
+      gradient.addColorStop(0.28, `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha * 0.05})`);
+      gradient.addColorStop(0.62, `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha * 0.42})`);
+      gradient.addColorStop(0.84, `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha * 0.82})`);
+      gradient.addColorStop(1, `rgba(${RADIAL_FOCUS_MASK_COLOR},${alpha})`);
+      context.fillStyle = gradient;
+      context.fillRect(arenaX, arenaY, arenaWidth, arenaHeight);
+    }
+
+    context.restore();
+    this.texture.refresh();
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    if (this.scene.textures.exists(RADIAL_FOCUS_MASK_TEXTURE_KEY)) {
+      this.scene.textures.remove(RADIAL_FOCUS_MASK_TEXTURE_KEY);
+    }
   }
 }
