@@ -108,28 +108,40 @@
       "spawnOnArenaStart": true
     }
   ],
-  "waves": [
-    {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 6000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    },
-    {
-      "enemyKind": "demon-badger",
-      "intervalMs": 6000,
-      "countPerWave": 1,
-      "startAtMs": 5000
-    },
-    {
-      "enemyKind": "rabid-badger",
-      "intervalMs": 5000,
-      "countPerWave": 1,
-      "startAtMs": 5000
-    }
-  ],
   "boss": {
     "enemyKind": "grave-titan",
     "spawnAtMs": 15000
-  }
+  },
+  "persistentSpawns": [
+    {
+      "id": "map-5-pressure-0",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 6000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-5-pressure-1",
+      "enemyKind": "demon-badger",
+      "intervalMs": 6000,
+      "countPerTick": 1,
+      "startAtMs": 5000,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-5-pressure-2",
+      "enemyKind": "rabid-badger",
+      "intervalMs": 5000,
+      "countPerTick": 1,
+      "startAtMs": 5000,
+      "source": {
+        "type": "map"
+      }
+    }
+  ]
 }

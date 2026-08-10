@@ -226,7 +226,7 @@ export interface CoopDefenseEnemyPlayerScaling {
 
 export interface CoopDefenseEnemySpawnScaling {
   readonly intervalMsFactorPerAdditionalPlayer?: number;
-  readonly countPerWaveFactorPerAdditionalPlayer?: number;
+  readonly countPerTickFactorPerAdditionalPlayer?: number;
 }
 
 export interface CoopDefenseEnemyConfig {
@@ -368,23 +368,23 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
   ) as ResolvedCoopDefenseEnemyConfigs;
 }
 
-export function resolveCoopDefenseEnemyWaveConfig(
+export function resolveCoopDefenseEnemySpawnConfig(
   kind: CoopDefenseEnemyKind,
-  baseWaveConfig: { intervalMs: number; countPerWave: number },
+  baseSpawnConfig: { intervalMs: number; countPerTick: number },
   humanPlayerCount: number,
-): { intervalMs: number; countPerWave: number } {
+): { intervalMs: number; countPerTick: number } {
   const normalizedHumanPlayerCount = normalizeCoopDefenseHumanPlayerCount(humanPlayerCount);
   const config = getCoopDefenseEnemyConfig(kind);
 
   return {
     intervalMs: resolveCoopDefensePositiveNumber(
-      baseWaveConfig.intervalMs,
+      baseSpawnConfig.intervalMs,
       config.spawnScaling?.intervalMsFactorPerAdditionalPlayer,
       normalizedHumanPlayerCount,
     ),
-    countPerWave: resolveCoopDefenseNonNegativeInteger(
-      baseWaveConfig.countPerWave,
-      config.spawnScaling?.countPerWaveFactorPerAdditionalPlayer,
+    countPerTick: resolveCoopDefenseNonNegativeInteger(
+      baseSpawnConfig.countPerTick,
+      config.spawnScaling?.countPerTickFactorPerAdditionalPlayer,
       normalizedHumanPlayerCount,
     ),
   };
@@ -807,6 +807,6 @@ function normalizeSpawnScaling(
   if (!scaling) return undefined;
   return {
     intervalMsFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.intervalMsFactorPerAdditionalPlayer),
-    countPerWaveFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.countPerWaveFactorPerAdditionalPlayer),
+    countPerTickFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.countPerTickFactorPerAdditionalPlayer),
   };
 }

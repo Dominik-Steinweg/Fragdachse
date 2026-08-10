@@ -2,7 +2,7 @@ import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
 import {
   getCoopDefenseEnemyConfig,
   hasCoopDefenseEnemyKind,
-  resolveCoopDefenseEnemyWaveConfig,
+  resolveCoopDefenseEnemySpawnConfig,
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
 import { shouldDelayFirstPedestalSpawn, TIMED_POWERUP_PEDESTAL_CONFIGS } from '../powerups/PowerUpConfig';
@@ -104,24 +104,30 @@ export interface CoopBaseConfig {
   readonly shape: CoopBaseShape;
   readonly turrets?: readonly CoopBaseTurretConfig[];
   readonly powerUpPedestals?: readonly CoopBasePowerUpPedestalConfig[];
-  /** Freie Zelle innerhalb der Shape, an der die Spawnpunkt-Welle erscheint. */
+  /** Freie Zelle innerhalb der Shape, an der die strukturgebundene Quelle erscheint. */
   readonly spawnCenter?: CoopBaseCellOffset;
-  /** Wellenplan, der ausschließlich von diesem Spawnpunkt erzeugt wird. */
-  readonly spawnWave?: CoopDefenseMapWaveConfig;
 }
 
-export interface CoopDefenseMapWaveConfig {
+export type CoopDefenseMapPersistentSpawnSource =
+  | { readonly type: 'map' }
+  | { readonly type: 'base'; readonly baseId: string };
+
+export interface CoopDefenseMapPersistentSpawnConfig {
+  readonly id: string;
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly intervalMs: number;
-  readonly countPerWave: number;
+  readonly countPerTick: number;
   readonly startAtMs?: number;
+  readonly source: CoopDefenseMapPersistentSpawnSource;
 }
 
-export interface ResolvedCoopDefenseMapWaveConfig {
+export interface ResolvedCoopDefenseMapPersistentSpawnConfig {
+  readonly id: string;
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly intervalMs: number;
-  readonly countPerWave: number;
+  readonly countPerTick: number;
   readonly startAtMs: number;
+  readonly source: CoopDefenseMapPersistentSpawnSource;
 }
 
 /** Eine endliche Gegnergruppe innerhalb eines Encounters. */
@@ -327,9 +333,9 @@ export interface CoopDefenseMapConfig {
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
-  /** Legacy map-level waves; encounter maps may omit this and normalize it to `[]`. */
-  readonly waves?: readonly CoopDefenseMapWaveConfig[];
-  /** Optionale endliche Encounter; Legacy-`waves` und Encounter sind gegenseitig exklusiv. */
+  /** Optionale, zeitlich unbegrenzte Quellen fuer den Hintergrunddruck. */
+  readonly persistentSpawns?: readonly CoopDefenseMapPersistentSpawnConfig[];
+  /** Optionale endliche Encounter; beide Modelle koennen parallel aktiv sein. */
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
   /** Standard `survive` for legacy maps; migrated maps may explicitly use `repel-assault`. */
@@ -368,17 +374,23 @@ export function getDefaultCoopDefenseMapConfig(): CoopDefenseMapConfig {
   return mapConfig;
 }
 
-export function resolveCoopDefenseMapWaveConfigs(
+export function resolveCoopDefenseMapPersistentSpawnConfigs(
   mapConfig: CoopDefenseMapConfig,
   humanPlayerCount: number,
-): readonly ResolvedCoopDefenseMapWaveConfig[] {
-  return (mapConfig.waves ?? []).map((waveConfig) => {
-    const resolvedWaveConfig = resolveCoopDefenseEnemyWaveConfig(waveConfig.enemyKind, waveConfig, humanPlayerCount);
+): readonly ResolvedCoopDefenseMapPersistentSpawnConfig[] {
+  return (mapConfig.persistentSpawns ?? []).map((spawnConfig) => {
+    const resolvedSpawnConfig = resolveCoopDefenseEnemySpawnConfig(
+      spawnConfig.enemyKind,
+      { intervalMs: spawnConfig.intervalMs, countPerTick: spawnConfig.countPerTick },
+      humanPlayerCount,
+    );
     return {
-      enemyKind: waveConfig.enemyKind,
-      intervalMs: resolvedWaveConfig.intervalMs,
-      countPerWave: resolvedWaveConfig.countPerWave,
-      startAtMs: Math.max(0, Math.floor(waveConfig.startAtMs ?? 0)),
+      id: spawnConfig.id,
+      enemyKind: spawnConfig.enemyKind,
+      intervalMs: resolvedSpawnConfig.intervalMs,
+      countPerTick: resolvedSpawnConfig.countPerTick,
+      startAtMs: Math.max(0, Math.floor(spawnConfig.startAtMs ?? 0)),
+      source: spawnConfig.source,
     };
   });
 }
@@ -393,41 +405,52 @@ export function resolveCoopDefenseMapEncounterConfigs(
     start: encounter.start,
     restAfterMs: Math.max(0, Math.floor(encounter.restAfterMs ?? 0)),
     groups: encounter.groups.map((group) => {
-      const resolvedGroup = resolveCoopDefenseEnemyWaveConfig(
+      const resolvedGroup = resolveCoopDefenseEnemySpawnConfig(
         group.enemyKind,
-        { intervalMs: 1, countPerWave: group.count },
+        { intervalMs: 1, countPerTick: group.count },
         humanPlayerCount,
       );
       return {
         enemyKind: group.enemyKind,
-        count: resolvedGroup.countPerWave,
+        count: resolvedGroup.countPerTick,
         delayMs: Math.max(0, Math.floor(group.delayMs ?? 0)),
       };
     }),
   }));
 }
 
-/** Erwartete XP-Summe aller regulaer geplanten Spawns einer Map. */
+/** Exakte XP-Untergrenze aus endlichem Map-Inhalt; persistenter Druck ist darin nicht enthalten. */
 export function getCoopDefenseMapScheduledXp(
   mapConfig: CoopDefenseMapConfig,
-  waveConfigs: readonly ResolvedCoopDefenseMapWaveConfig[],
   humanPlayerCount = 1,
 ): number {
-  const durationMs = mapConfig.roundDurationSec * 1000;
   let totalXp = 0;
   if ((mapConfig.encounters?.length ?? 0) > 0) {
     for (const encounter of resolveCoopDefenseMapEncounterConfigs(mapConfig, humanPlayerCount)) {
       totalXp += getEncounterXp(encounter);
     }
-  } else {
-    for (const wave of waveConfigs) totalXp += getScheduledWaveXp(wave, durationMs);
-  }
-  for (const base of mapConfig.bases) {
-    if (!base.spawnWave) continue;
-    totalXp += getScheduledWaveXp(resolveWaveConfigForXp(base.spawnWave, humanPlayerCount), durationMs);
   }
   if (mapConfig.boss) totalXp += getEnemyLifecycleXp(mapConfig.boss.enemyKind);
   return Math.max(1, totalXp);
+}
+
+/**
+ * Technische XP-Referenz fuer Drop-Chancen. Persistente Quellen werden ueber die konfigurierte
+ * Rundendauer geschaetzt; ihre tatsaechliche Laufzeit kann durch Strukturzerstoerung oder ein
+ * frueheres Missionsende kleiner sein. Dieser Wert ist kein garantierter Rundenertrag.
+ */
+export function getCoopDefenseMapXpReference(
+  mapConfig: CoopDefenseMapConfig,
+  persistentSpawns: readonly ResolvedCoopDefenseMapPersistentSpawnConfig[],
+  humanPlayerCount = 1,
+): number {
+  const durationMs = mapConfig.roundDurationSec * 1000;
+  const finiteXp = getCoopDefenseMapScheduledXp(mapConfig, humanPlayerCount);
+  const persistentEstimate = persistentSpawns.reduce(
+    (sum, spawn) => sum + getScheduledPersistentSpawnXp(spawn, durationMs),
+    0,
+  );
+  return Math.max(1, finiteXp + persistentEstimate);
 }
 
 function getEncounterXp(encounter: ResolvedCoopDefenseMapEncounterConfig): number {
@@ -437,24 +460,14 @@ function getEncounterXp(encounter: ResolvedCoopDefenseMapEncounterConfig): numbe
   );
 }
 
-function getScheduledWaveXp(wave: ResolvedCoopDefenseMapWaveConfig, durationMs: number): number {
-  const activeDurationMs = Math.max(0, durationMs - wave.startAtMs);
-  if (activeDurationMs <= 0 || wave.countPerWave <= 0) return 0;
-  const waveCount = Math.max(1, Math.ceil(activeDurationMs / wave.intervalMs));
-  return waveCount * wave.countPerWave * getEnemyLifecycleXp(wave.enemyKind);
-}
-
-function resolveWaveConfigForXp(
-  waveConfig: CoopDefenseMapWaveConfig,
-  humanPlayerCount: number,
-): ResolvedCoopDefenseMapWaveConfig {
-  const resolved = resolveCoopDefenseEnemyWaveConfig(waveConfig.enemyKind, waveConfig, humanPlayerCount);
-  return {
-    enemyKind: waveConfig.enemyKind,
-    intervalMs: resolved.intervalMs,
-    countPerWave: resolved.countPerWave,
-    startAtMs: waveConfig.startAtMs ?? 0,
-  };
+function getScheduledPersistentSpawnXp(
+  spawn: ResolvedCoopDefenseMapPersistentSpawnConfig,
+  durationMs: number,
+): number {
+  const activeDurationMs = Math.max(0, durationMs - spawn.startAtMs);
+  if (activeDurationMs <= 0 || spawn.countPerTick <= 0) return 0;
+  const tickCount = Math.max(1, Math.ceil(activeDurationMs / spawn.intervalMs));
+  return tickCount * spawn.countPerTick * getEnemyLifecycleXp(spawn.enemyKind);
 }
 
 function getEnemyLifecycleXp(kind: CoopDefenseEnemyKind, ancestors = new Set<string>()): number {
@@ -495,8 +508,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     return normalizeBaseConfig(baseConfig);
   });
   const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, mapConfig.boss);
-  validateMapSpawnModel(mapConfig.mapId, objective, mapConfig.encounters, mapConfig.waves);
-  const waves = Array.isArray(mapConfig.waves) ? mapConfig.waves : [];
+  const persistentSpawns = Array.isArray(mapConfig.persistentSpawns) ? mapConfig.persistentSpawns : [];
+  validateMapSpawnModel(mapConfig.mapId, objective, mapConfig.encounters);
   const enemyAirstrikes = normalizeAirstrikeConfig(mapConfig.enemyAirstrikes);
   const boss = normalizeBossConfig(mapConfig);
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
@@ -529,7 +542,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
-    waves: waves.map(normalizeWaveConfig),
+    persistentSpawns: normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases),
     encounters,
     boss,
     objective,
@@ -546,19 +559,10 @@ function validateMapSpawnModel(
   mapId: string,
   objective: CoopDefenseMapObjective,
   encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
-  waves: readonly CoopDefenseMapWaveConfig[] | undefined,
 ): void {
-  if (Array.isArray(encounters) && encounters.length > 0 && Array.isArray(waves) && waves.length > 0) {
-    throw new Error(
-      `[coopDefenseMaps] Map ${mapId} must not declare both waves and encounters; use one spawn model`,
-    );
-  }
   if (objective !== 'repel-assault') return;
   if (!Array.isArray(encounters) || encounters.length === 0) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} with repel-assault needs at least one encounter`);
-  }
-  if (Array.isArray(waves) && waves.length > 0) {
-    throw new Error(`[coopDefenseMaps] Map ${mapId} with repel-assault must not declare legacy waves`);
   }
 }
 
@@ -877,8 +881,9 @@ function normalizePowerUpConfig(
 }
 
 function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBossConfig | undefined {
-  const bossWaves = (mapConfig.waves ?? []).filter((wave) => getCoopDefenseEnemyConfig(wave.enemyKind).isBoss);
-  if (bossWaves.length > 0) {
+  const bossPersistentSpawns = (mapConfig.persistentSpawns ?? [])
+    .filter((spawn) => getCoopDefenseEnemyConfig(spawn.enemyKind).isBoss);
+  if (bossPersistentSpawns.length > 0) {
     throw new Error(`[coopDefenseMaps] Boss enemies must use the unique boss slot on map ${mapConfig.mapId}`);
   }
   if (!mapConfig.boss) return undefined;
@@ -924,13 +929,12 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   const spawnCenter = baseConfig.spawnCenter
     ? normalizeBaseCellOffset(baseConfig.spawnCenter)
     : undefined;
-  const spawnWave = baseConfig.spawnWave ? normalizeWaveConfig(baseConfig.spawnWave) : undefined;
 
-  if (role === 'spawn-point' && (!spawnCenter || !spawnWave)) {
-    throw new Error(`[coopDefenseMaps] Spawn point ${baseConfig.id} needs spawnCenter and spawnWave`);
+  if (role === 'spawn-point' && !spawnCenter) {
+    throw new Error(`[coopDefenseMaps] Spawn point ${baseConfig.id} needs spawnCenter`);
   }
-  if (role !== 'spawn-point' && (spawnCenter || spawnWave)) {
-    throw new Error(`[coopDefenseMaps] Only spawn points may declare spawnCenter or spawnWave: ${baseConfig.id}`);
+  if (role !== 'spawn-point' && spawnCenter) {
+    throw new Error(`[coopDefenseMaps] Only spawn points may declare spawnCenter: ${baseConfig.id}`);
   }
   // Podeste versorgen ausschliesslich Spieler und bleiben deshalb an Gegnerbasen verboten.
   // Basistuerme sind dagegen fraktionsfaehig und erhalten ihr Zielverhalten erst zur Laufzeit.
@@ -951,7 +955,6 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
     turrets,
     powerUpPedestals,
     spawnCenter,
-    spawnWave,
   };
 }
 
@@ -1070,11 +1073,62 @@ function normalizeBaseShape(shape: CoopBaseShape): CoopBaseShape {
   };
 }
 
-function normalizeWaveConfig(waveConfig: CoopDefenseMapWaveConfig): CoopDefenseMapWaveConfig {
-  return {
-    enemyKind: waveConfig.enemyKind,
-    intervalMs: Math.max(1, Math.floor(waveConfig.intervalMs)),
-    countPerWave: Math.max(0, Math.floor(waveConfig.countPerWave)),
-    startAtMs: Math.max(0, Math.floor(waveConfig.startAtMs ?? 0)),
-  };
+function normalizePersistentSpawnConfigs(
+  mapId: string,
+  persistentSpawns: readonly CoopDefenseMapPersistentSpawnConfig[],
+  bases: readonly CoopBaseConfig[],
+): readonly CoopDefenseMapPersistentSpawnConfig[] {
+  const uniqueIds = new Set<string>();
+  return persistentSpawns.map((spawnConfig) => {
+    if (typeof spawnConfig.id !== 'string' || spawnConfig.id.trim().length === 0) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn on map ${mapId} needs a non-empty id`);
+    }
+    const id = spawnConfig.id.trim();
+    if (uniqueIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate persistent spawn id on map ${mapId}: ${id}`);
+    }
+    uniqueIds.add(id);
+    if (!hasCoopDefenseEnemyKind(spawnConfig.enemyKind)) {
+      throw new Error(
+        `[coopDefenseMaps] Persistent spawn ${mapId}:${id} references unknown enemy kind: ${spawnConfig.enemyKind}`,
+      );
+    }
+    if (!Number.isFinite(spawnConfig.intervalMs) || spawnConfig.intervalMs <= 0) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} needs a positive interval`);
+    }
+    if (!Number.isFinite(spawnConfig.countPerTick) || spawnConfig.countPerTick < 1) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} needs a positive countPerTick`);
+    }
+
+    const source = normalizePersistentSpawnSource(mapId, id, spawnConfig.source, bases);
+    return {
+      id,
+      enemyKind: spawnConfig.enemyKind,
+      intervalMs: Math.max(1, Math.floor(spawnConfig.intervalMs)),
+      countPerTick: Math.max(1, Math.floor(spawnConfig.countPerTick)),
+      startAtMs: Math.max(0, Math.floor(spawnConfig.startAtMs ?? 0)),
+      source,
+    };
+  });
+}
+
+function normalizePersistentSpawnSource(
+  mapId: string,
+  spawnId: string,
+  source: CoopDefenseMapPersistentSpawnSource,
+  bases: readonly CoopBaseConfig[],
+): CoopDefenseMapPersistentSpawnSource {
+  if (source?.type === 'map') return { type: 'map' };
+  if (source?.type !== 'base' || typeof source.baseId !== 'string' || source.baseId.trim().length === 0) {
+    throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${spawnId} needs a map or base source`);
+  }
+  const baseId = source.baseId.trim();
+  const base = bases.find((candidate) => candidate.id === baseId);
+  if (!base) {
+    throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${spawnId} references unknown base: ${baseId}`);
+  }
+  if ((base.role ?? 'main') !== 'spawn-point' || !base.spawnCenter) {
+    throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${spawnId} needs a spawn-point base: ${baseId}`);
+  }
+  return { type: 'base', baseId };
 }

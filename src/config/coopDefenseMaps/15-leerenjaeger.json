@@ -206,7 +206,6 @@
       "spawnOnArenaStart": true
     }
   ],
-  "waves": [],
   "encounters": [
     {
       "id": "void-hunter-opening-support",

@@ -82,7 +82,8 @@ interface PowerUpSystemOptions {
   onConfiguredNukeExploded?: (strike: SyncedNukeStrike) => void;
   onHolyHandGrenadePickup?: (playerId: string) => void;
   onBfgPickup?: (playerId: string) => void;
-  coopDefenseMapXpTotal?: number;
+  /** Finite XP plus a clearly documented round-duration estimate for persistent pressure. */
+  coopDefenseMapXpReference?: number;
   isAdrenalineDropEnabled?: (playerId: string) => boolean;
   getAdrenalineDropChanceMultiplier?: (playerId: string) => number;
   getAdrenalineSyringeDurationMultiplier?: (playerId: string) => number;
@@ -334,7 +335,7 @@ export class PowerUpSystem {
     const multiplier = Math.max(0, this.options.getAdrenalineDropChanceMultiplier?.(killerId) ?? 1);
     const chance = getAdrenalineSyringeDropChance(
       enemyXp,
-      this.options.coopDefenseMapXpTotal ?? 1,
+      this.options.coopDefenseMapXpReference ?? 1,
       multiplier,
     );
     if (Math.random() >= chance) return;

@@ -316,27 +316,39 @@
     }
   ],
   "powerUps": [],
-  "waves": [
-    {
-      "enemyKind": "pyro-badger",
-      "intervalMs": 20000,
-      "countPerWave": 1,
-      "startAtMs": 3000
-    },
-    {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 6000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    },
-    {
-      "enemyKind": "demon-badger",
-      "intervalMs": 6000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    }
-  ],
   "itemDrop": {
     "itemLevel": 3
-  }
+  },
+  "persistentSpawns": [
+    {
+      "id": "map-14-pressure-0",
+      "enemyKind": "pyro-badger",
+      "intervalMs": 20000,
+      "countPerTick": 1,
+      "startAtMs": 3000,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-14-pressure-1",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 6000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-14-pressure-2",
+      "enemyKind": "demon-badger",
+      "intervalMs": 6000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    }
+  ]
 }

@@ -6,7 +6,7 @@ import {
 } from '../src/config/coopDefenseEnemies';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
-  resolveCoopDefenseMapWaveConfigs,
+  resolveCoopDefenseMapPersistentSpawnConfigs,
 } from '../src/config/coopDefenseMaps';
 import { scaleByCoopDefenseHumanPlayers } from '../src/config/coopDefenseScaling';
 
@@ -43,10 +43,10 @@ describe('Coop defense multiplayer scaling', () => {
     }
   });
 
-  it('keeps every map wave unchanged as players join', () => {
+  it('keeps every persistent source unchanged as players join when no enemy scaling is configured', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
-      expect(resolveCoopDefenseMapWaveConfigs(map, 4)).toEqual(
-        resolveCoopDefenseMapWaveConfigs(map, 1),
+      expect(resolveCoopDefenseMapPersistentSpawnConfigs(map, 4)).toEqual(
+        resolveCoopDefenseMapPersistentSpawnConfigs(map, 1),
       );
     }
   });

@@ -310,39 +310,59 @@
       "spawnOnArenaStart": false
     }
   ],
-  "waves": [
-    {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 9000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    },
-    {
-      "enemyKind": "demon-badger",
-      "intervalMs": 9000,
-      "countPerWave": 1,
-      "startAtMs": 4000
-    },
-    {
-      "enemyKind": "spore-warden",
-      "intervalMs": 20000,
-      "countPerWave": 1,
-      "startAtMs": 12000
-    },
-    {
-      "enemyKind": "plague-medic",
-      "intervalMs": 30000,
-      "countPerWave": 1,
-      "startAtMs": 20000
-    },
-    {
-      "enemyKind": "alien-badger",
-      "intervalMs": 9000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    }
-  ],
   "itemDrop": {
     "itemLevel": 2
-  }
+  },
+  "persistentSpawns": [
+    {
+      "id": "map-12-pressure-0",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 9000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-12-pressure-1",
+      "enemyKind": "demon-badger",
+      "intervalMs": 9000,
+      "countPerTick": 1,
+      "startAtMs": 4000,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-12-pressure-2",
+      "enemyKind": "spore-warden",
+      "intervalMs": 20000,
+      "countPerTick": 1,
+      "startAtMs": 12000,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-12-pressure-3",
+      "enemyKind": "plague-medic",
+      "intervalMs": 30000,
+      "countPerTick": 1,
+      "startAtMs": 20000,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-12-pressure-4",
+      "enemyKind": "alien-badger",
+      "intervalMs": 9000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    }
+  ]
 }

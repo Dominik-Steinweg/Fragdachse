@@ -30,7 +30,7 @@ describe('Map 15 - Leerenjäger', () => {
       'friendly-outpost-rocket',
       'friendly-outpost-flame',
     ]);
-    expect(map.waves).toEqual([]);
+    expect(map.persistentSpawns).toEqual([]);
     expect(map.encounters).toHaveLength(3);
     expect(map.encounters?.map((encounter) => encounter.start.type)).toEqual([
       'time',

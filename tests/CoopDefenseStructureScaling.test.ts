@@ -62,7 +62,6 @@ const STRUCTURE_SCALING_MAP: CoopDefenseMapConfig = {
       anchor: { kind: 'grid', gridX: 40, gridY: 12 },
       shape: C_SHAPE,
       spawnCenter: { gridX: 1, gridY: 1 },
-      spawnWave: { enemyKind: 'zombie-badger', intervalMs: 1000, countPerWave: 1 },
     },
     {
       id: 'hostile-override',
@@ -74,7 +73,6 @@ const STRUCTURE_SCALING_MAP: CoopDefenseMapConfig = {
     },
   ],
   powerUps: [],
-  waves: [],
 };
 
 function resolvedById(playerCount: number): Map<string, number> {

@@ -109,24 +109,36 @@
       "spawnOnArenaStart": false
     }
   ],
-  "waves": [
+  "persistentSpawns": [
     {
+      "id": "map-4-pressure-0",
       "enemyKind": "zombie-badger",
       "intervalMs": 1500,
-      "countPerWave": 2,
-      "startAtMs": 0
+      "countPerTick": 2,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-4-pressure-1",
       "enemyKind": "demon-badger",
       "intervalMs": 6000,
-      "countPerWave": 1,
-      "startAtMs": 0
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-4-pressure-2",
       "enemyKind": "rabid-badger",
       "intervalMs": 5000,
-      "countPerWave": 1,
-      "startAtMs": 0
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
     }
   ]
 }

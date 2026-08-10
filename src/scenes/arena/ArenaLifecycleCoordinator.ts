@@ -37,7 +37,9 @@ import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseSurvivalSystem } from '../../systems/CoopDefenseSurvivalSystem';
-import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
+import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
+import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
+import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import {
   CoopDefenseAirstrikeDirector,
@@ -63,7 +65,7 @@ import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONF
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -550,8 +552,8 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseBases = coopDefenseMapConfig
       ? getCoopDefenseBases(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
-    const coopDefenseWaveConfigs = coopDefenseMapConfig
-      ? resolveCoopDefenseMapWaveConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
+    const coopDefensePersistentSpawnConfigs = coopDefenseMapConfig
+      ? resolveCoopDefenseMapPersistentSpawnConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
     const coopDefenseEncounterConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapEncounterConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
@@ -635,7 +637,7 @@ export class ArenaLifecycleCoordinator {
         baseManager: this.ctx.baseManager,
         objective: coopDefenseMapConfig?.objective,
         getSecondsLeft: () => bridge.computeSecondsLeft(),
-        isBossDefeated: () => this.ctx.coopDefenseWaveSpawner?.isBossDefeated() ?? false,
+        isBossDefeated: () => this.ctx.coopDefenseBossSystem?.isBossDefeated() ?? false,
         isAssaultRepelled: () => this.ctx.coopDefenseMapDirector?.isAssaultRepelled() ?? false,
         isSurvivalTeamWiped: () => {
           const survival = this.ctx.coopDefenseSurvivalSystem;
@@ -748,24 +750,35 @@ export class ArenaLifecycleCoordinator {
         this.ctx.enemyManager
         && this.ctx.enemyFlowFieldService
         && (
-          coopDefenseWaveConfigs.length > 0
+          coopDefensePersistentSpawnConfigs.length > 0
           || coopDefenseEncounterConfigs.length > 0
-          || coopDefenseBases.some((base) => base.spawnWave)
+          || coopDefenseMapConfig?.boss !== undefined
         )
       ) {
-        this.ctx.coopDefenseWaveSpawner = new CoopDefenseWaveSpawner(
+        this.ctx.coopDefenseSpawnExecutor = new CoopDefenseSpawnExecutor(
           this.ctx.enemyManager,
           this.ctx.enemyFlowFieldService,
-          coopDefenseWaveConfigs,
-          coopDefenseBases,
-          () => this.ctx.baseManager?.getActiveBaseIds() ?? new Set<string>(),
-          coopDefenseMapConfig?.boss,
           this.ctx.enemyBossFlowFieldService,
         );
+        this.ctx.coopDefensePersistentPressureSystem = coopDefensePersistentSpawnConfigs.length > 0
+          ? new CoopDefensePersistentPressureSystem(
+            coopDefensePersistentSpawnConfigs,
+            this.ctx.coopDefenseSpawnExecutor,
+            coopDefenseBases,
+            () => this.ctx.baseManager?.getActiveBaseIds() ?? new Set<string>(),
+          )
+          : null;
+        this.ctx.coopDefenseBossSystem = coopDefenseMapConfig?.boss
+          ? new CoopDefenseBossSystem(
+            coopDefenseMapConfig.boss,
+            this.ctx.enemyManager,
+            this.ctx.coopDefenseSpawnExecutor,
+          )
+          : null;
         if (coopDefenseEncounterConfigs.length > 0) {
           this.ctx.coopDefenseMapDirector = new CoopDefenseMapDirector(
             coopDefenseEncounterConfigs,
-            (enemyKind, count, originId) => this.ctx.coopDefenseWaveSpawner?.hostSpawnEncounterGroup(enemyKind, count, originId),
+            (enemyKind, count, originId) => this.ctx.coopDefenseSpawnExecutor?.hostSpawnEncounterGroup(enemyKind, count, originId),
             {
               mode: coopDefenseMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
               isEnemyActive: (enemyId) => this.ctx.enemyManager?.getEnemy(enemyId)?.sprite.active === true,
@@ -1802,10 +1815,10 @@ export class ArenaLifecycleCoordinator {
         onBfgPickup: (playerId) => {
           this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.BFG, 1);
         },
-        coopDefenseMapXpTotal: coopDefenseMapConfig
-          ? getCoopDefenseMapScheduledXp(
+        coopDefenseMapXpReference: coopDefenseMapConfig
+          ? getCoopDefenseMapXpReference(
             coopDefenseMapConfig,
-            coopDefenseWaveConfigs,
+            coopDefensePersistentSpawnConfigs,
             coopDefenseHumanPlayerCount,
           )
           : 1,
@@ -2267,7 +2280,11 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyAttackSystem = null;
     this.ctx.coopDefenseMapDirector?.reset();
     this.ctx.coopDefenseMapDirector = null;
-    this.ctx.coopDefenseWaveSpawner = null;
+    this.ctx.coopDefensePersistentPressureSystem?.reset();
+    this.ctx.coopDefensePersistentPressureSystem = null;
+    this.ctx.coopDefenseBossSystem?.reset();
+    this.ctx.coopDefenseBossSystem = null;
+    this.ctx.coopDefenseSpawnExecutor = null;
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);
@@ -2336,7 +2353,7 @@ export class ArenaLifecycleCoordinator {
   private onTransitionToArena(): void {
     const layout = bridge.getArenaLayout();
     // Im Coop-Modus zusätzlich auf den (reliable) RoundState warten: er trägt Map-ID und Spielerzahl,
-    // aus denen Basen/Wellen/Gegner deterministisch gebaut werden. Ohne dieses Gate kann der Client
+    // aus denen Basen/Druckquellen/Gegner deterministisch gebaut werden. Ohne dieses Gate kann der Client
     // bauen, bevor diese Keys angekommen sind → fehlende/falsche Basis. Das 3-s-Countdown-Fenster
     // (ARENA_COUNTDOWN_SEC) bietet reichlich Zeit für die Retries.
     const roundState = bridge.getRoundState();

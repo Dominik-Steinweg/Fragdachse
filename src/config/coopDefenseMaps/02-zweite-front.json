@@ -47,18 +47,26 @@
     }
   ],
   "powerUps": [],
-  "waves": [
+  "persistentSpawns": [
     {
+      "id": "map-2-pressure-0",
       "enemyKind": "zombie-badger",
       "intervalMs": 4000,
-      "countPerWave": 1,
-      "startAtMs": 0
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-2-pressure-1",
       "enemyKind": "demon-badger",
       "intervalMs": 3000,
-      "countPerWave": 2,
-      "startAtMs": 10000
+      "countPerTick": 2,
+      "startAtMs": 10000,
+      "source": {
+        "type": "map"
+      }
     }
   ]
 }

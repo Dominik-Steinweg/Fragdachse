@@ -59,7 +59,7 @@ export const DEFAULT_COOP_DEFENSE_CONSTRUCTION_ID: ConstructionId = 'rocket_turr
 /**
  * Grundkapazitaet des Inspectors. Sie ersetzt die frueheren Adrenalinkosten als einzige
  * Obergrenze fuer gleichzeitig stehende Konstrukte und ist damit unabhaengig von Rundendauer,
- * Adrenalin, Cooldowns und Anzahl abgewehrter Wellen.
+ * Adrenalin, Cooldowns und Anzahl abgewehrter Angriffe.
  *
  * Ab dem Item-Affix "Baukapazitaet" ist sie nicht mehr das persoenliche Maximum – dafuer gibt
  * es {@link getCoopDefenseConstructionCapacity}.

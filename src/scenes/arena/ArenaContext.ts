@@ -52,7 +52,9 @@ import type { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItem
 import type { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import type { NecromancySystem } from '../../systems/NecromancySystem';
 import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
-import type { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
+import type { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
+import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
+import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import type { CoopDefenseAirstrikeDirector } from '../../systems/CoopDefenseAirstrikeDirector';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
@@ -153,7 +155,9 @@ export interface ArenaContext {
   coopDefenseTimebombSystem: CoopDefenseTimebombSystem | null;
   coopDefenseSurvivalSystem: CoopDefenseSurvivalSystem | null;
   coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
-  coopDefenseWaveSpawner: CoopDefenseWaveSpawner | null;
+  coopDefenseSpawnExecutor: CoopDefenseSpawnExecutor | null;
+  coopDefensePersistentPressureSystem: CoopDefensePersistentPressureSystem | null;
+  coopDefenseBossSystem: CoopDefenseBossSystem | null;
   coopDefenseMapDirector: CoopDefenseMapDirector | null;
   coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;
   translocatorSystem: TranslocatorSystem | null;

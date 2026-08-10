@@ -4,10 +4,11 @@ import {
   DEFAULT_COOP_DEFENSE_MAP_ID,
   getCoopDefenseMapConfig,
   getCoopDefenseMapScheduledXp,
+  getCoopDefenseMapXpReference,
   getCoopDefenseMapObjectiveLabel,
   resolveCoopDefenseMapEncounterConfigs,
   type CoopBaseShape,
-  resolveCoopDefenseMapWaveConfigs,
+  resolveCoopDefenseMapPersistentSpawnConfigs,
 } from '../src/config/coopDefenseMaps';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import {
@@ -97,8 +98,7 @@ describe('Coop defense map progression', () => {
 
   it('calculates positive finite XP for every playable map', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
-      const waves = resolveCoopDefenseMapWaveConfigs(map, 1);
-      const scheduledXp = getCoopDefenseMapScheduledXp(map, waves, 1);
+      const scheduledXp = getCoopDefenseMapScheduledXp(map, 1);
       expect(Number.isFinite(scheduledXp)).toBe(true);
       expect(scheduledXp).toBeGreaterThan(0);
     }
@@ -107,7 +107,7 @@ describe('Coop defense map progression', () => {
   it('migrates only Map 1 to the explicit repel-assault campaign reference', () => {
     const map = getCoopDefenseMapConfig('1');
     expect(map.objective).toBe('repel-assault');
-    expect(map.waves).toEqual([]);
+    expect(map.persistentSpawns).toEqual([]);
     expect(map.encounters).toHaveLength(3);
     expect(map.encounters?.slice(0, 2).map((encounter) => encounter.restAfterMs)).toEqual([5_000, 5_000]);
     expect(map.boss).toBeUndefined();
@@ -117,7 +117,7 @@ describe('Coop defense map progression', () => {
   it('migrates Map 11 and Map 15 to finite encounter content with semantic triggers', () => {
     const bomberMap = getCoopDefenseMapConfig('11');
     expect(bomberMap.objective).toBe('repel-assault');
-    expect(bomberMap.waves).toEqual([]);
+    expect(bomberMap.persistentSpawns).toEqual([]);
     expect(bomberMap.encounters?.map((encounter) => encounter.start.type)).toEqual([
       'time',
       'opening-airstrike-complete',
@@ -127,7 +127,7 @@ describe('Coop defense map progression', () => {
 
     const voidHunterMap = getCoopDefenseMapConfig('15');
     expect(voidHunterMap.objective).toBe('defeat-boss');
-    expect(voidHunterMap.waves).toEqual([]);
+    expect(voidHunterMap.persistentSpawns).toEqual([]);
     expect(voidHunterMap.encounters?.some((encounter) => (
       encounter.start.type === 'boss-phase' && encounter.start.phase === 2
     ))).toBe(true);
@@ -142,10 +142,10 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('uses the central enemy-wave resolver for Map 1 encounter XP instead of legacy waves', () => {
+  it('uses the central enemy-spawn resolver for Map 1 encounter XP', () => {
     const map = getCoopDefenseMapConfig('1');
-    const singlePlayerXp = getCoopDefenseMapScheduledXp(map, [], 1);
-    const multiplayerXp = getCoopDefenseMapScheduledXp(map, [], 2);
+    const singlePlayerXp = getCoopDefenseMapScheduledXp(map, 1);
+    const multiplayerXp = getCoopDefenseMapScheduledXp(map, 2);
     const resolvedMultiplayerGroups = resolveCoopDefenseMapEncounterConfigs(map, 2)
       .flatMap((encounter) => encounter.groups);
     expect(singlePlayerXp).toBe(40);
@@ -202,13 +202,13 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('uses known enemies and valid spawn settings for every wave and boss', () => {
+  it('uses known enemies and valid settings for every persistent source and boss', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
-      for (const wave of map.waves) {
-        expect(() => getCoopDefenseEnemyConfig(wave.enemyKind)).not.toThrow();
-        expect(wave.intervalMs).toBeGreaterThan(0);
-        expect(wave.countPerWave).toBeGreaterThan(0);
-        expect(wave.startAtMs ?? 0).toBeGreaterThanOrEqual(0);
+      for (const spawn of map.persistentSpawns ?? []) {
+        expect(() => getCoopDefenseEnemyConfig(spawn.enemyKind)).not.toThrow();
+        expect(spawn.intervalMs).toBeGreaterThan(0);
+        expect(spawn.countPerTick).toBeGreaterThan(0);
+        expect(spawn.startAtMs ?? 0).toBeGreaterThanOrEqual(0);
       }
       if (map.boss) {
         expect(getCoopDefenseEnemyConfig(map.boss.enemyKind).isBoss).toBe(true);
@@ -218,10 +218,9 @@ describe('Coop defense map progression', () => {
       for (const base of map.bases) {
         if (base.role !== 'spawn-point') continue;
         expect(base.spawnCenter).toBeDefined();
-        expect(base.spawnWave).toBeDefined();
-        expect(getCoopDefenseEnemyConfig(base.spawnWave!.enemyKind)).toBeDefined();
-        expect(base.spawnWave!.intervalMs).toBeGreaterThan(0);
-        expect(base.spawnWave!.countPerWave).toBeGreaterThan(0);
+        expect((map.persistentSpawns ?? []).some((spawn) => (
+          spawn.source.type === 'base' && spawn.source.baseId === base.id
+        ))).toBe(true);
       }
     }
   });
@@ -244,16 +243,13 @@ describe('Coop defense map progression', () => {
     expect(plasmaTurrets.length).toBeGreaterThan(0);
   });
 
-  it('includes spawn-point waves in the map XP budget with player scaling', () => {
+  it('keeps persistent-source XP outside the exact scheduled XP budget', () => {
     const map = getCoopDefenseMapConfig('13');
-    const waves = resolveCoopDefenseMapWaveConfigs(map, 2);
-    const withSpawnPoints = getCoopDefenseMapScheduledXp(map, waves, 2);
-    const withoutSpawnPoints = getCoopDefenseMapScheduledXp({
-      ...map,
-      bases: map.bases.map((base) => ({ ...base, spawnWave: undefined })),
-    }, waves, 2);
-
-    expect(withSpawnPoints).toBeGreaterThan(withoutSpawnPoints);
+    const finiteXp = getCoopDefenseMapScheduledXp(map, 2);
+    const persistentSpawns = resolveCoopDefenseMapPersistentSpawnConfigs(map, 2);
+    expect(finiteXp).toBeGreaterThan(0);
+    expect(persistentSpawns).toHaveLength(5);
+    expect(getCoopDefenseMapXpReference(map, persistentSpawns, 2)).toBeGreaterThan(finiteXp);
   });
 
   it('keeps five-cell obstacle clearance around every role and preserves spawn-center gaps', () => {

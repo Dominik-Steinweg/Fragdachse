@@ -151,7 +151,6 @@
       "spawnOnArenaStart": false
     }
   ],
-  "waves": [],
   "encounters": [
     {
       "id": "opening-assault",

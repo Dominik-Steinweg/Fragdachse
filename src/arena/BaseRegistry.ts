@@ -23,10 +23,8 @@ import {
   type CoopBaseRole,
   type CoopBaseTurretWeaponId,
   type CoopDefenseMapConfig,
-  type ResolvedCoopDefenseMapWaveConfig,
   DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
 } from '../config/coopDefenseMaps';
-import { resolveCoopDefenseEnemyWaveConfig } from '../config/coopDefenseEnemies';
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
 
 export interface BaseTurretSpec {
@@ -80,7 +78,6 @@ export interface BaseSpec {
     readonly x: number;
     readonly y: number;
   };
-  readonly spawnWave?: ResolvedCoopDefenseMapWaveConfig;
 }
 
 // ── Anker- & Shape-Auflösung ───────────────────────────────────────────────
@@ -194,10 +191,6 @@ function resolveBaseSpec(config: CoopBaseConfig, humanPlayerCount: number): Base
     };
   }
 
-  const resolvedSpawnWave = config.spawnWave
-    ? resolveCoopDefenseEnemyWaveConfig(config.spawnWave.enemyKind, config.spawnWave, humanPlayerCount)
-    : null;
-
   const turrets = (config.turrets ?? []).map((turret) => resolveBaseTurretSpec(
     config.id,
     turret,
@@ -225,14 +218,6 @@ function resolveBaseSpec(config: CoopBaseConfig, humanPlayerCount: number): Base
     turrets,
     powerUpPedestals,
     spawnCenter,
-    spawnWave: config.spawnWave && resolvedSpawnWave
-      ? {
-        enemyKind: config.spawnWave.enemyKind,
-        intervalMs: resolvedSpawnWave.intervalMs,
-        countPerWave: resolvedSpawnWave.countPerWave,
-        startAtMs: Math.max(0, Math.floor(config.spawnWave.startAtMs ?? 0)),
-      }
-      : undefined,
   };
 }
 

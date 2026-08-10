@@ -203,30 +203,46 @@
       "spawnOnArenaStart": false
     }
   ],
-  "waves": [
+  "persistentSpawns": [
     {
+      "id": "map-6-pressure-0",
       "enemyKind": "zombie-badger",
       "intervalMs": 8000,
-      "countPerWave": 1,
-      "startAtMs": 0
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-6-pressure-1",
       "enemyKind": "demon-badger",
       "intervalMs": 7000,
-      "countPerWave": 1,
-      "startAtMs": 5000
+      "countPerTick": 1,
+      "startAtMs": 5000,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-6-pressure-2",
       "enemyKind": "rabid-badger",
       "intervalMs": 10000,
-      "countPerWave": 1,
-      "startAtMs": 10000
+      "countPerTick": 1,
+      "startAtMs": 10000,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-6-pressure-3",
       "enemyKind": "spore-warden",
       "intervalMs": 6000,
-      "countPerWave": 1,
-      "startAtMs": 0
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
     }
   ]
 }

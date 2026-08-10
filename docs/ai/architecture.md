@@ -19,10 +19,10 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
 
 - `src/systems/`: hostseitige Gameplay-Regeln, zeitlicher autoritativer State und Kollisionsergebnisse.
 - `CoopDefenseMapDirector` ist ein Round-Lifetime-Hostsystem für endliche Encounter. Im
-  zeitgeplanten A2-Modus delegiert er fällige Gruppen an den bestehenden `CoopDefenseWaveSpawner`;
+  zeitgeplanten A2-Modus delegiert er fällige Gruppen an den bestehenden `CoopDefenseSpawnExecutor`;
   im `repel-assault`-Modus aktiviert er genau einen Encounter nach dem anderen und entscheidet
   Clear über die von diesem Spawnaufruf zurückgegebenen Enemy-IDs, gefolgt von `restAfterMs`.
-  Legacy-`waves`, Spawnpunkt-Wellen und Boss-Spawns bleiben getrennt. Der Director meldet den
+  Map- und strukturgebundene Druckquellen werden vom `CoopDefensePersistentPressureSystem` getaktet; Boss-Timing liegt beim `CoopDefenseBossSystem`. Der Director meldet den
   Assault-Fortschritt nur an den `CoopDefenseRoundStateSystem`, der als einzige Instanz Sieg oder
   Niederlage abschließt.
 - Encounter-Starts sind eine kleine discriminated union (`time`, `after-previous`,

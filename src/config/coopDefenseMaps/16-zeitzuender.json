@@ -509,12 +509,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "timebomb-badger",
-        "intervalMs": 3000,
-        "countPerWave": 1,
-        "startAtMs": 0
       }
     },
     {
@@ -563,12 +557,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "timebomb-badger",
-        "intervalMs": 3000,
-        "countPerWave": 1,
-        "startAtMs": 1000
       }
     },
     {
@@ -617,12 +605,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "timebomb-badger",
-        "intervalMs": 3000,
-        "countPerWave": 1,
-        "startAtMs": 2000
       }
     },
     {
@@ -671,12 +653,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "timebomb-badger",
-        "intervalMs": 3000,
-        "countPerWave": 1,
-        "startAtMs": 0
       }
     }
   ],
@@ -712,27 +688,83 @@
       "spawnOnArenaStart": false
     }
   ],
-  "waves": [
-    {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 4500,
-      "countPerWave": 1,
-      "startAtMs": 0
-    },
-    {
-      "enemyKind": "demon-badger",
-      "intervalMs": 5000,
-      "countPerWave": 1,
-      "startAtMs": 1500
-    },
-    {
-      "enemyKind": "rabid-badger",
-      "intervalMs": 6500,
-      "countPerWave": 1,
-      "startAtMs": 2500
-    }
-  ],
   "itemDrop": {
     "itemLevel": 3
-  }
+  },
+  "persistentSpawns": [
+    {
+      "id": "map-16-pressure-0",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 4500,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-16-pressure-1",
+      "enemyKind": "demon-badger",
+      "intervalMs": 5000,
+      "countPerTick": 1,
+      "startAtMs": 1500,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-16-pressure-2",
+      "enemyKind": "rabid-badger",
+      "intervalMs": 6500,
+      "countPerTick": 1,
+      "startAtMs": 2500,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "base-16-spawn-point-timebomb-top-pressure",
+      "enemyKind": "timebomb-badger",
+      "intervalMs": 3000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-timebomb-top"
+      }
+    },
+    {
+      "id": "base-16-spawn-point-timebomb-bottom-pressure",
+      "enemyKind": "timebomb-badger",
+      "intervalMs": 3000,
+      "countPerTick": 1,
+      "startAtMs": 1000,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-timebomb-bottom"
+      }
+    },
+    {
+      "id": "base-16-spawn-point-timebomb-rear-pressure",
+      "enemyKind": "timebomb-badger",
+      "intervalMs": 3000,
+      "countPerTick": 1,
+      "startAtMs": 2000,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-timebomb-rear"
+      }
+    },
+    {
+      "id": "base-16-spawn-point-zombie-rear-pressure",
+      "enemyKind": "timebomb-badger",
+      "intervalMs": 3000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-zombie-rear"
+      }
+    }
+  ]
 }

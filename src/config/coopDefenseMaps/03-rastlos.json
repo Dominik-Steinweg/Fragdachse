@@ -56,24 +56,36 @@
     }
   ],
   "powerUps": [],
-  "waves": [
+  "persistentSpawns": [
     {
+      "id": "map-3-pressure-0",
       "enemyKind": "zombie-badger",
       "intervalMs": 6000,
-      "countPerWave": 2,
-      "startAtMs": 0
+      "countPerTick": 2,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-3-pressure-1",
       "enemyKind": "demon-badger",
       "intervalMs": 6000,
-      "countPerWave": 1,
-      "startAtMs": 5000
+      "countPerTick": 1,
+      "startAtMs": 5000,
+      "source": {
+        "type": "map"
+      }
     },
     {
+      "id": "map-3-pressure-2",
       "enemyKind": "rabid-badger",
       "intervalMs": 5000,
-      "countPerWave": 2,
-      "startAtMs": 5000
+      "countPerTick": 2,
+      "startAtMs": 5000,
+      "source": {
+        "type": "map"
+      }
     }
   ]
 }

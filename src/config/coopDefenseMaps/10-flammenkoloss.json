@@ -170,31 +170,43 @@
       "spawnOnArenaStart": true
     }
   ],
-  "waves": [
-    {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 5000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    },
-    {
-      "enemyKind": "demon-badger",
-      "intervalMs": 5000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    },
-    {
-      "enemyKind": "spore-warden",
-      "intervalMs": 15000,
-      "countPerWave": 2,
-      "startAtMs": 0
-    }
-  ],
   "boss": {
     "enemyKind": "inferno-colossus",
     "spawnAtMs": 5000
   },
   "itemDrop": {
     "itemLevel": 1
-  }
+  },
+  "persistentSpawns": [
+    {
+      "id": "map-10-pressure-0",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 5000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-10-pressure-1",
+      "enemyKind": "demon-badger",
+      "intervalMs": 5000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "map-10-pressure-2",
+      "enemyKind": "spore-warden",
+      "intervalMs": 15000,
+      "countPerTick": 2,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    }
+  ]
 }

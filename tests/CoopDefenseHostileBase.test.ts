@@ -47,6 +47,22 @@ describe('coop-defense hostile bases', () => {
     expect(hostile?.turrets?.every((turret) => turret.mountSide === 'rear')).toBe(true);
   });
 
+  it('uses map 13 as the combined objective, encounter, and persistent-pressure reference', () => {
+    const map = getCoopDefenseMapConfig('13');
+    expect(map.objective).toBe('destroy-hostile-bases');
+    expect(map.encounters).toHaveLength(2);
+    expect(map.persistentSpawns?.filter((spawn) => spawn.source.type === 'map')).toHaveLength(1);
+    expect(map.persistentSpawns?.filter((spawn) => spawn.source.type === 'base')).toHaveLength(4);
+    expect(map.encounters?.some((encounter) => encounter.start.type === 'base-destroyed')).toBe(true);
+  });
+
+  it('keeps map 16 on the migrated map-pressure plus four structure-source model', () => {
+    const map = getCoopDefenseMapConfig('16');
+    expect(map.encounters ?? []).toHaveLength(0);
+    expect(map.persistentSpawns?.filter((spawn) => spawn.source.type === 'map')).toHaveLength(3);
+    expect(map.persistentSpawns?.filter((spawn) => spawn.source.type === 'base')).toHaveLength(4);
+  });
+
   it('places hostile bases outside the spawn band and before the defended bases', () => {
     for (const mapId of ATTACK_MAP_IDS) {
       const specs = resolveCoopDefenseBases(getCoopDefenseMapConfig(mapId));
@@ -63,8 +79,9 @@ describe('coop-defense hostile bases', () => {
     }
   });
 
-  it('keeps map 13 spawn waves on four destructible C-shaped sources', () => {
-    const spawnPoints = resolveCoopDefenseBases(getCoopDefenseMapConfig('13'))
+  it('keeps map 13 persistent pressure on four destructible C-shaped sources', () => {
+    const map = getCoopDefenseMapConfig('13');
+    const spawnPoints = resolveCoopDefenseBases(map)
       .filter((spec) => spec.role === 'spawn-point');
 
     expect(spawnPoints).toHaveLength(4);
@@ -91,10 +108,11 @@ describe('coop-defense hostile bases', () => {
     for (const source of spawnPoints) {
       expect(source.hpMax).toBeGreaterThan(0);
       expect(source.cells).toHaveLength(7);
-      expect(source.spawnWave).toBeDefined();
       expect(source.spawnCenter).toBeDefined();
       expect(source.cells).not.toContainEqual(source.spawnCenter);
-      expect(source.spawnWave?.enemyKind).toBeDefined();
+      expect(map.persistentSpawns?.some((spawn) => (
+        spawn.source.type === 'base' && spawn.source.baseId === source.id
+      ))).toBe(true);
     }
   });
 
@@ -145,15 +163,18 @@ describe('coop-defense hostile bases', () => {
       expect(source.cells).toHaveLength(7);
       expect(source.cells).not.toContainEqual(source.spawnCenter);
       expect(source.hpMax).toBeGreaterThan(0);
-      expect(source.spawnWave).toMatchObject({
+      const pressure = map.persistentSpawns?.find((spawn) => (
+        spawn.source.type === 'base' && spawn.source.baseId === source.id
+      ));
+      expect(pressure).toMatchObject({
         enemyKind: expect.any(String),
         intervalMs: expect.any(Number),
-        countPerWave: expect.any(Number),
+        countPerTick: expect.any(Number),
         startAtMs: expect.any(Number),
       });
-      expect(source.spawnWave!.intervalMs).toBeGreaterThan(0);
-      expect(source.spawnWave!.countPerWave).toBeGreaterThan(0);
-      expect(source.spawnWave!.startAtMs).toBeGreaterThanOrEqual(0);
+      expect(pressure!.intervalMs).toBeGreaterThan(0);
+      expect(pressure!.countPerTick).toBeGreaterThan(0);
+      expect(pressure!.startAtMs).toBeGreaterThanOrEqual(0);
     }
   });
 

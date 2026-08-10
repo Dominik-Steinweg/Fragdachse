@@ -370,12 +370,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "zombie-badger",
-        "intervalMs": 8000,
-        "countPerWave": 1,
-        "startAtMs": 0
       }
     },
     {
@@ -424,12 +418,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "demon-badger",
-        "intervalMs": 8000,
-        "countPerWave": 1,
-        "startAtMs": 4000
       }
     },
     {
@@ -478,12 +466,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "spore-warden",
-        "intervalMs": 22000,
-        "countPerWave": 1,
-        "startAtMs": 10000
       }
     },
     {
@@ -532,12 +514,6 @@
       "spawnCenter": {
         "gridX": 1,
         "gridY": 1
-      },
-      "spawnWave": {
-        "enemyKind": "alien-badger",
-        "intervalMs": 25000,
-        "countPerWave": 1,
-        "startAtMs": 15000
       }
     },
     {
@@ -626,15 +602,96 @@
       "spawnOnArenaStart": false
     }
   ],
-  "waves": [
-    {
-      "enemyKind": "thrower-badger",
-      "intervalMs": 11000,
-      "countPerWave": 1,
-      "startAtMs": 0
-    }
-  ],
   "itemDrop": {
     "itemLevel": 2
-  }
+  },
+  "persistentSpawns": [
+    {
+      "id": "map-13-pressure-0",
+      "enemyKind": "thrower-badger",
+      "intervalMs": 11000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "map"
+      }
+    },
+    {
+      "id": "base-13-spawn-point-zombie-badger-pressure",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 8000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-zombie-badger"
+      }
+    },
+    {
+      "id": "base-13-spawn-point-demon-badger-pressure",
+      "enemyKind": "demon-badger",
+      "intervalMs": 8000,
+      "countPerTick": 1,
+      "startAtMs": 4000,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-demon-badger"
+      }
+    },
+    {
+      "id": "base-13-spawn-point-spore-warden-pressure",
+      "enemyKind": "spore-warden",
+      "intervalMs": 22000,
+      "countPerTick": 1,
+      "startAtMs": 10000,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-spore-warden"
+      }
+    },
+    {
+      "id": "base-13-spawn-point-alien-badger-pressure",
+      "enemyKind": "alien-badger",
+      "intervalMs": 25000,
+      "countPerTick": 1,
+      "startAtMs": 15000,
+      "source": {
+        "type": "base",
+        "baseId": "spawn-point-alien-badger"
+      }
+    }
+  ],
+  "encounters": [
+    {
+      "id": "hive-defense",
+      "start": {
+        "type": "time",
+        "atMs": 10000
+      },
+      "groups": [
+        {
+          "enemyKind": "demon-badger",
+          "count": 2
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 1,
+          "delayMs": 2500
+        }
+      ]
+    },
+    {
+      "id": "hive-collapse",
+      "start": {
+        "type": "base-destroyed",
+        "baseId": "enemy-hive"
+      },
+      "groups": [
+        {
+          "enemyKind": "rabid-badger",
+          "count": 2
+        }
+      ]
+    }
+  ]
 }

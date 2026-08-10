@@ -9,7 +9,7 @@ import {
 function makeMap(
   encounters: CoopDefenseMapConfig['encounters'],
   objective?: CoopDefenseMapConfig['objective'],
-  waves: CoopDefenseMapConfig['waves'] = [],
+  persistentSpawns: CoopDefenseMapConfig['persistentSpawns'] = [],
   extras: Partial<CoopDefenseMapConfig> = {},
 ): CoopDefenseMapConfig {
   return {
@@ -18,7 +18,7 @@ function makeMap(
     roundDurationSec: 60,
     bases: [],
     powerUps: [],
-    waves,
+    persistentSpawns,
     encounters,
     objective,
     ...extras,
@@ -69,22 +69,24 @@ describe('Coop defense encounters', () => {
     ]))).toThrow('positive finite group counts');
   });
 
-  it('requires encounters and rejects legacy waves for repel-assault maps', () => {
+  it('requires encounters for repel-assault maps while allowing parallel persistent pressure', () => {
     expect(() => normalizeCoopDefenseMapConfig(makeMap(undefined, 'repel-assault')))
       .toThrow('needs at least one encounter');
     expect(() => normalizeCoopDefenseMapConfig(makeMap([], 'repel-assault')))
       .toThrow('needs at least one encounter');
-    expect(() => normalizeCoopDefenseMapConfig(makeMap(
+    const normalized = normalizeCoopDefenseMapConfig(makeMap(
       [{ id: 'opening', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'zombie-badger', count: 1 }] }],
       'repel-assault',
-      [{ enemyKind: 'zombie-badger', intervalMs: 1_000, countPerWave: 1 }],
-    ))).toThrow('both waves and encounters');
-
-    expect(() => normalizeCoopDefenseMapConfig(makeMap([
-      { id: 'mixed', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'zombie-badger', count: 1 }] },
-    ], 'survive', [
-      { enemyKind: 'zombie-badger', intervalMs: 1_000, countPerWave: 1 },
-    ]))).toThrow('both waves and encounters');
+      [{
+        id: 'background-pressure',
+        enemyKind: 'zombie-badger',
+        intervalMs: 1_000,
+        countPerTick: 1,
+        source: { type: 'map' },
+      }],
+    ));
+    expect(normalized.persistentSpawns).toHaveLength(1);
+    expect(normalized.encounters).toHaveLength(1);
   });
 
   it('validates the typed trigger references while normalizing them', () => {
@@ -147,7 +149,7 @@ describe('Coop defense encounters', () => {
 
   it('keeps the A2 test encounter isolated on Map 0', () => {
     const map = getCoopDefenseMapConfig('0');
-    expect(map.waves).toEqual([]);
+    expect(map.persistentSpawns).toEqual([]);
     expect(map.encounters).toHaveLength(1);
     expect(resolveCoopDefenseMapEncounterConfigs(map, 1)).toEqual([
       {
