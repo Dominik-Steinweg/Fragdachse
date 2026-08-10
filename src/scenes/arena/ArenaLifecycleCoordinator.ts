@@ -581,6 +581,7 @@ export class ArenaLifecycleCoordinator {
       ? resolveCoopDefenseMapSecondaryObjectives(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
     if (bridge.isHost()) {
       if (coopDefenseMapConfig?.objective === 'survive') {
         const respawnsPerPlayer = coopDefenseMapConfig.surviveRespawnsPerPlayer;
@@ -2360,6 +2361,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseMapDirector = null;
     this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    this.ctx.coopDefenseSecondaryObjectiveConfigs = [];
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     this.ctx.coopDefensePersistentPressureSystem?.reset();
     this.ctx.coopDefensePersistentPressureSystem = null;

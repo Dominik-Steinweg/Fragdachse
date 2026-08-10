@@ -1,3 +1,4 @@
+import { ARENA_BACKGROUND_TEXTURE_KEY } from './ArenaBackground';
 import { ARENA_HEIGHT, ARENA_OFFSET_Y, CELL_SIZE, COLORS, FULL_ARENA_WIDTH, FULL_ARENA_WIDTH as MENU_PREVIEW_WIDTH, GAME_HEIGHT, GAME_WIDTH, GRID_ROWS } from '../config';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TrackCell, TreeCell } from '../types';
 import { ARENA_DECAL_CONFIG, clampDecalOffsetPx, getDecalTextureKey } from './DecalConfig';
@@ -35,7 +36,7 @@ export interface MenuArenaPreviewOverlayConfig {
 }
 
 export interface MenuArenaPreviewViewConfig {
-  backgroundTextureKey: 'gras_bg_dm' | 'gras_bg_ctb';
+  backgroundTextureKey: typeof ARENA_BACKGROUND_TEXTURE_KEY;
   bounds: {
     offsetX: number;
     offsetY: number;
@@ -574,7 +575,7 @@ const decals = generatePreviewDecals(finalRocks, finalTrees, tracks, finalDirt, 
 
 export const MENU_ARENA_PREVIEW_CONFIG: MenuArenaPreviewConfig = {
   view: {
-    backgroundTextureKey: 'gras_bg_dm',
+    backgroundTextureKey: ARENA_BACKGROUND_TEXTURE_KEY,
     bounds: {
       offsetX: 0,
       offsetY: ARENA_OFFSET_Y,

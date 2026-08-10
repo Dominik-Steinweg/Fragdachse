@@ -362,18 +362,22 @@ export const DEATH_DISINTEGRATION_VFX = {
  * Sprache sprechen. Bewusst die **dunklen** Palettentöne: der Effekt deckt bei wenig Leben
  * große Teile des Bildes ab, und ein hellerer Rotton legt sich dort als Schleier über die
  * Karte, statt am Rand zu kleben. Sichtbarkeit kommt aus der Deckkraft, nicht aus der
- * Helligkeit. Die Spritzer sitzen eine Stufe unter der Fläche – sie sollen als dichtere
- * Stellen desselben Bluts lesen, nicht als eigene, hellere Schicht.
+ * Helligkeit.
+ *
+ * Die Spritzer stehen genau eine Palettenstufe über der Fläche. Sie bedecken als einzelne
+ * Tropfen wenig Bildfläche und dürfen sich deshalb abheben, ohne zu schleiern – gleichauf mit
+ * der Fläche verschwänden sie in ihr, eine Stufe höher wären sie so hell wie die
+ * Schadensvignette und nähmen ihr den Akzent.
  */
 export const LOW_HEALTH_BLOOD_VFX = {
   filmColor: BLOOD_HIT_VFX.palette[1],
-  speckleColor: BLOOD_HIT_VFX.palette[0],
+  speckleColor: BLOOD_HIT_VFX.palette[2],
   /** Ab hier blendet der Rand ein; darüber ist er vollständig unsichtbar. */
   onsetHpFraction: 0.5,
   /** Einzelne Spritzer kommen später dazu – sie markieren den kritischen Bereich. */
   speckleOnsetHpFraction: 0.42,
   filmAlphaMax: 0.42,
-  speckleAlphaMax: 0.34,
+  speckleAlphaMax: 0.44,
   /** Ein Treffer schlägt sofort durch, Heilung blutet aus, statt zu blinken. */
   riseMs: 180,
   fallMs: 600,

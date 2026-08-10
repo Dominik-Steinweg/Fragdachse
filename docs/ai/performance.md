@@ -36,6 +36,7 @@ Dieselbe Backregel gilt für die gesamte Lobby-/Menü-Vorschau, nicht nur für i
 
 Zwei nicht offensichtliche Regeln dabei:
 
+- Zufällige Decal-Rotationen werden am temporären Image gesetzt und zusammen mit der Rotation in `decalStamps` übernommen. Der CPU-Terrain-Sampler zeichnet diese Stamps mit derselben Transformation nach, damit seine Farbprobe zum gebackenen Decal-Layer passt.
 - Die Layer-Alpha wird auf die **Einzelbilder vor dem Backen** angewendet, die RenderTexture bleibt bei Alpha 1. Nur so bleibt das Ergebnis bei einander überlappenden Bildern pixelgleich (der „over"-Operator ist assoziativ); eine Alpha auf dem fertigen Layer würde Überlappungen anders gewichten.
 - Dauerhaft unsichtbar konfigurierte Bänder (`visible: false` bzw. `alpha: 0`, aktuell Tracks und Baumstämme) werden gar nicht erst erzeugt.
 

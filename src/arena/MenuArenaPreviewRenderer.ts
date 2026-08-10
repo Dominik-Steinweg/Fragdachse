@@ -13,7 +13,7 @@ import { RockGridIndex } from './RockGridIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
 
 export class MenuArenaPreviewRenderer {
-  private background: Phaser.GameObjects.Image | null = null;
+  private background: Phaser.GameObjects.TileSprite | null = null;
   private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
   private rightSidebar: Phaser.GameObjects.Rectangle | null = null;
   private arenaShade: Phaser.GameObjects.Rectangle | null = null;
@@ -40,8 +40,8 @@ export class MenuArenaPreviewRenderer {
     const { view, layout } = this.config;
     const { bounds } = view;
     this.background = this.scene.add
-      .image(bounds.offsetX + bounds.width * 0.5, bounds.offsetY + bounds.height * 0.5, view.backgroundTextureKey)
-      .setDisplaySize(bounds.width, bounds.height)
+      .tileSprite(bounds.offsetX + bounds.width * 0.5, bounds.offsetY + bounds.height * 0.5, bounds.width, bounds.height, view.backgroundTextureKey)
+      .setTilePosition(0, 0)
       .setDepth(DEPTH.GRASS)
       .setTint(view.backgroundTint)
       .setAlpha(view.backgroundAlpha);

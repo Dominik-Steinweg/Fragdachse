@@ -35,6 +35,13 @@ const ARENA_SIDEBAR_WIDTH    = Math.round(ARENA_OFFSET_X * 1.5);
 const ARENA_SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_SIDEBAR_WIDTH / 2;
 const ARENA_SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_SIDEBAR_WIDTH + 8;
 const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
+
+/**
+ * Linke Kante der Arena-Seitenspalte. Killfeed und Leaderboard beginnen hier direkt unter dem
+ * Encounter-Panel; exportiert, damit weitere HUD-Elemente unterhalb des Panels davor enden
+ * können, statt sie zu überdecken.
+ */
+export const ARENA_SIDEBAR_CONTENT_LEFT_X = ARENA_SIDEBAR_LEFT_X;
 const ARENA_PANEL_WIDTH      = Math.round((DEFAULT_ARENA_OFFSET_X - 40) * 1.5);
 const LOBBY_TOP_OFFSET_Y = 246;
 const RESULTS_EXTRA_OFFSET_Y = 32;

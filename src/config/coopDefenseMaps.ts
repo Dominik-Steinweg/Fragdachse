@@ -194,6 +194,14 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly targets: readonly string[];
   readonly targetGoal?: number;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
+  /**
+   * Missionsname im HUD, z. B. `BRUTNESTER ZERSTÖREN`. Rein darstellend und deshalb bewusst
+   * authored statt repliziert: Der Client kennt die Map-Konfiguration ohnehin. Ohne Angabe
+   * greift ein archetypischer Ersatzname.
+   */
+  readonly displayName?: string;
+  /** Einzeilige Reward-Vorschau im HUD. Ohne Angabe greift ein archetypischer Hinweis. */
+  readonly rewardHint?: string;
 }
 
 export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
@@ -204,6 +212,8 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly targets: readonly string[];
   readonly targetGoal: number;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
+  readonly displayName?: string;
+  readonly rewardHint?: string;
 }
 
 // Kurze Aliasnamen halten den Vertrag für Systeme/Tests lesbar, ohne die Map-Config-Namensfamilie
@@ -508,6 +518,8 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     targets: [...objective.targets],
     targetGoal: objective.targetGoal ?? objective.targets.length,
     ...(objective.rewards ? { rewards: { ...objective.rewards } } : {}),
+    ...(objective.displayName ? { displayName: objective.displayName } : {}),
+    ...(objective.rewardHint ? { rewardHint: objective.rewardHint } : {}),
   }));
 }
 
@@ -868,6 +880,8 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.rewards === undefined
         ? {}
         : { rewards: normalizeSecondaryObjectiveRewards(mapId, id, objective.rewards) }),
+      ...normalizeSecondaryObjectiveLabel(mapId, id, 'displayName', objective.displayName),
+      ...normalizeSecondaryObjectiveLabel(mapId, id, 'rewardHint', objective.rewardHint),
     };
   });
 
@@ -969,6 +983,34 @@ function normalizeSecondaryObjectiveTrigger(
         `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has unsupported ${fieldName} trigger: ${trigger.type}`,
       );
   }
+}
+
+/**
+ * Rein darstellende Beschriftung. Die Obergrenzen sind Layoutgrenzen des HUD-Panels, kein
+ * Geschmacksurteil: Ein längerer Name würde dort abgeschnitten und wäre in der Ankündigung
+ * nicht mehr auf einen Blick erfassbar.
+ */
+function normalizeSecondaryObjectiveLabel(
+  mapId: string,
+  objectiveId: string,
+  fieldName: 'displayName' | 'rewardHint',
+  value: string | undefined,
+): Record<string, string> {
+  if (value === undefined) return {};
+  if (typeof value !== 'string') {
+    throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has a non-string ${fieldName}`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has an empty ${fieldName}`);
+  }
+  const maxLength = fieldName === 'displayName' ? 34 : 48;
+  if (trimmed.length > maxLength) {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has a ${fieldName} longer than ${maxLength} characters`,
+    );
+  }
+  return { [fieldName]: trimmed };
 }
 
 function normalizeSecondaryObjectiveRewards(

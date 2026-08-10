@@ -95,9 +95,11 @@ describe('resolveLowHealthBloodAlphas', () => {
     expect(early.filmAlpha).toBeGreaterThan(0);
     expect(early.speckleAlpha).toBe(0);
 
+    // Die Tropfen duerfen deckender sein als die Flaeche – sie bedecken als Einzelspritzer
+    // wenig Bildflaeche. Was zaehlt, ist ihre spaetere Schwelle, nicht ihre Deckkraft.
     const critical = resolveLowHealthBloodAlphas(settle(0.05));
+    expect(critical.speckleAlpha).toBeGreaterThan(early.speckleAlpha);
     expect(critical.speckleAlpha).toBeGreaterThan(0);
-    expect(critical.speckleAlpha).toBeLessThan(critical.filmAlpha);
   });
 });
 

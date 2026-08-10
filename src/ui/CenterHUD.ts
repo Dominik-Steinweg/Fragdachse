@@ -85,7 +85,20 @@ const TRAIN_PANEL_H    = 54;
 const ENCOUNTER_PANEL_W = 400;
 const ENCOUNTER_PANEL_H = 84;
 const ENCOUNTER_PANEL_X = GAME_WIDTH - ENCOUNTER_PANEL_W / 2 - 24;
-const ENCOUNTER_PANEL_Y = 22 + ENCOUNTER_PANEL_H / 2;
+const ENCOUNTER_PANEL_TOP_Y = 22;
+const ENCOUNTER_PANEL_Y = ENCOUNTER_PANEL_TOP_Y + ENCOUNTER_PANEL_H / 2;
+
+/**
+ * Lage des Pflichtziel-Panels. Exportiert, damit sich das Nebenziel-Panel daran ausrichten
+ * kann, statt dieselben Zahlen ein zweites Mal zu führen – die beiden bilden bewusst eine
+ * gemeinsame Zeile am oberen Rand.
+ */
+export const ENCOUNTER_PANEL_LAYOUT = {
+  centerX: ENCOUNTER_PANEL_X,
+  topY: ENCOUNTER_PANEL_TOP_Y,
+  width: ENCOUNTER_PANEL_W,
+  height: ENCOUNTER_PANEL_H,
+} as const;
 const ENCOUNTER_PANEL_LEFT = -ENCOUNTER_PANEL_W / 2;
 const ENCOUNTER_PANEL_TOP = -ENCOUNTER_PANEL_H / 2;
 const ENCOUNTER_PANEL_RADIUS = 10;

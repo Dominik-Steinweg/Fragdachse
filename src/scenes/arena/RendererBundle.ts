@@ -40,6 +40,7 @@ import { PowerUpRenderer }     from '../../powerups/PowerUpRenderer';
 import { MeteorRenderer }      from '../../effects/MeteorRenderer';
 import { AirstrikeRenderer }   from '../../effects/AirstrikeRenderer';
 import { CoopDefenseEncounterTelegraphRenderer } from '../../effects/CoopDefenseEncounterTelegraphRenderer';
+import { CoopDefenseSecondaryObjectiveMarkerRenderer } from '../../effects/CoopDefenseSecondaryObjectiveMarkerRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { LightingSystem }      from '../../effects/LightingSystem';
@@ -91,6 +92,7 @@ export interface RendererBundle {
   nuke:                NukeRenderer;
   airstrike:           AirstrikeRenderer;
   encounterTelegraph:  CoopDefenseEncounterTelegraphRenderer;
+  secondaryObjectiveMarkers: CoopDefenseSecondaryObjectiveMarkerRenderer;
   meteor:              MeteorRenderer;
   rockDestruction:     RockDestructionRenderer;
   powerUp:             PowerUpRenderer;
@@ -214,6 +216,9 @@ export function createRendererBundle(
   const encounterTelegraph = new CoopDefenseEncounterTelegraphRenderer(scene);
   encounterTelegraph.generateTextures();
 
+  const secondaryObjectiveMarkers = new CoopDefenseSecondaryObjectiveMarkerRenderer(scene);
+  secondaryObjectiveMarkers.build();
+
   const meteor = new MeteorRenderer(scene);
   meteor.generateTextures();
 
@@ -250,7 +255,7 @@ export function createRendererBundle(
   return {
     bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, encounterTelegraph, meteor, rockDestruction, powerUp, shadow, lighting,
+    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     train: null,
     translocatorTeleport: null,

@@ -57,6 +57,7 @@ import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefe
 import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
+import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
 import type { CoopDefenseAirstrikeDirector } from '../../systems/CoopDefenseAirstrikeDirector';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
@@ -161,6 +162,12 @@ export interface ArenaContext {
   coopDefenseBossSystem: CoopDefenseBossSystem | null;
   coopDefenseMapDirector: CoopDefenseMapDirector | null;
   coopDefenseSecondaryObjectiveSystem: CoopDefenseSecondaryObjectiveSystem | null;
+  /**
+   * Authored Nebenmissionen der laufenden Runde. Host und Client lösen sie gleichermaßen aus
+   * der Map-Konfiguration auf; HUD und Weltmarkierung lesen daraus Name, Reward-Hinweis und
+   * Zielreferenzen, statt sie über das Netzwerk zu beziehen.
+   */
+  coopDefenseSecondaryObjectiveConfigs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[];
   coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;

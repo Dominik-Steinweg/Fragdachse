@@ -31,7 +31,7 @@
     },
     {
       "id": "destroy-brood-front-north",
-      "hpMax": 900,
+      "hpMax": 100,
       "faction": "hostile",
       "role": "spawn-point",
       "dormant": true,
@@ -56,7 +56,7 @@
     },
     {
       "id": "destroy-brood-front-center",
-      "hpMax": 900,
+      "hpMax": 100,
       "faction": "hostile",
       "role": "spawn-point",
       "dormant": true,
@@ -81,7 +81,7 @@
     },
     {
       "id": "destroy-brood-front-south",
-      "hpMax": 900,
+      "hpMax": 100,
       "faction": "hostile",
       "role": "spawn-point",
       "dormant": true,
@@ -174,6 +174,8 @@
     {
       "id": "destroy-brood-front",
       "type": "destroy",
+      "displayName": "BRUTNESTER ZERSTÖREN",
+      "rewardHint": "WENIGER GEGNERDRUCK · BONUS-XP",
       "start": {
         "type": "after-encounter",
         "encounterId": "a2-opening-encounter"

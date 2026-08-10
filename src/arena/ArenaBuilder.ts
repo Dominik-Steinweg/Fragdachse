@@ -17,7 +17,7 @@ import { DECAL_SIZE } from './DecalConfig';
 import { AutoTiler, ROCK_AUTOTILE, DIRT_AUTOTILE } from './AutoTiler';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { RockGridIndex } from './RockGridIndex';
-import { resolveArenaBackgroundSpec } from './ArenaBackground';
+import { ARENA_BACKGROUND_TEXTURE_KEY, resolveArenaBackgroundSpec } from './ArenaBackground';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 export interface ArenaBuilderResult {
@@ -69,6 +69,7 @@ export interface DirtStamp {
   y: number;
   displayWidth: number;
   displayHeight: number;
+  rotation: number;
   alpha: number;
 }
 
@@ -119,7 +120,7 @@ export class ArenaBuilder {
         .setTexture(background.textureKey)
         .setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
         .setSize(ARENA_WIDTH, ARENA_HEIGHT)
-        .setTilePosition(background.sourceX, background.sourceY)
+        .setTilePosition(0, 0)
         .setVisible(inArena);
     }
 
@@ -503,6 +504,7 @@ export class ArenaBuilder {
       y: img.y,
       displayWidth: img.displayWidth,
       displayHeight: img.displayHeight,
+      rotation: img.rotation,
       alpha: img.alpha,
     }));
 
@@ -536,6 +538,7 @@ export class ArenaBuilder {
       y: img.y,
       displayWidth: img.displayWidth,
       displayHeight: img.displayHeight,
+      rotation: img.rotation,
       alpha: img.alpha,
     }));
 
@@ -617,7 +620,7 @@ export class ArenaBuilder {
         ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5,
         ARENA_WIDTH,
         ARENA_HEIGHT,
-        'gras_bg_dm',
+        ARENA_BACKGROUND_TEXTURE_KEY,
       )
       .setDepth(DEPTH.GRASS);
   }

@@ -109,6 +109,10 @@ export class ArenaVisualFactory {
       const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
       const img = scene.add.image(worldX, worldY, textureKey);
       img.setDisplaySize(DECAL_SIZE, DECAL_SIZE);
+      // Decals are decorative and are baked immediately after creation. Keeping the
+      // random transform on the temporary Image lets both the RenderTexture and the
+      // terrain sampler consume the exact same placement.
+      img.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
       img.setDepth(DEPTH.DECALS);
       result.push(img);
     }

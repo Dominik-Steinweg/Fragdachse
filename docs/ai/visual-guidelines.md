@@ -124,6 +124,7 @@ Weltpositionen, Aimwinkel und visuelle Anhänge nicht mit Sprite-Frame-Offsets v
 - Trails/Exhaust werden aus der normalisierten Flugrichtung relativ zum Projektilzentrum berechnet, etwa in `RocketRenderer` und `GrenadeRenderer`. Lokale Offsets zuerst in Richtungs-/Normalenvektoren umrechnen, dann in Weltkoordinaten anwenden.
 - Grid-Assets verwenden `ARENA_OFFSET_X/Y + grid * CELL_SIZE + CELL_SIZE / 2`; absichtliche Decal-Jitter kommen erst danach hinzu (`ArenaVisualFactory`).
 - **HUD- und Overlay-Container mit absolut platzierten Kindern dürfen nicht skaliert werden.** Das verbreitete UI-Muster in `src/ui/` legt einen Container auf `(0, 0)` und setzt seine Kinder auf Bildschirmkoordinaten; `alpha` und ein Verschiebungs-Tween über `x`/`y` sind daran unbedenklich. `scale` bezieht sich dagegen auf den Container-Ursprung und zieht deshalb das ganze Element Richtung Bildschirmecke `(0, 0)`, nicht auf seine eigene Mitte. Ein Aufpopp-Tween braucht folglich einen Container **auf** der Elementmitte mit lokal platzierten Kindern; Weltpositionen für Partikelstöße werden dann getrennt festgehalten, statt sie aus den nun lokalen Kindkoordinaten zu lesen (`MatchResultsOverlay`, Belohnungszeilen).
+- **`CenterHUD.showAnnouncement()` ist ein geteilter Ein-Slot-Kanal in der Bildmitte.** Frags, Beer-Captures und Rundenmeldungen laufen alle darüber, und jeder Aufruf verwirft den Tween des vorherigen. Eine Einblendung, die verlässlich stehen bleiben muss, braucht deshalb eine eigene Fläche an einer anderen Bildposition (`CoopDefenseSecondaryObjectiveHud`, Nebenziel-Ankündigung im oberen Drittel) – sonst löscht der nächste Frag sie mitten im Lesen.
 
 ## Assets
 
@@ -134,5 +135,10 @@ Neue Grafiken vor Verwendung mit realen Dateien unter `public/assets/sprites/` v
 - Maßstab zum 32-px-Spieler und 32-px-Grid;
 - transparenter Hintergrund und saubere Alphakanten;
 - Lesbarkeit auf Gras, Dirt, Effekten und Teamfarben.
+
+- **Arena-Gras bleibt eine gemeinsame, nahtlose Kachel (`gras_bg_tile`).** Arena, Menüvorschau und
+  Terrain-Farbsampler verwenden denselben Texture-Key; die sichtbaren Hintergründe laufen als
+  `TileSprite`, und der CPU-Sampler wiederholt die Kachel in X und Y statt sie auf variable Arena-
+  Breiten oder -Höhen zu strecken.
 
 Loadout-/Upgrade-Icons liegen unter `public/assets/sprites/Loadout/` und werden über Konfigurations-IDs geladen. Weltassets, UI-Icons und prozedural erzeugte Runtime-Texturen nicht ohne Prüfung austauschbar behandeln. Neue Assets nur erzeugen, wenn der Auftrag dies verlangt oder der Nutzer vorher zustimmt; generierte Gameplay-Assets ausdrücklich gegen die 90°-Top-down-Regeln validieren.

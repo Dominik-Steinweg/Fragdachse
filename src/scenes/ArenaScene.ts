@@ -53,6 +53,7 @@ import {
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
+import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
@@ -223,6 +224,7 @@ export class ArenaScene extends Phaser.Scene {
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private hostileBaseIndicator: HostileBaseIndicator | null = null;
+  private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private scopeOverlay: ScopeOverlay | null = null;
   private menuArenaPreview: MenuArenaPreviewRenderer | null = null;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
@@ -344,8 +346,7 @@ export class ArenaScene extends Phaser.Scene {
 
   preload(): void {
     preloadAllAudio(this.load);
-    this.load.image('gras_bg_dm', './assets/sprites/gras_bg_dm.png');
-    this.load.image('gras_bg_ctb', './assets/sprites/gras_bg_ctb.png');
+    this.load.image('gras_bg_tile', './assets/sprites/gras_bg_tile.png');
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
@@ -708,7 +709,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyStrategicFlowFieldService: null,
@@ -863,6 +864,8 @@ export class ArenaScene extends Phaser.Scene {
     this.localPlayerState = new LocalPlayerState();
     this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.arenaClipMask, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
     this.hostileBaseIndicator = new HostileBaseIndicator(this);
+    this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(this);
+    this.secondaryObjectiveHud.build();
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
     this.tunnelRenderer    = new TunnelRenderer(this);
     this.gaussWarning      = new GaussWarningRenderer(
@@ -1493,14 +1496,27 @@ export class ArenaScene extends Phaser.Scene {
     const encounterPresentation = inArena && isCoopDefenseMode(bridge.getGameMode())
       ? bridge.getCoopDefenseEncounterPresentationState()
       : null;
-    // B1 stellt den Snapshot bereits am Client bereit; HUD und Welttelegraphing kommen erst mit B4.
-    const secondaryObjectivePresentation = inArena && isCoopDefenseMode(bridge.getGameMode())
+    const secondaryObjectivesActive = inArena && isCoopDefenseMode(bridge.getGameMode());
+    const secondaryObjectivePresentation = secondaryObjectivesActive
       ? bridge.getCoopDefenseSecondaryObjectivePresentationState()
       : null;
-    void secondaryObjectivePresentation;
     const encounterElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
     this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
     this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
+    // Pflichtziel und Nebenziel werden im selben Frameabschnitt aktualisiert; die Rundenzeit
+    // ist dieselbe Bezugsgroesse, gegen die der Host seine Zustandswechsel datiert.
+    this.secondaryObjectiveHud?.sync(
+      secondaryObjectivePresentation,
+      this.ctx.coopDefenseSecondaryObjectiveConfigs,
+      encounterElapsedMs,
+      secondaryObjectivesActive,
+    );
+    this.renderers.secondaryObjectiveMarkers.sync(
+      secondaryObjectivePresentation,
+      this.ctx.coopDefenseSecondaryObjectiveConfigs,
+      this.ctx.baseManager,
+      secondaryObjectivesActive,
+    );
     this.syncSpectatorPlayerNames(inArena);
     const hostileBaseIndicatorActive = inArena && isCoopDefenseMode(bridge.getGameMode());
     if (hostileBaseIndicatorActive) {
@@ -2480,6 +2496,9 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseUpgradesOverlay = null;
       this.hostileBaseIndicator?.destroy();
       this.hostileBaseIndicator = null;
+      this.secondaryObjectiveHud?.destroy();
+      this.secondaryObjectiveHud = null;
+      this.renderers?.secondaryObjectiveMarkers.destroy();
     });
   }
 

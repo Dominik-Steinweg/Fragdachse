@@ -22,20 +22,23 @@ export function createArenaTerrainColorSampler(
   ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
   const background = resolveArenaBackgroundSpec(mode, ARENA_WIDTH);
-  drawRepeatedImageFrameRegion(
-    scene,
-    ctx,
-    background.textureKey,
-    undefined,
-    background.sourceX,
-    background.sourceY,
-    background.sourceWidth,
-    background.sourceHeight,
-    0,
-    0,
-    ARENA_WIDTH,
-    ARENA_HEIGHT,
-  );
+  const backgroundFrame = scene.textures.getFrame(background.textureKey);
+  if (backgroundFrame) {
+    drawRepeatedImageFrameRegion(
+      scene,
+      ctx,
+      background.textureKey,
+      undefined,
+      0,
+      0,
+      backgroundFrame.cutWidth,
+      backgroundFrame.cutHeight,
+      0,
+      0,
+      ARENA_WIDTH,
+      ARENA_HEIGHT,
+    );
+  }
 
   // Der Dirt-Layer ist als RenderTexture gebacken; der Sampler zeichnet stattdessen aus der
   // erhaltenen Kachel-Geometrie in seine eigene CPU-Canvas.
@@ -85,13 +88,29 @@ function drawDisplayObjectFrame(
   ctx: CanvasRenderingContext2D,
   textureKey: string,
   frameName: string | number | undefined,
-  displayObject: { x: number; y: number; displayWidth: number; displayHeight: number; alpha: number },
+  displayObject: {
+    x: number;
+    y: number;
+    displayWidth: number;
+    displayHeight: number;
+    rotation: number;
+    alpha: number;
+  },
 ): void {
-  const left = displayObject.x - displayObject.displayWidth / 2 - ARENA_OFFSET_X;
-  const top = displayObject.y - displayObject.displayHeight / 2 - ARENA_OFFSET_Y;
   ctx.save();
   ctx.globalAlpha = displayObject.alpha;
-  drawImageFrame(scene, ctx, textureKey, frameName, left, top, displayObject.displayWidth, displayObject.displayHeight);
+  ctx.translate(displayObject.x - ARENA_OFFSET_X, displayObject.y - ARENA_OFFSET_Y);
+  ctx.rotate(displayObject.rotation);
+  drawImageFrame(
+    scene,
+    ctx,
+    textureKey,
+    frameName,
+    -displayObject.displayWidth / 2,
+    -displayObject.displayHeight / 2,
+    displayObject.displayWidth,
+    displayObject.displayHeight,
+  );
   ctx.restore();
 }
 
@@ -208,25 +227,27 @@ function drawRepeatedImageFrameRegion(
   width: number,
   height: number,
 ): void {
-  if (sourceHeight <= 0 || height <= 0) return;
-  let offsetY = 0;
-  while (offsetY < height) {
+  if (sourceWidth <= 0 || sourceHeight <= 0 || width <= 0 || height <= 0) return;
+
+  for (let offsetY = 0; offsetY < height; offsetY += sourceHeight) {
     const sliceHeight = Math.min(sourceHeight, height - offsetY);
-    drawImageFrameRegion(
-      scene,
-      ctx,
-      textureKey,
-      frameName,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sliceHeight,
-      x,
-      y + offsetY,
-      width,
-      sliceHeight,
-    );
-    offsetY += sliceHeight;
+    for (let offsetX = 0; offsetX < width; offsetX += sourceWidth) {
+      const sliceWidth = Math.min(sourceWidth, width - offsetX);
+      drawImageFrameRegion(
+        scene,
+        ctx,
+        textureKey,
+        frameName,
+        sourceX,
+        sourceY,
+        sliceWidth,
+        sliceHeight,
+        x + offsetX,
+        y + offsetY,
+        sliceWidth,
+        sliceHeight,
+      );
+    }
   }
 }
 
