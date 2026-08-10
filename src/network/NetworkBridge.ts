@@ -135,7 +135,8 @@ const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktuell
 const KEY_ROUND_PARTICIPATION = 'rpt'; // global reliable: RoundParticipationState | null
 const KEY_COOP_SURVIVAL = 'csv'; // global reliable: CoopDefenseSurvivalState | null
 const KEY_COOP_ENCOUNTER_PRESENTATION = 'cep'; // global reliable: CoopDefenseEncounterPresentationState | null
-const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: CoopDefenseSecondaryObjectivePresentationState | null
+const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: Objective-Presentationseinträge | null
+const MAX_COOP_SECONDARY_OBJECTIVE_PRESENTATION_ENTRIES = 32;
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
@@ -1524,32 +1525,50 @@ export class NetworkBridge {
   }
 
   getCoopDefenseSecondaryObjectivePresentationState(): CoopDefenseSecondaryObjectivePresentationState | null {
-    const raw = getState(KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION) as Partial<CoopDefenseSecondaryObjectivePresentationState> | null | undefined;
-    if (!raw || typeof raw !== 'object'
-      || typeof raw.objectiveId !== 'string'
-      || raw.objectiveId.length === 0
-      || raw.objectiveId.trim() !== raw.objectiveId
-      || !['destroy', 'hold', 'carry'].includes(raw.type ?? '')
-      || !['dormant', 'active', 'resolved', 'failed'].includes(raw.state ?? '')) return null;
+    const raw = getState(KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION) as unknown;
+    if (!Array.isArray(raw) || raw.length > MAX_COOP_SECONDARY_OBJECTIVE_PRESENTATION_ENTRIES) return null;
 
-    const progressCurrent = raw.progressCurrent;
-    const progressTotal = raw.progressTotal;
-    const stateChangedAtMs = raw.stateChangedAtMs;
-    if (typeof progressCurrent !== 'number' || !Number.isSafeInteger(progressCurrent) || progressCurrent < 0
-      || typeof progressTotal !== 'number' || !Number.isSafeInteger(progressTotal) || progressTotal <= 0
-      || progressCurrent > progressTotal
-      || typeof stateChangedAtMs !== 'number' || !Number.isFinite(stateChangedAtMs) || stateChangedAtMs < 0) {
-      return null;
+    const objectiveIds = new Set<string>();
+    let focusedCount = 0;
+    const sanitized: CoopDefenseSecondaryObjectivePresentationState[number][] = [];
+    for (const rawEntry of raw) {
+      if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) return null;
+      const entry = rawEntry as Partial<CoopDefenseSecondaryObjectivePresentationState[number]>;
+      if (typeof entry.objectiveId !== 'string'
+        || entry.objectiveId.length === 0
+        || entry.objectiveId.trim() !== entry.objectiveId
+        || objectiveIds.has(entry.objectiveId)
+        || !['destroy', 'hold', 'carry'].includes(entry.type ?? '')
+        || !['dormant', 'active', 'completed', 'failed'].includes(entry.state ?? '')
+        || typeof entry.focused !== 'boolean') return null;
+      objectiveIds.add(entry.objectiveId);
+      if (entry.focused) {
+        focusedCount += 1;
+        if (focusedCount > 1) return null;
+      }
+
+      const progressCurrent = entry.progressCurrent;
+      const progressTotal = entry.progressTotal;
+      const stateChangedAtMs = entry.stateChangedAtMs;
+      if (typeof progressCurrent !== 'number' || !Number.isSafeInteger(progressCurrent) || progressCurrent < 0
+        || typeof progressTotal !== 'number' || !Number.isSafeInteger(progressTotal) || progressTotal <= 0
+        || progressCurrent > progressTotal
+        || typeof stateChangedAtMs !== 'number' || !Number.isFinite(stateChangedAtMs) || stateChangedAtMs < 0) {
+        return null;
+      }
+
+      sanitized.push({
+        objectiveId: entry.objectiveId,
+        type: entry.type as CoopDefenseSecondaryObjectivePresentationState[number]['type'],
+        state: entry.state as CoopDefenseSecondaryObjectivePresentationState[number]['state'],
+        focused: entry.focused,
+        progressCurrent,
+        progressTotal,
+        stateChangedAtMs,
+      });
     }
 
-    return {
-      objectiveId: raw.objectiveId,
-      type: raw.type as CoopDefenseSecondaryObjectivePresentationState['type'],
-      state: raw.state as CoopDefenseSecondaryObjectivePresentationState['state'],
-      progressCurrent,
-      progressTotal,
-      stateChangedAtMs,
-    };
+    return sanitized;
   }
 
   getLocalCoopDefenseSurvivalState(): CoopDefenseSurvivalPlayerState | null {

@@ -1101,7 +1101,7 @@ export class CombatSystem {
     // Basen erhalten denselben zentralen Schadenstrichter wie direkte Treffer; die
     // Oberflächenprüfung berücksichtigt dabei auch große oder konkave Formen.
     for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
-      if (base.getHp() <= 0) continue;
+      if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > effect.radius) continue;
       if (this.enemyManager?.hasEnemy(ownerId)) continue;
@@ -2306,7 +2306,7 @@ export class CombatSystem {
     if (this.baseManager && !this.enemyManager?.hasEnemy(shooterId)) {
       const baseId = this.baseManager.getBaseIdAtWorldPoint(endX, endY);
       const base = baseId ? this.baseManager.getBase(baseId) : undefined;
-      if (base && base.faction === 'hostile' && base.getHp() > 0) {
+      if (base && base.faction === 'hostile' && !(base.isInert?.() ?? false) && base.getHp() > 0) {
         const loadoutMult = sourceSlot
           ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
           : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
@@ -2683,7 +2683,7 @@ export class CombatSystem {
     if (this.enemyManager?.hasEnemy(attackerId)) return;
 
     for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
-      if (base.getHp() <= 0) continue;
+      if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
       const damage = computeRadialDamage(surface.distance, radius, maxDamage, falloff);
@@ -2714,7 +2714,7 @@ export class CombatSystem {
     const targetFaction = shooterIsEnemy ? 'friendly' : 'hostile';
 
     for (const base of this.baseManager?.getBasesByFaction(targetFaction) ?? []) {
-      if (base.getHp() <= 0) continue;
+      if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
 
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface) continue;

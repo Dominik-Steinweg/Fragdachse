@@ -402,7 +402,7 @@ export class CoopDefenseEnemyAttackSystem {
 
     // Gegnerbasen sind fuer Zombies kein Ziel; sie gehoeren derselben Fraktion.
     for (const base of this.baseManager.getBasesByFaction('friendly')) {
-      if (base.getHp() <= 0) continue;
+      if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       if (
         strategicTarget === 'players-and-armed-constructs'
         && (base.role !== 'outpost' || base.getTurrets().length === 0)

@@ -70,20 +70,26 @@ export interface CoopDefenseEncounterPresentationState {
   enemiesTotal?: number;
 }
 
-/** Host-autoritärer, zuverlässiger Präsentationszustand eines Secondary Objectives. */
-export type CoopDefenseSecondaryObjectiveState = 'dormant' | 'active' | 'resolved' | 'failed';
+/** Host-autoritärer Lebenszyklus eines Secondary Objectives. */
+export type CoopDefenseSecondaryObjectiveState = 'dormant' | 'active' | 'completed' | 'failed';
 
 export type CoopDefenseSecondaryObjectiveType = 'destroy' | 'hold' | 'carry';
 
-export interface CoopDefenseSecondaryObjectivePresentationState {
+/** Ein Eintrag im host-autoritär replizierten Secondary-Objective-Snapshot. */
+export interface CoopDefenseSecondaryObjectivePresentationEntry {
   objectiveId: string;
   type: CoopDefenseSecondaryObjectiveType;
   state: CoopDefenseSecondaryObjectiveState;
+  /** True genau für das Objective mit dem prominenten HUD-Fokus. */
+  focused: boolean;
   progressCurrent: number;
   progressTotal: number;
   /** Host-Rundenzeit des letzten Zustandswechsels. */
   stateChangedAtMs: number;
 }
+
+/** Alle nicht-dormanten Objectives, in stabiler authored Reihenfolge. */
+export type CoopDefenseSecondaryObjectivePresentationState = readonly CoopDefenseSecondaryObjectivePresentationEntry[];
 
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {

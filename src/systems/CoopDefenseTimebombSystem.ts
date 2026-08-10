@@ -404,7 +404,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
 
   private damageArmedOutposts(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
     for (const base of this.baseManager.getBasesByFaction('friendly')) {
-      if (base.role !== 'outpost' || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
+      if (base.role !== 'outpost' || (base.isInert?.() ?? false) || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - surface.distance / radius)));

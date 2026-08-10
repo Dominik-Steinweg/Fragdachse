@@ -87,6 +87,8 @@ interface PowerUpSystemOptions {
   isAdrenalineDropEnabled?: (playerId: string) => boolean;
   getAdrenalineDropChanceMultiplier?: (playerId: string) => number;
   getAdrenalineSyringeDurationMultiplier?: (playerId: string) => number;
+  /** B2 gate for linked pedestals; unlinked pedestals remain unchanged. */
+  isLinkedBaseActive?: (baseId: string) => boolean;
 }
 
 // ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
@@ -751,23 +753,45 @@ export class PowerUpSystem {
   private buildPedestals(): void {
     this.pedestals.clear();
     for (const cell of this.layout.powerUpPedestals) {
-      const def = POWERUP_DEFS[cell.defId];
-      const cfg = TIMED_POWERUP_PEDESTAL_CONFIGS[cell.defId];
-      if (!def || !cfg) continue;
-
-      this.pedestals.set(cell.id, {
-        id: cell.id,
-        def,
-        x: this.cellToWorldX(cell.gridX),
-        y: this.cellToWorldY(cell.gridY),
-        respawnMs: Math.max(1, Math.floor(cell.respawnMs ?? cfg.respawnMs)),
-        spawnOnArenaStart: cell.spawnOnArenaStart ?? cfg.spawnOnArenaStart,
-        linkedBaseId: cell.linkedBaseId,
-        currentUid: null,
-        nextRespawnAt: 0,
-      });
+      if (
+        cell.linkedBaseId !== undefined
+        && this.options.isLinkedBaseActive !== undefined
+        && !this.options.isLinkedBaseActive(cell.linkedBaseId)
+      ) continue;
+      this.addLayoutPedestal(cell);
     }
     this.nextDynamicPedestalId = this.getInitialDynamicPedestalId();
+  }
+
+  /** Registers linked pedestals when their dormant base becomes active. */
+  activatePedestalsLinkedToBase(baseId: string): void {
+    for (const cell of this.layout.powerUpPedestals) {
+      if (cell.linkedBaseId !== baseId || this.pedestals.has(cell.id)) continue;
+      this.addLayoutPedestal(cell);
+      const pedestal = this.pedestals.get(cell.id);
+      if (!pedestal) continue;
+      if (this.pedestalsActivated && pedestal.spawnOnArenaStart && pedestal.currentUid === null) {
+        this.spawnPedestalItem(pedestal);
+      }
+    }
+  }
+
+  private addLayoutPedestal(cell: ArenaLayout['powerUpPedestals'][number]): void {
+    const def = POWERUP_DEFS[cell.defId];
+    const cfg = TIMED_POWERUP_PEDESTAL_CONFIGS[cell.defId];
+    if (!def || !cfg) return;
+
+    this.pedestals.set(cell.id, {
+      id: cell.id,
+      def,
+      x: this.cellToWorldX(cell.gridX),
+      y: this.cellToWorldY(cell.gridY),
+      respawnMs: Math.max(1, Math.floor(cell.respawnMs ?? cfg.respawnMs)),
+      spawnOnArenaStart: cell.spawnOnArenaStart ?? cfg.spawnOnArenaStart,
+      linkedBaseId: cell.linkedBaseId,
+      currentUid: null,
+      nextRespawnAt: 0,
+    });
   }
 
   private getInitialDynamicPedestalId(): number {

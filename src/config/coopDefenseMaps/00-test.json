@@ -28,6 +28,22 @@
         "widthCells": 1,
         "heightCells": 1
       }
+    },
+    {
+      "id": "dev-dormant-outpost",
+      "hpMax": 1200,
+      "faction": "hostile",
+      "role": "outpost",
+      "dormant": true,
+      "anchor": {
+        "kind": "left-center",
+        "edgeInsetCells": 2
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 1,
+        "heightCells": 1
+      }
     }
   ],
   "powerUps": [],
@@ -48,6 +64,19 @@
           "count": 2,
           "delayMs": 1500
         }
+      ]
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "dev-dormant-outpost-reveal",
+      "type": "destroy",
+      "start": {
+        "type": "time",
+        "atMs": 3000
+      },
+      "targets": [
+        "dev-dormant-outpost"
       ]
     }
   ]

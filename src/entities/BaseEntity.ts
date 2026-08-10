@@ -61,8 +61,8 @@ export class BaseEntity {
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly turretAngles = new Map<string, number>();
-  private readonly hpBarBg: Phaser.GameObjects.Rectangle;
-  private readonly hpBarFg: Phaser.GameObjects.Rectangle;
+  private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
+  private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
   private readonly hpBarWidth: number;
   /**
    * Fraktionsfarbe des HP-Balkens. Als Feld gehalten, weil `refreshHpBar()` die Fuellfarbe bei
@@ -74,10 +74,11 @@ export class BaseEntity {
    * ausleuchten. Einmal aus den Bounds abgeleitet.
    */
   private readonly lightSpots: readonly { readonly x: number; readonly y: number; readonly radius: number }[];
-  private readonly spawnCenterMarker: Phaser.GameObjects.Graphics | null;
-  private readonly spawnCenterTween: Phaser.Tweens.Tween | null;
+  private spawnCenterMarker: Phaser.GameObjects.Graphics | null = null;
+  private spawnCenterTween: Phaser.Tweens.Tween | null = null;
   private currentHp: number;
   private maxHp: number;
+  private dormant: boolean;
   private destroyedBroadcasted = false;
   private onDestroyed: (() => void) | null = null;
   private vulnerableMarker: Phaser.GameObjects.Graphics | null = null;
@@ -90,37 +91,42 @@ export class BaseEntity {
     this.role = spec.role ?? 'main';
     this.currentHp = spec.hpMax;
     this.maxHp = spec.hpMax;
+    this.dormant = spec.dormant === true;
     const hostile = spec.faction === 'hostile';
     this.hpBarFill = hostile ? COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL : COOP_DEFENSE_BASE_HP_BAR_FILL;
+    const bounds = getBaseWorldBounds(spec.region);
+    this.hpBarWidth = bounds.width;
+    this.lightSpots = BaseEntity.buildLightSpots(bounds);
+    if (!this.dormant) this.createWorldRepresentation();
+  }
+
+  /** Creates the complete gameplay/render representation exactly once. */
+  private createWorldRepresentation(): void {
+    if (!this.dormant && this.cellImages.length > 0) return;
+    const hostile = this.spec.faction === 'hostile';
     // Eigenes rotes Tileset statt Tint: das Basis-Tileset ist gesaettigt blau, ein Multiply-Tint
     // mit Rot ergibt nahezu Schwarz.
     const cellTexture = hostile ? 'base_hostile' : 'base';
 
-    const bounds = getBaseWorldBounds(spec.region);
-
     // ── 1) 47-Blob-Sprites + StaticBodies pro Zelle ────────────────────
     const cellKeySet = new Set<number>();
     const keyOf = (gx: number, gy: number) => gy * 100000 + gx;
-    for (const cell of spec.cells) cellKeySet.add(keyOf(cell.gridX, cell.gridY));
+    for (const cell of this.spec.cells) cellKeySet.add(keyOf(cell.gridX, cell.gridY));
     const isOccupied = (gx: number, gy: number) => cellKeySet.has(keyOf(gx, gy));
 
-    for (const cell of spec.cells) {
+    for (const cell of this.spec.cells) {
       const worldX = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
       const mask = AutoTiler.computeMask(cell.gridX, cell.gridY, isOccupied);
       const frame = AutoTiler.getFrame(mask, BASE_AUTOTILE);
-
-      const image = scene.add.image(worldX, worldY, cellTexture, frame);
+      const image = this.scene.add.image(worldX, worldY, cellTexture, frame);
       image.setDisplaySize(CELL_SIZE, CELL_SIZE);
       image.setDepth(DEPTH.BASES);
       this.cellImages.push(image);
 
-      // Unsichtbares Kollisions-Rechteck mit StaticBody (eines pro Zelle).
-      const body = scene.add.rectangle(worldX, worldY, CELL_SIZE, CELL_SIZE, 0x000000, 0);
-      // Collider-Callbacks bekommen nur das GameObject; ueber diesen Schluessel finden sie
-      // zurueck zur Basis, ohne dass ein zusaetzlicher raeumlicher Index noetig waere.
-      body.setData('baseId', spec.id);
-      scene.physics.add.existing(body, true);
+      const body = this.scene.add.rectangle(worldX, worldY, CELL_SIZE, CELL_SIZE, 0x000000, 0);
+      body.setData('baseId', this.spec.id);
+      this.scene.physics.add.existing(body, true);
       const staticBody = body.body as Phaser.Physics.Arcade.StaticBody;
       staticBody.setSize(CELL_SIZE, CELL_SIZE);
       staticBody.updateFromGameObject();
@@ -128,9 +134,8 @@ export class BaseEntity {
     }
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
-    // Ihr kompletter Lebenszyklus wird von dieser BaseEntity besessen.
-    for (const turret of spec.turrets) {
-      const image = scene.add.image(turret.x, turret.y, getBaseTurretTextureKey(turret.weaponId))
+    for (const turret of this.spec.turrets) {
+      const image = this.scene.add.image(turret.x, turret.y, getBaseTurretTextureKey(turret.weaponId))
         .setDisplaySize(CELL_SIZE, CELL_SIZE)
         .setRotation(turret.initialAngle)
         .setTint(hostile ? TEAM_RED_COLOR : TEAM_BLUE_COLOR)
@@ -139,9 +144,9 @@ export class BaseEntity {
       this.turretAngles.set(turret.id, turret.initialAngle);
     }
 
-    if (spec.role === 'spawn-point' && spec.spawnCenter) {
-      const marker = scene.add.graphics()
-        .setPosition(spec.spawnCenter.x, spec.spawnCenter.y)
+    if (this.spec.role === 'spawn-point' && this.spec.spawnCenter) {
+      const marker = this.scene.add.graphics()
+        .setPosition(this.spec.spawnCenter.x, this.spec.spawnCenter.y)
         .setDepth(DEPTH.BASES + 2);
       marker.lineStyle(2, hostile ? TEAM_RED_COLOR : TEAM_BLUE_COLOR, 0.78);
       marker.strokeCircle(0, 0, CELL_SIZE * 0.34);
@@ -150,7 +155,7 @@ export class BaseEntity {
       marker.lineBetween(-CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48, 0);
       marker.lineBetween(0, -CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48);
       this.spawnCenterMarker = marker;
-      this.spawnCenterTween = scene.tweens.add({
+      this.spawnCenterTween = this.scene.tweens.add({
         targets: marker,
         alpha: { from: 0.45, to: 1 },
         scale: { from: 0.92, to: 1.08 },
@@ -159,35 +164,33 @@ export class BaseEntity {
         yoyo: true,
         repeat: -1,
       });
-    } else {
-      this.spawnCenterMarker = null;
-      this.spawnCenterTween = null;
     }
 
     // ── 2) HP-Bar (eine pro Basis, unter der Bounding-Box) ─────────────
+    const bounds = getBaseWorldBounds(this.spec.region);
     const centerX = bounds.x + bounds.width / 2;
-    this.hpBarWidth = bounds.width;
     const hpBarY = bounds.y + bounds.height + COOP_DEFENSE_BASE_HP_BAR_GAP;
-    this.hpBarBg = scene.add.rectangle(
+    const hpBarBg = this.scene.add.rectangle(
       centerX,
       hpBarY,
       this.hpBarWidth,
       COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
       0x333333,
     );
-    this.hpBarBg.setStrokeStyle(1, COLORS.GREY_6);
-    this.hpBarBg.setDepth(DEPTH.BASES + 1);
-    this.hpBarFg = scene.add.rectangle(
+    hpBarBg.setStrokeStyle(1, COLORS.GREY_6);
+    hpBarBg.setDepth(DEPTH.BASES + 1);
+    this.hpBarBg = hpBarBg;
+    const hpBarFg = this.scene.add.rectangle(
       centerX - this.hpBarWidth / 2,
       hpBarY,
       this.hpBarWidth,
       COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
       this.hpBarFill,
     );
-    this.hpBarFg.setOrigin(0, 0.5);
-    this.hpBarFg.setDepth(DEPTH.BASES + 2);
-
-    this.lightSpots = BaseEntity.buildLightSpots(bounds);
+    hpBarFg.setOrigin(0, 0.5);
+    hpBarFg.setDepth(DEPTH.BASES + 2);
+    this.hpBarFg = hpBarFg;
+    this.refreshHpBar();
   }
 
   /**
@@ -218,9 +221,9 @@ export class BaseEntity {
     return spots;
   }
 
-  /** Lichtpunkte des Basisleuchtens, oder leer wenn zerstört. */
+  /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist. */
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
-    return this.isDestroyed() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
+    return this.isInert() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
   }
 
   /** Liefert alle Zell-Kollisions-Rectangles (für StaticGroup-Aufnahme & LoS). */
@@ -235,7 +238,7 @@ export class BaseEntity {
       this.vulnerableMarker = null;
       return;
     }
-    if (this.vulnerableMarker || this.isDestroyed()) return;
+    if (this.vulnerableMarker || this.isInert()) return;
     const bounds = getBaseWorldBounds(this.spec.region);
     const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 5);
     marker.lineStyle(3, VULNERABLE_MARKER_COLOR, 0.88);
@@ -265,7 +268,7 @@ export class BaseEntity {
    * zählen. Gibt `null` zurück, wenn die Basis zerstört ist.
    */
   getNearestSurfacePoint(x: number, y: number): { x: number; y: number; distance: number } | null {
-    if (this.isDestroyed() || this.spec.cells.length === 0) return null;
+    if (this.isInert() || this.spec.cells.length === 0) return null;
     let bestX = 0;
     let bestY = 0;
     let bestDistSq = Number.POSITIVE_INFINITY;
@@ -301,13 +304,13 @@ export class BaseEntity {
   }
 
   getSpawnCenterWorldPosition(): { x: number; y: number } | null {
-    return this.isDestroyed() || !this.spec.spawnCenter
+    return this.isInert() || !this.spec.spawnCenter
       ? null
       : { x: this.spec.spawnCenter.x, y: this.spec.spawnCenter.y };
   }
 
   getTurrets(): readonly BaseTurretRuntimeState[] {
-    if (this.isDestroyed()) return [];
+    if (this.isInert()) return [];
     return this.spec.turrets.map((turret) => ({
       id: turret.id,
       baseId: turret.baseId,
@@ -324,7 +327,7 @@ export class BaseEntity {
   }
 
   setTurretAngle(turretId: string, angle: number): void {
-    if (this.isDestroyed() || !Number.isFinite(angle) || !this.turretAngles.has(turretId)) return;
+    if (this.isInert() || !Number.isFinite(angle) || !this.turretAngles.has(turretId)) return;
     this.turretAngles.set(turretId, angle);
     this.turretImages.get(turretId)?.setRotation(angle);
   }
@@ -337,6 +340,23 @@ export class BaseEntity {
     return this.currentHp <= 0;
   }
 
+  isDormant(): boolean {
+    return this.dormant;
+  }
+
+  /** Shared gameplay/render gate for structures that do not exist yet or are destroyed. */
+  isInert(): boolean {
+    return this.isDestroyed() || this.isDormant();
+  }
+
+  /** Monotonic activation derived from the replicated secondary-objective state. */
+  activate(): boolean {
+    if (!this.dormant || this.isDestroyed()) return false;
+    this.dormant = false;
+    this.createWorldRepresentation();
+    return true;
+  }
+
   /** Wird vom `BaseManager` gesetzt; einmaliger Trigger bei HP → 0. */
   setOnDestroyed(callback: (() => void) | null): void {
     this.onDestroyed = callback;
@@ -346,7 +366,7 @@ export class BaseEntity {
    * Host-only: Schaden anwenden und HP-Bar-Visual aktualisieren.
    */
   applyDamage(damage: number): void {
-    if (damage <= 0 || this.currentHp <= 0) return;
+    if (damage <= 0 || this.isInert()) return;
     this.setHp(Math.max(0, this.currentHp - damage));
   }
 
@@ -361,6 +381,7 @@ export class BaseEntity {
 
   private refreshHpBar(): void {
     const ratio = this.maxHp > 0 ? this.currentHp / this.maxHp : 0;
+    if (!this.hpBarFg) return;
     this.hpBarFg.width = this.hpBarWidth * ratio;
     this.hpBarFg.setFillStyle(this.hpBarFill);
   }
@@ -384,8 +405,8 @@ export class BaseEntity {
 
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
 
-    if (this.hpBarBg.active) this.hpBarBg.setVisible(false);
-    if (this.hpBarFg.active) this.hpBarFg.setVisible(false);
+    if (this.hpBarBg?.active) this.hpBarBg.setVisible(false);
+    if (this.hpBarFg?.active) this.hpBarFg.setVisible(false);
 
     if (this.onDestroyed) {
       this.onDestroyed();
@@ -413,8 +434,8 @@ export class BaseEntity {
     this.turretAngles.clear();
     this.spawnCenterTween?.stop();
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
-    if (this.hpBarBg.active) this.hpBarBg.destroy();
-    if (this.hpBarFg.active) this.hpBarFg.destroy();
+    if (this.hpBarBg?.active) this.hpBarBg.destroy();
+    if (this.hpBarFg?.active) this.hpBarFg.destroy();
   }
 }
 

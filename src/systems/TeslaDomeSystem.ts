@@ -59,6 +59,7 @@ interface TeslaEnemyTarget {
 interface TeslaBaseTarget {
   id: string;
   faction: 'friendly' | 'hostile';
+  isInert?(): boolean;
   getHp(): number;
   getNearestSurfacePoint(x: number, y: number): { x: number; y: number; distance: number } | null;
 }
@@ -380,7 +381,7 @@ export class TeslaDomeSystem {
       for (const base of this.baseTargetProvider()) {
         // The provider is intentionally filtered again here: a future caller must not be able
         // to make a Tesla dome damage friendly bases by accidentally returning all structures.
-        if (base.faction !== 'hostile' || base.getHp() <= 0) continue;
+        if (base.faction !== 'hostile' || (base.isInert?.() ?? false) || base.getHp() <= 0) continue;
         const surface = base.getNearestSurfacePoint(dome.x, dome.y);
         if (!surface || surface.distance > radius) continue;
         if (!this.hasLineOfSight(fire, dome.x, dome.y, surface.x, surface.y, dome.skipRockIndex)) continue;
@@ -446,7 +447,7 @@ export class TeslaDomeSystem {
 
     if (baseTargets.length > 0 && this.baseTargetProvider && this.baseDamageHandler) {
       for (const base of this.baseTargetProvider()) {
-        if (base.faction !== 'hostile' || base.getHp() <= 0) continue;
+        if (base.faction !== 'hostile' || (base.isInert?.() ?? false) || base.getHp() <= 0) continue;
         if (!baseTargets.some(target => target.targetId === base.id)) continue;
         // Bases use the ordinary Tesla tick. In particular, rockDamageMult must not bleed
         // into this target class; the central base path applies Coop modifiers afterwards.

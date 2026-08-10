@@ -70,6 +70,10 @@ export interface BaseSpec {
    */
   readonly faction: CoopBaseFaction;
   readonly role: CoopBaseRole;
+  /** True while the linked secondary objective is still dormant. */
+  readonly dormant?: boolean;
+  /** Stable objective id used to derive activation from the B1 presentation snapshot. */
+  readonly dormantObjectiveId?: string;
   readonly turrets: readonly BaseTurretSpec[];
   readonly powerUpPedestals: readonly BasePowerUpPedestalSpec[];
   readonly spawnCenter?: {
@@ -141,7 +145,11 @@ function clampOriginToGrid(originX: number, originY: number, width: number, heig
   return { minGridX, minGridY };
 }
 
-function resolveBaseSpec(config: CoopBaseConfig, humanPlayerCount: number): BaseSpec {
+function resolveBaseSpec(
+  config: CoopBaseConfig,
+  humanPlayerCount: number,
+  dormantObjectiveId?: string,
+): BaseSpec {
   const { cells: relativeCells, width, height } = resolveShape(config.shape);
   const origin = resolveAnchorOrigin(config.anchor, width, height);
   const { minGridX, minGridY } = clampOriginToGrid(origin.minGridX, origin.minGridY, width, height);
@@ -215,6 +223,8 @@ function resolveBaseSpec(config: CoopBaseConfig, humanPlayerCount: number): Base
     hpMax: resolveCoopDefensePositiveInteger(config.hpMax, hpFactor, humanPlayerCount),
     faction,
     role: config.role ?? 'main',
+    dormant: config.dormant === true,
+    ...(dormantObjectiveId === undefined ? {} : { dormantObjectiveId }),
     turrets,
     powerUpPedestals,
     spawnCenter,
@@ -288,7 +298,15 @@ export function resolveCoopDefenseBases(
   mapConfig: CoopDefenseMapConfig,
   humanPlayerCount = 1,
 ): readonly BaseSpec[] {
-  return mapConfig.bases.map((baseConfig) => resolveBaseSpec(baseConfig, humanPlayerCount));
+  const objectiveByBaseId = new Map<string, string>();
+  for (const objective of mapConfig.secondaryObjectives ?? []) {
+    for (const baseId of objective.targets) objectiveByBaseId.set(baseId, objective.id);
+  }
+  return mapConfig.bases.map((baseConfig) => resolveBaseSpec(
+    baseConfig,
+    humanPlayerCount,
+    baseConfig.dormant === true ? objectiveByBaseId.get(baseConfig.id) : undefined,
+  ));
 }
 
 function resolveActiveCoopDefenseMapConfig(): CoopDefenseMapConfig {

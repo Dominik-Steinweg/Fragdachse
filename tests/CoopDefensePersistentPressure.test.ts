@@ -30,7 +30,7 @@ describe('CoopDefensePersistentPressureSystem', () => {
       role: 'spawn-point',
       spawnCenter: { gridX: 2, gridY: 5, x: 80, y: 176 },
     } as unknown as BaseSpec;
-    const activeBaseIds = new Set([base.id]);
+    const activeBaseIds = new Set<string>();
     const system = new CoopDefensePersistentPressureSystem(
       [
         source('map-pressure', { type: 'map' }, 0, 'north'),
@@ -49,6 +49,7 @@ describe('CoopDefensePersistentPressureSystem', () => {
     expect(mapSpawn).toHaveBeenNthCalledWith(1, 'zombie-badger', 2, 'north');
     expect(structureSpawn).toHaveBeenCalledTimes(0);
 
+    activeBaseIds.add(base.id);
     system.hostUpdate(1_000, false);
     expect(mapSpawn).toHaveBeenCalledTimes(2);
     expect(mapSpawn).toHaveBeenNthCalledWith(2, 'zombie-badger', 2, 'north');

@@ -42,7 +42,16 @@ function makeMap(
         id: 'friendly-outpost',
         hpMax: 100,
         role: 'outpost',
+        dormant: true,
         anchor: { kind: 'left-center', edgeInsetCells: 0 },
+        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+      },
+      {
+        id: 'friendly-outpost-b',
+        hpMax: 100,
+        role: 'outpost',
+        dormant: true,
+        anchor: { kind: 'center-offset', dxCells: -10, dyCells: 0 },
         shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
       },
     ],
@@ -72,14 +81,14 @@ describe('Coop defense secondary objectives', () => {
     clearActiveSession();
   });
 
-  it('normalizes objective ids, triggers, targets, goals and rewards', () => {
+  it('normalizes objective ids, triggers, complete targets and rewards', () => {
     const normalized = normalizeCoopDefenseMapConfig(makeMap([{
       id: '  destroy-front  ',
       type: 'destroy',
       start: { type: 'time', atMs: -25 },
-      activeUntil: { type: 'time', atMs: 500.9 },
-      targets: [' friendly-main ', 'friendly-outpost'],
-      targetGoal: 99.9,
+      focusUntil: { type: 'time', atMs: 500.9 },
+      targets: [' friendly-outpost ', 'friendly-outpost-b'],
+      targetGoal: 1,
       rewards: { xpPerTarget: -4.5 },
     }]));
 
@@ -87,9 +96,9 @@ describe('Coop defense secondary objectives', () => {
       id: 'destroy-front',
       type: 'destroy',
       start: { type: 'time', atMs: 0 },
-      activeUntil: { type: 'time', atMs: 500 },
-      targets: ['friendly-main', 'friendly-outpost'],
-      targetGoal: 2,
+      focusUntil: { type: 'time', atMs: 500 },
+      targetGoal: 1,
+      targets: ['friendly-outpost', 'friendly-outpost-b'],
       rewards: { xpPerTarget: 0 },
     }]);
     expect(resolveCoopDefenseMapSecondaryObjectives(normalized, 4)).toEqual(normalized.secondaryObjectives);
@@ -126,17 +135,53 @@ describe('Coop defense secondary objectives', () => {
 
   it('rejects overlapping authored windows and a Hold ending on the last repel encounter', () => {
     expect(() => normalizeCoopDefenseMapConfig(makeMap([
-      { id: 'first', type: 'destroy', start: { type: 'time', atMs: 100 }, activeUntil: { type: 'time', atMs: 500 }, targets: ['friendly-main'] },
-      { id: 'second', type: 'carry', start: { type: 'time', atMs: 400 }, activeUntil: { type: 'time', atMs: 800 }, targets: ['friendly-outpost'] },
+      { id: 'first', type: 'destroy', start: { type: 'time', atMs: 100 }, focusUntil: { type: 'time', atMs: 500 }, targets: ['friendly-outpost'] },
+      { id: 'second', type: 'carry', start: { type: 'time', atMs: 400 }, focusUntil: { type: 'time', atMs: 800 }, targets: ['friendly-outpost-b'] },
     ]))).toThrow('overlapping authored active windows');
 
     expect(() => normalizeCoopDefenseMapConfig(makeMap([{
       id: 'hold-final',
       type: 'hold',
       start: { type: 'time', atMs: 100 },
-      activeUntil: { type: 'after-encounter', encounterId: 'assault-final' },
-      targets: ['friendly-outpost'],
+      focusUntil: { type: 'after-encounter', encounterId: 'assault-final' },
+      targets: ['friendly-outpost', 'friendly-outpost-b'],
     }]))).toThrow('last repel-assault encounter');
+  });
+
+  it('validates deterministic after-encounter conflicts without rejecting sequential handoffs', () => {
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([
+      { id: 'first', type: 'destroy', start: { type: 'after-encounter', encounterId: 'assault-1' }, targets: ['friendly-outpost'] },
+      { id: 'second', type: 'carry', start: { type: 'after-encounter', encounterId: 'assault-1' }, targets: ['friendly-outpost-b'] },
+    ]))).toThrow('overlapping authored active windows');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([
+      { id: 'first', type: 'destroy', start: { type: 'after-encounter', encounterId: 'assault-1' }, focusUntil: { type: 'time', atMs: 500 }, targets: ['friendly-outpost'] },
+      { id: 'second', type: 'carry', start: { type: 'after-encounter', encounterId: 'assault-1' }, focusUntil: { type: 'time', atMs: 800 }, targets: ['friendly-outpost-b'] },
+    ]))).toThrow('same start encounter');
+
+    const threeEncounters: CoopDefenseMapConfig['encounters'] = [
+      ...makeMap().encounters!.slice(0, 1),
+      {
+        id: 'assault-2',
+        start: { type: 'after-previous' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+      },
+      {
+        id: 'assault-final',
+        start: { type: 'after-previous' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+      },
+    ];
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([
+      { id: 'first', type: 'destroy', start: { type: 'after-encounter', encounterId: 'assault-1' }, focusUntil: { type: 'after-encounter', encounterId: 'assault-final' }, targets: ['friendly-outpost'] },
+      { id: 'second', type: 'carry', start: { type: 'after-encounter', encounterId: 'assault-2' }, focusUntil: { type: 'after-encounter', encounterId: 'assault-final' }, targets: ['friendly-outpost-b'] },
+    ], 'repel-assault', threeEncounters))).toThrow('overlapping authored active windows');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([
+      { id: 'first', type: 'destroy', start: { type: 'after-encounter', encounterId: 'assault-1' }, focusUntil: { type: 'after-encounter', encounterId: 'assault-2' }, targets: ['friendly-outpost'] },
+      { id: 'second', type: 'carry', start: { type: 'after-encounter', encounterId: 'assault-2' }, focusUntil: { type: 'after-encounter', encounterId: 'assault-final' }, targets: ['friendly-outpost-b'] },
+    ], 'repel-assault', threeEncounters))).not.toThrow();
   });
 
   it('activates from time and encounter-clear triggers', () => {
@@ -150,62 +195,126 @@ describe('Coop defense secondary objectives', () => {
     ], { isEncounterCleared: () => encounterCleared });
 
     system.hostUpdate(99, false);
-    expect(system.getPresentationState()).toBeNull();
+    expect(system.getPresentationState()).toEqual([]);
     system.hostUpdate(1, false);
-    expect(system.getPresentationState()).toMatchObject({ objectiveId: 'destroy-front', state: 'active' });
+    expect(system.getPresentationState().find((entry) => entry.objectiveId === 'destroy-front'))
+      .toMatchObject({ state: 'active', focused: true });
     system.reportObjectiveFailed('destroy-front');
     encounterCleared = true;
     system.hostUpdate(0, false);
-    expect(system.getPresentationState()).toMatchObject({ objectiveId: 'after-clear', state: 'active' });
+    expect(system.getPresentationState().find((entry) => entry.objectiveId === 'after-clear'))
+      .toMatchObject({ state: 'active', focused: true });
 
     encounterCleared = false;
     const waiting = new CoopDefenseSecondaryObjectiveSystem([
       resolvedObjective({ start: { type: 'after-encounter', encounterId: 'assault-1' } }),
     ], { isEncounterCleared: () => encounterCleared });
     waiting.hostUpdate(100, false);
-    expect(waiting.getPresentationState()).toBeNull();
+    expect(waiting.getPresentationState()).toEqual([]);
     encounterCleared = true;
     waiting.hostUpdate(1, false);
-    expect(waiting.getPresentationState()).toMatchObject({ state: 'active' });
+    expect(waiting.getPresentationState()).toMatchObject([{ state: 'active', focused: true }]);
   });
 
-  it('keeps exactly one active objective and lets the dormant one trigger later', () => {
+  it('releases focus without completing the objective and lets the next objective take focus', () => {
     const system = new CoopDefenseSecondaryObjectiveSystem([
-      resolvedObjective({ id: 'first' }),
-      resolvedObjective({ id: 'second' }),
+      resolvedObjective({ id: 'first', focusUntil: { type: 'time', atMs: 100 } }),
+      resolvedObjective({ id: 'second', start: { type: 'time', atMs: 100 } }),
     ]);
 
     system.hostUpdate(0, false);
-    expect(system.getActiveObjectiveId()).toBe('first');
+    expect(system.getFocusedObjectiveId()).toBe('first');
     expect(system.getObjectiveState('second')).toBe('dormant');
+
+    system.hostUpdate(100, false);
+    expect(system.getObjectiveState('first')).toBe('active');
+    expect(system.getFocusedObjectiveId()).toBe('second');
+    expect(system.getPresentationState()).toEqual([
+      expect.objectContaining({ objectiveId: 'first', state: 'active', focused: false, progressCurrent: 0 }),
+      expect.objectContaining({ objectiveId: 'second', state: 'active', focused: true }),
+    ]);
 
     expect(system.reportTargetResolved('first', 'target-a')).toBe(true);
     expect(system.reportTargetResolved('first', 'target-b')).toBe(true);
     expect(system.reportTargetResolved('first', 'target-c')).toBe(true);
-    expect(system.getObjectiveState('first')).toBe('resolved');
-    system.hostUpdate(0, false);
-    expect(system.getActiveObjectiveId()).toBe('second');
+    expect(system.getObjectiveState('first')).toBe('completed');
+    expect(system.getFocusedObjectiveId()).toBe('second');
+    expect(system.getPresentationState().find((entry) => entry.objectiveId === 'first'))
+      .toMatchObject({ state: 'completed', focused: false, progressCurrent: 3, progressTotal: 3 });
   });
 
-  it('resolves on target goal or active-window expiry and keeps counting after resolved', () => {
-    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
-      activeUntil: { type: 'time', atMs: 50 },
-    })]);
+  it('keeps a trigger dormant while focus is occupied and retries it after focus loss', () => {
+    let encounterCleared = false;
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({ id: 'first', focusUntil: { type: 'time', atMs: 200 } }),
+      resolvedObjective({ id: 'after-clear', start: { type: 'after-encounter', encounterId: 'assault-1' } }),
+    ], { isEncounterCleared: () => encounterCleared });
+
+    system.hostUpdate(0, false);
+    encounterCleared = true;
+    system.hostUpdate(100, false);
+    expect(system.getObjectiveState('after-clear')).toBe('dormant');
+    system.hostUpdate(100, false);
+    expect(system.getObjectiveState('first')).toBe('active');
+    expect(system.getObjectiveState('after-clear')).toBe('active');
+    expect(system.getFocusedObjectiveId()).toBe('after-clear');
+  });
+
+  it('completes only after targetGoal and keeps progress countable after focus loss', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective()]);
 
     system.hostUpdate(0, false);
     expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
-    system.hostUpdate(50, false);
-    expect(system.getPresentationState()).toMatchObject({ state: 'resolved', progressCurrent: 1, progressTotal: 3 });
     expect(system.reportTargetResolved('destroy-front', 'target-b')).toBe(true);
-    expect(system.reportTargetResolved('destroy-front', 'target-b')).toBe(false);
-    expect(system.getPresentationState()).toMatchObject({ state: 'resolved', progressCurrent: 2 });
+    expect(system.getObjectiveState('destroy-front')).toBe('active');
+    expect(system.reportTargetResolved('destroy-front', 'target-c')).toBe(true);
+    expect(system.getObjectiveState('destroy-front')).toBe('completed');
+
+    const expiring = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      focusUntil: { type: 'time', atMs: 50 },
+    })]);
+
+    expiring.hostUpdate(0, false);
+    expect(expiring.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
+    expiring.hostUpdate(50, false);
+    expect(expiring.getPresentationState()).toMatchObject([
+      { state: 'active', focused: false, progressCurrent: 1, progressTotal: 3, stateChangedAtMs: 0 },
+    ]);
+    expect(expiring.reportTargetResolved('destroy-front', 'target-b')).toBe(true);
+    expect(expiring.getPresentationState()).toMatchObject([{ state: 'active', progressCurrent: 2 }]);
+    expect(expiring.reportTargetResolved('destroy-front', 'target-c')).toBe(true);
+    expect(expiring.getObjectiveState('destroy-front')).toBe('completed');
+  });
+
+  it('uses targetGoal as the presentation total and completion threshold', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({ targetGoal: 2 })]);
+    system.hostUpdate(0, false);
+
+    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
+    expect(system.reportTargetResolved('destroy-front', 'target-b')).toBe(true);
+    expect(system.getObjectiveState('destroy-front')).toBe('completed');
+    expect(system.getPresentationState()).toMatchObject([{
+      progressCurrent: 2,
+      progressTotal: 2,
+      state: 'completed',
+    }]);
+    expect(system.reportTargetResolved('destroy-front', 'target-c')).toBe(false);
+  });
+
+  it('leaves an incomplete Hold active at round end without implicit success', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({ type: 'hold' })]);
+    system.hostUpdate(60_000, false);
+
+    expect(system.getObjectiveState('destroy-front')).toBe('active');
+    expect(system.getObjectiveState('destroy-front')).not.toBe('completed');
+    expect(system.getPresentationState()).toMatchObject([{ type: 'hold', state: 'active', focused: true }]);
   });
 
   it('makes failed terminal without creating a round outcome', () => {
     const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective()]);
     system.hostUpdate(0, false);
     expect(system.reportObjectiveFailed('destroy-front')).toBe(true);
-    expect(system.getPresentationState()).toMatchObject({ state: 'failed' });
+    expect(system.getPresentationState()).toMatchObject([{ state: 'failed', focused: false }]);
     expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(false);
     system.hostUpdate(1_000, false);
     expect(system.getObjectiveState('destroy-front')).toBe('failed');
@@ -222,18 +331,33 @@ describe('Coop defense secondary objectives', () => {
     setActiveSession({ room: room as never, transport: {} as never, roomCode: 'test' });
 
     const bridge = new NetworkBridge();
-    const snapshot = {
+    const snapshot = [{
       objectiveId: 'destroy-front',
       type: 'destroy' as const,
       state: 'active' as const,
+      focused: true,
       progressCurrent: 1,
       progressTotal: 3,
       stateChangedAtMs: 125.5,
-    };
+    }];
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(snapshot);
     expect(bridge.getCoopDefenseSecondaryObjectivePresentationState()).toEqual(snapshot);
 
-    globalState.set('cso', { ...snapshot, progressCurrent: 4 });
+    globalState.set('cso', [{ ...snapshot[0], progressCurrent: 4 }]);
+    expect(bridge.getCoopDefenseSecondaryObjectivePresentationState()).toBeNull();
+
+    globalState.set('cso', [snapshot[0], { ...snapshot[0], focused: false }]);
+    expect(bridge.getCoopDefenseSecondaryObjectivePresentationState()).toBeNull();
+
+    globalState.set('cso', [
+      { ...snapshot[0], focused: true },
+      { ...snapshot[0], objectiveId: 'destroy-backup', focused: true },
+    ]);
+    expect(bridge.getCoopDefenseSecondaryObjectivePresentationState()).toBeNull();
+
+    globalState.set('cso', Array.from({ length: 33 }, (_, index) => ({
+      ...snapshot[0], objectiveId: `objective-${index}`, focused: index === 0,
+    })));
     expect(bridge.getCoopDefenseSecondaryObjectivePresentationState()).toBeNull();
   });
 });

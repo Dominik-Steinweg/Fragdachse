@@ -104,6 +104,8 @@ export interface CoopBaseConfig {
   readonly playerScaling?: CoopBasePlayerScaling;
   readonly faction?: CoopBaseFaction;
   readonly role?: CoopBaseRole;
+  /** Mission structure: constructed at round setup but inert until its objective leaves dormant. */
+  readonly dormant?: boolean;
   readonly anchor: CoopBaseAnchor;
   readonly shape: CoopBaseShape;
   readonly turrets?: readonly CoopBaseTurretConfig[];
@@ -188,7 +190,7 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly id: string;
   readonly type: CoopDefenseSecondaryObjectiveType;
   readonly start: CoopDefenseMapEncounterStart;
-  readonly activeUntil?: CoopDefenseMapEncounterStart;
+  readonly focusUntil?: CoopDefenseMapEncounterStart;
   readonly targets: readonly string[];
   readonly targetGoal?: number;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
@@ -198,7 +200,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly id: string;
   readonly type: CoopDefenseSecondaryObjectiveType;
   readonly start: CoopDefenseMapEncounterStart;
-  readonly activeUntil?: CoopDefenseMapEncounterStart;
+  readonly focusUntil?: CoopDefenseMapEncounterStart;
   readonly targets: readonly string[];
   readonly targetGoal: number;
   readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
@@ -502,7 +504,7 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     id: objective.id,
     type: objective.type,
     start: objective.start,
-    ...(objective.activeUntil ? { activeUntil: objective.activeUntil } : {}),
+    ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
     targets: [...objective.targets],
     targetGoal: objective.targetGoal ?? objective.targets.length,
     ...(objective.rewards ? { rewards: { ...objective.rewards } } : {}),
@@ -806,7 +808,10 @@ function normalizeSecondaryObjectiveConfigs(
   secondaryObjectives: readonly CoopDefenseMapSecondaryObjectiveConfig[] | undefined,
   context: SecondaryObjectiveNormalizationContext,
 ): readonly CoopDefenseMapSecondaryObjectiveConfig[] | undefined {
-  if (secondaryObjectives === undefined) return undefined;
+  if (secondaryObjectives === undefined) {
+    validateDormantMissionStructures(mapId, context.bases, []);
+    return undefined;
+  }
   if (!Array.isArray(secondaryObjectives)) {
     throw new Error(`[coopDefenseMaps] Secondary objectives on map ${mapId} need an array`);
   }
@@ -849,32 +854,30 @@ function normalizeSecondaryObjectiveConfigs(
       return normalizedTargetId;
     });
 
-    const defaultTargetGoal = targets.length;
-    const targetGoal = typeof objective.targetGoal === 'number' && Number.isFinite(objective.targetGoal)
-      ? Math.max(1, Math.min(defaultTargetGoal, Math.floor(objective.targetGoal)))
-      : defaultTargetGoal;
-
     return {
       id,
       type: objective.type,
       start: normalizeSecondaryObjectiveTrigger(mapId, id, objective.start, 'start', context),
-      ...(objective.activeUntil === undefined
+      ...(objective.focusUntil === undefined
         ? {}
-        : { activeUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.activeUntil, 'activeUntil', context) }),
+        : { focusUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.focusUntil, 'focusUntil', context) }),
       targets,
-      targetGoal,
+      targetGoal: typeof objective.targetGoal === 'number' && Number.isFinite(objective.targetGoal)
+        ? Math.max(1, Math.min(targets.length, Math.floor(objective.targetGoal)))
+        : targets.length,
       ...(objective.rewards === undefined
         ? {}
         : { rewards: normalizeSecondaryObjectiveRewards(mapId, id, objective.rewards) }),
     };
   });
 
-  validateSecondaryObjectiveWindows(mapId, normalizedObjectives);
+  validateDormantMissionStructures(mapId, context.bases, normalizedObjectives);
+  validateSecondaryObjectiveWindows(mapId, normalizedObjectives, context.encounters);
   if (context.objective === 'repel-assault' && context.encounters && context.encounters.length > 0) {
     const lastEncounterId = context.encounters[context.encounters.length - 1].id;
     for (const objective of normalizedObjectives) {
       if (objective.type !== 'hold') continue;
-      const isBoundToLastEncounter = [objective.start, objective.activeUntil]
+      const isBoundToLastEncounter = [objective.start, objective.focusUntil]
         .some((trigger) => trigger?.type === 'after-encounter' && trigger.encounterId === lastEncounterId);
       if (isBoundToLastEncounter) {
         throw new Error(
@@ -886,6 +889,45 @@ function normalizeSecondaryObjectiveConfigs(
   return normalizedObjectives;
 }
 
+/**
+ * Secondary-objective targets are the authored mission structures for B2. Keeping this
+ * relationship explicit in the map data lets both peers derive dormancy from the same map
+ * without adding another network field.
+ */
+function validateDormantMissionStructures(
+  mapId: string,
+  bases: readonly CoopBaseConfig[],
+  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+): void {
+  const dormantBaseIds = new Set(
+    bases.filter((base) => base.dormant === true).map((base) => base.id),
+  );
+  const objectiveReferences = new Map<string, string[]>();
+
+  for (const objective of objectives) {
+    for (const targetId of objective.targets) {
+      if (!dormantBaseIds.has(targetId)) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objective ${mapId}:${objective.id} target ${targetId} must be marked dormant`,
+        );
+      }
+      const references = objectiveReferences.get(targetId) ?? [];
+      references.push(objective.id);
+      objectiveReferences.set(targetId, references);
+    }
+  }
+
+  for (const base of bases) {
+    if (base.dormant !== true) continue;
+    const references = objectiveReferences.get(base.id) ?? [];
+    if (references.length !== 1) {
+      throw new Error(
+        `[coopDefenseMaps] Dormant mission structure ${mapId}:${base.id} must be referenced by exactly one secondary objective`,
+      );
+    }
+  }
+}
+
 function isSecondaryObjectiveType(value: unknown): value is CoopDefenseSecondaryObjectiveType {
   return value === 'destroy' || value === 'hold' || value === 'carry';
 }
@@ -894,7 +936,7 @@ function normalizeSecondaryObjectiveTrigger(
   mapId: string,
   objectiveId: string,
   trigger: CoopDefenseMapEncounterStart | undefined,
-  fieldName: 'start' | 'activeUntil',
+  fieldName: 'start' | 'focusUntil',
   context: SecondaryObjectiveNormalizationContext,
 ): CoopDefenseMapEncounterStart {
   if (!trigger || typeof trigger.type !== 'string') {
@@ -946,47 +988,113 @@ function normalizeSecondaryObjectiveRewards(
   };
 }
 
-interface AuthoredSecondaryObjectiveWindow {
+interface AuthoredSecondaryObjectiveTimeWindow {
   readonly startAtMs: number;
   readonly endAtMs: number;
 }
 
-function getAuthoredSecondaryObjectiveWindow(
+interface AuthoredSecondaryObjectiveEncounterWindow {
+  /** Half-open range of encounter boundaries: [start, end). */
+  readonly startEncounterIndex: number;
+  readonly endEncounterIndex: number;
+}
+
+function getAuthoredSecondaryObjectiveTimeWindow(
   objective: CoopDefenseMapSecondaryObjectiveConfig,
-): AuthoredSecondaryObjectiveWindow | null {
+): AuthoredSecondaryObjectiveTimeWindow | null {
   if (objective.start.type !== 'time') return null;
   // Ein Encounter-Clear ist in authored Daten kein fester Zeitpunkt. Das Fenster darf deshalb
   // nicht fälschlich als unendlich lang behandelt und dadurch zu streng abgelehnt werden.
-  if (objective.activeUntil !== undefined && objective.activeUntil.type !== 'time') return null;
+  if (objective.focusUntil !== undefined && objective.focusUntil.type !== 'time') return null;
   return {
     startAtMs: objective.start.atMs,
-    endAtMs: objective.activeUntil?.atMs ?? Number.POSITIVE_INFINITY,
+    endAtMs: objective.focusUntil?.atMs ?? Number.POSITIVE_INFINITY,
   };
+}
+
+function getAuthoredSecondaryObjectiveEncounterWindow(
+  objective: CoopDefenseMapSecondaryObjectiveConfig,
+  encounterIndexById: ReadonlyMap<string, number>,
+): AuthoredSecondaryObjectiveEncounterWindow | null {
+  if (objective.start.type !== 'after-encounter') return null;
+  const startEncounterIndex = encounterIndexById.get(objective.start.encounterId);
+  if (startEncounterIndex === undefined) return null;
+
+  if (objective.focusUntil === undefined) {
+    return { startEncounterIndex, endEncounterIndex: Number.POSITIVE_INFINITY };
+  }
+  if (objective.focusUntil.type !== 'after-encounter') return null;
+  const endEncounterIndex = encounterIndexById.get(objective.focusUntil.encounterId);
+  if (endEncounterIndex === undefined) return null;
+  if (endEncounterIndex <= startEncounterIndex) {
+    throw new Error(
+      `[coopDefenseMaps] Secondary objective ${objective.id} has a focusUntil encounter before or equal to its start encounter`,
+    );
+  }
+  return { startEncounterIndex, endEncounterIndex };
 }
 
 function validateSecondaryObjectiveWindows(
   mapId: string,
   objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+  encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
 ): void {
   for (const objective of objectives) {
     if (objective.start.type === 'time'
-      && objective.activeUntil?.type === 'time'
-      && objective.activeUntil.atMs <= objective.start.atMs) {
+      && objective.focusUntil?.type === 'time'
+      && objective.focusUntil.atMs <= objective.start.atMs) {
       throw new Error(
-        `[coopDefenseMaps] Secondary objective ${mapId}:${objective.id} has an activeUntil before its start`,
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objective.id} has a focusUntil before its start`,
       );
     }
   }
 
+  const encounterIndexById = new Map(
+    (encounters ?? []).map((encounter, index) => [encounter.id, index]),
+  );
+
   for (let firstIndex = 0; firstIndex < objectives.length; firstIndex += 1) {
-    const first = getAuthoredSecondaryObjectiveWindow(objectives[firstIndex]);
-    if (!first) continue;
+    const firstTimeWindow = getAuthoredSecondaryObjectiveTimeWindow(objectives[firstIndex]);
+    const firstEncounterWindow = getAuthoredSecondaryObjectiveEncounterWindow(
+      objectives[firstIndex],
+      encounterIndexById,
+    );
     for (let secondIndex = firstIndex + 1; secondIndex < objectives.length; secondIndex += 1) {
-      const second = getAuthoredSecondaryObjectiveWindow(objectives[secondIndex]);
-      if (!second) continue;
-      const overlapStart = Math.max(first.startAtMs, second.startAtMs);
-      const overlapEnd = Math.min(first.endAtMs, second.endAtMs);
-      if (overlapStart < overlapEnd) {
+      const firstStart = objectives[firstIndex].start;
+      const secondStart = objectives[secondIndex].start;
+      if (firstStart.type === 'after-encounter'
+        && secondStart.type === 'after-encounter'
+        && firstStart.encounterId === secondStart.encounterId) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objectives ${mapId}:${objectives[firstIndex].id} and ${objectives[secondIndex].id} have overlapping authored active windows from the same start encounter`,
+        );
+      }
+
+      const secondTimeWindow = getAuthoredSecondaryObjectiveTimeWindow(objectives[secondIndex]);
+      if (firstTimeWindow && secondTimeWindow) {
+        const overlapStart = Math.max(firstTimeWindow.startAtMs, secondTimeWindow.startAtMs);
+        const overlapEnd = Math.min(firstTimeWindow.endAtMs, secondTimeWindow.endAtMs);
+        if (overlapStart < overlapEnd) {
+          throw new Error(
+            `[coopDefenseMaps] Secondary objectives ${mapId}:${objectives[firstIndex].id} and ${objectives[secondIndex].id} have overlapping authored active windows`,
+          );
+        }
+      }
+
+      const secondEncounterWindow = getAuthoredSecondaryObjectiveEncounterWindow(
+        objectives[secondIndex],
+        encounterIndexById,
+      );
+      if (!firstEncounterWindow || !secondEncounterWindow) continue;
+      const encounterOverlapStart = Math.max(
+        firstEncounterWindow.startEncounterIndex,
+        secondEncounterWindow.startEncounterIndex,
+      );
+      const encounterOverlapEnd = Math.min(
+        firstEncounterWindow.endEncounterIndex,
+        secondEncounterWindow.endEncounterIndex,
+      );
+      if (encounterOverlapStart < encounterOverlapEnd) {
         throw new Error(
           `[coopDefenseMaps] Secondary objectives ${mapId}:${objectives[firstIndex].id} and ${objectives[secondIndex].id} have overlapping authored active windows`,
         );
@@ -1341,6 +1449,9 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   if (role !== 'spawn-point' && spawnCenter) {
     throw new Error(`[coopDefenseMaps] Only spawn points may declare spawnCenter: ${baseConfig.id}`);
   }
+  if (baseConfig.dormant === true && role === 'main') {
+    throw new Error(`[coopDefenseMaps] Dormant mission structure ${baseConfig.id} must not use role main`);
+  }
   // Podeste versorgen ausschliesslich Spieler und bleiben deshalb an Gegnerbasen verboten.
   // Basistuerme sind dagegen fraktionsfaehig und erhalten ihr Zielverhalten erst zur Laufzeit.
   if (faction === 'hostile' && powerUpPedestals.length > 0) {
@@ -1355,6 +1466,7 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
     playerScaling: normalizeBasePlayerScaling(baseConfig.playerScaling),
     faction,
     role,
+    dormant: baseConfig.dormant === true,
     anchor: normalizeBaseAnchor(baseConfig.anchor),
     shape: normalizeBaseShape(baseConfig.shape),
     turrets,

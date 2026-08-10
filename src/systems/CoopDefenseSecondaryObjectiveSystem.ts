@@ -22,14 +22,14 @@ interface SecondaryObjectiveRuntimeState {
 /**
  * Host-autoritatives Fundament für optionale Coop-Defense-Nebenmissionen.
  *
- * Das System kennt weder Basen noch den Encounter-Director. Es verwaltet nur den authored
- * Lebenszyklus und liest semantische Trigger über schmale Callbacks; die späteren Archetypen
- * melden ihre Weltauflösung über reportTargetResolved().
+ * Lebenszyklus und HUD-Fokus sind getrennt: Ein Objective kann nach dem Fokusverlust als aktives
+ * Hintergrund-Objective weiterlaufen und Ziele zählen, während ein anderes den Fokus übernimmt.
+ * Das System kennt weder Basen noch den Encounter-Director; spätere Archetypen melden ihre
+ * Weltauflösung über reportTargetResolved().
  */
 export class CoopDefenseSecondaryObjectiveSystem {
   private elapsedMs = 0;
-  private activeObjectiveIndex: number | null = null;
-  private presentationObjectiveIndex: number | null = null;
+  private focusedObjectiveIndex: number | null = null;
   private readonly isEncounterCleared: ((encounterId: string) => boolean) | null;
   private readonly objectiveStates: SecondaryObjectiveRuntimeState[];
 
@@ -51,10 +51,12 @@ export class CoopDefenseSecondaryObjectiveSystem {
     if (countdownActive) return;
     this.elapsedMs += Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
 
-    // Ein bereits aktives Objective behält den Slot bis zu seinem Abschluss. Wird es in diesem
-    // Frame resolved, darf ein gleichzeitig triggerfähiges Objective erst im nächsten Frame folgen.
-    if (this.activeObjectiveIndex !== null) {
-      this.updateActiveObjective(this.activeObjectiveIndex);
+    // Nur ein belegter Fokus-Slot blockiert die nächste Aktivierung; aktive Hintergrund-Objectives
+    // bleiben unabhängig davon zählbar und werden nicht erneut fokussiert.
+    if (this.focusedObjectiveIndex !== null) {
+      this.updateFocusedObjective();
+    }
+    if (this.focusedObjectiveIndex !== null) {
       return;
     }
 
@@ -62,15 +64,13 @@ export class CoopDefenseSecondaryObjectiveSystem {
       const state = this.objectiveStates[index];
       if (state.state !== 'dormant' || !this.isTriggerSatisfied(state.config.start)) continue;
       this.activateObjective(index);
-      this.updateActiveObjective(index);
       return;
     }
   }
 
   reset(): void {
     this.elapsedMs = 0;
-    this.activeObjectiveIndex = null;
-    this.presentationObjectiveIndex = null;
+    this.focusedObjectiveIndex = null;
     for (const state of this.objectiveStates) {
       state.resolvedTargetIds.clear();
       state.state = 'dormant';
@@ -82,10 +82,10 @@ export class CoopDefenseSecondaryObjectiveSystem {
     return this.elapsedMs;
   }
 
-  getActiveObjectiveId(): string | null {
-    return this.activeObjectiveIndex === null
+  getFocusedObjectiveId(): string | null {
+    return this.focusedObjectiveIndex === null
       ? null
-      : this.objectiveStates[this.activeObjectiveIndex]?.config.id ?? null;
+      : this.objectiveStates[this.focusedObjectiveIndex]?.config.id ?? null;
   }
 
   getObjectiveState(objectiveId: string): CoopDefenseSecondaryObjectiveState | null {
@@ -93,18 +93,16 @@ export class CoopDefenseSecondaryObjectiveSystem {
   }
 
   /**
-   * Meldet ein einmalig aufgelöstes authored Ziel. Die Meldung bleibt auch nach `resolved`
-   * gültig, damit nachwirkende Destroy-/Carry-Ziele ihren Fortschritt weiterführen können.
+   * Meldet ein einmalig aufgelöstes authored Ziel. Die Meldung gilt für jedes aktive Objective,
+   * auch wenn es nach Fokusverlust als Hintergrund-Objective weiterläuft.
    */
   reportTargetResolved(objectiveId: string, targetId: string): boolean {
     const state = this.findObjectiveState(objectiveId);
-    if (!state || state.state === 'dormant' || state.state === 'failed') return false;
+    if (!state || state.state !== 'active') return false;
     if (!state.config.targets.includes(targetId) || state.resolvedTargetIds.has(targetId)) return false;
 
     state.resolvedTargetIds.add(targetId);
-    if (state.state === 'active' && state.resolvedTargetIds.size >= state.config.targetGoal) {
-      this.resolveObjective(state);
-    }
+    if (state.resolvedTargetIds.size >= state.config.targetGoal) this.completeObjective(state);
     return true;
   }
 
@@ -114,28 +112,24 @@ export class CoopDefenseSecondaryObjectiveSystem {
     if (!state || state.state !== 'active') return false;
     state.state = 'failed';
     state.stateChangedAtMs = this.elapsedMs;
-    this.presentationObjectiveIndex = this.objectiveStates.indexOf(state);
-    this.activeObjectiveIndex = null;
+    const index = this.objectiveStates.indexOf(state);
+    if (this.focusedObjectiveIndex === index) this.focusedObjectiveIndex = null;
     return true;
   }
 
-  /** Alias mit kürzerem Namen für zukünftige Hold-Fachlogik. */
-  failObjective(objectiveId: string): boolean {
-    return this.reportObjectiveFailed(objectiveId);
-  }
-
-  getPresentationState(): CoopDefenseSecondaryObjectivePresentationState | null {
-    if (this.presentationObjectiveIndex === null) return null;
-    const state = this.objectiveStates[this.presentationObjectiveIndex];
-    if (!state) return null;
-    return {
-      objectiveId: state.config.id,
-      type: state.config.type,
-      state: state.state,
-      progressCurrent: state.resolvedTargetIds.size,
-      progressTotal: state.config.targets.length,
-      stateChangedAtMs: state.stateChangedAtMs,
-    };
+  getPresentationState(): CoopDefenseSecondaryObjectivePresentationState {
+    return this.objectiveStates
+      .map((state, index) => ({ state, index }))
+      .filter(({ state }) => state.state !== 'dormant')
+      .map(({ state, index }) => ({
+        objectiveId: state.config.id,
+        type: state.config.type,
+        state: state.state,
+        focused: this.focusedObjectiveIndex === index,
+        progressCurrent: state.resolvedTargetIds.size,
+        progressTotal: state.config.targetGoal,
+        stateChangedAtMs: state.stateChangedAtMs,
+      }));
   }
 
   private findObjectiveState(objectiveId: string): SecondaryObjectiveRuntimeState | null {
@@ -144,28 +138,31 @@ export class CoopDefenseSecondaryObjectiveSystem {
 
   private activateObjective(index: number): void {
     const state = this.objectiveStates[index];
-    if (!state || state.state !== 'dormant' || this.activeObjectiveIndex !== null) return;
+    if (!state || state.state !== 'dormant' || this.focusedObjectiveIndex !== null) return;
     state.state = 'active';
     state.stateChangedAtMs = this.elapsedMs;
-    this.activeObjectiveIndex = index;
-    this.presentationObjectiveIndex = index;
+    this.focusedObjectiveIndex = index;
   }
 
-  private updateActiveObjective(index: number): void {
-    const state = this.objectiveStates[index];
-    if (!state || state.state !== 'active') return;
-    if (state.resolvedTargetIds.size >= state.config.targetGoal
-      || (state.config.activeUntil !== undefined && this.isTriggerSatisfied(state.config.activeUntil))) {
-      this.resolveObjective(state);
+  private updateFocusedObjective(): void {
+    if (this.focusedObjectiveIndex === null) return;
+    const state = this.objectiveStates[this.focusedObjectiveIndex];
+    if (!state || state.state !== 'active') {
+      this.focusedObjectiveIndex = null;
+      return;
+    }
+    if (state.config.focusUntil !== undefined && this.isTriggerSatisfied(state.config.focusUntil)) {
+      // Fokusverlust ist kein Lebenszykluswechsel; stateChangedAtMs bleibt unverändert.
+      this.focusedObjectiveIndex = null;
     }
   }
 
-  private resolveObjective(state: SecondaryObjectiveRuntimeState): void {
+  private completeObjective(state: SecondaryObjectiveRuntimeState): void {
     if (state.state !== 'active') return;
-    state.state = 'resolved';
+    state.state = 'completed';
     state.stateChangedAtMs = this.elapsedMs;
-    this.presentationObjectiveIndex = this.objectiveStates.indexOf(state);
-    this.activeObjectiveIndex = null;
+    const index = this.objectiveStates.indexOf(state);
+    if (this.focusedObjectiveIndex === index) this.focusedObjectiveIndex = null;
   }
 
   private isTriggerSatisfied(trigger: CoopDefenseMapEncounterStart): boolean {

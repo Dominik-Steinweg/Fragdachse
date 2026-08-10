@@ -6,6 +6,7 @@ import { getCoopDefenseBases, type BaseSpec } from '../arena/BaseRegistry';
 import { BaseEntity, type BaseTurretRuntimeState } from './BaseEntity';
 import { mixColors } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
+import type { CoopDefenseSecondaryObjectiveState } from '../types';
 import {
   BaseDestructionRenderer,
   type BaseDestructionHooks,
@@ -49,6 +50,8 @@ export class BaseManager {
   private readonly byId = new Map<string, BaseEntity>();
   private readonly turretOwners = new Map<string, BaseEntity>();
   private onBaseDestroyed: ((spec: BaseSpec) => void) | null = null;
+  private onBaseActivated: ((spec: BaseSpec) => void) | null = null;
+  private getSecondaryObjectiveState: ((objectiveId: string) => CoopDefenseSecondaryObjectiveState | null) | null = null;
   private obstacleGeneration = 0;
   private lighting: LightingSystem | null = null;
   private readonly litBaseKeys = new Set<string>();
@@ -76,6 +79,37 @@ export class BaseManager {
   /** Registriert den Zerstörungs-Callback (vom ArenaLifecycleCoordinator). */
   setOnBaseDestroyed(callback: ((spec: BaseSpec) => void) | null): void {
     this.onBaseDestroyed = callback;
+  }
+
+  /** Registriert den gemeinsamen Folgereaktionspfad fuer die monotone Dormanz-Aktivierung. */
+  setOnBaseActivated(callback: ((spec: BaseSpec) => void) | null): void {
+    this.onBaseActivated = callback;
+  }
+
+  /**
+   * B2 liest den bereits replizierten B1-Objective-Zustand. Die Map-/Base-Identitaet bleibt lokal;
+   * ein zusaetzlicher Basis-Netzwerkpfad ist damit nicht noetig.
+   */
+  setSecondaryObjectiveStateProvider(
+    provider: ((objectiveId: string) => CoopDefenseSecondaryObjectiveState | null) | null,
+  ): void {
+    this.getSecondaryObjectiveState = provider;
+    this.syncDormantStates();
+  }
+
+  /** Activates each dormant base once the linked objective has left `dormant`. */
+  syncDormantStates(): void {
+    for (const entity of this.entities) {
+      const objectiveId = entity.spec.dormantObjectiveId;
+      if (!entity.isDormant() || !objectiveId) continue;
+      const objectiveState = this.getSecondaryObjectiveState?.(objectiveId) ?? null;
+      if (!objectiveState || objectiveState === 'dormant') continue;
+      if (!entity.activate()) continue;
+      for (const body of entity.getCellBodies()) this.group.add(body);
+      for (const turret of entity.getTurrets()) this.turretOwners.set(turret.id, entity);
+      this.obstacleGeneration += 1;
+      this.onBaseActivated?.(entity.spec);
+    }
   }
 
   setLightingSystem(lighting: LightingSystem | null): void {
@@ -139,7 +173,7 @@ export class BaseManager {
   getObstacleRectangles(): readonly Phaser.GameObjects.Rectangle[] {
     const result: Phaser.GameObjects.Rectangle[] = [];
     for (const entity of this.entities) {
-      if (entity.isDestroyed()) continue;
+      if (entity.isInert()) continue;
       for (const body of entity.getCellBodies()) result.push(body);
     }
     return result;
@@ -174,7 +208,7 @@ export class BaseManager {
   getActiveBaseIds(faction?: CoopBaseFaction): ReadonlySet<string> {
     const result = new Set<string>();
     for (const entity of this.entities) {
-      if (entity.isDestroyed()) continue;
+      if (entity.isInert()) continue;
       if (faction && entity.faction !== faction) continue;
       result.add(entity.id);
     }
@@ -184,7 +218,7 @@ export class BaseManager {
   getActiveMainBaseIds(faction?: CoopBaseFaction): ReadonlySet<string> {
     const result = new Set<string>();
     for (const entity of this.entities) {
-      if (entity.role !== 'main' || entity.isDestroyed()) continue;
+      if (entity.role !== 'main' || entity.isInert()) continue;
       if (faction && entity.faction !== faction) continue;
       result.add(entity.id);
     }
@@ -214,7 +248,7 @@ export class BaseManager {
    */
   getBaseIdAtWorldPoint(x: number, y: number): string | undefined {
     for (const entity of this.entities) {
-      if (entity.isDestroyed()) continue;
+      if (entity.isInert()) continue;
       for (const body of entity.getCellBodies()) {
         const bounds = body.getBounds();
         if (bounds.contains(x, y)) return entity.id;
@@ -248,7 +282,7 @@ export class BaseManager {
   heal(baseId: string, amount: number): void {
     if (amount <= 0) return;
     const base = this.byId.get(baseId);
-    if (!base || base.getHp() <= 0) return;
+    if (!base || base.isInert()) return;
     base.setHp(base.getHp() + amount);
   }
 
@@ -268,6 +302,7 @@ export class BaseManager {
   getNetSnapshot(): SyncedBaseState[] {
     const snapshot: SyncedBaseState[] = [];
     for (const entity of this.entities) {
+      if (entity.isInert()) continue;
       const turrets = entity.getSyncedTurretStates();
       if (entity.getHp() < entity.getMaxHp() || turrets.length > 0) {
         snapshot.push({

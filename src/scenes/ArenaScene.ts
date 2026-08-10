@@ -752,7 +752,8 @@ export class ArenaScene extends Phaser.Scene {
         // veröffentlichen, damit der Spawn nicht in deren Wirkungskreis fällt.
         enemyThreats: (() => {
           // Nur eigene Basen: der Zombie-Druck wird gegen die Basen gemessen, die sie angreifen.
-          const livingBases = this.ctx.baseManager?.getBasesByFaction('friendly').filter((base) => base.getHp() > 0) ?? [];
+          const livingBases = this.ctx.baseManager?.getBasesByFaction('friendly')
+            .filter((base) => !(base.isInert?.() ?? false) && base.getHp() > 0) ?? [];
           return (this.ctx.enemyManager?.getAllEnemies() ?? [])
           .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && combatSystem.isAlive(enemy.id))
           .map((enemy) => {

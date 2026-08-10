@@ -110,6 +110,9 @@ export class ClientUpdateCoordinator {
 
   runClientUpdate(delta: number): void {
     const startedAt = performance.now();
+    // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
+    // so a dormant structure can materialize even when no base HP delta arrived this frame.
+    this.ctx.baseManager?.syncDormantStates();
     const state = bridge.getLatestGameState();
     if (!state) {
       this.lastPerformance = {

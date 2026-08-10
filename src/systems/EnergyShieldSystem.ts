@@ -350,7 +350,7 @@ export class EnergyShieldSystem {
 
     // Die Kuppel heilt nur eigene Basen; eine Gegnerbasis darf sie nicht aufpaeppeln.
     for (const base of this.baseManager?.getBasesByFaction('friendly') ?? []) {
-      if (base.getHp() <= 0) continue;
+      if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(cx, cy);
       if (!surface || surface.distance > radius) continue;
       this.baseManager?.heal(base.id, amount);

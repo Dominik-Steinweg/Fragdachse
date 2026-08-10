@@ -156,12 +156,17 @@ export class HostUpdateCoordinator {
     const now = Date.now();
     let phaseStartedAt = performance.now();
 
-    this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);
     this.publishCoopDefenseEncounterPresentation();
     this.publishCoopDefenseSecondaryObjectivePresentation();
+    // The objective snapshot is now current; activate prebuilt mission structures before
+    // flow-field refresh and enemy movement in this same host frame.
+    this.ctx.baseManager?.syncDormantStates();
+    // Read active structure sources after the objective transition so pressure starts in the same
+    // host frame in which its linked dormant base becomes active.
+    this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
@@ -1108,16 +1113,7 @@ export class HostUpdateCoordinator {
 
   private publishCoopDefenseSecondaryObjectivePresentation(): void {
     const state = this.ctx.coopDefenseSecondaryObjectiveSystem?.getPresentationState() ?? null;
-    const signature = state
-      ? [
-        state.objectiveId,
-        state.type,
-        state.state,
-        state.progressCurrent,
-        state.progressTotal,
-        state.stateChangedAtMs,
-      ].join('|')
-      : null;
+    const signature = state ? JSON.stringify(state) : null;
     if (signature === this.lastSecondaryObjectivePresentationSignature) return;
     this.lastSecondaryObjectivePresentationSignature = signature;
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(state);
@@ -1396,7 +1392,7 @@ export class HostUpdateCoordinator {
     if ((cfg.baseDamageMult ?? 0) > 0 && this.ctx.baseManager) {
       // Zombie-Luftangriffe treffen nur eigene Basen.
       for (const base of this.ctx.baseManager.getBasesByFaction('friendly')) {
-        if (base.isDestroyed()) continue;
+        if (base.isInert?.() === true) continue;
         let minDist = Infinity;
         for (const cell of base.getCellBodies()) {
           const b  = cell.getBounds();
@@ -1633,7 +1629,7 @@ export class HostUpdateCoordinator {
     }
 
     const base = this.ctx.baseManager?.getBase(targetId) ?? this.findNearestBase(x, y);
-    if (!base || base.getHp() <= 0) return;
+    if (!base || base.isInert?.() === true || base.getHp() <= 0) return;
     if (base.faction === 'friendly') {
       const healed = this.healBase(base.id, effect.healPerHit);
       if (healed > 0) this.emitRegenerationEffect(x, y, effect.beamColor);
@@ -1730,7 +1726,7 @@ export class HostUpdateCoordinator {
     }
 
     for (const base of this.ctx.baseManager?.getBasesByFaction('hostile') ?? []) {
-      if (base.getHp() <= 0) continue;
+      if (base.isInert?.() === true || base.getHp() <= 0) continue;
       const footprint = this.getBaseFootprint(base);
       if (footprint) applyFromFootprint({ targetType: 'base', targetId: base.id }, footprint);
     }
@@ -1803,7 +1799,7 @@ export class HostUpdateCoordinator {
     for (const base of faction
       ? (this.ctx.baseManager?.getBasesByFaction(faction) ?? [])
       : (this.ctx.baseManager?.getBases() ?? [])) {
-      if (base.getHp() <= 0) continue;
+      if (base.isInert?.() === true || base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance >= bestDistance) continue;
       bestBase = base;
@@ -1815,7 +1811,7 @@ export class HostUpdateCoordinator {
   private healBase(baseId: string, amount: number): number {
     if (amount <= 0) return 0;
     const base = this.ctx.baseManager?.getBase(baseId);
-    if (!base || base.getHp() <= 0) return 0;
+    if (!base || base.isInert?.() === true || base.getHp() <= 0) return 0;
     const before = base.getHp();
     this.ctx.baseManager?.heal(baseId, amount);
     return base.getHp() - before;
@@ -2037,7 +2033,7 @@ export class HostUpdateCoordinator {
       }
 
       for (const base of this.ctx.baseManager?.getBasesByFaction('friendly') ?? []) {
-        if (base.role !== 'outpost' || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
+        if (base.role !== 'outpost' || base.isInert?.() === true || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
         const turret = base.getTurrets()[0];
         candidates.push({
           kind: 'armed-outpost',

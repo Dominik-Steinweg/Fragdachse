@@ -678,6 +678,17 @@ export class ArenaLifecycleCoordinator {
         },
       })
       : null;
+    const baseManager = this.ctx.baseManager;
+    const syncActiveBaseIds = (): void => {
+      const activeBaseIds = baseManager?.getActiveBaseIds() ?? new Set<string>();
+      this.ctx.enemyFlowFieldService?.setActiveBaseIds(activeBaseIds);
+      this.ctx.enemyPlayerFlowFieldService?.setActiveBaseIds(activeBaseIds);
+      this.ctx.enemyStrategicFlowFieldService?.setActiveBaseIds(activeBaseIds);
+      this.ctx.enemyBossFlowFieldService?.setActiveBaseIds(activeBaseIds);
+      for (const allyFlowField of this.ctx.allyFlowFieldServices.values()) {
+        allyFlowField.setActiveBaseIds(activeBaseIds);
+      }
+    };
     if (bridge.isHost()) {
       this.ctx.coopDefensePlayerModifierSystem = isCoopDefenseMode(bridge.getGameMode())
         ? new CoopDefensePlayerModifierSystem()
@@ -846,12 +857,12 @@ export class ArenaLifecycleCoordinator {
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
       // Goal-Cells werden nur noch aus den verbleibenden Basen aufgebaut, so dass
       // Gegner zur nächstgelegenen aktiven Basis laufen.
-      const baseManager = this.ctx.baseManager;
-      const flowFieldService = this.ctx.enemyFlowFieldService;
-      const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
-      const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
-      const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
       if (baseManager) {
+        baseManager.setOnBaseActivated((activatedBase) => {
+          this.ctx.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
+          this.ctx.powerUpSystem?.activatePedestalsLinkedToBase(activatedBase.id);
+          syncActiveBaseIds();
+        });
         baseManager.setOnBaseDestroyed((destroyedBase) => {
           this.ctx.targetStatusSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
           this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
@@ -866,19 +877,28 @@ export class ArenaLifecycleCoordinator {
             1,
             blast.durationMs,
           );
-          const activeBaseIds = baseManager.getActiveBaseIds();
-          flowFieldService?.setActiveBaseIds(activeBaseIds);
-          playerFlowFieldService?.setActiveBaseIds(activeBaseIds);
-          strategicFlowFieldService?.setActiveBaseIds(activeBaseIds);
-          bossFlowFieldService?.setActiveBaseIds(activeBaseIds);
-          // Die Wiederbelebten navigieren um Basen herum wie alle anderen Einheiten; ohne diese
-          // Aktualisierung blieben zerstoerte Basen fuer sie dauerhaft blockiert.
-          for (const allyFlowField of this.ctx.allyFlowFieldServices.values()) {
-            allyFlowField.setActiveBaseIds(activeBaseIds);
-          }
+          syncActiveBaseIds();
         });
+        // Flow fields are created from the complete prebuilt base list; remove dormant mission
+        // structures from their initial active-ID set before the first movement tick.
+        syncActiveBaseIds();
       }
     }
+    if (!bridge.isHost()) {
+      this.ctx.baseManager?.setOnBaseActivated(() => {
+        // Clients have no host flow fields, but their shared obstacle index still needs the
+        // newly materialized cell bodies for local LoS and presentation-side queries.
+        this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
+        syncActiveBaseIds();
+      });
+    }
+    // Both peers derive activation from B1's reliable presentation snapshot. The host additionally
+    // wires flow-field and pedestal follow-ups above; the BaseEntity materialization itself must
+    // also happen on clients that do not run host flow fields.
+    this.ctx.baseManager?.setSecondaryObjectiveStateProvider((objectiveId) => {
+      const state = bridge.getCoopDefenseSecondaryObjectivePresentationState();
+      return state?.find((entry) => entry.objectiveId === objectiveId)?.state ?? null;
+    });
     this.renderers.leafBlower.setTerrainColorSampler(
       createArenaTerrainColorSampler(this.scene, bridge.getGameMode(), this.ctx.arenaResult),
     );
@@ -1421,7 +1441,7 @@ export class ArenaLifecycleCoordinator {
       );
       this.ctx.turretSystem.setFocusedBaseTargetProvider((targetId, turretX, turretY) => {
         const base = this.ctx.baseManager?.getBase(targetId);
-        if (!base || base.faction !== 'hostile' || base.getHp() <= 0) return null;
+        if (!base || base.faction !== 'hostile' || (base.isInert?.() ?? false) || base.getHp() <= 0) return null;
         const surface = base.getNearestSurfacePoint(turretX, turretY);
         return surface ? { id: base.id, x: surface.x, y: surface.y } : null;
       });
@@ -1868,6 +1888,7 @@ export class ArenaLifecycleCoordinator {
         getAdrenalineSyringeDurationMultiplier: (playerId) => (
           1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
         ),
+        isLinkedBaseActive: (baseId) => this.ctx.baseManager?.getActiveBaseIds().has(baseId) ?? false,
       });
       this.ctx.powerUpSystem.setConstructionRespawnMultiplierProvider((constructionId) => {
         const rock = this.ctx.placementSystem?.getRuntimeRock(constructionId);
@@ -2085,7 +2106,7 @@ export class ArenaLifecycleCoordinator {
       // durch Spielerbeschuss.
       this.ctx.projectileManager.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
         const base = this.ctx.baseManager?.getBase(baseId);
-        if (!base || base.faction !== 'hostile' || base.getHp() <= 0) return;
+        if (!base || base.faction !== 'hostile' || (base.isInert?.() ?? false) || base.getHp() <= 0) return;
         if (projectile) this.ctx.combatSystem.applyProjectileBaseDamage(baseId, projectile);
         else this.ctx.combatSystem.applyBaseDamage(baseId, damage, attackerId);
       });
@@ -2976,7 +2997,7 @@ export class ArenaLifecycleCoordinator {
     }
     if (target.targetType === 'base') {
       const base = this.ctx.baseManager?.getBase(target.targetId);
-      if (!base || base.isDestroyed()) return null;
+      if (!base || (base.isInert?.() ?? false)) return null;
       const parts = base.getCellBodies().map((body) => {
         const bounds = body.getBounds();
         return {
