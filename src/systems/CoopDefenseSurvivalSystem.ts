@@ -56,10 +56,10 @@ export class CoopDefenseSurvivalSystem {
     return this.players.get(playerId)?.eliminated === true;
   }
 
-  /** Initialspawn/Join-Reentry: setzt nur den Lebensstatus, niemals das Respawn-Budget. */
+  /** Initialspawn oder Reconnect eines noch lebenden Spielers; verbraucht kein Budget. */
   registerInitialSpawn(playerId: string): boolean {
     const state = this.players.get(playerId);
-    if (!state || state.eliminated) return false;
+    if (!state || state.eliminated || !state.alive) return false;
     state.alive = true;
     return true;
   }

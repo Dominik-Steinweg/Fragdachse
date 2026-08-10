@@ -101,6 +101,8 @@ interface WildfirePanicState extends WildfireSourceInfo {
 export interface EnemySpawnOptions {
   /** Spawn visual is represented by the burrow effect instead of the normal materialization burst. */
   readonly spawnBurrowed?: boolean;
+  /** Host-only generic provenance, e.g. the owning encounter id. */
+  readonly originId?: string;
 }
 
 export class EnemyManager {
@@ -173,11 +175,16 @@ export class EnemyManager {
     else sink.clearBurrowState(enemyId);
   }
 
-  hostSpawnDummyAt(gridX: number, gridY: number, kind: CoopDefenseEnemyKind = 'zombie-badger'): EnemyEntity {
+  hostSpawnDummyAt(
+    gridX: number,
+    gridY: number,
+    kind: CoopDefenseEnemyKind = 'zombie-badger',
+    options: EnemySpawnOptions = {},
+  ): EnemyEntity {
     const world = this.gridToWorld(gridX, gridY);
     const x = world.x + Phaser.Math.RND.realInRange(-SPAWN_LANE_JITTER_PX, SPAWN_LANE_JITTER_PX);
     const y = world.y + Phaser.Math.RND.realInRange(-SPAWN_LANE_JITTER_PX, SPAWN_LANE_JITTER_PX);
-    return this.hostSpawnAtWorld(x, y, kind);
+    return this.hostSpawnAtWorld(x, y, kind, options);
   }
 
   hostSpawnAtWorld(
@@ -213,7 +220,19 @@ export class EnemyManager {
     options: EnemySpawnOptions = {},
   ): EnemyEntity {
     const id = this.generateEnemyId(kind);
-    const enemy = new EnemyEntity(this.scene, id, x, y, true, kind, this.resolvedConfigs[kind], faction, ownerId, ownerColor);
+    const enemy = new EnemyEntity(
+      this.scene,
+      id,
+      x,
+      y,
+      true,
+      kind,
+      this.resolvedConfigs[kind],
+      faction,
+      ownerId,
+      ownerColor,
+      options.originId,
+    );
     enemy.setLightingSystem(this.lighting);
     this.enemies.set(id, enemy);
     this.playSpawnEffect(enemy, options);
@@ -750,6 +769,16 @@ export class EnemyManager {
     return [...this.enemies.values()].filter((enemy) => enemy.faction === 'allied' && (ownerId === undefined || enemy.ownerId === ownerId));
   }
 
+  hasActiveEnemyOrigin(originId: string): boolean {
+    return this.getActiveEnemyIdsForOrigin(originId).length > 0;
+  }
+
+  getActiveEnemyIdsForOrigin(originId: string): string[] {
+    return [...this.enemies.values()]
+      .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && enemy.originId === originId)
+      .map((enemy) => enemy.id);
+  }
+
   hasEnemy(id: string): boolean {
     return this.enemies.has(id);
   }
@@ -822,6 +851,7 @@ export class EnemyManager {
           deathX + Math.cos(angle) * spawnConfig.offsetPx,
           deathY + Math.sin(angle) * spawnConfig.offsetPx,
           spawnConfig.enemyKind,
+          { originId: enemy.originId },
         );
       }
     }

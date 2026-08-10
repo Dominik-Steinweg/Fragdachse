@@ -47,6 +47,8 @@ export class EnemyEntity {
   readonly faction: EnemyFaction;
   readonly ownerId?: string;
   readonly ownerColor?: number;
+  /** Host-only provenance used to keep encounter follow-up spawns in the same clear scope. */
+  readonly originId?: string;
 
   private readonly authoritative: boolean;
   private readonly config: ResolvedCoopDefenseEnemyConfig;
@@ -96,12 +98,14 @@ export class EnemyEntity {
     faction: EnemyFaction = 'hostile',
     ownerId?: string,
     ownerColor?: number,
+    originId?: string,
   ) {
     this.id = id;
     this.kind = kind;
     this.faction = faction;
     this.ownerId = ownerId;
     this.ownerColor = ownerColor;
+    this.originId = originId;
     this.authoritative = authoritative;
     this.config = config;
     this.attackWeapons = authoritative ? this.createWeapons() : [];

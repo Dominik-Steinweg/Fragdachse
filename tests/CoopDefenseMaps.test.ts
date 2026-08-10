@@ -114,6 +114,25 @@ describe('Coop defense map progression', () => {
     expect(map.bases.some((base) => base.role === 'spawn-point')).toBe(false);
   });
 
+  it('migrates Map 11 and Map 15 to finite encounter content with semantic triggers', () => {
+    const bomberMap = getCoopDefenseMapConfig('11');
+    expect(bomberMap.objective).toBe('repel-assault');
+    expect(bomberMap.waves).toEqual([]);
+    expect(bomberMap.encounters?.map((encounter) => encounter.start.type)).toEqual([
+      'time',
+      'opening-airstrike-complete',
+      'after-previous',
+      'after-previous',
+    ]);
+
+    const voidHunterMap = getCoopDefenseMapConfig('15');
+    expect(voidHunterMap.objective).toBe('defeat-boss');
+    expect(voidHunterMap.waves).toEqual([]);
+    expect(voidHunterMap.encounters?.some((encounter) => (
+      encounter.start.type === 'boss-phase' && encounter.start.phase === 2
+    ))).toBe(true);
+  });
+
   it('uses Map 0 as the only explicitly budgeted A4 survival reference and keeps legacy maps unlimited', () => {
     expect(getCoopDefenseMapConfig('0').objective).toBe('survive');
     expect(getCoopDefenseMapConfig('0').surviveRespawnsPerPlayer).toBe(2);

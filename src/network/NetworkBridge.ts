@@ -1397,10 +1397,11 @@ export class NetworkBridge {
       && canRoundPlayerSpawnOrRespawn(this.getRoundParticipation(), playerId);
   }
 
-  /** Initialspawn/Reentry: Survival-Eliminierte bleiben Teilnehmer, werden aber nicht neu aktiviert. */
+  /** Initialspawn/Reconnect eines noch lebenden Survival-Spielers; tote Spieler nutzen den Respawnpfad. */
   canPlayerInitialSpawn(playerId: string): boolean {
     if (!this.canPlayerSpawnOrRespawn(playerId)) return false;
-    return this.getCoopDefenseSurvivalState()?.players[playerId]?.eliminated !== true;
+    const state = this.getCoopDefenseSurvivalState()?.players[playerId];
+    return state === undefined || (!state.eliminated && state.alive);
   }
 
   /** Echter Post-Death-Respawn; der Initialspawn benutzt separat canPlayerInitialSpawn(). */

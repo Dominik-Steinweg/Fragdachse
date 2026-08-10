@@ -17,7 +17,6 @@ describe('CoopDefenseWaveSpawner spawn-point sources', () => {
         intervalMs: 1_000,
         countPerWave: 2,
         startAtMs: 0,
-        startsAfterAirstrikeBarrage: false,
       },
     } as unknown as BaseSpec;
     const activeBaseIds = new Set([source.id]);

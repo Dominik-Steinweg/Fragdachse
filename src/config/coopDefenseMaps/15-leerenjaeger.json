@@ -206,30 +206,67 @@
       "spawnOnArenaStart": true
     }
   ],
-  "waves": [
+  "waves": [],
+  "encounters": [
     {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 2000,
-      "countPerWave": 1,
-      "startAtMs": 5000
+      "id": "void-hunter-opening-support",
+      "start": {
+        "type": "time",
+        "atMs": 5000
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 12
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 6,
+          "delayMs": 900
+        }
+      ]
     },
     {
-      "enemyKind": "demon-badger",
-      "intervalMs": 5000,
-      "countPerWave": 1,
-      "startAtMs": 5000
+      "id": "void-hunter-phase-two-reinforcements",
+      "start": {
+        "type": "boss-phase",
+        "phase": 2
+      },
+      "restAfterMs": 1000,
+      "groups": [
+        {
+          "enemyKind": "alien-badger",
+          "count": 2
+        },
+        {
+          "enemyKind": "thrower-badger",
+          "count": 2,
+          "delayMs": 800
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 2,
+          "delayMs": 1600
+        }
+      ]
     },
     {
-      "enemyKind": "alien-badger",
-      "intervalMs": 15000,
-      "countPerWave": 1,
-      "startAtMs": 15000
-    },
-    {
-      "enemyKind": "thrower-badger",
-      "intervalMs": 20000,
-      "countPerWave": 1,
-      "startAtMs": 20000
+      "id": "void-hunter-final-support",
+      "start": {
+        "type": "time",
+        "atMs": 20000
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 4,
+          "delayMs": 700
+        }
+      ]
     }
   ],
   "boss": {

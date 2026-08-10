@@ -78,6 +78,7 @@ export function computeVoidHunterNukeTarget(
  */
 export class CoopDefenseVoidHunterSystem {
   private readonly states = new Map<string, VoidHunterState>();
+  private readonly reachedPhases = new Set<number>();
 
   constructor(
     private readonly enemyManager: EnemyManager,
@@ -170,12 +171,18 @@ export class CoopDefenseVoidHunterSystem {
     return Boolean(state && (state.gauss !== null || state.phaseTransitionEndsAt > 0));
   }
 
+  /** Persistent host-side state query for map encounter triggers. */
+  hasReachedPhase(phase: number): boolean {
+    return this.reachedPhases.has(phase);
+  }
+
   clear(): void {
     for (const enemyId of this.states.keys()) {
       this.armageddonSystem.cancel(enemyId);
       this.enemyManager.getEnemy(enemyId)?.setSpecialAction('none');
     }
     this.states.clear();
+    this.reachedPhases.clear();
   }
 
   private createState(
@@ -205,6 +212,7 @@ export class CoopDefenseVoidHunterSystem {
     now: number,
   ): void {
     state.phaseTwo = true;
+    this.reachedPhases.add(2);
     enemy.setMoveSpeedMultiplier(config.phaseTwoSpeedMultiplier);
 
     const positions = this.playerManager.getAllPlayers()

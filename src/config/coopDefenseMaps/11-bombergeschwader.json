@@ -12,6 +12,7 @@
   "rockFillRatio": 0.4,
   "tutorialRockArmorDropMult": 0.02,
   "roundDurationSec": 90,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -150,39 +151,94 @@
       "spawnOnArenaStart": false
     }
   ],
-  "waves": [
+  "waves": [],
+  "encounters": [
     {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 9000,
-      "countPerWave": 1,
-      "startAtMs": 0
+      "id": "opening-assault",
+      "start": {
+        "type": "time",
+        "atMs": 0
+      },
+      "restAfterMs": 4000,
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 6
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 3,
+          "delayMs": 1200
+        }
+      ]
     },
     {
-      "enemyKind": "demon-badger",
-      "intervalMs": 9000,
-      "countPerWave": 1,
-      "startAtMs": 4000
+      "id": "post-barrage-assault",
+      "start": {
+        "type": "opening-airstrike-complete"
+      },
+      "restAfterMs": 4500,
+      "groups": [
+        {
+          "enemyKind": "spore-warden",
+          "count": 4
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 3,
+          "delayMs": 900
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "delayMs": 1800
+        }
+      ]
     },
     {
-      "enemyKind": "spore-warden",
-      "intervalMs": 12000,
-      "countPerWave": 1,
-      "startAtMs": 0,
-      "startsAfterAirstrikeBarrage": true
+      "id": "bomber-pressure",
+      "start": {
+        "type": "after-previous"
+      },
+      "restAfterMs": 4500,
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 5
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 3,
+          "delayMs": 700
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 2,
+          "delayMs": 1600
+        }
+      ]
     },
     {
-      "enemyKind": "void-stalker",
-      "intervalMs": 12000,
-      "countPerWave": 1,
-      "startAtMs": 5000,
-      "startsAfterAirstrikeBarrage": true
-    },
-    {
-      "enemyKind": "stink-broodmother",
-      "intervalMs": 20000,
-      "countPerWave": 1,
-      "startAtMs": 10000,
-      "startsAfterAirstrikeBarrage": true
+      "id": "final-bombing-run",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "spore-warden",
+          "count": 5
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 3,
+          "delayMs": 800
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 2,
+          "delayMs": 1700
+        }
+      ]
     }
   ],
   "itemDrop": {

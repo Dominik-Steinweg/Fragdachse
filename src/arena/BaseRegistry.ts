@@ -231,7 +231,6 @@ function resolveBaseSpec(config: CoopBaseConfig, humanPlayerCount: number): Base
         intervalMs: resolvedSpawnWave.intervalMs,
         countPerWave: resolvedSpawnWave.countPerWave,
         startAtMs: Math.max(0, Math.floor(config.spawnWave.startAtMs ?? 0)),
-        startsAfterAirstrikeBarrage: config.spawnWave.startsAfterAirstrikeBarrage ?? false,
       }
       : undefined,
   };

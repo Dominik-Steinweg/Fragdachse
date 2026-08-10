@@ -134,6 +134,8 @@ describe('Leerenjäger', () => {
     fixture.enemy.hp = fixture.enemy.maxHp * bossConfig.phaseTwoHpRatio;
     fixture.system.hostUpdate(100);
 
+    expect(fixture.system.hasReachedPhase(1)).toBe(false);
+    expect(fixture.system.hasReachedPhase(2)).toBe(true);
     expect(fixture.enemy.setMoveSpeedMultiplier).toHaveBeenCalledTimes(1);
     expect(fixture.enemy.setMoveSpeedMultiplier).toHaveBeenCalledWith(
       bossConfig.phaseTwoSpeedMultiplier,

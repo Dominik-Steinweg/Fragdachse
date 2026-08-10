@@ -25,6 +25,10 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
   Legacy-`waves`, Spawnpunkt-Wellen und Boss-Spawns bleiben getrennt. Der Director meldet den
   Assault-Fortschritt nur an den `CoopDefenseRoundStateSystem`, der als einzige Instanz Sieg oder
   Niederlage abschließt.
+- Encounter-Starts sind eine kleine discriminated union (`time`, `after-previous`,
+  `opening-airstrike-complete`, `boss-phase`, `base-destroyed`). Fachsysteme liefern dafür
+  persistente State-Abfragen über die Arena-Verdrahtung; der Director importiert weder Airstrike-,
+  Boss- noch Basislogik und startet ein erfülltes Gate höchstens einmal.
 - `CoopDefenseSurvivalSystem` ist ein separates host-only Round-System für bewusst konfigurierte
   `survive`-Maps. Es hält pro Round-Participant Budget, Lebensstatus und Eliminierung, während
   `CoopDefenseRoundStateSystem` nur den Team-Wipe als booleschen Regelinput abfragt. Der Zustand

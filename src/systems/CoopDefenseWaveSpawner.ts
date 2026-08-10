@@ -31,8 +31,6 @@ export class CoopDefenseWaveSpawner {
   private exhaustionWarned = false;
   private elapsedMs = 0;
   private bossSpawned = false;
-  /** Zeitpunkt (elapsedMs), zu dem das Luftangriffs-Eröffnungsbombardement fertig war; null solange offen/nicht zutreffend. */
-  private airstrikeBarrageGateOpenedAtMs: number | null = null;
 
   constructor(
     private readonly enemyManager: EnemyManager,
@@ -42,7 +40,6 @@ export class CoopDefenseWaveSpawner {
     private readonly getActiveBaseIds: () => ReadonlySet<string> = () => new Set<string>(),
     private readonly bossConfig?: CoopDefenseMapBossConfig,
     private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
-    private readonly isAirstrikeBarrageComplete?: () => boolean,
   ) {
     this.accumulators = waveConfigs.map(() => 0);
     this.startedWaves = waveConfigs.map(() => false);
@@ -56,18 +53,14 @@ export class CoopDefenseWaveSpawner {
     const previousElapsedMs = this.elapsedMs;
     this.elapsedMs += deltaMs;
 
-    if (this.airstrikeBarrageGateOpenedAtMs === null && (this.isAirstrikeBarrageComplete?.() ?? false)) {
-      this.airstrikeBarrageGateOpenedAtMs = this.elapsedMs;
-    }
-
     if (this.bossConfig && !this.bossSpawned && this.elapsedMs >= this.bossConfig.spawnAtMs) {
       this.bossSpawned = this.spawnOne(this.bossConfig.enemyKind);
     }
 
     for (const [index, waveConfig] of this.waveConfigs.entries()) {
       const { intervalMs } = waveConfig;
-      const effectiveStartAtMs = this.getEffectiveStartAtMs(waveConfig);
-      if (effectiveStartAtMs === null || this.elapsedMs < effectiveStartAtMs) continue;
+      const effectiveStartAtMs = waveConfig.startAtMs;
+      if (this.elapsedMs < effectiveStartAtMs) continue;
 
       if (!this.startedWaves[index]) {
         this.startedWaves[index] = true;
@@ -90,8 +83,8 @@ export class CoopDefenseWaveSpawner {
       if (!activeBaseIds.has(source.id)) continue;
       const waveConfig = source.spawnWave;
       if (!waveConfig) continue;
-      const effectiveStartAtMs = this.getEffectiveStartAtMs(waveConfig);
-      if (effectiveStartAtMs === null || this.elapsedMs < effectiveStartAtMs) continue;
+      const effectiveStartAtMs = waveConfig.startAtMs;
+      if (this.elapsedMs < effectiveStartAtMs) continue;
 
       if (!this.startedSpawnPointWaves[index]) {
         this.startedSpawnPointWaves[index] = true;
@@ -123,7 +116,6 @@ export class CoopDefenseWaveSpawner {
     this.exhaustionWarned = false;
     this.elapsedMs = 0;
     this.bossSpawned = false;
-    this.airstrikeBarrageGateOpenedAtMs = null;
   }
 
   isBossDefeated(): boolean {
@@ -136,11 +128,11 @@ export class CoopDefenseWaveSpawner {
    * Einmaliger Ausführungspfad für den MapDirector. Die Auswahl der normalen linken Spawnregion,
    * Flow-Field-Erreichbarkeit, Abstände und Sonderfälle bleiben bewusst hier gebündelt.
    */
-  hostSpawnEncounterGroup(kind: CoopDefenseEnemyKind, count: number): readonly string[] {
-    return this.runWave(kind, count);
+  hostSpawnEncounterGroup(kind: CoopDefenseEnemyKind, count: number, originId?: string): readonly string[] {
+    return this.runWave(kind, count, originId ? { originId } : undefined);
   }
 
-  private runWave(kind: CoopDefenseEnemyKind, count: number): string[] {
+  private runWave(kind: CoopDefenseEnemyKind, count: number, spawnOptions?: EnemySpawnOptions): string[] {
     const spawnedEnemyIds: string[] = [];
     if (count <= 0) return spawnedEnemyIds;
     const candidatesAll = this.collectCandidates(kind);
@@ -162,7 +154,7 @@ export class CoopDefenseWaveSpawner {
       }
 
       const pick = Phaser.Math.RND.pick(candidates) as { gridX: number; gridY: number };
-      const enemy = this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind);
+      const enemy = this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind, spawnOptions);
       spawnedEnemyIds.push(enemy.id);
       this.pushRecent(this.key(pick.gridX, pick.gridY));
 
@@ -307,17 +299,6 @@ export class CoopDefenseWaveSpawner {
     if (this.exhaustionWarned) return;
     this.exhaustionWarned = true;
     console.warn('[CoopDefenseWaveSpawner] Keine freien Spawn-Zellen mehr im linken Arena-Bereich.');
-  }
-
-  /**
-   * Effektiver Startzeitpunkt einer Welle: normal `startAtMs`, außer die Welle wartet auf das
-   * Ende des Luftangriffs-Eröffnungsbombardements – dann frühestens `startAtMs`, aber nicht bevor
-   * das Bombardement abgeschlossen ist (null = Gate noch geschlossen, Welle startet noch nicht).
-   */
-  private getEffectiveStartAtMs(waveConfig: ResolvedCoopDefenseMapWaveConfig): number | null {
-    if (!waveConfig.startsAfterAirstrikeBarrage) return waveConfig.startAtMs;
-    if (this.airstrikeBarrageGateOpenedAtMs === null) return null;
-    return Math.max(waveConfig.startAtMs, this.airstrikeBarrageGateOpenedAtMs);
   }
 
   private getActiveDeltaMs(previousElapsedMs: number, nextElapsedMs: number, startAtMs: number): number {

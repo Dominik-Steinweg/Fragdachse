@@ -27,7 +27,10 @@
   "encounters": [
     {
       "id": "a2-opening-encounter",
-      "startAtMs": 1500,
+      "start": {
+        "type": "time",
+        "atMs": 1500
+      },
       "groups": [
         {
           "enemyKind": "zombie-badger",

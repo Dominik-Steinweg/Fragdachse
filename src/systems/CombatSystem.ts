@@ -558,6 +558,29 @@ export class CombatSystem {
     this.lastDamageOrigin.delete(id);
   }
 
+  /** Host-only reconnect after a registered death; consumes through the normal respawn callback. */
+  spawnPlayerAfterReconnect(id: string): boolean {
+    if (!this.playerManager.getPlayer(id)) return false;
+    if (this.respawnAllowedResolver && !this.respawnAllowedResolver(id)) return false;
+    if (this.onRespawnCb && this.onRespawnCb(id) === false) return false;
+
+    this.hp.set(id, this.getMaxHp(id));
+    this.armor.set(id, 0);
+    this.alive.set(id, true);
+    this.clearBurnForPlayer(id);
+    this.lastAttacker.delete(id);
+    this.lastWeapon.delete(id);
+    this.lastKillSource.delete(id);
+    this.lastDamageOrigin.delete(id);
+    this.resourceSystem?.resetAdrenalineForSpawn(id);
+
+    const player = this.playerManager.getPlayer(id)!;
+    player.body.enable = true;
+    const spawn = this.playerManager.getSpawnPoint(id);
+    player.setPosition(ARENA_OFFSET_X + spawn.x, ARENA_OFFSET_Y + spawn.y);
+    return true;
+  }
+
   removePlayer(id: string): void {
     this.clearBurnForPlayer(id);
     this.clearBurnByAttacker(id);

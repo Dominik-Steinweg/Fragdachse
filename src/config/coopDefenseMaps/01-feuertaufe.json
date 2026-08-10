@@ -29,6 +29,10 @@
   "encounters": [
     {
       "id": "opening-assault",
+      "start": {
+        "type": "time",
+        "atMs": 0
+      },
       "restAfterMs": 5000,
       "groups": [
         {
@@ -39,6 +43,9 @@
     },
     {
       "id": "second-assault",
+      "start": {
+        "type": "after-previous"
+      },
       "restAfterMs": 5000,
       "groups": [
         {
@@ -49,6 +56,9 @@
     },
     {
       "id": "final-assault",
+      "start": {
+        "type": "after-previous"
+      },
       "groups": [
         {
           "enemyKind": "zombie-badger",

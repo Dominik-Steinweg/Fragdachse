@@ -30,21 +30,21 @@ describe('Map 15 - Leerenjäger', () => {
       'friendly-outpost-rocket',
       'friendly-outpost-flame',
     ]);
-    expect(map.waves.map((wave) => wave.enemyKind)).toEqual([
-      'zombie-badger',
-      'demon-badger',
-      'alien-badger',
-      'thrower-badger',
+    expect(map.waves).toEqual([]);
+    expect(map.encounters).toHaveLength(3);
+    expect(map.encounters?.map((encounter) => encounter.start.type)).toEqual([
+      'time',
+      'boss-phase',
+      'time',
     ]);
+    expect(map.encounters?.[1].start).toEqual({ type: 'boss-phase', phase: 2 });
 
     const roundDurationMs = map.roundDurationSec * 1000;
     expect(map.boss!.spawnAtMs).toBeGreaterThanOrEqual(0);
     expect(map.boss!.spawnAtMs).toBeLessThan(roundDurationMs);
-    for (const wave of map.waves) {
-      expect(wave.countPerWave).toBeGreaterThan(0);
-      expect(wave.intervalMs).toBeGreaterThan(0);
-      expect(wave.startAtMs).toBeGreaterThanOrEqual(0);
-      expect(wave.startAtMs).toBeLessThan(roundDurationMs);
+    for (const encounter of map.encounters ?? []) {
+      expect(encounter.groups.length).toBeGreaterThan(0);
+      for (const group of encounter.groups) expect(group.count).toBeGreaterThan(0);
     }
   });
 

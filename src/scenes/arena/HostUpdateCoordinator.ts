@@ -1220,6 +1220,7 @@ export class HostUpdateCoordinator {
     const enemyManager = this.ctx.enemyManager;
     if (!enemyManager || !hasCoopDefenseEnemyKind(effect.enemyKind)) return;
     const capturedByPlayer = this.ctx.playerManager.getPlayer(ownerId) !== undefined;
+    const originId = capturedByPlayer ? undefined : enemyManager.getEnemy(ownerId)?.originId;
 
     const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
     for (let index = 0; index < effect.count; index += 1) {
@@ -1231,7 +1232,14 @@ export class HostUpdateCoordinator {
       const captured = capturedByPlayer
         ? this.ctx.necromancySystem?.captureAlly(ownerId, spawnX, spawnY, effect.enemyKind) ?? null
         : null;
-      if (!captured) enemyManager.hostSpawnAtWorld(spawnX, spawnY, effect.enemyKind);
+      if (!captured) {
+        enemyManager.hostSpawnAtWorld(
+          spawnX,
+          spawnY,
+          effect.enemyKind,
+          originId ? { originId } : undefined,
+        );
+      }
     }
     bridge.broadcastExplosionEffect(x, y, effect.offsetPx * 2, effect.color, 'brood_hatch');
   }

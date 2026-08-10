@@ -115,8 +115,6 @@ export interface CoopDefenseMapWaveConfig {
   readonly intervalMs: number;
   readonly countPerWave: number;
   readonly startAtMs?: number;
-  /** True: Welle startet erst, wenn das Eröffnungsbombardement (enemyAirstrikes) den Felsbereich geräumt hat. */
-  readonly startsAfterAirstrikeBarrage?: boolean;
 }
 
 export interface ResolvedCoopDefenseMapWaveConfig {
@@ -124,7 +122,6 @@ export interface ResolvedCoopDefenseMapWaveConfig {
   readonly intervalMs: number;
   readonly countPerWave: number;
   readonly startAtMs: number;
-  readonly startsAfterAirstrikeBarrage: boolean;
 }
 
 /** Eine endliche Gegnergruppe innerhalb eines Encounters. */
@@ -135,10 +132,18 @@ export interface CoopDefenseMapEncounterGroupConfig {
   readonly delayMs?: number;
 }
 
-/** A2-Encounter mit Zeitstart; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
+/** Kleine, bewusst typisierte Startbedingungen fuer einen endlichen Encounter. */
+export type CoopDefenseMapEncounterStart =
+  | { readonly type: 'time'; readonly atMs: number }
+  | { readonly type: 'after-previous' }
+  | { readonly type: 'opening-airstrike-complete' }
+  | { readonly type: 'boss-phase'; readonly phase: number }
+  | { readonly type: 'base-destroyed'; readonly baseId: string };
+
+/** Endlicher Encounter; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
 export interface CoopDefenseMapEncounterConfig {
   readonly id: string;
-  readonly startAtMs?: number;
+  readonly start: CoopDefenseMapEncounterStart;
   /** Authored pause after this encounter is cleared; ignored after the final encounter. */
   readonly restAfterMs?: number;
   readonly groups: readonly CoopDefenseMapEncounterGroupConfig[];
@@ -152,7 +157,7 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
 
 export interface ResolvedCoopDefenseMapEncounterConfig {
   readonly id: string;
-  readonly startAtMs: number;
+  readonly start: CoopDefenseMapEncounterStart;
   readonly restAfterMs: number;
   readonly groups: readonly ResolvedCoopDefenseMapEncounterGroupConfig[];
 }
@@ -322,8 +327,9 @@ export interface CoopDefenseMapConfig {
   readonly roundDurationSec: number;
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
-  readonly waves: readonly CoopDefenseMapWaveConfig[];
-  /** Optionale A2-Encounter; Legacy-`waves` bleiben davon unabhängig. */
+  /** Legacy map-level waves; encounter maps may omit this and normalize it to `[]`. */
+  readonly waves?: readonly CoopDefenseMapWaveConfig[];
+  /** Optionale endliche Encounter; Legacy-`waves` und Encounter sind gegenseitig exklusiv. */
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
   /** Standard `survive` for legacy maps; migrated maps may explicitly use `repel-assault`. */
@@ -366,14 +372,13 @@ export function resolveCoopDefenseMapWaveConfigs(
   mapConfig: CoopDefenseMapConfig,
   humanPlayerCount: number,
 ): readonly ResolvedCoopDefenseMapWaveConfig[] {
-  return mapConfig.waves.map((waveConfig) => {
+  return (mapConfig.waves ?? []).map((waveConfig) => {
     const resolvedWaveConfig = resolveCoopDefenseEnemyWaveConfig(waveConfig.enemyKind, waveConfig, humanPlayerCount);
     return {
       enemyKind: waveConfig.enemyKind,
       intervalMs: resolvedWaveConfig.intervalMs,
       countPerWave: resolvedWaveConfig.countPerWave,
       startAtMs: Math.max(0, Math.floor(waveConfig.startAtMs ?? 0)),
-      startsAfterAirstrikeBarrage: waveConfig.startsAfterAirstrikeBarrage ?? false,
     };
   });
 }
@@ -385,7 +390,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
 ): readonly ResolvedCoopDefenseMapEncounterConfig[] {
   return (mapConfig.encounters ?? []).map((encounter) => ({
     id: encounter.id,
-    startAtMs: Math.max(0, Math.floor(encounter.startAtMs ?? 0)),
+    start: encounter.start,
     restAfterMs: Math.max(0, Math.floor(encounter.restAfterMs ?? 0)),
     groups: encounter.groups.map((group) => {
       const resolvedGroup = resolveCoopDefenseEnemyWaveConfig(
@@ -449,7 +454,6 @@ function resolveWaveConfigForXp(
     intervalMs: resolved.intervalMs,
     countPerWave: resolved.countPerWave,
     startAtMs: waveConfig.startAtMs ?? 0,
-    startsAfterAirstrikeBarrage: waveConfig.startsAfterAirstrikeBarrage ?? false,
   };
 }
 
@@ -491,6 +495,15 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     return normalizeBaseConfig(baseConfig);
   });
   const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, mapConfig.boss);
+  validateMapSpawnModel(mapConfig.mapId, objective, mapConfig.encounters, mapConfig.waves);
+  const waves = Array.isArray(mapConfig.waves) ? mapConfig.waves : [];
+  const enemyAirstrikes = normalizeAirstrikeConfig(mapConfig.enemyAirstrikes);
+  const boss = normalizeBossConfig(mapConfig);
+  const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
+    bases,
+    airstrikes: enemyAirstrikes,
+    boss,
+  });
 
   return {
     mapId: mapConfig.mapId,
@@ -506,7 +519,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
       : undefined,
     tutorialPersistent: mapConfig.tutorialPersistent === true,
     tutorialShowControls: mapConfig.tutorialShowControls === true,
-    enemyAirstrikes: normalizeAirstrikeConfig(mapConfig.enemyAirstrikes),
+    enemyAirstrikes,
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     trackMode: mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails',
@@ -516,9 +529,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     roundDurationSec: Math.max(1, Math.floor(mapConfig.roundDurationSec)),
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
-    waves: mapConfig.waves.map(normalizeWaveConfig),
-    encounters: normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters),
-    boss: normalizeBossConfig(mapConfig),
+    waves: waves.map(normalizeWaveConfig),
+    encounters,
+    boss,
     objective,
     surviveRespawnsPerPlayer: normalizeSurviveRespawnsPerPlayer(
       mapConfig.mapId,
@@ -527,6 +540,26 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     ),
     itemDrop: normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop),
   };
+}
+
+function validateMapSpawnModel(
+  mapId: string,
+  objective: CoopDefenseMapObjective,
+  encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
+  waves: readonly CoopDefenseMapWaveConfig[] | undefined,
+): void {
+  if (Array.isArray(encounters) && encounters.length > 0 && Array.isArray(waves) && waves.length > 0) {
+    throw new Error(
+      `[coopDefenseMaps] Map ${mapId} must not declare both waves and encounters; use one spawn model`,
+    );
+  }
+  if (objective !== 'repel-assault') return;
+  if (!Array.isArray(encounters) || encounters.length === 0) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} with repel-assault needs at least one encounter`);
+  }
+  if (Array.isArray(waves) && waves.length > 0) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} with repel-assault must not declare legacy waves`);
+  }
 }
 
 function normalizeSurviveRespawnsPerPlayer(
@@ -574,11 +607,12 @@ function normalizeObjective(
 function normalizeEncounterConfigs(
   mapId: string,
   encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
+  context: EncounterTriggerNormalizationContext,
 ): readonly CoopDefenseMapEncounterConfig[] | undefined {
   if (encounters === undefined) return undefined;
 
   const uniqueEncounterIds = new Set<string>();
-  return encounters.map((encounter) => {
+  return encounters.map((encounter, encounterIndex) => {
     if (typeof encounter.id !== 'string' || encounter.id.trim().length === 0) {
       throw new Error(`[coopDefenseMaps] Encounter on map ${mapId} needs a non-empty id`);
     }
@@ -593,11 +627,83 @@ function normalizeEncounterConfigs(
 
     return {
       id,
-      startAtMs: normalizeNonNegativeMilliseconds(encounter.startAtMs),
+      start: normalizeEncounterStart(mapId, id, encounter.start, encounterIndex, context),
       restAfterMs: normalizeNonNegativeMilliseconds(encounter.restAfterMs),
       groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group)),
     };
   });
+}
+
+interface EncounterTriggerNormalizationContext {
+  readonly bases: readonly CoopBaseConfig[];
+  readonly airstrikes: CoopDefenseMapAirstrikeConfig | undefined;
+  readonly boss: CoopDefenseMapBossConfig | undefined;
+}
+
+function normalizeEncounterStart(
+  mapId: string,
+  encounterId: string,
+  start: CoopDefenseMapEncounterStart | undefined,
+  encounterIndex: number,
+  context: EncounterTriggerNormalizationContext,
+): CoopDefenseMapEncounterStart {
+  if (!start || typeof start.type !== 'string') {
+    throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a start trigger`);
+  }
+
+  switch (start.type) {
+    case 'time':
+      return {
+        type: 'time',
+        atMs: normalizeRequiredMilliseconds(mapId, encounterId, start.atMs, 'time trigger'),
+      };
+    case 'after-previous':
+      if (encounterIndex === 0) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} has no previous encounter`);
+      }
+      return { type: 'after-previous' };
+    case 'opening-airstrike-complete':
+      if (!context.airstrikes?.bombTutorialRock) {
+        throw new Error(
+          `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an opening airstrike barrage`,
+        );
+      }
+      return { type: 'opening-airstrike-complete' };
+    case 'boss-phase':
+      if (!Number.isFinite(start.phase) || !Number.isInteger(start.phase) || start.phase !== 2) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} supports boss phase 2 only`);
+      }
+      if (!context.boss || context.boss.enemyKind !== 'void-hunter') {
+        throw new Error(
+          `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a Void Hunter boss for phase 2`,
+        );
+      }
+      return { type: 'boss-phase', phase: 2 };
+    case 'base-destroyed': {
+      if (typeof start.baseId !== 'string' || start.baseId.trim().length === 0) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a base id`);
+      }
+      const baseId = start.baseId.trim();
+      if (!context.bases.some((base) => base.id === baseId)) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} references unknown base: ${baseId}`);
+      }
+      return { type: 'base-destroyed', baseId };
+    }
+    default:
+      throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} has unknown start trigger`);
+  }
+}
+
+function normalizeRequiredMilliseconds(
+  mapId: string,
+  encounterId: string,
+  value: number,
+  label: string,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} has invalid ${label} time`);
+  }
+  return Math.max(0, Math.floor(value));
 }
 
 function normalizeEncounterGroup(
@@ -771,7 +877,7 @@ function normalizePowerUpConfig(
 }
 
 function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBossConfig | undefined {
-  const bossWaves = mapConfig.waves.filter((wave) => getCoopDefenseEnemyConfig(wave.enemyKind).isBoss);
+  const bossWaves = (mapConfig.waves ?? []).filter((wave) => getCoopDefenseEnemyConfig(wave.enemyKind).isBoss);
   if (bossWaves.length > 0) {
     throw new Error(`[coopDefenseMaps] Boss enemies must use the unique boss slot on map ${mapConfig.mapId}`);
   }
@@ -970,6 +1076,5 @@ function normalizeWaveConfig(waveConfig: CoopDefenseMapWaveConfig): CoopDefenseM
     intervalMs: Math.max(1, Math.floor(waveConfig.intervalMs)),
     countPerWave: Math.max(0, Math.floor(waveConfig.countPerWave)),
     startAtMs: Math.max(0, Math.floor(waveConfig.startAtMs ?? 0)),
-    startsAfterAirstrikeBarrage: waveConfig.startsAfterAirstrikeBarrage ?? false,
   };
 }

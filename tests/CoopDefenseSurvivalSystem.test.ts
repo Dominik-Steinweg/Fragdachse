@@ -21,6 +21,24 @@ describe('CoopDefenseSurvivalSystem', () => {
     expect(system.getPlayerState('p1')?.remainingRespawns).toBe(2);
   });
 
+  it('allows a reconnect during the same life without treating it as a respawn', () => {
+    const system = createSystem();
+
+    expect(system.registerInitialSpawn('p1')).toBe(true);
+    expect(system.getPlayerState('p1')?.remainingRespawns).toBe(2);
+    expect(system.canPlayerRespawn('p1')).toBe(false);
+  });
+
+  it('rejects the initial reconnect path after death so reentry must consume one respawn', () => {
+    const system = createSystem();
+
+    system.handlePlayerDeath('p1');
+    expect(system.registerInitialSpawn('p1')).toBe(false);
+    expect(system.canPlayerRespawn('p1')).toBe(true);
+    expect(system.consumeRespawn('p1')).toBe(true);
+    expect(system.getPlayerState('p1')?.remainingRespawns).toBe(1);
+  });
+
   it('keeps the gate pure and consumes exactly one budget on a real respawn', () => {
     const system = createSystem();
 

@@ -284,7 +284,10 @@ export class ArenaLifecycleCoordinator {
   spawnReadyPlayers(): void {
     if (!bridge.isHost()) return;
     for (const profile of bridge.getConnectedPlayers()) {
-      if (bridge.canPlayerInitialSpawn(profile.id)
+      const canInitialSpawn = bridge.canPlayerInitialSpawn(profile.id);
+      const reconnectAfterDeath = this.ctx.coopDefenseSurvivalSystem !== null
+        && bridge.canPlayerRespawn(profile.id);
+      if ((canInitialSpawn || reconnectAfterDeath)
         && bridge.getPlayerReady(profile.id)
         && !this.ctx.playerManager.hasPlayer(profile.id)) {
         // Erst spawnen, wenn der host das verbindliche Loadout-Snapshot wirklich hat. Sonst würde
@@ -294,8 +297,15 @@ export class ArenaLifecycleCoordinator {
         // daher verzögert das den Spawn höchstens um wenige Frames im Countdown.
         if (!this.hostHasCommittedLoadoutForSpawn(profile.id)) continue;
         this.ctx.playerManager.addPlayer(profile);
-        this.ctx.combatSystem.initPlayer(profile.id);
-        this.ctx.coopDefenseSurvivalSystem?.registerInitialSpawn(profile.id);
+        if (reconnectAfterDeath) {
+          if (!this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id)) {
+            this.ctx.playerManager.removePlayer(profile.id);
+            continue;
+          }
+        } else {
+          this.ctx.combatSystem.initPlayer(profile.id);
+          this.ctx.coopDefenseSurvivalSystem?.registerInitialSpawn(profile.id);
+        }
         this.ctx.resourceSystem?.initPlayer(profile.id);
         this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id);
         this.ctx.burrowSystem?.initPlayer(profile.id);
@@ -751,15 +761,34 @@ export class ArenaLifecycleCoordinator {
           () => this.ctx.baseManager?.getActiveBaseIds() ?? new Set<string>(),
           coopDefenseMapConfig?.boss,
           this.ctx.enemyBossFlowFieldService,
-          () => this.ctx.coopDefenseAirstrikeDirector?.isOpeningBarrageComplete() ?? true,
         );
         if (coopDefenseEncounterConfigs.length > 0) {
           this.ctx.coopDefenseMapDirector = new CoopDefenseMapDirector(
             coopDefenseEncounterConfigs,
-            (enemyKind, count) => this.ctx.coopDefenseWaveSpawner?.hostSpawnEncounterGroup(enemyKind, count),
+            (enemyKind, count, originId) => this.ctx.coopDefenseWaveSpawner?.hostSpawnEncounterGroup(enemyKind, count, originId),
             {
               mode: coopDefenseMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
-              isEnemyActive: (enemyId) => this.ctx.enemyManager?.hasEnemy(enemyId) ?? false,
+              isEnemyActive: (enemyId) => this.ctx.enemyManager?.getEnemy(enemyId)?.sprite.active === true,
+              isEncounterStartSatisfied: (start) => {
+                switch (start.type) {
+                  case 'opening-airstrike-complete':
+                    return this.ctx.coopDefenseAirstrikeDirector?.isOpeningBarrageComplete() ?? false;
+                  case 'boss-phase':
+                    return this.ctx.coopDefenseVoidHunterSystem?.hasReachedPhase(start.phase) ?? false;
+                  case 'base-destroyed':
+                    return this.ctx.baseManager?.getBase(start.baseId)?.isDestroyed() ?? false;
+                  case 'time':
+                  case 'after-previous':
+                    return false;
+                }
+              },
+              isEnemyOriginActive: (originId) => this.ctx.enemyManager?.hasActiveEnemyOrigin(originId) ?? false,
+              getActiveEnemyIdsForOrigin: (originId) => this.ctx.enemyManager?.getActiveEnemyIdsForOrigin(originId) ?? [],
+              isEnemyTechnicallyStuck: (enemyId) => {
+                const enemy = this.ctx.enemyManager?.getEnemy(enemyId);
+                return enemy?.sprite.active === true && enemy.getHp() > 0 && enemy.isPathBlocked();
+              },
+              removeEnemy: (enemyId) => (this.ctx.enemyManager?.hostRemoveWithoutKill(enemyId) ?? null) !== null,
             },
           );
         }
