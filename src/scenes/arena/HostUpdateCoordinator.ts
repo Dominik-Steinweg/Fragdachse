@@ -153,6 +153,7 @@ export class HostUpdateCoordinator {
     let phaseStartedAt = performance.now();
 
     this.ctx.coopDefenseWaveSpawner?.hostUpdate(delta, countdownActive);
+    this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);

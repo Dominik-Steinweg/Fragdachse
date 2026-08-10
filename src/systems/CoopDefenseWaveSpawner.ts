@@ -132,7 +132,16 @@ export class CoopDefenseWaveSpawner {
       && !this.enemyManager.hasEnemyKind(this.bossConfig.enemyKind);
   }
 
+  /**
+   * Einmaliger Ausführungspfad für den MapDirector. Die Auswahl der normalen linken Spawnregion,
+   * Flow-Field-Erreichbarkeit, Abstände und Sonderfälle bleiben bewusst hier gebündelt.
+   */
+  hostSpawnEncounterGroup(kind: CoopDefenseEnemyKind, count: number): void {
+    this.runWave(kind, count);
+  }
+
   private runWave(kind: CoopDefenseEnemyKind, count: number): void {
+    if (count <= 0) return;
     const candidatesAll = this.collectCandidates(kind);
     if (candidatesAll.length === 0) {
       this.warnExhausted();

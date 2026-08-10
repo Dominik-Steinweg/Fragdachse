@@ -37,6 +37,7 @@ import { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseWaveSpawner } from '../../systems/CoopDefenseWaveSpawner';
+import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import {
   CoopDefenseAirstrikeDirector,
   isPointNearBaseRegion,
@@ -61,7 +62,7 @@ import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONF
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapScheduledXp, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapWaveConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -536,6 +537,9 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseWaveConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapWaveConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
+    const coopDefenseEncounterConfigs = coopDefenseMapConfig
+      ? resolveCoopDefenseMapEncounterConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
+      : [];
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     this.ctx.arenaResult = builder.buildDynamic(layout);
@@ -701,7 +705,11 @@ export class ArenaLifecycleCoordinator {
       if (
         this.ctx.enemyManager
         && this.ctx.enemyFlowFieldService
-        && (coopDefenseWaveConfigs.length > 0 || coopDefenseBases.some((base) => base.spawnWave))
+        && (
+          coopDefenseWaveConfigs.length > 0
+          || coopDefenseEncounterConfigs.length > 0
+          || coopDefenseBases.some((base) => base.spawnWave)
+        )
       ) {
         this.ctx.coopDefenseWaveSpawner = new CoopDefenseWaveSpawner(
           this.ctx.enemyManager,
@@ -713,6 +721,12 @@ export class ArenaLifecycleCoordinator {
           this.ctx.enemyBossFlowFieldService,
           () => this.ctx.coopDefenseAirstrikeDirector?.isOpeningBarrageComplete() ?? true,
         );
+        if (coopDefenseEncounterConfigs.length > 0) {
+          this.ctx.coopDefenseMapDirector = new CoopDefenseMapDirector(
+            coopDefenseEncounterConfigs,
+            (enemyKind, count) => this.ctx.coopDefenseWaveSpawner?.hostSpawnEncounterGroup(enemyKind, count),
+          );
+        }
       }
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
       // Goal-Cells werden nur noch aus den verbleibenden Basen aufgebaut, so dass
@@ -2171,6 +2185,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setDashGroundFireHandler(null);
     this.ctx.hostPhysics.setDashHoldEnabledResolver(null);
     this.ctx.coopDefenseEnemyAttackSystem = null;
+    this.ctx.coopDefenseMapDirector?.reset();
+    this.ctx.coopDefenseMapDirector = null;
     this.ctx.coopDefenseWaveSpawner = null;
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);

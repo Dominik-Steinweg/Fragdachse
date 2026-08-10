@@ -1,6 +1,7 @@
 import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
 import {
   getCoopDefenseEnemyConfig,
+  hasCoopDefenseEnemyKind,
   resolveCoopDefenseEnemyWaveConfig,
   type CoopDefenseEnemyKind,
 } from './coopDefenseEnemies';
@@ -124,6 +125,33 @@ export interface ResolvedCoopDefenseMapWaveConfig {
   readonly countPerWave: number;
   readonly startAtMs: number;
   readonly startsAfterAirstrikeBarrage: boolean;
+}
+
+/** Eine endliche, zeitlich geplante Gegnergruppe innerhalb eines Encounters. */
+export interface CoopDefenseMapEncounterGroupConfig {
+  readonly enemyKind: CoopDefenseEnemyKind;
+  readonly count: number;
+  /** Verzögerung relativ zum Start des Encounters; Standard 0. */
+  readonly delayMs?: number;
+}
+
+/** Minimaler A2-Encounter: zeitlicher Start und eine endliche Liste von Gruppen. */
+export interface CoopDefenseMapEncounterConfig {
+  readonly id: string;
+  readonly startAtMs?: number;
+  readonly groups: readonly CoopDefenseMapEncounterGroupConfig[];
+}
+
+export interface ResolvedCoopDefenseMapEncounterGroupConfig {
+  readonly enemyKind: CoopDefenseEnemyKind;
+  readonly count: number;
+  readonly delayMs: number;
+}
+
+export interface ResolvedCoopDefenseMapEncounterConfig {
+  readonly id: string;
+  readonly startAtMs: number;
+  readonly groups: readonly ResolvedCoopDefenseMapEncounterGroupConfig[];
 }
 
 /** Konfiguriert die Zombie-Luftangriffe einer Map (siehe `CoopDefenseAirstrikeDirector`). */
@@ -289,6 +317,8 @@ export interface CoopDefenseMapConfig {
   readonly bases: readonly CoopBaseConfig[];
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
   readonly waves: readonly CoopDefenseMapWaveConfig[];
+  /** Optionale A2-Encounter; Legacy-`waves` bleiben davon unabhängig. */
+  readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
   /** Standard `survive`. */
   readonly objective?: CoopDefenseMapObjective;
@@ -340,6 +370,29 @@ export function resolveCoopDefenseMapWaveConfigs(
   });
 }
 
+/** Löst Encounter-Gruppenzahlen über denselben Enemy-Spawn-Resolver wie Legacy-Waves auf. */
+export function resolveCoopDefenseMapEncounterConfigs(
+  mapConfig: CoopDefenseMapConfig,
+  humanPlayerCount: number,
+): readonly ResolvedCoopDefenseMapEncounterConfig[] {
+  return (mapConfig.encounters ?? []).map((encounter) => ({
+    id: encounter.id,
+    startAtMs: Math.max(0, Math.floor(encounter.startAtMs ?? 0)),
+    groups: encounter.groups.map((group) => {
+      const resolvedGroup = resolveCoopDefenseEnemyWaveConfig(
+        group.enemyKind,
+        { intervalMs: 1, countPerWave: group.count },
+        humanPlayerCount,
+      );
+      return {
+        enemyKind: group.enemyKind,
+        count: resolvedGroup.countPerWave,
+        delayMs: Math.max(0, Math.floor(group.delayMs ?? 0)),
+      };
+    }),
+  }));
+}
+
 /** Erwartete XP-Summe aller regulaer geplanten Spawns einer Map. */
 export function getCoopDefenseMapScheduledXp(
   mapConfig: CoopDefenseMapConfig,
@@ -389,7 +442,7 @@ function getEnemyLifecycleXp(kind: CoopDefenseEnemyKind, ancestors = new Set<str
 }
 
 function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefenseMapRegistryFile {
-  const maps = registry.maps.map(normalizeMapConfig);
+  const maps = registry.maps.map(normalizeCoopDefenseMapConfig);
   const uniqueMapIds = new Set<string>();
   for (const mapConfig of maps) {
     if (uniqueMapIds.has(mapConfig.mapId)) {
@@ -406,7 +459,7 @@ function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefense
   };
 }
 
-function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConfig {
+export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConfig {
   const uniqueBaseIds = new Set<string>();
   const bases = mapConfig.bases.map((baseConfig) => {
     if (uniqueBaseIds.has(baseConfig.id)) {
@@ -441,6 +494,7 @@ function normalizeMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConf
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     waves: mapConfig.waves.map(normalizeWaveConfig),
+    encounters: normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters),
     boss: normalizeBossConfig(mapConfig),
     objective: normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, mapConfig.boss),
     itemDrop: normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop),
@@ -473,6 +527,66 @@ function normalizeObjective(
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs at least one friendly main base to lose`);
   }
   return normalizedObjective;
+}
+
+function normalizeEncounterConfigs(
+  mapId: string,
+  encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
+): readonly CoopDefenseMapEncounterConfig[] | undefined {
+  if (encounters === undefined) return undefined;
+
+  const uniqueEncounterIds = new Set<string>();
+  return encounters.map((encounter) => {
+    if (typeof encounter.id !== 'string' || encounter.id.trim().length === 0) {
+      throw new Error(`[coopDefenseMaps] Encounter on map ${mapId} needs a non-empty id`);
+    }
+    const id = encounter.id.trim();
+    if (uniqueEncounterIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate encounter id on map ${mapId}: ${id}`);
+    }
+    uniqueEncounterIds.add(id);
+    if (!Array.isArray(encounter.groups) || encounter.groups.length === 0) {
+      throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${id} needs at least one group`);
+    }
+
+    return {
+      id,
+      startAtMs: normalizeNonNegativeMilliseconds(encounter.startAtMs),
+      groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group)),
+    };
+  });
+}
+
+function normalizeEncounterGroup(
+  mapId: string,
+  encounterId: string,
+  group: CoopDefenseMapEncounterGroupConfig,
+): CoopDefenseMapEncounterGroupConfig {
+  if (!hasCoopDefenseEnemyKind(group.enemyKind)) {
+    throw new Error(
+      `[coopDefenseMaps] Encounter ${mapId}:${encounterId} references unknown enemy kind: ${group.enemyKind}`,
+    );
+  }
+  if (
+    typeof group.count !== 'number'
+    || !Number.isFinite(group.count)
+    || Math.floor(group.count) < 1
+  ) {
+    throw new Error(
+      `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs positive finite group counts`,
+    );
+  }
+
+  return {
+    enemyKind: group.enemyKind,
+    count: Math.floor(group.count),
+    delayMs: normalizeNonNegativeMilliseconds(group.delayMs),
+  };
+}
+
+function normalizeNonNegativeMilliseconds(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
 }
 
 function normalizeItemDropConfig(

@@ -21,5 +21,22 @@
     }
   ],
   "powerUps": [],
-  "waves": []
+  "waves": [],
+  "encounters": [
+    {
+      "id": "a2-opening-encounter",
+      "startAtMs": 1500,
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 4
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "delayMs": 1500
+        }
+      ]
+    }
+  ]
 }
