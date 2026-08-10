@@ -29,7 +29,7 @@ import {
   getCoopDefenseTutorialPanelHeight,
 } from '../config/coopDefenseTutorial';
 import { HELP_CONTROLS } from '../config/helpControls';
-import { ensureFlatPanelTexture } from './uiTextures';
+import { ensureFlatPanelTexture, roundRectPath } from './uiTextures';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 const CENTER_X       = GAME_WIDTH / 2;
@@ -106,6 +106,13 @@ const ENCOUNTER_PIP_GAP = 5;
 const ENCOUNTER_PIP_MAX = 9;
 const ENCOUNTER_FADE_MS = 180;
 const ENCOUNTER_BG_TEX = '_center_encounter_bg';
+const ENCOUNTER_RAIL_TEX = '_center_encounter_rail';
+const ENCOUNTER_RAIL_GLOW_TEX = '_center_encounter_rail_glow';
+const ENCOUNTER_RAIL_W = 6;
+const ENCOUNTER_RAIL_GLOW_W = 34;
+const ENCOUNTER_RAIL_GLOW_ALPHA = 0.5;
+const ENCOUNTER_SCAN_PERIOD_MS = 1_800;
+const ENCOUNTER_SCAN_INSET_PX = 9;
 
 type EncounterStyleId = 'incoming' | 'active' | 'done' | 'rest';
 
@@ -246,6 +253,72 @@ interface LowerBarSection {
   lastLabel: string | null;
 }
 
+/**
+ * Leitschiene des Encounter-Panels. Beide Texturen sind reines Weiß mit Alphaverlauf und
+ * werden zur Laufzeit auf die Phasenfarbe getintet.
+ *
+ * Der Körper liegt bewusst unter voller Deckkraft, der schmale Kern darüber auf 1: nach dem
+ * Tint entsteht daraus ein heller Kern in einem dunkleren Mantel. Ein einfarbiges Rechteck
+ * bliebe flach, und seine harten Kanten verrieten den additiven Schein als Rechteck.
+ */
+function ensureEncounterRailTextures(scene: Phaser.Scene): void {
+  if (!scene.textures.exists(ENCOUNTER_RAIL_TEX)) {
+    const ct = scene.textures.createCanvas(ENCOUNTER_RAIL_TEX, ENCOUNTER_RAIL_W, ENCOUNTER_RAIL_H);
+    if (ct) {
+      const ctx = ct.context;
+      const radius = (ENCOUNTER_RAIL_W - 1) / 2;
+      ctx.clearRect(0, 0, ENCOUNTER_RAIL_W, ENCOUNTER_RAIL_H);
+      const body = ctx.createLinearGradient(0, 0, 0, ENCOUNTER_RAIL_H);
+      body.addColorStop(0, 'rgba(255,255,255,0.16)');
+      body.addColorStop(0.16, 'rgba(255,255,255,0.5)');
+      body.addColorStop(0.5, 'rgba(255,255,255,0.68)');
+      body.addColorStop(0.84, 'rgba(255,255,255,0.5)');
+      body.addColorStop(1, 'rgba(255,255,255,0.16)');
+      roundRectPath(ctx, 0.5, 0.5, ENCOUNTER_RAIL_W - 1, ENCOUNTER_RAIL_H - 1, radius);
+      ctx.fillStyle = body;
+      ctx.fill();
+
+      ctx.save();
+      roundRectPath(ctx, 0.5, 0.5, ENCOUNTER_RAIL_W - 1, ENCOUNTER_RAIL_H - 1, radius);
+      ctx.clip();
+      const core = ctx.createLinearGradient(0, 0, 0, ENCOUNTER_RAIL_H);
+      core.addColorStop(0, 'rgba(255,255,255,0)');
+      core.addColorStop(0.22, 'rgba(255,255,255,1)');
+      core.addColorStop(0.78, 'rgba(255,255,255,1)');
+      core.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = core;
+      ctx.fillRect(ENCOUNTER_RAIL_W / 2 - 1, 0, 2, ENCOUNTER_RAIL_H);
+      ctx.restore();
+      ct.refresh();
+    }
+  }
+
+  if (scene.textures.exists(ENCOUNTER_RAIL_GLOW_TEX)) return;
+  const ct = scene.textures.createCanvas(ENCOUNTER_RAIL_GLOW_TEX, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
+  if (!ct) return;
+  const ctx = ct.context;
+  ctx.clearRect(0, 0, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
+  const horizontal = ctx.createLinearGradient(0, 0, ENCOUNTER_RAIL_GLOW_W, 0);
+  horizontal.addColorStop(0, 'rgba(255,255,255,0)');
+  horizontal.addColorStop(0.34, 'rgba(255,255,255,0.26)');
+  horizontal.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+  horizontal.addColorStop(0.66, 'rgba(255,255,255,0.26)');
+  horizontal.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = horizontal;
+  ctx.fillRect(0, 0, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
+  // Vertikaler Auslauf über destination-in: Der Schein endet weich statt an einer Kante.
+  ctx.globalCompositeOperation = 'destination-in';
+  const vertical = ctx.createLinearGradient(0, 0, 0, ENCOUNTER_RAIL_H);
+  vertical.addColorStop(0, 'rgba(0,0,0,0)');
+  vertical.addColorStop(0.2, 'rgba(0,0,0,1)');
+  vertical.addColorStop(0.8, 'rgba(0,0,0,1)');
+  vertical.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = vertical;
+  ctx.fillRect(0, 0, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
+  ctx.globalCompositeOperation = 'source-over';
+  ct.refresh();
+}
+
 function ensureRadialTexture(
   scene: Phaser.Scene,
   key: string,
@@ -285,8 +358,8 @@ export class CenterHUD {
   private encounterBg!: Phaser.GameObjects.Image;
   private encounterFrame!: Phaser.GameObjects.Graphics;
   private encounterPips!: Phaser.GameObjects.Graphics;
-  private encounterRailGlow!: Phaser.GameObjects.Rectangle;
-  private encounterRail!: Phaser.GameObjects.Rectangle;
+  private encounterRailGlow!: Phaser.GameObjects.Image;
+  private encounterRail!: Phaser.GameObjects.Image;
   private encounterProgressFill!: Phaser.GameObjects.Image;
   private encounterProgressHead!: Phaser.GameObjects.Image;
   private encounterKicker!: Phaser.GameObjects.Text;
@@ -393,14 +466,18 @@ export class CenterHUD {
       if (this.scene.textures.exists(style.barTex)) continue;
       createGradientTexture(this.scene, style.barTex, style.palette, ENCOUNTER_FILL_W, ENCOUNTER_FILL_H);
     }
+    ensureEncounterRailTextures(this.scene);
 
     this.encounterBg = this.scene.add.image(0, 0, ENCOUNTER_BG_TEX).setOrigin(0.5);
     this.encounterFrame = this.scene.add.graphics();
     this.encounterRailGlow = this.scene.add
-      .rectangle(ENCOUNTER_RAIL_X, 0, 14, ENCOUNTER_RAIL_H, ENCOUNTER_STYLES.incoming.accent, 0.22)
+      .image(ENCOUNTER_RAIL_X, 0, ENCOUNTER_RAIL_GLOW_TEX)
+      .setOrigin(0.5)
+      .setAlpha(ENCOUNTER_RAIL_GLOW_ALPHA)
       .setBlendMode(Phaser.BlendModes.ADD);
     this.encounterRail = this.scene.add
-      .rectangle(ENCOUNTER_RAIL_X, 0, 4, ENCOUNTER_RAIL_H, ENCOUNTER_STYLES.incoming.accent, 1);
+      .image(ENCOUNTER_RAIL_X, 0, ENCOUNTER_RAIL_TEX)
+      .setOrigin(0.5);
     this.encounterPips = this.scene.add.graphics();
 
     this.encounterKicker = this.scene.add
@@ -729,11 +806,21 @@ export class CenterHUD {
       : Math.max(0, state.phaseEndsAtMs - elapsed);
     const hasCountdown = state.phaseEndsAtMs !== null
       && (state.phase === 'incoming' || state.phase === 'rest');
-    const countdownText = !hasCountdown
-      ? ''
-      : remainingMs >= 10_000
-        ? `${Math.ceil(remainingMs / 1000)}s`
-        : `${(remainingMs / 1000).toFixed(1)}s`;
+    // Während des laufenden Angriffs tritt die Gegnerbilanz an die Stelle der Restzeit: Sie ist
+    // hier die einzige Größe, die den Fortschritt der Welle tatsächlich beschreibt.
+    const kills = state.phase === 'active'
+      && typeof state.enemiesTotal === 'number'
+      && typeof state.enemiesDefeated === 'number'
+      && state.enemiesTotal > 0
+      ? { defeated: Phaser.Math.Clamp(state.enemiesDefeated, 0, state.enemiesTotal), total: state.enemiesTotal }
+      : null;
+    const countdownText = kills
+      ? `${kills.defeated} / ${kills.total}`
+      : !hasCountdown
+        ? ''
+        : remainingMs >= 10_000
+          ? `${Math.ceil(remainingMs / 1000)}s`
+          : `${(remainingMs / 1000).toFixed(1)}s`;
     const statusText = state.phase === 'incoming'
       ? 'ANGRIFF ROLLT AN'
       : state.phase === 'active'
@@ -763,28 +850,44 @@ export class CenterHUD {
     }
     this.drawEncounterPips(state, style);
 
-    const progress = state.phaseEndsAtMs === null
+    // Nur die Gegnerbilanz oder eine wirklich zeitlich endende Phase darf einen Abschluss
+    // behaupten. Für einen offenen active-State ohne belastbare Gegnerzuordnung bleibt die
+    // Leiste voll gedimmt und bekommt stattdessen einen wandernden Lichtimpuls.
+    const indeterminate = state.phase === 'active' && kills === null;
+    const progress = indeterminate
       ? 1
-      : Phaser.Math.Clamp(
-        (elapsed - state.phaseStartedAtMs) / Math.max(1, state.phaseEndsAtMs - state.phaseStartedAtMs),
-        0,
-        1,
-      );
-    // Nur eine Phase mit bekanntem Ende darf einen echten Fortschritt behaupten. Der laufende
-    // Angriff endet erst mit dem letzten Gegner: dort steht der Balken voll, aber gedämpft –
-    // ein leerer Balken läse sich als Stillstand, ein voller heller als abgeschlossen.
-    const determinate = state.phaseEndsAtMs !== null && state.phase !== 'active';
+      : kills
+        ? kills.defeated / kills.total
+        : state.phaseEndsAtMs === null
+          ? 1
+          : Phaser.Math.Clamp(
+            (elapsed - state.phaseStartedAtMs) / Math.max(1, state.phaseEndsAtMs - state.phaseStartedAtMs),
+            0,
+            1,
+          );
+    const determinate = !indeterminate
+      && (kills !== null || (state.phaseEndsAtMs !== null && state.phase !== 'active'));
     const fillW = Math.round(ENCOUNTER_FILL_W * progress);
     if (fillW !== this.lastEncounterProgressWidth) {
       this.encounterProgressFill.setCrop(0, 0, fillW, ENCOUNTER_FILL_H);
-      this.encounterProgressHead.setX(ENCOUNTER_CONTENT_LEFT + 1 + fillW);
       this.lastEncounterProgressWidth = fillW;
     }
     if (determinate !== this.lastEncounterDeterminate) {
       this.encounterProgressFill.setAlpha(determinate ? 1 : 0.32);
       this.lastEncounterDeterminate = determinate;
     }
-    this.encounterProgressHead.setVisible(determinate && fillW > 4 && fillW < ENCOUNTER_FILL_W);
+    if (indeterminate) {
+      const scanRange = Math.max(1, ENCOUNTER_FILL_W - ENCOUNTER_SCAN_INSET_PX * 2);
+      const scanPhase = 0.5 + 0.5 * Math.sin((elapsed / ENCOUNTER_SCAN_PERIOD_MS) * Math.PI * 2);
+      this.encounterProgressHead.setX(
+        ENCOUNTER_CONTENT_LEFT + 1 + ENCOUNTER_SCAN_INSET_PX + scanPhase * scanRange,
+      );
+    } else {
+      this.encounterProgressHead.setX(ENCOUNTER_CONTENT_LEFT + 1 + fillW);
+    }
+    this.encounterProgressHead.setVisible(
+      indeterminate || (determinate && fillW > 4 && fillW < ENCOUNTER_FILL_W),
+    );
 
     if (phaseChanged || !this.encounterPanel.visible) {
       this.playEncounterPhaseEntry(state.phase);
@@ -794,8 +897,8 @@ export class CenterHUD {
 
   /** Farbführende Teile des Panels. Läuft nur beim Wechsel der Phasenfarbe. */
   private applyEncounterStyle(style: EncounterStyle): void {
-    this.encounterRail.setFillStyle(style.accent, 1);
-    this.encounterRailGlow.setFillStyle(style.accent, 0.22);
+    this.encounterRail.setTint(style.accent);
+    this.encounterRailGlow.setTint(style.accent);
     this.encounterStatus.setColor(toCssColor(style.accent));
     this.encounterCountdown.setColor(toCssColor(style.accent));
     this.encounterKicker.setColor(toCssColor(style.muted));
@@ -898,14 +1001,14 @@ export class CenterHUD {
 
     this.encounterPulseTween?.destroy();
     this.encounterPulseTween = null;
-    this.encounterRailGlow.setScale(1, 1).setAlpha(1);
+    this.encounterRailGlow.setScale(1, 1).setAlpha(ENCOUNTER_RAIL_GLOW_ALPHA);
     if (phase !== 'incoming' && phase !== 'cleared') return;
     // Nur die beiden kurzen Signalphasen atmen. Ein Dauerpuls während des Angriffs
     // würde neben den Kampfeffekten nur flimmern.
     this.encounterPulseTween = this.scene.tweens.add({
       targets: this.encounterRailGlow,
-      scaleX: 2.1,
-      alpha: 0.35,
+      scaleX: 1.7,
+      alpha: ENCOUNTER_RAIL_GLOW_ALPHA * 0.42,
       duration: phase === 'incoming' ? 340 : 480,
       yoyo: true,
       repeat: -1,
@@ -923,7 +1026,7 @@ export class CenterHUD {
       .setAlpha(1)
       .setScale(1)
       .setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y);
-    this.encounterRailGlow?.setScale(1, 1).setAlpha(1);
+    this.encounterRailGlow?.setScale(1, 1).setAlpha(ENCOUNTER_RAIL_GLOW_ALPHA);
     this.lastEncounterPresentationSignature = null;
     this.lastEncounterPresentationPhase = null;
     this.lastEncounterStyleId = null;

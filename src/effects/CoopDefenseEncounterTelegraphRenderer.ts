@@ -184,6 +184,9 @@ export class CoopDefenseEncounterTelegraphRenderer {
       || !inArena
       || state.phase === 'rest'
       || state.phase === 'complete'
+      // Nach der letzten ausgespielten Gruppe wäre eine Anmarschfront irreführend. Der
+      // tatsächliche Kampf bleibt über Gegner und HUD sichtbar; die Front gehört nur Ankunft.
+      || (state.phase === 'active' && state.spawnComplete === true)
       || !this.sparks
       || !this.band
       || !this.edge

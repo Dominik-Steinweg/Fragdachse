@@ -783,6 +783,7 @@ export class ArenaLifecycleCoordinator {
             (enemyKind, count, originId) => this.ctx.coopDefenseSpawnExecutor?.hostSpawnEncounterGroup(enemyKind, count, originId),
             {
               mode: coopDefenseMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
+              showComplete: coopDefenseMapConfig?.objective === 'repel-assault',
               isEnemyActive: (enemyId) => this.ctx.enemyManager?.getEnemy(enemyId)?.sprite.active === true,
               isEncounterStartSatisfied: (start) => {
                 switch (start.type) {

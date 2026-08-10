@@ -1483,6 +1483,15 @@ export class NetworkBridge {
       && (typeof phaseEndsAtMs !== 'number'
         || !Number.isFinite(phaseEndsAtMs)
         || phaseEndsAtMs < phaseStartedAtMs)) return null;
+    const spawnComplete = raw.spawnComplete;
+    if (spawnComplete !== undefined && typeof spawnComplete !== 'boolean') return null;
+    // Die Gegnerzahlen sind optional und rein darstellend: Ein unplausibles Paar wird
+    // verworfen, nicht repariert – das Panel fällt dann auf die Phasenanzeige zurück.
+    const enemiesTotal = raw.enemiesTotal;
+    const enemiesDefeated = raw.enemiesDefeated;
+    const hasEnemyProgress = typeof enemiesTotal === 'number' && Number.isSafeInteger(enemiesTotal) && enemiesTotal > 0
+      && typeof enemiesDefeated === 'number' && Number.isSafeInteger(enemiesDefeated)
+      && enemiesDefeated >= 0 && enemiesDefeated <= enemiesTotal;
     return {
       encounterId: raw.encounterId,
       sequenceIndex,
@@ -1490,6 +1499,8 @@ export class NetworkBridge {
       phase: phase as CoopDefenseEncounterPresentationState['phase'],
       phaseStartedAtMs,
       phaseEndsAtMs,
+      ...(spawnComplete === undefined ? {} : { spawnComplete }),
+      ...(hasEnemyProgress ? { enemiesDefeated, enemiesTotal } : {}),
     } as CoopDefenseEncounterPresentationState;
   }
 

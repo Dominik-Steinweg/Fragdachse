@@ -54,6 +54,15 @@ export interface CoopDefenseEncounterPresentationState {
   phaseStartedAtMs: number;
   /** Host-Rundenzeit des nächsten Phasenwechsels; null für offene Phasen. */
   phaseEndsAtMs: number | null;
+  /** True, sobald alle Gruppen dieses Encounters autoritativ ausgespielt wurden. */
+  spawnComplete?: boolean;
+  /**
+   * Erledigte bzw. erwartete Gegner des laufenden Encounters. Beide Werte fehlen, solange der
+   * Host keine belastbare Zuordnung hat (kein Lebendtest, noch keine registrierten Gegner).
+   * Rein darstellend: Clients leiten daraus keine Clear-Bedingung ab.
+   */
+  enemiesDefeated?: number;
+  enemiesTotal?: number;
 }
 
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */

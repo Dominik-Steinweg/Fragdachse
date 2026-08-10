@@ -27,6 +27,8 @@ export type CoopDefenseMapDirectorMode = 'scheduled' | 'repel-assault';
 export interface CoopDefenseMapDirectorOptions {
   /** A3: Clear wird ausschliesslich ueber die vom Encounter registrierten IDs bestimmt. */
   readonly mode?: CoopDefenseMapDirectorMode;
+  /** Scheduled-Encounter sind Support-Inhalt; nur `repel-assault` darf dauerhaft complete zeigen. */
+  readonly showComplete?: boolean;
   readonly isEnemyActive?: (enemyId: string) => boolean;
   /** Semantic map-state query; the director never imports the owning gameplay systems. */
   readonly isEncounterStartSatisfied?: (start: CoopDefenseMapEncounterStart) => boolean;
@@ -51,12 +53,24 @@ interface EncounterExecutionState {
   readonly groupSpawnedCounts: number[];
   readonly groupNoProgressMs: number[];
   readonly encounterEnemyIds: Set<string>;
+  /**
+   * Nur für die Fortschrittsanzeige. Bewusst getrennt von `encounterEnemyIds`: Hier landen
+   * zusätzlich die per Death-Spawn geerbten Gegner, die keine Encounter-Registrierung tragen
+   * und die Clear-Bedingung deshalb nicht mitbestimmen dürfen.
+   */
+  readonly progressEnemyIds: Set<string>;
   readonly technicallyStuckSinceMs: Map<string, number>;
   spawnBackstopped: boolean;
   startedAtMs: number;
   presentationIncomingStartedAtMs: number;
+  firstGroupSpawnedAtMs: number | null;
   clearedAtMs: number | null;
   cleared: boolean;
+}
+
+interface EncounterEnemyProgress {
+  readonly defeated: number;
+  readonly total: number;
 }
 
 type RepelAssaultPhase = 'waiting' | 'active' | 'rest' | 'complete';
@@ -72,6 +86,7 @@ export class CoopDefenseMapDirector {
   private elapsedMs = 0;
   private readonly executionStates: EncounterExecutionState[];
   private readonly mode: CoopDefenseMapDirectorMode;
+  private readonly showComplete: boolean;
   private readonly isEnemyActive: ((enemyId: string) => boolean) | null;
   private readonly isEncounterStartSatisfied: ((start: CoopDefenseMapEncounterStart) => boolean) | null;
   private readonly isEnemyOriginActive: ((originId: string) => boolean) | null;
@@ -93,6 +108,7 @@ export class CoopDefenseMapDirector {
     options: CoopDefenseMapDirectorOptions = {},
   ) {
     this.mode = options.mode ?? 'scheduled';
+    this.showComplete = options.showComplete ?? true;
     this.isEnemyActive = options.isEnemyActive ?? null;
     this.isEncounterStartSatisfied = options.isEncounterStartSatisfied ?? null;
     this.isEnemyOriginActive = options.isEnemyOriginActive ?? null;
@@ -111,10 +127,12 @@ export class CoopDefenseMapDirector {
       groupSpawnedCounts: encounter.groups.map(() => 0),
       groupNoProgressMs: encounter.groups.map(() => 0),
       encounterEnemyIds: new Set<string>(),
+      progressEnemyIds: new Set<string>(),
       technicallyStuckSinceMs: new Map<string, number>(),
       spawnBackstopped: false,
       startedAtMs: 0,
       presentationIncomingStartedAtMs: 0,
+      firstGroupSpawnedAtMs: null,
       clearedAtMs: null,
       cleared: false,
     }));
@@ -149,10 +167,12 @@ export class CoopDefenseMapDirector {
       state.groupSpawnedCounts.fill(0);
       state.groupNoProgressMs.fill(0);
       state.encounterEnemyIds.clear();
+      state.progressEnemyIds.clear();
       state.technicallyStuckSinceMs.clear();
       state.spawnBackstopped = false;
       state.startedAtMs = 0;
       state.presentationIncomingStartedAtMs = 0;
+      state.firstGroupSpawnedAtMs = null;
       state.clearedAtMs = null;
       state.cleared = false;
     }
@@ -220,6 +240,7 @@ export class CoopDefenseMapDirector {
         state.presentationIncomingStartedAtMs = this.getPresentationIncomingStartAtMs(encounterIndex);
       }
       if (!state.started) continue;
+      if (!state.cleared) this.trackProgressEnemies(state);
 
       for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
         if (state.groupsExecuted[groupIndex]) continue;
@@ -265,6 +286,7 @@ export class CoopDefenseMapDirector {
 
       const encounter = this.encounters[this.repelEncounterIndex];
       const state = this.executionStates[this.repelEncounterIndex];
+      this.trackProgressEnemies(state);
       for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
         if (state.groupsExecuted[groupIndex]) continue;
         const group = encounter.groups[groupIndex];
@@ -370,12 +392,6 @@ export class CoopDefenseMapDirector {
   }
 
   private getScheduledPresentationState(): CoopDefenseEncounterPresentationState | null {
-    for (let index = 0; index < this.executionStates.length; index += 1) {
-      const state = this.executionStates[index];
-      if (!state.started || state.cleared) continue;
-      return this.createStartedPresentationState(index, state);
-    }
-
     const pending = this.findPredictablePendingEncounter();
     if (pending && this.elapsedMs >= pending.startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS
       && this.elapsedMs < pending.startAtMs) {
@@ -386,6 +402,11 @@ export class CoopDefenseMapDirector {
         pending.startAtMs,
       );
     }
+
+    // Scheduled-Maps dürfen unabhängige Encounter überlappen. Der zuletzt gestartete
+    // Encounter ist für die Präsentation relevanter als ein älterer, noch laufender.
+    const newestStarted = this.findNewestStartedEncounter();
+    if (newestStarted) return this.createStartedPresentationState(newestStarted.index, newestStarted.state);
 
     const latestCleared = this.findLatestClearedEncounter();
     if (!latestCleared) return null;
@@ -411,7 +432,7 @@ export class CoopDefenseMapDirector {
       );
     }
 
-    if (this.executionStates.every((entry) => entry.cleared)) {
+    if (this.showComplete && this.executionStates.every((entry) => entry.cleared)) {
       return this.createPresentationState(
         latestCleared.index,
         'complete',
@@ -494,15 +515,25 @@ export class CoopDefenseMapDirector {
     index: number,
     state: EncounterExecutionState,
   ): CoopDefenseEncounterPresentationState {
-    const incomingEndsAtMs = Math.max(
-      state.presentationIncomingStartedAtMs + ENCOUNTER_INCOMING_TELEGRAPH_MS,
-      state.startedAtMs + this.getFirstGroupDelayMs(index),
-    );
+    const firstGroupStartAtMs = state.startedAtMs + this.getFirstGroupDelayMs(index);
+    if (state.firstGroupSpawnedAtMs !== null) {
+      return this.createPresentationState(
+        index,
+        'active',
+        state.firstGroupSpawnedAtMs,
+        null,
+        this.getEncounterEnemyProgress(index, state),
+        this.isEncounterSpawnCompleteState(state),
+      );
+    }
+
     return this.createPresentationState(
       index,
-      this.elapsedMs < incomingEndsAtMs ? 'incoming' : 'active',
+      'incoming',
       state.presentationIncomingStartedAtMs,
-      incomingEndsAtMs,
+      firstGroupStartAtMs,
+      null,
+      false,
     );
   }
 
@@ -511,6 +542,8 @@ export class CoopDefenseMapDirector {
     phase: CoopDefenseEncounterPresentationPhase,
     phaseStartedAtMs: number,
     phaseEndsAtMs: number | null,
+    enemyProgress: EncounterEnemyProgress | null = null,
+    spawnComplete: boolean | undefined = undefined,
   ): CoopDefenseEncounterPresentationState {
     return {
       encounterId: this.encounters[index]?.id ?? '',
@@ -519,7 +552,46 @@ export class CoopDefenseMapDirector {
       phase,
       phaseStartedAtMs: Math.max(0, phaseStartedAtMs),
       phaseEndsAtMs: phaseEndsAtMs === null ? null : Math.max(0, phaseEndsAtMs),
+      ...(spawnComplete === undefined ? {} : { spawnComplete }),
+      ...(enemyProgress === null
+        ? {}
+        : { enemiesDefeated: enemyProgress.defeated, enemiesTotal: enemyProgress.total }),
     };
+  }
+
+  /**
+   * Übernimmt geerbte Gegner (Death-Spawns) in die Fortschrittsmenge. Sie müssen beim ersten
+   * Sichten erfasst werden, sonst wären sie später weder als lebend noch als erledigt zählbar.
+   */
+  private trackProgressEnemies(state: EncounterExecutionState): void {
+    for (const enemyId of this.getActiveEnemyIdsForOrigin?.(state.encounterId) ?? []) {
+      if (typeof enemyId !== 'string' || enemyId.length === 0) continue;
+      state.progressEnemyIds.add(enemyId);
+    }
+  }
+
+  /**
+   * Bekämpfungsfortschritt des laufenden Encounters. `total` ist das Maximum aus geplanter
+   * Gruppenstärke und tatsächlich gesehenen Gegnern – Death-Spawns dürfen den Balken sonst
+   * über sein eigenes Ziel hinaus füllen. Ohne Lebendtest oder registrierte Gegner gibt es
+   * bewusst keine Zahl statt einer geratenen.
+   */
+  private getEncounterEnemyProgress(
+    index: number,
+    state: EncounterExecutionState,
+  ): EncounterEnemyProgress | null {
+    if (!this.isEnemyActive || state.progressEnemyIds.size === 0) return null;
+
+    let active = 0;
+    for (const enemyId of state.progressEnemyIds) {
+      if (this.isEnemyActive(enemyId)) active += 1;
+    }
+    const planned = this.encounters[index]?.groups.reduce(
+      (sum, group) => sum + Math.max(0, Math.floor(group.count)),
+      0,
+    ) ?? 0;
+    const total = Math.max(planned, state.progressEnemyIds.size, 1);
+    return { defeated: Math.min(total, state.progressEnemyIds.size - active), total };
   }
 
   private getFirstGroupDelayMs(index: number): number {
@@ -528,6 +600,20 @@ export class CoopDefenseMapDirector {
       (minimum, group) => Math.min(minimum, Math.max(0, Math.floor(group.delayMs))),
       Number.POSITIVE_INFINITY,
     );
+  }
+
+  private findNewestStartedEncounter(): { index: number; state: EncounterExecutionState } | null {
+    let newest: { index: number; state: EncounterExecutionState } | null = null;
+    for (let index = 0; index < this.executionStates.length; index += 1) {
+      const state = this.executionStates[index];
+      if (!state.started || state.cleared) continue;
+      if (!newest
+        || state.startedAtMs > newest.state.startedAtMs
+        || (state.startedAtMs === newest.state.startedAtMs && index > newest.index)) {
+        newest = { index, state };
+      }
+    }
+    return newest;
   }
 
   private findPredictablePendingEncounter(): { index: number; startAtMs: number } | null {
@@ -582,6 +668,9 @@ export class CoopDefenseMapDirector {
     if (spawnResult === undefined) {
       state.groupSpawnedCounts[groupIndex] = group.count;
       state.groupsExecuted[groupIndex] = true;
+      if (group.count > 0 && state.firstGroupSpawnedAtMs === null) {
+        state.firstGroupSpawnedAtMs = this.elapsedMs;
+      }
       return;
     }
 
@@ -590,11 +679,13 @@ export class CoopDefenseMapDirector {
     for (const enemyId of enemyIds) {
       if (typeof enemyId !== 'string' || enemyId.length === 0 || state.encounterEnemyIds.has(enemyId)) continue;
       state.encounterEnemyIds.add(enemyId);
+      state.progressEnemyIds.add(enemyId);
       spawnedCount += 1;
     }
     state.groupSpawnedCounts[groupIndex] = Math.min(group.count, state.groupSpawnedCounts[groupIndex] + spawnedCount);
     state.groupsExecuted[groupIndex] = state.groupSpawnedCounts[groupIndex] >= group.count;
     if (spawnedCount > 0) {
+      if (state.firstGroupSpawnedAtMs === null) state.firstGroupSpawnedAtMs = this.elapsedMs;
       state.groupNoProgressMs[groupIndex] = 0;
     } else if (!this.hasActiveOrigin(state)) {
       state.groupNoProgressMs[groupIndex] += this.lastDeltaMs;

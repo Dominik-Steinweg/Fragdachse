@@ -121,7 +121,7 @@ describe('CoopDefenseMapDirector', () => {
     expect(director.isAssaultRepelled()).toBe(true);
   });
 
-  it('exposes an incoming-active-cleared-rest rhythm without changing clear semantics', () => {
+  it('exposes an active-cleared-rest rhythm without changing clear semantics', () => {
     const activeEnemyIds = new Set<string>();
     let nextEnemyId = 1;
     const director = new CoopDefenseMapDirector([
@@ -148,7 +148,8 @@ describe('CoopDefenseMapDirector', () => {
 
     director.hostUpdate(0, false);
     expect(director.getPresentationState()).toMatchObject({
-      encounterId: 'opening', sequenceIndex: 1, phase: 'incoming', phaseEndsAtMs: 900,
+      encounterId: 'opening', sequenceIndex: 1, phase: 'active',
+      phaseStartedAtMs: 0, phaseEndsAtMs: null, spawnComplete: true,
     });
     director.hostUpdate(900, false);
     expect(director.getPresentationState()?.phase).toBe('active');
@@ -162,6 +163,134 @@ describe('CoopDefenseMapDirector', () => {
     expect(director.getPresentationState()).toMatchObject({
       encounterId: 'final', sequenceIndex: 2, phase: 'incoming', phaseEndsAtMs: 5_900,
     });
+  });
+
+  it('does not keep incoming after the first scheduled group has spawned', () => {
+    const activeEnemyIds = new Set<string>();
+    const director = new CoopDefenseMapDirector([{
+      id: 'scheduled',
+      start: { type: 'time', atMs: 1_000 },
+      restAfterMs: 0,
+      groups: [{ enemyKind: 'zombie-badger', count: 1, delayMs: 0 }],
+    }], () => {
+      activeEnemyIds.add('scheduled-enemy');
+      return ['scheduled-enemy'];
+    }, { isEnemyActive: (enemyId) => activeEnemyIds.has(enemyId) });
+
+    director.hostUpdate(100, false);
+    expect(director.getPresentationState()).toMatchObject({ phase: 'incoming', phaseEndsAtMs: 1_000 });
+    director.hostUpdate(900, false);
+
+    expect(director.getPresentationState()).toMatchObject({
+      encounterId: 'scheduled',
+      phase: 'active',
+      phaseStartedAtMs: 1_000,
+      phaseEndsAtMs: null,
+      spawnComplete: true,
+    });
+  });
+
+  it('shows event-triggered encounters active immediately or incoming only for an authored delay', () => {
+    let phase = 1;
+    const immediateIds = new Set<string>();
+    const immediate = new CoopDefenseMapDirector([{
+      id: 'boss-immediate',
+      start: { type: 'boss-phase', phase: 2 },
+      restAfterMs: 0,
+      groups: [{ enemyKind: 'void-stalker', count: 1, delayMs: 0 }],
+    }], () => {
+      immediateIds.add('boss-immediate-enemy');
+      return ['boss-immediate-enemy'];
+    }, {
+      isEnemyActive: (enemyId) => immediateIds.has(enemyId),
+      isEncounterStartSatisfied: (start) => start.type === 'boss-phase' && phase >= start.phase,
+    });
+
+    phase = 2;
+    immediate.hostUpdate(1_000, false);
+    expect(immediate.getPresentationState()).toMatchObject({
+      encounterId: 'boss-immediate',
+      phase: 'active',
+      phaseStartedAtMs: 1_000,
+      phaseEndsAtMs: null,
+    });
+
+    const delayedIds = new Set<string>();
+    const delayed = new CoopDefenseMapDirector([{
+      id: 'boss-delayed',
+      start: { type: 'boss-phase', phase: 2 },
+      restAfterMs: 0,
+      groups: [{ enemyKind: 'void-stalker', count: 1, delayMs: 250 }],
+    }], () => {
+      delayedIds.add('boss-delayed-enemy');
+      return ['boss-delayed-enemy'];
+    }, {
+      isEnemyActive: (enemyId) => delayedIds.has(enemyId),
+      isEncounterStartSatisfied: (start) => start.type === 'boss-phase' && phase >= start.phase,
+    });
+
+    delayed.hostUpdate(1_000, false);
+    expect(delayed.getPresentationState()).toMatchObject({
+      encounterId: 'boss-delayed', phase: 'incoming', phaseStartedAtMs: 1_000, phaseEndsAtMs: 1_250,
+    });
+    delayed.hostUpdate(249, false);
+    expect(delayed.getPresentationState()?.phase).toBe('incoming');
+    delayed.hostUpdate(1, false);
+    expect(delayed.getPresentationState()).toMatchObject({
+      phase: 'active', phaseStartedAtMs: 1_250, phaseEndsAtMs: null,
+    });
+  });
+
+  it('prioritizes a newly incoming or newly started scheduled encounter over an older one', () => {
+    const activeEnemyIds = new Set<string>();
+    let nextId = 0;
+    const director = new CoopDefenseMapDirector([
+      {
+        id: 'older',
+        start: { type: 'time', atMs: 0 },
+        restAfterMs: 0,
+        groups: [{ enemyKind: 'zombie-badger', count: 1, delayMs: 0 }],
+      },
+      {
+        id: 'newer',
+        start: { type: 'time', atMs: 2_000 },
+        restAfterMs: 0,
+        groups: [{ enemyKind: 'demon-badger', count: 1, delayMs: 0 }],
+      },
+    ], (_kind) => {
+      const id = `scheduled-${nextId++}`;
+      activeEnemyIds.add(id);
+      return [id];
+    }, { isEnemyActive: (enemyId) => activeEnemyIds.has(enemyId) });
+
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.encounterId).toBe('older');
+    director.hostUpdate(1_100, false);
+    expect(director.getPresentationState()).toMatchObject({ encounterId: 'newer', phase: 'incoming' });
+    director.hostUpdate(900, false);
+    expect(director.getPresentationState()).toMatchObject({
+      encounterId: 'newer', phase: 'active', phaseEndsAtMs: null,
+    });
+  });
+
+  it('lets scheduled complete fade away when encounters are only support content', () => {
+    const activeEnemyIds = new Set(['support-enemy']);
+    const director = new CoopDefenseMapDirector([{
+      id: 'support',
+      start: { type: 'time', atMs: 0 },
+      restAfterMs: 0,
+      groups: [{ enemyKind: 'zombie-badger', count: 1, delayMs: 0 }],
+    }], () => ['support-enemy'], {
+      showComplete: false,
+      isEnemyActive: (enemyId) => activeEnemyIds.has(enemyId),
+    });
+
+    director.hostUpdate(0, false);
+    activeEnemyIds.clear();
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('cleared');
+    director.hostUpdate(800, false);
+    expect(director.getPresentationState()).toBeNull();
   });
 
   it('keeps the authored rest as a minimum while faster clears shorten the assault', () => {
@@ -423,5 +552,55 @@ describe('CoopDefenseMapDirector', () => {
     director.hostUpdate(0, false);
     director.hostUpdate(1_000, false);
     expect(spawnGroup).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the encounter kill progress against the authored group strength', () => {
+    const activeEnemyIds = new Set<string>();
+    let nextEnemyId = 1;
+    const director = new CoopDefenseMapDirector([{
+      id: 'wave',
+      start: { type: 'time', atMs: 0 },
+      restAfterMs: 0,
+      groups: [
+        { enemyKind: 'zombie-badger', count: 2, delayMs: 0 },
+        { enemyKind: 'demon-badger', count: 2, delayMs: 1_000 },
+      ],
+    }], (_kind, count) => {
+      const ids = Array.from({ length: count }, () => `kill-progress-${nextEnemyId++}`);
+      for (const id of ids) activeEnemyIds.add(id);
+      return ids;
+    }, {
+      isEnemyActive: (enemyId) => activeEnemyIds.has(enemyId),
+      getActiveEnemyIdsForOrigin: () => [...activeEnemyIds],
+    });
+
+    // Die erste Gruppe steht, die zweite ist noch nicht fällig: Der Nenner bleibt trotzdem
+    // die volle Wellenstärke, sonst spränge der Balken beim Nachspawn zurück.
+    director.hostUpdate(900, false);
+    expect(director.getPresentationState()).toMatchObject({ enemiesDefeated: 0, enemiesTotal: 4 });
+
+    activeEnemyIds.delete('kill-progress-1');
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()).toMatchObject({ enemiesDefeated: 1, enemiesTotal: 4 });
+
+    // Ein geerbter Death-Spawn hebt den Nenner an, statt den Balken über sein Ziel zu füllen.
+    activeEnemyIds.add('kill-progress-inherited');
+    director.hostUpdate(1_000, false);
+    expect(director.getPresentationState()).toMatchObject({ enemiesDefeated: 1, enemiesTotal: 5 });
+  });
+
+  it('omits the kill progress without a liveness check', () => {
+    const director = new CoopDefenseMapDirector([{
+      id: 'wave',
+      start: { type: 'time', atMs: 0 },
+      restAfterMs: 0,
+      groups: [{ enemyKind: 'zombie-badger', count: 2, delayMs: 0 }],
+    }], () => ['no-liveness-1', 'no-liveness-2']);
+
+    director.hostUpdate(1_000, false);
+    const state = director.getPresentationState();
+    expect(state?.phase).toBe('active');
+    expect(state?.enemiesTotal).toBeUndefined();
+    expect(state?.enemiesDefeated).toBeUndefined();
   });
 });
