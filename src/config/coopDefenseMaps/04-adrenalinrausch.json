@@ -1,0 +1,132 @@
+{
+  "mapId": "4",
+  "displayName": "Map 4 - Adrenalinrausch",
+  "arenaWidthCells": 82,
+  "timeOfDay": "06:00",
+  "tutorialText": "Power-Ups können eingesammelt werden. Direkt mit Basen verbundene Power-Ups verschwinden bei Zerstörung der Basis.",
+  "rockFillRatio": 0.3,
+  "roundDurationSec": 60,
+  "bases": [
+    {
+      "id": "coop-base-rear",
+      "hpMax": 1500,
+      "anchor": {
+        "kind": "right-center",
+        "edgeInsetCells": 0
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 4,
+        "heightCells": 4
+      },
+      "turrets": [
+        {
+          "id": "front-top",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPOREN"
+        },
+        {
+          "id": "front-bottom",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 3
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPOREN"
+        }
+      ]
+    },
+    {
+      "id": "coop-base-middle",
+      "hpMax": 1000,
+      "anchor": {
+        "kind": "center-offset",
+        "dxCells": -4,
+        "dyCells": -1
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 2
+          },
+          {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
+            "gridX": 1,
+            "gridY": 3
+          }
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "health-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "defId": "HEALTH_PACK",
+          "respawnMs": 5000,
+          "spawnOnArenaStart": true
+        },
+        {
+          "id": "adrenaline-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 2
+          },
+          "defId": "ADRENALINE",
+          "respawnMs": 10000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    }
+  ],
+  "powerUps": [
+    {
+      "defId": "BFG",
+      "region": "front",
+      "respawnMs": 30000,
+      "spawnOnArenaStart": false
+    }
+  ],
+  "waves": [
+    {
+      "enemyKind": "zombie-badger",
+      "intervalMs": 1500,
+      "countPerWave": 2,
+      "startAtMs": 0
+    },
+    {
+      "enemyKind": "demon-badger",
+      "intervalMs": 6000,
+      "countPerWave": 1,
+      "startAtMs": 0
+    },
+    {
+      "enemyKind": "rabid-badger",
+      "intervalMs": 5000,
+      "countPerWave": 1,
+      "startAtMs": 0
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import rawCoopDefenseMaps from './coopDefenseMaps.json';
+import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
 import {
   getCoopDefenseEnemyConfig,
   resolveCoopDefenseEnemyWaveConfig,
@@ -301,10 +301,12 @@ interface CoopDefenseMapRegistryFile {
   readonly maps: readonly CoopDefenseMapConfig[];
 }
 
-const COOP_DEFENSE_MAP_REGISTRY = normalizeMapRegistry(rawCoopDefenseMaps as CoopDefenseMapRegistryFile);
+const NORMALIZED_COOP_DEFENSE_MAP_REGISTRY = normalizeMapRegistry(
+  COOP_DEFENSE_MAP_REGISTRY as CoopDefenseMapRegistryFile,
+);
 
-export const COOP_DEFENSE_MAP_CONFIGS = COOP_DEFENSE_MAP_REGISTRY.maps;
-export const DEFAULT_COOP_DEFENSE_MAP_ID = COOP_DEFENSE_MAP_REGISTRY.defaultMapId;
+export const COOP_DEFENSE_MAP_CONFIGS = NORMALIZED_COOP_DEFENSE_MAP_REGISTRY.maps;
+export const DEFAULT_COOP_DEFENSE_MAP_ID = NORMALIZED_COOP_DEFENSE_MAP_REGISTRY.defaultMapId;
 
 const MAPS_BY_ID = new Map<string, CoopDefenseMapConfig>(
   COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => [mapConfig.mapId, mapConfig]),

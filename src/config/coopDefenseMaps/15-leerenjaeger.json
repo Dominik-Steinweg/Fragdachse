@@ -1,0 +1,242 @@
+{
+  "mapId": "15",
+  "displayName": "Map 15 - Leerenjäger",
+  "arenaWidthCells": 100,
+  "timeOfDay": "22:00",
+  "trackMode": "void-fire",
+  "permanentGroundFire": {
+    "randomPatchCount": 6,
+    "minPatchRadiusCells": 2,
+    "maxPatchRadiusCells": 5,
+    "baseClearanceCells": 2,
+    "burnDurationMs": 2000,
+    "burnDamagePerTick": 0.5,
+    "weaponName": "Lila Leerenbrand"
+  },
+  "rockFillRatio": 0.08,
+  "roundDurationSec": 45,
+  "objective": "defeat-boss",
+  "bases": [
+    {
+      "id": "coop-base-rear",
+      "hpMax": 5000,
+      "anchor": {
+        "kind": "right-center",
+        "edgeInsetCells": 0
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 2,
+            "gridY": 0
+          },
+          {
+            "gridX": 3,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 2,
+            "gridY": 1
+          },
+          {
+            "gridX": 3,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 2
+          },
+          {
+            "gridX": 2,
+            "gridY": 2
+          },
+          {
+            "gridX": 3,
+            "gridY": 2
+          },
+          {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
+            "gridX": 1,
+            "gridY": 3
+          },
+          {
+            "gridX": 2,
+            "gridY": 3
+          },
+          {
+            "gridX": 3,
+            "gridY": 3
+          }
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "health-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "defId": "HEALTH_PACK",
+          "respawnMs": 5000,
+          "spawnOnArenaStart": true
+        },
+        {
+          "id": "armor-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 2
+          },
+          "defId": "ARMOR",
+          "respawnMs": 10000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "coop-base-middle",
+      "hpMax": 1000,
+      "anchor": {
+        "kind": "center-offset",
+        "dxCells": -4,
+        "dyCells": -1
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 2,
+        "heightCells": 3
+      },
+      "turrets": [
+        {
+          "id": "front-middle",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "mountSide": "front",
+          "weaponId": "TURRET_FLAME"
+        }
+      ]
+    },
+    {
+      "id": "friendly-outpost-rocket",
+      "role": "outpost",
+      "hpMax": 1000,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 40,
+        "gridY": 6
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 1,
+        "heightCells": 1
+      },
+      "turrets": [
+        {
+          "id": "rocket",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "front",
+          "weaponId": "TURRET_ROCKET"
+        }
+      ]
+    },
+    {
+      "id": "friendly-outpost-flame",
+      "role": "outpost",
+      "hpMax": 1000,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 40,
+        "gridY": 12
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 1,
+        "heightCells": 1
+      },
+      "turrets": [
+        {
+          "id": "flame",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "front",
+          "weaponId": "TURRET_FLAME"
+        }
+      ]
+    }
+  ],
+  "powerUps": [
+    {
+      "defId": "HEALTH_PACK",
+      "region": "front",
+      "respawnMs": 5000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "middle",
+      "respawnMs": 5000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "rear",
+      "respawnMs": 5000,
+      "spawnOnArenaStart": true
+    }
+  ],
+  "waves": [
+    {
+      "enemyKind": "zombie-badger",
+      "intervalMs": 2000,
+      "countPerWave": 1,
+      "startAtMs": 5000
+    },
+    {
+      "enemyKind": "demon-badger",
+      "intervalMs": 5000,
+      "countPerWave": 1,
+      "startAtMs": 5000
+    },
+    {
+      "enemyKind": "alien-badger",
+      "intervalMs": 15000,
+      "countPerWave": 1,
+      "startAtMs": 15000
+    },
+    {
+      "enemyKind": "thrower-badger",
+      "intervalMs": 20000,
+      "countPerWave": 1,
+      "startAtMs": 20000
+    }
+  ],
+  "boss": {
+    "enemyKind": "void-hunter",
+    "spawnAtMs": 2000
+  },
+  "itemDrop": {
+    "itemLevel": 3
+  }
+}

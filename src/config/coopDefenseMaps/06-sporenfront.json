@@ -1,0 +1,232 @@
+{
+  "mapId": "6",
+  "displayName": "Map 6 - Sporenfront",
+  "arenaWidthCells": 88,
+  "timeOfDay": "08:00",
+  "rockFillRatio": 0.1,
+  "roundDurationSec": 60,
+  "bases": [
+    {
+      "id": "coop-base-rear",
+      "hpMax": 2000,
+      "anchor": {
+        "kind": "right-center",
+        "edgeInsetCells": 0
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 2,
+            "gridY": 0
+          },
+          {
+            "gridX": 3,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 2,
+            "gridY": 1
+          },
+          {
+            "gridX": 3,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 2
+          },
+          {
+            "gridX": 2,
+            "gridY": 2
+          },
+          {
+            "gridX": 3,
+            "gridY": 2
+          },
+          {
+            "gridX": 1,
+            "gridY": 3
+          },
+          {
+            "gridX": 2,
+            "gridY": 3
+          },
+          {
+            "gridX": 3,
+            "gridY": 3
+          },
+          {
+            "gridX": 0,
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 4
+          },
+          {
+            "gridX": 2,
+            "gridY": 4
+          },
+          {
+            "gridX": 3,
+            "gridY": 4
+          }
+        ]
+      },
+      "turrets": [
+        {
+          "id": "front-middle",
+          "cellOffset": {
+            "gridX": 1,
+            "gridY": 2
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPOREN"
+        }
+      ],
+      "powerUpPedestals": [
+        {
+          "id": "health-station-top",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "defId": "HEALTH_PACK",
+          "respawnMs": 5000,
+          "spawnOnArenaStart": true
+        },
+        {
+          "id": "adrenaline-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 2
+          },
+          "defId": "ADRENALINE",
+          "respawnMs": 10000,
+          "spawnOnArenaStart": true
+        },
+        {
+          "id": "armor-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 3
+          },
+          "defId": "ARMOR",
+          "respawnMs": 10000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "coop-base-middle",
+      "hpMax": 750,
+      "anchor": {
+        "kind": "center-offset",
+        "dxCells": -4,
+        "dyCells": -1
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 0,
+            "gridY": 2
+          },
+          {
+            "gridX": 1,
+            "gridY": 2
+          }
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "double-damage-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "defId": "DOUBLE_DAMAGE",
+          "respawnMs": 20000,
+          "spawnOnArenaStart": false
+        }
+      ]
+    }
+  ],
+  "powerUps": [
+    {
+      "defId": "ADRENALINE",
+      "region": "front",
+      "respawnMs": 10000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "middle",
+      "respawnMs": 5000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "rear",
+      "respawnMs": 5000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HOLY_HAND_GRENADE",
+      "region": "rear",
+      "respawnMs": 30000,
+      "spawnOnArenaStart": false
+    }
+  ],
+  "waves": [
+    {
+      "enemyKind": "zombie-badger",
+      "intervalMs": 8000,
+      "countPerWave": 1,
+      "startAtMs": 0
+    },
+    {
+      "enemyKind": "demon-badger",
+      "intervalMs": 7000,
+      "countPerWave": 1,
+      "startAtMs": 5000
+    },
+    {
+      "enemyKind": "rabid-badger",
+      "intervalMs": 10000,
+      "countPerWave": 1,
+      "startAtMs": 10000
+    },
+    {
+      "enemyKind": "spore-warden",
+      "intervalMs": 6000,
+      "countPerWave": 1,
+      "startAtMs": 0
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "mapId": "3",
+  "displayName": "Map 3 - Rastlos",
+  "arenaWidthCells": 76,
+  "timeOfDay": "17:00",
+  "tutorialText": "Es gibt unterschiedliche Gegnerarten und manche Gegner haben es auf euch und nicht auf die Basen abgesehen.",
+  "rockFillRatio": 0.4,
+  "roundDurationSec": 60,
+  "bases": [
+    {
+      "id": "coop-base-rear",
+      "hpMax": 1500,
+      "anchor": {
+        "kind": "right-center",
+        "edgeInsetCells": 0
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 4,
+        "heightCells": 4
+      },
+      "turrets": [
+        {
+          "id": "front-top",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPOREN"
+        },
+        {
+          "id": "front-bottom",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 3
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPOREN"
+        }
+      ]
+    },
+    {
+      "id": "coop-base-middle",
+      "hpMax": 500,
+      "anchor": {
+        "kind": "center-offset",
+        "dxCells": -4,
+        "dyCells": -1
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 2,
+        "heightCells": 2
+      }
+    }
+  ],
+  "powerUps": [],
+  "waves": [
+    {
+      "enemyKind": "zombie-badger",
+      "intervalMs": 6000,
+      "countPerWave": 2,
+      "startAtMs": 0
+    },
+    {
+      "enemyKind": "demon-badger",
+      "intervalMs": 6000,
+      "countPerWave": 1,
+      "startAtMs": 5000
+    },
+    {
+      "enemyKind": "rabid-badger",
+      "intervalMs": 5000,
+      "countPerWave": 2,
+      "startAtMs": 5000
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "mapId": "5",
+  "displayName": "Map 5 - Grufttitan",
+  "arenaWidthCells": 74,
+  "timeOfDay": "22:30",
+  "tutorialText": "Eine Map mit Boss ist erst gewonnen, wenn der Boss fällt. Beim ersten Sieg gibt es einen Boss-Punkt für spezielle Upgrades. Nach Abschluss von Map 5 werden außerdem die Klassen freigeschaltet.",
+  "objective": "defeat-boss",
+  "rockFillRatio": 0.2,
+  "roundDurationSec": 45,
+  "bases": [
+    {
+      "id": "coop-base-rear",
+      "hpMax": 3500,
+      "anchor": {
+        "kind": "right-center",
+        "edgeInsetCells": 0
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 4,
+        "heightCells": 4
+      },
+      "turrets": [
+        {
+          "id": "front-top",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 0
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPOREN"
+        },
+        {
+          "id": "front-bottom",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 3
+          },
+          "mountSide": "front",
+          "weaponId": "BASE_SPOREN"
+        }
+      ]
+    },
+    {
+      "id": "coop-base-middle",
+      "hpMax": 750,
+      "anchor": {
+        "kind": "center-offset",
+        "dxCells": -5,
+        "dyCells": -1
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 0,
+            "gridY": 2
+          },
+          {
+            "gridX": 1,
+            "gridY": 2
+          }
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "armor-station",
+          "cellOffset": {
+            "gridX": 0,
+            "gridY": 1
+          },
+          "defId": "ARMOR",
+          "respawnMs": 10000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    }
+  ],
+  "powerUps": [
+    {
+      "defId": "ADRENALINE",
+      "region": "front",
+      "respawnMs": 10000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "middle",
+      "respawnMs": 5000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "rear",
+      "respawnMs": 5000,
+      "spawnOnArenaStart": true
+    }
+  ],
+  "waves": [
+    {
+      "enemyKind": "zombie-badger",
+      "intervalMs": 6000,
+      "countPerWave": 1,
+      "startAtMs": 0
+    },
+    {
+      "enemyKind": "demon-badger",
+      "intervalMs": 6000,
+      "countPerWave": 1,
+      "startAtMs": 5000
+    },
+    {
+      "enemyKind": "rabid-badger",
+      "intervalMs": 5000,
+      "countPerWave": 1,
+      "startAtMs": 5000
+    }
+  ],
+  "boss": {
+    "enemyKind": "grave-titan",
+    "spawnAtMs": 15000
+  }
+}

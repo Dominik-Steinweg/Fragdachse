@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
+  DEFAULT_COOP_DEFENSE_MAP_ID,
   getCoopDefenseMapConfig,
   getCoopDefenseMapScheduledXp,
   getCoopDefenseMapObjectiveLabel,
@@ -27,6 +28,11 @@ function getShapeBounds(shape: CoopBaseShape): { width: number; height: number }
 describe('Coop defense map progression', () => {
   it('keeps map identifiers and arena widths valid without snapshotting balance values', () => {
     const mapIds = COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId);
+    expect(mapIds).toEqual([
+      '0', '1', '2', '3', '4', '5', '6', '7', '8',
+      '9', '10', '11', '12', '13', '14', '15', '16',
+    ]);
+    expect(DEFAULT_COOP_DEFENSE_MAP_ID).toBe('1');
     expect(mapIds.every((mapId) => mapId.trim().length > 0)).toBe(true);
     expect(new Set(mapIds).size).toBe(mapIds.length);
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
