@@ -708,7 +708,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSurvivalSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseAirstrikeDirector: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
       enemyStrategicFlowFieldService: null,
@@ -1492,6 +1492,11 @@ export class ArenaScene extends Phaser.Scene {
     const encounterPresentation = inArena && isCoopDefenseMode(bridge.getGameMode())
       ? bridge.getCoopDefenseEncounterPresentationState()
       : null;
+    // B1 stellt den Snapshot bereits am Client bereit; HUD und Welttelegraphing kommen erst mit B4.
+    const secondaryObjectivePresentation = inArena && isCoopDefenseMode(bridge.getGameMode())
+      ? bridge.getCoopDefenseSecondaryObjectivePresentationState()
+      : null;
+    void secondaryObjectivePresentation;
     const encounterElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
     this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
     this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);

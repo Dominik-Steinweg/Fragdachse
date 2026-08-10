@@ -56,6 +56,7 @@ import type { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExe
 import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
+import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import type { CoopDefenseAirstrikeDirector } from '../../systems/CoopDefenseAirstrikeDirector';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
 import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
@@ -159,6 +160,7 @@ export interface ArenaContext {
   coopDefensePersistentPressureSystem: CoopDefensePersistentPressureSystem | null;
   coopDefenseBossSystem: CoopDefenseBossSystem | null;
   coopDefenseMapDirector: CoopDefenseMapDirector | null;
+  coopDefenseSecondaryObjectiveSystem: CoopDefenseSecondaryObjectiveSystem | null;
   coopDefenseAirstrikeDirector: CoopDefenseAirstrikeDirector | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;

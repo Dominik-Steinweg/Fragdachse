@@ -149,6 +149,7 @@ export interface CoopDefenseMapEncounterGroupConfig {
 export type CoopDefenseMapEncounterStart =
   | { readonly type: 'time'; readonly atMs: number }
   | { readonly type: 'after-previous' }
+  | { readonly type: 'after-encounter'; readonly encounterId: string }
   | { readonly type: 'opening-airstrike-complete' }
   | { readonly type: 'boss-phase'; readonly phase: number }
   | { readonly type: 'base-destroyed'; readonly baseId: string };
@@ -175,6 +176,38 @@ export interface ResolvedCoopDefenseMapEncounterConfig {
   readonly restAfterMs: number;
   readonly groups: readonly ResolvedCoopDefenseMapEncounterGroupConfig[];
 }
+
+export type CoopDefenseSecondaryObjectiveType = 'destroy' | 'hold' | 'carry';
+
+export interface CoopDefenseMapSecondaryObjectiveRewards {
+  /** B1 stores this value only; reward booking is added in a later expansion step. */
+  readonly xpPerTarget?: number;
+}
+
+export interface CoopDefenseMapSecondaryObjectiveConfig {
+  readonly id: string;
+  readonly type: CoopDefenseSecondaryObjectiveType;
+  readonly start: CoopDefenseMapEncounterStart;
+  readonly activeUntil?: CoopDefenseMapEncounterStart;
+  readonly targets: readonly string[];
+  readonly targetGoal?: number;
+  readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
+}
+
+export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
+  readonly id: string;
+  readonly type: CoopDefenseSecondaryObjectiveType;
+  readonly start: CoopDefenseMapEncounterStart;
+  readonly activeUntil?: CoopDefenseMapEncounterStart;
+  readonly targets: readonly string[];
+  readonly targetGoal: number;
+  readonly rewards?: CoopDefenseMapSecondaryObjectiveRewards;
+}
+
+// Kurze Aliasnamen halten den Vertrag für Systeme/Tests lesbar, ohne die Map-Config-Namensfamilie
+// der bestehenden Encounter- und Spawndefinitionen aufzubrechen.
+export type CoopDefenseSecondaryObjectiveConfig = CoopDefenseMapSecondaryObjectiveConfig;
+export type ResolvedCoopDefenseSecondaryObjectiveConfig = ResolvedCoopDefenseMapSecondaryObjectiveConfig;
 
 /** Konfiguriert die Zombie-Luftangriffe einer Map (siehe `CoopDefenseAirstrikeDirector`). */
 export interface CoopDefenseMapAirstrikeConfig {
@@ -373,6 +406,8 @@ export interface CoopDefenseMapConfig {
   readonly persistentSpawns?: readonly CoopDefenseMapPersistentSpawnConfig[];
   /** Optionale endliche Encounter; beide Modelle koennen parallel aktiv sein. */
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
+  /** Optionale, host-autoritativ aktivierte Nebenmissionen ohne Einfluss auf den Mapsieg. */
+  readonly secondaryObjectives?: readonly CoopDefenseMapSecondaryObjectiveConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
   /** Jede Map muss ihr Ziel explizit konfigurieren. */
   readonly objective: CoopDefenseMapObjective;
@@ -456,6 +491,21 @@ export function resolveCoopDefenseMapEncounterConfigs(
         front: group.front ?? DEFAULT_SPAWN_FRONT,
       };
     }),
+  }));
+}
+
+export function resolveCoopDefenseMapSecondaryObjectives(
+  mapConfig: CoopDefenseMapConfig,
+  _humanPlayerCount?: number,
+): readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[] {
+  return (mapConfig.secondaryObjectives ?? []).map((objective) => ({
+    id: objective.id,
+    type: objective.type,
+    start: objective.start,
+    ...(objective.activeUntil ? { activeUntil: objective.activeUntil } : {}),
+    targets: [...objective.targets],
+    targetGoal: objective.targetGoal ?? objective.targets.length,
+    ...(objective.rewards ? { rewards: { ...objective.rewards } } : {}),
   }));
 }
 
@@ -562,6 +612,11 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     airstrikes: enemyAirstrikes,
     boss,
   });
+  const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
+    bases,
+    encounters,
+    objective,
+  });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
 
   return {
@@ -595,6 +650,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
     persistentSpawns: normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases),
     encounters,
+    secondaryObjectives,
     boss,
     objective,
     surviveRespawnsPerPlayer: normalizeSurviveRespawnsPerPlayer(
@@ -737,6 +793,206 @@ function normalizeEncounterConfigs(
       groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group)),
     };
   });
+}
+
+interface SecondaryObjectiveNormalizationContext {
+  readonly bases: readonly CoopBaseConfig[];
+  readonly encounters: readonly CoopDefenseMapEncounterConfig[] | undefined;
+  readonly objective: CoopDefenseMapObjective;
+}
+
+function normalizeSecondaryObjectiveConfigs(
+  mapId: string,
+  secondaryObjectives: readonly CoopDefenseMapSecondaryObjectiveConfig[] | undefined,
+  context: SecondaryObjectiveNormalizationContext,
+): readonly CoopDefenseMapSecondaryObjectiveConfig[] | undefined {
+  if (secondaryObjectives === undefined) return undefined;
+  if (!Array.isArray(secondaryObjectives)) {
+    throw new Error(`[coopDefenseMaps] Secondary objectives on map ${mapId} need an array`);
+  }
+
+  const uniqueObjectiveIds = new Set<string>();
+  const normalizedObjectives = secondaryObjectives.map((objective) => {
+    if (typeof objective.id !== 'string' || objective.id.trim().length === 0) {
+      throw new Error(`[coopDefenseMaps] Secondary objective on map ${mapId} needs a non-empty id`);
+    }
+    const id = objective.id.trim();
+    if (uniqueObjectiveIds.has(id)) {
+      throw new Error(`[coopDefenseMaps] Duplicate secondary objective id on map ${mapId}: ${id}`);
+    }
+    uniqueObjectiveIds.add(id);
+
+    if (!isSecondaryObjectiveType(objective.type)) {
+      throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} has an unknown type: ${objective.type}`);
+    }
+    if (!Array.isArray(objective.targets) || objective.targets.length === 0) {
+      throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} needs at least one target`);
+    }
+
+    const targetIds = new Set<string>();
+    const targets = objective.targets.map((targetId: string) => {
+      if (typeof targetId !== 'string' || targetId.trim().length === 0) {
+        throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} needs non-empty target ids`);
+      }
+      const normalizedTargetId = targetId.trim();
+      if (targetIds.has(normalizedTargetId)) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objective ${mapId}:${id} has duplicate target id: ${normalizedTargetId}`,
+        );
+      }
+      targetIds.add(normalizedTargetId);
+      if (!context.bases.some((base) => base.id === normalizedTargetId)) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objective ${mapId}:${id} references unknown target base: ${normalizedTargetId}`,
+        );
+      }
+      return normalizedTargetId;
+    });
+
+    const defaultTargetGoal = targets.length;
+    const targetGoal = typeof objective.targetGoal === 'number' && Number.isFinite(objective.targetGoal)
+      ? Math.max(1, Math.min(defaultTargetGoal, Math.floor(objective.targetGoal)))
+      : defaultTargetGoal;
+
+    return {
+      id,
+      type: objective.type,
+      start: normalizeSecondaryObjectiveTrigger(mapId, id, objective.start, 'start', context),
+      ...(objective.activeUntil === undefined
+        ? {}
+        : { activeUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.activeUntil, 'activeUntil', context) }),
+      targets,
+      targetGoal,
+      ...(objective.rewards === undefined
+        ? {}
+        : { rewards: normalizeSecondaryObjectiveRewards(mapId, id, objective.rewards) }),
+    };
+  });
+
+  validateSecondaryObjectiveWindows(mapId, normalizedObjectives);
+  if (context.objective === 'repel-assault' && context.encounters && context.encounters.length > 0) {
+    const lastEncounterId = context.encounters[context.encounters.length - 1].id;
+    for (const objective of normalizedObjectives) {
+      if (objective.type !== 'hold') continue;
+      const isBoundToLastEncounter = [objective.start, objective.activeUntil]
+        .some((trigger) => trigger?.type === 'after-encounter' && trigger.encounterId === lastEncounterId);
+      if (isBoundToLastEncounter) {
+        throw new Error(
+          `[coopDefenseMaps] Hold secondary objective ${mapId}:${objective.id} must not bind to the last repel-assault encounter: ${lastEncounterId}`,
+        );
+      }
+    }
+  }
+  return normalizedObjectives;
+}
+
+function isSecondaryObjectiveType(value: unknown): value is CoopDefenseSecondaryObjectiveType {
+  return value === 'destroy' || value === 'hold' || value === 'carry';
+}
+
+function normalizeSecondaryObjectiveTrigger(
+  mapId: string,
+  objectiveId: string,
+  trigger: CoopDefenseMapEncounterStart | undefined,
+  fieldName: 'start' | 'activeUntil',
+  context: SecondaryObjectiveNormalizationContext,
+): CoopDefenseMapEncounterStart {
+  if (!trigger || typeof trigger.type !== 'string') {
+    throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs a valid ${fieldName} trigger`);
+  }
+  switch (trigger.type) {
+    case 'time':
+      if (typeof trigger.atMs !== 'number' || !Number.isFinite(trigger.atMs)) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has invalid ${fieldName} time`,
+        );
+      }
+      return { type: 'time', atMs: Math.max(0, Math.floor(trigger.atMs)) };
+    case 'after-encounter': {
+      if (typeof trigger.encounterId !== 'string' || trigger.encounterId.trim().length === 0) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs an encounter id for ${fieldName}`,
+        );
+      }
+      const encounterId = trigger.encounterId.trim();
+      if (!context.encounters?.some((encounter) => encounter.id === encounterId)) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} references unknown encounter: ${encounterId}`,
+        );
+      }
+      return { type: 'after-encounter', encounterId };
+    }
+    default:
+      throw new Error(
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has unsupported ${fieldName} trigger: ${trigger.type}`,
+      );
+  }
+}
+
+function normalizeSecondaryObjectiveRewards(
+  mapId: string,
+  objectiveId: string,
+  rewards: CoopDefenseMapSecondaryObjectiveRewards,
+): CoopDefenseMapSecondaryObjectiveRewards {
+  if (typeof rewards !== 'object' || rewards === null || Array.isArray(rewards)) {
+    throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has invalid rewards`);
+  }
+  if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) return {};
+  const value = rewards.xpPerTarget;
+  return {
+    xpPerTarget: typeof value === 'number' && Number.isFinite(value)
+      ? Math.max(0, Math.floor(value))
+      : 0,
+  };
+}
+
+interface AuthoredSecondaryObjectiveWindow {
+  readonly startAtMs: number;
+  readonly endAtMs: number;
+}
+
+function getAuthoredSecondaryObjectiveWindow(
+  objective: CoopDefenseMapSecondaryObjectiveConfig,
+): AuthoredSecondaryObjectiveWindow | null {
+  if (objective.start.type !== 'time') return null;
+  // Ein Encounter-Clear ist in authored Daten kein fester Zeitpunkt. Das Fenster darf deshalb
+  // nicht fälschlich als unendlich lang behandelt und dadurch zu streng abgelehnt werden.
+  if (objective.activeUntil !== undefined && objective.activeUntil.type !== 'time') return null;
+  return {
+    startAtMs: objective.start.atMs,
+    endAtMs: objective.activeUntil?.atMs ?? Number.POSITIVE_INFINITY,
+  };
+}
+
+function validateSecondaryObjectiveWindows(
+  mapId: string,
+  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+): void {
+  for (const objective of objectives) {
+    if (objective.start.type === 'time'
+      && objective.activeUntil?.type === 'time'
+      && objective.activeUntil.atMs <= objective.start.atMs) {
+      throw new Error(
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objective.id} has an activeUntil before its start`,
+      );
+    }
+  }
+
+  for (let firstIndex = 0; firstIndex < objectives.length; firstIndex += 1) {
+    const first = getAuthoredSecondaryObjectiveWindow(objectives[firstIndex]);
+    if (!first) continue;
+    for (let secondIndex = firstIndex + 1; secondIndex < objectives.length; secondIndex += 1) {
+      const second = getAuthoredSecondaryObjectiveWindow(objectives[secondIndex]);
+      if (!second) continue;
+      const overlapStart = Math.max(first.startAtMs, second.startAtMs);
+      const overlapEnd = Math.min(first.endAtMs, second.endAtMs);
+      if (overlapStart < overlapEnd) {
+        throw new Error(
+          `[coopDefenseMaps] Secondary objectives ${mapId}:${objectives[firstIndex].id} and ${objectives[secondIndex].id} have overlapping authored active windows`,
+        );
+      }
+    }
+  }
 }
 
 interface EncounterTriggerNormalizationContext {

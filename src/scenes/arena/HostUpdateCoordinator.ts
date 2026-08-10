@@ -94,6 +94,7 @@ export class HostUpdateCoordinator {
   private moveLoopHandle: string | null = null;
   private trainSpawned = false;
   private lastEncounterPresentationSignature: string | null = null;
+  private lastSecondaryObjectivePresentationSignature: string | null = null;
   private readonly blackHoleSystem: BlackHoleSystem;
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
   private lastPerformance = emptyHostUpdatePerformanceMetrics();
@@ -138,6 +139,7 @@ export class HostUpdateCoordinator {
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.trainSpawned = false;
     this.lastEncounterPresentationSignature = null;
+    this.lastSecondaryObjectivePresentationSignature = null;
     this.blackHoleSystem.clear();
     this.enemyDashVisuals.reset();
     this.lastPerformance = emptyHostUpdatePerformanceMetrics();
@@ -157,7 +159,9 @@ export class HostUpdateCoordinator {
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
+    this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);
     this.publishCoopDefenseEncounterPresentation();
+    this.publishCoopDefenseSecondaryObjectivePresentation();
     this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
@@ -1100,6 +1104,23 @@ export class HostUpdateCoordinator {
     if (signature === this.lastEncounterPresentationSignature) return;
     this.lastEncounterPresentationSignature = signature;
     bridge.publishCoopDefenseEncounterPresentationState(state);
+  }
+
+  private publishCoopDefenseSecondaryObjectivePresentation(): void {
+    const state = this.ctx.coopDefenseSecondaryObjectiveSystem?.getPresentationState() ?? null;
+    const signature = state
+      ? [
+        state.objectiveId,
+        state.type,
+        state.state,
+        state.progressCurrent,
+        state.progressTotal,
+        state.stateChangedAtMs,
+      ].join('|')
+      : null;
+    if (signature === this.lastSecondaryObjectivePresentationSignature) return;
+    this.lastSecondaryObjectivePresentationSignature = signature;
+    bridge.publishCoopDefenseSecondaryObjectivePresentationState(state);
   }
 
   getPerformanceMetrics(): HostUpdatePerformanceMetrics {

@@ -41,6 +41,7 @@ import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor
 import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
+import { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
 import {
   CoopDefenseAirstrikeDirector,
   isPointNearBaseRegion,
@@ -65,7 +66,7 @@ import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONF
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import { getBaseWorldBounds, getCoopDefenseBases } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapObjectiveLabel, getCoopDefenseMapXpReference, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, ARENA_OFFSET_X, CELL_SIZE, ARENA_HEIGHT, ARENA_OFFSET_Y, GRID_COLS, GRID_ROWS, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
@@ -253,6 +254,7 @@ export class ArenaLifecycleCoordinator {
     // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
       : null;
@@ -384,6 +386,7 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const roundEndedAt = Date.now();
     bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
 
     if (roundConclusion) {
       const currentRoundState = bridge.getRoundState();
@@ -574,6 +577,10 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseEncounterConfigs = coopDefenseMapConfig
       ? resolveCoopDefenseMapEncounterConfigs(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
       : [];
+    const coopDefenseSecondaryObjectiveConfigs = coopDefenseMapConfig
+      ? resolveCoopDefenseMapSecondaryObjectives(coopDefenseMapConfig, coopDefenseHumanPlayerCount)
+      : [];
+    this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     if (bridge.isHost()) {
       if (coopDefenseMapConfig?.objective === 'survive') {
         const respawnsPerPlayer = coopDefenseMapConfig.surviveRespawnsPerPlayer;
@@ -811,6 +818,8 @@ export class ArenaLifecycleCoordinator {
                     return this.ctx.coopDefenseAirstrikeDirector?.isOpeningBarrageComplete() ?? false;
                   case 'boss-phase':
                     return this.ctx.coopDefenseVoidHunterSystem?.hasReachedPhase(start.phase) ?? false;
+                  case 'after-encounter':
+                    return this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false;
                   case 'base-destroyed':
                     return this.ctx.baseManager?.getBase(start.baseId)?.isDestroyed() ?? false;
                   case 'time':
@@ -829,6 +838,11 @@ export class ArenaLifecycleCoordinator {
           );
         }
       }
+      this.ctx.coopDefenseSecondaryObjectiveSystem = coopDefenseSecondaryObjectiveConfigs.length > 0
+        ? new CoopDefenseSecondaryObjectiveSystem(coopDefenseSecondaryObjectiveConfigs, {
+          isEncounterCleared: (encounterId) => this.ctx.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
+        })
+        : null;
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
       // Goal-Cells werden nur noch aus den verbleibenden Basen aufgebaut, so dass
       // Gegner zur nächstgelegenen aktiven Basis laufen.
@@ -2310,6 +2324,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseEnemyAttackSystem = null;
     this.ctx.coopDefenseMapDirector?.reset();
     this.ctx.coopDefenseMapDirector = null;
+    this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
+    this.ctx.coopDefenseSecondaryObjectiveSystem = null;
+    bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     this.ctx.coopDefensePersistentPressureSystem?.reset();
     this.ctx.coopDefensePersistentPressureSystem = null;
     this.ctx.coopDefenseBossSystem?.reset();
