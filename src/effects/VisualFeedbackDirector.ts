@@ -19,6 +19,7 @@ interface NukeSequenceEntry {
 import type { PostFxEvent } from './postfx/postFxPresets';
 import { resolveBaseGrade, type WorldGradeInputs } from './postfx/worldGrade';
 import { EntityJoltRegistry } from './EntityJoltRegistry';
+import { LowHealthBloodOverlay } from './LowHealthBloodOverlay';
 import {
   HitFeedbackRenderer,
   type HitTargetSilhouetteProvider,
@@ -46,6 +47,7 @@ export class VisualFeedbackDirector {
   readonly hitFeedback: HitFeedbackRenderer;
   readonly postFx: CameraPostFxController;
   readonly distortion: LocalDistortionComposer;
+  readonly lowHealthBlood: LowHealthBloodOverlay;
   private lastBossPhase = 0;
   private nextNukeSequenceId = 1;
   private readonly nukeSequences: NukeSequenceEntry[] = [];
@@ -65,6 +67,7 @@ export class VisualFeedbackDirector {
     this.hitFeedback.setLocalPlayerIdProvider(deps.getLocalPlayerId);
     this.postFx = new CameraPostFxController(scene, scene.cameras.main);
     this.hitFeedback.setPostFx(this.postFx);
+    this.lowHealthBlood = new LowHealthBloodOverlay(scene);
     this.distortion = new LocalDistortionComposer(scene);
     this.distortion.setTextureRebuiltHandler(() => {
       this.postFx.rebindDistortionTexture(this.distortion.getTextureKey());
@@ -158,6 +161,8 @@ export class VisualFeedbackDirector {
     this.stepNukeSequences(deltaMs);
     this.postFx.setBaseGrade(resolveBaseGrade(inputs));
     this.postFx.update(deltaMs);
+    // Niedrige Gesundheit spricht am Bildrand über Blut, nicht über zunehmende Dunkelheit.
+    this.lowHealthBlood.update(inputs.localHpFraction, deltaMs);
   }
 
   private stepNukeSequences(deltaMs: number): void {
@@ -200,6 +205,7 @@ export class VisualFeedbackDirector {
     this.hitFeedback.clear();
     this.postFx.reset();
     this.distortion.reset();
+    this.lowHealthBlood.reset();
     // Laufende Sequenzen dürfen eine Rundengrenze nicht überleben – sonst hinge der
     // Bildschirmblitz einer Nuke noch in der Lobby.
     for (const entry of this.nukeSequences) entry.onFinished?.();
@@ -213,5 +219,6 @@ export class VisualFeedbackDirector {
     this.camera.destroy();
     this.postFx.destroy();
     this.distortion.destroy();
+    this.lowHealthBlood.destroy();
   }
 }

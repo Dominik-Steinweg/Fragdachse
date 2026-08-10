@@ -30,20 +30,79 @@
       }
     },
     {
-      "id": "dev-dormant-outpost",
-      "hpMax": 1200,
+      "id": "destroy-brood-front-north",
+      "hpMax": 900,
       "faction": "hostile",
-      "role": "outpost",
+      "role": "spawn-point",
       "dormant": true,
       "anchor": {
-        "kind": "left-center",
-        "edgeInsetCells": 2
+        "kind": "grid",
+        "gridX": 12,
+        "gridY": 3
       },
       "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      }
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 1, "gridY": 0 },
+          { "gridX": 2, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 1, "gridY": 2 },
+          { "gridX": 2, "gridY": 2 }
+        ]
+      },
+      "spawnCenter": { "gridX": 1, "gridY": 1 }
+    },
+    {
+      "id": "destroy-brood-front-center",
+      "hpMax": 900,
+      "faction": "hostile",
+      "role": "spawn-point",
+      "dormant": true,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 12,
+        "gridY": 15
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 1, "gridY": 0 },
+          { "gridX": 2, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 1, "gridY": 2 },
+          { "gridX": 2, "gridY": 2 }
+        ]
+      },
+      "spawnCenter": { "gridX": 1, "gridY": 1 }
+    },
+    {
+      "id": "destroy-brood-front-south",
+      "hpMax": 900,
+      "faction": "hostile",
+      "role": "spawn-point",
+      "dormant": true,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 12,
+        "gridY": 27
+      },
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 1, "gridY": 0 },
+          { "gridX": 2, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 },
+          { "gridX": 1, "gridY": 2 },
+          { "gridX": 2, "gridY": 2 }
+        ]
+      },
+      "spawnCenter": { "gridX": 1, "gridY": 1 }
     }
   ],
   "powerUps": [],
@@ -54,6 +113,7 @@
         "type": "time",
         "atMs": 1500
       },
+      "restAfterMs": 12000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
@@ -65,19 +125,69 @@
           "delayMs": 1500
         }
       ]
+    },
+    {
+      "id": "a2-follow-up-encounter",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 5
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "delayMs": 1500
+        }
+      ]
+    }
+  ],
+  "persistentSpawns": [
+    {
+      "id": "destroy-brood-front-north-pressure",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 5000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": { "type": "base", "baseId": "destroy-brood-front-north" }
+    },
+    {
+      "id": "destroy-brood-front-center-pressure",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 5000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": { "type": "base", "baseId": "destroy-brood-front-center" }
+    },
+    {
+      "id": "destroy-brood-front-south-pressure",
+      "enemyKind": "zombie-badger",
+      "intervalMs": 5000,
+      "countPerTick": 1,
+      "startAtMs": 0,
+      "source": { "type": "base", "baseId": "destroy-brood-front-south" }
     }
   ],
   "secondaryObjectives": [
     {
-      "id": "dev-dormant-outpost-reveal",
+      "id": "destroy-brood-front",
       "type": "destroy",
       "start": {
-        "type": "time",
-        "atMs": 3000
+        "type": "after-encounter",
+        "encounterId": "a2-opening-encounter"
+      },
+      "focusUntil": {
+        "type": "after-encounter",
+        "encounterId": "a2-follow-up-encounter"
       },
       "targets": [
-        "dev-dormant-outpost"
-      ]
+        "destroy-brood-front-north",
+        "destroy-brood-front-center",
+        "destroy-brood-front-south"
+      ],
+      "rewards": { "xpPerTarget": 25 }
     }
   ]
 }

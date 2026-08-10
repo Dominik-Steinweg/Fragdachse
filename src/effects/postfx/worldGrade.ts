@@ -151,15 +151,17 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
     temperature += 0.45;
   }
 
-  // Niedrige Gesundheit ausschliesslich über Vignette und Entsättigung – kein Farbtonwechsel,
-  // sonst verschieben sich Telegraph- und Teamfarben genau dann, wenn sie am wichtigsten sind.
-  // Der Radius bleibt jenseits der Bildecke, die Intensität läuft allein über die Stärke.
-  // Die Vignette rahmt ein Bild, sie verdunkelt es nicht zusätzlich. Nachts ist die Lightmap
-  // ohnehin dunkel; ein mit der Dunkelheit wachsender Rand würde dort Gegner am Bildrand
-  // verschlucken. Sie bleibt deshalb weitgehend konstant, und die Dramatik kommt aus der
-  // Gesundheit.
-  const vignetteStrength = 0.18 + darkness * 0.05 + hurt * 0.34;
-  const vignetteRadius = 1.05 - hurt * 0.18;
+  // Niedrige Gesundheit ausschliesslich über Entsättigung – kein Farbtonwechsel, sonst
+  // verschieben sich Telegraph- und Teamfarben genau dann, wenn sie am wichtigsten sind.
+  //
+  // Die Vignette rahmt ein Bild, sie verdunkelt es nicht. Sie hängt deshalb weder an der
+  // Gesundheit noch nennenswert an der Uhrzeit: ein mit dem Schaden wachsender schwarzer Rand
+  // las sich als „Licht geht aus" statt als Verletzung und verschluckte nachts, wenn die
+  // Lightmap ohnehin dunkel ist, Gegner am Bildrand. Den Zustand trägt stattdessen die
+  // Blutdarstellung auf der Klarheitskamera (`LowHealthBloodOverlay`) – sie ist rot, sie ist
+  // großflächig, und sie kann die Bildmitte nicht abdunkeln.
+  const vignetteStrength = 0.18 + darkness * 0.05;
+  const vignetteRadius = 1.05;
   saturation -= hurt * 0.2;
 
   return {

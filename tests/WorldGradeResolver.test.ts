@@ -90,14 +90,26 @@ describe('resolveBaseGrade', () => {
       .toBeLessThan(resolveBaseGrade(inputs()).bloomThreshold);
   });
 
-  /** Ein Farbtonwechsel bei wenig Leben wuerde Telegraph- und Teamfarben verschieben. */
-  it('reagiert auf niedrige Gesundheit nur mit Vignette und Entsaettigung', () => {
+  /**
+   * Ein Farbtonwechsel bei wenig Leben wuerde Telegraph- und Teamfarben verschieben. Die
+   * Verdunklung traegt den Zustand ebenfalls nicht mehr: dafuer gibt es die Blutdarstellung am
+   * Bildrand. Die Vignette rahmt nur noch.
+   */
+  it('reagiert auf niedrige Gesundheit nur mit Entsaettigung', () => {
     const healthy = resolveBaseGrade(inputs({ localHpFraction: 1 }));
     const hurt = resolveBaseGrade(inputs({ localHpFraction: 0.1 }));
-    expect(hurt.vignetteStrength).toBeGreaterThan(healthy.vignetteStrength);
     expect(hurt.saturation).toBeLessThan(healthy.saturation);
+    expect(hurt.vignetteStrength).toBe(healthy.vignetteStrength);
+    expect(hurt.vignetteRadius).toBe(healthy.vignetteRadius);
     expect(hurt.tint).toBe(healthy.tint);
     expect(hurt.temperature).toBe(healthy.temperature);
+  });
+
+  /** Nachts ist die Lightmap ohnehin dunkel; ein wachsender Rand verschluckte dort Gegner. */
+  it('haelt die Vignette unabhaengig von der Gesundheit', () => {
+    const night = resolveBaseGrade(inputs({ skyState: MIDNIGHT, localHpFraction: 0 }));
+    const nightHealthy = resolveBaseGrade(inputs({ skyState: MIDNIGHT, localHpFraction: 1 }));
+    expect(night.vignetteStrength).toBe(nightHealthy.vignetteStrength);
   });
 
   it('gibt Void-Map und Bossphase je ein eigenes Farbprofil', () => {

@@ -301,6 +301,22 @@ describe('Coop defense secondary objectives', () => {
     expect(system.reportTargetResolved('destroy-front', 'target-c')).toBe(false);
   });
 
+  it('deduplicates target resolution and exposes only the normalized team reward', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      rewards: { xpPerTarget: 25.9 },
+    })]);
+    system.hostUpdate(0, false);
+
+    expect(system.reportTargetResolved('destroy-front', 'unknown')).toBe(false);
+    expect(system.reportTargetResolved('other-objective', 'target-a')).toBe(false);
+    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(true);
+    expect(system.reportTargetResolved('destroy-front', 'target-a')).toBe(false);
+    expect(system.getTargetResolutionXp('destroy-front')).toBe(25);
+
+    const withoutReward = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective()]);
+    expect(withoutReward.getTargetResolutionXp('destroy-front')).toBe(0);
+  });
+
   it('leaves an incomplete Hold active at round end without implicit success', () => {
     const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({ type: 'hold' })]);
     system.hostUpdate(60_000, false);

@@ -2687,13 +2687,21 @@ export class ArenaScene extends Phaser.Scene {
     const minutes = this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES;
     const inArena = bridge.getGamePhase() === 'ARENA';
     const mapId = bridge.getRoundState()?.coopDefenseMapId ?? bridge.getCoopDefenseMapId();
-    const localPlayer = this.ctx?.playerManager.getPlayer(bridge.getLocalPlayerId());
+    const localId = bridge.getLocalPlayerId();
+    const localPlayer = this.ctx?.playerManager.getPlayer(localId);
+    // Tot oder zuschauend gilt als unverletzt: die Gesundheitsdarstellung gehört zum eigenen
+    // Körper. Ohne diesen Vorbehalt bliebe der Bildschirm nach dem Tod bis zum Respawn – in
+    // Coop-Defense bis zum Wellenende – dauerhaft entsättigt und blutig.
+    const localWounded = inArena
+      && !this.localPlayerState.spectator
+      && !bridge.isLocalSpectator()
+      && (this.ctx?.combatSystem.isAlive(localId) ?? false);
 
     return {
       skyState: resolveSkyState(minutes),
       isVoidMap: inArena && getCoopDefenseMapConfig(mapId).trackMode === 'void-fire',
       bossPhase: inArena ? (this.ctx?.enemyManager?.getMaxBossPhase() ?? 0) : 0,
-      localHpFraction: inArena ? (localPlayer?.getHpFraction() ?? 1) : 1,
+      localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,
       gamePhase: inArena ? 'ARENA' : 'LOBBY',
     };
   }

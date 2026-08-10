@@ -31,6 +31,8 @@ Jede Map mit `objective: "survive"` konfiguriert zwingend `surviveDurationSec` u
 
 Coop-Maps mit `repel-assault`, `defeat-boss` oder `destroy-hostile-bases` haben keinen Rundentimer: Sieg und Niederlage werden ausschliesslich vom Objective und den Basen entschieden, `roundEndTime` bleibt fuer diese Maps ungesetzt. Nur `surviveDurationSec` speist den Survival-Timer und das Survival-HUD. `balanceReferenceDurationSec` ist davon getrennt und darf nur die Druck-/Drop-Normalisierung beeinflussen; es steuert weder Sieg, Hazard-Lifetime, Zug, Encounter noch Boss-Lifecycle.
 
+Destroy-Nebenmissionen melden die Aufloesung ihrer verknuepften Basis im gemeinsamen Basiszerstoerungs-Callback. Das Reporting laeuft nur auf dem Host; `reportTargetResolved()` ist zugleich die Deduplizierung und der Completion-Gate. Ein konfiguriertes `rewards.xpPerTarget` wird bei erfolgreicher Meldung direkt in den host-autoritaeren Runden-XP-Zaehler gebucht. Strukturgebundene `persistentSpawns` lesen weiterhin nur aktive Basis-IDs und brauchen keine eigene Destroy-Abschaltlogik.
+
 ## Spielmodi
 
 Die tatsächlichen Modus-IDs stehen in `src/types.ts`, die Modusregeln in `src/gameModes.ts`:

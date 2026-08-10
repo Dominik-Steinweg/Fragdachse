@@ -863,10 +863,25 @@ export class ArenaLifecycleCoordinator {
           this.ctx.powerUpSystem?.activatePedestalsLinkedToBase(activatedBase.id);
           syncActiveBaseIds();
         });
-        baseManager.setOnBaseDestroyed((destroyedBase) => {
-          this.ctx.targetStatusSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
-          this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
-          this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
+        // Flow fields are created from the complete prebuilt base list; remove dormant mission
+        // structures from their initial active-ID set before the first movement tick.
+        syncActiveBaseIds();
+      }
+    }
+    if (baseManager) {
+      baseManager.setOnBaseDestroyed((destroyedBase) => {
+        this.ctx.targetStatusSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
+        this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
+        this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
+
+        if (bridge.isHost()) {
+          const objectiveId = destroyedBase.dormantObjectiveId;
+          const objectiveSystem = this.ctx.coopDefenseSecondaryObjectiveSystem;
+          if (objectiveId && objectiveSystem?.reportTargetResolved(objectiveId, destroyedBase.id)) {
+            const xp = objectiveSystem.getTargetResolutionXp(objectiveId);
+            if (xp > 0) bridge.addCoopDefenseRoundXp(xp);
+          }
+
           const blast = getBaseDestructionBlast(destroyedBase);
           this.ctx.hostPhysics.applyRadialImpulse(
             blast.x,
@@ -877,12 +892,10 @@ export class ArenaLifecycleCoordinator {
             1,
             blast.durationMs,
           );
-          syncActiveBaseIds();
-        });
-        // Flow fields are created from the complete prebuilt base list; remove dormant mission
-        // structures from their initial active-ID set before the first movement tick.
+        }
+
         syncActiveBaseIds();
-      }
+      });
     }
     if (!bridge.isHost()) {
       this.ctx.baseManager?.setOnBaseActivated(() => {

@@ -8,7 +8,6 @@ vi.mock('phaser', () => ({
 }));
 
 import {
-  getCoopDefenseMapConfig,
   normalizeCoopDefenseMapConfig,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
@@ -18,9 +17,50 @@ import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { LightingSystem } from '../src/effects/LightingSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
 
+const DORMANT_BASE_ID = 'test-dormant-outpost';
+const DORMANT_OBJECTIVE_ID = 'test-dormant-objective';
+
+function makeDormantMap(): CoopDefenseMapConfig {
+  return {
+    mapId: 'dormant-test',
+    displayName: 'Dormant test map',
+    balanceReferenceDurationSec: 60,
+    objective: 'repel-assault',
+    bases: [
+      {
+        id: 'test-friendly-main',
+        hpMax: 1000,
+        anchor: { kind: 'right-center', edgeInsetCells: 0 },
+        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+      },
+      {
+        id: DORMANT_BASE_ID,
+        hpMax: 1000,
+        faction: 'hostile',
+        role: 'outpost',
+        dormant: true,
+        anchor: { kind: 'left-center', edgeInsetCells: 2 },
+        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+      },
+    ],
+    powerUps: [],
+    encounters: [{
+      id: 'test-encounter',
+      start: { type: 'time', atMs: 0 },
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+    }],
+    secondaryObjectives: [{
+      id: DORMANT_OBJECTIVE_ID,
+      type: 'destroy',
+      start: { type: 'time', atMs: 0 },
+      targets: [DORMANT_BASE_ID],
+    }],
+  };
+}
+
 function withMapChanges(changes: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
   return {
-    ...getCoopDefenseMapConfig('0'),
+    ...makeDormantMap(),
     ...changes,
   };
 }
@@ -127,18 +167,18 @@ function makeScene(): { scene: any; groupObjects: any[] } {
 
 describe('Coop-Defense dormant mission structures', () => {
   it('resolves a dormant base with its single linked objective', () => {
-    const map = getCoopDefenseMapConfig('0');
-    const spec = resolveCoopDefenseBases(map).find((base) => base.id === 'dev-dormant-outpost');
+    const map = makeDormantMap();
+    const spec = resolveCoopDefenseBases(map).find((base) => base.id === DORMANT_BASE_ID);
 
     expect(spec).toMatchObject({
       dormant: true,
-      dormantObjectiveId: 'dev-dormant-outpost-reveal',
+      dormantObjectiveId: DORMANT_OBJECTIVE_ID,
     });
   });
 
   it('rejects dormant structures without exactly one objective and rejects non-dormant targets', () => {
-    const baseMap = getCoopDefenseMapConfig('0');
-    const dormantBase = baseMap.bases.find((base) => base.id === 'dev-dormant-outpost')!;
+    const baseMap = makeDormantMap();
+    const dormantBase = baseMap.bases.find((base) => base.id === DORMANT_BASE_ID)!;
     const objective = baseMap.secondaryObjectives![0];
 
     expect(() => normalizeCoopDefenseMapConfig(withMapChanges({
@@ -157,9 +197,9 @@ describe('Coop-Defense dormant mission structures', () => {
   });
 
   it('rejects dormant main bases', () => {
-    const baseMap = getCoopDefenseMapConfig('0');
+    const baseMap = makeDormantMap();
     expect(() => normalizeCoopDefenseMapConfig(withMapChanges({
-      bases: baseMap.bases.map((base) => base.id === 'dev-dormant-outpost'
+      bases: baseMap.bases.map((base) => base.id === DORMANT_BASE_ID
         ? { ...base, role: 'main' as const }
         : base),
     }))).toThrow(/must not use role main/);

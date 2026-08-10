@@ -2,7 +2,18 @@ import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEATH_DISINTEGRATION_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
-import { TEX_BLOOD_DROPLET, TEX_BLOOD_STAIN, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
+import {
+  TEX_BLOOD_DROPLET,
+  TEX_BLOOD_EDGE_BOTTOM,
+  TEX_BLOOD_EDGE_LEFT,
+  TEX_BLOOD_EDGE_RIGHT,
+  TEX_BLOOD_EDGE_TOP,
+  TEX_BLOOD_STAIN,
+  TEX_BLOOD_STREAK,
+  ensureBloodEdgeTextures,
+  ensureBloodHitTextures,
+  spawnBloodStain,
+} from './BloodEffectShared';
 import { circleZone, createQualityEmitter, createSeededRandom, edgeZone, ensureCanvasTexture, makeAdditive, mixColors } from './EffectUtils';
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { PlasmaBurnerRenderer } from './PlasmaBurnerRenderer';
@@ -45,10 +56,6 @@ const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
 const TEX_EXPLOSION_SPARK = '__explosion_spark';
 const TEX_EXPLOSION_EMBER = '__explosion_ember';
-const TEX_DAMAGE_VIGNETTE_TOP    = '__damage_vignette_top';
-const TEX_DAMAGE_VIGNETTE_BOTTOM = '__damage_vignette_bottom';
-const TEX_DAMAGE_VIGNETTE_LEFT   = '__damage_vignette_left';
-const TEX_DAMAGE_VIGNETTE_RIGHT  = '__damage_vignette_right';
 const TEX_DEATH_PIXEL_GLOW = '__death_pixel_glow';
 
 const DEPTH_BLOOD_STAIN = DEPTH.PLAYERS - 0.05;
@@ -257,42 +264,10 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     ensureBloodHitTextures(this.scene);
-
-    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_TOP, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
-      const depth = GAME_HEIGHT * 0.32;
-      const grad = ctx.createLinearGradient(0, 0, 0, depth);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, GAME_WIDTH, depth);
-    });
-
-    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_BOTTOM, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
-      const depth = GAME_HEIGHT * 0.32;
-      const grad = ctx.createLinearGradient(0, GAME_HEIGHT, 0, GAME_HEIGHT - depth);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, GAME_HEIGHT - depth, GAME_WIDTH, depth);
-    });
-
-    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_LEFT, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
-      const depth = GAME_WIDTH * 0.18;
-      const grad = ctx.createLinearGradient(0, 0, depth, 0);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, depth, GAME_HEIGHT);
-    });
-
-    ensureCanvasTexture(this.scene.textures, TEX_DAMAGE_VIGNETTE_RIGHT, GAME_WIDTH, GAME_HEIGHT, (ctx) => {
-      const depth = GAME_WIDTH * 0.18;
-      const grad = ctx.createLinearGradient(GAME_WIDTH, 0, GAME_WIDTH - depth, 0);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(GAME_WIDTH - depth, 0, depth, GAME_HEIGHT);
-    });
+    // Die Schadensvignette teilt sich die Kantentexturen mit der Blutdarstellung bei wenig
+    // Leben: Treffer und Dauerzustand sollen erkennbar dasselbe Blut sein, nicht zwei
+    // verschiedene rote Rahmen.
+    ensureBloodEdgeTextures(this.scene);
 
     ensureCanvasTexture(this.scene.textures, TEX_DEATH_PIXEL_GLOW, 24, 24, (ctx) => {
       const gradient = ctx.createRadialGradient(12, 12, 1, 12, 12, 12);
@@ -2005,10 +1980,10 @@ export class EffectSystem implements EnemyVisualSink {
       return edge;
     };
 
-    this.damageVignetteTop    = createEdge(TEX_DAMAGE_VIGNETTE_TOP);
-    this.damageVignetteBottom = createEdge(TEX_DAMAGE_VIGNETTE_BOTTOM);
-    this.damageVignetteLeft   = createEdge(TEX_DAMAGE_VIGNETTE_LEFT);
-    this.damageVignetteRight  = createEdge(TEX_DAMAGE_VIGNETTE_RIGHT);
+    this.damageVignetteTop    = createEdge(TEX_BLOOD_EDGE_TOP);
+    this.damageVignetteBottom = createEdge(TEX_BLOOD_EDGE_BOTTOM);
+    this.damageVignetteLeft   = createEdge(TEX_BLOOD_EDGE_LEFT);
+    this.damageVignetteRight  = createEdge(TEX_BLOOD_EDGE_RIGHT);
   }
 
   private playDamageVignette(effect: SyncedHitEffect): void {

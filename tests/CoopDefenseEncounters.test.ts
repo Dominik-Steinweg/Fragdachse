@@ -176,14 +176,31 @@ describe('Coop defense encounters', () => {
     expect(normalized.encounters?.[0].start).toEqual({ type: 'base-destroyed', baseId: 'base-a' });
   });
 
-  it('keeps the A2 test encounter isolated on Map 0', () => {
+  it('configures the Map 0 destroy side mission alongside its encounters', () => {
     const map = getCoopDefenseMapConfig('0');
-    expect(map.persistentSpawns).toEqual([]);
-    expect(map.encounters).toHaveLength(1);
+    expect(map.persistentSpawns).toHaveLength(3);
+    expect(map.persistentSpawns?.every((spawn) => spawn.source.type === 'base')).toBe(true);
+    expect(new Set(map.persistentSpawns?.map((spawn) => (
+      spawn.source.type === 'base' ? spawn.source.baseId : 'map-source'
+    )))).toEqual(new Set(map.secondaryObjectives?.[0]?.targets));
+    expect(map.encounters).toHaveLength(2);
     const encounter = resolveCoopDefenseMapEncounterConfigs(map, 1)[0];
     expect(encounter?.id).toBe('a2-opening-encounter');
     expect(encounter?.start).toEqual({ type: 'time', atMs: 1_500 });
+    expect(encounter?.restAfterMs).toBeGreaterThan(0);
     expect(encounter?.groups.every((group) => group.front === 'west')).toBe(true);
     expect(encounter?.groups.every((group) => group.count > 0 && group.delayMs >= 0)).toBe(true);
+    expect(map.encounters?.[1]?.start).toEqual({ type: 'after-previous' });
+    expect(map.secondaryObjectives).toEqual([expect.objectContaining({
+      id: 'destroy-brood-front',
+      start: { type: 'after-encounter', encounterId: 'a2-opening-encounter' },
+      focusUntil: { type: 'after-encounter', encounterId: 'a2-follow-up-encounter' },
+      targets: expect.arrayContaining([
+        'destroy-brood-front-north',
+        'destroy-brood-front-center',
+        'destroy-brood-front-south',
+      ]),
+      rewards: { xpPerTarget: 25 },
+    })]);
   });
 });

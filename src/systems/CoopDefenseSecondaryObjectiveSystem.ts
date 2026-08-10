@@ -92,6 +92,11 @@ export class CoopDefenseSecondaryObjectiveSystem {
     return this.findObjectiveState(objectiveId)?.state ?? null;
   }
 
+  getTargetResolutionXp(objectiveId: string): number {
+    const value = this.findObjectiveState(objectiveId)?.config.rewards?.xpPerTarget;
+    return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  }
+
   /**
    * Meldet ein einmalig aufgelöstes authored Ziel. Die Meldung gilt für jedes aktive Objective,
    * auch wenn es nach Fokusverlust als Hintergrund-Objective weiterläuft.

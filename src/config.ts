@@ -352,8 +352,38 @@ export const DEATH_DISINTEGRATION_VFX = {
   glowAlpha: 0.36,
 } as const;
 
+/**
+ * Dauerzustand „wenig Leben" am Bildschirmrand: großflächiges, dezentes Blut auf der
+ * Klarheitskamera. Es ersetzt den früheren Gesundheitsanteil der schwarzen Weltvignette – ein
+ * dunkler werdender Rand las sich als „Licht geht aus", nicht als „du blutest", und verschluckte
+ * nachts Gegner am Bildrand.
+ *
+ * Die Farben kommen aus {@link BLOOD_HIT_VFX.palette}, damit Rand und Blutspritzer dieselbe
+ * Sprache sprechen. Bewusst die **dunklen** Palettentöne: der Effekt deckt bei wenig Leben
+ * große Teile des Bildes ab, und ein hellerer Rotton legt sich dort als Schleier über die
+ * Karte, statt am Rand zu kleben. Sichtbarkeit kommt aus der Deckkraft, nicht aus der
+ * Helligkeit. Die Spritzer sitzen eine Stufe unter der Fläche – sie sollen als dichtere
+ * Stellen desselben Bluts lesen, nicht als eigene, hellere Schicht.
+ */
+export const LOW_HEALTH_BLOOD_VFX = {
+  filmColor: BLOOD_HIT_VFX.palette[1],
+  speckleColor: BLOOD_HIT_VFX.palette[0],
+  /** Ab hier blendet der Rand ein; darüber ist er vollständig unsichtbar. */
+  onsetHpFraction: 0.5,
+  /** Einzelne Spritzer kommen später dazu – sie markieren den kritischen Bereich. */
+  speckleOnsetHpFraction: 0.42,
+  filmAlphaMax: 0.42,
+  speckleAlphaMax: 0.34,
+  /** Ein Treffer schlägt sofort durch, Heilung blutet aus, statt zu blinken. */
+  riseMs: 180,
+  fallMs: 600,
+  pulseAmplitude: 0.15,
+  pulsePeriodOnsetMs: 1400,
+  pulsePeriodCriticalMs: 700,
+} as const;
+
 export const DAMAGE_VIGNETTE_VFX = {
-  color: COLORS.RED_3,
+  color: BLOOD_HIT_VFX.palette[3],
   durationMs: 800,
   damageFloor: 6,
   damageMid: 22,
