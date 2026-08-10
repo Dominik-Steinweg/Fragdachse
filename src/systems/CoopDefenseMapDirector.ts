@@ -4,6 +4,10 @@ import type {
   ResolvedCoopDefenseMapEncounterGroupConfig,
 } from '../config/coopDefenseMaps';
 import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
+import type {
+  CoopDefenseEncounterPresentationPhase,
+  CoopDefenseEncounterPresentationState,
+} from '../types';
 
 /** Ausfuehrungsschnitt des Directors zur bestehenden normalen Spawnlogik. */
 export type CoopDefenseEncounterSpawnHandler = (
@@ -14,6 +18,9 @@ export type CoopDefenseEncounterSpawnHandler = (
 
 const DEFAULT_SPAWN_BACKSTOP_MS = 30_000;
 const DEFAULT_TECHNICAL_STUCK_BACKSTOP_MS = 60_000;
+/** Reine Präsentationszeit; sie verschiebt weder Trigger noch Spawn-Zeitpunkte. */
+const ENCOUNTER_INCOMING_TELEGRAPH_MS = 900;
+const ENCOUNTER_CLEARED_HOLD_MS = 800;
 
 export type CoopDefenseMapDirectorMode = 'scheduled' | 'repel-assault';
 
@@ -47,6 +54,7 @@ interface EncounterExecutionState {
   readonly technicallyStuckSinceMs: Map<string, number>;
   spawnBackstopped: boolean;
   startedAtMs: number;
+  presentationIncomingStartedAtMs: number;
   clearedAtMs: number | null;
   cleared: boolean;
 }
@@ -106,6 +114,7 @@ export class CoopDefenseMapDirector {
       technicallyStuckSinceMs: new Map<string, number>(),
       spawnBackstopped: false,
       startedAtMs: 0,
+      presentationIncomingStartedAtMs: 0,
       clearedAtMs: null,
       cleared: false,
     }));
@@ -143,6 +152,7 @@ export class CoopDefenseMapDirector {
       state.technicallyStuckSinceMs.clear();
       state.spawnBackstopped = false;
       state.startedAtMs = 0;
+      state.presentationIncomingStartedAtMs = 0;
       state.clearedAtMs = null;
       state.cleared = false;
     }
@@ -186,6 +196,18 @@ export class CoopDefenseMapDirector {
     return Math.max(0, this.restUntilMs - this.elapsedMs);
   }
 
+  /**
+   * Kleiner, zuverlässiger Präsentationsvertrag für HUD und Welt-Telegraph.
+   * Er beschreibt nur den bereits autoritativ entschiedenen Encounter-Fortschritt;
+   * Clients leiten daraus weder Trigger, Spawns noch Clear-Bedingungen ab.
+   */
+  getPresentationState(): CoopDefenseEncounterPresentationState | null {
+    if (this.encounters.length === 0) return null;
+    return this.mode === 'repel-assault'
+      ? this.getRepelPresentationState()
+      : this.getScheduledPresentationState();
+  }
+
   private hostUpdateScheduled(): number {
     let executedGroupCount = 0;
 
@@ -195,6 +217,7 @@ export class CoopDefenseMapDirector {
       if (!state.started && this.canStartScheduledEncounter(encounterIndex)) {
         state.started = true;
         state.startedAtMs = this.getScheduledEncounterStartAtMs(encounterIndex);
+        state.presentationIncomingStartedAtMs = this.getPresentationIncomingStartAtMs(encounterIndex);
       }
       if (!state.started) continue;
 
@@ -280,6 +303,7 @@ export class CoopDefenseMapDirector {
     }
     state.started = true;
     state.startedAtMs = this.getRepelEncounterStartAtMs(this.encounters[index].start);
+    state.presentationIncomingStartedAtMs = this.getPresentationIncomingStartAtMs(index);
     this.repelEncounterStartedAtMs = state.startedAtMs;
     this.repelPhase = 'active';
   }
@@ -331,6 +355,214 @@ export class CoopDefenseMapDirector {
     return start.type === 'time'
       ? Math.max(0, Math.floor(start.atMs))
       : this.elapsedMs;
+  }
+
+  private getPresentationIncomingStartAtMs(index: number): number {
+    const state = this.executionStates[index];
+    if (!state) return this.elapsedMs;
+    const start = this.encounters[index]?.start;
+    // Zeit- und After-Previous-Encounter sind vorhersehbar und erhalten eine echte
+    // Vorwarnung. Event-Trigger werden erst bei ihrer autoritativen Auslösung sichtbar.
+    if (start?.type === 'time' || start?.type === 'after-previous') {
+      return Math.max(0, state.startedAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS);
+    }
+    return this.elapsedMs;
+  }
+
+  private getScheduledPresentationState(): CoopDefenseEncounterPresentationState | null {
+    for (let index = 0; index < this.executionStates.length; index += 1) {
+      const state = this.executionStates[index];
+      if (!state.started || state.cleared) continue;
+      return this.createStartedPresentationState(index, state);
+    }
+
+    const pending = this.findPredictablePendingEncounter();
+    if (pending && this.elapsedMs >= pending.startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS
+      && this.elapsedMs < pending.startAtMs) {
+      return this.createPresentationState(
+        pending.index,
+        'incoming',
+        pending.startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS,
+        pending.startAtMs,
+      );
+    }
+
+    const latestCleared = this.findLatestClearedEncounter();
+    if (!latestCleared) return null;
+    const clearedAtMs = latestCleared.state.clearedAtMs ?? this.elapsedMs;
+    if (this.elapsedMs < clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS) {
+      return this.createPresentationState(
+        latestCleared.index,
+        'cleared',
+        clearedAtMs,
+        clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS,
+      );
+    }
+
+    const nextIndex = latestCleared.index + 1;
+    const next = this.encounters[nextIndex];
+    if (next?.start.type === 'after-previous') {
+      const nextStartAtMs = clearedAtMs + this.encounters[latestCleared.index].restAfterMs;
+      return this.createPresentationState(
+        nextIndex,
+        'rest',
+        clearedAtMs,
+        nextStartAtMs,
+      );
+    }
+
+    if (this.executionStates.every((entry) => entry.cleared)) {
+      return this.createPresentationState(
+        latestCleared.index,
+        'complete',
+        clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS,
+        null,
+      );
+    }
+    return null;
+  }
+
+  private getRepelPresentationState(): CoopDefenseEncounterPresentationState | null {
+    if (this.repelPhase === 'active') {
+      const state = this.executionStates[this.repelEncounterIndex];
+      return state?.started ? this.createStartedPresentationState(this.repelEncounterIndex, state) : null;
+    }
+
+    if (this.repelPhase === 'rest') {
+      const nextIndex = this.repelEncounterIndex + 1;
+      if (nextIndex >= this.encounters.length) return null;
+      const previousClearedAtMs = this.executionStates[this.repelEncounterIndex]?.clearedAtMs ?? this.elapsedMs;
+      if (this.elapsedMs < previousClearedAtMs + ENCOUNTER_CLEARED_HOLD_MS) {
+        return this.createPresentationState(
+          this.repelEncounterIndex,
+          'cleared',
+          previousClearedAtMs,
+          previousClearedAtMs + ENCOUNTER_CLEARED_HOLD_MS,
+        );
+      }
+      if (this.elapsedMs >= this.restUntilMs - ENCOUNTER_INCOMING_TELEGRAPH_MS
+        && this.elapsedMs < this.restUntilMs) {
+        return this.createPresentationState(
+          nextIndex,
+          'incoming',
+          this.restUntilMs - ENCOUNTER_INCOMING_TELEGRAPH_MS,
+          this.restUntilMs,
+        );
+      }
+      return this.createPresentationState(
+        nextIndex,
+        'rest',
+        previousClearedAtMs,
+        this.restUntilMs,
+      );
+    }
+
+    if (this.repelPhase === 'complete') {
+      const lastIndex = this.executionStates.length - 1;
+      const state = this.executionStates[lastIndex];
+      const clearedAtMs = state?.clearedAtMs ?? this.elapsedMs;
+      if (this.elapsedMs < clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS) {
+        return this.createPresentationState(
+          lastIndex,
+          'cleared',
+          clearedAtMs,
+          clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS,
+        );
+      }
+      return this.createPresentationState(
+        lastIndex,
+        'complete',
+        clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS,
+        null,
+      );
+    }
+
+    const pending = this.findPredictablePendingEncounter();
+    if (pending && this.elapsedMs >= pending.startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS
+      && this.elapsedMs < pending.startAtMs) {
+      return this.createPresentationState(
+        pending.index,
+        'incoming',
+        pending.startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS,
+        pending.startAtMs,
+      );
+    }
+    return null;
+  }
+
+  private createStartedPresentationState(
+    index: number,
+    state: EncounterExecutionState,
+  ): CoopDefenseEncounterPresentationState {
+    const incomingEndsAtMs = Math.max(
+      state.presentationIncomingStartedAtMs + ENCOUNTER_INCOMING_TELEGRAPH_MS,
+      state.startedAtMs + this.getFirstGroupDelayMs(index),
+    );
+    return this.createPresentationState(
+      index,
+      this.elapsedMs < incomingEndsAtMs ? 'incoming' : 'active',
+      state.presentationIncomingStartedAtMs,
+      incomingEndsAtMs,
+    );
+  }
+
+  private createPresentationState(
+    index: number,
+    phase: CoopDefenseEncounterPresentationPhase,
+    phaseStartedAtMs: number,
+    phaseEndsAtMs: number | null,
+  ): CoopDefenseEncounterPresentationState {
+    return {
+      encounterId: this.encounters[index]?.id ?? '',
+      sequenceIndex: index + 1,
+      sequenceCount: this.encounters.length,
+      phase,
+      phaseStartedAtMs: Math.max(0, phaseStartedAtMs),
+      phaseEndsAtMs: phaseEndsAtMs === null ? null : Math.max(0, phaseEndsAtMs),
+    };
+  }
+
+  private getFirstGroupDelayMs(index: number): number {
+    const groups = this.encounters[index]?.groups ?? [];
+    return groups.reduce(
+      (minimum, group) => Math.min(minimum, Math.max(0, Math.floor(group.delayMs))),
+      Number.POSITIVE_INFINITY,
+    );
+  }
+
+  private findPredictablePendingEncounter(): { index: number; startAtMs: number } | null {
+    for (let index = 0; index < this.encounters.length; index += 1) {
+      const state = this.executionStates[index];
+      const encounter = this.encounters[index];
+      if (state.started) continue;
+      if (encounter.start.type === 'time') {
+        return { index, startAtMs: Math.max(0, Math.floor(encounter.start.atMs)) };
+      }
+      if (encounter.start.type === 'after-previous') {
+        const previous = this.executionStates[index - 1];
+        if (previous?.cleared && previous.clearedAtMs !== null) {
+          return {
+            index,
+            startAtMs: previous.clearedAtMs + this.encounters[index - 1].restAfterMs,
+          };
+        }
+      }
+      // Event- und Base-Trigger haben keinen clientseitig vorhersagbaren Zeitpunkt.
+      return null;
+    }
+    return null;
+  }
+
+  private findLatestClearedEncounter(): { index: number; state: EncounterExecutionState } | null {
+    let latest: { index: number; state: EncounterExecutionState } | null = null;
+    for (let index = 0; index < this.executionStates.length; index += 1) {
+      const state = this.executionStates[index];
+      if (!state.cleared) continue;
+      if (!latest || (state.clearedAtMs ?? -1) > (latest.state.clearedAtMs ?? -1)) {
+        latest = { index, state };
+      }
+    }
+    return latest;
   }
 
   private spawnEncounterGroup(

@@ -67,6 +67,10 @@ describe('Coop defense encounters', () => {
     expect(() => normalizeCoopDefenseMapConfig(makeMap([
       { id: 'empty-group', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'zombie-badger', count: 0 }] },
     ]))).toThrow('positive finite group counts');
+
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([
+      { id: 'boss-group', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'void-hunter', count: 1 }] },
+    ]))).toThrow('unique boss slot');
   });
 
   it('requires encounters for repel-assault maps while allowing parallel persistent pressure', () => {

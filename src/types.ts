@@ -36,6 +36,26 @@ export interface CoopDefenseSurvivalState {
   players: Record<string, CoopDefenseSurvivalPlayerState>;
 }
 
+/** Host-autoritärer, zuverlässiger Präsentationszustand eines endlichen Coop-Encounter. */
+export type CoopDefenseEncounterPresentationPhase =
+  | 'incoming'
+  | 'active'
+  | 'cleared'
+  | 'rest'
+  | 'complete';
+
+export interface CoopDefenseEncounterPresentationState {
+  encounterId: string;
+  /** 1-basierter Index innerhalb der endlichen Encounter-Sequenz. */
+  sequenceIndex: number;
+  sequenceCount: number;
+  phase: CoopDefenseEncounterPresentationPhase;
+  /** Host-Rundenzeit, ab der die aktuelle Phase begonnen hat. */
+  phaseStartedAtMs: number;
+  /** Host-Rundenzeit des nächsten Phasenwechsels; null für offene Phasen. */
+  phaseEndsAtMs: number | null;
+}
+
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {
   dx: number;  // -1 | 0 | 1

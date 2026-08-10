@@ -1487,6 +1487,12 @@ export class ArenaScene extends Phaser.Scene {
     // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
     // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
     this.syncMainCamera(spectator ? 0 : delta, inArena);
+    const encounterPresentation = inArena && isCoopDefenseMode(bridge.getGameMode())
+      ? bridge.getCoopDefenseEncounterPresentationState()
+      : null;
+    const encounterElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
+    this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
+    this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
     this.syncSpectatorPlayerNames(inArena);
     const hostileBaseIndicatorActive = inArena && isCoopDefenseMode(bridge.getGameMode());
     if (hostileBaseIndicatorActive) {

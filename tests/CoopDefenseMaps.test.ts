@@ -96,12 +96,20 @@ describe('Coop defense map progression', () => {
     expect(getCoopDefenseMapObjectiveLabel('survive')).toBe('ZEIT ÜBERLEBEN');
   });
 
-  it('calculates positive finite XP for every playable map', () => {
+  it('calculates non-negative exact finite XP for every playable map', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
       const scheduledXp = getCoopDefenseMapScheduledXp(map, 1);
       expect(Number.isFinite(scheduledXp)).toBe(true);
-      expect(scheduledXp).toBeGreaterThan(0);
+      expect(scheduledXp).toBeGreaterThanOrEqual(0);
     }
+    const finiteEmptyMap = {
+      mapId: 'finite-empty',
+      displayName: 'Finite empty',
+      roundDurationSec: 60,
+      bases: [],
+      powerUps: [],
+    } as CoopDefenseMapConfig;
+    expect(getCoopDefenseMapScheduledXp(finiteEmptyMap)).toBe(0);
   });
 
   it('migrates only Map 1 to the explicit repel-assault campaign reference', () => {

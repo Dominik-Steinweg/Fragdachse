@@ -55,7 +55,8 @@ Der globale `CoopDefenseSurvivalState`-Snapshot (`csv`) ist ebenfalls reliable. 
 `PeerRoom` bietet einen Key-Value-Store, global und pro Spieler. Verträge:
 
 - **Lokale Schreibvorgänge wirken sofort lokal** und werden danach verteilt. `setLocalReady(true)` gefolgt von `getPlayerReady(localId)` liefert ohne Roundtrip `true`.
-- **Zuverlässig** (`reliable = true`, Kanal `rel`, sofortiger Versand): Spielphase, Modus/Map, Arena-Layout, Zeitbasen, Lobby-Snapshot, committed Loadouts, Teams, Rundenergebnisse, Farbpool und der `RoundParticipationState`-Snapshot.
+- **Zuverlässig** (`reliable = true`, Kanal `rel`, sofortiger Versand): Spielphase, Modus/Map, Arena-Layout, Zeitbasen, Lobby-Snapshot, committed Loadouts, Teams, Rundenergebnisse, Farbpool, der `RoundParticipationState`-Snapshot und der kompakte `CoopDefenseEncounterPresentationState`-Snapshot (`cep`).
+- `cep` ist ausschließlich host-autoritatives Präsentationswissen für Latejoiner und Zuschauer: Encounter-ID/Sequenz, Phase (`incoming`, `active`, `cleared`, `rest`, `complete`) und absolute Phasenzeiten. Er entscheidet weder Spawns noch Sieg/Niederlage und wird nur bei einer Zustandsänderung geschrieben, nie pro Frame.
 - **Ersetzbar** (Default, Kanal `fast`): Input, Ping, `KEY_GAME_STATE`. Diese Schreibvorgänge werden pro Key gesammelt und einmal je Frame verschickt – pro Key gewinnt der letzte Wert.
 - Der Host ist die einzige Instanz, die weiterreicht; Clients sprechen nie miteinander. `HOST_ONLY_PLAYER_KEYS` hält Keys vom Relay fern, die ausschließlich der Host liest. `KEY_INPUT` gehört bewusst nicht dazu: `PlacementPreviewRenderer` liest `placementPreview` fremder Spieler und läuft auch auf Clients.
 - Beim Join erhält ein Client den vollständigen Store, bevor Join-Callbacks feuern.

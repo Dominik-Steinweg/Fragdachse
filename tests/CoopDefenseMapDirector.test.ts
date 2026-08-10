@@ -121,6 +121,49 @@ describe('CoopDefenseMapDirector', () => {
     expect(director.isAssaultRepelled()).toBe(true);
   });
 
+  it('exposes an incoming-active-cleared-rest rhythm without changing clear semantics', () => {
+    const activeEnemyIds = new Set<string>();
+    let nextEnemyId = 1;
+    const director = new CoopDefenseMapDirector([
+      {
+        id: 'opening',
+        start: { type: 'time', atMs: 0 },
+        restAfterMs: 5_000,
+        groups: [{ enemyKind: 'zombie-badger', count: 1, delayMs: 0 }],
+      },
+      {
+        id: 'final',
+        start: { type: 'after-previous' },
+        restAfterMs: 0,
+        groups: [{ enemyKind: 'demon-badger', count: 1, delayMs: 0 }],
+      },
+    ], (_kind, count) => {
+      const ids = Array.from({ length: count }, () => `presentation-${nextEnemyId++}`);
+      for (const id of ids) activeEnemyIds.add(id);
+      return ids;
+    }, {
+      mode: 'repel-assault',
+      isEnemyActive: (enemyId) => activeEnemyIds.has(enemyId),
+    });
+
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()).toMatchObject({
+      encounterId: 'opening', sequenceIndex: 1, phase: 'incoming', phaseEndsAtMs: 900,
+    });
+    director.hostUpdate(900, false);
+    expect(director.getPresentationState()?.phase).toBe('active');
+
+    activeEnemyIds.clear();
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('cleared');
+    director.hostUpdate(800, false);
+    expect(director.getPresentationState()).toMatchObject({ encounterId: 'final', phase: 'rest' });
+    director.hostUpdate(3_300, false);
+    expect(director.getPresentationState()).toMatchObject({
+      encounterId: 'final', sequenceIndex: 2, phase: 'incoming', phaseEndsAtMs: 5_900,
+    });
+  });
+
   it('keeps the authored rest as a minimum while faster clears shorten the assault', () => {
     const run = (clearDelayMs: number): number => {
       const activeEnemyIds = new Set<string>();

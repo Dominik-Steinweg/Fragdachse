@@ -93,6 +93,7 @@ export class HostUpdateCoordinator {
   private readonly prevAliveStates      = new Map<string, boolean>();
   private moveLoopHandle: string | null = null;
   private trainSpawned = false;
+  private lastEncounterPresentationSignature: string | null = null;
   private readonly blackHoleSystem: BlackHoleSystem;
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
   private lastPerformance = emptyHostUpdatePerformanceMetrics();
@@ -136,6 +137,7 @@ export class HostUpdateCoordinator {
     this.prevAliveStates.clear();
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.trainSpawned = false;
+    this.lastEncounterPresentationSignature = null;
     this.blackHoleSystem.clear();
     this.enemyDashVisuals.reset();
     this.lastPerformance = emptyHostUpdatePerformanceMetrics();
@@ -155,6 +157,7 @@ export class HostUpdateCoordinator {
     this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive);
     this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
+    this.publishCoopDefenseEncounterPresentation();
     this.ctx.coopDefenseAirstrikeDirector?.hostUpdate(delta, countdownActive);
     this.updateEnemyFlowFields(now);
     if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
@@ -1075,6 +1078,23 @@ export class HostUpdateCoordinator {
     metrics.snapshotBuildMs = performance.now() - phaseStartedAt;
     metrics.totalMs = performance.now() - startedAt;
     this.lastPerformance = metrics;
+  }
+
+  private publishCoopDefenseEncounterPresentation(): void {
+    const state = this.ctx.coopDefenseMapDirector?.getPresentationState() ?? null;
+    const signature = state
+      ? [
+        state.encounterId,
+        state.sequenceIndex,
+        state.sequenceCount,
+        state.phase,
+        state.phaseStartedAtMs,
+        state.phaseEndsAtMs ?? 'open',
+      ].join('|')
+      : null;
+    if (signature === this.lastEncounterPresentationSignature) return;
+    this.lastEncounterPresentationSignature = signature;
+    bridge.publishCoopDefenseEncounterPresentationState(state);
   }
 
   getPerformanceMetrics(): HostUpdatePerformanceMetrics {

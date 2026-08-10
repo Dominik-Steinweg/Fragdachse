@@ -251,6 +251,7 @@ export class ArenaLifecycleCoordinator {
     // Der Endstand der Vorrunde bleibt in der Lobby sichtbar, wird aber beim Start atomar
     // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
     bridge.publishRoundResults([]);
+    bridge.publishCoopDefenseEncounterPresentationState(null);
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
       : null;
@@ -368,6 +369,7 @@ export class ArenaLifecycleCoordinator {
   hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const roundEndedAt = Date.now();
+    bridge.publishCoopDefenseEncounterPresentationState(null);
 
     if (roundConclusion) {
       const currentRoundState = bridge.getRoundState();
@@ -2313,6 +2315,7 @@ export class ArenaLifecycleCoordinator {
     this.renderers.powerUp.clear();
     this.renderers.nuke.clear();
     this.renderers.airstrike.clear();
+    this.renderers.encounterTelegraph.clear();
     this.renderers.meteor.clear();
     this.ctx.armageddonSystem?.destroyAll();
     this.ctx.armageddonSystem = null;

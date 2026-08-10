@@ -7,7 +7,7 @@
 import * as Phaser from 'phaser';
 import { ARMOR_COLOR, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
-import type { CoopDefenseSurvivalPlayerState } from '../types';
+import type { CoopDefenseEncounterPresentationState, CoopDefenseSurvivalPlayerState } from '../types';
 import {
   rgbStr,
   type LivingBarPalette,
@@ -75,6 +75,16 @@ const TRAIN_BAR_BG_TEX = '_center_train_bg';
 const TRAIN_PAL: LivingBarPalette = { dark: 0x3d1812, mid: 0xcf573c, light: 0xff8060 };
 const TRAIN_PANEL_Y    = 78;
 const TRAIN_PANEL_H    = 54;
+
+const ENCOUNTER_PANEL_W = 392;
+const ENCOUNTER_PANEL_H = 54;
+const ENCOUNTER_PANEL_X = GAME_WIDTH - ENCOUNTER_PANEL_W / 2 - 22;
+const ENCOUNTER_PANEL_Y = 28;
+const ENCOUNTER_PANEL_LEFT = -ENCOUNTER_PANEL_W / 2;
+const ENCOUNTER_PANEL_TOP = -ENCOUNTER_PANEL_H / 2;
+const ENCOUNTER_PROGRESS_W = ENCOUNTER_PANEL_W - 34;
+const ENCOUNTER_PROGRESS_Y = ENCOUNTER_PANEL_H / 2 - 6;
+const ENCOUNTER_FADE_MS = 180;
 
 const STACK_BAR_W      = 212;
 const STACK_BAR_H      = 14;
@@ -195,6 +205,16 @@ export class CenterHUD {
   private announcementBg!: Phaser.GameObjects.Rectangle;
   private announcementText!: Phaser.GameObjects.Text;
   private announcementTween: Phaser.Tweens.Tween | null = null;
+  private encounterPanel!: Phaser.GameObjects.Container;
+  private encounterGraphics!: Phaser.GameObjects.Graphics;
+  private encounterMarker!: Phaser.GameObjects.Arc;
+  private encounterProgress!: Phaser.GameObjects.Rectangle;
+  private encounterProgressBg!: Phaser.GameObjects.Rectangle;
+  private encounterTitle!: Phaser.GameObjects.Text;
+  private encounterStatus!: Phaser.GameObjects.Text;
+  private encounterSequence!: Phaser.GameObjects.Text;
+  private encounterTween: Phaser.Tweens.Tween | null = null;
+  private encounterPulseTween: Phaser.Tweens.Tween | null = null;
 
   private trainText!: Phaser.GameObjects.Text;
   private trainPanelBg!: Phaser.GameObjects.Rectangle;
@@ -211,6 +231,8 @@ export class CenterHUD {
   private lastTimerText: string | null = null;
   private lastTimerColor: string | null = null;
   private lastSurvivalText: string | null = null;
+  private lastEncounterPresentationSignature: string | null = null;
+  private lastEncounterPresentationPhase: CoopDefenseEncounterPresentationState['phase'] | null = null;
   private lastTrainText: string | null = null;
   private lastTrainBarWidth = -1;
   private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
@@ -251,6 +273,7 @@ export class CenterHUD {
     }
 
     this.buildTimer();
+    this.buildEncounterPanel();
     this.buildTutorialPanel();
     this.buildAnnouncementOverlay();
     this.buildTrainWidget();
@@ -267,6 +290,47 @@ export class CenterHUD {
       fontSize: '14px', fontFamily: 'monospace', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     this.container.add([timerBg, this.timerText, this.survivalText]);
+  }
+
+  private buildEncounterPanel(): void {
+    this.encounterGraphics = this.scene.add.graphics();
+    this.encounterMarker = this.scene.add.circle(ENCOUNTER_PANEL_LEFT + 18, 0, 5, COLORS.RED_1, 1);
+    this.encounterTitle = this.scene.add.text(ENCOUNTER_PANEL_LEFT + 34, -19, 'ANGRIFF', {
+      fontSize: '13px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
+    }).setOrigin(0, 0.5);
+    this.encounterStatus = this.scene.add.text(ENCOUNTER_PANEL_LEFT + 34, 2, '', {
+      fontSize: '17px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.RED_1),
+    }).setOrigin(0, 0.5);
+    this.encounterSequence = this.scene.add.text(-ENCOUNTER_PANEL_LEFT - 16, -18, '', {
+      fontSize: '13px', fontFamily: 'monospace', color: toCssColor(COLORS.GREY_3),
+    }).setOrigin(1, 0.5);
+    this.encounterProgressBg = this.scene.add.rectangle(
+      ENCOUNTER_PANEL_LEFT + 17,
+      ENCOUNTER_PROGRESS_Y,
+      ENCOUNTER_PROGRESS_W,
+      2,
+      COLORS.GREY_8,
+      0.85,
+    ).setOrigin(0, 0.5);
+    this.encounterProgress = this.scene.add.rectangle(
+      ENCOUNTER_PANEL_LEFT + 17,
+      ENCOUNTER_PROGRESS_Y,
+      ENCOUNTER_PROGRESS_W,
+      2,
+      COLORS.RED_1,
+      1,
+    ).setOrigin(0, 0.5);
+
+    this.encounterPanel = this.scene.add.container(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y, [
+      this.encounterGraphics,
+      this.encounterProgressBg,
+      this.encounterProgress,
+      this.encounterMarker,
+      this.encounterTitle,
+      this.encounterStatus,
+      this.encounterSequence,
+    ]).setScrollFactor(0).setVisible(false).setAlpha(1);
+    this.container.add(this.encounterPanel);
   }
 
   private buildTutorialPanel(): void {
@@ -476,6 +540,7 @@ export class CenterHUD {
   transitionToLobby(): void {
     this.container.setVisible(false);
     this.hideAnnouncement();
+    this.hideEncounterPresentation();
     this.hideTutorial(true);
     this.hideTrainWidget();
     this.hideLowerSection(this.armorSection);
@@ -539,6 +604,130 @@ export class CenterHUD {
     this.survivalText
       .setColor(status.eliminated ? '#ff5555' : status.alive && status.remainingRespawns === 0 ? '#ffb347' : '#ffd166')
       .setVisible(true);
+  }
+
+  updateEncounterPresentation(
+    state: CoopDefenseEncounterPresentationState | null,
+    elapsedMs: number,
+  ): void {
+    if (!state) {
+      this.hideEncounterPresentation();
+      return;
+    }
+
+    const elapsed = Number.isFinite(elapsedMs) ? elapsedMs : 0;
+    const remainingMs = state.phaseEndsAtMs === null
+      ? 0
+      : Math.max(0, state.phaseEndsAtMs - elapsed);
+    const remainingText = remainingMs >= 10_000
+      ? `${Math.ceil(remainingMs / 1000)}s`
+      : `${(remainingMs / 1000).toFixed(1)}s`;
+    const statusText = state.phase === 'incoming'
+      ? `EINSATZ IN ${remainingText}`
+      : state.phase === 'active'
+        ? 'ANGRIFF LÄUFT'
+        : state.phase === 'cleared'
+          ? 'ABGEWEHRT'
+          : state.phase === 'rest'
+            ? `NÄCHSTER IN ${remainingText}`
+            : 'SERIE ABGEWEHRT';
+    const titleText = state.phase === 'complete'
+      ? 'ENDE DER ANGRIFFSSERIE'
+      : `ANGRIFF ${state.sequenceIndex} / ${state.sequenceCount}`;
+    const textSignature = [state.encounterId, state.phase, titleText, statusText].join('|');
+    const phaseChanged = state.phase !== this.lastEncounterPresentationPhase;
+
+    if (textSignature !== this.lastEncounterPresentationSignature) {
+      this.encounterTitle.setText(titleText);
+      this.encounterStatus.setText(statusText);
+      this.encounterSequence.setText(`${state.sequenceIndex}/${state.sequenceCount}`);
+      this.lastEncounterPresentationSignature = textSignature;
+    }
+
+    const style = this.getEncounterStyle(state.phase);
+    this.encounterTitle.setColor(toCssColor(style.color));
+    this.encounterStatus.setColor(toCssColor(style.color));
+    this.encounterSequence.setColor(toCssColor(style.secondary));
+    this.encounterMarker.setFillStyle(style.color, 1);
+    this.encounterProgress.setFillStyle(style.color, 1);
+    this.encounterProgress.setScale(
+      state.phaseEndsAtMs === null
+        ? 1
+        : Phaser.Math.Clamp(
+          (elapsed - state.phaseStartedAtMs) / Math.max(1, state.phaseEndsAtMs - state.phaseStartedAtMs),
+          0,
+          1,
+        ),
+      1,
+    );
+    this.drawEncounterFrame(style.color);
+
+    if (phaseChanged || !this.encounterPanel.visible) {
+      this.encounterTween?.destroy();
+      this.encounterPanel.setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y + 8).setVisible(true).setAlpha(0);
+      this.encounterTween = this.scene.tweens.add({
+        targets: this.encounterPanel,
+        alpha: 1,
+        y: ENCOUNTER_PANEL_Y,
+        duration: ENCOUNTER_FADE_MS,
+        ease: 'Quad.easeOut',
+        onComplete: () => { this.encounterTween = null; },
+      });
+      this.encounterPulseTween?.destroy();
+      this.encounterPulseTween = null;
+      if (state.phase === 'incoming' || state.phase === 'cleared') {
+        this.encounterPulseTween = this.scene.tweens.add({
+          targets: this.encounterMarker,
+          scaleX: 1.35,
+          scaleY: 1.35,
+          alpha: 0.45,
+          duration: state.phase === 'incoming' ? 360 : 500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    }
+    this.lastEncounterPresentationPhase = state.phase;
+  }
+
+  private getEncounterStyle(phase: CoopDefenseEncounterPresentationState['phase']): { color: number; secondary: number } {
+    if (phase === 'active') return { color: COLORS.GOLD_1, secondary: COLORS.GOLD_2 };
+    if (phase === 'cleared' || phase === 'complete') return { color: COLORS.GREEN_1, secondary: COLORS.BLUE_2 };
+    if (phase === 'rest') return { color: COLORS.BLUE_2, secondary: COLORS.GREY_3 };
+    return { color: COLORS.RED_1, secondary: COLORS.GOLD_2 };
+  }
+
+  private drawEncounterFrame(color: number): void {
+    this.encounterGraphics.clear();
+    this.encounterGraphics.fillStyle(PANEL_BG_COL, 0.64);
+    this.encounterGraphics.fillRoundedRect(
+      ENCOUNTER_PANEL_LEFT,
+      ENCOUNTER_PANEL_TOP,
+      ENCOUNTER_PANEL_W,
+      ENCOUNTER_PANEL_H,
+      8,
+    );
+    this.encounterGraphics.lineStyle(1.5, color, 0.78);
+    this.encounterGraphics.strokeRoundedRect(
+      ENCOUNTER_PANEL_LEFT,
+      ENCOUNTER_PANEL_TOP,
+      ENCOUNTER_PANEL_W,
+      ENCOUNTER_PANEL_H,
+      8,
+    );
+    this.encounterGraphics.fillStyle(color, 0.92);
+    this.encounterGraphics.fillRoundedRect(ENCOUNTER_PANEL_LEFT, ENCOUNTER_PANEL_TOP, 4, ENCOUNTER_PANEL_H, 2);
+  }
+
+  private hideEncounterPresentation(): void {
+    this.encounterTween?.destroy();
+    this.encounterTween = null;
+    this.encounterPulseTween?.destroy();
+    this.encounterPulseTween = null;
+    this.encounterPanel?.setVisible(false).setAlpha(1).setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y);
+    this.lastEncounterPresentationSignature = null;
+    this.lastEncounterPresentationPhase = null;
   }
 
   /**
@@ -782,6 +971,7 @@ export class CenterHUD {
 
   destroy(): void {
     this.hideAnnouncement();
+    this.hideEncounterPresentation();
     this.hideTutorial(true);
     this.trainBarEffect.destroy();
     this.stopSectionAttention(this.armorSection);

@@ -431,7 +431,7 @@ export function getCoopDefenseMapScheduledXp(
     }
   }
   if (mapConfig.boss) totalXp += getEnemyLifecycleXp(mapConfig.boss.enemyKind);
-  return Math.max(1, totalXp);
+  return totalXp;
 }
 
 /**
@@ -718,6 +718,11 @@ function normalizeEncounterGroup(
   if (!hasCoopDefenseEnemyKind(group.enemyKind)) {
     throw new Error(
       `[coopDefenseMaps] Encounter ${mapId}:${encounterId} references unknown enemy kind: ${group.enemyKind}`,
+    );
+  }
+  if (getCoopDefenseEnemyConfig(group.enemyKind).isBoss) {
+    throw new Error(
+      `[coopDefenseMaps] Boss enemies must use the unique boss slot on map ${mapId}`,
     );
   }
   if (

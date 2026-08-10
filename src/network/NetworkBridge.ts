@@ -25,7 +25,7 @@ import {
   type PeerReconnectStatus,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseSurvivalPlayerState, CoopDefenseSurvivalState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, ArenaLayout, RockNetState } from '../types';
 import {
   NET_DEBUG_ENEMY_SYNC_METRICS,
   NET_DEBUG_ENEMY_SYNC_METRICS_WINDOW_MS,
@@ -133,6 +133,7 @@ const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschl
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
 const KEY_ROUND_PARTICIPATION = 'rpt'; // global reliable: RoundParticipationState | null
 const KEY_COOP_SURVIVAL = 'csv'; // global reliable: CoopDefenseSurvivalState | null
+const KEY_COOP_ENCOUNTER_PRESENTATION = 'cep'; // global reliable: CoopDefenseEncounterPresentationState | null
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
 const KEY_SMOKE_CLOUDS   = 'smk'; // global: SyncedSmokeCloud[] (unreliable, host-authoritative Sichtbehinderung)
 const KEY_FIRE_ZONES     = 'fzn'; // global: SyncedFireZone[]   (unreliable, host-authoritative Feuerzonen)
@@ -1457,6 +1458,39 @@ export class NetworkBridge {
       respawnsPerPlayer: Math.floor(raw.respawnsPerPlayer),
       players,
     };
+  }
+
+  /** Host-only: publiziert ausschließlich den aktuellen, kleinen Encounter-Präsentationszustand. */
+  publishCoopDefenseEncounterPresentationState(state: CoopDefenseEncounterPresentationState | null): void {
+    if (!isHost()) return;
+    setState(KEY_COOP_ENCOUNTER_PRESENTATION, state, true);
+  }
+
+  getCoopDefenseEncounterPresentationState(): CoopDefenseEncounterPresentationState | null {
+    const raw = getState(KEY_COOP_ENCOUNTER_PRESENTATION) as Partial<CoopDefenseEncounterPresentationState> | null | undefined;
+    if (!raw || typeof raw !== 'object' || typeof raw.encounterId !== 'string' || raw.encounterId.length === 0) return null;
+    const sequenceIndex = raw.sequenceIndex;
+    const sequenceCount = raw.sequenceCount;
+    const phaseStartedAtMs = raw.phaseStartedAtMs;
+    const phase = raw.phase;
+    if (typeof sequenceIndex !== 'number' || !Number.isSafeInteger(sequenceIndex) || sequenceIndex < 1
+      || typeof sequenceCount !== 'number' || !Number.isSafeInteger(sequenceCount) || sequenceCount < sequenceIndex
+      || typeof phaseStartedAtMs !== 'number' || !Number.isFinite(phaseStartedAtMs) || phaseStartedAtMs < 0
+      || !['incoming', 'active', 'cleared', 'rest', 'complete'].includes(phase ?? '')) return null;
+
+    const phaseEndsAtMs = raw.phaseEndsAtMs ?? null;
+    if (phaseEndsAtMs !== null
+      && (typeof phaseEndsAtMs !== 'number'
+        || !Number.isFinite(phaseEndsAtMs)
+        || phaseEndsAtMs < phaseStartedAtMs)) return null;
+    return {
+      encounterId: raw.encounterId,
+      sequenceIndex,
+      sequenceCount,
+      phase: phase as CoopDefenseEncounterPresentationState['phase'],
+      phaseStartedAtMs,
+      phaseEndsAtMs,
+    } as CoopDefenseEncounterPresentationState;
   }
 
   getLocalCoopDefenseSurvivalState(): CoopDefenseSurvivalPlayerState | null {
