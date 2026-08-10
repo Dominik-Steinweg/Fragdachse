@@ -18,9 +18,13 @@ Nur bei Aufgaben lesen, die Systemgrenzen, Scene-/Round-Lifecycle oder mehrere S
 ## Zuständigkeiten
 
 - `src/systems/`: hostseitige Gameplay-Regeln, zeitlicher autoritativer State und Kollisionsergebnisse.
-- `CoopDefenseMapDirector` ist ein Round-Lifetime-Hostsystem für endliche, zeitlich geplante
-  Encounter. Es kennt keine Spawnpositionen und delegiert fällige Gruppen an den bestehenden
-  `CoopDefenseWaveSpawner`; Legacy-`waves`, Spawnpunkt-Wellen und Boss-Spawns bleiben getrennt.
+- `CoopDefenseMapDirector` ist ein Round-Lifetime-Hostsystem für endliche Encounter. Im
+  zeitgeplanten A2-Modus delegiert er fällige Gruppen an den bestehenden `CoopDefenseWaveSpawner`;
+  im `repel-assault`-Modus aktiviert er genau einen Encounter nach dem anderen und entscheidet
+  Clear über die von diesem Spawnaufruf zurückgegebenen Enemy-IDs, gefolgt von `restAfterMs`.
+  Legacy-`waves`, Spawnpunkt-Wellen und Boss-Spawns bleiben getrennt. Der Director meldet den
+  Assault-Fortschritt nur an den `CoopDefenseRoundStateSystem`, der als einzige Instanz Sieg oder
+  Niederlage abschließt.
 - `src/entities/`: Entity-Lifecycle, Manager, Host-Objekte und Clientdarstellung replizierter Entities.
 - `src/effects/`: nicht-autoritative visuelle Reaktion, Partikel und Renderer. Effekte entscheiden keinen Schaden.
 - `src/arena/`: Layout-Erzeugung, Terrain, Registrys und statische/dynamische Arena-Objekte.

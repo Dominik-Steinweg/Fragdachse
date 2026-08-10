@@ -5,6 +5,7 @@ import {
   getCoopDefenseMapConfig,
   getCoopDefenseMapScheduledXp,
   getCoopDefenseMapObjectiveLabel,
+  resolveCoopDefenseMapEncounterConfigs,
   type CoopBaseShape,
   resolveCoopDefenseMapWaveConfigs,
 } from '../src/config/coopDefenseMaps';
@@ -73,7 +74,8 @@ describe('Coop defense map progression', () => {
     );
 
     expect(Object.values(objectiveByMapId).every((objective) => (
-      objective === 'survive'
+      objective === 'repel-assault'
+      || objective === 'survive'
       || objective === 'defeat-boss'
       || objective === 'destroy-hostile-bases'
     ))).toBe(true);
@@ -88,6 +90,7 @@ describe('Coop defense map progression', () => {
   });
 
   it('keeps the German labels for representative map objectives', () => {
+    expect(getCoopDefenseMapObjectiveLabel('repel-assault')).toBe('ANGRIFF ABWEHREN');
     expect(getCoopDefenseMapObjectiveLabel('destroy-hostile-bases')).toBe('FEINDBASIS ZERSTÖREN');
     expect(getCoopDefenseMapObjectiveLabel('survive')).toBe('ZEIT ÜBERLEBEN');
   });
@@ -99,6 +102,26 @@ describe('Coop defense map progression', () => {
       expect(Number.isFinite(scheduledXp)).toBe(true);
       expect(scheduledXp).toBeGreaterThan(0);
     }
+  });
+
+  it('migrates only Map 1 to the explicit repel-assault campaign reference', () => {
+    const map = getCoopDefenseMapConfig('1');
+    expect(map.objective).toBe('repel-assault');
+    expect(map.waves).toEqual([]);
+    expect(map.encounters).toHaveLength(3);
+    expect(map.encounters?.slice(0, 2).map((encounter) => encounter.restAfterMs)).toEqual([5_000, 5_000]);
+    expect(map.boss).toBeUndefined();
+    expect(map.bases.some((base) => base.role === 'spawn-point')).toBe(false);
+  });
+
+  it('uses the central enemy-wave resolver for Map 1 encounter XP instead of legacy waves', () => {
+    const map = getCoopDefenseMapConfig('1');
+    const singlePlayerXp = getCoopDefenseMapScheduledXp(map, [], 1);
+    const multiplayerXp = getCoopDefenseMapScheduledXp(map, [], 2);
+    const resolvedMultiplayerGroups = resolveCoopDefenseMapEncounterConfigs(map, 2)
+      .flatMap((encounter) => encounter.groups);
+    expect(singlePlayerXp).toBe(40);
+    expect(multiplayerXp).toBe(resolvedMultiplayerGroups.reduce((sum, group) => sum + group.count, 0));
   });
 
   it('uses valid visual footprints for every base', () => {

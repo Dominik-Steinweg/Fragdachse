@@ -8,14 +8,16 @@ export interface CoopDefenseRoundStateSystemOptions {
   readonly objective?: CoopDefenseMapObjective;
   readonly getSecondsLeft: () => number;
   readonly isBossDefeated?: () => boolean;
+  /** `repel-assault`: wird vom host-only MapDirector gesetzt, loest aber selbst keinen Sieg aus. */
+  readonly isAssaultRepelled?: () => boolean;
 }
 
 /**
  * Entscheidet host-autoritativ ueber Sieg und Niederlage einer Coop-Defense-Runde.
  *
- * Verloren wird immer ueber die eigenen Basen. Gewonnen wird je nach Map ueber das Zeitlimit
- * (`survive`), den Boss (`defeat-boss`) oder die Zerstoerung aller feindlichen Basen
- * (`destroy-hostile-bases`).
+ * Verloren wird immer ueber die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
+ * Abwehren des Assaults (`repel-assault`), das Zeitlimit (`survive`), den Boss (`defeat-boss`)
+ * oder die Zerstoerung aller feindlichen Basen (`destroy-hostile-bases`).
  */
 export class CoopDefenseRoundStateSystem {
   private concluded = false;
@@ -23,12 +25,14 @@ export class CoopDefenseRoundStateSystem {
   private readonly objective: CoopDefenseMapObjective;
   private readonly getSecondsLeft: () => number;
   private readonly isBossDefeated: () => boolean;
+  private readonly isAssaultRepelled: () => boolean;
 
   constructor(options: CoopDefenseRoundStateSystemOptions) {
     this.baseManager = options.baseManager;
     this.objective = options.objective ?? 'survive';
     this.getSecondsLeft = options.getSecondsLeft;
     this.isBossDefeated = options.isBossDefeated ?? (() => false);
+    this.isAssaultRepelled = options.isAssaultRepelled ?? (() => false);
   }
 
   update(): RoundOutcome | null {
@@ -53,6 +57,14 @@ export class CoopDefenseRoundStateSystem {
       // Der Guard schuetzt gegen einen Sofortsieg, falls eine Map ohne feindliche Basis das
       // Ziel doch einmal an der Normalisierung vorbei setzt.
       if (this.hasMainBase('hostile') && this.getTotalMainBaseHp('hostile') <= 0) {
+        this.concluded = true;
+        return 'victory';
+      }
+      return null;
+    }
+
+    if (this.objective === 'repel-assault') {
+      if (this.isAssaultRepelled()) {
         this.concluded = true;
         return 'victory';
       }

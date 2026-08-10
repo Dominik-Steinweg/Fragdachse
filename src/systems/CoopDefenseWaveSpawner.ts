@@ -136,16 +136,17 @@ export class CoopDefenseWaveSpawner {
    * Einmaliger Ausführungspfad für den MapDirector. Die Auswahl der normalen linken Spawnregion,
    * Flow-Field-Erreichbarkeit, Abstände und Sonderfälle bleiben bewusst hier gebündelt.
    */
-  hostSpawnEncounterGroup(kind: CoopDefenseEnemyKind, count: number): void {
-    this.runWave(kind, count);
+  hostSpawnEncounterGroup(kind: CoopDefenseEnemyKind, count: number): readonly string[] {
+    return this.runWave(kind, count);
   }
 
-  private runWave(kind: CoopDefenseEnemyKind, count: number): void {
-    if (count <= 0) return;
+  private runWave(kind: CoopDefenseEnemyKind, count: number): string[] {
+    const spawnedEnemyIds: string[] = [];
+    if (count <= 0) return spawnedEnemyIds;
     const candidatesAll = this.collectCandidates(kind);
     if (candidatesAll.length === 0) {
       this.warnExhausted();
-      return;
+      return spawnedEnemyIds;
     }
 
     const recentSet = new Set(this.recentCells);
@@ -157,19 +158,21 @@ export class CoopDefenseWaveSpawner {
     for (let i = 0; i < count; i++) {
       if (candidates.length === 0) {
         this.warnExhausted();
-        return;
+        return spawnedEnemyIds;
       }
 
       const pick = Phaser.Math.RND.pick(candidates) as { gridX: number; gridY: number };
-      this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind);
+      const enemy = this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind);
+      spawnedEnemyIds.push(enemy.id);
       this.pushRecent(this.key(pick.gridX, pick.gridY));
 
       candidates = candidates.filter(
         (cell) =>
           Math.abs(cell.gridX - pick.gridX) > MIN_INTRA_WAVE_DISTANCE_CELLS
-          || Math.abs(cell.gridY - pick.gridY) > MIN_INTRA_WAVE_DISTANCE_CELLS,
+        || Math.abs(cell.gridY - pick.gridY) > MIN_INTRA_WAVE_DISTANCE_CELLS,
       );
     }
+    return spawnedEnemyIds;
   }
 
   private runSpawnPointWave(source: BaseSpec, count: number): void {

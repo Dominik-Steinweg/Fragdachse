@@ -61,6 +61,29 @@ describe('CoopDefenseRoundStateSystem', () => {
     expect(bossRun(0, false)).toBeNull();
     expect(bossRun(30, true)).toBe('victory');
   });
+
+  it('wins a repel-assault map only after the director reports the full assault clear', () => {
+    let assaultRepelled = false;
+    const system = new CoopDefenseRoundStateSystem({
+      baseManager: createBaseManager(friendly(500)),
+      objective: 'repel-assault',
+      getSecondsLeft: () => 0,
+      isAssaultRepelled: () => assaultRepelled,
+    });
+
+    expect(system.update()).toBeNull();
+    assaultRepelled = true;
+    expect(system.update()).toBe('victory');
+  });
+
+  it('keeps base defeat ahead of a completed repel assault', () => {
+    expect(new CoopDefenseRoundStateSystem({
+      baseManager: createBaseManager(friendly(0)),
+      objective: 'repel-assault',
+      getSecondsLeft: () => 10,
+      isAssaultRepelled: () => true,
+    }).update()).toBe('defeat');
+  });
 });
 
 describe('CoopDefenseRoundStateSystem with a hostile base', () => {

@@ -127,7 +127,7 @@ export interface ResolvedCoopDefenseMapWaveConfig {
   readonly startsAfterAirstrikeBarrage: boolean;
 }
 
-/** Eine endliche, zeitlich geplante Gegnergruppe innerhalb eines Encounters. */
+/** Eine endliche Gegnergruppe innerhalb eines Encounters. */
 export interface CoopDefenseMapEncounterGroupConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly count: number;
@@ -135,10 +135,12 @@ export interface CoopDefenseMapEncounterGroupConfig {
   readonly delayMs?: number;
 }
 
-/** Minimaler A2-Encounter: zeitlicher Start und eine endliche Liste von Gruppen. */
+/** A2-Encounter mit Zeitstart; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
 export interface CoopDefenseMapEncounterConfig {
   readonly id: string;
   readonly startAtMs?: number;
+  /** Authored pause after this encounter is cleared; ignored after the final encounter. */
+  readonly restAfterMs?: number;
   readonly groups: readonly CoopDefenseMapEncounterGroupConfig[];
 }
 
@@ -151,6 +153,7 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
 export interface ResolvedCoopDefenseMapEncounterConfig {
   readonly id: string;
   readonly startAtMs: number;
+  readonly restAfterMs: number;
   readonly groups: readonly ResolvedCoopDefenseMapEncounterGroupConfig[];
 }
 
@@ -170,13 +173,16 @@ export interface CoopDefenseMapBossConfig {
 /**
  * Siegbedingung der Map.
  *
- * Jede Map hat genau ein Ziel: Zeit ueberleben, den Boss besiegen oder alle feindlichen Basen
- * zerstoeren. Verloren wird in allen Faellen ueber die eigenen Basen.
+ * Jede Map hat genau ein Ziel: einen endlichen Assault abwehren, Zeit ueberleben, den Boss
+ * besiegen oder alle feindlichen Basen zerstoeren. Verloren wird in allen Faellen ueber die
+ * eigenen Basen.
  */
-export type CoopDefenseMapObjective = 'survive' | 'defeat-boss' | 'destroy-hostile-bases';
+export type CoopDefenseMapObjective = 'repel-assault' | 'survive' | 'defeat-boss' | 'destroy-hostile-bases';
 
 export function getCoopDefenseMapObjectiveLabel(objective: CoopDefenseMapObjective | undefined): string {
   switch (objective) {
+    case 'repel-assault':
+      return 'ANGRIFF ABWEHREN';
     case 'defeat-boss':
       return 'BOSS MUSS FALLEN';
     case 'destroy-hostile-bases':
@@ -320,7 +326,7 @@ export interface CoopDefenseMapConfig {
   /** Optionale A2-Encounter; Legacy-`waves` bleiben davon unabhängig. */
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
   readonly boss?: CoopDefenseMapBossConfig;
-  /** Standard `survive`. */
+  /** Standard `survive` for legacy maps; migrated maps may explicitly use `repel-assault`. */
   readonly objective?: CoopDefenseMapObjective;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
@@ -378,6 +384,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
   return (mapConfig.encounters ?? []).map((encounter) => ({
     id: encounter.id,
     startAtMs: Math.max(0, Math.floor(encounter.startAtMs ?? 0)),
+    restAfterMs: Math.max(0, Math.floor(encounter.restAfterMs ?? 0)),
     groups: encounter.groups.map((group) => {
       const resolvedGroup = resolveCoopDefenseEnemyWaveConfig(
         group.enemyKind,
@@ -401,13 +408,26 @@ export function getCoopDefenseMapScheduledXp(
 ): number {
   const durationMs = mapConfig.roundDurationSec * 1000;
   let totalXp = 0;
-  for (const wave of waveConfigs) totalXp += getScheduledWaveXp(wave, durationMs);
+  if ((mapConfig.encounters?.length ?? 0) > 0) {
+    for (const encounter of resolveCoopDefenseMapEncounterConfigs(mapConfig, humanPlayerCount)) {
+      totalXp += getEncounterXp(encounter);
+    }
+  } else {
+    for (const wave of waveConfigs) totalXp += getScheduledWaveXp(wave, durationMs);
+  }
   for (const base of mapConfig.bases) {
     if (!base.spawnWave) continue;
     totalXp += getScheduledWaveXp(resolveWaveConfigForXp(base.spawnWave, humanPlayerCount), durationMs);
   }
   if (mapConfig.boss) totalXp += getEnemyLifecycleXp(mapConfig.boss.enemyKind);
   return Math.max(1, totalXp);
+}
+
+function getEncounterXp(encounter: ResolvedCoopDefenseMapEncounterConfig): number {
+  return encounter.groups.reduce(
+    (sum, group) => sum + group.count * getEnemyLifecycleXp(group.enemyKind),
+    0,
+  );
 }
 
 function getScheduledWaveXp(wave: ResolvedCoopDefenseMapWaveConfig, durationMs: number): number {
@@ -518,6 +538,7 @@ function normalizeObjective(
     }
     return normalizedObjective;
   }
+  if (normalizedObjective === 'repel-assault') return normalizedObjective;
   if (normalizedObjective !== 'destroy-hostile-bases') return 'survive';
   // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
   if (!bases.some((baseConfig) => baseConfig.faction === 'hostile' && (baseConfig.role ?? 'main') === 'main')) {
@@ -552,6 +573,7 @@ function normalizeEncounterConfigs(
     return {
       id,
       startAtMs: normalizeNonNegativeMilliseconds(encounter.startAtMs),
+      restAfterMs: normalizeNonNegativeMilliseconds(encounter.restAfterMs),
       groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group)),
     };
   });

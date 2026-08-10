@@ -603,6 +603,7 @@ export class ArenaLifecycleCoordinator {
         objective: coopDefenseMapConfig?.objective,
         getSecondsLeft: () => bridge.computeSecondsLeft(),
         isBossDefeated: () => this.ctx.coopDefenseWaveSpawner?.isBossDefeated() ?? false,
+        isAssaultRepelled: () => this.ctx.coopDefenseMapDirector?.isAssaultRepelled() ?? false,
       })
       : null;
     if (bridge.isHost()) {
@@ -725,6 +726,10 @@ export class ArenaLifecycleCoordinator {
           this.ctx.coopDefenseMapDirector = new CoopDefenseMapDirector(
             coopDefenseEncounterConfigs,
             (enemyKind, count) => this.ctx.coopDefenseWaveSpawner?.hostSpawnEncounterGroup(enemyKind, count),
+            {
+              mode: coopDefenseMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
+              isEnemyActive: (enemyId) => this.ctx.enemyManager?.hasEnemy(enemyId) ?? false,
+            },
           );
         }
       }

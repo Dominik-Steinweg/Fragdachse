@@ -3,11 +3,12 @@
   "displayName": "Map 1 - Feuertaufe",
   "arenaWidthCells": 60,
   "timeOfDay": "12:00",
-  "tutorialText": "Die Basis muss bis zum Ablauf der Zeit verteidigt werden. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
+  "tutorialText": "Schützt die Basis vor den angreifenden Wellen. Wenn alle Angriffe abgewehrt sind, ist die Map gewonnen. Nach Ende einer Map erhalten die Spieler XP für die gemeinsamen Abschüsse. Nach Level-Ups können Skill-Punkte verteilt werden.",
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "rockFillRatio": 0.3,
   "roundDurationSec": 40,
+  "objective": "repel-assault",
   "bases": [
     {
       "id": "coop-base-rear",
@@ -24,12 +25,36 @@
     }
   ],
   "powerUps": [],
-  "waves": [
+  "waves": [],
+  "encounters": [
     {
-      "enemyKind": "zombie-badger",
-      "intervalMs": 1000,
-      "countPerWave": 1,
-      "startAtMs": 0
+      "id": "opening-assault",
+      "restAfterMs": 5000,
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 6
+        }
+      ]
+    },
+    {
+      "id": "second-assault",
+      "restAfterMs": 5000,
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 12
+        }
+      ]
+    },
+    {
+      "id": "final-assault",
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 22
+        }
+      ]
     }
   ]
 }

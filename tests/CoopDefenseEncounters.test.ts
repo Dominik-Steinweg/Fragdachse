@@ -24,6 +24,7 @@ describe('Coop defense encounters', () => {
       {
         id: '  opening  ',
         startAtMs: -25,
+        restAfterMs: -100,
         groups: [{ enemyKind: 'zombie-badger', count: 3.9, delayMs: -100 }],
       },
     ]));
@@ -32,6 +33,7 @@ describe('Coop defense encounters', () => {
       {
         id: 'opening',
         startAtMs: 0,
+        restAfterMs: 0,
         groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0 }],
       },
     ]);
@@ -39,6 +41,7 @@ describe('Coop defense encounters', () => {
       {
         id: 'opening',
         startAtMs: 0,
+        restAfterMs: 0,
         groups: [{ enemyKind: 'zombie-badger', count: 3, delayMs: 0 }],
       },
     ]);
@@ -67,6 +70,7 @@ describe('Coop defense encounters', () => {
       {
         id: 'a2-opening-encounter',
         startAtMs: 1_500,
+        restAfterMs: 0,
         groups: [
           { enemyKind: 'zombie-badger', count: 4, delayMs: 0 },
           { enemyKind: 'demon-badger', count: 2, delayMs: 1_500 },
